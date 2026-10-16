@@ -22,6 +22,7 @@ gives you a narrative verb, do one of three things, in order:
 Storage is single-direction: record the base predicate on the opposite
 endpoint, never the inverse as its own edge.
 
+<!-- generated:synonyms (scripts/gen_ontology_docs.py) -->
 | Written as (inverse/synonym) | Store as |
 |------------------------------|----------|
 | `owned_by A → B` | `owns B → A` |
@@ -31,6 +32,7 @@ endpoint, never the inverse as its own edge.
 | `commanded_by A → B` | `commands B → A` |
 | `located_in` / `hosted_by A → B` | `located_at A → B` |
 | `member A → B` (of a group) | `member_of A → B` |
+<!-- /generated:synonyms -->
 
 For symmetric predicates (`knows`, `allied_with`, `borders`, `enemy_of`,
 `rival_of`, `trades_with`, `sibling_of`, `spouse_of`, …) store once with
@@ -51,8 +53,7 @@ site while being an orphan in the graph and invisible to a push — which is
 exactly what happened to the Dead End vault's Entertainment District
 venues.
 
-The same pairing applies to a Faction's `territory:` / `headquartered_at`
-and an Item's `current_holder:` / `owns`.
+An item's `current_holder:` pairs the same way with an `owns` tie on the holder's note.
 
 ## Interposing a new container — re-point its children
 
@@ -106,19 +107,27 @@ were meant to be on the strip.
 
 Non-exhaustive — extend by category, never by inventing a new `type:`.
 
+<!-- generated:verbs (scripts/gen_ontology_docs.py) -->
 | Narrative verb(s) | Sanctioned predicate |
 |-------------------|----------------------|
-| hosts, contains, part of, inside, within | `part_of` (child → parent) |
+| hosts, contains | `part_of` *(on the other note)* |
+| inside, within | `part_of` |
 | adjacent to, next to, connects to | `borders` |
-| stationed at, lives at, based at, appears at *(a place)* | `located_at` |
+| stationed at, lives at, based at, appears at | `located_at` |
 | HQ'd at, operates from | `headquartered_at` |
-| carved by, forged by, built by, wrote, authored | `created` |
-| carries, holds, bears, piloted by *(→ owner)* | `owns` / `wields` |
-| serves under, reports to, assigned by | `serves` / `commands` (base direction) |
+| carved by, forged by, built by | `created` *(on the other note)* |
+| wrote, authored | `created` |
+| carries, holds, bears | `owns` / `wields` |
+| piloted by | `owns` *(on the other note)* |
+| serves under | `serves` |
+| reports to, assigned by | `commands` *(on the other note)* |
 | raided, assaulted, attacked, besieged | `at_war_with` / `conquered` |
 | deceives, misled, tricked, lied to | `deceived` |
-| investigated by, questioned, interrogated | *usually not an edge — see below* |
 | has intelligence on, spies on, watches | `infiltrates` / `studies` |
+| affiliated with | `member_of` / `allied_with` |
+| visited by | `located_at` *(on the other note)* / `participated_in` *(on the other note)* |
+| investigated by, questioned, interrogated, appears in | *not an edge, see below* |
+<!-- /generated:verbs -->
 
 If no predicate is close, prefer the most general in the right category
 over inventing one, and leave a `description:` that keeps the specific

@@ -14,7 +14,7 @@ from pathlib import Path
 import relink
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           cells, edit_frontmatter, stopped, write_text_atomic)
-from schema_rules import tone_families
+from schema_rules import tone_families, without_generated_markers
 from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
                          player_section_key, wrapup_filename_findings)
 from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter,
@@ -1008,7 +1008,8 @@ def _schema_tone_text() -> tuple[str, str, str] | None:
     """From the plugin's entity-schema.md: the comment on the example's
     `tone:` line, the paragraph before the Tones paragraph, and the Tones
     paragraph. None when the schema no longer has that shape."""
-    schema = (SHARED / "entity-schema.md").read_text(encoding="utf-8")
+    schema = without_generated_markers(
+        (SHARED / "entity-schema.md").read_text(encoding="utf-8"))
     comment = NEW_COMMENT_RE.search(schema)
     paragraphs = schema.split("\n\n")
     at = next((i for i, p in enumerate(paragraphs)

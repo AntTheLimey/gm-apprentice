@@ -34,6 +34,7 @@ from pathlib import Path
 
 import index_build
 import migrate_vault as mv
+from schema_rules import without_generated_markers
 from migrate_core import StepFailed, write_text_atomic
 from vault_write import utf8_output
 from vaultlib import (PUBLISH_TOOL, SETTINGS_FILE, STAMP_KEY, STATE_FILE,
@@ -78,7 +79,7 @@ def _plugin_text(path: Path) -> str:
 def entity_types_text() -> str:
     """A new vault's `_meta/entity-types.md`: ENTITY_SECTIONS of the
     plugin's schema, copied whole."""
-    text = _plugin_text(SCHEMA)
+    text = without_generated_markers(_plugin_text(SCHEMA))
     heads = [(m.start(), m.group(1).strip())
              for m in re.finditer(r"^## (.+)$", text, re.M)]
     parts: list[str] = []

@@ -182,6 +182,15 @@ def inverse_predicates() -> dict[str, str]:
             for p in _ontology_predicates() if p.get("inverse")}
 
 
+GENERATED_MARKER_RE = re.compile(r"^<!-- /?generated:[^>]*-->\r?\n", re.M)
+
+
+def without_generated_markers(text: str) -> str:
+    """The plugin's schema text as a vault should hold it: the markers
+    scripts/gen_ontology_docs.py leaves around its tables are not copied."""
+    return GENERATED_MARKER_RE.sub("", text)
+
+
 def type_key(raw: str) -> str:
     """A written relationship type as the vocabulary spells it."""
     return re.sub(r"[\s-]+", "_", str(raw).strip().lower())
