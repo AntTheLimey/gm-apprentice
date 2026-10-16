@@ -154,7 +154,8 @@ Write confirmed decisions to `chapter-shape.md`.
   spine.
 - **Locations** (`ttrpg-expert/content-generation.md`): what
   makes each place interesting.
-- **Relationships** (`ttrpg-expert/relationship-patterns.md`).
+- **Relationships** (`ttrpg-expert/relationship-patterns.md`; the words:
+  `node "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js" relationships words --vault <vault>`).
 - **Architecture:** fill in the Phase 2 shape — entry points,
   escalation, multiple paths through every problem.
 - **System known:** read `systems/{system}/session-procedures.md`.

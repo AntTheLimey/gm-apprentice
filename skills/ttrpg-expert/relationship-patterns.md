@@ -6,24 +6,26 @@ write, which direction to store it, and how the common shapes
 vocabulary.
 
 **The vocabulary is fixed.** Every `relationships[].type` must be
-one of the 77 predicates in the table below — the same table as
-`shared/entity-schema.md` ("Relationship Types") and the
-machine-readable `shared/gm-apprentice-ontology.json` that
-`vault_check.py relationships` enforces. A new vault's
+one of the sanctioned predicates, which `shared/gm-apprentice-ontology.json`
+holds and `vault_check.py relationships` enforces. A new vault's
 `_meta/relationship-types.md` starts with the full list; older
 vaults may hold a genre subset.
 Never invent a type; when a play note gives you a narrative verb
 ("reports to", "guards", "lives in"), map it with
 `shared/relationship-normalization.md`.
 
+For the words (types, their reverse names, tones, strength), run
+`node "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js" relationships words --vault <vault>`;
+it prints only what this vault uses.
+
 ## The Edge
 
 ```yaml
 relationships:
   - target: "[[Target Entity Name]]"
-    type: member_of         # a predicate from the table below
-    tone: respectful        # optional — see Tones
-    strength: 7             # optional — 1-10, see Strength
+    type: member_of         # a predicate from `relationships words`
+    tone: respectful        # optional — see below
+    strength: 7             # optional — 1-10, 5 when unknown
     bidirectional: false    # true only for symmetric predicates
     description: "Serves as lieutenant"
 ```
@@ -31,10 +33,15 @@ relationships:
 `target` is a quoted wiki-link. `source` is the file the block
 lives in. There are no IDs.
 
+Tone is how the *source* feels about the *target*. A `rival_of`
+edge can be `respectful` (honourable competition) or `hostile`;
+a `serves` edge can be `professional` or `fearful`. Default to
+`neutral` when the source text is ambiguous.
+
 ## Direction and Storage
 
 **Storage is single-direction.** Each predicate has an inverse
-name (right-hand column below) that is *implied* by the stored
+name (after the `>` in `relationships words`) that is *implied* by the stored
 edge and must never be written as its own edge. Record
 `A --[employs]--> B` on A's file; do not also record
 `B --[employed_by]--> A` on B's — `employed_by` is off-vocabulary
@@ -52,220 +59,6 @@ Storing them on both endpoints is a duplicate edge, not
 *subject* of the verb: the employer `employs`, the contained place
 is `part_of` its container, the member is `member_of` the faction,
 the liege has a `vassal_of` recorded on the vassal's file.
-
-## Predicate Table
-
-Generated from `shared/gm-apprentice-ontology.json`; a test keeps
-this table and the export in step.
-
-### Kinship
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `parent_of` | `child_of` | universal |
-| `ancestor_of` | `descendant_of` | universal |
-| `sibling_of` | — (symmetric) | universal |
-| `spouse_of` | — (symmetric) | universal |
-| `betrothed_to` | — (symmetric) | universal |
-
-### Social
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `knows` | — (symmetric) | universal |
-| `friend_of` | — (symmetric) | universal |
-| `rival_of` | — (symmetric) | universal |
-| `mentors` | `mentored_by` | universal |
-| `trusts` | `trusted_by` | universal |
-| `betrayed` | `betrayed_by` | universal |
-
-### Power
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `rules` | `ruled_by` | universal |
-| `employs` | `employed_by` | universal |
-| `commands` | `commanded_by` | universal |
-| `serves` | `served_by` | universal |
-| `vassal_of` | `liege_of` | universal |
-| `imprisons` | `imprisoned_by` | universal |
-
-### Spatial
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `located_at` | `location_of` | universal |
-| `headquartered_at` | `headquarters_of` | universal |
-| `part_of` | `has_part` | universal |
-| `borders` | — (symmetric) | universal |
-| `haunts` | `haunted_by` | universal |
-
-### Possession
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `owns` | `owned_by` | universal |
-| `created` | `created_by` | universal |
-| `wields` | `wielded_by` | universal |
-| `seeks` | `sought_by` | universal |
-
-### Knowledge
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `discovered` | `discovered_by` | universal |
-| `conceals` | `concealed_by` | universal |
-| `recorded_in` | `records` | universal |
-| `studies` | `studied_by` | universal |
-
-### Conflict
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `enemy_of` | — (symmetric) | universal |
-| `at_war_with` | — (symmetric) | universal |
-| `conspires_against` | `conspired_against_by` | universal |
-| `allied_with` | — (symmetric) | universal |
-
-### Affiliation
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `member_of` | `has_member` | universal |
-| `founded` | `founded_by` | universal |
-| `leads` | `led_by` | universal |
-| `defected_from` | `lost_member` | universal |
-| `infiltrates` | `infiltrated_by` | universal |
-
-### Supernatural
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `bound_to` | `binds` | fantasy, horror |
-| `cursed_by` | `cursed` | fantasy, horror |
-| `summoned` | `summoned_by` | fantasy, horror |
-| `worships` | `worshipped_by` | fantasy, horror |
-| `corrupted_by` | `corrupted` | fantasy, horror |
-
-### Temporal
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `caused` | `caused_by` | universal |
-| `triggered` | `triggered_by` | universal |
-| `participated_in` | `had_participant` | universal |
-| `witnessed` | `witnessed_by` | universal |
-
-### Economic
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `trades_with` | — (symmetric) | universal |
-| `supplies` | `supplied_by` | universal |
-| `finances` | `financed_by` | universal |
-| `indebted_to` | `creditor_of` | universal |
-
-### Event
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `murdered` | `murdered_by` | universal |
-| `poisoned` | `poisoned_by` | universal |
-| `wounded` | `wounded_by` | universal |
-| `rescued` | `rescued_by` | universal |
-| `captured` | `captured_by` | universal |
-| `deceived` | `deceived_by` | universal |
-
-### Horror
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `possessed_by` | `possesses` | horror |
-| `infected_by` | `infected` | horror |
-| `fears` | `feared_by` | horror |
-| `feeds_on` | `fed_upon_by` | horror |
-
-### Romance
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `courts` | `courted_by` | romance |
-| `rejected` | `rejected_by` | romance |
-| `disguised_as` | `disguise_of` | romance |
-| `blackmails` | `blackmailed_by` | romance |
-
-### Historical
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `conquered` | `conquered_by` | historical |
-| `exiled_from` | `exiled` | historical |
-| `succeeded` | `preceded` | historical |
-| `negotiated_with` | — (symmetric) | historical |
-
-### Sci-Fi
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `uploaded_to` | `upload_source_of` | scifi |
-| `augmented_by` | `augments` | scifi |
-| `cloned_from` | `clone_source_of` | scifi |
-| `hacked` | `hacked_by` | scifi |
-
-### Superhero
-
-| Type | Inverse (implied, never stored) | Genre |
-|------|--------------------------------|-------|
-| `alter_ego_of` | — (symmetric) | superhero |
-| `empowered_by` | `empowers` | superhero |
-| `nemesis_of` | — (symmetric) | superhero |
-
-## Tones
-
-Emotional colour on any edge. Always one of these words; the nuance
-goes in `description`.
-
-| Positive | Negative | Neutral |
-|----------|----------|---------|
-| positive, friendly, warm, loving, romantic, loyal, devoted, protective, trusting, respectful | negative, hostile, fearful, distrustful, contemptuous, tense, cold, resentful, predatory, ominous | neutral, unknown, complicated, cautious, transactional, formal, professional |
-
-`positive` and `negative` are for a tie that is plainly one or the
-other and no more. A tone off this list is flagged by
-`vault_check.py relationships` and tidied by `tones.py`.
-
-Tone is how the *source* feels about the *target*. A `rival_of`
-edge can be `respectful` (honourable competition) or `hostile`;
-a `serves` edge can be `professional` or `fearful`. Default to
-`neutral` when the source text is ambiguous.
-
-## Strength
-
-Optional 1-10 intensity, defaulting to 5 when unknown:
-
-| Strength | Meaning |
-|----------|---------|
-| 1-2 | Weak, casual |
-| 3-4 | Moderate |
-| 5-6 | Significant |
-| 7-8 | Strong |
-| 9-10 | Defining |
-
-## Required Relationships
-
-campaign-qa's graph-health check and campaign-organizer's Validate
-step flag these when missing (a read-the-frontmatter check today —
-`vault_check.py relationships` validates predicates and tone words
-only):
-
-| Entity type | Must have |
-|-------------|-----------|
-| NPC, PC, creature | `located_at` |
-| Faction, organization | `headquartered_at` |
-
-A location's containment is written twice — the
-`parent_location:` scalar (site listing) *and* a `part_of` edge
-(the graph) — and the two must agree. See
-`shared/relationship-normalization.md`.
 
 ## Modeling Patterns
 

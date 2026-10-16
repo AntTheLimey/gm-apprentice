@@ -45,7 +45,7 @@ The vault's `_meta/` is the source of truth, not this skill.
 | File | Contents |
 |------|----------|
 | `_meta/entity-types.md` | Type hierarchy, frontmatter schemas, folder mappings |
-| `_meta/relationship-types.md` | Relationship taxonomy, domain/range, symmetry, genre tags |
+| `_meta/relationship-types.md` | Relationship taxonomy, domain/range, symmetry, genre tags (the words: `relationships words`, see `ttrpg-expert/relationship-patterns.md`) |
 | `_meta/index.md` | Master registry of every entity and narrative element |
 | `_meta/vault-notes.md` | The GM's own notes on how this vault is kept; read it if it exists |
 

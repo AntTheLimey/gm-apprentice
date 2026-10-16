@@ -117,29 +117,20 @@ class IterTests(unittest.TestCase):
 
 
 def doc_families(text):
-    """The words a document lists under each family, from its table row
-    (relationship-patterns.md) or its `**Tones.**` sentence
-    (entity-schema.md)."""
-    start = text.index("## Tones") if "## Tones" in text \
-        else text.index("**Tones.**")
-    part = text[start:]
-    row = re.search(r"^\| (positive,[^|]*)\|([^|]*)\|([^|]*)\|$", part, re.M)
-    if row:
-        cells = row.groups()
-    else:
-        cells = re.search(r"one of:(.*?)\(positive\);(.*?)\(negative\);"
-                          r"(.*?)\(neutral\)", part, re.S).groups()
+    """The words a document lists under each family, from its
+    `**Tones.**` sentence (entity-schema.md)."""
+    part = text[text.index("**Tones.**"):]
+    cells = re.search(r"one of:(.*?)\(positive\);(.*?)\(negative\);"
+                      r"(.*?)\(neutral\)", part, re.S).groups()
     return {family: [w.strip() for w in cell.split(",")]
             for family, cell in zip(("positive", "negative", "neutral"),
                                     cells)}
 
 
 class DocTests(unittest.TestCase):
-    def test_both_documents_list_exactly_the_words_by_family(self):
-        for rel in ("skills/ttrpg-expert/relationship-patterns.md",
-                    "skills/shared/entity-schema.md"):
-            text = (REPO / rel).read_text(encoding="utf-8")
-            self.assertEqual(doc_families(text), LISTED, rel)
+    def test_the_schema_document_lists_exactly_the_words_by_family(self):
+        text = (REPO / "skills/shared/entity-schema.md").read_text(encoding="utf-8")
+        self.assertEqual(doc_families(text), LISTED)
 
     def test_every_template_tone_is_listed(self):
         seen = 0
