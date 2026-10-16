@@ -123,10 +123,11 @@ directed predicate is canonical.
 > not a person/group pair, the type degrades to **Generic** (the predicate then
 > rides on the event title). An Item→Organization `owns` edge is therefore
 > Generic, not the Reign its predicate suggests; likewise a person→person `serves`.
-> Passing no kinds at all falls back to the flat mapping below, which is the
-> documented degraded behaviour. `map_cmd.resolve_event_type` is the single
-> entry point both push and `pull-canon --baseline` use — read it, not this
-> table, when the endpoints matter.
+> Passing no kinds at all falls back to the flat mapping, each predicate's
+> `mobrpg_event_type` in the ontology file, which is the documented degraded
+> behaviour. `map_cmd.resolve_event_type` is the single
+> entry point both push and `pull-canon --baseline` use — read it, not the
+> `mobrpg_event_type` field, when the endpoints matter.
 
 ---
 

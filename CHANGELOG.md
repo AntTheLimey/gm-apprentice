@@ -42,6 +42,7 @@ the apprentice stops reading a 13 KB document to write a relationship.
   generated from it and is byte for byte the same file.
 - `scripts/validate_ontology.py` keeps only the mobRPG enum checks; the
   schema comparisons it did are now the generator's job.
+- The publish tool is 1.31.0.
 
 ### Removed
 

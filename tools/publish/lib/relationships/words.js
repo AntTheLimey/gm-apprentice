@@ -59,14 +59,12 @@ function wordsData({ vaultPath } = {}) {
   if (file !== null) {
     const found = candidates(file);
     const named = all.filter((p) => found.named.has(p.type));
-    if (named.length > 0 && named.length < all.length) {
-      predicates = named;
-      const known = new Set([
-        ...all.flatMap((p) => [p.type, p.inverse]),
-        ...all.flatMap((p) => p.genre || []),
-      ]);
-      unknown = [...found.extra].filter((w) => !known.has(w));
-    }
+    if (named.length > 0 && named.length < all.length) predicates = named;
+    const known = new Set([
+      ...all.flatMap((p) => [p.type, p.inverse]),
+      ...all.flatMap((p) => p.genre || []),
+    ]);
+    unknown = [...found.extra].filter((w) => !known.has(w));
   }
   return {
     subset: predicates.length < all.length,

@@ -72,6 +72,13 @@ test('a vault with no file, an empty folder, or every name gets the full list', 
   assert.match(words({ vaultPath: all }), /^Relationship types \(77\)\./);
 });
 
+test('a file naming every type and one stray still lists the stray', () => {
+  const dir = vaultWith(ontology.predicates.map((p) => p.type).join(', ') + '\n\n- `frobs`\n');
+  const out = words({ vaultPath: dir });
+  assert.match(out, /^Relationship types \(77\)\./);
+  assert.match(out, /^Not in the vocabulary: frobs$/m);
+});
+
 test('a file that is a directory is unreadable and gives the full list', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rel-words-'));
   fs.mkdirSync(path.join(dir, '_meta', 'relationship-types.md'), { recursive: true });
