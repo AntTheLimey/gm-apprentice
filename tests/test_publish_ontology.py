@@ -30,10 +30,12 @@ def test_copy_holds_every_tone_and_predicate():
     full = json.loads((REPO / "skills" / "shared" /
                        "gm-apprentice-ontology.json").read_text(encoding="utf-8"))
     copy = json.loads(COPY.read_text(encoding="utf-8"))
-    assert copy["tones"] == full["tones"]
+    for key in ("tones", "tone_near", "strength_scale", "verbs", "same_fact",
+                "place_fields", "not_edge_target_types"):
+        assert copy[key] == full[key], key
     assert [p["type"] for p in copy["predicates"]] == [p["type"] for p in full["predicates"]]
     for p in copy["predicates"]:
-        assert set(p) == {"type", "inverse", "category", "symmetric"}, p["type"]
+        assert set(p) == {"type", "inverse", "category", "symmetric", "genre"}, p["type"]
 
 
 def _exporter():

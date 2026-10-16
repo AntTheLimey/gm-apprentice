@@ -39,6 +39,7 @@ Usage:
   gm-apprentice-publish update-pin [options] Repoint this site at the newest installed build tool
   gm-apprentice-publish manifest <cmd>       Compare the publish manifest with the vault, or update it
   gm-apprentice-publish leaks <cmd>          Check the built player site for hidden text (list, check, accept, prune)
+  gm-apprentice-publish relationships <cmd>  The relationship words, short (words)
   gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
   gm-apprentice-publish lines                Answer what publishes, for text on stdin (used by vault_check)
@@ -153,6 +154,19 @@ the GM.
   --json             Emit { pc, sourcePath, playerSafe, frontmatter, markdown }
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
+`,
+  relationships: `
+gm-apprentice-publish relationships words [--vault <path>] [--json]
+
+Prints the relationship types (each with its reverse name), the tone words and the
+strength scale in a few lines. With --vault, a vault whose _meta/relationship-types.md
+names only some types gets only those, and names the file holds that are not in the
+vocabulary are listed on one line.
+
+  relationships words        Print the words
+  --vault <path>             The vault folder (reads _meta/relationship-types.md)
+  --json                     Print { subset, predicates, tones, strength } as JSON
+  --help, -h                 Show this help
 `,
   leaks: `
 gm-apprentice-publish leaks <list|check|accept|prune> [--config <path>] [--json]
@@ -1006,6 +1020,26 @@ if (command === 'leaks') {
   }
   const { runLeaks } = require('../lib/leaks-cli.js');
   runLeaks({ verb, configPath: parsed.configPath, json: !!parsed.flags.json, page: positional[0], text: positional[1], allOnPage: parsed.flags.page, note: parsed.flags.note })
+    .then(exitAfterFlush)
+    .catch(failAfterFlush);
+  return;
+}
+
+if (command === 'relationships') {
+  const { runRelationships, VERBS } = require('../lib/relationships/cli.js');
+  const verb = args[1];
+  if (!VERBS.includes(verb)) {
+    console.error(verb ? `Error: Unknown relationships command: ${verb}` : `Error: relationships needs a command (${VERBS.join(', ')})`);
+    printSubcommandHelp('relationships');
+    process.exit(1);
+  }
+  const parsed = parseSubcommandArgs(args.slice(2), { '--json': 'json' }, { '--vault': 'vault' });
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printSubcommandHelp('relationships');
+    process.exit(1);
+  }
+  runRelationships({ verb, vault: parsed.flags.vault, json: !!parsed.flags.json })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
   return;

@@ -35,468 +35,1105 @@
       "professional"
     ]
   },
+  "tone_near": {
+    "cordial": "friendly",
+    "collegial": "friendly",
+    "collaborative": "friendly",
+    "companionable": "friendly",
+    "sympathetic": "friendly",
+    "compassionate": "friendly",
+    "pleased": "friendly",
+    "grateful": "friendly",
+    "affectionate": "loving",
+    "fond": "loving",
+    "tender": "loving",
+    "maternal": "loving",
+    "paternal": "loving",
+    "dedicated": "loyal",
+    "dutiful": "loyal",
+    "obedient": "loyal",
+    "fanatical": "devoted",
+    "zealous": "devoted",
+    "idolatrous": "devoted",
+    "deferential": "respectful",
+    "reverent": "respectful",
+    "admiring": "respectful",
+    "adversarial": "hostile",
+    "violent": "hostile",
+    "dangerous": "hostile",
+    "terrified": "fearful",
+    "anxious": "fearful",
+    "horrified": "fearful",
+    "uneasy": "fearful",
+    "unsettled": "fearful",
+    "traumatised": "fearful",
+    "traumatized": "fearful",
+    "suspicious": "distrustful",
+    "dismissive": "contemptuous",
+    "condescending": "contemptuous",
+    "disapproving": "contemptuous",
+    "strained": "tense",
+    "cool": "cold",
+    "manipulative": "predatory",
+    "controlling": "predatory",
+    "corrupting": "predatory",
+    "dread": "ominous",
+    "chilling": "ominous",
+    "grim": "ominous",
+    "doomed": "ominous",
+    "haunted": "ominous",
+    "harrowing": "ominous",
+    "grave": "ominous",
+    "wary": "cautious",
+    "mercenary": "transactional",
+    "utilitarian": "transactional",
+    "instrumental": "transactional",
+    "strategic": "transactional",
+    "businesslike": "professional",
+    "clinical": "professional",
+    "complex": "complicated",
+    "conflicted": "complicated",
+    "unresolved": "complicated",
+    "mysterious": "unknown",
+    "uncertain": "unknown"
+  },
+  "strength_scale": {
+    "1-2": "weak",
+    "3-4": "moderate",
+    "5-6": "significant",
+    "7-8": "strong",
+    "9-10": "defining"
+  },
+  "verbs": {
+    "works_for": [
+      {
+        "use": "employs",
+        "flip": true
+      }
+    ],
+    "located_in": [
+      {
+        "use": "located_at",
+        "flip": false
+      }
+    ],
+    "hosted_by": [
+      {
+        "use": "located_at",
+        "flip": false
+      }
+    ],
+    "member": [
+      {
+        "use": "member_of",
+        "flip": false
+      }
+    ],
+    "hosts": [
+      {
+        "use": "part_of",
+        "flip": true
+      }
+    ],
+    "contains": [
+      {
+        "use": "part_of",
+        "flip": true
+      }
+    ],
+    "inside": [
+      {
+        "use": "part_of",
+        "flip": false
+      }
+    ],
+    "within": [
+      {
+        "use": "part_of",
+        "flip": false
+      }
+    ],
+    "adjacent_to": [
+      {
+        "use": "borders",
+        "flip": false
+      }
+    ],
+    "next_to": [
+      {
+        "use": "borders",
+        "flip": false
+      }
+    ],
+    "connects_to": [
+      {
+        "use": "borders",
+        "flip": false
+      }
+    ],
+    "stationed_at": [
+      {
+        "use": "located_at",
+        "flip": false
+      }
+    ],
+    "lives_at": [
+      {
+        "use": "located_at",
+        "flip": false
+      }
+    ],
+    "based_at": [
+      {
+        "use": "located_at",
+        "flip": false
+      }
+    ],
+    "appears_at": [
+      {
+        "use": "located_at",
+        "flip": false
+      }
+    ],
+    "hqd_at": [
+      {
+        "use": "headquartered_at",
+        "flip": false
+      }
+    ],
+    "operates_from": [
+      {
+        "use": "headquartered_at",
+        "flip": false
+      }
+    ],
+    "carved_by": [
+      {
+        "use": "created",
+        "flip": true
+      }
+    ],
+    "forged_by": [
+      {
+        "use": "created",
+        "flip": true
+      }
+    ],
+    "built_by": [
+      {
+        "use": "created",
+        "flip": true
+      }
+    ],
+    "wrote": [
+      {
+        "use": "created",
+        "flip": false
+      }
+    ],
+    "authored": [
+      {
+        "use": "created",
+        "flip": false
+      }
+    ],
+    "carries": [
+      {
+        "use": "owns",
+        "flip": false
+      },
+      {
+        "use": "wields",
+        "flip": false
+      }
+    ],
+    "holds": [
+      {
+        "use": "owns",
+        "flip": false
+      },
+      {
+        "use": "wields",
+        "flip": false
+      }
+    ],
+    "bears": [
+      {
+        "use": "owns",
+        "flip": false
+      },
+      {
+        "use": "wields",
+        "flip": false
+      }
+    ],
+    "piloted_by": [
+      {
+        "use": "owns",
+        "flip": true
+      }
+    ],
+    "serves_under": [
+      {
+        "use": "serves",
+        "flip": false
+      }
+    ],
+    "reports_to": [
+      {
+        "use": "commands",
+        "flip": true
+      }
+    ],
+    "assigned_by": [
+      {
+        "use": "commands",
+        "flip": true
+      }
+    ],
+    "raided": [
+      {
+        "use": "at_war_with",
+        "flip": false
+      },
+      {
+        "use": "conquered",
+        "flip": false
+      }
+    ],
+    "assaulted": [
+      {
+        "use": "at_war_with",
+        "flip": false
+      },
+      {
+        "use": "conquered",
+        "flip": false
+      }
+    ],
+    "attacked": [
+      {
+        "use": "at_war_with",
+        "flip": false
+      },
+      {
+        "use": "conquered",
+        "flip": false
+      }
+    ],
+    "besieged": [
+      {
+        "use": "at_war_with",
+        "flip": false
+      },
+      {
+        "use": "conquered",
+        "flip": false
+      }
+    ],
+    "deceives": [
+      {
+        "use": "deceived",
+        "flip": false
+      }
+    ],
+    "misled": [
+      {
+        "use": "deceived",
+        "flip": false
+      }
+    ],
+    "tricked": [
+      {
+        "use": "deceived",
+        "flip": false
+      }
+    ],
+    "lied_to": [
+      {
+        "use": "deceived",
+        "flip": false
+      }
+    ],
+    "has_intelligence_on": [
+      {
+        "use": "infiltrates",
+        "flip": false
+      },
+      {
+        "use": "studies",
+        "flip": false
+      }
+    ],
+    "spies_on": [
+      {
+        "use": "infiltrates",
+        "flip": false
+      },
+      {
+        "use": "studies",
+        "flip": false
+      }
+    ],
+    "watches": [
+      {
+        "use": "infiltrates",
+        "flip": false
+      },
+      {
+        "use": "studies",
+        "flip": false
+      }
+    ],
+    "affiliated_with": [
+      {
+        "use": "member_of",
+        "flip": false
+      },
+      {
+        "use": "allied_with",
+        "flip": false
+      }
+    ],
+    "visited_by": [
+      {
+        "use": "located_at",
+        "flip": true
+      },
+      {
+        "use": "participated_in",
+        "flip": true
+      }
+    ],
+    "investigated_by": [],
+    "questioned": [],
+    "interrogated": [],
+    "appears_in": []
+  },
+  "same_fact": [
+    [
+      "serves",
+      "employs"
+    ]
+  ],
+  "place_fields": [
+    {
+      "field": "parent_location",
+      "predicate": "part_of",
+      "stored_on": "self"
+    },
+    {
+      "field": "current_holder",
+      "predicate": "owns",
+      "stored_on": "target"
+    }
+  ],
+  "not_edge_target_types": [
+    "session",
+    "session_plan",
+    "session_play_notes",
+    "session_wrap",
+    "session_wrap_up",
+    "session_wrapup"
+  ],
   "predicates": [
     {
       "type": "parent_of",
       "inverse": "child_of",
       "category": "kinship",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "ancestor_of",
       "inverse": "descendant_of",
       "category": "kinship",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "sibling_of",
       "inverse": "sibling_of",
       "category": "kinship",
-      "symmetric": true
+      "symmetric": true,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "spouse_of",
       "inverse": "spouse_of",
       "category": "kinship",
-      "symmetric": true
+      "symmetric": true,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "betrothed_to",
       "inverse": "betrothed_to",
       "category": "kinship",
-      "symmetric": true
+      "symmetric": true,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "knows",
       "inverse": "knows",
       "category": "social",
-      "symmetric": true
+      "symmetric": true,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "friend_of",
       "inverse": "friend_of",
       "category": "social",
-      "symmetric": true
+      "symmetric": true,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "rival_of",
       "inverse": "rival_of",
       "category": "social",
-      "symmetric": true
+      "symmetric": true,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "mentors",
       "inverse": "mentored_by",
       "category": "social",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "trusts",
       "inverse": "trusted_by",
       "category": "social",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "betrayed",
       "inverse": "betrayed_by",
       "category": "social",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "rules",
       "inverse": "ruled_by",
       "category": "power",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "employs",
       "inverse": "employed_by",
       "category": "power",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "commands",
       "inverse": "commanded_by",
       "category": "power",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "serves",
       "inverse": "served_by",
       "category": "power",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "vassal_of",
       "inverse": "liege_of",
       "category": "power",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "imprisons",
       "inverse": "imprisoned_by",
       "category": "power",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "located_at",
       "inverse": "location_of",
       "category": "spatial",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "headquartered_at",
       "inverse": "headquarters_of",
       "category": "spatial",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "part_of",
       "inverse": "has_part",
       "category": "spatial",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "borders",
       "inverse": "borders",
       "category": "spatial",
-      "symmetric": true
+      "symmetric": true,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "haunts",
       "inverse": "haunted_by",
       "category": "spatial",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "owns",
       "inverse": "owned_by",
       "category": "possession",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "created",
       "inverse": "created_by",
       "category": "possession",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "wields",
       "inverse": "wielded_by",
       "category": "possession",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "seeks",
       "inverse": "sought_by",
       "category": "possession",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "discovered",
       "inverse": "discovered_by",
       "category": "knowledge",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "conceals",
       "inverse": "concealed_by",
       "category": "knowledge",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "recorded_in",
       "inverse": "records",
       "category": "knowledge",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "studies",
       "inverse": "studied_by",
       "category": "knowledge",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "enemy_of",
       "inverse": "enemy_of",
       "category": "conflict",
-      "symmetric": true
+      "symmetric": true,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "at_war_with",
       "inverse": "at_war_with",
       "category": "conflict",
-      "symmetric": true
+      "symmetric": true,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "conspires_against",
       "inverse": "conspired_against_by",
       "category": "conflict",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "allied_with",
       "inverse": "allied_with",
       "category": "conflict",
-      "symmetric": true
+      "symmetric": true,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "member_of",
       "inverse": "has_member",
       "category": "affiliation",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "founded",
       "inverse": "founded_by",
       "category": "affiliation",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "leads",
       "inverse": "led_by",
       "category": "affiliation",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "defected_from",
       "inverse": "lost_member",
       "category": "affiliation",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "infiltrates",
       "inverse": "infiltrated_by",
       "category": "affiliation",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "bound_to",
       "inverse": "binds",
       "category": "supernatural",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "fantasy",
+        "horror"
+      ]
     },
     {
       "type": "cursed_by",
       "inverse": "cursed",
       "category": "supernatural",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "fantasy",
+        "horror"
+      ]
     },
     {
       "type": "summoned",
       "inverse": "summoned_by",
       "category": "supernatural",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "fantasy",
+        "horror"
+      ]
     },
     {
       "type": "worships",
       "inverse": "worshipped_by",
       "category": "supernatural",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "fantasy",
+        "horror"
+      ]
     },
     {
       "type": "corrupted_by",
       "inverse": "corrupted",
       "category": "supernatural",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "fantasy",
+        "horror"
+      ]
     },
     {
       "type": "caused",
       "inverse": "caused_by",
       "category": "temporal",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "triggered",
       "inverse": "triggered_by",
       "category": "temporal",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "participated_in",
       "inverse": "had_participant",
       "category": "temporal",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "witnessed",
       "inverse": "witnessed_by",
       "category": "temporal",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "trades_with",
       "inverse": "trades_with",
       "category": "economic",
-      "symmetric": true
+      "symmetric": true,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "supplies",
       "inverse": "supplied_by",
       "category": "economic",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "finances",
       "inverse": "financed_by",
       "category": "economic",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "indebted_to",
       "inverse": "creditor_of",
       "category": "economic",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "murdered",
       "inverse": "murdered_by",
       "category": "event",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "poisoned",
       "inverse": "poisoned_by",
       "category": "event",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "wounded",
       "inverse": "wounded_by",
       "category": "event",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "rescued",
       "inverse": "rescued_by",
       "category": "event",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "captured",
       "inverse": "captured_by",
       "category": "event",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "deceived",
       "inverse": "deceived_by",
       "category": "event",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
     },
     {
       "type": "possessed_by",
       "inverse": "possesses",
       "category": "horror",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "horror"
+      ]
     },
     {
       "type": "infected_by",
       "inverse": "infected",
       "category": "horror",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "horror"
+      ]
     },
     {
       "type": "fears",
       "inverse": "feared_by",
       "category": "horror",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "horror"
+      ]
     },
     {
       "type": "feeds_on",
       "inverse": "fed_upon_by",
       "category": "horror",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "horror"
+      ]
     },
     {
       "type": "courts",
       "inverse": "courted_by",
       "category": "romance",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "romance"
+      ]
     },
     {
       "type": "rejected",
       "inverse": "rejected_by",
       "category": "romance",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "romance"
+      ]
     },
     {
       "type": "disguised_as",
       "inverse": "disguise_of",
       "category": "romance",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "romance"
+      ]
     },
     {
       "type": "blackmails",
       "inverse": "blackmailed_by",
       "category": "romance",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "romance"
+      ]
     },
     {
       "type": "conquered",
       "inverse": "conquered_by",
       "category": "historical",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "historical"
+      ]
     },
     {
       "type": "exiled_from",
       "inverse": "exiled",
       "category": "historical",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "historical"
+      ]
     },
     {
       "type": "succeeded",
       "inverse": "preceded",
       "category": "historical",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "historical"
+      ]
     },
     {
       "type": "negotiated_with",
       "inverse": "negotiated_with",
       "category": "historical",
-      "symmetric": true
+      "symmetric": true,
+      "genre": [
+        "historical"
+      ]
     },
     {
       "type": "uploaded_to",
       "inverse": "upload_source_of",
       "category": "scifi",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "scifi"
+      ]
     },
     {
       "type": "augmented_by",
       "inverse": "augments",
       "category": "scifi",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "scifi"
+      ]
     },
     {
       "type": "cloned_from",
       "inverse": "clone_source_of",
       "category": "scifi",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "scifi"
+      ]
     },
     {
       "type": "hacked",
       "inverse": "hacked_by",
       "category": "scifi",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "scifi"
+      ]
     },
     {
       "type": "alter_ego_of",
       "inverse": "alter_ego_of",
       "category": "superhero",
-      "symmetric": true
+      "symmetric": true,
+      "genre": [
+        "superhero"
+      ]
     },
     {
       "type": "empowered_by",
       "inverse": "empowers",
       "category": "superhero",
-      "symmetric": false
+      "symmetric": false,
+      "genre": [
+        "superhero"
+      ]
     },
     {
       "type": "nemesis_of",
       "inverse": "nemesis_of",
       "category": "superhero",
-      "symmetric": true
+      "symmetric": true,
+      "genre": [
+        "superhero"
+      ]
     }
   ]
 }
