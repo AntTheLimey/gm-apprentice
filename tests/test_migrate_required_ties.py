@@ -66,6 +66,15 @@ class RequiredTiesSectionTests(unittest.TestCase):
         item.apply(None)
         self.assertEqual(read(vault), "# Types\n\n")
 
+    def test_a_heading_of_the_first_level_after_the_section_stays(self):
+        text = (f"# Types\n\n## Required Relationships\n\n{ONE_LINER}\n\n"
+                "### Aside\n\nsub\n\n# Notes\n\nmine\n")
+        vault = vault_with(self, text)
+        (item,) = mv.find_required_ties_section(vault)
+        self.assertNotIn("mine", " ".join(item.lines))
+        item.apply(None)
+        self.assertEqual(read(vault), "# Types\n\n# Notes\n\nmine\n")
+
     def test_your_own_lines_are_named_in_the_offer(self):
         text = (f"## Required Relationships\n\n{ONE_LINER}\n"
                 "Every shrine needs a `patron`.\n\n## Universal Fields\n\nkept\n")

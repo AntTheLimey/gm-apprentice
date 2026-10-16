@@ -549,7 +549,7 @@ def find_required_ties_section(vault: Path) -> list[Item]:
     start = re.search(rf"^{re.escape(_RETIRED_HEADING)}[ \t]*\r?$", text, re.M)
     if not start:
         return []
-    nxt = re.search(r"^## ", text[start.end():], re.M)
+    nxt = re.search(r"^#{1,2} ", text[start.end():], re.M)
     end = start.end() + nxt.start() if nxt else len(text)
     body = [ln.strip() for ln in text[start.end():end].splitlines() if ln.strip()]
     own = [ln for ln in body if ln not in _STOCK_TIES_LINES]
@@ -559,7 +559,7 @@ def find_required_ties_section(vault: Path) -> list[Item]:
         m = re.search(rf"^{re.escape(_RETIRED_HEADING)}[ \t]*\r?$", new, re.M)
         if not m:
             return []
-        n = re.search(r"^## ", new[m.end():], re.M)
+        n = re.search(r"^#{1,2} ", new[m.end():], re.M)
         stop = m.end() + n.start() if n else len(new)
         write_text_atomic(path, new[:m.start()] + new[stop:])
         return ["removed the Required Relationships section"]
