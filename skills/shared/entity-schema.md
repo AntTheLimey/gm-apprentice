@@ -525,8 +525,8 @@ suggestions to the campaign's genre.
 Inverse names and modeling patterns (families, hierarchies,
 triangles): ttrpg-expert's `relationship-patterns.md`.
 
-This table is the authoritative vocabulary
-(`shared/gm-apprentice-ontology.json` is generated from it). A new
+This table is generated from
+`shared/gm-apprentice-ontology.json`, the one source of the vocabulary. A new
 vault's `_meta/relationship-types.md` starts with the full list;
 older vaults may hold a genre subset. A predicate found only in a
 vault copy is drift.

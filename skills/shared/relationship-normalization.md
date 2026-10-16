@@ -6,8 +6,8 @@ session-play, the-midwife, vault-ingest) and by the skills that **audit**
 them (campaign-qa graph-health). Prevention and repair read the same
 table, so drift can't reopen.
 
-The authoritative vocabulary is the predicate table in
-`shared/entity-schema.md`; a new vault's `_meta/relationship-types.md`
+The vocabulary is `shared/gm-apprentice-ontology.json` (the predicate
+table in `shared/entity-schema.md` is generated from it); a new vault's `_meta/relationship-types.md`
 starts with the full list, and older vaults may hold a genre subset.
 **Only ever write a `type:` that is in that vocabulary.** When a play note
 gives you a narrative verb, do one of three things, in order:
@@ -84,7 +84,7 @@ explicit step:
    | A place inside a place (venue in a district, room in a wing) | `parent_location` | `part_of` |
    | A faction inside a faction (a cell under its parent body) | `part_of` | `part_of` |
    | A **person in a faction** (a member moved to a new cell) | *(none)* | `member_of` |
-   | A faction's seat of operations | `territory` | `headquartered_at` |
+   | A faction's seat of operations | *(none)* | `headquartered_at` |
 
    Faction and Organization carry a scalar `part_of` (wiki-link to the
    parent body) as well as the edge — the same scalar/edge pairing

@@ -136,10 +136,9 @@ DEPRECATED_FIELDS: dict[str, list[tuple[str, str, str]]] = {
 
 # Relationship predicate vocabulary
 #
-# The authoritative list is the predicate table in entity-schema.md; the
-# ontology export beside this package restates it machine-readably (and
-# scripts/validate_ontology.py fails CI when the two disagree), so the
-# export is what code reads. Resolved from this file's own location: the
+# The ontology file beside this package is the one source of the vocabulary;
+# the predicate table in entity-schema.md is generated from it
+# (scripts/gen_ontology_docs.py --check fails CI when it is stale). Resolved from this file's own location: the
 # vocabulary travels with the plugin, never with the vault under audit.
 
 ONTOLOGY_PATH = Path(__file__).resolve().parent.parent / "gm-apprentice-ontology.json"
