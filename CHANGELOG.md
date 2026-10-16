@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.65] — 2026-10-16
+
+The ontology file becomes the one place every relationship rule lives, and
+the apprentice stops reading a 13 KB document to write a relationship.
+
+### Added
+
+- `gm-apprentice-publish relationships words` prints the relationship
+  words in a few lines: each predicate with its inverse and kind, grouped
+  by kind, and the tone words. `--vault <vault>` prints only the
+  predicates the vault's genre uses; `--json` gives the same as data. The
+  skills that write relationships run it instead of reading
+  `relationship-patterns.md`.
+- `scripts/gen_ontology_docs.py` writes every documented copy of the
+  ontology: the predicate, tone and symmetric tables in
+  `entity-schema.md`, the synonym and verb tables in
+  `relationship-normalization.md`, the publish tool's export and the
+  mobRPG copy. `--check` fails when any copy is stale, and CI runs it.
+- The ontology file now also holds the verb map, the pairs of ties that
+  state the same fact, the place fields (`parent_location` with
+  `part_of`, `current_holder` with `owns`) and the note types a tie never
+  points at.
+- A new update check, `required-ties-section`: when a vault's
+  `_meta/entity-types.md` still holds the "Required Relationships"
+  section, the update offers to remove it, and removes only that section.
+
+### Changed
+
+- `relationship-patterns.md` goes from 13,064 to 6,310 bytes. The tables
+  the new command prints are gone from it; the modelling patterns stay.
+- The ontology is its own source, version 1.4, and its `source_of_truth`
+  is `skills/shared/gm-apprentice-ontology.json`. The mobRPG copy is
+  generated from it and is byte for byte the same file.
+- `scripts/validate_ontology.py` keeps only the mobRPG enum checks; the
+  schema comparisons it did are now the generator's job.
+
+### Removed
+
+- The required-relationships table, and the by-eye instructions in
+  `campaign-organizer`, `campaign-qa` and the schema documents that told
+  the apprentice to check each kind of note against it. Not every note
+  needs a place. For mobRPG readers: `required_relationships` left the
+  ontology export.
+- The sentence that paired `territory:` with a tie. A `territory:` field
+  is never paired with a tie; the place pairs are only `parent_location`
+  with `part_of` and `current_holder` with `owns`, and only when the
+  field is exactly one wiki-link.
+
+---
+
 ## [1.10.64] — 2026-10-15
 
 `deploy` checks the finished site for hidden text before it uploads

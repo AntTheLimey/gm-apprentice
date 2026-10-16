@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.64"
+current_version: "1.10.65"
 ---
 
 # Vault Migration Record
