@@ -86,7 +86,9 @@ jobs:
       - name: CHANGELOG has an entry for the plugin version
         run: |
           PLUGIN_VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
-          if ! grep -qF "## [$PLUGIN_VERSION]" CHANGELOG.md; then
+          # A release heading at the start of a line, not the same text in an example.
+          PATTERN="^## \[${PLUGIN_VERSION//./\\.}\]( |$)"
+          if ! grep -qE "$PATTERN" CHANGELOG.md; then
             echo "::error::CHANGELOG.md has no '## [$PLUGIN_VERSION]' entry for the version in plugin.json"
             exit 1
           fi

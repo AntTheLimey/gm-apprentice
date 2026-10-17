@@ -84,6 +84,26 @@ class NotesTests(unittest.TestCase):
         self.assertNotIn("[1.0.0]", notes)
         self.assertNotIn("---", notes)
 
+    def test_a_tool_change_ships_in_the_next_version_bump(self):
+        (self.dir / "CHANGELOG.md").write_text(CHANGELOG)
+        self.commit("1.0.0", "Before")
+        self.git("tag", "publish-v1.0.0")
+        self.commit("1.0.0", "Tool change, no bump")
+        self.commit("1.2.0", "The bump", tool_change=False)
+        notes = prn.notes("1.2.0", "publish-v1.0.0", self.dir)
+        self.assertIn("- Tool change, no bump (", notes)
+        self.assertIn("### [1.2.0]", notes)
+        self.assertNotIn("[1.0.0]", notes)
+
+    def test_a_tool_change_no_bump_follows_yet_copies_no_entry(self):
+        (self.dir / "CHANGELOG.md").write_text(CHANGELOG)
+        self.commit("1.1.0", "Before")
+        self.git("tag", "publish-v1.0.0")
+        self.commit("1.1.0", "Not yet shipped")
+        notes = prn.notes("1.0.1", "publish-v1.0.0", self.dir)
+        self.assertIn("- Not yet shipped (", notes)
+        self.assertNotIn("## What changed", notes)
+
     def test_a_version_with_no_changelog_entry_is_left_out(self):
         (self.dir / "CHANGELOG.md").write_text(CHANGELOG)
         self.commit("1.0.0", "Before")

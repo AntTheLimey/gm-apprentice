@@ -56,6 +56,27 @@ def plugin_version_at(sha: str, cwd: Path) -> str | None:
     return json.loads(raw).get("version") or None
 
 
+def shipping_versions(prev: str, cwd: Path) -> dict[str, str]:
+    """Each commit since `prev` -> the plugin version it shipped in: the
+    version set by the first commit at or after it that changed
+    plugin.json's version. A commit no version change follows yet has not
+    shipped in a plugin release and is left out."""
+    log = git("log", "--reverse", "--format=%H", f"{prev}..HEAD", cwd=cwd)
+    order = [line for line in log.splitlines() if line]
+    shipped: dict[str, str] = {}
+    pending: list[str] = []
+    before = plugin_version_at(prev, cwd)
+    for sha in order:
+        pending.append(sha)
+        now = plugin_version_at(sha, cwd)
+        if now and now != before:
+            for waiting in pending:
+                shipped[waiting] = now
+            pending = []
+        before = now or before
+    return shipped
+
+
 def notes(version: str, prev: str | None, cwd: Path) -> str:
     out = [f"Publish tool {version}, packed with `npm pack`.", "",
            "Pin with the attached .tgz and verify it with `SHA256SUMS`.", "",
@@ -68,9 +89,10 @@ def notes(version: str, prev: str | None, cwd: Path) -> str:
     commits = [line.split("\t", 2) for line in log.splitlines() if line]
     out += [f"Since `{prev}`:", ""]
     out += [f"- {subject} ({short})" for _sha, short, subject in commits]
+    shipped = shipping_versions(prev, cwd)
     versions: list[str] = []
     for sha, _short, _subject in commits:
-        found = plugin_version_at(sha, cwd)
+        found = shipped.get(sha)
         if found and found not in versions:
             versions.append(found)
     entries = changelog_entries((cwd / "CHANGELOG.md").read_text(encoding="utf-8"))
