@@ -82,3 +82,63 @@ describe('leak gate: secret names', () => {
     } finally { s.cleanup(); }
   });
 });
+
+describe('leak gate: never-show words (player_site.never_show)', () => {
+  const WORDS = { player: { folder_map: { NPCs: 'npcs' }, never_show: ['Blue Lady', 'Kestrel'] } };
+  it('a clean build has no finding', () => {
+    const s = leakSite(NOTES, WORDS);
+    try { assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings, []); } finally { s.cleanup(); }
+  });
+  it('a listed phrase on a page, in any case and with a hyphen between its words, stops the gate', () => {
+    const s = leakSite(NOTES, WORDS);
+    try {
+      leakInto(s.outputDir, 'npcs/linker.html', 'They feared the BLUE-lady most.');
+      const found = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings.filter((x) => x.code === 'NEVER_SHOW');
+      assert.deepEqual(found.map((f) => [f.page, f.text, f.note]), [['npcs/linker.html', 'blue lady', 'player_site.never_show']]);
+      assert.match(found[0].shown, /BLUE-lady/);
+    } finally { s.cleanup(); }
+  });
+  it('a word inside a longer word is not a finding', () => {
+    const s = leakSite(NOTES, WORDS);
+    try {
+      leakInto(s.outputDir, 'npcs/linker.html', 'The Kestrels flew.');
+      assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings, []);
+    } finally { s.cleanup(); }
+  });
+  it('a listed word in a public note\'s own text is still a finding: the GM said never', () => {
+    const notes = { ...NOTES, 'NPCs/Kestrel.md': '---\ntype: npc\n---\nA bird of a name.\n' };
+    const s = leakSite(notes, WORDS);
+    try {
+      const pages = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings.filter((x) => x.code === 'NEVER_SHOW').map((f) => f.page);
+      assert.ok(pages.includes('npcs/kestrel.html'), JSON.stringify(pages));
+    } finally { s.cleanup(); }
+  });
+  it('a listed word in a copied file\'s name stops the gate', () => {
+    const s = leakSite(NOTES, WORDS);
+    try {
+      fs.writeFileSync(path.join(s.outputDir, 'kestrel-map.png'), 'x');
+      const found = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings.filter((x) => x.code === 'NEVER_SHOW');
+      assert.deepEqual(found.map((f) => f.page), ['kestrel-map.png']);
+    } finally { s.cleanup(); }
+  });
+  it('an accepted finding no longer stops the gate', () => {
+    const s = leakSite(NOTES, WORDS);
+    try {
+      leakInto(s.outputDir, 'npcs/linker.html', 'Kestrel was here.');
+      const [f] = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings;
+      const list = path.join(s.root, 'vault', '_meta', 'publish-list.yaml');
+      assert.ok(fs.existsSync(path.dirname(list)));
+      fs.appendFileSync(list, `accepted:\n  - page: ${f.page}\n    text: ${f.text}\n    note: ${f.note}\n`);
+      assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings, []);
+    } finally { s.cleanup(); }
+  });
+  it('a vault kept by a player is still checked for never-show words', () => {
+    const s = leakSite(NOTES, { ...WORDS, vault: { kept_by: 'player' }, gm: { publish: false } });
+    try {
+      leakInto(s.outputDir, 'npcs/linker.html', 'Kestrel was here.');
+      const r = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir });
+      assert.equal(r.skipped, null);
+      assert.deepEqual(r.findings.map((f) => f.code), ['NEVER_SHOW']);
+    } finally { s.cleanup(); }
+  });
+});

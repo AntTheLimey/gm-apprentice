@@ -7,7 +7,7 @@ const { performance } = require('perf_hooks');
 const { loadPublishList } = require('../manifest');
 const { collectHidden } = require('./collect');
 const { createMatcher, readOutput, listFiles } = require('./match');
-const { nameFindings } = require('./names');
+const { nameFindings, neverShowFindings } = require('./names');
 const { wordsOf, nameSet, onlyNames } = require('./text');
 
 const findingId = (page, text) => crypto.createHash('sha1').update(`${page}\n${text}`).digest('hex').slice(0, 6);
@@ -18,7 +18,7 @@ function runLeakGate({ configPath, outputDir }) {
   const start = performance.now();
   const done = (r) => ({ skipped: null, missing: false, findings: [], unneeded: [], warnings: [], files: 0, ...r, seconds: (performance.now() - start) / 1000 });
   const hidden = collectHidden({ configPath });
-  if (hidden.keptBy === 'player') {
+  if (hidden.keptBy === 'player' && hidden.neverShow.length === 0) {
     return done({ skipped: 'The leak check is skipped: this vault is kept by a player (vault.kept_by: player), so it holds nothing hidden.' });
   }
   if (!fs.existsSync(outputDir)) return done({ missing: true });
@@ -43,6 +43,10 @@ function runLeakGate({ configPath, outputDir }) {
   }
   // The name checks add theirs here, before the accepted list is applied.
   for (const f of nameFindings({ files, allFiles: listFiles(outputDir), hidden, findingId })) {
+    const key = keyOf(f.page, f.text);
+    if (!raw.has(key)) raw.set(key, f);
+  }
+  for (const f of neverShowFindings({ files, allFiles: listFiles(outputDir), words: hidden.neverShow, findingId })) {
     const key = keyOf(f.page, f.text);
     if (!raw.has(key)) raw.set(key, f);
   }

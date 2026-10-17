@@ -151,7 +151,10 @@ async function runDeploy(options, deps) {
   (d.assertNoStopsFor || require('./config').assertNoStopsFor)(configPath, 'deploy');
 
   // The leak gate (#293): the folder that would be uploaded, after the build, its steps and any postbuild script.
-  // It reads and never writes; a gate that cannot run stops the deploy (it fails closed).
+  // It reads and never writes; a gate that cannot run stops the deploy (it fails closed). --ignore-leaks deploys past a
+  // finding, or a gate that cannot run, on purpose: every finding is still printed, and the payload says so.
+  const ignoreLeaks = !!opts.ignoreLeaks;
+  const IGNORED = 'Deploying anyway: --ignore-leaks was given, so these go online as they are.';
   const gateFolder = tomlFolder || outputFolder;
   const checkLeaks = () => {
     try { return { result: leakGate({ configPath, outputDir: gateFolder }) }; } catch (err) {
@@ -188,13 +191,15 @@ async function runDeploy(options, deps) {
     // The gate reads the folder as it stands; it writes nothing, so a dry run may run it.
     const gate = checkLeaks();
     const leakLines = gate.result ? [...(gate.result.warnings || [])] : [];
-    const refuse = !gate.result || gate.result.findings.length > 0;
-    if (!gate.result) leakLines.push(gate.line.replace(' Nothing was uploaded.', ''));
+    const leaky = !gate.result || gate.result.findings.length > 0;
+    const refuse = leaky && !ignoreLeaks;
+    if (!gate.result) leakLines.push(gate.line.replace(' Nothing was uploaded.', '') + (ignoreLeaks ? ' Deploy would go ahead anyway (--ignore-leaks).' : ''));
     else if (gate.result.missing) leakLines.push(`Leak check: there is no built site in ${gateFolder} yet, so nothing to check.`);
     else if (gate.result.skipped) leakLines.push(gate.result.skipped);
-    else if (refuse) {
+    else if (leaky) {
       const n = gate.result.findings.length;
-      leakLines.push(`Leak check: deploy would stop: ${n} finding${n === 1 ? '' : 's'}.`, ...formatFindings(gate.result));
+      leakLines.push(ignoreLeaks ? `Leak check: ${n} finding${n === 1 ? '' : 's'}; deploy would go ahead anyway (--ignore-leaks).`
+        : `Leak check: deploy would stop: ${n} finding${n === 1 ? '' : 's'}.`, ...formatFindings(gate.result));
     } else leakLines.push(`Leak check: nothing hidden on the player site (${gate.result.files} files).`);
     if (opts.json) {
       out(JSON.stringify({
@@ -202,6 +207,7 @@ async function runDeploy(options, deps) {
         verified: false, status: null, attempts: 0, commands, dryRun: true,
         ...(gate.result ? { leaks: gateSummary(gate.result) } : {}),
         ...(refuse ? { wouldRefuse: true } : {}),
+        ...(leaky && ignoreLeaks ? { leaksIgnored: true } : {}),
         ...(gate.result ? {} : { messages: leakLines }),
       }, null, 2));
       return refuse ? 1 : 0;
@@ -249,6 +255,7 @@ async function runDeploy(options, deps) {
         host, built, deployed: false, url: null, verified: false, status: null,
         attempts: 0, commands, messages, deployedAt: now().toISOString(),
         ...(gateResult ? { leaks: gateSummary(gateResult) } : {}),
+        ...(leaksIgnored ? { leaksIgnored: true } : {}),
       }, payload), null, 2));
     }
     return rc;
@@ -256,21 +263,31 @@ async function runDeploy(options, deps) {
 
   const gate = checkLeaks();
   gateResult = gate.result;
-  if (!gateResult) { say(gate.line); return finish({ refused: true }, 1); }
-  for (const line of gateResult.warnings || []) say(line);
-  if (gateResult.skipped) say(gateResult.skipped);
-  if (gateResult.missing) {
+  let leaksIgnored = false;
+  if (!gateResult && ignoreLeaks) {
+    say(gate.line.replace(' Nothing was uploaded.', ''));
+    say(IGNORED);
+    leaksIgnored = true;
+  } else if (!gateResult) { say(gate.line); return finish({ refused: true }, 1); }
+  if (gateResult) for (const line of gateResult.warnings || []) say(line);
+  if (gateResult && gateResult.skipped) say(gateResult.skipped);
+  if (gateResult && gateResult.missing) {
     say(`deploy stopped: there is no built site in ${gateFolder} to check. Nothing was uploaded.`);
     return finish({ refused: true }, 1);
   }
-  if (gateResult.findings.length) {
+  if (gateResult && gateResult.findings.length && ignoreLeaks) {
+    const n = gateResult.findings.length;
+    say(`Leak check: hidden text or a secret name is on the player site (${n} finding${n === 1 ? '' : 's'}).`);
+    for (const line of formatFindings(gateResult)) say(line);
+    say(IGNORED);
+    leaksIgnored = true;
+  } else if (gateResult && gateResult.findings.length) {
     const n = gateResult.findings.length;
     say(`deploy stopped: hidden text or a secret name is on the player site (${n} finding${n === 1 ? '' : 's'}). Nothing was uploaded.`);
     for (const line of formatFindings(gateResult)) say(line);
     say('Fix each note, or accept a finding with gm-apprentice-publish leaks accept <page> <id>. leaks list shows them again.');
     return finish({ refused: true }, 1);
-  }
-  if (!gateResult.skipped) say(`Leak check: nothing hidden on the player site (${gateResult.files} files, ${gateResult.seconds.toFixed(1)} s).`);
+  } else if (gateResult && !gateResult.skipped) say(`Leak check: nothing hidden on the player site (${gateResult.files} files, ${gateResult.seconds.toFixed(1)} s).`);
 
   if (isCloudflare) {
     const who = runWrangler(['whoami'], { cwd: siteRoot });

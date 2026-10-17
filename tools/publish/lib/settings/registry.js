@@ -562,6 +562,13 @@ const REGISTRY = [
     left_out: '`4`',
   },
 
+  // Words the GM never wants on the player site: going online stops on one (the leak gate)
+  {
+    name: 'player_site.never_show', type: 'list', same: 'phrase', of: 'words or phrases', default: [], guards: true, group: 'published',
+    does: 'Words or phrases that must never reach players: a name, a twist, a word from your prep. The build does not remove them; `deploy` stops when the finished player site holds one (any case, as a whole word), names the page, and `leaks check` lists them. A finding you mean to keep is accepted like any other (`leaks accept`)',
+    left_out: 'None',
+  },
+
   // Withheld notes: the words a link to one prints in place of its name
   { name: 'player_site.withheld_words', type: 'map', container: true },
   {
@@ -640,7 +647,7 @@ const REGISTRY = [
 const NOT_PER_SITE = new Set(['player_site.publish', 'player_site.folder', 'player_site.url', 'player_site.host',
   'player_site.output', 'player_site.cloudflare_project', 'player_site.keep',
   'player_site.hide.folders', 'player_site.hide.sections', 'player_site.hide.fields', 'player_site.hide.callouts',
-  'player_site.hide.drafts', 'player_site.hide.field_exceptions',
+  'player_site.hide.drafts', 'player_site.hide.field_exceptions', 'player_site.never_show',
   'player_site.features.live_stats', 'player_site.features.inbox']);
 // A twin that does not inherit when unset: the player site's build steps never run for the GM site.
 const GM_OWN_DEFAULT = { 'player_site.before_build': [], 'player_site.after_build': [] };

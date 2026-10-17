@@ -7,6 +7,8 @@ const { wordsOf } = require('./text');
 
 const REASON = { alias: 'a name kept secret in gm_aliases', withheld: 'the name of a note marked withheld' };
 const CODE = { alias: 'ALIAS_IN_PROSE', withheld: 'WITHHELD_IN_PROSE' };
+const NEVER_SHOW = { code: 'NEVER_SHOW', note: 'player_site.never_show', reason: 'a word the GM listed under player_site.never_show' };
+const CONTEXT = 60;
 
 const esc = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -90,4 +92,41 @@ function nameFindings({ files, allFiles, hidden, findingId }) {
   return found;
 }
 
-module.exports = { nameFindings };
+// The GM's never-show words (player_site.never_show): each found in any case as a whole word, with a space, an
+// underscore or a hyphen between its words, in what a file sends and in any file's own name. Unlike a secret name, a
+// public name that holds one is no excuse: the GM said never.
+function neverShowFindings({ files, allFiles, words, findingId }) {
+  const found = [];
+  const seen = new Set();
+  const list = [...new Set(words.map((w) => w.trim()).filter(Boolean))].map((w) => ({
+    word: w,
+    re: new RegExp('(?<![\\p{L}\\p{N}])' + foldQuotes(w).split(/[\s_\-\u2010\u2011]+/).filter(Boolean).map(esc).join('[\\s_\\-\\u2010\\u2011]+')
+      + '(?![\\p{L}\\p{N}])', 'iu'),
+  }));
+  const add = (page, w, shown) => {
+    const text = wordsOf(w.word).join(' ');
+    const key = `${page}\n${text}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    found.push({ id: findingId(page, text), kind: 'name', code: NEVER_SHOW.code, page, text, shown, note: NEVER_SHOW.note, reason: NEVER_SHOW.reason });
+  };
+  for (const file of files) {
+    const text = foldQuotes(file.text || '');
+    for (const w of list) {
+      const m = w.re.exec(text);
+      if (!m) continue;
+      const start = Math.max(text.lastIndexOf('\n', m.index) + 1, m.index - CONTEXT);
+      const end = text.indexOf('\n', m.index + m[0].length);
+      const stop = Math.min(end === -1 ? text.length : end, m.index + m[0].length + CONTEXT);
+      add(file.rel, w, text.slice(start, stop).replace(/\s+/g, ' ').trim());
+    }
+  }
+  for (const rel of allFiles) {
+    if (isToolFile(rel)) continue;
+    const address = foldQuotes(rel.replace(/\.[^./]+$/, ''));
+    for (const w of list) if (w.re.test(address)) add(rel, w, rel);
+  }
+  return found;
+}
+
+module.exports = { nameFindings, neverShowFindings };

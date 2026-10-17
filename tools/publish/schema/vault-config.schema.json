@@ -1192,6 +1192,21 @@
             }
           }
         },
+        "never_show": {
+          "description": "Words or phrases that must never reach players: a name, a twist, a word from your prep. The build does not remove them; `deploy` stops when the finished player site holds one (any case, as a whole word), names the page, and `leaks check` lists them. A finding you mean to keep is accepted like any other (`leaks accept`)",
+          "default": [],
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
         "withheld_words": {
           "type": [
             "object",

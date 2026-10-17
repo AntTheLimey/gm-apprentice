@@ -107,6 +107,7 @@ fixed, so nothing extra is ever shown by a guess. These are:
 - `player_site.hide.callouts`
 - `player_site.hide.drafts`
 - `player_site.hide.field_exceptions`
+- `player_site.never_show`
 
 <!-- /settings:hiding-list -->
 
@@ -255,6 +256,7 @@ These decide which notes, and which parts of a note, reach the site.
 | `player_site.hide.callouts`<br>was `publish.exclude_callouts`, `excludeCallouts` | Whether Obsidian callouts (`> [!note]`) are left out | `on` for all, `off` for none, or a list of callout types | Off; a site set up by the apprentice starts with it on |
 | `player_site.hide.drafts`<br>was `publish.exclude_drafts` | Whether a note with `canon_status: DRAFT` at its top is left off the site | A switch | Off: drafts publish with a "Draft" badge |
 | `player_site.hide.field_exceptions`<br>was `publish.overrides.fields` | Lets one note show a field that `player_site.hide.fields` hides everywhere else | A note's path from the top of the vault, in quotes, then `include:` and the field names | No exceptions |
+| `player_site.never_show` | Words or phrases that must never reach players: a name, a twist, a word from your prep. The build does not remove them; `deploy` stops when the finished player site holds one (any case, as a whole word), names the page, and `leaks check` lists them. A finding you mean to keep is accepted like any other (`leaks accept`) | A list of words or phrases | None |
 | `player_site.withheld_words.person` | The word that stands in for the name of a withheld person (a character or an NPC) when a note links to them with no label of their own. It cannot hold `[`, `]` or `\|` | Text | `someone` |
 | `player_site.withheld_words.place` | The word that stands in for the name of a withheld place. It cannot hold `[`, `]` or `\|` | Text | `somewhere` |
 | `player_site.withheld_words.thing` | The word that stands in for the name of any other withheld note. It cannot hold `[`, `]` or `\|` | Text | `something` |
@@ -540,6 +542,7 @@ mark always means hidden from players. The GM site's folder is
 - `player_site.hide.callouts`
 - `player_site.hide.drafts`
 - `player_site.hide.field_exceptions`
+- `player_site.never_show`
 - `player_site.features.live_stats`
 - `player_site.features.inbox`
 

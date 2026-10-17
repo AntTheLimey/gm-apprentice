@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.66"
+current_version: "1.10.67"
 ---
 
 # Vault Migration Record
@@ -73,3 +73,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.64 | No vault change (a publish list with no `accepted:` entries holds none). The publish tool learns the leak gate: `deploy` reads the finished player site after every build step and stops on a hidden sentence or a secret name, and the `leaks` command lists, checks, accepts and prunes findings (an accepted finding is written to the publish list under `accepted:`); repinned to 1.30.0 | — |
 | 1.10.65 | The retired "Required Relationships" section removed from `_meta/entity-types.md`, on a yes; repinned to 1.31.0 | `required-ties-section` |
 | 1.10.66 | A `_meta/relationship-types.md` that names fewer of the relationship types than the vocabulary has is offered the missing ones, on a yes (the offer names them; answer no for a deliberate genre subset). A list written as the scaffold's `Category / Types` table has each type added to its category's row; any other form gets a short section of `- type` bullets at the end. Nothing else in the file changes; repinned to 1.32.0 | `relationship-types-missing` |
+| 1.10.67 | No vault change. The publish tool learns `deploy --ignore-leaks` (uploads past the leak check on purpose, every finding still printed) and the `player_site.never_show` setting (words that stop a deploy when the player site shows them); repinned to 1.33.0 | — |

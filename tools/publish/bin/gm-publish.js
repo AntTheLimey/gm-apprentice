@@ -369,24 +369,28 @@ and prints the addresses to open.
   --help, -h         Show this help
 `,
   deploy: `
-gm-apprentice-publish deploy [--config <path>] [--verify] [--no-build] [--dry-run] [--json]
+gm-apprentice-publish deploy [--config <path>] [--verify] [--no-build] [--dry-run] [--ignore-leaks] [--json]
 
 Builds the site and publishes it to the host the vault names (player_site.host):
 "cloudflare-pages" runs wrangler (checking authentication first, and aligning
 wrangler.toml's project name), "github-pages" commits docs/ and pushes.
 
 Before anything is uploaded, the leak check reads the built site for hidden text
-and secret names, and stops the deploy on a finding (see leaks --help). --dry-run
-runs the check on the folder as it stands.
+and secret names (and the words player_site.never_show lists), and stops the
+deploy on a finding (see leaks --help). --dry-run runs the check on the folder
+as it stands.
 
   --verify          After deploying, fetch the site URL up to 3 times, 20s
                      apart. A site still propagating is reported, not failed.
   --no-build         Deploy whatever is already in the output directory
   --dry-run, -n      Print the commands that would run; run none of them
                      (exit 1 when the leak check would stop the deploy)
+  --ignore-leaks     Deploy even when the leak check finds something, or
+                     cannot run. Every finding is still printed. Only for
+                     a deploy the GM chose to make; nothing is accepted
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --json             Emit { host, built, deployed, url, verified, status,
-                     attempts, commands, refused, leaks }
+                     attempts, commands, refused, leaks, leaksIgnored }
   --help, -h         Show this help
 `,
   'update-pin': `
@@ -941,6 +945,7 @@ if (command === 'deploy') {
     '--dry-run': 'dryRun',
     '-n': 'dryRun',
     '--json': 'json',
+    '--ignore-leaks': 'ignoreLeaks',
   });
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
@@ -954,6 +959,7 @@ if (command === 'deploy') {
     noBuild: !!parsed.flags.noBuild,
     dryRun: !!parsed.flags.dryRun,
     json: !!parsed.flags.json,
+    ignoreLeaks: !!parsed.flags.ignoreLeaks,
   })
     .then(exitAfterFlush)
     .catch(failAfterFlush);

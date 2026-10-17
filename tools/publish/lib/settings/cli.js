@@ -456,6 +456,12 @@ function sameRule(e, vaultPath) {
     const { dirIsExcluded } = require('../scanner');
     return (a, b) => dirIsExcluded(a, [b]) && dirIsExcluded(b, [a]);
   }
+  if (e.same === 'phrase') {
+    // The leak gate reads a phrase in any case, with any run of spaces between its words.
+    const { canonicalNfc } = require('../unicode');
+    const key = (x) => canonicalNfc(String(x)).replace(/\s+/g, ' ').trim().toLowerCase();
+    return (a, b) => key(a) === key(b);
+  }
   if (e.same === 'callout') return (a, b) => a.toLowerCase() === b.toLowerCase(); // the build lower-cases both sides
   if (e.same === 'name') {
     const { canonicalNfc } = require('../unicode');
