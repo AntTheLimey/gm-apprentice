@@ -373,6 +373,15 @@ class SystemAliases(unittest.TestCase):
         self.assertIn("Cartography", out.stdout)
         self.assertIn("coc-7e/regency", out.stdout)
 
+    def test_a_variant_system_id_or_alias_reads_its_variant(self):
+        """`coc-7e-regency` and `regency-cthulhu` (a vault's system) read
+        the coc-7e/regency variant, as `coc-7e/regency` does."""
+        for name in ("coc-7e-regency", "Regency-Cthulhu"):
+            with self.subTest(name=name):
+                out = run_cli(name, "Cartography", "--systems-dir", str(FIX))
+                self.assertEqual(out.returncode, 0, out.stderr)
+                self.assertIn("coc-7e/regency", out.stdout)
+
     def test_unknown_variant_suffix_exits_2(self):
         out = run_cli("coc-7e/not-a-real-variant", "Cartography",
                       "--systems-dir", str(FIX))

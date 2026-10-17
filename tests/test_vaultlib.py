@@ -573,11 +573,13 @@ class VersionTests(unittest.TestCase):
 
     def _zip_layout_version(self, stamp):
         """plugin_version() from a copy laid out as a skill zip unpacks:
-        shared/scripts/vaultlib.py, no .claude-plugin/plugin.json."""
+        shared/scripts/vaultlib.py beside shared/'s ontology file (a zip
+        carries all of shared/), no .claude-plugin/plugin.json."""
         with tempfile.TemporaryDirectory() as t:
             scripts = Path(t) / "skill" / "shared" / "scripts"
             scripts.mkdir(parents=True)
             shutil.copy(Path(vl.__file__), scripts / "vaultlib.py")
+            shutil.copy(vl.ONTOLOGY_PATH, scripts.parent / vl.ONTOLOGY_PATH.name)
             if stamp is not None:
                 (scripts.parent / "VERSION").write_text(stamp, encoding="utf-8")
             run = subprocess.run(

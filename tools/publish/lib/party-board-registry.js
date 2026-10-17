@@ -1,8 +1,9 @@
 'use strict';
 // Maps a campaign's system id to its party-board skin. Single source of truth so
-// build.js / wiki.js do not hard-code any one system. Keys mirror pc-registry.js
-// and live-mount.js. clientScripts are ORDERED — party-core.js (the shared spine)
+// build.js / wiki.js do not hard-code any one system. Keyed by canonical system id,
+// as pc-registry.js and live-mount.js are. clientScripts are ORDERED — party-core.js (the shared spine)
 // must load before any system client that reads window.__partyCore.
+const { systemId } = require('./shared-lists');
 const { buildPartyManifest } = require('./party-manifest');
 const { renderPartyBoard } = require('./templates/gurps/party-board');
 const { buildCoCPartyManifest, renderCoCBoard } = require('./templates/coc/party-board');
@@ -26,15 +27,16 @@ const DND = {
   scriptId: 'dnd-party-data',
   clientScripts: ['party-core.js', 'dnd-live.js', 'dnd-party.js'],
 };
+// By canonical system id; the aliases that name each are the shared list (shared-lists.js).
 const REGISTRY = {
-  'gurps': GURPS, 'gurps-4e': GURPS,
-  'coc': COC, 'coc-7e': COC, 'regency-cthulhu': COC, 'coc-7e-regency': COC,
-  'dnd': DND, 'dnd-5e': DND, 'dnd-5e-2024': DND,
+  'gurps-4e': GURPS,
+  'coc-7e': COC, 'coc-7e-regency': COC,
+  'dnd-5e-2024': DND,
 };
 
 function boardFor(system) {
-  if (!system) return null;
-  return REGISTRY[String(system).toLowerCase()] || null;
+  const id = systemId(system);
+  return (id && REGISTRY[id]) || null;
 }
 
 module.exports = { boardFor };

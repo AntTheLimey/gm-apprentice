@@ -31,7 +31,8 @@ def test_copy_holds_every_tone_and_predicate():
                        "gm-apprentice-ontology.json").read_text(encoding="utf-8"))
     copy = json.loads(COPY.read_text(encoding="utf-8"))
     for key in ("tones", "tone_near", "strength_scale", "storage_rule", "verbs", "same_fact",
-                "place_fields", "not_edge_target_types"):
+                "place_fields", "not_edge_target_types", "session_status", "session_stage",
+                "wrap_up_types", "game_systems", "vault_folders"):
         assert copy[key] == full[key], key
     assert [p["type"] for p in copy["predicates"]] == [p["type"] for p in full["predicates"]]
     for p in copy["predicates"]:

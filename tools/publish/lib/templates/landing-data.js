@@ -2,11 +2,11 @@ const { canonicalNfc, graphemes } = require('../unicode');
 const { escapeHtml, publishedSource } = require('../processor');
 const { wikilinkRe, parseWikilink } = require('../wikilink');
 const { stripTags } = require('../strip-tags');
-const { isLinkedWrapUp, isWrapUp } = require('../session-hub');
+const { isLinkedWrapUp, isWrapUp, isPlayedSession } = require('../session-hub');
 
 function getLatestSession(pages) {
   const played = pages.filter(
-    p => p.frontmatter.type === 'session' && (p.frontmatter.status === 'played' || p.frontmatter.status === 'reviewed')
+    p => isPlayedSession(p.frontmatter)
   );
   if (played.length === 0) return null;
   // "Latest" = most recently played (by play_date), not highest session_number — chapters can

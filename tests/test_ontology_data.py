@@ -18,7 +18,7 @@ class OntologyData(unittest.TestCase):
 
     def test_the_file_is_its_own_source(self):
         self.assertEqual(ONT["source_of_truth"], "skills/shared/gm-apprentice-ontology.json")
-        self.assertEqual(ONT["version"], "1.4")
+        self.assertEqual(ONT["version"], "1.5")
 
     def test_every_verb_choice_is_a_real_predicate(self):
         vocab = VOCAB

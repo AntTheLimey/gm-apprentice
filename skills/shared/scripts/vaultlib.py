@@ -36,6 +36,7 @@ import threading
 import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Literal
 
@@ -696,12 +697,28 @@ def wrapup_filename(rel: str, fm: dict[str, Any]) -> str | None:
             f"_Wrap_Up.md")
 
 
+# The ontology file beside this package holds the short lists the scripts
+# share with the publish tool (wrap-up spellings, session statuses, game
+# systems, type folders); schema_rules reads the rest of it. Resolved from
+# this file's own location: the lists travel with the plugin, never with
+# the vault under audit.
+ONTOLOGY_PATH = Path(__file__).resolve().parent.parent / "gm-apprentice-ontology.json"
+
+
+@lru_cache(maxsize=1)
+def ontology() -> dict[str, Any]:
+    """The ontology file, read once."""
+    loaded: dict[str, Any] = json.loads(ONTOLOGY_PATH.read_text(encoding="utf-8"))
+    return loaded
+
+
 # Every `type:` spelling a Session Wrap-Up is written with in the wild.
 # One definition, because a script that knows only two of the three finds
 # a vault's wrap-ups and another one silently does not: `vault_check
 # sessions` reported a wrap-up that `session_context.py` never loaded.
-WRAP_UP_TYPES: frozenset[str] = frozenset(
-    {"session_wrap", "session-wrap-up", "session-wrapup"})
+# The first is the spelling the templates write.
+WRAP_UP_TYPE: str = ontology()["wrap_up_types"][0]
+WRAP_UP_TYPES: frozenset[str] = frozenset(ontology()["wrap_up_types"])
 
 
 # --------------------------------------------------------------------------

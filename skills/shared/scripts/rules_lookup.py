@@ -75,6 +75,9 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import schema_rules  # noqa: E402
+
 SYSTEMS_DIR = Path(__file__).resolve().parents[2] / "ttrpg-expert" / "systems"
 # Each system directory ships a licence notice; it is not rules content.
 NOTICE_FILE = "NOTICE.md"
@@ -98,28 +101,23 @@ KIND_BY_STEM: dict[str, str] = {
     "conditions": "condition",
 }
 
-# System slug -> the argument a user or a skill might type instead.
-# Values must be real top-level directory names under SYSTEMS_DIR; that
-# is checked at lookup time (list_systems()), not assumed here, so a
-# stale alias fails loudly rather than silently resolving to nothing.
-SYSTEM_ALIASES: dict[str, str] = {
-    "gurps": "gurps-4e",
-    "gurps4e": "gurps-4e",
-    "dnd": "dnd-5e-2024",
-    "dnd5e": "dnd-5e-2024",
-    "5e": "dnd-5e-2024",
-    "dnd-5e": "dnd-5e-2024",
-    "d&d": "dnd-5e-2024",
-    "pf2": "pf2e",
-    "pathfinder": "pf2e",
-    "pf2e-remaster": "pf2e",
-    "coc": "coc-7e",
-    "coc7e": "coc-7e",
-    "cthulhu": "coc-7e",
-    "blades": "fitd",
-    "bitd": "fitd",
-    "fitd": "fitd",
-}
+# The argument a user or a skill might type -> the system slug: the game
+# systems' aliases, from the ontology (schema_rules.SYSTEM_ALIASES). A slug
+# must be a real top-level directory under SYSTEMS_DIR; that is checked at
+# lookup time (list_systems()), not assumed here, so an alias with no
+# rules folder fails loudly rather than silently resolving to nothing.
+# A system whose rules are another system's variant (`coc-7e-regency`,
+# `regency-cthulhu`) is read as that `base/variant` (schema_rules.SYSTEM_RULES).
+SYSTEM_ALIASES: dict[str, str] = dict(schema_rules.SYSTEM_ALIASES)
+
+
+def as_rules_path(raw: str) -> str:
+    """`coc-7e-regency` or `regency-cthulhu` -> `coc-7e/regency`; anything
+    else, including an explicit `base/variant`, is returned as given."""
+    if "/" in raw:
+        return raw
+    rules = schema_rules.SYSTEM_RULES.get(schema_rules.system_id(raw) or "")
+    return rules if rules and "/" in rules else raw
 
 FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
 HEADING_RE = re.compile(r"^#{1,6}\s")
@@ -597,7 +595,7 @@ def main(argv: list[str] | None = None) -> int:
         system: str | None = None
         implied_variant: str | None = None
     else:
-        base_part, _, variant_part = args.system.partition("/")
+        base_part, _, variant_part = as_rules_path(args.system).partition("/")
         base = resolve_system(base_part, args.systems_dir)
         if base is None:
             valid = list_systems(args.systems_dir)

@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.70] — 2026-10-17
+
+The short lists the vault scripts, the publish tool and the skill text all
+use now live in one place, the ontology file, and a test fails when any copy
+drifts. Several copies had already drifted apart.
+
+### Added
+
+- The ontology file (version 1.5) holds the session statuses (not yet run;
+  played), the session stages (in prep; in play), the wrap-up type
+  spellings, the game systems with their names and every short form, and
+  the vault's type folders with their site folders. The publish tool reads
+  its generated copy through `lib/shared-lists.js`; the vault scripts read
+  them through `schema_rules.py`.
+- `tests/test_shared_lists.py` and `tools/publish/test/unit/shared-lists.test.js`
+  check every remaining typed-out copy, in code and in the skill text,
+  against the one source.
+
+### Changed
+
+- Every part of the plugin understands the same short forms of a game
+  system: `coc`, `coc7e`, `cthulhu`, `regency-cthulhu`, `gurps`,
+  `gurps4e`, `dnd`, `dnd-5e`, `dnd5e`, `5e`, `d&d`, `pathfinder`,
+  `pathfinder-2e`, `pf2`, `pf2e-remaster`, `blades`, `bitd`. Before, the
+  rules lookup, the update, the sheets, the party boards and the live
+  sheets each knew a different set.
+- `vault.system` reads a short form as the system it names (`coc` is
+  `coc-7e`); `settings move --fill vault.system=coc` writes `coc-7e`. No
+  page changes.
+- A wrap-up typed `session-wrap-up` or `session-wrapup` is treated like
+  `session_wrap` everywhere: it can go on the publish list, the build and
+  `doctor --site` warn when it is on neither list, and its page header
+  reads "Session".
+- A vault whose system is Regency Cthulhu (`coc-7e-regency` or
+  `regency-cthulhu`) reads the Regency rules in `rules_lookup.py`, as
+  `coc-7e/regency` already did; before, it was turned away as unknown.
+- The menu and index section names come from one table in the publish
+  tool. A new site's folder map lists Heritages after Creatures; what
+  publishes is unchanged.
+- The publish tool is 1.35.0.
+
+### Fixed
+
+- The publish tool's package ships its MIT licence as `LICENSE`, a copy of
+  the repo's `LICENSE-CODE` that a test keeps identical, and the release
+  stops if the packed tool lacks it (#418).
+
+- `entity-schema.md` left `wrap-up` out of a session's statuses, and
+  `skipped` and `modified` out of a scene's; `content-filtering.md` left
+  `wrap-up` out of what always publishes.
+- A session at `status: wrap-up` publishes, but four places on the site
+  still counted only `played` and `reviewed`: the chapter index showed it
+  as upcoming and its chapter as not complete, the landing page skipped it
+  as the latest session and in the sessions-played count, and a PC's
+  journey left out its places. They ask the same rule as the build now.
+- `flush` sent a Pathfinder or Forged in the Dark character's saved values
+  to the Call of Cthulhu writer. Those systems have no live sheet, so it
+  now skips the note and says why.
+
+---
+
 ## [1.10.69] — 2026-10-17
 
 Housekeeping from an architecture sweep: the plugin version lives in one

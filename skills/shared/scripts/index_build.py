@@ -43,6 +43,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TypedDict
 
+from schema_rules import SESSION_NOT_YET_RUN
 from vaultlib import (
     WRAP_UP_TYPES,
     chapter_key,
@@ -107,8 +108,9 @@ NON_ENTITY_TYPES: set[str] = NARRATIVE_ADJACENT_TYPES | NARRATIVE_TYPES
 # be skipped outright too; they now get placed instead — see above.)
 SKIP_TYPES = {"meta", "campaign_overview"}
 
-# Statuses that make a session worth surfacing under "Active Session".
-ACTIVE_SESSION_STATUSES = {"planned", "prepped"}
+# Statuses that make a session worth surfacing under "Active Session":
+# the ones not yet run.
+ACTIVE_SESSION_STATUSES = SESSION_NOT_YET_RUN
 
 DESCRIPTOR_FIELDS = ("description", "summary", "role", "occupation", "tagline")
 

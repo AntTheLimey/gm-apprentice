@@ -1,9 +1,10 @@
 const { refTarget, parseWikilink, linkText } = require('../wikilink');
 const { escapeHtml, relativePath, resolveWikiLinks, renderMetaValue, plainMetaValue, encodeHref, publishedSource, renderMarkdown } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, portraitImg, noPreviewAttr, getCanonStatus } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, portraitImg, noPreviewAttr, getCanonStatus, DIR_LABELS } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
 const { canonicalNfc, nfcLookupTable } = require('../unicode');
+const { isPlayedStatus } = require('../session-hub');
 
 const GENRE_SECTION_TITLES = {
   military: {
@@ -24,13 +25,9 @@ const GENRE_SECTION_TITLES = {
   },
 };
 
-const DEFAULT_SECTION_TITLES = {
-  locations: 'Locations',
-  factions: 'Factions & Organizations',
-  items: 'Items & Artifacts',
-  creatures: 'Creatures',
-  documents: 'Documents',
-};
+// The sections a genre may retitle, under the names base.js's DIR_LABELS gives them.
+const DEFAULT_SECTION_TITLES = Object.fromEntries(
+  ['locations', 'factions', 'items', 'creatures', 'documents'].map((k) => [k, DIR_LABELS[k]]));
 
 function sectionTitle(key, publishConfig) {
   const overrides = (publishConfig && publishConfig.section_titles) || {};
@@ -441,8 +438,8 @@ function renderChapterList(pages, indexDir) {
   }
 
   function statusBadge(chapter, chSessions) {
-    const allPlayed = chSessions.length > 0 && chSessions.every(s => s.frontmatter.status === 'played' || s.frontmatter.status === 'reviewed');
-    const anyPlayed = chSessions.some(s => s.frontmatter.status === 'played' || s.frontmatter.status === 'reviewed');
+    const allPlayed = chSessions.length > 0 && chSessions.every(s => isPlayedStatus(s.frontmatter.status));
+    const anyPlayed = chSessions.some(s => isPlayedStatus(s.frontmatter.status));
     if (allPlayed) return '<span class="chapter-status chapter-complete">Complete</span>';
     if (anyPlayed) return '<span class="chapter-status chapter-active">In Progress</span>';
     const chStatus = String(chapter.frontmatter.status || '').toLowerCase();
@@ -461,7 +458,7 @@ function renderChapterList(pages, indexDir) {
     const sessionItems = chSessions.map(s => {
       const sNum = s.frontmatter.session_number || '';
       const sTitle = s.displayTitle.replace(/^Session \d+\s*[-–—]\s*/i, '');
-      const played = s.frontmatter.status === 'played' || s.frontmatter.status === 'reviewed';
+      const played = isPlayedStatus(s.frontmatter.status);
       const statusIcon = played ? '&#10003;' : '&#9702;';
       const statusClass = played ? 'session-played' : 'session-pending';
       return `<li class="${statusClass}">

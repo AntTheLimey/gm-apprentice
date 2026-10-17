@@ -56,6 +56,15 @@ test('flush warns for a KV slug with no matching vault sheet', async () => {
   assert.equal(r.writes['/vault/NPCs/Gatekeeper.md'], undefined); // NPCs untouched
 });
 
+test('flush skips, and says why, a PC whose system has no live sheet', async () => {
+  const pf2Pages = () => [{ sourcePath: '/vault/PCs/Jane_Ashford.md', title: 'Jane_Ashford',
+    displayTitle: 'Jane Ashford', frontmatter: { type: 'pc', system: 'pf2e' } }];
+  const r = run({ scan: pf2Pages });
+  assert.equal(await r.promise, 0);
+  assert.deepStrictEqual(r.writes, {});
+  assert.ok(r.lines.some((l) => /Jane Ashford/.test(l) && /no live sheet/.test(l)), r.lines.join('\n'));
+});
+
 test('flush reports nothing to flush when the roster is empty', async () => {
   const r = run({ adapter: fakeAdapter({ 'roster:test-campaign': '[]' }) });
   const code = await r.promise;
@@ -256,14 +265,17 @@ test('flush finds a renamed PC by its pinned live_key', async () => {
   assert.match(r.writes['/vault/PCs/Jane_Hale.md'], /\| HP \| 11 \| 7 \|/);
 });
 
-test('resolveSystem: GURPS, D&D, and CoC as the default', () => {
+test('resolveSystem: GURPS, D&D, CoC as the default, none for a system with no live sheet', () => {
   const { resolveSystem } = require('../lib/flush-cli');
   assert.equal(resolveSystem({}, 'gurps-4e'), 'gurps');
   assert.equal(resolveSystem({}, 'dnd-5e-2024'), 'dnd');
   assert.equal(resolveSystem({ system: 'dnd' }, 'coc-7e'), 'dnd');
   assert.equal(resolveSystem({}, 'coc-7e'), 'coc');
   assert.equal(resolveSystem({}, undefined), 'coc');
-  assert.equal(resolveSystem({}, 'pf2e'), 'coc');
+  assert.equal(resolveSystem({}, 'pf2e'), null);
+  assert.equal(resolveSystem({}, 'bitd'), null);
+  assert.equal(resolveSystem({ system: 'pf2' }, 'coc-7e'), null);
+  assert.equal(resolveSystem({}, 'coc-7e-regency'), 'coc');
 });
 
 test('routes a D&D PC to the D&D writeback; dry run writes nothing; missing cells are named', async () => {

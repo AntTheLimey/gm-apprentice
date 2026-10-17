@@ -15,6 +15,7 @@ import relink
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           cells, edit_frontmatter, plugin_tool, stopped,
                           write_text_atomic)
+from schema_rules import system_id as _system_id
 from schema_rules import tone_families, without_generated_markers
 from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
                          player_section_key, wrapup_filename_findings)
@@ -49,18 +50,8 @@ TEMPLATE_NAMES = {
     "session-wrap.md": "_Template_Session_WrapUp.md",
     "character-story.md": "character-story.md",
 }
-SYSTEM_ALIASES = {
-    "coc": "coc-7e", "regency-cthulhu": "coc-7e-regency", "gurps": "gurps-4e",
-    "dnd": "dnd-5e-2024", "dnd-5e": "dnd-5e-2024", "pathfinder": "pf2e",
-    "pathfinder-2e": "pf2e", "blades": "fitd",
-}
 STAT_BLOCK_RE = re.compile(r"^\{STAT BLOCK:.*?\}[ \t]*$", re.M | re.S)
 GENERIC_BLOCK = "### Stats\n\n{System stat block.}"
-
-
-def _system_id(raw: object) -> str | None:
-    text = str(raw or "").strip().lower()
-    return SYSTEM_ALIASES.get(text, text) or None
 
 
 def vault_system(vault: Path) -> str | None:

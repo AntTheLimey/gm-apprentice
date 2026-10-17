@@ -85,6 +85,9 @@ jobs:
             tar -tzf "$TGZ" | grep -q "^package/node_modules/$dep/package.json$" \
               || { echo "::error::$dep is missing from $TGZ"; exit 1; }
           done
+          # Anything that redistributes the tool must ship the MIT text with it (#418).
+          tar -tzf "$TGZ" | grep -q "^package/LICENSE$" \
+            || { echo "::error::LICENSE is missing from $TGZ"; exit 1; }
           sha256sum "$TGZ" > SHA256SUMS
           sha256sum -c SHA256SUMS
           ls -l

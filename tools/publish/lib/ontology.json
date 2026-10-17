@@ -437,6 +437,162 @@
     "session_wrap_up",
     "session_wrapup"
   ],
+  "session_status": {
+    "not_yet_run": [
+      "planned",
+      "prepped"
+    ],
+    "played": [
+      "played",
+      "wrap-up",
+      "reviewed"
+    ]
+  },
+  "session_stage": {
+    "in_prep": [
+      "outline",
+      "draft",
+      "ready"
+    ],
+    "in_play": [
+      "in_play",
+      "wrap_up"
+    ]
+  },
+  "wrap_up_types": [
+    "session_wrap",
+    "session-wrap-up",
+    "session-wrapup"
+  ],
+  "game_systems": [
+    {
+      "id": "coc-7e",
+      "name": "Call of Cthulhu",
+      "aliases": [
+        "coc",
+        "coc7e",
+        "cthulhu"
+      ]
+    },
+    {
+      "id": "coc-7e-regency",
+      "name": "Regency Cthulhu",
+      "aliases": [
+        "regency-cthulhu"
+      ],
+      "rules": "coc-7e/regency"
+    },
+    {
+      "id": "gurps-4e",
+      "name": "GURPS",
+      "aliases": [
+        "gurps",
+        "gurps4e"
+      ]
+    },
+    {
+      "id": "dnd-5e-2024",
+      "name": "D&D 5e 2024",
+      "aliases": [
+        "dnd",
+        "dnd-5e",
+        "dnd5e",
+        "5e",
+        "d&d"
+      ]
+    },
+    {
+      "id": "pf2e",
+      "name": "Pathfinder",
+      "aliases": [
+        "pathfinder",
+        "pathfinder-2e",
+        "pf2",
+        "pf2e-remaster"
+      ]
+    },
+    {
+      "id": "fitd",
+      "name": "Forged in the Dark",
+      "aliases": [
+        "blades",
+        "bitd"
+      ]
+    }
+  ],
+  "vault_folders": [
+    {
+      "folder": "Characters/PCs",
+      "types": [
+        "pc"
+      ],
+      "site": "characters/pcs"
+    },
+    {
+      "folder": "Characters/NPCs",
+      "types": [
+        "npc"
+      ],
+      "site": "characters/npcs"
+    },
+    {
+      "folder": "Locations",
+      "types": [
+        "location"
+      ],
+      "site": "locations"
+    },
+    {
+      "folder": "Factions & Organizations",
+      "types": [
+        "faction",
+        "organization"
+      ],
+      "site": "factions"
+    },
+    {
+      "folder": "Items & Artifacts",
+      "types": [
+        "item"
+      ],
+      "site": "items"
+    },
+    {
+      "folder": "Creatures",
+      "types": [
+        "creature"
+      ],
+      "site": "creatures"
+    },
+    {
+      "folder": "Heritages",
+      "types": [
+        "heritage"
+      ],
+      "site": "heritages"
+    },
+    {
+      "folder": "Events",
+      "types": [
+        "event"
+      ],
+      "site": "events"
+    },
+    {
+      "folder": "Documents",
+      "types": [
+        "document"
+      ],
+      "site": "documents"
+    },
+    {
+      "folder": "Clues",
+      "types": [
+        "clue"
+      ],
+      "site": "clues"
+    }
+  ],
   "predicates": [
     {
       "type": "parent_of",

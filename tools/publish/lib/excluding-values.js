@@ -4,12 +4,14 @@
 // they are listed. publish-decision.js decides with them; frontmatter-shape.js reads a list
 // typed where one value belongs (`status: [planned, alive]`) with them, so that a list that
 // holds one of these is read as that value and not as a joined text no rule matches.
-// A leaf module: both of those sit on different sides of the scanner.
+// A leaf module: both of those sit on different sides of the scanner. The session status and
+// stage words are shared lists (shared-lists.js, read from the ontology).
+const { SESSION_NOT_YET_RUN, SESSION_STAGE_IN_PREP } = require('./shared-lists');
 
 // status: prep that has not been played.
-const AUTO_EXCLUDE_STATUS = new Set(['planned', 'prepped']);
+const AUTO_EXCLUDE_STATUS = SESSION_NOT_YET_RUN;
 // stage: a plan still being written.
-const AUTO_EXCLUDE_STAGE = new Set(['outline', 'draft', 'ready']);
+const AUTO_EXCLUDE_STAGE = SESSION_STAGE_IN_PREP;
 // source: written as prep.
 const AUTO_EXCLUDE_SOURCE = new Set(['prep']);
 // status, on a scene: it was cut or skipped, so it did not happen.

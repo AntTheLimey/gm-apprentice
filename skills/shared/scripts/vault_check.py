@@ -165,6 +165,7 @@ from schema_rules import (
     REQUIRED_FIELDS,
     SCENE_STATUS,
     SCENE_TYPES,
+    SESSION_PLAYED,
     SESSION_STATUS,
     extract_frontmatter,
     chapter_key,
@@ -177,6 +178,7 @@ from vaultlib import (  # noqa: F401
     HEADING_RE,
     LINK_RE,
     SKIP_DIRS,
+    WRAP_UP_TYPE,
     WRAP_UP_TYPES,
     LineState,
     active_pc_names,
@@ -387,7 +389,7 @@ DIGITS_RE = re.compile(r"\d+(?:\.\d+)?")
 # only flood the report.
 STRUCTURAL_TYPES = {
     "session", "session-plan", "session-play-notes",
-    "session-wrap-up", "session_wrap", "scene", "chapter",
+    *WRAP_UP_TYPES, "scene", "chapter",
     "meta", "timeline", "world_flags", "plan",
 }
 STRUCTURAL_NAME_RE = re.compile(
@@ -1027,9 +1029,6 @@ def _resolve_document_link(target: str, by_stem: dict[str, list[str]],
     if loose:
         return loose[0], None
     return None, hits[0]
-
-
-PLAYED_STATUSES = {"played", "wrap-up", "reviewed"}
 
 
 def publish_list_sets(vault: Path) -> tuple[dict[str, set[str]] | None,
@@ -2351,7 +2350,7 @@ def check_sessions(vault: Path) -> list[str]:
         # the session's published record.
         if unicodedata.normalize("NFC", rel) in withheld:
             rows.extend(_hub_body_rows(rel, text))
-        if declared.casefold() in PLAYED_STATUSES:
+        if declared.casefold() in SESSION_PLAYED:
             played.append(rel)
     rows.extend(manifest_rows(vault, played))
     return rows
@@ -3190,7 +3189,7 @@ def _pc_body(vault: Path, folder: str | None = None,
 # `Session NN - Title - Wrap-Up.md`, `Session_NN_Wrap_Up.md` and the
 # chapter-level variants have no filename in common.
 WRAP_TYPES = SESSION_DOC_TYPES["wrap_up"][1]
-CANONICAL_WRAP_TYPE = "session_wrap"
+CANONICAL_WRAP_TYPE = WRAP_UP_TYPE
 
 WRAP_TEMPLATE_PATH = (Path(__file__).resolve().parent.parent
                       / "templates" / "session-wrap.md")

@@ -27,6 +27,8 @@ const IDENTITY_SOURCE_FIELD = { Occupation: 'occupation', Age: 'age', Points: 'p
 // list so they don't duplicate the structured blocks. Prose/extra sections
 // (Background, Notes, GM Notes, suit mods, etc.) still render as accordions.
 const { GURPS_CONSUMED_TITLES, COC_CONSUMED_TITLES, EQUIPMENT_SECTION_TITLES } = require('./consumed-titles');
+const { systemId, SYSTEM_NAMES } = require('../shared-lists');
+const { isPlayedSession } = require('../session-hub');
 
 // Titles the structured CoC sheet/record consume. 'connections' and 'cover
 // identity' are deliberately NOT here: the structured renderer doesn't place
@@ -34,11 +36,11 @@ const { GURPS_CONSUMED_TITLES, COC_CONSUMED_TITLES, EQUIPMENT_SECTION_TITLES } =
 // they fall through to the Record tab's leftover-accordion guard (no content loss).
 
 function isGurpsSystem(publishConfig) {
-  return ['gurps-4e', 'gurps'].includes(String((publishConfig || {}).system || '').toLowerCase());
+  return systemId((publishConfig || {}).system) === 'gurps-4e';
 }
 
 function isCocSystem(publishConfig) {
-  return ['coc-7e', 'coc', 'regency-cthulhu', 'coc-7e-regency'].includes(String((publishConfig || {}).system || '').toLowerCase());
+  return ['coc-7e', 'coc-7e-regency'].includes(systemId((publishConfig || {}).system));
 }
 
 // Whether a PC page is the CoC parchment folio (sheets on, CoC system). That page has no
@@ -49,9 +51,7 @@ function usesCocFolio(publishConfig, sheetsOff) {
 
 // System label shown in the CoC masthead era line when the PC has no explicit `era`.
 function cocSystemLabel(publishConfig) {
-  return ['regency-cthulhu', 'coc-7e-regency'].includes(String((publishConfig || {}).system || '').toLowerCase())
-    ? 'Regency Cthulhu'
-    : 'Call of Cthulhu';
+  return SYSTEM_NAMES[systemId((publishConfig || {}).system) === 'coc-7e-regency' ? 'coc-7e-regency' : 'coc-7e'];
 }
 
 // Builds the approved parchment folio body for a CoC investigator (mockup:
@@ -177,7 +177,7 @@ function unconsumedEquipment(frontmatter, sections, consumes) {
 
 function buildRouteMap(page, pages) {
   const storyPages = (pages || [])
-    .filter(p => p.frontmatter.type === 'session' && (p.frontmatter.status === 'played' || p.frontmatter.status === 'reviewed'))
+    .filter(p => isPlayedSession(p.frontmatter))
     .sort((a, b) => (a.frontmatter.session_number || 0) - (b.frontmatter.session_number || 0));
 
   const locations = [];

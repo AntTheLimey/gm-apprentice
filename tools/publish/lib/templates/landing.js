@@ -7,6 +7,7 @@ const {
 } = require('./landing-data');
 const { canonicalNfc } = require('../unicode');
 const { isOutOfPlay } = require('../pc-status');
+const { isPlayedSession } = require('../session-hub');
 
 function formatDate(dateStr) {
   if (!dateStr) return null;
@@ -72,7 +73,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   const tagline = theme.tagline ? `<p class="hero-tagline">${escapeHtml(theme.tagline)}</p>` : '';
   const sessionCount = (overviewFm.sessions_played != null)
     ? overviewFm.sessions_played
-    : pages.filter(p => p.frontmatter.type === 'session' && (p.frontmatter.status === 'played' || p.frontmatter.status === 'reviewed')).length;
+    : pages.filter(p => isPlayedSession(p.frontmatter)).length;
   const heroDateParts = [];
   if (inGameLabel) heroDateParts.push(`<span><span class="date-label">In-Game</span> ${escapeHtml(String(inGameLabel))}</span>`);
   heroDateParts.push(`<span><span class="date-label">Sessions</span> ${sessionCount}</span>`);

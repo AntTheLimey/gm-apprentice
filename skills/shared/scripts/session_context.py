@@ -66,8 +66,9 @@ import sys
 from difflib import SequenceMatcher
 from pathlib import Path
 
-from schema_rules import (chapter_key, chapter_of, extract_frontmatter,
-                          parse_session_number, wikilink_target)
+from schema_rules import (SESSION_PLAYED, chapter_key, chapter_of,
+                          extract_frontmatter, parse_session_number,
+                          wikilink_target)
 from vaultlib import (GM_MARKER_RE, is_out_of_play, out_of_play,  # noqa: F401
                       report_unreadable_settings, setting_or_builtin,
                       SKIP_DIRS, WRAP_UP_TYPES, body_of, entity_type,
@@ -721,7 +722,6 @@ def select_session(files, session_arg: int | None) -> tuple[dict | None, list[st
     first, then an `asOfSession` mismatch, then any pre-created
     unplayed-session indexes for this chapter.
     """
-    PLAYED = {"played", "wrap-up", "reviewed"}
     sessions = []
     for rel, _text, fm in files:
         if fm.get("type") == "session":
@@ -733,7 +733,7 @@ def select_session(files, session_arg: int | None) -> tuple[dict | None, list[st
                     "n": n,
                     "chapter": chapter_key(rel, fm),
                     "chapter_label": chapter_of(rel, fm),
-                    "played": str(fm.get("status", "")).casefold() in PLAYED,
+                    "played": str(fm.get("status", "")).casefold() in SESSION_PLAYED,
                     "date": str(fm.get("play_date") or ""),
                 })
     played = [s for s in sessions if s["played"]]

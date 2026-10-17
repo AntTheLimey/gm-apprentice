@@ -91,7 +91,7 @@ campaign-qa's Tone Words check lists the hostile ties the site shows.
 
 ### Always included
 
-- Played/reviewed sessions (`status: played | reviewed`)
+- Played sessions (`status: played | wrap-up | reviewed`)
 - Scenes with `status: played` or `status: modified` (they
   happened — publish the reality, even if modified from plan)
 - Entity files in standard vault folders
