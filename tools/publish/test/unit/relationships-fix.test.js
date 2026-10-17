@@ -7,7 +7,7 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { readVault } = require('../../lib/relationships/read');
 const { check } = require('../../lib/relationships/check');
-const { planFix, applyFix, renderPlan } = require('../../lib/relationships/fix');
+const { planFix, applyFix, renderPlan, removeLeftovers } = require('../../lib/relationships/fix');
 const ontology = require('../../lib/ontology.json');
 
 const BIN = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
@@ -327,4 +327,58 @@ test('a repair that would store a two-way tie on both notes is KEEP', () => {
   const p = plan(dir);
   assert.strictEqual(p.texts.size, 0);
   assert.match(p.kept[0].why, /two-way tie on both notes/);
+});
+
+test('an empty (0-byte) destination note gets a frontmatter made for it', () => {
+  const dir = vault({ 'Kid.md': note('npc', rels(edge('child_of', 'Dad'))), 'Dad.md': '' });
+  const p = plan(dir);
+  assert.deepStrictEqual(p.kept, []);
+  assert.strictEqual(p.texts.get('Dad.md'), '---\nrelationships:\n  - target: "[[Kid]]"\n    type: parent_of\n---\n');
+});
+
+test('a destination whose frontmatter does not parse is not called missing', () => {
+  const dir = vault({ 'Kid.md': note('npc', rels(edge('child_of', 'Dad'))), 'Dad.md': '---\ntype: npc\nno end\n' });
+  const p = plan(dir);
+  assert.strictEqual(p.texts.size, 0);
+  assert.strictEqual(p.kept[0].why, "the other note's frontmatter does not parse");
+});
+
+test('a tie holding a comment is KEEP, since removing it would lose the comment', () => {
+  const dir = vault({
+    'Kid.md': note('npc', ['relationships:', '  - target: "[[Dad]]"', '    type: child_of # why', '    tone: warm']),
+    'Dad.md': note('npc'),
+  });
+  const p = plan(dir);
+  assert.strictEqual(p.texts.size, 0);
+  assert.match(p.kept[0].why, /comment that removing it would lose/);
+});
+
+test('temp files are visible, and the next --write removes only its own leftovers', () => {
+  const dir = vault({
+    'Kid.md': note('npc', rels(edge('child_of', 'Dad'))),
+    'Dad.md': note('npc'),
+    'Old.md.fix-tmp-4242': 'left by a killed run',
+    'Mine.txt': 'not a leftover',
+    'Other.tmp': 'not a leftover',
+  });
+  let seen = [];
+  const p = plan(dir);
+  applyFix(dir, p, { rename: (a, b) => { seen.push(path.basename(a)); fs.renameSync(a, b); } });
+  assert.ok(seen.every((n) => /^[^.].*\.md\.fix-tmp-\d+$/.test(n)), seen.join());
+  assert.deepStrictEqual(removeLeftovers(dir), ['Old.md.fix-tmp-4242']);
+  assert.deepStrictEqual(fs.readdirSync(dir).sort(), ['Dad.md', 'Kid.md', 'Mine.txt', 'Other.tmp']);
+});
+
+test('a change row that rides on a removal goes when the removing unit is dropped', () => {
+  const dir = vault({
+    'A.md': note('npc', rels(edge('sibling_of', 'B', ['bidirectional: true']))),
+    'B.md': note('npc', rels(edge('sibling_of', 'A'))),
+  });
+  const whole = plan(dir);
+  assert.deepStrictEqual(whole.changes.map((c) => c.after), ['removed (kept on A)', 'removed with the copy on the other note']);
+  const model = readVault(dir);
+  const p = planFix(model, check(model, ontology, { vaultPath: dir }), { vaultPath: dir, readBack: (t, rel) => (rel === 'B.md' ? { why: 'forced' } : { kind: 'none' }) });
+  assert.deepStrictEqual(p.changes, []);
+  assert.strictEqual(p.kept.length, 2);
+  assert.strictEqual(p.texts.size, 0);
 });

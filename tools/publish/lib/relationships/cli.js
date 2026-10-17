@@ -6,7 +6,7 @@ const path = require('path');
 const { words, wordsData } = require('./words');
 const { readVault } = require('./read');
 const { check, render } = require('./check');
-const { planFix, applyFix, renderPlan } = require('./fix');
+const { planFix, applyFix, renderPlan, removeLeftovers } = require('./fix');
 const { ontology } = require('../ontology');
 
 const VERBS = ['words', 'check', 'fix'];
@@ -28,6 +28,7 @@ async function runRelationships({ verb, vault, json, folder, files, newerThan, k
     if (verb === 'fix') {
       const FIXABLE = ['off-vocabulary', 'mirrored', 'bidirectional', 'place-missing-tie', 'place-missing-field'];
       for (const k of kinds || []) if (!FIXABLE.includes(k)) throw new Error(`--kind ${k} has no certain repair; the kinds are ${FIXABLE.join(', ')}`);
+      if (write) for (const left of removeLeftovers(root)) console.error(`removed a leftover temp file: ${left}`);
       const plan = planFix(model, findings, { vaultPath: root, kinds: kinds && kinds.length ? kinds : undefined, ontology });
       if (write) applyFix(root, plan);
       if (json) {

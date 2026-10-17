@@ -43,7 +43,7 @@ function openText(whole, rel) {
   const rest = whole.slice(bom);
   let parsed;
   try { parsed = parseNote(rest); } catch { return { why: 'its frontmatter does not read' }; }
-  const m = parsed.matter;
+  const m = parsed.matter || ''; // an empty file has none
   const base = { whole, eol, bom, rel };
   if (m === '') {
     const empty = /^---\r?\n---/.exec(rest);
@@ -81,7 +81,16 @@ function locateEdge(ctx, edge) {
 // ---- Edits -------------------------------------------------------------------------------------------
 
 // Whole item removed (its dash line through its last line).
+// A comment anywhere in the item would go with it (the move carries values, not comments).
+function hasComment(node) {
+  if (!node || typeof node !== 'object') return false;
+  if (node.comment || node.commentBefore) return true;
+  if (YAML.isPair(node)) return hasComment(node.key) || hasComment(node.value);
+  return Array.isArray(node.items) && node.items.some(hasComment);
+}
+
 function removeItemEdit(ctx, hit, index) {
+  if (hasComment(hit.item)) return { why: 'the tie has a comment that removing it would lose' };
   let dash;
   try { dash = dashOffset(hit.seq, index); } catch { return { why: FORM }; }
   return { edit: dropLines(ctx.whole, ctx.off + dash, ctx.off + endOf(hit.item, ctx.yaml), ctx.eol) };
@@ -178,7 +187,8 @@ function appendTo(ctx) {
 
 const comparable = (node) => JSON.stringify(YAML.isNode(node) ? node.toJS(new YAML.Document()) : node);
 
-function planFix(model, findings, { vaultPath, kinds, ontology = defaultOntology } = {}) {
+// `readBack` is the check that a new text still reads; a test may replace it.
+function planFix(model, findings, { vaultPath, kinds, ontology = defaultOntology, readBack = openText } = {}) {
   const byRel = new Map(model.notes.map((n) => [n.rel, n]));
   const symmetric = new Set((ontology.predicates || []).filter((p) => p.symmetric).map((p) => p.type));
   const contexts = new Map();
@@ -206,7 +216,7 @@ function planFix(model, findings, { vaultPath, kinds, ontology = defaultOntology
   // ---- one unit per finding: { ops, change } or { why } ----
   const added = new Set(); // dest|type|targetRel, planned already
   const touched = new Set(); // rel|index of an item another unit changes
-  const removed = new Set();
+  const removed = new Map();
   const units = [];
   const kept = [];
   const changes = [];
@@ -245,8 +255,11 @@ function planFix(model, findings, { vaultPath, kinds, ontology = defaultOntology
     if (f.kind === 'off-vocabulary' || f.kind === 'mirrored' || f.kind === 'bidirectional') {
       const edge = edgeOf(note, f);
       if (!edge) { fail('the tie is no longer where it was; run the check again'); continue; }
-      if (removed.has(`${f.rel}\u0000${edge.index}`)) {
-        changes.push({ kind: f.kind, rel: f.rel, line: f.line, before: `${edge.type} [[${edge.target}]]`, after: 'removed with the copy on the other note' });
+      const remover = removed.get(`${f.rel}\u0000${edge.index}`);
+      if (remover) {
+        // No edit of its own: it stands only while the unit that removes the tie stands.
+        units.push({ f, ops: [], rels: new Set(), needs: remover,
+          change: { before: `${edge.type} [[${edge.target}]]`, after: 'removed with the copy on the other note' } });
         continue;
       }
       const hit = locateEdge(src, edge);
@@ -298,7 +311,11 @@ function planFix(model, findings, { vaultPath, kinds, ontology = defaultOntology
           }
           unit.change = { before: `${edge.type} [[${edge.target}]]`, after: `${use} [[${edge.target}]]` };
         } else {
-          if (!edge.targetRel) { fail('the other note does not exist'); continue; }
+          if (!edge.targetRel) {
+            const unread = model.faults.some((x) => path.posix.basename(x.rel, '.md') === edge.target);
+            fail(unread ? "the other note's frontmatter does not parse" : 'the other note does not exist');
+            continue;
+          }
           if (edge.targetRel === f.rel) { fail('the tie points at its own note'); continue; }
           const stray = hit.item.items.map(keyName).find((k) => !KNOWN_KEYS.has(k));
           if (stray) { fail(`the tie carries a field the move does not carry: ${stray}`); continue; }
@@ -366,7 +383,7 @@ function planFix(model, findings, { vaultPath, kinds, ontology = defaultOntology
       continue;
     }
     for (const k of unit.marks) touched.add(k);
-    if (unit.remove) removed.add(unit.remove);
+    if (unit.remove) removed.set(unit.remove, unit);
     if (unit.dup) added.add(unit.dup);
     units.push(unit);
   }
@@ -398,17 +415,21 @@ function planFix(model, findings, { vaultPath, kinds, ontology = defaultOntology
       }
       const merged = mergeInserts(edits);
       const text = applyEdits(ctx.whole, merged);
-      const back = openText(text, rel);
+      const back = readBack(text, rel);
       if (back.why || (back.kind === 'front' && back.doc.errors.length)) bad.add(rel);
       else texts.set(rel, text);
     }
     if (!bad.size) break;
     const next = [];
+    const dropped = new Set();
     for (const u of live) {
-      if ([...u.rels].some((r) => bad.has(r))) keep(u.f, 'the edit did not read back, so nothing was changed');
-      else next.push(u);
+      if ([...u.rels].some((r) => bad.has(r))) { keep(u.f, 'the edit did not read back, so nothing was changed'); dropped.add(u); } else next.push(u);
     }
-    live = next;
+    live = next.filter((u) => {
+      if (!u.needs || !dropped.has(u.needs)) return true;
+      keep(u.f, 'the edit did not read back, so nothing was changed');
+      return false;
+    });
   }
   for (const u of live) changes.push({ kind: u.f.kind, rel: u.f.rel, line: u.f.line, ...u.change });
   changes.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0) || a.line - b.line);
@@ -435,6 +456,24 @@ function mergeInserts(edits) {
 
 // ---- Writing: all notes or none --------------------------------------------------------------------
 
+// A temp file is `<note>.md.fix-tmp-<pid>`: visible, not a note, and recognisable. A run killed between
+// writing and renaming leaves them; the next `fix --write` removes exactly the files of that pattern.
+const LEFTOVER = '.fix-tmp-';
+const LEFTOVER_RE = /\.md\.fix-tmp-\d+$/;
+
+function removeLeftovers(vaultPath) {
+  const gone = [];
+  (function walk(dir) {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name.startsWith('.')) continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.isFile() && LEFTOVER_RE.test(entry.name)) { fs.rmSync(full, { force: true }); gone.push(path.relative(vaultPath, full).split(path.sep).join('/')); }
+    }
+  })(vaultPath);
+  return gone;
+}
+
 function applyFix(vaultPath, plan, { rename = fs.renameSync } = {}) {
   const files = [...plan.texts.keys()].map((rel) => ({ rel, full: path.join(vaultPath, ...rel.split('/')) }));
   for (const f of files) {
@@ -448,7 +487,7 @@ function applyFix(vaultPath, plan, { rename = fs.renameSync } = {}) {
   const cleanTemps = () => { for (const t of temps) fs.rmSync(t, { force: true }); };
   try {
     for (const f of files) {
-      const tmp = path.join(path.dirname(f.full), `.${path.basename(f.full)}.${process.pid}.fix.tmp`);
+      const tmp = path.join(path.dirname(f.full), `${path.basename(f.full)}${LEFTOVER}${process.pid}`);
       temps.push(tmp);
       const mode = fs.statSync(f.full).mode & 0o7777;
       fs.writeFileSync(tmp, plan.texts.get(f.rel), { mode });
@@ -482,4 +521,4 @@ function renderPlan(plan, written) {
   return rows.join('\n');
 }
 
-module.exports = { planFix, applyFix, renderPlan };
+module.exports = { planFix, applyFix, renderPlan, removeLeftovers };
