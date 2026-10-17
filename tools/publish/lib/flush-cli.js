@@ -14,6 +14,7 @@ const { applyDnDFlush } = require('./flush/dnd-writeback');
 const { applyGURPSFlush } = require('./flush/gurps-writeback');
 const { deriveGurpsMax } = require('./flush/gurps-max');
 const { resolveConfig, loadVaultConfig } = require('./config');
+const { systemId } = require('./shared-lists');
 const { detectStatusBar } = require('./backend-flags');
 
 const { runCommand, WRANGLER_TIMEOUT_MS } = require('./run-command');
@@ -53,6 +54,9 @@ function safeSlug(slug) {
 // the default, as it always was: old CoC sites carry no system.
 function resolveSystem(frontmatter, campaignSystem) {
   const s = String((frontmatter && frontmatter.system) || campaignSystem || '').toLowerCase();
+  const id = systemId(s);
+  if (id === 'gurps-4e') return 'gurps';
+  if (id === 'dnd-5e-2024') return 'dnd';
   if (s.indexOf('gurps') !== -1) return 'gurps';
   if (/^dnd/.test(s) || /^d&d/.test(s)) return 'dnd';
   return 'coc';

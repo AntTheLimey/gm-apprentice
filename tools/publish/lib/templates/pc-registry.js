@@ -4,21 +4,16 @@ const { renderDnDSheet, isDndConsumedTitle } = require('./dnd/index');
 const { renderFitDSheet, isFitDConsumedTitle } = require('./pc-fitd');
 const { renderPF2eSheet, isPF2eConsumedTitle } = require('./pc-pf2e');
 
+const { systemId } = require('../shared-lists');
+
+// By canonical system id; the aliases that name each are the shared list (shared-lists.js).
 const renderers = {
   'coc-7e': renderCoCSheet,
-  'coc': renderCoCSheet,
-  'regency-cthulhu': renderCoCSheet,
   'coc-7e-regency': renderCoCSheet,
   'gurps-4e': renderGURPSSheet,
-  'gurps': renderGURPSSheet,
-  'dnd-5e': renderDnDSheet,
   'dnd-5e-2024': renderDnDSheet,
-  'dnd': renderDnDSheet,
   'fitd': renderFitDSheet,
-  'blades': renderFitDSheet,
   'pf2e': renderPF2eSheet,
-  'pathfinder-2e': renderPF2eSheet,
-  'pathfinder': renderPF2eSheet,
 };
 
 // For a renderer built on sheet-parse.js: which `## ` section titles its sheet
@@ -50,11 +45,11 @@ function getSheetFamily(system) {
 }
 
 function getRenderer(system) {
-  if (!system) return null;
-  return renderers[String(system).toLowerCase()] || null;
+  const id = systemId(system);
+  return (id && renderers[id]) || null;
 }
 
-// Every system id a `publish.system` setting may name, aliases included.
+// The system ids that have a sheet renderer (every game system does; a test holds it).
 const RENDERER_IDS = Object.keys(renderers);
 
 module.exports = { RENDERER_IDS, getRenderer, getConsumedTitleMatcher, getSheetFamily };

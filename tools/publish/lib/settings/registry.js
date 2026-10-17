@@ -22,12 +22,16 @@
 // The entries that carry `legacyKind` stay in the order of the old moved-key table.
 
 const { SKINS, FRAME_IDS } = require('../skins');
-const { RENDERER_IDS } = require('../templates/pc-registry');
+const { SYSTEM_IDS, SYSTEM_NAMES, SYSTEM_ALIASES } = require('../shared-lists');
 const { VALID_PRESETS, GENRE_ALIASES } = require('../theme');
 
 // The skin a sheet wears when neither the character nor the campaign names one. The setting reads
 // as unset then (it has no `default`), so the sheet code asks for this word, `fallback`, instead.
 const SKIN_FALLBACK = 'plain';
+
+// The game systems the setting takes, from the shared list: each id with its name, then the aliases.
+const SYSTEM_SHAPE = `${SYSTEM_IDS.map((id) => `\`${id}\` (${SYSTEM_NAMES[id]})`).join(', ')}; the short names ${
+  Object.keys(SYSTEM_ALIASES).map((a) => `\`${a}\``).join(', ').replace(/, ([^,]*)$/, ' and $1')} work too`;
 
 const GROUPS = [
   { id: 'vault', title: 'The vault' },
@@ -269,8 +273,8 @@ const REGISTRY = [
     left_out: '`_attachments`',
   },
   {
-    name: 'vault.system', was: [{ name: 'publish.system', in: 'vault' }, { name: 'system', in: 'site' }], type: 'choice', values: RENDERER_IDS, keepOnFault: true, legacyKind: 'scalar', group: 'site',
-    shape: '`coc-7e` (Call of Cthulhu), `coc-7e-regency` (Regency Cthulhu), `gurps-4e`, `dnd-5e-2024`, `pf2e` (Pathfinder), `fitd` (Forged in the Dark); the short names `coc`, `regency-cthulhu`, `gurps`, `dnd-5e`, `dnd`, `blades`, `pathfinder-2e` and `pathfinder` work too',
+    name: 'vault.system', was: [{ name: 'publish.system', in: 'vault' }, { name: 'system', in: 'site' }], type: 'choice', values: SYSTEM_IDS, aliases: SYSTEM_ALIASES, keepOnFault: true, legacyKind: 'scalar', group: 'site',
+    shape: SYSTEM_SHAPE,
     does: 'The game system, which decides how a character sheet is drawn',
     left_out: "A plain character page with no system's sheet",
   },

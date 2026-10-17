@@ -1,20 +1,18 @@
 // Maps a campaign's system id to its live-tracking client. Single source of
-// truth so pc.js does not hard-code any one system. Keys mirror pc-registry.js.
+// truth so pc.js does not hard-code any one system. Keyed by canonical system id; the
+// aliases that name each are the shared list (shared-lists.js).
+const { systemId } = require('../shared-lists');
+
 const CLIENTS = {
   'gurps-4e': { script: 'gurps-live.js', domId: 'gurps-live-data' },
-  'gurps': { script: 'gurps-live.js', domId: 'gurps-live-data' },
   'coc-7e': { script: 'coc-live.js', domId: 'coc-live-data' },
-  'coc': { script: 'coc-live.js', domId: 'coc-live-data' },
-  'regency-cthulhu': { script: 'coc-live.js', domId: 'coc-live-data' },
   'coc-7e-regency': { script: 'coc-live.js', domId: 'coc-live-data' },
-  'dnd-5e': { script: 'dnd-live.js', domId: 'dnd-live-data' },
   'dnd-5e-2024': { script: 'dnd-live.js', domId: 'dnd-live-data' },
-  'dnd': { script: 'dnd-live.js', domId: 'dnd-live-data' },
 };
 
 function clientFor(system) {
-  if (!system) return null;
-  return CLIENTS[String(system).toLowerCase()] || null;
+  const id = systemId(system);
+  return (id && CLIENTS[id]) || null;
 }
 
 // Ordered <script src> hrefs: the shared store must load before the client that

@@ -62,6 +62,10 @@ const INTENDED = [
   { row: 11, why: 'list entries come back as text (3 is "3")',
     ids: [...withSite('exclude_callouts-list-of-number'), ...withSite('exclude_callouts-list-with-number')].filter((id) => !id.endsWith('site-true')),
     fields: ['exclude_callouts'] },
+  // The shared lists sweep: the game systems are one list (shared-lists.js), so vault.system reads an
+  // alias as the id it names. Every reader of the system maps aliases the same way; no page changes.
+  { row: 'shared lists', why: 'vault.system reads an alias as its canonical id (`coc` is `coc-7e`); checked below',
+    ids: ['moved-system-vault', 'moved-system-site', 'moved-system-both', 'vault-with-coc-pc'], fields: ['system'], systemId: true },
 ];
 
 // Cases whose warnings may differ in WHICH settings they name, each with its row. Warnings
@@ -156,6 +160,15 @@ const strip = (o, skip, isGolden = false, trailingColon = false) => {
   }
   return copy;
 };
+
+test('a system the old reader kept as written now reads as the id it names', () => {
+  const { systemId } = require('../lib/shared-lists');
+  for (const c of all.filter((x) => allowed(x.id).some((d) => d.systemId))) {
+    const want = GOLDEN[c.id].publishConfig.system;
+    assert.notEqual(want, null, c.id);
+    assert.equal(snapshot(vaultFor(c), c.siteConfig || {}).publishConfig.system, systemId(want), c.id);
+  }
+});
 
 for (const c of all) {
   test(`settings resolve as before: ${c.id}`, () => {

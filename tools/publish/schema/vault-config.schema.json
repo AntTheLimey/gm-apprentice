@@ -202,7 +202,7 @@
             "string",
             "null"
           ],
-          "pattern": "^\\s*(?:[cC][oO][cC]\\-7[eE]|[cC][oO][cC]|[rR][eE][gG][eE][nN][cC][yY]\\-[cC][tT][hH][uU][lL][hH][uU]|[cC][oO][cC]\\-7[eE]\\-[rR][eE][gG][eE][nN][cC][yY]|[gG][uU][rR][pP][sS]\\-4[eE]|[gG][uU][rR][pP][sS]|[dD][nN][dD]\\-5[eE]|[dD][nN][dD]\\-5[eE]\\-2024|[dD][nN][dD]|[fF][iI][tT][dD]|[bB][lL][aA][dD][eE][sS]|[pP][fF]2[eE]|[pP][aA][tT][hH][fF][iI][nN][dD][eE][rR]\\-2[eE]|[pP][aA][tT][hH][fF][iI][nN][dD][eE][rR])\\s*$"
+          "pattern": "^\\s*(?:[cC][oO][cC]\\-7[eE]|[cC][oO][cC]\\-7[eE]\\-[rR][eE][gG][eE][nN][cC][yY]|[gG][uU][rR][pP][sS]\\-4[eE]|[dD][nN][dD]\\-5[eE]\\-2024|[pP][fF]2[eE]|[fF][iI][tT][dD]|[cC][oO][cC]|[cC][oO][cC]7[eE]|[cC][tT][hH][uU][lL][hH][uU]|[rR][eE][gG][eE][nN][cC][yY]\\-[cC][tT][hH][uU][lL][hH][uU]|[gG][uU][rR][pP][sS]|[gG][uU][rR][pP][sS]4[eE]|[dD][nN][dD]|[dD][nN][dD]\\-5[eE]|[dD][nN][dD]5[eE]|5[eE]|[dD]&[dD]|[pP][aA][tT][hH][fF][iI][nN][dD][eE][rR]|[pP][aA][tT][hH][fF][iI][nN][dD][eE][rR]\\-2[eE]|[pP][fF]2|[pP][fF]2[eE]\\-[rR][eE][mM][aA][sS][tT][eE][rR]|[bB][lL][aA][dD][eE][sS]|[bB][iI][tT][dD])\\s*$"
         },
         "setting_year": {
           "description": "An in-game year, shown on the landing page when the campaign overview gives no current date, and on a Call of Cthulhu sheet beside its era.",

@@ -75,6 +75,9 @@ from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import schema_rules  # noqa: E402
+
 SYSTEMS_DIR = Path(__file__).resolve().parents[2] / "ttrpg-expert" / "systems"
 # Each system directory ships a licence notice; it is not rules content.
 NOTICE_FILE = "NOTICE.md"
@@ -98,28 +101,13 @@ KIND_BY_STEM: dict[str, str] = {
     "conditions": "condition",
 }
 
-# System slug -> the argument a user or a skill might type instead.
-# Values must be real top-level directory names under SYSTEMS_DIR; that
-# is checked at lookup time (list_systems()), not assumed here, so a
-# stale alias fails loudly rather than silently resolving to nothing.
-SYSTEM_ALIASES: dict[str, str] = {
-    "gurps": "gurps-4e",
-    "gurps4e": "gurps-4e",
-    "dnd": "dnd-5e-2024",
-    "dnd5e": "dnd-5e-2024",
-    "5e": "dnd-5e-2024",
-    "dnd-5e": "dnd-5e-2024",
-    "d&d": "dnd-5e-2024",
-    "pf2": "pf2e",
-    "pathfinder": "pf2e",
-    "pf2e-remaster": "pf2e",
-    "coc": "coc-7e",
-    "coc7e": "coc-7e",
-    "cthulhu": "coc-7e",
-    "blades": "fitd",
-    "bitd": "fitd",
-    "fitd": "fitd",
-}
+# The argument a user or a skill might type -> the system slug: the game
+# systems' aliases, from the ontology (schema_rules.SYSTEM_ALIASES). A slug
+# must be a real top-level directory under SYSTEMS_DIR; that is checked at
+# lookup time (list_systems()), not assumed here, so an alias with no
+# rules folder (`regency-cthulhu`: Regency is the coc-7e/regency variant)
+# fails loudly rather than silently resolving to nothing.
+SYSTEM_ALIASES: dict[str, str] = dict(schema_rules.SYSTEM_ALIASES)
 
 FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
 HEADING_RE = re.compile(r"^#{1,6}\s")
