@@ -49,7 +49,7 @@ still applies.
 
 ```text
 Regency (1811-1820) overlay for CoC 7e. Use alongside base
-`../skills.md`. Only differences listed here; all unlisted
+`../../skills.md`. Only differences listed here; all unlisted
 base CoC skills remain available.
 ```
 
@@ -91,7 +91,7 @@ Do not duplicate content across files. Link instead.
 | Situation | Format |
 |-----------|--------|
 | Within same system | `See combat-reference.md` |
-| From variant to base | `See ../skills.md` |
+| From variant to base | `See ../../skills.md` |
 | To a shared ref | `See shared/entity-schema.md` |
 
 Place cross-references in the priming paragraph or at the top of the

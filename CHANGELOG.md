@@ -23,8 +23,10 @@ publish tool, and the certain repairs happen on one yes.
   no field), a place field that disagrees with another, a tie that points
   at a note type ties never point at, a genre list that leaves out a
   type, a container with nothing in it, and a hub with far more ties
-  than its kind usually has. `--folder`, `--file` and `--newer-than`
-  narrow it; `--json` gives the same as data.
+  than its kind usually has. A note whose frontmatter does not read is
+  one error row, never a silent gap. `--folder`, `--file` and
+  `--newer-than` narrow it (on `fix` too); a flag a command does not
+  take is refused; `--json` gives the same as data.
 - `gm-apprentice-publish relationships fix` lists the repairs that are
   certain (rename to the vocabulary word, drop the mirrored half, mark
   the tie two-way, add the missing place tie or field) and the ties it

@@ -15,10 +15,14 @@ relationship rule (vocabulary, direction, ties stored twice, the
 two-way flag, containment, ties to session notes, hubs); never
 check those by eye. Then run `node
 "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js" relationships
-fix --vault <vault>`: it lists the certain repairs and changes
-nothing. Show them to the GM by kind, take one yes for all, run it
-again with `--write`, then walk the rows left with the GM, ERROR
-first, then WARNING. List INFO rows once.
+fix --vault <vault> --json`: it lists the certain repairs (`changes`,
+each with its `kind`) and the ties it will not touch (`kept`, each
+with its reason), and changes nothing. Show them to the GM by kind,
+take one yes for all of the changes, run it again with `--write`
+instead of `--json`, then walk the rows left with the GM by kind
+(`gm-publish.js relationships check --vault <vault> --json` gives
+each finding its `kind`), ERROR first, then WARNING. List INFO rows
+once.
 
 **What the check cannot judge.** Only create a direct edge that
 carries its own narrative meaning: two NPCs who share a location

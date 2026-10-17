@@ -171,14 +171,21 @@ Then make the repairs yourself:
    `changes` are the certain repairs, each with its `kind`; `kept`
    are ties it will not touch, each with the reason.
 2. Show the GM the changes in one table by kind (count and an
-   example or two each) and ask one yes for all of them. On yes, run
-   the same command with `--write` instead of `--json`: every note
-   changes or none does.
-3. Run `vault_check.py <vault-path> relationships` again and walk
-   what is left with the GM by kind, ERROR rows first, then
-   WARNING. Each row names its choices (a near type, `one of:`,
-   store it on the other note, drop it, keep one copy); a `kept` row
-   gives its reason. Edit the note on the GM's answer.
+   example or two each), then the `kept` ties each with its reason,
+   and ask one yes for all of the changes. On yes, run the same
+   command with `--write` instead of `--json`: every note changes or
+   none does.
+3. Run the check again and walk what is left with the GM by kind,
+   ERROR rows first, then WARNING:
+
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js" \
+     relationships check --vault <vault-path> --json
+   ```
+
+   Each finding has a `kind` and a message that names its choices (a
+   near type, `one of:`, store it on the other note, drop it, keep one
+   copy). Edit the note on the GM's answer.
 4. List the INFO rows once, without a question each. A
    `childless-container` row is answered per
    `shared/relationship-normalization.md` § Interposing a new
