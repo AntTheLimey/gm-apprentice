@@ -1,6 +1,6 @@
 # Character Arcs, Spotlight, and Touchpoints
 
-Advisory reference — theory, thresholds, and patterns, not step-by-step procedures.
+Advisory reference — theory and patterns, not step-by-step procedures.
 
 For **session prep workflows**, see `session-prep`.
 For **system-specific arc drivers** (CoC SAN loss, GURPS disadvantages, FitD

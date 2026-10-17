@@ -201,7 +201,7 @@ sheets. Judge arc stage (five-stage model) from that evidence. Per PC:
 - `Open threads` → decisions needing consequences, next arc beat;
   `Knows (exclusive)` → personalized touchpoint fuel
 - mechanical highlights (signature abilities, resources)
-- last spotlight role and share, sessions since last B-plot; next beat
+- last spotlight role, sessions since last B-plot; next beat
 
 This is evidence for the GM's spotlight call, not the call.
 → `## PC Roster & Arcs` — durable analysis only (arc stage, theme,

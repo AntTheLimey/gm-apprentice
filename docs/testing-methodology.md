@@ -92,6 +92,8 @@ methodology doc in `docs/` is the persistent reference.
    be preserved.** "Read arc-spotlight-reference.md" is
    routing. "Flag below 15% floor. Assign B/C plots." is
    priming. Cutting priming degrades output quality.
+   (The 15% floor in this example is retired; see
+   `docs/why-the-numbers-came-out.md`.)
 
 2. **System-specific terminology matters.** Using BRP-generic
    terms for CoC 7e made the skill WORSE than no skill.

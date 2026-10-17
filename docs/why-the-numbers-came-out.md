@@ -1,42 +1,51 @@
 # Why the numbers came out
 
-Date: 2026-10-17. A record of a reversal: in April 2026 the skills gained
-spotlight percentages and thresholds because a test said they helped. In
-October they were taken out. Both decisions were reasonable on what was
-known at the time. This note explains what changed, so the reasoning is
-not lost and the numbers do not creep back.
+Date: 2026-10-17. A record of a reversal: from its first version in April
+2026 the ttrpg-expert skill carried spotlight percentages and thresholds,
+and a test that month seemed to prove they helped. In October they were
+taken out. Both decisions were reasonable on what was known at the time.
+This note explains what changed, so the reasoning is not lost and the
+numbers do not creep back.
 
 ## What went in, and why it looked right
 
-In April 2026 the session-prep and ttrpg-expert skills were cut down to
-save tokens, and a benchmark run showed the cut had hurt one answer. The
-fix restored "priming": short, concrete lines such as "flag below the 15%
-floor; assign B/C plots to underserved PCs". The benchmark compared two
-answers:
+The thresholds were there from the start: the first ttrpg-expert commit
+(8df1428d, 2026-04-04) already flagged a PC with "less than 15% of
+spotlight time" and one "without a high-impact touchpoint for 3+
+sessions".
 
-- "Give underserved PCs more scenes."
-- "Delgado is below the 15% floor, assign B-plot."
+Two days later, a benchmark compared answers with and without the skill
+(`tests/quick-commands/benchmark-2026-04-06.md`). Its spotlight question
+was open: one PC had been in six scenes and another in two, so what
+should the GM do? The two answers it compared:
 
-The second scored six points higher. The lesson written into
-`docs/testing-methodology.md` was "named frameworks with thresholds
-produce dramatically better output". The reference
-`arc-spotlight-reference.md` carried the full set: A/B/C plot shares of
-50-60%, 25-35% and 10-15%, a 15% floor per session, "three or more
-sessions" of imbalance that "demands immediate corrective action", and no
-PC going three sessions without a high-impact touchpoint.
+- "Give underserved PCs more scenes." (no skill)
+- "Delgado is below the 15% floor, assign B-plot." (with the skill)
+
+The second scored six points higher, and the evaluator praised its
+"measurable criteria (15% floor, 15-20 minute timer, three-session
+threshold)". The lesson written into `docs/testing-methodology.md` was
+"named frameworks with thresholds produce dramatically better output". A
+compaction test the same day (a802c270) then kept the line "Flag below
+15% floor. Assign B/C plots to underserved PCs" through a cut to save
+tokens. On 2026-04-22 `arc-spotlight-reference.md` gathered the full set:
+A/B/C plot shares of 50-60%, 25-35% and 10-15%, a 15% floor per session,
+"three or more sessions" of imbalance that "demands immediate corrective
+action", and no PC going three sessions without a high-impact touchpoint.
 
 ## What was wrong with it
 
 Nothing was wrong with the measurement. It measured the wrong thing.
 
-1. **The test asked for the number.** Benchmark question Q8 read "Flag any
-   PC below the 15% floor." An answer that applied a 15% floor scored well
-   because it did what the question asked. The scoring rubric pushed the
-   same way: its "Mechanical grounding" row gives full marks for
-   "specific stats, DCs, costs, rolls, thresholds", which is right for a
-   stat block and wrong for spotlight. The benchmark showed that the
-   skill followed its own rule. It could not show that the rule made a
-   better night at the table.
+1. **The rubric paid for a number, and a later test asked for it
+   outright.** The scoring rubric's "Mechanical grounding" row gives full
+   marks for "specific stats, DCs, costs, rolls, thresholds", which is
+   right for a stat block and wrong for spotlight. So an answer that cited
+   a 15% floor scored as "grounded" even though the floor was made up.
+   Two weeks later, session-prep benchmark question Q8 (2026-04-21) baked
+   the floor into the question itself: "Flag any PC below the 15% floor."
+   The benchmarks showed that the skill applied its own rule. They could
+   not show that the rule made a better night at the table.
 
 2. **Numbers nobody can measure get made up.** No one at a table can tell
    a 30% B-plot from a 20% one. The model was asked to estimate a "share"
@@ -48,8 +57,8 @@ Nothing was wrong with the measurement. It measured the wrong thing.
    without a high-impact touchpoint" makes every plan schedule big moments
    on a timer, whether or not the story wants one. "Demands immediate
    corrective action" overrules the GM's own sense that an arc is resting
-   on purpose. The same text also said "evidence for the GM's call, not
-   the call", and the numbers contradicted it.
+   on purpose. The skills also said "evidence for the GM's call, not the
+   call", and the numbers contradicted it.
 
 4. **An average hides a bad night.** Balance "over a run of sessions" is
    the GM's view from above. A player lives through one evening at a
@@ -73,7 +82,7 @@ Everything else about spotlight became "notice and ask": say who has had
 little lately, offer options, and let the GM decide. The A/B/C words
 stayed as vocabulary; the percentages, the 15% floor, the three-session
 timer and the "share" column went. The text the model reads got shorter
-(1,130 bytes less across six files), because the reasons now live here
+(1,187 bytes less across six files), because the reasons now live here
 and in the commit, not in the skill.
 
 ## The same mistake, three times

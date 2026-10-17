@@ -34,7 +34,7 @@ Spotlight advice keeps one hard rule and drops its numbers.
   and the new Spotlight Forecast guidance as a template placeholder.
 - Benchmark Q8 asks for a moment for every PC instead of a 15% floor
   check, and `docs/testing-methodology.md` notes the floor is retired.
-- Skill text is 1,130 bytes shorter across six files.
+- Skill text is 1,187 bytes shorter across six files.
 
 ### Added
 
