@@ -19,11 +19,12 @@ const { canonicalNfc } = require('./unicode');
 // and vault_check asks `explain --all --json` and `manifest publish-played --dry-run
 // --json` rather than re-implementing it. Change the rule here only.
 
-const WRAP_UP_TYPES = new Set(['session-wrap-up', 'session_wrap', 'session-wrapup']);
+// The wrap-up spellings and the played statuses are shared lists (shared-lists.js).
+const { WRAP_UP_TYPES, SESSION_PLAYED: PLAYED_SESSION_STATUSES } = require('./shared-lists');
 
-// A session counts as played once it has been run, including the `wrap-up` state between the
-// wrap-up and the review, so a freshly wrapped session counts before it is reviewed.
-const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
+// The types a played session is published as, so each should be on the publish list: build.js
+// warns when one is on neither list, and `doctor --site` reports it.
+const REGISTRABLE_TYPES = new Set(['session', 'chapter', ...WRAP_UP_TYPES]);
 
 function isPlayedSession(frontmatter) {
   return !!(frontmatter && frontmatter.type === 'session'
@@ -208,4 +209,4 @@ function isLinkedWrapUp(wrapUp, pairs) {
   return !!linkTarget(wrapUp && wrapUp.frontmatter && wrapUp.frontmatter.session);
 }
 
-module.exports = { suppressHubBody, publishedWrapUpFor, pairHubs, isLinkedWrapUp, WRAP_UP_TYPES, isWrapUp, PLAYED_SESSION_STATUSES, isPlayedSession };
+module.exports = { suppressHubBody, publishedWrapUpFor, pairHubs, isLinkedWrapUp, WRAP_UP_TYPES, isWrapUp, PLAYED_SESSION_STATUSES, isPlayedSession, REGISTRABLE_TYPES };

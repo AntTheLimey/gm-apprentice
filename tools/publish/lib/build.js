@@ -9,7 +9,7 @@ const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit } = 
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { nameList, gmAliasList, strippedLines, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
-const { pairHubs, isPlayedSession } = require('./session-hub');
+const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
 const { getsNoPage } = require('./previews');
@@ -642,7 +642,6 @@ function buildSite(options) {
     // Excluded list (a deliberate exclusion is a decision, not an oversight).
     // The publish list is enforced as an allowlist (the filter below), so the warning is true.
     const registered = new Set([...manifest.publishing, ...(manifest.excluded || [])]);
-    const REGISTRABLE_TYPES = new Set(['session', 'session_wrap', 'chapter']);
     for (const page of corpus) {
       const type = page.frontmatter && page.frontmatter.type;
       if (!REGISTRABLE_TYPES.has(type)) continue;

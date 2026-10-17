@@ -346,7 +346,7 @@ chapter: "[[Chapter 1 - Title]]"
 campaign: ""
 play_date: null           # Real-world date session was played, YYYY-MM-DD
 in_game_date: null        # In-game date(s) — string or array
-status: planned           # planned | prepped | played | reviewed
+status: planned           # planned | prepped | played | wrap-up | reviewed
 stage: outline            # outline | draft | ready | in_play | wrap_up
 prep_notes: ""
 actual_notes: ""
@@ -367,6 +367,7 @@ campaign: ""
 scene_type: investigation  # investigation | social | combat | chase
                            # transition | horror | downtime | other
 status: planned            # planned | ready | played | cut
+                           # skipped | modified
 sort_order: 1
 objective: ""
 gm_notes: ""

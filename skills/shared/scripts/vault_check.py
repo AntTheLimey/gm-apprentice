@@ -165,6 +165,7 @@ from schema_rules import (
     REQUIRED_FIELDS,
     SCENE_STATUS,
     SCENE_TYPES,
+    SESSION_PLAYED,
     SESSION_STATUS,
     extract_frontmatter,
     chapter_key,
@@ -1027,9 +1028,6 @@ def _resolve_document_link(target: str, by_stem: dict[str, list[str]],
     if loose:
         return loose[0], None
     return None, hits[0]
-
-
-PLAYED_STATUSES = {"played", "wrap-up", "reviewed"}
 
 
 def publish_list_sets(vault: Path) -> tuple[dict[str, set[str]] | None,
@@ -2351,7 +2349,7 @@ def check_sessions(vault: Path) -> list[str]:
         # the session's published record.
         if unicodedata.normalize("NFC", rel) in withheld:
             rows.extend(_hub_body_rows(rel, text))
-        if declared.casefold() in PLAYED_STATUSES:
+        if declared.casefold() in SESSION_PLAYED:
             played.append(rel)
     rows.extend(manifest_rows(vault, played))
     return rows

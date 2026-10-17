@@ -24,7 +24,7 @@ const {
 } = require('./processor');
 const { CODES: NOTE_FAULT_CODES, PAGES_SHOWN } = require('./note-faults');
 const { getsNoPage } = require('./previews');
-const { pairHubs, isWrapUp, isPlayedSession } = require('./session-hub');
+const { pairHubs, isWrapUp, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { canonicalNfc } = require('./unicode');
 const { wikilinkRe } = require('./wikilink');
 const { pinnedVersionOf, runUpdatePin } = require('./update-pin');
@@ -35,7 +35,6 @@ const LINK_ROW_CAP = 30;
 const FAULT_ROW_CAP = 20;
 const FAULT_CODES = new Set(NOTE_FAULT_CODES);
 const NEAREST_LIMIT = 3;
-const REGISTRABLE_TYPES = new Set(['session', 'session_wrap', 'chapter']);
 // The order codes appear in the human report: the ones that stop the audit first,
 // then roughly in the order a GM would act on them.
 const CODE_ORDER = [

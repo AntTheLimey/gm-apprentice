@@ -14,7 +14,6 @@ from here are re-exported below so nothing had to be rewritten.
 
 from __future__ import annotations
 
-import json
 import re
 import sys
 from functools import lru_cache
@@ -27,7 +26,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from vaultlib import (  # noqa: E402,F401
     FRONTMATTER_RE,
     MAX_PLAUSIBLE_SESSION,
+    ONTOLOGY_PATH,
     QUOTED_SCALAR_RE,
+    WRAP_UP_TYPES,
     chapter_key,
     chapter_of,
     extract_frontmatter,
@@ -36,10 +37,50 @@ from vaultlib import (  # noqa: E402,F401
     scalar_value,
     wikilink_target,
 )
+from vaultlib import ontology as _ontology  # noqa: E402
+
+# The short lists shared with the publish tool live in the ontology file
+# (vaultlib.ontology); everything below that names one derives from it.
+
+# A session's `status`: not yet run (prep, kept off a player site) or
+# played (the `wrap-up` state between the wrap-up and the review counts).
+SESSION_NOT_YET_RUN: frozenset[str] = frozenset(_ontology()["session_status"]["not_yet_run"])
+SESSION_PLAYED: frozenset[str] = frozenset(_ontology()["session_status"]["played"])
+# A session's `stage`: still being written (kept off a player site), or in play.
+SESSION_STAGE_IN_PREP: frozenset[str] = frozenset(_ontology()["session_stage"]["in_prep"])
+SESSION_STAGE: frozenset[str] = (
+    SESSION_STAGE_IN_PREP | frozenset(_ontology()["session_stage"]["in_play"]))
+
+# Game systems: canonical id -> its name, and every alias -> its canonical id.
+SYSTEMS: tuple[str, ...] = tuple(s["id"] for s in _ontology()["game_systems"])
+SYSTEM_NAMES: dict[str, str] = {s["id"]: s["name"] for s in _ontology()["game_systems"]}
+SYSTEM_ALIASES: dict[str, str] = {
+    alias: s["id"] for s in _ontology()["game_systems"] for alias in s["aliases"]}
+
+
+def system_id(raw: object) -> str | None:
+    """The canonical id a written system names (trimmed, any case); the
+    text itself, lowered, when it is no known alias; None when blank."""
+    text = str(raw or "").strip().lower()
+    return SYSTEM_ALIASES.get(text, text) or None
+
+
+def _descendants(name: str) -> set[str]:
+    found = {name}
+    for child in _ontology()["entity_types"]["hierarchy"].get(name, []):
+        found |= _descendants(child)
+    return found
+
+
+# The type folders: vault folder -> every type a note in it may have (the
+# folder's own types and their subtypes in the hierarchy).
+TYPE_FOLDERS: dict[str, frozenset[str]] = {
+    f["folder"]: frozenset().union(*(_descendants(t) for t in f["types"]))
+    for f in _ontology()["vault_folders"]}
 
 # Valid enum values
 CANON_STATUS_VALUES = {"DRAFT", "AUTHORITATIVE", "SUPERSEDED", "STUB"}
-SESSION_STATUS = {"planned", "prepped", "played", "wrap-up", "reviewed"}
+SESSION_STATUS = set(SESSION_NOT_YET_RUN | SESSION_PLAYED)
 SCENE_STATUS = {"planned", "ready", "played", "cut", "skipped", "modified"}
 SCENE_TYPES = {
     "investigation", "social", "combat", "chase",
@@ -77,9 +118,7 @@ REQUIRED_FIELDS = {
     "session": ["type", "session_number", "status", "documents"],
     "session-plan": ["type", "canon_status", "session"],
     "session-play-notes": ["type", "canon_status", "session"],
-    "session-wrap-up": ["type", "canon_status", "session"],
-    "session-wrapup": ["type", "canon_status", "session"],
-    "session_wrap": ["type", "canon_status", "session"],
+    **{t: ["type", "canon_status", "session"] for t in sorted(WRAP_UP_TYPES)},
     "scene": ["type", "canon_status", "scene_type", "status"],
     "chapter": ["type"],
     "meta": ["type"],
@@ -108,21 +147,11 @@ DEPRECATED_FIELDS: dict[str, list[tuple[str, str, str]]] = {
         ("source_confidence", "canon_status", "1.8.0"),
         ("confidence", "canon_status", "1.8.0"),
     ],
-    "session_wrap": [
+    **{t: [
         ("in_game_dates", "in_game_date", "1.9.5"),
         ("in_game_date_start", "in_game_date", "1.9.5"),
         ("in_game_date_end", "in_game_date", "1.9.5"),
-    ],
-    "session-wrap-up": [
-        ("in_game_dates", "in_game_date", "1.9.5"),
-        ("in_game_date_start", "in_game_date", "1.9.5"),
-        ("in_game_date_end", "in_game_date", "1.9.5"),
-    ],
-    "session-wrapup": [
-        ("in_game_dates", "in_game_date", "1.9.5"),
-        ("in_game_date_start", "in_game_date", "1.9.5"),
-        ("in_game_date_end", "in_game_date", "1.9.5"),
-    ],
+    ] for t in sorted(WRAP_UP_TYPES)},
     "event": [("date", "in_game_date", "1.4.22")],
     "session": [
         ("planned_date", "play_date", "1.4.22"),
@@ -135,14 +164,8 @@ DEPRECATED_FIELDS: dict[str, list[tuple[str, str, str]]] = {
 #
 # The ontology file beside this package is the one source of the vocabulary;
 # the predicate table in entity-schema.md is generated from it
-# (scripts/gen_ontology_docs.py --check fails CI when it is stale). Resolved from this file's own location: the
-# vocabulary travels with the plugin, never with the vault under audit.
-
-ONTOLOGY_PATH = Path(__file__).resolve().parent.parent / "gm-apprentice-ontology.json"
-
-@lru_cache(maxsize=1)
-def _ontology() -> dict:
-    return json.loads(ONTOLOGY_PATH.read_text(encoding="utf-8"))
+# (scripts/gen_ontology_docs.py --check fails CI when it is stale). vaultlib
+# reads it (ONTOLOGY_PATH, re-exported above).
 
 
 GENERATED_MARKER_RE = re.compile(r"^<!-- /?generated:[^>]*-->\r?\n", re.M)

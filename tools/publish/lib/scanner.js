@@ -6,6 +6,7 @@ const { getCanonStatus } = require('./templates/base');
 const { canonicalNfc, nfcLookupTable } = require('./unicode');
 const { linkText, labelsForLinks } = require('./wikilink');
 const { entry, nameIn, fileLabel } = require('./settings');
+const { WRAP_UP_TYPES } = require('./shared-lists');
 
 function slugify(name) {
   const slug = name
@@ -410,7 +411,7 @@ function pairStoryFiles(pages, vaultPath) {
 // this, because Obsidian resolves a link to any note in the vault, and a
 // GM-only folder the site never scans is the likeliest home for a secret.
 const HOUSEKEEPING_TYPE_LINE = /^type:\s*["']?(meta|template)["']?\s*$/m;
-const SESSION_TYPE_LINE = /^type:\s*["']?(session|session_wrap|session-wrap-up|session-wrapup)["']?\s*$/m;
+const SESSION_TYPE_LINE = new RegExp(`^type:\\s*["']?(session|${[...WRAP_UP_TYPES].join('|')})["']?\\s*$`, 'm');
 
 function scanAllNotes(vaultPath) {
   const out = [];
