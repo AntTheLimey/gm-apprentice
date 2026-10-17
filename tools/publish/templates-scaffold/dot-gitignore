@@ -11,3 +11,7 @@ vault.config.json
 
 # What the build keeps between builds (the image cache). Never published.
 .gm-apprentice/
+
+# The change-request watcher's scratch files (inbox watch).
+.watcher-heartbeat
+.watcher-seen.json

@@ -544,6 +544,18 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
     for (const v of [d, off, on]) fs.rmSync(v.vault, { recursive: true, force: true });
   });
 
+  it('reports the system and its sheet family, which picks the change-request file', async () => {
+    const cases = [['', null, null], ['  system: gurps-4e\n', 'gurps-4e', 'gurps'],
+      ['  system: coc-7e-regency\n', 'coc-7e-regency', 'coc'], ['  system: dnd\n', 'dnd', 'dnd'],
+      ['  system: fitd\n', 'fitd', null]];
+    for (const [line, system, family] of cases) {
+      const v = vaultWith(line);
+      const got = await explainAll(v.configPath);
+      assert.deepStrictEqual([got.system, got.sheetFamily], [system, family], line);
+      fs.rmSync(v.vault, { recursive: true, force: true });
+    }
+  });
+
   it('reports the PC keep-list: null with sheets on, the list with sheets off', async () => {
     const on = vaultWith('');
     assert.strictEqual((await explainAll(on.configPath)).pcKeepSections, null);

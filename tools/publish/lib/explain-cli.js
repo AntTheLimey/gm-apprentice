@@ -25,6 +25,7 @@ const { markersIn } = require('./markers');
 const YAML = require('yaml');
 const { nearestNames, readerView } = require('./site-doctor');
 const { nameIn } = require('./settings');
+const { sheetFamilyOf } = require('./party-board-registry');
 
 // The switches as the build resolves them, without the config notes.
 function switchesOf(publishConfig) {
@@ -324,7 +325,8 @@ function publishedPagesOf(survey) {
 }
 
 // `explain --all --json`: a top-level `switches` block ({ characterSheets, liveStats,
-// inbox }, as the build resolves them), a top-level `pcKeepSections` (the resolved PC
+// inbox }, as the build resolves them), the campaign `system` and its `sheetFamily`
+// (gurps, coc, dnd, or null for a system with no sheet), a top-level `pcKeepSections` (the resolved PC
 // keep-list; null when sheets are on), a top-level `excludeSections` (the `##` titles
 // the build strips: the vault file's list, else the site file's, else the default), then the verdict for every file the vault walk sees, in one run,
 // so a caller that needs the build's answer for many files (vault_check gm-leak and
@@ -384,6 +386,7 @@ async function runExplainAll(options, deps) {
     };
   });
   out(JSON.stringify({ vaultPath: survey.vaultPath, switches: switchesOf(survey.publishConfig),
+    system: survey.publishConfig.system || null, sheetFamily: sheetFamilyOf(survey.publishConfig.system),
     pcKeepSections: pcKeepList(survey.publishConfig),
     excludeSections: survey.publishConfig.exclude_sections || [], pages }, null, 2));
   return 0;

@@ -208,8 +208,9 @@ the inbox", "watch for sheet changes")
 
 Follow `references/change-request-loop.md` — an unattended,
 self-paced loop that applies clean player sheet edits (GURPS 4e,
-CoC 7e and D&D 5e) and flags edge cases. With `player_site.sheets.show`
-off it only answers questions.
+CoC 7e and D&D 5e) and flags edge cases. It names the one
+`change-request-<system>.md` file to read as well. With
+`player_site.sheets.show` off it only answers questions.
 
 ### 8. Live status bar setup (Tier 2a) / 9. At-table inbox setup (Tier 2b)
 ("turn on the status bar", "let players update hit points live" / "set

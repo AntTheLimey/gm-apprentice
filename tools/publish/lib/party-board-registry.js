@@ -39,4 +39,11 @@ function boardFor(system) {
   return (id && REGISTRY[id]) || null;
 }
 
-module.exports = { boardFor };
+// The sheet family a system id belongs to (gurps, coc or dnd), or null for a system
+// with no sheet. explain reports it so the change-request loop reads one system's file.
+function sheetFamilyOf(system) {
+  const board = boardFor(system);
+  return board === GURPS ? 'gurps' : board === COC ? 'coc' : board === DND ? 'dnd' : null;
+}
+
+module.exports = { boardFor, sheetFamilyOf };
