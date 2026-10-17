@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.73] — 2026-10-17
+
+The wrap-up records each PC's moment, and prep starts from it.
+
+### Added
+
+- The wrap-up template gives each PC a **Moment:** line under PC
+  Carry-Forward: what touched that PC tonight, from the notes, or
+  "none".
+- A GM-Assistant export's moments name the PCs in them, and the wrap-up
+  uses them for each PC's Moment.
+
+### Changed
+
+- Quality Notes start with what the players enjoyed or didn't. When the
+  notes don't show it, the wrap-up asks the GM once.
+- Session prep reads last session's Moment lines to see who had none
+  before the GM picks who the session leans on.
+
+---
+
 ## [1.10.72] — 2026-10-17
 
 Spotlight advice keeps one hard rule and drops its numbers.
@@ -27,8 +48,8 @@ Spotlight advice keeps one hard rule and drops its numbers.
   plan's `## Spotlight Forecast` lists each PC's role and moment.
 - The rules advisor's "Spotlight check" describes and offers; the GM
   assigns.
-- The wrap-up template notes who had little tonight, in plain words,
-  instead of "spotlight debt" with a staleness counter.
+- The wrap-up template drops "spotlight debt" with a staleness counter
+  from Unresolved Threads.
 - `session_context.py --arcs` prints each PC's role per session without
   the estimated share (`Session 6: B`). `plan_check.py` knows both the old
   and the new Spotlight Forecast guidance as a template placeholder.
