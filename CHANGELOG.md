@@ -30,6 +30,8 @@ reads only its own game system's instructions.
   - **New session:** `inbox open` clears the seen file.
 - `explain --all --json` prints `system` and `sheetFamily` (`gurps`, `coc`,
   `dnd` or null).
+- `inbox watch` writes its seen file through a temporary file, and `--every`
+  or `--remind-after` with no number after it is a usage error.
 
 ### Changed
 
@@ -41,8 +43,8 @@ reads only its own game system's instructions.
   | Game | Before | Now |
   |---|---|---|
   | GURPS | 38.5 KB | 22.6 KB |
-  | CoC | 38.5 KB | 24.1 KB |
-  | D&D | 38.5 KB | 30.4 KB |
+  | CoC | 38.5 KB | 24.0 KB |
+  | D&D | 38.5 KB | 30.3 KB |
   | Character sheets off | 38.5 KB | 19.9 KB |
 
 - The loop runs `update-pin` before it starts.

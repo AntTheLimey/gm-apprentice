@@ -69,6 +69,22 @@ test('an unknown argument prints the usage and exits 2, apart from the failure e
   assert.match(r.lines.join('\n'), /Usage: inbox watch/);
 });
 
+test('--every or --remind-after with no number, or a flag after it, exits 2 without eating the flag', async () => {
+  for (const args of [['--every'], ['--remind-after'], ['--every', '--exit-on-batch'], ['--remind-after', '--every', '5']]) {
+    const r = await watch(fakeKV(), siteDir(), args);
+    assert.equal(r.rc, 2, args.join(' '));
+    assert.match(r.lines[0], new RegExp(`^${args[0]} needs a number of seconds`), args.join(' '));
+  }
+});
+
+test('the seen file is replaced whole, leaving no temporary file behind', async () => {
+  const kv = fakeKV(); const dir = siteDir();
+  await inbox.enqueue(kv, entry('r1', '2026-07-11T14:01:00.000Z'));
+  await watch(kv, dir, []);
+  assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(dir, SEEN_FILE), 'utf8')).shown), ['r1']);
+  assert.deepEqual(fs.readdirSync(dir).filter((f) => f.endsWith('.tmp')), []);
+});
+
 test('a missing or unknown subcommand prints the usage and exits 2', async () => {
   const lines = [];
   assert.equal(await runInbox([], { out: (s) => lines.push(s) }), 2);

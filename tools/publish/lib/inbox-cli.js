@@ -76,8 +76,12 @@ function readSeen(file, nowMs) {
   }
 }
 
+// Written to a temporary file and renamed over the old one, so a watcher
+// stopped mid-write never leaves a truncated file that reads as empty.
 function writeSeen(file, seen) {
-  fs.writeFileSync(file, JSON.stringify({ shown: Object.fromEntries(seen) }) + '\n');
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify({ shown: Object.fromEntries(seen) }) + '\n');
+  fs.renameSync(tmp, file);
 }
 
 // A whole number of seconds, clamped; anything else falls back to the default
@@ -95,6 +99,10 @@ function parseWatchArgs(args) {
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--exit-on-batch') { opts.exitOnBatch = true; continue; }
+    if ((a === '--every' || a === '--remind-after')
+        && (args[i + 1] === undefined || args[i + 1].startsWith('--'))) {
+      return { error: `${a} needs a number of seconds` };
+    }
     if (a === '--every') {
       opts.every = secondsArg(a, args[++i], DEFAULT_EVERY, 1, 300, 'polling every', opts.notes);
       continue;
