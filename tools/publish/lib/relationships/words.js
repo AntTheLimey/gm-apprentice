@@ -33,33 +33,53 @@ function candidates(text) {
   const spans = (line, isExtra) => {
     for (const m of line.matchAll(/`([^`]+)`/g)) add(m[1], isExtra);
   };
-  for (const raw of text.replace(/\r\n/g, '\n').split('\n')) {
-    const line = raw.trim();
+  const lines = text.replace(/\r\n/g, '\n').split('\n').map((l) => l.trim());
+  lines.forEach((line, n) => {
     if (line.startsWith('|')) {
-      line.split('|').slice(1).forEach((cell, i) => {
-        spans(cell, i > 0);
-        cell.split(',').forEach((w) => add(w, i > 0));
+      const cells = line.replace(/^\||\|$/g, '').split('|');
+      // A one-column table has no category cell: its only cell is a type, unless the row is the header.
+      const header = /^\|?\s*:?-{3,}/.test(lines[n + 1] || '');
+      const single = cells.length === 1 && !header;
+      cells.forEach((cell, i) => {
+        spans(cell, i > 0 || single);
+        cell.split(',').forEach((w) => add(w, i > 0 || single));
       });
     } else {
       // A bullet or numbered item may also hold code spans; a line that is only a comma list of names counts too.
       const item = /^(?:[-*]|\d+\.)\s+/.test(line);
       if (item) spans(line, true);
+      // `- located_at: where it is`: a bare name before a colon is named. It is not offered as a stray
+      // type, because a prose label such as `- note: ...` looks the same.
+      const labelled = /^(?:[-*]|\d+\.)\s+([a-z][a-z0-9_]*)\s*:/.exec(line);
+      if (labelled) add(labelled[1], false);
       const bare = line.replace(/^(?:[-*]|\d+\.)\s+/, '');
       if (bare && bare.split(',').every((w) => IDENT.test(w.trim()))) bare.split(',').forEach((w) => add(w, true));
     }
-  }
+  });
   return { named, extra };
+}
+
+// The types a vault's own `_meta/relationship-types.md` puts forward: `subset` is true when it names some but not
+// all of the vocabulary, `types` then holds the predicate types it names; `found` is what candidates() read (null
+// when there is no file).
+function vaultVocabulary(vaultPath) {
+  const all = ontology.predicates;
+  const file = readTypesFile(vaultPath);
+  if (file === null) return { subset: false, types: null, found: null };
+  const found = candidates(file);
+  const named = all.filter((p) => found.named.has(p.type));
+  const subset = named.length > 0 && named.length < all.length;
+  return { subset, types: subset ? new Set(named.map((p) => p.type)) : null, found };
 }
 
 function wordsData({ vaultPath } = {}) {
   const all = ontology.predicates;
-  const file = readTypesFile(vaultPath);
+  const vocab = vaultVocabulary(vaultPath);
   let predicates = all;
   let unknown = [];
-  if (file !== null) {
-    const found = candidates(file);
-    const named = all.filter((p) => found.named.has(p.type));
-    if (named.length > 0 && named.length < all.length) predicates = named;
+  if (vocab.found !== null) {
+    const found = vocab.found;
+    if (vocab.subset) predicates = all.filter((p) => vocab.types.has(p.type));
     const known = new Set([
       ...all.flatMap((p) => [p.type, p.inverse]),
       ...all.flatMap((p) => p.genre || []),
@@ -99,4 +119,4 @@ function words(opts = {}) {
   return lines.join('\n');
 }
 
-module.exports = { words, wordsData };
+module.exports = { words, wordsData, vaultVocabulary };

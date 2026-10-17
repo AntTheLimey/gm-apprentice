@@ -781,4 +781,4 @@ function refusalsFor(vaultPath, changes) {
   return prepare(changes, layoutOf(vaultPath)).refusals;
 }
 
-module.exports = { applyChanges, refusalsFor, planChanges, renameInSettings, settingsText, writeAtomic, splitFront };
+module.exports = { applyChanges, refusalsFor, planChanges, renameInSettings, settingsText, writeAtomic, splitFront, applyEdits, addLines, dropLines, endOf, dashOffset, parseText };

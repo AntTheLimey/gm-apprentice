@@ -167,15 +167,8 @@ from schema_rules import (
     SCENE_TYPES,
     SESSION_STATUS,
     extract_frontmatter,
-    inverse_predicates,
-    iter_relationship_predicates,
-    iter_relationship_tones,
     chapter_key,
     parse_session_number,
-    predicate_problem,
-    predicate_vocabulary,
-    tone_families,
-    tone_proposal,
 )
 # LINK_RE and SKIP_DIRS are re-exported: they were part
 # of this module's surface before vaultlib existed.
@@ -793,48 +786,71 @@ def check_read_aloud(vault: Path) -> list[str]:
     return rows
 
 
+def _relationships_tool_row(why: str) -> list[str]:
+    return [f"ERROR\t(vault)\tcould not check the relationships: {why}"]
+
+
 def check_relationships(vault: Path, folder: str | None = None,
                         files: Iterable[str] | None = None,
-                        newer_than: float | None = None) -> list[str]:
-    """Every relationship predicate must come from the sanctioned vocabulary.
+                        newer_than: str | None = None) -> list[str]:
+    """Every relationship rule, as the publish tool checks it.
 
-    An invented `type:` is worse than a vague one: no query, no
-    inverse-inference and no publish step knows about it, so the edge is
-    written and then silently ignored (issue #130 — one session's entity
-    generation invented eleven of them). ERROR, with the nearest
-    sanctioned predicates so the fix is a rename, not a hunt. A tone off
-    the listed words is a WARNING, with the listed word to use when a
-    rule gives one.
+    `gm-publish relationships check --json` is the one place the rules
+    live (the predicate vocabulary, the tone words, direction, place
+    ties and the rest), so this asks it and returns its rows in the
+    LEVEL<TAB>note:line<TAB>message shape, in the tool's order (note,
+    then line). A tool that cannot answer (no node, no tool, a failure,
+    an answer that is not a list) is one ERROR (vault) row saying why,
+    never an empty result that reads as clean.
 
-    `folder`/`files`/`newer_than` scope the walk to what a run just
-    touched — a full vault's off-vocabulary backlog otherwise buries
-    the findings that belong to the files just written."""
+    `folder`/`files` scope the walk to what a run just touched, and
+    `newer_than` is a vault-relative file whose mtime is the cutoff: a
+    full vault's backlog otherwise buries the findings that belong to the
+    files just written."""
+    node = shutil.which("node")
+    if not node:
+        return _relationships_tool_row("node is not on PATH")
+    if not PUBLISH_TOOL.is_file():
+        return _relationships_tool_row(
+            f"the publish tool is not at {PUBLISH_TOOL.as_posix()}")
+    args = [node, str(PUBLISH_TOOL), "relationships", "check", "--json",
+            "--vault", str(vault)]
+    if folder:
+        args += ["--folder", folder]
+    for rel in files or ():
+        args += ["--file", rel]
+    if newer_than:
+        args += ["--newer-than", newer_than]
     try:
-        vocabulary = predicate_vocabulary()
-        # Warm the inverse map here too: predicate_problem() reads it through
-        # a second cache, and an unguarded load there would abort `all`.
-        inverse_predicates()
-        tones = tone_families()
-    except (OSError, ValueError, KeyError, TypeError) as e:
-        return [f"ERROR\t(vault)\tcannot read the predicate vocabulary "
-                f"from shared/gm-apprentice-ontology.json: {e}"]
-    rows = []
-    for rel, text in vault_files(vault, folder, files, newer_than=newer_than):
-        for lineno, key, predicate in iter_relationship_predicates(text):
-            if predicate in vocabulary:
-                continue
-            rows.append(f"ERROR\t{rel}:{lineno}\t"
-                        f"{predicate_problem(key, predicate)} "
-                        f"(map it via shared/relationship-normalization.md)")
-        for lineno, tone in iter_relationship_tones(text):
-            if tone in tones:
-                continue
-            fix = tone_proposal(tone)
-            rows.append(
-                f"WARNING\t{rel}:{lineno}\ttone '{tone}' is off the list; "
-                + (f"use '{fix}'" if fix else
-                   "pick a listed tone (shared/entity-schema.md, Tones)"))
-    return rows
+        done = subprocess.run(args, capture_output=True, text=True,
+                              encoding="utf-8", errors="replace",
+                              timeout=PUBLISH_TOOL_TIMEOUT, check=False)
+    except subprocess.TimeoutExpired:
+        return _relationships_tool_row(
+            f"the publish tool did not answer within {PUBLISH_TOOL_TIMEOUT}s")
+    except OSError as e:
+        return _relationships_tool_row(
+            f"node could not run ({e.__class__.__name__})")
+    if done.returncode != 0:
+        lines = [ln.strip() for ln in
+                 (done.stderr or "").splitlines()
+                 if ln.strip()]
+        why = (lines[-1].removeprefix("Error: ") if lines
+               else f"exit code {done.returncode}")
+        return _relationships_tool_row(f"the publish tool failed ({why})")
+    try:
+        found = json.loads(done.stdout)
+    except ValueError:
+        found = None
+    if not isinstance(found, list):
+        return _relationships_tool_row(
+            "the publish tool did not answer in JSON")
+    try:
+        return [f"{f['level']}\t{f['rel']}:{f['line']}\t{f['message']}"
+                for f in found]
+    except (KeyError, TypeError):
+        return _relationships_tool_row(
+            "the publish tool's JSON was not a list of findings")
 
 
 MIGRATION_HINT = ("run campaign-organizer's migration workflow "
@@ -5800,6 +5816,7 @@ def main() -> int:
               file=sys.stderr)
         return 2
     newer_than_mtime: float | None = None
+    newer_than_rel: str | None = None
     if args.file:
         normalized, invalid = _resolve_vault_paths(args.vault, args.file)
         if invalid:
@@ -5815,6 +5832,7 @@ def main() -> int:
                   f"{', '.join(invalid)}", file=sys.stderr)
             return 2
         newer_than_mtime = (args.vault / normalized[0]).stat().st_mtime
+        newer_than_rel = normalized[0]
     if args.command == "changed":
         if args.since is None:
             print("error: changed requires --since N", file=sys.stderr)
@@ -5871,7 +5889,7 @@ def main() -> int:
     if args.command in ("relationships", "all"):
         emit_rows("relationships",
                   check_relationships(args.vault, args.folder, args.file,
-                                      newer_than_mtime))
+                                      newer_than_rel))
     gm_own("sessions", lambda: check_sessions(args.vault))
     # `all` is a report, so gm-leak never writes — same reasoning as
     # `wrapup` below.

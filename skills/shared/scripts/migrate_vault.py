@@ -13,7 +13,8 @@ from pathlib import Path
 
 import relink
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
-                          cells, edit_frontmatter, stopped, write_text_atomic)
+                          cells, edit_frontmatter, plugin_tool, stopped,
+                          write_text_atomic)
 from schema_rules import tone_families, without_generated_markers
 from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
                          player_section_key, wrapup_filename_findings)
@@ -571,6 +572,145 @@ def find_required_ties_section(vault: Path) -> list[Item]:
         line += (f"; your own lines in it go too: "
                  + " / ".join(f"\"{ln}\"" for ln in own))
     return [Item("required-ties-section", CHOICE, [line], apply)]
+
+
+RELATIONSHIP_TYPES_FILE = "_meta/relationship-types.md"
+
+
+def _words(vault: Path | None) -> dict | None:
+    """The publish tool's `relationships words --json` (for `vault`, the
+    vault's own list), or None when it could not answer: no node, no tool,
+    a failure, or an answer that is not what it should be."""
+    args = ["relationships", "words", "--json"]
+    if vault is not None:
+        args += ["--vault", str(vault)]
+    try:
+        code, out, _err = plugin_tool(args)
+    except StepFailed:
+        return None
+    if code != 0:
+        return None
+    try:
+        data = json.loads(out)
+    except ValueError:
+        return None
+    if (not isinstance(data, dict)
+            or not isinstance(data.get("predicates"), list)
+            or not all(isinstance(p, dict) and isinstance(p.get("type"), str)
+                       for p in data["predicates"])):
+        return None
+    return data
+
+
+def _squash(text: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", text.lower())
+
+
+def _table_cells(line: str) -> list[str]:
+    body = line.rstrip("\r\n").strip()
+    if body.startswith("|"):
+        body = body[1:]
+    if body.endswith("|"):
+        body = body[:-1]
+    return body.split("|")
+
+
+def _add_to_table(text: str, missing: list[dict]) -> str | None:
+    """`text` with each missing type added to its category's row of a
+    `| Category | Types |` table (a row for a missing category goes after
+    the table's last row), or None when the file has no such table. Every
+    other byte stays."""
+    import vault_scaffold as vs    # it imports this module
+
+    lines = text.splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        head = [c.strip().lower() for c in _table_cells(line)]
+        if line.lstrip().startswith("|") and "category" in head \
+                and "types" in head:
+            cat_col, type_col = head.index("category"), head.index("types")
+            break
+    else:
+        return None
+    eol = "\r\n" if lines[i].endswith("\r\n") else "\n"
+    end = i + 1
+    while end < len(lines) and lines[end].lstrip().startswith("|"):
+        end += 1
+    wanted: dict[str, list[str]] = {}
+    for p in missing:
+        wanted.setdefault(p.get("category") or "", []).append(p["type"])
+    for category, types in wanted.items():
+        shown = vs.CATEGORY_NAMES.get(category, category.title())
+        for j in range(i + 2, end):
+            cols = _table_cells(lines[j])
+            if len(cols) <= max(cat_col, type_col) or \
+                    _squash(cols[cat_col]) not in (_squash(category),
+                                                   _squash(shown)):
+                continue
+            cell = cols[type_col]
+            body = cell.rstrip()
+            if body.strip():
+                cols[type_col] = body + ", " + ", ".join(types) + cell[len(body):]
+            else:
+                cols[type_col] = " " + ", ".join(types) + " "
+            lead = lines[j][:len(lines[j]) - len(lines[j].lstrip())]
+            tail = lines[j][len(lines[j].rstrip("\r\n")):]
+            row_text = lines[j].rstrip("\r\n").strip()
+            front = "|" if row_text.startswith("|") else ""
+            back = "|" if row_text.endswith("|") else ""
+            lines[j] = lead + front + "|".join(cols) + back + tail
+            break
+        else:
+            width = len(_table_cells(lines[i]))
+            cols = [" " + shown + " " if k == cat_col
+                    else " " + ", ".join(types) + " " if k == type_col
+                    else "  " for k in range(width)]
+            row = "|" + "|".join(cols) + "|" + eol
+            if end > 0 and not lines[end - 1].endswith("\n"):
+                lines[end - 1] += eol
+            lines.insert(end, row)
+            end += 1
+    return "".join(lines)
+
+
+def find_relationship_types_missing(vault: Path) -> list[Item]:
+    """1.10.66: a vault's `_meta/relationship-types.md` that names fewer of
+    the relationship types than the vocabulary has gets the missing ones
+    added, on a yes. What the file names is the publish tool's reading of
+    it (`relationships words`), never a second one here. A tool that cannot
+    answer gives no offer."""
+    path = vault / RELATIONSHIP_TYPES_FILE
+    if not path.is_file():
+        return []
+    mine = _words(vault)
+    if not mine or mine.get("subset") is not True:
+        return []
+    every = _words(None)
+    if not every:
+        return []
+    named = {p["type"] for p in mine["predicates"]}
+    missing = [p for p in every["predicates"] if p["type"] not in named]
+    if not missing:
+        return []
+    names = [p["type"] for p in missing]
+
+    def apply(_value: str | None) -> list[str]:
+        text = _read(path)
+        new = _add_to_table(text, missing)
+        if new is None:
+            eol = "\r\n" if "\r\n" in text else "\n"
+            new = (text + ("" if text.endswith("\n") or not text else eol)
+                   + eol + "## Added by the update (1.10.66)" + eol + eol
+                   + "".join(f"- {n}{eol}" for n in names))
+        write_text_atomic(path, new)
+        return [f"added {len(names)} relationship types to "
+                f"{RELATIONSHIP_TYPES_FILE}"]
+
+    line = (f"add the relationship types your list leaves out to "
+            f"{RELATIONSHIP_TYPES_FILE}: it names {len(named)} of the "
+            f"{len(every['predicates'])}, and is missing "
+            f"{', '.join(names)}; answer no if the list is a deliberate "
+            f"genre subset")
+    return [Item("relationship-types-missing", CHOICE, [line], apply)]
 
 
 # --- small per-release checks -------------------------------------------------
@@ -1168,6 +1308,10 @@ VAULT_CHECKS: list[Check] = [
     Check("required-ties-section", "1.10.65",
           3, "the retired required-relationships section",
           find_required_ties_section, choices=("required-ties-section",)),
+    Check("relationship-types-missing", "1.10.66", 3,
+          "the relationship types a list is missing",
+          find_relationship_types_missing,
+          choices=("relationship-types-missing",)),
     # An empty Timeline changes what an older publish tool shows, so it waits
     # for the repin: band 4, asks_site.
     Check("timeline-page", None, 4, "the Timeline page", find_timeline_page,

@@ -107,3 +107,23 @@ test('the command prints the text with --vault, and refuses an unknown verb', ()
   assert.strictEqual(bad.status, 1);
   assert.match(bad.stderr, /Unknown relationships command: nope/);
 });
+
+test('a bullet written as "- name: what it is" counts as named (#411 item 1)', () => {
+  const dir = vaultWith('# Types\n\n- located_at: where it is\n- employs: pays someone\n- knows: has met\n');
+  const out = words({ vaultPath: dir });
+  assert.match(out, /^Relationship types this vault uses \(3 of 77\)\./);
+  assert.match(out, /located_at>/);
+  assert.doesNotMatch(out, /sibling_of/);
+});
+
+test('a one-column table lists its stray names (#411 item 2)', () => {
+  const dir = vaultWith('| Type |\n|---|\n| knows |\n| employs |\n| frobs |\n');
+  const data = wordsData({ vaultPath: dir });
+  assert.deepStrictEqual(data.notInVocabulary, ['frobs']);
+  assert.strictEqual(data.predicates.length, 2);
+});
+
+test('a lower-case header of a one-column table is not a stray type', () => {
+  const dir = vaultWith('| types |\n|---|\n| knows |\n| employs |\n');
+  assert.deepStrictEqual(wordsData({ vaultPath: dir }).notInVocabulary, []);
+});

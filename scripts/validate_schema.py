@@ -39,11 +39,8 @@ from schema_rules import (  # noqa: E402
     SESSION_STATUS,
     WORLD_DOMAIN_STATUS,
     extract_frontmatter,
-    inverse_predicates,
-    iter_relationship_predicates,
-    predicate_problem,
-    predicate_vocabulary,
 )
+import vault_check  # noqa: E402
 
 
 def validate_file(filepath: Path, content: str | None = None) -> list[str]:
@@ -266,22 +263,26 @@ def validate_file(filepath: Path, content: str | None = None) -> list[str]:
     return errors
 
 
-def validate_relationships(content: str, vocabulary: frozenset[str]) -> list[str]:
-    """Check every relationship predicate against the sanctioned vocabulary.
+def relationship_rows(campaign_dir: Path) -> dict[str, list[str]]:
+    """Every relationship rule, as the publish tool checks it, by note.
 
-    Runs beside validate_file rather than inside it: an off-vocabulary
-    edge is a defect whatever the entity type is, including in the files
-    validate_file bails out of early.
+    The tool (`gm-publish.js relationships check`) is the one place the
+    rules live; this asks it through vault_check and keeps the ERROR and
+    WARNING rows (INFO rows are notes, not defects). A tool that cannot
+    answer is an ERROR row under `(vault)`, never a clean result. The
+    benchmark vault is clean of every kind, so every kind counts.
     """
-    errors = []
-    for lineno, key, predicate in iter_relationship_predicates(content):
-        if predicate in vocabulary:
+    found: dict[str, list[str]] = {}
+    for row in vault_check.check_relationships(campaign_dir):
+        level, where, message = row.split("\t", 2)
+        if level not in ("ERROR", "WARNING"):
             continue
-        errors.append(
-            f"Line {lineno}: {predicate_problem(key, predicate)} "
-            f"(map it via skills/shared/relationship-normalization.md)"
-        )
-    return errors
+        rel, _, line = where.rpartition(":")
+        if not rel:
+            rel, line = where, ""
+        text = f"Line {line}: {message}" if line.isdigit() else message
+        found.setdefault(rel, []).append(text)
+    return found
 
 
 # Content filtering rules — scenes that should be auto-excluded or auto-included
@@ -451,16 +452,7 @@ def validate_campaign(campaign_dir: Path) -> int:
         print(f"Warning: No markdown files found in {campaign_dir}")
         return 0
 
-    try:
-        vocabulary = predicate_vocabulary()
-        # Warm the inverse map here too: validate_relationships reaches it
-        # through predicate_problem() on a second cache, and an unguarded
-        # load there would abort the run mid-loop.
-        inverse_predicates()
-    except (OSError, ValueError, KeyError, TypeError) as e:
-        print(f"Error: cannot read the predicate vocabulary from the "
-              f"ontology export: {e}")
-        return 1
+    relationships = relationship_rows(campaign_dir)
 
     total_errors = 0
     files_with_errors = 0
@@ -473,7 +465,8 @@ def validate_campaign(campaign_dir: Path) -> int:
             errors = [f"Could not read file: {e}"]
         else:
             errors = (validate_file(filepath, content)
-                      + validate_relationships(content, vocabulary))
+                      + relationships.pop(
+                          filepath.relative_to(campaign_dir).as_posix(), []))
         if errors:
             files_with_errors += 1
             rel_path = filepath.relative_to(campaign_dir.parent) if campaign_dir.parent != Path(".") else filepath
@@ -481,6 +474,15 @@ def validate_campaign(campaign_dir: Path) -> int:
             for error in errors:
                 print(f"  - {error}")
                 total_errors += 1
+
+    # Rows about no note on disk (the tool could not answer, or a note
+    # that vanished mid-run) are still defects.
+    for where, rows in sorted(relationships.items()):
+        files_with_errors += 1
+        print(f"\n{where}:")
+        for error in rows:
+            print(f"  - {error}")
+            total_errors += 1
 
     print(f"\n{'='*50}")
     print(f"Validated {len(md_files)} files")

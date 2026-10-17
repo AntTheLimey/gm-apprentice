@@ -76,27 +76,6 @@ not referenced from `_meta/index.md`, and index entries whose
 target file no longer exists. The fix is `index_build.py
 <vault> --write`, never a hand edit to `_meta/index.md`.
 
-**Mirrored edges (duplicates, not gaps):** Storage is
-single-direction (`shared/entity-schema.md`, "Relationship
-Types"): an asymmetric edge lives on one endpoint and its
-inverse is implied; a symmetric predicate (`allied_with`,
-`knows`, `sibling_of`…) is stored **once** with
-`bidirectional: true`. So a one-way edge is *correct*, and the
-thing to flag is the opposite — the same fact stored on both
-endpoints: `A allied_with B` on A's file *and* `B allied_with A`
-on B's. This is a symmetric-predicate defect; an asymmetric edge
-has no legal mirror — its inverse name (`employed_by`) is
-off-vocabulary and is caught as "Wrong-direction / inverse
-stored" under Relationship Quality, and `employs` written on
-*both* files is two contradictory facts, not a duplicate. Report
-the pair; the fix is to delete one side, never to add the missing
-mirror.
-
-**Hub overload:** Entities with an unusually high number of
-relationships (more than 2 standard deviations above the mean
-for their type). These are often over-linked — some
-connections are implied by traversal rather than direct.
-
 **Un-fenced GM-only content:** `vault_check.py gm-leak` produces
 the findings — ERROR for an orphan `<!-- /gm-only -->` closer
 (everything above it publishes); WARNING for an unclosed opener
@@ -160,116 +139,65 @@ most recent `type: session_wrap` file).
 
 ### Step 5: Relationship Quality
 
-**Vocabulary conformance (strict):** Every `relationships[].type`
-in the vault must be a predicate listed in
-`_meta/relationship-types.md` (`shared/entity-schema.md`'s
-vocabulary: the full list in a new vault, a genre subset in some
-older ones). This is separate from,
-and more fundamental than, the vagueness check below — an
-invented predicate is worse than a vague one because no query,
-inverse-inference, or publish step knows about it.
-
-**Preferred procedure:** run the bundled check rather than
-eyeballing frontmatter — it reads the sanctioned vocabulary from
-`shared/gm-apprentice-ontology.json` and reports every off-vocabulary
-predicate (top-level `type:` and `mobrpg:` node `predicate:` alike)
-with its note, line, and the nearest sanctioned predicates:
+Every relationship rule is a check in the publish tool, so never
+read ties by eye for one. Run:
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
   <vault-path> relationships
 ```
 
-Walk each ERROR row with the GM fix-or-dismiss: rename to the
-suggested predicate, re-store an inverse on the other endpoint, or
-drop the edge if it is not entity-to-entity. The tone WARNING rows
-belong to the Tone Words check (`tone-words.md`): change nothing for
-them here, and in a Full Audit do not report them twice.
+Each row is `LEVEL  note:line  message`. The rows cover types off
+the vocabulary (inverses, verbs and near misses included), ties
+stored on both notes, one fact written from both sides, the
+two-way flag, strength, ties to session notes, the two containment
+fields, containers whose points of interest were never re-pointed,
+types the vault's own `_meta/relationship-types.md` leaves out, and
+hubs. One `ERROR  (vault)  could not check the relationships` row
+means the tool did not run: say why (the row names it) and skip
+this step. Tone WARNING rows belong to the Tone Words check
+(`tone-words.md`): change nothing for them here, and in a Full
+Audit do not report them twice.
 
-The check enforces the **full** vocabulary, not a genre subset an
-older vault may hold — a predicate that is globally sanctioned but
-absent from this vault's `_meta/relationship-types.md` passes the
-tool and still breaks the rule above. Silence means "no invented
-predicates", not "genre-appropriate": scan the surviving types
-against `_meta/relationship-types.md` yourself. Flag:
+Then make the repairs yourself:
 
-- **Off-vocabulary** — a `type:` not in the vocabulary at all
-  (`hosts`, `contains`, `adjacent_to`, `carved_by`, `patrols`,
-  …). Map it to the nearest sanctioned predicate via
-  `shared/relationship-normalization.md`, or drop it if it is not
-  an entity-to-entity edge.
-- **Wrong-direction / inverse stored** — an inverse form stored
-  as its own edge (`owned_by`, `employed_by`, `led_by`,
-  `works_for`). Storage is single-direction: rewrite to the base
-  predicate on the opposite endpoint (`owned_by A→B` becomes
-  `owns B→A`) and delete the duplicate.
-- **Blank or malformed** — an empty `type:`, or a mangled
-  compound like `created_owns`.
-- **Non-entity target** — an edge whose target resolves to a
-  `session_*` note or other non-entity (e.g. `appears_in`); this
-  is a log reference, not a graph edge — drop it.
+1. Run the fix preview. It changes nothing:
 
-Report, don't auto-fix. This is the off-ontology check that a
-real vault needed (a third of one vault's edges were off-vocabulary).
-The in-repo schema↔export agreement is checked separately by
-`scripts/validate_ontology.py`.
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js" \
+     relationships fix --vault <vault-path> --json
+   ```
 
-**Containment recorded in only one place:** A location's
-containment lives in two fields with two different consumers —
-the `parent_location:` scalar (groups the published Locations
-listing) and a `part_of` edge in `relationships:` (the graph
-edge every query, this audit, and the mobRPG sync read).
-Neither implies the other. For every entity, flag:
+   `changes` are the certain repairs, each with its `kind`; `kept`
+   are ties it will not touch, each with the reason.
+2. Show the GM the changes in one table by kind (count and an
+   example or two each), then the `kept` ties each with its reason,
+   and ask one yes for all of the changes. On yes, run the same
+   command with `--write` instead of `--json`: every note changes or
+   none does.
+3. Run the check again and walk what is left with the GM by kind,
+   ERROR rows first, then WARNING:
 
-- a `parent_location:` with no matching `part_of` edge — the
-  note looks correctly nested on the site while being an orphan
-  in the graph. This is the common direction, because the scalar
-  is the visible one.
-- a `part_of` edge with no matching `parent_location:`, or the
-  two naming *different* parents — a contradiction, not an
-  omission.
+   ```bash
+   node "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js" \
+     relationships check --vault <vault-path> --json
+   ```
 
-Severity: Warning. Proposed fix: write the missing half on the
-**child's** file (containment is stored child → parent,
-single-direction). An item's `current_holder:` pairs with an `owns` tie
-on the holder's note, as `relationship-normalization.md` says.
+   Each finding has a `kind` and a message that names its choices (a
+   near type, `one of:`, store it on the other note, drop it, keep one
+   copy). Edit the note on the GM's answer.
+4. List the INFO rows once, without a question each. A
+   `childless-container` row is answered per
+   `shared/relationship-normalization.md` § Interposing a new
+   container, if the GM wants it.
 
-**Childless containers beside their would-be children:** An
-entity whose prose or `points_of_interest` names entities that
-are not its graph children, while those entities sit at the same
-level as it under a shared parent, is an interposed container
-whose children were never re-pointed. Detect it as: X has a
-`part_of` parent P; X's body or `points_of_interest` links
-[[A]], [[B]]; A and B have no `part_of` edge to X (and are
-either unparented or also `part_of` P). Report X with its
-candidate children — this is the shape the Dead End vault's
-Entertainment District left behind. Severity: Warning; the fix
-is `shared/relationship-normalization.md`'s re-point procedure,
-one GM confirmation per candidate.
-
-**Generic types:** Flag uses of `associated_with` or similar
-vague relationship types where a more specific type exists
-in `_meta/relationship-types.md`.
-
-**Redundant edges:** Two entities connected by multiple
-relationship types that mean essentially the same thing.
-
-Include the case where **both endpoints authored the same fact
-from their own side** using two different in-vocabulary base
-predicates — `A serves B` on A and `B employs A` on B. Neither
-edge is off-vocabulary and neither is a stored inverse, so the
-checks above miss it, but storage is single-direction and this
-is one fact written twice. It reaches mobRPG as two separate
-events (it did, on the 2026-07-20 Dead End push). Flag the pair
-and keep whichever side the GM prefers. The predicate pairs to
-watch: `serves`/`employs`, `member_of`/`has_member`,
-`leads`/`led_by`, `owns`/`owned_by`, `rules`/`ruled_by`.
-
-**Traversal edges:** Direct relationships that add no
-information beyond what's discoverable by a short graph
-traversal. Two NPCs who share a location don't need a direct
-`associated_with` edge — the shared location is the
-relationship.
+**What the check cannot judge.** Raise these as Info, with the
+tie and your reason: a tie that adds nothing a short traversal
+does not already show (two NPCs who share a location need no
+direct tie: the shared place is the relationship), two ties on one
+pair that mean the same thing, and a type vaguer than one that
+fits. Offer the most specific type in
+`_meta/relationship-types.md` that says what the tie means.
 
 ### Step 6: Compile Findings
 

@@ -56,27 +56,21 @@ An item's `current_holder:` pairs the same way with an `owns` tie on the holder'
 
 ## Interposing a new container — re-point its children
 
-Creating an entity that sits **between** an existing parent and its
-existing children is only half the job. A district between a station and
-its venues, a wing between a manor and its rooms, a cell between a faction
-and its members: unless the children are re-pointed at the new container,
-it lands as a childless leaf sitting at the same level as the things it is
-supposed to contain, and the hierarchy is flatter than before it existed.
+A container created between a parent and its children (a district
+between a station and its venues, a cell between a faction and its
+members) lands childless unless the children are re-pointed at it.
+The relationships check reports it as a `childless-container` INFO
+row: the container is `part_of` a parent and lists, under
+`points_of_interest`, notes of its own type that are `part_of` the
+same parent or unplaced.
 
-Nothing about creating the container surfaces this — the children's own
-files are untouched and still say what they said yesterday. So make it an
-explicit step:
+To answer the row, or when creating the container:
 
-1. **List the candidates.** Everything currently pointing at the *old*
-   parent (or at nothing) that the new container's own prose, its
-   `points_of_interest`, or the play notes place inside it.
-2. **Present them to the GM for a yes/no each.** Never re-parent silently
-   — "inside the district" is a canon claim, and some siblings genuinely
-   stay siblings.
-3. **For each confirmed child, update the pair that matches the
-   containment's kind** — on the **child's** file, never the container's.
-   Containment is stored child → parent, single-direction, so the
-   container itself gains nothing but its own edge to *its* parent.
+1. **Ask the GM yes or no for each candidate.** Never re-parent
+   silently: "inside the district" is a canon claim, and some
+   siblings stay siblings.
+2. **For each yes, update the child's file**, never the
+   container's (containment is stored child → parent):
 
    | What is being contained | Scalar field | Edge |
    |---|---|---|
@@ -85,22 +79,9 @@ explicit step:
    | A **person in a faction** (a member moved to a new cell) | *(none)* | `member_of` |
    | A faction's seat of operations | *(none)* | `headquartered_at` |
 
-   Faction and Organization carry a scalar `part_of` (wiki-link to the
-   parent body) as well as the edge — the same scalar/edge pairing
-   Location has, and the same obligation to update both. The **edge is
-   authoritative**: it is what pushes upstream and what the graph
-   queries, and a scalar left behind is the divergence to fix.
-
-   `parent_location` is a **Location** field and exists for location
-   containment only. There is no membership scalar — a person's place in
-   a faction lives entirely on the `member_of` edge, which mobRPG reifies
-   as a Membership event. Do not write `parent_location` onto a person
-   because their cell changed, and do not use `part_of` for membership:
-   it is off-vocabulary there and pushes as a junk Generic node.
-
-Do this at creation time. A container that has been childless for a few
-sessions reads as deliberate, and by then nobody remembers which venues
-were meant to be on the strip.
+   The edge is authoritative; a scalar left behind is the
+   divergence to fix. Never write `parent_location` onto a person,
+   and never use `part_of` for membership.
 
 ## Map narrative verbs to sanctioned predicates
 

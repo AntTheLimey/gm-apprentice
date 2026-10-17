@@ -152,19 +152,25 @@ function edgesOf(frontmatter) {
   return out;
 }
 
+// The note name a relationship target value names, by the rule the site prints it with.
+// One link with words beside it ("[[Name|label]] (briefly)") names that link's note; two or
+// more name none (`links` says how many, so a reader can tell "none" from a plain name).
+function targetRef(value) {
+  const ref = linkText(value, { humanize: true });
+  const links = String(value).match(wikilinkRe('g')) || [];
+  const key = !ref.labelled && links.length === 1 ? parseWikilink(wikilinkRe('').exec(links[0])[1]).name.trim() : ref.key;
+  const name = canonicalNfc(key.split(/[#^]/)[0].replace(/\.md$/i, '').trim());
+  return { name, links: links.length, words: ref.words.trim() };
+}
+
 function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extras }) {
   const byPath = new Map(pages.map((p) => [p.outputPath, p]));
   // What a target names: its page when it has one, else the words to call it by (its
   // label, or its name with underscores read as spaces: wikilink.js linkText).
   const resolve = (value) => {
-    const ref = linkText(value, { humanize: true });
-    // One link with words beside it ("[[Name|label]] (briefly)") names that link's page;
-    // two or more name none, so the item stays unlinked.
-    const links = String(value).match(wikilinkRe('g')) || [];
-    const key = !ref.labelled && links.length === 1 ? parseWikilink(wikilinkRe('').exec(links[0])[1]).name.trim() : ref.key;
-    const name = canonicalNfc(key.split(/[#^]/)[0].replace(/\.md$/i, '').trim());
+    const { name, words } = targetRef(value);
     const out = name ? linkMap[name] : undefined;
-    return { page: (typeof out === 'string' && byPath.get(out)) || null, name, words: ref.words.trim() };
+    return { page: (typeof out === 'string' && byPath.get(out)) || null, name, words };
   };
 
   // Every relationship, once, filed under the page it points at.
@@ -304,4 +310,4 @@ function isEmpty(model) {
   return !model || (model.tabs.length === 0 && model.mentions.length === 0);
 }
 
-module.exports = { buildConnections, isEmpty, TABS, markdownLinkLabels };
+module.exports = { buildConnections, isEmpty, TABS, markdownLinkLabels, targetRef };

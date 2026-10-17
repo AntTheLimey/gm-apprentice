@@ -19,7 +19,6 @@ import re
 import sys
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from difflib import get_close_matches
 from functools import lru_cache
 from pathlib import Path
 
@@ -159,28 +158,6 @@ def _ontology() -> dict:
     return json.loads(ONTOLOGY_PATH.read_text(encoding="utf-8"))
 
 
-def _ontology_predicates() -> list[dict]:
-    return _ontology()["predicates"]
-
-
-@lru_cache(maxsize=1)
-def predicate_vocabulary() -> frozenset[str]:
-    """The sanctioned relationship predicates. Raises if the export is unusable."""
-    return frozenset(p["type"] for p in _ontology_predicates())
-
-
-@lru_cache(maxsize=1)
-def inverse_predicates() -> dict[str, str]:
-    """Inverse name -> the sanctioned predicate it inverts.
-
-    Inverse names (`led_by`, `owned_by`, `imprisoned_by`) are implied, never
-    stored, so they are off-vocabulary — but they are the one class of bad
-    predicate whose fix is exact rather than a guess.
-    """
-    return {p["inverse"]: p["type"]
-            for p in _ontology_predicates() if p.get("inverse")}
-
-
 GENERATED_MARKER_RE = re.compile(r"^<!-- /?generated:[^>]*-->\r?\n", re.M)
 
 
@@ -188,50 +165,6 @@ def without_generated_markers(text: str) -> str:
     """The plugin's schema text as a vault should hold it: the markers
     scripts/gen_ontology_docs.py leaves around its tables are not copied."""
     return GENERATED_MARKER_RE.sub("", text)
-
-
-def type_key(raw: str) -> str:
-    """A written relationship type as the vocabulary spells it."""
-    return re.sub(r"[\s-]+", "_", str(raw).strip().lower())
-
-
-def verb_choices(name: str) -> list[dict] | None:
-    """What a stray type means: None when the ontology has no entry, [] when
-    it is not a graph edge, else the predicates it can be (one = certain)."""
-    choices = _ontology().get("verbs", {}).get(type_key(name))
-    return None if choices is None else [dict(c) for c in choices]
-
-
-def same_fact_pairs() -> list[tuple[str, str]]:
-    return [(a, b) for a, b in _ontology().get("same_fact", [])]
-
-
-def place_fields() -> list[dict]:
-    return [dict(p) for p in _ontology().get("place_fields", [])]
-
-
-def suggest_predicates(predicate: str) -> list[str]:
-    """Up to three sanctioned predicates close to an off-vocabulary one."""
-    return get_close_matches(predicate, sorted(predicate_vocabulary()), n=3)
-
-
-def predicate_problem(key: str, predicate: str) -> str:
-    """Describe what is wrong with a predicate, and how to fix it.
-
-    Shared by both reporters so the vault-facing check and CI say the same
-    thing about the same edge; each wraps it in its own row format.
-    """
-    if not predicate:
-        return f"blank relationship {key} — every edge needs a sanctioned predicate"
-    problem = f"off-vocabulary relationship {key} '{predicate}'"
-    base = inverse_predicates().get(predicate)
-    if base:
-        return (f"{problem} — inverse of '{base}'; storage is single-direction, "
-                f"so record '{base}' on the other endpoint")
-    near = suggest_predicates(predicate)
-    if near:
-        return f"{problem} — did you mean {', '.join(near)}?"
-    return f"{problem} — no close match"
 
 
 # Tone words
