@@ -62,11 +62,88 @@ test('--every is clamped to 1..300, and a non-number falls back to 30 with one n
   assert.match(bad.lines[0], /--every "soon" is not a whole number.*every 30s/);
 });
 
-test('an unknown argument prints the usage and exits 1', async () => {
+test('an unknown argument prints the usage and exits 2, apart from the failure exit 1', async () => {
   const r = await watch(fakeKV(), siteDir(), ['--frobnicate']);
-  assert.equal(r.rc, 1);
+  assert.equal(r.rc, 2);
   assert.match(r.lines.join('\n'), /Unknown argument: --frobnicate/);
   assert.match(r.lines.join('\n'), /Usage: inbox watch/);
+});
+
+test('a missing or unknown subcommand prints the usage and exits 2', async () => {
+  const lines = [];
+  assert.equal(await runInbox([], { out: (s) => lines.push(s) }), 2);
+  assert.equal(await runInbox(['frob'], { out: (s) => lines.push(s) }), 2);
+  assert.match(lines.join('\n'), /Usage: inbox </);
+});
+
+test('--remind-after is clamped to 60..3600, and a non-number falls back to 300 with one note', async () => {
+  const bad = await watch(fakeKV(), siteDir(), ['--remind-after', 'later']);
+  assert.equal(bad.rc, 0);
+  assert.deepEqual(bad.lines, ['Note: --remind-after "later" is not a whole number of seconds; reminding after 300s.']);
+  // Clamped low: shown at t0, still pending 60 s later → a reminder even though 10 was asked.
+  const kv = fakeKV(); const dir = siteDir();
+  await inbox.enqueue(kv, entry('a', '2026-07-11T14:01:00.000Z'));
+  const r = await clockedWatch(kv, dir, ['--remind-after', '10'], { polls: 4, step: 30000 });
+  assert.deepEqual(r.lines.slice(1), ['WATCHER: still pending: a'], 'one reminder at 60 s, none at 30 s or 90 s');
+});
+
+// Run `inbox watch` with a clock that moves `step` ms per sleep.
+async function clockedWatch(kv, dir, args, { polls, step, start = 1_700_000_000_000, onPoll } = {}) {
+  const lines = [];
+  let clock = start; let n = 0;
+  const rc = await runInbox(['watch', ...args], {
+    adapter: kv, cwd: dir, out: (s) => lines.push(String(s)), maxPolls: polls,
+    now: () => clock,
+    sleep: async () => { n++; clock += step; if (onPoll) await onPoll(n); },
+  });
+  return { rc, lines, clock };
+}
+
+test('an id still pending --remind-after seconds after it was shown is named once, then again after another N', async () => {
+  const kv = fakeKV(); const dir = siteDir();
+  await inbox.enqueue(kv, entry('a', '2026-07-11T14:01:00.000Z'));
+  await inbox.enqueue(kv, entry('b', '2026-07-11T14:02:00.000Z'));
+  // Polls at 0, 60, 120, ... 600 s: shown at 0, reminded at 300 and 600, none in between.
+  const r = await clockedWatch(kv, dir, [], { polls: 11, step: 60000 });
+  assert.equal(r.rc, 0);
+  assert.equal(r.lines.length, 3, r.lines.join('\n'));
+  assert.deepEqual(JSON.parse(r.lines[0]).map(e => e.id), ['a', 'b']);
+  assert.deepEqual(r.lines.slice(1), ['WATCHER: still pending: a b', 'WATCHER: still pending: a b']);
+});
+
+test('no reminder before --remind-after, and none once the id is handled', async () => {
+  const kv = fakeKV(); const dir = siteDir();
+  await inbox.enqueue(kv, entry('a', '2026-07-11T14:01:00.000Z'));
+  await inbox.enqueue(kv, entry('b', '2026-07-11T14:02:00.000Z'));
+  const early = await clockedWatch(kv, dir, [], { polls: 5, step: 60000 });
+  assert.equal(early.lines.length, 1, 'polls at 0..240 s: the batch, no reminder yet');
+  // A second watcher picks the clock up from the seen file: 'a' is replied to, 'b' is not.
+  const r = await clockedWatch(kv, dir, [], {
+    polls: 3, step: 60000, start: early.clock,
+    onPoll: async (n) => { if (n === 1) await inbox.setResponse(kv, 'a', 'applied', 'done'); },
+  });
+  assert.deepEqual(r.lines, ['WATCHER: still pending: b']);
+});
+
+test('--exit-on-batch exits 0 after a reminder line', async () => {
+  const kv = fakeKV(); const dir = siteDir();
+  await inbox.enqueue(kv, entry('a', '2026-07-11T14:01:00.000Z'));
+  const first = await clockedWatch(kv, dir, ['--exit-on-batch'], { polls: 20, step: 30000 });
+  assert.equal(first.rc, 0);
+  assert.equal(first.lines.length, 1);
+  const second = await clockedWatch(kv, dir, ['--exit-on-batch'], { polls: 20, step: 30000, start: first.clock });
+  assert.equal(second.rc, 0);
+  assert.deepEqual(second.lines, ['WATCHER: still pending: a']);
+  const shown = JSON.parse(fs.readFileSync(path.join(dir, SEEN_FILE), 'utf8')).shown;
+  assert.equal(shown.a, second.clock, 'the reminder restarts the id\'s clock');
+});
+
+test('the old {"ids":[...]} seen file reads as shown now', async () => {
+  const kv = fakeKV(); const dir = siteDir();
+  fs.writeFileSync(path.join(dir, SEEN_FILE), JSON.stringify({ ids: ['a'] }));
+  await inbox.enqueue(kv, entry('a', '2026-07-11T14:01:00.000Z'));
+  const r = await clockedWatch(kv, dir, [], { polls: 6, step: 60000 });
+  assert.deepEqual(r.lines, ['WATCHER: still pending: a'], 'quiet at start, reminded at 300 s');
 });
 
 test('a new batch prints once as the pull JSON, and a still-pending batch stays quiet', async () => {
@@ -90,13 +167,13 @@ test('a new id prints the whole pending batch again, old ids included', async ()
   assert.deepEqual(JSON.parse(r.lines[1]).map(e => e.id), ['a', 'c']);
 });
 
-test('the printed ids survive a relaunch, so a stuck batch does not wake the loop again', async () => {
+test('the printed ids survive a relaunch, so the same batch is not printed again', async () => {
   const kv = fakeKV(); const dir = siteDir();
   await inbox.enqueue(kv, entry('a', '2026-07-11T14:01:00.000Z'));
   const first = await watch(kv, dir, ['--exit-on-batch'], { polls: 10 });
   assert.equal(first.rc, 0);
   assert.equal(first.lines.length, 1);
-  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(dir, SEEN_FILE), 'utf8')).ids, ['a']);
+  assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(path.join(dir, SEEN_FILE), 'utf8')).shown), ['a']);
   const second = await watch(kv, dir, ['--exit-on-batch'], { polls: 3 });
   assert.deepEqual(second.lines, [], 'the same pending id is not announced twice');
   assert.equal(second.rc, 0, 'ran out its polls without a batch');

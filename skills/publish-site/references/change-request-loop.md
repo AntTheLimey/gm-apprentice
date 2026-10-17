@@ -8,14 +8,16 @@ does the waiting, and you only wake when a request actually arrives.
 
 ## Prerequisites
 
+- First, bring the site's pinned tool up to date, from the site directory
+  (`$TOOL` as in `SKILL.md`): `node "$TOOL" update-pin --site .`. A site
+  still pinned to an older tool has no `inbox watch` and no `sheetFamily`.
 - The inbox is set up (KV namespace + `wrangler.toml` id + deployed Function).
   See `references/cloudflare-pages.md` → "Change-request inbox".
 - You know the campaign's switches and system. Ask the tool, from the site
-  directory, before anything else. Do not read the config files and work it
-  out:
+  directory. Do not read the config files and work it out:
 
   ```bash
-  npx gm-apprentice-publish explain --all --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["switches"], d["sheetFamily"])'
+  npx gm-apprentice-publish explain --all --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["switches"], d.get("sheetFamily"))'
   ```
 
   It prints the three switches as the build resolves them, then the sheet
@@ -27,6 +29,11 @@ does the waiting, and you only wake when a request actually arrives.
     "When character sheets are off" below.
   - The command fails: act as if character sheets are on, and tell the GM
     you could not check.
+  - It fails or prints `None` for the family: read the system with
+    `npx gm-apprentice-publish settings get vault.system` and map it:
+    `gurps`/`gurps-4e` → `gurps`; `coc`/`coc-7e`/`regency-cthulhu`/
+    `coc-7e-regency` → `coc`; `dnd`/`dnd-5e`/`dnd-5e-2024` → `dnd`;
+    anything else → `None`.
 - With character sheets on, read the one file for the sheet family, and only
   that one: `gurps` → `change-request-gurps.md` (GURPS 4e), `coc` →
   `change-request-coc.md` (CoC 7e, Regency Cthulhu included), `dnd` →
@@ -41,15 +48,18 @@ does the waiting, and you only wake when a request actually arrives.
 2. Set it live:  `npx gm-apprentice-publish inbox open WOLF`
    (or `node <tool>/bin/gm-publish.js inbox open WOLF`). A new code starts a
    new session, so the watcher forgets which requests it showed you before.
+   Stop any watcher still running first: a monitor-mode watcher keeps its
+   shown ids in memory and would write the old ones back.
 3. Print it prominently for the GM to read to the table:
    `╔═══════════════╗  SESSION CODE: WOLF  ╚═══════════════╝`
 4. Launch the **watcher** from `<site_dir>`, then leave the session idle.
    `inbox watch` polls the queue every 30s, writes the Unix time to
    `<site_dir>/.watcher-heartbeat` on every poll, and prints a batch only
    when it holds a request it has not shown you before (it remembers them in
-   `.watcher-seen.json`, across relaunches). A batch still pending from
-   before, such as one stuck on a failed deploy, does not wake you again.
-   After 5 failed polls in a row it prints
+   `.watcher-seen.json`, across relaunches). A request it showed you that is
+   still pending 5 minutes later (`--remind-after N` seconds, 60 to 3600)
+   prints `WATCHER: still pending: <id> <id>...`, and again every 5 minutes
+   while it stays pending. After 5 failed polls in a row it prints
    `WATCHER: inbox pull failed N times in a row`, and again every 5 more.
    Every wrangler call is bounded at 60s, so a hung network turn is a failed
    poll, not a frozen loop.
@@ -65,8 +75,9 @@ does the waiting, and you only wake when a request actually arrives.
      ```
 
    - **Otherwise, a background shell command** (`run_in_background: true`),
-     which only notifies you when it exits. It exits 0 after printing a new
-     batch and 1 after the first failure line, and is relaunched each time:
+     which only notifies you when it exits. It exits 0 after a new batch or
+     a reminder line, 1 after the first failure line and 2 on a usage error
+     (fix the command), and is relaunched each time:
 
      ```bash
      npx gm-apprentice-publish inbox watch --exit-on-batch
@@ -125,13 +136,14 @@ the cell being changed, on a PC that is not live), read first from the PC's
      frontmatter (ids in `sheet-skins.md`) and
      collected into the applied batch, which rebuilds the site; it needs no GM
      ruling unless the GM has said looks are theirs to choose.
-   - **Player override.** A request carrying a trust signal —
-     natural-language GM-approval or insistence such as "the GM said it's
-     OK", "GM approved", "GM said to", "do it anyway", "override", "GM okayed
-     it" — is applied even past a limit the system file would refuse it on.
-     Log a prominent **`⚠ OVERRIDE`** terminal line (character · what
-     changed · result) so you always see what was pushed through on the
-     player's word.
+   - **Player override, only where the system file allows one** (GURPS
+     costs, CoC maxima; D&D has none, and its bounds always hold). A request
+     carrying a trust signal — natural-language GM-approval or insistence
+     such as "the GM said it's OK", "GM approved", "GM said to", "do it
+     anyway", "override", "GM okayed it" — is applied past the limit that
+     file names. Log a prominent **`⚠ OVERRIDE`** terminal line (character ·
+     what changed · result) so you always see what was pushed through on
+     the player's word.
    - **Ambiguous — ask, don't guess.** If you genuinely can't tell *what* the
      player means (which skill, which item), do not edit. Finalize with a
      **`rejected`** reply asking which they meant:
@@ -176,8 +188,8 @@ the cell being changed, on a PC that is not live), read first from the PC's
      `pending`. Tell the GM in one line that the sheet update is held by the
      leak check and how many findings it named; they are dealt with after
      play, or now if the GM asks (`references/leak-findings.md`). The
-     watcher will not show those ids again: once the check is cleared,
-     deploy and reply to them yourself (`inbox pull` lists them).
+     watcher names those ids on a `still pending` line every 5 minutes;
+     deploy and reply only once the GM has cleared the check.
    - **On deploy success:** finalize each applied id with its confirmation:
 
      ```bash
@@ -185,13 +197,15 @@ the cell being changed, on a PC that is not live), read first from the PC's
      ```
 
    - **On deploy failure:** do **not** reply — the entries stay `pending`
-     (nothing else marks them). Log the failure. The watcher will not show
-     you those ids again, so retry the deploy yourself (a few minutes apart,
-     not every few seconds) until it succeeds, then reply.
+     (nothing else marks them). Log the failure. The watcher names them on
+     a `still pending` line 5 minutes later: retry the deploy then, and
+     reply once it succeeds.
 5. **Get the watcher running again for the next request.** On the monitor
    primitive it is still running: nothing to do. With `--exit-on-batch`,
    relaunch the same command. Idle resumes at zero model-token cost either
-   way.
+   way. **On a `WATCHER: still pending` line**, those ids were shown before
+   and never replied to: retry their deploy (a leak-held batch only once the
+   GM has cleared the check) and reply, then step 5 again.
 
 Once a request reaches a terminal outcome it returns exactly one response to
 the chat log: `applied` (sheet redeployed), `rejected` (with the point-math
@@ -276,7 +290,9 @@ player says they submitted something and nothing happened, run
 `cat <site_dir>/.watcher-heartbeat` — it shows the Unix timestamp of the
 last poll, written every poll in both modes. Stale by more than two or three
 intervals (60-90s at the default 30s; more if you set `--every`) means it
-died silently. Then:
+died silently. A fresh heartbeat proves only that it polls, not that a
+request was handled: when a player says nothing happened, also run
+`inbox pull` and compare its ids with the ones you have replied to. Then:
 
 - **`--exit-on-batch`:** relaunch it (Start step 4) before assuming the
   queue is simply empty.

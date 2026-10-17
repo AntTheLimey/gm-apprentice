@@ -4,9 +4,10 @@ Read this with `change-request-loop.md` when the campaign's `sheetFamily`
 is `dnd`. It is step 2 of "When a batch arrives" for D&D.
 
 D&D has no points pool, so nothing is costed: the table has already made the
-ruling and you record it. Everything else (roster match, questions, the
-ambiguity rule, the one deploy per batch, replies) is in
-`change-request-loop.md`.
+ruling and you record it. There is no player override: the bounds below
+hold whatever the request says the GM approved. Everything else (roster
+match, questions, the ambiguity rule, the one deploy per batch, replies) is
+in `change-request-loop.md`.
 The note's layout, and how each cell is written, is in `ttrpg-expert`'s
 `systems/dnd-5e-2024/character-sheet.md` under "Writing the Sheet in the
 Vault". Follow it; it is not repeated here.
@@ -146,8 +147,8 @@ Vault". Follow it; it is not repeated here.
   **When the tool fails.** The tool has failed when it prints an `ERROR`
   row, or when it exits with an error (any exit code other than 0). This
   holds for all three runs, `--write` included. Nothing is written while it fails, and
-  a request left without a reply stays pending where the watcher will not
-  show it again, so end it here. If an `ERROR` row came from your edit and you can see the
+  a request left without a reply would only come back on a `still pending`
+  line, so end it here. If an `ERROR` row came from your edit and you can see the
   mistake, fix it and run the preview again. Otherwise: put the note back
   to the text you read before the edit, keep the request out of the
   applied batch, log **`⚠ NEEDS YOU`** with what the tool printed, and

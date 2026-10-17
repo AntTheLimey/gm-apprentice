@@ -36,42 +36,71 @@ const USAGE = 'Usage: inbox <open|code|pull|watch|handled|flag|reply> [args]';
 // `inbox watch` does the waiting for the change-request loop, so the model never
 // writes its own poller. Each poll reads the pending queue, writes the Unix time to
 // .watcher-heartbeat (the Stop check reads it), and prints a batch only when it holds
-// an id not printed before. The printed ids are kept in .watcher-seen.json, so a
-// relaunch stays quiet about a batch it already handed over; `inbox open` clears it.
+// an id not printed before. The printed ids, each with the time it was last shown,
+// are kept in .watcher-seen.json, so a relaunch stays quiet about a batch it already
+// handed over; `inbox open` clears it. An id still pending --remind-after seconds
+// after it was last shown is named on a reminder line, so a batch whose deploy
+// failed wakes the loop again to retry it.
 const HEARTBEAT_FILE = '.watcher-heartbeat';
 const SEEN_FILE = '.watcher-seen.json';
 const DEFAULT_EVERY = 30;
+const DEFAULT_REMIND = 300;
 const STREAK = 5;
-const WATCH_USAGE = `Usage: inbox watch [--every N] [--exit-on-batch]
-  --every N        seconds between polls (default ${DEFAULT_EVERY}, kept between 1 and 300)
-  --exit-on-batch  exit after a new batch (code 0) or a failure line (code 1)
+const USAGE_EXIT = 2;
+const WATCH_USAGE = `Usage: inbox watch [--every N] [--remind-after N] [--exit-on-batch]
+  --every N         seconds between polls (default ${DEFAULT_EVERY}, kept between 1 and 300)
+  --remind-after N  seconds before a request still pending is named again
+                    (default ${DEFAULT_REMIND}, kept between 60 and 3600)
+  --exit-on-batch   exit 0 after a new batch or a reminder line, 1 after a failure line
 Prints a new batch as the JSON array \`inbox pull\` prints, once; a batch it printed before
-prints nothing. After ${STREAK} failed polls in a row it prints
-"WATCHER: inbox pull failed N times in a row", and again every ${STREAK} more.
-Without --exit-on-batch it runs until stopped.`;
+prints nothing. An id shown before and still pending N seconds later prints
+"WATCHER: still pending: <id> <id>...", and again every N seconds while it stays pending.
+After ${STREAK} failed polls in a row it prints "WATCHER: inbox pull failed N times in a row",
+and again every ${STREAK} more. Without --exit-on-batch it runs until stopped.
+Exit codes: 0 batch or reminder (or polls done), 1 failure line, 2 usage error.`;
 
-function readSeen(file) {
+// The seen file maps id -> ms when it was last shown (or reminded). The old
+// {"ids":[...]} shape reads as "shown now"; a missing or broken file as empty.
+function readSeen(file, nowMs) {
   try {
-    const ids = JSON.parse(fs.readFileSync(file, 'utf8')).ids;
-    return new Set(Array.isArray(ids) ? ids : []);
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const seen = new Map();
+    if (data && data.shown && typeof data.shown === 'object') {
+      for (const [id, t] of Object.entries(data.shown)) seen.set(id, Number.isFinite(t) ? t : nowMs);
+    } else if (data && Array.isArray(data.ids)) {
+      for (const id of data.ids) seen.set(id, nowMs);
+    }
+    return seen;
   } catch {
-    return new Set();
+    return new Map();
   }
 }
 
+function writeSeen(file, seen) {
+  fs.writeFileSync(file, JSON.stringify({ shown: Object.fromEntries(seen) }) + '\n');
+}
+
+// A whole number of seconds, clamped; anything else falls back to the default
+// with a one-line note.
+function secondsArg(flag, raw, def, min, max, what, notes) {
+  if (raw === undefined || !/^\d+$/.test(raw)) {
+    notes.push(`Note: ${flag} ${JSON.stringify(raw === undefined ? '' : raw)} is not a whole number of seconds; ${what} ${def}s.`);
+    return def;
+  }
+  return Math.min(max, Math.max(min, Number(raw)));
+}
+
 function parseWatchArgs(args) {
-  const opts = { every: DEFAULT_EVERY, exitOnBatch: false, notes: [] };
+  const opts = { every: DEFAULT_EVERY, remindAfter: DEFAULT_REMIND, exitOnBatch: false, notes: [] };
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--exit-on-batch') { opts.exitOnBatch = true; continue; }
     if (a === '--every') {
-      const raw = args[++i];
-      if (raw === undefined || !/^\d+$/.test(raw)) {
-        opts.every = DEFAULT_EVERY;
-        opts.notes.push(`Note: --every ${JSON.stringify(raw === undefined ? '' : raw)} is not a whole number of seconds; polling every ${DEFAULT_EVERY}s.`);
-      } else {
-        opts.every = Math.min(300, Math.max(1, Number(raw)));
-      }
+      opts.every = secondsArg(a, args[++i], DEFAULT_EVERY, 1, 300, 'polling every', opts.notes);
+      continue;
+    }
+    if (a === '--remind-after') {
+      opts.remindAfter = secondsArg(a, args[++i], DEFAULT_REMIND, 60, 3600, 'reminding after', opts.notes);
       continue;
     }
     return { error: `Unknown argument: ${a}` };
@@ -82,13 +111,14 @@ function parseWatchArgs(args) {
 async function runWatch(inbox, kv, args, deps) {
   const out = deps.out || console.log;
   const opts = parseWatchArgs(args);
-  if (opts.error) { out(opts.error); out(WATCH_USAGE); return 1; }
+  if (opts.error) { out(opts.error); out(WATCH_USAGE); return USAGE_EXIT; }
   opts.notes.forEach((n) => out(n));
   const dir = deps.cwd || process.cwd();
   const sleep = deps.sleep || ((ms) => new Promise((r) => setTimeout(r, ms)));
   const now = deps.now || Date.now;
   const seenFile = path.join(dir, SEEN_FILE);
-  const seen = readSeen(seenFile);
+  const seen = readSeen(seenFile, now());
+  const remindMs = opts.remindAfter * 1000;
   let fails = 0;
   for (let polls = 0; deps.maxPolls === undefined || polls < deps.maxPolls; polls++) {
     if (polls > 0) await sleep(opts.every * 1000);
@@ -108,10 +138,20 @@ async function runWatch(inbox, kv, args, deps) {
       continue;
     }
     fails = 0;
-    if (!pending.some((e) => !seen.has(e.id))) continue;
-    out(JSON.stringify(pending));
-    pending.forEach((e) => seen.add(e.id));
-    fs.writeFileSync(seenFile, JSON.stringify({ ids: [...seen] }) + '\n');
+    const t = now();
+    if (pending.some((e) => !seen.has(e.id))) {
+      // Printing the whole batch shows every id in it, so each one's clock restarts.
+      out(JSON.stringify(pending));
+      pending.forEach((e) => seen.set(e.id, t));
+      writeSeen(seenFile, seen);
+      if (opts.exitOnBatch) return 0;
+      continue;
+    }
+    const stale = pending.filter((e) => t - seen.get(e.id) >= remindMs).map((e) => e.id);
+    if (!stale.length) continue;
+    out(`WATCHER: still pending: ${stale.join(' ')}`);
+    stale.forEach((id) => seen.set(id, t));
+    writeSeen(seenFile, seen);
     if (opts.exitOnBatch) return 0;
   }
   return 0;
@@ -125,7 +165,7 @@ async function runInbox(argv, deps = {}) {
   const KNOWN = ['open', 'code', 'pull', 'watch', 'handled', 'flag', 'reply'];
   if (!KNOWN.includes(sub)) {
     out(USAGE);
-    return 1;
+    return USAGE_EXIT;
   }
   if (sub === 'watch' && (rest.includes('--help') || rest.includes('-h'))) { out(WATCH_USAGE); return 0; }
   // Build the wrangler-backed adapter only for real subcommands, so the usage
@@ -183,7 +223,7 @@ async function runInbox(argv, deps = {}) {
     }
     default:
       out(USAGE);
-      return 1;
+      return USAGE_EXIT;
   }
 }
 

@@ -121,15 +121,21 @@ by the publish-site skill's checking loop; run it by hand to inspect the queue.
                                              (and forget the ids the last watch printed)
   inbox code                                 Print the current session code
   inbox pull                                 Print pending requests as JSON
-  inbox watch [--every N] [--exit-on-batch]  Poll every N seconds (default 30, 1-300),
+  inbox watch [--every N] [--remind-after N] [--exit-on-batch]
+                                             Poll every N seconds (default 30, 1-300),
                                              writing the Unix time to .watcher-heartbeat
                                              each poll. Prints the pending batch as JSON
                                              when it holds an id not printed before (ids
-                                             kept in .watcher-seen.json), and
+                                             kept in .watcher-seen.json);
+                                             "WATCHER: still pending: <id>..." when an id
+                                             shown before is still pending --remind-after
+                                             seconds later (default 300, 60-3600), and
+                                             every N seconds after; and
                                              "WATCHER: inbox pull failed N times in a row"
                                              after 5 failed polls and every 5 more.
                                              Runs until stopped; with --exit-on-batch it
-                                             exits 0 after a batch, 1 after a failure line
+                                             exits 0 after a batch or reminder line, 1
+                                             after a failure line. A usage error exits 2
   inbox handled <id> [<id>...]               Mark requests handled
   inbox flag <id> [<id>...]                  Mark requests flagged for the GM
   inbox reply <id> <applied|rejected|advice> "<text>"
