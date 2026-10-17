@@ -142,9 +142,9 @@ Read the named check file when the mode runs.
 
 ### Graph Health — `references/checks/graph-health.md`
 
-Beyond that file's orphan, broken-link, mirrored-edge, hub,
-generic-type, stale-STUB, schema, story-file and index-drift
-checks, also:
+Beyond that file's orphan, broken-link, relationships (the tool's
+check and certain fixes), stale-STUB, schema, story-file and
+index-drift checks, also:
 
 - Legacy canon keys (`source_confidence:`, `confidence:`) —
   `references/checks/legacy-canon-field-repair.md`
