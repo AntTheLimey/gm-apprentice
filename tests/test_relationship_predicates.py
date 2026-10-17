@@ -17,10 +17,13 @@ import re
 import json
 import subprocess
 import sys
+import os
+import shutil
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 REPO = Path(__file__).resolve().parent.parent
 SHARED_SCRIPTS = REPO / "skills" / "shared" / "scripts"
@@ -30,6 +33,10 @@ sys.path.insert(0, str(REPO / "scripts"))
 import schema_rules as sr  # noqa: E402
 import validate_schema as vs  # noqa: E402
 import vault_check as vc  # noqa: E402
+
+NEEDS_NODE = unittest.skipUnless(
+    shutil.which("node") or os.environ.get("VAULT_CHECK_REQUIRE_NODE"),
+    "needs node")
 
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "relationship-predicates"
 
@@ -41,51 +48,32 @@ SESSION_03_PREDICATES = [
 ]
 
 
+_ONTOLOGY = json.loads(
+    (REPO / "skills" / "shared" / "gm-apprentice-ontology.json")
+    .read_text(encoding="utf-8"))
+VOCABULARY = frozenset(p["type"] for p in _ONTOLOGY["predicates"])
+INVERSE_NAMES = frozenset(p["inverse"] for p in _ONTOLOGY["predicates"]
+                          if p.get("inverse"))
+
+
 def rows_for(rows, needle):
     return [r for r in rows if needle in r]
 
 
 class PredicateVocabularyTests(unittest.TestCase):
-    def test_vocabulary_matches_the_ontology_export(self):
-        ontology = json.loads(
-            (REPO / "skills" / "shared" / "gm-apprentice-ontology.json")
-            .read_text(encoding="utf-8"))
-        self.assertEqual(sr.predicate_vocabulary(),
-                         frozenset(p["type"] for p in ontology["predicates"]))
-
     def test_sanctioned_predicates_are_in_the_vocabulary(self):
         for predicate in ("employs", "located_at", "member_of", "imprisons"):
-            self.assertIn(predicate, sr.predicate_vocabulary())
+            self.assertIn(predicate, VOCABULARY)
 
     def test_invented_predicates_are_not_in_the_vocabulary(self):
         for predicate in SESSION_03_PREDICATES:
-            self.assertNotIn(predicate, sr.predicate_vocabulary())
+            self.assertNotIn(predicate, VOCABULARY)
 
     def test_inverses_are_not_stored_predicates(self):
         # Storage is single-direction; the inverse name is implied, so it
         # is not part of the vocabulary an edge may carry.
-        self.assertNotIn("imprisoned_by", sr.predicate_vocabulary())
-
-    def test_suggestions_are_capped_at_three_real_predicates(self):
-        for predicate in SESSION_03_PREDICATES:
-            suggestions = sr.suggest_predicates(predicate)
-            self.assertLessEqual(len(suggestions), 3)
-            for s in suggestions:
-                self.assertIn(s, sr.predicate_vocabulary())
-
-    def test_near_miss_suggests_the_predicate_it_meant(self):
-        self.assertIn("commands", sr.suggest_predicates("commands_at"))
-        self.assertIn("deceived", sr.suggest_predicates("deceives"))
-
-    def test_no_suggestion_when_nothing_is_close(self):
-        self.assertEqual(sr.suggest_predicates("works_for"), [])
-
-    def test_inverse_names_map_back_to_their_base_predicate(self):
-        # Storage is single-direction, so an inverse name is off-vocabulary
-        # — but the export knows exactly which predicate it inverts.
-        self.assertEqual(sr.inverse_predicates()["led_by"], "leads")
-        self.assertEqual(sr.inverse_predicates()["imprisoned_by"], "imprisons")
-        self.assertNotIn("leads", sr.inverse_predicates())
+        self.assertNotIn("imprisoned_by", VOCABULARY)
+        self.assertIn("imprisoned_by", INVERSE_NAMES)
 
 
 class IterRelationshipPredicatesTests(unittest.TestCase):
@@ -277,7 +265,7 @@ class RelationshipPatternsDocTests(unittest.TestCase):
         # Every code span on a line that is not a warning must be a sanctioned
         # predicate or a documented inverse name — single words included, so
         # `friend` / `married` cannot come back.
-        allowed = sr.predicate_vocabulary() | set(sr.inverse_predicates())
+        allowed = VOCABULARY | INVERSE_NAMES
         self.assertEqual(self.taught - allowed, set())
 
     def test_the_old_invented_vocabulary_is_really_gone(self):
@@ -365,32 +353,7 @@ class VaultCheckCommandTests(unittest.TestCase):
 
 
 class ValidateSchemaRelationshipTests(unittest.TestCase):
-    def errors_for(self, note: Path) -> list[str]:
-        return vs.validate_relationships(note.read_text(encoding="utf-8"),
-                                         sr.predicate_vocabulary())
-
-    def test_off_vocabulary_edges_are_schema_errors(self):
-        errors = self.errors_for(FIXTURE / "Off Vocabulary NPC.md")
-        self.assertEqual(len(errors), len(SESSION_03_PREDICATES))
-        self.assertTrue(any("works_for" in e for e in errors))
-
-    def test_sanctioned_edges_pass(self):
-        self.assertEqual(self.errors_for(FIXTURE / "Clean NPC.md"), [])
-
-    def test_mobrpg_node_predicate_is_validated_too(self):
-        errors = self.errors_for(FIXTURE / "Mobrpg Sync.md")
-        self.assertEqual(len(errors), 1)
-        self.assertIn("imprisoned_by", errors[0])
-        self.assertIn("'imprisons'", errors[0])
-
-    def test_blank_predicate_is_named_as_blank(self):
-        errors = vs.validate_relationships(
-            "---\ntype: npc\ncanon_status: DRAFT\n"
-            "relationships:\n  - target: \"[[Somewhere]]\"\n"
-            "    type: \"\"\n---\n\nbody\n",
-            sr.predicate_vocabulary())
-        self.assertEqual(len(errors), 1)
-        self.assertIn("blank", errors[0])
+    """`validate_schema.py` asks the publish tool, as vault_check does."""
 
     def run_campaign(self, directory: Path) -> tuple[int, str]:
         out = io.StringIO()
@@ -407,43 +370,18 @@ class ValidateSchemaRelationshipTests(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("Could not read file", out)
 
-    def missing_ontology_campaign(self, *caches_to_clear) -> tuple[int, str]:
-        """Validate the fixture vault with the export gone and caches cold.
-
-        Raising instead of returning fails the calling test — that is the point.
-        """
-        original = sr.ONTOLOGY_PATH
-        sr.predicate_vocabulary()  # warm both caches from the real export
-        sr.inverse_predicates()
-        for cache in (sr._ontology, *caches_to_clear):
-            cache.cache_clear()
-        sr.ONTOLOGY_PATH = original.with_name("no-such-ontology.json")
-        try:
-            return self.run_campaign(FIXTURE)
-        finally:
-            sr.ONTOLOGY_PATH = original
-            sr._ontology.cache_clear()
-            sr.predicate_vocabulary.cache_clear()
-            sr.inverse_predicates.cache_clear()
-            sr.tone_families.cache_clear()
-
-    def test_missing_ontology_reports_instead_of_tracebacking(self):
-        code, out = self.missing_ontology_campaign(sr.predicate_vocabulary,
-                                                   sr.inverse_predicates)
+    def test_a_tool_that_cannot_answer_fails_the_run(self):
+        row = ["ERROR\t(vault)\tcould not check the relationships: node is not on PATH"]
+        with mock.patch.object(vs.vault_check, "check_relationships",
+                               return_value=row):
+            code, out = self.run_campaign(FIXTURE)
         self.assertEqual(code, 1)
-        self.assertIn("predicate vocabulary", out)
+        self.assertIn("node is not on PATH", out)
 
-    def test_missing_ontology_caught_even_with_the_vocabulary_cached(self):
-        # The asymmetry case: the vocabulary loads fine up front, then the
-        # export goes away before the loop reaches its first bad predicate
-        # and needs the inverse map through its own separate cache.
-        code, out = self.missing_ontology_campaign(sr.inverse_predicates)
-        self.assertEqual(code, 1)
-        self.assertIn("predicate vocabulary", out)
-
+    @NEEDS_NODE
     def test_campaign_validation_fails_on_off_vocabulary_edges(self):
         # The fixture vault is schema-clean apart from its predicates, so a
-        # non-zero exit here can only come from the new check.
+        # non-zero exit here can only come from the relationship check.
         result = subprocess.run(
             [sys.executable, str(REPO / "scripts" / "validate_schema.py"),
              str(FIXTURE)],
@@ -451,16 +389,22 @@ class ValidateSchemaRelationshipTests(unittest.TestCase):
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("works_for", result.stdout)
         self.assertIn("Off Vocabulary NPC.md", result.stdout)
+        self.assertIn("Line 6:", result.stdout)
 
-    def test_benchmark_campaign_has_no_off_vocabulary_edges(self):
-        for path in sorted((REPO / "tests" / "benchmark-campaign").rglob("*.md")):
-            self.assertEqual(self.errors_for(path), [], path.name)
+    @NEEDS_NODE
+    def test_benchmark_campaign_has_no_relationship_findings(self):
+        # Every kind of finding counts here: the benchmark vault is clean.
+        self.assertEqual(
+            vs.relationship_rows(REPO / "tests" / "benchmark-campaign"), {})
 
+    @NEEDS_NODE
     def test_shipped_templates_have_no_off_vocabulary_edges(self):
         # Scaffolded notes inherit these placeholders, so a bad predicate in a
         # template lands in the GM's vault as a finding the plugin authored.
-        for path in sorted((REPO / "skills" / "shared" / "templates").glob("*.md")):
-            self.assertEqual(self.errors_for(path), [], path.name)
+        rows = vc.check_relationships(
+            REPO / "skills" / "shared" / "templates")
+        bad = [r for r in rows if "off-vocabulary" in r or "blank" in r]
+        self.assertEqual(bad, [])
 
 
 if __name__ == "__main__":
