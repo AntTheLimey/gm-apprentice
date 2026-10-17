@@ -15,7 +15,7 @@
 //                                    note it names when the value is exactly one wiki-link to a
 //                                    note that exists, else null.
 //   Edge  { index, line, typeLine, type, target, targetRel, bidirectional, strength, tone,
-//           mobrpg, form, rawTarget }
+//           toneLine, strengthLine, mobrpg, form, rawTarget }
 //
 // `target` is read by the site's rule (connections.js targetRef); where that names no note
 // it is '' (and `targetRel` null), and `rawTarget` keeps the text as written.
@@ -205,6 +205,8 @@ function readVault(vaultPath, { files, folder, newerThan } = {}) {
           bidirectional: bidirectional && typeof scalarOf(bidirectional.value) === 'boolean' ? scalarOf(bidirectional.value) : null,
           strength: strength ? (YAML.isScalar(strength.value) ? strength.value.value : strength.value.toJS(p.doc)) : undefined,
           tone: toneText || null,
+          toneLine: tone ? lineOf(tone.key) : null,
+          strengthLine: strength ? lineOf(strength.key) : null,
           form: 'list',
         });
       });

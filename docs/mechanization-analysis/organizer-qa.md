@@ -314,7 +314,7 @@ Ordered by leverage. "Overlap" says whether to extend an existing script.
 - **Prose asks:** flag `parent_location:` with no matching `part_of` edge; a
   `part_of` edge with no `parent_location:`; the two naming different parents.
   Same pairing for Faction `territory:`/`headquartered_at` and Item
-  `current_holder:`/`owns`.
+  `current_holder:`/`owns`. (The `territory:` pairing was retired on 2026-10-16.)
 - **Contract:** extend `vault_check.py relationships` → `WARNING<TAB>path<TAB>
   parent_location "[[X]]" has no part_of edge` etc.
 - **What goes wrong today:** the prose documents a real production failure (the

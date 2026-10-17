@@ -39,7 +39,7 @@ Usage:
   gm-apprentice-publish update-pin [options] Repoint this site at the newest installed build tool
   gm-apprentice-publish manifest <cmd>       Compare the publish manifest with the vault, or update it
   gm-apprentice-publish leaks <cmd>          Check the built player site for hidden text (list, check, accept, prune)
-  gm-apprentice-publish relationships <cmd>  The relationship words, short (words)
+  gm-apprentice-publish relationships <cmd>  The relationship words, short (words); every relationship rule checked (check)
   gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
   gm-apprentice-publish lines                Answer what publishes, for text on stdin (used by vault_check)
@@ -157,6 +157,7 @@ the GM.
 `,
   relationships: `
 gm-apprentice-publish relationships words [--vault <path>] [--json]
+gm-apprentice-publish relationships check [--vault <path>] [--folder <sub>] [--file <rel>]... [--newer-than <rel>] [--json]
 
 Prints the relationship types (each with its reverse name), the tone words and the
 strength scale in a few lines. With --vault, a vault whose _meta/relationship-types.md
@@ -164,8 +165,13 @@ names only some types gets only those, and names the file holds that are not in 
 vocabulary are listed on one line.
 
   relationships words        Print the words
-  --vault <path>             The vault folder (reads _meta/relationship-types.md)
-  --json                     Print { subset, predicates, tones, strength, notInVocabulary } as JSON
+  relationships check        Check every relationship rule; prints '# count: N' then one row per finding
+                             (LEVEL<TAB>note:line<TAB>message), sorted by note then line
+  --vault <path>             The vault folder (reads _meta/relationship-types.md; default: .)
+  --folder <sub>             check: report only notes under this folder
+  --file <rel>               check: report only this note (repeatable)
+  --newer-than <rel>         check: report only notes modified at or after this vault file
+  --json                     words: { subset, predicates, tones, strength, notInVocabulary }; check: the findings
   --help, -h                 Show this help
 `,
   leaks: `
@@ -1033,13 +1039,19 @@ if (command === 'relationships') {
     printSubcommandHelp('relationships');
     process.exit(1);
   }
-  const parsed = parseSubcommandArgs(args.slice(2), { '--json': 'json' }, { '--vault': 'vault' });
+  const parsed = parseSubcommandArgs(
+    args.slice(2),
+    { '--json': 'json' },
+    { '--vault': 'vault', '--folder': 'folder', '--newer-than': 'newerThan' },
+    { '--file': 'files' },
+  );
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
     printSubcommandHelp('relationships');
     process.exit(1);
   }
-  runRelationships({ verb, vault: parsed.flags.vault, json: !!parsed.flags.json })
+  const { vault, json, folder, files, newerThan } = parsed.flags;
+  runRelationships({ verb, vault, json: !!json, folder, files, newerThan })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
   return;
