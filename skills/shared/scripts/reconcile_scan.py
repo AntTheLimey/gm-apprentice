@@ -139,11 +139,15 @@ def scan(vault: Path, wrap_rel: str) -> list[str]:
         raise LookupError(f"no Wrap-Up at {wrap_rel}")
     by_name = _index(notes)
     index = _resolve(wikilink_target(wrap.fm.get("session")), by_name, wrap.rel)
-    if index is not None and index.type != "session":
-        index = None
+    if index is None or index.type != "session":
+        # Or the index whose `documents.wrap_up` links this Wrap-Up.
+        stem = normalize(Path(wrap.rel).stem)
+        index = next((n for n in notes if n.type == "session" and link_target(
+            wikilink_target(nested_mapping(n.text, "documents").get("wrap_up", ""))) == stem),
+            None)
     out = [f"wrap-up: {wrap.rel}"]
     if index is None:
-        out.append("session: not found (the Wrap-Up's session: link names no session index)")
+        out.append("session: not found (no session index links this Wrap-Up)")
     else:
         out.append(f"session: {index.rel} (status: {index.fm.get('status', '')}, "
                    f"session_number: {index.fm.get('session_number', '')})")

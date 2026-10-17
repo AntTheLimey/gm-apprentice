@@ -85,11 +85,10 @@ Evolved types are identical to built-in ones.
 
 ### Temporal and Entity Fields
 
-A type's fields, required and optional, and their allowed values:
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/schema_rules.py"
-show <type>`. What the universal and world-evolution fields mean:
-`shared/entity-schema.md` § Universal Fields and § Core Entity Types.
-Preserve them in every Organize or Weave pass.
+A type's fields and values: `schema_rules.py show <type>`. What the
+universal and world-evolution fields mean: `shared/entity-schema.md`
+§ Universal Fields, § Core Entity Types. Preserve them in every
+Organize or Weave pass.
 
 `campaign-timeline.md` at the vault root, if present, is the
 append-only canonical record of what happened. Never reorganise

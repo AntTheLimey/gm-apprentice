@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.75] — 2026-10-17
+
+Two lookups the model did by reading are now commands.
+
+### Added
+
+- `schema_rules.py show <type>` prints one note type's fields in about
+  150 tokens: required and optional fields, the values its enumerated
+  fields take (and which of those the schema check enforces), its
+  template, folder, place in the type hierarchy, relationship rules and
+  old field names. `show` alone lists the types and the fields any type
+  takes. It reads the schema rules, the templates and the ontology, and a
+  test fails if it and the schema check disagree.
+- `reconcile_scan.py VAULT WRAP_UP` prints what reconcile counted by
+  hand: the Wrap-Up's UNVERIFIED markers and reconstruction notes, this
+  session's Plan file, the DRAFT entities and open spoiler blocks among
+  the notes the Wrap-Up links, whether reconcile should skip, and whether
+  the quick path applies by the rule reconcile already states. Whether a
+  DRAFT entity contradicts canon stays the GM's call.
+
+### Changed
+
+- `entity-schema.md` loses its required-fields list, its per-type
+  attribute list and its session example, which `show` now answers
+  (23,273 to 18,480 bytes). What some fields hold (a clue's
+  `discoveryState`, a world domain's `rules`) stays.
+- The scripts/validate_schema.py value checks read one table in
+  `schema_rules.py`, the one `show` prints, instead of twelve copies of
+  the same check.
+- Reconcile runs `reconcile_scan.py` in place of its three hand checks and
+  its inventory list. campaign-organizer, campaign-qa, the-midwife, the
+  scene note template and world evolution ask `show` instead of reading
+  the schema. Skill text is 5,097 bytes shorter in all.
+- A new vault's `_meta/entity-types.md` no longer copies the
+  required-fields list; it points at `show`.
+
 ## [1.10.72] — 2026-10-17
 
 Spotlight advice keeps one hard rule and drops its numbers.

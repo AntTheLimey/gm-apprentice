@@ -183,8 +183,7 @@ or rejects each. Then execute the filing protocol.
 
 ### Filing Protocol
 
-**New entities:** create the file from the vault's `_Templates/`
-copy (`schema_rules.py show <type>` names it and lists the fields),
+**New entities:** create the file from its `_Templates/` copy,
 setting `createdSession` in the initial write. Then stamp the rest
 with the bundled stamper (dry-run first, `--write` on confirmation):
 

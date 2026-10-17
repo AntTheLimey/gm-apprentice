@@ -1,8 +1,8 @@
 # Scene Note Template
 
 A standalone scene note lives in the chapter's `Scenes/` folder and is
-linked from the session index `scenes:` list. Its required fields and
-values: `schema_rules.py show scene` (in `shared/scripts/`).
+linked from the session index `scenes:` list. Fields and values:
+`schema_rules.py show scene`.
 
 ```markdown
 ---

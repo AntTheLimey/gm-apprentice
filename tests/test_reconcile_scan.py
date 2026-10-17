@@ -103,6 +103,14 @@ class Scan(unittest.TestCase):
             out = rs.scan(make_vault(tmp, files), WRAP)
         self.assertIn(f"plan: {SESSIONS}/Session 05 - The Ball - Plan.md", out)
 
+    def test_index_found_by_its_wrap_up_link(self):
+        files = dict(FILES)
+        files[WRAP] = files[WRAP].replace('session: "[[Session 05 - The Ball]]"', "session: 5")
+        with tempfile.TemporaryDirectory() as tmp:
+            out = rs.scan(make_vault(tmp, files), WRAP)
+        self.assertIn(f"session: {SESSIONS}/Session 05 - The Ball.md "
+                      "(status: wrap-up, session_number: 5)", out)
+
     def test_first_session_skips(self):
         files = dict(FILES)
         del files[f"{SESSIONS}/Session 04 - Before - Wrap-Up.md"]
