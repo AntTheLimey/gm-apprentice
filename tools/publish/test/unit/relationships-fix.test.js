@@ -240,9 +240,23 @@ test('if a rename fails, the notes already renamed are put back and no temp file
   const p = plan(dir);
   let n = 0;
   const rename = (from, to) => { n++; if (n === 3) throw new Error('disk full'); fs.renameSync(from, to); };
-  assert.throws(() => applyFix(dir, p, { rename }), /disk full/);
+  assert.throws(() => applyFix(dir, p, { rename }), /disk full.*nothing is changed/);
   for (const [rel, text] of Object.entries(files)) assert.strictEqual(read(dir, rel), text);
   assert.deepStrictEqual(fs.readdirSync(dir).sort(), ['A.md', 'B.md', 'C.md', 'D.md']);
+});
+
+test('if a note cannot be put back after a failed rename, the message does not say nothing is changed', () => {
+  const dir = vault({
+    'A.md': note('npc', rels(edge('child_of', 'B'))),
+    'B.md': note('npc'),
+    'C.md': note('npc', rels(edge('child_of', 'D'))),
+    'D.md': note('npc'),
+  });
+  const p = plan(dir);
+  let n = 0;
+  const rename = (from, to) => { n++; if (n === 3) throw new Error('disk full'); fs.renameSync(from, to); };
+  const restore = () => { throw new Error('locked'); };
+  assert.throws(() => applyFix(dir, p, { rename, restore }), (e) => /hold the new text/.test(e.message) && /locked/.test(e.message) && !/nothing is changed/.test(e.message));
 });
 
 test('running fix twice changes nothing the second time, and check shows none of the fixed kinds', () => {

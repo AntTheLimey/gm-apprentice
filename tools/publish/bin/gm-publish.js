@@ -158,7 +158,7 @@ the GM.
   relationships: `
 gm-apprentice-publish relationships words [--vault <path>] [--json]
 gm-apprentice-publish relationships check [--vault <path>] [--folder <sub>] [--file <rel>]... [--newer-than <rel>] [--json]
-gm-apprentice-publish relationships fix [--vault <path>] [--kind <kind>]... [--write] [--json]
+gm-apprentice-publish relationships fix [--vault <path>] [--folder <sub>] [--file <rel>]... [--newer-than <rel>] [--kind <kind>]... [--write] [--json]
 
 Prints the relationship types (each with its reverse name), the tone words and the
 strength scale in a few lines. With --vault, a vault whose _meta/relationship-types.md
@@ -175,9 +175,10 @@ vocabulary are listed on one line.
                              place-missing-field); repeatable
   --write                    fix: make the changes
   --vault <path>             The vault folder (reads _meta/relationship-types.md; default: .)
-  --folder <sub>             check: report only notes under this folder
-  --file <rel>               check: report only this note (repeatable)
-  --newer-than <rel>         check: report only notes modified at or after this vault file
+  --folder <sub>             check, fix: only notes under this folder
+  --file <rel>               check, fix: only this note (repeatable)
+  --newer-than <rel>         check, fix: only notes modified at or after this vault file
+                             (a flag the command does not take is refused)
   --json                     words: { subset, predicates, tones, strength, notInVocabulary }; check: the findings
   --help, -h                 Show this help
 `,
@@ -1056,6 +1057,19 @@ if (command === 'relationships') {
     console.error(`Error: ${parsed.error}`);
     printSubcommandHelp('relationships');
     process.exit(1);
+  }
+  const TAKES = {
+    words: { '--vault': 'vault', '--json': 'json' },
+    check: { '--vault': 'vault', '--json': 'json', '--folder': 'folder', '--file': 'files', '--newer-than': 'newerThan' },
+    fix: { '--vault': 'vault', '--json': 'json', '--folder': 'folder', '--file': 'files', '--newer-than': 'newerThan', '--kind': 'kinds', '--write': 'write' },
+  };
+  const ALL = { ...TAKES.fix };
+  for (const [flag, key] of Object.entries(ALL)) {
+    const given = Array.isArray(parsed.flags[key]) ? parsed.flags[key].length > 0 : parsed.flags[key] !== undefined;
+    if (given && !Object.prototype.hasOwnProperty.call(TAKES[verb], flag)) {
+      console.error(`Error: relationships ${verb} does not take ${flag}; its flags are ${Object.keys(TAKES[verb]).join(', ')}`);
+      process.exit(1);
+    }
   }
   const { vault, json, folder, files, newerThan, kinds, write } = parsed.flags;
   runRelationships({ verb, vault, json: !!json, folder, files, newerThan, kinds, write: !!write })

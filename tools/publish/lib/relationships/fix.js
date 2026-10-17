@@ -474,7 +474,7 @@ function removeLeftovers(vaultPath) {
   return gone;
 }
 
-function applyFix(vaultPath, plan, { rename = fs.renameSync } = {}) {
+function applyFix(vaultPath, plan, { rename = fs.renameSync, restore = fs.writeFileSync } = {}) {
   const files = [...plan.texts.keys()].map((rel) => ({ rel, full: path.join(vaultPath, ...rel.split('/')) }));
   for (const f of files) {
     let now;
@@ -503,10 +503,10 @@ function applyFix(vaultPath, plan, { rename = fs.renameSync } = {}) {
   } catch (e) {
     const failed = [];
     for (const f of done) {
-      try { fs.writeFileSync(f.full, plan.originals.get(f.rel)); } catch (r) { failed.push(`${f.rel} (${r.message})`); }
+      try { restore(f.full, plan.originals.get(f.rel)); } catch (r) { failed.push(`${f.rel} (${r.message})`); }
     }
     cleanTemps();
-    throw new Error(`${e.message}; ${done.length} note(s) already written were put back${failed.length ? `, but these could not be: ${failed.join(', ')}` : ''}; nothing is changed`);
+    throw new Error(`${e.message}; ${done.length - failed.length} note(s) already written were put back${failed.length ? `, but these could not be, so they hold the new text: ${failed.join(', ')}` : '; nothing is changed'}`);
   }
   cleanTemps();
   return files.map((f) => f.rel);
