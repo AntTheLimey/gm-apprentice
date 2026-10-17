@@ -39,7 +39,7 @@ Usage:
   gm-apprentice-publish update-pin [options] Repoint this site at the newest installed build tool
   gm-apprentice-publish manifest <cmd>       Compare the publish manifest with the vault, or update it
   gm-apprentice-publish leaks <cmd>          Check the built player site for hidden text (list, check, accept, prune)
-  gm-apprentice-publish relationships <cmd>  The relationship words, short (words); every relationship rule checked (check)
+  gm-apprentice-publish relationships <cmd>  The relationship words, short (words); every relationship rule checked (check); the certain repairs (fix)
   gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
   gm-apprentice-publish lines                Answer what publishes, for text on stdin (used by vault_check)
@@ -158,6 +158,7 @@ the GM.
   relationships: `
 gm-apprentice-publish relationships words [--vault <path>] [--json]
 gm-apprentice-publish relationships check [--vault <path>] [--folder <sub>] [--file <rel>]... [--newer-than <rel>] [--json]
+gm-apprentice-publish relationships fix [--vault <path>] [--kind <kind>]... [--write] [--json]
 
 Prints the relationship types (each with its reverse name), the tone words and the
 strength scale in a few lines. With --vault, a vault whose _meta/relationship-types.md
@@ -167,6 +168,12 @@ vocabulary are listed on one line.
   relationships words        Print the words
   relationships check        Check every relationship rule; prints '# count: N' then one row per finding
                              (LEVEL<TAB>note:line<TAB>message), sorted by note then line
+  relationships fix          The certain repairs. Without --write it lists them (WOULD-CHANGE and KEEP rows); with
+                             --write it makes them in every note at once or in none (CHANGED rows). A tie it cannot move
+                             or edit safely is a KEEP row with the reason.
+  --kind <kind>              fix: only this kind (off-vocabulary, mirrored, bidirectional, place-missing-tie,
+                             place-missing-field); repeatable
+  --write                    fix: make the changes
   --vault <path>             The vault folder (reads _meta/relationship-types.md; default: .)
   --folder <sub>             check: report only notes under this folder
   --file <rel>               check: report only this note (repeatable)
@@ -1041,17 +1048,17 @@ if (command === 'relationships') {
   }
   const parsed = parseSubcommandArgs(
     args.slice(2),
-    { '--json': 'json' },
+    { '--json': 'json', '--write': 'write' },
     { '--vault': 'vault', '--folder': 'folder', '--newer-than': 'newerThan' },
-    { '--file': 'files' },
+    { '--file': 'files', '--kind': 'kinds' },
   );
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
     printSubcommandHelp('relationships');
     process.exit(1);
   }
-  const { vault, json, folder, files, newerThan } = parsed.flags;
-  runRelationships({ verb, vault, json: !!json, folder, files, newerThan })
+  const { vault, json, folder, files, newerThan, kinds, write } = parsed.flags;
+  runRelationships({ verb, vault, json: !!json, folder, files, newerThan, kinds, write: !!write })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
   return;
