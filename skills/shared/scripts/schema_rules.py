@@ -112,7 +112,7 @@ FACTION_STATUS = frozenset({"active", "weakened", "destroyed", "allied", "dorman
 
 # The values a field takes, by note type ("*": any type). CHECKED_VALUES is
 # what scripts/validate_schema.py rejects anything outside of; LISTED_VALUES
-# are words the schema names that no check enforces. `show` prints both.
+# are words the schema names that no check enforces (`show`: unchecked).
 CHECKED_VALUES: dict[str, dict[str, frozenset[str]]] = {
     "*": {"canon_status": frozenset(CANON_STATUS_VALUES)},
     "session": {"status": frozenset(SESSION_NOT_YET_RUN | SESSION_PLAYED)},
@@ -405,8 +405,8 @@ def show(etype: str) -> str | None:
                                  else "no shared template (shared/entity-schema.md)"))
     lines.append("values (checked): " + _values(checked))
     if listed:
-        lines.append("values (listed, not checked): " + _values(listed))
-    lines.append(_common_line())
+        lines.append("values (unchecked): " + _values(listed))
+    lines.append("fields any type takes: `show`")
     rules = []
     if etype in PORTRAIT_TYPES:
         rules.append("portrait is a path under _attachments/")

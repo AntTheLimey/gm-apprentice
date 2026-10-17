@@ -131,7 +131,7 @@ class ShowReadsTheTemplates(unittest.TestCase):
 
     def test_listed_values_name_fields_the_type_takes(self):
         self.assertIn("stage", shown("session")["optional"].split(", "))
-        self.assertEqual(shown_values("faction", "values (listed, not checked)")["status"],
+        self.assertEqual(shown_values("faction", "values (unchecked)")["status"],
                          set(sr.FACTION_STATUS))
 
     def test_relationships(self):
