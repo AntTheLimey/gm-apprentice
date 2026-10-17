@@ -54,6 +54,7 @@ section when the Play Notes already carry a scene list.}
 #### [[PC Name]] (Player)
 
 - **MAJOR —** {arc-level beat, if any — omit the bullet otherwise}
+- **Moment:** {what touched this PC tonight, from the notes; or "none"}
 - **Intent:** {stated plans, unfinished actions}
 - **Knows:** {exclusive information gained this session}
 - **Relationships:** {shifted NPC ties}
@@ -127,7 +128,8 @@ HELD, by whom, written where. Held claims carry an inline
 
 ### Quality Notes
 
-{What worked / what was missing / what to adjust — plus provenance:
+{What the players enjoyed or didn't, what worked / what was
+missing / what to adjust — plus provenance:
 name canonicalisations applied, entities deliberately folded rather
 than created. Mark any claim in these GM Notes that the Play Notes,
 the plan or a named vault file don't support with

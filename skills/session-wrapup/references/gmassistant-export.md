@@ -13,7 +13,8 @@ Adopt `## Summary` verbatim as the Wrap-Up's `## Narrative Recap`:
 no rewriting, condensing or tone adjustment (the preserve-guard in
 `shared/content-fidelity.md`). Only add `[[wiki-links]]` to every
 entity reference. Skip Quick Bullets — `## Scenes` already covers
-them. Memorable Moments stays optional as usual.
+them. Memorable Moments stays optional as usual. The export's
+moments name the PCs in them: use them for each PC's Moment.
 
 ## Step 4 — Entities
 
