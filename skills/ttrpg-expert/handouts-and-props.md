@@ -312,8 +312,7 @@ Track in campaign continuity records (`continuity-engine.md`):
 - Track which handouts examined closely vs skimmed/ignored
 - Cross-check against established canon (dates, names, facts)
 - Create callbacks: name in Handout 3 reappears in Handout 12
-- Cross-ref with Chekhov protocol: introduced elements must
-  pay off within reasonable session count
+- Note handout details that could pay off later
 
 ## Sources
 

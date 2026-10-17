@@ -32,9 +32,16 @@ Spotlight advice keeps one hard rule and drops its numbers.
 - `session_context.py --arcs` prints each PC's role per session without
   the estimated share (`Session 6: B`). `plan_check.py` knows both the old
   and the new Spotlight Forecast guidance as a template placeholder.
+- Planted story elements (Chekhov's guns) have no deadline. The
+  continuity engine, the rules advisor, world evolution and handout
+  tracking no longer say an element "must fire or be explicitly retired"
+  or flag it after 3-5 or 5+ sessions. The AI notes what was planted,
+  looks for chances to pay it off, and raises a trust gap when players
+  remember something the GM may have forgotten. A subplot runs "usually a
+  few sessions".
 - Benchmark Q8 asks for a moment for every PC instead of a 15% floor
   check, and `docs/testing-methodology.md` notes the floor is retired.
-- Skill text is 1,187 bytes shorter across six files.
+- Skill text is 1,392 bytes shorter across ten files.
 
 ### Added
 

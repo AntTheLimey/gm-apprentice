@@ -93,7 +93,7 @@ This was not a one-off. The same shape turned up three times in 2026:
 |------|---------------------|--------------------------|
 | September | Every scene in a session plan had to carry seven labelled parts, checked as errors | Run against a real plan Ant had already run a game from, it raised nine errors, seven against a short routing scene. Research found no tradition that prescribes a fixed scene shape (`docs/scene-design-research.md`). Now only Situation and Starts it are required. |
 | October | A clue-paths check: count clues per conclusion and flag fewer than three | Ant: "it's not just about the mechanics, but about the freedom of storytelling." Clues come out of play, and at the table the GM is the redundancy. Dropped before it shipped. |
-| October | Counters for "stale threads", "Chekhov age", "threads gaining traction" and a spotlight script | A thread lying unused is not overdue. Struck from the roadmap. |
+| October | Counters for "stale threads", "Chekhov age", "threads gaining traction" and a spotlight script | A thread lying unused is not overdue. Struck from the roadmap, and the same deadlines ("must fire or be explicitly retired", 3-5 and 5+ sessions) came out of the skill text. |
 
 Each time, a rule of thumb about storytelling had been turned into a
 number, a check or a required shape, and each time it pushed the GM

@@ -63,8 +63,8 @@ fact to a source file; flag ungrounded content. Canon conflict →
 `canon-management.md`.
 
 **"Stale threads?"** / **"loose ends?"**
-→ `continuity-engine.md` (Chekhov Protocol). Threads open 3-5
-sessions: resolve, advance, or retire. Read each active PC's
+→ `continuity-engine.md` (Chekhov Protocol). List open threads and
+when each was last touched; the GM picks. Read each active PC's
 `## Current Status` → `Open threads`.
 
 **"Spotlight check"** / **"PC balance"**
@@ -221,6 +221,5 @@ AUTHORITATIVE (states, including STUB and SUPERSEDED:
 `canon-management.md`, `shared/canon-status.md`). On conflicts,
 ask — never assume. Content must be mechanically correct and
 consistent with `shared/entity-schema.md` and
-`continuity-engine.md`: no stale threads, no unfired Chekhov's
-guns (5+ sessions). Tone per system:
+`continuity-engine.md`. Tone per system:
 `systems/shared-patterns.md`.

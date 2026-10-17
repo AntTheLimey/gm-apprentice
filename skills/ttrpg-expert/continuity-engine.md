@@ -113,11 +113,11 @@ its absence as a gap.
 | Type | Resolution |
 |------|-----------|
 | Main plot | Scenario climax |
-| Subplot | Within 1-3 sessions |
+| Subplot | Usually a few sessions |
 | Character arc | Over campaign arc |
 | Faction thread | Advances between sessions via clocks |
 | Mystery thread | When PCs investigate |
-| Chekhov's gun | Must fire or be explicitly retired |
+| Chekhov's gun | Fires when the story reaches it, or lies unused |
 | Foreshadowing | Pays off in later session |
 | Red herring | When PCs realise the error |
 
@@ -148,11 +148,10 @@ Ripeness: [Planted / Ripening / Ready / Paid Off / Retired]
 
 ### Chekhov Protocol
 
-1. Track every element introduced with narrative emphasis
-2. Each must fire (pay off) or be explicitly retired
-3. Flag unresolved elements older than 5 sessions
-4. When generating content, check for Chekhov payoff opportunities
-5. Forgotten by GM but remembered by players = trust gap
+1. Note every element introduced with narrative emphasis
+2. When generating content, look for chances to pay one off
+3. Remembered by players but forgotten by the GM = trust gap:
+   raise it with the GM
 
 ### Dormant Thread Revival
 
