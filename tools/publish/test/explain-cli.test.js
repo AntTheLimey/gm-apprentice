@@ -546,7 +546,7 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
 
   it('reports the system and its sheet family, which picks the change-request file', async () => {
     const cases = [['', null, null], ['  system: gurps-4e\n', 'gurps-4e', 'gurps'],
-      ['  system: coc-7e-regency\n', 'coc-7e-regency', 'coc'], ['  system: dnd\n', 'dnd', 'dnd'],
+      ['  system: coc-7e-regency\n', 'coc-7e-regency', 'coc'], ['  system: dnd\n', 'dnd-5e-2024', 'dnd'],
       ['  system: fitd\n', 'fitd', null]];
     for (const [line, system, family] of cases) {
       const v = vaultWith(line);

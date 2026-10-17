@@ -30,10 +30,9 @@ does the waiting, and you only wake when a request actually arrives.
   - The command fails: act as if character sheets are on, and tell the GM
     you could not check.
   - It fails or prints `None` for the family: read the system with
-    `npx gm-apprentice-publish settings get vault.system` and map it:
-    `gurps`/`gurps-4e` → `gurps`; `coc`/`coc-7e`/`regency-cthulhu`/
-    `coc-7e-regency` → `coc`; `dnd`/`dnd-5e`/`dnd-5e-2024` → `dnd`;
-    anything else → `None`.
+    `npx gm-apprentice-publish settings get vault.system` (it prints the
+    full id): `gurps-4e` → `gurps`; `coc-7e` or `coc-7e-regency` → `coc`;
+    `dnd-5e-2024` → `dnd`; anything else → `None`.
 - With character sheets on, read the one file for the sheet family, and only
   that one: `gurps` → `change-request-gurps.md` (GURPS 4e), `coc` →
   `change-request-coc.md` (CoC 7e, Regency Cthulhu included), `dnd` →

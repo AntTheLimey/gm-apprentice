@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.71] — 2026-10-17
+
+The change-request loop's watcher is a tool command now, and a loop start
+reads only its own game system's instructions.
+
+### Added
+
+- `gm-apprentice-publish inbox watch` polls the inbox and owns what the
+  loop used to write by hand:
+  - **Polling:** an interval (`--every`, 1 to 300 seconds, default 30).
+  - **Heartbeat:** written to `.watcher-heartbeat` on every poll.
+  - **Failure streak:** a line after every 5 failed polls in a row.
+  - **Dedup:** a batch is shown once, tracked by request id in
+    `.watcher-seen.json`.
+  - **Reminder:** a `WATCHER: still pending` line when a request it showed
+    is still waiting after `--remind-after` seconds (60 to 3600, default
+    300), so a failed deploy gets retried.
+  - **Two modes:** by default it runs until stopped. With `--exit-on-batch`
+    it exits 0 on a batch or a reminder, 1 on a failure streak and 2 on a
+    usage error.
+  - **New session:** `inbox open` clears the seen file.
+- `explain --all --json` prints `system` and `sheetFamily` (`gurps`, `coc`,
+  `dnd` or null).
+
+### Changed
+
+- `publish-site/references/change-request-loop.md` keeps what every system
+  shares. The system rules move to `change-request-gurps.md`,
+  `change-request-coc.md` and `change-request-dnd.md`. A loop start now
+  reads:
+
+  | Game | Before | Now |
+  |---|---|---|
+  | GURPS | 38.5 KB | 22.6 KB |
+  | CoC | 38.5 KB | 24.1 KB |
+  | D&D | 38.5 KB | 30.4 KB |
+  | Character sheets off | 38.5 KB | 19.9 KB |
+
+- The loop runs `update-pin` before it starts.
+- A player's "the GM said OK" override applies only to GURPS and CoC, as
+  before the split. D&D's limits always hold.
+- A new site's `.gitignore` lists both watcher files.
+- The publish tool is 1.36.0.
+
+---
+
 ## [1.10.70] — 2026-10-17
 
 The short lists the vault scripts, the publish tool and the skill text all
