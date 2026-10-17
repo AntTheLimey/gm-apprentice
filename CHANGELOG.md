@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.74] — 2026-10-17
+
+Publish tool 1.36.1: note frontmatter is read as YAML and nothing else.
+
+### Fixed
+
+- A note whose frontmatter opener names another language (`---js`,
+  `---javascript`, `---json`) is now listed with the notes whose
+  frontmatter cannot be parsed, as a note with broken YAML is, and is
+  not read. The same holds for the old `vault-config.md` settings file.
+---
+
 ## [1.10.73] — 2026-10-17
 
 The wrap-up records each PC's moment, and prep starts from it.

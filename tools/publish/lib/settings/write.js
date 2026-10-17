@@ -11,6 +11,7 @@ const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
 const YAML = require('yaml');
 const matter = require('gray-matter');
+const { ENGINES } = require('../frontmatter');
 const { REGISTRY, resolve, legacyNameOf } = require('./registry');
 const { TYPES, isMap, getPath } = require('./types');
 const { makeFault } = require('./faults');
@@ -434,7 +435,7 @@ function open(vaultPath, layout, create) {
 
 // The old file split by gray-matter (its own YAML engine turned off): `matter` is the text between the --- lines
 // exactly as written, `content` what follows the closing ---. The one split, used here and by the move.
-const splitFront = (whole) => matter(whole, { engines: { yaml: () => ({}) } });
+const splitFront = (whole) => matter(whole, { engines: { ...ENGINES, yaml: () => ({}) } });
 
 // The part of the old file that is edited: { text (the frontmatter without its edges), join (puts an edited
 // text back between the same --- lines) }.

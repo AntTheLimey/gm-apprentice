@@ -13,8 +13,15 @@ const { markerRe } = require('./markers');
 //
 // A YAML value may refer to itself (`tags: &a [*a]`). Every reader below and across the
 // tool walks a value to its leaves, so the reference back is cut here, once, to nothing.
+//
+// Frontmatter is YAML and nothing else. An opener may name a language (`---js`, `---json`),
+// and gray-matter has its own reader for each; these refuse, so such a note reads as one
+// whose frontmatter cannot be parsed. Every gray-matter call in the tool passes ENGINES.
+const refuse = () => { throw new Error('frontmatter must be YAML'); };
+const ENGINES = { javascript: refuse, json: refuse };
+
 function parseNote(text) {
-  const note = matter(text, {});
+  const note = matter(text, { engines: ENGINES });
   uncycle(note.data, []);
   return note;
 }
@@ -152,4 +159,4 @@ function commentFields(data, prefix = '') {
   return out;
 }
 
-module.exports = { parseNote, cutValueComments, gluedBefore, valueStrays, commentFields };
+module.exports = { ENGINES, parseNote, cutValueComments, gluedBefore, valueStrays, commentFields };
