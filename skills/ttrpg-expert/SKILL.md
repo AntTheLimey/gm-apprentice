@@ -69,8 +69,8 @@ sessions: resolve, advance, or retire. Read each active PC's
 
 **"Spotlight check"** / **"PC balance"**
 → `arc-spotlight-reference.md` (Spotlight Theory). Last 2-3
-sessions per PC; flag below the 15% floor; assign B/C plots to
-underserved PCs.
+sessions per PC, in plain words; who looks light; options. The GM
+assigns.
 
 **"Character arc stage"** / **"what's next for this PC?"**
 → `arc-spotlight-reference.md` (Five-Stage Arc Model). Map the PC

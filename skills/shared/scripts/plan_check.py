@@ -168,6 +168,7 @@ PLACEHOLDER_PHRASES: tuple[str, ...] = (
     "Per-PC: arc stage",
     "Per-PC touchpoint assignments",
     "Per-PC estimated spotlight share",
+    "Per-PC role and moment",
     "Missing entities, stale files",
     "Left blank during prep",
     "Same structure",

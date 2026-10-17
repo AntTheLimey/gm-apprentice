@@ -142,7 +142,7 @@ none, write "No handouts or props."]
 
 ## Spotlight Forecast
 
-[Per-PC estimated spotlight share, and any imbalance to fix.]
+[Per-PC role and moment; none left blank.]
 
 ## Open Questions
 

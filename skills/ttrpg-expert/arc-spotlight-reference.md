@@ -44,32 +44,17 @@ may need consecutive sessions of focus.
 
 ## A/B/C Plot Structure
 
-Sessions balance three layers of content.
-
-| Plot | Share | Description |
-|------|-------|------------|
-| A-Plot | 50-60% | Main campaign storyline involving all PCs |
-| B-Plot | 25-35% | Personal arc for one "featured" PC this session |
-| C-Plot | 10-15% | Lighter personal touch for a second PC — a brief scene, callback, or arc clue |
-
-The **B-plot rotation** ensures every PC gets featured within
-N sessions, where N equals party size. A PC in mid-crisis
-(Stage 3) may warrant consecutive B-plots. A PC who received
-C-plot treatment in session N is a natural B-plot candidate
-for session N+1 or N+2.
+Three kinds of content: the A-plot is the shared story, the
+B-plot one PC's personal thread, the C-plot a lighter touch for
+another. Some tables rotate the B-plot; a PC in crisis may hold it
+longer.
 
 ## Spotlight Theory
 
-Spotlight balance is equitable engagement over a span of sessions, not equal screen time per session. Key thresholds:
-
-- **15% floor:** In a four-player party, any PC falling below
-  roughly 15% of a session's spotlight signals a problem
-  requiring corrective planning in the next session.
-- **Sustained imbalance (3+ sessions):** When a PC has been
-  underserved for three or more consecutive sessions, the
-  imbalance is serious and demands immediate corrective action
-  — a B-plot feature, a high-impact touchpoint, or a scenario
-  element built around that PC's strengths.
+Every PC at the table gets a moment every session. Beyond that,
+spotlight is the GM's call over a run of sessions: notice a PC who
+has had little lately, or a player gone quiet; say so and offer
+options (a B-plot, a touchpoint, a scene built on their strengths).
 
 ## Weaving Personal Content into Group Scenes
 
@@ -91,7 +76,8 @@ Avoid splitting the party for personal scenes — embed personal content in grou
 
 ## Touchpoint Taxonomy
 
-Every session needs at least one touchpoint per PC; not all need to be major. Six types, ranked by narrative impact:
+Every PC at the table gets at least one touchpoint every session;
+a small one counts. Six types, ranked by narrative impact:
 
 | Type | Impact | Description | Design Notes |
 |------|--------|-------------|-------------|
@@ -102,11 +88,7 @@ Every session needs at least one touchpoint per PC; not all need to be major. Si
 | Arc Advancement Clue | Medium | A clue or hint advancing the PC's personal arc | Ideal C-plot touchpoint. Brief, suggestive, forward-looking. |
 | Character Moment | Low-Med | Quiet scene for self-expression without plot pressure (campfire, downtime) | Schedule at least one per session after high-tension scenes for pacing variety. |
 
-**Frequency guidance:** B-plot PCs should receive at least one
-high-impact touchpoint per session. No PC should go three or
-more sessions without a high-impact touchpoint. Touchpoint
-types should vary across PCs within a session — avoid giving
-everyone the same kind.
+**Frequency guidance:** vary the types across PCs.
 
 ## Connecting PC Arcs to Main Plot
 
@@ -135,13 +117,13 @@ missed opportunity.
 
 | Anti-Pattern | Problem | Prevention |
 |-------------|---------|-----------|
-| Protagonist Problem | One PC's arc dominates the campaign | B-plot rotation and spotlight tracking |
+| Protagonist Problem | One PC's arc dominates the campaign | Notice it; raise it with the GM |
 | Backstory Dump | Too much backstory revealed in one session | Dole out backstory across many sessions |
 | Forced Connection | Every element tied to every PC's past | Some elements should be new to everyone |
 | Solo Spotlight | Personal scene while other players sit idle | Embed personal content in group scenes |
 | Neglected Quiet Player | Assuming quiet means the player does not want spotlight | Offer opportunity; provide written notes between sessions |
 | Arc Railroad | Predetermining how the arc resolves | GM creates situations; the player decides the outcome |
-| Stale Arc | No arc advancement for 4+ sessions | Even a small C-plot clue keeps an arc alive |
+| Forgotten Arc | An arc nobody has touched in a while | Ask: resting or forgotten? A small clue revives it |
 
 ## Sources
 

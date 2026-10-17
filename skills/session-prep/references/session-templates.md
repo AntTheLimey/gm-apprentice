@@ -201,8 +201,8 @@ Bullets, two lines each. Step 13.]
 
 ## Spotlight Forecast
 
-[Per-PC estimated spotlight share and imbalance flags. Table or
-bullets. Step 13.]
+[Per-PC role and moment; none left blank. Table or bullets.
+Step 13.]
 
 ## Open Questions
 
