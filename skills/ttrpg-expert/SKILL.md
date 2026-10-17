@@ -63,14 +63,14 @@ fact to a source file; flag ungrounded content. Canon conflict →
 `canon-management.md`.
 
 **"Stale threads?"** / **"loose ends?"**
-→ `continuity-engine.md` (Chekhov Protocol). Threads open 3-5
-sessions: resolve, advance, or retire. Read each active PC's
+→ `continuity-engine.md` (Chekhov Protocol). List open threads and
+when each was last touched; the GM picks. Read each active PC's
 `## Current Status` → `Open threads`.
 
 **"Spotlight check"** / **"PC balance"**
 → `arc-spotlight-reference.md` (Spotlight Theory). Last 2-3
-sessions per PC; flag below the 15% floor; assign B/C plots to
-underserved PCs.
+sessions per PC, in plain words; who looks light; options. The GM
+assigns.
 
 **"Character arc stage"** / **"what's next for this PC?"**
 → `arc-spotlight-reference.md` (Five-Stage Arc Model). Map the PC
@@ -221,6 +221,5 @@ AUTHORITATIVE (states, including STUB and SUPERSEDED:
 `canon-management.md`, `shared/canon-status.md`). On conflicts,
 ask — never assume. Content must be mechanically correct and
 consistent with `shared/entity-schema.md` and
-`continuity-engine.md`: no stale threads, no unfired Chekhov's
-guns (5+ sessions). Tone per system:
+`continuity-engine.md`. Tone per system:
 `systems/shared-patterns.md`.

@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.72] — 2026-10-17
+
+Spotlight advice keeps one hard rule and drops its numbers.
+
+### Changed
+
+- Every PC at the table gets a moment every session where they are
+  involved. Its size varies; whether there is one doesn't. Session prep
+  treats a PC with nothing yet as a gap to fill ("What touches him?"), not
+  as "light on purpose?".
+- The rest of spotlight is notice and ask: say who has had little lately,
+  offer options, and let the GM decide.
+- `arc-spotlight-reference.md` no longer gives A/B/C plot shares, a 15%
+  floor, "demands immediate corrective action" or a three-session timer on
+  high-impact touchpoints. A/B/C stay as words; "Stale Arc" becomes
+  "Forgotten Arc" (resting or forgotten?).
+- Session prep no longer asks the GM to choose a percentage split. The
+  plan's `## Spotlight Forecast` lists each PC's role and moment.
+- The rules advisor's "Spotlight check" describes and offers; the GM
+  assigns.
+- The wrap-up template notes who had little tonight, in plain words,
+  instead of "spotlight debt" with a staleness counter.
+- `session_context.py --arcs` prints each PC's role per session without
+  the estimated share (`Session 6: B`). `plan_check.py` knows both the old
+  and the new Spotlight Forecast guidance as a template placeholder.
+- Planted story elements (Chekhov's guns) have no deadline. The
+  continuity engine, the rules advisor, world evolution and handout
+  tracking no longer say an element "must fire or be explicitly retired"
+  or flag it after 3-5 or 5+ sessions. The AI notes what was planted,
+  looks for chances to pay it off, and raises a trust gap when players
+  remember something the GM may have forgotten. A subplot runs "usually a
+  few sessions".
+- Benchmark Q8 asks for a moment for every PC instead of a 15% floor
+  check, and `docs/testing-methodology.md` notes the floor is retired.
+- Skill text is 1,392 bytes shorter across ten files.
+
+### Added
+
+- `docs/why-the-numbers-came-out.md`: why the spotlight thresholds added
+  in April came out, and the test for when a number belongs in a skill.
+
 ## [1.10.71] — 2026-10-17
 
 The change-request loop's watcher is a tool command now, and a loop start

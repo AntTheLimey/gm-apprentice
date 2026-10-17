@@ -195,13 +195,13 @@ already in the bundle; don't re-read it. Run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault>
 --arcs` once for every active PC's `## Background` and `## GM Notes`
 plus spotlight history from earlier Plans' `## Spotlight Forecast`
-(role, share, sessions since last B- and C-plot). Don't open full PC
+(role, sessions since last B- and C-plot). Don't open full PC
 sheets. Judge arc stage (five-stage model) from that evidence. Per PC:
 - backstory hooks, stated goals, arc stage and theme, relationships
 - `Open threads` → decisions needing consequences, next arc beat;
   `Knows (exclusive)` → personalized touchpoint fuel
 - mechanical highlights (signature abilities, resources)
-- last spotlight role and share, sessions since last B-plot; next beat
+- last spotlight role, sessions since last B-plot; next beat
 
 This is evidence for the GM's spotlight call, not the call.
 → `## PC Roster & Arcs` — durable analysis only (arc stage, theme,
@@ -215,13 +215,11 @@ never copy a snapshot into the plan.
 > Katherine, who hasn't had a solo beat in three sessions. Or someone
 > else entirely?
 
-The GM chooses the split: A-plot ~50–60% (main storyline, all PCs),
-B-plot ~25–35% (one featured PC), C-plot ~10–15% (a lighter second
-PC). Then assign touchpoints with the six types in
-arc-spotlight-reference.md; the B-plot PC gets at least one
-high-impact touchpoint. Raise coverage gaps as questions:
+The GM picks who the session leans on. Then sketch a touchpoint
+for every PC at the table from the six types in
+arc-spotlight-reference.md; a PC with none is a gap to fill:
 
-> Freddy has no beat yet — light on purpose, or do you want one?
+> Freddy has nothing yet. What touches him?
 
 → `## Spotlight Forecast` and `## Touchpoint Plan`
 

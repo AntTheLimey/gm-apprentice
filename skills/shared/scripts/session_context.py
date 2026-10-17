@@ -480,7 +480,6 @@ SPOTLIGHT_TITLE = "Spotlight Forecast"
 
 _SEPARATOR_CELL_RE = re.compile(r"^[-:]+$")
 _TRAILING_PAREN_RE = re.compile(r"\s*\([^)]*\)\s*$")
-_SHARE_RE = re.compile(r"~?(\d+%)")
 _WIKILINK_RE = re.compile(r"\[\[([^\]|]+)(?:\|[^\]]*)?\]\]")
 
 
@@ -528,8 +527,8 @@ def _row_cells(line: str) -> list[str]:
     return cells
 
 
-def spotlight_rows(plan_body: str) -> list[tuple[str, str, str]] | None:
-    """(pc_cell, role, share) per data row of the first table under
+def spotlight_rows(plan_body: str) -> list[tuple[str, str]] | None:
+    """(pc_cell, role) per data row of the first table under
     `## Spotlight Forecast`; None when the section is absent. Only the
     first `|`-delimited table is read: collection starts at the first
     `|` line and stops at the first non-`|` line seen after that (a
@@ -538,8 +537,9 @@ def spotlight_rows(plan_body: str) -> list[tuple[str, str, str]] | None:
     `[[Target|Alias]]` reduced to its target, `**`, `[[`, `]]` removed
     and a trailing `(...)` dropped, stripped.
     role = "B" if "b-plot" in the row (casefold) else "C" if "c-plot"
-    else "A" if "a-plot" else "-". share = first `~?\\d+%` in the row
-    without the tilde, else "?". Header and separator rows skipped."""
+    else "A" if "a-plot" else "-". A share percentage in the row is not
+    read: it was an estimate, not a fact. Header and separator rows
+    skipped."""
     block = section(plan_body, SPOTLIGHT_TITLE)
     if block is None:
         return None
@@ -551,7 +551,7 @@ def spotlight_rows(plan_body: str) -> list[tuple[str, str, str]] | None:
             started = True
         elif started:
             break
-    rows: list[tuple[str, str, str]] = []
+    rows: list[tuple[str, str]] = []
     for line in table_lines[1:]:  # skip header row
         cells = _row_cells(line)
         if cells and all(_SEPARATOR_CELL_RE.match(c) for c in cells if c):
@@ -571,9 +571,7 @@ def spotlight_rows(plan_body: str) -> list[tuple[str, str, str]] | None:
             role = "A"
         else:
             role = "-"
-        m = _SHARE_RE.search(line)
-        share = m.group(1) if m else "?"
-        rows.append((first, role, share))
+        rows.append((first, role))
     return rows
 
 
@@ -609,7 +607,7 @@ def arcs_report(files, chapter, upcoming: int, vault: Path) -> str:
       ## GM Notes
       {section or "(no ## GM Notes section)"}
       Spotlight history (chapter-scoped, from ## Spotlight Forecast tables):
-        Session 6: B (30%)
+        Session 6: B
         Session 7: (no row for this PC)
       Sessions since last B-plot: 2 (Session 6)     or  never (in N plans read)
       Sessions since last C-plot: never (in 2 plans read)
@@ -625,7 +623,7 @@ def arcs_report(files, chapter, upcoming: int, vault: Path) -> str:
                                (read those sections directly): ...`, with
                                no per-PC line and no place in the
                                `(in N plans read)` denominator;
-      - table with rows     -> one `Session N: role (share)` line per PC,
+      - table with rows     -> one `Session N: role` line per PC,
                                `(no row for this PC)` where the PC is
                                genuinely absent from a table that exists.
     Both buckets print once, after the PCs (`(none)` when empty).
@@ -641,7 +639,7 @@ def arcs_report(files, chapter, upcoming: int, vault: Path) -> str:
                       if (n := session_ref_number(fm)) is not None
                       and n < upcoming})
 
-    plans: list[tuple[int, list[tuple[str, str, str]] | None]] = []
+    plans: list[tuple[int, list[tuple[str, str]] | None]] = []
     for n in numbers:
         candidates = [c for c in plan_files if session_ref_number(c[2]) == n]
         picked = prefer_chapter(candidates, chapter)
@@ -684,8 +682,8 @@ def arcs_report(files, chapter, upcoming: int, vault: Path) -> str:
             if match is None:
                 lines.append(f"  Session {n}: (no row for this PC)")
                 continue
-            role, share = match[1], match[2]
-            lines.append(f"  Session {n}: {role} ({share})")
+            role = match[1]
+            lines.append(f"  Session {n}: {role}")
             if role == "B":
                 last_b = n
             elif role == "C":
@@ -898,8 +896,7 @@ def main() -> int:
              "carry — ## Current Status is already in the bundle and is "
              "not repeated) plus a chapter-scoped spotlight history "
              "parsed from every earlier Plan's ## Spotlight Forecast "
-             "table (role A/B/C from the row text, share from the first "
-             "percentage) with sessions since the PC last carried the "
+             "table (role A/B/C from the row text) with sessions since the PC last carried the "
              "B- and C-plot. A forecast section is one of three states: "
              "absent, present but prose (listed once for direct reading "
              "— no per-PC row, and not counted in the 'plans read' "

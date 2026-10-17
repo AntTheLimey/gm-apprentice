@@ -439,6 +439,11 @@ class ShippedTemplateTests(unittest.TestCase):
     def test_untouched_handouts_section_is_placeholder(self):
         self.assertTrue(pc._is_placeholder_body(self._handouts_body()))
 
+    def test_spotlight_forecast_guidance_old_and_new_is_placeholder(self):
+        for line in ("Per-PC role and moment; none left blank. A note.",
+                     "Per-PC estimated spotlight share, and any imbalance."):
+            self.assertTrue(pc._is_placeholder_body(line + "\n"), line)
+
     def test_handouts_guidance_kept_with_filled_table_is_not_placeholder(self):
         guidance = self._handouts_body().split("|", 1)[0]
         body = (guidance + "| Document | Scene | Status | Notes |\n"

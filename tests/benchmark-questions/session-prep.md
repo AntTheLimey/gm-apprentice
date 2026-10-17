@@ -56,9 +56,9 @@ Sessions 1-2.
 
 ### Q8 — Spotlight forecast
 
-Review Sessions 1-2 at tests/benchmark-campaign/ and estimate
-the spotlight distribution per PC. Flag any PC below the 15%
-floor. Propose corrective B/C plot assignments for Session 3.
+Review Sessions 1-2 at tests/benchmark-campaign/ and say
+what each PC has had. Propose a moment for every PC in Session
+3, and flag any PC who has none yet.
 
 ## Agent Prompts
 
@@ -109,9 +109,9 @@ Showcase, Decision Callback, Arc Advancement Clue, or Character
 Moment), a description, and draw on established threads or NPCs
 from Sessions 1-2.
 
-Q8: Review Sessions 1-2 at tests/benchmark-campaign/ and estimate
-the spotlight distribution per PC. Flag any PC below the 15%
-floor. Propose corrective B/C plot assignments for Session 3.
+Q8: Review Sessions 1-2 at tests/benchmark-campaign/ and say
+what each PC has had. Propose a moment for every PC in Session
+3, and flag any PC who has none yet.
 ```
 
 ### Test prompt (split skill — feature branch)
@@ -162,9 +162,9 @@ Showcase, Decision Callback, Arc Advancement Clue, or Character
 Moment), a description, and draw on established threads or NPCs
 from Sessions 1-2.
 
-Q8: Review Sessions 1-2 at tests/benchmark-campaign/ and estimate
-the spotlight distribution per PC. Flag any PC below the 15%
-floor. Propose corrective B/C plot assignments for Session 3.
+Q8: Review Sessions 1-2 at tests/benchmark-campaign/ and say
+what each PC has had. Propose a moment for every PC in Session
+3, and flag any PC who has none yet.
 ```
 
 ### Evaluator prompt (blind scoring)
@@ -180,7 +180,7 @@ Score each answer on 5 dimensions (1-3 each, 15 max per question):
 | Factual accuracy | Wrong stats, hallucinated names | Mostly correct, minor errors | All verifiable facts correct |
 | System specificity | Could be any system, no mechanics | Right system but generic | Uses system-specific idiom, conventions, tone |
 | Actionability | Needs significant rework | Usable with GM effort | Drop-in ready, use as-is |
-| Mechanical grounding | No concrete numbers or values | Some mechanics but incomplete | Specific stats, DCs, costs, rolls, thresholds |
+| Mechanical grounding | No concrete numbers or values | Some mechanics but incomplete | Specific stats, DCs, costs, rolls where the question calls for mechanics |
 | Table-ready fiction | Generic/obvious/AI slop | Fits system but predictable | Evocative, system-native, sparks play |
 
 Questions for context:
@@ -192,7 +192,10 @@ Q4: Thread scanning across Sessions 1-2
 Q5: Gap flagging in Session 3 prep
 Q6: Arc check and A/B/C plot assignment per PC
 Q7: Touchpoint assignment per PC with type and source
-Q8: Spotlight forecast — per-PC balance, 15% floor check
+Q8: Spotlight forecast — a moment for every PC this session
+
+For Q8, score Mechanical grounding on concrete detail in each
+proposed moment (the scene, NPC or thread it uses), not on numbers.
 
 For each question, output:
 - Scores for A and B on each dimension

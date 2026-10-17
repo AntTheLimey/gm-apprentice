@@ -204,7 +204,7 @@ class SpotlightUnitTests(unittest.TestCase):
                 "| [[Second Name]] | 15% | C-plot featured. |\n"
                 "| **Third** | — | A-plot participant. |\n\n## Next\n\n| x | y |\n")
         self.assertEqual(sc.spotlight_rows(body), [
-            ("Hero", "B", "30%"), ("Second Name", "C", "15%"), ("Third", "A", "?")])
+            ("Hero", "B"), ("Second Name", "C"), ("Third", "A")])
 
     def test_rows_none_when_section_absent(self):
         self.assertIsNone(sc.spotlight_rows("## Planned Scenes\n\ntext\n"))
@@ -216,15 +216,15 @@ class SpotlightUnitTests(unittest.TestCase):
                 "A prose line separating two tables in the same section.\n\n"
                 "| PC | Share | Notes |\n|---|---|---|\n"
                 "| **Second** | ~15% | C-plot featured. |\n")
-        self.assertEqual(sc.spotlight_rows(body), [("Hero", "B", "30%")])
+        self.assertEqual(sc.spotlight_rows(body), [("Hero", "B")])
 
     def test_aliased_wikilink_first_cell_resolves_to_its_target(self):
         # The alias pipe inside `[[Hero_Name|Hero Alias]]` is not a cell
-        # boundary. Split there and the share and role came from a row
+        # boundary. Split there and the role came from a row
         # whose PC never matched, so the drought count was silently wrong.
         body = ("## Spotlight Forecast\n\n| PC | Share | Notes |\n|---|---|---|\n"
                 "| [[Hero_Name|Hero Alias]] (Alex) | ~10% | A-plot. |\n")
-        self.assertEqual(sc.spotlight_rows(body), [("Hero_Name", "A", "10%")])
+        self.assertEqual(sc.spotlight_rows(body), [("Hero_Name", "A")])
         self.assertTrue(sc.pc_matches(
             "Hero_Name", "Characters/PCs/Hero_Name.md", {}))
 
@@ -234,7 +234,7 @@ class SpotlightUnitTests(unittest.TestCase):
         # whole line in the PC cell and report a false drought.
         body = ("## Spotlight Forecast\n\n| PC | Share | Notes |\n|---|---|---|\n"
                 "| [[Hero | ~30% | B-plot. |\n")
-        self.assertEqual(sc.spotlight_rows(body), [("Hero", "B", "30%")])
+        self.assertEqual(sc.spotlight_rows(body), [("Hero", "B")])
 
     def test_row_ending_in_an_escaped_pipe_keeps_it(self):
         self.assertEqual(sc._row_cells(r"| Hero \|"), [r"Hero \|"])
@@ -243,7 +243,7 @@ class SpotlightUnitTests(unittest.TestCase):
         body = ("## Spotlight Forecast\n\n| PC | Share | Notes |\n|---|---|---|\n"
                 "| Hero \\| Sidekick | ~20% | B-plot. |\n")
         self.assertEqual(sc.spotlight_rows(body),
-                         [("Hero | Sidekick", "B", "20%")])
+                         [("Hero | Sidekick", "B")])
 
     def test_pc_matches_stem_first_token_and_alias(self):
         fm = {"aliases": ["The Hero"]}
@@ -270,14 +270,14 @@ class ArcsCLITests(unittest.TestCase):
         self.assertIn("Arc stage note the Keeper wrote", out)
         self.assertNotIn("STR 60", out)
         self.assertNotIn("Open threads: the Dredger's debt", out)
-        self.assertIn("Session 6: B (30%)", out)
-        self.assertIn("Session 7: A (20%)", out)
+        self.assertIn("Session 6: B", out)
+        self.assertIn("Session 7: A", out)
         self.assertIn("Sessions since last B-plot: 2 (Session 6)", out)
         self.assertIn("Sessions since last C-plot: never", out)
         self.assertIn("--- Second_Name (", out)
         self.assertIn("(no ## Background section)", out)
         self.assertIn("Session 7: (no row for this PC)", out)
-        self.assertIn("Session 6: C (15%)", out)
+        self.assertIn("Session 6: C", out)
         self.assertIn("Plans without a ## Spotlight Forecast: Session 5", out)
         self.assertNotIn("Retired", out)
         self.assertNotIn("===== Wrap-Up", out)

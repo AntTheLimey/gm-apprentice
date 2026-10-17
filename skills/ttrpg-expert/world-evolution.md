@@ -54,7 +54,7 @@ together after Step 7; wait for GM confirmation before filing.
 Review active threads (`continuity-engine.md`). For each:
 - Active threads resolved this session
 - Dormant threads touched or revived
-- Chekhov elements that fired, or overdue (5+ sessions unfired)
+- Chekhov elements that fired
 - Foreshadowing that paid off or needs planting
 - Dormant threads: recommend revival, retirement,
   or background advancement

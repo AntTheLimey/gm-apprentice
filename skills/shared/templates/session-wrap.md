@@ -69,8 +69,7 @@ person, the reason — these bullets are read cold by session-prep.}
 
 #### Unresolved Threads
 
-{Cliffhangers and live threads. Note spotlight debt with a staleness
-counter: "…now four sessions stale."}
+{Cliffhangers and live threads.}
 
 #### Player-Stated Intentions
 
