@@ -221,7 +221,8 @@ nothing to ask, and never ask where a sheet is kept on a campaign
 that does not publish sheets), `vault_check.py wrapup --file
 <wrap-up>`. A tone WARNING on a relationship you wrote or changed
 this session: use the word the row names, or where it names none the
-listed word that fits (`shared/entity-schema.md` Tones). Leave any
+listed word that fits (`relationships words` in the publish tool prints
+them). Leave any
 other tone WARNING to campaign-qa; never run `tones.py` here. If
 Step 4 ran as sub-agents, also run `relationships` once more with
 `--newer-than <session index>` (stamped once, before Step 1, and

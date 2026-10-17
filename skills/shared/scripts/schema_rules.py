@@ -136,10 +136,9 @@ DEPRECATED_FIELDS: dict[str, list[tuple[str, str, str]]] = {
 
 # Relationship predicate vocabulary
 #
-# The authoritative list is the predicate table in entity-schema.md; the
-# ontology export beside this package restates it machine-readably (and
-# scripts/validate_ontology.py fails CI when the two disagree), so the
-# export is what code reads. Resolved from this file's own location: the
+# The ontology file beside this package is the one source of the vocabulary;
+# the predicate table in entity-schema.md is generated from it
+# (scripts/gen_ontology_docs.py --check fails CI when it is stale). Resolved from this file's own location: the
 # vocabulary travels with the plugin, never with the vault under audit.
 
 ONTOLOGY_PATH = Path(__file__).resolve().parent.parent / "gm-apprentice-ontology.json"
@@ -180,6 +179,35 @@ def inverse_predicates() -> dict[str, str]:
     """
     return {p["inverse"]: p["type"]
             for p in _ontology_predicates() if p.get("inverse")}
+
+
+GENERATED_MARKER_RE = re.compile(r"^<!-- /?generated:[^>]*-->\r?\n", re.M)
+
+
+def without_generated_markers(text: str) -> str:
+    """The plugin's schema text as a vault should hold it: the markers
+    scripts/gen_ontology_docs.py leaves around its tables are not copied."""
+    return GENERATED_MARKER_RE.sub("", text)
+
+
+def type_key(raw: str) -> str:
+    """A written relationship type as the vocabulary spells it."""
+    return re.sub(r"[\s-]+", "_", str(raw).strip().lower())
+
+
+def verb_choices(name: str) -> list[dict] | None:
+    """What a stray type means: None when the ontology has no entry, [] when
+    it is not a graph edge, else the predicates it can be (one = certain)."""
+    choices = _ontology().get("verbs", {}).get(type_key(name))
+    return None if choices is None else [dict(c) for c in choices]
+
+
+def same_fact_pairs() -> list[tuple[str, str]]:
+    return [(a, b) for a, b in _ontology().get("same_fact", [])]
+
+
+def place_fields() -> list[dict]:
+    return [dict(p) for p in _ontology().get("place_fields", [])]
 
 
 def suggest_predicates(predicate: str) -> list[str]:

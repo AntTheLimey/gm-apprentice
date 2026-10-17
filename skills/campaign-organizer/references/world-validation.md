@@ -45,7 +45,7 @@ advisory — never blocking.
 |-------------|-------------|----------------|
 | heritages.md | npc, pc | Age vs lifespan range, heritage vs allowed list |
 | geography-climate.md | location | Settlement rules (if defined) |
-| politics-governance.md | faction, organization | Hierarchy depth, required relationships |
+| politics-governance.md | faction, organization | Hierarchy depth |
 | economics-trade.md | faction, location | Economic base rules (if defined) |
 | magic-technology.md | any | Tech era constraints (if defined) |
 

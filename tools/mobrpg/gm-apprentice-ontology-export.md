@@ -1,13 +1,15 @@
 # gm-apprentice Knowledge-Graph Ontology
 
 A standalone export of the gm-apprentice campaign ontology for the mobRPG team.
-Reconciles two internal sources into one document:
-`skills/shared/entity-schema.md` (authoritative vocabulary) and
-`skills/ttrpg-expert/relationship-patterns.md` (edge structure & modeling).
+The vocabulary itself is not kept here. The one source is
+`skills/shared/gm-apprentice-ontology.json`; its generated copy for mobRPG is
+`tools/mobrpg/mobrpg/gm-apprentice-ontology.json`, and `relationships words`
+in the publish tool prints the current list. Edge structure and modeling:
+`skills/ttrpg-expert/relationship-patterns.md`.
 
-The rightmost column of the predicate table suggests how each relationship would
-reify onto mobRPG's `event`-as-join model (`eventType` enum:
-`Employ, Membership, Leadership, Reign, War, Score, Generic`).
+Each predicate in the ontology file carries a suggested `eventType`
+(`mobrpg_event_type`) for reifying it onto mobRPG's `event`-as-join model
+(enum: `Employ, Membership, Leadership, Reign, War, Score, Generic`).
 
 ---
 
@@ -87,7 +89,7 @@ world (abstract)
 
 Every relationship is a directed, typed edge. Stored **single-direction only** —
 if `A --employs--> B` is recorded, the inverse `B --employed_by--> A` is *implied*,
-never stored twice. Symmetric types (see table) are stored once with no direction.
+never stored twice. Symmetric types (`symmetric: true` in the ontology file) are stored once with no direction.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -99,221 +101,37 @@ never stored twice. Symmetric types (see table) are stored once with no directio
 | `bidirectional` | boolean | no | True for symmetric types |
 | `description` | string | no | Context/role (e.g. "Serves as lieutenant") |
 
-**Tones:** `friendly`, `romantic`, `respectful`, `professional` (positive);
-`hostile`, `fearful`, `distrustful`, `contemptuous` (negative);
-`neutral`, `unknown`, `complicated` (neutral).
-
-**Strength:** 1–2 weak/casual · 3–4 moderate · 5–6 significant · 7–8 strong ·
-9–10 defining.
+The tone words and the strength scale are in the ontology file (`tones`,
+`strength_scale`).
 
 ---
 
 ## 3. Predicate vocabulary
 
-~80 predicates in 17 genre-tagged categories. `sym` = symmetric (inverse is
-itself). The **→ mobRPG** column is the suggested `eventType` when reifying the
-edge as a mobRPG join event; the specific predicate name is preserved on the
-event's `title`.
+The predicate list (type, inverse, symmetric flag, category, genre, and the
+suggested mobRPG `eventType` and relation type for each) lives in
+`skills/shared/gm-apprentice-ontology.json` and nowhere else. Read the mobRPG
+copy, `tools/mobrpg/mobrpg/gm-apprentice-ontology.json`, or run
+`relationships words`. The inverse is a display and query convenience; the
+directed predicate is canonical.
 
-> **The → mobRPG column is the predicate-only default, not the final answer.**
+> **The `mobrpg_event_type` on a predicate is the predicate-only default, not the final answer.**
 > The four affiliation types — **Membership**, **Leadership**, **Reign**,
 > **Employ** — are the person/group join. mobRPG builds them from a person and a
 > Political/Organization and nothing else, so `suggest` picks them from *both*
 > endpoint kinds, not from the predicate. When both kinds are known and they are
 > not a person/group pair, the type degrades to **Generic** (the predicate then
 > rides on the event title). An Item→Organization `owns` edge is therefore
-> Generic, not the Reign this table shows; likewise a person→person `serves`.
-> Passing no kinds at all falls back to the flat mapping below, which is the
-> documented degraded behaviour. `map_cmd.resolve_event_type` is the single
-> entry point both push and `pull-canon --baseline` use — read it, not this
-> table, when the endpoints matter.
-
-### Kinship — genre: universal
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| parent_of | child_of | | Generic |
-| ancestor_of | descendant_of | | Generic |
-| sibling_of | sibling_of | ✓ | Generic |
-| spouse_of | spouse_of | ✓ | Generic |
-| betrothed_to | betrothed_to | ✓ | Generic |
-
-### Social — genre: universal
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| knows | knows | ✓ | Generic |
-| friend_of | friend_of | ✓ | Generic |
-| rival_of | rival_of | ✓ | Generic |
-| mentors | mentored_by | | Generic |
-| trusts | trusted_by | | Generic |
-| betrayed | betrayed_by | | Generic |
-
-### Power — genre: universal
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| rules | ruled_by | | **Reign** |
-| employs | employed_by | | **Employ** |
-| commands | commanded_by | | **Employ** |
-| serves | served_by | | **Employ** |
-| vassal_of | liege_of | | **Employ** |
-| imprisons | imprisoned_by | | Generic |
-
-### Spatial — genre: universal
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| located_at | location_of | | Generic¹ |
-| headquartered_at | headquarters_of | | Generic¹ |
-| part_of | has_part | | Generic¹ |
-| borders | borders | ✓ | Generic |
-| haunts | haunted_by | | Generic |
-
-¹ In mobRPG, spatial containment is often modeled via `political` unit nesting
-and `person.lives`/`political.spans` DateRanges rather than an event.
-
-### Possession — genre: universal
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| owns | owned_by | | **Reign** |
-| created | created_by | | Generic |
-| wields | wielded_by | | Generic |
-| seeks | sought_by | | Generic |
-
-### Knowledge — genre: universal
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| discovered | discovered_by | | Generic |
-| conceals | concealed_by | | Generic |
-| recorded_in | records | | Generic |
-| studies | studied_by | | Generic |
-
-### Conflict — genre: universal
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| enemy_of | enemy_of | ✓ | **War** |
-| at_war_with | at_war_with | ✓ | **War** |
-| conspires_against | conspired_against_by | | **War** |
-| allied_with | allied_with | ✓ | Generic |
-
-### Affiliation — genre: universal
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| member_of | has_member | | **Membership** |
-| founded | founded_by | | **Membership** |
-| leads | led_by | | **Leadership** |
-| defected_from | lost_member | | **Membership** |
-| infiltrates | infiltrated_by | | **Membership** |
-
-### Supernatural — genre: fantasy, horror
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| bound_to | binds | | Generic |
-| cursed_by | cursed | | Generic |
-| summoned | summoned_by | | Generic |
-| worships | worshipped_by | | Generic |
-| corrupted_by | corrupted | | Generic |
-
-### Temporal — genre: universal
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| caused | caused_by | | Generic |
-| triggered | triggered_by | | Generic |
-| participated_in | had_participant | | Generic |
-| witnessed | witnessed_by | | Generic |
-
-### Economic — genre: universal
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| trades_with | trades_with | ✓ | Generic |
-| supplies | supplied_by | | **Employ** |
-| finances | financed_by | | Generic |
-| indebted_to | creditor_of | | Generic |
-
-### Event (past actions) — genre: universal
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| murdered | murdered_by | | Generic |
-| poisoned | poisoned_by | | Generic |
-| wounded | wounded_by | | Generic |
-| rescued | rescued_by | | Generic |
-| captured | captured_by | | Generic |
-| deceived | deceived_by | | Generic |
-
-### Horror — genre: horror
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| possessed_by | possesses | | Generic |
-| infected_by | infected | | Generic |
-| fears | feared_by | | Generic |
-| feeds_on | fed_upon_by | | Generic |
-
-### Romance — genre: romance
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| courts | courted_by | | Generic |
-| rejected | rejected_by | | Generic |
-| disguised_as | disguise_of | | Generic |
-| blackmails | blackmailed_by | | Generic |
-
-### Historical — genre: historical
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| conquered | conquered_by | | **War** |
-| exiled_from | exiled | | Generic |
-| succeeded | preceded | | Generic |
-| negotiated_with | negotiated_with | ✓ | Generic |
-
-### Sci-Fi — genre: scifi
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| uploaded_to | upload_source_of | | Generic |
-| augmented_by | augments | | Generic |
-| cloned_from | clone_source_of | | Generic |
-| hacked | hacked_by | | Generic |
-
-### Superhero — genre: superhero
-
-| Predicate | Inverse | Sym | → mobRPG |
-|-----------|---------|-----|----------|
-| alter_ego_of | alter_ego_of | ✓ | Generic |
-| empowered_by | empowers | | Generic |
-| nemesis_of | nemesis_of | ✓ | Generic |
-
-> Inverse names not explicitly enumerated in the source files are derived here
-> by convention; treat the directed predicate as canonical and the inverse as a
-> display/query convenience.
+> Generic, not the Reign its predicate suggests; likewise a person→person `serves`.
+> Passing no kinds at all falls back to the flat mapping, each predicate's
+> `mobrpg_event_type` in the ontology file, which is the documented degraded
+> behaviour. `map_cmd.resolve_event_type` is the single
+> entry point both push and `pull-canon --baseline` use — read it, not the
+> `mobrpg_event_type` field, when the endpoints matter.
 
 ---
 
-## 4. Required relationships
-
-Validation enforces a minimum spatial anchor per entity type:
-
-| Entity type | Required relationship |
-|-------------|----------------------|
-| npc | located_at |
-| pc | located_at |
-| creature | located_at |
-| faction | headquartered_at |
-| organization | headquartered_at |
-
----
-
-## 5. Notes for mapping onto mobRPG
+## 4. Notes for mapping onto mobRPG
 
 - **Predicate granularity is the gap.** gm-apprentice has ~80 predicates;
   mobRPG has 7 `eventType` buckets. Five map cleanly
@@ -325,7 +143,7 @@ Validation enforces a minimum spatial anchor per entity type:
   feature and the basis for a timeline.
 - **`tone` and `strength`** have no mobRPG field; carry them in the join event's
   `description` if a round-trip needs to preserve them.
-- **Symmetric predicates** (sym ✓) should produce a single mobRPG event with two
+- **Symmetric predicates** (`symmetric: true`) should produce a single mobRPG event with two
   `Link` edges, not two events.
 - **Classification** (entity subtype, e.g. `cult`, `relic`, `undead`) maps to
   mobRPG `Attribute` edges → reference entities (`organization/type`,
@@ -337,7 +155,7 @@ Validation enforces a minimum spatial anchor per entity type:
 
 ---
 
-## 6. Worked round-trip examples
+## 5. Worked round-trip examples
 
 All examples use the real **Regency Cthulhu** world (`worldId
 4b07d8dd-3da2-45fc-9ec5-6a45d21f1adb`) and the NPC **Eleanor Finch**. Real IDs:

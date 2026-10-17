@@ -97,7 +97,8 @@ all changes; file only after GM approval.
 **Worldbuilding / second-order effects** → `worldbuilding-principles.md`;
 interactive worldbuilding sessions go to the-midwife.
 
-**Relationships** → `relationship-patterns.md`.
+**Relationships** → `relationship-patterns.md`. The words (types, tones,
+strength): `node "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js" relationships words --vault <vault>`.
 **Prep frameworks** (Lazy DM, Three Clue Rule, Fronts, Five Room
 Dungeon) and discovery state → `gm-session-patterns.md`.
 **Campaign/session structure** → campaign-organizer skill +

@@ -216,11 +216,13 @@ source is ambiguous; `bidirectional: false` unless inherently
 symmetric; a `description` traceable to source text; `gm_only`
 omitted unless the edge's *existence* is the secret.
 
+<!-- generated:tones (scripts/gen_ontology_docs.py) -->
 **Tones.** `tone` is always one of: positive, friendly, warm, loving,
 romantic, loyal, devoted, protective, trusting, respectful (positive);
 negative, hostile, fearful, distrustful, contemptuous, tense, cold,
 resentful, predatory, ominous (negative); neutral, unknown,
 complicated, cautious, transactional, formal, professional (neutral).
+<!-- /generated:tones -->
 The nuance goes in `description`. The list is
 `shared/gm-apprentice-ontology.json`'s `tones`.
 
@@ -483,15 +485,16 @@ are JSON-encoded (`key: "text"`, `key: null`).
 Use the most specific type; generic types like `associated_with`
 or `related_to` add edges without meaning.
 
+<!-- generated:categories (scripts/gen_ontology_docs.py) -->
 | Category | Types |
 |----------|-------|
-| Kinship | parent_of, sibling_of, spouse_of, betrothed_to, ancestor_of |
+| Kinship | parent_of, ancestor_of, sibling_of, spouse_of, betrothed_to |
 | Social | knows, friend_of, rival_of, mentors, trusts, betrayed |
 | Power | rules, employs, commands, serves, vassal_of, imprisons |
 | Spatial | located_at, headquartered_at, part_of, borders, haunts |
 | Possession | owns, created, wields, seeks |
 | Knowledge | discovered, conceals, recorded_in, studies |
-| Conflict | enemy_of, allied_with, at_war_with, conspires_against |
+| Conflict | enemy_of, at_war_with, conspires_against, allied_with |
 | Affiliation | member_of, founded, leads, defected_from, infiltrates |
 | Supernatural | bound_to, cursed_by, summoned, worships, corrupted_by |
 | Temporal | caused, triggered, participated_in, witnessed |
@@ -502,25 +505,30 @@ or `related_to` add edges without meaning.
 | Historical | conquered, exiled_from, succeeded, negotiated_with |
 | Sci-Fi | uploaded_to, augmented_by, cloned_from, hacked |
 | Superhero | alter_ego_of, empowered_by, nemesis_of |
+<!-- /generated:categories -->
 
 Each type has an `inverse` name. Storage is single-direction only:
 record `A --[employs]--> B` and `B --[employed_by]--> A` is implied.
 Never store both.
 
+<!-- generated:symmetric (scripts/gen_ontology_docs.py) -->
 **Symmetric types** (stored once, no direction):
-knows, sibling_of, spouse_of, betrothed_to, enemy_of, allied_with,
-at_war_with, rival_of, friend_of, borders, trades_with, alter_ego_of,
-nemesis_of, negotiated_with
+sibling_of, spouse_of, betrothed_to, knows, friend_of, rival_of,
+borders, enemy_of, at_war_with, allied_with, trades_with,
+negotiated_with, alter_ego_of, nemesis_of
+<!-- /generated:symmetric -->
 
+<!-- generated:genres (scripts/gen_ontology_docs.py) -->
 **Genre tags:** each type carries `universal`, `fantasy`, `horror`,
-`scifi`, `superhero`, `historical` or `romance`; filter
-suggestions to the campaign's genre.
+`romance`, `historical`, `scifi` or `superhero`; filter suggestions to
+the campaign's genre.
+<!-- /generated:genres -->
 
 Inverse names and modeling patterns (families, hierarchies,
 triangles): ttrpg-expert's `relationship-patterns.md`.
 
-This table is the authoritative vocabulary
-(`shared/gm-apprentice-ontology.json` is generated from it). A new
+This table is generated from
+`shared/gm-apprentice-ontology.json`, the one source of the vocabulary. A new
 vault's `_meta/relationship-types.md` starts with the full list;
 older vaults may hold a genre subset. A predicate found only in a
 vault copy is drift.
@@ -532,17 +540,6 @@ an array of wiki-links to the next node(s) — on **Clue** and
 no `precedes` or `alternative_to`. A vault vocabulary with a
 `Sequencing` category invented it — convert those edges to
 `leads_to` fields.
-
-## Required Relationships
-
-| Entity Type | Required Relationship |
-|-------------|----------------------|
-| `npc` | `located_at` |
-| `pc` | `located_at` |
-| `creature` | `located_at` |
-| `faction` | `headquartered_at` |
-| `organization` | `headquartered_at` |
-| `heritage` | — (none required) |
 
 ## Default Folder Mapping
 

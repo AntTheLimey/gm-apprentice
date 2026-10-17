@@ -23,7 +23,7 @@ Read all entity files in scope. For each, extract:
 - Frontmatter relationships (wiki-links in frontmatter
   fields)
 - Body wiki-links (inline references)
-- Entity type and required relationships per schema
+- Entity type per schema
 
 ### Step 2: Structural Checks
 
@@ -231,8 +231,8 @@ Neither implies the other. For every entity, flag:
 
 Severity: Warning. Proposed fix: write the missing half on the
 **child's** file (containment is stored child → parent,
-single-direction). Same pairing applies to a Faction's
-`territory:` / `headquartered_at`.
+single-direction). An item's `current_holder:` pairs with an `owns` tie
+on the holder's note, as `relationship-normalization.md` says.
 
 **Childless containers beside their would-be children:** An
 entity whose prose or `points_of_interest` names entities that

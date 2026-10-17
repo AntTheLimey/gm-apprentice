@@ -146,8 +146,6 @@ Beyond that file's orphan, broken-link, mirrored-edge, hub,
 generic-type, stale-STUB, schema, story-file and index-drift
 checks, also:
 
-- Missing required relationships (NPCs without `located_at`,
-  factions without `headquartered_at`)
 - Legacy canon keys (`source_confidence:`, `confidence:`) —
   `references/checks/legacy-canon-field-repair.md`
 - Session document chain — `vault_check.py sessions`: Play Notes

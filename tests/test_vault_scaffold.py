@@ -57,6 +57,7 @@ class TextTests(unittest.TestCase):
         for title in vs.ENTITY_SECTIONS:
             self.assertIn(f"\n## {title}\n", text)
         self.assertNotIn("## Relationship Types", text)
+        self.assertNotIn("Required Relationships", text)
 
     def test_relationship_types_holds_the_full_vocabulary(self):
         text = vs.relationship_types_text()

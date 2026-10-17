@@ -116,8 +116,11 @@ jobs:
       - name: Validate content filtering rules
         run: python scripts/validate_schema.py filtering tests/benchmark-campaign
 
-      - name: Validate relationship-ontology copies agree
+      - name: Validate the ontology's mobRPG projection
         run: python scripts/validate_ontology.py
+
+      - name: Generated ontology copies are current
+        run: python scripts/gen_ontology_docs.py --check
 
       # Every tests/test_*.py in one run, so a new test file can't be left
       # out of CI again (tests/test_ci_runs_every_test.py pins this).

@@ -14,6 +14,7 @@ sys.path.insert(0, str(SCRIPTS))
 import migrate_vault as mv  # noqa: E402
 from layouts import on_layout  # noqa: E402
 import vault_scaffold as vs  # noqa: E402
+from schema_rules import without_generated_markers  # noqa: E402
 from migrate_core import CHOICE, PERSON, WILL, StepFailed  # noqa: E402
 
 sys.path.insert(0, str(SCRIPTS.parent.parent.parent / "scripts"))
@@ -1757,12 +1758,14 @@ class ToneListTests(unittest.TestCase):
         "# one listed word; see Tones below\n")
 
     def tones_paragraph(self):
-        schema = (SHARED / "entity-schema.md").read_text(encoding="utf-8")
+        schema = without_generated_markers(
+            (SHARED / "entity-schema.md").read_text(encoding="utf-8"))
         at = schema.index("**Tones.**")
         return schema[at:schema.index("\n\n", at)] + "\n"
 
     def test_the_old_text_is_what_main_scaffolded(self):
-        schema = (SHARED / "entity-schema.md").read_text(encoding="utf-8")
+        schema = without_generated_markers(
+            (SHARED / "entity-schema.md").read_text(encoding="utf-8"))
         self.assertIn(self.NOW, schema)
         self.assertIn(self.DEFAULTS + "\n" + self.tones_paragraph(), schema)
 

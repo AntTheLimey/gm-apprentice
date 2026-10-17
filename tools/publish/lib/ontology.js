@@ -55,4 +55,5 @@ function groupLabel(type, direction) {
   return direction === 'in' ? `${label} (named by)` : label;
 }
 
-module.exports = { toneFamily, groupLabel };
+// The whole export, for the commands that print or check the vocabulary (lib/relationships).
+module.exports = { toneFamily, groupLabel, ontology: data };

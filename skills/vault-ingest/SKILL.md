@@ -164,7 +164,8 @@ After all buckets:
 - Cross-bucket relationship chains — `graph_check.py all`,
   `vault_check.py relationships` (a tone WARNING on a relationship
   this ingest wrote: use the word the row names, or where it names
-  none the listed word that fits, `shared/entity-schema.md` Tones;
+  none the listed word that fits, as `relationships words` in the publish
+  tool prints them;
   leave any other to campaign-qa and never run `tones.py` here)
 - Timeline consistency across buckets — by eye (`vault_check.py
   timeline` does not check cross-bucket ordering)

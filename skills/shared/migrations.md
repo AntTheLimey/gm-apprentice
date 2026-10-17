@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.64"
+current_version: "1.10.65"
 ---
 
 # Vault Migration Record
@@ -71,3 +71,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.62 | No vault change; the publish tool learns `build --only sheets`; the inbox loop uses it; repinned to 1.29.0 | — |
 | 1.10.63 | The update offers to retire four build steps in `player_site.after_build` that the publish tool now does itself (`apply-overrides`, `add-tohit-calc`, `add-theme-toggle`, `optimize-images`, each run as `node <folder>/<name>.mjs`), one choice per step, retire or leave; the stamp waits for each answer. Retiring `optimize-images` turns on `player_site.images.optimize` first. The script files are never touched. The publish tool keeps shrunk pictures in `.gm-apprentice/image-cache/` in the site folder and adds that folder to the site's `.gitignore` when it has one; repinned to 1.29.1 | `retire-steps` |
 | 1.10.64 | No vault change (a publish list with no `accepted:` entries holds none). The publish tool learns the leak gate: `deploy` reads the finished player site after every build step and stops on a hidden sentence or a secret name, and the `leaks` command lists, checks, accepts and prunes findings (an accepted finding is written to the publish list under `accepted:`); repinned to 1.30.0 | — |
+| 1.10.65 | The retired "Required Relationships" section removed from `_meta/entity-types.md`, on a yes; repinned to 1.31.0 | `required-ties-section` |

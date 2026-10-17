@@ -32,16 +32,11 @@ a reified **Event** eventType (`member_of`→Membership, `leads`→Leadership,
 `owns`→Reign, …, default Generic) for social/narrative predicates, or a direct
 **WorldElementRelation** for *structural/spatial* predicates.
 
-The structural defaults are:
-
-| predicate | relation | note |
-|---|---|---|
-| `part_of` | `Link` | authored subordinate-first, pushed **container-first** |
-| `located_at` | `Link` | same swap |
-| `headquartered_at` | `Link` | same swap |
-| `borders` | `Link` | symmetric — no swap |
-| `parent_of` | `Parent` | genealogy between people only |
-| `spouse_of` | `Spouse` | symmetric |
+The structural defaults are the predicates that carry a `mobrpg_relation_type`
+in `skills/shared/gm-apprentice-ontology.json` (copy:
+`mobrpg/gm-apprentice-ontology.json`); read them there. `part_of`,
+`located_at` and `headquartered_at` are authored subordinate-first and pushed
+**container-first**; `borders` and `spouse_of` are symmetric, so no swap.
 
 `Parent`/`Child`/`Spouse` are **genealogy between people**; the backend
 auto-creates the reciprocal row. Place containment is a `Link` — one row, no

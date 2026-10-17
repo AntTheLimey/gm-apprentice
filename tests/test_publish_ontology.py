@@ -30,10 +30,12 @@ def test_copy_holds_every_tone_and_predicate():
     full = json.loads((REPO / "skills" / "shared" /
                        "gm-apprentice-ontology.json").read_text(encoding="utf-8"))
     copy = json.loads(COPY.read_text(encoding="utf-8"))
-    assert copy["tones"] == full["tones"]
+    for key in ("tones", "tone_near", "strength_scale", "storage_rule", "verbs", "same_fact",
+                "place_fields", "not_edge_target_types"):
+        assert copy[key] == full[key], key
     assert [p["type"] for p in copy["predicates"]] == [p["type"] for p in full["predicates"]]
     for p in copy["predicates"]:
-        assert set(p) == {"type", "inverse", "category", "symmetric"}, p["type"]
+        assert set(p) == {"type", "inverse", "category", "symmetric", "genre"}, p["type"]
 
 
 def _exporter():
@@ -85,3 +87,24 @@ def test_main_reports_the_refusal_and_exits_1(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(mod, "SOURCE", bad)
     assert mod.main(["--print"]) == 1
     assert "ambiguous" in capsys.readouterr().err
+
+
+def test_the_scaffolds_own_relationship_types_file_prints_the_full_list(tmp_path):
+    import shutil
+    import pytest
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("node is not installed")
+    sys.path.insert(0, str(REPO / "skills" / "shared" / "scripts"))
+    import vault_scaffold
+    meta = tmp_path / "_meta"
+    meta.mkdir()
+    (meta / "relationship-types.md").write_text(
+        vault_scaffold.relationship_types_text(), encoding="utf-8", newline="\n")
+    out = subprocess.run(
+        [node, str(REPO / "tools" / "publish" / "bin" / "gm-publish.js"),
+         "relationships", "words", "--vault", str(tmp_path)],
+        capture_output=True, text=True, check=True).stdout
+    assert out.startswith("Relationship types ("), out[:80]
+    assert "this vault uses" not in out
+    assert "Not in the vocabulary" not in out
