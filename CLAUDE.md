@@ -142,13 +142,14 @@ Every non-trivial change follows this sequence:
    CI fails when `CHANGELOG.md` has no `## [version]` entry for it
 5. **Local review** — dispatch the code-reviewer agent against the branch
    before pushing; fix all findings
-6. **Ask before pushing** — present a summary of what will be pushed and
-   wait for explicit user confirmation before running `git push` or
-   `gh pr create`. Never push or open a PR autonomously.
-7. **Push + PR** — push the branch and open a PR to main
-8. **CI** — wait for all checks to pass
-9. **CodeRabbit** — check for unresolved CodeRabbit comments on the PR;
-   address all findings before merging
+6. **Push + PR** — once local checks pass and the review findings are
+   fixed, push the branch and open a PR to main without waiting for a yes
+7. **CI** — wait for all checks to pass
+8. **CodeRabbit** — wait for its review, then fix every finding in one
+   batched push (never push while its review is running)
+9. **Ask before merging** — after that round of fixes, present what the PR
+   holds and what CodeRabbit raised, and wait for explicit user
+   confirmation. Never merge autonomously
 10. **Merge** — the release workflow creates the tag and GitHub Release
     with skill zips automatically
 
