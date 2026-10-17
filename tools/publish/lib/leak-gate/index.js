@@ -12,6 +12,11 @@ const { wordsOf, nameSet, onlyNames } = require('./text');
 
 const findingId = (page, text) => crypto.createHash('sha1').update(`${page}\n${text}`).digest('hex').slice(0, 6);
 const keyOf = (page, text) => `${page}\n${text}`;
+// A never-show word is its own rule: a finding of it, and an acceptance of it, never stand for another rule's on the
+// same page and text (an older accepted withheld name must not let a newly listed word through).
+const NEVER_NOTE = 'player_site.never_show';
+const findingKey = (f) => (f.code === 'NEVER_SHOW' ? `never\n${keyOf(f.page, f.text)}` : keyOf(f.page, f.text));
+const acceptedKey = (a) => (a.note === NEVER_NOTE ? `never\n${keyOf(a.page, a.text)}` : keyOf(a.page, a.text));
 const byPageText = (a, b) => (a.page < b.page ? -1 : a.page > b.page ? 1 : a.text < b.text ? -1 : a.text > b.text ? 1 : 0);
 
 function runLeakGate({ configPath, outputDir }) {
@@ -47,16 +52,16 @@ function runLeakGate({ configPath, outputDir }) {
     if (!raw.has(key)) raw.set(key, f);
   }
   for (const f of neverShowFindings({ files, allFiles: listFiles(outputDir), words: hidden.neverShow, findingId, published: hidden.published })) {
-    const key = keyOf(f.page, f.text);
+    const key = findingKey(f);
     if (!raw.has(key)) raw.set(key, f);
   }
 
   // The whole file, an accepted-only one included (loadManifest answers null for that: it is no publish list).
   const list = loadPublishList(hidden.vaultPath, { warn: () => {} });
   const accepted = (list && list.accepted) || [];
-  const acceptedKeys = new Set(accepted.map((a) => keyOf(a.page, a.text)));
-  const findings = [...raw.values()].filter((f) => !acceptedKeys.has(keyOf(f.page, f.text))).sort(byPageText);
-  const unneeded = accepted.filter((a) => !raw.has(keyOf(a.page, a.text)));
+  const acceptedKeys = new Set(accepted.map(acceptedKey));
+  const findings = [...raw.values()].filter((f) => !acceptedKeys.has(findingKey(f))).sort(byPageText);
+  const unneeded = accepted.filter((a) => !raw.has(acceptedKey(a)));
   return done({ findings, unneeded, warnings: hidden.warnings || [], files: files.length });
 }
 

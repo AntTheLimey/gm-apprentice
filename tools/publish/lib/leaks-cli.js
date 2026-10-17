@@ -94,9 +94,11 @@ async function runLeaks(options, deps) {
 
   if (opts.verb === 'prune') {
     const list = loadPublishList(vaultPath, { warn: () => {} });
-    const stale = new Set(result.unneeded.map((a) => `${a.page}\n${a.text}`));
+    // By page, text and note: a never-show acceptance and another rule's on the same page and text are two.
+    const keyOf = (a) => `${a.page}\n${a.text}\n${a.note || ''}`;
+    const stale = new Set(result.unneeded.map(keyOf));
     if (!list || stale.size === 0) return print(['Nothing to prune.'], { pruned: 0 }, 0);
-    const kept = (list.accepted || []).filter((a) => !stale.has(`${a.page}\n${a.text}`));
+    const kept = (list.accepted || []).filter((a) => !stale.has(keyOf(a)));
     try { writeAccepted(vaultPath, kept); } catch (e) { return print([e.message], { pruned: 0 }, 1); }
     return print([`Pruned ${stale.size} accepted finding${stale.size === 1 ? '' : 's'} no longer needed.`], { pruned: stale.size }, 0);
   }

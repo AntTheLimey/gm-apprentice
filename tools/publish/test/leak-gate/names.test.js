@@ -157,5 +157,16 @@ describe('leak gate: never-show words (player_site.never_show)', () => {
       assert.ok(s.logs.some((l) => /1 never-show word is printed on published pages, so deploy will stop \(Blue Lady 1 note\)/.test(l)), s.logs.join('\n'));
     } finally { s.cleanup(); }
   });
+  it('an older acceptance of another rule on the same page and text does not let a newly listed word through', () => {
+    const s = leakSite(NOTES, { player: { folder_map: { NPCs: 'npcs' }, never_show: ['Vesper'] } });
+    try {
+      leakInto(s.outputDir, 'npcs/linker.html', 'Vesper was here.');
+      const list = path.join(s.root, 'vault', '_meta', 'publish-list.yaml');
+      fs.appendFileSync(list, 'accepted:\n  - page: npcs/linker.html\n    text: vesper\n    note: NPCs/Vesper.md\n');
+      const r = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir });
+      assert.deepEqual(r.findings.map((f) => [f.code, f.page]), [['NEVER_SHOW', 'npcs/linker.html']]);
+      assert.deepEqual(r.unneeded, []);
+    } finally { s.cleanup(); }
+  });
 });
 
