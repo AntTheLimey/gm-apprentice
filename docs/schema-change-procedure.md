@@ -72,8 +72,8 @@ adding a new field, renaming a field, changing a field's type
 
 ### 7. Add migration check
 
-A migration is code, not prose: `migrate.py` runs it, and
-`shared/migrations.md` only records it.
+A migration is code, not prose: `migrate.py` runs it, and the
+CHANGELOG entry says what it changes in a vault.
 
 - [ ] Write a `find_*` function in
   `skills/shared/scripts/migrate_vault.py` (vault files) or
@@ -98,8 +98,8 @@ A migration is code, not prose: `migrate.py` runs it, and
 - [ ] Test the check against a vault that needs it and one
   that does not, in `tests/test_migrate_vault.py` or
   `tests/test_migrate_site.py`
-- [ ] Add one row to the table in `skills/shared/migrations.md`:
-  the release, what changes in a vault, and the check id
+- [ ] Say in the CHANGELOG entry what changes in a vault, and
+  name the check id
 
 ### 8. Update tests
 
@@ -113,9 +113,8 @@ A migration is code, not prose: `migrate.py` runs it, and
 
 - [ ] Bump the version in `.claude-plugin/plugin.json`
   (patch for field additions, minor for breaking changes)
-- [ ] Set `current_version` in `shared/migrations.md` to the
-  same version in the same commit — CI fails when they differ
-- [ ] Add a CHANGELOG entry describing the schema change
+- [ ] Add a CHANGELOG entry under that version describing the
+  schema change (CI fails when the version has no entry)
 
 ## Adding to a built-in default list
 

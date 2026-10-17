@@ -389,7 +389,7 @@ class RealBuildScriptTests(unittest.TestCase):
             (p / "book.md").write_text("private\n")
         shared = tmp / "skills" / "shared"
         shared.mkdir()
-        (shared / "migrations.md").write_text('current_version: "1.0.0"\n')
+        (shared / "README.md").write_text("# shared\n")
         out = tmp / "dist"
         subprocess.run(
             ["bash", str(tmp / "scripts" / "build-skill-zips.sh"), str(out)],
@@ -406,6 +406,14 @@ class RealBuildScriptTests(unittest.TestCase):
             self.assertIn("systems/gurps-4e/NOTICE.md", names)
             self.assertFalse([n for n in names if "personal" in n], names)
             self.assertEqual(ac.check_zips(out), [])
+
+    def test_the_zip_carries_the_plugin_version_and_the_tree_is_untouched(self) -> None:
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            out = self.build(tmp, personal=False)
+            with zipfile.ZipFile(out / "ttrpg-expert.zip") as z:
+                self.assertEqual(z.read("shared/VERSION").decode(), "9.9.9\n")
+            self.assertFalse((tmp / "skills" / "shared" / "VERSION").exists())
 
     def test_check_fails_when_the_real_build_lacks_a_notice(self) -> None:
         with tempfile.TemporaryDirectory() as t:

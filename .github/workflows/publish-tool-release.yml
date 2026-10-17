@@ -95,21 +95,9 @@ jobs:
           # The greatest exact publish-vX.Y.Z below this version: never this
           # release's own tag on a re-run, never a prerelease or suffixed tag.
           PREV=$(git tag --list 'publish-v*' | scripts/prev-publish-tag.sh "${{ steps.version.outputs.version }}")
-          {
-            echo "Publish tool ${{ steps.version.outputs.version }}, packed with \`npm pack\`."
-            echo
-            echo "Pin with the attached .tgz and verify it with \`SHA256SUMS\`."
-            echo
-            echo "## Changes to tools/publish"
-            echo
-            if [[ -n "$PREV" ]]; then
-              echo "Since \`$PREV\`:"
-              echo
-              git log --no-merges --format='- %s (%h)' "$PREV..HEAD" -- tools/publish
-            else
-              echo "Initial tagged release."
-            fi
-          } > notes.md
+          # The commits since PREV, then the CHANGELOG entry of each plugin
+          # release they shipped in.
+          python3 scripts/publish_release_notes.py "${{ steps.version.outputs.version }}" "$PREV" > notes.md
           cat notes.md
 
       # gh creates the tag at this commit. --latest=false keeps the plugin's own

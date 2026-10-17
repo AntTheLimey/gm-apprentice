@@ -385,7 +385,8 @@ a chapter page — are published too. Two common breakdowns:
 
 Run `node "$TOOL" doctor --site --config <dir>/vault.config.json`. A
 `RECAP_INCOMPLETE` row names the wrap-up file and which of "a published
-session with status played/reviewed" or "a published chapter page" is
+session with status played, wrap-up or reviewed" or "a published chapter
+page" is
 missing — exactly the two breakdowns above.
 
 ### Fix

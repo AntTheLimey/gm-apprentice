@@ -5,12 +5,13 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SKILLS_DIR="$REPO_ROOT/skills"
 OUT_DIR="${1:-$REPO_ROOT/dist}"
 
-# Stamp shared/migrations.md with the canonical version from plugin.json
+# A zip has no plugin.json, so shared/VERSION carries the plugin version into it.
+# It is written into a staging copy of shared/, never into the source tree.
 VERSION=$(jq -r '.version' "$REPO_ROOT/.claude-plugin/plugin.json")
-TMP="$SKILLS_DIR/shared/migrations.md.tmp"
-sed "s/current_version: \".*\"/current_version: \"$VERSION\"/" \
-  "$SKILLS_DIR/shared/migrations.md" > "$TMP"
-mv "$TMP" "$SKILLS_DIR/shared/migrations.md"
+STAGE=$(mktemp -d)
+trap 'rm -rf "$STAGE"' EXIT
+cp -R "$SKILLS_DIR/shared" "$STAGE/shared"
+printf '%s\n' "$VERSION" > "$STAGE/shared/VERSION"
 
 mkdir -p "$OUT_DIR"
 
@@ -25,7 +26,7 @@ for skill_dir in "$SKILLS_DIR"/*/; do
   (cd "$skill_dir" && find . -type f -not -name '.DS_Store' -not -path '*/personal/*' | zip "$zip_path" -@)
 
   # Add shared/ as sibling directory
-  (cd "$SKILLS_DIR" && find shared -type f -not -name '.DS_Store' | zip "$zip_path" -@)
+  (cd "$STAGE" && find shared -type f -not -name '.DS_Store' -not -path '*/__pycache__/*' | zip "$zip_path" -@)
 
   echo "  $skill.zip ($(du -h "$zip_path" | cut -f1 | xargs))"
 done

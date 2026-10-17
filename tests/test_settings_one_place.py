@@ -89,9 +89,7 @@ def test_no_page_writes_out_a_default_hiding_list():
 # `settings` command, which knows both layouts; it never names the old file or an old name.
 OLD_FILE = re.compile(r"vault-config\.md")
 OLD_NAME = re.compile(r"(?<![\w-])publish\.[a-z_]+(?:\.[a-z_]+)*")
-# The record of what each release changed, and the page for authors of other tools, whose
-# section on the old layout is what that section is for.
-RECORDS = {"migrations.md"}
+# The page for authors of other tools, whose section on the old layout is what that section is for.
 OLD_LAYOUT_SECTION = ("vault-config-format.md", re.compile(r"^## The old file\n.*?(?=^## |\Z)", re.M | re.S))
 
 
@@ -113,7 +111,7 @@ def test_the_old_layout_scan_finds_what_it_looks_for():
 
 
 def test_no_page_names_the_old_settings_file_or_an_old_setting_name():
-    pages = [p for p in [*_hand_written_pages(), ROOT / "README.md"] if p.name not in RECORDS]
+    pages = [p for p in [*_hand_written_pages(), ROOT / "README.md"]]
     hits = [f"{p.relative_to(ROOT).as_posix()}: {found}" for p in pages
             for found in _old_layout_mentions(p.name, p.read_text(encoding="utf-8"))]
     assert hits == []
@@ -165,7 +163,7 @@ def test_the_bare_old_keys_come_from_the_tool():
 
 def test_no_page_names_an_old_key_bare():
     keys = _bare_old_keys()
-    pages = [p for p in [*_hand_written_pages(), ROOT / "README.md"] if p.name not in RECORDS]
+    pages = [p for p in [*_hand_written_pages(), ROOT / "README.md"]]
     hits = [f"{p.relative_to(ROOT).as_posix()}: {found}" for p in pages
             for found in _bare_old_key_mentions(p.name, p.read_text(encoding="utf-8"), keys)]
     assert hits == []
@@ -173,7 +171,7 @@ def test_no_page_names_an_old_key_bare():
 
 # The keys a site folder's file and its package.json used to hold. They are settings of the
 # vault now; a page names the setting, never the key it came from. The record of each release
-# (the changelog and the migrations page) and the format page's section on the old layout
+# (the changelog) and the format page's section on the old layout
 # are where they may still be named.
 SITE_FOLDER_WORDS = re.compile(r"\b(?:siteUrl|outputDir|preserveDirs|cloudflarePagesProject|prebuild|postbuild)\b")
 
@@ -204,7 +202,7 @@ def _pages_that_must_not_name_site_folder_keys():
     seen = {}
     for p in pages:
         rel = p.relative_to(ROOT).as_posix()
-        if p.name in RECORDS or rel.startswith(RECORD_FOLDERS) or "personal" in p.parts:
+        if rel.startswith(RECORD_FOLDERS) or "personal" in p.parts:
             continue
         seen[rel] = p
     return seen
@@ -228,7 +226,7 @@ def test_the_scan_goes_red_on_a_plain_page(tmp_path):
 def test_the_site_folder_word_scan_covers_the_pages_it_names():
     rels = set(_pages_that_must_not_name_site_folder_keys())
     assert {"ROADMAP.md", "README.md", "tools/publish/README.md", "docs/site-settings.md"} <= rels
-    assert not any(r.startswith(RECORD_FOLDERS) or r.endswith("migrations.md") for r in rels)
+    assert not any(r.startswith(RECORD_FOLDERS) for r in rels)
 
 
 def test_no_page_names_a_site_folder_key_or_build_hook():

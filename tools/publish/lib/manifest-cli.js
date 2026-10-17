@@ -21,7 +21,7 @@ const { PUBLISH_LIST_FILE, OLD_LIST_FILE, PUBLISH_LIST_FROM, at } = require('./s
 const { siteToolOlderThan } = require('./settings/move');
 const { convertPublishList, setsOf } = require('./publish-list-convert');
 const { decidePage, publishesPage } = require('./publish-decision');
-const { pairHubs, isWrapUp } = require('./session-hub');
+const { pairHubs, isWrapUp, isPlayedSession } = require('./session-hub');
 const { getCanonStatus } = require('./templates/base');
 const { sitePin } = require('./site-pin');
 const { nameIn } = require('./settings');
@@ -306,8 +306,6 @@ async function runApply(options, deps, survey) {
   return 0;
 }
 
-const PLAYED_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
-
 // Why the site's own build would publish a ticked hub's body, or null (site-pin.js).
 function staleSitePin(siteDir) {
   return sitePin(siteDir).stale;
@@ -370,7 +368,7 @@ function planPublishPlayed(survey, { only = null, includeUnreviewed = false, pub
     .filter(([rel]) => only === null || rel === only)
     .filter(([rel, p]) => {
       const fm = p.frontmatter || {};
-      return fm.type === 'session' && PLAYED_STATUSES.has(String(fm.status || '').toLowerCase())
+      return isPlayedSession(fm)
         && onDisk.has(rel) && sectionOf(rel) !== 'excluded';
     })
     .map(([rel, page]) => ({ rel, page }));

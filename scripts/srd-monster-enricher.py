@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Transform SRD 5.2 monster stat blocks into compact enriched reference format."""
+"""Transform SRD 5.2 monster stat blocks into compact enriched reference format.
+
+This builds the five `skills/ttrpg-expert/systems/dnd-5e-2024/monsters-cr*.md`
+files the rules advisor reads. Run it after the SRD source changes:
+
+    python3 scripts/srd-monster-enricher.py <srd>/src/12_MonstersA-Z.md
+
+It rewrites the five files in place, and an unchanged SRD gives byte-identical
+files. The SRD 5.2 is CC-BY 4.0 (see ATTRIBUTION.md).
+"""
 
 import argparse
 import re
@@ -773,6 +782,7 @@ def main():
     for tk, tv in TIERS.items():
         content = write_tier(tk, tv, tier_monsters[tk])
         out_path = args.out_dir / f"monsters-{tk}.md"
+        content = content.rstrip('\n') + '\n'
         out_path.write_text(content, encoding='utf-8')
         size = len(content.encode('utf-8'))
         status = "✓" if size <= MAX_REF_BYTES else "✗ OVER LIMIT"
