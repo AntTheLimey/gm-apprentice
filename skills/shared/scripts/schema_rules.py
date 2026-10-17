@@ -202,6 +202,17 @@ TEMPLATE_NAMES = {
     "character-story.md": "character-story.md",
 }
 TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
+# Templates a new vault gets as a page, not under _Templates/ (vault_scaffold).
+WORLD_STUBS = {"world-index.md": "_World/world-index.md", "world-flags.md": "_World/_flags.md"}
+# Types with no template: the example frontmatter their fields are read from,
+# under skills/ (a skill zip holds only its own skill beside shared/).
+EXAMPLE_FILES = {
+    "adventure-brief": "the-midwife/references/scaffold-handoff.md",
+    "scene": "session-prep/references/scene-note-template.md",
+    "chapter": "shared/entity-schema.md",
+    "session-play-notes": "shared/session-document-chain.md",
+}
+SKILLS_DIR = TEMPLATES_DIR.parent.parent
 
 # Optional fields that support portraits (for future validation)
 PORTRAIT_TYPES = {
@@ -295,13 +306,14 @@ OLDER_TYPE_NAMES: dict[str, str] = {
 
 
 def template_sources(etype: str) -> list[str]:
-    """The shared/templates files a vault's `_Templates/` gets for notes
-    of this type (a type's older spelling has its new name's)."""
+    """The shared/templates files a vault gets for notes of this type: under
+    `_Templates/`, or as a `_World/` page (a type's older spelling has its new
+    name's)."""
     etype = OLDER_TYPE_NAMES.get(etype, etype)
     found = []
     for path in sorted(TEMPLATES_DIR.glob("*.md")):
-        if path.name not in TEMPLATE_NAMES and not path.name.startswith("pc-") \
-                and path.name != "crew-fitd.md":
+        if path.name not in TEMPLATE_NAMES and path.name not in WORLD_STUBS \
+                and not path.name.startswith("pc-") and path.name != "crew-fitd.md":
             continue
         fm = extract_frontmatter(path.read_text(encoding="utf-8")) or {}
         if fm.get("type") == etype:
@@ -309,13 +321,31 @@ def template_sources(etype: str) -> list[str]:
     return found
 
 
+EXAMPLE_BLOCK_RE = re.compile(r"^```(?:yaml|markdown)\n(---\n.*?\n---)\n", re.M | re.S)
+
+
+def example_fields(etype: str) -> list[str]:
+    """The fields of the example frontmatter for a type with no template;
+    empty when there is none (or its skill is not installed)."""
+    rel = EXAMPLE_FILES.get(etype)
+    path = SKILLS_DIR / rel if rel else None
+    if path is None or not path.is_file():
+        return []
+    for m in EXAMPLE_BLOCK_RE.finditer(path.read_text(encoding="utf-8")):
+        fm = extract_frontmatter(m.group(1) + "\n") or {}
+        if fm.get("type") == etype:
+            return list(fm)
+    return []
+
+
 def template_fields(etype: str) -> list[str]:
-    """Every frontmatter field the type's templates carry, in order."""
+    """Every frontmatter field the type's templates (or, with none, its
+    example) carry, in order."""
     fields: list[str] = []
     for name in template_sources(etype):
         fm = extract_frontmatter((TEMPLATES_DIR / name).read_text(encoding="utf-8")) or {}
         fields.extend(f for f in fm if f not in fields)
-    return fields
+    return fields or example_fields(etype)
 
 
 def _ancestors(name: str) -> list[str]:
@@ -383,30 +413,36 @@ def show(etype: str) -> str | None:
         lines.append("subtypes: " + " ".join(subtypes))
     sources = template_sources(etype)
     systems = [s[3:-3] for s in sources if s.startswith("pc-")]
-    names = [f"_Templates/{TEMPLATE_NAMES.get(s, s)}" for s in sources
-             if not s.startswith("pc-")]
+    names = [WORLD_STUBS[s] + " page" if s in WORLD_STUBS
+             else f"_Templates/{TEMPLATE_NAMES.get(s, s)}"
+             for s in sources if not s.startswith("pc-")]
     if systems:
         names.insert(0, "_Templates/pc-{system}.md (" + " ".join(systems) + ")")
     if names:
         lines.append("template: " + ", ".join(names))
+    elif example_fields(etype):
+        lines.append(f"template: none; fields from the example in {EXAMPLE_FILES[etype]}")
     folders = [f for f, types in TYPE_FOLDERS.items() if etype in types]
     if folders:
         lines.append("folder: " + ", ".join(folders))
     required = REQUIRED_FIELDS.get(etype, [])
     if required:
         lines.append("required: " + ", ".join(required))
-    checked = checked_values(etype)
+    fields = template_fields(etype)
+    # canon_status is checked wherever it is written; shown where the type takes it.
+    checked = {f: v for f, v in checked_values(etype).items()
+               if f != "canon_status" or f in required or f in fields}
     listed = LISTED_VALUES.get(etype, {})
-    optional = [f for f in template_fields(etype)
-                if f not in required and f not in COMMON_FIELDS]
+    optional = [f for f in fields if f not in required and f not in COMMON_FIELDS]
     optional += [f for f in (*CHECKED_VALUES.get(etype, {}), *listed)
                  if f not in required and f not in optional]
     lines.append("optional: " + (", ".join(optional) if optional
-                                 else "no shared template (shared/entity-schema.md)"))
-    lines.append("values (checked): " + _values(checked))
+                                 else "none listed (no template or example)"))
+    if checked:
+        lines.append("values (checked): " + _values(checked))
     if listed:
         lines.append("values (unchecked): " + _values(listed))
-    lines.append("fields any type takes: `show`")
+    lines.append("run `show` alone for the fields any type takes")
     rules = []
     if etype in PORTRAIT_TYPES:
         rules.append("portrait is a path under _attachments/")
@@ -418,14 +454,14 @@ def show(etype: str) -> str | None:
     edge_name = etype.replace("-", "_")
     if edge_name in ont["not_edge_target_types"]:
         lines.append("relationships: never a relationship target")
-    elif "relationships" in template_fields(etype):
+    elif "relationships" in fields:
         edge = [f for f in ont["edge_fields"] if f != "source"]
         low, high = ont["edge_fields"]["strength"]["range"]
         lines.append(f"relationships: list of {{{', '.join(edge)}}}; type one of "
                      f"{len(ont['predicates'])} in _meta/relationship-types.md; tone one "
                      f"of {len(tone_families())} listed; strength {low}-{high}")
         stands = [f"{p['field']} ({p['predicate']})" for p in ont["place_fields"]
-                  if p["field"] in template_fields(etype)]
+                  if p["field"] in fields]
         if stands:
             lines.append("fields that stand for an edge: " + ", ".join(stands))
     renamed: dict[str, list[str]] = {}

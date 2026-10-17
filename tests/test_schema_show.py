@@ -97,10 +97,25 @@ class ShowAgreesWithTheValidator(unittest.TestCase):
                     self.assertEqual(set(listed.split(", ")), values)
 
     def test_no_field_is_checked_that_show_leaves_out(self):
+        # canon_status is shown only where the type takes it (required, or
+        # in its template or example); every other checked field always.
         for etype in sr.known_types():
             with self.subTest(type=etype):
-                self.assertEqual(shown_values(etype),
-                                 {f: set(v) for f, v in sr.checked_values(etype).items()})
+                takes = (sr.REQUIRED_FIELDS[etype] + sr.template_fields(etype))
+                expected = {f: set(v) for f, v in sr.checked_values(etype).items()
+                            if f != "canon_status" or f in takes}
+                self.assertEqual(shown_values(etype), expected)
+
+    def test_canon_status_shown_only_where_the_type_takes_it(self):
+        self.assertNotIn("canon_status", shown_values("session"))
+        self.assertNotIn("canon_status", shown_values("chapter"))
+        self.assertIn("canon_status", shown_values("npc"))
+        # The validator still checks it wherever it is written.
+        self.assertEqual(len(errors_for({**a_valid_note("session"), "canon_status": "x"})), 1)
+
+    def test_a_list_type_is_an_error_not_a_crash(self):
+        errors = errors_for({"type": "[npc]", "canon_status": "DRAFT"})
+        self.assertEqual(errors, ["Field 'type' must be one type name, got ['npc']"])
 
     def test_recommended_fields_are_never_required(self):
         # Issue #221: the old doc required these on every type.
@@ -133,6 +148,30 @@ class ShowReadsTheTemplates(unittest.TestCase):
         self.assertIn("stage", shown("session")["optional"].split(", "))
         self.assertEqual(shown_values("faction", "values (unchecked)")["status"],
                          set(sr.FACTION_STATUS))
+
+    def test_types_with_no_template_read_their_example(self):
+        brief = shown("adventure-brief")
+        self.assertIn("the-midwife/references/scaffold-handoff.md", brief["template"])
+        for field in ("system", "sessions_estimated", "continuation_type"):
+            self.assertIn(field, brief["optional"].split(", "))
+        self.assertIn("objective", shown("scene")["optional"].split(", "))
+        self.assertIn("sort_order", shown("chapter")["optional"].split(", "))
+        self.assertEqual(shown("meta")["optional"], "none listed (no template or example)")
+
+    def test_world_pages_are_named_without_changing_an_update(self):
+        import migrate_vault
+        self.assertEqual(shown("world_flags")["template"], "_World/_flags.md page")
+        self.assertIn("_World/world-index.md page", shown("world_domain")["template"])
+        self.assertIn("last_reviewed", shown("world_flags")["optional"])
+        # TEMPLATE_NAMES (what an update gives _Templates/) does not hold them.
+        for stub in sr.WORLD_STUBS:
+            self.assertNotIn(stub, sr.TEMPLATE_NAMES)
+            for system in (None, *sr.SYSTEMS):
+                self.assertNotIn(stub, migrate_vault.templates_for(system))
+
+    def test_the_any_type_line_says_how(self):
+        self.assertIn("run `show` alone for the fields any type takes",
+                      (sr.show("npc") or "").splitlines())
 
     def test_relationships(self):
         self.assertEqual(shown("session")["relationships"], "never a relationship target")

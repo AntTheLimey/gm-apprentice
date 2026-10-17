@@ -56,6 +56,9 @@ def validate_file(filepath: Path, content: str | None = None) -> list[str]:
     if not entity_type:
         errors.append("Missing 'type' field")
         return errors
+    if not isinstance(entity_type, str):
+        errors.append(f"Field 'type' must be one type name, got {entity_type!r}")
+        return errors
 
     # Check required fields — reject unknown entity types
     if entity_type not in REQUIRED_FIELDS:

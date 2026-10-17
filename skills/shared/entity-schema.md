@@ -118,7 +118,8 @@ values its enumerated fields take, its template, folder and
 relationship rules; `show` alone lists the types and the fields any
 type takes. It reads the schema checks' own rules and the templates.
 
-Write the recommended fields anyway: `vault_check.py names` reads
+Write the recommended fields (`aliases`, `tags`, `source_document`,
+`campaign`, `first_appearance`) anyway: `vault_check.py names` reads
 `aliases`, and campaign-qa's audits lean on the rest.
 
 `gm_aliases` (optional list) holds names only the GM should know, such

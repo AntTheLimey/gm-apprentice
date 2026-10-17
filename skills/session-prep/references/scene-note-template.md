@@ -2,7 +2,8 @@
 
 A standalone scene note lives in the chapter's `Scenes/` folder and is
 linked from the session index `scenes:` list. Fields and values:
-`schema_rules.py show scene`.
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/schema_rules.py"
+show scene`.
 
 ```markdown
 ---

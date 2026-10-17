@@ -93,8 +93,8 @@ NPC references, location atmosphere), check the user's gitignored
 
 ## Phase 1: Reconcile (conditional)
 
-Run when the bundle's `Just played:` line shows `status: wrap-up`; skip
-for first sessions or when already `reviewed`. Follow
+Run when the bundle's `Just played:` line shows `status: wrap-up`,
+unless reconcile's scan gives a `skip:` reason. Follow
 `shared/reconcile.md`. It writes `### Reconciliation Context` under the
 Wrap-Up's `## GM Notes` (consequences, salvageable prep, GM decisions);
 steps 7–10 read it (also accept a top-level `## Reconciliation Context`

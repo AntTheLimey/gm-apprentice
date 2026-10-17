@@ -18,19 +18,21 @@ dry-run first, `--write` on GM confirmation (see
 ## Quick Scan — Fast Path
 
 Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/reconcile_scan.py"
-<vault> "<wrap-up>"` (reads only). Its `quick path:` line applies the
-rule; whether a DRAFT entity it lists contradicts AUTHORITATIVE canon
-is yours to judge.
+<vault> "<wrap-up>"` (reads only). The rule its `quick path:` line
+applies: no UNVERIFIED marker, no Plan file, and no DRAFT created this
+session that contradicts AUTHORITATIVE canon (that last is yours to
+judge).
 
 If it passes, offer:
 
 > "Straightforward session — no conflicts found, no unplayed
-> prep. Promote all new entities to AUTHORITATIVE? (y/n)"
+> prep. Promote the Wrap-Up and {the DRAFTs created this session,
+> by name} to AUTHORITATIVE? (y/n)"
 
 On yes:
 - `stamp_entities.py <vault> "<wrap-up>" --promote --reconciled YYYY-MM-DD`
 - `stamp_entities.py <vault> <entity files> --promote` — the
-  scan's DRAFT entities
+  scan's DRAFTs created this session, never its older ones
 - `stamp_entities.py <vault> "<index>" --set status=reviewed`
 - Do step 6.1, then go to step 6.5.
 
