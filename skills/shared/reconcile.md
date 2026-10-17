@@ -4,8 +4,8 @@ Shared procedure for reviewing a Wrap-Up with the GM and promoting
 canon status. Called by session-wrapup (after writing a Wrap-Up),
 session-prep (when the last session is at `wrap-up`), vault-ingest
 (after each ingested Wrap-Up), or standalone when the GM surfaces a
-contradiction ("these notes contradict Session 3"). Skip for first
-sessions or when status is already `reviewed`.
+contradiction ("these notes contradict Session 3"). Skip when the
+scan's `skip:` line gives a reason.
 
 You need the Wrap-Up path, its related entity files and timeline
 entries, and the session index.
@@ -17,23 +17,20 @@ dry-run first, `--write` on GM confirmation (see
 
 ## Quick Scan — Fast Path
 
-Check three conditions:
+Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/reconcile_scan.py"
+<vault> "<wrap-up>"` (reads only). Its `quick path:` line applies the
+rule; whether a DRAFT entity it lists contradicts AUTHORITATIVE canon
+is yours to judge.
 
-1. Zero `<!-- UNVERIFIED: … -->` markers (or bare
-   `<!-- UNVERIFIED -->`) in the Wrap-Up
-2. Zero DRAFT entities contradicting AUTHORITATIVE ones on the same
-   facts
-3. No Plan file for this session (no unplayed prep to triage)
-
-If all pass, offer:
+If it passes, offer:
 
 > "Straightforward session — no conflicts found, no unplayed
 > prep. Promote all new entities to AUTHORITATIVE? (y/n)"
 
 On yes:
 - `stamp_entities.py <vault> "<wrap-up>" --promote --reconciled YYYY-MM-DD`
-- `stamp_entities.py <vault> <entity files> --promote` — this
-  session's DRAFT entities
+- `stamp_entities.py <vault> <entity files> --promote` — the
+  scan's DRAFT entities
 - `stamp_entities.py <vault> "<index>" --set status=reviewed`
 - Do step 6.1, then go to step 6.5.
 
@@ -48,12 +45,9 @@ scene notes. Reads only — no writes yet.
 
 ### 2. Highlight uncertain areas
 
-As a short inventory, not a wall of text:
-- `<!-- UNVERIFIED: … -->` markers (or bare `<!-- UNVERIFIED -->`)
-- Reconstruction notes (`> [!info] Reconstruction Note`)
-- DRAFT entities and any `canon_status: DRAFT` content tied to this
-  session
-- Timeline entries with uncertain dates or ordering
+As a short inventory, not a wall of text: the scan's UNVERIFIED
+markers, reconstruction notes and DRAFT entities, and timeline entries
+with uncertain dates or ordering.
 
 ### 2.5. World fact review
 
@@ -83,9 +77,8 @@ resolution, and **wait for the GM's decision** before the next.
 
 ### 3.5. Spoiler reveal check
 
-For each entity this Wrap-Up created or updated (the set in
-session-wrapup's receipt) that holds an open `<!-- spoiler -->`
-block, ask:
+For each block under the scan's `open spoilers:` (and in any entity
+this run updated that the Wrap-Up does not link), ask:
 
 > "[[{Entity}]] has a pending spoiler: '{first ~10 words of the
 > spoiler text}...' — was this revealed to the players this session?
@@ -94,13 +87,12 @@ block, ask:
 Yes → remove the `<!-- spoiler -->` / `<!-- /spoiler -->` markers,
 leaving the content as published prose. No → leave it; it is asked
 again next time the entity is touched, or caught by campaign-qa (see
-`publish-site/references/content-filtering.md`). No spoiler blocks →
-skip silently.
+`publish-site/references/content-filtering.md`). None → skip
+silently.
 
 ### 5. Salvageable prep triage
 
-If a Plan file exists for this session, ask about each unplayed
-element:
+If the scan names a Plan file, ask about each unplayed element:
 
 | Disposition | Meaning |
 |-------------|---------|
