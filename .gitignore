@@ -77,3 +77,8 @@ tools/publish/node_modules/.cache/
 tools/publish/node_modules/.vite/
 tools/publish/node_modules/.package-lock.json
 tools/publish/node_modules/**/.package-lock.json
+
+# Local tool state
+.wrangler/
+.mypy_cache/
+.pytest_cache/

@@ -1,6 +1,14 @@
 # Mechanization analysis — what the skills do in prose that code should do
 
-Date: 2026-09-04. Analysis only; nothing in this document has been built.
+Date: 2026-09-04. Analysis only; nothing in this document had been built.
+
+Status at 2026-10-17: most of it has shipped (the `vault_check.py`
+subcommands, `stamp_entities.py`, `vault_write.py`, `session_context.py`,
+`plan_check.py`, `index_build.py`, `rules_lookup.py`, `relink.py`,
+`links.py`, `migrate.py`, `vault_scaffold.py`, and the publish tool's
+`explain`, `settings`, `update-pin` and `sheet show --player-safe`). Still
+undone: #18 to #21, #23, #24, #29 to #32, carried in `ROADMAP.md`. File and
+line references below are as of 2026-09-04.
 
 Question 1: which operations in the nine gm-apprentice skills are currently
 executed by the model interpreting prose, but are deterministic and should be

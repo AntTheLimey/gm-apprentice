@@ -388,7 +388,7 @@ class VersionCommandTests(unittest.TestCase):
         self.assertEqual(message,
                          "cannot determine the plugin version "
                          "(no .claude-plugin/plugin.json or "
-                         "shared/migrations.md)")
+                         "shared/VERSION)")
         self.assertEqual(code, 1)
 
     def test_cli_emits_the_version_section_and_exits_zero_on_ok(self):

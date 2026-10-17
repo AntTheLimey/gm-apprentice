@@ -9,7 +9,7 @@ const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit } = 
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { nameList, gmAliasList, strippedLines, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
-const { pairHubs } = require('./session-hub');
+const { pairHubs, isPlayedSession } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
 const { getsNoPage } = require('./previews');
@@ -41,7 +41,6 @@ const { sheetSourceOf } = require('./sheet-source');
 const { pcIdentity } = require('./templates/pc-identity');
 
 const TOOL_VERSION = require('../package.json').version;
-const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
 
 // The closing line about vault.config.json keys that moved to _meta/vault-config.md. Used
 // keys are listed plainly, a key the vault file also sets is "ignored", and an entry of a
@@ -649,7 +648,7 @@ function buildSite(options) {
       if (!REGISTRABLE_TYPES.has(type)) continue;
       const rel = vaultRelPathOf(page);
       if (!registered.has(rel)) {
-        if (type === 'session' && PLAYED_SESSION_STATUSES.has(String(page.frontmatter.status || '').toLowerCase())) {
+        if (isPlayedSession(page.frontmatter)) {
           unpublishedPlayedSessions.push({ rel, title: page.title || path.basename(rel, '.md') });
           continue;
         }

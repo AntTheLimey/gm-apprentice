@@ -14,6 +14,8 @@ Run: python tests/test_vaultlib.py
 from __future__ import annotations
 
 import json
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -568,6 +570,30 @@ class VersionTests(unittest.TestCase):
         got = vl.plugin_version()
         self.assertIsNotNone(got)
         self.assertEqual(got[0], expected)
+
+    def _zip_layout_version(self, stamp):
+        """plugin_version() from a copy laid out as a skill zip unpacks:
+        shared/scripts/vaultlib.py, no .claude-plugin/plugin.json."""
+        with tempfile.TemporaryDirectory() as t:
+            scripts = Path(t) / "skill" / "shared" / "scripts"
+            scripts.mkdir(parents=True)
+            shutil.copy(Path(vl.__file__), scripts / "vaultlib.py")
+            if stamp is not None:
+                (scripts.parent / "VERSION").write_text(stamp, encoding="utf-8")
+            run = subprocess.run(
+                [sys.executable, "-I", "-c",
+                 "import sys; sys.path.insert(0, sys.argv[1]); "
+                 "import vaultlib; print(vaultlib.plugin_version())",
+                 str(scripts)],
+                capture_output=True, text=True, check=True)
+            return run.stdout.strip()
+
+    def test_a_skill_zip_reads_shared_version(self):
+        self.assertEqual(self._zip_layout_version("1.2.3\n"),
+                         "('1.2.3', 'shared/VERSION')")
+
+    def test_no_manifest_and_no_stamp_is_unknown(self):
+        self.assertEqual(self._zip_layout_version(None), "None")
 
 
 class MarkerTests(unittest.TestCase):

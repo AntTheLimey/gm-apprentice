@@ -1,9 +1,7 @@
 const { publishedSource } = require('./processor');
 const { canonicalNfc } = require('./unicode');
 const { wikilinkRe, parseWikilink, firstWikilinkTarget } = require('./wikilink');
-// A session counts as "played" once it has been run — including the post-wrap-up, pre-reconcile
-// `wrap-up` state — so a freshly wrapped session still drives "recent" before it's reviewed.
-const PLAYED_STATUSES = new Set(['played', 'reviewed', 'wrap-up']);
+const { isPlayedSession } = require('./session-hub');
 
 // Mentions/recency must reflect only what readers can see, so prefer each page's published
 // view (gm-only + excluded sections stripped) over its raw markdown when available (B6).
@@ -57,7 +55,7 @@ function scoreByRecency(entities, sessions, chapters, options = {}) {
   // Most recently *played* first. session_number restarts per chapter, so it can't identify the
   // recent sessions — sort by play_date and fall back to session_number only when dates tie/absent.
   const played = sessions
-    .filter(s => s.frontmatter.type === 'session' && PLAYED_STATUSES.has(String(s.frontmatter.status || '').toLowerCase()))
+    .filter(s => isPlayedSession(s.frontmatter))
     .sort((a, b) => {
       const da = new Date(a.frontmatter.play_date || a.frontmatter.actual_date || 0).getTime() || 0;
       const db = new Date(b.frontmatter.play_date || b.frontmatter.actual_date || 0).getTime() || 0;
