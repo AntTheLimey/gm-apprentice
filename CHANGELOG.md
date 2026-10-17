@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.66] — 2026-10-16
+
+Every relationship rule the skills checked by eye is now a check in the
+publish tool, and the certain repairs happen on one yes.
+
+### Added
+
+- `gm-apprentice-publish relationships check` reads every note's
+  relationships and reports each rule that is broken, with the note and
+  line: a word outside the vocabulary (with the close match, or what a
+  verb means), a tone or strength that is not on the scale, a tie stored
+  on both notes, a two-way tie not marked `bidirectional`, two ties that
+  state the same fact, a place field with no matching tie (and a tie with
+  no field), a place field that disagrees with another, a tie that points
+  at a note type ties never point at, a genre list that leaves out a
+  type, a container with nothing in it, and a hub with far more ties
+  than its kind usually has. `--folder`, `--file` and `--newer-than`
+  narrow it; `--json` gives the same as data.
+- `gm-apprentice-publish relationships fix` lists the repairs that are
+  certain (rename to the vocabulary word, drop the mirrored half, mark
+  the tie two-way, add the missing place tie or field) and the ties it
+  keeps with the reason. `--write` makes them in every note at once or
+  in none; a note the file system refuses to rewrite is left as it was.
+  `--kind` limits it to one kind.
+- A new update check, `relationship-types-missing`: when a vault's
+  `_meta/relationship-types.md` names fewer of the relationship types
+  than the vocabulary has, the update names the missing ones and offers
+  to add them on a yes (answer no for a deliberate genre subset).
+
+### Changed
+
+- `vault_check.py relationships` asks the publish tool, so it needs
+  node. If node or the tool is missing it prints one error row saying so.
+  The rows for words and tones read as before; verbs the vocabulary
+  already means now say what they mean.
+- `campaign-qa` and `campaign-organizer` run the check and the fix
+  instead of reading the notes for these rules. About 5.4 KB of skill
+  text is gone.
+- `relationships words` reads a vault's `_meta/relationship-types.md`
+  `- name: text` bullets and one-column tables as well as the scaffold's
+  tables and lists.
+- The publish tool is 1.32.0.
+
+---
+
 ## [1.10.65] — 2026-10-16
 
 The ontology file becomes the one place every relationship rule lives, and
