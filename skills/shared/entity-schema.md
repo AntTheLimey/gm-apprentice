@@ -1,7 +1,9 @@
 # Entity Schema
 
 Entity type hierarchy, frontmatter schemas and per-type attributes
-for all campaign entities. Read the section you need
+for all campaign entities. For one type's fields and values, run
+`schema_rules.py show <type>` (§ Fields by Type) instead of reading
+this file. Otherwise read the section you need
 (`grep -n '^## ' shared/entity-schema.md`, then Read at that
 offset) unless you are seeding `_meta/`.
 
@@ -23,7 +25,7 @@ On **every** entity type:
 | lastUpdated | string | Session number or date of last modification |
 | asOfSession | string | Session when current state was confirmed accurate |
 | createdSession | string | Session when first introduced |
-| source | string | How it entered canon: "play", "prep", "backstory", or "world-evolution" |
+| source | string | How it entered canon (`show` lists the words) |
 | canon_status | string | Canon status: DRAFT / AUTHORITATIVE / SUPERSEDED / STUB |
 | era | string | Optional: named era from `_World/history-timeline.md` (e.g., "Second Age"). Assumed campaign present if absent. |
 
@@ -108,58 +110,16 @@ constraint inheritance in the relationship ontology.
 
 ## Frontmatter Schemas
 
-### Required Fields (by Entity Type)
+### Fields by Type
 
-Most entity types require `type` and `canon_status`; the exact
-per-type set is below. This is exactly what `vault_check.py
-frontmatter` enforces via
-`schema_rules.REQUIRED_FIELDS` — that mapping is authoritative, and
-`tests/test_entity_schema_required_fields.py` checks this block
-against it so the two cannot drift silently.
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/schema_rules.py"
+show <type>` prints one type's required and optional fields, the
+values its enumerated fields take, its template, folder and
+relationship rules; `show` alone lists the types and the fields any
+type takes. It reads the schema checks' own rules and the templates.
 
-```yaml
-npc: [type, canon_status]
-pc: [type, canon_status]
-location: [type, canon_status]
-faction: [type, canon_status]
-organization: [type, canon_status]
-item: [type, canon_status]
-creature: [type, canon_status]
-clue: [type, canon_status]
-event: [type, canon_status]
-document: [type, canon_status]
-adventure-brief: [type, canon_status, scope]
-session: [type, session_number, status, documents]
-session-plan: [type, canon_status, session]
-session-play-notes: [type, canon_status, session]
-session-wrap-up: [type, canon_status, session]
-session-wrapup: [type, canon_status, session]
-session_wrap: [type, canon_status, session]
-scene: [type, canon_status, scene_type, status]
-chapter: [type]
-meta: [type]
-timeline: [type]
-pc_roster: [type]
-player-characters: [type]
-character-story: [type, canon_status]
-campaign_overview: [type, canon_status]
-heritage: [type, canon_status]
-plan: [type, canon_status, plan_type, chapter]
-world_domain: [type, canon_status, domain, status]
-world_flags: [type]
-```
-
-The roster page is `pc_roster`. `player-characters` is an older name
-for it, still accepted; write `pc_roster`.
-
-A `type:` outside this list is a custom type: `vault_check.py
-frontmatter` surfaces it as INFO ("no schema rules applied") rather
-than enforcing anything against it.
-
-Recommended on every type, though not enforced: `aliases`, `tags`,
-`source_document`, `campaign`, `first_appearance`. Write them
-anyway — `vault_check.py names` reads `aliases`, and campaign-qa's
-audits lean on the rest.
+Write the recommended fields anyway: `vault_check.py names` reads
+`aliases`, and campaign-qa's audits lean on the rest.
 
 `gm_aliases` (optional list) holds names only the GM should know, such
 as a disguised NPC's true name. They resolve `[[links]]` like `aliases`,
@@ -176,20 +136,6 @@ placeholder in place of the name. `gm_aliases` rewrites a secret name;
 `withheld` finds one. Write `true` or `false`; the build also reads
 `yes`, `on` and `1` as true, as it does for `gm_only`. It is a note's
 own flag and is never published.
-
-```yaml
----
-type: npc              # From the type hierarchy
-canon_status: DRAFT    # DRAFT | AUTHORITATIVE | SUPERSEDED | STUB
-aliases: []             # recommended, not enforced
-gm_aliases: []          # optional — secret names; resolve links, never published
-withheld: false         # optional — true: this note's own name is a secret
-tags: []                # recommended, not enforced
-source_document: ""     # recommended, not enforced
-campaign: ""            # recommended, not enforced
-first_appearance: ""    # recommended, not enforced — link to scene or session
----
-```
 
 ### Relationships Block
 
@@ -254,74 +200,30 @@ Status` → Open threads and in the Session Plan's `## Active
 Threads`, in the Thread Tracker format in
 `ttrpg-expert/continuity-engine.md`.
 
-Attribute names as each type has used them. Where a name differs
-from `## Type-Specific Fields` below (e.g. `factionType` vs
-`faction_type`), follow the vault's `_Templates/` file for that
-type.
+A type's fields: `schema_rules.py show <type>`. Older vaults spell
+some in camelCase (`factionType` for `faction_type`); follow the
+vault's `_Templates/` file for that type. What some fields hold:
 
-- **NPC** — occupation, age (number), gender, nationality,
-  characteristics (object: system stats), skills (array),
-  motivations (array), secrets (hidden information), portrait
-- **Location** — locationType (building, outdoor…), address,
-  size, atmosphere, inhabitants (array), points_of_interest
-  (array), secrets, portrait (establishing shot)
-- **Item** — itemType (weapon, book, artifact…), value
-  (worth/rarity), origin (provenance), properties (object: special
-  abilities), currentHolder, portrait
-- **Faction** — factionType, goals (array), resources, leadership,
-  territory, tier (number, FitD), currentPlan (active objective),
-  planProgress (clock value or stage), alliances (array),
-  recentActions (array: last 1-3 sessions), status (active /
-  weakened / destroyed / allied / dormant), portrait (logo or HQ),
-  part_of (optional wiki-link to parent organization,
-  `"[[Parent Org]]"`)
-- **Clue** — clueType (physical, testimonial…), foundAt, foundBy,
-  leads_to (array of wiki-links to the node(s) this clue reveals;
-  shared with Plan), reliability, discoveryState (object, per PC:
-  `{"PC": "Unknown/Rumoured/Observed/Investigated/Understood"}`)
-- **Creature** — creatureType, size, abilities (array),
-  weaknesses (array), sanityLoss (SAN loss on sight), stats
-  (object), portrait
-- **Organization** — orgType (university, company…), purpose,
-  size (member count), resources, notable_members (array),
-  portrait, part_of (optional wiki-link to parent organization)
-- **Event** — event_type, in_game_date, location (wiki-link),
-  participants (array: `[[Entity]] (role)`,
-  `[[Entity|Display]] (role)`, or plain text), outcome
-- **Plan** — plan_type (`arc`, `scene`, `investigation`,
-  `timeline`), chapter (`"[[Chapter_N_Overview]]"`), participants
-  and locations (wiki-link arrays), leads_to (wiki-link array; see
-  Not relationship predicates)
-- **Document** — docType (letter, journal, map…), author, date
-  (when written), content (the text), condition
-- **Adventure Brief** — scope (campaign / one-shot / few-shot),
-  sessions_estimated (number or range, e.g. "3-5"),
-  continuation_type (new / new-chapter / new-arc / time-jump /
-  prequel / parallel / new-pcs), adventure_shape (linear /
-  branching / hub-and-spoke / open-node / sandbox), system (game
-  system identifier or "undecided")
-- **Campaign Overview** — campaign, game_system, setting_year,
-  current_game_date, genre_tags (array), scope, status
-  (not_started / in_progress / paused / completed / abandoned),
-  sessions_played (number), last_session (wiki-link),
-  last_play_date (real-world ISO date), current_arc, arcs_planned
-  (number; 0 for sandbox), current_chapter (wiki-link),
-  chapters_planned (number: in current arc, or total), portrait.
-  session-wrapup auto-updates current_game_date, sessions_played,
-  last_session and last_play_date.
-- **Heritage** — lifespan_range ([min, max] age), maturity_age,
-  average_height, notable_traits (array), portrait
+- **Clue** — `discoveryState` is per PC:
+  `{"PC": "Unknown/Rumoured/Observed/Investigated/Understood"}`;
+  `leads_to` is the node(s) the clue reveals, as on a Plan.
+- **Faction** — `tier` is FitD's; `currentPlan` the active objective;
+  `planProgress` a clock value or stage; `recentActions` the last 1-3
+  sessions.
+- **Event** — each of `participants` is `[[Entity]] (role)`,
+  `[[Entity|Display]] (role)` or plain text.
+- **Adventure Brief** — `sessions_estimated` is a number or a range
+  ("3-5"); `system` a game system id or "undecided".
+- **Campaign Overview** — `last_play_date` is a real-world ISO date;
+  `arcs_planned` is 0 for a sandbox; `chapters_planned` counts the
+  current arc's, or all. session-wrapup updates `current_game_date`,
+  `sessions_played`, `last_session` and `last_play_date`.
 - **World Domain** — one domain's world rules, in `_World/`; a
-  structural file, not a graph entity. domain (e.g. `heritages`,
-  `geography-climate`), status (active / stub / inactive), summary
-  (one line), rules (array; each rule has `id` for flag tracking,
-  `rule` in plain words, and `check` — a structured object:
-  field comparisons, allowed values, ranges)
-- **World Flags** — the three-state flag tracker, one per campaign
-  at `_World/_flags.md`; structural, not a graph entity.
-  last_reviewed (date)
-
-`portrait` is always optional: a path under `_attachments/`.
+  structural file, not a graph entity. Each of `rules` has `id` (flag
+  tracking), `rule` (plain words) and `check` (a structured object:
+  field comparisons, allowed values, ranges).
+- **World Flags** — the three-state flag tracker, one per campaign at
+  `_World/_flags.md`; structural, not a graph entity.
 
 ## Narrative Element Schemas
 
@@ -333,26 +235,6 @@ sort_order: 1
 title: "Chapter Title"
 campaign: ""
 overview: ""
-tags: []
----
-```
-
-**Session:**
-```yaml
----
-type: session
-session_number: 1
-chapter: "[[Chapter 1 - Title]]"
-campaign: ""
-play_date: null           # Real-world date session was played, YYYY-MM-DD
-in_game_date: null        # In-game date(s) — string or array
-status: planned           # planned | prepped | played | wrap-up | reviewed
-stage: outline            # outline | draft | ready | in_play | wrap_up
-prep_notes: ""
-actual_notes: ""
-play_notes: ""
-scenes:                   # Ordered list of scene links
-  - "[[Scene Title]]"
 tags: []
 ---
 ```

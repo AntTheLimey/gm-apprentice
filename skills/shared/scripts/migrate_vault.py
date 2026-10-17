@@ -16,6 +16,7 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           cells, edit_frontmatter, plugin_tool, stopped,
                           write_text_atomic)
 from schema_rules import system_id as _system_id
+from schema_rules import TEMPLATE_NAMES
 from schema_rules import tone_families, without_generated_markers
 from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
                          player_section_key, wrapup_filename_findings)
@@ -30,26 +31,6 @@ TEMPLATES = SHARED / "templates"
 HISTORY = SHARED / "template-history.json"
 CONFIG = "_meta/vault-config.md"
 
-# shared/templates name -> _Templates name: the one definition.
-TEMPLATE_NAMES = {
-    "npc.md": "_Template_NPC.md",
-    "location.md": "_Template_Location.md",
-    "item.md": "_Template_Item.md",
-    "creature.md": "_Template_Creature.md",
-    "organization.md": "_Template_Organization.md",
-    "faction.md": "_Template_Faction.md",
-    "event.md": "_Template_Event.md",
-    "clue.md": "_Template_Clue.md",
-    "document.md": "_Template_Document.md",
-    "heritage.md": "_Template_Heritage.md",
-    "world-domain.md": "_Template_World_Domain.md",
-    "plan.md": "_Template_Plan.md",
-    "campaign-overview.md": "_Template_Campaign_Overview.md",
-    "session.md": "_Template_Session.md",
-    "session-plan.md": "_Template_Session_Plan.md",
-    "session-wrap.md": "_Template_Session_WrapUp.md",
-    "character-story.md": "character-story.md",
-}
 STAT_BLOCK_RE = re.compile(r"^\{STAT BLOCK:.*?\}[ \t]*$", re.M | re.S)
 GENERIC_BLOCK = "### Stats\n\n{System stat block.}"
 

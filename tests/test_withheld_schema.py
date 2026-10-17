@@ -94,7 +94,7 @@ class WithheldTemplateTests(unittest.TestCase):
     def test_entity_schema_documents_the_flag(self):
         text = (ROOT / "skills" / "shared" / "entity-schema.md").read_text(encoding="utf-8")
         self.assertIn("`withheld`", text)
-        self.assertIn("withheld: false", text)
+        self.assertIn("Write `true` or `false`", text)
 
 
 if __name__ == "__main__":
