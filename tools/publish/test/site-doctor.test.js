@@ -448,6 +448,22 @@ describe('doctor --site', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  it('counts a wrap-up-status session as played and any wrap-up spelling as a recap', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-recap-wrapup-'));
+    write(vault, 'Sessions/Session_1_Wrap.md', '---\ntype: session-wrap-up\n---\n\nWhat happened.\n');
+    write(vault, 'Sessions/Session_1.md', '---\ntype: session\nstatus: wrap-up\n---\n\nIt happened.\n');
+    const { configPath } = siteFor(vault, { folderMap: { Sessions: 'sessions' } });
+    const c = capture();
+    await runSiteDoctor({ configPath, json: true }, c.deps);
+    const payload = JSON.parse(c.out.join(''));
+    const finding = payload.findings.find(f => f.code === 'RECAP_INCOMPLETE');
+    assert.ok(finding, JSON.stringify(payload.findings));
+    assert.strictEqual(finding.path, 'Sessions/Session_1_Wrap.md');
+    assert.match(finding.detail, /no published chapter page/);
+    assert.doesNotMatch(finding.detail, /no published session/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('caps the untyped rows at 20 and says how many more there are', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-many-'));
     for (let i = 1; i <= 25; i++) write(vault, `Characters/NPCs/Untyped${i}.md`, '---\nname: x\n---\n');

@@ -808,10 +808,6 @@ class ExcludeListTests(unittest.TestCase):
         self.assertEqual((check.release, check.band, check.asks_site),
                          ("1.10.47", 2, True))
 
-    def test_the_migrations_table_has_its_row(self):
-        text = (Path(ms.__file__).parent.parent / "migrations.md").read_text(encoding="utf-8")
-        self.assertRegex(text, r"(?m)^\| 1\.10\.47 \|.*`exclude-lists`")
-
 
 @unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
                      or (shutil.which("node") and (

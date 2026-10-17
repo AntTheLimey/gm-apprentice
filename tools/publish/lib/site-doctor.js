@@ -24,7 +24,7 @@ const {
 } = require('./processor');
 const { CODES: NOTE_FAULT_CODES, PAGES_SHOWN } = require('./note-faults');
 const { getsNoPage } = require('./previews');
-const { pairHubs } = require('./session-hub');
+const { pairHubs, isWrapUp, isPlayedSession } = require('./session-hub');
 const { canonicalNfc } = require('./unicode');
 const { wikilinkRe } = require('./wikilink');
 const { pinnedVersionOf, runUpdatePin } = require('./update-pin');
@@ -505,13 +505,12 @@ async function runSiteDoctor(options, deps) {
 
   // --- the recap chain a player follows -----------------------------------
   const typeOf = (page) => page.frontmatter && page.frontmatter.type;
-  const wraps = published.filter((p) => typeOf(p) === 'session_wrap');
-  const playedSessions = published.filter((p) => typeOf(p) === 'session'
-    && ['played', 'reviewed'].includes(String((p.frontmatter && p.frontmatter.status) || '').toLowerCase()));
+  const wraps = published.filter(isWrapUp);
+  const playedSessions = published.filter((p) => isPlayedSession(p.frontmatter));
   const chapters = published.filter((p) => typeOf(p) === 'chapter');
   if (wraps.length > 0 && (playedSessions.length === 0 || chapters.length === 0)) {
     const missing = [
-      playedSessions.length === 0 ? 'no published session with status played/reviewed' : null,
+      playedSessions.length === 0 ? 'no published session with status played, wrap-up or reviewed' : null,
       chapters.length === 0 ? 'no published chapter page' : null,
     ].filter(Boolean).join(' and ');
     for (const wrap of wraps) {

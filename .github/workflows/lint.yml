@@ -83,13 +83,13 @@ jobs:
             exit 1
           fi
 
-      - name: Migration version matches plugin version
+      - name: CHANGELOG has an entry for the plugin version
         run: |
           PLUGIN_VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
-          MIGRATION_VERSION=$(grep -m1 'current_version:' \
-            skills/shared/migrations.md | sed 's/.*"\(.*\)".*/\1/')
-          if [ "$PLUGIN_VERSION" != "$MIGRATION_VERSION" ]; then
-            echo "::error::plugin.json ($PLUGIN_VERSION) != migrations.md ($MIGRATION_VERSION) — git installs stamp vaults with the stale value"
+          # A release heading at the start of a line, not the same text in an example.
+          PATTERN="^## \[${PLUGIN_VERSION//./\\.}\]( |$)"
+          if ! grep -qE "$PATTERN" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [$PLUGIN_VERSION]' entry for the version in plugin.json"
             exit 1
           fi
 
@@ -192,18 +192,6 @@ jobs:
           if [ "$PR_VERSION" = "$MAIN_VERSION" ]; then
             echo "::warning::No version bump detected — no release will be created on merge"
             exit 1
-          fi
-
-      - name: Check changelog updated
-        continue-on-error: true
-        run: |
-          PR_VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
-          MAIN_VERSION=$(git show origin/main:.claude-plugin/plugin.json | jq -r '.version')
-          if [ "$PR_VERSION" != "$MAIN_VERSION" ]; then
-            if ! git diff origin/main -- CHANGELOG.md | grep -Eq "^\+## \[$PR_VERSION\]"; then
-              echo "::warning::Version bumped to $PR_VERSION but no CHANGELOG entry for this version"
-              exit 1
-            fi
           fi
 
       - name: Test build script

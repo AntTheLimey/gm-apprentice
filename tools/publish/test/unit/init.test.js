@@ -277,7 +277,7 @@ describe('init', () => {
         assert.strictEqual(pub.output, undefined);
         assert.strictEqual(pub.folder_map['Chapters'], 'chapters');
         assert.strictEqual(tree.vault.attachments, '_attachments');
-        assert.deepStrictEqual(pub.hide.folders, ['_meta', '_Templates', '_resources']);
+        assert.deepStrictEqual(pub.hide.folders, entry('player_site.hide.folders').default);
         assert.strictEqual(pub.hide.callouts, true);
         // The built-in lists are written out so the GM sees them (#294): the same lists the build falls back to.
         assert.deepStrictEqual(pub.hide.sections, entry('player_site.hide.sections').default);

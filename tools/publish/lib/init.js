@@ -41,10 +41,10 @@ function defaultCampaignSettings(siteTitle, tagline, siteDir) {
     'player_site.title': siteTitle,
     'player_site.folder_map': DEFAULT_FOLDER_MAP,
     'vault.attachments': '_attachments',
-    'player_site.hide.folders': ['_meta', '_Templates', '_resources'],
     // The built-in lists, written out so the GM sees them and edits them knowingly: a list in
     // the vault replaces the built-in one, so an entry added to an invisible default would drop
     // the rest. One source: the lists the build falls back to when the vault has none.
+    'player_site.hide.folders': [...entry('player_site.hide.folders').default],
     'player_site.hide.sections': [...entry('player_site.hide.sections').default],
     'player_site.hide.fields': [...entry('player_site.hide.fields').default],
     'player_site.hide.callouts': true,

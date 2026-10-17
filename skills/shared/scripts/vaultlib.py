@@ -2264,17 +2264,13 @@ def parse_version(text: str) -> tuple[int, ...]:
 def plugin_version() -> tuple[str, str] | None:
     """(version, source) for the installed plugin, or None.
 
-    `.claude-plugin/plugin.json` is authoritative. `migrations.md` is the
-    fallback because it carries the same version (CI enforces the match),
-    so a skill zip that ships without the plugin manifest still knows its
-    own version.
+    `.claude-plugin/plugin.json` is authoritative. A skill zip ships
+    without it, so the zip build writes the same version into
+    `shared/VERSION`, and that is the fallback.
 
     A *missing* manifest is the ordinary skill-zip case and falls through
     quietly. A manifest that exists but cannot be parsed warns on stderr
-    first: that is a broken install, and a mid-edit version bump can leave
-    `migrations.md` behind the working version, so falling through
-    silently could report `AHEAD` on a current vault and send the GM off
-    to update a plugin that is already up to date.
+    first: that is a broken install, not a zip.
     """
     here = Path(__file__).resolve()
     manifest = here.parents[3] / ".claude-plugin" / "plugin.json"
@@ -2283,21 +2279,19 @@ def plugin_version() -> tuple[str, str] | None:
         if version:
             return str(version), ".claude-plugin/plugin.json"
         print(f"warning: {manifest} has an empty version — falling back to "
-              f"shared/migrations.md", file=sys.stderr)
+              f"shared/VERSION", file=sys.stderr)
     except FileNotFoundError:
         pass
     except (OSError, ValueError, KeyError, TypeError) as e:
         print(f"warning: unusable {manifest} ({e.__class__.__name__}: {e}) "
-              f"— falling back to shared/migrations.md", file=sys.stderr)
-    migrations = here.parents[1] / "migrations.md"
+              f"— falling back to shared/VERSION", file=sys.stderr)
+    stamp = here.parents[1] / "VERSION"
     try:
-        fm = extract_frontmatter(
-            migrations.read_text(encoding="utf-8")) or {}
+        current = stamp.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return None
     except OSError as e:
-        print(f"warning: unreadable {migrations}: {e} — the plugin version "
+        print(f"warning: unreadable {stamp}: {e} — the plugin version "
               f"is unknown", file=sys.stderr)
         return None
-    current = fm.get("current_version")
-    if isinstance(current, str) and current:
-        return current, "shared/migrations.md"
-    return None
+    return (current, "shared/VERSION") if current else None

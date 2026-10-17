@@ -21,6 +21,15 @@ const { canonicalNfc } = require('./unicode');
 
 const WRAP_UP_TYPES = new Set(['session-wrap-up', 'session_wrap', 'session-wrapup']);
 
+// A session counts as played once it has been run, including the `wrap-up` state between the
+// wrap-up and the review, so a freshly wrapped session counts before it is reviewed.
+const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
+
+function isPlayedSession(frontmatter) {
+  return !!(frontmatter && frontmatter.type === 'session'
+    && PLAYED_SESSION_STATUSES.has(String(frontmatter.status || '').toLowerCase()));
+}
+
 function isWrapUp(page) {
   return !!(page && page.frontmatter && WRAP_UP_TYPES.has(page.frontmatter.type));
 }
@@ -199,4 +208,4 @@ function isLinkedWrapUp(wrapUp, pairs) {
   return !!linkTarget(wrapUp && wrapUp.frontmatter && wrapUp.frontmatter.session);
 }
 
-module.exports = { suppressHubBody, publishedWrapUpFor, pairHubs, isLinkedWrapUp, WRAP_UP_TYPES, isWrapUp };
+module.exports = { suppressHubBody, publishedWrapUpFor, pairHubs, isLinkedWrapUp, WRAP_UP_TYPES, isWrapUp, PLAYED_SESSION_STATUSES, isPlayedSession };

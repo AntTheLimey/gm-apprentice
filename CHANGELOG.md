@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.69] — 2026-10-17
+
+Housekeeping from an architecture sweep: the plugin version lives in one
+place, each publish tool release carries the CHANGELOG entries behind it,
+and two rules that had drifted apart in the tool agree again.
+
+### Added
+
+- Each publish tool release (`publish-vX.Y.Z`) now carries the CHANGELOG
+  entry of every plugin release its changes shipped in, under the list of
+  changes, so a project that pins the tool reads what changed on the
+  release itself (`scripts/publish_release_notes.py`).
+- CI fails when `CHANGELOG.md` has no `## [version]` entry for the version
+  in `plugin.json`.
+
+### Changed
+
+- The plugin version lives only in `.claude-plugin/plugin.json`. A skill
+  zip, which has no `plugin.json`, carries it as `shared/VERSION`, written
+  by the zip build into the zip and never into the source tree.
+- The site doctor counts a session with status `wrap-up` as played, as
+  the build does, and reads every spelling of the wrap-up type
+  (`session_wrap`, `session-wrap-up`, `session-wrapup`). Before, a
+  `wrap-up` session or a `session-wrap-up` note could make its recap
+  check say the opposite of the build. One rule in `session-hub.js` now
+  says what a played session is, and the build, the doctor, `manifest
+  publish-played` and recency all use it.
+- A new site's hidden folders come from the settings list's own default
+  (`_meta`, `_Templates`), as its hidden sections and fields already do.
+  It used to add `_resources`, a folder nothing creates. Existing vaults
+  keep what they have.
+- `scripts/srd-monster-enricher.py` says what it builds and how to run
+  it, and a rerun on an unchanged SRD now gives the five monster files
+  byte for byte.
+- The skill zips leave out Python's `__pycache__` folders.
+- The publish tool is 1.34.1.
+
+### Removed
+
+- `skills/shared/migrations.md`. Nothing read it to run an update: each
+  update step is code with its release, and the CHANGELOG says what a
+  release changes in a vault. Its version line, the CI check that kept it
+  equal to `plugin.json` and the hand bump are gone with it.
+
+---
+
 ## [1.10.68] — 2026-10-17
 
 The tone tidy stops reading relationships with its own line reader and asks

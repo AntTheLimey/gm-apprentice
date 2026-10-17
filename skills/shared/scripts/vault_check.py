@@ -874,7 +874,7 @@ def check_version(vault: Path) -> tuple[list[str], int]:
     found = plugin_version()
     if found is None:
         return ([("ERROR\t(plugin)\tcannot determine the plugin version "
-                  "(no .claude-plugin/plugin.json or shared/migrations.md)")],
+                  "(no .claude-plugin/plugin.json or shared/VERSION)")],
                 1)
     plugin, _source = found
     if not (vault / "_meta").is_dir():
