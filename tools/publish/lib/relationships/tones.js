@@ -128,4 +128,4 @@ function planTones(model, { vaultPath, sets, skip, readBack = openText } = {}) {
   return { changes, kept, texts, originals };
 }
 
-module.exports = { listTones, planTones, parseSets };
+module.exports = { listTones, planTones, parseSets, skipped };

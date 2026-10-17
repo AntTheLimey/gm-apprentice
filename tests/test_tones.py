@@ -124,6 +124,21 @@ class VaultCase(unittest.TestCase):
 
 
 class ReportTests(VaultCase):
+    def test_a_note_whose_frontmatter_does_not_read_is_named(self):
+        self.put("NPCs/A.md", note("    tone: Cordial"))
+        self.put("NPCs/B.md", "---\ntype: npc\nrelationships: [unclosed\n"
+                 "    tone: grumpy\n---\n")
+        code, out, _err = self.run_main()
+        self.assertEqual(code, 0)
+        self.assertNotIn("grumpy", out)
+        self.assertTrue(out.rstrip("\n").endswith(
+            "# 1 note not read (the frontmatter does not read; "
+            "campaign-qa's Graph Health names the fault): NPCs/B.md"), out)
+
+    def test_a_tool_that_cannot_answer_is_a_step_failure_for_the_update(self):
+        import migrate_core
+        self.assertTrue(issubclass(tones.TonesError, migrate_core.StepFailed))
+
     def test_report(self):
         self.put("NPCs/A.md", note("    tone: warm", "    tone: Cordial",
                                    "    tone: cordial"))
@@ -269,7 +284,10 @@ class FixTests(VaultCase):
         p = tones.plan_fix(self.vault, near=True, sets={})
         self.assertEqual([(c.lineno, c.before, c.after) for c in p.changes],
                          [(10, "dread", "ominous")])
-        self.assertEqual(p.kept, [("NPCs/A.md", 6, "dread")])
+        self.assertEqual(p.kept, [("NPCs/A.md", 6, "dread",
+                                   "not a plain tone line")])
+        self.assertIn("KEPT\tNPCs/A.md:6\tdread\tnot a plain tone line; "
+                      "edit the note", tones.rows(p))
         tones.apply(p)
         self.assertEqual(self.get("NPCs/A.md"), before.replace(
             "    tone: dread\n---", "    tone: ominous\n---"))

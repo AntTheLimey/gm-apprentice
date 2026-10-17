@@ -9,7 +9,7 @@ const { readVault } = require('./read');
 const { check, render } = require('./check');
 const { planFix, applyFix, renderPlan, removeLeftovers } = require('./fix');
 const { ontology } = require('../ontology');
-const { listTones, planTones, parseSets } = require('./tones');
+const { listTones, planTones, parseSets, skipped } = require('./tones');
 
 const VERBS = ['words', 'check', 'list', 'fix'];
 
@@ -27,8 +27,11 @@ async function runRelationships({ verb, vault, json, folder, files, newerThan, k
     const model = readVault(root, { folder, files: files && files.length ? files : undefined, newerThan: since });
     if (verb === 'list') {
       const rows = listTones(model, { skip });
-      if (json) console.log(JSON.stringify(rows, null, 2));
-      else console.log([`# tones: ${rows.length}`, ...rows.map((r) => `${r.rel}:${r.line}\t${r.tone}\t${r.target}\t${r.description.split(/\s+/).filter(Boolean).join(' ')}`)].join('\n'));
+      // The notes whose frontmatter does not read: their tones are not in the list, and the caller says so.
+      const unread = (model.faults || []).filter((f) => f.inScope && !skipped(f.rel, skip))
+        .map((f) => ({ rel: f.rel, message: String(f.message).replace(/\s+/g, ' ').trim() }));
+      if (json) console.log(JSON.stringify({ tones: rows, unread }, null, 2));
+      else console.log([`# tones: ${rows.length}${unread.length ? `  not read: ${unread.length}` : ''}`, ...rows.map((r) => `${r.rel}:${r.line}\t${r.tone}\t${r.target}\t${r.description.split(/\s+/).filter(Boolean).join(' ')}`)].join('\n'));
       return 0;
     }
     if (verb === 'fix' && (kinds || []).includes('tone')) {
@@ -42,6 +45,7 @@ async function runRelationships({ verb, vault, json, folder, files, newerThan, k
       return 0;
     }
     if (sets && sets.length) throw new Error('--set goes with fix --kind tone');
+    if (verb === 'fix' && skip && skip.length) throw new Error('--skip goes with list and fix --kind tone');
     const findings = check(model, ontology, { vaultPath: root });
     if (verb === 'fix') {
       const FIXABLE = ['off-vocabulary', 'mirrored', 'bidirectional', 'place-missing-tie', 'place-missing-field'];

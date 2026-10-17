@@ -19,7 +19,9 @@ stray word.
 
 When there are ASK rows, three `#` lines after them give the listed
 words by family, for the GM to pick from. Notes under `_QA`, `_archive`,
-`_Templates` and `_inbox` are not read.
+`_Templates` and `_inbox` are not read. A note whose frontmatter does not
+read has no tones in the report: a last `#` line names it (`uses` ends
+with the same line).
 
 `uses` prints every use of a stray word, one tab-separated row each,
 and writes nothing:
@@ -68,6 +70,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from migrate_core import StepFailed
 from schema_rules import (
     tone_families,
     tone_key,
@@ -75,12 +78,13 @@ from schema_rules import (
 )
 from vaultlib import (UNCHECKED_DIRS, PublishToolUnavailable,
                       SettingsUnavailable, extract_frontmatter,
-                      is_unchecked_source, run_relationships, settings,
-                      vault_files)
+                      run_relationships, settings)
 
 
-class TonesError(Exception):
-    """A fix refused or failed. The message is one line."""
+class TonesError(StepFailed):
+    """A fix refused or failed, or the tool could not be asked. The message
+    is one line. A StepFailed, so the update reports it as the step's and
+    goes on."""
 
 
 @dataclass
@@ -103,10 +107,39 @@ def _ask(vault: Path, args: list[str]) -> Any:
         raise TonesError(str(e)) from e
 
 
+def _listed(vault: Path) -> dict[str, Any]:
+    """The tool's list: `tones` (one row per tone) and `unread` (the notes
+    whose frontmatter does not read, so their tones are not in it)."""
+    answer = _ask(vault, ["list"])
+    if not (isinstance(answer, dict) and isinstance(answer.get("tones"), list)
+            and isinstance(answer.get("unread"), list)):
+        raise TonesError("the publish tool's tone list was not what was "
+                         "expected")
+    return answer
+
+
+def survey_and_unread(vault: Path) -> tuple[list[Use], list[str]]:
+    """Every tone on every relationship of every checked note, and the
+    notes that could not be read."""
+    answer = _listed(vault)
+    return ([Use(r["rel"], r["line"], r["tone"], r["target"],
+                 r["description"]) for r in answer["tones"]],
+            sorted(u["rel"] for u in answer["unread"]))
+
+
 def survey(vault: Path) -> list[Use]:
     """Every tone on every relationship of every checked note."""
-    return [Use(r["rel"], r["line"], r["tone"], r["target"],
-                r["description"]) for r in _ask(vault, ["list"])]
+    return survey_and_unread(vault)[0]
+
+
+def unread_line(unread: list[str]) -> list[str]:
+    """One `#` line naming the notes whose tones were not read, or none."""
+    if not unread:
+        return []
+    n = len(unread)
+    return [f"# {n} note{'' if n == 1 else 's'} not read (the frontmatter "
+            f"does not read; campaign-qa's Graph Health names the fault): "
+            + "; ".join(unread[:3]) + (f"; +{n - 3} more" if n > 3 else "")]
 
 
 def published_notes(vault: Path) -> set[str] | None:
@@ -223,7 +256,7 @@ def shown_edges(vault: Path, published: set[str]
     if _campaign_hides_relationships(vault):
         return
     hidden: dict[str, bool] = {}
-    for edge in _ask(vault, ["list"]):
+    for edge in _listed(vault)["tones"]:
         rel = edge["rel"]
         if (edge["gmOnly"] or not site_family(edge["tone"])
                 or unicodedata.normalize("NFC", rel) not in published):
@@ -277,7 +310,7 @@ class Plan:
     # The tool's answer: the changes it makes (or would make), the ties it
     # left as written, and the notes it writes.
     changes: list[Change] = field(default_factory=list)
-    kept: list[tuple[str, int, str]] = field(default_factory=list)
+    kept: list[tuple[str, int, str, str]] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
     # The rewrites asked of the tool, as `--set OLD=NEW` arguments.
     sets: list[str] = field(default_factory=list)
@@ -318,7 +351,7 @@ def _run_fix(p: Plan, write: bool) -> None:
     try:
         p.changes = [Change(c["rel"], c["line"], c["before"], c["after"])
                      for c in answer["changes"]]
-        p.kept = [(k["rel"], k["line"], k["tone"])
+        p.kept = [(k["rel"], k["line"], k["tone"], k["why"])
                   for k in answer["kept"]]
         p.notes = list(answer["notes"])
     except (KeyError, TypeError) as e:
@@ -366,8 +399,8 @@ def rows(p: Plan, done: bool = False) -> list[str]:
     verb = "CHANGED" if done else "WOULD-CHANGE"
     out = [f"{verb}\t{c.rel}:{c.lineno}\t{c.before} -> {c.after}"
            for c in p.changes]
-    out += [f"KEPT\t{rel}:{lineno}\t{tone}\tnot a plain tone line; "
-            f"edit the note" for rel, lineno, tone in p.kept]
+    out += [f"KEPT\t{rel}:{lineno}\t{tone}\t{why}; edit the note"
+            for rel, lineno, tone, why in p.kept]
     return out + [f"# {len(p.changes)} tone(s) in {len(p.notes)} note(s)"
                   + (f", {len(p.kept)} left as written" if p.kept else "")]
 
@@ -414,10 +447,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     try:
         if args.command is None:
-            print("\n".join(report_lines(survey(args.vault))))
+            uses, unread = survey_and_unread(args.vault)
+            print("\n".join([*report_lines(uses), *unread_line(unread)]))
             return 0
         if args.command == "uses":
-            print("\n".join(use_lines(survey(args.vault), args.words)))
+            uses, unread = survey_and_unread(args.vault)
+            print("\n".join([*use_lines(uses, args.words),
+                             *unread_line(unread)]))
             return 0
         if args.command == "shown":
             published = published_notes(args.vault)

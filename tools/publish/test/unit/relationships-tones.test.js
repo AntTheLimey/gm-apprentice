@@ -104,9 +104,11 @@ test('list leaves out the folders it is told to skip, and those only at the top'
 test('list --json is one row per tone, and a scoped run lists only that note', () => {
   const dir = vault({ 'A.md': NOTE, 'B.md': NOTE });
   const all = JSON.parse(cli(dir, 'list', '--json').stdout);
-  assert.strictEqual(all.length, 4);
-  assert.deepStrictEqual(Object.keys(all[0]), ['rel', 'line', 'tone', 'target', 'description', 'gmOnly']);
-  assert.deepStrictEqual(JSON.parse(cli(dir, 'list', '--json', '--file', 'B.md').stdout).map((r) => r.rel), ['B.md', 'B.md']);
+  assert.deepStrictEqual(Object.keys(all), ['tones', 'unread']);
+  assert.strictEqual(all.tones.length, 4);
+  assert.deepStrictEqual(all.unread, []);
+  assert.deepStrictEqual(Object.keys(all.tones[0]), ['rel', 'line', 'tone', 'target', 'description', 'gmOnly']);
+  assert.deepStrictEqual(JSON.parse(cli(dir, 'list', '--json', '--file', 'B.md').stdout).tones.map((r) => r.rel), ['B.md', 'B.md']);
   assert.match(cli(dir, 'list').stdout, /^# tones: 4\nA\.md:7\tCordial\t\[\[A\]\]\ttone: dread a line of prose\n/);
 });
 
@@ -192,4 +194,19 @@ test('the command line: preview, write, a word that starts with a dash, and the 
   assert.match(wrong.stderr, /relationships check does not take --set/);
   const stray = cli(dir, 'fix', '--set', 'a=tense');
   assert.match(stray.stderr, /--set goes with fix --kind tone/);
+});
+
+test('list names the notes whose frontmatter does not read, except in a skipped folder', () => {
+  const broken = '---\ntype: npc\nrelationships: [unclosed\n---\n';
+  const dir = vault({ 'A.md': NOTE, 'B.md': broken, '_QA/C.md': broken });
+  const all = JSON.parse(cli(dir, 'list', '--json', '--skip', '_QA').stdout);
+  assert.deepStrictEqual(all.unread.map((u) => u.rel), ['B.md']);
+  assert.match(cli(dir, 'list', '--skip', '_QA').stdout, /^# tones: 2  not read: 1\n/);
+});
+
+test('fix --skip without --kind tone is refused', () => {
+  const dir = vault({ 'A.md': NOTE });
+  const r = cli(dir, 'fix', '--skip', '_QA');
+  assert.notStrictEqual(r.status, 0);
+  assert.match(r.stderr, /--skip goes with list and fix --kind tone/);
 });

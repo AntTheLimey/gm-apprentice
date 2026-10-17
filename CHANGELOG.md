@@ -17,7 +17,9 @@ the publish tool, which reads every note with the real YAML parser.
 - `gm-apprentice-publish relationships list` prints every tone on a
   note's own relationships: the note and line, the tone as written, the
   target as written and the description. `--json` adds whether the tie is
-  `gm_only`. `--skip <folder>` leaves out a top-level folder.
+  `gm_only`, and names the notes whose frontmatter does not read (their
+  tones are not in the list). `--skip <folder>` leaves out a top-level
+  folder.
 - `gm-apprentice-publish relationships fix --kind tone --set OLD=NEW`
   rewrites a tone word. It keeps the quotes, the spacing, a trailing
   comment and the line endings, lists a tone it cannot edit in place (a
@@ -34,7 +36,12 @@ the publish tool, which reads every note with the real YAML parser.
   note with a byte order mark is read (the Python reader skipped it), a tie
   written on one line in braces is read, and a note whose frontmatter does
   not parse is skipped whole (`relationships check` reports it) instead of
-  being read as far as a line pattern could.
+  being read as far as a line pattern could. The tone report and `uses`
+  end with a line naming such notes, so a stray in one is not missed
+  silently.
+- A tone the fix leaves as written says why, in the tool's words. When
+  the tool cannot be asked, the update reports the tone step as failed
+  and goes on with the rest, instead of stopping.
 - The publish tool is 1.34.0.
 
 ### Removed

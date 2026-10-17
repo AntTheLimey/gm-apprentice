@@ -1077,7 +1077,7 @@ def find_tone_words(vault: Path) -> list[Item]:
     """1.10.44: a relationship's tone is one of the listed words. Offers
     the rewrites a rule gives (cordial -> friendly). A word with no rule
     is campaign-qa's to ask about and is never touched here."""
-    import tones    # it imports migrate_core, as this module does
+    import tones    # its refusals are StepFailed, which the update reports
 
     report = tones.report_lines(tones.survey(vault))
     near = [r.split("\t") for r in report if r.startswith("NEAR\t")]
@@ -1119,9 +1119,8 @@ def find_tone_words(vault: Path) -> list[Item]:
             raise StepFailed(str(e)) from e
         return [*(f"{c.rel}:{c.lineno}: {c.before} -> {c.after}"
                   for c in p.changes),
-                *(f"{rel}:{lineno}: {tone} left as written "
-                  f"(not a plain tone line)"
-                  for rel, lineno, tone in p.kept)]
+                *(f"{rel}:{lineno}: {tone} left as written ({why})"
+                  for rel, lineno, tone, why in p.kept)]
 
     return [Item("tone-words", CHOICE,
                  [head, *(f"{w} -> {to} ({n})" for _, w, to, n in near)],

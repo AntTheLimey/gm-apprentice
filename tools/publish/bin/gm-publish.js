@@ -170,8 +170,9 @@ vocabulary are listed on one line.
   relationships check        Check every relationship rule; prints '# count: N' then one row per finding
                              (LEVEL<TAB>note:line<TAB>message), sorted by note then line
   relationships list         Every tone on a note's own relationships, one row each: note:line of the tone key, the tone as
-                             written, the target as written, the description on one line. --json gives { rel, line, tone, target,
-                             description, gmOnly } for each
+                             written, the target as written, the description on one line; the header counts the notes whose
+                             frontmatter does not read. --json gives { tones: [{ rel, line, tone, target, description, gmOnly }],
+                             unread: [{ rel, message }] }
   relationships fix          The certain repairs. Without --write it lists them (WOULD-CHANGE and KEEP rows); with
                              --write it makes them in every note at once or in none (CHANGED rows). A tie it cannot move
                              or edit safely is a KEEP row with the reason.
