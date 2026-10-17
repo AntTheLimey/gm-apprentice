@@ -60,25 +60,23 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 import unicodedata
 from collections import Counter
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
-from migrate_core import StepFailed, write_all_or_none
 from schema_rules import (
-    RelationshipEdge,
-    iter_relationship_edges,
-    iter_relationship_tones,
     tone_families,
     tone_key,
     tone_proposal,
 )
-from vaultlib import (SettingsUnavailable, extract_frontmatter,
-                      is_unchecked_source, settings, vault_files)
+from vaultlib import (UNCHECKED_DIRS, PublishToolUnavailable,
+                      SettingsUnavailable, extract_frontmatter,
+                      is_unchecked_source, run_relationships, settings,
+                      vault_files)
 
 
 class TonesError(Exception):
@@ -94,22 +92,21 @@ class Use:
     description: str = ""   # the edge's description, on one line
 
 
+def _ask(vault: Path, args: list[str]) -> Any:
+    """Ask the publish tool's relationships reader (the one parser of a
+    note's `relationships:` block), keeping out the folders the tone tidy
+    has never read. Its refusal or silence is one TonesError line."""
+    skip = [a for d in UNCHECKED_DIRS for a in ("--skip", d)]
+    try:
+        return run_relationships(vault, [*args, *skip])
+    except PublishToolUnavailable as e:
+        raise TonesError(str(e)) from e
+
+
 def survey(vault: Path) -> list[Use]:
     """Every tone on every relationship of every checked note."""
-    uses = []
-    for rel, text in vault_files(vault):
-        if is_unchecked_source(rel):
-            continue
-        found = list(iter_relationship_tones(text))
-        if not found:
-            continue
-        edges = {lineno: edge for edge in iter_relationship_edges(text)
-                 for lineno in edge.tone_lines}
-        for lineno, raw in found:
-            edge = edges.get(lineno)
-            uses.append(Use(rel, lineno, raw, edge.target if edge else "",
-                            edge.description if edge else ""))
-    return uses
+    return [Use(r["rel"], r["line"], r["tone"], r["target"],
+                r["description"]) for r in _ask(vault, ["list"])]
 
 
 def published_notes(vault: Path) -> set[str] | None:
@@ -208,24 +205,34 @@ def _campaign_hides_relationships(vault: Path) -> bool:
     return "relationships" not in json.dumps(s.get("player_site.hide.field_exceptions"))
 
 
+def _note_frontmatter(vault: Path, rel: str) -> dict[str, Any]:
+    try:
+        text = (vault / rel).read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+    return extract_frontmatter(text) or {}
+
+
 def shown_edges(vault: Path, published: set[str]
-                ) -> Iterator[tuple[str, RelationshipEdge]]:
-    """`(note, edge)` for every relationship a published note shows on the
-    site with a tone the site draws (a listed word)."""
+                ) -> Iterator[dict[str, Any]]:
+    """Every relationship a published note shows on the site with a tone
+    the site draws (a listed word), as the tool lists it (`rel`, `line`,
+    `tone`, `target`, `description`)."""
     # The vault's own exclude_fields; a list only the site file holds is not
     # known here, and its notes are listed (the safe side).
     if _campaign_hides_relationships(vault):
         return
-    for rel, text in vault_files(vault):
-        if (is_unchecked_source(rel)
+    hidden: dict[str, bool] = {}
+    for edge in _ask(vault, ["list"]):
+        rel = edge["rel"]
+        if (edge["gmOnly"] or not site_family(edge["tone"])
                 or unicodedata.normalize("NFC", rel) not in published):
             continue
-        fm = extract_frontmatter(text) or {}
-        if _hides_relationships(fm.get("publish_exclude_fields")):
-            continue
-        for edge in iter_relationship_edges(text):
-            if not edge.gm_only and site_family(edge.tone):
-                yield rel, edge
+        if rel not in hidden:
+            hidden[rel] = _hides_relationships(
+                _note_frontmatter(vault, rel).get("publish_exclude_fields"))
+        if not hidden[rel]:
+            yield edge
 
 
 def site_shows_a_tone(vault: Path) -> bool:
@@ -242,25 +249,18 @@ def shown_lines(vault: Path, published: set[str]) -> list[str]:
     """One row per hostile tie a published note shows, then a count."""
     rows: list[str] = []
     notes: set[str] = set()
-    for rel, edge in shown_edges(vault, published):
-        if site_family(edge.tone) != "negative":
+    for edge in shown_edges(vault, published):
+        if site_family(edge["tone"]) != "negative":
             continue
-        line = edge.tone_lines[0] if edge.tone_lines else 0
         rows.append("\t".join([
-            f"{rel}:{line}", edge.tone, _one_line(edge.target),
-            _one_line(edge.description, DESCRIPTION_CAP)]))
-        notes.add(rel)
+            f"{edge['rel']}:{edge['line']}", edge["tone"],
+            _one_line(edge["target"]),
+            _one_line(edge["description"], DESCRIPTION_CAP)]))
+        notes.add(edge["rel"])
     n, m = len(rows), len(notes)
     rows.append(f"# {n} hostile tie{'' if n == 1 else 's'} shown on "
                 f"{m} note{'' if m == 1 else 's'}")
     return rows
-
-
-# A tone line the fix may rewrite: the word is the whole value, bare or
-# in one pair of matching quotes, with nothing after it but a comment.
-TONE_LINE_RE = re.compile(
-    r"""^(?P<head>\s*(?:-\s+)?tone:[ \t]*)(?P<q>["']?)"""
-    r"""(?P<word>[^"'#\r\n]*?)(?P=q)(?P<tail>[ \t]*(?:\#[^\r\n]*)?\r?)$""")
 
 
 @dataclass
@@ -274,21 +274,13 @@ class Change:
 @dataclass
 class Plan:
     vault: Path
-    originals: dict[str, str] = field(default_factory=dict)
-    texts: dict[str, str] = field(default_factory=dict)
+    # The tool's answer: the changes it makes (or would make), the ties it
+    # left as written, and the notes it writes.
     changes: list[Change] = field(default_factory=list)
     kept: list[tuple[str, int, str]] = field(default_factory=list)
-
-
-def _read(vault: Path, rel: str) -> str | None:
-    """The note exactly as it is on disk, or None when it is not UTF-8."""
-    try:
-        return (vault / rel).read_bytes().decode("utf-8")
-    except UnicodeDecodeError:
-        return None
-    except OSError as e:
-        raise TonesError(f"{rel} cannot be read ({e.__class__.__name__}); "
-                         f"run it again") from e
+    notes: list[str] = field(default_factory=list)
+    # The rewrites asked of the tool, as `--set OLD=NEW` arguments.
+    sets: list[str] = field(default_factory=list)
 
 
 Sets = dict[str, str] | Iterable[tuple[str, str]]
@@ -314,6 +306,26 @@ def _checked_sets(sets: Sets, used: set[str]) -> dict[str, str]:
     return out
 
 
+def _run_fix(p: Plan, write: bool) -> None:
+    """Ask the tool for the rewrite (`fix --kind tone`), as a preview or
+    written to every note or none, and take its answer into the plan."""
+    args = ["fix", "--kind", "tone"]
+    for pair in p.sets:
+        args += ["--set", pair]
+    if write:
+        args.append("--write")
+    answer = _ask(p.vault, args)
+    try:
+        p.changes = [Change(c["rel"], c["line"], c["before"], c["after"])
+                     for c in answer["changes"]]
+        p.kept = [(k["rel"], k["line"], k["tone"])
+                  for k in answer["kept"]]
+        p.notes = list(answer["notes"])
+    except (KeyError, TypeError) as e:
+        raise TonesError("the publish tool's answer to the tone fix was not "
+                         "what was expected") from e
+
+
 def plan_fix(vault: Path, near: bool, sets: Sets,
              excepts: Iterable[str] = ()) -> Plan:
     """What `fix` would write. Changes nothing."""
@@ -334,55 +346,20 @@ def plan_fix(vault: Path, near: bool, sets: Sets,
         return sets.get(key) or (tone_proposal(raw)
                                  if near and key not in skip else None)
 
-    p = Plan(vault)
-    # The survey only says which notes hold a stray this run would change.
-    # Its line numbers are not used: it reads with universal newlines, which
-    # can number lines differently from the bytes this rewrites.
-    seen: dict[str, list[Use]] = {}
-    for u in uses:
-        if becomes(u.raw):
-            seen.setdefault(u.rel, []).append(u)
-    for rel, wanted in seen.items():
-        text = _read(vault, rel)
-        if text is None:
-            raise TonesError(f"{rel} is not UTF-8 text; fix the file, "
-                             f"then run it again")
-        # One text, one numbering: the tone lines are found in the same
-        # text that is split and rewritten.
-        lines = text.split("\n")
-        pending = Counter(u.raw for u in wanted)
-        for lineno, raw in iter_relationship_tones(text):
-            new = becomes(raw)
-            if not new:
-                continue
-            pending[raw] -= 1
-            m = (TONE_LINE_RE.match(lines[lineno - 1])
-                 if lineno <= len(lines) else None)
-            if not m or m.group("word").strip() != raw:
-                p.kept.append((rel, lineno, raw))
-                continue
-            lines[lineno - 1] = (f"{m.group('head')}{m.group('q')}{new}"
-                                 f"{m.group('q')}{m.group('tail')}")
-            p.changes.append(Change(rel, lineno, raw, new))
-        # A stray the survey saw but the strict reading did not (the
-        # frontmatter is not found in the exact text): listed, not rewritten.
-        for u in wanted:
-            if pending[u.raw] > 0:
-                pending[u.raw] -= 1
-                p.kept.append((rel, u.lineno, u.raw))
-        after = "\n".join(lines)
-        if after != text:
-            p.originals[rel], p.texts[rel] = text, after
+    # Each distinct word as written, with the listed word it becomes; the
+    # tool finds the lines, keeps the quotes and the comments, and refuses
+    # what it cannot edit in place.
+    wanted = {u.raw: new for u in uses if (new := becomes(u.raw))}
+    p = Plan(vault, sets=[f"{old}={new}" for old, new in wanted.items()])
+    if p.sets:
+        _run_fix(p, write=False)
     return p
 
 
 def apply(p: Plan) -> None:
     """Write every note of the plan, or leave the vault exactly as it was."""
-    try:
-        write_all_or_none(p.vault, p.originals, p.texts, read=_read,
-                          what="the tidy", holds="the new tones")
-    except StepFailed as e:
-        raise TonesError(str(e)) from e
+    if p.sets:
+        _run_fix(p, write=True)
 
 
 def rows(p: Plan, done: bool = False) -> list[str]:
@@ -391,7 +368,7 @@ def rows(p: Plan, done: bool = False) -> list[str]:
            for c in p.changes]
     out += [f"KEPT\t{rel}:{lineno}\t{tone}\tnot a plain tone line; "
             f"edit the note" for rel, lineno, tone in p.kept]
-    return out + [f"# {len(p.changes)} tone(s) in {len(p.texts)} note(s)"
+    return out + [f"# {len(p.changes)} tone(s) in {len(p.notes)} note(s)"
                   + (f", {len(p.kept)} left as written" if p.kept else "")]
 
 

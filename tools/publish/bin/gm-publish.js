@@ -39,7 +39,7 @@ Usage:
   gm-apprentice-publish update-pin [options] Repoint this site at the newest installed build tool
   gm-apprentice-publish manifest <cmd>       Compare the publish manifest with the vault, or update it
   gm-apprentice-publish leaks <cmd>          Check the built player site for hidden text (list, check, accept, prune)
-  gm-apprentice-publish relationships <cmd>  The relationship words, short (words); every relationship rule checked (check); the certain repairs (fix)
+  gm-apprentice-publish relationships <cmd>  The relationship words, short (words); every relationship rule checked (check); the tones listed (list); the certain repairs (fix)
   gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
   gm-apprentice-publish lines                Answer what publishes, for text on stdin (used by vault_check)
@@ -158,7 +158,8 @@ the GM.
   relationships: `
 gm-apprentice-publish relationships words [--vault <path>] [--json]
 gm-apprentice-publish relationships check [--vault <path>] [--folder <sub>] [--file <rel>]... [--newer-than <rel>] [--json]
-gm-apprentice-publish relationships fix [--vault <path>] [--folder <sub>] [--file <rel>]... [--newer-than <rel>] [--kind <kind>]... [--write] [--json]
+gm-apprentice-publish relationships list [--vault <path>] [--folder <sub>] [--file <rel>]... [--newer-than <rel>] [--skip <folder>]... [--json]
+gm-apprentice-publish relationships fix [--vault <path>] [--folder <sub>] [--file <rel>]... [--newer-than <rel>] [--kind <kind>]... [--set <OLD=NEW>]... [--skip <folder>]... [--write] [--json]
 
 Prints the relationship types (each with its reverse name), the tone words and the
 strength scale in a few lines. With --vault, a vault whose _meta/relationship-types.md
@@ -168,11 +169,18 @@ vocabulary are listed on one line.
   relationships words        Print the words
   relationships check        Check every relationship rule; prints '# count: N' then one row per finding
                              (LEVEL<TAB>note:line<TAB>message), sorted by note then line
+  relationships list         Every tone on a note's own relationships, one row each: note:line of the tone key, the tone as
+                             written, the target as written, the description on one line. --json gives { rel, line, tone, target,
+                             description, gmOnly } for each
   relationships fix          The certain repairs. Without --write it lists them (WOULD-CHANGE and KEEP rows); with
                              --write it makes them in every note at once or in none (CHANGED rows). A tie it cannot move
                              or edit safely is a KEEP row with the reason.
   --kind <kind>              fix: only this kind (off-vocabulary, mirrored, bidirectional, place-missing-tie,
                              place-missing-field); repeatable
+  --kind tone                fix: rewrite tone words instead; alone, with one or more --set. It keeps quotes, spacing, comments and
+                             line endings, and a tone it cannot edit in place (a block scalar, a tag) is a KEEP row
+  --set <OLD=NEW>            fix --kind tone: rewrite a tone written exactly OLD to the listed tone NEW (repeatable)
+  --skip <folder>            list, fix --kind tone: leave out the notes under this top-level folder (repeatable)
   --write                    fix: make the changes
   --vault <path>             The vault folder (reads _meta/relationship-types.md; default: .)
   --folder <sub>             check, fix: only notes under this folder
@@ -538,7 +546,8 @@ function parseSubcommandArgs(rest, allowedFlags, valueFlags = {}, repeatedFlags 
       if (!rest[i + 1] || rest[i + 1].startsWith('-')) return { error: '--config needs a path' };
       configPath = rest[i + 1]; i++;
     } else if (Object.prototype.hasOwnProperty.call(repeatedFlags, a)) {
-      if (!rest[i + 1] || rest[i + 1].startsWith('-')) return { error: `${a} needs a value` };
+      // A `--set` pair may start with a dash: the word before the `=` is a tone as written.
+      if (!rest[i + 1] || (rest[i + 1].startsWith('-') && a !== '--set')) return { error: `${a} needs a value` };
       flags[repeatedFlags[a]].push(rest[i + 1]); i++;
     } else if (Object.prototype.hasOwnProperty.call(valueFlags, a)) {
       if (!rest[i + 1] || rest[i + 1].startsWith('-')) return { error: `${a} needs a value` };
@@ -1061,7 +1070,7 @@ if (command === 'relationships') {
     args.slice(2),
     { '--json': 'json', '--write': 'write' },
     { '--vault': 'vault', '--folder': 'folder', '--newer-than': 'newerThan' },
-    { '--file': 'files', '--kind': 'kinds' },
+    { '--file': 'files', '--kind': 'kinds', '--set': 'sets', '--skip': 'skip' },
   );
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
@@ -1071,7 +1080,8 @@ if (command === 'relationships') {
   const TAKES = {
     words: { '--vault': 'vault', '--json': 'json' },
     check: { '--vault': 'vault', '--json': 'json', '--folder': 'folder', '--file': 'files', '--newer-than': 'newerThan' },
-    fix: { '--vault': 'vault', '--json': 'json', '--folder': 'folder', '--file': 'files', '--newer-than': 'newerThan', '--kind': 'kinds', '--write': 'write' },
+    list: { '--vault': 'vault', '--json': 'json', '--folder': 'folder', '--file': 'files', '--newer-than': 'newerThan', '--skip': 'skip' },
+    fix: { '--vault': 'vault', '--json': 'json', '--folder': 'folder', '--file': 'files', '--newer-than': 'newerThan', '--kind': 'kinds', '--set': 'sets', '--skip': 'skip', '--write': 'write' },
   };
   const ALL = { ...TAKES.fix };
   for (const [flag, key] of Object.entries(ALL)) {
@@ -1081,8 +1091,8 @@ if (command === 'relationships') {
       process.exit(1);
     }
   }
-  const { vault, json, folder, files, newerThan, kinds, write } = parsed.flags;
-  runRelationships({ verb, vault, json: !!json, folder, files, newerThan, kinds, write: !!write })
+  const { vault, json, folder, files, newerThan, kinds, write, sets, skip } = parsed.flags;
+  runRelationships({ verb, vault, json: !!json, folder, files, newerThan, kinds, write: !!write, sets, skip })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
   return;

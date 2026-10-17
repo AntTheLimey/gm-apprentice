@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.68] — 2026-10-17
+
+The tone tidy stops reading relationships with its own line reader and asks
+the publish tool, which reads every note with the real YAML parser.
+
+### Added
+
+- `gm-apprentice-publish relationships list` prints every tone on a
+  note's own relationships: the note and line, the tone as written, the
+  target as written and the description. `--json` adds whether the tie is
+  `gm_only`. `--skip <folder>` leaves out a top-level folder.
+- `gm-apprentice-publish relationships fix --kind tone --set OLD=NEW`
+  rewrites a tone word. It keeps the quotes, the spacing, a trailing
+  comment and the line endings, lists a tone it cannot edit in place (a
+  block scalar, a tag) as a KEEP row, and with `--write` changes every
+  note or none.
+
+### Changed
+
+- `tones.py` (the tone report, `uses`, `shown` and `fix`) asks those two
+  commands instead of reading the notes itself; its rows, options and exit
+  codes are as before. It now needs Node, like `vault_check.py
+  relationships`.
+- Because the real YAML reader is used, a few odd notes read differently: a
+  note with a byte order mark is read (the Python reader skipped it), a tie
+  written on one line in braces is read, and a note whose frontmatter does
+  not parse is skipped whole (`relationships check` reports it) instead of
+  being read as far as a line pattern could.
+- The publish tool is 1.34.0.
+
+### Removed
+
+- The Python line reader for relationships in `schema_rules.py`
+  (`iter_relationship_tones`, `iter_relationship_edges`,
+  `iter_relationship_predicates` and the patterns under them), about
+  9.7 KB. Nothing but `tones.py` and its tests used it.
+
+---
 ## [1.10.67] — 2026-10-17
 
 A GM can put the site online past the leak check on purpose, and can list
