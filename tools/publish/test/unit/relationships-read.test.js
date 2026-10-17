@@ -79,6 +79,23 @@ test('[[Name|Label]] and "[[Name]]" resolve to the same note, an alias too', () 
   assert.deepStrictEqual(edges.map((e) => e.target), ['Bob', 'Bob', 'Rob', 'Ghost']);
 });
 
+test('a target is read as the site reads it: one link with words names it, two link names none', () => {
+  const dir = vault({
+    'A.md': '---\ntype: npc\nrelationships:\n  - type: knows\n    target: "[[B]] (briefly)"\n  - type: knows\n    target: "[[B]] and [[C]]"\n  - type: knows\n    target: Plain words\n  - type: knows\n---\n',
+    'B.md': '---\ntype: npc\n---\n',
+    'C.md': '---\ntype: npc\n---\n',
+  });
+  const [one, two, plain, none] = noteOf(readVault(dir), 'A.md').edges;
+  assert.deepStrictEqual([one.target, one.targetRel, one.rawTarget], ['B', 'B.md', '[[B]] (briefly)']);
+  assert.deepStrictEqual([two.target, two.targetRel, two.rawTarget], ['', null, '[[B]] and [[C]]']);
+  assert.deepStrictEqual([plain.target, plain.targetRel], ['Plain words', null]);
+  assert.deepStrictEqual([none.target, none.targetRel, none.rawTarget], ['', null, '']);
+  // the same values through connections.js's own rule
+  const { targetRef } = require('../../lib/connections');
+  assert.strictEqual(targetRef(one.rawTarget).name, one.target);
+  assert.strictEqual(targetRef(two.rawTarget).links, 2);
+});
+
 test('the map form is read, in its flattened order, with form map', () => {
   const dir = vault({
     'A.md': '---\ntype: npc\nrelationships:\n  ally: ["[[B]]", "[[C]]"]\n  enemy_of:\n    - "[[D]]"\n---\n',

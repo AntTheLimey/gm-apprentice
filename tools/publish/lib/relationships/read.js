@@ -15,7 +15,10 @@
 //                                    note it names when the value is exactly one wiki-link to a
 //                                    note that exists, else null.
 //   Edge  { index, line, typeLine, type, target, targetRel, bidirectional, strength, tone,
-//           mobrpg, form }
+//           mobrpg, form, rawTarget }
+//
+// `target` is read by the site's rule (connections.js targetRef); where that names no note
+// it is '' (and `targetRel` null), and `rawTarget` keeps the text as written.
 //
 // `line` and `typeLine` are 1-based lines of the FILE (the opening `---` is line 1, so the
 // frontmatter starts at 2), the numbers `vault_check.py` prints. `typeLine` is the line of the
@@ -38,6 +41,7 @@ const { parseNote } = require('../frontmatter');
 const { buildLinkMap } = require('../scanner');
 const { canonicalNfc } = require('../unicode');
 const { wikilinkRe, parseWikilink } = require('../wikilink');
+const { targetRef } = require('../connections');
 
 const SKIP_DIRS = new Set(['_Templates', '_templates', '_inbox']);
 const FIELDS = ['parent_location', 'current_holder'];
@@ -77,14 +81,6 @@ const textOf = (node) => {
 function pairOf(map, name) {
   if (!YAML.isMap(map)) return null;
   return map.items.find((p) => YAML.isScalar(p.key) && String(p.key.value) === name) || null;
-}
-
-// The name a value links to, as written: the first wiki-link's target, else the text.
-function nameOf(value) {
-  const text = String(value);
-  const m = wikilinkRe('').exec(text);
-  if (m) return parseWikilink(m[1]).name.trim();
-  return text.replace(/\[\[|\]\]/g, '').trim();
 }
 
 // The name when the whole value is one wiki-link, else null.
@@ -174,11 +170,16 @@ function readVault(vaultPath, { files, folder, newerThan } = {}) {
     }
 
     const edge = (fieldsOf) => {
-      const target = fieldsOf.target === undefined ? '' : fieldsOf.target;
+      // The target is read by the site's own rule (connections.js targetRef). Where that rule
+      // names no note (two links, or nothing), `target` is '' and `rawTarget` keeps the text.
+      const rawTarget = fieldsOf.target === undefined ? '' : fieldsOf.target;
+      const ref = rawTarget.trim() ? targetRef(rawTarget) : { name: '', links: 0 };
+      const target = ref.links > 1 ? '' : ref.name;
       edges.push({
         ...fieldsOf,
-        target: nameOf(target),
-        targetRel: resolve(nameOf(target)),
+        target,
+        targetRel: target ? resolve(target) : null,
+        rawTarget,
         mobrpg: !!fieldsOf.mobrpg,
       });
     };
