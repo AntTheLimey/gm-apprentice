@@ -34,7 +34,7 @@ from pathlib import Path
 
 import index_build
 import migrate_vault as mv
-from schema_rules import without_generated_markers
+from schema_rules import SYSTEMS, TYPE_FOLDERS, system_id, without_generated_markers
 from migrate_core import StepFailed, write_text_atomic
 from vault_write import utf8_output
 from vaultlib import (PUBLISH_TOOL, SETTINGS_FILE, STAMP_KEY, STATE_FILE,
@@ -156,9 +156,6 @@ def state_text(version: str) -> str:
     return json.dumps({STAMP_KEY: version}, indent=2, ensure_ascii=False) + "\n"
 
 
-SYSTEMS = ("coc-7e", "coc-7e-regency", "gurps-4e", "dnd-5e-2024", "pf2e",
-           "fitd")
-
 # --- the skeleton: the one definition of what a vault is made of ------------
 
 PLAIN_FOLDERS = ("_meta", "_Campaign", "_Templates", "_World", "Chapters",
@@ -166,29 +163,8 @@ PLAIN_FOLDERS = ("_meta", "_Campaign", "_Templates", "_World", "Chapters",
 ATTACHMENT_SUBS = ("characters", "locations", "factions", "items",
                    "creatures", "events", "documents")
 # A type folder counts as present when the vault already keeps a note of one
-# of its types anywhere: that is how a renamed folder is recognised.
-TYPE_FOLDERS: dict[str, frozenset[str]] = {
-    "Characters/PCs": frozenset({"pc"}),
-    "Characters/NPCs": frozenset({"npc"}),
-    "Locations": frozenset({"location"}),
-    "Factions & Organizations": frozenset({
-        "faction", "organization", "government", "corporation", "cult",
-        "guild", "military", "criminal"}),
-    "Items & Artifacts": frozenset({
-        "item", "weapon", "armor", "vehicle", "treasure", "relic", "tool",
-        "consumable"}),
-    "Creatures": frozenset({
-        "creature", "beast", "undead", "construct", "spirit", "deity",
-        "aberration"}),
-    "Heritages": frozenset({"heritage"}),
-    "Events": frozenset({
-        "event", "battle", "ritual", "disaster", "discovery",
-        "betrayal_event", "celebration"}),
-    "Documents": frozenset({
-        "document", "spell", "map", "letter", "prophecy", "contract",
-        "journal"}),
-    "Clues": frozenset({"clue"}),
-}
+# of its types anywhere: that is how a renamed folder is recognised. The
+# folders and their types are schema_rules.TYPE_FOLDERS (from the ontology).
 # `pc_roster` is the name; `player-characters` is an older one still found
 # in vaults.
 ROSTER_TYPES = frozenset({"pc_roster", "player-characters"})
@@ -395,7 +371,7 @@ def resolve_system(vault: Path, given: str | None,
     if vault.is_dir():
         recorded = mv.vault_system(vault)
     if given is not None:
-        found = mv._system_id(given)
+        found = system_id(given)
         if found not in SYSTEMS:
             raise ScaffoldError(f"unknown system '{given}': use one of "
                                 f"{ids}, or --no-system")

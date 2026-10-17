@@ -2,26 +2,28 @@ const { TOGGLE_BUTTON, MOBILE_TOGGLE } = require('../color-mode');
 const { relativePath, escapeHtml, encodeHref } = require('../processor');
 const { DIR_LABELS, colorModeEnabled } = require('./base');
 
+// A link reads as base.js's DIR_LABELS names its folder; `labels` holds only a word the menu
+// says differently.
 const NAV_GROUPS = [
   {
     name: 'Story',
     dirs: ['chapters', 'sessions', 'events'],
-    labels: { chapters: 'Chapters', sessions: 'Sessions', events: 'Events' },
+    labels: {},
   },
   {
     name: 'Characters',
     dirs: ['characters/pcs', 'characters/npcs', 'creatures'],
-    labels: { 'characters/pcs': 'Player Characters', 'characters/npcs': 'NPCs', creatures: 'Creatures' },
+    labels: {},
   },
   {
     name: 'World',
     dirs: ['world', 'heritages', 'locations', 'factions', 'items'],
-    labels: { world: 'World Overview', heritages: 'Heritages', locations: 'Locations', factions: 'Factions & Organizations', items: 'Items & Artifacts' },
+    labels: { world: 'World Overview' },
   },
   {
     name: 'Reference',
     dirs: ['documents', 'clues', 'campaign'],
-    labels: { documents: 'Documents', clues: 'Clues', campaign: 'Campaign' },
+    labels: {},
   },
 ];
 

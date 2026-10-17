@@ -1,6 +1,6 @@
 const { refTarget, parseWikilink, linkText } = require('../wikilink');
 const { escapeHtml, relativePath, resolveWikiLinks, renderMetaValue, plainMetaValue, encodeHref, publishedSource, renderMarkdown } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, portraitImg, noPreviewAttr, getCanonStatus } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, portraitImg, noPreviewAttr, getCanonStatus, DIR_LABELS } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
 const { canonicalNfc, nfcLookupTable } = require('../unicode');
@@ -24,13 +24,9 @@ const GENRE_SECTION_TITLES = {
   },
 };
 
-const DEFAULT_SECTION_TITLES = {
-  locations: 'Locations',
-  factions: 'Factions & Organizations',
-  items: 'Items & Artifacts',
-  creatures: 'Creatures',
-  documents: 'Documents',
-};
+// The sections a genre may retitle, under the names base.js's DIR_LABELS gives them.
+const DEFAULT_SECTION_TITLES = Object.fromEntries(
+  ['locations', 'factions', 'items', 'creatures', 'documents'].map((k) => [k, DIR_LABELS[k]]));
 
 function sectionTitle(key, publishConfig) {
   const overrides = (publishConfig && publishConfig.section_titles) || {};

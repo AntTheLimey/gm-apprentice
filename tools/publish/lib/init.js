@@ -4,6 +4,7 @@ const path = require('path');
 const { applyChanges, settingsText } = require('./settings/write');
 const { siteDirPath } = require('./lines-cli');
 const { entry, nameIn, fileLabel, layoutOf } = require('./settings');
+const { VAULT_FOLDERS } = require('./shared-lists');
 
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates-scaffold');
 
@@ -14,21 +15,13 @@ const DEFAULTS = {
 };
 
 // The campaign settings a new site starts with, by the settings' own names. They live in the
-// vault's settings file, not in the site's vault.config.json.
+// vault's settings file, not in the site's vault.config.json. The type folders and their site
+// folders are the shared list (shared-lists.js); the three others are the vault's own.
 const DEFAULT_FOLDER_MAP = {
-  'Characters/PCs': 'characters/pcs',
-  'Characters/NPCs': 'characters/npcs',
-  'Locations': 'locations',
-  'Factions & Organizations': 'factions',
-  'Items & Artifacts': 'items',
-  'Creatures': 'creatures',
-  'Events': 'events',
-  'Documents': 'documents',
-  'Clues': 'clues',
+  ...Object.fromEntries(VAULT_FOLDERS.map((f) => [f.folder, f.site])),
   'Chapters': 'chapters',
   '_Campaign': 'campaign',
   '_World': 'world',
-  'Heritages': 'heritages',
 };
 
 // `siteDir` is where the vault finds its site again: vault_check asks the tool installed
