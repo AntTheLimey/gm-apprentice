@@ -40,8 +40,11 @@ function collectHidden({ configPath }) {
   const rawConfig = loadVaultConfig(resolvedConfig);
   const vaultPath = path.resolve(siteDir, rawConfig.vaultPath);
   rawConfig.vaultPath = vaultPath;
-  const keptBy = forSite(readSettings({ vaultPath, siteConfig: rawConfig, siteDir }), 'player').vault.kept_by;
-  const empty = { vaultPath, siteDir, keptBy, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => null };
+  const player = forSite(readSettings({ vaultPath, siteConfig: rawConfig, siteDir }), 'player');
+  const keptBy = player.vault.kept_by;
+  // The GM's own words that must never reach players (player_site.never_show): looked for on every kind of vault.
+  const neverShow = (player.site.never_show || []).filter((w) => typeof w === 'string' && w.trim());
+  const empty = { vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => null };
   if (keptBy === 'player') return empty;
 
   const quiet = () => {};
@@ -151,7 +154,7 @@ function collectHidden({ configPath }) {
     add(piecesOfMarkdown(body), rel, `unpublished note: ${why}`);
   }
 
-  return { vaultPath, siteDir, keptBy, pieces, visible, warnings, notes, published, publishedRels, linkMap, outOf: (rel) => outputOf.get(rel) || null };
+  return { vaultPath, siteDir, keptBy, neverShow, pieces, visible, warnings, notes, published, publishedRels, linkMap, outOf: (rel) => outputOf.get(rel) || null };
 }
 
 module.exports = { collectHidden };

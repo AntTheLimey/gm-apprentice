@@ -15,6 +15,8 @@
 //                        cannot be searched for
 //   WITHHELD_PUBLISHED   a note marked `withheld: true` that the site publishes (an error)
 //   WITHHELD_FLAG_UNREADABLE  a `withheld:` value that is not true or false (read as false)
+//   NEVER_SHOW_IN_PROSE  a word listed under `player_site.never_show` printed on a published page
+//                        (deploy stops on it: the leak gate looks for it in the finished folder)
 //   TOHIT_UNREAD    a row of a GURPS PC sheet the to-hit calculator cannot fully read, with
 //                   why and the fix (the calculator's own words, from tohit-data.js); a row
 //                   it reads but that is written another way, or whose numbers do not add
@@ -43,7 +45,7 @@ const { kindOfType } = require('./kind-label');
 const { STORY_SUFFIX } = require('./scanner');
 const { decodeEntities } = require('./templates/gurps/tables');
 
-const CODES = ['ALIAS_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD'];
+const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD'];
 const WORST = 3;
 // The human report names this many of the pages that link a note with no page.
 const PAGES_SHOWN = 3;
@@ -260,7 +262,10 @@ function secretNamesOf(input) {
     // Between the words of a name a space, an underscore or a hyphen all read as the same
     // name ("The_Watcher", "The-Watcher"), whichever of them gm_aliases has.
     re: matcher(a.alias),
-  })).concat([...withheldOwners.values()].map((a) => ({ ...a, kind: 'withheld', re: matcher(a.alias) })));
+  })).concat([...withheldOwners.values()].map((a) => ({ ...a, kind: 'withheld', re: matcher(a.alias) })))
+    // The GM's never-show words (player_site.never_show): searched as names are, but a public name that holds one is no
+    // excuse (the GM said never), so none is dropped for colliding with one. They belong to no note.
+    .concat([...new Map((input.neverShow || []).map((w) => [fold(w), w])).values()].map((w) => ({ alias: w, rel: null, kind: 'never_show', re: matcher(w) })));
   // One cheap look at the raw HTML decides whether a page is read at all: the longest word
   // of each secret name. A name with no word of three letters is looked for on every page.
   const probeWords = names.map((a) => (foldQuotes(a.alias).match(/[\p{L}\p{N}]+/gu) || []).sort((x, y) => y.length - x.length)[0] || '');
@@ -310,18 +315,20 @@ function findSecretNames(html, names, { publicWords, listing = false, only = nul
     if (only && a.kind !== only) continue;
     a.re.lastIndex = 0;
     let text = body;
-    let matches = [...bodyOwn.matchAll(a.re)];
+    // A never-show word is a finding inside a public name too.
+    const own = a.kind === 'never_show' ? (t) => t : blank;
+    let matches = [...(a.kind === 'never_show' ? body : bodyOwn).matchAll(a.re)];
     if (matches.length === 0) {
       // A sheet's small boxes run a label and its value together ("TL" and the name).
       if (boxes === null) boxes = foldQuotes(pageText(bodyHtml, { links: 'fence', spaced: true }));
       text = boxes;
-      matches = [...blank(boxes).matchAll(a.re)];
+      matches = [...own(boxes).matchAll(a.re)];
     }
     if (matches.length === 0) {
       // An index page's cards are links that carry a note's fields in their attributes.
       if (rest === null) rest = foldQuotes(pageText(whole, { links: 'fence', attributes: listing ? 'all' : true }));
       text = rest;
-      matches = [...blank(rest).matchAll(a.re)].slice(0, 1);
+      matches = [...own(rest).matchAll(a.re)].slice(0, 1);
     }
     if (matches.length === 0) continue;
     const at = matches[0].index;
@@ -375,7 +382,7 @@ function startNoteAudit(input) {
     untyped: new Set(input.report.untyped.map(canonicalNfc)),
     unmapped: new Set(input.report.unmapped.map((u) => canonicalNfc(u.dir))),
   };
-  const secrets = secretNamesOf({ notes: input.notes, publishedRels, outOf: (rel) => (scanned.get(rel) || {}).outputPath, linkMap: input.linkMap });
+  const secrets = secretNamesOf({ notes: input.notes, publishedRels, outOf: (rel) => (scanned.get(rel) || {}).outputPath, linkMap: input.linkMap, neverShow: input.publishConfig.never_show });
   const { secretKeys, collisions, publishedWithheld, unreadableFlags, probe, mayHold, publicNames } = secrets;
   const aliasRes = secrets.names;
   for (const note of input.notes) {
@@ -630,19 +637,21 @@ function startNoteAudit(input) {
   // against the page itself when no note does.
   function aliasFindings(kind = 'alias') {
     const withheld = kind === 'withheld';
-    const code = withheld ? 'WITHHELD_IN_PROSE' : 'ALIAS_IN_PROSE';
+    const never = kind === 'never_show';
+    const code = never ? 'NEVER_SHOW_IN_PROSE' : withheld ? 'WITHHELD_IN_PROSE' : 'ALIAS_IN_PROSE';
     const out = new Map();   // "path\nalias" -> finding
     const fixLine = (alias, owner, file) => {
       if (file) return `rename the file, and the embeds that name it, so that its name does not hold "${alias}"`;
+      if (never) return `reword it, or move it into a part of the note players do not see (a GM Notes section, a gm-only block); deploy stops while the player site shows it. If the word no longer needs guarding, take it off player_site.never_show`;
       if (withheld) {
         return `reword it to a name the players know, in the text or in the frontmatter field or title that holds it; or, in the text, link the note ([[${alias}]]): a link with no label of its own prints a neutral word (${[...new Set(Object.values(input.publishConfig.withheld_words))].join(', ')}) in place of a withheld note's name; where it is an ordinary word and not the name, the finding stays until the note is no longer marked withheld`;
       }
       return `reword it to the public name, in the text or in the frontmatter field or title that holds it; or, in the text, link the name ([[${alias}]]): the build prints the page's public title for a linked GM alias`;
     };
-    const told = (hit, rel) => (withheld
+    const told = (hit, rel) => (never ? `"${hit.alias}", a word you listed under player_site.never_show` : withheld
       ? `"${hit.alias}", the name of ${hit.owner === rel ? 'this note, which you marked withheld' : `a note you marked withheld (${hit.owner})`}`
       : `"${hit.alias}", a name you keep secret in gm_aliases${hit.owner === rel ? '' : ` (of ${hit.owner})`}`);
-    const base = (hit) => (withheld ? { name: hit.alias } : { alias: hit.alias });
+    const base = (hit) => (never ? { word: hit.alias } : withheld ? { name: hit.alias } : { alias: hit.alias });
     const hits = aliasHits.filter((h) => h.kind === kind);
     for (const hit of hits.filter((h) => h.out === null)) {
       // A name a note's own page prints is told as that; the same name only the search index
@@ -686,9 +695,11 @@ function startNoteAudit(input) {
         const key = `${rel}\n${hit.alias}`;
         if (!out.has(key)) {
           const secret = withheld ? 'a note you marked withheld' : 'a name you keep secret in gm_aliases';
+          const named = never ? `"${hit.alias}", a word you listed under player_site.never_show,` : null;
           out.set(key, {
             code, severity: 'warning', path: rel,
-            detail: sources.length > 0
+            detail: named ? (sources.length > 0 ? `${named} is in this note's title, frontmatter or text, and an index or listing page prints it` : `${named} is printed on this page of the site, which is not built from one note`)
+              : sources.length > 0
               ? `"${hit.alias}", ${withheld ? `the name of ${hit.owner === rel ? 'this note, which you marked withheld' : `${secret} (${hit.owner})`}` : `a name you keep secret in gm_aliases${hit.owner === rel ? '' : ` (of ${hit.owner})`}`}, is in this note's title, frontmatter or text, and an index or listing page prints it`
               : `"${hit.alias}", ${withheld ? `the name of ${secret} (${hit.owner})` : `a name you keep secret in gm_aliases (of ${hit.owner})`}, is printed on this page of the site, which is not built from one note`,
             fix: fixLine(hit.alias, hit.owner, false),
@@ -774,6 +785,7 @@ function startNoteAudit(input) {
     // Not settled by a "stays hidden:" reason: that answers the link report (NAMED_NO_PAGE)
     // only. A name in plain text is fixed in the sentence or by taking the flag off.
     found.push(...aliasFindings('withheld'));
+    found.push(...aliasFindings('never_show'));
     for (const c of collisions) {
       const answers = Object.entries(input.linkMap).find(([key]) => fold(key) === c.key);
       const answering = answers ? input.published.find((p) => p.outputPath === answers[1]) : null;
@@ -932,6 +944,12 @@ function summaryLines(findings) {
       const worst = [...byName].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, WORST)
         .map(([name, pages]) => `${name} ${pages} ${plural(pages, 'page', 'pages')}`);
       lines.push(`${byName.size} withheld ${plural(byName.size, 'name is', 'names are')} printed on published pages (${worst.join(', ')}) — ${where} ${plural(byName.size, 'it', 'these')}.`);
+    } else if (code === 'NEVER_SHOW_IN_PROSE') {
+      const byWord = new Map();
+      for (const f of rows) byWord.set(f.word, (byWord.get(f.word) || 0) + 1);
+      const worst = [...byWord].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, WORST)
+        .map(([word, pages]) => `${word} ${pages} ${plural(pages, 'note', 'notes')}`);
+      lines.push(`${byWord.size} never-show ${plural(byWord.size, 'word is', 'words are')} printed on published pages, so deploy will stop (${worst.join(', ')}) — ${where} ${plural(byWord.size, 'it', 'these')}.`);
     } else if (code === 'TOHIT_UNREAD') {
       // Rows it cannot read; a row whose numbers do not add up is only information.
       const unread = rows.filter((f) => f.severity !== 'info');

@@ -187,6 +187,17 @@ class SiteFaultRowsTests(unittest.TestCase):
         self.assertIn("FENCE_UNCLOSED: the code fence on line 9 never "
                       "closes", by_code["FENCE_UNCLOSED"])
 
+    def test_a_never_show_word_is_a_row(self):
+        row = vc._site_fault_row({
+            "code": "NEVER_SHOW_IN_PROSE", "severity": "warning",
+            "path": MARA, "word": "Blue Lady", "owner": None, "count": 2,
+            "context": "Bob saw the blue lady", "listings": []},
+            whole=False)
+        self.assertEqual(row, (
+            f"WARNING\t{MARA}\tNEVER_SHOW_IN_PROSE: \"Blue Lady\" (listed "
+            f"under player_site.never_show), printed 2 times | Bob saw the "
+            f"blue lady"))
+
     def test_a_sheet_row_the_to_hit_calculator_cannot_read_is_a_row(self):
         # The tool's own words: what is wrong, then the fix.
         row = vc._site_fault_row({

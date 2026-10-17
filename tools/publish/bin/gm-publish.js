@@ -187,8 +187,9 @@ gm-apprentice-publish leaks <list|check|accept|prune> [--config <path>] [--json]
 
 The leak check reads the built player site (the folder deploy uploads) for
 hidden text and secret names: any hidden sentence, list item or table cell of
-four words or more, a gm_aliases name, a withheld note's name. deploy runs it
-and stops on a finding; these commands run it without deploying.
+four words or more, a gm_aliases name, a withheld note's name, and any word
+player_site.never_show lists. deploy runs it and stops on a finding (unless
+deploy --ignore-leaks); these commands run it without deploying.
 
   leaks list                 Print the findings, each with a short id
   leaks check                The same, and exit 1 on a finding; also names
@@ -369,24 +370,28 @@ and prints the addresses to open.
   --help, -h         Show this help
 `,
   deploy: `
-gm-apprentice-publish deploy [--config <path>] [--verify] [--no-build] [--dry-run] [--json]
+gm-apprentice-publish deploy [--config <path>] [--verify] [--no-build] [--dry-run] [--ignore-leaks] [--json]
 
 Builds the site and publishes it to the host the vault names (player_site.host):
 "cloudflare-pages" runs wrangler (checking authentication first, and aligning
 wrangler.toml's project name), "github-pages" commits docs/ and pushes.
 
 Before anything is uploaded, the leak check reads the built site for hidden text
-and secret names, and stops the deploy on a finding (see leaks --help). --dry-run
-runs the check on the folder as it stands.
+and secret names (and the words player_site.never_show lists), and stops the
+deploy on a finding (see leaks --help). --dry-run runs the check on the folder
+as it stands.
 
   --verify          After deploying, fetch the site URL up to 3 times, 20s
                      apart. A site still propagating is reported, not failed.
   --no-build         Deploy whatever is already in the output directory
   --dry-run, -n      Print the commands that would run; run none of them
                      (exit 1 when the leak check would stop the deploy)
+  --ignore-leaks     Deploy even when the leak check finds something, or
+                     cannot run. Every finding is still printed. Only for
+                     a deploy the GM chose to make; nothing is accepted
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --json             Emit { host, built, deployed, url, verified, status,
-                     attempts, commands, refused, leaks }
+                     attempts, commands, refused, leaks, leaksIgnored }
   --help, -h         Show this help
 `,
   'update-pin': `
@@ -436,6 +441,9 @@ change what the site shows:
                   printed on a page, in the address of a link, held by the
                   search index or the link previews, or carried in a copied
                   file's name
+  NEVER_SHOW_IN_PROSE
+                  a word listed under player_site.never_show printed on a
+                  published page (deploy stops on it)
   WITHHELD_PUBLISHED
                   a note marked withheld: true that the site publishes (an
                   error; the build still builds)
@@ -941,6 +949,7 @@ if (command === 'deploy') {
     '--dry-run': 'dryRun',
     '-n': 'dryRun',
     '--json': 'json',
+    '--ignore-leaks': 'ignoreLeaks',
   });
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
@@ -954,6 +963,7 @@ if (command === 'deploy') {
     noBuild: !!parsed.flags.noBuild,
     dryRun: !!parsed.flags.dryRun,
     json: !!parsed.flags.json,
+    ignoreLeaks: !!parsed.flags.ignoreLeaks,
   })
     .then(exitAfterFlush)
     .catch(failAfterFlush);

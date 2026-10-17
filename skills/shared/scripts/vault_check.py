@@ -1780,7 +1780,8 @@ def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
 
 # The faults in a NOTE that change what the site shows, as the publish
 # tool's `doctor --site --json` names them.
-NOTE_FAULT_CODES = ("ALIAS_IN_PROSE", "WITHHELD_PUBLISHED",
+NOTE_FAULT_CODES = ("ALIAS_IN_PROSE", "NEVER_SHOW_IN_PROSE",
+                    "WITHHELD_PUBLISHED",
                     "WITHHELD_IN_PROSE", "WITHHELD_NAME_PUBLIC",
                     "WITHHELD_FLAG_UNREADABLE", "FENCE_UNCLOSED",
                     "COMMENT_STRAY", "NAMED_NO_PAGE", "TOHIT_UNREAD")
@@ -1834,6 +1835,14 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
                   "WITHHELD_FLAG_UNREADABLE"):
         msg = (f"{code}: {_one_line(f.get('detail'))} — "
                f"{_one_line(f.get('fix'))}")
+    elif code == "NEVER_SHOW_IN_PROSE":
+        msg = (f"NEVER_SHOW_IN_PROSE: \"{_one_line(f.get('word'))}\" (listed "
+               f"under player_site.never_show), printed "
+               f"{f.get('count')} time{'' if f.get('count') == 1 else 's'} | "
+               f"{_one_line(f.get('context'))}")
+        outs = [_one_line(p) for p in f.get("listings") or []]
+        if outs:
+            msg += " | printed on the index or listing page: " + ", ".join(outs)
     elif code == "WITHHELD_IN_PROSE":
         msg = (f"WITHHELD_IN_PROSE: \"{_one_line(f.get('name'))}\" (a "
                f"withheld note: {_one_line(f.get('owner'))}), printed "

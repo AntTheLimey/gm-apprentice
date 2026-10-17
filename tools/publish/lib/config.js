@@ -226,6 +226,8 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
     } else words[key] = raw || entry(setting).default;
   }
   Object.defineProperty(merged, 'withheld_words', { value: words, enumerable: false });
+  // The GM's never-show words, for the note audit (the leak gate reads the setting itself). Not listed, like `limits`.
+  Object.defineProperty(merged, 'never_show', { value: (p.never_show || []).filter((w) => typeof w === 'string' && w.trim()).map((w) => w.trim()), enumerable: false });
 
   // The status lists, every word trimmed and lower-cased once. Not listed, like `limits`. A `fallen` word that is
   // not out of play is left out (the settings reader has already reported one the GM wrote).

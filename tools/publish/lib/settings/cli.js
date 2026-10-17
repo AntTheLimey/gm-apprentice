@@ -216,7 +216,7 @@ function describe(name) {
     return { result: { ...r, twinOf: e.twinOf }, lines, notices: noticesFor([name]) };
   }
   lines.push(`  ${r.does || '(no description)'}`, `  takes: ${r.takes}`, `  default: ${plainValue(r.default)}`);
-  if (r.guards) lines.push('  hides things from players: a mistake here stops the build');
+  if (r.guards) lines.push(e.name === 'player_site.never_show' ? '  guards what players see: a mistake here stops the build' : '  hides things from players: a mistake here stops the build');
   return { result: r, lines, notices: noticesFor([name]) };
 }
 
@@ -455,6 +455,12 @@ function sameRule(e, vaultPath) {
   if (e.same === 'folder') {
     const { dirIsExcluded } = require('../scanner');
     return (a, b) => dirIsExcluded(a, [b]) && dirIsExcluded(b, [a]);
+  }
+  if (e.same === 'phrase') {
+    // The leak gate reads a phrase in any case, with any run of spaces between its words.
+    const { canonicalNfc } = require('../unicode');
+    const key = (x) => canonicalNfc(String(x)).replace(/\s+/g, ' ').trim().toLowerCase();
+    return (a, b) => key(a) === key(b);
   }
   if (e.same === 'callout') return (a, b) => a.toLowerCase() === b.toLowerCase(); // the build lower-cases both sides
   if (e.same === 'name') {

@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.67] — 2026-10-17
+
+A GM can put the site online past the leak check on purpose, and can list
+words that must never reach players.
+
+### Added
+
+- `deploy --ignore-leaks` uploads even when the leak check finds hidden
+  text or a secret name, or cannot run. Every finding is still printed,
+  nothing is accepted, and the next deploy without it stops again. A dry
+  run with it says the deploy would go ahead. `--json` adds
+  `leaksIgnored: true`. With no built site there is still nothing to
+  upload, so that still stops.
+- `player_site.never_show`: words or phrases the GM never wants on the
+  player site. The build does not remove them; `deploy` stops when the
+  finished site holds one (any case, as a whole word, a space, underscore
+  or hyphen between its words), on a page, in a data file or in a file's
+  name, and `leaks check` lists them with the code `NEVER_SHOW`. A
+  public note's own text is no excuse. An accepted finding passes, as
+  any other does, file by file (a word has no note to tie its copies
+  to). A phrase in a public note's `aliases`, which the search index
+  holds only as single words, is a finding on the index. It is checked
+  on a vault kept by a player too. Edit it with `settings add` and
+  `settings remove`; two entries that differ only in case or spacing are
+  one. A value that is not a list stops the build, the deploy and the
+  `leaks` commands.
+- The build warns before deploy does: a never-show word printed on a
+  published page is a new Site Faults code, `NEVER_SHOW_IN_PROSE`, in the
+  build's count, `doctor --site` and campaign-qa's Site Faults check,
+  which offers to reword it or move it into a hidden part of the note.
+  A never-show word that only a build step writes is found by the leak
+  check alone.
+- The publish-site skill's leak walk-through covers `NEVER_SHOW` findings,
+  and uses `--ignore-leaks` only when the GM says to put the site online
+  as it is.
+
+### Changed
+
+- The publish tool is 1.33.0. A site tool older than 1.33.0 stops on a
+  vault that sets `player_site.never_show` ("not a setting"); the update
+  repins it.
+
 ## [1.10.66] — 2026-10-16
 
 Every relationship rule the skills checked by eye is now a check in the

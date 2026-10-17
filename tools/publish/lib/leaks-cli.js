@@ -25,7 +25,8 @@ const sameLeak = (a, b) => a.note === b.note && a.text === b.text;
 
 // The findings one accept covers: every one on a page (`allOnPage`), every one from a note (`note`), or the one named by
 // page and id or sentence together with its copies in the site's data files (the same sentence from the same note in a
-// file that is not a page: the previews, the search index).
+// file that is not a page: the previews, the search index). A never-show word has no note to tie its copies to, so
+// it is accepted file by file.
 function chosenFindings(findings, opts) {
   if (opts.allOnPage) return findings.filter((f) => f.page === String(opts.allOnPage).trim());
   if (opts.note) return findings.filter((f) => f.note === String(opts.note).trim());
@@ -34,7 +35,7 @@ function chosenFindings(findings, opts) {
   const wanted = /^[0-9a-f]{6}$/.test(given) ? null : wordsOf(given).join(' ');
   const one = findings.find((f) => f.page === page && (wanted === null ? f.id === given : f.text === wanted));
   if (!one) return [];
-  return [one, ...(isPage(one.page) ? findings.filter((f) => f !== one && !isPage(f.page) && sameLeak(f, one)) : [])];
+  return [one, ...(isPage(one.page) && one.code !== 'NEVER_SHOW' ? findings.filter((f) => f !== one && !isPage(f.page) && sameLeak(f, one)) : [])];
 }
 
 function notAFinding(opts) {
@@ -48,6 +49,8 @@ async function runLeaks(options, deps) {
   const out = (deps && deps.out) || console.log;
   const configPath = path.resolve(opts.configPath || './vault.config.json');
   const outputDir = gateFolderFor(configPath);
+  // A hiding-side settings fault (a never_show that is not a list) stops here too: the check would look for nothing.
+  require('./config').assertNoStopsFor(configPath, 'leaks');
   const result = runLeakGate({ configPath, outputDir });
   const vaultPath = path.resolve(path.dirname(configPath), loadVaultConfig(configPath).vaultPath);
   const print = (lines, payload, rc) => { if (opts.json) out(JSON.stringify(payload, null, 2)); else lines.forEach((l) => out(l)); return rc; };
@@ -57,8 +60,8 @@ async function runLeaks(options, deps) {
 
   if (opts.verb === 'list' || opts.verb === 'check') {
     const n = result.findings.length;
-    const head = n === 0 ? `No hidden text or secret name on the player site (${result.files} files read).`
-      : `${n} finding${n === 1 ? '' : 's'}: hidden text or a secret name on the player site.`;
+    const head = n === 0 ? `No hidden text, secret name or never-show word on the player site (${result.files} files read).`
+      : `${n} finding${n === 1 ? '' : 's'}: hidden text, a secret name or a never-show word on the player site.`;
     const rc = opts.verb === 'check' && n > 0 ? 1 : 0;
     return print([...(result.warnings || []), head, ...formatFindings(opts.verb === 'list' ? { ...result, unneeded: [] } : result)], gateSummary(result), rc);
   }
@@ -91,9 +94,11 @@ async function runLeaks(options, deps) {
 
   if (opts.verb === 'prune') {
     const list = loadPublishList(vaultPath, { warn: () => {} });
-    const stale = new Set(result.unneeded.map((a) => `${a.page}\n${a.text}`));
+    // By page, text and note: a never-show acceptance and another rule's on the same page and text are two.
+    const keyOf = (a) => `${a.page}\n${a.text}\n${a.note || ''}`;
+    const stale = new Set(result.unneeded.map(keyOf));
     if (!list || stale.size === 0) return print(['Nothing to prune.'], { pruned: 0 }, 0);
-    const kept = (list.accepted || []).filter((a) => !stale.has(`${a.page}\n${a.text}`));
+    const kept = (list.accepted || []).filter((a) => !stale.has(keyOf(a)));
     try { writeAccepted(vaultPath, kept); } catch (e) { return print([e.message], { pruned: 0 }, 1); }
     return print([`Pruned ${stale.size} accepted finding${stale.size === 1 ? '' : 's'} no longer needed.`], { pruned: stale.size }, 0);
   }
