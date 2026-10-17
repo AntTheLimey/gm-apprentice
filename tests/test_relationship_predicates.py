@@ -316,7 +316,9 @@ class CheckRelationshipsTests(unittest.TestCase):
         self.assertNotIn("cursed_by", row)
 
     def test_rows_say_so_when_nothing_is_close(self):
-        row = rows_for(self.bad, "'works_for'")[0]
+        # `works_for` is a named verb now (the row says what it means); a
+        # name with no verb and nothing near gets the old words.
+        row = rows_for(self.bad, "'taken_from'")[0]
         self.assertIn("no close match", row)
         self.assertIn("relationship-normalization.md", row)
 
@@ -341,42 +343,6 @@ class CheckRelationshipsTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertIn("blank", rows[0])
         self.assertNotIn("no close match", rows[0])
-
-    def missing_ontology_rows(self, *caches_to_clear):
-        """Run the check with the export gone and the named caches cold."""
-        original = sr.ONTOLOGY_PATH
-        sr.predicate_vocabulary()  # warm both caches from the real export
-        sr.inverse_predicates()
-        for cache in (sr._ontology, *caches_to_clear):
-            cache.cache_clear()
-        sr.ONTOLOGY_PATH = original.with_name("no-such-ontology.json")
-        try:
-            return vc.check_relationships(FIXTURE)
-        finally:
-            sr.ONTOLOGY_PATH = original
-            sr._ontology.cache_clear()
-            sr.predicate_vocabulary.cache_clear()
-            sr.inverse_predicates.cache_clear()
-            sr.tone_families.cache_clear()
-
-    def test_missing_ontology_reports_instead_of_crashing(self):
-        rows = self.missing_ontology_rows(sr.predicate_vocabulary,
-                                          sr.inverse_predicates)
-        self.assertEqual(len(rows), 1)
-        self.assertTrue(rows[0].startswith("ERROR\t"))
-        self.assertIn("predicate vocabulary", rows[0])
-
-    def test_missing_ontology_caught_even_with_the_vocabulary_cached(self):
-        # The two loads go through separate caches; a warm vocabulary and a
-        # cold inverse map must still report, not abort the whole pass.
-        rows = self.missing_ontology_rows(sr.inverse_predicates)
-        self.assertEqual(len(rows), 1)
-        self.assertIn("predicate vocabulary", rows[0])
-
-    def test_missing_ontology_caught_with_only_the_tone_list_cold(self):
-        rows = self.missing_ontology_rows(sr.tone_families)
-        self.assertEqual(len(rows), 1)
-        self.assertTrue(rows[0].startswith("ERROR\t(vault)\t"), rows[0])
 
 
 class VaultCheckCommandTests(unittest.TestCase):

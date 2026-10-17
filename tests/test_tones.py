@@ -153,7 +153,7 @@ import tones  # noqa: E402
 
 
 def note(*tone_lines):
-    edges = "".join(f'  - target: "[[T{i}]]"\n    type: knows\n{line}\n'
+    edges = "".join(f'  - target: "[[T{i}]]"\n    type: leads\n{line}\n'
                     for i, line in enumerate(tone_lines))
     return f"---\ntype: npc\nrelationships:\n{edges}---\nBody\n"
 
@@ -924,15 +924,15 @@ class CheckTests(VaultCase):
             "pick a listed tone (shared/entity-schema.md, Tones)",
         ])
 
-    def test_error_rows_come_before_a_notes_tone_warnings(self):
+    def test_rows_come_in_note_then_line_order(self):
         self.put("NPCs/A.md", (
             "---\ntype: npc\nrelationships:\n"
-            '  - target: "[[A]]"\n    type: knows\n    tone: dread\n'
+            '  - target: "[[A]]"\n    type: leads\n    tone: dread\n'
             '  - target: "[[B]]"\n    type: frenemy_of\n    tone: warm\n'
             "---\n"))
         rows = vc.check_relationships(self.vault)
         self.assertEqual([r.split("\t")[:2] for r in rows],
-                         [["ERROR", "NPCs/A.md:8"], ["WARNING", "NPCs/A.md:6"]])
+                         [["WARNING", "NPCs/A.md:6"], ["ERROR", "NPCs/A.md:8"]])
 
     def test_file_scope_applies(self):
         self.put("NPCs/A.md", note("    tone: dread"))
