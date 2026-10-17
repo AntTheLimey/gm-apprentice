@@ -102,7 +102,8 @@ methodology doc in `docs/` is the persistent reference.
    "Delgado is below the 15% floor, assign B-plot" — the
    latter scored +6 points higher.
    The 15% floor was retired on 2026-10-17: Ant's rule is that
-   every PC at the table gets a moment every session.
+   every PC at the table gets a moment every session (see
+   `docs/why-the-numbers-came-out.md`).
 
 4. **The "bad guys advance on their own timeline" principle**
    should frame every world-evolution proposal. Without it,
