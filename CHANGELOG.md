@@ -45,7 +45,7 @@ publish tool, and the certain repairs happen on one yes.
   The rows for words and tones read as before; verbs the vocabulary
   already means now say what they mean.
 - `campaign-qa` and `campaign-organizer` run the check and the fix
-  instead of reading the notes for these rules. About 5.4 KB of skill
+  instead of reading the notes for these rules. About 5 KB of skill
   text is gone.
 - `relationships words` reads a vault's `_meta/relationship-types.md`
   `- name: text` bullets and one-column tables as well as the scaffold's
