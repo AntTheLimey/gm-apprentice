@@ -19,7 +19,7 @@ const { vaultVocabulary } = require('./words');
 
 const KIND_ORDER = [
   'off-vocabulary', 'tone', 'mirrored', 'same-fact', 'bidirectional', 'strength', 'place-missing-tie',
-  'place-missing-field', 'place-disagrees', 'not-an-edge', 'genre-subset', 'childless-container', 'hub',
+  'place-missing-field', 'place-disagrees', 'not-an-edge', 'genre-subset', 'childless-container', 'hub', 'unreadable',
 ];
 const MAP_HINT = ' (map it via shared/relationship-normalization.md)';
 const HUB_MIN_NOTES = 5;
@@ -362,6 +362,16 @@ function check(model, ontology, { vaultPath } = {}) {
         add(note, null, 'INFO', 'hub', 1, `${n} ties; notes of type ${type} average ${mean.toFixed(1)}`, null);
       }
     }
+  }
+
+  // A note whose frontmatter does not read has no edges to check; it is one row, so it never looks clean.
+  for (const fault of model.faults || []) {
+    if (!fault.inScope) continue;
+    out.push({
+      level: 'ERROR', rel: fault.rel, line: 1, kind: 'unreadable',
+      message: `its frontmatter does not read (${String(fault.message).replace(/\s+/g, ' ').trim()}); its relationships were not checked`,
+      fix: null, edgeIndex: null, form: null, mobrpg: null,
+    });
   }
 
   const rank = (f) => KIND_ORDER.indexOf(f.kind);

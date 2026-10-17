@@ -8,6 +8,7 @@ Run: python3 tests/test_vault_check_relationships_tool.py
 """
 
 import contextlib
+import os
 import shutil
 import subprocess
 import sys
@@ -127,19 +128,43 @@ class ScopeReachesToolTests(FakeNode):
                           if a == "--file"], ["A.md", "B.md"])
         self.assertEqual(sent[sent.index("--newer-than") + 1], "Wrap-Up.md")
 
-    @unittest.skipUnless(HAS_NODE, "needs node")
+    @unittest.skipUnless(HAS_NODE or os.environ.get("VAULT_CHECK_REQUIRE_NODE"),
+                         "needs node")
     def test_real_tool_scoped_to_one_file(self):
         rows = vc.check_relationships(FIXTURE, files=["Mobrpg Sync.md"])
         self.assertTrue(rows)
         self.assertTrue(all("\tMobrpg Sync.md:" in r for r in rows), rows)
 
-    @unittest.skipUnless(HAS_NODE, "needs node")
+    @unittest.skipUnless(HAS_NODE or os.environ.get("VAULT_CHECK_REQUIRE_NODE"),
+                         "needs node")
     def test_rows_are_the_tools_rows_in_tsv(self):
         rows = vc.check_relationships(FIXTURE)
         self.assertIn(
             "ERROR\tOff Vocabulary NPC.md:12\toff-vocabulary relationship "
             "type 'commands_at' — did you mean commands? "
             "(map it via shared/relationship-normalization.md)", rows)
+
+    @unittest.skipUnless(HAS_NODE or os.environ.get("VAULT_CHECK_REQUIRE_NODE"),
+                         "needs node")
+    def test_a_note_whose_frontmatter_does_not_read_is_one_row(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            (vault / "Broken.md").write_text(
+                '---\ntype: npc\nrelationships:\n  - target: "[[X]]\n'
+                '    type: employed_by\n---\n', encoding="utf-8")
+            (vault / "Fine.md").write_text(
+                '---\ntype: npc\nrelationships:\n  - target: "[[Broken]]"\n'
+                '    type: employed_by\n---\n', encoding="utf-8")
+            scoped = vc.check_relationships(vault, files=["Broken.md"])
+            self.assertEqual(len(scoped), 1, scoped)
+            self.assertTrue(scoped[0].startswith(
+                "ERROR\tBroken.md:1\tits frontmatter does not read"), scoped)
+            whole = vc.check_relationships(vault)
+            self.assertEqual(
+                len([r for r in whole if "\tBroken.md:" in r]), 1, whole)
+            self.assertTrue(any("\tFine.md:" in r for r in whole), whole)
+            other = vc.check_relationships(vault, files=["Fine.md"])
+            self.assertFalse(any("Broken.md" in r for r in other), other)
 
 
 if __name__ == "__main__":

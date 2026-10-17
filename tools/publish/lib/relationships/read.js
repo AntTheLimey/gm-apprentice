@@ -129,14 +129,14 @@ function readVault(vaultPath, { files, folder, newerThan } = {}) {
       stat = fs.statSync(full);
       text = fs.readFileSync(full, 'utf8');
     } catch (e) {
-      faults.push({ rel, message: `cannot read the file: ${e.message}` });
+      faults.push({ rel, message: `cannot read the file: ${e.message}`, mtime: stat ? stat.mtimeMs / 1000 : Infinity });
       continue;
     }
     let note;
     try {
       note = parseNote(text);
     } catch (e) {
-      faults.push({ rel, message: e.message });
+      faults.push({ rel, message: e.message, mtime: stat.mtimeMs / 1000 });
       continue;
     }
     const lineCounter = new YAML.LineCounter();
@@ -144,7 +144,7 @@ function readVault(vaultPath, { files, folder, newerThan } = {}) {
     // the line count is the same without it.
     const doc = YAML.parseDocument((note.matter || '').replace(/\r\n/g, '\n').replace(/\r$/, ''), { lineCounter, keepSourceTokens: true });
     if (doc.errors.length) {
-      faults.push({ rel, message: doc.errors[0].message.split('\n')[0] });
+      faults.push({ rel, message: doc.errors[0].message.split('\n')[0], mtime: stat.mtimeMs / 1000 });
       continue;
     }
     const data = YAML.isMap(doc.contents) ? doc.toJS() || {} : {};
@@ -168,6 +168,9 @@ function readVault(vaultPath, { files, folder, newerThan } = {}) {
     (prefix && !p.rel.startsWith(prefix))
     || (wanted && !wanted.has(p.rel))
     || (newerThan !== undefined && newerThan !== null && p.mtime < newerThan));
+
+  // A note that cannot be read is in scope by the same rule; `check` reports it once if it is.
+  for (const f of faults) f.inScope = inScope({ rel: f.rel, mtime: f.mtime });
 
   const notes = parsed.map((p) => {
     const lineOf = (node) => p.lineCounter.linePos(node.range[0]).line;

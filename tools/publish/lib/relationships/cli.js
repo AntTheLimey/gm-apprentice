@@ -23,7 +23,6 @@ async function runRelationships({ verb, vault, json, folder, files, newerThan, k
       }
     }
     const model = readVault(root, { folder, files: files && files.length ? files : undefined, newerThan: since });
-    for (const fault of model.faults) console.error(`cannot read ${fault.rel}: ${fault.message}`);
     const findings = check(model, ontology, { vaultPath: root });
     if (verb === 'fix') {
       const FIXABLE = ['off-vocabulary', 'mirrored', 'bidirectional', 'place-missing-tie', 'place-missing-field'];

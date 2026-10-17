@@ -348,9 +348,9 @@ test('mobrpg edges are checked for vocabulary only', () => {
   assert.deepStrictEqual(rowsOf(dir), []);
 });
 
-test('a note the YAML cannot read gives no rows of its own and the others are still checked', () => {
+test('a note the YAML cannot read gives one row of its own and the others are still checked', () => {
   const dir = vault({ 'Broken.md': '---\ntype: [oops\n---\n', 'A.md': note('npc', rels(edge('works_foo', 'B'))) });
-  assert.strictEqual(rowsOf(dir).length, 1);
+  assert.strictEqual(rowsOf(dir).length, 2);
 });
 
 test('rows are sorted by rel then line, and each finding carries the edge it is about', () => {
@@ -379,4 +379,37 @@ test('the command prints the TSV under a count header, and --json carries edgeIn
   assert.strictEqual(data[0].edgeIndex, 0);
   const none = spawnSync(process.execPath, [BIN, 'relationships', 'check', '--vault', dir, '--folder', 'Nowhere'], { encoding: 'utf8' });
   assert.strictEqual(none.stdout.trim(), '# count: 0');
+});
+
+test('a note whose frontmatter does not read is one ERROR row, in text and --json, and the others are still checked', () => {
+  const dir = vault({
+    'Broken.md': '---\ntype: npc\nrelationships:\n  - target: "[[X]]\n    type: employed_by\n---\n',
+    'A.md': note('npc', rels(edge('employed_by', 'B'))),
+    'B.md': note('npc'),
+  });
+  const rows = rowsOf(dir);
+  assert.strictEqual(rows.filter((r) => r.includes('Broken.md')).length, 1);
+  assert.match(rows.find((r) => r.includes('Broken.md')), /^ERROR\tBroken\.md:1\tits frontmatter does not read \(.+\); its relationships were not checked$/);
+  assert.ok(rows.some((r) => r.startsWith('ERROR\tA.md:5\toff-vocabulary')));
+  const text = spawnSync(process.execPath, [BIN, 'relationships', 'check', '--vault', dir], { encoding: 'utf8' });
+  assert.match(text.stdout, /# count: 2/);
+  const j = JSON.parse(spawnSync(process.execPath, [BIN, 'relationships', 'check', '--vault', dir, '--json'], { encoding: 'utf8' }).stdout);
+  assert.deepStrictEqual(j.filter((f) => f.kind === 'unreadable').map((f) => f.rel), ['Broken.md']);
+  // scope: reported when in scope, silent when not
+  assert.strictEqual(rowsOf(dir, { files: ['Broken.md'] }).length, 1);
+  assert.strictEqual(rowsOf(dir, { files: ['A.md'] }).filter((r) => r.includes('Broken.md')).length, 0);
+  assert.strictEqual(rowsOf(dir, { folder: 'Nowhere' }).length, 0);
+});
+
+test('a flag the verb does not take is refused with the verb\'s flags; fix takes the scoping flags', () => {
+  const dir = vault({ 'A.md': note('npc') });
+  const run = (...a) => spawnSync(process.execPath, [BIN, 'relationships', ...a, '--vault', dir], { encoding: 'utf8' });
+  for (const [args, flag] of [[['check', '--write'], '--write'], [['check', '--kind', 'hub'], '--kind'], [['words', '--folder', 'x'], '--folder']]) {
+    const r = run(...args);
+    assert.strictEqual(r.status, 1, args.join(' '));
+    assert.ok(r.stderr.includes(`does not take ${flag}`), r.stderr);
+    assert.ok(r.stderr.includes('its flags are --vault'), r.stderr);
+  }
+  const ok = run('fix', '--folder', 'Nowhere', '--file', 'A.md');
+  assert.strictEqual(ok.status, 0, ok.stderr);
 });
