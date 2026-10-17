@@ -56,9 +56,9 @@ Sessions 1-2.
 
 ### Q8 — Spotlight forecast
 
-Review Sessions 1-2 at tests/benchmark-campaign/ and estimate
-the spotlight distribution per PC. Flag any PC below the 15%
-floor. Propose corrective B/C plot assignments for Session 3.
+Review Sessions 1-2 at tests/benchmark-campaign/ and say
+what each PC has had. Propose a moment for every PC in Session
+3, and flag any PC who has none yet.
 
 ## Agent Prompts
 
@@ -109,9 +109,9 @@ Showcase, Decision Callback, Arc Advancement Clue, or Character
 Moment), a description, and draw on established threads or NPCs
 from Sessions 1-2.
 
-Q8: Review Sessions 1-2 at tests/benchmark-campaign/ and estimate
-the spotlight distribution per PC. Flag any PC below the 15%
-floor. Propose corrective B/C plot assignments for Session 3.
+Q8: Review Sessions 1-2 at tests/benchmark-campaign/ and say
+what each PC has had. Propose a moment for every PC in Session
+3, and flag any PC who has none yet.
 ```
 
 ### Test prompt (split skill — feature branch)
@@ -162,9 +162,9 @@ Showcase, Decision Callback, Arc Advancement Clue, or Character
 Moment), a description, and draw on established threads or NPCs
 from Sessions 1-2.
 
-Q8: Review Sessions 1-2 at tests/benchmark-campaign/ and estimate
-the spotlight distribution per PC. Flag any PC below the 15%
-floor. Propose corrective B/C plot assignments for Session 3.
+Q8: Review Sessions 1-2 at tests/benchmark-campaign/ and say
+what each PC has had. Propose a moment for every PC in Session
+3, and flag any PC who has none yet.
 ```
 
 ### Evaluator prompt (blind scoring)
@@ -192,7 +192,7 @@ Q4: Thread scanning across Sessions 1-2
 Q5: Gap flagging in Session 3 prep
 Q6: Arc check and A/B/C plot assignment per PC
 Q7: Touchpoint assignment per PC with type and source
-Q8: Spotlight forecast — per-PC balance, 15% floor check
+Q8: Spotlight forecast — a moment for every PC this session
 
 For each question, output:
 - Scores for A and B on each dimension
