@@ -51,12 +51,15 @@ function safeSlug(slug) {
 
 // Which writer a PC's note takes. A PC's own frontmatter.system wins; otherwise the
 // campaign system decides (publishConfig.system, resolved as build.js does). CoC is
-// the default, as it always was: old CoC sites carry no system.
+// the default, as it always was: old CoC sites carry no system. A known system with no
+// live sheet (Pathfinder, Forged in the Dark) has no writer: null, and the note is skipped.
+const NO_LIVE_SHEET = new Set(['pf2e', 'fitd']);
 function resolveSystem(frontmatter, campaignSystem) {
   const s = String((frontmatter && frontmatter.system) || campaignSystem || '').toLowerCase();
   const id = systemId(s);
   if (id === 'gurps-4e') return 'gurps';
   if (id === 'dnd-5e-2024') return 'dnd';
+  if (NO_LIVE_SHEET.has(id)) return null;
   if (s.indexOf('gurps') !== -1) return 'gurps';
   if (/^dnd/.test(s) || /^d&d/.test(s)) return 'dnd';
   return 'coc';
@@ -146,7 +149,9 @@ async function runFlush(deps) {
     if (!page) { out('⚠ ' + safeSlug(slug) + ' — in KV but no matching vault sheet (skipped)'); continue; }
     const name = page.displayTitle || page.title;
     const raw = readFile(page.sourcePath);
-    const res = WRITERS[resolveSystem(page.frontmatter, campaignSystem)](raw, latest[slug], page, out);
+    const writer = resolveSystem(page.frontmatter, campaignSystem);
+    if (!writer) { out('⚠ ' + name + ' — this system has no live sheet to write back (skipped)'); continue; }
+    const res = WRITERS[writer](raw, latest[slug], page, out);
     if (!res) continue;
     if (res.changes.length) {
       if (dryRun) {

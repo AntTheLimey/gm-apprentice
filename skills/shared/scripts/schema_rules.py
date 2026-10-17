@@ -56,6 +56,10 @@ SYSTEMS: tuple[str, ...] = tuple(s["id"] for s in _ontology()["game_systems"])
 SYSTEM_NAMES: dict[str, str] = {s["id"]: s["name"] for s in _ontology()["game_systems"]}
 SYSTEM_ALIASES: dict[str, str] = {
     alias: s["id"] for s in _ontology()["game_systems"] for alias in s["aliases"]}
+# Where a system's rules live under ttrpg-expert/systems/, when not under its id: a
+# variant of another system (Regency is coc-7e's `regency` variant).
+SYSTEM_RULES: dict[str, str] = {
+    s["id"]: s.get("rules", s["id"]) for s in _ontology()["game_systems"]}
 
 
 def system_id(raw: object) -> str | None:

@@ -479,7 +479,8 @@
       "name": "Regency Cthulhu",
       "aliases": [
         "regency-cthulhu"
-      ]
+      ],
+      "rules": "coc-7e/regency"
     },
     {
       "id": "gurps-4e",

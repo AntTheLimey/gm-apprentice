@@ -105,9 +105,19 @@ KIND_BY_STEM: dict[str, str] = {
 # systems' aliases, from the ontology (schema_rules.SYSTEM_ALIASES). A slug
 # must be a real top-level directory under SYSTEMS_DIR; that is checked at
 # lookup time (list_systems()), not assumed here, so an alias with no
-# rules folder (`regency-cthulhu`: Regency is the coc-7e/regency variant)
-# fails loudly rather than silently resolving to nothing.
+# rules folder fails loudly rather than silently resolving to nothing.
+# A system whose rules are another system's variant (`coc-7e-regency`,
+# `regency-cthulhu`) is read as that `base/variant` (schema_rules.SYSTEM_RULES).
 SYSTEM_ALIASES: dict[str, str] = dict(schema_rules.SYSTEM_ALIASES)
+
+
+def as_rules_path(raw: str) -> str:
+    """`coc-7e-regency` or `regency-cthulhu` -> `coc-7e/regency`; anything
+    else, including an explicit `base/variant`, is returned as given."""
+    if "/" in raw:
+        return raw
+    rules = schema_rules.SYSTEM_RULES.get(schema_rules.system_id(raw) or "")
+    return rules if rules and "/" in rules else raw
 
 FENCE_RE = re.compile(r"^\s*(?:```|~~~)")
 HEADING_RE = re.compile(r"^#{1,6}\s")
@@ -585,7 +595,7 @@ def main(argv: list[str] | None = None) -> int:
         system: str | None = None
         implied_variant: str | None = None
     else:
-        base_part, _, variant_part = args.system.partition("/")
+        base_part, _, variant_part = as_rules_path(args.system).partition("/")
         base = resolve_system(base_part, args.systems_dir)
         if base is None:
             valid = list_systems(args.systems_dir)

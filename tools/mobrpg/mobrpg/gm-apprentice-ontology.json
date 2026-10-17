@@ -111,7 +111,7 @@
   "wrap_up_types": ["session_wrap", "session-wrap-up", "session-wrapup"],
   "game_systems": [
     {"id": "coc-7e", "name": "Call of Cthulhu", "aliases": ["coc", "coc7e", "cthulhu"]},
-    {"id": "coc-7e-regency", "name": "Regency Cthulhu", "aliases": ["regency-cthulhu"]},
+    {"id": "coc-7e-regency", "name": "Regency Cthulhu", "aliases": ["regency-cthulhu"], "rules": "coc-7e/regency"},
     {"id": "gurps-4e", "name": "GURPS", "aliases": ["gurps", "gurps4e"]},
     {"id": "dnd-5e-2024", "name": "D&D 5e 2024", "aliases": ["dnd", "dnd-5e", "dnd5e", "5e", "d&d"]},
     {"id": "pf2e", "name": "Pathfinder", "aliases": ["pathfinder", "pathfinder-2e", "pf2", "pf2e-remaster"]},
