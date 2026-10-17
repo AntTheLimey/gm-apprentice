@@ -303,7 +303,8 @@ test('a vault that lists only some types notes the others as INFO; a full list i
 test('a container that links would-be children which are part_of its parent or unplaced', () => {
   const dir = vault({
     'Station.md': note('location'),
-    'District.md': note('location', rels(edge('part_of', 'Station')), 'Holds [[Bar]], [[Club]], [[Ann]], [[Station]], [[Done]] and [[Elsewhere]].'),
+    'District.md': note('location', [...rels(edge('part_of', 'Station')), 'points_of_interest:', '  - "[[Bar]]"', '  - "[[Club]] (open late)"', '  - "[[Ann]]"', '  - "[[Station]]"', '  - "[[Done]]"', '  - "[[Elsewhere]]"'], 'Next to [[Tower]] and [[Plaza]].'),
+    'Plaza.md': note('location'),
     'Bar.md': note('location', rels(edge('part_of', 'Station'))),
     'Club.md': note('location'),
     'Ann.md': note('npc'),
@@ -311,7 +312,7 @@ test('a container that links would-be children which are part_of its parent or u
     'Elsewhere.md': note('location', rels(edge('part_of', 'Tower'))),
     'Tower.md': note('location'),
   });
-  assert.deepStrictEqual(ofKind(dir, 'childless-container'), ['INFO\tDistrict.md:4\tDistrict is part_of Station and links Bar, Club, which are part_of Station or unplaced: should they be part_of District?']);
+  assert.deepStrictEqual(ofKind(dir, 'childless-container'), ['INFO\tDistrict.md:4\tDistrict is part_of Station and lists Bar, Club as points of interest, which are part_of Station or unplaced: should they be part_of District?']);
   assert.deepStrictEqual(findings(dir).find((f) => f.kind === 'childless-container').fix, { certain: false, choices: ['Bar', 'Club'] });
 });
 
@@ -319,7 +320,7 @@ test('a container beside nothing is quiet, and a link to a grandparent is not a 
   const dir = vault({
     'Planet.md': note('location'),
     'Station.md': note('location', rels(edge('part_of', 'Planet'))),
-    'District.md': note('location', rels(edge('part_of', 'Station')), 'Under [[Planet]].'),
+    'District.md': note('location', [...rels(edge('part_of', 'Station')), 'points_of_interest:', '  - "[[Planet]]"']),
   });
   assert.deepStrictEqual(ofKind(dir, 'childless-container'), []);
 });

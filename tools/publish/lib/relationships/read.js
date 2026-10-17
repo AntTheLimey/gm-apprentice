@@ -10,7 +10,7 @@
 // a hidden folder, not under a top-level `_Templates`, `_templates` or `_inbox`. `_meta` is a
 // note like any other.
 //
-//   Note  { rel, name, aliases, type, fields, edges, links, inScope }
+//   Note  { rel, name, aliases, type, fields, edges, links, poiLinks, inScope }   (poiLinks: the names in points_of_interest alone)
 //   Field { raw, target, line }      parent_location / current_holder. `target` is the rel of the
 //                                    note it names when the value is exactly one wiki-link to a
 //                                    note that exists, else null.
@@ -88,6 +88,20 @@ function soleLink(value) {
   const text = String(value).trim();
   const m = wikilinkRe('').exec(text);
   return m && m.index === 0 && m[0].length === text.length ? parseWikilink(m[1]).name.trim() : null;
+}
+
+function poiLinks(frontmatter) {
+  const names = new Set();
+  const poi = frontmatter.points_of_interest;
+  for (const item of Array.isArray(poi) ? poi : [poi]) {
+    if (typeof item !== 'string') continue;
+    for (const m of item.matchAll(wikilinkRe('g', true))) {
+      if (m[0].startsWith('!')) continue;
+      const name = parseWikilink(m[1]).name.trim();
+      if (name) names.add(name);
+    }
+  }
+  return [...names];
 }
 
 function bodyLinks(content, frontmatter) {
@@ -263,6 +277,7 @@ function readVault(vaultPath, { files, folder, newerThan } = {}) {
       fields,
       edges,
       links: bodyLinks(p.content, p.data),
+      poiLinks: poiLinks(p.data),
       inScope: inScope(p),
     };
   });

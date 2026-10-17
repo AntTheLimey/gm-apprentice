@@ -295,7 +295,7 @@ function check(model, ontology, { vaultPath } = {}) {
     }
   }
 
-  // --- a container that links would-be children ---------------------------------------------------
+  // --- a container that lists would-be children as points of interest (prose mentions of a neighbour are not) ---------------------------------------------------
   const partOfTargets = (note) => own(note).filter((e) => e.type === 'part_of' && e.targetRel).map((e) => e.targetRel);
   const ancestors = (note) => {
     const found = new Set();
@@ -308,7 +308,7 @@ function check(model, ontology, { vaultPath } = {}) {
   for (const note of notes) {
     if (!note.inScope) continue;
     const parents = own(note).filter((e) => e.type === 'part_of' && e.targetRel);
-    if (!parents.length || !note.links.length) continue;
+    if (!parents.length || !note.poiLinks.length) continue;
     const up = ancestors(note);
     const seenParent = new Set();
     for (const parentEdge of parents) {
@@ -318,7 +318,7 @@ function check(model, ontology, { vaultPath } = {}) {
       if (seenParent.has(parent.rel) || !note.type || parent.type !== note.type) continue;
       seenParent.add(parent.rel);
       const candidates = [];
-      for (const name of note.links) {
+      for (const name of note.poiLinks) {
         const rel = model.resolve(name);
         const child = rel && byRel.get(rel);
         if (!child || child === note || up.has(child.rel) || candidates.includes(child)) continue;
@@ -334,7 +334,7 @@ function check(model, ontology, { vaultPath } = {}) {
       if (candidates.length) {
         const names = candidates.map((c) => c.name);
         add(note, parentEdge, 'INFO', 'childless-container', parentEdge.line,
-          `${note.name} is part_of ${parent.name} and links ${names.join(', ')}, which are part_of ${parent.name} or unplaced: should they be part_of ${note.name}?`,
+          `${note.name} is part_of ${parent.name} and lists ${names.join(', ')} as points of interest, which are part_of ${parent.name} or unplaced: should they be part_of ${note.name}?`,
           { certain: false, choices: names });
       }
     }
