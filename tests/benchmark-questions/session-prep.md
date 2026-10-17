@@ -180,7 +180,7 @@ Score each answer on 5 dimensions (1-3 each, 15 max per question):
 | Factual accuracy | Wrong stats, hallucinated names | Mostly correct, minor errors | All verifiable facts correct |
 | System specificity | Could be any system, no mechanics | Right system but generic | Uses system-specific idiom, conventions, tone |
 | Actionability | Needs significant rework | Usable with GM effort | Drop-in ready, use as-is |
-| Mechanical grounding | No concrete numbers or values | Some mechanics but incomplete | Specific stats, DCs, costs, rolls, thresholds |
+| Mechanical grounding | No concrete numbers or values | Some mechanics but incomplete | Specific stats, DCs, costs, rolls where the question calls for mechanics |
 | Table-ready fiction | Generic/obvious/AI slop | Fits system but predictable | Evocative, system-native, sparks play |
 
 Questions for context:
@@ -193,6 +193,9 @@ Q5: Gap flagging in Session 3 prep
 Q6: Arc check and A/B/C plot assignment per PC
 Q7: Touchpoint assignment per PC with type and source
 Q8: Spotlight forecast — a moment for every PC this session
+
+For Q8, score Mechanical grounding on concrete detail in each
+proposed moment (the scene, NPC or thread it uses), not on numbers.
 
 For each question, output:
 - Scores for A and B on each dimension

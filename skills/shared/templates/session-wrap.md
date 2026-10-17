@@ -69,8 +69,7 @@ person, the reason — these bullets are read cold by session-prep.}
 
 #### Unresolved Threads
 
-{Cliffhangers and live threads. Note who had little tonight, in
-plain words.}
+{Cliffhangers and live threads.}
 
 #### Player-Stated Intentions
 

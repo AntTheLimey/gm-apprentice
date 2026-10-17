@@ -134,7 +134,7 @@ Score each answer on 5 dimensions (1-3 each, 15 max per question):
 | Factual accuracy | Wrong stats, hallucinated names | Mostly correct, minor errors | All verifiable facts correct |
 | System specificity | Could be any system, no mechanics | Right system but generic | Uses system-specific idiom, conventions, tone |
 | Actionability | Needs significant rework | Usable with GM effort | Drop-in ready, use as-is |
-| Mechanical grounding | No concrete numbers or values | Some mechanics but incomplete | Specific stats, DCs, costs, rolls, thresholds |
+| Mechanical grounding | No concrete numbers or values | Some mechanics but incomplete | Specific stats, DCs, costs, rolls where the question calls for mechanics |
 | Table-ready fiction | Generic/obvious/AI slop | Fits system but predictable | Evocative, system-native, sparks play |
 
 Questions for context:

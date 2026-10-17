@@ -59,7 +59,7 @@ which is control or test. Randomise A/B assignment.
 | **Factual accuracy** | Wrong stats, hallucinated names | Mostly correct, minor errors | All verifiable facts correct |
 | **System specificity** | Could be any system, no mechanics | Right system but generic | Uses system-specific idiom, conventions, tone |
 | **Actionability** | Needs significant rework | Usable with GM effort | Drop-in ready, use as-is |
-| **Mechanical grounding** | No concrete numbers or values | Some mechanics but incomplete | Specific stats, DCs, costs, rolls, thresholds |
+| **Mechanical grounding** | No concrete numbers or values | Some mechanics but incomplete | Specific stats, DCs, costs, rolls where the question calls for mechanics |
 | **Table-ready fiction** | Generic/obvious/AI slop | Fits system but predictable | Evocative, system-native, sparks play — GM sees how it plays out |
 
 ### 5. Record metrics
@@ -99,8 +99,8 @@ methodology doc in `docs/` is the persistent reference.
    terms for CoC 7e made the skill WORSE than no skill.
    Always match the system the GM expects.
 
-3. **Named frameworks with thresholds produce dramatically
-   better output.** "Give underserved PCs more scenes" vs
+3. **(Historical, April 2026) Named frameworks with thresholds
+   produced dramatically better output.** "Give underserved PCs more scenes" vs
    "Delgado is below the 15% floor, assign B-plot" — the
    latter scored +6 points higher.
    The 15% floor was retired on 2026-10-17: Ant's rule is that
