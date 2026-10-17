@@ -8,8 +8,8 @@ not run: show the GM `messages` word for word and stop. Nothing was uploaded.
 ## What happened
 
 Nothing was uploaded. Before every upload the tool reads
-the finished player site for sentences the vault hides (four words or more) and
-for secret names. Each finding is something the vault keeps from players and the
+the finished player site for sentences the vault hides (four words or more),
+for secret names, and for the words the GM listed under `player_site.never_show`. Each finding is something the vault keeps from players and the
 built site shows anyway. Say that in a line or two, in plain words, then take
 the findings one at a time. `node "$TOOL" leaks list --json --config
 <dir>/vault.config.json` shows them again.
@@ -58,7 +58,10 @@ A finding with the code `NEVER_SHOW` is a word the GM listed under
 `player_site.never_show`. The build does not remove it: fix the note or the
 build step that puts it on the page, accept it, or, if the word no longer needs
 guarding, `node "$TOOL" settings remove player_site.never_show "<word>" --vault
-<vault>` on the GM's word.
+<vault>` on the GM's word. Each file with the word (a page, a data file such
+as the search index, a copied file's name) is its own finding, accepted on its
+own. Never offer `leaks accept --note player_site.never_show`: it accepts
+every listed word on every page at once.
 
 ## When they are settled
 

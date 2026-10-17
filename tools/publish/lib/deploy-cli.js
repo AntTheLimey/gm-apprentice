@@ -264,7 +264,11 @@ async function runDeploy(options, deps) {
   const gate = checkLeaks();
   gateResult = gate.result;
   let leaksIgnored = false;
-  if (!gateResult && ignoreLeaks) {
+  if (!gateResult && ignoreLeaks && !exists(gateFolder)) {
+    say(gate.line);
+    say(`deploy stopped: there is no built site in ${gateFolder} to upload.`);
+    return finish({ refused: true }, 1);
+  } else if (!gateResult && ignoreLeaks) {
     say(gate.line.replace(' Nothing was uploaded.', ''));
     say(IGNORED);
     leaksIgnored = true;
@@ -277,13 +281,13 @@ async function runDeploy(options, deps) {
   }
   if (gateResult && gateResult.findings.length && ignoreLeaks) {
     const n = gateResult.findings.length;
-    say(`Leak check: hidden text or a secret name is on the player site (${n} finding${n === 1 ? '' : 's'}).`);
+    say(`Leak check: hidden text, a secret name or a never-show word is on the player site (${n} finding${n === 1 ? '' : 's'}).`);
     for (const line of formatFindings(gateResult)) say(line);
     say(IGNORED);
     leaksIgnored = true;
   } else if (gateResult && gateResult.findings.length) {
     const n = gateResult.findings.length;
-    say(`deploy stopped: hidden text or a secret name is on the player site (${n} finding${n === 1 ? '' : 's'}). Nothing was uploaded.`);
+    say(`deploy stopped: hidden text, a secret name or a never-show word is on the player site (${n} finding${n === 1 ? '' : 's'}). Nothing was uploaded.`);
     for (const line of formatFindings(gateResult)) say(line);
     say('Fix each note, or accept a finding with gm-apprentice-publish leaks accept <page> <id>. leaks list shows them again.');
     return finish({ refused: true }, 1);

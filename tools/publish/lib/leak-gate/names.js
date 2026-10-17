@@ -4,6 +4,8 @@
 const { secretNamesOf, findSecretNames, publicWordsOf, foldQuotes } = require('../note-faults');
 const { fileText, pageExtras, isToolFile } = require('./match');
 const { wordsOf } = require('./text');
+const { canonicalNfc } = require('../unicode');
+const { labelsForLinks } = require('../wikilink');
 
 const REASON = { alias: 'a name kept secret in gm_aliases', withheld: 'the name of a note marked withheld' };
 const CODE = { alias: 'ALIAS_IN_PROSE', withheld: 'WITHHELD_IN_PROSE' };
@@ -95,7 +97,7 @@ function nameFindings({ files, allFiles, hidden, findingId }) {
 // The GM's never-show words (player_site.never_show): each found in any case as a whole word, with a space, an
 // underscore or a hyphen between its words, in what a file sends and in any file's own name. Unlike a secret name, a
 // public name that holds one is no excuse: the GM said never.
-function neverShowFindings({ files, allFiles, words, findingId }) {
+function neverShowFindings({ files, allFiles, words, findingId, published = [] }) {
   const found = [];
   const seen = new Set();
   const list = [...new Set(words.map((w) => w.trim()).filter(Boolean))].map((w) => ({
@@ -119,6 +121,19 @@ function neverShowFindings({ files, allFiles, words, findingId }) {
       const end = text.indexOf('\n', m.index + m[0].length);
       const stop = Math.min(end === -1 ? text.length : end, m.index + m[0].length + CONTEXT);
       add(file.rel, w, text.slice(start, stop).replace(/\s+/g, ' ').trim());
+    }
+  }
+  // A search index holds a public note's aliases only as single terms, which no phrase matches: each published note's
+  // aliases are read as the index was made from them, and a phrase in one is a finding on each index file.
+  const indexes = files.filter((f) => f.ext === '.json' && /"invertedIndex"/.test(f.raw) && /"aliases"/.test(f.raw));
+  if (indexes.length) {
+    for (const page of published) {
+      const aliases = (page.frontmatter && Array.isArray(page.frontmatter.aliases)) ? page.frontmatter.aliases : [];
+      const text = foldQuotes(canonicalNfc(aliases.map((a) => labelsForLinks(String(a))).join(', ')));
+      for (const w of list) {
+        if (!w.re.test(text)) continue;
+        for (const f of indexes) add(f.rel, w, `aliases of ${page.displayTitle || 'a published note'}: ${text}`);
+      }
     }
   }
   for (const rel of allFiles) {

@@ -187,8 +187,9 @@ gm-apprentice-publish leaks <list|check|accept|prune> [--config <path>] [--json]
 
 The leak check reads the built player site (the folder deploy uploads) for
 hidden text and secret names: any hidden sentence, list item or table cell of
-four words or more, a gm_aliases name, a withheld note's name. deploy runs it
-and stops on a finding; these commands run it without deploying.
+four words or more, a gm_aliases name, a withheld note's name, and any word
+player_site.never_show lists. deploy runs it and stops on a finding (unless
+deploy --ignore-leaks); these commands run it without deploying.
 
   leaks list                 Print the findings, each with a short id
   leaks check                The same, and exit 1 on a finding; also names
@@ -440,6 +441,9 @@ change what the site shows:
                   printed on a page, in the address of a link, held by the
                   search index or the link previews, or carried in a copied
                   file's name
+  NEVER_SHOW_IN_PROSE
+                  a word listed under player_site.never_show printed on a
+                  published page (deploy stops on it)
   WITHHELD_PUBLISHED
                   a note marked withheld: true that the site publishes (an
                   error; the build still builds)

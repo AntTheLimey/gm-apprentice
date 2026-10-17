@@ -213,6 +213,20 @@ vault (gm_site.publish); nothing was built."
 | `--site <name>` | both while the GM site is on | Build one site: `player` or `gm` |
 | `--config <path>` | `./vault.config.json` | Path to config file |
 
+### `deploy [--verify] [--no-build] [--dry-run] [--ignore-leaks] [--json] [--config path]`
+
+Builds the player site (unless `--no-build`) and puts it online on the
+vault's `player_site.host`. Before anything is uploaded the leak check
+reads the finished folder, after every build step, for hidden text (a
+hidden sentence, list item or table cell of four words or more), a secret
+name (`gm_aliases`, a withheld note's name) and the words
+`player_site.never_show` lists, and stops on a finding. `leaks
+list|check|accept|prune` run the same check without deploying, and an
+accepted finding is not asked about again. `--ignore-leaks` uploads
+anyway, on purpose: every finding is still printed, and nothing is
+accepted. `--dry-run` prints what would run and runs the check on the
+folder as it stands. `deploy --help` and `leaks --help` have the detail.
+
 ### `serve [--site gm|player] [--port N] [--config path]`
 
 Serves a site that is already built to your home network, read only, so

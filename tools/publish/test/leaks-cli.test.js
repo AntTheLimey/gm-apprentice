@@ -195,4 +195,28 @@ describe('leaks', () => {
       assert.equal(gateFolderFor(site.configPath), path.join(fs.realpathSync(siteRoot), 'elsewhere'));
     } finally { site.cleanup(); }
   });
+  it('a never-show word is accepted file by file: its copies elsewhere still ask', async () => {
+    const site = leakSite(NOTES, { player: { folder_map: { NPCs: 'npcs' }, never_show: ['Kestrel'] } });
+    try {
+      leakInto(site.outputDir, 'npcs/b.html', 'Kestrel was here.');
+      fs.writeFileSync(path.join(site.outputDir, 'kestrel.png'), 'x');
+      const r = await run(site, 'accept', { page: 'npcs/b.html', text: 'Kestrel' });
+      assert.equal(r.rc, 0, r.text);
+      const left = JSON.parse((await run(site, 'list', { json: true })).out.join('')).findings.map((f) => f.page);
+      assert.deepEqual(left, ['kestrel.png']);
+    } finally { site.cleanup(); }
+  });
+
+  it('a never_show that is not a list stops the leaks commands rather than reading clean', async () => {
+    const site = leakSite(NOTES, SETTINGS);
+    try {
+      const file = path.join(vaultOf(site), '_meta', 'vault-config.yaml');
+      const YAML = require('yaml');
+      const doc = YAML.parse(fs.readFileSync(file, 'utf8'));
+      doc.player_site.never_show = 'Kestrel';
+      fs.writeFileSync(file, YAML.stringify(doc));
+      await assert.rejects(run(site, 'check'), /never_show/);
+    } finally { site.cleanup(); }
+  });
 });
+

@@ -46,7 +46,7 @@ function runLeakGate({ configPath, outputDir }) {
     const key = keyOf(f.page, f.text);
     if (!raw.has(key)) raw.set(key, f);
   }
-  for (const f of neverShowFindings({ files, allFiles: listFiles(outputDir), words: hidden.neverShow, findingId })) {
+  for (const f of neverShowFindings({ files, allFiles: listFiles(outputDir), words: hidden.neverShow, findingId, published: hidden.published })) {
     const key = keyOf(f.page, f.text);
     if (!raw.has(key)) raw.set(key, f);
   }
@@ -67,7 +67,8 @@ function formatFindings(result) {
   const groups = new Map();
   const pageFirst = (a, b) => Number(!/\.html?$/i.test(a.page)) - Number(!/\.html?$/i.test(b.page));
   for (const f of [...result.findings].sort(pageFirst)) {
-    const key = `${f.note}\n${f.text}`;
+    // A never-show word has no note of its own, and is accepted page by page: one block per page.
+    const key = f.code === 'NEVER_SHOW' ? `${f.note}\n${f.text}\n${f.page}` : `${f.note}\n${f.text}`;
     if (groups.has(key)) groups.get(key).push(f); else groups.set(key, [f]);
   }
   for (const [f, ...rest] of groups.values()) {

@@ -216,7 +216,7 @@ function describe(name) {
     return { result: { ...r, twinOf: e.twinOf }, lines, notices: noticesFor([name]) };
   }
   lines.push(`  ${r.does || '(no description)'}`, `  takes: ${r.takes}`, `  default: ${plainValue(r.default)}`);
-  if (r.guards) lines.push('  hides things from players: a mistake here stops the build');
+  if (r.guards) lines.push(e.name === 'player_site.never_show' ? '  guards what players see: a mistake here stops the build' : '  hides things from players: a mistake here stops the build');
   return { result: r, lines, notices: noticesFor([name]) };
 }
 

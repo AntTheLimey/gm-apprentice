@@ -62,6 +62,7 @@ every page that names it. Use it to confirm each fix.
 |-----|--------------|-----|
 | `ALIAS_IN_PROSE` | Critical | A secret name is on the site now |
 | `WITHHELD_IN_PROSE` | Critical | The name of a note you marked withheld is on the site now |
+| `NEVER_SHOW_IN_PROSE` | Critical | A word the GM listed never to show is on the site now; deploy stops on it |
 | `NAMED_NO_PAGE`, withheld (`ERROR`) | Critical | A published page links a withheld note |
 | `WITHHELD_PUBLISHED` (`ERROR`) | Critical | A withheld note is on the site under its name |
 | `WITHHELD_NAME_PUBLIC` | Warning | A withheld name is not looked for |
@@ -109,6 +110,19 @@ or the name of another page it links. Show the sentence. Offer:
 
 If the GM says the name is no longer a secret, move it from
 `gm_aliases` to `aliases` on the owning note instead.
+
+## NEVER_SHOW_IN_PROSE
+
+A word or phrase the GM listed under `player_site.never_show` is printed
+on a published page. The row gives the note, the word, how often it is
+printed and the sentence. A public name that holds the word is still a
+row: the GM said never. Show the sentence. Offer: **reword** it; or
+**move** it into a part of the note players do not see (a `## GM Notes`
+section, a gm-only block). A row ending "printed on the index or listing
+page: …" comes from a frontmatter field: reword that field. If the GM
+says the word no longer needs guarding, take it off the list on their
+word: `node "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js"
+settings remove player_site.never_show "<word>" --vault "<vault>"`.
 
 ## WITHHELD_IN_PROSE
 

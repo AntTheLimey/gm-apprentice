@@ -26,10 +26,19 @@ words that must never reach players.
   or hyphen between its words), on a page, in a data file or in a file's
   name, and `leaks check` lists them with the code `NEVER_SHOW`. A
   public note's own text is no excuse. An accepted finding passes, as
-  any other does. It is checked on a vault kept by a player too. Edit it
-  with `settings add` and `settings remove`; two entries that differ only
-  in case or spacing are one. A value that is not a list stops the
-  build and the deploy.
+  any other does, file by file (a word has no note to tie its copies
+  to). A phrase in a public note's `aliases`, which the search index
+  holds only as single words, is a finding on the index. It is checked
+  on a vault kept by a player too. Edit it with `settings add` and
+  `settings remove`; two entries that differ only in case or spacing are
+  one. A value that is not a list stops the build, the deploy and the
+  `leaks` commands.
+- The build warns before deploy does: a never-show word printed on a
+  published page is a new Site Faults code, `NEVER_SHOW_IN_PROSE`, in the
+  build's count, `doctor --site` and campaign-qa's Site Faults check,
+  which offers to reword it or move it into a hidden part of the note.
+  A never-show word that only a build step writes is found by the leak
+  check alone.
 - The publish-site skill's leak walk-through covers `NEVER_SHOW` findings,
   and uses `--ignore-leaks` only when the GM says to put the site online
   as it is.

@@ -141,4 +141,21 @@ describe('leak gate: never-show words (player_site.never_show)', () => {
       assert.deepEqual(r.findings.map((f) => f.code), ['NEVER_SHOW']);
     } finally { s.cleanup(); }
   });
+  it('a listed phrase in a public note\'s aliases is a finding on the search index (it holds them as single terms)', () => {
+    const notes = { ...NOTES, 'NPCs/Bird.md': '---\ntype: npc\naliases: [Blue Lady, Wren]\n---\nA bird.\n' };
+    const s = leakSite(notes, WORDS);
+    try {
+      const found = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings.filter((x) => x.code === 'NEVER_SHOW');
+      assert.deepEqual(found.map((f) => [f.page, f.text]), [['search-index.json', 'blue lady']]);
+      assert.match(found[0].shown, /aliases of Bird/);
+    } finally { s.cleanup(); }
+  });
+  it('the build\'s note audit warns of a listed word printed on a published page (NEVER_SHOW_IN_PROSE)', () => {
+    const notes = { ...NOTES, 'NPCs/Bob.md': '---\ntype: npc\n---\nBob saw the blue lady at the quay.\n' };
+    const s = leakSite(notes, WORDS);
+    try {
+      assert.ok(s.logs.some((l) => /1 never-show word is printed on published pages, so deploy will stop \(Blue Lady 1 note\)/.test(l)), s.logs.join('\n'));
+    } finally { s.cleanup(); }
+  });
 });
+
