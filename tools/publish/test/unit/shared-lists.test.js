@@ -59,3 +59,28 @@ test('a session is played or not yet run, never both', () => {
   for (const s of AUTO_EXCLUDE_STATUS) assert.ok(!isPlayedSession({ type: 'session', status: s }), s);
   assert.ok(AUTO_EXCLUDE_STAGE.has('outline'));
 });
+
+test('a wrap-up session is played on the landing page, and no file types the played list out', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { getLatestSession } = require('../../lib/templates/landing-data');
+  const latest = getLatestSession([
+    { frontmatter: { type: 'session', status: 'played', session_number: 1, play_date: '2026-01-01' } },
+    { frontmatter: { type: 'session', status: 'wrap-up', session_number: 2, play_date: '2026-01-08' } },
+    { frontmatter: { type: 'session', status: 'prepped', session_number: 3, play_date: '2026-01-15' } },
+  ]);
+  assert.equal(latest.frontmatter.session_number, 2);
+  // Every "is this session played" question goes through session-hub; a status compared to
+  // 'played' by hand is a copy that can drift (four did, leaving out `wrap-up`).
+  const lib = path.join(__dirname, '../../lib');
+  const hand = [];
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith('.js') && /status\s*===\s*['"]played['"]/.test(fs.readFileSync(p, 'utf8'))) hand.push(path.relative(lib, p));
+    }
+  };
+  walk(lib);
+  assert.deepEqual(hand, []);
+});

@@ -53,6 +53,11 @@ drifts. Several copies had already drifted apart.
 - `entity-schema.md` left `wrap-up` out of a session's statuses, and
   `skipped` and `modified` out of a scene's; `content-filtering.md` left
   `wrap-up` out of what always publishes.
+- A session at `status: wrap-up` publishes, but four places on the site
+  still counted only `played` and `reviewed`: the chapter index showed it
+  as upcoming and its chapter as not complete, the landing page skipped it
+  as the latest session and in the sessions-played count, and a PC's
+  journey left out its places. They ask the same rule as the build now.
 - `flush` sent a Pathfinder or Forged in the Dark character's saved values
   to the Call of Cthulhu writer. Those systems have no live sheet, so it
   now skips the note and says why.

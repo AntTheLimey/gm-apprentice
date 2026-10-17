@@ -178,6 +178,7 @@ from vaultlib import (  # noqa: F401
     HEADING_RE,
     LINK_RE,
     SKIP_DIRS,
+    WRAP_UP_TYPE,
     WRAP_UP_TYPES,
     LineState,
     active_pc_names,
@@ -388,7 +389,7 @@ DIGITS_RE = re.compile(r"\d+(?:\.\d+)?")
 # only flood the report.
 STRUCTURAL_TYPES = {
     "session", "session-plan", "session-play-notes",
-    "session-wrap-up", "session_wrap", "scene", "chapter",
+    *WRAP_UP_TYPES, "scene", "chapter",
     "meta", "timeline", "world_flags", "plan",
 }
 STRUCTURAL_NAME_RE = re.compile(
@@ -3188,7 +3189,7 @@ def _pc_body(vault: Path, folder: str | None = None,
 # `Session NN - Title - Wrap-Up.md`, `Session_NN_Wrap_Up.md` and the
 # chapter-level variants have no filename in common.
 WRAP_TYPES = SESSION_DOC_TYPES["wrap_up"][1]
-CANONICAL_WRAP_TYPE = "session_wrap"
+CANONICAL_WRAP_TYPE = WRAP_UP_TYPE
 
 WRAP_TEMPLATE_PATH = (Path(__file__).resolve().parent.parent
                       / "templates" / "session-wrap.md")

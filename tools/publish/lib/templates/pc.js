@@ -28,6 +28,7 @@ const IDENTITY_SOURCE_FIELD = { Occupation: 'occupation', Age: 'age', Points: 'p
 // (Background, Notes, GM Notes, suit mods, etc.) still render as accordions.
 const { GURPS_CONSUMED_TITLES, COC_CONSUMED_TITLES, EQUIPMENT_SECTION_TITLES } = require('./consumed-titles');
 const { systemId, SYSTEM_NAMES } = require('../shared-lists');
+const { isPlayedSession } = require('../session-hub');
 
 // Titles the structured CoC sheet/record consume. 'connections' and 'cover
 // identity' are deliberately NOT here: the structured renderer doesn't place
@@ -176,7 +177,7 @@ function unconsumedEquipment(frontmatter, sections, consumes) {
 
 function buildRouteMap(page, pages) {
   const storyPages = (pages || [])
-    .filter(p => p.frontmatter.type === 'session' && (p.frontmatter.status === 'played' || p.frontmatter.status === 'reviewed'))
+    .filter(p => isPlayedSession(p.frontmatter))
     .sort((a, b) => (a.frontmatter.session_number || 0) - (b.frontmatter.session_number || 0));
 
   const locations = [];

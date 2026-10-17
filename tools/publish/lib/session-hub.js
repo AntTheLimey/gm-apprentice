@@ -26,6 +26,10 @@ const { WRAP_UP_TYPES, SESSION_PLAYED: PLAYED_SESSION_STATUSES } = require('./sh
 // warns when one is on neither list, and `doctor --site` reports it.
 const REGISTRABLE_TYPES = new Set(['session', 'chapter', ...WRAP_UP_TYPES]);
 
+function isPlayedStatus(status) {
+  return PLAYED_SESSION_STATUSES.has(String(status || '').toLowerCase());
+}
+
 function isPlayedSession(frontmatter) {
   return !!(frontmatter && frontmatter.type === 'session'
     && PLAYED_SESSION_STATUSES.has(String(frontmatter.status || '').toLowerCase()));
@@ -209,4 +213,4 @@ function isLinkedWrapUp(wrapUp, pairs) {
   return !!linkTarget(wrapUp && wrapUp.frontmatter && wrapUp.frontmatter.session);
 }
 
-module.exports = { suppressHubBody, publishedWrapUpFor, pairHubs, isLinkedWrapUp, WRAP_UP_TYPES, isWrapUp, PLAYED_SESSION_STATUSES, isPlayedSession, REGISTRABLE_TYPES };
+module.exports = { suppressHubBody, publishedWrapUpFor, pairHubs, isLinkedWrapUp, WRAP_UP_TYPES, isWrapUp, PLAYED_SESSION_STATUSES, isPlayedStatus, isPlayedSession, REGISTRABLE_TYPES };

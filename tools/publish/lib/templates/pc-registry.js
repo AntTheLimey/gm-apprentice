@@ -18,7 +18,7 @@ const renderers = {
 
 // For a renderer built on sheet-parse.js: which `## ` section titles its sheet
 // renders in full, so the PC page can drop them from its accordion list. Keyed
-// by renderer, so the system aliases above stay the only list of them.
+// by renderer, so the renderer table above stays the only list of systems.
 const consumedTitles = new Map([
   [renderDnDSheet, isDndConsumedTitle],
   [renderFitDSheet, isFitDConsumedTitle],
@@ -32,7 +32,7 @@ function getConsumedTitleMatcher(system) {
 }
 
 // Which sheet family a system's renderer belongs to, by renderer so the
-// aliases above stay the only list of them. CoC has no frontmatter stat read.
+// renderer table above stays the only list of systems. CoC has no frontmatter stat read.
 const families = new Map([
   [renderGURPSSheet, 'gurps'],
   [renderDnDSheet, 'dnd'],
