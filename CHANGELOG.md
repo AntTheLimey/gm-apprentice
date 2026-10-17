@@ -50,6 +50,10 @@ drifts. Several copies had already drifted apart.
 
 ### Fixed
 
+- The publish tool's package ships its MIT licence as `LICENSE`, a copy of
+  the repo's `LICENSE-CODE` that a test keeps identical, and the release
+  stops if the packed tool lacks it (#418).
+
 - `entity-schema.md` left `wrap-up` out of a session's statuses, and
   `skipped` and `modified` out of a scene's; `content-filtering.md` left
   `wrap-up` out of what always publishes.
