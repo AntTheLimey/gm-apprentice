@@ -521,4 +521,4 @@ function renderPlan(plan, written) {
   return rows.join('\n');
 }
 
-module.exports = { planFix, applyFix, renderPlan, removeLeftovers };
+module.exports = { planFix, applyFix, renderPlan, removeLeftovers, openText };

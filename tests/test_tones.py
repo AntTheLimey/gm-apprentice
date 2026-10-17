@@ -25,30 +25,6 @@ LISTED = {
                 "transactional", "formal", "professional"],
 }
 
-NOTE = """---
-type: npc
-tone: grim
-relationships:
-  - target: "[[A]]"
-    type: knows
-    tone: "Cordial"  # per S3
-    description: |
-      tone: dread
-      a line of prose
-  - target: "[[B]]"
-    type: serves
-    tone: warm
-  - target: "[[C]]"
-    type: knows
-    tone:
-mobrpg:
-  relationships:
-    - predicate: knows
-      tone: zealous
----
-Body. tone: ominous
-"""
-
 
 class ListTests(unittest.TestCase):
     def test_the_list_is_the_27_words_ant_agreed(self):
@@ -79,41 +55,6 @@ class ListTests(unittest.TestCase):
         self.assertIsNone(sr.tone_proposal("warm"))
         self.assertIsNone(sr.tone_proposal("central"))
         self.assertIsNone(sr.tone_proposal("[a, b]"))
-
-
-class IterTests(unittest.TestCase):
-    def test_only_edge_tones_of_the_top_level_block(self):
-        self.assertEqual(list(sr.iter_relationship_tones(NOTE)),
-                         [(7, "Cordial"), (13, "warm")])
-
-    def test_predicates_are_unchanged(self):
-        self.assertEqual(
-            [(n, k, v) for n, k, v in sr.iter_relationship_predicates(NOTE)],
-            [(6, "type", "knows"), (12, "type", "serves"),
-             (15, "type", "knows"), (19, "predicate", "knows")])
-
-    def test_crlf(self):
-        crlf = NOTE.replace("\n", "\r\n")
-        self.assertEqual(list(sr.iter_relationship_tones(crlf)),
-                         [(7, "Cordial"), (13, "warm")])
-
-
-    def test_an_empty_frontmatter_has_no_relationships(self):
-        # `---` straight after `---` closes the frontmatter: a later `---`
-        # in the body does not, and the body is never read as YAML.
-        for eol in ("\n", "\r\n"):
-            text = ("---\n---\nText.\n\nrelationships:\n"
-                    '  - target: "[[X]]"\n    type: bogus\n    tone: wary\n'
-                    "\n---\n\nMore.\n").replace("\n", eol)
-            self.assertEqual(list(sr.iter_relationship_tones(text)), [])
-            self.assertEqual(list(sr.iter_relationship_predicates(text)), [])
-        self.assertEqual(list(sr.iter_relationship_tones("---\n---")), [])
-
-    def test_a_null_tone_is_no_tone(self):
-        text = note("    tone: null", "    tone: ~", "    tone: Null",
-                    "    tone: dread")
-        self.assertEqual(list(sr.iter_relationship_tones(text)),
-                         [(15, "dread")])
 
 
 def doc_families(text):
@@ -183,6 +124,21 @@ class VaultCase(unittest.TestCase):
 
 
 class ReportTests(VaultCase):
+    def test_a_note_whose_frontmatter_does_not_read_is_named(self):
+        self.put("NPCs/A.md", note("    tone: Cordial"))
+        self.put("NPCs/B.md", "---\ntype: npc\nrelationships: [unclosed\n"
+                 "    tone: grumpy\n---\n")
+        code, out, _err = self.run_main()
+        self.assertEqual(code, 0)
+        self.assertNotIn("grumpy", out)
+        self.assertTrue(out.rstrip("\n").endswith(
+            "# 1 note not read (the frontmatter does not read; "
+            "campaign-qa's Graph Health names the fault): NPCs/B.md"), out)
+
+    def test_a_tool_that_cannot_answer_is_a_step_failure_for_the_update(self):
+        import migrate_core
+        self.assertTrue(issubclass(tones.TonesError, migrate_core.StepFailed))
+
     def test_report(self):
         self.put("NPCs/A.md", note("    tone: warm", "    tone: Cordial",
                                    "    tone: cordial"))
@@ -278,7 +234,9 @@ class FixTests(VaultCase):
         self.assertEqual(tones.rows(p)[0],
                          "WOULD-CHANGE\tNPCs/A.md:6\tdread -> ominous")
         tones.apply(p)
-        self.assertEqual(self.get("NPCs/A.md"), p.texts["NPCs/A.md"])
+        self.assertEqual(self.get("NPCs/A.md"),
+                         before.replace("tone: dread", "tone: ominous"))
+        self.assertEqual(p.notes, ["NPCs/A.md"])
 
     def test_crlf_note_changes_only_the_word(self):
         self.put("NPCs/A.md", note("    tone: dread").replace("\n", "\r\n"))
@@ -315,19 +273,33 @@ class FixTests(VaultCase):
                 "      tone: dread\n---\ntone: dread\n")
         self.put("NPCs/A.md", text)
         p = tones.plan_fix(self.vault, near=True, sets={})
-        self.assertEqual(p.texts, {})
+        self.assertEqual(p.notes, [])
         self.assertEqual(tones.rows(p), ["# 0 tone(s) in 0 note(s)"])
 
     def test_a_line_it_cannot_rewrite_is_kept_and_listed(self):
-        # A word holding a quote mark is read as a tone but is not a line
-        # the fix's pattern takes, so it is listed and left.
-        self.put("NPCs/A.md", note("    tone: rock'n", "    tone: dread"))
-        p = tones.plan_fix(self.vault, near=True, sets={"rock'n": "neutral"})
-        self.assertEqual(len(p.changes), 1)
-        self.assertEqual(p.kept, [("NPCs/A.md", 6, "rock'n")])
-        self.assertIn("tone: rock'n", p.texts["NPCs/A.md"])
-        self.assertEqual(tones.rows(p)[-1],
+        # A block scalar is read as a tone but is not a value the fix
+        # splices in place, so it is listed and left.
+        self.put("NPCs/A.md", note("    tone: >-\n      dread", "    tone: dread"))
+        before = self.get("NPCs/A.md")
+        p = tones.plan_fix(self.vault, near=True, sets={})
+        self.assertEqual([(c.lineno, c.before, c.after) for c in p.changes],
+                         [(10, "dread", "ominous")])
+        self.assertEqual(p.kept, [("NPCs/A.md", 6, "dread",
+                                   "not a plain tone line")])
+        self.assertIn("KEPT\tNPCs/A.md:6\tdread\tnot a plain tone line; "
+                      "edit the note", tones.rows(p))
+        tones.apply(p)
+        self.assertEqual(self.get("NPCs/A.md"), before.replace(
+            "    tone: dread\n---", "    tone: ominous\n---"))
+        self.assertEqual(tones.rows(p, done=True)[-1],
                          "# 1 tone(s) in 1 note(s), 1 left as written")
+
+    def test_a_word_holding_a_quote_mark_is_rewritten_like_any_other(self):
+        self.put("NPCs/A.md", note("    tone: rock'n"))
+        p = tones.plan_fix(self.vault, near=False, sets={"rock'n": "neutral"})
+        tones.apply(p)
+        self.assertEqual(p.kept, [])
+        self.assertIn("    tone: neutral\n", self.get("NPCs/A.md"))
 
     def test_a_note_that_is_not_utf8_stops_the_run(self):
         self.put("NPCs/A.md", note("    tone: dread"))
@@ -339,28 +311,34 @@ class FixTests(VaultCase):
         self.assertIn("tone: dread", self.get("NPCs/A.md"))
         self.assertEqual((self.vault / "NPCs" / "B.md").read_bytes(), bad)
 
-    def test_a_bare_cr_inside_a_line_still_hits_the_right_lines(self):
+    def test_a_note_whose_yaml_does_not_read_is_left_alone(self):
+        # A bare carriage return inside a plain key makes the frontmatter
+        # unreadable to the YAML reader (the build skips the note too, and
+        # `relationships check` reports it), so no tone of it is read.
         text = ("---\ntype: npc\nnote: a\rb\nrelationships:\n"
                 '  - target: "[[A]]"\n    type: knows\n    tone: dread\n'
-                '  - target: "[[B]]"\n    type: knows\n    tone: dread\n'
-                '  - target: "[[C]]"\n    type: knows\n    tone: dread\n'
                 "---\nBody\n")
         self.put("NPCs/A.md", text)
+        self.assertEqual(tones.survey(self.vault), [])
         p = tones.plan_fix(self.vault, near=True, sets={})
         tones.apply(p)
-        self.assertEqual(self.get("NPCs/A.md"),
-                         text.replace("tone: dread", "tone: ominous"))
-        self.assertEqual([c.lineno for c in p.changes], [7, 10, 13])
-        self.assertEqual(p.kept, [])
+        self.assertEqual((p.changes, p.kept), ([], []))
+        self.assertEqual(self.get("NPCs/A.md"), text)
 
-    def test_an_all_cr_note_is_listed_and_left_byte_for_byte(self):
+    def test_an_all_cr_note_has_no_frontmatter_to_read_and_stays_as_it_is(self):
         text = note("    tone: dread", "    tone: dread").replace("\n", "\r")
         self.put("NPCs/A.md", text)
-        p = tones.plan_fix(self.vault, near=True, sets={})
-        self.assertEqual(p.changes, [])
-        self.assertEqual(len(p.kept), 2)
-        tones.apply(p)
+        self.assertEqual(tones.survey(self.vault), [])
+        tones.apply(tones.plan_fix(self.vault, near=True, sets={}))
         self.assertEqual(self.get("NPCs/A.md"), text)
+
+    def test_several_notes_are_rewritten_with_their_own_line_numbers(self):
+        self.put("NPCs/A.md", note("    tone: dread", "    tone: dread",
+                                   "    tone: dread"))
+        p = tones.plan_fix(self.vault, near=True, sets={})
+        tones.apply(p)
+        self.assertEqual([c.lineno for c in p.changes], [6, 9, 12])
+        self.assertEqual(p.kept, [])
 
     def test_untouched_lines_keep_their_bytes(self):
         for eol in ("\n", "\r\n"):
@@ -460,25 +438,6 @@ class FixTests(VaultCase):
         self.assertEqual(self.get("NPCs/A.md"),
                          before.replace("cordial", "friendly"))
 
-    def test_a_note_that_vanishes_after_the_survey_is_one_line(self):
-        self.put("NPCs/A.md", note("    tone: dread"))
-        self.put("NPCs/B.md", note("    tone: dread"))
-        before = self.get("NPCs/A.md")
-        real = tones.survey
-
-        def survey_then_lose(vault):
-            uses = real(vault)
-            (self.vault / "NPCs" / "B.md").unlink()
-            return uses
-
-        with mock.patch.object(tones, "survey", survey_then_lose):
-            code, out, err = self.run_main("fix", "--near", "--write")
-        self.assertEqual(code, 1)
-        self.assertEqual(out, "")
-        self.assertEqual(err, "tones.py: NPCs/B.md cannot be read "
-                              "(FileNotFoundError); run it again\n")
-        self.assertEqual(self.get("NPCs/A.md"), before)
-
     def test_an_empty_frontmatter_note_is_never_rewritten(self):
         text = ("---\n---\nSome text.\n\n```yaml\nrelationships:\n"
                 '  - target: "[[X]]"\n    tone: wary\n```\n\n---\n\nMore.\n')
@@ -488,15 +447,16 @@ class FixTests(VaultCase):
         self.put("NPCs/B.md", note("    tone: wary"))
         p = tones.plan_fix(self.vault, near=True, sets={})
         tones.apply(p)
-        self.assertEqual(list(p.texts), ["NPCs/B.md"])
+        self.assertEqual(p.notes, ["NPCs/B.md"])
         self.assertEqual(self.get("Chapters/A.md"), text)
 
-    def test_a_note_with_a_byte_order_mark_is_left_alone(self):
-        self.put("NPCs/A.md", "﻿" + note("    tone: dread"))
+    def test_a_note_with_a_byte_order_mark_is_read_and_keeps_it(self):
+        # The YAML reader (and the build) read past a byte order mark.
+        self.put("NPCs/A.md", "\ufeff" + note("    tone: dread"))
         before = self.get("NPCs/A.md")
-        p = tones.plan_fix(self.vault, near=True, sets={})
-        tones.apply(p)
-        self.assertEqual(self.get("NPCs/A.md"), before)
+        tones.apply(tones.plan_fix(self.vault, near=True, sets={}))
+        self.assertEqual(self.get("NPCs/A.md"),
+                         before.replace("tone: dread", "tone: ominous"))
 
     def test_command_line(self):
         import contextlib
@@ -600,21 +560,6 @@ class UsesTests(VaultCase):
                 self.assertEqual(
                     tones.use_lines(tones.survey(self.vault), []), want)
 
-    def test_the_edge_walker_leaves_the_other_readings_alone(self):
-        self.assertEqual(
-            [(e.tone_lines, e.target) for e in
-             sr.iter_relationship_edges(self.EDGES)],
-            [([7], "[[Ana Ruiz|Ana]]"), ([8], "[[Bo]]"), ([16], "[[Cy]]"),
-             ([19], "Dee"), ([24], "[[Eve]]"), ([28], "[[Fay]]")])
-        self.assertEqual(list(sr.iter_relationship_tones(self.EDGES)),
-                         [(7, "tragic"), (8, "tragic"), (16, "tragic"),
-                          (19, "tragic"), (24, "tragic"), (28, "warm")])
-        self.assertEqual(
-            [n for n, _k, _v in sr.iter_relationship_predicates(self.EDGES)],
-            [5, 17, 32])
-        self.assertEqual(list(sr.iter_relationship_edges(NOTE))[0].description,
-                         "tone: dread a line of prose")
-
     QUOTED = (
         "---\ntype: npc\nrelationships:\n"
         '  - target: "[[Ana]]"\n'
@@ -630,10 +575,6 @@ class UsesTests(VaultCase):
         "  - target: \"[[Cy]]\"\n"
         "    description: the captain's man\n"
         "    tone: Cordial\n"
-        "  - target: \"[[Di]]\"\n"
-        '    description: "never closed\n'
-        "      tone: dread\n"
-        "    tone: tragic\n"
         "  - tone: cordial\n"
         '    target: "[[Ed]]"\n'
         "---\nBody\n")
@@ -642,23 +583,24 @@ class UsesTests(VaultCase):
         for eol in ("\n", "\r\n"):
             with self.subTest(eol=eol):
                 text = self.QUOTED.replace("\n", eol)
-                self.assertEqual(
-                    list(sr.iter_relationship_tones(text)),
-                    [(9, "dread"), (11, "tragic"), (16, "Cordial"),
-                     (20, "tragic"), (21, "cordial")])
                 self.put("NPCs/A.md", text)
                 self.assertEqual(
                     tones.use_lines(tones.survey(self.vault), []),
-                    ["NPCs/A.md:11\ttragic\t[[Bo]]\tIt''s tone: dread",
-                     "NPCs/A.md:20\ttragic\t[[Di]]\t"
-                     '"never closed tone: dread',
-                     "# 2 use(s) of 1 word(s)"])
+                    ["NPCs/A.md:11\ttragic\t[[Bo]]\tIt's tone: dread",
+                     "# 1 use(s) of 1 word(s)"])
                 self.assertEqual(
                     tones.use_lines(tones.survey(self.vault), ["dread"]),
                     ["NPCs/A.md:9\tdread\t[[Ana]]\t"
-                     'He spoke in a \\"flat\\" tone: dread, mostly '
+                     'He spoke in a "flat" tone: dread, mostly '
                      "tone: cordial at the end",
                      "# 1 use(s) of 1 word(s)"])
+
+    def test_a_note_whose_quote_never_closes_is_skipped_whole(self):
+        # Real YAML refuses the note, so the build skips it and
+        # `relationships check` reports it; its tones are not read.
+        self.put("NPCs/A.md", note('    description: "never closed',
+                                   "    tone: dread"))
+        self.assertEqual(tones.survey(self.vault), [])
 
     def test_a_fix_leaves_a_quoted_descriptions_text_alone(self):
         for eol in ("\n", "\r\n"):
@@ -669,7 +611,7 @@ class UsesTests(VaultCase):
                 self.assertEqual(out.splitlines(), [
                     "CHANGED\tNPCs/A.md:9\tdread -> ominous",
                     "CHANGED\tNPCs/A.md:16\tCordial -> friendly",
-                    "CHANGED\tNPCs/A.md:21\tcordial -> friendly",
+                    "CHANGED\tNPCs/A.md:17\tcordial -> friendly",
                     "# 3 tone(s) in 1 note(s)"])
                 want = (self.QUOTED
                         .replace("# s3\n    tone: dread\n",
@@ -876,38 +818,6 @@ class ShownTests(VaultCase):
              "  Hallam: hostile\n  tone: hostile\n---\nBody\n"},
             {"NPCs/Map.md"})
         self.assertEqual((code, rows), (0, ["# 0 hostile ties shown on 0 notes"]))
-
-
-class EdgeToneTests(unittest.TestCase):
-    def edges(self, *lines):
-        body = "".join(f"    {x}\n" for x in lines)
-        return list(sr.iter_relationship_edges(
-            '---\ntype: npc\nrelationships:\n  - target: "[[A]]"\n'
-            + body + "---\n"))
-
-    def test_gm_only_is_read_like_the_site_reads_it(self):
-        # The site hides an edge for true, the words true/yes/on and 1 in any
-        # capitals and padding, quoted or not (processor.js isGmOnlyEdge);
-        # reading more as a yes only hides more.
-        for line, want in (("gm_only: true", True), ("gm_only: True", True),
-                           ("gm_only: TRUE", True), ('gm_only: "true"', True),
-                           ("gm_only: 'true'", True), ('gm_only: "True"', True),
-                           ('gm_only: " true "', True), ("gm_only: yes", True),
-                           ("gm_only: Yes # why", True), ('gm_only: "YES"', True),
-                           ("gm_only: on", True), ("gm_only: 1", True),
-                           ('gm_only: "1"', True), ("gm_only: 1.0", True),
-                           ("gm_only: false", False), ("gm_only: no", False),
-                           ("gm_only: off", False), ("gm_only: 0", False),
-                           ("gm_only: 2", False), ("gm_only:", False),
-                           ("type: knows", False)):
-            with self.subTest(line=line):
-                self.assertEqual(self.edges(line)[0].gm_only, want)
-
-    def test_tone_is_unquoted_and_loses_a_trailing_comment(self):
-        self.assertEqual(
-            self.edges('tone: "hostile"  # s3')[0].tone, "hostile")
-        self.assertEqual(self.edges("tone: cold # s3")[0].tone, "cold")
-        self.assertEqual(self.edges("type: knows")[0].tone, "")
 
 
 import vault_check as vc  # noqa: E402

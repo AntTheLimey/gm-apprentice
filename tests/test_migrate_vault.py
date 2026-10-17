@@ -1479,8 +1479,8 @@ class ToneWordsTests(unittest.TestCase):
                          self.NOTE.format(tone="ominous").replace("\n", "\r\n"))
 
     def test_tidy_says_which_strays_it_kept(self):
-        # An all-CR note is read as tones but is not a line the fix takes.
-        self.put("NPCs/A.md", self.NOTE.format(tone="dread"), eol="\r")
+        # A block scalar is read as a tone but is not a value the fix takes.
+        self.put("NPCs/A.md", self.NOTE.format(tone=">-\n      dread"))
         self.put("NPCs/B.md", self.NOTE.format(tone="dread"))
         (item,) = mv.find_tone_words(self.vault)
         before = self.get("NPCs/A.md")

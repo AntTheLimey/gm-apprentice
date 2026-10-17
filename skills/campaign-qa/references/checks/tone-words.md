@@ -17,7 +17,10 @@ The first line counts every tone, the listed ones, and the two kinds of
 stray (`near`, `ask`). Then one row per stray word. No rows: say in a
 line that the tones are tidy, and stop. In a report, strays are Info.
 In a Full Audit, report the two counts; do not run `uses` or ask
-anything until the report has been presented.
+anything until the report has been presented. A last `# N note(s) not
+read` line names notes whose frontmatter does not read: their tones are
+not counted. Tell the GM which, and that fixing the frontmatter comes
+first (Graph Health's `unreadable` row says what is wrong).
 
 ## NEAR rows: one yes
 

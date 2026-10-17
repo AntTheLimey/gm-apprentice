@@ -15,7 +15,9 @@
 //                                    note it names when the value is exactly one wiki-link to a
 //                                    note that exists, else null.
 //   Edge  { index, line, typeLine, type, target, targetRel, bidirectional, strength, tone,
-//           toneLine, strengthLine, mobrpg, form, rawTarget }
+//           toneLine, strengthLine, description, gmOnly, mobrpg, form, rawTarget }
+//         (`description` is the value as the YAML reader gives it, '' when none; `gmOnly` is whether
+//         the site drops the edge, read by the site's own rule, processor.js isGmOnlyEdge)
 //
 // `target` is read by the site's rule (connections.js targetRef); where that names no note
 // it is '' (and `targetRel` null), and `rawTarget` keeps the text as written.
@@ -212,6 +214,8 @@ function readVault(vaultPath, { files, folder, newerThan } = {}) {
         const bidirectional = get('bidirectional');
         const strength = get('strength');
         const tone = get('tone');
+        const description = get('description');
+        const gmOnly = get('gm_only');
         const toneText = tone ? textOf(tone.value) : '';
         edge({
           index,
@@ -224,6 +228,8 @@ function readVault(vaultPath, { files, folder, newerThan } = {}) {
           tone: toneText || null,
           toneLine: tone ? lineOf(tone.key) : null,
           strengthLine: strength ? lineOf(strength.key) : null,
+          description: description ? textOf(description.value) : '',
+          gmOnly: gmOnly ? require('../processor').isGmOnlyEdge({ gm_only: scalarOf(gmOnly.value) }) : false,
           form: 'list',
         });
       });

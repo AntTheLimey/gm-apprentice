@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.67"
+current_version: "1.10.68"
 ---
 
 # Vault Migration Record
@@ -74,3 +74,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.65 | The retired "Required Relationships" section removed from `_meta/entity-types.md`, on a yes; repinned to 1.31.0 | `required-ties-section` |
 | 1.10.66 | A `_meta/relationship-types.md` that names fewer of the relationship types than the vocabulary has is offered the missing ones, on a yes (the offer names them; answer no for a deliberate genre subset). A list written as the scaffold's `Category / Types` table has each type added to its category's row; any other form gets a short section of `- type` bullets at the end. Nothing else in the file changes; repinned to 1.32.0 | `relationship-types-missing` |
 | 1.10.67 | No vault change. The publish tool learns `deploy --ignore-leaks` (uploads past the leak check on purpose, every finding still printed) and the `player_site.never_show` setting (words that stop a deploy when the player site shows them); repinned to 1.33.0 | — |
+| 1.10.68 | No vault change. The tone tidy (`tones.py`) asks the publish tool to find and rewrite tones, so a note is read by the same YAML reader the build uses; repinned to 1.34.0 | — |

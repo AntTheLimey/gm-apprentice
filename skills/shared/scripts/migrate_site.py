@@ -801,7 +801,7 @@ def find_tone_shown(vault: Path) -> list[Item]:
     with a site that shows at least one tone has anything to be told: a
     tone on a note that does not publish, on a `gm_only` relationship or on
     a note that excludes `relationships` is not shown."""
-    import tones    # it imports migrate_core, as this module does
+    import tones    # its refusals are StepFailed, which the update reports
 
     site, _has_config = configured_site(vault)
     if site is None or not tones.site_shows_a_tone(vault):
