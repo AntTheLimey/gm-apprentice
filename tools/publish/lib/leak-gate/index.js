@@ -9,7 +9,6 @@ const { collectHidden } = require('./collect');
 const { createMatcher, readOutput, listFiles } = require('./match');
 const { nameFindings, neverShowFindings } = require('./names');
 const { wordsOf, nameSet, onlyNames } = require('./text');
-const { indexHits } = require('./search-index');
 
 const findingId = (page, text) => crypto.createHash('sha1').update(`${page}\n${text}`).digest('hex').slice(0, 6);
 const keyOf = (page, text) => `${page}\n${text}`;
@@ -47,12 +46,6 @@ function runLeakGate({ configPath, outputDir }) {
       if (raw.has(key)) continue;
       raw.set(key, { id: findingId(file.rel, piece.text), kind: 'text', code: 'HIDDEN_TEXT', page: file.rel, text: piece.text, shown: piece.shown, note: piece.note, reason: piece.reason });
     }
-  }
-  // The search index holds a page's text as single terms, in no order: read entry by entry (search-index.js).
-  for (const { file, piece } of indexHits({ files, pieces: looked })) {
-    const key = keyOf(file.rel, piece.text);
-    if (raw.has(key)) continue;
-    raw.set(key, { id: findingId(file.rel, piece.text), kind: 'text', code: 'HIDDEN_TEXT', page: file.rel, text: piece.text, shown: piece.shown, note: piece.note, reason: piece.reason });
   }
   // The name checks add theirs here, before the accepted list is applied.
   for (const f of nameFindings({ files, allFiles: listFiles(outputDir), hidden, findingId })) {
