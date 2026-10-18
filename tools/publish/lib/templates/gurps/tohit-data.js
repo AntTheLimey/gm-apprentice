@@ -4,8 +4,10 @@
 // values come from the reference rows already shipped (B552, B550); the
 // Dual-Weapon Attack figure is the technique's default of skill-4, capped at
 // the skill (MA83, B230). Aid names are looked for; the bonus is whatever the note says.
+// The calculator's own rules numbers ride in the block as `rules` (blocks/tohit-rules.js, #420).
 
 const { HIT_LOCATION_ROWS, SIZE_SPEED_RANGE_ROWS } = require('./blocks/reference');
+const { TOHIT_RULES } = require('./blocks/tohit-rules');
 const { levelAtEnd } = require('./weapon-level');
 
 const AID_NAMES = [
@@ -23,7 +25,7 @@ const ALWAYS_ACC = new Set(['Scope', 'HUD link']);
 const SIGNED_RE = /(?:([+−])|(?:^|[\s(])(-))\s*(\d+)/;
 
 // Dual-Weapon Attack: default skill-4, so up to 4 points can be bought off (MA83, B230).
-const DUAL_PENALTY = 4;
+const DUAL_PENALTY = TOHIT_RULES.dualBoughtMax;
 
 // [key, label, the reference-table row label whose penalty it carries]. Arms and legs
 // are apart (a low target is harder to hit in the torso, groin and legs, not the arms, B548);
@@ -665,6 +667,7 @@ function buildTohitData(model, meta, report) {
     freeFall: ff ? ff.level : null,
     locations,
     bands: buildBands(),
+    rules: TOHIT_RULES,
   };
 }
 

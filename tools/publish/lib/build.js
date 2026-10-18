@@ -15,7 +15,6 @@ const { isRoster } = require('./templates/nav');
 const { getsNoPage } = require('./previews');
 const { runSteps, packageScripts, packageNotes } = require('./settings/steps');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
-const { clientFor } = require('./templates/live-mount');
 const { ignoringMark } = require('./heading-key');
 const { linkText, parseWikilink } = require('./wikilink');
 const { nameIn, fileLabel } = require('./settings');
@@ -422,13 +421,21 @@ function buildSite(options) {
     return true;
   }
 
-  const tohitScriptNeeded = publishConfig.tohit_calculator === 'on' && !sheetsOff
-    && (clientFor(publishConfig.system) || {}).script === 'gurps-live.js';
+  // The to-hit calculator's script is copied after the pages are written, and only when one of them
+  // loads it: a GURPS PC page with weapon rows, its Combat tab and the calculator on (#420).
+  const TOHIT_SCRIPT = 'gurps-tohit.js';
+  const TOHIT_SCRIPT_TAG = /<script\b[^>]*\bsrc="[^"]*js\/gurps-tohit\.js"/;
+  let tohitScriptLoaded = false;
+  function copyOneJS(file) {
+    const dest = path.join(outputDir, 'js', file);
+    ensureDir(dest);
+    fs.copyFileSync(path.join(__dirname, '../js', file), dest);
+    console.log(`  wrote js/${file}`);
+  }
   function copyJS() {
     if (writes !== 'all') return;
     const jsDir = path.join(__dirname, '../js');
     if (!fs.existsSync(jsDir)) return;
-    const destDir = path.join(outputDir, 'js');
     for (const file of fs.readdirSync(jsDir)) {
       if (!file.endsWith('.js')) continue;
       // The link-preview script is for a site that has the cards file; with previews off no
@@ -436,13 +443,8 @@ function buildSite(options) {
       if (file === 'previews.js' && publishConfig.link_previews === 'off') continue;
       // Likewise the Connections script: with Connections off no page holds a section or loads it.
       if (file === 'connections.js' && publishConfig.connections === 'off') continue;
-      // The to-hit calculator's script: only a GURPS site with sheets and the calculator on links it.
-      if (file === 'gurps-tohit.js' && !tohitScriptNeeded) continue;
-      const src = path.join(jsDir, file);
-      const dest = path.join(destDir, file);
-      ensureDir(dest);
-      fs.copyFileSync(src, dest);
-      console.log(`  wrote js/${file}`);
+      if (file === TOHIT_SCRIPT) continue;
+      copyOneJS(file);
     }
   }
 
@@ -1563,6 +1565,7 @@ function buildSite(options) {
       const out = renderPage(page, liveFx);
       if (out.roster) { deferredRosters.push({ page, processed: out.roster }); continue; }
       seen(vaultRelPathOf(page), out.html, page, false);
+      if (TOHIT_SCRIPT_TAG.test(out.html)) tohitScriptLoaded = true;
       // A fast build writes no page of the people a PC page lists, so their pictures are copied for this one.
       if (onlySheets && publishConfig._connections) useConnectionImages(publishConfig._connections.for(page));
       if (writes === 'none') continue;
@@ -1578,6 +1581,8 @@ function buildSite(options) {
       console.error(`  ERROR rendering ${page.outputPath}: ${e.message}`);
     }
   }
+  // A fast build writes it too: the sheets it writes carry data blocks this version of the script reads.
+  if (tohitScriptLoaded && writes !== 'none') copyOneJS(TOHIT_SCRIPT);
 
   // The pictures a Connections model names (`images/<relPath>`) count as used, as a full build counts them
   // through the pages that own them.

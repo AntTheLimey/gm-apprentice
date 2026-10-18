@@ -90,6 +90,23 @@ test('the calculator\'s script is copied only into a GURPS site with the calcula
   assert.ok(fs.existsSync(path.join(coc.out, 'js', 'coc-live.js')), 'the other scripts are still copied');
 });
 
+// #420: a GURPS site whose PCs have no weapon rows loads the script on no page, so it is not copied.
+test('a GURPS site with no PC that has weapons gets no calculator script', () => {
+  const { html, out } = quiet(() => buildPc('gurps-4e', '# Test Hero\n\nA wanderer with no weapons written down.\n'));
+  assert.deepStrictEqual(has(html), NONE);
+  assert.ok(!fs.existsSync(path.join(out, 'js', 'gurps-tohit.js')));
+  assert.ok(fs.readdirSync(path.join(out, 'js')).length > 0, 'the other scripts are still copied');
+});
+
+// #420: the rules numbers ride in the data block; the script holds none.
+test('the data block carries the rules numbers and the script carries no rules table', () => {
+  const { html } = quiet(() => buildPc('gurps-4e', RONNIE));
+  const { TOHIT_RULES } = require('../../lib/templates/gurps/blocks/tohit-rules');
+  assert.deepStrictEqual(dataOf(html).rules, TOHIT_RULES);
+  const source = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'gurps-tohit.js'), 'utf8');
+  assert.deepStrictEqual(source.split('\n').filter((l) => /\[\[?[0-9]+, *-?[0-9]+/.test(l)), []);
+});
+
 // #394: a row the calculator cannot fully read is a Site Faults finding on the PC's note,
 // and the build's summary points at campaign-qa.
 test('a row the calculator cannot read is a finding, with a summary line', () => {

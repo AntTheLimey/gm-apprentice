@@ -11,7 +11,8 @@ const matter = require('gray-matter');
 const { extractSections } = require('../lib/processor');
 const { parseGurps } = require('../lib/templates/gurps/parse');
 const { buildTohitData } = require('../lib/templates/gurps/tohit-data');
-const T = require('../js/gurps-tohit');
+const { TOHIT_RULES } = require('../lib/templates/gurps/blocks/tohit-rules');
+const T = require('../js/gurps-tohit').make(TOHIT_RULES);
 
 const LOCATIONS = [
   ['torso', 'Torso', 0], ['vitals', 'Vitals', -3], ['arm', 'Arm', -2], ['leg', 'Leg', -2], ['extremity', 'Hand or foot', -4],

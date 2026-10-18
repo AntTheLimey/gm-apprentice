@@ -3,7 +3,8 @@
 // (the way test/previews-client.test.js does). Data blocks are built by hand; names are invented.
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const T = require('../js/gurps-tohit');
+const { TOHIT_RULES } = require('../lib/templates/gurps/blocks/tohit-rules');
+const T = require('../js/gurps-tohit').make(TOHIT_RULES);
 const { dataBlock, load } = require('./helpers/tohit-dom');
 
 const HOSTILE = '<img src=x onerror=1>';
