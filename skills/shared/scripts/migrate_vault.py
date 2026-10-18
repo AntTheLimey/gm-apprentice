@@ -1164,7 +1164,9 @@ TONES_MARK = "**Tones.**"
 def _stale_tone_lists(text: str) -> list[tuple[int, int, str]]:
     """(start, end, replacement) for each list of tone words in `text` that
     is not the listed words: the words and their separators, nothing else.
-    A list is five or more words, each an old or a listed tone, with one
+    A list is the plugin's own: every one of the eleven old words, and no
+    other word but a listed tone (a line the GM wrote names fewer, and is
+    never taken). It has one
     kind of separator, straight after a label on its first line that says
     `tone`, ending at a full stop or its paragraph's end. Anything else is
     not a list this step can delimit, and is left out."""
@@ -1178,6 +1180,7 @@ def _stale_tone_lists(text: str) -> list[tuple[int, int, str]]:
         line_start = max(text.rfind("\n", 0, m.start()),
                          text.rfind("\r", 0, m.start())) + 1
         if (not set(words) <= known or set(words) == set(listed)
+                or not set(OLD_TONES) <= set(words)
                 or len({s.strip() for s in seps}) != 1
                 or not TONE_LABEL_RE.search(text[line_start:m.start()])
                 or not RUN_END_RE.match(text, m.end())):

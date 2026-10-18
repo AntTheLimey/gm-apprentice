@@ -77,7 +77,7 @@ from schema_rules import (
     tone_proposal,
 )
 from vaultlib import (UNCHECKED_DIRS, PublishToolUnavailable,
-                      SettingsUnavailable, extract_frontmatter,
+                      SettingsUnavailable,
                       run_relationships, settings)
 
 
@@ -238,14 +238,6 @@ def _campaign_hides_relationships(vault: Path) -> bool:
     return "relationships" not in json.dumps(s.get("player_site.hide.field_exceptions"))
 
 
-def _note_frontmatter(vault: Path, rel: str) -> dict[str, Any]:
-    try:
-        text = (vault / rel).read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return {}
-    return extract_frontmatter(text) or {}
-
-
 def shown_edges(vault: Path, published: set[str]
                 ) -> Iterator[dict[str, Any]]:
     """Every relationship a published note shows on the site with a tone
@@ -255,16 +247,12 @@ def shown_edges(vault: Path, published: set[str]
     # known here, and its notes are listed (the safe side).
     if _campaign_hides_relationships(vault):
         return
-    hidden: dict[str, bool] = {}
     for edge in _listed(vault)["tones"]:
         rel = edge["rel"]
         if (edge["gmOnly"] or not site_family(edge["tone"])
                 or unicodedata.normalize("NFC", rel) not in published):
             continue
-        if rel not in hidden:
-            hidden[rel] = _hides_relationships(
-                _note_frontmatter(vault, rel).get("publish_exclude_fields"))
-        if not hidden[rel]:
+        if not edge["hidesRelationships"]:
             yield edge
 
 

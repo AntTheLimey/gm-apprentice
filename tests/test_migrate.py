@@ -861,7 +861,8 @@ class ToneListEngineTests(unittest.TestCase):
         path = vault / "_meta" / "relationship-types.md"
         with path.open("w", encoding="utf-8", newline="") as f:
             f.write("**tone** \u2208 friendly | romantic | respectful | "
-                    "professional | hostile |\r\nfearful | neutral. "
+                    "professional | hostile | fearful |\r\ndistrustful | "
+                    "contemptuous | neutral | unknown | complicated. "
                     "**strength** 1\u201310.\r\n")
         checks = [c for c in mv.VAULT_CHECKS if c.name == "tone-list"]
         with mock.patch.object(migrate, "plugin_version",

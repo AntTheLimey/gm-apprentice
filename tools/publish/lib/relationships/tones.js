@@ -7,7 +7,7 @@
 // comment, other lines and line endings are never touched) and writes all notes or none, through
 // the same applyFix the other repairs use.
 //
-//   listTones(model, { skip })        -> [{ rel, line, tone, target, description, gmOnly }]
+//   listTones(model, { skip })        -> [{ rel, line, tone, target, description, gmOnly, hidesRelationships }]
 //   planTones(model, { vaultPath, sets, skip, readBack? })
 //        -> { changes: [{ kind: 'tone', rel, line, before, after }],
 //             kept: [{ rel, line, tone, why }], texts, originals }
@@ -55,6 +55,7 @@ function listTones(model, { skip } = {}) {
     target: edge.rawTarget,
     description: edge.description || '',
     gmOnly: !!edge.gmOnly,
+    hidesRelationships: !!note.hidesRelationships,
   }));
 }
 

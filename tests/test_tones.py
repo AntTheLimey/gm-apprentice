@@ -728,6 +728,34 @@ class ShownTests(VaultCase):
                                             {"NPCs/Emma.md"})
                 self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes"])
 
+    def test_the_hide_list_is_read_as_yaml_not_by_line(self):
+        # A comment after an item, a flow list over two lines and a quoted
+        # item are all lists to the site's YAML reader (#337).
+        for hide in ("publish_exclude_fields:\n  - relationships  # secret\n",
+                     "publish_exclude_fields: [secrets,\n  relationships]\n",
+                     "publish_exclude_fields:\n  - 'relationships' # x\n"):
+            with self.subTest(hide=hide):
+                note = self.NOTE.replace("type: npc\n", "type: npc\n" + hide)
+                _, rows, _ = self.run_shown({"NPCs/Emma.md": note},
+                                            {"NPCs/Emma.md"})
+                self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes"])
+
+    def test_flow_style_relationships_are_counted_as_the_site_reads_them(self):
+        flow = ("---\ntype: npc\nrelationships: [{target: '[[A]]', "
+                "type: knows, tone: hostile}, {target: '[[B]]', type: knows,"
+                " tone: warm}]\n---\nB\n")
+        item = ("---\ntype: npc\nrelationships:\n"
+                "  - {target: '[[A]]', type: knows, tone: Cold}\n"
+                "  - {target: '[[B]]', type: knows, tone: hostile, "
+                "gm_only: true}\n---\nB\n")
+        _, rows, _ = self.run_shown({"NPCs/F.md": flow, "NPCs/G.md": item},
+                                    {"NPCs/F.md", "NPCs/G.md"})
+        self.assertEqual(rows[-1], "# 2 hostile ties shown on 2 notes")
+        self.assertEqual(
+            [r.split("\t")[:3] for r in rows[:-1]],
+            [["NPCs/F.md:3", "hostile", "[[A]]"],
+             ["NPCs/G.md:4", "Cold", "[[A]]"]])
+
     def test_only_a_real_list_hides_a_notes_relationships(self):
         # The site reads publish_exclude_fields only as a list, and matches
         # an item exactly (processor.js publishedFrontmatter).
