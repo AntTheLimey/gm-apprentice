@@ -30,6 +30,25 @@ counted, not judged. Publish tool 1.36.2.
   showed empty bullets.
 
 ---
+## [1.10.76] — 2026-10-18
+
+The site set-up guide reads 6.5 KB less (31,378 to 24,871 bytes).
+
+### Changed
+
+- Step 14 runs `update-pin --site <dir>`, which checks and mends the
+  site's tool pin, instead of having the model open `package.json` and
+  compare paths.
+- The GitHub Pages deploy (Step 21b) moves to `github-pages.md` §
+  First deploy, so a Cloudflare set-up no longer reads it.
+- Step 23 points at `cloudflare-pages.md` § The fast way for the
+  status bar and inbox commands' KV details instead of repeating them.
+- The GM site for the table has its own file, `gm-site.md`; asking for
+  one no longer reads the whole set-up guide.
+
+### Removed
+
+- The set-up guide's "Before you start" section, which Step 4 repeats.
 
 ## [1.10.75] — 2026-10-17
 
