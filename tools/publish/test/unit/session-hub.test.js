@@ -178,3 +178,23 @@ describe('sessionBodyHtml (#276)', () => {
     assert.match(sessionBodyHtml(dated, { wrapUp, recapChars: RECAP_CHARS }), /In-game: Autumn 1813/);
   });
 });
+
+describe('pairHubs: a title the withheld-name rewrite changed (#448)', () => {
+  const pages = () => {
+    const ledger = { title: 'Patron_Ledger', sourcePath: '/v/NPCs/Patron_Ledger.md', vaultPath: 'NPCs/Patron_Ledger',
+      displayTitle: 'The Masked Patron', frontmatter: { type: 'npc', title: '[[The Masked Patron]]' }, markdown: 'x' };
+    const patron = { title: 'The Masked Patron', sourcePath: '/v/NPCs/The Masked Patron.md', vaultPath: 'NPCs/The Masked Patron',
+      displayTitle: 'The Masked Patron', frontmatter: { type: 'npc', withheld: true }, markdown: 'y' };
+    return { ledger, patron };
+  };
+  it('prints the withheld word', () => {
+    const { ledger, patron } = pages();
+    pairHubs([ledger, patron], [ledger], { allNotes: [], withheldWords: WORDS, apply: true });
+    assert.strictEqual(ledger.displayTitle, WORDS.person);
+  });
+  it('a rewritten title that reads as nothing falls back to the file name, never to the title before the rewrite', () => {
+    const { ledger, patron } = pages();
+    pairHubs([ledger, patron], [ledger], { allNotes: [], withheldWords: { person: ' ', place: ' ', thing: ' ' }, apply: true });
+    assert.strictEqual(ledger.displayTitle, 'Patron Ledger');
+  });
+});

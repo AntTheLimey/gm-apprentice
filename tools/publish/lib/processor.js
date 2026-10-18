@@ -643,7 +643,7 @@ function stubView(markdown, includeSections, withhold) {
     flags[stripped.from[i]] = true;
   });
   // The chain's faults that show in the kept sections (noteFacts), by this same cut.
-  return { kept, flags, hidden: stripped.hidden, facts: noteFacts(stripped, (lines) => stubKept(lines, wanted, withhold, null, lines === stripped.lines ? stripped.restored : null)) };
+  return { kept, flags, hidden: stripped.hidden, facts: noteFacts(stripped, (lines, restored) => stubKept(lines, wanted, withhold, null, restored || null)) };
 }
 
 // Per line of `lines` (a note after the strip chain), whether a stub that keeps the `wanted`
@@ -1409,17 +1409,25 @@ function markersShown(lines, blocksOnly = false) {
 
 // What the strip chain found that changes what the site shows, for the note-faults audit:
 // each stray `%%` that hides text the page would otherwise print, and the first hidden marker
-// the page prints because a code fence above it never closed. `keptOf(lines)` says, per line,
-// whether the page's own section rules keep it; a fault that lies wholly in text those rules
+// the page prints because a code fence above it never closed. `keptOf(lines, restored)` says, per line,
+// whether the page's own section rules keep it (`restored`: the put-back heading lines, never kept); a fault that lies wholly in text those rules
 // hide already changes nothing on the site and is not reported.
 // Returns { strays: [{ line, kind }], openFence: { line, marker, markerLine } | null }, in
 // lines of the text the chain was given (`line` is null for a marker with no fence above it).
 function noteFacts(stripped, keptOf) {
   const out = { strays: [], openFence: null };
+  // Per line of a stage, whether the page keeps it: the last stage with the headings strippedLines put back, an earlier
+  // one with the same put-back made on its own copy (restoredView).
+  const keptAt = (stage) => {
+    if (stage.lines === stripped.lines) return keptOf(stage.lines, stripped.restored);
+    if (!stage.view) return keptOf(stage.lines);
+    const flags = keptOf(stage.view.lines, stage.view.restored);
+    return stage.view.index.map((j) => flags[j]);
+  };
   if (stripped.strays.length > 0) {
     // Read as if no `%%` were a comment: the text the chain was about to cut.
     const { lines, spans } = stripped.pre;
-    const kept = keptOf(lines);
+    const kept = keptAt(stripped.pre);
     stripped.strays.forEach((stray, k) => {
       const [at, endAt] = spans[k];
       const stop = endAt === null ? lines.length - 1 : endAt;
@@ -1433,7 +1441,7 @@ function noteFacts(stripped, keptOf) {
   const stages = [stripped.blocks, { lines: stripped.lines, from: stripped.from, shown: markersShown(stripped.lines) }];
   for (const stage of stages) {
     if (!stage || stage.shown.length === 0) continue;
-    const kept = keptOf(stage.lines);
+    const kept = keptAt(stage);
     const first = stage.shown.find(m => kept[m.at]);
     if (!first) continue;
     const found = {
@@ -1717,9 +1725,34 @@ function playerSafeMarkdown(markdown, options = {}) {
   text = filterSections(text, options.excludeSections, options.frontmatter,
     { pcKeepSections: options.pcKeepSections, warn: (m) => warnings.push(m), restored: stripped.restored });
   // The chain's faults that show on this page (noteFacts), by the same section rules.
-  const { strays, openFence } = noteFacts(stripped, (lines) => keptFlags(lines, options.excludeSections, options.frontmatter,
-    { pcKeepSections: options.pcKeepSections, restored: lines === stripped.lines ? stripped.restored : undefined }));
+  const { strays, openFence } = noteFacts(stripped, (lines, restored) => keptFlags(lines, options.excludeSections, options.frontmatter,
+    { pcKeepSections: options.pcKeepSections, restored }));
   return { text, warnings, strays, openFence };
+}
+
+// Per line of `text`, as playerSafeMarkdown reads it: `cut`, the line as the strip chain leaves it or null when the
+// chain removes it, and with the page's section rules (`rules`: excludeSections, frontmatter, pcKeepSections,
+// excludeCallouts) `withheldBy`, the section that withholds the line, or null. The headings the strips put back (#447)
+// withhold what follows them and answer for no line of their own. The `lines` command's `cut` (lines-cli.js).
+function cutLines(text, rules) {
+  const source = String(text);
+  const cut = source.split('\n').map(() => null);
+  if (!rules) {
+    const { lines, from, unbalanced } = strippedLines(source.replace(/\r/g, ''), false);
+    lines.forEach((line, i) => { cut[from[i]] = line; });
+    return { cut, unbalanced };
+  }
+  const { excludeSections, frontmatter, pcKeepSections, excludeCallouts } = rules;
+  const stripped = strippedLines(source.replace(/\r/g, ''), excludeCallouts, null,
+    sectionWithholder(excludeSections, frontmatter, { pcKeepSections }));
+  const walk = walkSections(stripped.lines.join('\n'), excludeSections, frontmatter, { pcKeepSections, inBlock: stripped.restored });
+  const withheldBy = cut.slice();
+  stripped.lines.forEach((line, i) => {
+    if (stripped.restored.has(i)) return;
+    cut[stripped.from[i]] = line;
+    withheldBy[stripped.from[i]] = walk.withheldBy[i] == null ? null : walk.withheldBy[i];
+  });
+  return { cut, unbalanced: stripped.unbalanced, withheldBy };
 }
 
 // playerSafeMarkdown for the GM site. The PC and NPC templates cut a page at its `##` headings, so no mark may span
@@ -1795,7 +1828,7 @@ function strippedLines(text, excludeCallouts, mark, withholds) {
     if (result.warnings) warnings.push(...result.warnings);
     if (result.strays && result.strays.length > 0) {
       strays = result.strays.map(s => ({ line: before[s.line], kind: s.kind }));
-      pre = { lines: given, spans: result.strays.map(s => [s.line, s.end]) };
+      pre = { lines: given, from: before, spans: result.strays.map(s => [s.line, s.end]) };
     }
     if (result.unbalanced) unbalanced.push(...result.unbalanced.map(u => ({ ...u, line: before === null ? u.line : before[u.line] })));
   }
@@ -1808,7 +1841,23 @@ function strippedLines(text, excludeCallouts, mark, withholds) {
     }
   }
   warnings.push(...hidden.map((h) => hiddenHeadingWarning(h.title)));
+  // The earlier stages noteFacts reads get the same put-back, so a fault in the text a hidden heading withholds is none.
+  if (withholds) for (const stage of [blocks, pre]) if (stage && stage.from) stage.view = restoredView(text, stage, notCode, withholds);
   return { lines, from, warnings, strays, pre, blocks, unbalanced, restored, hidden };
+}
+
+// A stage of the strip chain ({ lines, from }) with strippedLines' put-back made on a copy: the copy's lines, the
+// lines put back, and `index`, the copy's line for each of the stage's own. Null when nothing goes back.
+function restoredView(text, stage, notCode, withholds) {
+  const lines = stage.lines.slice();
+  const from = stage.from.slice();
+  if (lines.length === 0) return null;
+  const back = restoreHiddenHeadings(text, lines, from, notCode, withholds);
+  if (back.length === 0) return null;
+  const restored = new Set(back.map((b) => b.at));
+  const index = [];
+  lines.forEach((_, j) => { if (!restored.has(j)) index.push(j); });
+  return { lines, restored, index };
 }
 
 function hiddenHeadingWarning(title) {
@@ -1832,9 +1881,14 @@ function restoreHiddenHeadings(text, lines, from, notCode, withholds) {
   let k = 0;
   for (const s of [...headingAt.keys()].sort((a, b) => a - b)) {
     if (survived.has(s) || (notCode && !notCode.has(s))) continue;
+    const h = headingAt.get(s);
+    // A heading the source reads across the block's edge (a closing `%%` or `-->` line over a kept `===` line) is no
+    // heading of the block: its kept lines are read where they are, and it cancels nothing.
+    let edge = false;
+    for (let l = s + 1; l < h.end; l++) if (survived.has(l)) edge = true;
+    if (edge) continue;
     while (k < from.length && from[k] <= s) k++;
     if (k >= lines.length) break;   // nothing after the block to withhold
-    const h = headingAt.get(s);
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push({ title: h.title, level: h.level, line: s });
   }
@@ -2493,4 +2547,4 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
   };
 }
 
-module.exports = { unstableBodyMarked, unstableSectionsMarked, markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, sectionWithholder, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, campaignImageSrc, isWebImageAddress, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };
+module.exports = { unstableBodyMarked, unstableSectionsMarked, markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, cutLines, sectionWithholder, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, campaignImageSrc, isWebImageAddress, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };

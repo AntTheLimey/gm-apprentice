@@ -910,7 +910,7 @@ function buildSite(options) {
     // hides anyway (noteFacts) is none; a note withheld whole shows none.
     stripFacts.set(page, stubFacts.get(page) || {
       source, hidden: page.headingsUnstable ? [] : stripped.hidden,
-      ...noteFacts(stripped, (lines) => (page.headingsUnstable ? lines.map(() => false) : keptFlags(lines, excludeSections, fm, { pcKeepSections, restored: lines === stripped.lines ? stripped.restored : undefined }))),
+      ...noteFacts(stripped, (lines, restored) => (page.headingsUnstable ? lines.map(() => false) : keptFlags(lines, excludeSections, fm, { pcKeepSections, restored }))),
     });
     const text = stripped.lines.join('\n');
     page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(text, excludeSections, fm,

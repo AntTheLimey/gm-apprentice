@@ -6,7 +6,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  playerSafeMarkdown, keepOnlySections, keptSectionFlags, stubMarked, processContent, strippedLines,
+  playerSafeMarkdown, keepOnlySections, keptSectionFlags, stubMarked, processContent, strippedLines, stubCut,
 } = require('../../lib/processor');
 const { createMarks, markKinds, withoutMarked } = require('../../lib/gm-marks');
 
@@ -160,6 +160,30 @@ test('a spoiler block and an HTML comment holding the heading do the same', () =
     assert.doesNotMatch(playerSafeMarkdown(note, { excludeSections: EXCLUDE }).text, /HIDDENAFTER/, open);
     assert.doesNotMatch(keepOnlySections(note, ['Appearance'], { excludeSections: EXCLUDE }), /HIDDENAFTER/, open);
   }
+});
+
+test('a closing comment line over a kept === or --- line cancels nothing: the text after the block stays withheld', () => {
+  for (const [open, close, rule] of [['%%', '%%', '==='], ['<!--', '-->', '---']]) {
+    const note = `Intro.\n\n${open}\n## GM Notes\n${close}\n${rule}\n\nHIDDENAFTER\n`;
+    const { text, warnings } = playerSafeMarkdown(note, { excludeSections: EXCLUDE });
+    assert.doesNotMatch(text, /HIDDENAFTER/, open);
+    assert.ok(warnings.some((w) => /"GM Notes"/.test(w)), JSON.stringify(warnings));
+  }
+});
+
+test('a stray %% or an open fence in the text a hidden heading withholds is no fault of the page (noteFacts)', () => {
+  const head = 'Intro.\n\n<!-- gm-only -->\n## GM Notes\n<!-- /gm-only -->\n';
+  const stray = playerSafeMarkdown(`${head}Secret. %% a stray\n`, { excludeSections: EXCLUDE });
+  assert.deepEqual(stray.strays, []);
+  const fence = playerSafeMarkdown(`${head}Secret.\n\`\`\`\n<!-- gm-only -->\nX\n<!-- /gm-only -->\n`, { excludeSections: EXCLUDE });
+  assert.equal(fence.openFence, null);
+  // The same faults in text the page prints are still found.
+  assert.equal(playerSafeMarkdown('Intro. %% a stray\n', { excludeSections: EXCLUDE }).strays.length, 1);
+  assert.notEqual(playerSafeMarkdown('Intro.\n```\n<!-- gm-only -->\nX\n<!-- /gm-only -->\n', { excludeSections: EXCLUDE }).openFence, null);
+  // And the stub cut reads them the same way.
+  const stub = '## Appearance\nTall.\n<!-- gm-only -->\n## GM Notes\n<!-- /gm-only -->\nSecret. %% a stray\n';
+  assert.deepEqual(stubCut(stub, ['Appearance'], { excludeSections: EXCLUDE }).strays, []);
+  assert.equal(stubCut('## Appearance\nTall. %% a stray\n', ['Appearance'], { excludeSections: EXCLUDE }).strays.length, 1);
 });
 
 test('a heading in a code block inside a hidden block is code: nothing is withheld for it', () => {

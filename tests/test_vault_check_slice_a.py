@@ -1245,11 +1245,24 @@ class GmLeakCommandTests(unittest.TestCase):
             out.append("GM Notes" if level is not None else None)
         return out
 
+    @staticmethod
+    def without_rules_answer():
+        """A publish tool older than #447: its `cut` answers no
+        `withheldBy`, so `build_lines` asks `withheld_by` as before."""
+        real = vaultlib.PublishLines.ask
+
+        def ask(self, request):
+            answer = real(self, request)
+            if request.get("op") == "cut":
+                answer.pop("withheldBy", None)
+            return answer
+        return mock.patch.object(vaultlib.PublishLines, "ask", ask)
+
     def test_a_site_on_an_older_tool_gets_the_dressed_heading_error(self):
         # Hidden by the current tool (no row, above); published by an older
         # one, and then the heading defeats the exclude list.
-        with mock.patch.object(vaultlib, "withheld_by",
-                               self.old_tool_withheld_by):
+        with self.without_rules_answer(), mock.patch.object(
+                vaultlib, "withheld_by", self.old_tool_withheld_by):
             rows = vc.check_gm_leak(LEAK, None)
         self.assertIn(
             f"ERROR\t{LEAKY}:10\tbold-wrapped heading 'GM Notes' defeats "
@@ -1332,40 +1345,67 @@ class GmLeakCommandTests(unittest.TestCase):
             "publish strips to end of file",
             vc.check_gm_leak(vault, None))
 
-    def test_a_fenced_gm_notes_heading_hides_nothing_below_the_closer(self):
+    def test_a_fenced_gm_notes_heading_withholds_what_follows_the_closer(self):
         # `<!-- gm-only -->` wrapping `## GM Notes` is the shape
-        # `wrapup --fix` writes. The publish pipeline strips the block
-        # before filterSections runs, so that heading excludes nothing —
-        # and letting it start an exclusion made this check blind to
-        # everything a GM appended after the closer.
+        # `wrapup --fix` writes. Since #447 the build puts that heading
+        # back where the block ends, so the text after the closer is
+        # withheld as part of GM Notes up to the next `##`: nothing in it
+        # is reported, and what follows that next heading still is.
         vault = make_vault(self)
         (vault / "Bob.md").write_text(
             "---\ntype: npc\n---\n\n# Bob\n\n<!-- gm-only -->\n"
             "## GM Notes\nhidden\n<!-- /gm-only -->\n\n"
             "**Secret:** he runs the cult.\n\n"
-            "> [!note] GM only: he lies.\n", encoding="utf-8")
+            "> [!note] GM only: he lies.\n\n## Voice\n\n"
+            "**Secret:** he whispers.\n", encoding="utf-8")
         rows = vc.check_gm_leak(vault, None)
-        self.assertTrue(rows_for(rows, "bold label 'Secret'"), rows)
-        self.assertTrue(rows_for(rows, "callout [!note] GM only"), rows)
+        self.assertEqual(rows_for(rows, "Bob.md"), [
+            "INFO\tBob.md:18\tbold label 'Secret' looks Keeper-facing — "
+            "confirm with the GM (not a heading; not auto-movable)"], rows)
+
+    def test_text_after_a_hidden_gm_notes_block_raises_no_alarm(self):
+        # #447 against #441: the site withholds what follows a hidden
+        # `## GM Notes` (HEADING_IN_HIDDEN_BLOCK says so), so gm-leak must
+        # not call it published: no heading WARNING, no INFO row and no
+        # re-nest of a heading the site already withholds.
+        vault = make_vault(self)
+        note = ("---\ntype: npc\n---\n\n# Bob\n\n## Appearance\n\nTall.\n\n"
+                "<!-- gm-only -->\n## GM Notes\n<!-- /gm-only -->\n"
+                "### Keeper Secrets\nThe informant.\n\n"
+                "**Secret:** he lies.\n")
+        (vault / "Bob.md").write_text(note, encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertEqual(rows_for(rows, "Bob.md"), [], rows)
+        self.assertEqual(read(vault, "Bob.md"), note)
+
+    def test_a_hidden_callout_is_not_reported(self):
+        # The callouts the site hides (`player_site.hide.callouts`) are cut
+        # by the build's strip chain, so one that reads Keeper-facing is
+        # no INFO row.
+        vault = make_vault(self, "---\npublish:\n  exclude_callouts: true\n---\n")
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\n> [!note] GM only: he lies.\n",
+            encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(rows_for(rows, "Bob.md"), [], rows)
 
     # #441: the blocks are the build's own reading (`gm-publish lines`,
     # op `cut`), not a Python model of them. Each case below was read
     # differently by that model, and each time the check went quiet on a
     # heading the site publishes.
 
-    def test_a_heading_in_a_multi_line_comment_starts_nothing(self):
-        # The build cuts the comment before its section filter runs, so
-        # the commented-out `## GM Notes` withholds nothing below it, and
-        # the commented-out `## Secret Tactics` never reaches a reader.
+    def test_a_heading_in_a_multi_line_comment_is_read_as_the_build_reads_it(self):
+        # The build cuts the comment, then puts a withheld heading it held
+        # back where the comment ends (#447): the commented-out `## GM
+        # Notes` withholds `### Keeper Secrets` below it, and the
+        # commented-out `## Secret Tactics` never reaches a reader.
         vault = make_vault(self)
         (vault / "Bob.md").write_text(
             "---\ntype: npc\n---\n\n# Bob\n\n<!--\n## Secret Tactics\n-->\n\n"
             "<!--\n## GM Notes\n-->\n### Keeper Secrets\nx\n",
             encoding="utf-8")
         rows = vc.check_gm_leak(vault, None)
-        self.assertEqual(rows_for(rows, "Bob.md"), [
-            "WARNING\tBob.md:14\tKeeper-facing heading 'Keeper Secrets' "
-            "publishes — nest it under ## GM Notes or fence it"], rows)
+        self.assertEqual(rows_for(rows, "Bob.md"), [], rows)
 
     def test_a_heading_after_a_closer_on_its_line_is_read(self):
         # `<!-- /gm-only -->## Public`: the build keeps `## Public`, which
@@ -4826,7 +4866,11 @@ class GmLeakSheetsOffTests(unittest.TestCase):
                 self.assertIn("Hero.md:7", rows_for(rows, self.LABEL)[0])
 
     def test_a_placeholder_title_never_drops_anything(self):
-        for pc_keep in (None, [], ["Background"]):
+        # The keep-list names the section, so the build's own walk (the
+        # `cut` answer, which takes the keep-list) keeps it: only the
+        # placeholder titles in `sheetWithheldSections` could drop it.
+        for pc_keep in (None, ["(empty heading)"],
+                        ["(empty heading)", "Background"]):
             with self.subTest(pc_keep=pc_keep):
                 vault = make_vault(self)
                 stub_publish_tool(self, vault, pc_keep=pc_keep, sheet_withheld={

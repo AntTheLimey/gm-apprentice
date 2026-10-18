@@ -146,8 +146,8 @@ const foldQuotes = (text) => canonicalNfc(text).replace(/[\u2018\u2019\u02bc\u20
 // How a secret name is looked for in a text: as whole words, in any capitals, with a space, an underscore or a hyphen
 // between its words, whichever the name has. A word's edge is a letter or digit of a script written with spaces between
 // words: a script written without them (Chinese, Japanese, Thai…) runs a name into the particle after it ("影の王は"),
-// so a letter of one is no edge. A plural ("the Lord Zorns") is the name when its last word is written with a capital;
-// "hopes" is a word, not the note Hope. Read the hits with nameHits, which applies that rule.
+// so a letter of one is no edge. A plural ("the Lord Zorns") is matched too; read the hits with nameHits, which decides
+// when a plural is the name ("hopes" is a word, not the note Hope).
 const NO_SPACE = '\\p{scx=Han}\\p{scx=Hiragana}\\p{scx=Katakana}\\p{scx=Hangul}\\p{scx=Thai}\\p{scx=Lao}\\p{scx=Khmer}\\p{scx=Myanmar}';
 const SPACED = `(?:(?=[\\p{L}\\p{N}])[^${NO_SPACE}])`;
 const NAME_SEP = /[\s_\-\u2010\u2011]+/;
@@ -157,13 +157,35 @@ function nameMatcher(alias) {
   const end = last.slice(-1);
   const cased = end.toLowerCase() !== end.toUpperCase();
   const plural = cased ? `(?<plural>${/(?:s|x|z|ch|sh)$/i.test(last) ? 'es' : 's'})?` : '';
-  return new RegExp(`(?<!${SPACED})${words.map((w) => `${esc(w)}[\\s_\\-\\u2010\\u2011]+`).join('')}(?<last>${esc(last)})${plural}(?!${SPACED})`, 'giu');
+  const re = new RegExp(`(?<!${SPACED})${words.map((w) => `${esc(w)}[\\s_\\-\\u2010\\u2011]+`).join('')}(?<last>${esc(last)})${plural}(?!${SPACED})`, 'giu');
+  re.oneWord = words.length === 0;
+  return re;
 }
 
-// The hits of a name matcher in a text: a plural counts only where the name's last word starts with a capital.
+// Whether a capitalised plural of a one-word name, at match `m` in `text`, is written where only a name would carry the
+// capital: mid-sentence, on a line that is no markdown heading, with no capitalised word right before or after it. At a
+// sentence start, in a heading or in a run of capitalised words ("Lost Hopes"), the capital says nothing.
+function capitalMidSentence(text, m) {
+  const lineStart = text.lastIndexOf('\n', m.index - 1) + 1;
+  const lineEnd = text.indexOf('\n', m.index) < 0 ? text.length : text.indexOf('\n', m.index);
+  if (/^ {0,3}#{1,6}(?:\s|$)/.test(text.slice(lineStart, lineEnd))) return false;
+  const before = text.slice(lineStart, m.index);
+  const lead = before.replace(/[\s"'“‘([*_~`>]+$/u, '');
+  if (lead === '' || /[.!?…]$/.test(lead) || /^\s*(?:[-*+]|\d+[.)])$/.test(lead)) return false;
+  // The word before or after, across spaces or a breadcrumb's separator ("Home›Hopes›Lost Hopes").
+  const prev = /(\p{L}[\p{L}\p{N}'’]*)[\s›»|/·]+$/u.exec(before);
+  if (prev && /^\p{Lu}/u.test(prev[1])) return false;
+  return !/^[\s›»|/·]+\p{Lu}/u.test(text.slice(m.index + m[0].length, lineEnd));
+}
+
+// The hits of a name matcher in a text. A plural counts only where the name's last word is written with a capital, and
+// for a one-word name only where that capital is mid-sentence (capitalMidSentence): "Hopes were high" and "## Lost
+// Hopes" are words, "the Hopes" is the note Hope. A name of more words ("the Lord Zorns") counts anywhere.
 function nameHits(re, text) {
   re.lastIndex = 0;
-  return [...String(text).matchAll(re)].filter((m) => !(m.groups && m.groups.plural) || /^\p{Lu}/u.test(m.groups.last));
+  const s = String(text);
+  return [...s.matchAll(re)].filter((m) => !(m.groups && m.groups.plural)
+    || (/^\p{Lu}/u.test(m.groups.last) && (!re.oneWord || capitalMidSentence(s, m))));
 }
 const hasName = (re, text) => nameHits(re, text).length > 0;
 
