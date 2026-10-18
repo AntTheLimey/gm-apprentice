@@ -733,11 +733,11 @@ describe('rapid fire past 100 shots (HT172) and the Rcl note (B373)', () => {
     const got = [99, 100, 199, 200, 399, 400, 799, 800, 999].map((s) => rolls(data, { weapon: 'Blaster pistol', shots: s }) - 17);
     assert.deepStrictEqual(got, [6, 7, 7, 8, 8, 9, 9, 10, 10]);
   });
-  it('the Rcl note names the step', () => {
+  it('the hits follow the Rcl step (#458)', () => {
     const one = T.effective(mk(), { weapon: 'Blaster pistol', shots: 3 });
-    assert.ok(one.notes.some((n) => /^Every point the roll/.test(n)));
+    assert.strictEqual(one.damage.perHit, 1);
     const two = T.effective(withWeapon(mk(), 'Blaster pistol', { rcl: 2 }), { weapon: 'Blaster pistol', shots: 3 });
-    assert.ok(two.notes.some((n) => /^Every 2 points the roll/.test(n)));
+    assert.strictEqual(two.damage.perHit, 2);
   });
 });
 
@@ -1128,5 +1128,57 @@ describe('shots fired follow the weapon\'s RoF', () => {
   });
   it('a melee weapon has no shots', () => {
     assert.deepStrictEqual(T.shotsFor(mk().weapons[0], {}).options, [1]);
+  });
+});
+
+// #458: the calculator ends with the damage rolls to make (B373, B379, B409). It never rolls.
+describe('the damage rolls to make', () => {
+  const gun = (patch) => withWeapon(mk(), 'Blaster pistol', patch);
+  it('one shot: the damage, one roll', () => {
+    const d = T.effective(mk(), { weapon: 'Blaster pistol' }).damage;
+    assert.strictEqual(d.text, '3d burn');
+    assert.strictEqual(d.maxHits, 1);
+    assert.deepStrictEqual(d.rolls, []);
+  });
+  it('rapid fire: one more hit for each Rcl the roll is made by, up to the shots, by the roll made', () => {
+    const d = T.effective(mk(), { weapon: 'Blaster pistol', shots: 3 }).damage;
+    assert.strictEqual(d.maxHits, 3);
+    assert.deepStrictEqual(d.rolls, [{ from: 16, to: 16, hits: 2 }, { from: 3, to: 15, hits: 3 }]);
+    const r2 = T.effective(gun({ rcl: 2 }), { weapon: 'Blaster pistol', shots: 3 }).damage;
+    assert.deepStrictEqual(r2.rolls, [{ from: 16, to: 16, hits: 1 }, { from: 14, to: 15, hits: 2 }, { from: 3, to: 13, hits: 3 }]);
+  });
+  it('a low roll: a 17 or 18 never hits, a 3 or 4 always does', () => {
+    const low = T.effective(gun({ level: 2, base: 2 }), { weapon: 'Blaster pistol', shots: 5 });
+    assert.strictEqual(low.roll, 3);
+    assert.deepStrictEqual(low.damage.rolls, [{ from: 3, to: 4, hits: 1 }]);
+    const high = T.effective(gun({ level: 20, base: 20 }), { weapon: 'Blaster pistol', shots: 3 }).damage;
+    assert.deepStrictEqual(high.rolls, [{ from: 3, to: 16, hits: 3 }]);
+  });
+  it('no roll, no damage rolls', () => {
+    const d = T.effective(gun({ level: 1, base: 1 }), { weapon: 'Blaster pistol', shots: 5 }).damage;
+    assert.strictEqual(d.none, true);
+  });
+  it('a shotgun counts its projectiles; inside a tenth of 1/2D each hit is half the multiplier times the damage, and the DR too', () => {
+    const d = gun({ rof: 3, rofMult: 9, range: '50/125', halfD: 50, damage: '1d+1 pi-' });
+    const far = T.effective(d, { weapon: 'Blaster pistol', shots: 2, yards: 20 }).damage;
+    assert.strictEqual(far.maxHits, 18);
+    assert.strictEqual(far.close, null);
+    const near = T.effective(d, { weapon: 'Blaster pistol', shots: 2, yards: 3 }).damage;
+    assert.strictEqual(near.maxHits, 2);
+    assert.strictEqual(near.close, 4);
+  });
+  it('says when the sheet gives no Rcl', () => {
+    assert.strictEqual(T.effective(gun({ noRcl: true }), { weapon: 'Blaster pistol', shots: 3 }).damage.rclAssumed, true);
+    assert.strictEqual(T.effective(gun({ noRcl: true }), { weapon: 'Blaster pistol' }).damage.rclAssumed, false);
+  });
+  it('melee: the damage, with All-Out Attack (Strong)\'s extra, and each attack its own roll', () => {
+    const plain = T.effective(mk(), { weapon: 'Knife' }).damage;
+    assert.strictEqual(plain.text, 'sw cut');
+    assert.strictEqual(plain.strong, null);
+    assert.deepStrictEqual(T.effective(mk(), { weapon: 'Knife', man: 'aos' }).damage.strong, [2, 1]);
+    assert.strictEqual(T.effective(mk(), { weapon: 'Knife', rapid: true }).damage.attacks, true);
+    assert.strictEqual(T.effective(mk(), { weapon: 'Knife', man: 'aodbl' }).damage.attacks, true);
+    assert.strictEqual(T.effective(mk(), { weapon: 'Knife', dual: true }).damage.attacks, true);
+    assert.strictEqual(T.effective(mk(), { weapon: 'Knife' }).damage.attacks, false);
   });
 });

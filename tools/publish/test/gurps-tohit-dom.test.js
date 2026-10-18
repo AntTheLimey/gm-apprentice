@@ -589,3 +589,39 @@ describe('shots fired follow the weapon', () => {
     assert.ok(p.all('#th-lines td').some((td) => td.textContent === 'Rapid fire, 1×9 = 9 shots'));
   });
 });
+
+// #458: the calculator ends with the damage rolls to make, and rolls nothing.
+describe('the damage rolls to make', () => {
+  it('a single shot: the damage and one roll', () => {
+    const p = load(dataBlock());
+    p.set('#th-weapon', 'Blaster pistol');
+    const dmg = p.$('#th-dmg');
+    assert.ok(dmg, 'the damage section is drawn');
+    assert.strictEqual(p.$('.th-dmg-what').textContent, 'Damage: 3d burn');
+    assert.strictEqual(p.$('.th-dmg-how').textContent, 'If it hits, make 1 damage roll.');
+    assert.strictEqual(p.$('.th-dmg-runs'), null);
+  });
+  it('rapid fire: a row for each roll made and the damage rolls it gives', () => {
+    const p = load(dataBlock());
+    p.set('#th-weapon', 'Blaster pistol');
+    p.set('#th-shots', 3);
+    p.set('#th-yards', 10);
+    assert.strictEqual(p.$('#th-roll').textContent, '14');
+    assert.strictEqual(p.$('.th-dmg-how').textContent, 'One hit, and one more for each point the roll is made by, up to 3. Make one damage roll for each hit.');
+    const rows = p.all('.th-dmg-runs tr').map((tr) => tr.children.map((td) => td.textContent));
+    assert.deepStrictEqual(rows, [['You roll', 'Damage rolls'], ['14', '1'], ['13', '2'], ['3 to 12', '3']]);
+  });
+  it('the last place on the page, after the notes', () => {
+    const p = load(dataBlock());
+    const out = p.$('.th-out');
+    const ids = out.children.map((c) => c.attrs.id || c.attrs.class);
+    assert.ok(ids.indexOf('th-dmg') > ids.indexOf('th-notes'), ids.join(', '));
+  });
+  it('melee: the damage as the sheet writes it', () => {
+    const p = load(dataBlock());
+    p.set('#th-weapon', 'Hatchet');
+    assert.strictEqual(p.$('.th-dmg-what').textContent, 'Damage: sw+1 cut');
+    p.set('#th-man', 'aos');
+    assert.strictEqual(p.$('.th-dmg-what').textContent, 'Damage: sw+1 cut, +2 (or +1 a die if better) for All-Out Attack (Strong)');
+  });
+});

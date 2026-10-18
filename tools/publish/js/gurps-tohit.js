@@ -172,7 +172,7 @@
     function effective(data, state, opts) {
       const st = isObj(state) ? state : {};
       const w = pickWeapon(data, st.weapon);
-      if (!w) return { type: 'melee', roll: 0, critSkill: 0, lines: [], cap: null, included: null, notes: [], foe: null };
+      if (!w) return { type: 'melee', roll: 0, critSkill: 0, lines: [], cap: null, included: null, notes: [], foe: null, damage: null };
 
       const ranged = w.type === 'ranged';
       const type = ranged ? 'ranged' : 'melee';
@@ -183,6 +183,7 @@
       let foeAdj = 0;
       let deceptive = 0;
       let telegraphicOn = false;
+      let rapid = null;
       const add = (group, label, value) => { if (value) lines.push({ group, label, value }); };
 
       const acc = ranged ? int(w.acc, 0, 99) : 0;
@@ -309,7 +310,7 @@
         if (sf.over) notes.push(`This weapon's RoF is ${rofText(w)}.`);
         if (sf.under) notes.push(`Full auto only: this weapon fires at least ${sf.min} shots.`);
         if (close) notes.push(`At under ${halfD / R.closeRangeDivisor} yd, a tenth of its 1/2D, each shell is one shot: the ×${sf.mult} goes to damage instead.`);
-        if (fired > 1) notes.push(`Every ${rcl > 1 ? rcl + ' points' : 'point'} the roll is made by lands one more hit, up to ${fired}.`);
+        rapid = { fired, close, mult: sf.mult };
         const cover = typeof st.cover === 'string' ? R.cover[st.cover] : undefined;
         if (cover) add('env', st.cover === 'light' ? 'Light cover or concealment' : 'Target only partly exposed', cover);
         add('env', 'Shot passes other figures', R.behind * int(st.behind, 0, BEHIND_MAX));
@@ -433,7 +434,40 @@
         const d = dist(roll, critSkill);
         foe = { defence, defends, lands: d.CS + d.S * (1 - defends) };
       }
-      return { type, roll, critSkill, lines, cap, included, notes, foe };
+      return { type, roll, critSkill, lines, cap, included, notes, foe, damage: damageFor(w, st, man, roll, critSkill, rapid, rcl) };
+    }
+
+    // The damage rolls to make (#458); nothing is rolled here. Each hit is its own damage roll
+    // (B379). A rapid-fire attack hits once, and once more for each full Rcl the roll is made by,
+    // up to the shots fired (B373): `rolls` gives, for each roll that hits, from the highest down,
+    // how many damage rolls it means. A shotgun closer than a tenth of its 1/2D multiplies each
+    // hit's damage, and the target's DR, by half its multiplier, rounded down (B409).
+    function damageFor(w, st, man, roll, critSkill, rapid, rcl) {
+      const ranged = w.type === 'ranged';
+      const maxHits = rapid ? rapid.fired : 1;
+      const rolls = [];
+      if (maxHits > 1 && roll >= LOW) {
+        for (let r = HIGH; r >= LOW; r--) {
+          const o = outcome(r, roll, critSkill);
+          if (o !== 'S' && o !== 'CS') continue;
+          const hits = Math.min(maxHits, 1 + Math.max(0, Math.floor((roll - r) / rcl)));
+          const last = rolls[rolls.length - 1];
+          if (last && last.hits === hits && last.from === r + 1) last.from = r;
+          else rolls.push({ from: r, to: r, hits });
+        }
+      }
+      return {
+        text: typeof w.damage === 'string' ? w.damage.trim() : '',
+        none: roll < LOW,
+        maxHits,
+        perHit: rcl,
+        rolls,
+        close: rapid && rapid.close ? Math.floor(rapid.mult / R.closeDamageDivisor) : null,
+        rclAssumed: ranged && w.noRcl === true && maxHits > 1,
+        strong: !ranged && man === 'aos' ? [R.aosDamage, R.aosPerDie] : null,
+        // Two weapons, Rapid Strike or All-Out Attack (Double): each attack that hits is rolled for.
+        attacks: st.dual === true || (!ranged && (man === 'aodbl' || (st.rapid === true && man !== 'move'))),
+      };
     }
 
     // Aids offered on a weapon: its own row's, then the character-wide ones (ranged only). One
@@ -872,6 +906,7 @@
     for (let r = LOW; r <= HIGH; r++) { const c = h('div', { class: 'th-cell', text: r }); cells.push(c); stripEl.appendChild(c); }
     const linesEl = h('tbody', { id: 'th-lines' });
     const notesEl = h('div', { class: 'th-notes', id: 'th-notes' });
+    const dmgEl = h('div', { class: 'th-dmg', id: 'th-dmg' });
     const resetBtn = h('button', { type: 'button', id: 'th-reset', text: 'Reset' });
     const big = (k, v) => h('div', {}, [h('div', { class: 'th-k', text: k }), v]);
 
@@ -891,6 +926,7 @@
         stripEl,
         h('table', { class: 'th-lines' }, [linesEl]),
         notesEl,
+        dmgEl,
         h('div', { class: 'th-actions' }, [resetBtn]),
       ]),
     ]));
@@ -1034,6 +1070,35 @@
       if (res.foe) {
         notesEl.appendChild(h('div', { class: 'th-note th-foe', text: 'Against a defence of ' + res.foe.defence + ' (' + pct(res.foe.defends) + ' to defend), this attack lands ' + pct(res.foe.lands) + " of the time. A critical hit can't be defended." }));
       }
+      drawDamage(res.damage);
+    }
+
+    // The damage rolls to make: what to roll, and how many times. It never rolls them.
+    function drawDamage(dm) {
+      clear(dmgEl);
+      if (!dm) return;
+      if (dm.none) {
+        dmgEl.appendChild(h('p', { class: 'th-dmg-how', text: 'No roll, so no damage to roll.' }));
+        return;
+      }
+      let what = 'Damage: ' + (dm.text || 'not on the sheet');
+      if (dm.strong) what += ', ' + sgn(dm.strong[0]) + ' (or ' + sgn(dm.strong[1]) + ' a die if better) for All-Out Attack (Strong)';
+      dmgEl.appendChild(h('p', { class: 'th-dmg-what', text: what }));
+      if (dm.close) {
+        dmgEl.appendChild(h('p', { class: 'th-dmg-close', text: 'Close range: each hit does ' + dm.close + ' times this damage, and the target\'s DR counts ' + dm.close + ' times against it.' }));
+      }
+      let how;
+      if (dm.maxHits > 1) {
+        how = 'One hit, and one more for each ' + (dm.perHit > 1 ? dm.perHit + ' points' : 'point') + ' the roll is made by, up to ' + dm.maxHits + '. Make one damage roll for each hit.' +
+          (dm.rclAssumed ? ' The sheet gives no Rcl, so this counts Rcl 1.' : '');
+      } else {
+        how = dm.attacks ? 'Make 1 damage roll for each attack that hits.' : 'If it hits, make 1 damage roll.';
+      }
+      dmgEl.appendChild(h('p', { class: 'th-dmg-how', text: how }));
+      if (!dm.rolls.length) return;
+      const body = h('tbody', {}, [h('tr', { class: 'th-gh' }, [h('td', { text: 'You roll' }), h('td', { class: 'th-n', text: 'Damage rolls' })])]);
+      for (const x of dm.rolls) body.appendChild(row('', x.from === x.to ? String(x.from) : x.from + ' to ' + x.to, String(x.hits)));
+      dmgEl.appendChild(h('table', { class: 'th-lines th-dmg-runs' }, [body]));
     }
 
     weaponSel.addEventListener('change', () => {
