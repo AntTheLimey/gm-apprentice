@@ -1,0 +1,148 @@
+'use strict';
+// tools/publish/test/unit/hidden-heading.test.js
+// #447: a hidden block (gm-only, spoiler, an HTML or %% comment, a hidden callout) that holds a withheld section's
+// heading. The strip takes the heading with the block; the text after it still sits under that heading in Obsidian,
+// so it is withheld to the next heading of the same or higher level, on stub and full pages alike.
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const {
+  playerSafeMarkdown, keepOnlySections, keptSectionFlags, stubMarked, processContent, strippedLines,
+} = require('../../lib/processor');
+const { createMarks, markKinds, withoutMarked } = require('../../lib/gm-marks');
+
+// The exact example from the issue, in the two forms it names.
+const PCT = '## Appearance\nTall, grey coat.\n%% working note\n## GM Notes\n%%\nShe is the informant.\n';
+const GMO = '## Appearance\nTall, grey coat.\n<!-- gm-only -->\n## GM Notes\n<!-- /gm-only -->\nShe is the informant.\n';
+const FORMS = [['%% comment', PCT], ['gm-only block', GMO]];
+const EXCLUDE = ['GM Notes'];
+
+for (const [form, note] of FORMS) {
+  test(`stub (${form}): the text after a hidden GM Notes heading is withheld`, () => {
+    const out = keepOnlySections(note, ['Appearance'], { excludeSections: EXCLUDE });
+    assert.match(out, /Tall, grey coat\./);
+    assert.doesNotMatch(out, /informant|GM Notes/);
+    const flags = keptSectionFlags(note, ['Appearance'], { excludeSections: EXCLUDE });
+    assert.equal(flags[5], false, 'the line is not kept');
+  });
+
+  test(`full page (${form}): the text after a hidden GM Notes heading is withheld, and the GM hears why`, () => {
+    const { text, warnings } = playerSafeMarkdown(note, { excludeSections: EXCLUDE });
+    assert.match(text, /Tall, grey coat\./);
+    assert.doesNotMatch(text, /informant|GM Notes/);
+    assert.ok(warnings.some((w) => /"GM Notes"/.test(w) && /hidden block/.test(w)), JSON.stringify(warnings));
+  });
+
+  test(`full page render (${form}): processContent withholds it too`, () => {
+    const { html, warnings } = processContent({ markdown: note, frontmatter: { type: 'npc' }, outputPath: 'npcs/x.html' }, {}, EXCLUDE);
+    assert.match(html, /Tall, grey coat\./);
+    assert.doesNotMatch(html, /informant|GM Notes/);
+    assert.ok(warnings.some((w) => /"GM Notes"/.test(w)), JSON.stringify(warnings));
+  });
+
+  test(`GM site (${form}): the same text is marked hidden, in a GM Notes section mark`, () => {
+    const marks = createMarks();
+    const mark = { marks, show: new Set(markKinds()) };
+    const out = playerSafeMarkdown(note, { excludeSections: EXCLUDE, mark }).text;
+    assert.match(out, /She is the informant\./);
+    assert.doesNotMatch(withoutMarked(out, marks), /informant/);
+    // The mark that holds the sentence is the section's, opened after the hidden block has closed.
+    const at = out.indexOf('She is the informant.');
+    const open = out.lastIndexOf('\uE000', at);
+    const id = parseInt(out.slice(open + 1, out.indexOf('\uE001', open)), 36);
+    assert.deepEqual(marks.get(id), { kind: 'sections', label: 'GM Notes section' });
+  });
+
+  test(`GM site stub (${form}): the text is inside the stub's mark`, () => {
+    const marks = createMarks();
+    const out = stubMarked(note, ['Appearance'], { excludeSections: EXCLUDE }, { marks, show: new Set(markKinds()) });
+    assert.match(out, /She is the informant\./);
+    assert.doesNotMatch(withoutMarked(out, marks), /informant/);
+    assert.match(withoutMarked(out, marks), /Tall, grey coat\./);
+  });
+}
+
+test('GM site with comments not shown (the default): the cut comment\'s heading still marks the text after it', () => {
+  const marks = createMarks();
+  const show = new Set(markKinds().filter((k) => k !== 'comments'));
+  const { html } = processContent({ markdown: PCT, frontmatter: { type: 'npc' }, outputPath: 'npcs/x.html' }, {}, EXCLUDE, {}, { mark: { marks, show } });
+  assert.match(html, /She is the informant\./);
+  const at = html.indexOf('She is the informant.');
+  const open = html.lastIndexOf('\uE000', at);
+  assert.ok(open >= 0 && html.indexOf('\uE002', open) > at, 'inside a mark');
+  assert.equal(marks.get(parseInt(html.slice(open + 1, html.indexOf('\uE001', open)), 36)).label, 'GM Notes section');
+});
+
+test('a heading inside a hidden block ends no hidden section, on the player site and on the GM site alike', () => {
+  const note = 'Intro.\n\n## GM Notes\nsecret\n<!-- gm-only -->\n## Appearance\n<!-- /gm-only -->\nAFTERBLOCK\n\n## Voice\nLow.\n';
+  assert.doesNotMatch(playerSafeMarkdown(note, { excludeSections: EXCLUDE }).text, /AFTERBLOCK/);
+  const marks = createMarks();
+  const out = playerSafeMarkdown(note, { excludeSections: EXCLUDE, mark: { marks, show: new Set(markKinds()) } }).text;
+  const seen = withoutMarked(out, marks);
+  assert.doesNotMatch(seen, /AFTERBLOCK|secret/);
+  assert.match(seen, /Low\./);
+});
+
+test('a stub: a hidden heading the stub does not name ends the kept section; the heading itself never prints', () => {
+  const note = '## Appearance\nTall.\n%%\n## Plans\n%%\nPLANTEXT\n\n## Voice\nLow.\n';
+  const out = keepOnlySections(note, ['Appearance', 'Voice'], {});
+  assert.match(out, /Tall\./);
+  assert.match(out, /Low\./);
+  assert.doesNotMatch(out, /PLANTEXT|Plans/);
+});
+
+test('a stub: a hidden deeper heading inside a kept section keeps the text, and the heading does not print', () => {
+  const note = '## Appearance\nTall.\n%%\n### Scar\n%%\nA scar.\n\n## Plans\nNo.\n';
+  const out = keepOnlySections(note, ['Appearance'], {});
+  assert.match(out, /A scar\./);
+  assert.doesNotMatch(out, /Scar$|### |Plans|No\./m);
+});
+
+test('a hidden heading the page does not withhold changes nothing, and is not printed', () => {
+  const note = 'Intro.\n\n%%\n## Appearance\n%%\nTall.\n';
+  const { text, warnings } = playerSafeMarkdown(note, { excludeSections: EXCLUDE });
+  assert.match(text, /Tall\./);
+  assert.doesNotMatch(text, /Appearance/);
+  assert.deepEqual(warnings, []);
+});
+
+test('a later heading in the same block that the page keeps cancels an earlier withheld one', () => {
+  const note = 'Intro.\n\n<!-- gm-only -->\n## GM Notes\nx\n## Appearance\n<!-- /gm-only -->\nTall.\n';
+  const { text } = playerSafeMarkdown(note, { excludeSections: EXCLUDE });
+  assert.match(text, /Tall\./);
+  assert.doesNotMatch(text, /GM Notes|Appearance|^x$/m);
+});
+
+test('a hidden callout that holds the heading withholds what follows it', () => {
+  const note = '## Appearance\nTall.\n\n> [!note]\n> ## GM Notes\n\nCALLOUTSECRET\n\n## Voice\nLow.\n';
+  const { text } = playerSafeMarkdown(note, { excludeSections: EXCLUDE, excludeCallouts: true });
+  assert.match(text, /Tall\./);
+  assert.match(text, /Low\./);
+  assert.doesNotMatch(text, /CALLOUTSECRET/);
+});
+
+test('the withholding runs to the next heading of the same or higher level, not further', () => {
+  const note = '# Title\n\n## Appearance\nTall.\n%%\n## GM Notes\n%%\nSECRET\n\n### Deeper\nSECRET2\n\n## Voice\nLow.\n';
+  const { text } = playerSafeMarkdown(note, { excludeSections: EXCLUDE });
+  assert.doesNotMatch(text, /SECRET|Deeper/);
+  assert.match(text, /Low\./);
+});
+
+test('a spoiler block and an HTML comment holding the heading do the same', () => {
+  for (const [open, close] of [['<!-- spoiler -->', '<!-- /spoiler -->'], ['<!--', '-->']]) {
+    const note = `## Appearance\nTall.\n${open}\n## GM Notes\n${close}\nHIDDENAFTER\n`;
+    assert.doesNotMatch(playerSafeMarkdown(note, { excludeSections: EXCLUDE }).text, /HIDDENAFTER/, open);
+    assert.doesNotMatch(keepOnlySections(note, ['Appearance'], { excludeSections: EXCLUDE }), /HIDDENAFTER/, open);
+  }
+});
+
+test('a heading in a code block inside a hidden block is code: nothing is withheld for it', () => {
+  const note = 'Intro.\n\n<!-- gm-only -->\n```\n## GM Notes\n```\n<!-- /gm-only -->\nShown.\n';
+  const { text, warnings } = playerSafeMarkdown(note, { excludeSections: EXCLUDE });
+  assert.match(text, /Shown\./);
+  assert.deepEqual(warnings, []);
+});
+
+test('strippedLines with no section rules leaves the lines as they were (the `cut` answer to vault_check)', () => {
+  const { lines } = strippedLines(PCT, false);
+  assert.deepEqual(lines, ['## Appearance', 'Tall, grey coat.', 'She is the informant.', '']);
+});

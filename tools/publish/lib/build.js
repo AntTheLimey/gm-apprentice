@@ -8,7 +8,7 @@ const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllN
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
-const { nameList, gmAliasList, strippedLines, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
+const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
@@ -894,22 +894,25 @@ function buildSite(options) {
       // is that text with each marked span dropped, as players see it: an excerpt that cut a mark open would wrap the
       // rest of its page. A PC whose headings a link label changes has neither, as on the player site: its page shows
       // the body, marked. No note-faults facts.
-      page.gmMarkedPublished = page.headingsUnstable ? '' : filterSections(strippedLines(source, excludeCallouts, mark).lines.join('\n'),
-        excludeSections, page.sourceFrontmatter || page.frontmatter, { pcKeepSections, mark });
+      const gmFm = page.sourceFrontmatter || page.frontmatter;
+      page.gmMarkedPublished = page.headingsUnstable ? '' : filterSections(
+        strippedLines(source, excludeCallouts, mark, sectionWithholder(excludeSections, gmFm, { pcKeepSections })).lines.join('\n'),
+        excludeSections, gmFm, { pcKeepSections, mark });
       page.publishedMarkdown = withoutMarked(page.gmMarkedPublished, mark.marks);
       continue;
     }
-    const stripped = strippedLines(source, excludeCallouts);
     const fm = page.sourceFrontmatter || page.frontmatter;
+    // A withheld heading inside a hidden block comes back where the block ended, as on the page (#447).
+    const stripped = strippedLines(source, excludeCallouts, null, sectionWithholder(excludeSections, fm, { pcKeepSections }));
     // A stub's facts were taken when it was cut. A fault that lies wholly in text the page
     // hides anyway (noteFacts) is none; a note withheld whole shows none.
     stripFacts.set(page, stubFacts.get(page) || {
       source,
-      ...noteFacts(stripped, (lines) => (page.headingsUnstable ? lines.map(() => false) : keptFlags(lines, excludeSections, fm, { pcKeepSections }))),
+      ...noteFacts(stripped, (lines) => (page.headingsUnstable ? lines.map(() => false) : keptFlags(lines, excludeSections, fm, { pcKeepSections, restored: lines === stripped.lines ? stripped.restored : undefined }))),
     });
     const text = stripped.lines.join('\n');
     page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(text, excludeSections, fm,
-      { pcKeepSections });   // its warnings are the page render's to print, once
+      { pcKeepSections, restored: stripped.restored });   // its warnings are the page render's to print, once
   }
 
   // Whether a Story section will exist. Computed early (pure function of pages) so the
