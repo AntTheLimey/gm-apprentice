@@ -151,7 +151,7 @@ describe('ALIAS_IN_PROSE is read off the page as built', () => {
     assert.strictEqual(f.count, 1);
   });
   it('is silent in a field the page does not print, as a link, and as part of a longer word', async () => {
-    assert.deepStrictEqual(await on('---\ntype: npc\nprivate_memo: "The Watcher"\n---\n\nSee [[The Watcher]] and the Watchers.\n'), []);
+    assert.deepStrictEqual(await on('---\ntype: npc\nprivate_memo: "The Watcher"\n---\n\nSee [[The Watcher]] and the watchers. The Watcherson.\n'), []);
   });
   it('does not count another page\'s public name printed as a link to it', async () => {
     const found = await faults(Object.assign({
@@ -615,7 +615,7 @@ describe('ALIAS_IN_PROSE: spellings and places that used to slip by', () => {
     assert.strictEqual((await aliases({ 'People/Case.md': npcNote('Intro.\n\n## Seen\n\nThey fear The​ Watcher at night.') })).length, 1);
   });
   it('still leaves a longer word alone', async () => {
-    assert.deepStrictEqual(await aliases({ 'People/Case.md': npcNote('Intro.\n\n## Seen\n\nThe Watchers and Zorveks.') }), []);
+    assert.deepStrictEqual(await aliases({ 'People/Case.md': npcNote('Intro.\n\n## Seen\n\nThe Watchersons, the watchers and Zorvekish.') }), []);
   });
 });
 

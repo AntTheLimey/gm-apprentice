@@ -695,10 +695,26 @@ describe('an address on a page', () => {
     const files = {
       'Characters/Lord_Zorn.md': zornNote(),
       'Characters/Lord_Zorn_Jr.md': mara('The heir.'),
-      'Characters/Mara_Quill.md': mara('Intro.\n\nMet [[Lord_Zorn_Jr]]. [out](https://example.com/Lord_Zorn)'),
+      'Characters/Mara_Quill.md': mara('Intro.\n\nMet [[Lord_Zorn_Jr]]. [heir](lord-zorn-jr.html) [home](../index.html)'),
     };
     const hits = await found(files, { excluded: ZORN_EXCLUDED });
     assert.deepStrictEqual(hits.filter((f) => f.path === 'Characters/Mara_Quill.md' && /printed on the page|address/.test(f.detail)), []);
+  });
+  it('a hand-written address of a page the site does not have is read (#352)', async () => {
+    const files = {
+      'Characters/Lord_Zorn.md': zornNote(),
+      'Characters/Mara_Quill.md': mara('Intro.\n\nSee [v](lord_zorn.html).'),
+    };
+    const hits = await found(files, { excluded: ZORN_EXCLUDED });
+    assert.deepStrictEqual(hits.map((f) => [f.path, /address of a link/.test(f.detail)]), [['Characters/Mara_Quill.md', true]]);
+  });
+  // A bare https://… is plain text on the page (the renderer makes no link of it), so it stays a finding of the page's words.
+  it('another site\'s address holding the name is told as an address, labelled or written <https://…> (#352)', async () => {
+    for (const body of ['See [out](https://example.com/Lord_Zorn).', 'See <https://example.com/Lord_Zorn> here.']) {
+      const files = { 'Characters/Lord_Zorn.md': zornNote(), 'Characters/Mara_Quill.md': mara(`Intro.\n\n${body}`) };
+      const hits = await found(files, { excluded: ZORN_EXCLUDED });
+      assert.deepStrictEqual(hits.map((f) => [f.path, /address of a link/.test(f.detail)]), [['Characters/Mara_Quill.md', true]], body);
+    }
   });
 });
 
@@ -731,5 +747,24 @@ describe('a withheld note\'s aliases written as one value', () => {
     const { configPath, docs } = site(files, { excluded: ZORN_EXCLUDED });
     buildQuiet(configPath);
     assert.ok(fs.readFileSync(path.join(docs, 'characters', 'mara-quill.html'), 'utf8').includes('Met someone.'));
+  });
+});
+
+describe('secret-name leftovers (#352)', () => {
+  it('a plural written with a capital is the name: "the Lord Zorns"', async () => {
+    const files = { 'Characters/Lord_Zorn.md': zornNote(), 'Characters/Mara_Quill.md': mara('Intro.\n\nThe Lord Zorns rode out.') };
+    assert.deepStrictEqual((await found(files, { excluded: ZORN_EXCLUDED })).map((f) => f.name), [ZORN]);
+  });
+  it('a name in the first paragraph, which an NPC page also prints as its pull-quote, is printed once', async () => {
+    const files = { 'Characters/Lord_Zorn.md': zornNote(), 'Characters/Mara_Quill.md': mara('Lord Zorn rides at dawn.') };
+    const [f] = await found(files, { excluded: ZORN_EXCLUDED });
+    assert.strictEqual(f.count, 1);
+    assert.doesNotMatch(f.detail, /times/);
+  });
+  it('`withheld : true` (a space before the colon) on a note the scan never reads keeps the flag', async () => {
+    for (const key of ['withheld : true', '"withheld": true']) {
+      const files = { 'Quiet/Lord_Zorn.md': zornNote(`${key}\n`), 'Characters/Mara_Quill.md': mara('Intro.\n\nLord Zorn rides.') };
+      assert.deepStrictEqual((await found(files)).map((f) => f.name), [ZORN], key);
+    }
   });
 });

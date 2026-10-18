@@ -101,7 +101,7 @@ describe('leak gate: never-show words (player_site.never_show)', () => {
   it('a word inside a longer word is not a finding', () => {
     const s = leakSite(NOTES, WORDS);
     try {
-      leakInto(s.outputDir, 'npcs/linker.html', 'The Kestrels flew.');
+      leakInto(s.outputDir, 'npcs/linker.html', 'The Kestrelton flew. The kestrels flew.');
       assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings, []);
     } finally { s.cleanup(); }
   });

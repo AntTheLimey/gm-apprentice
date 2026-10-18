@@ -1,7 +1,7 @@
 'use strict';
 // The secret-name checks of the build's note audit (note-faults.js), run over the finished folder: a gm_aliases name or
 // a withheld note's name in any text file, or in a copied file's name; and a withheld note that publishes.
-const { secretNamesOf, findSecretNames, publicWordsOf, foldQuotes } = require('../note-faults');
+const { secretNamesOf, findSecretNames, publicWordsOf, foldQuotes, nameMatcher, nameHits, hasName } = require('../note-faults');
 const { fileText, pageExtras, isToolFile } = require('./match');
 const { wordsOf } = require('./text');
 const { canonicalNfc } = require('../unicode');
@@ -23,8 +23,7 @@ function holdersOf(names, publicWords) {
     if (!w) continue;
     const text = foldQuotes(w);
     for (const n of names) {
-      n.re.lastIndex = 0;
-      if (n.re.test(text)) { holders.push(text); break; }
+      if (hasName(n.re, text)) { holders.push(text); break; }
     }
   }
   if (holders.length === 0) return null;
@@ -82,8 +81,7 @@ function nameFindings({ files, allFiles, hidden, findingId }) {
     const address = foldQuotes(rel.replace(/\.[^./]+$/, ''));
     for (const n of secrets.names) {
       if (n.kind !== 'withheld') continue;
-      n.re.lastIndex = 0;
-      if (n.re.test(address)) add(rel, 'withheld', n.alias, n.owner, rel);
+      if (hasName(n.re, address)) add(rel, 'withheld', n.alias, n.owner, rel);
     }
   }
   for (const w of secrets.publishedWithheld) {
@@ -102,8 +100,7 @@ function neverShowFindings({ files, allFiles, words, findingId, published = [] }
   const seen = new Set();
   const list = [...new Set(words.map((w) => w.trim()).filter(Boolean))].map((w) => ({
     word: w,
-    re: new RegExp('(?<![\\p{L}\\p{N}])' + foldQuotes(w).split(/[\s_\-\u2010\u2011]+/).filter(Boolean).map(esc).join('[\\s_\\-\\u2010\\u2011]+')
-      + '(?![\\p{L}\\p{N}])', 'iu'),
+    re: nameMatcher(w),
   }));
   const add = (page, w, shown) => {
     const text = wordsOf(w.word).join(' ');
@@ -115,7 +112,7 @@ function neverShowFindings({ files, allFiles, words, findingId, published = [] }
   for (const file of files) {
     const text = foldQuotes(file.text || '');
     for (const w of list) {
-      const m = w.re.exec(text);
+      const [m] = nameHits(w.re, text);
       if (!m) continue;
       const start = Math.max(text.lastIndexOf('\n', m.index) + 1, m.index - CONTEXT);
       const end = text.indexOf('\n', m.index + m[0].length);
@@ -131,7 +128,7 @@ function neverShowFindings({ files, allFiles, words, findingId, published = [] }
       const aliases = (page.frontmatter && Array.isArray(page.frontmatter.aliases)) ? page.frontmatter.aliases : [];
       const text = foldQuotes(canonicalNfc(aliases.map((a) => labelsForLinks(String(a))).join(', ')));
       for (const w of list) {
-        if (!w.re.test(text)) continue;
+        if (!hasName(w.re, text)) continue;
         for (const f of indexes) add(f.rel, w, `aliases of ${page.displayTitle || 'a published note'}: ${text}`);
       }
     }
@@ -139,7 +136,7 @@ function neverShowFindings({ files, allFiles, words, findingId, published = [] }
   for (const rel of allFiles) {
     if (isToolFile(rel)) continue;
     const address = foldQuotes(rel.replace(/\.[^./]+$/, ''));
-    for (const w of list) if (w.re.test(address)) add(rel, w, rel);
+    for (const w of list) if (hasName(w.re, address)) add(rel, w, rel);
   }
   return found;
 }

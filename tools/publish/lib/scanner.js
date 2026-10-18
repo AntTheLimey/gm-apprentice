@@ -410,8 +410,8 @@ function pairStoryFiles(pages, vaultPath) {
 // excludeDirs, folderMap and `type:` (#212). GM aliases are resolved against
 // this, because Obsidian resolves a link to any note in the vault, and a
 // GM-only folder the site never scans is the likeliest home for a secret.
-const HOUSEKEEPING_TYPE_LINE = /^type:\s*["']?(meta|template)["']?\s*$/m;
-const SESSION_TYPE_LINE = new RegExp(`^type:\\s*["']?(session|${[...WRAP_UP_TYPES].join('|')})["']?\\s*$`, 'm');
+const HOUSEKEEPING_TYPE_LINE = /^type[ \t]*:\s*["']?(meta|template)["']?\s*$/m;
+const SESSION_TYPE_LINE = new RegExp(`^type[ \\t]*:\\s*["']?(session|${[...WRAP_UP_TYPES].join('|')})["']?\\s*$`, 'm');
 
 function scanAllNotes(vaultPath) {
   const out = [];
@@ -432,16 +432,17 @@ function scanAllNotes(vaultPath) {
         // index or Wrap-Up the scan skipped, which session-hub.js still counts when it
         // resolves a pairing link (a same-titled hub elsewhere makes a link ambiguous).
         // A note directly in _meta is read too: its type says whether it is the plugin's own (publish-decision.js).
+        // A key written `withheld :` or `"withheld":` is the same key to YAML, so it is looked for so too (#352).
         const inMeta = path.relative(vaultPath, full).split(path.sep)[0] === '_meta';
-        if (inMeta || /^(?:(?:gm_)?aliases|withheld|title|publish):/m.test(text) || HOUSEKEEPING_TYPE_LINE.test(text) || SESSION_TYPE_LINE.test(text)) frontmatter = parseNote(text).data || {};
+        if (inMeta || /^["']?(?:(?:gm_)?aliases|withheld|title|publish)["']?[ \t]*:/m.test(text) || HOUSEKEEPING_TYPE_LINE.test(text) || SESSION_TYPE_LINE.test(text)) frontmatter = parseNote(text).data || {};
       } catch (err) {
         // Its name still counts. A secret that silently stops being
         // protected is the one failure that must not be quiet.
-        if (/^gm_aliases:/m.test(text)) {
+        if (/^gm_aliases[ \t]*:/m.test(text)) {
           console.warn(`WARNING: ${path.relative(vaultPath, full)} has gm_aliases but its frontmatter `
             + `can't be read (${err.message.split('\n')[0]}); those names are NOT hidden on the site.`);
         }
-        if (/^withheld:/m.test(text)) {
+        if (/^withheld[ \t]*:/m.test(text)) {
           console.warn(`WARNING: ${path.relative(vaultPath, full)} has withheld but its frontmatter `
             + `can't be read (${err.message.split('\n')[0]}); its name is NOT looked for on the site.`);
         }
