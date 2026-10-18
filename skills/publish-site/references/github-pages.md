@@ -1,7 +1,80 @@
-# GitHub Pages — Manual Enablement
+# GitHub Pages — First Deploy and Manual Enablement
 
-This guide walks through enabling GitHub Pages manually in the
-browser. This is a one-time setup.
+## First deploy
+
+Step 21b of the set-up guide. `<project_name>` and the GitHub user
+come from `node "$TOOL" settings setup-note get --vault <vault>`;
+`$TOOL` is set up in `SKILL.md` → "The build tool".
+
+Initialise git, commit, and push, then enable Pages.
+
+The scaffold's `.gitignore` already keeps `vault.config.json` (which holds
+the absolute `vaultPath` on the GM's machine) out of the repo, so no manual
+edit is needed before committing:
+
+```bash
+git init
+git branch -M main
+git add .
+git commit -m "Initial site scaffold"
+```
+
+(Only the built `docs/` folder and the scaffold's public files are
+published; the local build config stays on the GM's machine.)
+
+**Create the repository.** If `gh` is available and authenticated (from the
+set-up guide's Phase A), ask:
+
+> "I can create the GitHub repository and push everything for you.
+> Shall I go ahead? The repo will be called `<project_name>` and
+> will be public (required for free GitHub Pages)."
+
+After confirmation:
+
+```bash
+gh repo create <project_name> --public --source . --remote origin --push
+```
+
+**If the GM chose the manual path in Phase A** (no `gh`):
+
+1. Go to <https://github.com/new>
+2. Set the repository name to `<project_name>`
+3. Set visibility to **Public** (required for free GitHub Pages)
+4. Do **not** initialise with a README — you already have one
+5. Click **Create repository**
+6. Copy the remote URL shown next (it looks like
+   `https://github.com/<github_username>/<project_name>.git`)
+7. In the terminal, run:
+
+   ```bash
+   git remote add origin https://github.com/<github_username>/<project_name>.git
+   node "$TOOL" deploy --config vault.config.json
+   ```
+
+   `deploy` builds, commits, and pushes, setting the upstream tracking
+   branch on this first push. Do **not** pass `--verify` here — Pages
+   isn't enabled yet, so a live-URL probe now would just report a
+   miss. Verification happens in Step 22, after Pages is turned on
+   below.
+
+**Enable GitHub Pages.** If `gh` was used, offer to enable it
+programmatically:
+
+```bash
+gh api repos/<github_username>/<project_name>/pages \
+  -X POST \
+  -f "build_type=legacy" \
+  -f "source[branch]=main" \
+  -f "source[path]=/docs"
+```
+
+If that command fails (permissions, Pages already enabled) or `gh` isn't
+available, walk the GM through the numbered steps under
+Enabling Pages by hand.
+
+---
+
+## Enabling Pages by hand
 
 If you used the setup wizard with the `gh` CLI, Pages was
 enabled automatically — you can skip this guide. These steps
