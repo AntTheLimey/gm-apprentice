@@ -51,29 +51,6 @@ of this.
 
 ---
 
-## Before you start
-
-Setup runs an **automated preflight** first (Phase A below) — it checks
-for you that every tool the site needs is installed and connected, and
-walks the GM through fixing anything that's missing, all **before**
-touching a single file. There is no manual checklist to tick off here;
-the preflight is the checklist, and it's tailored to whichever host the
-GM picks.
-
-There are two free host options:
-
-- **Cloudflare Pages — recommended.** Fast global CDN, easy custom
-  domains, image optimization, and it's the smoothest path for the
-  live status bar and at-table inbox if the GM ever wants them.
-- **GitHub Pages — a fully-supported alternative.** A good fit if the
-  GM already uses GitHub. Nothing about the site is worse; only how it's
-  deployed differs.
-
-The site itself is identical either way. The GM picks in Phase A, and
-that choice tailors the preflight and forks the deploy at the end.
-
----
-
 ## Phase A — Preflight (runs first)
 
 Nothing is created or changed in this phase except the set-up note.
@@ -443,41 +420,11 @@ rare fallback.)
 
 ### Step 14: Confirm the build tool pin
 
-`init` auto-pins the scaffold's `package.json` to the exact tool it ran
-from — the plugin cache version — so there is no `"latest"` to replace
-and no manual edit in the normal case:
-
-```json
-{
-  "dependencies": {
-    "gm-apprentice-publish": "file:<plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish"
-  }
-}
-```
-
-Open `package.json` and confirm the `gm-apprentice-publish` value is a
-`file:` path ending in `/<plugin-version>/tools/publish`. If it shows
-anything else (e.g. `"latest"` from an older scaffold, or an
-out-of-date version), correct it to the path above — `<plugin-version>`
-is the current gm-apprentice plugin version from
-`.claude-plugin/plugin.json`.
-
-This ensures the site always builds with the exact version of the
-publish tool that matches the installed plugin.
-
-**Why a `file:` cache pin (and not the npm registry or "auto-updating")?**
-The tool is distributed with the plugin, not published as a live npm
-package, so pinning to the cache is what keeps the renderer in lockstep
-with the skill that drives it. A floating pin (like `"latest"`) would
-resolve from the npm registry, where the package is deprecated and stuck
-at 1.2.1, which leaks GM-only content. Floating pins are also how sites
-silently went stale before. The build tool prints a loud
-**version-drift warning** at the start of any build when a newer version
-is installed in the cache, and routine updates (capability 2) repoint
-the path and re-run `npm install` whenever the plugin version changes.
-The tool ships its runtime dependencies **vendored**, so a freshly-pinned
-cache version builds with no download step — `npm install` only re-links
-the package.
+Run `node "$TOOL" update-pin --site <site_dir>` and report its one
+line. It points the site at the installed plugin's copy of the tool
+and runs `npm install`, which only links it (nothing downloads). If
+it says npm install left something else, show the GM the lines it
+printed and stop.
 
 ### Step 15: Check the settings
 
@@ -511,15 +458,7 @@ the GM to edit a file.
 
 ### Step 16: Link the build tool
 
-In the terminal, navigate to `<site_dir>` and run:
-
-```bash
-npm install
-```
-
-This links the `gm-apprentice-publish` build tool from the plugin cache
-(the `file:` pin from Step 14). The tool ships its dependencies vendored,
-so this just creates the link — it downloads nothing and works offline.
+Step 14's `update-pin` already ran `npm install`. Go on.
 
 ### Step 17: Initial build
 
@@ -617,71 +556,7 @@ deploy failure otherwise routes to `troubleshooting.md` (and
 
 ### Step 21b: Deploy to GitHub Pages
 
-Initialise git, commit, and push, then enable Pages.
-
-The scaffold's `.gitignore` already keeps `vault.config.json` (which holds
-the absolute `vaultPath` on the GM's machine) out of the repo, so no manual
-edit is needed before committing:
-
-```bash
-git init
-git branch -M main
-git add .
-git commit -m "Initial site scaffold"
-```
-
-(Only the built `docs/` folder and the scaffold's public files are
-published; the local build config stays on the GM's machine.)
-
-**Create the repository.** If `gh` is available and authenticated (from
-Phase A), ask:
-
-> "I can create the GitHub repository and push everything for you.
-> Shall I go ahead? The repo will be called `<project_name>` and
-> will be public (required for free GitHub Pages)."
-
-After confirmation:
-
-```bash
-gh repo create <project_name> --public --source . --remote origin --push
-```
-
-**If the GM chose the manual path in Phase A** (no `gh`):
-
-1. Go to <https://github.com/new>
-2. Set the repository name to `<project_name>`
-3. Set visibility to **Public** (required for free GitHub Pages)
-4. Do **not** initialise with a README — you already have one
-5. Click **Create repository**
-6. Copy the remote URL shown next (it looks like
-   `https://github.com/<github_username>/<project_name>.git`)
-7. In the terminal, run:
-
-   ```bash
-   git remote add origin https://github.com/<github_username>/<project_name>.git
-   node "$TOOL" deploy --config vault.config.json
-   ```
-
-   `deploy` builds, commits, and pushes, setting the upstream tracking
-   branch on this first push. Do **not** pass `--verify` here — Pages
-   isn't enabled yet, so a live-URL probe now would just report a
-   miss. Verification happens in Step 22, after Pages is turned on
-   below.
-
-**Enable GitHub Pages.** If `gh` was used, offer to enable it
-programmatically:
-
-```bash
-gh api repos/<github_username>/<project_name>/pages \
-  -X POST \
-  -f "build_type=legacy" \
-  -f "source[branch]=main" \
-  -f "source[path]=/docs"
-```
-
-If that command fails (permissions, Pages already enabled) or `gh` isn't
-available, direct the GM to `references/github-pages.md` for the manual
-two-minute enablement steps. Then continue to Phase F.
+Follow `github-pages.md` § First deploy, then go on to Phase F.
 
 ---
 
@@ -755,35 +630,19 @@ and each can be set up later:
 > - an **at-table change-request inbox** for sheet edits during play.
 > Want to set up either now?"
 
-**If the GM wants one now, run the real command** — Cloudflare only, and
-each runs its own **KV-permission probe** (the wizard already ran `doctor`
-in its Phase A preflight; the command additionally lists KV namespaces to
-confirm the token can manage KV before touching anything, mapping
-Cloudflare's `code: 10000` to the one-line fix: edit the
-token to add **Account · Workers KV Storage · Edit**) and **idempotent**
-(safe to re-run — it reuses the existing `INBOX` KV namespace rather than
-recreating one):
+**If the GM wants one now**, run it from the site directory
+(Cloudflare only; `--config <path>` if not `./vault.config.json`):
 
 ```bash
 node "$TOOL" setup-status-bar   # Tier 2a — live status bar
 node "$TOOL" setup-inbox        # Tier 2b — at-table change-request inbox
 ```
 
-Run from the site directory (each defaults to `./vault.config.json`; pass
-`--config <path>` otherwise). Either command creates or reuses the `INBOX`
-KV namespace, aligns `wrangler.toml`'s `name` to the Cloudflare project,
-turns on the matching switch (`player_site.features.live_stats` /
-`player_site.features.inbox`) in the vault's settings,
-rebuilds, and deploys — one step, no manual `wrangler.toml` editing.
-It checks that the settings can be written before it touches wrangler
-or KV. `setup-inbox` requires and ensures the same KV
-namespace (**inbox ⇒ KV**) and is **infra-only** — it sets the switch but
-does not open a session; that's still "start your checking loop"
-(capability 7) once the switch is live. If the command reports the
-KV-permission fix, walk the GM through editing the token (My Profile → API
-Tokens → their token → Edit → add **Account · Workers KV Storage · Edit** →
-Save) — the same one-tick permission mentioned in Phase A — then re-run;
-it picks up right where it left off.
+Each checks first, is safe to re-run, turns its switch on, rebuilds
+and deploys. If it stops with the KV-permission fix, walk the GM
+through it (`cloudflare-pages.md` § The fast way), then re-run.
+`setup-inbox` opens no session: that is "start your checking loop"
+(capability 7).
 
 Nothing records which add-on was put off: the two switches say what
 is on (`settings get player_site.features`). If the GM puts one off,
@@ -793,17 +652,3 @@ tell them:
 > bar' or 'set up the inbox' and I'll set it up with one command."
 
 Setup is complete.
-
-### A GM site for the table
-
-When the GM wants a copy of the site for themselves (every note and every
-hidden part, each marked with why players don't see it), run `node
-"$TOOL" settings set gm_site.publish=on --vault <vault>`: it
-makes the GM site's folder beside the site folder, named after it with
-`-gm` added, and from then on every build makes both sites. Build it now
-with `node "$TOOL" build --site gm --config vault.config.json`, start
-`node "$TOOL" serve --config vault.config.json` in the background, and
-give the GM the addresses it prints to open on a phone or tablet at home
-(it runs until stopped). Tell them it never goes online (`deploy` refuses
-its folder) and that the site's build steps don't run for it: any it
-needs go under `gm_site.before_build` or `gm_site.after_build`.
