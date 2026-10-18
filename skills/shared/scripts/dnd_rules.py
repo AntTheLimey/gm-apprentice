@@ -4,8 +4,8 @@
 Read-only. `check(text)` returns findings; dnd_sheet.py prints them.
   WRONG      the sheet contradicts itself, whatever books are in use
   LOOK       a number differs from the SRD 5.2 table for the class and
-             level; a reason in brackets beside a score over 20 or
-             `HP (Max)` settles it
+             level; a reason in brackets beside a score over 20,
+             `HP (Max)` or a slot Total settles it
   CANTCHECK  a class is not in SRD 5.2, so its tables cannot be consulted
 
 Not checked: whether a choice is allowed (spell lists, feat requirements,

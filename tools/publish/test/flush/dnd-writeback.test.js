@@ -459,3 +459,11 @@ test('a few well-formed unknown keys are all named, with no count entries', () =
   const r = applyDnDFlush(md, { used: { 'class:old feature': 1, 'slot:9th': 2 } });
   assert.deepEqual(r.skipped.slice().sort(), ['class:old feature', 'slot:9th']);
 });
+
+test('a slot total written with a reason is a live row the flush can write (#444)', () => {
+  const md = note('Brannoch_Vale.md').replace(/^\| 1st \| (\d+) \|/m, '| 1st | $1 (Ring of Spell Storing) |');
+  assert.match(md, /\| 1st \| \d+ \(Ring of Spell Storing\) \|/);
+  const r = applyDnDFlush(md, blob({ used: { 'slot:1st': 1 } }));
+  assert.match(row(r.markdown, /^\| 1st \|/), /^\| 1st \| \d+ \(Ring of Spell Storing\) \| 1 \|/);
+  assert.deepEqual(r.skipped, []);
+});

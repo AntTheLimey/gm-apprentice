@@ -83,16 +83,16 @@ report has an `ERROR` row, the rules checks do not run: fix the note first.
 | Row | Means | Do |
 |-----|-------|----|
 | `WRONG` | The sheet contradicts itself: class levels, hit dice, Expertise without proficiency, more spent than owned, current hit points above the maximum, a death-save count above 3, a score over 30, more than three attuned items (`WRONG` when every class is in the free rules; a `LOOK` whenever the class line cannot be read or names a class outside them) | Fix the note, or ask the GM which number is right |
-| `LOOK` | A number differs from the free rules' table for the class and level | Tell the GM. If the number is right (an item, a boon, a house rule), write the reason in brackets beside it, `22 (belt of giant strength)`, and the row goes away. That works for a score over 20 and for `HP (Max)` only; the other `LOOK` rows are handled as listed below |
+| `LOOK` | A number differs from the free rules' table for the class and level | Tell the GM. If the number is right (an item, a boon, a house rule), write the reason in brackets beside it, `22 (belt of giant strength)`, and the row goes away. That works for a score over 20, `HP (Max)` and a slot Total; the other `LOOK` rows are handled as listed below |
 | `CANTCHECK` | A class is outside the free rules, the class line cannot be read, or slot totals differ for a class with no spells of its own | Mention it once. It is not a fault |
 
 Other `LOOK` rows have no cell for a reason:
 
 - Slot totals: a Warlock's `Pact (3rd)` row is held to the Warlock's own
-  count and slot level, and the numbered rows to the rest. The page reads
-  a slot Total only as a bare number, so a reason in brackets there would
-  take that row off the live sheet. If the total is right for the
-  character, tell the GM once and leave the row.
+  count and slot level, and the numbered rows to the rest. If the total
+  is right for the character (a ring that stores spells), write the reason
+  in brackets beside it, `5 (Ring of Spell Storing)`; the page still reads
+  the number.
 - Cantrip or prepared-spell counts, or a spell above what the class can
   prepare: a spell from an item, feat or species trait is left out of the
   count when its `Source` cell says so; one the character always has

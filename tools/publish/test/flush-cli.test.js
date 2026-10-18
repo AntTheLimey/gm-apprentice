@@ -7,6 +7,9 @@ function fakeAdapter(map) {
   return { async get(key) { return key in map ? map[key] : null; } };
 }
 
+// The vault in these tests is the made-up folder /vault, so the bookkeeping file is faked.
+const NO_STATE = { readState: () => ({}), writeState: () => {} };
+
 const CONFIG = { vaultPath: '/vault', siteTitle: 'Test Campaign', excludeDirs: [], folderMap: {} };
 
 const JANE_MD = [
@@ -36,7 +39,7 @@ function run(over = {}) {
     writeFile: (p, s) => { writes[p] = s; },
     out: (m) => lines.push(String(m)),
   }, over);
-  return { promise: runFlush(deps), writes, lines };
+  return { promise: runFlush({ ...NO_STATE, ...deps }), writes, lines };
 }
 
 test('flush writes the newest blob into the matching PC sheet only', async () => {
@@ -111,6 +114,7 @@ test('routes a GURPS PC to the GURPS writeback (injects HP/FP)', async () => {
     'loadout:gurps-camp:karl-brenner:ABCD': JSON.stringify({ hp: 7, fp: 9, updatedAt: 5 }),
   });
   const rc = await runFlush({
+    ...NO_STATE,
     config: { vaultPath: '/vault', siteTitle: 'GURPS Camp', system: 'gurps-4e', excludeDirs: [], folderMap: {} },
     publishConfig: { system: 'gurps-4e', switches: { characterSheets: true, liveStats: true } },
     adapter,
@@ -142,6 +146,7 @@ test('routes a GURPS PC when system comes only from publishConfig (_meta/vault-c
     'loadout:gurps-camp:karl-brenner:ABCD': JSON.stringify({ hp: 7, fp: 9, updatedAt: 5 }),
   });
   const rc = await runFlush({
+    ...NO_STATE,
     config: { vaultPath: '/vault', siteTitle: 'GURPS Camp', excludeDirs: [], folderMap: {} }, // NOTE: no `system`
     publishConfig: { system: 'gurps-4e' },          // system as _meta/vault-config.md would supply it
     adapter,
@@ -173,6 +178,7 @@ test('flush skips a GURPS PC whose HP/FP are pinned in frontmatter (status objec
     'loadout:gurps-camp:karl-brenner:ABCD': JSON.stringify({ hp: 5, fp: 9, updatedAt: 5 }),
   });
   const rc = await runFlush({
+    ...NO_STATE,
     config: { vaultPath: '/vault', siteTitle: 'GURPS Camp', system: 'gurps-4e', excludeDirs: [], folderMap: {} },
     publishConfig: { system: 'gurps-4e', switches: { characterSheets: true, liveStats: true } },
     adapter,
@@ -290,6 +296,7 @@ test('routes a D&D PC to the D&D writeback; dry run writes nothing; missing cell
       'loadout:dnd-camp:brannoch-vale:ABCD': JSON.stringify({ v: 1, hp: 20, used: { 'slot:1st': 3, 'class:no such feature': 1 }, updatedAt: 1 }),
     });
     const rc = await runFlush({
+    ...NO_STATE,
       dryRun,
       config: { vaultPath: '/vault', siteTitle: 'DnD Camp', system: 'dnd-5e-2024', excludeDirs: [], folderMap: {} },
       publishConfig: { system: 'dnd-5e-2024', switches: { characterSheets: true, liveStats: true } },
@@ -323,6 +330,7 @@ test('D&D flush report: hostile keys in the record never reach the printed lines
     'loadout:dnd-camp:brannoch-vale:ABCD': JSON.stringify({ v: 1, hp: 20, used, updatedAt: 1 }),
   });
   await runFlush({
+    ...NO_STATE,
     dryRun: true,
     config: { vaultPath: '/vault', siteTitle: 'DnD Camp', system: 'dnd-5e-2024', excludeDirs: [], folderMap: {} },
     publishConfig: { system: 'dnd-5e-2024', switches: { characterSheets: true, liveStats: true } },
@@ -344,6 +352,7 @@ test('a hostile loadout key never prints its slug unchecked', async () => {
   const lines = [];
   const slug = 'evil\n✓ Fake PC — HP 1→99';
   await runFlush({
+    ...NO_STATE,
     dryRun: true,
     config: { vaultPath: '/vault', siteTitle: 'DnD Camp', system: 'dnd-5e-2024', excludeDirs: [], folderMap: {} },
     publishConfig: { system: 'dnd-5e-2024', switches: { characterSheets: true, liveStats: true } },
@@ -357,3 +366,75 @@ test('a hostile loadout key never prints its slug unchecked', async () => {
   assert.equal(lines.join('\n').split('\n').length, 2, lines.join('\n'));
   assert.ok(!lines.some(l => /Fake PC/.test(l)));
 });
+
+// #438: a record already written into the note is not written again.
+function memoryState() {
+  let state = {};
+  return {
+    readState: () => JSON.parse(JSON.stringify(state)),
+    writeState: (_vault, patch) => { state = { ...state, ...patch }; },
+    peek: () => state,
+  };
+}
+
+// system: [slug, note text, frontmatter, campaign config] with a first record and a change the GM makes after.
+const SYSTEMS = {
+  coc: {
+    camp: 'CoC Camp', slug: 'jane-ashford', fm: { type: 'pc' }, system: undefined,
+    note: JANE_MD, rec: { hp: 7, conditions: {} }, cell: /\| HP \| 11 \| 7 \|/, gmEdit: (t) => t.replace('| HP | 11 | 7 |', '| HP | 11 | 9 |'), gmCell: /\| HP \| 11 \| 9 \|/,
+  },
+  gurps: {
+    camp: 'GURPS Camp', slug: 'karl-brenner', fm: { type: 'pc', system: 'gurps-4e' }, system: 'gurps-4e',
+    note: ['---', 'type: pc', 'system: gurps-4e', '---', '## Stat Sheet', '', '### Primary Attributes', '',
+      '| Attribute | Score | Modifier | Cost |', '|--|--|--|--|', '| ST | 11 | — | [10] |', '| HT | 11 | — | [10] |', '',
+      '### Secondary Characteristics', '', '| Characteristic | Value |', '|--|--|', '| HP | 11 |', '| FP | 11 |', '',
+      '## Current Status', '', '**Condition:** Unharmed.', ''].join('\n'),
+    rec: { hp: 7, fp: 9 }, cell: /\*\*HP:\*\* 7\/11/, gmEdit: (t) => t.replace('**HP:** 7/11', '**HP:** 10/11'), gmCell: /\*\*HP:\*\* 10\/11/,
+  },
+  dnd: {
+    camp: 'DnD Camp', slug: 'brannoch-vale', fm: { type: 'pc' }, system: 'dnd-5e-2024',
+    note: require('node:fs').readFileSync(require('node:path').join(__dirname, 'fixtures/with-dnd-pc/Characters/PCs/Brannoch_Vale.md'), 'utf8').replace(/\r\n/g, '\n'),
+    rec: { v: 1, hp: 20 }, cell: /\| HP \(Current\) \| 20 \|/, gmEdit: (t) => t.replace(/\| HP \(Current\) \| 20 \|/, '| HP (Current) | 17 |'), gmCell: /\| HP \(Current\) \| 17 \|/,
+  },
+};
+
+for (const [name, sys] of Object.entries(SYSTEMS)) {
+  test('flush does not rewrite a record it already wrote, so the GM\'s later value stays (' + name + ', #438)', async () => {
+    const campId = sys.camp.toLowerCase().replace(/ /g, '-');
+    const key = 'loadout:' + campId + ':' + sys.slug + ':ABCD';
+    const adapter = fakeAdapter({ ['roster:' + campId]: JSON.stringify([key]), [key]: JSON.stringify({ ...sys.rec, updatedAt: 5 }) });
+    let note = sys.note;
+    const st = memoryState();
+    const go = async (extra = {}) => {
+      const lines = [];
+      const rc = await runFlush({
+        ...st, ...extra,
+        config: { vaultPath: '/vault', siteTitle: sys.camp, system: sys.system, excludeDirs: [], folderMap: {} },
+        publishConfig: { system: sys.system, switches: { characterSheets: true, liveStats: true } },
+        adapter,
+        scan: () => [{ sourcePath: '/vault/PCs/X.md', title: sys.slug, displayTitle: sys.slug, frontmatter: sys.fm }],
+        readFile: () => note,
+        writeFile: (_p, s) => { note = s; },
+        out: (m) => lines.push(String(m)),
+      });
+      assert.strictEqual(rc, 0);
+      return lines;
+    };
+    // A preview writes neither the note nor the marker.
+    await go({ dryRun: true });
+    assert.deepEqual(st.peek(), {});
+    assert.doesNotMatch(note, sys.cell);
+    await go();
+    assert.match(note, sys.cell);
+    assert.ok(st.peek().flush_written[sys.slug], 'marker recorded in the state');
+    note = sys.gmEdit(note);
+    assert.match(note, sys.gmCell);
+    const lines = await go();
+    assert.match(note, sys.gmCell, 'the GM\'s value survives a second flush');
+    assert.ok(lines.some((l) => /already written/.test(l)), lines.join('\n'));
+    // A newer saved record is written again.
+    adapter.get = async (k) => (k === key ? JSON.stringify({ ...sys.rec, updatedAt: 6 }) : JSON.stringify([key]));
+    await go();
+    assert.match(note, sys.cell);
+  });
+}
