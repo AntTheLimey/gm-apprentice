@@ -3,14 +3,14 @@
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const matter = require('gray-matter');
+const { parseNote } = require('../../lib/frontmatter');
 const { extractSections } = require('../../lib/processor');
 
 const TEMPLATES = path.join(__dirname, '../../../../skills/shared/templates');
 
 function templateBody(name) {
   // A Windows checkout has CRLF line endings; the mutations below match on \n.
-  return matter(fs.readFileSync(path.join(TEMPLATES, name), 'utf8')).content.replace(/\r\n/g, '\n');
+  return parseNote(fs.readFileSync(path.join(TEMPLATES, name), 'utf8')).content.replace(/\r\n/g, '\n');
 }
 
 // Replace one table row, found by its first cell, with new cells.

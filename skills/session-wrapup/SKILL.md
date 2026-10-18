@@ -272,7 +272,8 @@ presents the three-state prompts.
 
 Fill What Carries Forward, World State, Keeper Checklist, Quality
 Notes and Handoff to session-prep (the section session-prep reads
-first) per the template. Whatever an older vault template copy says:
+first) per the template. If the notes don't show what the players
+enjoyed, ask the GM once. Whatever an older vault template copy says:
 Skipped Prep lists every planned scene and clue that didn't fire,
 with what the players still need; Pending Consequences are decisions
 whose effects haven't landed; Advancement records what the sheet or

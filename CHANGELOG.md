@@ -55,6 +55,41 @@ Two lookups the model did by reading are now commands.
 - A new vault's `_meta/entity-types.md` no longer copies the
   required-fields list; it points at `show`.
 
+---
+
+## [1.10.74] — 2026-10-17
+
+Publish tool 1.36.1: note frontmatter is read as YAML and nothing else.
+
+### Fixed
+
+- A note whose frontmatter opener names another language (`---js`,
+  `---javascript`, `---json`) is now listed with the notes whose
+  frontmatter cannot be parsed, as a note with broken YAML is, and is
+  not read. The same holds for the old `vault-config.md` settings file.
+---
+
+## [1.10.73] — 2026-10-17
+
+The wrap-up records each PC's moment, and prep starts from it.
+
+### Added
+
+- The wrap-up template gives each PC a **Moment:** line under PC
+  Carry-Forward: what touched that PC tonight, from the notes, or
+  "none".
+- A GM-Assistant export's moments name the PCs in them, and the wrap-up
+  uses them for each PC's Moment.
+
+### Changed
+
+- Quality Notes start with what the players enjoyed or didn't. When the
+  notes don't show it, the wrap-up asks the GM once.
+- Session prep reads last session's Moment lines to see who had none
+  before the GM picks who the session leans on.
+
+---
+
 ## [1.10.72] — 2026-10-17
 
 Spotlight advice keeps one hard rule and drops its numbers.
@@ -75,8 +110,8 @@ Spotlight advice keeps one hard rule and drops its numbers.
   plan's `## Spotlight Forecast` lists each PC's role and moment.
 - The rules advisor's "Spotlight check" describes and offers; the GM
   assigns.
-- The wrap-up template notes who had little tonight, in plain words,
-  instead of "spotlight debt" with a staleness counter.
+- The wrap-up template drops "spotlight debt" with a staleness counter
+  from Unresolved Threads.
 - `session_context.py --arcs` prints each PC's role per session without
   the estimated share (`Session 6: B`). `plan_check.py` knows both the old
   and the new Spotlight Forecast guidance as a template placeholder.
