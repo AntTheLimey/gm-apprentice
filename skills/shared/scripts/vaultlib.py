@@ -2236,6 +2236,52 @@ def link_lines(text: str) -> Iterator[LinkLine]:
                        else inline_code_spans(line))
 
 
+# The one definition of an UNVERIFIED marker: `<!-- UNVERIFIED: claim -->`,
+# tagged with the session that wrote it as `<!-- UNVERIFIED (S12): claim -->`,
+# or `(Ch4 S12)` where session numbers restart each chapter. Untagged
+# markers predate tags. The publish tool strips every HTML comment, so it
+# needs no parser of its own.
+UNVERIFIED_RE = re.compile(
+    r"<!--\s*UNVERIFIED\b(?:\s*\(\s*(?:Ch\s*(\d+(?:\.\d+)?)\s+)?S\s*(\d+)\s*\))?(.*?)-->",
+    re.I | re.S)
+
+
+@dataclass(frozen=True)
+class Unverified:
+    line: int
+    chapter: str | None
+    session: int | None  # None: untagged
+    text: str
+
+    @property
+    def tag(self) -> str:
+        if self.session is None:
+            return ""
+        return (f"Ch{self.chapter} " if self.chapter else "") + f"S{self.session}"
+
+    def from_session(self, number: int, chapter: str | None) -> bool | None:
+        """Whether the session numbered `number` (in `chapter`, when known)
+        wrote this marker; None for an untagged one. A chapter on only one
+        side is judged by number alone."""
+        if self.session is None:
+            return None
+        if self.session != number:
+            return False
+        return (chapter is None or self.chapter is None
+                or float(chapter) == float(self.chapter))
+
+
+def unverified_markers(text: str) -> list[Unverified]:
+    """Each UNVERIFIED marker outside code and frontmatter (any case; one
+    may span lines)."""
+    body = "".join("\n" if ll.in_code or ll.in_frontmatter else ll.line
+                   for ll in link_lines(text))
+    return [Unverified(body.count("\n", 0, m.start()) + 1, m.group(1),
+                       int(m.group(2)) if m.group(2) else None,
+                       " ".join(m.group(3).strip(" :").split()))
+            for m in UNVERIFIED_RE.finditer(body)]
+
+
 def live_wikilinks(line: str,
                    spans: list[tuple[int, int]]) -> Iterator[re.Match[str]]:
     """The wikilinks on a line that are links: not inside an inline code

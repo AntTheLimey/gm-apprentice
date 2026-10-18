@@ -137,6 +137,27 @@ class Scan(unittest.TestCase):
         self.assertIn("  NPCs/The Duke.md:11: he fled", out)
         self.assertEqual(out[-1], "quick path: no (1 UNVERIFIED marker on a linked note)")
 
+    def test_a_marker_tagged_with_another_session_does_not_block(self):
+        # #434: markers name the session that wrote them; only this
+        # session's, and untagged ones, rule out the quick path.
+        files = plain_wrap(FILES)
+        files[INDEX] = files[INDEX].replace(
+            "status: wrap-up", 'status: wrap-up\nchapter: "[[Chapter 1 - Start]]"')
+        files["NPCs/The Duke.md"] += ("<!-- UNVERIFIED (S4): he fled -->\n"
+                                      "<!-- UNVERIFIED (Ch2 S5): he hid -->\n")
+        out = scan(files)
+        self.assertIn("unverified in linked notes: 2", out)
+        self.assertIn("  NPCs/The Duke.md:9: (S4) he fled [another session]", out)
+        self.assertIn("  NPCs/The Duke.md:10: (Ch2 S5) he hid [another session]", out)
+        self.assertTrue(out[-1].startswith("quick path: yes"), out[-1])
+        for tag in ("S5", "Ch1 S5"):
+            files["NPCs/The Duke.md"] += f"<!-- UNVERIFIED ({tag}): now -->\n"
+            out = scan(files)
+            self.assertIn(f"  NPCs/The Duke.md:11: ({tag}) now", out)
+            self.assertEqual(out[-1], "quick path: no (1 UNVERIFIED marker on a linked note)")
+            files["NPCs/The Duke.md"] = files["NPCs/The Duke.md"].replace(
+                f"<!-- UNVERIFIED ({tag}): now -->\n", "")
+
     def test_only_older_drafts_is_a_plain_yes(self):
         files = plain_wrap(FILES)
         files["NPCs/Lady_Grey.md"] = files["NPCs/Lady_Grey.md"].replace(

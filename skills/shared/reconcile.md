@@ -19,7 +19,8 @@ dry-run first, `--write` on GM confirmation (see
 
 Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/reconcile_scan.py"
 <vault> "<wrap-up>"` (reads only). The rule its `quick path:` line
-applies: no UNVERIFIED marker, no Plan file, and no DRAFT created this
+applies: no UNVERIFIED marker (bar those tagged with another
+session), no Plan file, and no DRAFT created this
 session that contradicts AUTHORITATIVE canon (that last is yours to
 judge).
 
