@@ -124,7 +124,7 @@ function get(options, names) {
   // --site gm: the values the GM site builds with, and for each whether the GM wrote it for that site or it is the player site's.
   const gmSite = options.site === 'gm';
   if (options.site && !gmSite && options.site !== 'player') throw new Error(`settings get --site takes player or gm, not "${options.site}".`);
-  const view = gmSite ? { values: { ...read.values, player_site: forSite(read, 'gm').site }, origins: read.origins } : read;
+  const view = gmSite ? { values: { ...read.values, player_site: forSite(read, 'gm').site } } : read;
   const shown = names.length ? [...new Set(names.flatMap((name) => leaves.filter((e) => reaches(e, name))))] : leaves.filter((e) => !e.twinOf);
   const now = {};
   for (const e of shown) now[e.name] = { value: getPath(view.values, e.name.split('.')) ?? null, origin: gmSite ? gmOrigin(read, e.name) : read.origins[e.name] };
@@ -376,7 +376,6 @@ function pathExists(p) {
 // Turning the GM site on: the folder it is built into is the one named, or one beside the player site's, and it must
 // be one the GM site can own. { folder } when it is to be made or kept, { errors } when the change is refused, {}
 // when the change does not turn the GM site on. Adds the folder to the changes when it was not named.
-
 function turningOnGmSite(options, planned) {
   const on = planned.changes.find((c) => c.name === 'gm_site.publish');
   if (!on || readSwitch(on.value) !== true) return {};

@@ -122,4 +122,15 @@ const TYPES = {
 // (`onFault: false`), where it is unreadable. Read by the reader and by the schema.
 const emptyIsFault = (e) => e.type === 'switch' && e.onFault === false;
 
-module.exports = { TYPES, SWITCH_WORDS, readSwitch, isMap, getPath, firstLine, emptyIsFault };
+// A value written at a dotted name, the maps on the way made as needed (one that is not a map is replaced).
+function setIn(obj, name, value) {
+  const segs = name.split('.');
+  let cur = obj;
+  for (const s of segs.slice(0, -1)) {
+    if (!isMap(cur[s])) cur[s] = {};
+    cur = cur[s];
+  }
+  cur[segs[segs.length - 1]] = value;
+}
+
+module.exports = { TYPES, SWITCH_WORDS, readSwitch, isMap, getPath, setIn, firstLine, emptyIsFault };

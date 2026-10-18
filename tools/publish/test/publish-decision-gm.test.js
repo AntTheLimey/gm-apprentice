@@ -1,7 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 
-const { decidePage, decideGmPage, publishesPage, NOTE_CODES } = require('../lib/publish-decision');
+const { decidePage, decideGmPage, publishesPage, NOTE_CODES, isHousekeepingNote } = require('../lib/publish-decision');
 const { publishedPages } = require('../lib/published-pages');
 
 function page(frontmatter, outputPath = 'characters/npcs/someone.html') {
@@ -103,6 +103,20 @@ describe('decideGmPage: never shown, or not the notes rule', () => {
       }
     });
   }
+
+  it('the player verdict is the player site\'s own, in any case: decidePage says the same for _META/x.md', () => {
+    for (const rel of ['_META/x.md', 'Camp/PERSONAL/x.md', '_TEMPLATES/x.md']) {
+      const own = decidePage(page({ type: 'npc' }), { rel, publishConfig: PLAYER });
+      assert.strictEqual(own.code, 'DIR_ALWAYS_EXCLUDED', rel);
+      assert.deepStrictEqual(gm({ type: 'npc' }, { rel }).player, own, rel);
+    }
+  });
+
+  it('a template folder is housekeeping in any case', () => {
+    for (const rel of ['_Templates/x.md', '_TEMPLATES/x.md', 'Camp/_templates/deep/x.md']) assert.strictEqual(isHousekeepingNote(rel, {}), true, rel);
+    assert.strictEqual(isHousekeepingNote('_META/index', { type: 'meta' }), true);
+    assert.strictEqual(isHousekeepingNote('Camp/Templates/x.md', {}), false);
+  });
 
   it('a folder that only starts with an always-excluded name is a normal folder', () => {
     assert.strictEqual(gm({ type: 'npc' }, { rel: '_Metadata/x.md' }).code, 'OK');

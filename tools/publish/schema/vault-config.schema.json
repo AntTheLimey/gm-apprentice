@@ -1319,7 +1319,7 @@
       ],
       "properties": {
         "publish": {
-          "description": "Whether this vault has a GM site: a second copy of the site with every note and every hidden part shown and marked, for you at the table. It is never put online",
+          "description": "Whether this vault has a GM site: a second copy of the site with every note shown and the hidden parts marked (the `gm_site.show.*` switches choose which), for you at the table. It is never put online",
           "default": false,
           "anyOf": [
             {

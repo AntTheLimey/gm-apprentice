@@ -3,7 +3,7 @@ const { canonicalNfc } = require('./unicode');
 const { SWITCH_WORDS } = require('./settings/types');
 const { gluedBefore } = require('./frontmatter');
 const { markerRe: markerPattern } = require('./markers');
-const { blockLines, sanitize, marksAtHeadings } = require('./gm-marks');
+const { blockLines, sanitize, marksAtHeadings, unmark } = require('./gm-marks');
 const { bareSectionTitle } = require('./pc-prose');
 const { wikilinkRe, parseWikilink, labelsForLinks, labelsForLinksFully } = require('./wikilink');
 const { headingKey, headingKeys, squashedKeys, titleNamedIn } = require('./heading-key');
@@ -534,13 +534,18 @@ function keptSectionFlags(markdown, includeSections = [], withhold = {}) {
 // "publish: stub". A line is cut when keptSectionFlags does not keep it AND it lies outside every kept section: a
 // line between the first and last kept line of one kept section (a gm-only block in Overview) is left unmarked, for
 // the strips to deal with. The tokens are this function's; the caller must not sanitize the result.
-function stubMarked(markdown, includeSections, withhold, mark) {
+// `warn` hears it when the note's headings cannot be read (the marks then cover whole runs, more than the stub cuts);
+// `parse` is the heading reader (findHeadings), a seam for tests.
+function stubMarked(markdown, includeSections, withhold, mark, { warn, parse = findHeadings } = {}) {
   const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
   if (!mark || !mark.show.has('sections')) return lines.join('\n');
   const flags = keptSectionFlags(markdown, includeSections, withhold);
   const inside = flags.slice();   // kept lines, and the lines between a kept section's first and last kept line
   let headings = null;
-  try { headings = findHeadings(lines.join('\n')).headingAt; } catch (err) { headings = null; }
+  try { headings = parse(lines.join('\n')).headingAt; } catch (err) {
+    headings = null;
+    if (typeof warn === 'function') warn('could not parse the note\'s headings; the stub\'s marks may cover more than the stub cuts');
+  }
   if (headings) {
     const tops = [...headings].filter(([, h]) => !h.nested).sort((a, b) => a[0] - b[0]);
     tops.forEach(([at, h], k) => {
@@ -964,6 +969,10 @@ function stripSpoiler(markdown) {
 //   falsy                       → unchanged
 // Matches markdown.js CALLOUT_RE on the type token (allows hyphens and a +/- fold marker),
 // then consumes the contiguous `>`-prefixed lines that form the blockquote.
+// The callout opener, and the types to cut (null: every type), shared by the player strip and the GM site's marking one.
+const CALLOUT_OPEN = /^>[ \t]*\[!([A-Za-z][\w-]*)\][+-]?/;
+const calloutTypes = (exclude) => (Array.isArray(exclude) ? new Set(exclude.map((t) => String(t).toLowerCase())) : null);
+
 function stripCallouts(markdown, exclude) {
   if (!exclude) return markdown;
   return calloutLines(markdown, exclude).lines.join('\n');
@@ -973,9 +982,7 @@ function stripCallouts(markdown, exclude) {
 // With `mark` and the `callouts` kind on, each callout that would be cut is kept instead, in a block mark.
 function calloutLines(markdown, exclude, mark) {
   if (mark && exclude && mark.show.has('callouts')) return calloutLinesMarking(markdown, exclude, mark);
-  const types = Array.isArray(exclude)
-    ? new Set(exclude.map(t => String(t).toLowerCase()))
-    : null; // null → strip all types
+  const types = calloutTypes(exclude);
   const lines = markdown.split('\n');
   const out = [];
   const from = [];
@@ -986,7 +993,7 @@ function calloutLines(markdown, exclude, mark) {
     // not a real callout — copy fenced lines verbatim (matches stripMarkedBlocks).
     if (/^```/.test(lines[i])) inCodeFence = !inCodeFence;
     if (inCodeFence) { out.push(lines[i]); from.push(i); continue; }
-    const m = lines[i].match(/^>[ \t]*\[!([A-Za-z][\w-]*)\][+-]?/);
+    const m = lines[i].match(CALLOUT_OPEN);
     if (m && (!types || types.has(m[1].toLowerCase()))) {
       i++;
       while (i < lines.length && /^>/.test(lines[i])) i++;
@@ -1005,7 +1012,7 @@ function calloutLines(markdown, exclude, mark) {
 // The GM site's callout strip: the same callouts are found, and each is wrapped in a mark instead of cut. The blank
 // line after it, which the strip swallows, is kept. `from` is null.
 function calloutLinesMarking(markdown, exclude, mark) {
-  const types = Array.isArray(exclude) ? new Set(exclude.map((t) => String(t).toLowerCase())) : null;
+  const types = calloutTypes(exclude);
   const lines = markdown.split('\n');
   const out = [];
   let fenceDelim = null;
@@ -1013,7 +1020,7 @@ function calloutLinesMarking(markdown, exclude, mark) {
     const step = fenceStep(lines[i], fenceDelim);
     fenceDelim = step.fenceDelim;
     if (fenceDelim !== null || step.isFenceLine) { out.push(lines[i]); continue; }
-    const m = lines[i].match(/^>[ \t]*\[!([A-Za-z][\w-]*)\][+-]?/);
+    const m = lines[i].match(CALLOUT_OPEN);
     if (m && (!types || types.has(m[1].toLowerCase()))) {
       blockLines(mark.marks.open('callouts', `${m[1].toLowerCase()} callout`)).forEach((t) => out.push(t));
       out.push(lines[i]);
@@ -1413,6 +1420,24 @@ function stripLeadingH1(markdown) {
   return lines.join('\n');
 }
 
+const PREAMBLE_TITLE = 'Before the first heading';
+
+// stripLeadingH1 for the GM site, where hidden material stays in the text: the title line is the first line that is
+// neither blank nor inside a mark nor a mark's token line alone, so a marked block above `# Title` does not leave the
+// title on the page beside the template's own.
+function stripLeadingH1Marked(markdown) {
+  const lines = markdown.split('\n');
+  let depth = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const startDepth = depth;
+    for (const m of lines[i].matchAll(/\uE000[0-9a-z]+\uE001|\uE002/g)) depth = Math.max(0, depth + (m[0] === '\uE002' ? -1 : 1));
+    if (startDepth > 0 || unmark(lines[i]).trim() === '') continue;
+    if (/^#\s+/.test(lines[i])) lines.splice(i, 1);
+    break;
+  }
+  return lines.join('\n');
+}
+
 // Whether the line stripLeadingH1 would drop is one the exclude list withholds, by the
 // walk's own verdict, so the page and everything else that asks the walk agree.
 function leadingH1Withheld(markdown, excludeSections, frontmatter) {
@@ -1739,7 +1764,6 @@ function markedStrippedLines(text, excludeCallouts, mark) {
     (t) => calloutLines(t, excludeCallouts, mark),
   ];
   for (const strip of strips) {
-    if (lines !== null && lines.length === 0) break;
     const result = strip(lines === null ? clean(text) : lines.join('\n'));
     lines = result.lines;
     // A strip that still cuts (its kind is off) keeps a Setext line apart, as the player strip does.
@@ -1808,14 +1832,28 @@ function pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, options = 
   return false;
 }
 
+const UNSTABLE_BODY_LABEL = 'note body (a link label changes its headings)';
+
+// The sections of an unsteady PC note's GM page with every title marked as the body is: a heading a link label makes
+// (after the strips) has no mark of its own, and its nav link and accordion header would show outside the mark.
+function unstableSectionsMarked(sections, mark) {
+  if (!mark.show.has('sections')) return sections;
+  return sections.map((s) => (unmark(s.title) !== s.title ? s
+    : { ...s, title: mark.marks.open('sections', UNSTABLE_BODY_LABEL) + s.title + mark.marks.close() }));
+}
+
 // The GM site's body of a PC note whose headings a link label changes (the player site shows none of it): the whole
 // text in one `sections` mark, or nothing when that kind is not shown. `close` (default true) closes and reopens the
 // mark at each level 1-2 heading, as the templates cut there; processContent does that itself, after its own filter.
-function unstableBodyMarked(markdown, mark, { close = true } = {}) {
+// `warn` hears it when the headings cannot be read and the mark is left running across them.
+function unstableBodyMarked(markdown, mark, { close = true, warn, parse = findHeadings } = {}) {
   if (!mark.show.has('sections')) return '';
-  const wrapped = [...blockLines(mark.marks.open('sections', 'note body (a link label changes its headings)')), markdown, ...blockLines(mark.marks.close())].join('\n');
+  const wrapped = [...blockLines(mark.marks.open('sections', UNSTABLE_BODY_LABEL)), markdown, ...blockLines(mark.marks.close())].join('\n');
   if (!close) return wrapped;
-  try { return marksAtHeadings(wrapped, findHeadings); } catch (err) { return wrapped; }
+  try { return marksAtHeadings(wrapped, parse); } catch (err) {
+    if (typeof warn === 'function') warn('could not parse the note\'s headings; the mark on its body may run across them');
+    return wrapped;
+  }
 }
 
 function processContent(page, linkMap, excludeSections, imageMap = {}, options = {}) {
@@ -1836,7 +1874,7 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   if (titleWithheld && !mark) {
     markdown = walkExcludeList(markdown.split('\n'), excludeSections, fm, { warn: (m) => warnings.push(m) }).kept.join('\n');
   }
-  if (!(mark && titleWithheld)) markdown = stripLeadingH1(markdown);
+  if (!(mark && titleWithheld)) markdown = mark ? stripLeadingH1Marked(markdown) : stripLeadingH1(markdown);
   // The PC keep-list is decided here, on the raw note, before any transform: the same
   // text publishedMarkdown, explain and the doctor walk. A note whose headings the
   // transforms below would change is withheld whole (pcHeadingsUnstable).
@@ -1878,8 +1916,10 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
 
 // Extract ## sections for accordion rendering (used by PC/NPC templates). The
 // boundaries are the renderer's top-level level 2 headings, so a `## line` shown in a
-// code block stays inside its section.
-function extractSections(markdown) {
+// code block stays inside its section. The text above the first one belongs to no section and is dropped on the player
+// site; with `preamble` (the GM site) it comes first as a section of its own when it holds a mark, so hidden material
+// above the first heading is not lost.
+function extractSections(markdown, { preamble = false } = {}) {
   const lines = markdown.replace(/\r/g, '').split('\n');
   let headingAt;
   try {
@@ -1888,6 +1928,7 @@ function extractSections(markdown) {
     return [];
   }
   const sections = [];
+  const above = [];
   let current = null;
 
   for (let i = 0; i < lines.length; i++) {
@@ -1899,13 +1940,20 @@ function extractSections(markdown) {
       i = h.end - 1;
     } else if (current) {
       current.lines.push(lines[i]);
+    } else {
+      above.push(lines[i]);
     }
   }
   if (current) sections.push(current);
+  const top = stripLeadingH1Marked(above.join('\n'));
+  if (preamble && unmark(top) !== top && unmark(top).trim() !== '') {
+    sections.unshift({ title: PREAMBLE_TITLE, lines: top.split('\n') });
+  }
 
+  // The anchor is the title's own words: a mark's tokens (the GM site) are not part of it.
   return sections.map(s => ({
     title: s.title,
-    id: s.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
+    id: unmark(s.title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''),
     html: md.render(s.lines.join('\n')),
   }));
 }
@@ -2184,8 +2232,17 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
 
   // `text` wrapped in a mark of `kind`, or null when the GM site does not show that kind.
   const marked = (kind, label, text) => (mark && mark.show.has(kind) ? `${mark.marks.open(kind, label)}${text}${mark.marks.close()}` : null);
-  // A withheld name as the GM sees it: the owner's display title, else the link's own text with `_` read as spaces.
-  const withheldName = (owner, text) => (owner ? (owner.displayTitle || owner.title) : String(text).split('/').pop().replace(/_/g, ' '));
+  // A withheld name as the GM sees it: the link's own text with `_` read as spaces. An owner is only ever found by a
+  // secret alias, so that text is the alias as the GM wrote it, not the owner's name.
+  const withheldName = (text) => String(text).split('/').pop().replace(/_/g, ' ');
+  // The page a public link target names, by its title or a public alias: what players see for a secret label over it.
+  const shownByName = new Map();
+  for (const page of published || pages) {
+    const fm = page.frontmatter || {};
+    for (const n of [page.title, ...(Array.isArray(fm.aliases) ? fm.aliases : [])]) {
+      if (typeof n === 'string' && !shownByName.has(gmAliasKey(n))) shownByName.set(gmAliasKey(n), page);
+    }
+  }
 
   const WIKI = wikilinkRe('g', true);
   function links(text, labelled) {
@@ -2210,13 +2267,14 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
       // An unlabelled link to a withheld page (by any of its names) prints the placeholder,
       // not the page's name.
       if (hidden && !effectiveLabel) {
-        const name = marked('withheld_names', `players see: ${hidden}`, withheldName(owner, target));
+        const name = marked('withheld_names', `players see: ${hidden}`, withheldName(target));
         return `${bang}[[${owner ? owner.title : target}${anchor || ''}${bar}${name === null ? hidden : name}]]`;
       }
       // The GM site keeps the secret alias, inside a mark that says what players see in its place.
       if (mark && !effectiveLabel) {
         const alias = String(labelIsSecret ? w.display : target).split('/').pop();
-        const seen = owner ? (owner.displayTitle || owner.title) : withheldName(null, target);
+        const shownPage = owner || shownByName.get(gmAliasKey(target.split('/').pop()));
+        const seen = shownPage ? (shownPage.displayTitle || shownPage.title) : withheldName(target);
         const name = marked('fields', `gm_aliases; players see: ${seen}`, alias);
         if (name !== null) return `${bang}[[${owner ? owner.title : target}${anchor || ''}${bar}${name}]]`;
       }
@@ -2248,13 +2306,13 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
       // A bare name that is a withheld note's: the page prints the placeholder, as for a link.
       const hidden = placeholderFor(v);
       if (owner && hidden) {
-        const name = marked('withheld_names', `players see: ${hidden}`, withheldName(owner, v));
+        const name = marked('withheld_names', `players see: ${hidden}`, withheldName(v));
         return `[[${owner.title}|${name === null ? hidden : name}]]`;
       }
       if (owner) return owner.title;
       const bare = v.trim();
       if (bare && !bare.includes('[[') && hidden) {
-        const name = marked('withheld_names', `players see: ${hidden}`, withheldName(null, bare));
+        const name = marked('withheld_names', `players see: ${hidden}`, withheldName(bare));
         return `[[${bare}|${name === null ? hidden : name}]]`;
       }
       return links(v, false);
@@ -2292,4 +2350,4 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
   };
 }
 
-module.exports = { unstableBodyMarked, markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, campaignImageSrc, isWebImageAddress, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };
+module.exports = { unstableBodyMarked, unstableSectionsMarked, markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, campaignImageSrc, isWebImageAddress, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };

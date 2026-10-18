@@ -132,8 +132,8 @@ directly:
 ## A GM site for the table
 
 The tool can also build a second copy of the site just for you: every
-note and every hidden part, each hidden part marked with why players do
-not see it. Turn it on with `gm-apprentice-publish settings set
+note and most hidden parts (the `gm_site.show.*` switches choose),
+each marked with why players do not see it. Turn it on with `gm-apprentice-publish settings set
 gm_site.publish=on`, which makes its folder beside the player site's
 (named after it with `-gm` added). Every build then makes both sites
 (`build --site gm` or `--site player` makes one), and

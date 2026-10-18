@@ -17,7 +17,7 @@ const { alignProjectName } = require('./setup-backend');
 const { loadVaultConfig, siteConfigFor, outputFolderOf, tomlOutputFolder, loadPublishConfig } = require('./config');
 const { buildHooks, HOOK_TIMEOUT_MS } = require('./settings/legacy');
 const { nameIn } = require('./settings');
-const { isGmOutput, gmEvidence } = require('./gm-site');
+const { gmEvidence } = require('./gm-site');
 const leakGateLib = require('./leak-gate');
 
 const VERIFY_ATTEMPTS = 3;
@@ -168,9 +168,10 @@ async function runDeploy(options, deps) {
   const outputFolder = path.resolve(siteRoot, outputFolderOf(config));
   const readTomlSafely = () => { try { return readFile(tomlPath); } catch { return ''; } };
   const tomlFolder = hasToml ? tomlOutputFolder(readTomlSafely(), siteRoot) : null;
-  const gmFolder = [outputFolder, tomlFolder].filter(Boolean).find((f) => (d.isGmOutput || isGmOutput)(f));
+  const evidenceOf = d.gmEvidence || gmEvidence;
+  const gmFolder = [outputFolder, tomlFolder].filter(Boolean).find((f) => evidenceOf(f));
   if (gmFolder) {
-    const found = gmEvidence(gmFolder) || 'gm-build.json, or a page with the GM build tag';
+    const found = evidenceOf(gmFolder);
     const line = `deploy refused: ${gmFolder} is a GM site folder (${found}). The GM site never goes online.`;
     if (opts.json) out(JSON.stringify({ host, built: false, deployed: false, url: null, verified: false, status: null, attempts: 0, commands: [], refused: true, messages: [line] }, null, 2));
     else out(line);

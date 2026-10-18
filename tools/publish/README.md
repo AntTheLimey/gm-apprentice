@@ -343,7 +343,7 @@ folder. Every step is given `GM_APPRENTICE_SITE` (`player` or `gm`) and
 ## The GM site
 
 The GM site is a second build of the same vault, for the GM at the table:
-every note and every hidden part, each hidden part marked with why players
+every note and the hidden parts, each marked with why players
 do not see it. It never goes online.
 
 - `settings set gm_site.publish=on` turns it on. With no `gm_site.folder`,
@@ -358,8 +358,9 @@ do not see it. It never goes online.
   `<meta name="robots" content="noindex, nofollow">` and
   `<meta name="gm-apprentice-build" content="gm">`. A page players do not
   get at all also says why. The folder holds `gm-build.json` (the tool
-  version and build time) and a `robots.txt` that turns every search
-  engine away.
+  version and build time; `built` is `null` until the build has
+  finished, so a `null` means the last build stopped part-way) and a
+  `robots.txt` that turns every search engine away.
 - `deploy` builds only the player site, and refuses an output folder that
   holds `gm-build.json` or a page with the GM meta tag, with
   `--no-build` too.

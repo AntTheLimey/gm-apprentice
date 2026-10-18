@@ -50,7 +50,7 @@ const ALWAYS_EXCLUDE_DIRS = [...HOUSEKEEPING_DIRS, 'personal'];
 // A note the GM put there, or typed "meta", is a campaign note like any other.
 // (Named as a note's vault path is, without the .md.)
 const PLUGIN_META_NOTES = ['index', 'entity-types', 'relationship-types', 'vault-config', 'vault-notes', 'publish-manifest'];
-const TEMPLATE_DIRS = ['_Templates', '_templates'];
+const LOWER_TEMPLATE_DIRS = ['_templates'];   // folder names are read in any case, as the scanner reads them
 
 // The plugin's own housekeeping notes: any file in a templates folder (at any depth), and the files in
 // PLUGIN_META_NOTES directly under `_meta/` while they are still typed "meta" (as the plugin writes them). They hold
@@ -67,9 +67,9 @@ function isHousekeepingNote(vaultPath, frontmatter) {
   if (fm.withheld === true || fm.withheld === 'true' || hasEntries(fm.gm_aliases)) return false;
   if (fm.publish === false || fm.publish === 'false') return false;
   const parts = String(vaultPath == null ? '' : vaultPath).replace(/\\/g, '/').split('/');
-  if (parts.slice(0, -1).some((part) => TEMPLATE_DIRS.includes(part))) return true;
+  if (parts.slice(0, -1).some((part) => LOWER_TEMPLATE_DIRS.includes(part.toLowerCase()))) return true;
   const typedMeta = fm.type == null || String(fm.type).trim().toLowerCase() === 'meta';
-  return parts.length === 2 && parts[0] === '_meta' && PLUGIN_META_NOTES.includes(parts[1]) && typedMeta;
+  return parts.length === 2 && parts[0].toLowerCase() === '_meta' && PLUGIN_META_NOTES.includes(parts[1]) && typedMeta;
 }
 
 // A scene that was cut or skipped did not happen. content-filtering.md has listed
@@ -100,11 +100,13 @@ function autoExcludeReason(code, frontmatter) {
 }
 
 // The first path segment (excluding the filename) that names an always-excluded
-// directory. Segment equality, not prefix matching — `_metadata/` is a normal folder.
-function alwaysExcludedSegment(rel, dirs = ALWAYS_EXCLUDE_DIRS) {
+// directory, as written in the path. Segment equality, not prefix matching — `_metadata/` is a normal folder.
+// Case does not matter, as the scanner's folder tests do not: on a case-insensitive disk `_META/` is `_meta/`.
+const LOWER_ALWAYS_EXCLUDE_DIRS = ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase());
+function alwaysExcludedSegment(rel) {
   const segments = String(rel == null ? '' : rel).split('/');
   segments.pop();
-  return segments.find((s) => dirs.includes(s)) || null;
+  return segments.find((s) => LOWER_ALWAYS_EXCLUDE_DIRS.includes(s.toLowerCase())) || null;
 }
 
 // Manifest sections are arrays; a page-by-page `includes()` would be quadratic on a
@@ -260,12 +262,8 @@ function decideGmPage(page, options) {
   const withPlayer = (v) => ({ ...v, player: v });
 
   const rel = opts.rel;
-  // The scanner reads folder names case-insensitively, so the GM site's never-shown test does too.
-  const lowerDirs = ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase());
-  const excludedDir = String(rel == null ? '' : rel).split('/').slice(0, -1).find((s) => lowerDirs.includes(s.toLowerCase()));
-  if (excludedDir) {
-    return withPlayer({ bucket: 'exclude', code: 'DIR_ALWAYS_EXCLUDED', reason: `in ${excludedDir}/ — never published`, outputPath: (page && page.outputPath) || null });
-  }
+  // A never-shown folder: the player site's own verdict is the verdict, whatever the GM site shows.
+  if (alwaysExcludedSegment(rel)) return withPlayer(decidePage(page, { ...opts, publishConfig: opts.playerConfig }));
 
   const outputPath = (page && page.outputPath) || null;
   const folder = matchExcludedDir(String(rel == null ? '' : rel), opts.hiddenFolders);
@@ -297,6 +295,7 @@ module.exports = {
   publishesPage,
   autoExcludeCode,
   ALWAYS_EXCLUDE_DIRS,
+  alwaysExcludedSegment,
   HOUSEKEEPING_DIRS,
   isHousekeepingNote,
   AUTO_EXCLUDE_STATUS,
