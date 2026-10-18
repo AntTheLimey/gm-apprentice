@@ -811,7 +811,7 @@ def find_tone_shown(vault: Path) -> list[Item]:
         "tone as warm, hostile or neutral, never the word itself. A tone "
         "that gives a secret away wants `gm_only: true` on that "
         "relationship, or another tone. campaign-qa's Tone Words check "
-        "lists the hostile ties the site shows"])]
+        "lists the hostile ties the site shows"], notice=True)]
 
 
 # The two lists the vault file holds in plain sight.

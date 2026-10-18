@@ -1083,6 +1083,10 @@ SETTINGS_FILE = "_meta/vault-config.yaml"
 LEGACY_SETTINGS_FILE = "_meta/vault-config.md"
 STATE_FILE = "_meta/vault-state.json"
 STAMP_KEY = "gm_apprentice_version"
+# What an update that could not stamp the vault remembers for the next one:
+# {"left": [choice ids answered "leave"], "said": [notices already shown]}.
+# Dropped whenever the stamp is written.
+HELD_KEY = "update_held"
 
 
 def vault_layout(vault: Path) -> Literal["new", "legacy", "none"]:
@@ -1169,6 +1173,37 @@ def write_stamp(vault: Path, version: str) -> None:
         return
     state = _read_state(vault)
     state[STAMP_KEY] = version
+    state.pop(HELD_KEY, None)
+    _write_state(vault, state)
+
+
+def read_held(vault: Path) -> dict[str, set[str]]:
+    """The `left` and `said` ids a held update remembered. Only the new
+    layout keeps them; an old-layout vault moves in the same update."""
+    if vault_layout(vault) != "new":
+        return {"left": set(), "said": set()}
+    held = _read_state(vault).get(HELD_KEY)
+    held = held if isinstance(held, dict) else {}
+    return {key: {str(i) for i in held[key]}
+            if isinstance(held.get(key), list) else set()
+            for key in ("left", "said")}
+
+
+def write_held(vault: Path, left: set[str], said: set[str]) -> None:
+    """Remember the ids for the next update (merged with those already
+    remembered); nothing is written on the old layout."""
+    if vault_layout(vault) != "new":
+        return
+    before = read_held(vault)
+    left, said = left | before["left"], said | before["said"]
+    state = _read_state(vault)
+    if not left and not said:
+        return
+    state[HELD_KEY] = {"left": sorted(left), "said": sorted(said)}
+    _write_state(vault, state)
+
+
+def _write_state(vault: Path, state: dict[str, Any]) -> None:
     target = (vault / STATE_FILE).resolve()
     text = json.dumps(state, indent=2, ensure_ascii=False) + "\n"
     tmp = target.with_name(f".{target.name}.{os.getpid()}.tmp")

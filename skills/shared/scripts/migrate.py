@@ -38,7 +38,8 @@ from migrate_site import REPIN, SITE_CHECKS
 from migrate_vault import VAULT_CHECKS
 from vaultlib import (LEGACY_SETTINGS_FILE, SettingsUnavailable,
                       StateUnreadable, parse_version, plugin_version,
-                      read_stamp, vault_layout, write_stamp)
+                      read_held, read_stamp, vault_layout, write_held,
+                      write_stamp)
 
 FLOOR = "1.10.12"
 LAST_PROSE = "1.10.25"   # the last release whose skills migrate by hand
@@ -87,6 +88,14 @@ def offered(checks: list[Check], vault_v: str,
 Row = tuple[str, str]   # (the check or item that printed it, its row)
 
 
+def _answered(item: Item, held: dict[str, set[str]]) -> bool:
+    """Is this item settled by what a held update remembered: a "leave"
+    already given, or a notice already said?"""
+    if item.group == CHOICE and item.holds_stamp:
+        return item.id in held["left"]
+    return item.notice and item.id in held["said"]
+
+
 def _rows(item: Item) -> list[Row]:
     if item.group == PERSON:
         return [(item.id, line) for line in item.lines]
@@ -132,15 +141,16 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
     groups: dict[str, list[Row]] = {WILL: [], CHOICE: [], PERSON: []}
     waiting: list[Row] = []
     holding: list[str] = []   # choices apply will not stamp without
+    maybe: list[str] = []     # checks behind the repin that may ask one
+    held = read_held(vault)
     stuck: list[str] = []     # things only a person can settle, that hold it
     repin_waits = False
     for check in offered(CHECKS if checks is None else checks, vault_v, plugin_v):
         if check.asks_site and repin_waits:
             waiting.append((check.name, f"{check.name}\t{check.title}"))
             if any(c.endswith("=") for c in check.choices):
-                # not looked at yet; a value choice is one that holds
-                holding.append(f"{check.name} (after the site's tool is "
-                               f"updated)")
+                # not looked at yet: all that is known is that it can ask
+                maybe.append(check.name)
             continue
         try:
             items = check.find(vault)
@@ -150,6 +160,8 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
             repin_waits = repin_waits or check.name == REPIN
             continue
         for item in items:
+            if _answered(item, held):
+                continue
             groups[item.group].extend(_rows(item))
             if item.holds_stamp:
                 (stuck if item.group == PERSON else holding).append(item.id)
@@ -161,9 +173,13 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
         print("up to date")
         return 0
     if behind:
-        until = (f" (only once {', '.join(holding)} "
-                 f"{'is' if len(holding) == 1 else 'are'} answered)"
-                 if holding else "")
+        parts = ([f"only once {', '.join(holding)} "
+                  f"{'is' if len(holding) == 1 else 'are'} answered"]
+                 if holding else [])
+        if maybe:
+            parts.append(f"{', '.join(maybe)} may ask a choice once the "
+                         f"site's tool is updated")
+        until = f" ({'; '.join(parts)})" if parts else ""
         if stuck:
             until = (f" (not until {', '.join(stuck)} "
                      f"{'is' if len(stuck) == 1 else 'are'} settled)")
@@ -241,11 +257,19 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
     error = ""
     repinned = waited = False
     unanswered: list[str] = []   # value choices the GM was not asked
+    held = read_held(vault)
+    left_ids: set[str] = set()   # "leave" answers given this run
+    said: set[str] = set()       # notices seen this run
     stuck: list[str] = []        # person rows that hold the stamp
     for n, check in enumerate(todo):
         after_repin = check.asks_site and repinned   # plan did not list it
         try:
             for item in check.find(vault):
+                picked = any(i == item.id for i, _v in chosen)
+                if _answered(item, held) and not picked:
+                    continue
+                if item.notice:
+                    said.add(item.id)
                 if item.group == PERSON:
                     if item.holds_stamp:
                         stuck.append(item.id)
@@ -262,6 +286,14 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                     # stamp the release gate would never offer it again.
                     unanswered.append(f"{item.id}=<{item.wants}>")
                 for value in picks:
+                    if value == "leave" and item.holds_stamp:
+                        left_ids.add(item.id)
+                    elif value == "leave" and not item.wants:
+                        # A yes/no choice declined by name: nothing is run,
+                        # and the release gate does not offer it again.
+                        did.append((item.id, f"{item.id}\tleft as it is"))
+                        used.add(item.id)
+                        continue
                     if item.wants and not value:
                         raise StepFailed(
                             f"--choose {item.id} needs a value: "
@@ -294,6 +326,11 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
             stamped = False
             error = error or f"stamp: {e}"
             failed = failed if failed is not None else len(todo)
+    if not stamped:
+        try:   # the next plan does not ask these again
+            write_held(vault, left_ids, said)
+        except (StateUnreadable, OSError):
+            pass
     emit("Did", did)
     for choice in dict.fromkeys(i for i, _v in chosen if i not in used):
         print(f"not offered: {choice}")

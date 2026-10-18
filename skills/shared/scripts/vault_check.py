@@ -281,6 +281,7 @@ def _emit_tool_once() -> Callable[[str, list[str]], None]:
 
 
 # Dated: the old file may still be in an un-updated vault; remove at 1.11.0.
+# A copy written before the tool added `type: meta` is let through untyped.
 PUBLISH_MANIFEST_REL = "_meta/publish-manifest.md"
 
 
@@ -326,11 +327,20 @@ def check_frontmatter(vault: Path, folder: str | None,
             # Schema rows would come from the line reader's guess at YAML
             # the build rejects; they mean nothing until it parses.
             continue
-        if rel == PUBLISH_MANIFEST_REL:
-            # Written by the publish tool with no `type`, and regenerated
-            # on every build: the GM cannot fix a row about it (#333).
-            continue
         fm = extract_frontmatter(text)
+        if rel == PUBLISH_MANIFEST_REL:
+            # The tool reads this file's frontmatter with a real YAML
+            # parser: its refusal is the finding (#333).
+            _sets, listed = publish_list_sets(vault)
+            if listed.why and "frontmatter cannot be read" in listed.why:
+                detail = listed.why.split("(", 1)[-1].rstrip(") ")
+                rows.append(f"ERROR\t{rel}\tthe publish tool cannot read "
+                            f"this frontmatter ({detail}) — {_yaml_hint(detail)}")
+                continue
+            if fm is not None and "type" not in fm:
+                # Written before the tool added `type: meta`; the next
+                # write of the list adds it, so a row would only nag.
+                continue
         if fm is None:
             rows.append(f"INFO\t{rel}\tno frontmatter")
             continue
@@ -2368,12 +2378,14 @@ def check_sessions(vault: Path) -> list[str]:
 # train the GM to ignore the second.
 # --------------------------------------------------------------------------
 
-# graph-health.md, "Un-fenced GM-only content". Matched as substrings of a
-# casefolded title, so "Tactics" hits "tactic" and "Secrets" hits "secret".
-# "Keeper" is the exception (`_keeper_word`): a whole word, and a job when
-# another word comes right before it (#316).
-KEEPER_WORDS = ("gm only", "gm-only", "dm only", "secret",
-                "tactic", "confidential", "spoiler")
+# graph-health.md, "Un-fenced GM-only content". Matched as whole words of a
+# casefolded title, plural allowed: "Tactics" hits "tactic" and "Secrets"
+# hits "secret", but "Tactician" and "Secretary" do not (#355). "Keeper" is
+# the exception (`_keeper_word`): a job when another word comes right
+# before it (#316).
+KEEPER_WORDS_RE = re.compile(
+    r"(?<![^\W_])(?:gm only|gm-only|dm only|secrets?|tactics?|confidential"
+    r"|spoilers?)(?![^\W_])")
 # Keeper or Keepers, not inside a longer word; "_" and "-" end it.
 KEEPER_WORD_RE = re.compile(r"(?<![^\W_])keepers?(?![^\W_])")
 # The whitespace-separated token just before it.
@@ -2404,7 +2416,7 @@ GM_AFTER_POSSESSIVE = frozenset((
 GM_LEAK_SKIP_TYPES = {"session-plan", "session-play-notes", "plan", "meta"}
 
 # A bold label opening a paragraph: `**Secret:** he lied.` The colon is
-# optional and is dropped from the captured label.
+# optional; `_bold_label` reads either as the label, colon and all.
 BOLD_LABEL_RE = re.compile(r"^\*\*([^*]+?):?\*\*")
 # A labelled Current Status field: `**Location:** the quay`.
 LABELLED_FIELD_RE = re.compile(r"^\*\*[A-Za-z][^*]*:\*\*")
@@ -2471,7 +2483,8 @@ def _keeper_word(text: str) -> bool:
     missed GM heading publishes unwarned, so every other shape flags:
     nothing before it, punctuation or a function word before it ("For the
     Keeper"), or more after it ("Private Keeper Notes")."""
-    low = text.casefold()
+    # "Lore-Keeper" reads as "Lore Keeper": a hyphen joins the two words.
+    low = re.sub(r"(?<=\w)-(?=keepers?(?![^\W_]))", " ", text.casefold())
     for m in KEEPER_WORD_RE.finditer(low):
         before = BEFORE_WORD_RE.search(low[:m.start()])
         if (before and PLAIN_WORD_RE.fullmatch(before.group(1))
@@ -2487,8 +2500,10 @@ def _keeper_text(text: str, excludes: list[str]) -> bool:
     """Does this title or label read as Keeper-facing?"""
     low = text.casefold()
     return (_keeper_word(low)
-            or any(word in low for word in KEEPER_WORDS)
-            or any(s.casefold() in low for s in excludes))
+            or KEEPER_WORDS_RE.search(low) is not None
+            or any(re.search(r"(?<![^\W_])" + re.escape(s.casefold())
+                             + r"(?![^\W_])", low)
+                   for s in excludes if s.strip()))
 
 
 def _heading_leak(rel: str, state: LineState, excludes: list[str],
@@ -2535,8 +2550,11 @@ def _heading_leak(rel: str, state: LineState, excludes: list[str],
                 f"{json.dumps(paste, ensure_ascii=False)} and run "
                 f"`vault_check.py <vault> gm-leak --renest-excludes --fix`"]
     if _keeper_text(title, excludes):
+        fix = ("rename the note's title or move the note out of the "
+               "published folders" if level == 1
+               else "nest it under ## GM Notes or fence it")
         return [f"WARNING\t{rel}:{state.lineno}\tKeeper-facing heading "
-                f"'{title}' publishes — nest it under ## GM Notes or fence it"]
+                f"'{title}' publishes — {fix}"]
     return []
 
 
@@ -2712,7 +2730,9 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
                 heading_leak = heading_leak or bool(found)
                 continue
             bold = BOLD_LABEL_RE.match(state.line)
-            if bold and _keeper_text(bold.group(1), excludes):
+            # A label ends in a colon whether or not it was written: the
+            # phrase does not run on, so "Private Keeper" is not a job.
+            if bold and _keeper_text(bold.group(1) + ":", excludes):
                 rows.append(f"INFO\t{rel}:{state.lineno}\tbold label "
                             f"'{bold.group(1)}' looks Keeper-facing — confirm "
                             f"with the GM (not a heading; not auto-movable)")
