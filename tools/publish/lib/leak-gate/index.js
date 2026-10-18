@@ -10,6 +10,7 @@ const { createMatcher, readOutput, listFiles } = require('./match');
 const { nameFindings, neverShowFindings } = require('./names');
 const { wordsOf, nameSet, onlyNames } = require('./text');
 const { indexHits } = require('./search-index');
+const { isSettledHeading } = require('../settled-headings');
 
 const findingId = (page, text) => crypto.createHash('sha1').update(`${page}\n${text}`).digest('hex').slice(0, 6);
 const keyOf = (page, text) => `${page}\n${text}`;
@@ -66,7 +67,8 @@ function runLeakGate({ configPath, outputDir }) {
 
   // The whole file, an accepted-only one included (loadManifest answers null for that: it is no publish list).
   const list = loadPublishList(hidden.vaultPath, { warn: () => {} });
-  const accepted = (list && list.accepted) || [];
+  // A heading gm-leak's settled for players is no finding of this gate (settled-headings.js): never needed, never pruned.
+  const accepted = ((list && list.accepted) || []).filter((a) => !isSettledHeading(a));
   const acceptedKeys = new Set(accepted.map(acceptedKey));
   const findings = [...raw.values()].filter((f) => !acceptedKeys.has(findingKey(f))).sort(byPageText);
   const unneeded = accepted.filter((a) => !raw.has(acceptedKey(a)));

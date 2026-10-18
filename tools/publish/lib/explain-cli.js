@@ -15,7 +15,8 @@ const { mapFolder, matchExcludedDir } = require('./scanner');
 const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, alwaysExcludedSegment } = require('./publish-decision');
 const { surveyVault, pairsWith } = require('./manifest-cli');
 const { assertNoStops, outputFolderOf } = require('./config');
-const { canonicalPath } = require('./manifest');
+const { canonicalPath, loadPublishList } = require('./manifest');
+const { settledHeadingsOf } = require('./settled-headings');
 const { strippedSectionTitles, sheetWithheldTitles, publishMode } = require('./processor');
 const { pcKeepList, retiredSheetFieldsFor } = require('./pc-prose');
 const { getCanonStatus } = require('./templates/base');
@@ -388,7 +389,9 @@ async function runExplainAll(options, deps) {
   out(JSON.stringify({ vaultPath: survey.vaultPath, switches: switchesOf(survey.publishConfig),
     system: survey.publishConfig.system || null, sheetFamily: sheetFamilyOf(survey.publishConfig.system),
     pcKeepSections: pcKeepList(survey.publishConfig),
-    excludeSections: survey.publishConfig.exclude_sections || [], pages }, null, 2));
+    excludeSections: survey.publishConfig.exclude_sections || [],
+    // gm-leak skips these Keeper-looking headings: the GM settled each for players (#453).
+    settledHeadings: settledHeadingsOf(loadPublishList(survey.vaultPath, { warn: () => {} })), pages }, null, 2));
   return 0;
 }
 

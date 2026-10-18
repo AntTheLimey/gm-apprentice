@@ -1639,6 +1639,60 @@ FIX_CONFIG = ('---\ntype: meta\npublish:\n'
               '  exclude_sections: ["GM Notes", "Keeper Secrets"]\n---\n')
 
 
+class GmLeakSettleTests(unittest.TestCase):
+    """`gm-leak --settle NOTE:LINE` (#453): a Keeper-looking heading the GM
+    reviewed and means for players is recorded through the publish tool,
+    in the publish list's `accepted` list, and gm-leak skips it while the
+    note and the heading text stay the same."""
+
+    ROW = ("WARNING\tBob.md:7\tKeeper-facing heading 'Secret Tactics' "
+           "publishes — nest it under ## GM Notes or fence it")
+
+    def vault(self, heading="## Secret Tactics"):
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            f"---\ntype: npc\n---\n\n# Bob\n\n{heading}\n\nHe flanks.\n\n"
+            "## Keeper Notes\n\nx\n", encoding="utf-8")
+        return vault
+
+    def test_a_settled_heading_is_skipped_and_flagged_again_when_it_changes(self):
+        vault = self.vault()
+        self.assertIn(self.ROW, vc.check_gm_leak(vault, None))
+        done = run_cli(vault, "gm-leak", "--settle", "Bob.md:7")
+        self.assertEqual(done.returncode, 0, done.stdout + done.stderr)
+        self.assertIn("SETTLED\tBob.md:7\t'Secret Tactics'", done.stdout)
+        listed = (vault / "_meta" / "publish-list.yaml").read_text("utf-8")
+        self.assertIn("text: Secret Tactics", listed)
+        self.assertIn("note: gm-leak.heading", listed)
+        rows = vc.check_gm_leak(vault, None)
+        self.assertNotIn(self.ROW, rows)
+        # Only that heading: the other one on the page is still a finding.
+        self.assertTrue(rows_for(rows, "Bob.md:11\tKeeper-facing heading "
+                                 "'Keeper Notes'"), rows)
+        self.assertIn("INFO\t(vault)\t1 Keeper-looking heading the GM "
+                      "settled for players is not flagged", rows)
+        # Emphasis around the title is the same heading.
+        (vault / "Bob.md").write_text(
+            (vault / "Bob.md").read_text("utf-8").replace(
+                "## Secret Tactics", "## **Secret Tactics**"), "utf-8")
+        self.assertFalse(rows_for(vc.check_gm_leak(vault, None),
+                                  "'Secret Tactics'"))
+        # A changed heading is flagged again.
+        (vault / "Bob.md").write_text(
+            (vault / "Bob.md").read_text("utf-8").replace(
+                "## **Secret Tactics**", "## Secret Tactics Revised"), "utf-8")
+        self.assertTrue(rows_for(vc.check_gm_leak(vault, None),
+                                 "Keeper-facing heading 'Secret Tactics "
+                                 "Revised'"))
+
+    def test_settle_refuses_a_line_that_is_no_heading(self):
+        vault = self.vault()
+        done = run_cli(vault, "gm-leak", "--settle", "Bob.md:9")
+        self.assertEqual(done.returncode, 2, done.stdout)
+        self.assertIn("line 9 of Bob.md is not a heading", done.stderr)
+        self.assertFalse((vault / "_meta" / "publish-list.yaml").exists())
+
+
 def leak_heading_rows(rows, rel):
     """ERROR/WARNING heading rows for one file — what `--fix` exists to
     clear."""

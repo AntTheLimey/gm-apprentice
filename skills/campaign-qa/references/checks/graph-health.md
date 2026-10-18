@@ -89,7 +89,9 @@ heading that is not on the exclude list). A heading on the list is
 hidden however it is dressed (`### **GM Notes**`, `### GM Notes:`), so it is
 not a finding.
 The script skips notes the site does not publish, so it only flags
-content that would actually reach the site.
+content that would actually reach the site. A keyword heading the GM
+says is for players: run `vault_check.py <vault> gm-leak --settle
+"<note:line from the row>"`, and it is not flagged again.
 Severity: Critical if the vault has a site; Warning otherwise. With
 no site the script says so in one INFO row.
 

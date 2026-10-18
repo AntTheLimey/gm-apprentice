@@ -279,6 +279,22 @@ class SiteFaultRowsTests(unittest.TestCase):
             f"WARNING\t{MARA}\tWITHHELD_IN_PROSE: \"Lord Zorn\" (a withheld "
             f"note: {ZORN}), printed 1 time | Lord Zorn rides at dawn."])
 
+    def test_a_withheld_everyday_word_row_carries_the_rename_fix(self):
+        # #454: the tool decides the name is an everyday word (one word, on
+        # the page in lower case) and says to rename the note; the row
+        # carries its words. Any other row of the code stays as it was.
+        human = "Heritages/Human.md"
+        vault, _site = make(self, {
+            MARA: npc("Mara is human."),
+            human: npc("Clones.", "withheld: true\n")}, excluded=[human])
+        rows = findings(vc.check_site_faults(vault))
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith(
+            f"WARNING\t{MARA}\tWITHHELD_IN_PROSE: \"Human\" (a withheld note: "
+            f"{human}), printed 1 time | Mara is human. — \"Human\" is an "
+            f"everyday word"), rows)
+        self.assertIn(f"rename the note ({human})", rows[0])
+
     def test_a_withheld_note_that_publishes_is_an_error_row_that_does_not_stop_the_audit(self):
         vault, _site = make(self, {
             MARA: npc("She met [[Vesper_Hale]]."),

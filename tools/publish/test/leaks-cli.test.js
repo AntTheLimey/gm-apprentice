@@ -207,6 +207,32 @@ describe('leaks', () => {
     } finally { site.cleanup(); }
   });
 
+  it('settle records a reviewed heading in the accepted list, once, with no built site; check and prune leave it (#453)', async () => {
+    const site = leakSite(NOTES, SETTINGS);
+    try {
+      fs.rmSync(site.outputDir, { recursive: true, force: true });
+      const r = await run(site, 'settle', { page: 'NPCs/A.md', text: 'Secret Tactics' });
+      assert.equal(r.rc, 0, r.text);
+      assert.match(r.text, /Settled: the heading "Secret Tactics" in NPCs\/A\.md/);
+      assert.equal((await run(site, 'settle', { page: 'NPCs/A.md', text: 'Secret Tactics' })).rc, 0);
+      const { accepted } = loadPublishList(vaultOf(site), { warn: () => {} });
+      assert.deepEqual(accepted, [{ page: 'NPCs/A.md', text: 'Secret Tactics', note: 'gm-leak.heading' }]);
+      const missing = await run(site, 'settle', { page: 'NPCs/Nobody.md', text: 'Secret Tactics' });
+      assert.equal(missing.rc, 1);
+      assert.match(missing.text, /no note NPCs\/Nobody\.md/);
+      // The leak gate reads it as no finding of its own: not "no longer needed", and prune keeps it.
+      const rebuilt = leakSite(NOTES, SETTINGS);
+      try {
+        fs.copyFileSync(path.join(vaultOf(site), '_meta', 'publish-list.yaml'), path.join(vaultOf(rebuilt), '_meta', 'publish-list.yaml'));
+        const check = await run(rebuilt, 'check');
+        assert.equal(check.rc, 0, check.text);
+        assert.doesNotMatch(check.text, /no longer needed/);
+        assert.match((await run(rebuilt, 'prune')).text, /Nothing to prune/);
+        assert.equal(loadPublishList(vaultOf(rebuilt), { warn: () => {} }).accepted.length, 1);
+      } finally { rebuilt.cleanup(); }
+    } finally { site.cleanup(); }
+  });
+
   it('a never_show that is not a list stops the leaks commands rather than reading clean', async () => {
     const site = leakSite(NOTES, SETTINGS);
     try {

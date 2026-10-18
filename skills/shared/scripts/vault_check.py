@@ -18,6 +18,7 @@ Usage:
   vault_check.py VAULT sessions      (also: played sessions/Wrap-Ups not under Publishing)
   vault_check.py VAULT gm-leak [--folder SUB] [--fix]
   vault_check.py VAULT gm-leak --renest-excludes [--fix]
+  vault_check.py VAULT gm-leak --settle NOTE:LINE
   vault_check.py VAULT pc-body [--folder SUB] [--file REL ...] [--newer-than REL]
   vault_check.py VAULT wrapup [--file REL] [--fix]
   vault_check.py VAULT site-faults [--file REL ...]
@@ -83,7 +84,10 @@ every file the publisher might ship and fails closed on an
 `exclude_sections` it cannot read exactly. No rewrite is written if
 a hidden line would publish after it — judged by a port of the
 publish pipeline — or a fence would unbalance (ERROR row instead),
-and one refusal blocks the whole migration.
+and one refusal blocks the whole migration. `--settle NOTE:LINE` marks
+the keyword WARNING heading on that line as meant for players: the
+publish tool records it in the publish list's `accepted` list, and
+gm-leak skips it (one INFO row counts them) until its text changes.
 
 `pc-body` runs over every `type: pc` sheet except `*_Story.md`
 companions and `publish: none` pages. ERROR is `## Current Status`
@@ -1867,6 +1871,10 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
         outs = [_one_line(p) for p in f.get("listings") or []]
         if outs:
             msg += " | printed on the index or listing page: " + ", ".join(outs)
+        if f.get("everyday") is True:
+            # The tool's own fix for a name that is an everyday word (#454):
+            # rewording each ordinary use would never end.
+            msg += f" — {_one_line(f.get('fix'))}"
     else:
         msg = (f"ALIAS_IN_PROSE: \"{_one_line(f.get('alias'))}\" (a secret "
                f"name of {_one_line(f.get('owner'))}), printed "
@@ -2088,6 +2096,50 @@ def sheet_withheld_sections(answer: ToolAnswer) -> dict[str, set[str]]:
         return {rel: titles for rel, titles in got.items() if titles}
     except (KeyError, TypeError, AttributeError):
         return {}
+
+
+def settled_headings(answer: ToolAnswer) -> frozenset[tuple[str, str]]:
+    """The (note, title) pairs, NFC, of the Keeper-looking headings the GM
+    settled for players (#453): `settledHeadings` in `explain --all
+    --json`, read from the publish list by the tool alone. Empty when the
+    tool could not be asked or predates the field, so every heading is
+    flagged as before."""
+    try:
+        got = answer.data.get("settledHeadings") or [] \
+            if isinstance(answer.data, dict) else []
+        return frozenset((unicodedata.normalize("NFC", str(h["page"])),
+                          unicodedata.normalize("NFC", str(h["heading"])))
+                         for h in got)
+    except (KeyError, TypeError, AttributeError):
+        return frozenset()
+
+
+def settle_heading(vault: Path, where: str) -> tuple[list[str], int]:
+    """`gm-leak --settle NOTE:LINE`: the heading on that line is one the
+    GM settled for players. The record is written by the publish tool
+    (`leaks settle`), into the publish list's `accepted` list; nothing
+    here writes it. (rows, exit code)."""
+    rel, _, line = where.rpartition(":")
+    rel = rel.replace("\\", "/")
+    path = vault / rel
+    if not rel or not line.isdigit() or not path.is_file():
+        return [f"error: --settle takes NOTE:LINE from a gm-leak row; "
+                f"'{where}' names no note and line"], 2
+    lines = path.read_bytes().decode("utf-8", errors="replace").split("\n")
+    n = int(line)
+    hm = HEADING_RE.match(lines[n - 1].rstrip("\r")) if 0 < n <= len(lines) \
+        else None
+    if hm is None:
+        return [f"error: line {n} of {rel} is not a heading"], 2
+    title = _shown_title(atx_title(hm.group(2)))
+    answer = ask_publish_tool(vault, ["leaks", "settle", rel, title])
+    if answer.data is None or not isinstance(answer.data, dict) \
+            or answer.data.get("settled") is not True:
+        why = answer.why or "the publish tool did not settle it"
+        return [f"ERROR\t{rel}:{n}\t'{title}' was not settled: {why}"], 1
+    return [f"SETTLED\t{rel}:{n}\t'{title}' is for players: gm-leak does "
+            f"not flag it while the note's path and the heading stay the "
+            f"same"], 0
 
 
 _HK_WIKILINK = re.compile(r"\[\[((?:[^\]|\\]|\\(?!\|))+(?:\\?\|[^\]]*)?)\]\]")
@@ -2523,6 +2575,18 @@ def _keeper_text(text: str, excludes: list[str]) -> bool:
                    for s in excludes if s.strip()))
 
 
+def _shown_title(raw: str) -> str:
+    """A heading's title as gm-leak's rows show it and a settled heading
+    is kept: whole-title emphasis unwrapped."""
+    m = EMPHASIS_RE.match(raw)
+    return m.group(2).strip() if m else raw
+
+
+# What `_heading_leak` answers for a heading the GM settled: no row, but
+# counted, so the run says how many it left alone.
+SETTLED_SKIP = "SETTLED-SKIP"
+
+
 def _own_strip_row(rel: str, state: LineState | BuildLine) -> str:
     """The row for a `##` the publish tool withholds by its own rule (a
     handout's Keeper sections, #280), outside ## GM Notes."""
@@ -2534,13 +2598,17 @@ def _own_strip_row(rel: str, state: LineState | BuildLine) -> str:
 
 
 def _heading_leak(rel: str, state: LineState | BuildLine,
-                  excludes: list[str], list_name: str) -> list[str]:
-    """Rows for one published heading line."""
+                  excludes: list[str], list_name: str,
+                  settled: frozenset[tuple[str, str]] = frozenset()
+                  ) -> list[str]:
+    """Rows for one published heading line. `settled` holds the (note,
+    title) pairs the GM settled for players (#453): their Keeper-word row
+    is not given."""
     if state.heading is None:
         return []
     level, raw = state.heading
     m = EMPHASIS_RE.match(raw)
-    title = m.group(2).strip() if m else raw
+    title = _shown_title(raw)
     if _bare_section_title(raw) in {_bare_section_title(e) for e in excludes}:
         # A heading the site hides never reaches here: `build_lines` has
         # already marked it excluded, as the site's tool answered. This one
@@ -2577,6 +2645,9 @@ def _heading_leak(rel: str, state: LineState | BuildLine,
                 f"{json.dumps(paste, ensure_ascii=False)} and run "
                 f"`vault_check.py <vault> gm-leak --renest-excludes --fix`"]
     if _keeper_text(title, excludes):
+        if (unicodedata.normalize("NFC", rel),
+                unicodedata.normalize("NFC", title)) in settled:
+            return [SETTLED_SKIP]
         fix = ("rename the note's title or move the note out of the "
                "published folders" if level == 1
                else "nest it under ## GM Notes or fence it")
@@ -2687,8 +2758,11 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
     # Headings only the tool withholds (not on the exclude list), per file.
     tool_stripped: dict[str, set[str]] = {}
     sheet_off: dict[str, set[str]] = {}
+    settled = frozenset[tuple[str, str]]()
+    settled_skipped = 0
     if tool is not None:
         sheet_off = sheet_withheld_sections(tool)
+        settled = settled_headings(tool)
         raw_keep = (tool.data.get("pcKeepSections")
                     if isinstance(tool.data, dict) else None)
         if isinstance(raw_keep, list) and all(isinstance(t, str)
@@ -2774,7 +2848,10 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
                 continue
             if state.heading is not None:
                 found = _heading_leak(rel, state, excludes, setting_name(
-                    vault, "player_site.hide.sections"))
+                    vault, "player_site.hide.sections"), settled)
+                was_settled = found == [SETTLED_SKIP]
+                if was_settled:
+                    found = []
                 title = state.heading[1].strip()
                 if (not found and state.heading[0] == 2
                         and title.casefold() in own_strips):
@@ -2784,6 +2861,7 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
                     # so. Its home is under GM Notes, and moving it is
                     # mechanical.
                     found = [_own_strip_row(rel, state)]
+                settled_skipped += was_settled and not found
                 rows.extend(found)
                 heading_leak = heading_leak or bool(found)
                 continue
@@ -2817,6 +2895,12 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
     if not_published:
         rows.append(f"INFO\t(vault)\t{not_published} notes skipped: the site "
                     f"does not publish them")
+    if settled_skipped:
+        rows.append(f"INFO\t(vault)\t{settled_skipped} Keeper-looking "
+                    + ("heading the GM settled for players is"
+                       if settled_skipped == 1 else
+                       "headings the GM settled for players are")
+                    + " not flagged")
     if renest_excludes:
         return rows + renest_excludes_migration(vault, fix)
     mode = "FIXED" if fix else "WOULD-FIX"
@@ -5914,6 +5998,11 @@ def main() -> int:
                          "exclude_sections entry under ## GM Notes, then "
                          "collapse exclude_sections to [\"GM Notes\"]. "
                          "Dry run unless --fix.")
+    ap.add_argument("--settle", metavar="NOTE:LINE",
+                    help="gm-leak only: the Keeper-looking heading at "
+                         "NOTE:LINE (as a gm-leak row names it) is for "
+                         "players; the publish tool records it and gm-leak "
+                         "stops flagging it until the heading changes")
     ap.add_argument("--threshold", type=float,
                     help="similarity ratio for names (default: the vault's "
                          "vault.name_match setting)")
@@ -5929,6 +6018,14 @@ def main() -> int:
               "whole vault (no --folder): it rewrites the vault config",
               file=sys.stderr)
         return 2
+    if args.settle is not None:
+        if args.command != "gm-leak":
+            print("error: --settle needs the gm-leak command",
+                  file=sys.stderr)
+            return 2
+        lines, code = settle_heading(args.vault, args.settle)
+        print("\n".join(lines), file=sys.stderr if code == 2 else sys.stdout)
+        return code
     newer_than_mtime: float | None = None
     newer_than_rel: str | None = None
     if args.file:
