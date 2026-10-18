@@ -22,7 +22,7 @@ These entity types have purpose-built page layouts.
 | Field | Status | Description |
 |-------|--------|-------------|
 | `occupation` | Optional | Background or character class |
-| `status` | Optional | active, retired, dead, npc |
+| `status` | Optional | Any word; one in `vault.statuses.out_of_play` takes the PC out of play |
 | `key_traits` | Optional | List of defining traits (shown on PC card and landing page) |
 | `player_name` | Optional | Real-world player name |
 | `portrait` | Optional | Path relative to vault root (e.g. `_attachments/characters/slug.jpg`) |
@@ -63,7 +63,7 @@ beneath them. No accordion — the content flows as continuous prose.
 |-------|--------|-------------|
 | `occupation` | Optional | Role label (e.g. "Patron", "Antagonist", "Shopkeeper") |
 | `nationality` | Optional | Origin or nationality |
-| `status` | Optional | active, dead, missing, unknown |
+| `status` | Optional | alive, dead, missing, unknown |
 | `age` | Optional | Character age |
 | `rank` | Optional | Military or organizational rank |
 | `portrait` | Optional | Path relative to vault root |

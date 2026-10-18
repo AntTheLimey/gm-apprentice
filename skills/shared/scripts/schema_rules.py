@@ -110,27 +110,31 @@ SOURCE_VALUES = frozenset({"play", "prep", "backstory", "world-evolution"})
 FACTION_STATUS = frozenset({"active", "weakened", "destroyed", "allied", "dormant"})
 
 # The values a field takes, by note type ("*": any type). CHECKED_VALUES is
-# what scripts/validate_schema.py rejects anything outside of; LISTED_VALUES
-# are words the schema names that no check enforces (`show`: unchecked).
+# what both checks (vault_check.py frontmatter, scripts/validate_schema.py)
+# reject anything outside of; LISTED_VALUES are words the schema names that
+# no check enforces (`show`: unchecked).
 CHECKED_VALUES: dict[str, dict[str, frozenset[str]]] = {
     "*": {"canon_status": frozenset(CANON_STATUS_VALUES)},
     "session": {"status": frozenset(SESSION_NOT_YET_RUN | SESSION_PLAYED)},
     "scene": {"status": frozenset(SCENE_STATUS), "scene_type": frozenset(SCENE_TYPES)},
     "npc": {"status": frozenset(NPC_STATUS)},
-    "pc": {"status": frozenset(NPC_STATUS)},
     "adventure-brief": {"scope": frozenset(ADVENTURE_BRIEF_SCOPE),
                         "continuation_type": frozenset(ADVENTURE_BRIEF_CONTINUATION),
                         "adventure_shape": frozenset(ADVENTURE_BRIEF_SHAPE)},
-    "campaign_overview": {"status": frozenset(CAMPAIGN_OVERVIEW_STATUS),
-                          "scope": frozenset(ADVENTURE_BRIEF_SCOPE)},
+    "campaign_overview": {"scope": frozenset(ADVENTURE_BRIEF_SCOPE)},
     "world_domain": {"status": frozenset(WORLD_DOMAIN_STATUS)},
     "plan": {"plan_type": frozenset(PLAN_TYPES)},
 }
+# A PC's and a campaign overview's status are named, not checked, until the
+# GM's own vaults agree with a list: a retired PC is a status the site groups
+# on its own (`vault.statuses`), and a vault's overview writes `active` (#431).
 LISTED_VALUES: dict[str, dict[str, frozenset[str]]] = {
     "*": {"source": SOURCE_VALUES},
     "session": {"stage": SESSION_STAGE},
     "faction": {"status": FACTION_STATUS},
     "organization": {"status": FACTION_STATUS},
+    "pc": {"status": frozenset(NPC_STATUS)},
+    "campaign_overview": {"status": frozenset(CAMPAIGN_OVERVIEW_STATUS)},
 }
 
 
@@ -237,6 +241,84 @@ DEPRECATED_FIELDS: dict[str, list[tuple[str, str, str]]] = {
         ("actual_date", "play_date", "1.4.22"),
     ],
 }
+
+
+def is_schema_type(etype: str) -> bool:
+    """A type the schema names: one with rules, or a subtype in the
+    ontology's hierarchy (`weapon`, `cult`). An abstract kind (`character`)
+    is never a note's type; anything else is the GM's own custom type."""
+    if etype in REQUIRED_FIELDS:
+        return True
+    hierarchy = _ontology()["entity_types"]["hierarchy"]
+    named = set(hierarchy).union(*hierarchy.values())
+    return etype in named and etype not in _ontology()["entity_types"]["abstract"]
+
+
+def frontmatter_findings(fm: dict) -> list[tuple[str, str]]:
+    """Every schema rule for one note's frontmatter, as (level, message).
+
+    The one place the rules live: `vault_check.py frontmatter` prints these
+    as rows and `scripts/validate_schema.py` reports the ERRORs. A custom
+    type is INFO and takes only the rules for any type; an empty value is
+    unset, not wrong."""
+    etype = fm.get("type")
+    if not etype:
+        return [("ERROR", "missing 'type' field")]
+    if not isinstance(etype, str):
+        return [("ERROR", f"field 'type' must be one type name, got {etype!r}")]
+    found: list[tuple[str, str]] = []
+    custom = not is_schema_type(etype)
+    if custom:
+        found.append(("INFO", f"custom type '{etype}' (no schema rules applied)"))
+    for field in REQUIRED_FIELDS.get(etype, []):
+        if field not in fm:
+            found.append(("ERROR", f"missing required field '{field}' for type '{etype}'"))
+    for field, allowed in (CHECKED_VALUES["*"] if custom else checked_values(etype)).items():
+        value = fm.get(field)
+        if not value:  # unset: the line reader reads `field: ""` as []
+            continue
+        if not isinstance(value, str):
+            found.append(("ERROR", f"{field}: one value, not {value!r}"))
+        elif value not in allowed:
+            found.append(("ERROR", f"{field}: '{value}' must be one of: "
+                                   f"{', '.join(sorted(allowed))}"))
+        elif field == "canon_status" and value == "SUPERSEDED" and not custom \
+                and not fm.get("superseded_by"):
+            # Not asked of a custom type: a GM's superseded reference
+            # notes, replaced by many, mostly name no one note (#431).
+            found.append(("ERROR", "canon_status SUPERSEDED needs superseded_by"))
+    if etype == "plan" and fm.get("leads_to") is not None:
+        # leads_to: the plan node(s) this one leads to (2+ targets = a branch).
+        links = fm["leads_to"]
+        if not isinstance(links, list):
+            found.append(("ERROR", "leads_to must be a list of wiki-links"))
+        else:
+            found += [("ERROR", f"leads_to entries must be wiki-links "
+                                f"(e.g. \"[[Plan Name]]\"), got {item!r}")
+                      for item in links if not isinstance(item, str) or "[[" not in item]
+    # `withheld: true` makes the note's own name a secret the site build
+    # searches for. The build reads yes, on and 1 as true as well; the
+    # schema asks for the real word.
+    if "withheld" in fm:
+        value = fm["withheld"]
+        if not (isinstance(value, bool) or (isinstance(value, str)
+                                             and value.strip().lower() in ("true", "false"))):
+            found.append(("ERROR", "withheld must be true or false"))
+    portrait = fm.get("portrait")
+    if portrait and not custom:
+        if not isinstance(portrait, str):
+            found.append(("ERROR", "portrait must be one path"))
+        elif etype not in PORTRAIT_TYPES:
+            found.append(("ERROR", f"portrait is not taken by type '{etype}' — only by: "
+                                   f"{', '.join(sorted(PORTRAIT_TYPES))}"))
+        elif not portrait.startswith("_attachments/"):
+            found.append(("ERROR", f"portrait '{portrait}' must start with '_attachments/'"))
+    for scope in ("*", etype):
+        for old, new, since in DEPRECATED_FIELDS.get(scope, []):
+            if old in fm:
+                found.append(("ERROR", f"legacy field '{old}' — renamed to '{new}' "
+                                       f"in {since} (see shared/canon-status.md)"))
+    return found
 
 
 # Relationship predicate vocabulary
@@ -380,7 +462,8 @@ def show_types() -> str:
     """`show` with no type: the types, and the fields any type takes."""
     return "\n".join([
         "types: " + " ".join(known_types()),
-        "any other type is custom: no rules (vault_check reports it as INFO)",
+        "a subtype in the ontology (weapon, cult) takes the rules for any type; "
+        "any other type is custom: vault_check reports it as INFO",
         _common_line(),
         "canon_status SUPERSEDED needs superseded_by",
         "show <type> for one type's fields",
@@ -406,7 +489,7 @@ def show(etype: str) -> str | None:
                      + " ".join(hierarchy.get(etype, [])))
         return "\n".join(lines)
     if etype not in REQUIRED_FIELDS:
-        lines.append("no rules of its own: a custom type to vault_check")
+        lines.append("no rules of its own: only the rules for any type")
     subtypes = hierarchy.get(etype, [])
     if subtypes:
         lines.append("subtypes: " + " ".join(subtypes))

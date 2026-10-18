@@ -79,7 +79,7 @@ class ShowAgreesWithTheValidator(unittest.TestCase):
                         continue
                     fm = a_valid_note(etype)
                     del fm[field]
-                    self.assertIn(f"Missing required field '{field}' for type '{etype}'",
+                    self.assertIn(f"missing required field '{field}' for type '{etype}'",
                                   errors_for(fm))
 
     def test_checked_values_are_exactly_what_the_validator_accepts(self):
@@ -115,7 +115,7 @@ class ShowAgreesWithTheValidator(unittest.TestCase):
 
     def test_a_list_type_is_an_error_not_a_crash(self):
         errors = errors_for({"type": "[npc]", "canon_status": "DRAFT"})
-        self.assertEqual(errors, ["Field 'type' must be one type name, got ['npc']"])
+        self.assertEqual(errors, ["field 'type' must be one type name, got ['npc']"])
 
     def test_recommended_fields_are_never_required(self):
         # Issue #221: the old doc required these on every type.
