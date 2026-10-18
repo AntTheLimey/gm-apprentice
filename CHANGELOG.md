@@ -25,9 +25,18 @@ quiet. Publish tool 1.38.0.
   on that entry's page, stops the deploy (#408).
 - `migrate.py VAULT apply --choose <id>=leave` declines a yes/no change by
   name and runs nothing; before, `fonts-self-host=leave` ran the
-  change. A `leave` given while another choice is unanswered is
-  remembered (`update_held` in `_meta/vault-state.json`), and a notice
-  said once is not said again until the vault is stamped (#355).
+  change, and any other value on a yes/no change is now refused. A
+  `leave` is remembered while another choice is unanswered
+  (`update_held` in `_meta/vault-state.json`), and a notice said once
+  is not said again until the vault is stamped (#355).
+- `inbox open` starts a session clock, 5 hours by default
+  (`--hours N`, 1 to 12), and `inbox watch` ends with
+  `WATCHER: session time is up` when it runs out. The change-request
+  loop relaunches a watcher that stopped for any other reason at once,
+  without asking, and asks the GM once at the end of the session time;
+  a host monitor ends after 30 minutes, and the watch lapsed mid-game.
+  `inbox open` also adds the watcher's files to an older site's
+  `.gitignore` (#451).
 
 ### Fixed
 
@@ -48,7 +57,8 @@ quiet. Publish tool 1.38.0.
   closer. On a site whose publish tool predates 1.17.0 they say to run
   update-pin (#441).
 - The secret-name checks find a plural of a withheld name ("the Lord
-  Zorns", when the name ends in a capitalised word), a name in a script
+  Zorns"; a one-word name's plural only mid-sentence, so a note called
+  Hope does not flag "Hopes were high"), a name in a script
   written without spaces, a name split by `&shy;`, a name in a
   hand-written `.html` address or an external link's address, and
   `withheld : true` written with a space before the colon. A name in a
@@ -84,6 +94,10 @@ quiet. Publish tool 1.38.0.
 
 ### Changed
 
+- A note in a folder named `Personal`, `_Meta` or `_Templates` in any
+  capitalisation, at any depth, is no longer published; the player site
+  read only the exact spelling below the vault root, while the GM site
+  already called these notes never published (#401).
 - ROADMAP: a row for house rules (a home for a campaign's own table
   rules, read wherever rules are answered).
 
