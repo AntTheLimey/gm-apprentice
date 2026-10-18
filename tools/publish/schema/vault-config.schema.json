@@ -197,7 +197,7 @@
           ]
         },
         "system": {
-          "description": "The game system, which decides how a character sheet is drawn",
+          "description": "The game system, which decides how a character sheet is drawn. `coc-7e-regency` changes two things from `coc-7e`: the Regency skill list on every sheet, and the masthead label \"Regency Cthulhu\" for a PC with no era",
           "type": [
             "string",
             "null"
