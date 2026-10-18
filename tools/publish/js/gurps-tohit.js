@@ -16,6 +16,8 @@
   const SCOPE_MAX = 6;
   const SM_LOW = -6;
   const SM_HIGH = 10;
+  // Shots fired: every count up to this many is offered, then only the counts where the bonus steps.
+  const SHOTS_EACH = 50;
 
   // ---------- reading input without trusting it ----------
 
@@ -76,6 +78,12 @@
     return isObj(st.aidBonus) ? int(st.aidBonus[a.id], 0, 30) : 0;
   }
   const offHand = (list, skill) => list.indexOf(skill) >= 0;
+  // The RoF as the sheet writes it: `3`, `3×9`, `10!`.
+  function rofText(w) {
+    const rof = int(w.rof, 1, 9999, 1);
+    const mult = int(w.rofMult, 1, 999, 1);
+    return rof + (mult > 1 ? '×' + mult : '') + (w.fullAuto === true ? '!' : '');
+  }
 
   // The values each choice box offers that are not rules numbers.
   const MANEUVERS = ['attack', 'aod', 'move', 'popup', 'aodbl', 'aos', 'committed'];
@@ -110,6 +118,29 @@
     function rofBonus(shots) {
       for (const [n, b] of R.rofSteps) if (shots >= n) return b;
       return 0;
+    }
+
+    // The shots a weapon can fire in one attack (#457): from 1, or a full-auto weapon's least
+    // burst, up to its RoF (B373, B270, B408). `shots` is the state's count held to that, a blank
+    // one the least; `mult` is a shotgun's projectiles per shot (B409). A melee weapon fires 1.
+    function shotsFor(w, state) {
+      const st = isObj(state) ? state : {};
+      if (!w || w.type !== 'ranged') return { options: [1], shots: 1, min: 1, max: 1, mult: 1, over: false, under: false };
+      const max = int(w.rof, 1, 9999, 1);
+      const mult = int(w.rofMult, 1, 999, 1);
+      const min = w.fullAuto === true ? Math.min(max, Math.ceil(max / R.fullAutoMinDivisor)) : 1;
+      const options = [];
+      for (let n = min; n <= Math.min(max, SHOTS_EACH); n++) options.push(n);
+      if (max > SHOTS_EACH) {
+        for (const [n] of R.rofSteps.slice().reverse()) if (n > Math.max(min, SHOTS_EACH) && n < max) options.push(n);
+        options.push(max);
+      }
+      const asked = num(st.shots);
+      const want = asked === null ? min : Math.trunc(asked);
+      // A count between two offered ones is the lower: the page shows what is counted.
+      let shots = options[0];
+      for (const n of options) if (n <= want) shots = n;
+      return { options, shots, min, max, mult, over: want > max, under: min > 1 && want < min };
     }
 
     // `crit` is the skill that sets the critical-success range; it is the skill itself unless a
@@ -155,7 +186,6 @@
       const add = (group, label, value) => { if (value) lines.push({ group, label, value }); };
 
       const acc = ranged ? int(w.acc, 0, 99) : 0;
-      const rof = ranged ? int(w.rof, 1, 9999, 1) : 1;
       const rcl = ranged ? int(w.rcl, 1, 99, 1) : 1;
       const bulk = ranged ? Math.abs(int(w.bulk, -99, 99)) : 0;
       const skill = typeof w.skill === 'string' ? w.skill : '';
@@ -269,10 +299,17 @@
         const yards = num(st.yards, 0, 1e8) || 0;
         const speed = num(st.speed, 0, 1e8) || 0;
         add('target', `Range ${yards} yd` + (speed ? ` + speed ${speed}` : ''), rangePenalty(yards + speed));
-        const shots = int(st.shots, 1, 999, 1) || 1;
-        add('attack', `Rapid fire, ${shots} shots`, rofBonus(shots));
-        if (shots > rof) notes.push(`This weapon's RoF is ${rof}.`);
-        if (shots > 1) notes.push(`Every ${rcl > 1 ? rcl + ' points' : 'point'} the roll is made by lands one more hit, up to ${shots}.`);
+        const sf = shotsFor(w, st);
+        const shots = sf.shots;
+        // A shotgun closer than a tenth of its 1/2D: each shell is one shot (B409).
+        const halfD = num(w.halfD);
+        const close = sf.mult > 1 && halfD !== null && yards * R.closeRangeDivisor < halfD;
+        const fired = close ? shots : shots * sf.mult;
+        add('attack', sf.mult > 1 && !close ? `Rapid fire, ${shots}×${sf.mult} = ${fired} shots` : `Rapid fire, ${shots} shots`, rofBonus(fired));
+        if (sf.over) notes.push(`This weapon's RoF is ${rofText(w)}.`);
+        if (sf.under) notes.push(`Full auto only: this weapon fires at least ${sf.min} shots.`);
+        if (close) notes.push(`At under ${halfD / R.closeRangeDivisor} yd, a tenth of its 1/2D, each shell is one shot: the ×${sf.mult} goes to damage instead.`);
+        if (fired > 1) notes.push(`Every ${rcl > 1 ? rcl + ' points' : 'point'} the roll is made by lands one more hit, up to ${fired}.`);
         const cover = typeof st.cover === 'string' ? R.cover[st.cover] : undefined;
         if (cover) add('env', st.cover === 'light' ? 'Light cover or concealment' : 'Target only partly exposed', cover);
         add('env', 'Shot passes other figures', R.behind * int(st.behind, 0, BEHIND_MAX));
@@ -522,7 +559,7 @@
     }
 
     return {
-      effective, outcome, odds, rangePenalty, techniquesFor, aidsFor, conflicts, defaultState, cleanState, weaponId: wid, GROUPS,
+      effective, outcome, odds, rangePenalty, techniquesFor, aidsFor, conflicts, defaultState, cleanState, shotsFor, weaponId: wid, GROUPS,
       DECEPTIVE_OFFERED, LOW, HIGH,
     };
   }
@@ -556,7 +593,7 @@
     data.weapons = data.weapons.filter((w) => isObj(w) && typeof w.key === 'string');
     if (!data.weapons.length) return;
     const R = data.rules;
-    const { effective, outcome, odds, rangePenalty, aidsFor, conflicts, defaultState, cleanState, DECEPTIVE_OFFERED, LOW, HIGH } = make(R);
+    const { effective, outcome, odds, rangePenalty, aidsFor, conflicts, defaultState, cleanState, shotsFor, DECEPTIVE_OFFERED, LOW, HIGH } = make(R);
     const DICE_WORD = R.dice + 'd6';
 
     // "Critical hit on 3 to 4, hit up to 11, miss from 12, critical miss on 17 to 18"
@@ -743,6 +780,15 @@
       ]);
     }
 
+    // Shots fired: the counts this weapon can fire, a shotgun's with its projectiles (#457). The
+    // state holds the count the sum uses, so the box and the sum agree.
+    function shotsField(w) {
+      const sf = shotsFor(w, state);
+      state.shots = String(sf.shots);
+      const opts = sf.options.map((n) => [n, sf.mult > 1 ? n + '×' + sf.mult + ' (' + n * sf.mult + ')' : String(n)]);
+      return pick('shots', 'Shots fired', opts);
+    }
+
     function groupFields(id, w) {
       const ranged = w.type === 'ranged';
       const zerog = freeFall === null ? null : tick('zerog', 'Zero gravity (Free Fall ' + freeFall + ')');
@@ -766,7 +812,7 @@
         case 'attack':
           return ranged ? [
             pick('man', 'Maneuver', [['attack', 'Attack'], ['aod', 'All-Out Attack (Determined) ' + sgn(R.aoaRanged)], ['move', 'Move and Attack (' + sgn(-R.moveRangedMin) + ' or Bulk, no Aim)'], ['popup', 'Pop-up attack ' + sgn(R.popup) + ', no Aim']], { cls: 'th-wide' }),
-            numBox('shots', 'Shots fired', 1, 999, '1'),
+            shotsField(w),
             checks([tick('dual', 'Two weapons at once ' + sgn(R.dual)), tick('offhand', 'Off hand ' + sgn(R.offHand))]),
           ] : [
             pick('man', 'Maneuver', [['attack', 'Attack'], ['aod', 'All-Out Attack (Determined) ' + sgn(R.aoaMelee)], ['aodbl', 'All-Out Attack (Double): two attacks'], ['aos', 'All-Out Attack (Strong): ' + sgn(R.aosDamage) + ' damage'], ['committed', 'Committed Attack (Determined) ' + sgn(R.committed)], ['move', 'Move and Attack ' + sgn(R.moveMelee) + ' (max ' + R.moveMeleeCap + ')']], { cls: 'th-wide' }),
@@ -927,7 +973,7 @@
       }
       weaponSel.value = weaponId(w);
       wline.textContent = res.type === 'ranged'
-        ? ['Acc ' + int(w.acc, 0, 99), 'RoF ' + int(w.rof, 1, 9999, 1), 'Rcl ' + int(w.rcl, 1, 99, 1), 'Bulk −' + Math.abs(int(w.bulk, -99, 99)), String(w.range || '')].filter(Boolean).join(' · ')
+        ? ['Acc ' + int(w.acc, 0, 99), 'RoF ' + rofText(w), 'Rcl ' + int(w.rcl, 1, 99, 1), 'Bulk −' + Math.abs(int(w.bulk, -99, 99)), String(w.range || '')].filter(Boolean).join(' · ')
         : String(w.damage || '');
 
       const c = conflicts(state);
@@ -993,8 +1039,9 @@
     weaponSel.addEventListener('change', () => {
       state.weapon = weaponSel.value;
       state.technique = '';
-      // A hit location is chosen for one attack: a new weapon starts back at the torso.
+      // A hit location is chosen for one attack: a new weapon starts back at the torso, and at its own first shot count.
       state.loc = defaultState(data).loc;
+      state.shots = '';
       rebuild();
       changed();
     });

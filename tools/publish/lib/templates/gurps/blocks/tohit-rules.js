@@ -51,6 +51,14 @@ const TOHIT_RULES = {
   // +7 at 100, +8 at 200, +9 at 400, +10 at 800, one more for each doubling. B373's own table
   // ends at 99 shots.
   rofSteps: [[800, 10], [400, 9], [200, 8], [100, 7], [50, 6], [25, 5], [17, 4], [13, 3], [9, 2], [5, 1]],
+  // RoF is the most shots one attack fires; fewer, down to 1, is allowed (B373, B270). A weapon
+  // that fires only full auto (RoF written N!) fires at least a quarter of its RoF, rounded up (B270, B408).
+  fullAutoMinDivisor: 4,
+  // A shotgun's RoF NxM: each shot is M projectiles, and the rapid-fire bonus and the most hits
+  // count them all (B373, B409). Closer than a tenth of its 1/2D range the multiplier adds no
+  // shots: the damage dice and the target's DR are multiplied by half of it, rounded down (B409).
+  closeRangeDivisor: 10,
+  closeDamageDivisor: 2,
 
   rapidStrike: -6,                   // each attack (B370)
   rapidStrikeHalf: -3,               // with Trained by a Master (B93) or Weapon Master (MA48)

@@ -561,3 +561,31 @@ describe('skills offered for their techniques', () => {
     assert.ok(p.$('#th-tech'), 'the technique picker is offered');
   });
 });
+
+// #457: shots fired is a choice of the counts the weapon can fire.
+describe('shots fired follow the weapon', () => {
+  const twoGuns = () => {
+    const d = dataBlock();
+    d.weapons.push(Object.assign({}, d.weapons[2], { key: 'Shotgun', name: 'Shotgun', rof: 3, rofMult: 9, range: '50/125', halfD: 50, aids: [] }));
+    return d;
+  };
+  it('offers 1 to the RoF, and a shotgun its shells times the multiplier', () => {
+    const p = load(twoGuns());
+    p.set('#th-weapon', 'Blaster pistol');
+    assert.strictEqual(p.$('#th-shots').tag, 'select');
+    assert.deepStrictEqual(p.$('#th-shots').children.map((o) => o.attrs.value), ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10']);
+    p.set('#th-weapon', 'Shotgun');
+    assert.deepStrictEqual(p.$('#th-shots').children.map((o) => o.textContent), ['1×9 (9)', '2×9 (18)', '3×9 (27)']);
+    assert.match(p.$('#th-wline').textContent, /RoF 3×9/);
+  });
+  it('a new weapon starts at its own first count', () => {
+    const p = load(twoGuns());
+    p.set('#th-weapon', 'Blaster pistol');
+    p.set('#th-shots', 10);
+    assert.strictEqual(p.$('#th-shots').value, '10');
+    p.set('#th-weapon', 'Shotgun');
+    assert.strictEqual(p.$('#th-shots').value, '1');
+    p.set('#th-yards', 20);
+    assert.ok(p.all('#th-lines td').some((td) => td.textContent === 'Rapid fire, 1×9 = 9 shots'));
+  });
+});

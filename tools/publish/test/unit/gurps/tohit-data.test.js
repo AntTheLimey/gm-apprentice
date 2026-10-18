@@ -851,3 +851,35 @@ describe('techniques and rows as real sheets write them', () => {
     assert.ok(report.some(r => /is split: a link in its Weapon cell holds a \|/.test(r.detail)), JSON.stringify(report));
   });
 });
+
+// #457: the RoF cell, read as the sheets write it: a number, a shotgun's NxM, a full-auto N!.
+describe('buildTohitData: the RoF cell', () => {
+  const cases = [
+    ['3', { rof: 3, rofMult: 1, fullAuto: false }],
+    ['10', { rof: 10, rofMult: 1, fullAuto: false }],
+    ['3*', { rof: 3, rofMult: 1, fullAuto: false }],
+    ['2x9', { rof: 2, rofMult: 9, fullAuto: false }],
+    ['3×9', { rof: 3, rofMult: 9, fullAuto: false }],
+    ['1 x 9', { rof: 1, rofMult: 9, fullAuto: false }],
+    ['8!', { rof: 8, rofMult: 1, fullAuto: true }],
+    ['20 !', { rof: 20, rofMult: 1, fullAuto: true }],
+    ['', { rof: 1, rofMult: 1, fullAuto: false }],
+    ['T', { rof: 1, rofMult: 1, fullAuto: false }],
+  ];
+  for (const [cell, want] of cases) {
+    it(`reads "${cell}"`, () => {
+      const w = one({ rof: cell });
+      assert.deepStrictEqual({ rof: w.rof, rofMult: w.rofMult, fullAuto: w.fullAuto }, want);
+    });
+  }
+  it('reads the 1/2D range, and none from a muscle-powered range', () => {
+    assert.strictEqual(one({ range: '70/200 †' }).halfD, 70);
+    assert.strictEqual(one({ range: '700/2,100' }).halfD, 700);
+    assert.strictEqual(one({ range: '×10/×15' }).halfD, null);
+    assert.strictEqual(one({ range: '' }).halfD, null);
+  });
+  it('says when the row gives no Rcl', () => {
+    assert.strictEqual(one({ rcl: '' }).noRcl, true);
+    assert.strictEqual(one({ rcl: '2' }).noRcl, undefined);
+  });
+});
