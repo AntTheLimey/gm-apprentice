@@ -7,7 +7,7 @@
 // comment, other lines and line endings are never touched) and writes all notes or none, through
 // the same applyFix the other repairs use.
 //
-//   listTones(model, { skip })        -> [{ rel, line, tone, target, description, gmOnly, hidesRelationships }]
+//   listTones(model, { skip })        -> [{ rel, line, tone, target, description, gmOnly, hidesRelationships, siteFamily }]
 //   planTones(model, { vaultPath, sets, skip, readBack? })
 //        -> { changes: [{ kind: 'tone', rel, line, before, after }],
 //             kept: [{ rel, line, tone, why }], texts, originals }
@@ -23,7 +23,7 @@ const fs = require('fs');
 const path = require('path');
 const YAML = require('yaml');
 const { applyEdits } = require('../settings/write');
-const { ontology } = require('../ontology');
+const { ontology, toneFamily } = require('../ontology');
 const { openText } = require('./fix');
 
 const keyName = (p) => String(YAML.isScalar(p.key) ? p.key.value : p.key);
@@ -56,6 +56,7 @@ function listTones(model, { skip } = {}) {
     description: edge.description || '',
     gmOnly: !!edge.gmOnly,
     hidesRelationships: !!note.hidesRelationships,
+    siteFamily: LISTED.has(edge.tone.trim().toLowerCase()) ? toneFamily(edge.tone) : null,
   }));
 }
 

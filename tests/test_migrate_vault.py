@@ -1731,6 +1731,21 @@ class ToneListTests(unittest.TestCase):
                 self.assertEqual(mv.find_tone_list(self.vault), [])
                 self.assertEqual(self.get(self.ENTITY), text)
 
+    def test_a_big_meta_file_is_not_slow(self):
+        # Finding where each line starts was a backwards search per match:
+        # quadratic, 38 s on 2 MB (#338). Linear now, about 1.5 s on 2 MB.
+        import time
+        filler = ("alpha, beta, gamma, delta, epsilon, zeta, eta, theta, "
+                  "iota, kappa, lambda, mu, nu, xi, omicron, pi, rho\n")
+        text = (filler * 40 + "\nTone values: " + OLD_LIST + "\n\n") * 150
+        self.put(self.ENTITY, text)
+        start = time.monotonic()
+        (item,) = mv.find_tone_list(self.vault)
+        self.assertLess(time.monotonic() - start, 6)
+        self.assertEqual(item.lines, [
+            "_meta/entity-types.md: the 150 tone lists become the 27 listed "
+            "words"])
+
     def test_a_half_list_is_never_taken_for_the_whole(self):
         by_family = "; ".join(
             ", ".join(w for w, f in mv.tone_families().items() if f == fam)

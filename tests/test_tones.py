@@ -414,6 +414,54 @@ class FixTests(VaultCase):
             self.assertEqual(str(raised.exception),
                              f"no NEAR row has the tone {word}")
 
+    def test_an_empty_except_is_a_usage_error_not_an_empty_word(self):
+        self.put("NPCs/A.md", note("    tone: dread"))
+        for empty in ("", "  "):
+            code, _out, err = self.run_main("fix", "--near", "--except", empty)
+            self.assertEqual((code, err),
+                             (2, "tones.py: --except takes a word\n"))
+
+    def test_hand_written_shapes_are_read_by_the_tool_not_by_line(self):
+        # Flow-style ties, a `>-` tone, a quoted "tone" key, a quoted
+        # "null", a byte-order mark: all surveyed. A tone in a map nested
+        # inside a tie is not the tie's tone and is never rewritten; a `>-`
+        # tone is counted but kept (it cannot be edited in place).
+        edge = '  - target: "[[A]]"\n    type: knows\n'
+        files = {
+            "A": f"---\ntype: npc\nrelationships:\n{edge}    tone: >-\n"
+                 "      Cordial\n---\n",
+            "B": f'---\ntype: npc\nrelationships:\n{edge}    "tone": '
+                 "Cordial\n---\n",
+            "C": f"---\ntype: npc\nrelationships:\n{edge}    meta:\n"
+                 "      tone: Cordial\n    tone: warm\n---\n",
+            "D": f"﻿---\ntype: npc\nrelationships:\n{edge}    tone: "
+                 "Cordial\n---\n",
+            "E": f'---\ntype: npc\nrelationships:\n{edge}    tone: '
+                 '"null"\n---\n',
+            "F": "---\ntype: npc\nrelationships: [{target: '[[A]]', "
+                 "type: knows, tone: Cordial}]\n---\n",
+        }
+        for name, text in files.items():
+            self.put(f"NPCs/{name}.md", text)
+        words = sorted(u.raw for u in tones.survey(self.vault))
+        self.assertEqual(words, ["Cordial"] * 4 + ["null", "warm"])
+        p = tones.plan_fix(self.vault, near=True, sets={})
+        self.assertEqual(sorted((c.rel, c.before) for c in p.changes),
+                         [("NPCs/B.md", "Cordial"), ("NPCs/D.md", "Cordial"),
+                          ("NPCs/F.md", "Cordial")])
+        self.assertEqual([k[0] for k in p.kept], ["NPCs/A.md"])
+        tones.apply(p)
+        self.assertIn("meta:\n      tone: Cordial\n    tone: warm",
+                      self.get("NPCs/C.md"))
+
+    def test_a_bare_cr_note_is_unread_by_the_report_and_left_by_fix(self):
+        self.put("NPCs/A.md", note("    tone: Cordial")
+                 .replace("tone: Cordial", "tone: Cordial\rx: y"))
+        uses, unread = tones.survey_and_unread(self.vault)
+        self.assertEqual((uses, unread), ([], ["NPCs/A.md"]))
+        self.assertEqual(tones.plan_fix(self.vault, near=True, sets={})
+                         .changes, [])
+
     def test_except_on_the_command_line(self):
         self.put("NPCs/A.md", note("    tone: dread", "    tone: cordial",
                                    "    tone: grim"))
@@ -495,6 +543,16 @@ class UsesTests(VaultCase):
             "NPCs/B.md:6\ttragic\t[[T0]]\t",
             "NPCs/B.md:12\tcentral\t[[T2]]\t",
             "# 4 use(s) of 2 word(s)"])
+
+    def test_a_quoted_description_shows_unescaped(self):
+        # The tool gives the YAML value, so `\"` in a quoted description
+        # is a quote mark (#338).
+        self.put("NPCs/Q.md", '---\ntype: npc\nrelationships:\n'
+                 '  - target: "[[A]]"\n    type: knows\n    tone: tragic\n'
+                 '    description: "He said \\"no\\" twice"\n---\n')
+        self.assertEqual(tones.use_lines(tones.survey(self.vault), []), [
+            'NPCs/Q.md:6\ttragic\t[[A]]\tHe said "no" twice',
+            "# 1 use(s) of 1 word(s)"])
 
     def test_named_words_are_listed_in_the_order_given(self):
         self.fill()
@@ -716,8 +774,6 @@ class ShownTests(VaultCase):
                 self.assertEqual(rows[-1], "# 1 hostile tie shown on 1 note")
                 self.assertEqual(rows[0].split("\t")[1],
                                  written.strip('"'))
-        self.assertEqual(tones.site_family(" Hostile "), "negative")
-        self.assertIsNone(tones.site_family("grim"))
 
     def test_a_note_that_hides_its_relationships_lists_nothing(self):
         for hide in ("publish_exclude_fields: [relationships]\n",
@@ -727,6 +783,26 @@ class ShownTests(VaultCase):
                 _, rows, _ = self.run_shown({"NPCs/Emma.md": note},
                                             {"NPCs/Emma.md"})
                 self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes"])
+
+    def test_a_tone_is_trimmed_the_way_the_site_trims_it(self):
+        # JS trim() does not trim \x1c-\x1f or NEL; Python's split() does.
+        # The tool's own toneFamily decides, so neither is read as hostile.
+        for written in (r'"hostile\x1c"', r'"hostile\N"', r'"\x1fhostile"'):
+            with self.subTest(written=written):
+                note = ("---\ntype: npc\nrelationships:\n"
+                        '  - target: "[[A]]"\n    type: knows\n'
+                        f"    tone: {written}\n---\nB\n")
+                _, rows, _ = self.run_shown({"NPCs/E.md": note}, {"NPCs/E.md"})
+                self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes"])
+
+    def test_gm_only_is_the_sites_reading_whatever_the_spelling(self):
+        # `0x1` is a number to YAML; the site's rule drops the edge, and so
+        # does `shown` (it asks the tool, which uses the site's function).
+        note = ("---\ntype: npc\nrelationships:\n"
+                '  - target: "[[A]]"\n    type: knows\n    tone: hostile\n'
+                "    gm_only: 0x1\n---\nB\n")
+        _, rows, _ = self.run_shown({"NPCs/E.md": note}, {"NPCs/E.md"})
+        self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes"])
 
     def test_the_hide_list_is_read_as_yaml_not_by_line(self):
         # A comment after an item, a flow list over two lines and a quoted

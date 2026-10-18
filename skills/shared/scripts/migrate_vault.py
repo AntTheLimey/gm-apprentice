@@ -4,6 +4,7 @@ alone: templates, the schema mirror, and the small per-release fixes."""
 
 from __future__ import annotations
 
+import bisect
 import difflib
 import hashlib
 import json
@@ -1173,12 +1174,15 @@ def _stale_tone_lists(text: str) -> list[tuple[int, int, str]]:
     listed = list(tone_families())
     known = set(listed) | set(OLD_TONES)
     out = []
+    # Where each line starts, found once: a backwards search from every
+    # match is quadratic on a large file with no bare CR in it.
+    breaks = [b.end() for b in re.finditer(r"[\r\n]", text)]
     for m in WORD_RUN_RE.finditer(text):
         run = m.group(0)
         words = re.findall(_LIST_WORD, run)
         seps = re.findall(_LIST_SEP, run)
-        line_start = max(text.rfind("\n", 0, m.start()),
-                         text.rfind("\r", 0, m.start())) + 1
+        at = bisect.bisect_right(breaks, m.start())
+        line_start = breaks[at - 1] if at else 0
         if (not set(words) <= known or set(words) == set(listed)
                 or not set(OLD_TONES) <= set(words)
                 or len({s.strip() for s in seps}) != 1
