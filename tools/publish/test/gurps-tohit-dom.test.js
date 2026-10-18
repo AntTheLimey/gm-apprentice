@@ -374,7 +374,8 @@ describe('aids and buttons that follow the weapon', () => {
   });
   it('an aid already in the sheet\'s number starts unticked with a hint, and Reset keeps it so', () => {
     const d = withProgram();
-    d.weapons[2] = Object.assign({}, d.weapons[2], { level: 19, base: 17, shown: 19 });
+    // RoF 1: one shot, so the sums here carry no rapid-fire bonus.
+    d.weapons[2] = Object.assign({}, d.weapons[2], { level: 19, base: 17, shown: 19, rof: 1 });
     const p = load(d);
     p.set('#th-weapon', 'w2');
     const box = p.$('[data-aid="prog"]');
@@ -578,48 +579,71 @@ describe('shots fired follow the weapon', () => {
     assert.deepStrictEqual(p.$('#th-shots').children.map((o) => o.textContent), ['1×9 (9)', '2×9 (18)', '3×9 (27)']);
     assert.match(p.$('#th-wline').textContent, /RoF 3×9/);
   });
-  it('a new weapon starts at its own first count', () => {
+  it('a weapon starts at its full RoF, a shotgun at N×M (Ant, 2026-10-18)', () => {
     const p = load(twoGuns());
     p.set('#th-weapon', 'Blaster pistol');
-    p.set('#th-shots', 10);
     assert.strictEqual(p.$('#th-shots').value, '10');
+    p.set('#th-shots', 2);
     p.set('#th-weapon', 'Shotgun');
-    assert.strictEqual(p.$('#th-shots').value, '1');
+    assert.strictEqual(p.$('#th-shots').value, '3');
     p.set('#th-yards', 20);
-    assert.ok(p.all('#th-lines td').some((td) => td.textContent === 'Rapid fire, 1×9 = 9 shots'));
+    assert.ok(p.all('#th-lines td').some((td) => td.textContent === 'Rapid fire, 3×9 = 27 shots'));
+  });
+});
+
+// Ant, 2026-10-18: the player sets the Rcl, beside shots fired; kept for each weapon.
+describe('the Rcl control', () => {
+  const noRcl = () => {
+    const d = dataBlock();
+    d.weapons[2] = Object.assign({}, d.weapons[2], { noRcl: true });
+    d.weapons.push(Object.assign({}, d.weapons[2], { key: 'Rifle', name: 'Rifle', rcl: 3, noRcl: undefined, aids: [] }));
+    return d;
+  };
+  const label = (p) => p.all('label').find((l) => l.attrs.for === 'th-rcl').textContent;
+  it('starts at 1 and says it is not on the sheet; a row with an Rcl starts at it', () => {
+    const p = load(noRcl());
+    p.set('#th-weapon', 'Blaster pistol');
+    assert.strictEqual(p.$('#th-rcl').value, '1');
+    assert.strictEqual(label(p), 'Rcl (not on the sheet)');
+    assert.doesNotMatch(p.$('#th-wline').textContent, /not on the sheet/);
+    p.set('#th-weapon', 'Rifle');
+    assert.strictEqual(p.$('#th-rcl').value, '3');
+    assert.strictEqual(label(p), 'Rcl');
+  });
+  it('drives the successes layout, and is kept for each weapon and saved', () => {
+    const p = load(noRcl());
+    p.set('#th-weapon', 'Blaster pistol');
+    p.set('#th-shots', 3);
+    p.set('#th-rcl', 2);
+    assert.deepStrictEqual(p.all('.th-dmg-row').map((r) => r.textContent), [
+      'Made it by 0-1: 1 hit, roll 3d burn once', 'Made it by 2-3: 2 hits, roll 3d burn 2 times', 'Made it by 4 or more: 3 hits, roll 3d burn 3 times']);
+    p.set('#th-weapon', 'Rifle');
+    p.set('#th-weapon', 'Blaster pistol');
+    assert.strictEqual(p.$('#th-rcl').value, '2');
+    assert.deepStrictEqual(JSON.parse([...p.store.values()][0]).state.rcl, { 'Blaster pistol': 2 });
+  });
+  it('a melee weapon has none', () => {
+    const p = load(noRcl());
+    p.set('#th-weapon', 'Hatchet');
+    assert.strictEqual(p.$('#th-rcl'), null);
   });
 });
 
 // #458: the calculator ends with the damage rolls to make, and rolls nothing.
 describe('the damage rolls to make', () => {
-  it('a single shot: the damage and one roll', () => {
+  it('a single shot: one line', () => {
     const p = load(dataBlock());
     p.set('#th-weapon', 'Blaster pistol');
-    const dmg = p.$('#th-dmg');
-    assert.ok(dmg, 'the damage section is drawn');
-    assert.strictEqual(p.$('.th-dmg-what').textContent, 'Damage: 3d burn');
-    assert.strictEqual(p.$('.th-dmg-how').textContent, 'If it hits, make 1 damage roll.');
-    assert.strictEqual(p.$('.th-dmg-runs'), null);
+    p.set('#th-shots', 1);
+    assert.ok(p.$('#th-dmg'), 'the damage section is drawn');
+    assert.deepStrictEqual(p.all('.th-dmg-row').map((r) => r.textContent), ['Hit: roll 3d burn once']);
   });
-  it('rapid fire: a row for each roll made and the damage rolls it gives', () => {
+  it('rapid fire: a row for each margin of success, up to the shots fired', () => {
     const p = load(dataBlock());
     p.set('#th-weapon', 'Blaster pistol');
     p.set('#th-shots', 3);
-    p.set('#th-yards', 10);
-    assert.strictEqual(p.$('#th-roll').textContent, '14');
-    assert.strictEqual(p.$('.th-dmg-how').textContent, 'One hit, and one more for each point the roll is made by, up to 3. Make one damage roll for each hit.');
-    const rows = p.all('.th-dmg-runs tr').map((tr) => tr.children.map((td) => td.textContent));
-    assert.deepStrictEqual(rows, [['You roll', 'Damage rolls'], ['14', '1'], ['13', '2'], ['3 to 12', '3']]);
-  });
-  it('the weapon line says when the sheet gives no Rcl', () => {
-    const d = dataBlock();
-    d.weapons[2] = Object.assign({}, d.weapons[2], { noRcl: true });
-    const p = load(d);
-    p.set('#th-weapon', 'Blaster pistol');
-    assert.match(p.$('#th-wline').textContent, /Rcl 1 \(not on the sheet\) · /);
-    const q = load(dataBlock());
-    q.set('#th-weapon', 'Blaster pistol');
-    assert.doesNotMatch(q.$('#th-wline').textContent, /not on the sheet/);
+    assert.deepStrictEqual(p.all('.th-dmg-row').map((r) => r.textContent), [
+      'Made it by 0: 1 hit, roll 3d burn once', 'Made it by 1: 2 hits, roll 3d burn 2 times', 'Made it by 2 or more: 3 hits, roll 3d burn 3 times']);
   });
   it('the last place on the page, after the notes', () => {
     const p = load(dataBlock());
@@ -630,8 +654,10 @@ describe('the damage rolls to make', () => {
   it('melee: the damage as the sheet writes it', () => {
     const p = load(dataBlock());
     p.set('#th-weapon', 'Hatchet');
-    assert.strictEqual(p.$('.th-dmg-what').textContent, 'Damage: sw+1 cut');
+    assert.deepStrictEqual(p.all('.th-dmg-row').map((r) => r.textContent), ['Hit: roll sw+1 cut once']);
     p.set('#th-man', 'aos');
-    assert.strictEqual(p.$('.th-dmg-what').textContent, 'Damage: sw+1 cut, +2 (or +1 a die if better) for All-Out Attack (Strong)');
+    assert.strictEqual(p.$('.th-dmg-strong').textContent, 'All-Out Attack (Strong): add +2 to that damage, or +1 a die if better.');
+    p.set('#th-man', 'aodbl');
+    assert.strictEqual(p.$('.th-dmg-how').textContent, 'Make 1 damage roll for each attack that hits.');
   });
 });

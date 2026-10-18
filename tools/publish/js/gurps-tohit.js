@@ -122,7 +122,7 @@
 
     // The shots a weapon can fire in one attack (#457): from 1, or a full-auto weapon's least
     // burst, up to its RoF (B373, B270, B408). `shots` is the state's count held to that, a blank
-    // one the least; `mult` is a shotgun's projectiles per shot (B409). A melee weapon fires 1.
+    // one the full RoF; `mult` is a shotgun's projectiles per shot (B409). A melee weapon fires 1.
     function shotsFor(w, state) {
       const st = isObj(state) ? state : {};
       if (!w || w.type !== 'ranged') return { options: [1], shots: 1, min: 1, max: 1, mult: 1, over: false, under: false };
@@ -136,11 +136,21 @@
         options.push(max);
       }
       const asked = num(st.shots);
-      const want = asked === null ? min : Math.trunc(asked);
+      // A blank count is the weapon's full RoF (Ant, 2026-10-18); a saved one wins.
+      const want = asked === null ? max : Math.trunc(asked);
       // A count between two offered ones is the lower: the page shows what is counted.
       let shots = options[0];
       for (const n of options) if (n <= want) shots = n;
       return { options, shots, min, max, mult, over: want > max, under: min > 1 && want < min };
+    }
+
+    // The Rcl the hits are counted at: the one the player set for this weapon (state.rcl, by
+    // weapon id), else the row's, else 1. Most sheets have no Rcl column (Ant, 2026-10-18).
+    const setRcl = (w, st) => (isObj(st.rcl) && w ? num(st.rcl[wid(w)], 1, 99) : null);
+    function rclFor(w, state) {
+      const st = isObj(state) ? state : {};
+      const set = setRcl(w, st);
+      return set !== null ? Math.trunc(set) : int(w && w.rcl, 1, 99, 1);
     }
 
     // `crit` is the skill that sets the critical-success range; it is the skill itself unless a
@@ -187,7 +197,7 @@
       const add = (group, label, value) => { if (value) lines.push({ group, label, value }); };
 
       const acc = ranged ? int(w.acc, 0, 99) : 0;
-      const rcl = ranged ? int(w.rcl, 1, 99, 1) : 1;
+      const rcl = ranged ? rclFor(w, st) : 1;
       const bulk = ranged ? Math.abs(int(w.bulk, -99, 99)) : 0;
       const skill = typeof w.skill === 'string' ? w.skill : '';
       const level = int(w.level, -99, 99);
@@ -434,26 +444,22 @@
         const d = dist(roll, critSkill);
         foe = { defence, defends, lands: d.CS + d.S * (1 - defends) };
       }
-      return { type, roll, critSkill, lines, cap, included, notes, foe, damage: damageFor(w, st, man, roll, critSkill, rapid, rcl) };
+      return { type, roll, critSkill, lines, cap, included, notes, foe, damage: damageFor(w, st, man, roll, rapid, rcl) };
     }
 
     // The damage rolls to make (#458); nothing is rolled here. Each hit is its own damage roll
     // (B379). A rapid-fire attack hits once, and once more for each full Rcl the roll is made by,
-    // up to the shots fired (B373): `rolls` gives, for each roll that hits, from the highest down,
-    // how many damage rolls it means. A shotgun closer than a tenth of its 1/2D multiplies each
-    // hit's damage, and the target's DR, by half its multiplier, rounded down (B409).
-    function damageFor(w, st, man, roll, critSkill, rapid, rcl) {
+    // up to the shots fired (B373): `bands` gives, for each band of margin of success, the hits
+    // it means; the last band (`to` null) is that margin or more. A shotgun closer than a tenth
+    // of its 1/2D multiplies each hit's damage, and the target's DR, by half its multiplier,
+    // rounded down (B409).
+    function damageFor(w, st, man, roll, rapid, rcl) {
       const ranged = w.type === 'ranged';
       const maxHits = rapid ? rapid.fired : 1;
-      const rolls = [];
-      if (maxHits > 1 && roll >= LOW) {
-        for (let r = HIGH; r >= LOW; r--) {
-          const o = outcome(r, roll, critSkill);
-          if (o !== 'S' && o !== 'CS') continue;
-          const hits = Math.min(maxHits, 1 + Math.max(0, Math.floor((roll - r) / rcl)));
-          const last = rolls[rolls.length - 1];
-          if (last && last.hits === hits && last.from === r + 1) last.from = r;
-          else rolls.push({ from: r, to: r, hits });
+      const bands = [];
+      if (maxHits > 1) {
+        for (let hits = 1; hits <= maxHits; hits++) {
+          bands.push({ from: (hits - 1) * rcl, to: hits === maxHits ? null : hits * rcl - 1, hits });
         }
       }
       return {
@@ -461,9 +467,9 @@
         none: roll < LOW,
         maxHits,
         perHit: rcl,
-        rolls,
+        bands,
         close: rapid && rapid.close ? Math.floor(rapid.mult / R.closeDamageDivisor) : null,
-        rclAssumed: ranged && w.noRcl === true && maxHits > 1,
+        rclAssumed: ranged && w.noRcl === true && setRcl(w, st) === null && maxHits > 1,
         strong: !ranged && man === 'aos' ? [R.aosDamage, R.aosPerDie] : null,
         // Two weapons, Rapid Strike or All-Out Attack (Double): each attack that hits is rolled for.
         attacks: st.dual === true || (!ranged && (man === 'aodbl' || (st.rapid === true && man !== 'move'))),
@@ -540,7 +546,7 @@
       const s = {
         weapon: list.length ? wid(list[0]) : '', technique: '', aim: 0, scope: 0, sm: 0, vis: 0, shock: 0, evaluate: 0,
         deceptive: 0, posture: 0, cover: 0, man: 'attack', loc: locs.some((l) => Array.isArray(l) && l[0] === 'torso') ? 'torso' : '',
-        aids, aidBonus: {},
+        aids, aidBonus: {}, rcl: {},
       };
       for (const k of FLAGS) s[k] = false;
       for (const k of BOXES) s[k] = '';
@@ -589,11 +595,19 @@
           if (n !== null) s.aidBonus[id] = n;
         }
       }
+      // An Rcl the player set: kept for a ranged weapon there is, a whole number from 1 to 99.
+      if (isObj(raw.rcl)) {
+        for (const w of list) {
+          if (w.type !== 'ranged') continue;
+          const v = Object.prototype.hasOwnProperty.call(raw.rcl, wid(w)) ? num(raw.rcl[wid(w)]) : null;
+          if (v !== null && Number.isInteger(v) && v >= 1 && v <= 99) s.rcl[wid(w)] = v;
+        }
+      }
       return s;
     }
 
     return {
-      effective, outcome, odds, rangePenalty, techniquesFor, aidsFor, conflicts, defaultState, cleanState, shotsFor, weaponId: wid, GROUPS,
+      effective, outcome, odds, rangePenalty, techniquesFor, aidsFor, conflicts, defaultState, cleanState, shotsFor, rclFor, weaponId: wid, GROUPS,
       DECEPTIVE_OFFERED, LOW, HIGH,
     };
   }
@@ -627,7 +641,7 @@
     data.weapons = data.weapons.filter((w) => isObj(w) && typeof w.key === 'string');
     if (!data.weapons.length) return;
     const R = data.rules;
-    const { effective, outcome, odds, rangePenalty, aidsFor, conflicts, defaultState, cleanState, shotsFor, DECEPTIVE_OFFERED, LOW, HIGH } = make(R);
+    const { effective, outcome, odds, rangePenalty, aidsFor, conflicts, defaultState, cleanState, shotsFor, rclFor, DECEPTIVE_OFFERED, LOW, HIGH } = make(R);
     const DICE_WORD = R.dice + 'd6';
 
     // "Critical hit on 3 to 4, hit up to 11, miss from 12, critical miss on 17 to 18"
@@ -822,6 +836,20 @@
       const opts = sf.options.map((n) => [n, sf.mult > 1 ? n + '×' + sf.mult + ' (' + n * sf.mult + ')' : String(n)]);
       return pick('shots', 'Shots fired', opts);
     }
+    // Rcl: the row's to start, else 1 marked as not on the sheet; what the player sets is kept for
+    // this weapon and counts the hits.
+    function rclField(w) {
+      const id = weaponId(w);
+      const inp = h('input', { type: 'number', inputmode: 'numeric', id: 'th-rcl', min: 1, max: 99 });
+      inp.value = String(rclFor(w, state));
+      bind(inp, () => {
+        const n = num(inp.value);
+        if (!isObj(state.rcl)) state.rcl = {};
+        if (n !== null && Number.isInteger(n) && n >= 1 && n <= 99) state.rcl[id] = n; else delete state.rcl[id];
+      });
+      refs.rcl = inp;
+      return wrap('rcl', 'Rcl' + (w.noRcl === true ? ' (not on the sheet)' : ''), inp);
+    }
 
     function groupFields(id, w) {
       const ranged = w.type === 'ranged';
@@ -847,6 +875,7 @@
           return ranged ? [
             pick('man', 'Maneuver', [['attack', 'Attack'], ['aod', 'All-Out Attack (Determined) ' + sgn(R.aoaRanged)], ['move', 'Move and Attack (' + sgn(-R.moveRangedMin) + ' or Bulk, no Aim)'], ['popup', 'Pop-up attack ' + sgn(R.popup) + ', no Aim']], { cls: 'th-wide' }),
             shotsField(w),
+            rclField(w),
             checks([tick('dual', 'Two weapons at once ' + sgn(R.dual)), tick('offhand', 'Off hand ' + sgn(R.offHand))]),
           ] : [
             pick('man', 'Maneuver', [['attack', 'Attack'], ['aod', 'All-Out Attack (Determined) ' + sgn(R.aoaMelee)], ['aodbl', 'All-Out Attack (Double): two attacks'], ['aos', 'All-Out Attack (Strong): ' + sgn(R.aosDamage) + ' damage'], ['committed', 'Committed Attack (Determined) ' + sgn(R.committed)], ['move', 'Move and Attack ' + sgn(R.moveMelee) + ' (max ' + R.moveMeleeCap + ')']], { cls: 'th-wide' }),
@@ -1009,7 +1038,7 @@
       }
       weaponSel.value = weaponId(w);
       wline.textContent = res.type === 'ranged'
-        ? ['Acc ' + int(w.acc, 0, 99), 'RoF ' + rofText(w), 'Rcl ' + int(w.rcl, 1, 99, 1) + (w.noRcl === true ? ' (not on the sheet)' : ''),'Bulk −' + Math.abs(int(w.bulk, -99, 99)), String(w.range || '')].filter(Boolean).join(' · ')
+        ? ['Acc ' + int(w.acc, 0, 99), 'RoF ' + rofText(w), w.noRcl === true ? '' : 'Rcl ' + int(w.rcl, 1, 99, 1), 'Bulk −' + Math.abs(int(w.bulk, -99, 99)), String(w.range || '')].filter(Boolean).join(' · ')
         : String(w.damage || '');
 
       const c = conflicts(state);
@@ -1081,24 +1110,20 @@
         dmgEl.appendChild(h('p', { class: 'th-dmg-how', text: 'No roll, so no damage to roll.' }));
         return;
       }
-      let what = 'Damage: ' + (dm.text || 'not on the sheet');
-      if (dm.strong) what += ', ' + sgn(dm.strong[0]) + ' (or ' + sgn(dm.strong[1]) + ' a die if better) for All-Out Attack (Strong)';
-      dmgEl.appendChild(h('p', { class: 'th-dmg-what', text: what }));
-      if (dm.close) {
-        dmgEl.appendChild(h('p', { class: 'th-dmg-close', text: 'Close range: each hit does ' + dm.close + ' times this damage, and the target\'s DR counts ' + dm.close + ' times against it.' }));
+      // Laid out by the margin of success the player rolled (Ant, 2026-10-18): each row the hits
+      // and the damage rolls to make, in full.
+      const dmg = dm.text || "the weapon's damage";
+      const times = (n) => (n === 1 ? 'once' : n + ' times');
+      const line = (cls, text) => dmgEl.appendChild(h('p', { class: cls, text }));
+      if (!dm.bands.length) line('th-dmg-row', 'Hit: roll ' + dmg + ' once');
+      for (const b of dm.bands) {
+        const by = b.to === null ? b.from + ' or more' : b.from === b.to ? String(b.from) : b.from + '-' + b.to;
+        line('th-dmg-row', 'Made it by ' + by + ': ' + b.hits + (b.hits === 1 ? ' hit' : ' hits') + ', roll ' + dmg + ' ' + times(b.hits));
       }
-      let how;
-      if (dm.maxHits > 1) {
-        how = 'One hit, and one more for each ' + (dm.perHit > 1 ? dm.perHit + ' points' : 'point') + ' the roll is made by, up to ' + dm.maxHits + '. Make one damage roll for each hit.' +
-          (dm.rclAssumed ? ' The sheet gives no Rcl, so this counts Rcl 1.' : '');
-      } else {
-        how = dm.attacks ? 'Make 1 damage roll for each attack that hits.' : 'If it hits, make 1 damage roll.';
-      }
-      dmgEl.appendChild(h('p', { class: 'th-dmg-how', text: how }));
-      if (!dm.rolls.length) return;
-      const body = h('tbody', {}, [h('tr', { class: 'th-gh' }, [h('td', { text: 'You roll' }), h('td', { class: 'th-n', text: 'Damage rolls' })])]);
-      for (const x of dm.rolls) body.appendChild(row('', x.from === x.to ? String(x.from) : x.from + ' to ' + x.to, String(x.hits)));
-      dmgEl.appendChild(h('table', { class: 'th-lines th-dmg-runs' }, [body]));
+      if (dm.attacks) line('th-dmg-how', 'Make 1 damage roll for each attack that hits.');
+      if (dm.strong) line('th-dmg-strong', 'All-Out Attack (Strong): add ' + sgn(dm.strong[0]) + ' to that damage, or ' + sgn(dm.strong[1]) + ' a die if better.');
+      if (dm.close) line('th-dmg-close', 'Close range: each hit does ' + dm.close + ' times the damage, and the target\'s DR counts ' + dm.close + ' times against it.');
+      if (dm.rclAssumed) line('th-dmg-how', 'The sheet gives no Rcl, so this counts Rcl 1: set the real one beside Shots fired.');
     }
 
     weaponSel.addEventListener('change', () => {
@@ -1112,8 +1137,11 @@
     });
     resetBtn.addEventListener('click', () => {
       const keep = state.weapon;
+      // An Rcl the player set is a fact about the weapon, not a choice for one attack: Reset keeps it.
+      const rcl = state.rcl;
       state = defaultState(data);
       state.weapon = keep;
+      state.rcl = rcl;
       open = {};
       rebuild();
       changed();

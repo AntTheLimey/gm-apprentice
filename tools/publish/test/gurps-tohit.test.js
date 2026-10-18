@@ -26,7 +26,9 @@ function mk(over = {}) {
       { key: 'Knife', type: 'melee', name: 'Knife', skill: 'Knife', level: 14, base: 14, range: '', damage: 'sw cut', beam: false, aids: [], bonuses: [] },
       {
         key: 'Blaster pistol', type: 'ranged', name: 'Blaster pistol', skill: 'Beam Weapons (Pistol)', level: 17, base: 17,
-        acc: 6, rof: 10, rcl: 1, bulk: 2, range: '150/450', damage: '3d burn', beam: true, aids: [], bonuses: [],
+        // RoF 1: shots fired start at the full RoF, so the sums below have no rapid-fire bonus
+        // unless a test asks for one.
+        acc: 6, rof: 1, rcl: 1, bulk: 2, range: '150/450', damage: '3d burn', beam: true, aids: [], bonuses: [],
       },
     ],
     aids: [],
@@ -54,7 +56,7 @@ function scoped(aids, extra = {}) {
 }
 
 describe('the issue\'s case and its two variants', () => {
-  const data = scoped([SCOPE3]);
+  const data = withWeapon(scoped([SCOPE3]), 'Blaster pistol', { rof: 10 });
   it('makes 23, the aiming line 12', () => {
     const r = T.effective(data, ISSUE);
     assert.strictEqual(r.roll, 23);
@@ -150,7 +152,7 @@ describe('ranged attack', () => {
     assert.deepStrictEqual(got, [0, 1, 2, 3, 4, 5, 6, 7]);
   });
   it('shots above RoF are cut to the RoF, with a note (#457)', () => {
-    const r = T.effective(mk(), { weapon: 'Blaster pistol', shots: 12 });
+    const r = T.effective(withWeapon(mk(), 'Blaster pistol', { rof: 10 }), { weapon: 'Blaster pistol', shots: 12 });
     assert.ok(r.notes.some((n) => /RoF is 10/.test(n)));
     assert.strictEqual(line(r, 'attack').label, 'Rapid fire, 10 shots');
     assert.strictEqual(r.roll, 17 + 2);
@@ -1079,10 +1081,10 @@ describe('the off-hand technique', () => {
 describe('shots fired follow the weapon\'s RoF', () => {
   const gun = (patch) => withWeapon(mk(), 'Blaster pistol', patch);
   const rapid = (r) => r.lines.find((l) => /^Rapid fire/.test(l.label));
-  it('offers 1 up to the RoF, and starts at 1', () => {
+  it('offers 1 up to the RoF, and starts at the full RoF (Ant, 2026-10-18)', () => {
     const s = T.shotsFor(gun({ rof: 3 }).weapons[1], {});
     assert.deepStrictEqual(s.options, [1, 2, 3]);
-    assert.strictEqual(s.shots, 1);
+    assert.strictEqual(s.shots, 3);
   });
   it('RoF 1 offers 1 only', () => {
     assert.deepStrictEqual(T.shotsFor(gun({ rof: 1 }).weapons[1], {}).options, [1]);
@@ -1090,10 +1092,10 @@ describe('shots fired follow the weapon\'s RoF', () => {
   it('a weapon with no RoF offers 1 only', () => {
     assert.deepStrictEqual(T.shotsFor(gun({ rof: undefined }).weapons[1], {}).options, [1]);
   });
-  it('full auto only: a quarter of the RoF at least, rounded up, and starts there', () => {
+  it('full auto only: a quarter of the RoF at least, rounded up, and starts at the full RoF', () => {
     const s = T.shotsFor(gun({ rof: 10, fullAuto: true }).weapons[1], {});
     assert.deepStrictEqual(s.options, [3, 4, 5, 6, 7, 8, 9, 10]);
-    assert.strictEqual(s.shots, 3);
+    assert.strictEqual(s.shots, 10);
     const r = T.effective(gun({ rof: 10, fullAuto: true }), { weapon: 'Blaster pistol', shots: 1 });
     assert.strictEqual(rapid(r), undefined, '3 shots give no bonus');
     assert.ok(r.notes.some((n) => /at least 3 shots/.test(n)), r.notes.join(' | '));
@@ -1102,9 +1104,10 @@ describe('shots fired follow the weapon\'s RoF', () => {
     const s = T.shotsFor(gun({ rof: 300 }).weapons[1], {});
     assert.deepStrictEqual(s.options.slice(48), [49, 50, 100, 200, 300]);
   });
-  it('a saved count above the RoF is the RoF; a blank one is the start', () => {
+  it('a saved count above the RoF is the RoF; a blank one is the full RoF; a saved one wins', () => {
     assert.strictEqual(T.shotsFor(gun({ rof: 3 }).weapons[1], { shots: '20' }).shots, 3);
-    assert.strictEqual(T.shotsFor(gun({ rof: 3 }).weapons[1], { shots: '' }).shots, 1);
+    assert.strictEqual(T.shotsFor(gun({ rof: 3 }).weapons[1], { shots: '' }).shots, 3);
+    assert.strictEqual(T.shotsFor(gun({ rof: 3 }).weapons[1], { shots: '1' }).shots, 1);
     assert.strictEqual(T.shotsFor(gun({ rof: 3 }).weapons[1], { shots: '2' }).shots, 2);
   });
   it('a shotgun counts each shell as its multiplier of shots for the bonus', () => {
@@ -1115,9 +1118,11 @@ describe('shots fired follow the weapon\'s RoF', () => {
     const r = T.effective(d, { weapon: 'Blaster pistol', shots: 2, yards: 20 });
     assert.strictEqual(rapid(r).label, 'Rapid fire, 2×9 = 18 shots');
     assert.strictEqual(rapid(r).value, 4);
-    const one = T.effective(d, { weapon: 'Blaster pistol', yards: 20 });
+    const one = T.effective(d, { weapon: 'Blaster pistol', yards: 20, shots: 1 });
     assert.strictEqual(rapid(one).label, 'Rapid fire, 1×9 = 9 shots');
     assert.strictEqual(rapid(one).value, 2);
+    const start = T.effective(d, { weapon: 'Blaster pistol', yards: 20 });
+    assert.strictEqual(rapid(start).label, 'Rapid fire, 3×9 = 27 shots', 'a shotgun starts at N×M');
   });
   it('a shotgun inside a tenth of its 1/2D fires its shells only', () => {
     const d = gun({ rof: 3, rofMult: 9, range: '50/125', halfD: 50 });
@@ -1133,26 +1138,24 @@ describe('shots fired follow the weapon\'s RoF', () => {
 
 // #458: the calculator ends with the damage rolls to make (B373, B379, B409). It never rolls.
 describe('the damage rolls to make', () => {
-  const gun = (patch) => withWeapon(mk(), 'Blaster pistol', patch);
+  const gun = (patch) => withWeapon(mk(), 'Blaster pistol', Object.assign({ rof: 10 }, patch));
   it('one shot: the damage, one roll', () => {
-    const d = T.effective(mk(), { weapon: 'Blaster pistol' }).damage;
+    const d = T.effective(gun({}), { weapon: 'Blaster pistol', shots: 1 }).damage;
     assert.strictEqual(d.text, '3d burn');
     assert.strictEqual(d.maxHits, 1);
-    assert.deepStrictEqual(d.rolls, []);
+    assert.deepStrictEqual(d.bands, []);
   });
-  it('rapid fire: one more hit for each Rcl the roll is made by, up to the shots, by the roll made', () => {
-    const d = T.effective(mk(), { weapon: 'Blaster pistol', shots: 3 }).damage;
+  it('rapid fire: bands of margin of success, one more hit for each full Rcl, up to the shots (B373)', () => {
+    const d = T.effective(gun({}), { weapon: 'Blaster pistol', shots: 3 }).damage;
     assert.strictEqual(d.maxHits, 3);
-    assert.deepStrictEqual(d.rolls, [{ from: 16, to: 16, hits: 2 }, { from: 3, to: 15, hits: 3 }]);
+    assert.deepStrictEqual(d.bands, [{ from: 0, to: 0, hits: 1 }, { from: 1, to: 1, hits: 2 }, { from: 2, to: null, hits: 3 }]);
     const r2 = T.effective(gun({ rcl: 2 }), { weapon: 'Blaster pistol', shots: 3 }).damage;
-    assert.deepStrictEqual(r2.rolls, [{ from: 16, to: 16, hits: 1 }, { from: 14, to: 15, hits: 2 }, { from: 3, to: 13, hits: 3 }]);
+    assert.deepStrictEqual(r2.bands, [{ from: 0, to: 1, hits: 1 }, { from: 2, to: 3, hits: 2 }, { from: 4, to: null, hits: 3 }]);
   });
-  it('a low roll: a 17 or 18 never hits, a 3 or 4 always does', () => {
-    const low = T.effective(gun({ level: 2, base: 2 }), { weapon: 'Blaster pistol', shots: 5 });
-    assert.strictEqual(low.roll, 3);
-    assert.deepStrictEqual(low.damage.rolls, [{ from: 3, to: 4, hits: 1 }]);
+  it('the bands do not change with the roll', () => {
+    const low = T.effective(gun({ level: 8, base: 8 }), { weapon: 'Blaster pistol', shots: 3 }).damage;
     const high = T.effective(gun({ level: 20, base: 20 }), { weapon: 'Blaster pistol', shots: 3 }).damage;
-    assert.deepStrictEqual(high.rolls, [{ from: 3, to: 16, hits: 3 }]);
+    assert.deepStrictEqual(low.bands, high.bands);
   });
   it('no roll, no damage rolls', () => {
     const d = T.effective(gun({ level: 1, base: 1 }), { weapon: 'Blaster pistol', shots: 5 }).damage;
@@ -1167,9 +1170,10 @@ describe('the damage rolls to make', () => {
     assert.strictEqual(near.maxHits, 2);
     assert.strictEqual(near.close, 4);
   });
-  it('says when the sheet gives no Rcl', () => {
+  it('says when the sheet gives no Rcl and none is set', () => {
     assert.strictEqual(T.effective(gun({ noRcl: true }), { weapon: 'Blaster pistol', shots: 3 }).damage.rclAssumed, true);
-    assert.strictEqual(T.effective(gun({ noRcl: true }), { weapon: 'Blaster pistol' }).damage.rclAssumed, false);
+    assert.strictEqual(T.effective(gun({ noRcl: true }), { weapon: 'Blaster pistol', shots: 1 }).damage.rclAssumed, false);
+    assert.strictEqual(T.effective(gun({ noRcl: true }), { weapon: 'Blaster pistol', shots: 3, rcl: { 'Blaster pistol': 2 } }).damage.rclAssumed, false);
   });
   it('melee: the damage, with All-Out Attack (Strong)\'s extra, and each attack its own roll', () => {
     const plain = T.effective(mk(), { weapon: 'Knife' }).damage;
@@ -1180,5 +1184,33 @@ describe('the damage rolls to make', () => {
     assert.strictEqual(T.effective(mk(), { weapon: 'Knife', man: 'aodbl' }).damage.attacks, true);
     assert.strictEqual(T.effective(mk(), { weapon: 'Knife', dual: true }).damage.attacks, true);
     assert.strictEqual(T.effective(mk(), { weapon: 'Knife' }).damage.attacks, false);
+  });
+});
+
+// The player sets the Rcl (Ant, 2026-10-18): the row's Rcl to start, else 1; kept per weapon.
+describe('the Rcl the player sets', () => {
+  const gun = (patch) => withWeapon(mk(), 'Blaster pistol', Object.assign({ rof: 10 }, patch));
+  it('starts at the row\'s Rcl, or 1 when the sheet has none', () => {
+    assert.strictEqual(T.rclFor(gun({ rcl: 3 }).weapons[1], {}), 3);
+    assert.strictEqual(T.rclFor(gun({ rcl: 1, noRcl: true }).weapons[1], {}), 1);
+  });
+  it('the set Rcl drives the hits, per weapon', () => {
+    const st = { weapon: 'Blaster pistol', shots: 3, rcl: { 'Blaster pistol': 2 } };
+    const d = T.effective(gun({ noRcl: true }), st).damage;
+    assert.strictEqual(d.perHit, 2);
+    assert.deepStrictEqual(d.bands, [{ from: 0, to: 1, hits: 1 }, { from: 2, to: 3, hits: 2 }, { from: 4, to: null, hits: 3 }]);
+    assert.strictEqual(T.rclFor(gun({ rcl: 3 }).weapons[1], { rcl: { Other: 5 } }), 3, 'another weapon\'s Rcl is not this one\'s');
+  });
+  it('a set Rcl does not change the rapid-fire bonus, which follows the shots (B373)', () => {
+    const a = T.effective(gun({}), { weapon: 'Blaster pistol', shots: 10 });
+    const b = T.effective(gun({}), { weapon: 'Blaster pistol', shots: 10, rcl: { 'Blaster pistol': 4 } });
+    assert.strictEqual(a.roll, b.roll);
+  });
+  it('a saved Rcl is kept only for a weapon there is, from 1 to 99', () => {
+    const d = gun({});
+    const s = T.cleanState(d, { rcl: { 'Blaster pistol': 2, Knife: 3, Gone: 4, x: 'y' } });
+    assert.deepStrictEqual(s.rcl, { 'Blaster pistol': 2 });
+    assert.deepStrictEqual(T.cleanState(d, { rcl: { 'Blaster pistol': 0 } }).rcl, {});
+    assert.deepStrictEqual(T.defaultState(d).rcl, {});
   });
 });
