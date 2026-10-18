@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { entry } = require('./settings/registry');
+const { ensureIgnored } = require('./gitignore');
 
 // Only raster formats that reliably shrink when re-encoded. SVG is vector, GIF may be
 // animated, and WebP/AVIF are already in a modern format — all pass through untouched.
@@ -140,19 +141,8 @@ function imageCacheDir(siteDir, { outputDirs, vaultPath }) {
  * In the file's own line endings; a site with no .gitignore gets none.
  */
 function ignoreCacheInGit(siteDir) {
-  const file = path.join(siteDir, '.gitignore');
-  let text;
-  try { text = fs.readFileSync(file, 'utf8'); } catch { return; }
-  const named = text.split(/\r?\n/).some((line) => line.trim().replace(/^\//, '').replace(/\/$/, '') === CACHE_FOLDER);
-  if (named) return;
-  const eol = text.includes('\r\n') ? '\r\n' : '\n';
-  const lead = text === '' || text.endsWith('\n') ? '' : eol;
-  try {
-    fs.appendFileSync(file, `${lead}${CACHE_FOLDER}/${eol}`);
-  } catch (err) {
-    // A .gitignore that cannot be written (read-only) must not stop the build; the cache still works.
-    console.warn(`  WARNING: could not add the image cache folder ${CACHE_FOLDER}/ to ${file} (${err.code || err.message}); add it by hand.`);
-  }
+  // A .gitignore that cannot be written (read-only) must not stop the build; the cache still works.
+  ensureIgnored(siteDir, [`${CACHE_FOLDER}/`], 'the image cache folder');
 }
 
 // The way this tool asks the encoder for a picture (buildCwebpArgs, the width probe). Raise it whenever

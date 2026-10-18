@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { runCommand, WRANGLER_TIMEOUT_MS } = require('./run-command.js');
 const { readNamespaceId, makeAdapter } = require('./inbox-wrangler.js');
+const { ensureIgnored } = require('./gitignore.js');
 
 // The change-request watcher (`inbox watch`) polls the queue and writes
 // `.watcher-heartbeat` only once the poll returns. An unbounded spawn on a
@@ -235,6 +236,8 @@ async function runInbox(argv, deps = {}) {
       fs.rmSync(path.join(dir, SEEN_FILE), { force: true });
       const start = Math.floor((deps.now || Date.now)() / 1000);
       fs.writeFileSync(path.join(dir, SESSION_FILE), JSON.stringify({ start, hours: opts.hours }) + '\n');
+      // Sites made before the scaffold named these files get them too.
+      ensureIgnored(dir, [HEARTBEAT_FILE, SEEN_FILE, SESSION_FILE], 'the watcher files');
       out(`Session code set: ${code} (the watcher stops after ${opts.hours} hours)`);
       return 0;
     }

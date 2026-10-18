@@ -294,6 +294,15 @@ test('inbox open --hours with no number, or an unknown flag, is a usage error an
   }
 });
 
+test('inbox open adds the watcher files missing from an older site\'s .gitignore', async () => {
+  const dir = siteDir();
+  fs.writeFileSync(path.join(dir, '.gitignore'), 'node_modules/\n.watcher-heartbeat\n');
+  await open(fakeKV(), dir, ['wolf']);
+  await open(fakeKV(), dir, ['wolf']);
+  assert.equal(fs.readFileSync(path.join(dir, '.gitignore'), 'utf8'),
+    `node_modules/\n.watcher-heartbeat\n${SEEN_FILE}\n${SESSION_FILE}\n`);
+});
+
 test('opening a new code starts a new clock', async () => {
   const kv = fakeKV(); const dir = siteDir();
   await open(kv, dir, ['wolf', '--hours', '2']);
