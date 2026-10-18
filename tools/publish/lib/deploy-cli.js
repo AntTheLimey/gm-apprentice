@@ -441,12 +441,15 @@ async function runDeploy(options, deps) {
     status = await fetchStatus(target);
     if (status >= 200 && status < 300) {
       if (isCloudflare) {
-        // The deployment's own address answering does not prove the site's address serves it: compare the two pages.
-        const root = (address) => `${address.replace(/\/+$/, '')}/`;
+        // The deployment's own address answering does not prove the site's address serves it: compare one
+        // file from each. The search index is JSON, which a custom domain's Cloudflare features (e-mail
+        // obfuscation, Rocket Loader) never rewrite as they can a page; a site without search compares `/`.
+        const at = (address, file) => `${address.replace(/\/+$/, '')}/${file}`;
+        const file = (await fetchBody(at(deploymentUrl, 'search-index.json'))) != null ? 'search-index.json' : '';
         let same = false;
         for (let k = 0; k < SAME_PAGE_ATTEMPTS && !same; k++) {
           if (k > 0) await sleep(SAME_PAGE_WAIT_MS);
-          const [onSite, onDeployment] = await Promise.all([fetchBody(root(url)), fetchBody(root(deploymentUrl))]);
+          const [onSite, onDeployment] = await Promise.all([fetchBody(at(url, file)), fetchBody(at(deploymentUrl, file))]);
           same = onSite != null && onSite === onDeployment;
         }
         if (!same) {

@@ -445,12 +445,13 @@ describe('deploy --verify', () => {
   });
 
   // The deployment's own address answering does not prove the site's address serves it (the project's production
-  // branch may not be the one deployed to): the two pages are compared.
-  it('says live at the site address only when its page is the deployment\'s page', async () => {
+  // branch may not be the one deployed to): one file from each is compared, the search index when the site has one
+  // (a custom domain's Cloudflare features can rewrite a page, never JSON), else the home page.
+  it('says live at the site address only when its search index is the deployment\'s', async () => {
     const h = harness({ statuses: [200] });
     const rc = await runDeploy({ configPath: CONFIG, verify: true, json: true }, h.deps);
     assert.strictEqual(rc, 0);
-    assert.deepStrictEqual(h.bodyFetches.slice().sort(), ['https://1a2b3c4d.canticle.pages.dev/', 'https://canticle.pages.dev/'].sort());
+    assert.deepStrictEqual(h.bodyFetches.slice(1).sort(), ['https://1a2b3c4d.canticle.pages.dev/search-index.json', 'https://canticle.pages.dev/search-index.json'].sort());
     const payload = JSON.parse(h.out.join(''));
     assert.strictEqual(payload.verified, true);
     assert.strictEqual(payload.siteServesDeployment, true);
@@ -460,7 +461,7 @@ describe('deploy --verify', () => {
   it('retries while the site address serves a different page, then catches up', async () => {
     const h = harness({
       statuses: [200],
-      body: (url, n) => (url.startsWith('https://canticle.') && n < 5 ? '<html>earlier build</html>' : '<html>one build</html>'),
+      body: (url, n) => (url.startsWith('https://canticle.') && n < 6 ? '<html>earlier build</html>' : '<html>one build</html>'),
     });
     const rc = await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
     assert.strictEqual(rc, 0);
@@ -485,6 +486,14 @@ describe('deploy --verify', () => {
     assert.match(text, /https:\/\/canticle\.pages\.dev still serves an earlier build/);
     assert.doesNotMatch(text, /live at/);
     assert.ok(h.sleeps.length >= 2 && h.sleeps.reduce((a, b) => a + b, 0) <= 40000);
+  });
+
+  it('a site without a search index compares the home pages', async () => {
+    const h = harness({ statuses: [200], body: (url) => (url.endsWith('/search-index.json') ? null : '<html>one build</html>') });
+    const rc = await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
+    assert.strictEqual(rc, 0);
+    assert.deepStrictEqual(h.bodyFetches.slice(1).sort(), ['https://1a2b3c4d.canticle.pages.dev/', 'https://canticle.pages.dev/'].sort());
+    assert.match(h.text(), /live at https:\/\/canticle\.pages\.dev/);
   });
 
   it('github-pages does not compare pages', async () => {
