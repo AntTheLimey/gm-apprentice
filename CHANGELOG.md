@@ -27,8 +27,13 @@ tool said "fine" when it wasn't. Publish tool 1.37.0.
   previous build. The Cloudflare upload gets ten minutes, not sixty
   seconds, and always goes to the production branch, even with a
   `wrangler.toml`. `--verify` checks the deployment wrangler printed,
-  says "this deployment is live at", and exits 1 when it cannot tell
-  which build is served or the deployment went out as a preview (#350).
+  then fetches the site's address and the deployment's address and
+  compares the pages: "live at" the site's address only when they match
+  (it retries for about 30 seconds), and exit 1 when the site still
+  serves an earlier build, when it cannot tell which build is served, or
+  when the deployment went out as a preview, in which case it says the
+  project's production branch is probably not `main` and how to set it
+  (#350).
 - `flush` remembers, per PC, which saved live record it last wrote
   (`flush_written` in `_meta/vault-state.json`) and skips it next time,
   so a value the GM sets in the note afterwards is no longer

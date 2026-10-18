@@ -31,6 +31,7 @@ function harness(overrides = {}) {
   const builds = [];
   const sleeps = [];
   const fetches = [];
+  const bodyFetches = [];
   const files = Object.assign({ [path.join(SITE, 'wrangler.toml')]: TOML }, overrides.files);
 
   const deps = {
@@ -61,12 +62,16 @@ function harness(overrides = {}) {
       fetches.push(url);
       return (overrides.statuses || [200])[Math.min(fetches.length - 1, (overrides.statuses || [200]).length - 1)];
     },
+    fetchBody: async (url) => {
+      bodyFetches.push(url);
+      return (overrides.body || (() => '<html>one build</html>'))(url, bodyFetches.length);
+    },
     sleep: async (ms) => { sleeps.push(ms); },
     now: () => new Date('2026-09-07T12:00:00.000Z'),
     config: Object.assign({ host: 'cloudflare-pages', outputDir: './docs' }, overrides.config),
     leakGate: overrides.leakGate || (() => ({ skipped: null, missing: false, findings: [], unneeded: [], files: 3, seconds: 0.01 })),
   };
-  return { deps, out, writes, wrangler, wranglerOpts, commands, builds, sleeps, fetches, files, text: () => out.join('\n') };
+  return { deps, out, writes, wrangler, wranglerOpts, commands, builds, sleeps, fetches, bodyFetches, files, text: () => out.join('\n') };
 }
 
 describe('alignProjectName', () => {
@@ -385,7 +390,7 @@ describe('deploy --verify', () => {
     assert.strictEqual(rc, 0);
     assert.deepStrictEqual(h.fetches, [DEPLOYED]);
     assert.deepStrictEqual(h.sleeps, []);
-    assert.match(h.text(), /live at https:\/\/1a2b3c4d\.canticle\.pages\.dev/);
+    assert.match(h.text(), /live at https:\/\/canticle\.pages\.dev/);
   });
 
   it('checks the deployment address wrangler printed, not the site root the old build answers', async () => {
@@ -436,7 +441,56 @@ describe('deploy --verify', () => {
     });
     const rc = await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
     assert.strictEqual(rc, 0);
-    assert.match(h.text(), /this deployment is live at https:\/\/1a2b3c4d\.canticle\.pages\.dev/);
+    assert.match(h.text(), /live at https:\/\/canticle\.pages\.dev/);
+  });
+
+  // The deployment's own address answering does not prove the site's address serves it (the project's production
+  // branch may not be the one deployed to): the two pages are compared.
+  it('says live at the site address only when its page is the deployment\'s page', async () => {
+    const h = harness({ statuses: [200] });
+    const rc = await runDeploy({ configPath: CONFIG, verify: true, json: true }, h.deps);
+    assert.strictEqual(rc, 0);
+    assert.deepStrictEqual(h.bodyFetches.slice().sort(), ['https://1a2b3c4d.canticle.pages.dev/', 'https://canticle.pages.dev/'].sort());
+    const payload = JSON.parse(h.out.join(''));
+    assert.strictEqual(payload.verified, true);
+    assert.strictEqual(payload.siteServesDeployment, true);
+    assert.match(payload.messages.join('\n'), /live at https:\/\/canticle\.pages\.dev/);
+  });
+
+  it('retries while the site address serves a different page, then catches up', async () => {
+    const h = harness({
+      statuses: [200],
+      body: (url, n) => (url.startsWith('https://canticle.') && n < 5 ? '<html>earlier build</html>' : '<html>one build</html>'),
+    });
+    const rc = await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
+    assert.strictEqual(rc, 0);
+    assert.ok(h.sleeps.length >= 1 && h.sleeps.length <= 3, String(h.sleeps));
+    assert.match(h.text(), /live at https:\/\/canticle\.pages\.dev/);
+  });
+
+  it('exits 1 with verified false when the site address keeps serving an earlier build', async () => {
+    const h = harness({
+      statuses: [200],
+      body: (url) => (url.startsWith('https://canticle.') ? '<html>earlier build</html>' : '<html>one build</html>'),
+    });
+    const rc = await runDeploy({ configPath: CONFIG, verify: true, json: true }, h.deps);
+    assert.strictEqual(rc, 1);
+    const payload = JSON.parse(h.out.join(''));
+    assert.strictEqual(payload.deployed, true);
+    assert.strictEqual(payload.verified, false);
+    assert.strictEqual(payload.siteServesDeployment, false);
+    assert.strictEqual(payload.deploymentUrl, DEPLOYED);
+    const text = payload.messages.join('\n');
+    assert.match(text, /the deployment is up at https:\/\/1a2b3c4d\.canticle\.pages\.dev/);
+    assert.match(text, /https:\/\/canticle\.pages\.dev still serves an earlier build/);
+    assert.doesNotMatch(text, /live at/);
+    assert.ok(h.sleeps.length >= 2 && h.sleeps.reduce((a, b) => a + b, 0) <= 40000);
+  });
+
+  it('github-pages does not compare pages', async () => {
+    const h = harness({ config: { host: 'github-pages', siteUrl: 'https://u.github.io/c' }, statuses: [200] });
+    await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
+    assert.deepStrictEqual(h.bodyFetches, []);
   });
 
   it('github-pages still verifies the site address', async () => {

@@ -22,6 +22,9 @@ const leakGateLib = require('./leak-gate');
 
 const VERIFY_ATTEMPTS = 3;
 const VERIFY_WAIT_MS = 20000;
+// Once the deployment answers, the site's own address gets about 30 seconds to serve the same page.
+const SAME_PAGE_ATTEMPTS = 4;
+const SAME_PAGE_WAIT_MS = 10000;
 const FETCH_TIMEOUT_MS = 15000;
 const MAX_REDIRECTS = 5;
 
@@ -40,13 +43,15 @@ function outputDirArg(config) {
   return outputFolderOf(config) + '/';
 }
 
-// GET the URL and hand back the status, following redirects. Resolves null on any
-// transport failure or timeout — "the host did not answer" is a legitimate answer
-// during propagation, not an error to throw.
-function defaultFetchStatus(url, depth = 0) {
+// GET the URL, following redirects, and hand back {status, body}. Resolves {status: null, body: null} on any
+// transport failure or timeout — "the host did not answer" is a legitimate answer during propagation, not an
+// error to throw. The body is read only when asked for, and capped.
+const MAX_BODY_BYTES = 5 * 1024 * 1024;
+function fetchGet(url, wantBody, depth = 0) {
   return new Promise((resolve) => {
     let settled = false;
     const finish = (value) => { if (!settled) { settled = true; resolve(value); } };
+    const none = { status: null, body: null };
     let request;
     try {
       const target = new URL(url);
@@ -54,21 +59,41 @@ function defaultFetchStatus(url, depth = 0) {
       request = client.get(target, { timeout: FETCH_TIMEOUT_MS }, (res) => {
         const status = res.statusCode;
         const location = res.headers && res.headers.location;
-        res.resume();
         if (location && status >= 300 && status < 400 && depth < MAX_REDIRECTS) {
-          finish(defaultFetchStatus(new URL(location, target).toString(), depth + 1));
+          res.resume();
+          finish(fetchGet(new URL(location, target).toString(), wantBody, depth + 1));
           return;
         }
-        finish(status);
+        if (!wantBody) {
+          res.resume();
+          finish({ status, body: null });
+          return;
+        }
+        const chunks = [];
+        let size = 0;
+        res.on('data', (chunk) => {
+          size += chunk.length;
+          if (size > MAX_BODY_BYTES) { request.destroy(); finish(none); return; }
+          chunks.push(chunk);
+        });
+        res.on('end', () => finish({ status, body: Buffer.concat(chunks).toString('utf8') }));
+        res.on('error', () => finish(none));
       });
     } catch {
-      finish(null);
+      finish(none);
       return;
     }
-    request.on('timeout', () => { request.destroy(); finish(null); });
-    request.on('error', () => finish(null));
+    request.on('timeout', () => { request.destroy(); finish(none); });
+    request.on('error', () => finish(none));
   });
 }
+
+const defaultFetchStatus = async (url) => (await fetchGet(url, false)).status;
+// The page at the address, or null when it did not answer with a 2xx.
+const defaultFetchBody = async (url) => {
+  const got = await fetchGet(url, true);
+  return got.status >= 200 && got.status < 300 ? got.body : null;
+};
 
 // The address wrangler prints for the deployment it just made (https://<8 hex>.<project>.pages.dev), the one
 // thing that tells this build apart from the previous one still answering at the site's own address (#350).
@@ -113,6 +138,7 @@ async function runDeploy(options, deps) {
     return require('./build').build({ ...o, runSteps: true, ...(opts.json ? { stepsStdio: ['ignore', 2, 2], stepsLog: console.error } : {}) });
   });
   const fetchStatus = d.fetchStatus || defaultFetchStatus;
+  const fetchBody = d.fetchBody || defaultFetchBody;
   const sleep = d.sleep || defaultSleep;
   const now = d.now || (() => new Date());
   const { formatFindings, gateSummary } = leakGateLib;
@@ -414,7 +440,23 @@ async function runDeploy(options, deps) {
     attempts++;
     status = await fetchStatus(target);
     if (status >= 200 && status < 300) {
-      say(isCloudflare ? `this deployment is live at ${target}` : `live at ${target}`);
+      if (isCloudflare) {
+        // The deployment's own address answering does not prove the site's address serves it: compare the two pages.
+        const root = (address) => `${address.replace(/\/+$/, '')}/`;
+        let same = false;
+        for (let k = 0; k < SAME_PAGE_ATTEMPTS && !same; k++) {
+          if (k > 0) await sleep(SAME_PAGE_WAIT_MS);
+          const [onSite, onDeployment] = await Promise.all([fetchBody(root(url)), fetchBody(root(deploymentUrl))]);
+          same = onSite != null && onSite === onDeployment;
+        }
+        if (!same) {
+          say(`the deployment is up at ${deploymentUrl}, but ${url} still serves an earlier build`);
+          return finish({ deployed: true, url, verified: false, status, attempts, deploymentUrl, siteServesDeployment: false }, 1);
+        }
+        say(`live at ${url}`);
+        return finish({ deployed: true, url, verified: true, status, attempts, deploymentUrl, siteServesDeployment: true }, 0);
+      }
+      say(`live at ${target}`);
       return finish({ deployed: true, url, verified: true, status, attempts, ...(isCloudflare ? { deploymentUrl } : {}) }, 0);
     }
   }
@@ -425,4 +467,4 @@ async function runDeploy(options, deps) {
   return finish({ deployed: true, url, verified: false, status, attempts, ...(isCloudflare ? { deploymentUrl } : {}) }, 0);
 }
 
-module.exports = { runDeploy, deploymentUrlFrom, aliasUrlFrom, defaultFetchStatus, projectNameFor, outputDirArg };
+module.exports = { runDeploy, deploymentUrlFrom, aliasUrlFrom, defaultFetchStatus, defaultFetchBody, projectNameFor, outputDirArg };
