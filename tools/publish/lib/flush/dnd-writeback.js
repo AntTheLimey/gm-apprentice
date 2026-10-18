@@ -2,7 +2,7 @@
 
 const { splitTableRow } = require('../wikilink');
 const { findHeadings, renderInline } = require('../processor');
-const { splitReason, COLS, countCells, wholeNumber, slotTotal } = require('../templates/dnd/parse');
+const { splitReason, linkInReason, COLS, countCells, wholeNumber, slotTotal } = require('../templates/dnd/parse');
 const { ATTRIBUTE_COLUMNS, cellText, filled, yesNo } = require('../templates/sheet-parse');
 const { normalizeTitle } = require('../templates/gurps/tables');
 const { liveKey, shown, trackable, holdsNothing, saysNone } = require('../templates/dnd/live-key');
@@ -35,6 +35,9 @@ const FEATURE_SECTIONS = [['class features', 'class'], ['species traits', 'speci
 // instance (links, emphasis, the typographer's quotes), then its text.
 const plain = cell => cellText(renderInline(shown(String(cell == null ? '' : cell))));
 const hasLink = raw => /\[\[|\]\(/.test(raw);
+// A value cell as the page holds it, for the page's own rule on where a link may sit (linkInReason): rendered,
+// with a [[wikilink]] taken as the link it becomes on the page.
+const asHtml = raw => renderInline(shown(String(raw == null ? '' : raw).replace(/\[\[([^\]|]*)(?:\|([^\]]*))?\]\]/g, (_, t, a) => `[${a || t}](#)`)));
 
 // The note's sections, subsections and tables, found as the build finds them: headings
 // and code from the renderer's own parser (so a fence of either kind is exact), the
@@ -142,12 +145,7 @@ function applyDnDFlush(markdown, record, options) {
       if (everyRow) return true;
       if (row.cells.slice(2).some(c => plain(c))) return false;
       if (hasLink(row.cells[0] || '')) return false;
-      const value = row.cells[1] || '';
-      if (hasLink(value)) {                      // only a reason may hold a link
-        const m = value.match(/^(.*?\S)\s*\(([^()]+)\)$/);
-        return !!m && !hasLink(m[1]) && hasLink(m[2]);
-      }
-      return true;
+      return linkInReason(asHtml(row.cells[1])) !== false;   // only a reason may hold a link
     }).map(row => ({ row, label: plain(row.cells[0]), raw: row.cells[1] || '' }));
   };
   // A cell read as the build reads a number: blank, a whole number (a reason may follow), or other.
@@ -310,10 +308,7 @@ function applyDnDFlush(markdown, record, options) {
   for (const row of countedRows(slotTable && slotTable.tables[0], COLS.slots)) {
     // A link is read only in the Total's trailing `(reason)`, as the build reads it.
     if (row.cells.some((cell, i) => i !== 1 && hasLink(cell))) continue;
-    if (hasLink(row.cells[1] || '')) {
-      const m = String(row.cells[1]).match(/^(.*?\S)\s*\(([^()]+)\)$/);
-      if (!m || hasLink(m[1]) || !hasLink(m[2])) continue;
-    }
+    if (linkInReason(asHtml(row.cells[1])) === false) continue;
     const c = row.cells.map(plain);
     if (!c[1] && !c[2]) continue;
     const t = slotTotal(c[1]);

@@ -52,17 +52,24 @@ function splitReason(text) {
 const LINKS = { links: true };
 const hasLink = html => /<a[ >]/i.test(html || '');
 
+// How a value cell's html holds a link: null for none, the reason's html when the only link sits in the trailing
+// `(reason)`, false for a link anywhere else (it would be lost from a tile, so the row stays as written).
+// The flush's write-back reads a cell by this same rule.
+function linkInReason(html) {
+  if (!hasLink(html)) return null;
+  const m = String(html).match(/^([\s\S]*?\S)\s*\(((?:[^()<]|<[^>]*>)+)\)$/);
+  return m && !hasLink(m[1]) && hasLink(m[2]) ? m[2].trim() : false;
+}
+
 // Offered to a rich `Attribute | Value` table: a row whose only link sits in the value's trailing
 // `(reason)` is placed, and the reason's html is kept for the page. A link in the label or in the
 // value itself would be lost from a tile, so that row stays as written.
 function keepReasonLink(model, place) {
   return (cells, h) => {
     if (hasLink(h[0])) return false;
-    if (hasLink(h[1])) {
-      const m = String(h[1]).match(/^([\s\S]*?\S)\s*\(((?:[^()<]|<[^>]*>)+)\)$/);
-      if (!m || hasLink(m[1]) || !hasLink(m[2])) return false;
-      model.whyHtml.set(cells[1], m[2].trim());
-    }
+    const why = linkInReason(h[1]);
+    if (why === false) return false;
+    if (why !== null) model.whyHtml.set(cells[1], why);
     return place(cells, h);
   };
 }
@@ -420,4 +427,4 @@ function parseDnd(frontmatter, sections) {
   return model;
 }
 
-module.exports = { parseDnd, splitReason, ABILITIES, COLS, countCells, wholeNumber, slotTotal };
+module.exports = { parseDnd, splitReason, linkInReason, ABILITIES, COLS, countCells, wholeNumber, slotTotal };

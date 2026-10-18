@@ -476,6 +476,23 @@ test('a slot total whose reason is a link is a live row the flush writes (#444)'
   assert.deepEqual(r.skipped, []);
 });
 
+test('a slot total whose reason is a markdown link is a live row the flush writes', () => {
+  const md = note('Brannoch_Vale.md').replace(/^\| 1st \| (\d+) \|/m, '| 1st | $1 ([Ring](Ring.md)) |');
+  assert.match(md, /\| 1st \| \d+ \(\[Ring\]\(Ring\.md\)\) \|/);
+  const r = applyDnDFlush(md, blob({ used: { 'slot:1st': 1 } }));
+  assert.match(row(r.markdown, /^\| 1st \|/), /^\| 1st \| \d+ \(\[Ring\]\(Ring\.md\)\) \| 1 \|/);
+  assert.deepEqual(r.skipped, []);
+  // The page reads it as a live slot row too.
+  assert.ok(buildDndLiveData(parseDnd({ type: 'pc' }, sectionsFromMarkdown(md)), { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' }).tracks.some(t => t.key === 'slot:1st'));
+});
+
+test('an Attribute value whose reason is a markdown link is written the same way', () => {
+  const md = mini(['| HP (Current) | 20 ([Charm](Charm.md)) |', '| HP (Max) | 20 |'], []);
+  const r = applyDnDFlush(md, { hp: 5 });
+  assert.match(row(r.markdown, /^\| HP \(Current\)/), /\| 5 \(\[Charm\]\(Charm\.md\)\) \|/);
+  assert.deepEqual(r.skipped, []);
+});
+
 test('a link in the slot total itself, not a trailing reason, is not written', () => {
   const md = note('Brannoch_Vale.md').replace(/^\| 1st \| (\d+) \|/m, '| 1st | [[Ring]] $1 |');
   const r = applyDnDFlush(md, blob({ used: { 'slot:1st': 3 } }));
