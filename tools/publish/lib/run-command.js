@@ -9,6 +9,9 @@ const { spawnSync } = require('child_process');
 // bound. 60s rather than the 30s default because a cold `npx wrangler@4` may
 // have to fetch the package before it does any work.
 const WRANGLER_TIMEOUT_MS = 60000;
+// `pages deploy` uploads the whole site, so it gets its own, longer bound: a big site on a slow
+// connection needs more than a minute when healthy (#350).
+const WRANGLER_DEPLOY_TIMEOUT_MS = 10 * 60 * 1000;
 
 // `stdio`, `shell` and `maxBuffer` pass through for a long-running child whose output a
 // person should see as it happens (deploy's build hooks): with stdio inherited, stdout and
@@ -18,11 +21,15 @@ function runCommand(cmd, args, { timeoutMs = 30000, cwd, stdio, shell, maxBuffer
     encoding: 'utf8', timeout: timeoutMs, ...(cwd ? { cwd } : {}),
     ...(stdio ? { stdio } : {}), ...(shell ? { shell } : {}), ...(maxBuffer ? { maxBuffer } : {}),
   });
+  // A killed child can still report status 0 (`npx` does, when it times out `wrangler`), so a set
+  // `error` or `signal` is a failure whatever the status says (#350).
+  const killed = !!(res.error || res.signal);
   return {
-    code: res.status == null ? 1 : res.status,
+    code: res.status == null || (killed && res.status === 0) ? 1 : res.status,
     stdout: res.stdout || '',
     stderr: res.stderr || '',
     error: res.error ? (res.error.code || res.error.message) : null,
+    signal: res.signal || null,
   };
 }
 
@@ -40,4 +47,4 @@ function failureDetail(res) {
     || ('exit ' + res.code);
 }
 
-module.exports = { runCommand, WRANGLER_TIMEOUT_MS, failureDetail };
+module.exports = { runCommand, WRANGLER_TIMEOUT_MS, WRANGLER_DEPLOY_TIMEOUT_MS, failureDetail };

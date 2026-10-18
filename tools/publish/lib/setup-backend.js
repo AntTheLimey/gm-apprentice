@@ -76,7 +76,7 @@ function patchWranglerToml(tomlText, { name, kvId }) {
 // control-plane calls (kv namespace list/create), so a stall means a wedged
 // setup with nothing on screen to explain it.
 const defaultRunWrangler = (args, opts = {}, run = runCommand) => {
-  const r = run('npx', ['wrangler@4', ...args], { timeoutMs: WRANGLER_TIMEOUT_MS, cwd: opts.cwd });
+  const r = run('npx', ['wrangler@4', ...args], { timeoutMs: opts.timeoutMs || WRANGLER_TIMEOUT_MS, cwd: opts.cwd });
   return { code: r.code, stdout: r.stdout || '', stderr: r.stderr || '', error: r.error || null };
 };
 

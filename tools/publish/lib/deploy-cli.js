@@ -12,7 +12,7 @@
 // not a failed deploy, so a 404 on the third try still exits 0 and says why.
 const fs = require('fs');
 const path = require('path');
-const { failureDetail } = require('./run-command');
+const { failureDetail, WRANGLER_DEPLOY_TIMEOUT_MS } = require('./run-command');
 const { alignProjectName } = require('./setup-backend');
 const { loadVaultConfig, siteConfigFor, outputFolderOf, tomlOutputFolder, loadPublishConfig } = require('./config');
 const { buildHooks, HOOK_TIMEOUT_MS } = require('./settings/legacy');
@@ -68,6 +68,16 @@ function defaultFetchStatus(url, depth = 0) {
     request.on('timeout', () => { request.destroy(); finish(null); });
     request.on('error', () => finish(null));
   });
+}
+
+// The address wrangler prints for the deployment it just made (https://<8 hex>.<project>.pages.dev), the one
+// thing that tells this build apart from the previous one still answering at the site's own address (#350).
+// Wrangler's line is "Take a peek over at <address>"; failing that, the first address of that shape.
+function deploymentUrlFrom(text) {
+  const plain = String(text || '').replace(/\u001b\[[0-9;]*m/g, '');
+  const peek = plain.match(/peek over at\s+(https:\/\/[0-9a-f]{8}\.[a-z0-9-]+\.pages\.dev)/i);
+  const any = plain.match(/https:\/\/[0-9a-f]{8}\.[a-z0-9-]+\.pages\.dev/i);
+  return peek ? peek[1] : any ? any[0] : null;
 }
 
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -293,6 +303,7 @@ async function runDeploy(options, deps) {
     return finish({ refused: true }, 1);
   } else if (gateResult && !gateResult.skipped) say(`Leak check: nothing hidden on the player site (${gateResult.files} files, ${gateResult.seconds.toFixed(1)} s).`);
 
+  let deploymentUrl = null;
   if (isCloudflare) {
     const who = runWrangler(['whoami'], { cwd: siteRoot });
     if (who.code !== 0) {
@@ -309,11 +320,15 @@ async function runDeploy(options, deps) {
       }
     }
     commands.push(`npx wrangler@4 ${wranglerDeployArgs.join(' ')}`);
-    const deployed = runWrangler(wranglerDeployArgs, { cwd: siteRoot });
-    if (deployed.code !== 0) {
-      say(`Deploy failed: ${failureDetail(deployed)}`);
+    const deployed = runWrangler(wranglerDeployArgs, { cwd: siteRoot, timeoutMs: WRANGLER_DEPLOY_TIMEOUT_MS });
+    // A killed upload can come back with a zero exit status; a set error or signal is a failure all the same.
+    if (deployed.code !== 0 || deployed.error || deployed.signal) {
+      say(deployed.error === 'ETIMEDOUT'
+        ? `Deploy failed: the upload did not finish within ${WRANGLER_DEPLOY_TIMEOUT_MS / 60000} minutes, so nothing was deployed. Run deploy again.`
+        : `Deploy failed: ${failureDetail(deployed)}`);
       return finish({}, 1);
     }
+    deploymentUrl = deploymentUrlFrom(`${deployed.stdout || ''}\n${deployed.stderr || ''}`);
   } else {
     const git = (args) => {
       commands.push(`git ${args.join(' ')}`);
@@ -364,22 +379,30 @@ async function runDeploy(options, deps) {
     return finish({ deployed: true, url: null }, 0);
   }
 
+  // On Cloudflare the site's own address is still answered by the previous deployment until this one is promoted, so a
+  // 200 there proves nothing: check the address wrangler gave this deployment. Without one, say so and fail.
+  if (isCloudflare && !deploymentUrl) {
+    say(`deployed, but could not confirm which build is served: wrangler printed no address for this deployment. Run \`npx wrangler@4 pages deployment list\` to see whether it exists.`);
+    return finish({ deployed: true, url, verified: false }, 1);
+  }
+  const target = isCloudflare ? deploymentUrl : url;
+
   let status = null;
   let attempts = 0;
   for (let i = 0; i < VERIFY_ATTEMPTS; i++) {
     if (i > 0) await sleep(VERIFY_WAIT_MS);
     attempts++;
-    status = await fetchStatus(url);
+    status = await fetchStatus(target);
     if (status >= 200 && status < 300) {
-      say(`live at ${url}`);
-      return finish({ deployed: true, url, verified: true, status, attempts }, 0);
+      say(`live at ${target}`);
+      return finish({ deployed: true, url, verified: true, status, attempts, ...(isCloudflare ? { deploymentUrl } : {}) }, 0);
     }
   }
 
   // The deploy itself succeeded; propagation is the host's business, not a failure
   // to report as one.
-  say(`deployed, but ${url} returned ${status == null ? 'no response' : status} after ${VERIFY_ATTEMPTS} tries — the host is still propagating; check it in a minute`);
-  return finish({ deployed: true, url, verified: false, status, attempts }, 0);
+  say(`deployed, but ${target} returned ${status == null ? 'no response' : status} after ${VERIFY_ATTEMPTS} tries — the host is still propagating; check it in a minute`);
+  return finish({ deployed: true, url, verified: false, status, attempts, ...(isCloudflare ? { deploymentUrl } : {}) }, 0);
 }
 
-module.exports = { runDeploy, defaultFetchStatus, projectNameFor, outputDirArg };
+module.exports = { runDeploy, deploymentUrlFrom, defaultFetchStatus, projectNameFor, outputDirArg };
