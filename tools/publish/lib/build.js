@@ -1156,7 +1156,7 @@ function buildSite(options) {
   // Resolve campaign_image: copy from vault to output and rewrite to output-relative path
   if (writes === 'all' && publishConfig.theme.campaign_image) {
     const imgVal = publishConfig.theme.campaign_image;
-    if (!imgVal.startsWith('http://') && !imgVal.startsWith('https://')) {
+    if (!isWebImageAddress(imgVal)) {
       const vaultRoot = path.resolve(config.vaultPath);
       const vaultImgPath = path.resolve(vaultRoot, imgVal);
       if (!vaultImgPath.startsWith(vaultRoot + path.sep)) {

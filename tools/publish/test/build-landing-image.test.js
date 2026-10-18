@@ -63,3 +63,11 @@ test('data: and protocol-relative campaign pictures are printed as written, with
     assert.ok(html.includes(`<img src="${printed}"`), html.match(/<img[^>]*>/)[0]);
   }
 });
+
+// CodeRabbit: the full build's vault-path copy must skip data: and protocol-relative addresses instead of throwing.
+for (const image of ['//cdn.example.com/crest.png', 'data:image/png;base64,iVBORw0KGgo=']) {
+  test(`a full build does not try to copy ${image.slice(0, 12)}... from the vault`, () => {
+    const { src } = heroSrc(false, image, false);
+    assert.equal(src, image);
+  });
+}
