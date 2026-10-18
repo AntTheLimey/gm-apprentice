@@ -93,7 +93,8 @@ class ShowAgreesWithTheValidator(unittest.TestCase):
                         self.assertEqual(errors_for(fm), [], value)
                     bad = errors_for({**a_valid_note(etype), field: "not-a-value"})
                     self.assertEqual(len(bad), 1, bad)
-                    listed = re.search(r"must be one of: (.+)$", bad[0]).group(1)
+                    # An alias or a setting's words follow in brackets.
+                    listed = re.search(r"must be one of: (.+?)(?: \(.*)?$", bad[0]).group(1)
                     self.assertEqual(set(listed.split(", ")), values)
 
     def test_no_field_is_checked_that_show_leaves_out(self):

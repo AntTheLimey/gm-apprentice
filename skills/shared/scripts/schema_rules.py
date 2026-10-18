@@ -18,6 +18,7 @@ import re
 import sys
 from functools import lru_cache
 from pathlib import Path
+from typing import Callable, Iterable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Re-exported for scripts/validate_schema.py, vault_check.py,
@@ -91,6 +92,7 @@ SCENE_TYPES = {
     "transition", "horror", "downtime", "other"
 }
 NPC_STATUS = {"alive", "dead", "missing", "unknown"}
+PC_STATUS = frozenset(NPC_STATUS | {"retired"})
 ADVENTURE_BRIEF_SCOPE = {"campaign", "one-shot", "few-shot"}
 CAMPAIGN_OVERVIEW_STATUS = {
     "not_started", "in_progress", "paused", "completed", "abandoned"
@@ -118,23 +120,30 @@ CHECKED_VALUES: dict[str, dict[str, frozenset[str]]] = {
     "session": {"status": frozenset(SESSION_NOT_YET_RUN | SESSION_PLAYED)},
     "scene": {"status": frozenset(SCENE_STATUS), "scene_type": frozenset(SCENE_TYPES)},
     "npc": {"status": frozenset(NPC_STATUS)},
+    "pc": {"status": PC_STATUS},
     "adventure-brief": {"scope": frozenset(ADVENTURE_BRIEF_SCOPE),
                         "continuation_type": frozenset(ADVENTURE_BRIEF_CONTINUATION),
                         "adventure_shape": frozenset(ADVENTURE_BRIEF_SHAPE)},
-    "campaign_overview": {"scope": frozenset(ADVENTURE_BRIEF_SCOPE)},
+    "campaign_overview": {"status": frozenset(CAMPAIGN_OVERVIEW_STATUS),
+                          "scope": frozenset(ADVENTURE_BRIEF_SCOPE)},
     "world_domain": {"status": frozenset(WORLD_DOMAIN_STATUS)},
     "plan": {"plan_type": frozenset(PLAN_TYPES)},
 }
-# A PC's and a campaign overview's status are named, not checked, until the
-# GM's own vaults agree with a list: a retired PC is a status the site groups
-# on its own (`vault.statuses`), and a vault's overview writes `active` (#431).
+# Another spelling a checked field accepts: spelling -> the value it means.
+VALUE_ALIASES: dict[str, dict[str, dict[str, str]]] = {
+    "campaign_overview": {"status": {"active": "in_progress"}},
+}
+# A checked field that also takes the words of a site setting (compared
+# trimmed and lower-cased, as the publish tool does): a word the GM added
+# for the campaign is not a wrong value.
+SETTING_VALUES: dict[str, dict[str, str]] = {
+    "pc": {"status": "vault.statuses.out_of_play"},
+}
 LISTED_VALUES: dict[str, dict[str, frozenset[str]]] = {
     "*": {"source": SOURCE_VALUES},
     "session": {"stage": SESSION_STAGE},
     "faction": {"status": FACTION_STATUS},
     "organization": {"status": FACTION_STATUS},
-    "pc": {"status": frozenset(NPC_STATUS)},
-    "campaign_overview": {"status": frozenset(CAMPAIGN_OVERVIEW_STATUS)},
 }
 
 
@@ -254,13 +263,17 @@ def is_schema_type(etype: str) -> bool:
     return etype in named and etype not in _ontology()["entity_types"]["abstract"]
 
 
-def frontmatter_findings(fm: dict) -> list[tuple[str, str]]:
+def frontmatter_findings(fm: dict, setting: Callable[[str], Iterable[object]] | None = None
+                         ) -> list[tuple[str, str]]:
     """Every schema rule for one note's frontmatter, as (level, message).
 
     The one place the rules live: `vault_check.py frontmatter` prints these
     as rows and `scripts/validate_schema.py` reports the ERRORs. A custom
     type is INFO and takes only the rules for any type; an empty value is
-    unset, not wrong."""
+    unset, not wrong. `setting(name)` is the vault's value of a setting, as
+    the publish tool reads it (vaultlib.setting_or_builtin); asked only for
+    a value outside the schema's words, for a field in SETTING_VALUES.
+    Without it, only the schema's words pass."""
     etype = fm.get("type")
     if not etype:
         return [("ERROR", "missing 'type' field")]
@@ -280,8 +293,19 @@ def frontmatter_findings(fm: dict) -> list[tuple[str, str]]:
         if not isinstance(value, str):
             found.append(("ERROR", f"{field}: one value, not {value!r}"))
         elif value not in allowed:
-            found.append(("ERROR", f"{field}: '{value}' must be one of: "
-                                   f"{', '.join(sorted(allowed))}"))
+            aliases = {} if custom else VALUE_ALIASES.get(etype, {}).get(field, {})
+            name = None if custom else SETTING_VALUES.get(etype, {}).get(field)
+            if value in aliases:
+                continue
+            also = "".join(f" ({a} = {v})" for a, v in sorted(aliases.items()))
+            if name is None:
+                found.append(("ERROR", f"{field}: '{value}' must be one of: "
+                                       f"{', '.join(sorted(allowed))}{also}"))
+            elif setting is None or value.strip().lower() not in {
+                    str(w).strip().lower() for w in setting(name)}:
+                found.append(("ERROR", f"{field}: '{value}' must be one of: "
+                                       f"{', '.join(sorted(allowed))}{also} (or a word in "
+                                       f"the setting {name})"))
         elif field == "canon_status" and value == "SUPERSEDED" and not custom \
                 and not fm.get("superseded_by"):
             # Not asked of a custom type: a GM's superseded reference
@@ -530,6 +554,11 @@ def show(etype: str) -> str | None:
         rules.append("portrait is a path under _attachments/")
     if etype == "plan":
         rules.append("leads_to is a list of [[links]]")
+    rules += [f"{field} {alias} = {value}"
+              for field, spellings in VALUE_ALIASES.get(etype, {}).items()
+              for alias, value in spellings.items()]
+    rules += [f"{field} may also be a word in {name}"
+              for field, name in SETTING_VALUES.get(etype, {}).items()]
     if rules:
         lines.append("rules: " + "; ".join(rules))
     ont = _ontology()

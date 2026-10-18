@@ -30,13 +30,17 @@ from schema_rules import (  # noqa: E402
     is_schema_type,
 )
 import vault_check  # noqa: E402
+from vaultlib import setting_or_builtin  # noqa: E402
 
 
-def validate_file(filepath: Path, content: str | None = None) -> list[str]:
+def validate_file(filepath: Path, content: str | None = None,
+                  vault: Path | None = None) -> list[str]:
     """Validate a single markdown file. Returns list of errors.
 
     Pass `content` when the caller has already read the file, so a run
-    that applies several checks reads each note exactly once.
+    that applies several checks reads each note exactly once. With `vault`,
+    a field that also takes a setting's words (a PC's status) reads them
+    from the vault's settings through the publish tool.
     """
     if content is None:
         try:
@@ -57,7 +61,8 @@ def validate_file(filepath: Path, content: str | None = None) -> list[str]:
     if entity_type and isinstance(entity_type, str) and not is_schema_type(entity_type):
         return [f"Unknown type '{entity_type}' — must be one of: "
                 f"{', '.join(sorted(REQUIRED_FIELDS))}, or a subtype in the ontology"]
-    return [message for level, message in frontmatter_findings(frontmatter)
+    setting = None if vault is None else (lambda name: setting_or_builtin(vault, name))
+    return [message for level, message in frontmatter_findings(frontmatter, setting)
             if level == "ERROR"]
 
 
@@ -262,7 +267,7 @@ def validate_campaign(campaign_dir: Path) -> int:
         except (OSError, UnicodeError) as e:
             errors = [f"Could not read file: {e}"]
         else:
-            errors = (validate_file(filepath, content)
+            errors = (validate_file(filepath, content, campaign_dir)
                       + relationships.pop(
                           filepath.relative_to(campaign_dir).as_posix(), []))
         if errors:
