@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.81] — 2026-10-18
+
+Bug Bash batch 3: vault checks that reported wrongly on real vaults,
+and the decisions taken on the leak and name checks. Publish tool 1.39.0.
+
+### Added
+
+- A Keeper-looking heading the GM has reviewed and means for players
+  can be settled: `vault_check.py <vault> gm-leak --settle NOTE:LINE`
+  records it in the publish list's `accepted` list (new tool command
+  `leaks settle`), gm-leak stops flagging it while the note and heading
+  stay the same, and `leaks prune` drops the record once the heading or
+  note is gone. campaign-qa writes it when the GM says the heading is
+  public (#453).
+- UNVERIFIED markers carry the session that wrote them,
+  `<!-- UNVERIFIED (S12): ... -->` or `(Ch4 S12)`. Reconcile's quick path
+  is ruled out by a marker on a linked note only when it is this
+  session's or untagged; a marker from another session is listed but
+  does not block (#434).
+- PC `status` may be `retired`, and a word in the site's
+  `vault.statuses.out_of_play` setting also passes. A campaign overview's
+  `status: active` is read as `in_progress`. Both are checked again
+  (#431). The schema mirror update offers the new PC line in
+  `_meta/entity-types.md`.
+
+### Fixed
+
+- `vault_check.py frontmatter` and `scripts/validate_schema.py` read one
+  rule set (`schema_rules.frontmatter_findings`), so the two no longer
+  disagree; an empty value counts as unset, and a list where one value
+  belongs is an error in both (#431).
+- pc-body no longer checks an archived PC or a PC template (#389).
+- `links.py`, relink and graph_check skip example links in a frontmatter
+  comment (#443).
+- `reconcile_scan.py` no longer counts another chapter's same-numbered
+  DRAFT as made this session (#440), and the quick path looks for
+  UNVERIFIED markers on linked entity notes too (#434).
+- `tones.py` takes every relationship and hide-list reading from the
+  publish tool, so flow-style YAML and the other forms in #337 read as
+  the site reads them, and a tone is trimmed as the site trims it.
+  `--except ""` is a usage error (#337).
+- The tone-list refresh takes a line as the plugin's only when it holds
+  all eleven old tones, never a line the GM wrote; it is no longer slow
+  on a large `_meta` file (2 MB: 38 s to 1.6 s) (#338).
+- A withheld note named with an everyday word ("Hope", "Human") says to
+  rename the note, and campaign-qa offers to do it with links; a
+  `title:` does not change which name is looked for (#454).
+
 ## [1.10.80] — 2026-10-18
 
 Publish tool 1.38.1.

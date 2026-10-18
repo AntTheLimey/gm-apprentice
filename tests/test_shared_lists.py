@@ -67,8 +67,17 @@ PROSE: list[tuple[str, str, frozenset[str] | set[str]]] = [
     ("shared/session-principles.md", r"Scene status:\n`([^`]+)`", sr.SCENE_STATUS),
     # NPC and PC status
     ("shared/entity-schema.md", r"^\(([a-z/]+)\), `location`", sr.NPC_STATUS),
-    ("shared/entity-schema.md", r"^`status` \((alive[a-z/]+)\)", sr.NPC_STATUS),
+    ("shared/entity-schema.md", r"^\*\*PC:\*\* [^\n]*\n`status` \((alive[a-z/]+)\)",
+     sr.PC_STATUS),
+    ("publish-site/references/schema-reference.md",
+     r"^\| `status` \| Optional \| (alive[^|]+), or a word in", sr.PC_STATUS),
     ("shared/templates/npc.md", r"^status: alive +# (.+)$", sr.NPC_STATUS),
+    ("publish-site/references/schema-reference.md",
+     r"^\| `status` \| Optional \| (alive, [a-z, ]+) \|$", sr.NPC_STATUS),
+    # Campaign overview status (its alias is checked in test_schema_checks_agree)
+    ("publish-site/references/schema-reference.md",
+     r"^`status`: (not_started[^;]+);\n`active` is read as `in_progress`$",
+     sr.CAMPAIGN_OVERVIEW_STATUS),
     # Faction and organization status
     ("shared/entity-schema.md", r"^`status` \((active[a-z/]+)\)", sr.FACTION_STATUS),
     ("shared/templates/organization.md", r"^status: active +# (.+)$", sr.FACTION_STATUS),

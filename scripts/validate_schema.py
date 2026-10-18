@@ -17,6 +17,7 @@ import re
 import sys
 from collections import namedtuple
 from pathlib import Path
+from typing import Any, Callable
 
 # Schema rules and the frontmatter parser are shared with the
 # plugin-bundled vault utility — single source of truth in
@@ -24,23 +25,24 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent
                         / "skills" / "shared" / "scripts"))
 from schema_rules import (  # noqa: E402
-    DEPRECATED_FIELDS,
-    PORTRAIT_TYPES,
     REQUIRED_FIELDS,
-    checked_values,
     extract_frontmatter,
+    frontmatter_findings,
+    is_schema_type,
 )
 import vault_check  # noqa: E402
+from vaultlib import SettingsUnavailable, raw_frontmatter, setting_or_builtin  # noqa: E402
 
 
-def validate_file(filepath: Path, content: str | None = None) -> list[str]:
+def validate_file(filepath: Path, content: str | None = None,
+                  vault: Path | None = None) -> list[str]:
     """Validate a single markdown file. Returns list of errors.
 
     Pass `content` when the caller has already read the file, so a run
-    that applies several checks reads each note exactly once.
+    that applies several checks reads each note exactly once. With `vault`,
+    a field that also takes a setting's words (a PC's status) reads them
+    from the vault's settings through the publish tool.
     """
-    errors = []
-
     if content is None:
         try:
             content = filepath.read_text(encoding="utf-8")
@@ -52,95 +54,25 @@ def validate_file(filepath: Path, content: str | None = None) -> list[str]:
         # No frontmatter is OK for some files
         return []
 
-    entity_type = frontmatter.get("type", "")
-    if not entity_type:
-        errors.append("Missing 'type' field")
-        return errors
-    if not isinstance(entity_type, str):
-        errors.append(f"Field 'type' must be one type name, got {entity_type!r}")
-        return errors
-
-    # Check required fields — reject unknown entity types
-    if entity_type not in REQUIRED_FIELDS:
-        errors.append(
-            f"Unknown type '{entity_type}' — "
-            f"must be one of: {', '.join(sorted(REQUIRED_FIELDS))}"
-        )
-        return errors
-    required = REQUIRED_FIELDS[entity_type]
-    for field in required:
-        if field not in frontmatter:
-            errors.append(f"Missing required field '{field}' for type '{entity_type}'")
-
-    # Enumerated fields: schema_rules.CHECKED_VALUES is the one table
-    # (`schema_rules.py show <type>` prints it).
-    for field, allowed in checked_values(entity_type).items():
-        if field not in frontmatter:
-            continue
-        value = frontmatter[field]
-        label = (f"{entity_type} status"
-                 if field == "status" and entity_type in ("session", "scene") else field)
-        if not isinstance(value, str):
-            errors.append(f"Field '{field}' must be a string")
-        elif value not in allowed:
-            errors.append(
-                f"Invalid {label} '{value}' — "
-                f"must be one of: {', '.join(sorted(allowed))}"
-            )
-        elif field == "canon_status" and value == "SUPERSEDED" \
-                and not frontmatter.get("superseded_by", ""):
-            errors.append("SUPERSEDED entity missing 'superseded_by' reference")
-
-    if entity_type == "plan":
-        # leads_to: optional node-based sequencing — array of wiki-links to the
-        # plan node(s) this one leads to (2+ targets = a branch). Absent is fine.
-        if "leads_to" in frontmatter and frontmatter["leads_to"] is not None:
-            value = frontmatter["leads_to"]
-            if not isinstance(value, list):
-                errors.append("Field 'leads_to' must be an array of wiki-links")
-            else:
-                for item in value:
-                    if not isinstance(item, str) or "[[" not in item:
-                        errors.append(
-                            f"Field 'leads_to' entries must be wiki-links "
-                            f"(e.g. \"[[Plan Name]]\"), got {item!r}"
-                        )
-
-    # `withheld` (optional): true makes the note's own name a secret the site
-    # build searches for. The build reads yes, on and 1 as true as well; the
-    # schema asks for the real word.
-    if "withheld" in frontmatter:
-        value = frontmatter["withheld"]
-        if not (isinstance(value, bool)
-                or (isinstance(value, str) and value.strip().lower() in ("true", "false"))):
-            errors.append("Field 'withheld' must be true or false")
-
-    # Validate portrait field — only allowed for supported entity types
-    portrait = frontmatter.get("portrait")
-    if portrait:
-        if not isinstance(portrait, str):
-            errors.append("Field 'portrait' must be a string path")
-        elif entity_type not in PORTRAIT_TYPES:
-            errors.append(
-                f"Field 'portrait' not allowed for type '{entity_type}' — "
-                f"only supported for: {', '.join(sorted(PORTRAIT_TYPES))}"
-            )
-        elif not portrait.startswith("_attachments/"):
-            errors.append(
-                f"Invalid portrait path '{portrait}' — "
-                f"must start with '_attachments/'"
-            )
-
-    # Deprecation errors for renamed fields (universal "*" + per-type)
-    deprecated = DEPRECATED_FIELDS.get("*", []) + DEPRECATED_FIELDS.get(entity_type, [])
-    for old_field, new_field, migration in deprecated:
-        if old_field in frontmatter:
-            errors.append(
-                f"Deprecated field '{old_field}' — "
-                f"rename to '{new_field}' (run migration {migration})"
-            )
-
-    return errors
+    # The rules are schema_rules.frontmatter_findings, which the vault's own
+    # check (vault_check.py frontmatter) asks too. One difference: this
+    # validator guards the repo's fixtures, where a type the schema does not
+    # name is a typo, not a GM's custom type.
+    entity_type = frontmatter.get("type")
+    if entity_type and isinstance(entity_type, str) and not is_schema_type(entity_type):
+        return [f"Unknown type '{entity_type}' — must be one of: "
+                f"{', '.join(sorted(REQUIRED_FIELDS))}, or a subtype in the ontology"]
+    setting: Callable[[str], list[Any]] | None = None
+    if vault is not None:
+        def setting(name: str) -> list[Any]:
+            # Unreadable settings: only the schema's words pass, as in vault_check.
+            try:
+                return list(setting_or_builtin(vault, name) or [])
+            except SettingsUnavailable:
+                return []
+    return [message for level, message
+            in frontmatter_findings(frontmatter, setting, raw_frontmatter(content))
+            if level == "ERROR"]
 
 
 def relationship_rows(campaign_dir: Path) -> dict[str, list[str]]:
@@ -344,7 +276,7 @@ def validate_campaign(campaign_dir: Path) -> int:
         except (OSError, UnicodeError) as e:
             errors = [f"Could not read file: {e}"]
         else:
-            errors = (validate_file(filepath, content)
+            errors = (validate_file(filepath, content, campaign_dir)
                       + relationships.pop(
                           filepath.relative_to(campaign_dir).as_posix(), []))
         if errors:

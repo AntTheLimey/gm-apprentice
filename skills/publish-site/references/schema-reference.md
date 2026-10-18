@@ -22,7 +22,7 @@ These entity types have purpose-built page layouts.
 | Field | Status | Description |
 |-------|--------|-------------|
 | `occupation` | Optional | Background or character class |
-| `status` | Optional | active, retired, dead, npc |
+| `status` | Optional | alive, dead, missing, retired, unknown, or a word in `vault.statuses.out_of_play` (which takes the PC out of play) |
 | `key_traits` | Optional | List of defining traits (shown on PC card and landing page) |
 | `player_name` | Optional | Real-world player name |
 | `portrait` | Optional | Path relative to vault root (e.g. `_attachments/characters/slug.jpg`) |
@@ -63,7 +63,7 @@ beneath them. No accordion — the content flows as continuous prose.
 |-------|--------|-------------|
 | `occupation` | Optional | Role label (e.g. "Patron", "Antagonist", "Shopkeeper") |
 | `nationality` | Optional | Origin or nationality |
-| `status` | Optional | active, dead, missing, unknown |
+| `status` | Optional | alive, dead, missing, unknown |
 | `age` | Optional | Character age |
 | `rank` | Optional | Military or organizational rank |
 | `portrait` | Optional | Path relative to vault root |
@@ -254,6 +254,13 @@ Badges rendered: `sort_order`
 A published chapter page is required for the Story page's Campaign
 Saga: a recap surfaces only when its session, its chapter, and the
 wrap-up (`type: session_wrap`) all publish.
+
+### Campaign Overview
+
+`type: campaign_overview`
+
+`status`: not_started, in_progress, paused, completed, abandoned;
+`active` is read as `in_progress`
 
 ### Session
 

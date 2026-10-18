@@ -35,7 +35,7 @@ import subprocess
 import sys
 import threading
 import unicodedata
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -275,6 +275,14 @@ def _nested_block(raw: str, key: str) -> list[str]:
             block.append(nxt)
         return block
     return []
+
+
+def has_nested_block(raw: str, key: str) -> bool:
+    """Whether a top-level `key:` in the raw frontmatter has indented lines
+    under it (a map such as a session's `documents:`), which
+    `extract_frontmatter` reads as an empty value."""
+    return any(ln.strip() and not ln.strip().startswith("#")
+               for ln in _nested_block(raw, key))
 
 
 def nested_mapping(text: str, key: str) -> dict[str, str]:
@@ -2194,9 +2202,59 @@ class LinkLine:
     line: str  # with its line ending
     in_code: bool  # in a code fence: nothing on it is a link
     in_frontmatter: bool
-    # Inline code spans, where a link is quoted, not made. Empty in
-    # frontmatter: a backtick there is YAML, not code.
+    # Inline code spans, where a link is quoted, not made. In frontmatter a
+    # backtick is YAML, not code, so the only span there is a YAML comment.
     spans: list[tuple[int, int]]
+
+
+# A line that opens a block scalar (`key: |`, `- >-`, `key: |2`): the
+# indented lines after it are its text, where `#` is no comment.
+_YAML_BLOCK_SCALAR = re.compile(r"(?:^|[:-])\s+[|>][1-9+-]{0,2}$")
+
+
+def _yaml_line_comment(line: str, quote: str) -> tuple[int | None, str]:
+    """Where a YAML comment starts on one line (None when it has none) and
+    the quote still open at its end, given the quote open at its start: a
+    `#` at the start or after whitespace, outside quotes. `\\` in double
+    quotes escapes the next character."""
+    i = 0
+    while i < len(line):
+        ch = line[i]
+        if quote:
+            if ch == "\\" and quote == '"':
+                i += 1
+            elif ch == quote:
+                quote = ""
+        elif ch in "\"'" and (i == 0 or not line[i - 1].isalnum()):
+            quote = ch
+        elif ch == "#" and (i == 0 or line[i - 1].isspace()):
+            return i, quote
+        i += 1
+    return None, quote
+
+
+def yaml_comment_spans(lines: Sequence[str]) -> list[list[tuple[int, int]]]:
+    """Each frontmatter line's YAML comment span, from its `#` to the line's
+    end. The build never renders it, so a `[[link]]` in it is an example,
+    not a link. A block scalar's lines and the inside of a quoted value that
+    runs over lines have none."""
+    out: list[list[tuple[int, int]]] = []
+    quote = ""
+    block: int | None = None
+    for line in lines:
+        text = line.rstrip("\r\n")
+        indent = len(text) - len(text.lstrip(" "))
+        if block is not None and (not text.strip() or indent > block):
+            out.append([])
+            continue
+        block = None
+        opened = quote
+        at, quote = _yaml_line_comment(text, quote)
+        out.append([] if at is None else [(at, len(line))])
+        code = text[:at].rstrip() if at is not None else text.rstrip()
+        if not opened and not quote and _YAML_BLOCK_SCALAR.search(code):
+            block = indent
+    return out
 
 
 def link_lines(text: str) -> Iterator[LinkLine]:
@@ -2211,10 +2269,70 @@ def link_lines(text: str) -> Iterator[LinkLine]:
     states, _ = scan_body(text)
     code = {s.lineno for s in states if s.in_code}
     body_start = states[0].lineno if states else len(lines) + 1
+    fm_spans = yaml_comment_spans(lines[:body_start - 1])
     for lineno, line in enumerate(lines, 1):
         in_fm = lineno < body_start
         yield LinkLine(lineno, line, lineno in code, in_fm,
-                       [] if in_fm else inline_code_spans(line))
+                       fm_spans[lineno - 1] if in_fm
+                       else inline_code_spans(line))
+
+
+# The one definition of an UNVERIFIED marker: `<!-- UNVERIFIED: claim -->`,
+# tagged with the session that wrote it as `<!-- UNVERIFIED (S12): claim -->`,
+# or `(Ch4 S12)` where session numbers restart each chapter. Untagged
+# markers predate tags. The publish tool strips every HTML comment, so it
+# needs no parser of its own.
+UNVERIFIED_RE = re.compile(
+    r"<!--\s*UNVERIFIED\b(?:\s*\(\s*(?:Ch\s*(\d+(?:\.\d+)?)\s+)?S\s*(\d+)\s*\))?(.*?)-->",
+    re.I | re.S)
+
+
+@dataclass(frozen=True)
+class Unverified:
+    line: int
+    chapter: str | None
+    session: int | None  # None: untagged
+    text: str
+
+    @property
+    def tag(self) -> str:
+        if self.session is None:
+            return ""
+        return (f"Ch{self.chapter} " if self.chapter else "") + f"S{self.session}"
+
+    def from_session(self, number: int, chapter: str | None) -> bool | None:
+        """Whether the session numbered `number` (in `chapter`, when known)
+        wrote this marker; None for an untagged one. A chapter on only one
+        side is judged by number alone."""
+        if self.session is None:
+            return None
+        if self.session != number:
+            return False
+        return same_chapter(chapter, self.chapter)
+
+
+def same_chapter(a: str | None, b: str | None) -> bool:
+    """Whether two chapter numbers name one chapter, compared as numbers
+    ("01" is "1"). A chapter missing on either side matches any."""
+    return a is None or b is None or float(a) == float(b)
+
+
+def _blank_spans(line: str, spans: list[tuple[int, int]]) -> str:
+    """The line with each character inside a span turned to a space."""
+    return "".join(" " if inside_spans(i, spans) and c != "\n" else c
+                   for i, c in enumerate(line))
+
+
+def unverified_markers(text: str) -> list[Unverified]:
+    """Each UNVERIFIED marker outside code, inline code and frontmatter (any
+    case; one may span lines)."""
+    body = "".join("\n" if ll.in_code or ll.in_frontmatter
+                   else _blank_spans(ll.line, ll.spans)
+                   for ll in link_lines(text))
+    return [Unverified(body.count("\n", 0, m.start()) + 1, m.group(1),
+                       int(m.group(2)) if m.group(2) else None,
+                       " ".join(m.group(3).strip(" :").split()))
+            for m in UNVERIFIED_RE.finditer(body)]
 
 
 def live_wikilinks(line: str,

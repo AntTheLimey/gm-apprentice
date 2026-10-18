@@ -93,7 +93,7 @@ content, not live capture.
    Q3", "existing timeline entry".
 
 3. **Preserve uncertainty.** If the keeper said "I think so,"
-   include the event but mark with `<!-- UNVERIFIED -->`.
+   include the event but mark with `<!-- UNVERIFIED (S{n}) -->`.
 
 4. **Entity flags are for session-wrapup.** Use the extraction
    shorthand from `session-wrapup/references/recap-formats.md`

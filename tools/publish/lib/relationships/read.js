@@ -10,7 +10,7 @@
 // a hidden folder, not under a top-level `_Templates`, `_templates` or `_inbox`. `_meta` is a
 // note like any other.
 //
-//   Note  { rel, name, aliases, type, fields, edges, links, poiLinks, inScope }   (poiLinks: the names in points_of_interest alone)
+//   Note  { rel, name, aliases, type, fields, edges, links, poiLinks, inScope, hidesRelationships }   (poiLinks: the names in points_of_interest alone)
 //   Field { raw, target, line }      parent_location / current_holder. `target` is the rel of the
 //                                    note it names when the value is exactly one wiki-link to a
 //                                    note that exists, else null.
@@ -288,6 +288,8 @@ function readVault(vaultPath, { files, folder, newerThan } = {}) {
       links: bodyLinks(p.content, p.data),
       poiLinks: poiLinks(p.data),
       inScope: inScope(p),
+      // The site strips `relationships` from a page whose own `publish_exclude_fields` lists it (processor.js publishedFrontmatter).
+      hidesRelationships: Array.isArray(p.data.publish_exclude_fields) && p.data.publish_exclude_fields.includes('relationships'),
     };
   });
 

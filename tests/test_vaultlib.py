@@ -921,6 +921,42 @@ class StripCommentSpansTests(unittest.TestCase):
         self.assertEqual(kept, ["one ", " two", "three"])
 
 
+class UnverifiedMarkerTests(unittest.TestCase):
+    """#434: a marker names the session that wrote it, or nothing."""
+
+    def test_tags_parse_and_untagged_stay_markers(self):
+        got = vl.unverified_markers(
+            "---\nx: 1\n---\n"
+            "<!-- UNVERIFIED (S12): he fled -->\n"
+            "<!-- unverified (ch4 s3) -->\n"
+            "<!-- UNVERIFIED (Ch0.1 S2): a\nb -->\n"
+            "<!-- UNVERIFIED: old -->\n<!-- UNVERIFIED -->\n"
+            "```\n<!-- UNVERIFIED (S1): code -->\n```\n")
+        self.assertEqual(got, [
+            vl.Unverified(4, None, 12, "he fled"),
+            vl.Unverified(5, "4", 3, ""),
+            vl.Unverified(6, "0.1", 2, "a b"),
+            vl.Unverified(8, None, None, "old"),
+            vl.Unverified(9, None, None, ""),
+        ])
+        self.assertEqual([m.tag for m in got], ["S12", "Ch4 S3", "Ch0.1 S2", "", ""])
+
+    def test_an_example_in_an_inline_code_span_is_not_a_marker(self):
+        got = vl.unverified_markers(
+            "Write `<!-- UNVERIFIED (S5): example -->` like so.\n"
+            "<!-- UNVERIFIED (S6): real --> and `x` after\n")
+        self.assertEqual(got, [vl.Unverified(2, None, 6, "real")])
+
+    def test_from_session(self):
+        m = vl.Unverified
+        self.assertTrue(m(1, None, 5, "").from_session(5, "1"))
+        self.assertTrue(m(1, "1", 5, "").from_session(5, None))
+        self.assertTrue(m(1, "01", 5, "").from_session(5, "1"))
+        self.assertFalse(m(1, "2", 5, "").from_session(5, "1"))
+        self.assertFalse(m(1, None, 4, "").from_session(5, None))
+        self.assertIsNone(m(1, None, None, "").from_session(5, None))
+
+
 class LinkLinesTests(unittest.TestCase):
     NOTE = ("---\ntype: npc\n---\n"
             "Quoted `[[A]]` and [[B]].\n"
@@ -950,6 +986,27 @@ class LinkLinesTests(unittest.TestCase):
         self.assertEqual(fm.spans, [])
         self.assertEqual(
             [m.group(1) for m in vl.live_wikilinks(fm.line, fm.spans)], ["A"])
+
+    def fm_links(self, fm):
+        return [[m.group(1) for m in vl.live_wikilinks(ll.line, ll.spans)]
+                for ll in vl.link_lines(f"---\n{fm}---\nbody\n")][1:-2]
+
+    def test_a_yaml_comment_hides_its_links(self):
+        self.assertEqual(self.fm_links("a: [[A]] # see [[B]]\n"), [["A"]])
+
+    def test_an_escaped_quote_does_not_close_a_double_quoted_value(self):
+        # `\"` stays inside the string, so the `#` after it is not a comment.
+        self.assertEqual(self.fm_links('a: "x\\" #1 [[A]]"\n'), [["A"]])
+        self.assertEqual(self.fm_links('a: "x\\\\" # [[A]]\n'), [[]])
+
+    def test_a_block_scalar_has_no_comment(self):
+        fm = "a: |\n  one # two [[A]]\n\n  #3 [[B]]\nb: >-\n  # [[C]]\nc: x # [[D]]\n"
+        self.assertEqual(self.fm_links(fm),
+                         [[], ["A"], [], ["B"], [], ["C"], []])
+
+    def test_a_multi_line_quoted_value_has_no_comment(self):
+        fm = 'a: "one\n  two # [[A]]\n  three" # [[B]]\nb: \'x\n  # [[C]]\'\n'
+        self.assertEqual(self.fm_links(fm), [[], ["A"], [], [], ["C"]])
 
     def test_frontmatter_only_note_is_all_frontmatter(self):
         got = list(vl.link_lines('---\nx: "[[A]]"\n---\n'))

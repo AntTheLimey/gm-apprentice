@@ -63,7 +63,7 @@ Not all GM answers carry equal weight:
 | GM Response | Canon Status | Treatment |
 |---|---|---|
 | "Definitely happened" / specific details | AUTHORITATIVE | Full canon |
-| "I think so" / "sounds right" | AUTHORITATIVE + UNVERIFIED marker | `<!-- UNVERIFIED: [claim] -->` |
+| "I think so" / "sounds right" | AUTHORITATIVE + UNVERIFIED marker | `<!-- UNVERIFIED (S{n}): [claim] -->` |
 | "Maybe" / uncertain | Flag for future resolution | Don't include in play events |
 | "I don't remember" | Unresolved | Add to unresolved list |
 

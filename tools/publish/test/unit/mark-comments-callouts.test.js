@@ -27,6 +27,14 @@ test('2: a line that is only a comment is a block', () => {
   assert.equal(r.text, `before\n\n${OPEN(0)}\n\nUNVERIFIED\n\n${CLOSE}\n\nafter`);
 });
 
+test('2b: an UNVERIFIED marker tagged with its session is a comment like any other (#434)', () => {
+  const md = 'before\n<!-- UNVERIFIED (Ch4 S12): he fled -->\nafter <!-- UNVERIFIED (S3) --> x';
+  assert.equal(htmlComments(md).text, 'before\nafter  x');
+  const { mark } = setup();
+  assert.equal(htmlComments(md, mark).text,
+    `before\n\n${OPEN(0)}\n\nUNVERIFIED (Ch4 S12): he fled\n\n${CLOSE}\n\nafter ${OPEN(1)}UNVERIFIED (S3)${CLOSE} x`);
+});
+
 test('3: a multi-line HTML comment is a block', () => {
   const { mark } = setup();
   const r = htmlComments('x\n<!--\nline one\nline two\n-->\ny', mark);

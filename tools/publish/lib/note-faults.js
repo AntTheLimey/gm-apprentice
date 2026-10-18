@@ -407,6 +407,8 @@ function findSecretNames(html, names, { publicWords, listing = false, only = nul
     const stop = Math.min(...[text.indexOf('\n', at), at + matches[0][0].length + CONTEXT, text.length].filter((x) => x >= 0));
     hits.push({
       kind: a.kind, alias: a.alias, owner: a.rel, re: a.re, count,
+      // A one-word name the page also writes in lower case reads as an everyday word there (#454).
+      lowerCase: a.re.oneWord && matches.some((m) => /^\p{Ll}/u.test(m.groups.last)),
       context: clip(text.slice(start, stop).replace(/[\u0002\u0003]/g, '').trim(), 2 * CONTEXT + a.alias.length),
     });
   }
@@ -728,9 +730,19 @@ function startNoteAudit(input) {
     const never = kind === 'never_show';
     const code = never ? 'NEVER_SHOW_IN_PROSE' : withheld ? 'WITHHELD_IN_PROSE' : 'ALIAS_IN_PROSE';
     const out = new Map();   // "path\nalias" -> finding
+    // A withheld name that is one word and that some page writes in lower case is an everyday word (#454): every
+    // ordinary use of it is a row, and rewording each would be endless. The name has to go: a file name by renaming
+    // the note, a title or alias by taking it off (a title adds a name to look for; it never replaces the file name).
+    const everyday = new Set(secretHits.filter((h) => h.kind === 'withheld' && h.lowerCase).map((h) => h.alias));
     const fixLine = (alias, owner, file) => {
       if (file) return `rename the file, and the embeds that name it, so that its name does not hold "${alias}"`;
       if (never) return `reword it, or move it into a part of the note players do not see (a GM Notes section, a gm-only block); deploy stops while the player site shows it. If the word no longer needs guarding, take it off player_site.never_show`;
+      if (withheld && everyday.has(alias)) {
+        const what = fold(baseName(owner).replace(/_/g, ' ')) === fold(alias)
+          ? `rename the note (${owner}) to a name players will not write by chance and remove any matching title or aliases; campaign-qa offers to rename it, links included`
+          : `take it out of the title or aliases of ${owner}`;
+        return `"${alias}" is an everyday word, so every ordinary use of it is reported: ${what}. If the name is no secret, take withheld: true off`;
+      }
       if (withheld) {
         return `reword it to a name the players know, in the text or in the frontmatter field or title that holds it; or, in the text, link the note ([[${alias}]]): a link with no label of its own prints a neutral word (${[...new Set(Object.values(input.publishConfig.withheld_words))].join(', ')}) in place of a withheld note's name; where it is an ordinary word and not the name, the finding stays until the note is no longer marked withheld`;
       }
@@ -739,7 +751,7 @@ function startNoteAudit(input) {
     const told = (hit, rel) => (never ? `"${hit.alias}", a word you listed under player_site.never_show` : withheld
       ? `"${hit.alias}", the name of ${hit.owner === rel ? 'this note, which you marked withheld' : `a note you marked withheld (${hit.owner})`}`
       : `"${hit.alias}", a name you keep secret in gm_aliases${hit.owner === rel ? '' : ` (of ${hit.owner})`}`);
-    const base = (hit) => (never ? { word: hit.alias } : withheld ? { name: hit.alias } : { alias: hit.alias });
+    const base = (hit) => (never ? { word: hit.alias } : withheld ? { name: hit.alias, ...(everyday.has(hit.alias) ? { everyday: true } : {}) } : { alias: hit.alias });
     const hits = secretHits.filter((h) => h.kind === kind);
     for (const hit of hits.filter((h) => h.out === null)) {
       // A name a note's own page prints is told as that; the same name only the search index

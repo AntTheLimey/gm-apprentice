@@ -1,14 +1,15 @@
 'use strict';
-// `leaks list|check|accept|prune`: the leak gate on the folder as it stands, without deploying. The publish-site skill
+// `leaks list|check|accept|prune|settle`: the leak gate on the folder as it stands, without deploying. The publish-site skill
 // uses these to walk the GM through each finding; the GM never edits the accepted list by hand.
 const fs = require('fs');
 const path = require('path');
 const { loadVaultConfig, siteConfigFor, outputFolderOf, tomlOutputFolder } = require('./config');
 const { loadPublishList, writeAccepted } = require('./manifest');
-const { ACCEPTED_FROM } = require('./settings/layout');
+const { ACCEPTED_FROM, SETTLE_FROM } = require('./settings/layout');
 const { siteToolOlderThan } = require('./settings/move');
 const { runLeakGate, formatFindings, gateSummary } = require('./leak-gate');
 const { wordsOf } = require('./leak-gate/text');
+const { HEADING_NOTE, settledHeadingGone } = require('./settled-headings');
 
 // The folder deploy uploads: the one wrangler.toml names, when the site has one, else the output folder.
 function gateFolderFor(configPath) {
@@ -44,10 +45,70 @@ function notAFinding(opts) {
   return `"${opts.text}" on ${opts.page} is not a finding of the leak check; leaks list shows the current ones.`;
 }
 
+// The accept refusal for a site whose tool reads an accepted-only publish list as an empty publish list, and the settle
+// refusal for one whose tool reads a settled heading as an accepted finding no longer needed (prune would delete it).
+const ACCEPT = { from: ACCEPTED_FROM, words: ['accepted', 'accepting', 'accept'], why: 'reads the accepted list as an empty publish list' };
+const SETTLE = { from: SETTLE_FROM, words: ['settled', 'settling', 'settle'], why: 'reads a settled heading as a finding no longer needed, and prune deletes it' };
+function tooOldFor(configPath, { from, words: [done, doing, verb], why } = ACCEPT) {
+  const old = siteToolOlderThan(path.dirname(configPath), from);
+  if (!old) return null;
+  return {
+    line: `Not ${done}: this site's publish tool is ${old.shown}, and ${doing} needs ${from} or later `
+      + `(an older tool ${why}). Update the site first `
+      + `(gm-apprentice-publish update-pin --site ${path.dirname(configPath)}), then ${verb} again.`,
+    shown: old.shown,
+    needs: from,
+  };
+}
+
+// A note path as the vault spells it: `./` and `a/../` dropped, and each part's case as it is on disk (a disk that
+// ignores case finds `npcs/a.md` for `NPCs/A.md`). Null when no note is there or the path leaves the vault.
+function vaultSpelling(vaultPath, page) {
+  const rel = path.posix.normalize(page);
+  if (rel.startsWith('../') || rel === '..' || path.posix.isAbsolute(rel) || !fs.existsSync(path.join(vaultPath, rel))) return null;
+  const parts = [];
+  for (const part of rel.split('/')) {
+    let names;
+    try { names = fs.readdirSync(path.join(vaultPath, ...parts)); } catch { return null; }
+    const nfc = part.normalize('NFC');
+    const same = (n) => n.normalize('NFC') === nfc;
+    parts.push(names.find(same) || names.find((n) => n.normalize('NFC').toLowerCase() === nfc.toLowerCase()) || part);
+  }
+  return parts.join('/');
+}
+
+// `leaks settle <note> <heading>`: a Keeper-looking heading gm-leak flagged, which the GM means for players (#453).
+// It needs no built site: gm-leak reads the vault.
+function settleHeading(opts, configPath, out, err) {
+  // A refusal under --json says why on stderr too: vault_check reads the last stderr line of a failed run.
+  const print = (lines, payload, rc) => {
+    if (opts.json) { out(JSON.stringify(payload, null, 2)); if (rc) lines.forEach((l) => err(l)); } else lines.forEach((l) => out(l));
+    return rc;
+  };
+  const vaultPath = opts.vault ? path.resolve(opts.vault) : path.resolve(path.dirname(configPath), loadVaultConfig(configPath).vaultPath);
+  const given = String(opts.page || '').trim().split(path.sep).join('/');
+  const heading = String(opts.text || '').trim();
+  const page = given.endsWith('.md') ? vaultSpelling(vaultPath, given) : null;
+  if (!page) return print([`Not settled: there is no note ${given} in ${vaultPath}.`], { settled: false }, 1);
+  if (!heading) return print(['Not settled: no heading was given.'], { settled: false }, 1);
+  const record = { page, text: heading, note: HEADING_NOTE };
+  if (settledHeadingGone(vaultPath, record)) return print([`Not settled: ${page} has no heading "${heading}".`], { settled: false }, 1);
+  const old = tooOldFor(configPath, SETTLE);
+  if (old) return print([old.line], { settled: false, siteTool: old.shown, needs: old.needs }, 1);
+  const list = loadPublishList(vaultPath, { warn: () => {} });
+  const accepted = (list && list.accepted) || [];
+  if (!accepted.some((a) => a.note === HEADING_NOTE && a.page === page && a.text === heading)) {
+    try { writeAccepted(vaultPath, [...accepted, record]); } catch (e) { return print([e.message], { settled: false }, 1); }
+  }
+  return print([`Settled: the heading "${heading}" in ${page} is for players. gm-leak asks again if the heading or the note's name changes.`],
+    { settled: true, heading: record }, 0);
+}
+
 async function runLeaks(options, deps) {
   const opts = options || {};
   const out = (deps && deps.out) || console.log;
   const configPath = path.resolve(opts.configPath || './vault.config.json');
+  if (opts.verb === 'settle') return settleHeading(opts, configPath, out, (deps && deps.err) || console.error);
   const outputDir = gateFolderFor(configPath);
   // A hiding-side settings fault (a never_show that is not a list) stops here too: the check would look for nothing.
   require('./config').assertNoStopsFor(configPath, 'leaks');
@@ -71,13 +132,8 @@ async function runLeaks(options, deps) {
     if (chosen.length === 0) return print([notAFinding(opts)], { accepted: false }, 1);
     // An older tool reads a publish list holding accepted findings only as an empty publish list: nothing is written
     // until the site's tool reads them.
-    const old = siteToolOlderThan(path.dirname(configPath), ACCEPTED_FROM);
-    if (old) {
-      const line = `Not accepted: this site's publish tool is ${old.shown}, and accepting needs ${ACCEPTED_FROM} or later `
-        + '(an older tool reads the accepted list as an empty publish list). Update the site first '
-        + `(gm-apprentice-publish update-pin --site ${path.dirname(configPath)}), then accept again.`;
-      return print([line], { accepted: false, siteTool: old.shown, needs: ACCEPTED_FROM }, 1);
-    }
+    const old = tooOldFor(configPath, ACCEPT);
+    if (old) return print([old.line], { accepted: false, siteTool: old.shown, needs: old.needs }, 1);
     // A vault with no publish list can accept too: writeAccepted creates a file holding only `accepted:`, which is not
     // a publish list for page decisions (amendment 7a).
     const list = loadPublishList(vaultPath, { warn: () => {} });
