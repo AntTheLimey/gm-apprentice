@@ -35,7 +35,7 @@ import subprocess
 import sys
 import threading
 import unicodedata
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -275,6 +275,14 @@ def _nested_block(raw: str, key: str) -> list[str]:
             block.append(nxt)
         return block
     return []
+
+
+def has_nested_block(raw: str, key: str) -> bool:
+    """Whether a top-level `key:` in the raw frontmatter has indented lines
+    under it (a map such as a session's `documents:`), which
+    `extract_frontmatter` reads as an empty value."""
+    return any(ln.strip() and not ln.strip().startswith("#")
+               for ln in _nested_block(raw, key))
 
 
 def nested_mapping(text: str, key: str) -> dict[str, str]:
@@ -2199,22 +2207,54 @@ class LinkLine:
     spans: list[tuple[int, int]]
 
 
-def yaml_comment_spans(line: str) -> list[tuple[int, int]]:
-    """The span of a YAML comment on a frontmatter line: from a `#` at the
-    start or after whitespace, outside quotes, to the line's end. The build
-    never renders it, so a `[[link]]` in it is an example, not a link."""
-    quote = ""
-    for i, ch in enumerate(line):
+# A line that opens a block scalar (`key: |`, `- >-`, `key: |2`): the
+# indented lines after it are its text, where `#` is no comment.
+_YAML_BLOCK_SCALAR = re.compile(r"(?:^|[:-])\s+[|>][1-9+-]{0,2}$")
+
+
+def _yaml_line_comment(line: str, quote: str) -> tuple[int | None, str]:
+    """Where a YAML comment starts on one line (None when it has none) and
+    the quote still open at its end, given the quote open at its start: a
+    `#` at the start or after whitespace, outside quotes. `\\` in double
+    quotes escapes the next character."""
+    i = 0
+    while i < len(line):
+        ch = line[i]
         if quote:
-            if ch == quote:
+            if ch == "\\" and quote == '"':
+                i += 1
+            elif ch == quote:
                 quote = ""
-            elif ch == "\\" and quote == '"':
-                continue
         elif ch in "\"'" and (i == 0 or not line[i - 1].isalnum()):
             quote = ch
         elif ch == "#" and (i == 0 or line[i - 1].isspace()):
-            return [(i, len(line))]
-    return []
+            return i, quote
+        i += 1
+    return None, quote
+
+
+def yaml_comment_spans(lines: Sequence[str]) -> list[list[tuple[int, int]]]:
+    """Each frontmatter line's YAML comment span, from its `#` to the line's
+    end. The build never renders it, so a `[[link]]` in it is an example,
+    not a link. A block scalar's lines and the inside of a quoted value that
+    runs over lines have none."""
+    out: list[list[tuple[int, int]]] = []
+    quote = ""
+    block: int | None = None
+    for line in lines:
+        text = line.rstrip("\r\n")
+        indent = len(text) - len(text.lstrip(" "))
+        if block is not None and (not text.strip() or indent > block):
+            out.append([])
+            continue
+        block = None
+        opened = quote
+        at, quote = _yaml_line_comment(text, quote)
+        out.append([] if at is None else [(at, len(line))])
+        code = text[:at].rstrip() if at is not None else text.rstrip()
+        if not opened and not quote and _YAML_BLOCK_SCALAR.search(code):
+            block = indent
+    return out
 
 
 def link_lines(text: str) -> Iterator[LinkLine]:
@@ -2229,10 +2269,11 @@ def link_lines(text: str) -> Iterator[LinkLine]:
     states, _ = scan_body(text)
     code = {s.lineno for s in states if s.in_code}
     body_start = states[0].lineno if states else len(lines) + 1
+    fm_spans = yaml_comment_spans(lines[:body_start - 1])
     for lineno, line in enumerate(lines, 1):
         in_fm = lineno < body_start
         yield LinkLine(lineno, line, lineno in code, in_fm,
-                       yaml_comment_spans(line) if in_fm
+                       fm_spans[lineno - 1] if in_fm
                        else inline_code_spans(line))
 
 
@@ -2267,8 +2308,13 @@ class Unverified:
             return None
         if self.session != number:
             return False
-        return (chapter is None or self.chapter is None
-                or float(chapter) == float(self.chapter))
+        return same_chapter(chapter, self.chapter)
+
+
+def same_chapter(a: str | None, b: str | None) -> bool:
+    """Whether two chapter numbers name one chapter, compared as numbers
+    ("01" is "1"). A chapter missing on either side matches any."""
+    return a is None or b is None or float(a) == float(b)
 
 
 def unverified_markers(text: str) -> list[Unverified]:

@@ -353,7 +353,7 @@ def check_frontmatter(vault: Path, folder: str | None,
         # The schema's rules, from the one place they live (the repo's
         # validator asks the same function); custom types are INFO.
         rows += [f"{level}\t{rel}\t{message}"
-                 for level, message in frontmatter_findings(fm, setting)]
+                 for level, message in frontmatter_findings(fm, setting, raw_frontmatter(text))]
         for line in raw_frontmatter(text).splitlines():
             if UNQUOTED_LINK_RE.match(line):
                 rows.append(f"WARNING\t{rel}\tunquoted wikilink in "
@@ -2107,9 +2107,11 @@ def settle_heading(vault: Path, where: str) -> tuple[list[str], int]:
     if answer.data is None or not isinstance(answer.data, dict) \
             or answer.data.get("settled") is not True:
         why = answer.why or "the publish tool did not settle it"
-        if "Unknown leaks command: settle" in why:
-            # A site pinned to a tool from before `leaks settle`: an old
-            # pin, which update-pin fixes (as `_tool_too_old_row`).
+        if "Unknown leaks command: settle" in why \
+                or "and settling needs" in why:
+            # A site pinned to a tool from before `leaks settle`, or one
+            # the tool refuses by version (SETTLE_FROM): an old pin, which
+            # update-pin fixes (as `_tool_too_old_row`).
             why = ("the site's publish tool is too old to settle a heading "
                    "— run update-pin, then run this again")
         return [f"ERROR\t{rel}:{n}\t'{title}' was not settled: {why}"], 1

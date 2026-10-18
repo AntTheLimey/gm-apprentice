@@ -30,7 +30,7 @@ from schema_rules import (  # noqa: E402
     is_schema_type,
 )
 import vault_check  # noqa: E402
-from vaultlib import setting_or_builtin  # noqa: E402
+from vaultlib import raw_frontmatter, setting_or_builtin  # noqa: E402
 
 
 def validate_file(filepath: Path, content: str | None = None,
@@ -62,7 +62,8 @@ def validate_file(filepath: Path, content: str | None = None,
         return [f"Unknown type '{entity_type}' — must be one of: "
                 f"{', '.join(sorted(REQUIRED_FIELDS))}, or a subtype in the ontology"]
     setting = None if vault is None else (lambda name: setting_or_builtin(vault, name))
-    return [message for level, message in frontmatter_findings(frontmatter, setting)
+    return [message for level, message
+            in frontmatter_findings(frontmatter, setting, raw_frontmatter(content))
             if level == "ERROR"]
 
 

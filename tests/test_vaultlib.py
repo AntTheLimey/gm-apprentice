@@ -981,6 +981,27 @@ class LinkLinesTests(unittest.TestCase):
         self.assertEqual(
             [m.group(1) for m in vl.live_wikilinks(fm.line, fm.spans)], ["A"])
 
+    def fm_links(self, fm):
+        return [[m.group(1) for m in vl.live_wikilinks(ll.line, ll.spans)]
+                for ll in vl.link_lines(f"---\n{fm}---\nbody\n")][1:-2]
+
+    def test_a_yaml_comment_hides_its_links(self):
+        self.assertEqual(self.fm_links("a: [[A]] # see [[B]]\n"), [["A"]])
+
+    def test_an_escaped_quote_does_not_close_a_double_quoted_value(self):
+        # `\"` stays inside the string, so the `#` after it is not a comment.
+        self.assertEqual(self.fm_links('a: "x\\" #1 [[A]]"\n'), [["A"]])
+        self.assertEqual(self.fm_links('a: "x\\\\" # [[A]]\n'), [[]])
+
+    def test_a_block_scalar_has_no_comment(self):
+        fm = "a: |\n  one # two [[A]]\n\n  #3 [[B]]\nb: >-\n  # [[C]]\nc: x # [[D]]\n"
+        self.assertEqual(self.fm_links(fm),
+                         [[], ["A"], [], ["B"], [], ["C"], []])
+
+    def test_a_multi_line_quoted_value_has_no_comment(self):
+        fm = 'a: "one\n  two # [[A]]\n  three" # [[B]]\nb: \'x\n  # [[C]]\'\n'
+        self.assertEqual(self.fm_links(fm), [[], ["A"], [], [], ["C"]])
+
     def test_frontmatter_only_note_is_all_frontmatter(self):
         got = list(vl.link_lines('---\nx: "[[A]]"\n---\n'))
         self.assertEqual(len(got), 3)

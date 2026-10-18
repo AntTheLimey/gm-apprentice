@@ -53,7 +53,7 @@ from schema_rules import extract_frontmatter, parse_session_number, wikilink_tar
 from vault_check import RECONSTRUCTION_NOTE_RE, STRUCTURAL_TYPES  # noqa: E402
 from vaultlib import (WRAP_UP_TYPES, entity_type, link_aliases, link_lines,  # noqa: E402
                       link_target, live_wikilinks, markers_in, nested_mapping,
-                      normalize, normalize_file_arg, unverified_markers,
+                      normalize, normalize_file_arg, same_chapter, unverified_markers,
                       Unverified, vault_files)
 
 FIRST_WORDS = 10
@@ -184,8 +184,7 @@ def _created_this_session(note: Note, number: int | None, chapter: str | None) -
     names no chapter is judged by number alone."""
     if number is None or parse_session_number(note.fm.get("createdSession")) != number:
         return False
-    theirs = _chapter(note.fm.get("createdSession"))
-    return chapter is None or theirs is None or theirs == chapter
+    return same_chapter(chapter, _chapter(note.fm.get("createdSession")))
 
 
 def _wrap_rel(vault: Path, raw: str) -> str:

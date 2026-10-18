@@ -109,7 +109,7 @@ check("ambiguous: filename collisions only, alias shadow excluded",
 # --- vault_check.py ---
 
 lines = run("vault_check.py", "frontmatter", vault=SCHEMA_VAULT)
-check("frontmatter finding count", lines[:2], ["## frontmatter", "# count: 5"])
+check("frontmatter finding count", lines[:2], ["## frontmatter", "# count: 6"])
 findings = "\n".join(lines)
 check("frontmatter: inline YAML comment not a false enum error",
       ["CommentVal" in findings], [False])
@@ -119,6 +119,8 @@ for expect, label in [
     ("legacy field 'source_confidence'", "legacy field detection"),
     ("unquoted wikilink in frontmatter", "unquoted frontmatter link"),
     ("missing 'type' field", "missing type"),
+    ("Session_5.md\tmissing required field 'documents'",
+     "an empty required field is missing"),
 ]:
     check(f"frontmatter: {label}",
           [expect in findings], [True])

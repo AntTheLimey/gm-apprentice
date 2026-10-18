@@ -120,6 +120,10 @@ class Scan(unittest.TestCase):
         files["NPCs/Lady_Grey.md"] = files["NPCs/Lady_Grey.md"].replace(
             "Chapter 2,", "Chapter 1,")
         self.assertIn("draft entities created this session: 1", scan(files))
+        # Chapters compare as numbers: "01" is chapter 1.
+        files["NPCs/Lady_Grey.md"] = files["NPCs/Lady_Grey.md"].replace(
+            "Chapter 1,", "Chapter 01,")
+        self.assertIn("draft entities created this session: 1", scan(files))
 
     def test_the_chapter_comes_from_the_indexs_folder_too(self):
         files = plain_wrap(FILES)

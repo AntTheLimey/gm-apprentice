@@ -34,6 +34,7 @@ from vaultlib import (  # noqa: E402,F401
     chapter_key,
     chapter_of,
     extract_frontmatter,
+    has_nested_block,
     parse_session_number,
     scalar_value,
     wikilink_target,
@@ -263,14 +264,20 @@ def is_schema_type(etype: str) -> bool:
     return etype in named and etype not in _ontology()["entity_types"]["abstract"]
 
 
-def frontmatter_findings(fm: dict, setting: Callable[[str], Iterable[object]] | None = None
-                         ) -> list[tuple[str, str]]:
+def _empty(value: object) -> bool:
+    return value is None or value in ("", [], {}) or (isinstance(value, str) and not value.strip())
+
+
+def frontmatter_findings(fm: dict, setting: Callable[[str], Iterable[object]] | None = None,
+                         raw: str | None = None) -> list[tuple[str, str]]:
     """Every schema rule for one note's frontmatter, as (level, message).
 
     The one place the rules live: `vault_check.py frontmatter` prints these
     as rows and `scripts/validate_schema.py` reports the ERRORs. A custom
     type is INFO and takes only the rules for any type; an empty value is
-    unset, not wrong. `setting(name)` is the vault's value of a setting, as
+    unset, not wrong, and a required field left empty is missing. `raw` is
+    the frontmatter's text, so a map under a required key is not read as
+    empty. `setting(name)` is the vault's value of a setting, as
     the publish tool reads it (vaultlib.setting_or_builtin); asked only for
     a value outside the schema's words, for a field in SETTING_VALUES.
     Without it, only the schema's words pass."""
@@ -284,11 +291,14 @@ def frontmatter_findings(fm: dict, setting: Callable[[str], Iterable[object]] | 
     if custom:
         found.append(("INFO", f"custom type '{etype}' (no schema rules applied)"))
     for field in REQUIRED_FIELDS.get(etype, []):
-        if field not in fm:
+        # Present but empty (`field:`, `field: ""`, `[]`) is missing too,
+        # unless `raw` shows a map indented under it (a session's
+        # `documents:`), which the line reader reads as empty.
+        if _empty(fm.get(field)) and not (raw is not None and has_nested_block(raw, field)):
             found.append(("ERROR", f"missing required field '{field}' for type '{etype}'"))
     for field, allowed in (CHECKED_VALUES["*"] if custom else checked_values(etype)).items():
         value = fm.get(field)
-        if not value:  # unset: the line reader reads `field: ""` as []
+        if _empty(value):  # unset: the line reader reads `field: ""` as []
             continue
         if not isinstance(value, str):
             found.append(("ERROR", f"{field}: one value, not {value!r}"))

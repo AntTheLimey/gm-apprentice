@@ -1697,6 +1697,25 @@ class GmLeakSettleTests(unittest.TestCase):
             "publish tool is too old to settle a heading — run update-pin, "
             "then run this again"])
 
+    def test_a_site_tool_below_the_settle_version_says_too_old_too(self):
+        # A newer tool asked about a site pinned to 1.30-1.38 refuses by
+        # version (SETTLE_FROM); the row reads the same as an unknown verb.
+        vault = self.vault()
+        old = vc.ToolAnswer(
+            why="leaks settle exited 1: Not settled: this site's publish "
+                "tool is 1.38.2, and settling needs 1.39.0 or later (an "
+                "older tool reads a settled heading as a finding no longer "
+                "needed, and prune deletes it). Update the site first "
+                "(gm-apprentice-publish update-pin --site /x), then settle "
+                "again.")
+        with mock.patch.object(vc, "ask_publish_tool", return_value=old):
+            rows, code = vc.settle_heading(vault, "Bob.md:7")
+        self.assertEqual(code, 1)
+        self.assertEqual(rows, [
+            "ERROR\tBob.md:7\t'Secret Tactics' was not settled: the site's "
+            "publish tool is too old to settle a heading — run update-pin, "
+            "then run this again"])
+
     def test_settle_refuses_a_line_that_is_no_heading(self):
         vault = self.vault()
         done = run_cli(vault, "gm-leak", "--settle", "Bob.md:9")

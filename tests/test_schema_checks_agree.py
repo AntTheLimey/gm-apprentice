@@ -121,6 +121,15 @@ class BothChecksAgree(unittest.TestCase):
     def test_missing_required_fields(self):
         self.assertAgree("type: scene\ncanon_status: DRAFT", 2)
 
+    def test_an_empty_required_field_is_missing_to_both(self):
+        for empty in ('""', "", "[]", "'  '"):
+            errors = self.assertAgree(f"type: npc\ncanon_status: {empty}", 1)
+            self.assertEqual(errors, ["missing required field 'canon_status' for type 'npc'"])
+        # A map indented under a required key is a value, not an empty one.
+        session = "type: session\nsession_number: 1\nstatus: planned\ndocuments:"
+        self.assertAgree(f'{session}\n  plan: "[[P]]"\n  wrap_up: null', 0)
+        self.assertAgree(session, 1)
+
     def test_superseded_needs_superseded_by_in_both(self):
         self.assertAgree("type: npc\ncanon_status: SUPERSEDED", 1)
         self.assertAgree('type: npc\ncanon_status: SUPERSEDED\nsuperseded_by: "[[B]]"', 0)

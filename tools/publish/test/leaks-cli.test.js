@@ -215,9 +215,13 @@ describe('leaks', () => {
     try {
       const vault = vaultOf(site);
       const note = path.join(vault, 'NPCs', 'A.md');
+      const noteB = path.join(vault, 'NPCs', 'B.md');
+      const plainB = fs.readFileSync(noteB, 'utf8');
+      fs.writeFileSync(noteB, `${plainB}\n## Keeper Notes\n\nx\n`);
       assert.equal((await run(site, 'settle', { page: 'NPCs/A.md', text: 'Secret Tactics' })).rc, 0);
       assert.equal((await run(site, 'settle', { page: 'NPCs/B.md', text: 'Keeper Notes' })).rc, 0);
-      // B.md has no such heading: that record is no longer needed; A's still is, emphasis-wrapped or with a closing #.
+      fs.writeFileSync(noteB, plainB);
+      // B.md no longer has the heading: that record is no longer needed; A's still is, emphasis-wrapped or with a closing #.
       fs.writeFileSync(note, fs.readFileSync(note, 'utf8').replace('## Secret Tactics', '## **Secret Tactics** ##'));
       const check = await run(site, 'check');
       assert.match(check.text, /no longer needed: the settled heading "Keeper Notes" in NPCs\/B\.md/);
@@ -255,6 +259,53 @@ describe('leaks', () => {
         assert.match((await run(rebuilt, 'prune')).text, /Nothing to prune/);
         assert.equal(loadPublishList(vaultOf(rebuilt), { warn: () => {} }).accepted.length, 1);
       } finally { rebuilt.cleanup(); }
+    } finally { site.cleanup(); }
+  });
+
+  it('settle refuses while the site\'s installed publish tool is older than 1.39.0, and names the update', async () => {
+    const site = leakSite(TACTICS, SETTINGS);
+    try {
+      const tool = path.join(path.dirname(site.configPath), 'node_modules', 'gm-apprentice-publish');
+      fs.mkdirSync(tool, { recursive: true });
+      const listFile = path.join(vaultOf(site), '_meta', 'publish-list.yaml');
+      const before = fs.readFileSync(listFile, 'utf8');
+      // 1.30.0 to 1.38.x read an accepted record as a leak finding no longer needed, and prune would delete it.
+      fs.writeFileSync(path.join(tool, 'package.json'), JSON.stringify({ name: 'gm-apprentice-publish', version: '1.38.2' }));
+      const r = await run(site, 'settle', { page: 'NPCs/A.md', text: 'Secret Tactics' });
+      assert.equal(r.rc, 1);
+      assert.match(r.text, /1\.38\.2/);
+      assert.match(r.text, /1\.39\.0/);
+      assert.match(r.text, /update-pin/);
+      assert.equal(fs.readFileSync(listFile, 'utf8'), before);
+      const errs = [];
+      const json = await runLeaks({ verb: 'settle', configPath: site.configPath, page: 'NPCs/A.md', text: 'Secret Tactics', json: true },
+        { out: () => {}, err: (l) => errs.push(String(l)) });
+      assert.equal(json, 1);
+      assert.match(errs.at(-1), /settling needs 1\.39\.0/);
+      fs.writeFileSync(path.join(tool, 'package.json'), JSON.stringify({ name: 'gm-apprentice-publish', version: '1.39.0' }));
+      assert.equal((await run(site, 'settle', { page: 'NPCs/A.md', text: 'Secret Tactics' })).rc, 0);
+    } finally { site.cleanup(); }
+  });
+
+  it('settle refuses a heading the note does not have, and records the note path as the vault spells it', async () => {
+    const site = leakSite(TACTICS, SETTINGS);
+    try {
+      const listFile = path.join(vaultOf(site), '_meta', 'publish-list.yaml');
+      const before = fs.readFileSync(listFile, 'utf8');
+      const r = await run(site, 'settle', { page: 'NPCs/A.md', text: 'Keeper Notes' });
+      assert.equal(r.rc, 1);
+      assert.match(r.text, /Not settled: NPCs\/A\.md has no heading "Keeper Notes"/);
+      assert.equal(fs.readFileSync(listFile, 'utf8'), before);
+      assert.equal((await run(site, 'settle', { page: './NPCs/A.md', text: 'Secret Tactics' })).rc, 0);
+      assert.deepEqual(settledList(vaultOf(site)), [{ page: 'NPCs/A.md', text: 'Secret Tactics', note: 'gm-leak.heading' }]);
+      // On a disk that ignores case, another spelling finds the same note and is stored as the disk has it.
+      const caseless = fs.existsSync(path.join(vaultOf(site), 'npcs', 'a.md'));
+      if (caseless) {
+        assert.equal((await run(site, 'settle', { page: 'npcs/a.md', text: 'Secret Tactics' })).rc, 0);
+        assert.equal(settledList(vaultOf(site)).length, 1);
+      } else {
+        assert.equal((await run(site, 'settle', { page: 'npcs/a.md', text: 'Secret Tactics' })).rc, 1);
+      }
     } finally { site.cleanup(); }
   });
 
