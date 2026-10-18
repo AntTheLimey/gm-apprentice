@@ -361,25 +361,30 @@ def build(vault: Path, pieces: list[Piece]) -> None:
             made.append(path)
             write_text_atomic(path, piece.text())
     except BaseException as e:
+        unrestored: list[str] = []
         for path, original in merged.items():
             try:
                 write_text_atomic(path, original)
-            except OSError:
-                pass
+            except (OSError, StepFailed):
+                unrestored.append(path.relative_to(vault).as_posix())
         left = _undo(vault, made)
         if not isinstance(e, Exception):
-            if left:
-                raise ScaffoldError(f"interrupted; could not remove: "
-                                    f"{', '.join(left)}", left=True) from e
+            if left or unrestored:
+                raise ScaffoldError(
+                    f"interrupted; could not remove or put back: "
+                    f"{', '.join(left + unrestored)}", left=True) from e
             raise
         name = e.__class__.__name__
         why = str(e) or name
         if str(e) and not isinstance(e, (StepFailed, OSError,
                                          ScaffoldError)):
             why = f"{name}: {e}"
+        if unrestored:
+            why = (f"{why}; could not be put back as it was: "
+                   f"{', '.join(unrestored)}")
         if left:
             why = f"{why}; could not remove: {', '.join(left)}"
-        raise ScaffoldError(why, left=bool(left)) from e
+        raise ScaffoldError(why, left=bool(left or unrestored)) from e
 
 
 # --- CLI --------------------------------------------------------------------
