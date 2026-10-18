@@ -107,6 +107,16 @@ describe('fourOhFourTemplate', () => {
     assert.ok(html.includes('src="/my-campaign/images/campaign-image.svg"'));
   });
 
+  it('encodes a campaign image name holding a space and a bracket (#385)', () => {
+    const html = fourOhFourTemplate({ ...baseConfig, theme: { campaign_image: 'images/Rock [Lavey] Crest.png' } });
+    assert.ok(html.includes('src="/images/Rock%20%5BLavey%5D%20Crest.png"'), html);
+  });
+
+  it('keeps a web address for the campaign image, spaces aside', () => {
+    const html = fourOhFourTemplate({ ...baseConfig, theme: { campaign_image: 'https://example.com/a b.png' } });
+    assert.ok(html.includes('src="https://example.com/a%20b.png"'), html);
+  });
+
   it('includes generated SVG placeholder when no image', () => {
     const html = fourOhFourTemplate(baseConfig);
     assert.ok(html.includes('four-oh-four-hero'));

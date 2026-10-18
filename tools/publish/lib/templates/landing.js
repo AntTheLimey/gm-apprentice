@@ -1,4 +1,4 @@
-const { escapeHtml, plainMetaValue, encodeHref, encodeAddress, encodeImageUrl } = require('../processor');
+const { escapeHtml, plainMetaValue, encodeHref, encodeAddress, encodeImageUrl, campaignImageSrc } = require('../processor');
 const { refTarget, linkText } = require('../wikilink');
 const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, canonStatusBadge, clientScripts, noPreviewAttr } = require('./base');
 const {
@@ -67,8 +67,9 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   const inGameLabel = overviewFm.current_game_date || settingYear;
 
   // --- Zone 1: Hero ---
+  const heroSrc = campaignImage ? campaignImageSrc(campaignImage) : '';
   const heroImgHtml = campaignImage
-    ? `<img class="landing-hero-img" src="${escapeHtml(campaignImage)}" alt="${escapeHtml(config.siteTitle)}">`
+    ? `<img class="landing-hero-img" src="${escapeHtml(heroSrc)}" alt="${escapeHtml(config.siteTitle)}">`
     : '';
   const tagline = theme.tagline ? `<p class="hero-tagline">${escapeHtml(theme.tagline)}</p>` : '';
   const sessionCount = (overviewFm.sessions_played != null)
