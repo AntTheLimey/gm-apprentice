@@ -33,7 +33,6 @@ from vaultlib import (  # noqa: E402,F401
     chapter_key,
     chapter_of,
     extract_frontmatter,
-    gm_only_hides,
     parse_session_number,
     scalar_value,
     wikilink_target,

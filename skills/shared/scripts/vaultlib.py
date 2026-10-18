@@ -2121,33 +2121,6 @@ def publisher_lines(text: str, excludes: Iterable[str],
 # Publish gating
 # --------------------------------------------------------------------------
 
-# The words of the publish tool's switch list that mean yes. A copy, because the
-# checks that read a note's flag run with no Node; tests/test_vaultlib_state.py
-# pins it to the tool's own list.
-GM_ONLY_YES_WORDS = ("true", "yes", "on")
-
-
-def gm_only_hides(value: Any) -> bool:
-    """Whether a relationship's `gm_only: <value>` hides the edge.
-
-    Mirrors tools/publish/lib/processor.js `isGmOnlyEdge`: true, the number
-    1, and the words true, yes, on and 1, trimmed and in any capitals. A
-    real YAML parser gives `yes` and `on` as strings and a GM may quote or
-    pad any of them. Reading more of these as a yes only hides more.
-    tools/publish/test/fixtures/gm-only-vectors.json pins both.
-    """
-    if value is True:
-        return True
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return value == 1
-    if not isinstance(value, str):
-        return False
-    word = value.strip().lower()
-    # A word that reads as the number 1 (1.0, 01, +1) is a yes, as in JS.
-    return word in GM_ONLY_YES_WORDS or re.fullmatch(
-        r"\+?0*1(?:\.0*)?", word, re.ASCII) is not None
-
-
 WITHHELD_KEY_RE = re.compile(r"""^["']?withheld["']?[ \t]*:""", re.M)
 
 

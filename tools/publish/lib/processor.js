@@ -1936,8 +1936,8 @@ function publishMode(frontmatter) {
 // GM may quote or pad any of them, so the flag hides the edge for true, the
 // number 1, and the words true, yes, on and 1, trimmed and in any capitals.
 // Reading more of these as a yes only ever shows less.
-// skills/shared/scripts/vaultlib.py `gm_only_hides` is this function;
-// test/fixtures/gm-only-vectors.json pins both.
+// The vault scripts ask the tool (the relationships command) and keep no reading of their own;
+// test/fixtures/gm-only-vectors.json pins this one.
 function isGmOnlyEdge(rel) {
   return flagIsYes(rel && rel.gm_only);
 }

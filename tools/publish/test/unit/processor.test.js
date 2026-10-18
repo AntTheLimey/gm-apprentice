@@ -731,7 +731,7 @@ describe('isWithheld (the gm_only vectors; vaultlib.note_withheld asks it)', () 
   });
 });
 
-describe('isGmOnlyEdge (shared vectors; vaultlib.gm_only_hides must agree)', () => {
+describe('isGmOnlyEdge (the gm_only vectors)', () => {
   const VECTORS = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '..', 'fixtures', 'gm-only-vectors.json'), 'utf8'));
   for (const v of VECTORS.cases) {
     it(`gm_only ${JSON.stringify(v.value)} ${v.hides ? 'hides' : 'does not hide'} the edge`, () => assert.strictEqual(isGmOnlyEdge({ gm_only: v.value }), v.hides));
