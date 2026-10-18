@@ -293,12 +293,12 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
     state_path = vault / STATE_FILE
     if not has_settings and state_path.is_file():
         try:
-            held = _read_state(vault)
+            old_state = _read_state(vault)
         except StateUnreadable as e:
             raise ScaffoldError(str(e)) from e
-        if STAMP_KEY not in held:
+        if STAMP_KEY not in old_state:
             out.append(Piece(STATE_FILE, lambda: json.dumps(
-                {**held, STAMP_KEY: version}, indent=2,
+                {**old_state, STAMP_KEY: version}, indent=2,
                 ensure_ascii=False) + "\n", merge=True))
     return out
 
