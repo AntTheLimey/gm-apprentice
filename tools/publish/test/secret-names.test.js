@@ -34,12 +34,33 @@ describe('a plural of a secret name (#352)', () => {
   it('"the Lord Zorns" is a hit, as a name written with a capital', () => {
     const s = secrets({ withheld: ['Lord Zorn'], gmAliases: ['Fox'] });
     assert.deepStrictEqual(hits(s, page('<p>The Lord Zorns rode out.</p>')).map((h) => h.alias), ['Lord Zorn']);
-    assert.deepStrictEqual(hits(s, page('<p>Two Foxes came.</p>')).map((h) => h.alias), ['Fox']);
+    assert.deepStrictEqual(hits(s, page('<p>Then the Lord Zorns rode out.</p>')).map((h) => h.alias), ['Lord Zorn']);
+    assert.deepStrictEqual(hits(s, page('<p>Lord Zorns ride.</p>')).map((h) => h.alias), ['Lord Zorn']);
+    assert.deepStrictEqual(hits(s, page('<p>We saw two Foxes come.</p>')).map((h) => h.alias), ['Fox']);
   });
   it('a lower-case plural is a word, not the name: "hopes" for a note named Hope', () => {
     const s = secrets({ withheld: ['Hope'] });
     assert.deepStrictEqual(hits(s, page('<p>Her hopes were high.</p>')), []);
-    assert.deepStrictEqual(hits(s, page('<p>The Hopes of Arkham.</p>')).map((h) => h.alias), ['Hope']);
+    assert.deepStrictEqual(hits(s, page('<p>We read of the Hopes in Arkham.</p>')).map((h) => h.alias), ['Hope']);
+  });
+  it('a one-word name\'s plural counts only written with a capital mid-sentence (not a sentence start, heading or title)', () => {
+    const s = secrets({ withheld: ['Hope', 'Mark', 'Zorn'] });
+    assert.deepStrictEqual(hits(s, page('<p>Hopes were high.</p>')), []);
+    assert.deepStrictEqual(hits(s, page('<p>It rained. Hopes were high.</p>')), []);
+    assert.deepStrictEqual(hits(s, page('<h2>Lost Hopes</h2><p>Nothing.</p>')), []);
+    assert.deepStrictEqual(hits(s, page('<p>Marks of the beast.</p>')), []);
+    assert.deepStrictEqual(hits(s, page('<p>We read The Lost Hopes Of Old aloud.</p>')), []);
+    assert.deepStrictEqual(hits(s, page('<p>Home›Hopes›Lost</p>')), []);
+    assert.deepStrictEqual(hits(s, page('<p>And the Zorns came.</p>')).map((h) => h.alias), ['Zorn']);
+    // The name itself, not a plural, is matched as it always was.
+    assert.deepStrictEqual(hits(s, page('<p>Hope was high.</p>')).map((h) => h.alias), ['Hope']);
+  });
+  it('a markdown heading line or sentence start is read the same in a note\'s text', () => {
+    const { nameMatcher, nameHits } = require('../lib/note-faults');
+    const hope = nameMatcher('Hope');
+    assert.deepStrictEqual(nameHits(hope, '## Lost Hopes\n\nHopes were high.\n- Hopes again'), []);
+    assert.strictEqual(nameHits(hope, 'We lost the Hopes.').length, 1);
+    assert.strictEqual(nameHits(nameMatcher('Lord Zorn'), '## the Lord Zorns').length, 1);
   });
   it('a longer word is still not the name', () => {
     const s = secrets({ withheld: ['Lord Zorn'] });

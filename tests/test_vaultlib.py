@@ -1000,6 +1000,53 @@ class BuildLinesTests(unittest.TestCase):
              (9, "hidden", False, "GM Notes", None)])
         self.assertEqual(states[3].written, "<!-- /gm-only -->## Public")
 
+    def test_one_answer_holds_the_put_back_heading_and_an_old_tool_asks_twice(self):
+        # #447: a withheld heading in a hidden block withholds the text
+        # after the block, in the tool's one `cut` answer. A tool whose
+        # answer has no `withheldBy` is asked about the lines left, as before.
+        text = ("---\ntype: npc\n---\n<!-- gm-only -->\n## GM Notes\n"
+                "<!-- /gm-only -->\nafter\n## Voice\nlow\n")
+        states, _ = vl.build_lines(text, ["GM Notes"])
+        self.assertEqual([(s.lineno, s.cut, s.excluded_by) for s in states],
+                         [(4, False, None), (5, True, None), (6, True, None),
+                          (7, False, "GM Notes"), (8, False, None),
+                          (9, False, None)])
+        own = vl._LINES_BY_TOOL[vl.PUBLISH_TOOL]
+        asked = []
+
+        class OldTool:
+            def ask(self, request):
+                asked.append(request["op"])
+                answer = dict(own.ask(request))
+                if request["op"] == "cut":
+                    answer.pop("withheldBy", None)
+                return answer
+
+        saved = vl.PUBLISH_LINES
+        vl.PUBLISH_LINES = OldTool()  # type: ignore[assignment]
+        try:
+            states, _ = vl.build_lines(text, ["GM Notes"])
+        finally:
+            vl.PUBLISH_LINES = saved
+        self.assertEqual(asked, ["cut", "sections"])
+        self.assertEqual([s.excluded_by for s in states],
+                         [None, None, None, None, None, None])
+
+    def test_every_run_of_the_publish_tool_closes_its_stdin(self):
+        # A tool that read stdin would wait on the caller's terminal; each
+        # one-shot run hands it nothing instead.
+        import ast
+        for name in ("vaultlib.py", "vault_check.py"):
+            tree = ast.parse((SCRIPTS / name).read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and node.func.attr == "run"
+                        and isinstance(node.func.value, ast.Name)
+                        and node.func.value.id == "subprocess"):
+                    with self.subTest(file=name, line=node.lineno):
+                        self.assertIn("stdin", [k.arg for k in node.keywords])
+
     def test_unbalanced_markers_are_worded_as_scan_body_words_them(self):
         text = "a\n<!-- /spoiler -->\n<!-- gm-only -->\n<!-- /gm-only -->\n<!-- gm-only -->\nb"
         self.assertEqual(vl.build_lines(text)[1], vl.scan_body(text)[1])

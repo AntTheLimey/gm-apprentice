@@ -97,6 +97,38 @@ describe('lines: cut', () => {
   });
 });
 
+describe('lines: cut with the page\'s section rules (#447)', () => {
+  const HIDDEN = '## Appearance\nTall.\n<!-- gm-only -->\n## GM Notes\n<!-- /gm-only -->\n### Keeper Secrets\nThe informant.\n## Voice\nLow.';
+  it('answers per line what withholds it, a heading in a hidden block withholding the text after it as the build does', () => {
+    const { cut, withheldBy } = answer({ op: 'cut', text: HIDDEN, excludeSections: ['GM Notes'] });
+    assert.deepStrictEqual(cut, ['## Appearance', 'Tall.', '', null, null, '### Keeper Secrets', 'The informant.', '## Voice', 'Low.']);
+    assert.deepStrictEqual(withheldBy, [null, null, null, null, null, 'GM Notes', 'GM Notes', null, null]);
+    // The lines it calls kept are the lines the build prints.
+    const printed = cut.filter((c, i) => c !== null && withheldBy[i] === null).join('\n');
+    assert.strictEqual(printed, playerSafeMarkdown(HIDDEN, { excludeSections: ['GM Notes'] }).text);
+  });
+  it('takes the document type, the PC keep-list and the hidden callouts', () => {
+    const doc = '## Content\nThe chit.\n%%\n## Context\n%%\nThe man.';
+    assert.deepStrictEqual(answer({ op: 'cut', text: doc, excludeSections: [], type: 'handout' }).withheldBy,
+      [null, null, null, null, null, 'Context']);
+    const pc = '## Background\nBorn.\n## Skills\nSword.';
+    assert.deepStrictEqual(answer({ op: 'cut', text: pc, excludeSections: [], type: 'pc', pcKeepSections: ['Background'] }).withheldBy,
+      [null, null, 'Skills', 'Skills']);
+    const callout = 'Intro.\n> [!gm] Keeper\n> secret\nAfter.';
+    assert.deepStrictEqual(answer({ op: 'cut', text: callout, excludeSections: [], excludeCallouts: ['gm'] }).cut,
+      ['Intro.', null, null, 'After.']);
+  });
+  it('without the rules it answers as before, with no withheldBy', () => {
+    const got = answer({ op: 'cut', text: HIDDEN });
+    assert.strictEqual(got.withheldBy, undefined);
+    assert.deepStrictEqual(got.cut, ['## Appearance', 'Tall.', '', null, null, '### Keeper Secrets', 'The informant.', '## Voice', 'Low.']);
+  });
+  it('a rule that is not a list is an error, not "nothing withheld"', () => {
+    assert.throws(() => answer({ op: 'cut', text: 'x', excludeSections: 'GM Notes' }), /excludeSections/);
+    assert.throws(() => answer({ op: 'cut', text: 'x', excludeSections: [], excludeCallouts: 'gm' }), /excludeCallouts/);
+  });
+});
+
 describe('lines: sections', () => {
   it('names the section withholding each line', () => {
     const { withheldBy } = answer({ op: 'sections', text: NOTE, excludeSections: ['gm notes'] });

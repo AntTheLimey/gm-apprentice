@@ -173,9 +173,13 @@ function pairHubs(corpus, published, options) {
       const before = page.frontmatter && page.frontmatter.title;
       page.frontmatter = rewriter.frontmatter(page.frontmatter);
       // The page's title is read from `title:` once, by the scanner (displayTitle), and every printer takes it from
-      // there: a title the rewrite changed (a link to a withheld note, now its word) is read again, here (#448).
+      // there: a title the rewrite changed (a link to a withheld note, now its word) is read again, here (#448). One
+      // that reads as nothing gets the scanner's own fallback, the file name, never the title from before the rewrite.
       const after = page.frontmatter && page.frontmatter.title;
-      if (typeof before === 'string' && after !== before) page.displayTitle = labelsForLinks(String(after)) || page.displayTitle;
+      if (typeof before === 'string' && after !== before) {
+        page.displayTitle = labelsForLinks(String(after == null ? '' : after)).trim()
+          || String(page.title || path.basename(page.sourcePath || '', '.md')).replace(/_/g, ' ');
+      }
     }
   } else if (rewriter) {
     const views = new Map(corpus.map((p) => [p, Object.assign({}, p, { frontmatter: rewriter.frontmatter(p.frontmatter) })]));

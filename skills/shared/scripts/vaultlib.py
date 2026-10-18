@@ -986,7 +986,7 @@ class PublishLines:
         try:
             done = subprocess.run(
                 [node, str(self.tool), *args], capture_output=True,
-                timeout=PUBLISH_LINES_TIMEOUT)
+                stdin=subprocess.DEVNULL, timeout=PUBLISH_LINES_TIMEOUT)
         except subprocess.TimeoutExpired as e:
             raise PublishToolUnavailable(
                 f"the publish tool did not answer within "
@@ -1351,7 +1351,8 @@ def _run_settings(args: list[str], *, refusable: bool = False,
     try:
         done = subprocess.run(
             [node, str(PUBLISH_TOOL), "settings", *args, "--json"],
-            capture_output=True, timeout=PUBLISH_LINES_TIMEOUT)
+            capture_output=True, stdin=subprocess.DEVNULL,
+            timeout=PUBLISH_LINES_TIMEOUT)
     except subprocess.TimeoutExpired as e:
         raise fail(f"the publish tool did not answer within "
                    f"{PUBLISH_LINES_TIMEOUT}s") from e
@@ -1404,7 +1405,8 @@ def run_relationships(vault: Path, args: list[str]) -> Any:
         done = subprocess.run(
             [node, str(PUBLISH_TOOL), "relationships", *args, "--json",
              "--vault", str(vault)],
-            capture_output=True, timeout=PUBLISH_LINES_TIMEOUT)
+            capture_output=True, stdin=subprocess.DEVNULL,
+            timeout=PUBLISH_LINES_TIMEOUT)
     except subprocess.TimeoutExpired as e:
         raise fail(f"it did not answer within {PUBLISH_LINES_TIMEOUT}s") from e
     except OSError as e:
@@ -1933,7 +1935,10 @@ class BuildLine:
         return not self.cut and self.excluded_by is None
 
 
-def build_lines(text: str, exclude_sections: Iterable[str] = ()
+def build_lines(text: str, exclude_sections: Iterable[str] = (), *,
+                note_type: str | None = None,
+                pc_keep: list[str] | None = None,
+                callouts: Any = False,
                 ) -> tuple[list[BuildLine], list[str]]:
     """Every body line of a note as the build reads it, and the gm-only and
     spoiler markers its block strips find unbalanced, as `scan_body`'s
@@ -1942,12 +1947,17 @@ def build_lines(text: str, exclude_sections: Iterable[str] = ()
     The build splits at `\\n` alone (a form feed, `\\x85` or a lone `\\r`
     is inside a line) and drops `\\r`; `text` must be the file as written,
     not read with universal newlines. Which lines the strip chain cuts
-    (gm-only and spoiler blocks, HTML and `%%` comments, dataview) and
-    what it leaves of the rest is the publish tool's `cut` answer; the
-    section filter is then asked about the lines left, as the build runs
-    it. Headings and code fences are read from what is left. Raises
-    `PublishToolUnavailable` when the tool cannot be asked, and
-    `PublishToolTooOld` when it predates `cut`."""
+    (gm-only and spoiler blocks, HTML and `%%` comments, dataview, the
+    hidden callouts) and which an excluded section withholds is the
+    publish tool's one `cut` answer, given the page's section rules: the
+    exclude list, the note's `type:` (`note_type`), the PC keep-list while
+    sheets are off (`pc_keep`) and `player_site.hide.callouts`
+    (`callouts`). So a withheld heading inside a hidden block withholds
+    the text after the block, as on the site (#447). A tool older than
+    that answers without `withheldBy`: the section filter is then asked
+    about the lines left. Headings and code fences are read from what is
+    left. Raises `PublishToolUnavailable` when the tool cannot be asked,
+    and `PublishToolTooOld` when it predates `cut`."""
     lines = text.split("\n")
     if len(lines) > 1 and lines[-1] == "":
         lines.pop()
@@ -1959,7 +1969,12 @@ def build_lines(text: str, exclude_sections: Iterable[str] = ()
     body = lines[start:]
     if not body:
         return [], []
-    request = {"op": "cut", "text": "\n".join(body)}
+    excludes = [str(s) for s in exclude_sections]
+    request: dict[str, Any] = {
+        "op": "cut", "text": "\n".join(body), "excludeSections": excludes,
+        "type": note_type, "pcKeepSections": pc_keep,
+        "excludeCallouts": callouts if isinstance(callouts, (bool, list))
+        else False}
     try:
         answer = PUBLISH_LINES.ask(request)
     except PublishToolUnavailable as e:
@@ -1973,7 +1988,14 @@ def build_lines(text: str, exclude_sections: Iterable[str] = ()
         # A site's tool from before the faults were reported: where the
         # blocks run is still its answer; only the faults' lines are the
         # plugin's tool's.
-        unbalanced = own.ask(request).get("unbalanced")
+        unbalanced = own.ask({"op": "cut", "text": request["text"]}).get(
+            "unbalanced")
+    by = answer.get("withheldBy")
+    if by is not None and (
+            not isinstance(by, list) or len(by) != len(body)
+            or not all(v is None or isinstance(v, str) for v in by)):
+        raise PublishToolUnavailable(
+            "the publish tool's answer does not match the note's lines")
     if (not isinstance(cut, list) or len(cut) != len(body)
             or not all(c is None or isinstance(c, str) for c in cut)
             or not isinstance(unbalanced, list)
@@ -1985,8 +2007,13 @@ def build_lines(text: str, exclude_sections: Iterable[str] = ()
                        for u in unbalanced)):
         raise PublishToolUnavailable(
             "the publish tool's answer does not match the note's lines")
-    left = [c for c in cut if c is not None]
-    verdicts = iter(withheld_by(left, exclude_sections))
+    if by is not None:
+        verdicts = iter([v for v, c in zip(by, cut) if c is not None])
+    else:
+        # A tool from before #447: the section filter asked about the
+        # lines the strips left, in a second question.
+        verdicts = iter(withheld_by([c for c in cut if c is not None],
+                                    excludes))
     states: list[BuildLine] = []
     fence_delim: str | None = None
     for i, (written, kept) in enumerate(zip(body, cut)):
@@ -2035,28 +2062,25 @@ def scan_body(text: str,
       after it, silently, which is the worst possible failure of the one
       primitive whose whole job is hiding things (#168).
 
-    Section exclusion follows the pipeline's *order*. `processContent` /
-    `playerSafeMarkdown` run `stripGmOnly` and `stripSpoiler` BEFORE
-    `filterSections`, so a `## GM Notes` written inside a
-    `<!-- gm-only -->` block is already gone when the section filter
-    runs: it never starts an exclusion, and it never ends one either. The
-    tool is therefore asked about the note with its marker lines and
-    marker blocks blanked. This matters because `<!-- gm-only -->`
-    wrapping `## GM Notes` is exactly the shape `wrapup --fix` writes:
-    letting that heading exclude the rest of the file would blind every
-    leak check to everything a GM appends below the fence.
+    The section filter is asked about the note with its marker lines and
+    marker blocks blanked, so a `## GM Notes` written inside a
+    `<!-- gm-only -->` block (the shape `wrapup --fix` writes) neither
+    starts nor ends an exclusion here.
 
     Known divergences of the marker model, which can err either way — so
     the leak checks do not use it: the leak invariant in vault_check.py
     reads `publisher_lines` and gm-leak reads `build_lines`, the tool's
-    own answers (#441). What still calls this is writers and structure
-    checks, which need to see inside the blocks:
+    own answers (#441, #447). What still calls this is writers and
+    structure checks, which need to see inside the blocks:
 
+    * The site puts a withheld heading from a hidden block back where the
+      block ends (#447), so the text after a fenced `## GM Notes`, up to
+      the next heading of its level or higher, is withheld there and
+      called published here.
     * Only the two marker blocks are blanked before the tool is asked,
-      not multi-line HTML comments, which `stripHtmlComments` also
-      removes before `filterSections`. A `## GM Notes` commented out that
-      way still starts an exclusion here and does not on the site, so
-      what follows it is called hidden here and publishes there.
+      not multi-line HTML comments. A `## GM Notes` commented out that
+      way starts its exclusion here at the heading, and on the site where
+      the comment ends.
     * A line that starts with a marker is a marker line here, whatever
       follows it: `<!-- /gm-only -->## Public` is no heading here, and is
       one on the site.

@@ -838,6 +838,7 @@ def check_relationships(vault: Path, folder: str | None = None,
         args += ["--newer-than", newer_than]
     try:
         done = subprocess.run(args, capture_output=True, text=True,
+                              stdin=subprocess.DEVNULL,
                               encoding="utf-8", errors="replace",
                               timeout=PUBLISH_TOOL_TIMEOUT, check=False)
     except subprocess.TimeoutExpired:
@@ -1538,6 +1539,7 @@ def ask_publish_tool(vault: Path, args: list[str],
             [node, str(tool), *args, "--json", *site_args,
              "--vault", str(vault.resolve())],
             capture_output=True, text=True, encoding="utf-8",
+            stdin=subprocess.DEVNULL,
             errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False)
     except subprocess.TimeoutExpired:
         return ToolAnswer(why=f"{name} timed out after {PUBLISH_TOOL_TIMEOUT}s",
@@ -1916,6 +1918,7 @@ def check_site_faults(vault: Path, files: list[str] | None = None
             [node, str(tool), "doctor", "--site", "--json", "--config",
              str(site / "vault.config.json"), "--vault", str(vault.resolve())],
             capture_output=True, text=True, encoding="utf-8",
+            stdin=subprocess.DEVNULL,
             errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False)
     except subprocess.TimeoutExpired:
         return [f"ERROR\t(vault)\tsite-faults: the publish tool did not "
@@ -2520,6 +2523,16 @@ def _keeper_text(text: str, excludes: list[str]) -> bool:
                    for s in excludes if s.strip()))
 
 
+def _own_strip_row(rel: str, state: LineState | BuildLine) -> str:
+    """The row for a `##` the publish tool withholds by its own rule (a
+    handout's Keeper sections, #280), outside ## GM Notes."""
+    title = state.heading[1].strip() if state.heading else ""
+    return (f"WARNING\t{rel}:{state.lineno}\t'{title}' is Keeper material "
+            f"outside ## GM Notes — nest it under ## GM Notes (publish "
+            f"{STRIPPED_SECTIONS_SINCE}+ withholds it; to publish it, "
+            f"rename the heading)")
+
+
 def _heading_leak(rel: str, state: LineState | BuildLine,
                   excludes: list[str], list_name: str) -> list[str]:
     """Rows for one published heading line."""
@@ -2657,7 +2670,14 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
     # site file's old one, else the built-in.
     explain = explain or ExplainAll(vault)
     tool = explain() if notes else None
-    excludes = vault_settings(vault).get("player_site.hide.sections") if notes else []
+    site_settings = vault_settings(vault) if notes else None
+    excludes = (site_settings.get("player_site.hide.sections")
+                if site_settings is not None else [])
+    # The hidden callouts and the PC keep-list are the build's too, so a
+    # line the site cuts or withholds for either is not called published.
+    callouts = (site_settings.get("player_site.hide.callouts")
+                if site_settings is not None else False)
+    pc_keep: list[str] | None = None
     match = {s.casefold() for s in excludes}
     writes: list[tuple[str, str, list[str]]] = []
     rows: list[str] = []
@@ -2669,6 +2689,11 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
     sheet_off: dict[str, set[str]] = {}
     if tool is not None:
         sheet_off = sheet_withheld_sections(tool)
+        raw_keep = (tool.data.get("pcKeepSections")
+                    if isinstance(tool.data, dict) else None)
+        if isinstance(raw_keep, list) and all(isinstance(t, str)
+                                              for t in raw_keep):
+            pc_keep = raw_keep
         published = pages_published(tool)
         rows.extend(_tool_used_row(tool.used if tool.data is not None
                                    else None))
@@ -2711,7 +2736,11 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
             # session-hub.js suppressHubBody: the site publishes the
             # frontmatter and the Wrap-Up's recap, not this body.
             continue
-        states, problems = build_lines(text, excludes)
+        note_type = fm.get("type")
+        states, problems = build_lines(
+            text, excludes,
+            note_type=note_type if isinstance(note_type, str) else None,
+            pc_keep=pc_keep, callouts=callouts)
         kept = _published_linenos(states, fm)
         # With character sheets off the tool withholds a PC's sheet sections
         # whatever they are called; their lines are no more published than a
@@ -2726,6 +2755,18 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
         heading_leak = False
         for state in states:
             if kept is not None and state.lineno not in kept:
+                continue
+            if (not state.in_code and not state.cut and state.heading
+                    and state.heading[0] == 2 and state.excluded_by
+                    and _plain_title(state.excluded_by).casefold()
+                    == _plain_title(state.heading[1]).casefold()
+                    and state.heading[1].strip().casefold() in own_strips):
+                # A handout's Keeper section the build withholds by its own
+                # rule (the `cut` answer takes the note's type, #280): not
+                # published, but its home is under GM Notes, and moving it
+                # is mechanical.
+                rows.append(_own_strip_row(rel, state))
+                heading_leak = True
                 continue
             # `published` says nothing about code fences, so exclude them
             # here, or this repo's own documented examples become findings.
@@ -2742,11 +2783,7 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
                     # an older pin publishes it, and the (vault) row says
                     # so. Its home is under GM Notes, and moving it is
                     # mechanical.
-                    found = [f"WARNING\t{rel}:{state.lineno}\t'{title}' "
-                             f"is Keeper material outside ## GM Notes — "
-                             f"nest it under ## GM Notes (publish "
-                             f"{STRIPPED_SECTIONS_SINCE}+ withholds it; to "
-                             f"publish it, rename the heading)"]
+                    found = [_own_strip_row(rel, state)]
                 rows.extend(found)
                 heading_leak = heading_leak or bool(found)
                 continue

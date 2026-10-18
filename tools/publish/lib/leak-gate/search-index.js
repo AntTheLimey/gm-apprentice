@@ -5,8 +5,13 @@
 // so that is what is checked: a hidden piece is a finding on the index when every one of its terms is in one entry's
 // body, and at least one of them is a word that entry's own page does not print. A piece whose words the page prints
 // anyway tells a visitor nothing the page does not (its sentence, if it were there, is not recoverable from the index).
-const lunr = require('lunr');
+const { indexTerms } = require('../search-index');
 const { wordsOf } = require('./text');
+
+// The fewest different terms a piece must keep once the common words are dropped. The index has no word order, so one
+// or two words an entry happens to share with a hidden piece ("baker") say nothing about the piece; three of its own
+// words, all in one entry and one of them not printed on that entry's page, is the shortest overlap read as the piece.
+const MIN_TERMS = 3;
 
 // The index files among the site's text files, parsed: { file, data }.
 function indexesOf(files) {
@@ -20,12 +25,11 @@ function indexesOf(files) {
   return out;
 }
 
-// A text's terms as the index made them (its own pipeline: the trimmer and the stop-word filter, and the stemmer if the
-// index was built with one), each read as the gate reads words (quotes, dashes and case folded).
-function termReader(index) {
-  let pipeline;
-  try { pipeline = lunr.Pipeline.load(index.pipeline || []); } catch (e) { pipeline = new lunr.Pipeline(); }
-  const read = (text) => pipeline.run(lunr.tokenizer(String(text))).flatMap((t) => wordsOf(String(t)));
+// A text's terms as the build stored them (the build's own steps: lunr's trimmer and stop-word filter, no stemmer, from
+// lib/search-index.js), each read as the gate reads words (quotes, dashes and case folded). The steps saved in the index
+// file are its search steps, not the ones its texts went through, so they are not what is read here.
+function termReader() {
+  const read = (text) => indexTerms(text).flatMap((t) => wordsOf(t));
   // A piece's words are read one at a time, each once (the tokenizer parts at spaces and hyphens, which a word holds
   // only as a hyphen, so a word read alone gives the terms it gives in its sentence).
   const known = new Map();
@@ -44,7 +48,7 @@ function indexHits({ files, pieces }) {
   const hits = [];
   const byRel = new Map(files.map((f) => [f.rel, f]));
   for (const { file, data } of indexesOf(files)) {
-    const termsOf = termReader(data.index);
+    const termsOf = termReader();
     // Each entry's body terms.
     const body = new Map();
     for (const entry of data.index.invertedIndex) {
@@ -63,7 +67,7 @@ function indexHits({ files, pieces }) {
     const filed = new Map();
     for (const piece of pieces) {
       const terms = [...new Set(termsOf.words(piece.words))];
-      if (terms.length === 0 || terms.some((t) => !entries.has(t))) continue;
+      if (terms.length < MIN_TERMS || terms.some((t) => !entries.has(t))) continue;
       const rarest = terms.reduce((a, b) => (entries.get(b) < entries.get(a) ? b : a));
       if (!filed.has(rarest)) filed.set(rarest, []);
       filed.get(rarest).push({ piece, terms });
