@@ -921,6 +921,36 @@ class StripCommentSpansTests(unittest.TestCase):
         self.assertEqual(kept, ["one ", " two", "three"])
 
 
+class UnverifiedMarkerTests(unittest.TestCase):
+    """#434: a marker names the session that wrote it, or nothing."""
+
+    def test_tags_parse_and_untagged_stay_markers(self):
+        got = vl.unverified_markers(
+            "---\nx: 1\n---\n"
+            "<!-- UNVERIFIED (S12): he fled -->\n"
+            "<!-- unverified (ch4 s3) -->\n"
+            "<!-- UNVERIFIED (Ch0.1 S2): a\nb -->\n"
+            "<!-- UNVERIFIED: old -->\n<!-- UNVERIFIED -->\n"
+            "```\n<!-- UNVERIFIED (S1): code -->\n```\n")
+        self.assertEqual(got, [
+            vl.Unverified(4, None, 12, "he fled"),
+            vl.Unverified(5, "4", 3, ""),
+            vl.Unverified(6, "0.1", 2, "a b"),
+            vl.Unverified(8, None, None, "old"),
+            vl.Unverified(9, None, None, ""),
+        ])
+        self.assertEqual([m.tag for m in got], ["S12", "Ch4 S3", "Ch0.1 S2", "", ""])
+
+    def test_from_session(self):
+        m = vl.Unverified
+        self.assertTrue(m(1, None, 5, "").from_session(5, "1"))
+        self.assertTrue(m(1, "1", 5, "").from_session(5, None))
+        self.assertTrue(m(1, "01", 5, "").from_session(5, "1"))
+        self.assertFalse(m(1, "2", 5, "").from_session(5, "1"))
+        self.assertFalse(m(1, None, 4, "").from_session(5, None))
+        self.assertIsNone(m(1, None, None, "").from_session(5, None))
+
+
 class LinkLinesTests(unittest.TestCase):
     NOTE = ("---\ntype: npc\n---\n"
             "Quoted `[[A]]` and [[B]].\n"

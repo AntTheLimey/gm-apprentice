@@ -142,7 +142,8 @@ fabricated Gregorian date or a time of day). Per bucket, run
 bucket.
 
 Include a `> [!info] Reconstruction Note` (sources, limitations);
-mark uncertain items `<!-- UNVERIFIED -->`.
+mark uncertain items `<!-- UNVERIFIED (S{n}) -->`, tagged with
+the session ingested (`Ch{c} S{n}` if it has a chapter).
 
 **Planning documents** (scene designs, arc structures,
 investigation flows) become `type: plan` entities in

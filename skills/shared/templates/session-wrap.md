@@ -119,7 +119,7 @@ otherwise.}
 
 {Only if any. One line per claim: claim → CONFIRMED / REJECTED /
 HELD, by whom, written where. Held claims carry an inline
-`<!-- UNVERIFIED: {claim} -->` marker for reconcile.}
+`<!-- UNVERIFIED (S{n}): {claim} -->` marker for reconcile.}
 
 ### World Fact Findings
 
@@ -133,7 +133,7 @@ missing / what to adjust — plus provenance:
 name canonicalisations applied, entities deliberately folded rather
 than created. Mark any claim in these GM Notes that the Play Notes,
 the plan or a named vault file don't support with
-`<!-- UNVERIFIED: {claim} -->`; reconcile queues them.}
+`<!-- UNVERIFIED (S{n}): {claim} -->`; reconcile queues them.}
 
 ### Handoff to session-prep
 

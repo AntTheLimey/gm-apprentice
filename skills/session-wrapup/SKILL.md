@@ -53,8 +53,9 @@ carry-forward): no embellishment, invent nothing the session
 didn't produce. The synthesized GM Notes sections (What Carries
 Forward, World State, Keeper Checklist, Quality Notes) are
 grounded too: each claim traces to the Play Notes, the plan or a
-named vault file; mark anything uncertain `<!-- UNVERIFIED: … -->`
-for reconcile. Everything
+named vault file; mark anything uncertain `<!-- UNVERIFIED (S{n}): … -->`
+for reconcile, tagged with this session (`Ch{c} S{n}` if it has a
+chapter). Everything
 else that moves existing text keeps it verbatim.
 
 ## Workflow
@@ -164,7 +165,7 @@ creating entities.
   into that entity's file. Ask the GM once per claim. Confirmed →
   write it there and log it under the Wrap-Up's `### Cross-Entity
   Claims` (`vw wrapup-add --append` adds to it). Unconfirmed or
-  deferred → log it there with `<!-- UNVERIFIED: {claim} -->`;
+  deferred → log it there with `<!-- UNVERIFIED (S{n}): {claim} -->`;
   reconcile scans the Wrap-Up for these and blocks promotion.
 - **Relationship edges:** every `type:` comes from
   `_meta/relationship-types.md`. Map narrative verbs to the nearest

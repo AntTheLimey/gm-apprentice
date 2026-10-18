@@ -112,7 +112,7 @@ the places a GM already reads:
 
 | Detector | Where the finding lands |
 |----------|-------------------------|
-| session-wrapup, while processing play notes | The wrap-up's `### Cross-Entity Claims` section (and `### Name Conflicts`, for table-assistant exports only); a claim about another entity that is HELD rather than applied gets an `<!-- UNVERIFIED -->` marker on the file it would have changed |
+| session-wrapup, while processing play notes | The wrap-up's `### Cross-Entity Claims` section (and `### Name Conflicts`, for table-assistant exports only); a claim about another entity that is HELD rather than applied gets an `<!-- UNVERIFIED (S{n}) -->` marker on the file it would have changed |
 | `vault_check.py names` | Duplicate / near-duplicate / sound-alike name pairs |
 | campaign-qa canon audit (`checks/canon-audit.md`) | Contradictions between files, incrementally since the last audited session |
 | campaign-qa timeline validation | Dated events that cannot both be true |
@@ -174,5 +174,5 @@ fact.
 - **Reference, don't copy.** Point at the entity's live file
   rather than transcribing a snapshot that will rot.
 - **Note the source session** on any fact taken from play.
-- **Flag uncertainties** with `<!-- UNVERIFIED -->` rather than
+- **Flag uncertainties** with `<!-- UNVERIFIED (S{n}) -->` rather than
   choosing quietly.

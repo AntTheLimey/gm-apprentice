@@ -16,8 +16,9 @@ with the files under a count indented below it:
                          case, one may span lines), line and text
     unverified in linked notes
                          the same markers on the notes the Wrap-Up links
-                         (a held claim may sit on an entity file); they
-                         rule out the quick path too
+                         (a held claim may sit on an entity file), with
+                         their session tags; those of this session, and
+                         untagged ones, rule out the quick path too
     reconstruction notes `> [!info] Reconstruction Note` callouts
     plan                 this session's Plan file, or `none`
     linked entities      notes the Wrap-Up links to (sessions, scenes,
@@ -52,9 +53,9 @@ from schema_rules import extract_frontmatter, parse_session_number, wikilink_tar
 from vault_check import RECONSTRUCTION_NOTE_RE, STRUCTURAL_TYPES  # noqa: E402
 from vaultlib import (WRAP_UP_TYPES, entity_type, link_aliases, link_lines,  # noqa: E402
                       link_target, live_wikilinks, markers_in, nested_mapping,
-                      normalize, normalize_file_arg, vault_files)
+                      normalize, normalize_file_arg, unverified_markers,
+                      Unverified, vault_files)
 
-UNVERIFIED_RE = re.compile(r"<!--\s*UNVERIFIED\b(.*?)-->", re.I | re.S)
 FIRST_WORDS = 10
 
 
@@ -161,13 +162,8 @@ def _find_plan(index: Note | None, notes: list[Note],
                  and _linked(n, n.fm.get("session"), by_name) is index), None)
 
 
-def unverified_markers(text: str) -> list[tuple[int, str]]:
-    """(line, text) of each UNVERIFIED marker outside code and frontmatter."""
-    kept = ["\n" if ll.in_code or ll.in_frontmatter else ll.line
-            for ll in link_lines(text)]
-    body = "".join(kept)
-    return [(body.count("\n", 0, m.start()) + 1, " ".join(m.group(1).strip(" :").split()))
-            for m in UNVERIFIED_RE.finditer(body)]
+def _marker(m: Unverified) -> str:
+    return " ".join(x for x in (f"({m.tag})" if m.tag else "", m.text) if x) or "(bare)"
 
 
 CHAPTER_RE = re.compile(r"chapter\D{0,3}(\d+(?:\.\d+)?)", re.I)
@@ -233,7 +229,7 @@ def scan(vault: Path, wrap_arg: str) -> list[str]:
     else:
         out.append("skip: no")
     out.append(f"unverified: {len(unverified)}")
-    out.extend(f"  line {n}: {what or '(bare)'}" for n, what in unverified)
+    out.extend(f"  line {m.line}: {_marker(m)}" for m in unverified)
     out.append(f"reconstruction notes: {len(recon)}")
     out.extend(f"  line {n}" for n in recon)
     plan = _find_plan(index, notes, by_name)
@@ -258,9 +254,17 @@ def scan(vault: Path, wrap_arg: str) -> list[str]:
     out.append(f"older draft entities linked (the quick path leaves them): {len(older)}")
     out.extend(f"  {n.rel} (createdSession: {n.fm.get('createdSession') or 'none'})"
                for n in older)
-    held = [(n.rel, line, what) for n in linked for line, what in unverified_markers(n.text)]
-    out.append(f"unverified in linked notes: {len(held)}")
-    out.extend(f"  {rel}:{line}: {what or '(bare)'}" for rel, line, what in held)
+    # Untagged markers are of unknown session, so they block with this one's.
+    held = []
+    out.append(f"unverified in linked notes: "
+               f"{sum(len(unverified_markers(n.text)) for n in linked)}")
+    for n in linked:
+        for mark in unverified_markers(n.text):
+            other = number is not None and mark.from_session(number, chapter) is False
+            out.append(f"  {n.rel}:{mark.line}: {_marker(mark)}"
+                       + (" [another session]" if other else ""))
+            if not other:
+                held.append(mark)
     spoilers = [(n.rel, line, words) for n in linked for line, words in open_spoilers(n.text)]
     out.append(f"open spoilers: {len(spoilers)}")
     out.extend(f"  {rel}:{line}: {words}" for rel, line, words in spoilers)
