@@ -2,7 +2,7 @@
 
 const { splitTableRow } = require('../wikilink');
 const { findHeadings, renderInline } = require('../processor');
-const { splitReason, COLS, countCells, wholeNumber } = require('../templates/dnd/parse');
+const { splitReason, COLS, countCells, wholeNumber, slotTotal } = require('../templates/dnd/parse');
 const { ATTRIBUTE_COLUMNS, cellText, filled, yesNo } = require('../templates/sheet-parse');
 const { normalizeTitle } = require('../templates/gurps/tables');
 const { liveKey, shown, trackable, holdsNothing, saysNone } = require('../templates/dnd/live-key');
@@ -296,7 +296,7 @@ function applyDnDFlush(markdown, blob) {
     if (row.cells.some(hasLink)) continue;
     const c = row.cells.map(plain);
     if (!c[1] && !c[2]) continue;
-    const t = wholeNumber(c[1]);
+    const t = slotTotal(c[1]);
     const e = c[2] ? wholeNumber(c[2]) : 0;
     if (t === null || e === null || e > t) continue;
     count(liveKey('slot', shown(c[0])), c[0], row, 2, t, e, row.cells[2] || '');

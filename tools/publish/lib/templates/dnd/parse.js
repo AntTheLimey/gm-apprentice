@@ -69,6 +69,9 @@ function keepReasonLink(model, place) {
 
 const wholeNumber = s => (/^\d+$/.test(String(s).trim()) ? parseInt(s, 10) : null);
 
+// A spell slot Total: a whole number, a reason in brackets may follow (`5 (Ring of Spell Storing)`).
+const slotTotal = s => wholeNumber(splitReason(s).value);
+
 function stripNotes(html) {
   return String(html || '').replace(/<(blockquote|p)>([\s\S]*?)<\/\1>/gi,
     (whole, tag, inner) => (TEMPLATE_NOTES.some(n => n.test(cellText(inner))) ? '' : whole));
@@ -279,7 +282,7 @@ function readSpellcasting(model, section) {
     if (key === 'spell slots' && first) {
       left = consumeTable(sub.html, COLS.slots, ([level, total, expended]) => {
         if (!total && !expended) return /^(\d+(st|nd|rd|th)?|cantrips?|pact\b.*)$/i.test(level);
-        const t = wholeNumber(total);
+        const t = slotTotal(total);
         const e = expended ? wholeNumber(expended) : 0;
         if (t === null || e === null || e > t) return false;
         model.slots.push({ level, total: t, expended: e });
@@ -415,4 +418,4 @@ function parseDnd(frontmatter, sections) {
   return model;
 }
 
-module.exports = { parseDnd, splitReason, ABILITIES, COLS, countCells, wholeNumber };
+module.exports = { parseDnd, splitReason, ABILITIES, COLS, countCells, wholeNumber, slotTotal };
