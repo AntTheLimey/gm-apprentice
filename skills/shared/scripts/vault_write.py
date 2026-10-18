@@ -1322,6 +1322,22 @@ def _flush(above: str, below: str) -> bool:
                     and below.lstrip().startswith("|")))
 
 
+def _timeline_end(doc: Doc, head: Head) -> int:
+    """Where entries under `head` stop. A Chapter's span runs through any
+    visible Session heading at its level or higher that follows it (legacy
+    sessions filed beside the chapter), to the next Chapter or other
+    heading; anything else keeps its section."""
+    end = section_end(doc, head)
+    if not re.match(r"(?i)^chapter\b", head.title):
+        return end
+    while True:
+        nxt = next((h for h in doc.heads if h.idx == end), None)
+        if (nxt is None or nxt.gm
+                or not re.match(r"(?i)^session\b", nxt.title)):
+            return end
+        end = section_end(doc, nxt)
+
+
 def _later_entry_heading(doc: Doc, end: int) -> Head | None:
     """The first visible Session or Chapter heading at or after line `end`
     whose own lines hold a list item or table row: a place sessions were
@@ -1379,7 +1395,7 @@ def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
                   f"\u2014 {seen_by}")
     doc = parse(note)
     head = _need(doc, level, title)
-    end = section_end(doc, head)
+    end = _timeline_end(doc, head)
     known = {doc.lines[i].strip() for i in own_lines(doc, head, end)}
     plan: list[tuple[list[str], bool]] = []
     for entry in entries:
@@ -1401,7 +1417,8 @@ def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
         batch.put(rel, note)
     child = next((h for h in reversed(doc.heads) if head.idx < h.idx < at),
                  None)
-    later = _later_entry_heading(doc, end) if new_entries else None
+    later = (_later_entry_heading(doc, end)
+             if new_entries and not LABEL_START_RE.match(title) else None)
     if later is not None:
         batch.row("WARNING", rel, where,
                   f"the entries go above '{'#' * later.level} {later.title}', "

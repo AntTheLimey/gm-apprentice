@@ -1408,18 +1408,52 @@ class TimelineTests(unittest.TestCase):
         self.assertEqual(read(vault, TL_REL).count("- **1814** — x"), 1)
 
     # #314: --under a heading that is not the last one holding entries
-    def test_entries_above_later_entry_headings_are_warned(self):
+    def test_a_chapter_target_takes_entries_after_its_legacy_sessions(self):
         legacy = TL.replace("<!-- gm-only -->",
                             "## Session 5 — Hostile Takeover\n\n"
                             "- **(date TBD)** — [[Raid]] — Boom.\n\n"
+                            "## Chapter 2\n\n- **1815** — later.\n\n"
                             "<!-- gm-only -->")
         vault = make_vault(self, {TL_REL: legacy})
         code, out = tl(vault, "- **1814** — x\n",
                        "--under", "## Chapter 1")
         self.assertEqual(code, 0, out)
+        self.assertNotIn("WARNING", out)
+        text = read(vault, TL_REL)
+        self.assertIn("Boom.\n- **1814** — x\n\n## Chapter 2", text)
+
+    def test_a_chapter_target_with_no_later_chapter_runs_to_the_end(self):
+        legacy = TL.replace("<!-- gm-only -->",
+                            "## Session 5 — Hostile Takeover\n\n"
+                            "- **(date TBD)** — [[Raid]] — Boom.\n\n"
+                            "<!-- gm-only -->")
+        vault = make_vault(self, {TL_REL: legacy})
+        tl(vault, "- **1814** — x\n", "--under", "## Chapter 1")
+        self.assertIn("Boom.\n- **1814** — x\n\n<!-- gm-only",
+                      read(vault, TL_REL))
+
+    def test_a_session_target_keeps_its_own_section(self):
+        two = TL.replace("<!-- gm-only -->",
+                         "### Session 2 — Next\n\n- **5 August 1814** — b.\n\n"
+                         "<!-- gm-only -->")
+        vault = make_vault(self, {TL_REL: two})
+        _, out = tl(vault, "- **4 August 1814** — x\n",
+                    "--under", "### Session 1 — Arrival (3 August)")
+        self.assertNotIn("WARNING", out)
+        self.assertIn("They came.\n- **4 August 1814** — x\n\n### Session 2",
+                      read(vault, TL_REL))
+
+    def test_an_ambiguous_target_still_warns(self):
+        odd = TL.replace("<!-- gm-only -->",
+                         "## Session 5 — Hostile Takeover\n\n"
+                         "- **(date TBD)** — [[Raid]] — Boom.\n\n"
+                         "<!-- gm-only -->").replace(
+                             "## Chapter 1", "## Notes from the road")
+        vault = make_vault(self, {TL_REL: odd})
+        _, out = tl(vault, "- **1814** — x\n",
+                    "--under", "## Notes from the road")
         self.assertIn("WARNING", out)
         self.assertIn("## Session 5 — Hostile Takeover", out)
-        self.assertIn("above", out)
 
     def test_the_last_entry_heading_draws_no_placement_warning(self):
         legacy = TL.replace("<!-- gm-only -->",
