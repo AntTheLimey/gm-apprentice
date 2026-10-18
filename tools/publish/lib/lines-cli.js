@@ -27,7 +27,12 @@
 //   {"op":"cut","text":…}
 //       -> {"cut":[…]}       per line of `text`: the line as the strip chain leaves it
 //                            (the build's own: gm-only, spoiler, HTML and %% comments),
-//                            or null when the chain removes it
+//                            or null when the chain removes it; and {"unbalanced":[…]}, each
+//                            gm-only or spoiler marker the block strips found unbalanced:
+//                            {line (of `text`), marker, close}, a closer with nothing open
+//                            or an opener never closed (a tool older than #441 leaves it out).
+//                            vault_check's gm-leak reads a note's blocks from this answer
+//                            (`build_lines`), not from a model of its own
 //
 //   {"op":"site","vault":…}
 //       -> {"publishes":…,"site":…,"siteDir":…}  whether the vault's settings have the site's
@@ -129,10 +134,10 @@ function answer(request) {
       return { kept: keptSectionFlags(text, list(request, 'include'),
         { excludeSections: request.excludeSections === undefined ? [] : list(request, 'excludeSections') }) };
     case 'cut': {
-      const { lines, from } = strippedLines(text.replace(/\r/g, ''), false);
+      const { lines, from, unbalanced } = strippedLines(text.replace(/\r/g, ''), false);
       const cut = text.split('\n').map(() => null);
       lines.forEach((line, i) => { cut[from[i]] = line; });
-      return { cut };
+      return { cut, unbalanced };
     }
     default:
       throw new Error(`unknown op: ${JSON.stringify(request.op)}`);

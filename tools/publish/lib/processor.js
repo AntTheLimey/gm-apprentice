@@ -849,6 +849,8 @@ function markBlocksKeeping(lines, markerName, mark) {
 
 // The strip as lines, and `from`: the line of `markdown` each of them came from. With `mark`
 // ({ marks, show }) and the marker's kind on in `show`, the GM site's version instead (above).
+// `unbalanced`: each closer with nothing open and each opener never closed, as
+// { line (of `markdown`), marker, close }, closers first; vault_check reports them by line.
 function markedBlocks(markdown, markerName, mark) {
   const lines = markerLines(markdown, markerName);
   if (mark && MARK_OF[markerName] && mark.show.has(MARK_OF[markerName].kind)) return markBlocksKeeping(lines, markerName, mark);
@@ -859,6 +861,7 @@ function markedBlocks(markdown, markerName, mark) {
   const warnings = [];
   const stack = [];
   const from = [];
+  const unbalanced = [];
   const keep = (text, i) => { result.push(text); from.push(i); };
   let depth = 0;
   let orphanClosers = 0;
@@ -912,6 +915,7 @@ function markedBlocks(markdown, markerName, mark) {
         // A closer with nothing open. Don't let it drive depth negative — that
         // would make a LATER opener fail to strip. Count it and warn instead.
         orphanClosers += 1;
+        unbalanced.push({ line: i, marker: markerName, close: true });
       } else {
         // A closer tucked after other content ("<div><!-- /gm-only --></div>")
         // may only end a block opened the same way or on this same line; against
@@ -938,8 +942,9 @@ function markedBlocks(markdown, markerName, mark) {
       `${orphanClosers} <!-- /${markerName} --> marker${orphanClosers === 1 ? '' : 's'} `
       + `without a matching <!-- ${markerName} --> — check the block boundaries`);
   }
+  for (const open of stack) unbalanced.push({ line: open.line, marker: markerName, close: false });
 
-  return { text: result.join('\n'), warnings, lines: result, from };
+  return { text: result.join('\n'), warnings, lines: result, from, unbalanced };
 }
 
 function stripGmOnly(markdown) {
@@ -1669,7 +1674,8 @@ function keepApart(lines, from) {
 }
 
 // The strips of playerSafeMarkdown, in its order, before any section is filtered: the
-// lines left, `from` (the line of `text` each came from) and the strips' warnings.
+// lines left, `from` (the line of `text` each came from), the strips' warnings and
+// `unbalanced`, the block markers they found unbalanced (markedBlocks), by line of `text`.
 // playerSafeMarkdown and the stub cut both take this, so the cut cannot be made on a
 // different reading of what is hidden.
 // With `mark` ({ marks, show }), the GM site's version (markedStrippedLines).
@@ -1683,6 +1689,7 @@ function strippedLines(text, excludeCallouts, mark) {
   let strays = [];
   let pre = null;
   let blocks = null;   // a gm-only or spoiler marker the block strips left: { lines, from, shown }
+  const unbalanced = [];   // the block strips' unbalanced markers, by line of `text` (markedBlocks)
   const strips = [
     dataviewLines,
     (t) => markedBlocks(t, 'gm-only'),
@@ -1709,8 +1716,9 @@ function strippedLines(text, excludeCallouts, mark) {
       strays = result.strays.map(s => ({ line: before[s.line], kind: s.kind }));
       pre = { lines: given, spans: result.strays.map(s => [s.line, s.end]) };
     }
+    if (result.unbalanced) unbalanced.push(...result.unbalanced.map(u => ({ ...u, line: before === null ? u.line : before[u.line] })));
   }
-  return { lines, from, warnings, strays, pre, blocks };
+  return { lines, from, warnings, strays, pre, blocks, unbalanced };
 }
 
 // The strip chain for the GM site: the note's own private-use characters become U+FFFD first (a note cannot forge a

@@ -1310,6 +1310,77 @@ class GmLeakCommandTests(unittest.TestCase):
         self.assertTrue(rows_for(rows, "bold label 'Secret'"), rows)
         self.assertTrue(rows_for(rows, "callout [!note] GM only"), rows)
 
+    # #441: the blocks are the build's own reading (`gm-publish lines`,
+    # op `cut`), not a Python model of them. Each case below was read
+    # differently by that model, and each time the check went quiet on a
+    # heading the site publishes.
+
+    def test_a_heading_in_a_multi_line_comment_starts_nothing(self):
+        # The build cuts the comment before its section filter runs, so
+        # the commented-out `## GM Notes` withholds nothing below it, and
+        # the commented-out `## Secret Tactics` never reaches a reader.
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\n<!--\n## Secret Tactics\n-->\n\n"
+            "<!--\n## GM Notes\n-->\n### Keeper Secrets\nx\n",
+            encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(rows_for(rows, "Bob.md"), [
+            "WARNING\tBob.md:14\tKeeper-facing heading 'Keeper Secrets' "
+            "publishes — nest it under ## GM Notes or fence it"], rows)
+
+    def test_a_heading_after_a_closer_on_its_line_is_read(self):
+        # `<!-- /gm-only -->## Public`: the build keeps `## Public`, which
+        # ends `## GM Notes`, so what follows it publishes.
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\n## GM Notes\n<!-- gm-only -->\n"
+            "secret\n<!-- /gm-only -->## Public\n\n### Keeper Secrets\nx\n\n"
+            "**Secret:** he lies.\n", encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(rows_for(rows, "Bob.md"), [
+            "WARNING\tBob.md:12\tKeeper-facing heading 'Keeper Secrets' "
+            "publishes — nest it under ## GM Notes or fence it",
+            "INFO\tBob.md:15\tbold label 'Secret' looks Keeper-facing — "
+            "confirm with the GM (not a heading; not auto-movable)"], rows)
+
+    def test_a_form_feed_nel_or_lone_cr_does_not_split_a_line(self):
+        # The build splits a note at `\n` alone and drops `\r`, so
+        # `## GM Notes<x>more` is one heading, not the excluded one, and
+        # line numbers count `\n`.
+        for ch in ("\r", "\x0c", "\x85"):
+            with self.subTest(ch=repr(ch)):
+                vault = make_vault(self)
+                (vault / "Bob.md").write_bytes(
+                    (f"---\ntype: npc\n---\n\n# Bob\n\n## GM Notes{ch}more\n"
+                     f"\n### Keeper Secrets\nx\n").encode("utf-8"))
+                rows = vc.check_gm_leak(vault, None)
+                self.assertIn(
+                    "WARNING\tBob.md:9\tKeeper-facing heading 'Keeper "
+                    "Secrets' publishes — nest it under ## GM Notes or "
+                    "fence it", rows)
+
+    def test_the_classic_block_shapes_still_read_as_before(self):
+        # Nested blocks, an inline pair, a marker shown in a fenced
+        # example, an orphan closer and a block left open.
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\n"
+            "<!-- gm-only -->\nouter\n<!-- gm-only -->\n## Keeper Notes\n"
+            "<!-- /gm-only -->\n## Secret Plans\n<!-- /gm-only -->\n\n"
+            "a <!-- spoiler -->**Secret:** x<!-- /spoiler --> b\n\n"
+            "```\n<!-- /gm-only -->\n## Keeper Tips\n```\n\n"
+            "## Tactics\n\n<!-- /spoiler -->\n\n<!-- gm-only -->\n"
+            "## Keeper Only\n", encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(rows_for(rows, "Bob.md"), [
+            "ERROR\tBob.md:24\t<!-- /spoiler --> with no opener — "
+            "everything above it publishes",
+            "WARNING\tBob.md:26\t<!-- gm-only --> never closed — publish "
+            "strips to end of file",
+            "WARNING\tBob.md:22\tKeeper-facing heading 'Tactics' publishes "
+            "— nest it under ## GM Notes or fence it"], rows)
+
     def test_an_occupation_ending_in_keeper_is_not_keeper_facing(self):
         # #316: "keeper" matched as a substring, so Innkeeper, Housekeeper
         # and the like were flagged, in headings, bold labels and callouts.

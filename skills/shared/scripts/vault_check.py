@@ -156,7 +156,7 @@ from difflib import SequenceMatcher
 from html import unescape as _html_unescape
 import unicodedata
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Sequence
 
 from schema_rules import (
     CANON_STATUS_VALUES,
@@ -180,9 +180,11 @@ from vaultlib import (  # noqa: F401
     SKIP_DIRS,
     WRAP_UP_TYPE,
     WRAP_UP_TYPES,
+    BuildLine,
     LineState,
     active_pc_names,
     atx_title,
+    build_lines,
     active_pcs,
     delete_key,
     entity_type,
@@ -2172,7 +2174,8 @@ _SETEXT_UNDERLINE_RE = re.compile(r"^\s{0,3}(=+|-+)\s*$")
 _HTML_HEADING_RE = re.compile(r"<h[1-6]", re.I)
 
 
-def _without_sections(states: list[LineState], kept: set[int] | None,
+def _without_sections(states: Sequence[LineState | BuildLine],
+                      kept: set[int] | None,
                       titles: set[str]) -> set[int]:
     """`kept` (None: every line) minus the lines under each published H2
     whose title is in `titles` (already `_bare_section_title`d).
@@ -2360,10 +2363,11 @@ def check_sessions(vault: Path) -> list[str]:
 # --------------------------------------------------------------------------
 # Publish safety
 #
-# Both checks answer the same question — "would a player see this?" — and
-# both answer it through `scan_body`, which mirrors the publish pipeline's
-# own fence tracking and section filter. That containment is the whole
-# point: a grep for "Keeper" cannot tell a heading nested under an excluded
+# Both checks answer the same question — "would a player see this?":
+# gm-leak through `build_lines`, the publish tool's own strip chain and
+# section filter; pc-body through `scan_body`, which also sees inside the
+# blocks it reports on (a fenced Current Status). That containment is the
+# whole point: a grep for "Keeper" cannot tell a heading nested under an excluded
 # `## GM Notes` from a sibling beside it, and reporting the first would
 # train the GM to ignore the second.
 # --------------------------------------------------------------------------
@@ -2491,8 +2495,8 @@ def _keeper_text(text: str, excludes: list[str]) -> bool:
             or any(s.casefold() in low for s in excludes))
 
 
-def _heading_leak(rel: str, state: LineState, excludes: list[str],
-                  list_name: str) -> list[str]:
+def _heading_leak(rel: str, state: LineState | BuildLine,
+                  excludes: list[str], list_name: str) -> list[str]:
     """Rows for one published heading line."""
     if state.heading is None:
         return []
@@ -2500,7 +2504,7 @@ def _heading_leak(rel: str, state: LineState, excludes: list[str],
     m = EMPHASIS_RE.match(raw)
     title = m.group(2).strip() if m else raw
     if _bare_section_title(raw) in {_bare_section_title(e) for e in excludes}:
-        # A heading the site hides never reaches here: `scan_body` has
+        # A heading the site hides never reaches here: `build_lines` has
         # already marked it excluded, as the site's tool answered. This one
         # is on the exclude list under another spelling and the tool did
         # NOT hide it: a site pinned to a publish tool older than 1.16.0
@@ -2540,7 +2544,7 @@ def _heading_leak(rel: str, state: LineState, excludes: list[str],
     return []
 
 
-def _published_linenos(states: list[LineState],
+def _published_linenos(states: Sequence[LineState | BuildLine],
                        fm: dict) -> set[int] | None:
     """Which body lines a `publish: stub` page actually ships, or None.
 
@@ -2554,7 +2558,7 @@ def _published_linenos(states: list[LineState],
     if publish_mode(fm) != "stub":
         return None
     raw = fm.get("publish_include_sections")
-    kept = stub_kept([s.line for s in states],
+    kept = stub_kept([s.written for s in states],
                      raw if isinstance(raw, list) else [])
     return {s.lineno for s, keep in zip(states, kept) if keep}
 
@@ -2582,10 +2586,11 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
     GM has to judge (INFO) — neither is auto-movable without rewriting
     the paragraph around it.
 
-    Every line is filtered through `scan_body`, so nothing inside a
-    `<!-- gm-only -->`/`<!-- spoiler -->` fence, under an excluded
-    heading, or inside a code fence is ever reported — and the file's own
-    `publish:` gate is honoured first: a `publish: false` page is dropped
+    Every line is read as the build reads it (`build_lines`: the publish
+    tool's own strip chain and section filter, #441), so nothing inside a
+    `<!-- gm-only -->`/`<!-- spoiler -->` fence or a comment, under an
+    excluded heading, or inside a code fence is ever reported — and the
+    file's own `publish:` gate is honoured first: a `publish: false` page is dropped
     before the site's link map exists, and a `publish: stub` page is
     reduced to `publish_include_sections`, so neither can leak whatever
     its headings say.
@@ -2602,13 +2607,18 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
     `renest_excludes` appends `renest_excludes_migration`'s rows (the
     1.8.3 migration) instead of planning the plain re-nest.
 
-    Which lines an excluded section withholds is asked of the publish
-    tool (`scan_body`); when it cannot be asked, or the site is pinned to
-    a tool too old to ask, the check says so and stops
+    Which lines the strips cut and an excluded section withholds is
+    asked of the publish tool (`build_lines`); when it cannot be asked,
+    or the site is pinned to a tool too old to ask, the check says so and
+    stops
     (`no_publish_tool`).
     """
-    notes = [(rel, text, extract_frontmatter(text) or {})
-             for rel, text in vault_files(vault, folder)]
+    # Read as written: the build splits a note at `\n` alone, and a lone
+    # `\r` is inside a line (`build_lines`). The frontmatter is read as
+    # every other check reads it.
+    notes = [(rel, raw, extract_frontmatter(
+        raw.replace("\r\n", "\n").replace("\r", "\n")) or {})
+             for rel, raw in vault_files(vault, folder, newline="")]
     if notes:
         why, gate = no_publish_tool(vault, "gm-leak")
         if why is not None:
@@ -2671,7 +2681,7 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
             # session-hub.js suppressHubBody: the site publishes the
             # frontmatter and the Wrap-Up's recap, not this body.
             continue
-        states, problems = scan_body(text, excludes)
+        states, problems = build_lines(text, excludes)
         kept = _published_linenos(states, fm)
         # With character sheets off the tool withholds a PC's sheet sections
         # whatever they are called; their lines are no more published than a
@@ -2687,9 +2697,8 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
         for state in states:
             if kept is not None and state.lineno not in kept:
                 continue
-            # `published` deliberately says nothing about code fences —
-            # vaultlib's divergence note — so exclude them here, or this
-            # repo's own documented examples become findings.
+            # `published` says nothing about code fences, so exclude them
+            # here, or this repo's own documented examples become findings.
             if state.in_code or not state.published:
                 continue
             if state.heading is not None:

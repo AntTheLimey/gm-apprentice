@@ -19,7 +19,8 @@ the publish tool does not track fences, so a fenced `## GM Notes` example
 still starts exclusion on the site. The divergence is deliberate and one
 -directional: this module errs toward reporting a line as published, which
 is the safe direction for a leak check — it over-reports what a reader
-might see rather than quietly assuming something is hidden.
+might see rather than quietly assuming something is hidden. gm-leak no
+longer reads it: `build_lines` asks the publish tool instead (#441).
 """
 
 from __future__ import annotations
@@ -98,8 +99,12 @@ def is_unchecked_source(rel: str) -> bool:
 def vault_files(vault: Path, folder: str | None = None,
                 files: Iterable[str] | None = None,
                 skip_dirs: set[str] = SKIP_DIRS,
-                newer_than: float | None = None) -> Iterator[tuple[str, str]]:
+                newer_than: float | None = None,
+                newline: str | None = None) -> Iterator[tuple[str, str]]:
     """Yield (vault-relative posix path, text) for every readable note.
+
+    `newline` is `open`'s: None reads with universal newlines (`\\r` and
+    `\\r\\n` become `\\n`), "" yields the text as written.
 
     Hidden directories and `skip_dirs` (templates, the `_inbox` staging
     area) are skipped; an unreadable file warns on stderr rather than
@@ -132,7 +137,9 @@ def vault_files(vault: Path, folder: str | None = None,
         try:
             if newer_than is not None and path.stat().st_mtime < newer_than:
                 continue
-            text = path.read_text(encoding="utf-8", errors="replace")
+            with path.open(encoding="utf-8", errors="replace",
+                           newline=newline) as f:
+                text = f.read()
         except OSError as e:
             print(f"warning: unreadable {rel}: {e}", file=sys.stderr)
             continue
@@ -1858,6 +1865,102 @@ class LineState:
         return (self.gm_depth == 0 and self.spoiler_depth == 0
                 and self.excluded_by is None and self.marker is None)
 
+    @property
+    def written(self) -> str:
+        """The line as written in the note."""
+        return self.line
+
+
+@dataclass
+class BuildLine:
+    """One body line as the build reads it (`build_lines`): the publish
+    tool's own strip chain and section filter, nothing modelled here."""
+
+    lineno: int
+    written: str  # the line as written, `\r` dropped as the build drops it
+    line: str  # what the strip chain leaves of it; "" when it is cut
+    cut: bool  # the strip chain removes the line
+    excluded_by: str | None
+    in_code: bool
+    heading: tuple[int, str] | None
+
+    @property
+    def published(self) -> bool:
+        return not self.cut and self.excluded_by is None
+
+
+def build_lines(text: str, exclude_sections: Iterable[str] = ()
+                ) -> tuple[list[BuildLine], list[str]]:
+    """Every body line of a note as the build reads it, and the gm-only and
+    spoiler markers its block strips find unbalanced, as `scan_body`'s
+    problems are worded.
+
+    The build splits at `\\n` alone (a form feed, `\\x85` or a lone `\\r`
+    is inside a line) and drops `\\r`; `text` must be the file as written,
+    not read with universal newlines. Which lines the strip chain cuts
+    (gm-only and spoiler blocks, HTML and `%%` comments, dataview) and
+    what it leaves of the rest is the publish tool's `cut` answer; the
+    section filter is then asked about the lines left, as the build runs
+    it. Headings and code fences are read from what is left. Raises
+    `PublishToolUnavailable` when the tool cannot be asked."""
+    lines = text.split("\n")
+    if len(lines) > 1 and lines[-1] == "":
+        lines.pop()
+    lines = [line.replace("\r", "") for line in lines]
+    start = 0
+    if lines and lines[0].strip() == "---":
+        start = next((i + 1 for i in range(1, len(lines))
+                      if lines[i].strip() == "---"), 0)
+    body = lines[start:]
+    if not body:
+        return [], []
+    request = {"op": "cut", "text": "\n".join(body)}
+    answer = PUBLISH_LINES.ask(request)
+    cut = answer.get("cut")
+    unbalanced = answer.get("unbalanced")
+    own = _LINES_BY_TOOL[PUBLISH_TOOL]
+    if unbalanced is None and PUBLISH_LINES is not own:
+        # A site's tool from before the faults were reported: where the
+        # blocks run is still its answer; only the faults' lines are the
+        # plugin's tool's.
+        unbalanced = own.ask(request).get("unbalanced")
+    if (not isinstance(cut, list) or len(cut) != len(body)
+            or not all(c is None or isinstance(c, str) for c in cut)
+            or not isinstance(unbalanced, list)
+            or not all(isinstance(u, dict)
+                       and isinstance(u.get("line"), int)
+                       and 0 <= u["line"] < len(body)
+                       and u.get("marker") in ("gm-only", "spoiler")
+                       and isinstance(u.get("close"), bool)
+                       for u in unbalanced)):
+        raise PublishToolUnavailable(
+            "the publish tool's answer does not match the note's lines")
+    left = [c for c in cut if c is not None]
+    verdicts = iter(withheld_by(left, exclude_sections))
+    states: list[BuildLine] = []
+    fence_delim: str | None = None
+    for i, (written, kept) in enumerate(zip(body, cut)):
+        lineno = start + i + 1
+        if kept is None:
+            states.append(BuildLine(lineno, written, "", True, None, False,
+                                    None))
+            continue
+        fence_delim, is_fence_line = fence_step(kept, fence_delim)
+        in_code = fence_delim is not None or is_fence_line
+        hm = None if in_code else HEADING_RE.match(kept)
+        states.append(BuildLine(
+            lineno, written, kept, False, next(verdicts), in_code,
+            (len(hm.group(1)), atx_title(hm.group(2))) if hm else None))
+    problems = [f"line {start + u['line'] + 1}: <!-- /{u['marker']} --> "
+                f"with no opener" for u in sorted(
+                    (u for u in unbalanced if u["close"]),
+                    key=lambda u: u["line"])]
+    for _name, word in _MARKERS:
+        problems += [f"line {start + u['line'] + 1}: <!-- {word} --> "
+                     f"never closed" for u in unbalanced
+                     if not u["close"] and u["marker"] == word]
+    return states, problems
+
 
 def scan_body(text: str,
               exclude_sections: Iterable[str] = ()) -> tuple[list[LineState],
@@ -1893,15 +1996,22 @@ def scan_body(text: str,
     letting that heading exclude the rest of the file would blind every
     leak check to everything a GM appends below the fence.
 
-    Known divergences of the marker model, which can err either way — the
-    leak invariant in vault_check.py uses `publisher_lines`, the tool's
-    own answer, instead:
+    Known divergences of the marker model, which can err either way — so
+    the leak checks do not use it: the leak invariant in vault_check.py
+    reads `publisher_lines` and gm-leak reads `build_lines`, the tool's
+    own answers (#441). What still calls this is writers and structure
+    checks, which need to see inside the blocks:
 
     * Only the two marker blocks are blanked before the tool is asked,
       not multi-line HTML comments, which `stripHtmlComments` also
       removes before `filterSections`. A `## GM Notes` commented out that
       way still starts an exclusion here and does not on the site, so
       what follows it is called hidden here and publishes there.
+    * A line that starts with a marker is a marker line here, whatever
+      follows it: `<!-- /gm-only -->## Public` is no heading here, and is
+      one on the site.
+    * Lines are split by `str.splitlines`, at a form feed, `\\x85` and a
+      lone `\\r` too; the build splits at `\\n` alone.
 
     Returns (states, problems); problems are authoring defects — orphan
     closers and blocks left open at EOF.

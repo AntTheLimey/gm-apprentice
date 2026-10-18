@@ -47,6 +47,36 @@ describe('lines: cut', () => {
     const { cut } = answer({ op: 'cut', text: '```\n%%x\n```\n    %%y%%' });
     assert.deepStrictEqual(cut, ['```', '%%x', '```', null]);
   });
+  it('names the block markers the strips found unbalanced, by line of `text` (#441)', () => {
+    const text = [
+      'a',
+      '<!-- /gm-only -->',            // 1: closes nothing
+      '<!--',                          // 2: a marker over three lines, never closed
+      'gm-only',
+      '-->',
+      'hidden',
+      '<!-- spoiler -->',              // 6: inside the open gm-only block: cut, not a fault
+      '```',
+      '<!-- /spoiler -->',
+      '```',
+    ].join('\n');
+    const { cut, unbalanced } = answer({ op: 'cut', text });
+    assert.strictEqual(cut.length, 10);
+    assert.deepStrictEqual(unbalanced, [
+      { line: 1, marker: 'gm-only', close: true },
+      { line: 2, marker: 'gm-only', close: false },
+    ]);
+    const fenced = answer({ op: 'cut', text: 'x\r\n```\n<!-- /spoiler -->\n```\n<!-- /spoiler -->\n<!-- spoiler -->\n<!-- spoiler -->\n<!-- /spoiler -->' });
+    assert.deepStrictEqual(fenced.unbalanced, [
+      { line: 4, marker: 'spoiler', close: true },
+      { line: 5, marker: 'spoiler', close: false },
+    ]);
+    assert.deepStrictEqual(answer({ op: 'cut', text: 'plain' }).unbalanced, []);
+  });
+  it('keeps a heading that follows a closer on its line, and does not split at a form feed (#441)', () => {
+    const { cut } = answer({ op: 'cut', text: '<!-- gm-only -->\nx\n<!-- /gm-only -->## Public\n## A\fB\r\n<!--\n## C\n-->' });
+    assert.deepStrictEqual(cut, ['', null, '## Public', '## A\fB', null, null, null]);
+  });
 });
 
 describe('lines: sections', () => {

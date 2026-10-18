@@ -985,5 +985,50 @@ class LinkLinesTests(unittest.TestCase):
             "`[[A]]` X")
 
 
+class BuildLinesTests(unittest.TestCase):
+    """`build_lines`: a note's body as the publish tool reads it (#441)."""
+
+    def setUp(self):
+        vl.use_publish_tool(vl.PUBLISH_TOOL)
+
+    def test_lines_are_numbered_by_newline_and_read_from_what_is_kept(self):
+        text = ("---\ntype: npc\n---\n# Bob\x85x\r\n<!-- gm-only -->\nsecret\n"
+                "<!-- /gm-only -->## Public\n## GM Notes\nhidden\n")
+        states, problems = vl.build_lines(text, ["GM Notes"])
+        self.assertEqual(problems, [])
+        self.assertEqual(
+            [(s.lineno, s.line, s.cut, s.excluded_by, s.heading)
+             for s in states],
+            [(4, "# Bob\x85x", False, None, (1, "Bob\x85x")),
+             (5, "", False, None, None),
+             (6, "", True, None, None),
+             (7, "## Public", False, None, (2, "Public")),
+             (8, "## GM Notes", False, "GM Notes", (2, "GM Notes")),
+             (9, "hidden", False, "GM Notes", None)])
+        self.assertEqual(states[3].written, "<!-- /gm-only -->## Public")
+
+    def test_unbalanced_markers_are_worded_as_scan_body_words_them(self):
+        text = "a\n<!-- /spoiler -->\n<!-- gm-only -->\n<!-- /gm-only -->\n<!-- gm-only -->\nb"
+        self.assertEqual(vl.build_lines(text)[1], vl.scan_body(text)[1])
+
+    def test_a_site_tool_without_the_faults_still_gets_them_from_the_plugin(self):
+        own = vl._LINES_BY_TOOL[vl.PUBLISH_TOOL]
+
+        class OldTool:
+            def ask(self, request):
+                answer = dict(own.ask(request))
+                answer.pop("unbalanced", None)
+                return answer
+
+        old = OldTool()
+        saved = vl.PUBLISH_LINES
+        vl.PUBLISH_LINES = old  # type: ignore[assignment]
+        try:
+            _states, problems = vl.build_lines("x\n<!-- /gm-only -->\n")
+        finally:
+            vl.PUBLISH_LINES = saved
+        self.assertEqual(problems, ["line 2: <!-- /gm-only --> with no opener"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
