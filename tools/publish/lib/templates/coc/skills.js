@@ -74,7 +74,7 @@ function mergeSkills(pcSkills, variant, chars) {
     const regNum = Number(pc.reg);
     if (base === null && (blank || !Number.isFinite(regNum))) continue;   // nothing to show but a guess
     const reg = (blank || !Number.isFinite(regNum)) ? base : regNum;
-    byName.set(key, { name: existing ? existing.name : name, base, reg });
+    byName.set(key, { name: existing ? existing.name : name, base, reg, worked: !!existing });
     const p = parentOf(name);
     if (p && GENERIC_PARENTS.has(p.toLowerCase())) specParents.add(p.toLowerCase());
   }
@@ -91,6 +91,8 @@ function mergeSkills(pcSkills, variant, chars) {
     .map(s => ({
       name: s.name, reg: s.reg, half: half(s.reg), fifth: fifth(s.reg),
       developed: s.base !== null && s.reg > s.base,
+      // Written below the base worked out for it from the PC's characteristics; the sheet still shows the written number.
+      ...(s.worked && s.base !== null && s.reg < s.base ? { belowBase: s.base } : {}),
     }))
     .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
 }

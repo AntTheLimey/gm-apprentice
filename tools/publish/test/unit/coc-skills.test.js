@@ -128,4 +128,12 @@ describe('mergeSkills', () => {
     const ticked = mergeSkills([{ name: 'Etiquette ✓', base: 5, reg: 40 }], 'regency', { DEX: { reg: 50 } });
     assert.equal(ticked.filter(s => /etiquette/i.test(s.name)).length, 1);
   });
+  it('a skill written below its worked-out base keeps the written number and says what the base is (#396)', () => {
+    const out = mergeSkills([{ name: 'Dancing', base: 5, reg: 10 }, { name: 'Charm', base: 15, reg: 15 }], 'regency', { DEX: { reg: 70 } });
+    const dancing = out.find(s => s.name === 'Dancing');
+    assert.equal(dancing.reg, 10);
+    assert.equal(dancing.belowBase, 14);
+    assert.equal(out.find(s => s.name === 'Charm').belowBase, undefined);
+    assert.equal(out.find(s => s.name === 'Etiquette'), undefined, 'a skill left off has nothing to flag');
+  });
 });

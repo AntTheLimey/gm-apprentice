@@ -30,6 +30,12 @@ function renderCoCSheet(frontmatter, sections, meta) {
     // No status bar → no mutable vitals → nothing to wire.
     liveData: statusBarHtml ? buildCoCLiveData(model, meta) : null,
     warnings,
+    // Skills written below their worked-out base: said in the note-faults audit, never changed on the sheet (#396).
+    tohitRows: model.skills.filter((k) => k.belowBase != null).map((k) => ({
+      code: 'SKILL_BELOW_BASE', severity: 'info',
+      detail: `${k.name} is written as ${k.reg}, below its base of ${k.belowBase} worked out from the characteristics`,
+      fix: `raise ${k.name} to ${k.belowBase} in the Regular column, or leave it as written (the sheet shows ${k.reg} either way)`,
+    })),
   };
 }
 

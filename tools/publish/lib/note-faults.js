@@ -21,6 +21,8 @@
 //                   why and the fix (the calculator's own words, from tohit-data.js); a row
 //                   it reads but that is written another way, or whose numbers do not add
 //                   up, is information
+//   SKILL_BELOW_BASE  a skill of a CoC investigator written below the base worked out for it
+//                     from the characteristics (information; the sheet shows the number written)
 //
 // Nothing here reads a page a second way, and nothing here knows which field a template
 // prints. The names are decided by the page as the build makes it: every link to a note
@@ -45,7 +47,7 @@ const { kindOfType } = require('./kind-label');
 const { STORY_SUFFIX } = require('./scanner');
 const { decodeEntities } = require('./templates/gurps/tables');
 
-const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD'];
+const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE'];
 const WORST = 3;
 // The human report names this many of the pages that link a note with no page.
 const PAGES_SHOWN = 3;
@@ -861,7 +863,7 @@ function startNoteAudit(input) {
       }
     }
 
-    for (const c of calcRows) found.push({ code: 'TOHIT_UNREAD', severity: c.severity === 'info' ? 'info' : 'warning', path: c.rel, detail: c.detail, fix: c.fix });
+    for (const c of calcRows) found.push({ code: c.code || 'TOHIT_UNREAD', severity: c.severity === 'info' ? 'info' : 'warning', path: c.rel, detail: c.detail, fix: c.fix });
     const sorted = sortFindings(found);
     // The targets that name a note with no page, printed or not, settled or not: the
     // dead-link check leaves them out (a link to a note that exists is not a dead link).
@@ -872,7 +874,7 @@ function startNoteAudit(input) {
   // The to-hit calculator's report for one PC sheet (`rel`, the PC's note).
   const calcRows = [];
   function calculator(rel, rows) {
-    for (const r of rows || []) if (r && r.detail) calcRows.push({ rel, severity: r.severity, detail: r.detail, fix: r.fix || '' });
+    for (const r of rows || []) if (r && r.detail) calcRows.push({ rel, code: r.code, severity: r.severity, detail: r.detail, fix: r.fix || '' });
   }
 
   return { read, readAddresses, readFileName, mark, mayPrint, printed, listing, connections, calculator, findings, storyRelOf };
@@ -959,6 +961,8 @@ function summaryLines(findings) {
       const worst = [...byPc].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, WORST).map(([p, k]) => `${baseName(p)} ${k}`);
       const m = unread.length;
       lines.push(`${m} ${plural(m, 'row of a PC sheet is', 'rows of PC sheets are')} not fully read by the to-hit calculator (${worst.join(', ')}) — ${where} ${plural(m, 'it', 'these')}.`);
+    } else if (code === 'SKILL_BELOW_BASE') {
+      continue;   // information for campaign-qa; the build has nothing to say about it
     } else if (code === 'WITHHELD_NAME_PUBLIC') {
       const names = [...new Set(rows.map((f) => f.name))];
       lines.push(`${names.length} withheld ${plural(names.length, 'name is also the name of a published page', 'names are also the names of published pages')}, so ${plural(names.length, 'it is', 'they are')} not looked for (${names.slice(0, WORST).join(', ')}) — ${where} ${plural(names.length, 'it', 'these')}.`);
