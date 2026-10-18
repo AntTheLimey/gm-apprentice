@@ -96,7 +96,7 @@ quiet. Publish tool 1.38.0.
 
 - A note in a folder named `Personal`, `_Meta` or `_Templates` in any
   capitalisation, at any depth, is no longer published; the player site
-  read only the exact spelling below the vault root, while the GM site
+  matched only the exact spelling below the vault root, while the GM site
   already called these notes never published (#401).
 - ROADMAP: a row for house rules (a home for a campaign's own table
   rules, read wherever rules are answered).
