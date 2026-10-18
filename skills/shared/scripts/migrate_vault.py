@@ -284,6 +284,7 @@ def find_templates(vault: Path) -> list[Item]:
     items: list[Item] = []
     system = vault_system(vault)
     released = _released_hashes(system)
+    regency_released = _released_hashes("coc-7e-regency")
     regency_pc = _regency_pc_template(vault)
     for name, text in expected_templates(vault).items():
         path = folder / name
@@ -313,13 +314,17 @@ def find_templates(vault: Path) -> list[Item]:
                               [f"copy the missing template _Templates/{name}"],
                               apply))
             continue
+        # What releases wrote for a Regency build is the Regency list,
+        # whatever system the vault is stamped (#355).
+        regency_build = _regency_build(system, name, current) is not None
         shown = _with_values(
-            _without_setup_comment(current)
-            if _regency_build(system, name, current) else current, text, filled)
+            _without_setup_comment(current) if regency_build else current,
+            text, filled)
         if _same(shown, text):
             continue
         if {text_hash(current), text_hash(_with_values(current, text, filled))} \
-                & set(released.get(name, [])):
+                & set((regency_released if regency_build else released
+                       ).get(name, [])):
             items.append(Item(
                 f"template:{name}", WILL,
                 [f"update _Templates/{name} from an earlier release's text"],
@@ -343,6 +348,22 @@ def _read(path: Path) -> str:
                          f"({e.__class__.__name__})") from e
 
 
+GAME_SYSTEM_ROW_RE = re.compile(r"^\s*\|\s*\**game system\**\s*\|(.*)\|",
+                                re.I | re.M)
+
+
+def _game_system_row_regency(vault: Path) -> bool:
+    """Does a `Game System | ... Regency ...` row of the old settings
+    table say Regency Cthulhu?"""
+    try:
+        text = (vault / "_meta" / "vault-config.md").read_text(
+            encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    return any("regency" in m.group(1).casefold()
+               for m in GAME_SYSTEM_ROW_RE.finditer(text))
+
+
 def find_regency_looks(vault: Path) -> list[Item]:
     """1.10.49: a vault stamped plain `coc-7e` whose templates look like
     Regency Cthulhu: a stat block with the Reputation line, or a template
@@ -351,7 +372,7 @@ def find_regency_looks(vault: Path) -> list[Item]:
     if vault_system(vault) != "coc-7e":
         return []
     folder = vault / "_Templates"
-    looks = _regency_pc_template(vault)
+    looks = _regency_pc_template(vault) or _game_system_row_regency(vault)
     for name in ("_Template_NPC.md", "_Template_Creature.md"):
         try:
             looks = looks or bool(REPUTATION_LINE_RE.search(
@@ -367,7 +388,7 @@ def find_regency_looks(vault: Path) -> list[Item]:
         f"{settings_file(vault)}. That changes two things on the site: every "
         f"sheet gets the Regency skill list, and a PC with no era is headed "
         f"Regency Cthulhu instead of Call of Cthulhu. Nothing else changes, "
-        f"and this is said once"])]
+        f"and this is said once"], notice=True)]
 
 
 def find_pc_template_field(vault: Path) -> list[Item]:
@@ -1068,7 +1089,7 @@ def find_tone_words(vault: Path) -> list[Item]:
             f"{'is' if asked == 1 else 'are'} not on the standard list and "
             f"{'has' if asked == 1 else 'have'} no rule to tidy "
             f"{'it' if asked == 1 else 'them'}; campaign-qa's Tone Words "
-            f"check asks which word to use for each"])]
+            f"check asks which word to use for each"], notice=True)]
     n_near = sum(int(r[3]) for r in near)
     n_ask = sum(int(r.split("\t")[2]) for r in report
                 if r.startswith("ASK\t"))

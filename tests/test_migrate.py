@@ -376,8 +376,113 @@ class ApplyTests(unittest.TestCase):
                         asks_site=True, choices=("later=",))
         checks = [will(migrate.REPIN, None, 1, log), waiting]
         _, plan, _ = call([str(vault), "plan"], checks)
-        self.assertIn("-> " + PLUGIN + " (only once later (after the site's "
-                      "tool is updated) is answered)", plan)
+        # It only knows the check has a value choice, not that it will ask.
+        self.assertIn("-> " + PLUGIN + " (later may ask a choice once the "
+                      "site's tool is updated)", plan)
+        self.assertNotIn("is answered", plan)
+
+    def test_the_stamp_row_keeps_known_and_possible_choices_apart(self):
+        vault = make_vault(self)
+        checks = [will(migrate.REPIN, None, 1, []),
+                  *self.two_holders([])[:1],
+                  Check("later", "1.10.30", 4, "later", lambda v: [],
+                        asks_site=True, choices=("later=",))]
+        _, plan, _ = call([str(vault), "plan"], checks)
+        self.assertIn("(only once one is answered; later may ask a choice "
+                      "once the site's tool is updated)", plan)
+
+    def new_layout(self, vault):
+        """The vault on the new settings file, stamp in the state file."""
+        version = stamp_of(vault)
+        (vault / "_meta" / "vault-config.yaml").write_text(
+            "vault:\n  name: T\n", encoding="utf-8")
+        (vault / "_meta" / "vault-state.json").write_text(
+            json.dumps({"gm_apprentice_version": version}), encoding="utf-8")
+        return vault
+
+    def held(self, vault):
+        state = json.loads((vault / "_meta" / "vault-state.json").read_text())
+        return state.get("update_held")
+
+    def test_a_leave_is_remembered_while_the_stamp_is_held(self):
+        # #355: `one=leave` with `two` unanswered held the stamp, and the
+        # next plan asked about `one` again.
+        vault = self.new_layout(make_vault(self))
+        checks = self.two_holders([])
+        code, out, _ = call([str(vault), "apply", "--choose", "one=leave"],
+                            checks)
+        self.assertEqual(code, 0)
+        self.assertEqual(stamp_of(vault), "1.10.12")
+        _, plan, _ = call([str(vault), "plan"], checks)
+        self.assertNotIn("one=<", plan)
+        self.assertIn("two=<a or b>", plan)
+        self.assertIn("(only once two is answered)", plan)
+        code, out, _ = call([str(vault), "apply", "--choose", "two=a"], checks)
+        self.assertEqual(stamp_of(vault), PLUGIN)
+        self.assertIsNone(self.held(vault))
+
+    def test_a_remembered_leave_can_still_be_changed_by_naming_it(self):
+        vault = self.new_layout(make_vault(self))
+        log = []
+
+        def find(v):
+            return [Item("one", CHOICE, ["a or b"],
+                         lambda x: log.append(x) or ["done"],
+                         wants="a or b", holds_stamp=True)]
+        checks = [Check("one", "1.10.30", 3, "one", find, choices=("one=",)),
+                  *self.two_holders([])[1:]]
+        call([str(vault), "apply", "--choose", "one=leave"], checks)
+        call([str(vault), "apply", "--choose", "one=b"], checks)
+        self.assertEqual(log, ["leave", "b"])
+
+    def notice_checks(self, log):
+        def find(v):
+            return [Item("heads-up", PERSON, ["somewhere\tread this"],
+                         notice=True)]
+        return [Check("heads-up", "1.10.30", 3, "heads-up", find),
+                *self.two_holders(log)[1:]]
+
+    def test_a_notice_is_said_once_even_while_the_stamp_is_held(self):
+        vault = self.new_layout(make_vault(self))
+        checks = self.notice_checks([])
+        _, plan, _ = call([str(vault), "plan"], checks)
+        self.assertIn("somewhere\tread this", plan)
+        call([str(vault), "apply"], checks)
+        self.assertEqual(stamp_of(vault), "1.10.12")
+        _, plan, _ = call([str(vault), "plan"], checks)
+        self.assertNotIn("read this", plan)
+        self.assertIn("two=<a or b>", plan)
+        call([str(vault), "apply", "--choose", "two=a"], checks)
+        self.assertEqual(stamp_of(vault), PLUGIN)
+        self.assertIsNone(self.held(vault))
+
+    def test_a_yes_no_choice_can_be_declined_by_name(self):
+        # #355: `--choose id=leave` on a choice with no value ran it.
+        vault = make_vault(self)
+        log = []
+
+        def find(v):
+            return [Item("fonts", CHOICE, ["self-host"],
+                         lambda x: log.append(x) or ["done"])]
+        checks = [Check("fonts", "1.10.30", 3, "fonts", find,
+                        choices=("fonts",))]
+        code, out, _ = call([str(vault), "apply", "--choose", "fonts=leave"],
+                            checks)
+        self.assertEqual(code, 0)
+        self.assertEqual(log, [])
+        self.assertIn("fonts\tleft as it is", out)
+        self.assertEqual(stamp_of(vault), PLUGIN)
+
+    def test_a_person_row_that_is_not_a_notice_comes_back_every_time(self):
+        vault = self.new_layout(make_vault(self))
+
+        def find(v):
+            return [Item("fix-me", PERSON, ["N.md:3\tbroken"])]
+        checks = [Check("fix-me", "1.10.30", 3, "fix-me", find),
+                  *self.two_holders([])[1:]]
+        call([str(vault), "apply"], checks)
+        _, plan, _ = call([str(vault), "plan"], checks)
+        self.assertIn("N.md:3\tbroken", plan)
 
     def test_waited_choice_already_named_is_taken_and_stamped(self):
         vault = make_vault(self)

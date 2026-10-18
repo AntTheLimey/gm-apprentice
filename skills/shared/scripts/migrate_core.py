@@ -37,6 +37,9 @@ class Item:
     # A wants-CHOICE whose answers include "leave it": until it is answered
     # `apply` does not stamp, or its release gate would hide it for good.
     holds_stamp: bool = False
+    # A PERSON row that only tells the GM something: said once, even while
+    # the stamp is held and the plan comes back.
+    notice: bool = False
 
 
 @dataclass(frozen=True)

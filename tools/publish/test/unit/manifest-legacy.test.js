@@ -7,6 +7,25 @@ const { parseManifest, stripInlineComment } = require('../../lib/manifest-legacy
 const { loadManifest } = require('../../lib/manifest');
 const quiet = { warn: () => {} };
 
+describe('the old list with frontmatter that cannot be read (#333)', () => {
+  it('names the file and the parser reason on one line', () => {
+    const md = '---\ngenerated: x\nvault: a: b\n---\n\n## Publishing (0 files)\n';
+    assert.throws(() => parseManifest(md), (e) => {
+      assert.match(e.message, /^_meta\/publish-manifest\.md: the frontmatter cannot be read \(/);
+      assert.ok(!e.message.includes('\n'), e.message);
+      return true;
+    });
+  });
+});
+
+describe('renderManifest', () => {
+  it('writes type: meta so the frontmatter check recognises the note (#333)', () => {
+    const { renderManifest } = require('../../lib/manifest-legacy');
+    const text = renderManifest({ entries: new Map(), generated: 'g', vault: 'V', totalFiles: 0 });
+    assert.match(text, /^---\ntype: meta\n/);
+  });
+});
+
 describe('parseManifest', () => {
   it('parses frontmatter metadata', () => {
     const md = [

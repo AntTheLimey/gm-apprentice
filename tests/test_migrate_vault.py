@@ -413,6 +413,37 @@ class TemplateTests(unittest.TestCase):
                     "Cthulhu instead of Call of Cthulhu. Nothing else "
                     "changes, and this is said once"])
 
+    def test_the_game_system_row_of_the_settings_file_also_looks_regency(self):
+        # #355: the row can say Regency when no template does.
+        vault = self.npc_vault(mv.expected_templates(
+            make_vault(self))["_Template_NPC.md"])
+        config = vault / "_meta" / "vault-config.md"
+        config.write_text(
+            config.read_text(encoding="utf-8")
+            + "\n| Setting | Value |\n|---|---|\n"
+            "| Game System | Call of Cthulhu 7th Edition (Regency Cthulhu) |\n",
+            encoding="utf-8")
+        self.assertEqual([i.id for i in mv.find_regency_looks(vault)],
+                         ["regency-looks"])
+        config.write_text(
+            config.read_text(encoding="utf-8").replace(
+                "(Regency Cthulhu)", ""), encoding="utf-8")
+        self.assertEqual(mv.find_regency_looks(vault), [])
+
+    def test_a_regency_template_is_updated_from_the_regency_history(self):
+        # #355: a stale Regency build in a vault stamped coc-7e matches the
+        # coc-7e-regency released hashes, not the coc-7e ones.
+        stale = self.regency_build(comment=True).replace(
+            "**Armour** {none}", "**Armour** {leather}")
+        vault = self.npc_vault(stale)
+        file = Path(tempfile.mkdtemp(prefix="migh-")) / "template-history.json"
+        self.addCleanup(shutil.rmtree, file.parent, ignore_errors=True)
+        file.write_text(json.dumps({"coc-7e-regency": {
+            "_Template_NPC.md": [mv.text_hash(stale)]}}), encoding="utf-8")
+        with mock.patch.object(mv, "HISTORY", file):
+            item = by_id(mv.find_templates(vault))["template:_Template_NPC.md"]
+        self.assertEqual(item.group, WILL)
+
     def test_a_plain_coc_vault_is_not_told_it_looks_regency(self):
         vault = self.npc_vault(mv.expected_templates(
             make_vault(self))["_Template_NPC.md"])

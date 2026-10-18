@@ -1077,6 +1077,28 @@ class FrontmatterUnparseableTests(unittest.TestCase):
         self.assertIn("ERROR\t_meta/other.md\tmissing 'type' field", rows)
         self.assertFalse(rows_for(rows, "publish-manifest"), rows)
 
+    def test_the_publish_manifest_with_a_type_is_checked_like_any_note(self):
+        # #333: the tool now writes `type: meta`; it is no longer skipped.
+        vault, _calls = self._vault()
+        (vault / "_meta" / "publish-manifest.md").write_text(
+            "---\ntype: meta\ngenerated: x\n---\n\n## Publishing (0 files)\n",
+            encoding="utf-8")
+        self.assertEqual(rows_for(vc.check_frontmatter(vault, None),
+                                  "publish-manifest"), [])
+
+    def test_a_publish_manifest_with_broken_frontmatter_is_named(self):
+        # #333: the tool's own message names the file; the frontmatter check
+        # says so as an ERROR on that note instead of leaving it silent.
+        vault, _calls = self._vault()
+        (vault / "_meta" / "publish-manifest.md").write_text(
+            "---\ngenerated: x\nvault: a: b\n---\n\n## Publishing (0 files)\n",
+            encoding="utf-8")
+        rows = rows_for(vc.check_frontmatter(vault, None), "publish-manifest")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith(
+            "ERROR\t_meta/publish-manifest.md\tthe publish tool cannot read "
+            "this frontmatter ("), rows)
+
     def test_a_file_the_build_walks_and_this_script_skips_is_still_named(self):
         # `_inbox` is in vaultlib's SKIP_DIRS and not in the tool's
         # exclude_dirs, so the build's closing line names it.
@@ -1455,6 +1477,52 @@ class GmLeakCommandTests(unittest.TestCase):
         for title in flagged:
             with self.subTest(flagged=title):
                 self.assertTrue(vc._keeper_text(title, []))
+
+    def test_keyword_and_exclude_matches_are_whole_words(self):
+        # #355: "secret" is not "Secretary", "tactic" is not "Tactician",
+        # and an exclude entry is a word too; plurals still count.
+        for title in ("Secretary", "The Secretary of State", "Tactician",
+                      "Confidentially Yours", "Spoilered"):
+            with self.subTest(clean=title):
+                self.assertFalse(vc._keeper_text(title, []))
+        for title in ("Secrets", "Tactics", "Secret Door", "Spoilers",
+                      "Confidential", "The Secret: Mara", "GM-only", "GM Only"):
+            with self.subTest(flagged=title):
+                self.assertTrue(vc._keeper_text(title, []))
+        self.assertFalse(vc._keeper_text("Playbook", ["Play"]))
+        self.assertFalse(vc._keeper_text("Loreful", ["Lore"]))
+        self.assertTrue(vc._keeper_text("Lore Notes — Draft", ["Lore Notes"]))
+        self.assertTrue(vc._keeper_text("Lore_Notes", ["Lore"]))
+
+    def test_a_hyphen_before_keeper_reads_like_a_space(self):
+        for title in ("Lore Keeper", "Lore-Keeper", "Peace-keeper",
+                      "Peace Keeper"):
+            with self.subTest(title=title):
+                self.assertFalse(vc._keeper_text(title, []))
+        self.assertTrue(vc._keeper_text("Private-Keeper Notes", []))
+
+    def test_a_bold_label_is_a_label_with_or_without_its_colon(self):
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\n"
+            "**Private Keeper** he lies.\n\n"
+            "**Private Keeper:** he lies.\n\n"
+            "**Secrets** all of them.\n\n"
+            "**Secretary:** takes notes.\n", encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(sorted(r.split("\t")[1] for r in rows_for(
+            rows, "Bob.md")), ["Bob.md:11", "Bob.md:7", "Bob.md:9"], rows)
+        self.assertTrue(rows_for(rows, "bold label 'Private Keeper' looks"),
+                        rows)
+
+    def test_a_flagged_title_is_told_to_rename_not_to_nest(self):
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Keeper Notes\n\ntext\n", encoding="utf-8")
+        rows = rows_for(vc.check_gm_leak(vault, None), "Bob.md:5")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertNotIn("nest", rows[0])
+        self.assertIn("rename", rows[0])
 
     def test_a_content_word_and_more_after_keeper_still_warns_in_a_note(self):
         vault = make_vault(self)
