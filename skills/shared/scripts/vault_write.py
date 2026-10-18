@@ -1188,6 +1188,24 @@ def add_line(text: str, rel: str, section: str, line: str,
     return place(doc, at, [line], tight=_listy(line), glue=glue), ""
 
 
+LOG_SECTION = "campaign log"
+LOG_ALIASES = frozenset({"appearances", "encounters"})
+
+
+def resolve_log_section(note: str, section: str) -> str | None:
+    """The name of the public log section a note keeps in place of
+    `Campaign Log` (`Appearances` or `Encounters`, whichever comes first),
+    or None when `section` is not `Campaign Log`, the note has one, or it
+    has no equivalent."""
+    if key(section.strip().lstrip("#")) != LOG_SECTION:
+        return None
+    heads = [h for h in parse(note).heads if h.level == 2 and not h.gm]
+    if any(key(h.title) == LOG_SECTION for h in heads):
+        return None
+    return next((h.title for h in heads if key(h.title) in LOG_ALIASES),
+                None)
+
+
 def cmd_log(batch: Batch, _args: argparse.Namespace, text: str) -> None:
     rows = [r for r in text.replace("\r\n", "\n").split("\n") if r.strip()]
     if not rows:
@@ -1203,15 +1221,18 @@ def cmd_log(batch: Batch, _args: argparse.Namespace, text: str) -> None:
         if note_type not in templates:
             templates[note_type] = type_template(note_type)
         tmap, fenced = templates[note_type]
-        keeper, name = split_section(cells[1])
+        resolved = resolve_log_section(note, cells[1])
+        section = resolved or cells[1]
+        keeper, name = split_section(section)
         where = f"\u00a7{'GM Notes/' if keeper else ''}{name}"
-        new, detail = add_line(note, rel, cells[1], cells[2], tmap, fenced,
+        new, detail = add_line(note, rel, section, cells[2], tmap, fenced,
                                note_type)
         if new is None:
             batch.row("SKIP", rel, where, detail)
             continue
         batch.put(rel, new)
-        batch.row("WOULD-ADD", rel, where, detail)
+        batch.row("WOULD-ADD", rel, where, detail or ("resolved" if resolved
+                                                      else ""))
         if (keeper or key(name) == GM_NOTES) and any(
                 st.gm_depth == 0 for st in added_states(note, new)):
             batch.row("WARNING", rel, where,
@@ -1301,6 +1322,20 @@ def _flush(above: str, below: str) -> bool:
                     and below.lstrip().startswith("|")))
 
 
+def _later_entry_heading(doc: Doc, end: int) -> Head | None:
+    """The first visible Session or Chapter heading at or after line `end`
+    whose own lines hold a list item or table row: a place sessions were
+    filed, so a new entry above it may be in the wrong spot."""
+    for h in doc.heads:
+        if h.idx < end or h.gm or not LABEL_START_RE.match(h.title):
+            continue
+        if any(TOP_LIST_RE.match(doc.lines[i])
+               or doc.lines[i].lstrip().startswith("|")
+               for i in own_lines(doc, h, section_end(doc, h))):
+            return h
+    return None
+
+
 def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
     rel = batch.resolve(args.file or TIMELINE)
     if not batch.exists(rel):
@@ -1366,6 +1401,12 @@ def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
         batch.put(rel, note)
     child = next((h for h in reversed(doc.heads) if head.idx < h.idx < at),
                  None)
+    later = _later_entry_heading(doc, end) if new_entries else None
+    if later is not None:
+        batch.row("WARNING", rel, where,
+                  f"the entries go above '{'#' * later.level} {later.title}', "
+                  f"which also holds entries: if they belong after it, "
+                  f"use --under '{'#' * later.level} {later.title}'")
     for entry, fresh in plan:
         if not fresh:
             batch.row("SKIP", rel, where, "already there")
@@ -1432,6 +1473,8 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=raw, description=(
             "stdin: one row per line, PATH<TAB>SECTION<TAB>LINE.\n"
             "SECTION is 'Campaign Log' or 'GM Notes/Behind the Scenes';\n"
+            "a note with no Campaign Log but an Appearances or Encounters\n"
+            "section gets the row there (the row says 'resolved');\n"
             "any section name is accepted. A section the note's template\n"
             "keeps under GM Notes must be written as 'GM Notes/<Name>'\n"
             "unless the note already has it as a public section."))

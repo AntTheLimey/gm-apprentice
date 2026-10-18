@@ -1092,6 +1092,51 @@ class LogTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertEqual(out.count("ADDED\t"), 3)
 
+    # #314: a row that says Campaign Log finds the log the note has
+    def test_campaign_log_row_finds_an_appearances_section(self):
+        note = ("---\ntype: npc\n---\n\n# Kartik\n\n## Appearances\n\n"
+                "- **[[Session 01 - Start]]** — met.\n\n## Next\n\ntext\n")
+        vault = make_vault(self, {NPC_REL: note})
+        code, out = log(vault, f"{NPC_REL}\tCampaign Log\t{S2}again.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"ADDED\t{NPC_REL}\t§Appearances\tresolved", out)
+        text = read(vault, NPC_REL)
+        self.assertNotIn("## Campaign Log", text)
+        self.assertIn("met.\n" + S2 + "again.\n\n## Next", text)
+
+    def test_campaign_log_row_finds_encounters_on_a_creature(self):
+        rel = "Creatures/Thing.md"
+        note = ("---\ntype: creature\n---\n\n# Thing\n\n## Encounters\n\n"
+                "- old\n")
+        vault = make_vault(self, {rel: note})
+        code, out = log(vault, f"{rel}\tCampaign Log\t{S2}new\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("§Encounters\tresolved", out)
+        self.assertNotIn("## Campaign Log", read(vault, rel))
+
+    def test_campaign_log_wins_when_the_note_has_it(self):
+        note = NPC.replace("# Hallam\n", "# Hallam\n\n## Appearances\n\n- a\n")
+        vault = make_vault(self, {NPC_REL: note})
+        _, out = log(vault, f"{NPC_REL}\tCampaign Log\t{S2}b\n")
+        self.assertIn("§Campaign Log\t", out)
+        self.assertNotIn("resolved", out)
+
+    def test_campaign_log_row_still_creates_when_no_equivalent(self):
+        note = "---\ntype: npc\n---\n\n# Hallam\n\n## Notes\n\ntext\n"
+        vault = make_vault(self, {NPC_REL: note})
+        code, out = log(vault, f"{NPC_REL}\tCampaign Log\t{S2}b\n")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("resolved", out)
+        self.assertIn("## Campaign Log", read(vault, NPC_REL))
+
+    def test_a_hidden_appearances_is_not_the_log(self):
+        note = ("---\ntype: npc\n---\n\n# Hallam\n\n<!-- gm-only -->\n\n"
+                "## GM Notes\n\n### Appearances\n\n- secret\n\n"
+                "<!-- /gm-only -->\n")
+        vault = make_vault(self, {NPC_REL: note})
+        _, out = log(vault, f"{NPC_REL}\tCampaign Log\t{S2}b\n")
+        self.assertNotIn("resolved", out)
+
 
 class GuardTests(unittest.TestCase):
     def test_a_path_that_is_not_a_note_is_refused(self):
@@ -1361,6 +1406,49 @@ class TimelineTests(unittest.TestCase):
         self.assertEqual(out.count("ADDED\t"), 1, out)
         self.assertEqual(out.count("SKIP\t"), 1, out)
         self.assertEqual(read(vault, TL_REL).count("- **1814** — x"), 1)
+
+    # #314: --under a heading that is not the last one holding entries
+    def test_entries_above_later_entry_headings_are_warned(self):
+        legacy = TL.replace("<!-- gm-only -->",
+                            "## Session 5 — Hostile Takeover\n\n"
+                            "- **(date TBD)** — [[Raid]] — Boom.\n\n"
+                            "<!-- gm-only -->")
+        vault = make_vault(self, {TL_REL: legacy})
+        code, out = tl(vault, "- **1814** — x\n",
+                       "--under", "## Chapter 1")
+        self.assertEqual(code, 0, out)
+        self.assertIn("WARNING", out)
+        self.assertIn("## Session 5 — Hostile Takeover", out)
+        self.assertIn("above", out)
+
+    def test_the_last_entry_heading_draws_no_placement_warning(self):
+        legacy = TL.replace("<!-- gm-only -->",
+                            "## Session 5 — Hostile Takeover\n\n"
+                            "- **(date TBD)** — [[Raid]] — Boom.\n\n"
+                            "<!-- gm-only -->")
+        vault = make_vault(self, {TL_REL: legacy})
+        _, out = tl(vault, "- **1814** — x\n",
+                    "--under", "## Session 5 — Hostile Takeover")
+        self.assertNotIn("WARNING", out)
+
+    def test_later_headings_with_no_entries_draw_no_warning(self):
+        # TL's "Future Events" is hidden and holds entries, but a heading
+        # with no list under it is not a place entries went
+        bare = TL.replace("- **12 August 1814** — the ritual.\n", "")
+        vault = make_vault(self, {TL_REL: bare})
+        _, out = tl(vault, "- **1814** — x\n", "--under", "## Chapter 1")
+        self.assertNotIn("WARNING", out)
+
+    def test_entries_land_after_child_headings_inside_the_section(self):
+        vault = make_vault(self, {TL_REL: TL})
+        code, out = tl(vault, "- **4 August 1814** — Next.\n",
+                       "--under", "## Chapter 1")
+        self.assertEqual(code, 0, out)
+        text = read(vault, TL_REL)
+        self.assertLess(text.index("They came."),
+                        text.index("- **4 August 1814** — Next."))
+        self.assertLess(text.index("- **4 August 1814** — Next."),
+                        text.index("<!-- gm-only -->"))
 
 
 class Group1Tests(unittest.TestCase):
