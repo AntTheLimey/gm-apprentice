@@ -150,39 +150,49 @@ async function runFlush(deps) {
   // since then is not overwritten by it.
   const loadState = deps.readState || readState;
   const saveState = deps.writeState || writeState;
-  const state = loadState(vaultPath);
+  let state;
+  try {
+    state = loadState(vaultPath);
+  } catch (e) {
+    out('✖ ' + e.message + '. Fix or delete that file, then flush again. Nothing was written.');
+    return 1;
+  }
   const written = Object.assign({}, state.flush_written);
   let markersChanged = false;
 
-  for (const slug of Object.keys(latest)) {
-    const marker = recordMarker(latest[slug].key, latest[slug].blob);
-    if (written[slug] === marker) {
-      const page0 = bySlug[slug];
-      if (page0) out('· ' + (page0.displayTitle || page0.title) + ' — already written, left as the note has it');
-      continue;
-    }
-    const page = bySlug[slug];
-    if (!page) { out('⚠ ' + safeSlug(slug) + ' — in KV but no matching vault sheet (skipped)'); continue; }
-    const name = page.displayTitle || page.title;
-    const raw = readFile(page.sourcePath);
-    const writer = resolveSystem(page.frontmatter, campaignSystem);
-    if (!writer) { out('⚠ ' + name + ' — this system has no live sheet to write back (skipped)'); continue; }
-    const res = WRITERS[writer](raw, latest[slug].blob, page, out);
-    if (!res) continue;
-    if (res.changes.length) {
-      if (dryRun) {
-        out('✓ ' + name + ' — ' + summarize(res.changes) + '  (would write)');
-      } else {
-        writeFile(page.sourcePath, res.markdown);
-        out('✓ ' + name + ' — ' + summarize(res.changes));
+  // A throw part-way (a file that cannot be written) still keeps the markers of the PCs already written.
+  try {
+    for (const slug of Object.keys(latest)) {
+      const marker = recordMarker(latest[slug].key, latest[slug].blob);
+      if (written[slug] === marker) {
+        const page0 = bySlug[slug];
+        if (page0) out('· ' + (page0.displayTitle || page0.title) + ' — already written, left as the note has it');
+        continue;
       }
-    } else {
-      out('· ' + name + ' — no change');
+      const page = bySlug[slug];
+      if (!page) { out('⚠ ' + safeSlug(slug) + ' — in KV but no matching vault sheet (skipped)'); continue; }
+      const name = page.displayTitle || page.title;
+      const raw = readFile(page.sourcePath);
+      const writer = resolveSystem(page.frontmatter, campaignSystem);
+      if (!writer) { out('⚠ ' + name + ' — this system has no live sheet to write back (skipped)'); continue; }
+      const res = WRITERS[writer](raw, latest[slug].blob, page, out);
+      if (!res) continue;
+      if (res.changes.length) {
+        if (dryRun) {
+          out('✓ ' + name + ' — ' + summarize(res.changes) + '  (would write)');
+        } else {
+          writeFile(page.sourcePath, res.markdown);
+          out('✓ ' + name + ' — ' + summarize(res.changes));
+        }
+      } else {
+        out('· ' + name + ' — no change');
+      }
+      if (res.skipped && res.skipped.length) out('  ' + name + ' — not written, no cell in the note can hold: ' + res.skipped.join(', '));
+      if (!dryRun) { written[slug] = marker; markersChanged = true; }
     }
-    if (res.skipped && res.skipped.length) out('  ' + name + ' — not written, no cell in the note can hold: ' + res.skipped.join(', '));
-    if (!dryRun) { written[slug] = marker; markersChanged = true; }
+  } finally {
+    if (markersChanged) saveState(vaultPath, { flush_written: written });
   }
-  if (markersChanged) saveState(vaultPath, { flush_written: written });
   return 0;
 }
 

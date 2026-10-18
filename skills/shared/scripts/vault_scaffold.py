@@ -39,7 +39,7 @@ from schema_rules import (SYSTEMS, TYPE_FOLDERS, WORLD_STUBS, system_id,
 from migrate_core import StepFailed, write_text_atomic
 from vault_write import utf8_output
 from vaultlib import (PUBLISH_TOOL, SETTINGS_FILE, STAMP_KEY, STATE_FILE,
-                      SettingsUnavailable, StateUnreadable, entity_type,
+                      SettingsUnavailable, StateUnreadable, _read_state, entity_type,
                       extract_frontmatter, forget_settings, parse_version,
                       plugin_version, read_stamp, settings, settings_default,
                       settings_set, stamp_file, vault_files, vault_layout)
@@ -181,6 +181,7 @@ class Piece:
     called when the file is written."""
     rel: str
     text: Callable[[], str] | None = None
+    merge: bool = False   # an existing file rewritten whole; undone by putting its text back
 
 
 def shown(piece: Piece) -> str:
@@ -287,6 +288,18 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
     file(SETTINGS_FILE, lambda: settings_text(system, campaign),
          present=has_settings)
     file(STATE_FILE, lambda: state_text(version), present=has_settings)
+    # A state file that exists already (flush makes it) but holds no stamp: the stamp is merged in, every
+    # other key kept. Without it the new vault would read as unstamped.
+    state_path = vault / STATE_FILE
+    if not has_settings and state_path.is_file():
+        try:
+            held = _read_state(vault)
+        except StateUnreadable as e:
+            raise ScaffoldError(str(e)) from e
+        if STAMP_KEY not in held:
+            out.append(Piece(STATE_FILE, lambda: json.dumps(
+                {**held, STAMP_KEY: version}, indent=2,
+                ensure_ascii=False) + "\n", merge=True))
     return out
 
 
@@ -327,6 +340,7 @@ def build(vault: Path, pieces: list[Piece]) -> None:
     """Create every piece, or none: a failure part-way, Ctrl-C included,
     removes what this run made and nothing else."""
     made: list[Path] = []
+    merged: dict[Path, str] = {}
     # The vault's settings file may be among the pieces (or removed again).
     forget_settings(vault)
     try:
@@ -335,6 +349,10 @@ def build(vault: Path, pieces: list[Piece]) -> None:
             if piece.text is None:
                 _make_folders(path, made)
                 continue
+            if piece.merge:
+                merged[path] = path.read_text(encoding="utf-8")
+                write_text_atomic(path, piece.text())
+                continue
             _make_folders(path.parent, made)
             if path.exists():
                 raise ScaffoldError(f"{piece.rel}: appeared since the plan "
@@ -342,6 +360,11 @@ def build(vault: Path, pieces: list[Piece]) -> None:
             made.append(path)
             write_text_atomic(path, piece.text())
     except BaseException as e:
+        for path, original in merged.items():
+            try:
+                write_text_atomic(path, original)
+            except OSError:
+                pass
         left = _undo(vault, made)
         if not isinstance(e, Exception):
             if left:

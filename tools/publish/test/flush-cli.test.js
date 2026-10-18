@@ -438,3 +438,40 @@ for (const [name, sys] of Object.entries(SYSTEMS)) {
     assert.match(note, sys.cell);
   });
 }
+
+test('a write that throws part-way still keeps the markers of the PCs already written', async () => {
+  const st = memoryState();
+  const two = () => [
+    { sourcePath: '/vault/PCs/Jane_Ashford.md', title: 'Jane_Ashford', displayTitle: 'Jane Ashford', frontmatter: { type: 'pc' } },
+    { sourcePath: '/vault/PCs/Bob_Marsh.md', title: 'Bob_Marsh', displayTitle: 'Bob Marsh', frontmatter: { type: 'pc' } },
+  ];
+  const adapter = fakeAdapter({
+    'roster:test-campaign': JSON.stringify(['loadout:test-campaign:jane-ashford:ABCD', 'loadout:test-campaign:bob-marsh:EFGH']),
+    'loadout:test-campaign:jane-ashford:ABCD': JSON.stringify({ hp: 7, conditions: {}, updatedAt: 5 }),
+    'loadout:test-campaign:bob-marsh:EFGH': JSON.stringify({ hp: 6, conditions: {}, updatedAt: 6 }),
+  });
+  await assert.rejects(runFlush({
+    ...st, config: CONFIG, adapter, scan: two, publishConfig: { switches: { characterSheets: true, liveStats: true } },
+    readFile: () => JANE_MD,
+    writeFile: (p) => { if (/Bob/.test(p)) throw new Error('disk full'); },
+    out: () => {},
+  }), /disk full/);
+  assert.deepEqual(Object.keys(st.peek().flush_written || {}), ['jane-ashford']);
+});
+
+test('a corrupt vault-state.json stops flush with one plain line naming the file', async () => {
+  const lines = [];
+  const rc = await runFlush({
+    readState: () => { throw new Error('_meta/vault-state.json is not valid JSON: Unexpected token'); },
+    writeState: () => { throw new Error('must not write'); },
+    config: CONFIG, adapter: fakeAdapter({ 'roster:test-campaign': JSON.stringify(['loadout:test-campaign:jane-ashford:ABCD']),
+      'loadout:test-campaign:jane-ashford:ABCD': JSON.stringify({ hp: 7, updatedAt: 5 }) }),
+    scan: pages, publishConfig: { switches: { characterSheets: true, liveStats: true } },
+    readFile: () => JANE_MD, writeFile: () => { throw new Error('must not write'); },
+    out: (m) => lines.push(String(m)),
+  });
+  assert.equal(rc, 1);
+  assert.equal(lines.length, 1, lines.join('\n'));
+  assert.match(lines[0], /_meta\/vault-state\.json is not valid JSON/);
+  assert.doesNotMatch(lines[0], /\n\s+at /);
+});
