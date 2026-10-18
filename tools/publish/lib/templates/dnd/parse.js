@@ -280,14 +280,16 @@ function readSpellcasting(model, section) {
     seen.add(key);
     let left = sub.html;
     if (key === 'spell slots' && first) {
-      left = consumeTable(sub.html, COLS.slots, ([level, total, expended]) => {
+      // Only the Total may hold a link, and only in its trailing `(reason)`, as for an ability score.
+      left = consumeTable(sub.html, COLS.slots, keepReasonLink(model, ([level, total, expended], h) => {
+        if (hasLink(h[2])) return false;
         if (!total && !expended) return /^(\d+(st|nd|rd|th)?|cantrips?|pact\b.*)$/i.test(level);
         const t = slotTotal(total);
         const e = expended ? wholeNumber(expended) : 0;
         if (t === null || e === null || e > t) return false;
         model.slots.push({ level, total: t, expended: e });
         return true;
-      });
+      }), LINKS);
     } else if (key === 'spells' && first) {
       // Ten columns with Source before Summary, or the nine before it.
       const withSource = SOURCE_COLUMN.test(firstHeader(sub.html)[8] || '');

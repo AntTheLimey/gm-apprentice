@@ -467,3 +467,17 @@ test('a slot total written with a reason is a live row the flush can write (#444
   assert.match(row(r.markdown, /^\| 1st \|/), /^\| 1st \| \d+ \(Ring of Spell Storing\) \| 1 \|/);
   assert.deepEqual(r.skipped, []);
 });
+
+test('a slot total whose reason is a link is a live row the flush writes (#444)', () => {
+  const md = note('Brannoch_Vale.md').replace(/^\| 1st \| (\d+) \|/m, '| 1st | $1 ([[Ring of Spell Storing]]) |');
+  assert.match(md, /\| 1st \| \d+ \(\[\[Ring of Spell Storing\]\]\) \|/);
+  const r = applyDnDFlush(md, blob({ used: { 'slot:1st': 1 } }));
+  assert.match(row(r.markdown, /^\| 1st \|/), /^\| 1st \| \d+ \(\[\[Ring of Spell Storing\]\]\) \| 1 \|/);
+  assert.deepEqual(r.skipped, []);
+});
+
+test('a link in the slot total itself, not a trailing reason, is not written', () => {
+  const md = note('Brannoch_Vale.md').replace(/^\| 1st \| (\d+) \|/m, '| 1st | [[Ring]] $1 |');
+  const r = applyDnDFlush(md, blob({ used: { 'slot:1st': 3 } }));
+  assert.equal(row(r.markdown, /^\| 1st \|/), row(md, /^\| 1st \|/), 'the row is left as written');
+});

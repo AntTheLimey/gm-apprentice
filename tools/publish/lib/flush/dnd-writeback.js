@@ -293,7 +293,12 @@ function applyDnDFlush(markdown, blob) {
   const spell = section('spellcasting');
   const slotTable = subsection({ subs: firstOfEach(spell ? spell.subs : []) }, 'spell slots');
   for (const row of countedRows(slotTable && slotTable.tables[0], COLS.slots)) {
-    if (row.cells.some(hasLink)) continue;
+    // A link is read only in the Total's trailing `(reason)`, as the build reads it.
+    if (row.cells.some((cell, i) => i !== 1 && hasLink(cell))) continue;
+    if (hasLink(row.cells[1] || '')) {
+      const m = String(row.cells[1]).match(/^(.*?\S)\s*\(([^()]+)\)$/);
+      if (!m || hasLink(m[1]) || !hasLink(m[2])) continue;
+    }
     const c = row.cells.map(plain);
     if (!c[1] && !c[2]) continue;
     const t = slotTotal(c[1]);
