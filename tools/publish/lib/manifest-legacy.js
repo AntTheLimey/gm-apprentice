@@ -10,6 +10,7 @@
 // unchanged), so a vault stays on the file it is on until it is moved on purpose.
 const { parseNote } = require('./frontmatter');
 const { canonicalNfc: canonicalPath } = require('./unicode');
+const { OLD_LIST_FILE } = require('./settings/layout');
 
 // Manifest entries are vault-relative paths, optionally annotated with an inline
 // `— comment` (the Excluded section uses these throughout). Keep only the path, so an
@@ -30,7 +31,14 @@ function stripInlineComment(entry) {
 }
 
 function parseManifest(markdown) {
-  const { data, content } = parseNote(markdown);
+  let note;
+  try {
+    note = parseNote(markdown);
+  } catch (e) {
+    // One line that names the file, so the vault check can say which note it is (#333).
+    throw new Error(`${OLD_LIST_FILE}: the frontmatter cannot be read (${String(e.reason || e.message).split('\n')[0].trim()})`);
+  }
+  const { data, content } = note;
   const publishing = [];
   const needsDecision = [];
   const resolved = [];
@@ -149,6 +157,7 @@ function renderManifest({ entries, generated, vault, totalFiles }) {
 
   const lines = [
     '---',
+    'type: meta',
     `generated: ${generated}`,
     `vault: ${JSON.stringify(vault)}`,
     'mode: player',

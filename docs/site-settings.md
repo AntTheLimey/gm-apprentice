@@ -16,7 +16,7 @@ what is possible, or to read what your file already says.
 | File | Where | What it holds | Who writes it |
 |------|-------|---------------|---------------|
 | `_meta/vault-config.yaml` | In the vault | Every setting: the campaign's name and system, the site's title and theme, what is published, character sheets, the landing page | You, or the apprentice when you ask |
-| `_meta/vault-state.json` | In the vault | The apprentice's own bookkeeping: which version last updated the vault, and how far setting up a site got | The apprentice only. Leave it alone |
+| `_meta/vault-state.json` | In the vault | The apprentice's own bookkeeping: which version last updated the vault, how far setting up a site got, and what an unfinished update has already asked or said | The apprentice only. Leave it alone |
 | `vault.config.json` | In the site folder, the one `player_site.folder` names | One setting: where the vault is | The apprentice, when it sets the site up |
 
 The two vault files travel with the campaign. The site file belongs to
@@ -256,7 +256,7 @@ These decide which notes, and which parts of a note, reach the site.
 | `player_site.hide.callouts`<br>was `publish.exclude_callouts`, `excludeCallouts` | Whether Obsidian callouts (`> [!note]`) are left out | `on` for all, `off` for none, or a list of callout types | Off; a site set up by the apprentice starts with it on |
 | `player_site.hide.drafts`<br>was `publish.exclude_drafts` | Whether a note with `canon_status: DRAFT` at its top is left off the site | A switch | Off: drafts publish with a "Draft" badge |
 | `player_site.hide.field_exceptions`<br>was `publish.overrides.fields` | Lets one note show a field that `player_site.hide.fields` hides everywhere else | A note's path from the top of the vault, in quotes, then `include:` and the field names | No exceptions |
-| `player_site.never_show` | Words or phrases that must never reach players: a name, a twist, a word from your prep. The build does not remove them; `deploy` stops when the finished player site holds one (any case, as a whole word), names the page, and `leaks check` lists them. A finding you mean to keep is accepted like any other (`leaks accept`) | A list of words or phrases | None |
+| `player_site.never_show` | Words or phrases that must never reach players: a name, a twist, a word from your prep. The build does not remove them; `deploy` stops when the finished player site holds one (any case, as a whole word, or its plural written with a capital), names the page, and `leaks check` lists them. A finding you mean to keep is accepted like any other (`leaks accept`) | A list of words or phrases | None |
 | `player_site.withheld_words.person` | The word that stands in for the name of a withheld person (a character or an NPC) when a note links to them with no label of their own. It cannot hold `[`, `]` or `\|` | Text | `someone` |
 | `player_site.withheld_words.place` | The word that stands in for the name of a withheld place. It cannot hold `[`, `]` or `\|` | Text | `somewhere` |
 | `player_site.withheld_words.thing` | The word that stands in for the name of any other withheld note. It cannot hold `[`, `]` or `\|` | Text | `something` |
@@ -480,8 +480,9 @@ player_site:
 ## The GM site
 
 The GM site is a second copy of your campaign site, for you at the table.
-It holds every note and shows every part players do not see, each one
-marked with the reason players do not see it. It is written to its own
+It holds every note and shows the parts players do not see (the
+`gm_site.show.*` switches choose which), each one marked with the reason
+players do not see it. It is written to its own
 folder, and it is never put online: you read it on your own computer, or
 serve it to your home network with `gm-apprentice-publish serve`.
 
@@ -500,7 +501,7 @@ mark, so do not read those places aloud as if players had them.
 
 | Setting | What it does | Values | Left out |
 |---------|--------------|--------|----------|
-| `gm_site.publish` | Whether this vault has a GM site: a second copy of the site with every note and every hidden part shown and marked, for you at the table. It is never put online | A switch | Off |
+| `gm_site.publish` | Whether this vault has a GM site: a second copy of the site with every note shown and the hidden parts marked (the `gm_site.show.*` switches choose which), for you at the table. It is never put online | A switch | Off |
 | `gm_site.folder` | The folder the GM site's pages are written to. It holds built pages only, and cannot be the player site's folder, inside it, or hold it. Turning the GM site on with this unset makes one beside the player site's folder | A folder path | A folder beside the player site's, made when the GM site is turned on |
 | `gm_site.show.notes` | Notes the player site leaves out (prep, drafts, the ones held back by the publish list) get a page, marked | A switch | On |
 | `gm_site.show.sections` | Sections the player site hides (by heading) are shown, marked | A switch | On |

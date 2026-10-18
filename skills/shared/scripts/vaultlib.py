@@ -19,7 +19,8 @@ the publish tool does not track fences, so a fenced `## GM Notes` example
 still starts exclusion on the site. The divergence is deliberate and one
 -directional: this module errs toward reporting a line as published, which
 is the safe direction for a leak check — it over-reports what a reader
-might see rather than quietly assuming something is hidden.
+might see rather than quietly assuming something is hidden. gm-leak no
+longer reads it: `build_lines` asks the publish tool instead (#441).
 """
 
 from __future__ import annotations
@@ -98,8 +99,12 @@ def is_unchecked_source(rel: str) -> bool:
 def vault_files(vault: Path, folder: str | None = None,
                 files: Iterable[str] | None = None,
                 skip_dirs: set[str] = SKIP_DIRS,
-                newer_than: float | None = None) -> Iterator[tuple[str, str]]:
+                newer_than: float | None = None,
+                newline: str | None = None) -> Iterator[tuple[str, str]]:
     """Yield (vault-relative posix path, text) for every readable note.
+
+    `newline` is `open`'s: None reads with universal newlines (`\\r` and
+    `\\r\\n` become `\\n`), "" yields the text as written.
 
     Hidden directories and `skip_dirs` (templates, the `_inbox` staging
     area) are skipped; an unreadable file warns on stderr rather than
@@ -132,7 +137,9 @@ def vault_files(vault: Path, folder: str | None = None,
         try:
             if newer_than is not None and path.stat().st_mtime < newer_than:
                 continue
-            text = path.read_text(encoding="utf-8", errors="replace")
+            with path.open(encoding="utf-8", errors="replace",
+                           newline=newline) as f:
+                text = f.read()
         except OSError as e:
             print(f"warning: unreadable {rel}: {e}", file=sys.stderr)
             continue
@@ -931,6 +938,15 @@ class PublishToolUnavailable(Exception):
     """The publish tool could not say what publishes. The message is why."""
 
 
+# The first publish tool with the `lines` op `cut` (`build_lines`).
+CUT_SINCE = "1.17.0"
+
+
+class PublishToolTooOld(PublishToolUnavailable):
+    """The tool answers, but predates a question asked of it. The message
+    is the first version that has it."""
+
+
 class PublishLines:
     """A `gm-publish lines` process: one JSON question per line."""
 
@@ -970,7 +986,7 @@ class PublishLines:
         try:
             done = subprocess.run(
                 [node, str(self.tool), *args], capture_output=True,
-                timeout=PUBLISH_LINES_TIMEOUT)
+                stdin=subprocess.DEVNULL, timeout=PUBLISH_LINES_TIMEOUT)
         except subprocess.TimeoutExpired as e:
             raise PublishToolUnavailable(
                 f"the publish tool did not answer within "
@@ -1083,6 +1099,10 @@ SETTINGS_FILE = "_meta/vault-config.yaml"
 LEGACY_SETTINGS_FILE = "_meta/vault-config.md"
 STATE_FILE = "_meta/vault-state.json"
 STAMP_KEY = "gm_apprentice_version"
+# What an update that could not stamp the vault remembers for the next one:
+# {"left": [choice ids answered "leave"], "said": [notices already shown]}.
+# Dropped whenever the stamp is written.
+HELD_KEY = "update_held"
 
 
 def vault_layout(vault: Path) -> Literal["new", "legacy", "none"]:
@@ -1169,6 +1189,37 @@ def write_stamp(vault: Path, version: str) -> None:
         return
     state = _read_state(vault)
     state[STAMP_KEY] = version
+    state.pop(HELD_KEY, None)
+    _write_state(vault, state)
+
+
+def read_held(vault: Path) -> dict[str, set[str]]:
+    """The `left` and `said` ids a held update remembered. Only the new
+    layout keeps them; an old-layout vault moves in the same update."""
+    if vault_layout(vault) != "new":
+        return {"left": set(), "said": set()}
+    held = _read_state(vault).get(HELD_KEY)
+    held = held if isinstance(held, dict) else {}
+    return {key: {str(i) for i in held[key]}
+            if isinstance(held.get(key), list) else set()
+            for key in ("left", "said")}
+
+
+def write_held(vault: Path, left: set[str], said: set[str]) -> None:
+    """Remember the ids for the next update (merged with those already
+    remembered); nothing is written on the old layout."""
+    if vault_layout(vault) != "new":
+        return
+    before = read_held(vault)
+    left, said = left | before["left"], said | before["said"]
+    state = _read_state(vault)
+    if not left and not said:
+        return
+    state[HELD_KEY] = {"left": sorted(left), "said": sorted(said)}
+    _write_state(vault, state)
+
+
+def _write_state(vault: Path, state: dict[str, Any]) -> None:
     target = (vault / STATE_FILE).resolve()
     text = json.dumps(state, indent=2, ensure_ascii=False) + "\n"
     tmp = target.with_name(f".{target.name}.{os.getpid()}.tmp")
@@ -1300,7 +1351,8 @@ def _run_settings(args: list[str], *, refusable: bool = False,
     try:
         done = subprocess.run(
             [node, str(PUBLISH_TOOL), "settings", *args, "--json"],
-            capture_output=True, timeout=PUBLISH_LINES_TIMEOUT)
+            capture_output=True, stdin=subprocess.DEVNULL,
+            timeout=PUBLISH_LINES_TIMEOUT)
     except subprocess.TimeoutExpired as e:
         raise fail(f"the publish tool did not answer within "
                    f"{PUBLISH_LINES_TIMEOUT}s") from e
@@ -1353,7 +1405,8 @@ def run_relationships(vault: Path, args: list[str]) -> Any:
         done = subprocess.run(
             [node, str(PUBLISH_TOOL), "relationships", *args, "--json",
              "--vault", str(vault)],
-            capture_output=True, timeout=PUBLISH_LINES_TIMEOUT)
+            capture_output=True, stdin=subprocess.DEVNULL,
+            timeout=PUBLISH_LINES_TIMEOUT)
     except subprocess.TimeoutExpired as e:
         raise fail(f"it did not answer within {PUBLISH_LINES_TIMEOUT}s") from e
     except OSError as e:
@@ -1858,6 +1911,133 @@ class LineState:
         return (self.gm_depth == 0 and self.spoiler_depth == 0
                 and self.excluded_by is None and self.marker is None)
 
+    @property
+    def written(self) -> str:
+        """The line as written in the note."""
+        return self.line
+
+
+@dataclass
+class BuildLine:
+    """One body line as the build reads it (`build_lines`): the publish
+    tool's own strip chain and section filter, nothing modelled here."""
+
+    lineno: int
+    written: str  # the line as written, `\r` dropped as the build drops it
+    line: str  # what the strip chain leaves of it; "" when it is cut
+    cut: bool  # the strip chain removes the line
+    excluded_by: str | None
+    in_code: bool
+    heading: tuple[int, str] | None
+
+    @property
+    def published(self) -> bool:
+        return not self.cut and self.excluded_by is None
+
+
+def build_lines(text: str, exclude_sections: Iterable[str] = (), *,
+                note_type: str | None = None,
+                pc_keep: list[str] | None = None,
+                callouts: Any = False,
+                ) -> tuple[list[BuildLine], list[str]]:
+    """Every body line of a note as the build reads it, and the gm-only and
+    spoiler markers its block strips find unbalanced, as `scan_body`'s
+    problems are worded.
+
+    The build splits at `\\n` alone (a form feed, `\\x85` or a lone `\\r`
+    is inside a line) and drops `\\r`; `text` must be the file as written,
+    not read with universal newlines. Which lines the strip chain cuts
+    (gm-only and spoiler blocks, HTML and `%%` comments, dataview, the
+    hidden callouts) and which an excluded section withholds is the
+    publish tool's one `cut` answer, given the page's section rules: the
+    exclude list, the note's `type:` (`note_type`), the PC keep-list while
+    sheets are off (`pc_keep`) and `player_site.hide.callouts`
+    (`callouts`). So a withheld heading inside a hidden block withholds
+    the text after the block, as on the site (#447). A tool older than
+    that answers without `withheldBy`: the section filter is then asked
+    about the lines left. Headings and code fences are read from what is
+    left. Raises `PublishToolUnavailable` when the tool cannot be asked,
+    and `PublishToolTooOld` when it predates `cut`."""
+    lines = text.split("\n")
+    if len(lines) > 1 and lines[-1] == "":
+        lines.pop()
+    lines = [line.replace("\r", "") for line in lines]
+    start = 0
+    if lines and lines[0].strip() == "---":
+        start = next((i + 1 for i in range(1, len(lines))
+                      if lines[i].strip() == "---"), 0)
+    body = lines[start:]
+    if not body:
+        return [], []
+    excludes = [str(s) for s in exclude_sections]
+    request: dict[str, Any] = {
+        "op": "cut", "text": "\n".join(body), "excludeSections": excludes,
+        "type": note_type, "pcKeepSections": pc_keep,
+        "excludeCallouts": callouts if isinstance(callouts, (bool, list))
+        else False}
+    try:
+        answer = PUBLISH_LINES.ask(request)
+    except PublishToolUnavailable as e:
+        if "unknown op" in str(e):
+            raise PublishToolTooOld(CUT_SINCE) from e
+        raise
+    cut = answer.get("cut")
+    unbalanced = answer.get("unbalanced")
+    own = _LINES_BY_TOOL[PUBLISH_TOOL]
+    if unbalanced is None and PUBLISH_LINES is not own:
+        # A site's tool from before the faults were reported: where the
+        # blocks run is still its answer; only the faults' lines are the
+        # plugin's tool's.
+        unbalanced = own.ask({"op": "cut", "text": request["text"]}).get(
+            "unbalanced")
+    by = answer.get("withheldBy")
+    if by is not None and (
+            not isinstance(by, list) or len(by) != len(body)
+            or not all(v is None or isinstance(v, str) for v in by)):
+        raise PublishToolUnavailable(
+            "the publish tool's answer does not match the note's lines")
+    if (not isinstance(cut, list) or len(cut) != len(body)
+            or not all(c is None or isinstance(c, str) for c in cut)
+            or not isinstance(unbalanced, list)
+            or not all(isinstance(u, dict)
+                       and isinstance(u.get("line"), int)
+                       and 0 <= u["line"] < len(body)
+                       and u.get("marker") in ("gm-only", "spoiler")
+                       and isinstance(u.get("close"), bool)
+                       for u in unbalanced)):
+        raise PublishToolUnavailable(
+            "the publish tool's answer does not match the note's lines")
+    if by is not None:
+        verdicts = iter([v for v, c in zip(by, cut) if c is not None])
+    else:
+        # A tool from before #447: the section filter asked about the
+        # lines the strips left, in a second question.
+        verdicts = iter(withheld_by([c for c in cut if c is not None],
+                                    excludes))
+    states: list[BuildLine] = []
+    fence_delim: str | None = None
+    for i, (written, kept) in enumerate(zip(body, cut)):
+        lineno = start + i + 1
+        if kept is None:
+            states.append(BuildLine(lineno, written, "", True, None, False,
+                                    None))
+            continue
+        fence_delim, is_fence_line = fence_step(kept, fence_delim)
+        in_code = fence_delim is not None or is_fence_line
+        hm = None if in_code else HEADING_RE.match(kept)
+        states.append(BuildLine(
+            lineno, written, kept, False, next(verdicts), in_code,
+            (len(hm.group(1)), atx_title(hm.group(2))) if hm else None))
+    problems = [f"line {start + u['line'] + 1}: <!-- /{u['marker']} --> "
+                f"with no opener" for u in sorted(
+                    (u for u in unbalanced if u["close"]),
+                    key=lambda u: u["line"])]
+    for _name, word in _MARKERS:
+        problems += [f"line {start + u['line'] + 1}: <!-- {word} --> "
+                     f"never closed" for u in unbalanced
+                     if not u["close"] and u["marker"] == word]
+    return states, problems
+
 
 def scan_body(text: str,
               exclude_sections: Iterable[str] = ()) -> tuple[list[LineState],
@@ -1882,26 +2062,30 @@ def scan_body(text: str,
       after it, silently, which is the worst possible failure of the one
       primitive whose whole job is hiding things (#168).
 
-    Section exclusion follows the pipeline's *order*. `processContent` /
-    `playerSafeMarkdown` run `stripGmOnly` and `stripSpoiler` BEFORE
-    `filterSections`, so a `## GM Notes` written inside a
-    `<!-- gm-only -->` block is already gone when the section filter
-    runs: it never starts an exclusion, and it never ends one either. The
-    tool is therefore asked about the note with its marker lines and
-    marker blocks blanked. This matters because `<!-- gm-only -->`
-    wrapping `## GM Notes` is exactly the shape `wrapup --fix` writes:
-    letting that heading exclude the rest of the file would blind every
-    leak check to everything a GM appends below the fence.
+    The section filter is asked about the note with its marker lines and
+    marker blocks blanked, so a `## GM Notes` written inside a
+    `<!-- gm-only -->` block (the shape `wrapup --fix` writes) neither
+    starts nor ends an exclusion here.
 
-    Known divergences of the marker model, which can err either way — the
-    leak invariant in vault_check.py uses `publisher_lines`, the tool's
-    own answer, instead:
+    Known divergences of the marker model, which can err either way — so
+    the leak checks do not use it: the leak invariant in vault_check.py
+    reads `publisher_lines` and gm-leak reads `build_lines`, the tool's
+    own answers (#441, #447). What still calls this is writers and
+    structure checks, which need to see inside the blocks:
 
+    * The site puts a withheld heading from a hidden block back where the
+      block ends (#447), so the text after a fenced `## GM Notes`, up to
+      the next heading of its level or higher, is withheld there and
+      called published here.
     * Only the two marker blocks are blanked before the tool is asked,
-      not multi-line HTML comments, which `stripHtmlComments` also
-      removes before `filterSections`. A `## GM Notes` commented out that
-      way still starts an exclusion here and does not on the site, so
-      what follows it is called hidden here and publishes there.
+      not multi-line HTML comments. A `## GM Notes` commented out that
+      way starts its exclusion here at the heading, and on the site where
+      the comment ends.
+    * A line that starts with a marker is a marker line here, whatever
+      follows it: `<!-- /gm-only -->## Public` is no heading here, and is
+      one on the site.
+    * Lines are split by `str.splitlines`, at a form feed, `\\x85` and a
+      lone `\\r` too; the build splits at `\\n` alone.
 
     Returns (states, problems); problems are authoring defects — orphan
     closers and blocks left open at EOF.
@@ -2121,41 +2305,27 @@ def publisher_lines(text: str, excludes: Iterable[str],
 # Publish gating
 # --------------------------------------------------------------------------
 
-# The words of the publish tool's switch list that mean yes. A copy, because the
-# checks that read a note's flag run with no Node; tests/test_vaultlib_state.py
-# pins it to the tool's own list.
-GM_ONLY_YES_WORDS = ("true", "yes", "on")
+WITHHELD_KEY_RE = re.compile(r"""^["']?withheld["']?[ \t]*:""", re.M)
 
 
-def gm_only_hides(value: Any) -> bool:
-    """Whether a relationship's `gm_only: <value>` hides the edge.
-
-    Mirrors tools/publish/lib/processor.js `isGmOnlyEdge`: true, the number
-    1, and the words true, yes, on and 1, trimmed and in any capitals. A
-    real YAML parser gives `yes` and `on` as strings and a GM may quote or
-    pad any of them. Reading more of these as a yes only hides more.
-    tools/publish/test/fixtures/gm-only-vectors.json pins both.
-    """
-    if value is True:
-        return True
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return value == 1
-    if not isinstance(value, str):
-        return False
-    word = value.strip().lower()
-    # A word that reads as the number 1 (1.0, 01, +1) is a yes, as in JS.
-    return word in GM_ONLY_YES_WORDS or re.fullmatch(
-        r"\+?0*1(?:\.0*)?", word, re.ASCII) is not None
-
-
-def is_withheld(frontmatter: dict[str, Any] | None) -> bool:
-    """Whether a note's own name is a secret (`withheld: true`, #291).
-
-    Read exactly as `gm_only` is, so the two flags read alike: this is
-    `gm_only_hides` on the `withheld` field. Mirrors
-    tools/publish/lib/processor.js `isWithheld`; absent means false.
-    """
-    return gm_only_hides((frontmatter or {}).get("withheld"))
+def note_withheld(text: str) -> tuple[bool, list[str]]:
+    """Whether a note's own name is a secret (`withheld: true`, #291), and
+    the names its title, aliases and gm_aliases give it. Asked of the
+    publish tool, which reads the frontmatter with the build's YAML reader
+    and the flag with the build's rule (`isWithheld`), so a number YAML
+    makes 1 (`0x1`, `1e0`) reads the same on both sides (#352). A note
+    with no `withheld` key is not asked about. Raises
+    `PublishToolUnavailable` when the tool cannot be asked or cannot read
+    the note's frontmatter."""
+    if not WITHHELD_KEY_RE.search(raw_frontmatter(text)):
+        return False, []
+    answer = PUBLISH_LINES.ask({"op": "withheld", "text": text})
+    withheld, names = answer.get("withheld"), answer.get("names")
+    if not isinstance(withheld, bool) or not (
+            isinstance(names, list) and all(isinstance(n, str) for n in names)):
+        raise PublishToolUnavailable(
+            "the publish tool's answer about withheld is not understood")
+    return withheld, names
 
 
 # The two explicit opt-outs processor.js honours, and nothing else.

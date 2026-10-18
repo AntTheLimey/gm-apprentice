@@ -3,15 +3,15 @@
 
 An optional frontmatter flag. Absent means false. The site build searches the
 published site for a withheld note's file name, title and aliases. This pins
-the Python side: the flag is read the way `gm_only` is, `validate_schema.py`
+the Python side: the flag is the publish tool's answer, `validate_schema.py`
 accepts it and names a value that is not true or false, and the templates that
 carry `gm_aliases` carry the flag beside it.
 """
 
 import importlib.util
-import json
 import os
 import pathlib
+import shutil
 import sys
 import tempfile
 import unittest
@@ -26,7 +26,6 @@ SPEC = importlib.util.spec_from_file_location(
 vs = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(vs)
 
-VECTORS = ROOT / "tools" / "publish" / "test" / "fixtures" / "gm-only-vectors.json"
 TEMPLATES = ROOT / "skills" / "shared" / "templates"
 
 
@@ -44,20 +43,28 @@ def withheld_errors(line: str) -> list[str]:
         path.unlink(missing_ok=True)
 
 
+@unittest.skipUnless(shutil.which("node"), "node is not on PATH")
 class WithheldFlagTests(unittest.TestCase):
-    def test_is_withheld_reads_the_flag_as_gm_only_does(self):
-        for case in json.loads(VECTORS.read_text(encoding="utf-8"))["cases"]:
-            with self.subTest(value=case["value"]):
-                self.assertEqual(vl.is_withheld({"withheld": case["value"]}),
-                                 case["hides"])
+    """The flag is the publish tool's answer (`note_withheld`, #352): read
+    with the build's YAML reader and its flag rule, never a second way."""
 
-    def test_absent_or_no_frontmatter_is_not_withheld(self):
-        self.assertFalse(vl.is_withheld({}))
-        self.assertFalse(vl.is_withheld(None))
+    def test_the_flag_reads_as_the_build_reads_it(self):
+        for value, withheld in (("true", True), ("yes", True), ("1", True),
+                                ("0x1", True), ("1e0", True), ("1.0", True),
+                                ('"0x1"', False), ("false", False),
+                                ("2", False), ("maybe", False)):
+            with self.subTest(value=value):
+                got, _ = vl.note_withheld(f"---\ntype: npc\nwithheld: {value}\n---\n\nb\n")
+                self.assertEqual(got, withheld)
 
-    def test_the_frontmatter_parser_yields_a_string_and_it_still_reads(self):
-        fm = vl.extract_frontmatter("---\ntype: npc\nwithheld: true\n---\n\nb\n")
-        self.assertTrue(vl.is_withheld(fm))
+    def test_a_note_without_the_key_is_not_asked_about(self):
+        self.assertEqual(vl.note_withheld("---\ntype: npc\n---\n\nwithheld: true\n"), (False, []))
+        self.assertEqual(vl.note_withheld("no frontmatter\n"), (False, []))
+
+    def test_the_names_are_the_builds(self):
+        self.assertEqual(vl.note_withheld(
+            "---\nwithheld : true\ntitle: The Ferryman\naliases: Old Nick\n"
+            "gm_aliases: [Vesper]\n---\n"), (True, ["The Ferryman", "Old Nick", "Vesper"]))
 
 
 class WithheldValidationTests(unittest.TestCase):

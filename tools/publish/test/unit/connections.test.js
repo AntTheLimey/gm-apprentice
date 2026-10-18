@@ -325,7 +325,34 @@ test('a markdown link in a description prints its label, whatever its address ho
 
 test('a wiki-link in a description still reads its name as words, and a label as the label', () => {
   assert.deepStrictEqual(lineOf('Sister of [[Some_Note]] and [[Some_Note|the_label]].'), ['Sister of Some Note and the_label.']);
-  assert.deepStrictEqual(lineOf('mixed_up [[Some_Note]] in_between [[Other_One#A_head]]'), ['mixed_up Some Note in_between Other One#A head']);
+  assert.deepStrictEqual(lineOf('mixed_up [[Some_Note]] in_between [[Other_One#A_head]]'), ['mixed_up Some Note in_between Other One']);
+});
+
+test('a link to a heading prints the note name, an escaped underscore prints the underscore, an image its alt text (#355)', () => {
+  assert.deepStrictEqual(lineOf('see [[Other_One#A_head]] now'), ['see Other One now']);
+  assert.deepStrictEqual(lineOf('see [[Other_One^block_id]] now'), ['see Other One now']);
+  assert.deepStrictEqual(lineOf('see [[#A_head]] now'), ['see A head now']);
+  assert.deepStrictEqual(lineOf('[[Old\\_Tom]] and a \\_b\\_'), ['Old Tom and a _b_']);
+  assert.deepStrictEqual(lineOf('look ![the_map](Maps/Secret.png) here'), ['look the_map here']);
+  assert.deepStrictEqual(lineOf('look ![[map.png]] and ![x](y) here'), ['look and x here']);
+  assert.deepStrictEqual(lineOf('see [x]( rest'), ['see x rest']);
+  assert.deepStrictEqual(lineOf('a _plain_ word'), ['a _plain_ word']);
+});
+
+test('an address that never ends is dropped up to the next space, and an image in a type prints its alt text (review B L4)', () => {
+  assert.deepStrictEqual(lineOf('see [Shadow](Hidden_Man.md'), ['see Shadow']);
+  assert.deepStrictEqual(lineOf('see [Shadow](Hidden_Man.md and more'), ['see Shadow and more']);
+  const emma = page('Emma', 'npc', { relationships: [{ target: 'Hallam', type: '![serves](pic.png)' }] });
+  const labels = tab(buildConnections(ctx([emma, page('Hallam', 'npc')])).for(emma), 'people').groups.map((g) => g.label);
+  assert.ok(labels.length && labels.every((l) => !l.includes('!')), labels.join('|'));
+});
+
+test('descriptions made of unfinished brackets are read in time linear in their length (#355)', () => {
+  for (const text of ['[[a|'.repeat(12500), '![['.repeat(16000), '['.repeat(50000), '[[a\\'.repeat(12500), '[x]('.repeat(10000)]) {
+    const start = Date.now();
+    lineOf(text);
+    assert.ok(Date.now() - start < 1500, `${JSON.stringify(text.slice(0, 8))}… took ${Date.now() - start} ms`);
+  }
 });
 
 test('HTML special characters in a description are left for the page to escape', () => {

@@ -24,10 +24,26 @@
 //                            gm-only block, a spoiler block or a comment is not kept;
 //                            nor, when `excludeSections` is given, one it withholds
 //
+//   {"op":"withheld","text":…}
+//       -> {"withheld":…,"names":[…]}  for a whole note: whether the build reads it as withheld (its YAML reader, its
+//                            flag rule), and the names its title, aliases and gm_aliases give it, as the build reads them
+//
 //   {"op":"cut","text":…}
 //       -> {"cut":[…]}       per line of `text`: the line as the strip chain leaves it
 //                            (the build's own: gm-only, spoiler, HTML and %% comments),
-//                            or null when the chain removes it
+//                            or null when the chain removes it; and {"unbalanced":[…]}, each
+//                            gm-only or spoiler marker the block strips found unbalanced:
+//                            {line (of `text`), marker, close}, a closer with nothing open
+//                            or an opener never closed (a tool older than #441 leaves it out).
+//   {"op":"cut","text":…,"excludeSections":[…],"type":…,"pcKeepSections":[…]|null,"excludeCallouts":…}
+//       -> also {"withheldBy":[…]}  with the page's section rules (`excludeSections` given; `type`, the note's
+//                            `type:`; `pcKeepSections` while sheets are off; `excludeCallouts`, the hidden callouts,
+//                            true or a list of types): the hidden callouts are cut too, and per line of `text` the
+//                            section that withholds it, or null, as the build reads it (#447: a withheld heading
+//                            in a hidden block withholds the text after the block). A tool older than that answers
+//                            without `withheldBy`.
+//                            vault_check's gm-leak reads a note's lines from this answer
+//                            (`build_lines`), not from a model of its own
 //
 //   {"op":"site","vault":…}
 //       -> {"publishes":…,"site":…,"siteDir":…}  whether the vault's settings have the site's
@@ -49,7 +65,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { readSettings, nameIn, fileLabel, layoutOf } = require('./settings');
-const { strippedLines, playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts } = require('./processor');
+const { cutLines, playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts, isWithheld, nameList, gmAliasList } = require('./processor');
+const { parseNote } = require('./frontmatter');
+const { labelsForLinks } = require('./wikilink');
 
 // A request is checked, not coerced: a list that is not a list read as "no list"
 // would answer "nothing is withheld".
@@ -128,11 +146,25 @@ function answer(request) {
     case 'stub':
       return { kept: keptSectionFlags(text, list(request, 'include'),
         { excludeSections: request.excludeSections === undefined ? [] : list(request, 'excludeSections') }) };
+    case 'withheld': {
+      let fm;
+      try { fm = parseNote(text).data || {}; } catch (e) { throw new Error(`the frontmatter cannot be read (${String(e.message).split('\n')[0]})`); }
+      const title = typeof fm.title === 'string' ? labelsForLinks(fm.title).trim() : '';
+      return { withheld: isWithheld(fm), names: [...(title ? [title] : []), ...nameList(fm.aliases), ...gmAliasList(fm)] };
+    }
     case 'cut': {
-      const { lines, from } = strippedLines(text.replace(/\r/g, ''), false);
-      const cut = text.split('\n').map(() => null);
-      lines.forEach((line, i) => { cut[from[i]] = line; });
-      return { cut };
+      // The page's section rules, when they are asked about: `excludeSections` says they are.
+      if (request.excludeSections === undefined) return cutLines(text);
+      const type = request.type;
+      if (type !== undefined && type !== null && typeof type !== 'string') throw new Error('type must be a string');
+      const callouts = request.excludeCallouts === undefined ? false : request.excludeCallouts;
+      if (typeof callouts !== 'boolean') list(request, 'excludeCallouts');
+      return cutLines(text, {
+        excludeSections: list(request, 'excludeSections'),
+        frontmatter: type ? { type } : null,
+        pcKeepSections: request.pcKeepSections === undefined || request.pcKeepSections === null ? null : list(request, 'pcKeepSections'),
+        excludeCallouts: callouts,
+      });
     }
     default:
       throw new Error(`unknown op: ${JSON.stringify(request.op)}`);

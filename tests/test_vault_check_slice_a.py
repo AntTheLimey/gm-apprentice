@@ -69,6 +69,22 @@ def rows_for(rows, needle):
     return [r for r in rows if needle in r]
 
 
+def refuse_cut(ask):
+    """`PublishLines.ask` as a publish tool older than 1.17.0 answers: it
+    has no `cut` op."""
+    def old_ask(self, request):
+        if request.get("op") == "cut":
+            raise vaultlib.PublishToolUnavailable(
+                'the publish tool refused: unknown op: "cut"')
+        return ask(self, request)
+    return old_ask
+
+
+TOO_OLD_ROW = ("ERROR\t(vault)\t{check} did not run: the site's publish tool "
+               "predates 1.17.0 and is too old for this check — run "
+               "update-pin, then run this again")
+
+
 # Found once, before any test patches `shutil.which` or `subprocess.run`.
 REAL_NODE = shutil.which("node")
 REAL_RUN = subprocess.run
@@ -1061,6 +1077,28 @@ class FrontmatterUnparseableTests(unittest.TestCase):
         self.assertIn("ERROR\t_meta/other.md\tmissing 'type' field", rows)
         self.assertFalse(rows_for(rows, "publish-manifest"), rows)
 
+    def test_the_publish_manifest_with_a_type_is_checked_like_any_note(self):
+        # #333: the tool now writes `type: meta`; it is no longer skipped.
+        vault, _calls = self._vault()
+        (vault / "_meta" / "publish-manifest.md").write_text(
+            "---\ntype: meta\ngenerated: x\n---\n\n## Publishing (0 files)\n",
+            encoding="utf-8")
+        self.assertEqual(rows_for(vc.check_frontmatter(vault, None),
+                                  "publish-manifest"), [])
+
+    def test_a_publish_manifest_with_broken_frontmatter_is_named(self):
+        # #333: the tool's own message names the file; the frontmatter check
+        # says so as an ERROR on that note instead of leaving it silent.
+        vault, _calls = self._vault()
+        (vault / "_meta" / "publish-manifest.md").write_text(
+            "---\ngenerated: x\nvault: a: b\n---\n\n## Publishing (0 files)\n",
+            encoding="utf-8")
+        rows = rows_for(vc.check_frontmatter(vault, None), "publish-manifest")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith(
+            "ERROR\t_meta/publish-manifest.md\tthe publish tool cannot read "
+            "this frontmatter ("), rows)
+
     def test_a_file_the_build_walks_and_this_script_skips_is_still_named(self):
         # `_inbox` is in vaultlib's SKIP_DIRS and not in the tool's
         # exclude_dirs, so the build's closing line names it.
@@ -1207,11 +1245,24 @@ class GmLeakCommandTests(unittest.TestCase):
             out.append("GM Notes" if level is not None else None)
         return out
 
+    @staticmethod
+    def without_rules_answer():
+        """A publish tool older than #447: its `cut` answers no
+        `withheldBy`, so `build_lines` asks `withheld_by` as before."""
+        real = vaultlib.PublishLines.ask
+
+        def ask(self, request):
+            answer = real(self, request)
+            if request.get("op") == "cut":
+                answer.pop("withheldBy", None)
+            return answer
+        return mock.patch.object(vaultlib.PublishLines, "ask", ask)
+
     def test_a_site_on_an_older_tool_gets_the_dressed_heading_error(self):
         # Hidden by the current tool (no row, above); published by an older
         # one, and then the heading defeats the exclude list.
-        with mock.patch.object(vaultlib, "withheld_by",
-                               self.old_tool_withheld_by):
+        with self.without_rules_answer(), mock.patch.object(
+                vaultlib, "withheld_by", self.old_tool_withheld_by):
             rows = vc.check_gm_leak(LEAK, None)
         self.assertIn(
             f"ERROR\t{LEAKY}:10\tbold-wrapped heading 'GM Notes' defeats "
@@ -1294,21 +1345,130 @@ class GmLeakCommandTests(unittest.TestCase):
             "publish strips to end of file",
             vc.check_gm_leak(vault, None))
 
-    def test_a_fenced_gm_notes_heading_hides_nothing_below_the_closer(self):
+    def test_a_fenced_gm_notes_heading_withholds_what_follows_the_closer(self):
         # `<!-- gm-only -->` wrapping `## GM Notes` is the shape
-        # `wrapup --fix` writes. The publish pipeline strips the block
-        # before filterSections runs, so that heading excludes nothing —
-        # and letting it start an exclusion made this check blind to
-        # everything a GM appended after the closer.
+        # `wrapup --fix` writes. Since #447 the build puts that heading
+        # back where the block ends, so the text after the closer is
+        # withheld as part of GM Notes up to the next `##`: nothing in it
+        # is reported, and what follows that next heading still is.
         vault = make_vault(self)
         (vault / "Bob.md").write_text(
             "---\ntype: npc\n---\n\n# Bob\n\n<!-- gm-only -->\n"
             "## GM Notes\nhidden\n<!-- /gm-only -->\n\n"
             "**Secret:** he runs the cult.\n\n"
-            "> [!note] GM only: he lies.\n", encoding="utf-8")
+            "> [!note] GM only: he lies.\n\n## Voice\n\n"
+            "**Secret:** he whispers.\n", encoding="utf-8")
         rows = vc.check_gm_leak(vault, None)
-        self.assertTrue(rows_for(rows, "bold label 'Secret'"), rows)
-        self.assertTrue(rows_for(rows, "callout [!note] GM only"), rows)
+        self.assertEqual(rows_for(rows, "Bob.md"), [
+            "INFO\tBob.md:18\tbold label 'Secret' looks Keeper-facing — "
+            "confirm with the GM (not a heading; not auto-movable)"], rows)
+
+    def test_text_after_a_hidden_gm_notes_block_raises_no_alarm(self):
+        # #447 against #441: the site withholds what follows a hidden
+        # `## GM Notes` (HEADING_IN_HIDDEN_BLOCK says so), so gm-leak must
+        # not call it published: no heading WARNING, no INFO row and no
+        # re-nest of a heading the site already withholds.
+        vault = make_vault(self)
+        note = ("---\ntype: npc\n---\n\n# Bob\n\n## Appearance\n\nTall.\n\n"
+                "<!-- gm-only -->\n## GM Notes\n<!-- /gm-only -->\n"
+                "### Keeper Secrets\nThe informant.\n\n"
+                "**Secret:** he lies.\n")
+        (vault / "Bob.md").write_text(note, encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertEqual(rows_for(rows, "Bob.md"), [], rows)
+        self.assertEqual(read(vault, "Bob.md"), note)
+
+    def test_a_hidden_callout_is_not_reported(self):
+        # The callouts the site hides (`player_site.hide.callouts`) are cut
+        # by the build's strip chain, so one that reads Keeper-facing is
+        # no INFO row.
+        vault = make_vault(self, "---\npublish:\n  exclude_callouts: true\n---\n")
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\n> [!note] GM only: he lies.\n",
+            encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(rows_for(rows, "Bob.md"), [], rows)
+
+    # #441: the blocks are the build's own reading (`gm-publish lines`,
+    # op `cut`), not a Python model of them. Each case below was read
+    # differently by that model, and each time the check went quiet on a
+    # heading the site publishes.
+
+    def test_a_heading_in_a_multi_line_comment_is_read_as_the_build_reads_it(self):
+        # The build cuts the comment, then puts a withheld heading it held
+        # back where the comment ends (#447): the commented-out `## GM
+        # Notes` withholds `### Keeper Secrets` below it, and the
+        # commented-out `## Secret Tactics` never reaches a reader.
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\n<!--\n## Secret Tactics\n-->\n\n"
+            "<!--\n## GM Notes\n-->\n### Keeper Secrets\nx\n",
+            encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(rows_for(rows, "Bob.md"), [], rows)
+
+    def test_a_heading_after_a_closer_on_its_line_is_read(self):
+        # `<!-- /gm-only -->## Public`: the build keeps `## Public`, which
+        # ends `## GM Notes`, so what follows it publishes.
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\n## GM Notes\n<!-- gm-only -->\n"
+            "secret\n<!-- /gm-only -->## Public\n\n### Keeper Secrets\nx\n\n"
+            "**Secret:** he lies.\n", encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(rows_for(rows, "Bob.md"), [
+            "WARNING\tBob.md:12\tKeeper-facing heading 'Keeper Secrets' "
+            "publishes — nest it under ## GM Notes or fence it",
+            "INFO\tBob.md:15\tbold label 'Secret' looks Keeper-facing — "
+            "confirm with the GM (not a heading; not auto-movable)"], rows)
+
+    def test_a_form_feed_nel_or_lone_cr_does_not_split_a_line(self):
+        # The build splits a note at `\n` alone and drops `\r`, so
+        # `## GM Notes<x>more` is one heading, not the excluded one, and
+        # line numbers count `\n`.
+        for ch in ("\r", "\x0c", "\x85"):
+            with self.subTest(ch=repr(ch)):
+                vault = make_vault(self)
+                (vault / "Bob.md").write_bytes(
+                    (f"---\ntype: npc\n---\n\n# Bob\n\n## GM Notes{ch}more\n"
+                     f"\n### Keeper Secrets\nx\n").encode("utf-8"))
+                rows = vc.check_gm_leak(vault, None)
+                self.assertIn(
+                    "WARNING\tBob.md:9\tKeeper-facing heading 'Keeper "
+                    "Secrets' publishes — nest it under ## GM Notes or "
+                    "fence it", rows)
+
+    def test_the_classic_block_shapes_still_read_as_before(self):
+        # Nested blocks, an inline pair, a marker shown in a fenced
+        # example, an orphan closer and a block left open.
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\n"
+            "<!-- gm-only -->\nouter\n<!-- gm-only -->\n## Keeper Notes\n"
+            "<!-- /gm-only -->\n## Secret Plans\n<!-- /gm-only -->\n\n"
+            "a <!-- spoiler -->**Secret:** x<!-- /spoiler --> b\n\n"
+            "```\n<!-- /gm-only -->\n## Keeper Tips\n```\n\n"
+            "## Tactics\n\n<!-- /spoiler -->\n\n<!-- gm-only -->\n"
+            "## Keeper Only\n", encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(rows_for(rows, "Bob.md"), [
+            "ERROR\tBob.md:24\t<!-- /spoiler --> with no opener — "
+            "everything above it publishes",
+            "WARNING\tBob.md:26\t<!-- gm-only --> never closed — publish "
+            "strips to end of file",
+            "WARNING\tBob.md:22\tKeeper-facing heading 'Tactics' publishes "
+            "— nest it under ## GM Notes or fence it"], rows)
+
+    def test_a_site_tool_too_old_for_cut_names_the_pin(self):
+        # `cut` came in publish tool 1.17.0; an older site tool refuses it.
+        # That is an old pin to update, not a tool that stopped answering.
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text("---\ntype: npc\n---\n\n# Bob\n",
+                                      encoding="utf-8")
+        with mock.patch.object(vaultlib.PublishLines, "ask",
+                               refuse_cut(vaultlib.PublishLines.ask)):
+            self.assertEqual(vc.check_gm_leak(vault, None), [TOO_OLD_ROW
+                             .format(check="gm-leak")])
 
     def test_an_occupation_ending_in_keeper_is_not_keeper_facing(self):
         # #316: "keeper" matched as a substring, so Innkeeper, Housekeeper
@@ -1357,6 +1517,52 @@ class GmLeakCommandTests(unittest.TestCase):
         for title in flagged:
             with self.subTest(flagged=title):
                 self.assertTrue(vc._keeper_text(title, []))
+
+    def test_keyword_and_exclude_matches_are_whole_words(self):
+        # #355: "secret" is not "Secretary", "tactic" is not "Tactician",
+        # and an exclude entry is a word too; plurals still count.
+        for title in ("Secretary", "The Secretary of State", "Tactician",
+                      "Confidentially Yours", "Spoilered"):
+            with self.subTest(clean=title):
+                self.assertFalse(vc._keeper_text(title, []))
+        for title in ("Secrets", "Tactics", "Secret Door", "Spoilers",
+                      "Confidential", "The Secret: Mara", "GM-only", "GM Only"):
+            with self.subTest(flagged=title):
+                self.assertTrue(vc._keeper_text(title, []))
+        self.assertFalse(vc._keeper_text("Playbook", ["Play"]))
+        self.assertFalse(vc._keeper_text("Loreful", ["Lore"]))
+        self.assertTrue(vc._keeper_text("Lore Notes — Draft", ["Lore Notes"]))
+        self.assertTrue(vc._keeper_text("Lore_Notes", ["Lore"]))
+
+    def test_a_hyphen_before_keeper_reads_like_a_space(self):
+        for title in ("Lore Keeper", "Lore-Keeper", "Peace-keeper",
+                      "Peace Keeper"):
+            with self.subTest(title=title):
+                self.assertFalse(vc._keeper_text(title, []))
+        self.assertTrue(vc._keeper_text("Private-Keeper Notes", []))
+
+    def test_a_bold_label_is_a_label_with_or_without_its_colon(self):
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\n"
+            "**Private Keeper** he lies.\n\n"
+            "**Private Keeper:** he lies.\n\n"
+            "**Secrets** all of them.\n\n"
+            "**Secretary:** takes notes.\n", encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(sorted(r.split("\t")[1] for r in rows_for(
+            rows, "Bob.md")), ["Bob.md:11", "Bob.md:7", "Bob.md:9"], rows)
+        self.assertTrue(rows_for(rows, "bold label 'Private Keeper' looks"),
+                        rows)
+
+    def test_a_flagged_title_is_told_to_rename_not_to_nest(self):
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Keeper Notes\n\ntext\n", encoding="utf-8")
+        rows = rows_for(vc.check_gm_leak(vault, None), "Bob.md:5")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertNotIn("nest", rows[0])
+        self.assertIn("rename", rows[0])
 
     def test_a_content_word_and_more_after_keeper_still_warns_in_a_note(self):
         vault = make_vault(self)
@@ -2778,6 +2984,54 @@ class PcBodyCommandTests(unittest.TestCase):
 
     def test_the_story_companion_is_ignored(self):
         self.assertFalse(rows_for(self.rows, STORY), self.rows)
+
+    # #441: which headings publish, and the fence rows, are the build's own
+    # reading (`build_lines`), not scan_body's model.
+
+    def _hero(self, body, raw=False):
+        vault = make_vault(self)
+        note = f"---\ntype: pc\n---\n\n{body}"
+        if raw:
+            (vault / "Hero.md").write_bytes(note.encode("utf-8"))
+        else:
+            (vault / "Hero.md").write_text(note, encoding="utf-8")
+        return vc.check_pc_body(vault)
+
+    def test_a_stat_sheet_after_a_closer_on_its_line_publishes(self):
+        rows = self._hero("## Current Status\n\n**Location:** the quay\n\n"
+                        "<!-- gm-only -->\nsecret\n<!-- /gm-only -->"
+                        "## Stat Sheet\n\nST 14, DX 12, IQ 11.\n")
+        self.assertFalse(rows_for(rows, "no published ## Stat Sheet"), rows)
+
+    def test_a_heading_in_a_multi_line_comment_is_no_heading(self):
+        rows = self._hero("## Stat Sheet\n\nST 14, DX 12, IQ 11.\n\n<!--\n"
+                        "## Notes\n-->\n\n## Current Status\n\n"
+                        "**Location:** the quay\n")
+        self.assertFalse(rows_for(rows, "comes after"), rows)
+
+    def test_a_form_feed_nel_or_lone_cr_does_not_split_a_heading(self):
+        for ch in ("\r", "\x0c", "\x85"):
+            with self.subTest(ch=repr(ch)):
+                rows = self._hero(
+                    f"## Stat Sheet\n\nST 14, DX 12, IQ 11.\n\n## Notes{ch}"
+                    f"more\n\n## Current Status\n\n**Location:** x\n",
+                    raw=True)
+                self.assertFalse(rows_for(rows, "comes after"), rows)
+
+    def test_fence_rows_are_the_builds(self):
+        # The spoiler opener sits inside the gm-only block, which the build
+        # cuts first: it never opens anything.
+        rows = self._hero("## Stat Sheet\n\nST 14, DX 12, IQ 11.\n\n"
+                        "## Current Status\n\n**Location:** x\n\n"
+                        "<!-- gm-only -->\n<!-- spoiler -->\n"
+                        "<!-- /gm-only -->\n")
+        self.assertFalse(rows_for(rows, "never closed"), rows)
+
+    def test_a_site_tool_too_old_for_cut_names_the_pin(self):
+        with mock.patch.object(vaultlib.PublishLines, "ask",
+                               refuse_cut(vaultlib.PublishLines.ask)):
+            rows = self._hero("## Stat Sheet\n\nST 14\n")
+        self.assertEqual(rows, [TOO_OLD_ROW.format(check="pc-body")])
 
     def test_that_is_every_row(self):
         self.assertEqual(len(self.rows), 6, self.rows)
@@ -4612,7 +4866,11 @@ class GmLeakSheetsOffTests(unittest.TestCase):
                 self.assertIn("Hero.md:7", rows_for(rows, self.LABEL)[0])
 
     def test_a_placeholder_title_never_drops_anything(self):
-        for pc_keep in (None, [], ["Background"]):
+        # The keep-list names the section, so the build's own walk (the
+        # `cut` answer, which takes the keep-list) keeps it: only the
+        # placeholder titles in `sheetWithheldSections` could drop it.
+        for pc_keep in (None, ["(empty heading)"],
+                        ["(empty heading)", "Background"]):
             with self.subTest(pc_keep=pc_keep):
                 vault = make_vault(self)
                 stub_publish_tool(self, vault, pc_keep=pc_keep, sheet_withheld={

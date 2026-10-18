@@ -156,7 +156,7 @@ from difflib import SequenceMatcher
 from html import unescape as _html_unescape
 import unicodedata
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Sequence
 
 from schema_rules import (
     CANON_STATUS_VALUES,
@@ -180,14 +180,17 @@ from vaultlib import (  # noqa: F401
     SKIP_DIRS,
     WRAP_UP_TYPE,
     WRAP_UP_TYPES,
+    BuildLine,
     LineState,
     active_pc_names,
     atx_title,
+    build_lines,
     active_pcs,
     delete_key,
     entity_type,
     body_text,
     PUBLISH_TOOL,
+    PublishToolTooOld,
     PublishToolUnavailable,
     publish_tool_problem,
     publisher_lines,
@@ -281,6 +284,7 @@ def _emit_tool_once() -> Callable[[str, list[str]], None]:
 
 
 # Dated: the old file may still be in an un-updated vault; remove at 1.11.0.
+# A copy written before the tool added `type: meta` is let through untyped.
 PUBLISH_MANIFEST_REL = "_meta/publish-manifest.md"
 
 
@@ -326,11 +330,20 @@ def check_frontmatter(vault: Path, folder: str | None,
             # Schema rows would come from the line reader's guess at YAML
             # the build rejects; they mean nothing until it parses.
             continue
-        if rel == PUBLISH_MANIFEST_REL:
-            # Written by the publish tool with no `type`, and regenerated
-            # on every build: the GM cannot fix a row about it (#333).
-            continue
         fm = extract_frontmatter(text)
+        if rel == PUBLISH_MANIFEST_REL:
+            # The tool reads this file's frontmatter with a real YAML
+            # parser: its refusal is the finding (#333).
+            _sets, listed = publish_list_sets(vault)
+            if listed.why and "frontmatter cannot be read" in listed.why:
+                detail = listed.why.split("(", 1)[-1].rstrip(") ")
+                rows.append(f"ERROR\t{rel}\tthe publish tool cannot read "
+                            f"this frontmatter ({detail}) — {_yaml_hint(detail)}")
+                continue
+            if fm is not None and "type" not in fm:
+                # Written before the tool added `type: meta`; the next
+                # write of the list adds it, so a row would only nag.
+                continue
         if fm is None:
             rows.append(f"INFO\t{rel}\tno frontmatter")
             continue
@@ -825,6 +838,7 @@ def check_relationships(vault: Path, folder: str | None = None,
         args += ["--newer-than", newer_than]
     try:
         done = subprocess.run(args, capture_output=True, text=True,
+                              stdin=subprocess.DEVNULL,
                               encoding="utf-8", errors="replace",
                               timeout=PUBLISH_TOOL_TIMEOUT, check=False)
     except subprocess.TimeoutExpired:
@@ -1525,6 +1539,7 @@ def ask_publish_tool(vault: Path, args: list[str],
             [node, str(tool), *args, "--json", *site_args,
              "--vault", str(vault.resolve())],
             capture_output=True, text=True, encoding="utf-8",
+            stdin=subprocess.DEVNULL,
             errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False)
     except subprocess.TimeoutExpired:
         return ToolAnswer(why=f"{name} timed out after {PUBLISH_TOOL_TIMEOUT}s",
@@ -1784,7 +1799,7 @@ NOTE_FAULT_CODES = ("ALIAS_IN_PROSE", "NEVER_SHOW_IN_PROSE",
                     "WITHHELD_IN_PROSE", "WITHHELD_NAME_PUBLIC",
                     "WITHHELD_FLAG_UNREADABLE", "FENCE_UNCLOSED",
                     "COMMENT_STRAY", "NAMED_NO_PAGE", "TOHIT_UNREAD",
-                    "SKILL_BELOW_BASE")
+                    "SKILL_BELOW_BASE", "HEADING_IN_HIDDEN_BLOCK")
 # How many of the pages naming a note a row lists; `--file` lists them all.
 SITE_FAULT_PAGES = 3
 
@@ -1828,7 +1843,8 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
                f"{_one_line(f.get('text'))}")
     elif code == "FENCE_UNCLOSED":
         msg = f"FENCE_UNCLOSED: {_one_line(f.get('detail'))}"
-    elif code in ("TOHIT_UNREAD", "SKILL_BELOW_BASE"):
+    elif code in ("TOHIT_UNREAD", "SKILL_BELOW_BASE",
+                  "HEADING_IN_HIDDEN_BLOCK"):
         msg = (f"{code}: {_one_line(f.get('detail'))} — "
                f"{_one_line(f.get('fix'))}")
     elif code in ("WITHHELD_NAME_PUBLIC", "WITHHELD_PUBLISHED",
@@ -1902,6 +1918,7 @@ def check_site_faults(vault: Path, files: list[str] | None = None
             [node, str(tool), "doctor", "--site", "--json", "--config",
              str(site / "vault.config.json"), "--vault", str(vault.resolve())],
             capture_output=True, text=True, encoding="utf-8",
+            stdin=subprocess.DEVNULL,
             errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False)
     except subprocess.TimeoutExpired:
         return [f"ERROR\t(vault)\tsite-faults: the publish tool did not "
@@ -1953,6 +1970,14 @@ def check_site_faults(vault: Path, files: list[str] | None = None
                     f"{'note is' if settled == 1 else 'notes are'} settled "
                     f"as \"stays hidden\" and not raised")
     return rows
+
+
+def _tool_too_old_row(check: str, e: PublishToolTooOld) -> str:
+    """The row for a site whose publish tool answers but predates a
+    question the check needs: an old pin, which update-pin fixes."""
+    return (f"ERROR\t(vault)\t{check} did not run: the site's publish tool "
+            f"predates {e} and is too old for this check — run update-pin, "
+            f"then run this again")
 
 
 def _tool_gone_row(check: str, e: Exception) -> str:
@@ -2172,7 +2197,8 @@ _SETEXT_UNDERLINE_RE = re.compile(r"^\s{0,3}(=+|-+)\s*$")
 _HTML_HEADING_RE = re.compile(r"<h[1-6]", re.I)
 
 
-def _without_sections(states: list[LineState], kept: set[int] | None,
+def _without_sections(states: Sequence[LineState | BuildLine],
+                      kept: set[int] | None,
                       titles: set[str]) -> set[int]:
     """`kept` (None: every line) minus the lines under each published H2
     whose title is in `titles` (already `_bare_section_title`d).
@@ -2360,20 +2386,23 @@ def check_sessions(vault: Path) -> list[str]:
 # --------------------------------------------------------------------------
 # Publish safety
 #
-# Both checks answer the same question — "would a player see this?" — and
-# both answer it through `scan_body`, which mirrors the publish pipeline's
-# own fence tracking and section filter. That containment is the whole
-# point: a grep for "Keeper" cannot tell a heading nested under an excluded
+# Both checks answer the same question — "would a player see this?":
+# gm-leak through `build_lines`, the publish tool's own strip chain and
+# section filter; pc-body through `scan_body`, which also sees inside the
+# blocks it reports on (a fenced Current Status). That containment is the
+# whole point: a grep for "Keeper" cannot tell a heading nested under an excluded
 # `## GM Notes` from a sibling beside it, and reporting the first would
 # train the GM to ignore the second.
 # --------------------------------------------------------------------------
 
-# graph-health.md, "Un-fenced GM-only content". Matched as substrings of a
-# casefolded title, so "Tactics" hits "tactic" and "Secrets" hits "secret".
-# "Keeper" is the exception (`_keeper_word`): a whole word, and a job when
-# another word comes right before it (#316).
-KEEPER_WORDS = ("gm only", "gm-only", "dm only", "secret",
-                "tactic", "confidential", "spoiler")
+# graph-health.md, "Un-fenced GM-only content". Matched as whole words of a
+# casefolded title, plural allowed: "Tactics" hits "tactic" and "Secrets"
+# hits "secret", but "Tactician" and "Secretary" do not (#355). "Keeper" is
+# the exception (`_keeper_word`): a job when another word comes right
+# before it (#316).
+KEEPER_WORDS_RE = re.compile(
+    r"(?<![^\W_])(?:gm only|gm-only|dm only|secrets?|tactics?|confidential"
+    r"|spoilers?)(?![^\W_])")
 # Keeper or Keepers, not inside a longer word; "_" and "-" end it.
 KEEPER_WORD_RE = re.compile(r"(?<![^\W_])keepers?(?![^\W_])")
 # The whitespace-separated token just before it.
@@ -2404,7 +2433,7 @@ GM_AFTER_POSSESSIVE = frozenset((
 GM_LEAK_SKIP_TYPES = {"session-plan", "session-play-notes", "plan", "meta"}
 
 # A bold label opening a paragraph: `**Secret:** he lied.` The colon is
-# optional and is dropped from the captured label.
+# optional; `_bold_label` reads either as the label, colon and all.
 BOLD_LABEL_RE = re.compile(r"^\*\*([^*]+?):?\*\*")
 # A labelled Current Status field: `**Location:** the quay`.
 LABELLED_FIELD_RE = re.compile(r"^\*\*[A-Za-z][^*]*:\*\*")
@@ -2471,7 +2500,8 @@ def _keeper_word(text: str) -> bool:
     missed GM heading publishes unwarned, so every other shape flags:
     nothing before it, punctuation or a function word before it ("For the
     Keeper"), or more after it ("Private Keeper Notes")."""
-    low = text.casefold()
+    # "Lore-Keeper" reads as "Lore Keeper": a hyphen joins the two words.
+    low = re.sub(r"(?<=\w)-(?=keepers?(?![^\W_]))", " ", text.casefold())
     for m in KEEPER_WORD_RE.finditer(low):
         before = BEFORE_WORD_RE.search(low[:m.start()])
         if (before and PLAIN_WORD_RE.fullmatch(before.group(1))
@@ -2487,12 +2517,24 @@ def _keeper_text(text: str, excludes: list[str]) -> bool:
     """Does this title or label read as Keeper-facing?"""
     low = text.casefold()
     return (_keeper_word(low)
-            or any(word in low for word in KEEPER_WORDS)
-            or any(s.casefold() in low for s in excludes))
+            or KEEPER_WORDS_RE.search(low) is not None
+            or any(re.search(r"(?<![^\W_])" + re.escape(s.casefold())
+                             + r"(?![^\W_])", low)
+                   for s in excludes if s.strip()))
 
 
-def _heading_leak(rel: str, state: LineState, excludes: list[str],
-                  list_name: str) -> list[str]:
+def _own_strip_row(rel: str, state: LineState | BuildLine) -> str:
+    """The row for a `##` the publish tool withholds by its own rule (a
+    handout's Keeper sections, #280), outside ## GM Notes."""
+    title = state.heading[1].strip() if state.heading else ""
+    return (f"WARNING\t{rel}:{state.lineno}\t'{title}' is Keeper material "
+            f"outside ## GM Notes — nest it under ## GM Notes (publish "
+            f"{STRIPPED_SECTIONS_SINCE}+ withholds it; to publish it, "
+            f"rename the heading)")
+
+
+def _heading_leak(rel: str, state: LineState | BuildLine,
+                  excludes: list[str], list_name: str) -> list[str]:
     """Rows for one published heading line."""
     if state.heading is None:
         return []
@@ -2500,7 +2542,7 @@ def _heading_leak(rel: str, state: LineState, excludes: list[str],
     m = EMPHASIS_RE.match(raw)
     title = m.group(2).strip() if m else raw
     if _bare_section_title(raw) in {_bare_section_title(e) for e in excludes}:
-        # A heading the site hides never reaches here: `scan_body` has
+        # A heading the site hides never reaches here: `build_lines` has
         # already marked it excluded, as the site's tool answered. This one
         # is on the exclude list under another spelling and the tool did
         # NOT hide it: a site pinned to a publish tool older than 1.16.0
@@ -2535,12 +2577,15 @@ def _heading_leak(rel: str, state: LineState, excludes: list[str],
                 f"{json.dumps(paste, ensure_ascii=False)} and run "
                 f"`vault_check.py <vault> gm-leak --renest-excludes --fix`"]
     if _keeper_text(title, excludes):
+        fix = ("rename the note's title or move the note out of the "
+               "published folders" if level == 1
+               else "nest it under ## GM Notes or fence it")
         return [f"WARNING\t{rel}:{state.lineno}\tKeeper-facing heading "
-                f"'{title}' publishes — nest it under ## GM Notes or fence it"]
+                f"'{title}' publishes — {fix}"]
     return []
 
 
-def _published_linenos(states: list[LineState],
+def _published_linenos(states: Sequence[LineState | BuildLine],
                        fm: dict) -> set[int] | None:
     """Which body lines a `publish: stub` page actually ships, or None.
 
@@ -2554,7 +2599,7 @@ def _published_linenos(states: list[LineState],
     if publish_mode(fm) != "stub":
         return None
     raw = fm.get("publish_include_sections")
-    kept = stub_kept([s.line for s in states],
+    kept = stub_kept([s.written for s in states],
                      raw if isinstance(raw, list) else [])
     return {s.lineno for s, keep in zip(states, kept) if keep}
 
@@ -2567,6 +2612,8 @@ def check_gm_leak(vault: Path, folder: str | None,
     Its writes all come after the last question, so nothing is written."""
     try:
         return _gm_leak(vault, folder, fix, renest_excludes, explain)
+    except PublishToolTooOld as e:
+        return [_tool_too_old_row("gm-leak", e)]
     except PublishToolUnavailable as e:
         return [_tool_gone_row("gm-leak", e)]
 
@@ -2582,10 +2629,11 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
     GM has to judge (INFO) — neither is auto-movable without rewriting
     the paragraph around it.
 
-    Every line is filtered through `scan_body`, so nothing inside a
-    `<!-- gm-only -->`/`<!-- spoiler -->` fence, under an excluded
-    heading, or inside a code fence is ever reported — and the file's own
-    `publish:` gate is honoured first: a `publish: false` page is dropped
+    Every line is read as the build reads it (`build_lines`: the publish
+    tool's own strip chain and section filter, #441), so nothing inside a
+    `<!-- gm-only -->`/`<!-- spoiler -->` fence or a comment, under an
+    excluded heading, or inside a code fence is ever reported — and the
+    file's own `publish:` gate is honoured first: a `publish: false` page is dropped
     before the site's link map exists, and a `publish: stub` page is
     reduced to `publish_include_sections`, so neither can leak whatever
     its headings say.
@@ -2602,13 +2650,18 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
     `renest_excludes` appends `renest_excludes_migration`'s rows (the
     1.8.3 migration) instead of planning the plain re-nest.
 
-    Which lines an excluded section withholds is asked of the publish
-    tool (`scan_body`); when it cannot be asked, or the site is pinned to
-    a tool too old to ask, the check says so and stops
+    Which lines the strips cut and an excluded section withholds is
+    asked of the publish tool (`build_lines`); when it cannot be asked,
+    or the site is pinned to a tool too old to ask, the check says so and
+    stops
     (`no_publish_tool`).
     """
-    notes = [(rel, text, extract_frontmatter(text) or {})
-             for rel, text in vault_files(vault, folder)]
+    # Read as written: the build splits a note at `\n` alone, and a lone
+    # `\r` is inside a line (`build_lines`). The frontmatter is read as
+    # every other check reads it.
+    notes = [(rel, raw, extract_frontmatter(
+        raw.replace("\r\n", "\n").replace("\r", "\n")) or {})
+             for rel, raw in vault_files(vault, folder, newline="")]
     if notes:
         why, gate = no_publish_tool(vault, "gm-leak")
         if why is not None:
@@ -2617,7 +2670,14 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
     # site file's old one, else the built-in.
     explain = explain or ExplainAll(vault)
     tool = explain() if notes else None
-    excludes = vault_settings(vault).get("player_site.hide.sections") if notes else []
+    site_settings = vault_settings(vault) if notes else None
+    excludes = (site_settings.get("player_site.hide.sections")
+                if site_settings is not None else [])
+    # The hidden callouts and the PC keep-list are the build's too, so a
+    # line the site cuts or withholds for either is not called published.
+    callouts = (site_settings.get("player_site.hide.callouts")
+                if site_settings is not None else False)
+    pc_keep: list[str] | None = None
     match = {s.casefold() for s in excludes}
     writes: list[tuple[str, str, list[str]]] = []
     rows: list[str] = []
@@ -2629,6 +2689,11 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
     sheet_off: dict[str, set[str]] = {}
     if tool is not None:
         sheet_off = sheet_withheld_sections(tool)
+        raw_keep = (tool.data.get("pcKeepSections")
+                    if isinstance(tool.data, dict) else None)
+        if isinstance(raw_keep, list) and all(isinstance(t, str)
+                                              for t in raw_keep):
+            pc_keep = raw_keep
         published = pages_published(tool)
         rows.extend(_tool_used_row(tool.used if tool.data is not None
                                    else None))
@@ -2671,7 +2736,11 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
             # session-hub.js suppressHubBody: the site publishes the
             # frontmatter and the Wrap-Up's recap, not this body.
             continue
-        states, problems = scan_body(text, excludes)
+        note_type = fm.get("type")
+        states, problems = build_lines(
+            text, excludes,
+            note_type=note_type if isinstance(note_type, str) else None,
+            pc_keep=pc_keep, callouts=callouts)
         kept = _published_linenos(states, fm)
         # With character sheets off the tool withholds a PC's sheet sections
         # whatever they are called; their lines are no more published than a
@@ -2687,9 +2756,20 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
         for state in states:
             if kept is not None and state.lineno not in kept:
                 continue
-            # `published` deliberately says nothing about code fences —
-            # vaultlib's divergence note — so exclude them here, or this
-            # repo's own documented examples become findings.
+            if (not state.in_code and not state.cut and state.heading
+                    and state.heading[0] == 2 and state.excluded_by
+                    and _plain_title(state.excluded_by).casefold()
+                    == _plain_title(state.heading[1]).casefold()
+                    and state.heading[1].strip().casefold() in own_strips):
+                # A handout's Keeper section the build withholds by its own
+                # rule (the `cut` answer takes the note's type, #280): not
+                # published, but its home is under GM Notes, and moving it
+                # is mechanical.
+                rows.append(_own_strip_row(rel, state))
+                heading_leak = True
+                continue
+            # `published` says nothing about code fences, so exclude them
+            # here, or this repo's own documented examples become findings.
             if state.in_code or not state.published:
                 continue
             if state.heading is not None:
@@ -2703,16 +2783,14 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
                     # an older pin publishes it, and the (vault) row says
                     # so. Its home is under GM Notes, and moving it is
                     # mechanical.
-                    found = [f"WARNING\t{rel}:{state.lineno}\t'{title}' "
-                             f"is Keeper material outside ## GM Notes — "
-                             f"nest it under ## GM Notes (publish "
-                             f"{STRIPPED_SECTIONS_SINCE}+ withholds it; to "
-                             f"publish it, rename the heading)"]
+                    found = [_own_strip_row(rel, state)]
                 rows.extend(found)
                 heading_leak = heading_leak or bool(found)
                 continue
             bold = BOLD_LABEL_RE.match(state.line)
-            if bold and _keeper_text(bold.group(1), excludes):
+            # A label ends in a colon whether or not it was written: the
+            # phrase does not run on, so "Private Keeper" is not a job.
+            if bold and _keeper_text(bold.group(1) + ":", excludes):
                 rows.append(f"INFO\t{rel}:{state.lineno}\tbold label "
                             f"'{bold.group(1)}' looks Keeper-facing — confirm "
                             f"with the GM (not a heading; not auto-movable)")
@@ -2845,7 +2923,8 @@ def _normalise_sheet(lines: Iterable[str]) -> list[str]:
     return out
 
 
-def _stat_sheet_lines(states: list[LineState], start: LineState) -> list[str]:
+def _stat_sheet_lines(states: Sequence[LineState | BuildLine],
+                      start: LineState | BuildLine) -> list[str]:
     """The published lines of the `## Stat Sheet` section `start` opens, up
     to the next H2, normalised."""
     lines = []
@@ -2951,7 +3030,8 @@ def _stat_sheet_problem(lines: list[str]) -> str | None:
     return None
 
 
-def _has_labelled_field(states: list[LineState], start: LineState,
+def _has_labelled_field(states: Sequence[LineState | BuildLine],
+                        start: LineState | BuildLine,
                         level: int, kept: set[int] | None = None) -> bool:
     """Does the block `start` opens carry any `**Label:**` field?
 
@@ -2980,6 +3060,8 @@ def check_pc_body(vault: Path, folder: str | None = None,
     part-way. The check writes nothing."""
     try:
         return _pc_body(vault, folder, files, newer_than, explain)
+    except PublishToolTooOld as e:
+        return [_tool_too_old_row("pc-body", e)]
     except PublishToolUnavailable as e:
         return [_tool_gone_row("pc-body", e)]
 
@@ -3024,7 +3106,12 @@ def _pc_body(vault: Path, folder: str | None = None,
     # False once the tool says character sheets are off: no sheet is built, so
     # nothing about one is worth a row. Unknown (an older tool) means on.
     sheets_on = True
-    for rel, text in vault_files(vault, folder, files, newer_than=newer_than):
+    # Read as written, as gm-leak reads it: the build splits a note at `\n`
+    # alone (`build_lines`). Frontmatter and the structure model read it
+    # with universal newlines, as every other check does.
+    for rel, raw in vault_files(vault, folder, files, newer_than=newer_than,
+                                newline=""):
+        text = raw.replace("\r\n", "\n").replace("\r", "\n")
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
             continue
@@ -3042,7 +3129,14 @@ def _pc_body(vault: Path, folder: str | None = None,
                 excludes, no_tool = [], True
         if excludes is None:
             excludes = vault_settings(vault).get("player_site.hide.sections")
-        states, problems = scan_body(text, excludes)
+        # Which headings publish, and the fence rows, are the build's reading
+        # (#441). With no site and no tool to ask, scan_body's model: nothing
+        # publishes then, and only the structure is checked.
+        states: Sequence[LineState | BuildLine]
+        if no_tool:
+            states, problems = scan_body(text, excludes)
+        else:
+            states, problems = build_lines(raw, excludes)
         kept = None if no_tool else _published_linenos(states, fm)
         if kept is not None and not kept:
             continue
@@ -3060,7 +3154,7 @@ def _pc_body(vault: Path, folder: str | None = None,
                         f"character sheet \u2014 move the values into the "
                         f"note's ## {CANONICAL_FIRST_H2} sections")
 
-        headings: list[tuple[LineState, int, str]] = []
+        headings: list[tuple[LineState | BuildLine, int, str]] = []
         for state in states:
             if kept is not None and state.lineno not in kept:
                 continue
@@ -3069,6 +3163,16 @@ def _pc_body(vault: Path, folder: str | None = None,
         h2s = [(s, title) for s, level, title in headings if level == 2]
 
         named = [h for h in headings if h[2].casefold() == CURRENT_STATUS]
+        # The build cuts a Current Status inside a gm-only or spoiler block,
+        # so only the structure model sees it there, which the ERROR below
+        # is about. A stub never ships a line in a block.
+        inside: list[LineState] = []
+        if not named and not no_tool and kept is None:
+            inside = scan_body(text, ())[0]
+            named = [(s, s.heading[0], s.heading[1]) for s in inside
+                     if s.heading is not None
+                     and s.heading[1].casefold() == CURRENT_STATUS
+                     and (s.gm_depth or s.spoiler_depth)]
         current = next((h for h in named if h[1] == 2), None)
         if current is None and named:
             current = named[0]
@@ -3083,7 +3187,8 @@ def _pc_body(vault: Path, folder: str | None = None,
         else:
             state, level, _title = current
             n = state.lineno
-            if state.gm_depth or state.spoiler_depth:
+            if isinstance(state, LineState) and (state.gm_depth
+                                                 or state.spoiler_depth):
                 rows.append(f"ERROR\t{rel}:{n}\t## Current Status is inside "
                             f"a <!-- gm-only --> / <!-- spoiler --> fence — "
                             f"it publishes; move it outside")
@@ -3099,7 +3204,7 @@ def _pc_body(vault: Path, folder: str | None = None,
                     rows.append(f"WARNING\t{rel}:{n}\t## Current Status "
                                 f"comes after ## {first_title} — it must "
                                 f"precede the protected sections")
-            if not _has_labelled_field(states, state, level, kept):
+            if not _has_labelled_field(inside or states, state, level, kept):
                 rows.append(f"INFO\t{rel}:{n}\t## Current Status has no "
                             f"labelled fields (**Location:** …) — machine "
                             f"consumers read the labels")

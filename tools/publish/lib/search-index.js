@@ -44,6 +44,18 @@ function refFor(i) {
   return i.toString(36);
 }
 
+// The steps every indexed text goes through after lunr's tokenizer: lunr's own trimmer (it trims anything but ASCII
+// letters, digits and underscore from a word's edges, so "café" is stored as "caf") and its stop-word filter. No
+// stemmer (#267, below). One list, so the leak gate reads a hidden text into the terms a build would store (#408).
+const INDEX_STEPS = [lunr.trimmer, lunr.stopWordFilter];
+
+// A text's terms as the build's index stores them.
+function indexTerms(text) {
+  const pipeline = new lunr.Pipeline();
+  pipeline.add(...INDEX_STEPS);
+  return pipeline.run(lunr.tokenizer(String(text))).map(String);
+}
+
 function buildSearchIndex(allPages) {
   // A note the build writes no page for has no search entry: a result would open a page
   // that is not there, and its words would be findable. previews.js has the one
@@ -71,7 +83,8 @@ function buildSearchIndex(allPages) {
     // stored term so fuzzy matching cannot reach it. Exact and prefix matching cover the
     // plural/inflection cases a stemmer would have caught. The pipeline names are serialized
     // into the index, so the browser's loaded index skips the stemmer at query time too.
-    this.pipeline.remove(lunr.stemmer);
+    this.pipeline.reset();
+    this.pipeline.add(...INDEX_STEPS);
     this.searchPipeline.remove(lunr.stemmer);
     this.ref('id');
     this.field('title', { boost: 10 });
@@ -106,4 +119,4 @@ function buildSearchIndex(allPages) {
   return built;
 }
 
-module.exports = { subtitleOf: getSubtitle, buildSearchIndex, stripMarkdown };
+module.exports = { subtitleOf: getSubtitle, buildSearchIndex, stripMarkdown, indexTerms };

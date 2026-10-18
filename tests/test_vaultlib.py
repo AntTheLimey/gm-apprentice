@@ -876,13 +876,6 @@ class PublishModeTests(unittest.TestCase):
                 self.assertEqual(vl.publish_mode(case["frontmatter"]),
                                  case["mode"])
 
-    def test_gm_only_hides_agrees_with_the_publish_tools_vectors(self):
-        path = (Path(__file__).resolve().parent.parent / "tools" / "publish"
-                / "test" / "fixtures" / "gm-only-vectors.json")
-        for case in json.loads(path.read_text(encoding="utf-8"))["cases"]:
-            with self.subTest(value=case["value"]):
-                self.assertEqual(vl.gm_only_hides(case["value"]), case["hides"])
-
     def test_anything_unrecognised_still_publishes(self):
         # A typo must not silently unpublish a page, and must not silently
         # convince a leak check that a page is safe.
@@ -983,6 +976,98 @@ class LinkLinesTests(unittest.TestCase):
             vl.sub_wikilinks(line, vl.inline_code_spans(line),
                              lambda m: "X"),
             "`[[A]]` X")
+
+
+class BuildLinesTests(unittest.TestCase):
+    """`build_lines`: a note's body as the publish tool reads it (#441)."""
+
+    def setUp(self):
+        vl.use_publish_tool(vl.PUBLISH_TOOL)
+
+    def test_lines_are_numbered_by_newline_and_read_from_what_is_kept(self):
+        text = ("---\ntype: npc\n---\n# Bob\x85x\r\n<!-- gm-only -->\nsecret\n"
+                "<!-- /gm-only -->## Public\n## GM Notes\nhidden\n")
+        states, problems = vl.build_lines(text, ["GM Notes"])
+        self.assertEqual(problems, [])
+        self.assertEqual(
+            [(s.lineno, s.line, s.cut, s.excluded_by, s.heading)
+             for s in states],
+            [(4, "# Bob\x85x", False, None, (1, "Bob\x85x")),
+             (5, "", False, None, None),
+             (6, "", True, None, None),
+             (7, "## Public", False, None, (2, "Public")),
+             (8, "## GM Notes", False, "GM Notes", (2, "GM Notes")),
+             (9, "hidden", False, "GM Notes", None)])
+        self.assertEqual(states[3].written, "<!-- /gm-only -->## Public")
+
+    def test_one_answer_holds_the_put_back_heading_and_an_old_tool_asks_twice(self):
+        # #447: a withheld heading in a hidden block withholds the text
+        # after the block, in the tool's one `cut` answer. A tool whose
+        # answer has no `withheldBy` is asked about the lines left, as before.
+        text = ("---\ntype: npc\n---\n<!-- gm-only -->\n## GM Notes\n"
+                "<!-- /gm-only -->\nafter\n## Voice\nlow\n")
+        states, _ = vl.build_lines(text, ["GM Notes"])
+        self.assertEqual([(s.lineno, s.cut, s.excluded_by) for s in states],
+                         [(4, False, None), (5, True, None), (6, True, None),
+                          (7, False, "GM Notes"), (8, False, None),
+                          (9, False, None)])
+        own = vl._LINES_BY_TOOL[vl.PUBLISH_TOOL]
+        asked = []
+
+        class OldTool:
+            def ask(self, request):
+                asked.append(request["op"])
+                answer = dict(own.ask(request))
+                if request["op"] == "cut":
+                    answer.pop("withheldBy", None)
+                return answer
+
+        saved = vl.PUBLISH_LINES
+        vl.PUBLISH_LINES = OldTool()  # type: ignore[assignment]
+        try:
+            states, _ = vl.build_lines(text, ["GM Notes"])
+        finally:
+            vl.PUBLISH_LINES = saved
+        self.assertEqual(asked, ["cut", "sections"])
+        self.assertEqual([s.excluded_by for s in states],
+                         [None, None, None, None, None, None])
+
+    def test_every_run_of_the_publish_tool_closes_its_stdin(self):
+        # A tool that read stdin would wait on the caller's terminal; each
+        # one-shot run hands it nothing instead.
+        import ast
+        for name in ("vaultlib.py", "vault_check.py"):
+            tree = ast.parse((SCRIPTS / name).read_text(encoding="utf-8"))
+            for node in ast.walk(tree):
+                if (isinstance(node, ast.Call)
+                        and isinstance(node.func, ast.Attribute)
+                        and node.func.attr == "run"
+                        and isinstance(node.func.value, ast.Name)
+                        and node.func.value.id == "subprocess"):
+                    with self.subTest(file=name, line=node.lineno):
+                        self.assertIn("stdin", [k.arg for k in node.keywords])
+
+    def test_unbalanced_markers_are_worded_as_scan_body_words_them(self):
+        text = "a\n<!-- /spoiler -->\n<!-- gm-only -->\n<!-- /gm-only -->\n<!-- gm-only -->\nb"
+        self.assertEqual(vl.build_lines(text)[1], vl.scan_body(text)[1])
+
+    def test_a_site_tool_without_the_faults_still_gets_them_from_the_plugin(self):
+        own = vl._LINES_BY_TOOL[vl.PUBLISH_TOOL]
+
+        class OldTool:
+            def ask(self, request):
+                answer = dict(own.ask(request))
+                answer.pop("unbalanced", None)
+                return answer
+
+        old = OldTool()
+        saved = vl.PUBLISH_LINES
+        vl.PUBLISH_LINES = old  # type: ignore[assignment]
+        try:
+            _states, problems = vl.build_lines("x\n<!-- /gm-only -->\n")
+        finally:
+            vl.PUBLISH_LINES = saved
+        self.assertEqual(problems, ["line 2: <!-- /gm-only --> with no opener"])
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@
 // a gm-only relationship, an excluded field and a note with no page never get this far.
 // Nothing here reads sourceFrontmatter or page.markdown.
 const { backlinksOf } = require('./backlinks');
-const { linkText, labelsForLinksFully, wikilinkRe, parseWikilink } = require('./wikilink');
+const { linkText, labelsForLinksFully, replaceWikilinks, wikilinkSpans, removeEmbeds, parseWikilink } = require('./wikilink');
 const { canonicalNfc } = require('./unicode');
 const { kindLabel } = require('./kind-label');
 const { orderedSessions } = require('./story-spine');
@@ -47,9 +47,8 @@ function tabOf(page) {
 // markdown link as its text and an embed not at all, so no bracket and no file name reaches
 // the page. A description goes through printedProse below.
 const printed = (text) => {
-  const reduced = labelsForLinksFully(text)
-    .replace(/!\[\[[^\]]*\]\]/g, '')
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
+  const reduced = removeEmbeds(labelsForLinksFully(text))
+    .replace(/(?<!\\)!?\[([^\]]*)\]\([^)]*\)/g, '$1');
   return linkText(reduced, { humanize: true }).words.replace(/\s+/g, ' ').trim();
 };
 
@@ -127,10 +126,17 @@ function markdownLinkLabels(text, depth = 0) {
       if (title.ok) end = blank(title.pos);
     }
     if (end === -1 || text[end] !== ')') end = (addressEnd ||= addressEnds(text))(close + 2);
-    if (end === -1) continue;
+    // An address that never ends: no link, but the `](` is not prose either; the label stays.
+    const unfinished = end === -1;
     const label = text.slice(i + 1, close);
-    out += text.slice(at, i) + (depth < LINK_DEPTH ? markdownLinkLabels(label, depth + 1) : dropAddresses(label));
-    at = end + 1;
+    // An image (`![alt](address)`) prints its alt text, not the `!` before it.
+    const image = i > at && text[i - 1] === '!' && text[i - 2] !== '\\';
+    out += text.slice(at, image ? i - 1 : i) + (depth < LINK_DEPTH ? markdownLinkLabels(label, depth + 1) : dropAddresses(label));
+    // The address that never ends is dropped up to the next space, so `[Shadow](Hidden_Man.md`
+    // prints `Shadow`, and the words after a space stay.
+    let after = close + 2;
+    if (unfinished) while (after < text.length && !/\s/.test(text[after])) after++;
+    at = unfinished ? after : end + 1;
   }
   return out + text.slice(at);
 }
@@ -138,9 +144,14 @@ function markdownLinkLabels(text, depth = 0) {
 // A description is prose: the same reduction, but only a link's name is read as words. An
 // underscore anywhere else (`snake_case`, `_emphasis_`, a pasted address) is the GM's own.
 const printedProse = (text) => {
-  const reduced = markdownLinkLabels(labelsForLinksFully(text).replace(/!\[\[[^\]]*\]\]/g, ''))
-    .replace(wikilinkRe('g'), (link) => link.replace(/_/g, ' '));
-  return linkText(reduced).words.replace(/\s+/g, ' ').trim();
+  // What is left of a link is its note's name (a `#heading` or `^block` after it is not on the
+  // page), with `_` (written `\_` in a table) read as a space. Anywhere else `\_` is the
+  // underscore the GM escaped.
+  const reduced = replaceWikilinks(markdownLinkLabels(removeEmbeds(labelsForLinksFully(text))), (link, body) => {
+    const { name, heading } = parseWikilink(body);
+    return (name || heading).replace(/\\_/g, '_').replace(/_/g, ' ');
+  });
+  return linkText(reduced).words.replace(/\\_/g, '_').replace(/\s+/g, ' ').trim();
 };
 function edgesOf(frontmatter) {
   const raw = frontmatter && frontmatter.relationships;
@@ -169,8 +180,8 @@ function edgesOf(frontmatter) {
 // more name none (`links` says how many, so a reader can tell "none" from a plain name).
 function targetRef(value) {
   const ref = linkText(value, { humanize: true });
-  const links = String(value).match(wikilinkRe('g')) || [];
-  const key = !ref.labelled && links.length === 1 ? parseWikilink(wikilinkRe('').exec(links[0])[1]).name.trim() : ref.key;
+  const links = wikilinkSpans(String(value));
+  const key = !ref.labelled && links.length === 1 ? parseWikilink(links[0].body).name.trim() : ref.key;
   const name = canonicalNfc(key.split(/[#^]/)[0].replace(/\.md$/i, '').trim());
   return { name, links: links.length, words: ref.words.trim() };
 }

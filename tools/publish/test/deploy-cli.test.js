@@ -695,7 +695,7 @@ describe('setup-status-bar and setup-inbox build with the vault\'s build steps',
 describe('deploy refuses a GM site folder', () => {
   const GM_TAG = require('../lib/gm-site').GM_META_TAG;
   const fs = require('fs');
-  // A real site folder in a temp dir, so the real isGmOutput reads the real output folder.
+  // A real site folder in a temp dir, so the real gmEvidence reads the real output folder.
   function realSite(setup) {
     const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'deploy-gm-')));
     const docs = path.join(root, 'docs');
@@ -708,12 +708,12 @@ describe('deploy refuses a GM site folder', () => {
   for (const [flag, opts] of [['--no-build', { noBuild: true }], ['--dry-run', { dryRun: true }], ['--json', { json: true }]]) {
     it(`refuses a GM folder under ${flag}: runs nothing, builds nothing`, async () => {
       const h = harness();
-      h.deps.isGmOutput = (dir) => { h.seen = dir; return true; };
+      h.deps.gmEvidence = (dir) => { h.seen = dir; return 'gm-build.json'; };
       const rc = await runDeploy({ configPath: CONFIG, ...opts }, h.deps);
       assert.strictEqual(rc, 1);
       noBuilt(h);
       assert.strictEqual(h.seen, path.join(SITE, 'docs'));
-      assert.match(h.text(), /deploy refused: .* is a GM site folder/);
+      assert.match(h.text(), /deploy refused: .* is a GM site folder \(gm-build\.json\)/);
       assert.match(h.text(), /The GM site never goes online\./);
       if (opts.json) {
         const payload = JSON.parse(h.out[0]);
@@ -727,7 +727,7 @@ describe('deploy refuses a GM site folder', () => {
     const abs = path.resolve(path.sep, 'srv', 'out');
     const h = harness({ config: { outputDir: abs } });
     const seen = [];
-    h.deps.isGmOutput = (dir) => { seen.push(dir); return true; };
+    h.deps.gmEvidence = (dir) => { seen.push(dir); return 'gm-build.json'; };
     const rc = await runDeploy({ configPath: CONFIG, noBuild: true }, h.deps);
     assert.strictEqual(rc, 1);
     assert.strictEqual(seen[0], abs);

@@ -199,7 +199,7 @@ const REGISTRY = [
   // player_site setting also has a twin under gm_site (generated below).
   {
     name: 'gm_site.publish', type: 'switch', default: false, group: 'gm',
-    does: 'Whether this vault has a GM site: a second copy of the site with every note and every hidden part shown and marked, for you at the table. It is never put online',
+    does: 'Whether this vault has a GM site: a second copy of the site with every note shown and the hidden parts marked (the `gm_site.show.*` switches choose which), for you at the table. It is never put online',
     left_out: 'Off',
   },
   {
@@ -569,7 +569,7 @@ const REGISTRY = [
   // Words the GM never wants on the player site: going online stops on one (the leak gate)
   {
     name: 'player_site.never_show', type: 'list', same: 'phrase', of: 'words or phrases', default: [], guards: true, group: 'published',
-    does: 'Words or phrases that must never reach players: a name, a twist, a word from your prep. The build does not remove them; `deploy` stops when the finished player site holds one (any case, as a whole word), names the page, and `leaks check` lists them. A finding you mean to keep is accepted like any other (`leaks accept`)',
+    does: 'Words or phrases that must never reach players: a name, a twist, a word from your prep. The build does not remove them; `deploy` stops when the finished player site holds one (any case, as a whole word, or its plural written with a capital), names the page, and `leaks check` lists them. A finding you mean to keep is accepted like any other (`leaks accept`)',
     left_out: 'None',
   },
 

@@ -408,6 +408,23 @@ describe('the GM build beside the player site', () => {
     } finally { s.cleanup(); }
   });
 
+  it('an unsteady PC: every section-nav link is inside the mark, and the text above the first heading is shown (marked)', () => {
+    const s = buildBoth({
+      'PCs/Jean.md': '---\ntype: pc\n---\n# Jean\nPRELUDETEXT\n\n## Background\nok BACKGROUNDTEXT\n[[Nowhere|## Skills]]\nSTAT14\n\n## GM Notes\n\nJEANSECRET\n',
+    }, { player: { sheets: { show: false } } });
+    try {
+      const html = s.gm.read('pcs', 'jean.html');
+      const nav = /<nav class="section-nav"[^>]*>([\s\S]*?)<\/nav>/.exec(html)[1];
+      const links = [...nav.matchAll(/<a href="#([^"]*)">([\s\S]*?)<\/a>/g)];
+      assert.deepEqual(links.map((m) => m[1]), ['before-the-first-heading', 'background', 'skills', 'gm-notes']);
+      for (const [, id, inner] of links) assert.match(inner, /^<span class="gm-mark gm-mark--sections"[^>]*>[^<]+<\/span>$/, id);
+      const marks = markedTexts(html);
+      assert.ok(marks.some((m) => m.label === 'note body (a link label changes its headings)' && /PRELUDETEXT/.test(m.text)));
+      assert.doesNotMatch(html, /<h1>Jean<\/h1>[\s\S]*<h1>Jean<\/h1>/);
+      assert.doesNotMatch(s.player.read('pcs', 'jean.html'), /PRELUDETEXT|before-the-first-heading/);
+    } finally { s.cleanup(); }
+  });
+
   it('each site\'s build steps are told which site they run for and where it is built', () => {
     const s = buildBoth(NOTES, { sites: [] });
     try {

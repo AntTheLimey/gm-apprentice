@@ -2,6 +2,7 @@ const path = require('path');
 const { isSessionHub, parseWikiRef, gmAliasRewriter } = require('./processor');
 const { linkKeys, scanAllNotes } = require('./scanner');
 const { canonicalNfc } = require('./unicode');
+const { labelsForLinks } = require('./wikilink');
 
 // The session index (hub) is metadata only by design, and GMs use its body as a working
 // dashboard: plan links, scene prep states, "Keeper-only" notes. Once the session has a
@@ -169,7 +170,16 @@ function pairHubs(corpus, published, options) {
     for (const page of corpus) {
       page.markdown = rewriter.markdown(page.markdown || '');
       if (page.storyMarkdown) page.storyMarkdown = rewriter.markdown(page.storyMarkdown);
+      const before = page.frontmatter && page.frontmatter.title;
       page.frontmatter = rewriter.frontmatter(page.frontmatter);
+      // The page's title is read from `title:` once, by the scanner (displayTitle), and every printer takes it from
+      // there: a title the rewrite changed (a link to a withheld note, now its word) is read again, here (#448). One
+      // that reads as nothing gets the scanner's own fallback, the file name, never the title from before the rewrite.
+      const after = page.frontmatter && page.frontmatter.title;
+      if (typeof before === 'string' && after !== before) {
+        page.displayTitle = labelsForLinks(String(after == null ? '' : after)).trim()
+          || String(page.title || path.basename(page.sourcePath || '', '.md')).replace(/_/g, ' ');
+      }
     }
   } else if (rewriter) {
     const views = new Map(corpus.map((p) => [p, Object.assign({}, p, { frontmatter: rewriter.frontmatter(p.frontmatter) })]));

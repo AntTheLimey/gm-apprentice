@@ -61,6 +61,12 @@ A heading line written inside a fenced code block is code, not a heading:
 it neither starts nor ends a hidden section. A fence that is never closed
 is not trusted, so a heading after it is still read as a heading.
 
+A hidden heading written inside a hidden block (a `gm-only` or spoiler
+block, a comment, a hidden callout) goes with the block, and the text
+after the block stays hidden with it, as Obsidian shows it, up to the
+next heading of the same or higher level. The build warns, naming the
+heading. A heading inside a hidden block never ends a hidden section.
+
 ### Frontmatter is not covered by the fence
 
 `<!-- gm-only -->` is a **body** primitive. It has no meaning inside

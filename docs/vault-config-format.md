@@ -36,7 +36,7 @@ The top level holds four names and nothing else: `version`, `vault`,
   be turned on.
 - `player_site` holds everything about the site the players see.
 - `gm_site` holds the settings of the GM site, a second build for the GM
-  that shows every hidden part and never goes online.
+  that shows the hidden parts and never goes online.
 
 Names are grouped, so a setting is a path: `player_site.hide.sections` is
 `sections` inside `hide` inside `player_site`. A key written with nothing
@@ -251,7 +251,7 @@ would do.
 
 ## The state file
 
-`_meta/vault-state.json` is a JSON object. Three keys matter:
+`_meta/vault-state.json` is a JSON object. Four keys matter:
 
 - `gm_apprentice_version` is the plugin version the vault was last updated
   to.
@@ -259,6 +259,10 @@ would do.
   runs.
 - `flush_written` holds, per PC, which saved live record `flush` last
   wrote into the note, so the same record is not written twice.
+- `update_held` is what an update that could not stamp the vault
+  remembers for the next one: `left` lists the choices the GM answered
+  "leave", `said` the notices already shown, so neither is asked or
+  shown again. It is dropped when the vault is stamped.
 
 Other keys may appear and must be kept. Do not edit the file by hand. The
 `settings setup-note` command reads and writes `setup`.

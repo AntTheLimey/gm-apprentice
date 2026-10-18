@@ -15,3 +15,4 @@ vault.config.json
 # The change-request watcher's scratch files (inbox watch).
 .watcher-heartbeat
 .watcher-seen.json
+.watcher-session.json

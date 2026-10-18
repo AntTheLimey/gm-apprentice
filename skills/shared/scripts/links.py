@@ -85,13 +85,16 @@ from vaultlib import (
     UNCHECKED_DIRS,
     LinkLine,
     extract_frontmatter,
+    PublishToolUnavailable,
+    WITHHELD_KEY_RE,
     is_unchecked_source,
-    is_withheld,
     link_aliases,
     link_lines,
     link_name,
     link_target,
     normalize,
+    note_withheld,
+    raw_frontmatter,
     sub_wikilinks,
 )
 
@@ -438,20 +441,30 @@ def _withheld_names(vault: Path, names: list[str]) -> set[str]:
     """Which of NAMES mean a note marked `withheld: true`, as the
     `normalize`d last part of the name. A NAME is the note's file name, its
     title, or one of its aliases or gm_aliases (a link may use any of them,
-    and unlinking one would print it)."""
+    and unlinking one would print it). Whether a note is withheld, and its
+    names, are the publish tool's answer (`note_withheld`): read as the
+    build reads them. When the tool cannot answer, a note that has the key
+    at all is taken as withheld, so its links are kept, not printed."""
     wanted = {_segments(n)[-1] for n in names if _segments(n)}
     found: set[str] = set()
     for rel in _walk(vault, ".md"):
         try:
-            fm = extract_frontmatter((vault / rel).read_text(encoding="utf-8"))
+            text = (vault / rel).read_text(encoding="utf-8")
         except (OSError, UnicodeError):
             continue
-        if fm is None or not is_withheld(fm):
+        if not WITHHELD_KEY_RE.search(raw_frontmatter(text)):
             continue
-        own = [_stem(rel), str(fm.get("title") or "")] + link_aliases(fm)
-        if isinstance(fm.get("aliases"), str):
-            own.append(fm["aliases"])
-        for name in own:
+        try:
+            withheld, given = note_withheld(text)
+        except PublishToolUnavailable:
+            fm = extract_frontmatter(text) or {}
+            withheld = True
+            given = [str(fm.get("title") or "")] + link_aliases(fm)
+            if isinstance(fm.get("aliases"), str):
+                given.append(fm["aliases"])
+        if not withheld:
+            continue
+        for name in [_stem(rel), *given]:
             key = normalize(name.strip().strip("[]").split("/")[-1])
             if key in wanted:
                 found.add(key)

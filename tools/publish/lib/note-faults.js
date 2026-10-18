@@ -23,6 +23,8 @@
 //                   up, is information
 //   SKILL_BELOW_BASE  a skill of a CoC investigator written below the base worked out for it
 //                     from the characteristics (information; the sheet shows the number written)
+//   HEADING_IN_HIDDEN_BLOCK  a withheld section's heading written inside a hidden block, so the text
+//                     after the block is withheld with it (information; the build says so per page)
 //
 // Nothing here reads a page a second way, and nothing here knows which field a template
 // prints. The names are decided by the page as the build makes it: every link to a note
@@ -47,7 +49,7 @@ const { kindOfType } = require('./kind-label');
 const { STORY_SUFFIX } = require('./scanner');
 const { decodeEntities } = require('./templates/gurps/tables');
 
-const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE'];
+const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK'];
 const WORST = 3;
 // The human report names this many of the pages that link a note with no page.
 const PAGES_SHOWN = 3;
@@ -85,7 +87,11 @@ const BLOCK_TAGS = new Set(('address article aside blockquote br caption dd deta
 const MORE_ENTITIES = {
   rsaquo: '›', lsaquo: '‹', raquo: '»', laquo: '«', mdash: '—', ndash: '–', hellip: '…', rarr: '→', larr: '←',
   middot: '·', bull: '•', times: '×', copy: '©', nbsp: ' ', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', apos: "'",
+  // Characters that print nothing (#415): decoded so a name split by one reads whole once they are taken out.
+  shy: '\u00ad', zerowidthspace: '\u200b', nobreak: '\u2060',
 };
+// Every entity a page may hold that the reader knows, as its character.
+const decodeAll = (s) => decodeEntities(s).replace(/&([a-z]+);/gi, (whole, name) => MORE_ENTITIES[name.toLowerCase()] || whole);
 const PRINTED_ATTRS = /\s(?:alt|title|aria-label|content|placeholder)="([^"]*)"/gi;
 // With the `data-…` values a page carries for its filters and scripts: not printed, but in
 // the page a visitor is sent.
@@ -119,7 +125,7 @@ function pageText(html, { links = true, attributes = false, spaced = false } = {
     const name = tag.toLowerCase();
     return (BLOCK_TAGS.has(name) ? '\n' : spaced && BOX_TAGS.has(name) ? ' ' : '') + extra;
   });
-  return decodeEntities(s).replace(/&([a-z]+);/gi, (whole, name) => MORE_ENTITIES[name.toLowerCase()] || whole)
+  return decodeAll(s)
     .replace(MARK_RE, '').split('\n')
     .map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n');
 }
@@ -136,6 +142,52 @@ const foldQuotes = (text) => canonicalNfc(text).replace(/[\u2018\u2019\u02bc\u20
   // A character that prints nothing (a zero-width space or joiner, a soft hyphen) does not make a different name.
   // And a name in the other Unicode form (an NFD file name, an NFC page) is the same name.
   .replace(/[\u200b-\u200d\u2060\ufeff\u00ad]/g, '');
+
+// How a secret name is looked for in a text: as whole words, in any capitals, with a space, an underscore or a hyphen
+// between its words, whichever the name has. A word's edge is a letter or digit of a script written with spaces between
+// words: a script written without them (Chinese, Japanese, Thai…) runs a name into the particle after it ("影の王は"),
+// so a letter of one is no edge. A plural ("the Lord Zorns") is matched too; read the hits with nameHits, which decides
+// when a plural is the name ("hopes" is a word, not the note Hope).
+const NO_SPACE = '\\p{scx=Han}\\p{scx=Hiragana}\\p{scx=Katakana}\\p{scx=Hangul}\\p{scx=Thai}\\p{scx=Lao}\\p{scx=Khmer}\\p{scx=Myanmar}';
+const SPACED = `(?:(?=[\\p{L}\\p{N}])[^${NO_SPACE}])`;
+const NAME_SEP = /[\s_\-\u2010\u2011]+/;
+function nameMatcher(alias) {
+  const words = foldQuotes(String(alias).trim()).split(NAME_SEP).filter(Boolean);
+  const last = words.pop() || '';
+  const end = last.slice(-1);
+  const cased = end.toLowerCase() !== end.toUpperCase();
+  const plural = cased ? `(?<plural>${/(?:s|x|z|ch|sh)$/i.test(last) ? 'es' : 's'})?` : '';
+  const re = new RegExp(`(?<!${SPACED})${words.map((w) => `${esc(w)}[\\s_\\-\\u2010\\u2011]+`).join('')}(?<last>${esc(last)})${plural}(?!${SPACED})`, 'giu');
+  re.oneWord = words.length === 0;
+  return re;
+}
+
+// Whether a capitalised plural of a one-word name, at match `m` in `text`, is written where only a name would carry the
+// capital: mid-sentence, on a line that is no markdown heading, with no capitalised word right before or after it. At a
+// sentence start, in a heading or in a run of capitalised words ("Lost Hopes"), the capital says nothing.
+function capitalMidSentence(text, m) {
+  const lineStart = text.lastIndexOf('\n', m.index - 1) + 1;
+  const lineEnd = text.indexOf('\n', m.index) < 0 ? text.length : text.indexOf('\n', m.index);
+  if (/^ {0,3}#{1,6}(?:\s|$)/.test(text.slice(lineStart, lineEnd))) return false;
+  const before = text.slice(lineStart, m.index);
+  const lead = before.replace(/[\s"'“‘([*_~`>]+$/u, '');
+  if (lead === '' || /[.!?…]$/.test(lead) || /^\s*(?:[-*+]|\d+[.)])$/.test(lead)) return false;
+  // The word before or after, across spaces or a breadcrumb's separator ("Home›Hopes›Lost Hopes").
+  const prev = /(\p{L}[\p{L}\p{N}'’]*)[\s›»|/·]+$/u.exec(before);
+  if (prev && /^\p{Lu}/u.test(prev[1])) return false;
+  return !/^[\s›»|/·]+\p{Lu}/u.test(text.slice(m.index + m[0].length, lineEnd));
+}
+
+// The hits of a name matcher in a text. A plural counts only where the name's last word is written with a capital, and
+// for a one-word name only where that capital is mid-sentence (capitalMidSentence): "Hopes were high" and "## Lost
+// Hopes" are words, "the Hopes" is the note Hope. A name of more words ("the Lord Zorns") counts anywhere.
+function nameHits(re, text) {
+  re.lastIndex = 0;
+  const s = String(text);
+  return [...s.matchAll(re)].filter((m) => !(m.groups && m.groups.plural)
+    || (/^\p{Lu}/u.test(m.groups.last) && (!re.oneWord || capitalMidSentence(s, m))));
+}
+const hasName = (re, text) => nameHits(re, text).length > 0;
 
 // Why each vault note has no page, or null when it has one. A scanned page carries the
 // publish decision's own code; a note the scan never turned into a page gets the reason
@@ -256,18 +308,16 @@ function secretNamesOf(input) {
     if (aliasOwners.has(key)) withheldOwners.delete(key);
     else if (publicNames.has(key)) { collisions.push({ ...owner, key }); withheldOwners.delete(key); }
   }
-  const matcher = (alias) => new RegExp('(?<![\\p{L}\\p{N}])' + foldQuotes(alias.trim()).split(/[\s_\-\u2010\u2011]+/).filter(Boolean).map(esc).join('[\\s_\\-\\u2010\\u2011]+')
-    + '(?![\\p{L}\\p{N}])', 'giu');
   const names = [...aliasOwners.values()].map((a) => ({
     ...a,
     kind: 'alias',
     // Between the words of a name a space, an underscore or a hyphen all read as the same
     // name ("The_Watcher", "The-Watcher"), whichever of them gm_aliases has.
-    re: matcher(a.alias),
-  })).concat([...withheldOwners.values()].map((a) => ({ ...a, kind: 'withheld', re: matcher(a.alias) })))
+    re: nameMatcher(a.alias),
+  })).concat([...withheldOwners.values()].map((a) => ({ ...a, kind: 'withheld', re: nameMatcher(a.alias) })))
     // The GM's never-show words (player_site.never_show): searched as names are, but a public name that holds one is no
     // excuse (the GM said never), so none is dropped for colliding with one. They belong to no note.
-    .concat([...new Map((input.neverShow || []).map((w) => [fold(w), w])).values()].map((w) => ({ alias: w, rel: null, kind: 'never_show', re: matcher(w) })));
+    .concat([...new Map((input.neverShow || []).map((w) => [fold(w), w])).values()].map((w) => ({ alias: w, rel: null, kind: 'never_show', re: nameMatcher(w) })));
   // One cheap look at the raw HTML decides whether a page is read at all: the longest word
   // of each secret name. A name with no word of three letters is looked for on every page.
   const probeWords = names.map((a) => (foldQuotes(a.alias).match(/[\p{L}\p{N}]+/gu) || []).sort((x, y) => y.length - x.length)[0] || '');
@@ -280,7 +330,7 @@ function secretNamesOf(input) {
   // at again with those taken out, as the name is compared.
   const HIDDEN_CHAR = /[\u200b-\u200d\u2060\ufeff\u00ad]|&(?:shy|ZeroWidthSpace|NoBreak|#\d+|#x[0-9a-f]+);/i;
   const COMBINING = /[\u0300-\u036f]/;
-  const mayHold = (html) => probe.test(html) || ((HIDDEN_CHAR.test(html) || COMBINING.test(html)) && probe.test(foldQuotes(decodeEntities(String(html)))));
+  const mayHold = (html) => probe.test(html) || ((HIDDEN_CHAR.test(html) || COMBINING.test(html)) && probe.test(foldQuotes(decodeAll(String(html)))));
   return { names, probe, mayHold, secretKeys, collisions, publishedWithheld, unreadableFlags, publicNames };
 }
 
@@ -289,6 +339,16 @@ function publicWordsOf(linkMap, published) {
   const set = new Set(Object.keys(linkMap).map((k) => fold(foldQuotes(k))));
   for (const page of published) set.add(fold(foldQuotes(page.displayTitle || '')));
   return set;
+}
+
+// A page with each link to another site that prints its own address taken out.
+function withoutAutolinks(html) {
+  return html.replace(/<a\b[^>]*\shref="((?:[a-z][a-z0-9+.-]*:|\/\/)[^"]*)"[^>]*>([\s\S]*?)<\/a\s*>/gi, (whole, href, inner) => {
+    const words = decodeAll(inner.replace(/<[^>]*>/g, '')).trim();
+    let address = decodeAll(href);
+    try { address = decodeURI(address); } catch (e) { /* as written */ }
+    return words && !/\s/.test(words) && address.endsWith(words.replace(/^[a-z][a-z0-9+.-]*:\/\//i, '')) ? ' ' : whole;
+  });
 }
 
 // A page's secret names: the hits of `names` (secretNamesOf's matchers) in the HTML of one built file, each
@@ -313,31 +373,40 @@ function findSecretNames(html, names, { publicWords, listing = false, only = nul
   const bodyOwn = blank(body);
   let boxes = null;
   let rest = null;
+  // A page's pull-quote is its first paragraph again: a name in both is written once, and counted once.
+  const quoted = /<div class="pull-quote">/.test(bodyHtml);
+  let unquoted = null;
   for (const a of names) {
     if (only && a.kind !== only) continue;
-    a.re.lastIndex = 0;
     let text = body;
     // A never-show word is a finding inside a public name too.
     const own = a.kind === 'never_show' ? (t) => t : blank;
-    let matches = [...(a.kind === 'never_show' ? body : bodyOwn).matchAll(a.re)];
+    let matches = nameHits(a.re, a.kind === 'never_show' ? body : bodyOwn);
+    let count = matches.length;
+    if (count > 1 && quoted) {
+      if (unquoted === null) unquoted = foldQuotes(pageText(bodyHtml.replace(/<div class="pull-quote">[\s\S]*?<\/div>/g, ' '), { links: 'fence' }));
+      count = nameHits(a.re, own(unquoted)).length || count;
+    }
     if (matches.length === 0) {
       // A sheet's small boxes run a label and its value together ("TL" and the name).
       if (boxes === null) boxes = foldQuotes(pageText(bodyHtml, { links: 'fence', spaced: true }));
       text = boxes;
-      matches = [...own(boxes).matchAll(a.re)];
+      matches = nameHits(a.re, own(boxes));
+      count = matches.length;
     }
     if (matches.length === 0) {
       // An index page's cards are links that carry a note's fields in their attributes.
       if (rest === null) rest = foldQuotes(pageText(whole, { links: 'fence', attributes: listing ? 'all' : true }));
       text = rest;
-      matches = [...own(rest).matchAll(a.re)].slice(0, 1);
+      matches = nameHits(a.re, own(rest)).slice(0, 1);
+      count = matches.length;
     }
     if (matches.length === 0) continue;
     const at = matches[0].index;
     const start = Math.max(text.lastIndexOf('\n', at) + 1, at - CONTEXT);
     const stop = Math.min(...[text.indexOf('\n', at), at + matches[0][0].length + CONTEXT, text.length].filter((x) => x >= 0));
     hits.push({
-      kind: a.kind, alias: a.alias, owner: a.rel, re: a.re, count: matches.length,
+      kind: a.kind, alias: a.alias, owner: a.rel, re: a.re, count,
       context: clip(text.slice(start, stop).replace(/[\u0002\u0003]/g, '').trim(), 2 * CONTEXT + a.alias.length),
     });
   }
@@ -386,7 +455,7 @@ function startNoteAudit(input) {
   };
   const secrets = secretNamesOf({ notes: input.notes, publishedRels, outOf: (rel) => (scanned.get(rel) || {}).outputPath, linkMap: input.linkMap, neverShow: input.publishConfig.never_show });
   const { secretKeys, collisions, publishedWithheld, unreadableFlags, probe, mayHold, publicNames } = secrets;
-  const aliasRes = secrets.names;
+  const secretNames = secrets.names;
   for (const note of input.notes) {
     const rel = noteRel(note);
     const why = noPageReason(rel, scanned.get(rel), input, skipped);
@@ -399,7 +468,7 @@ function startNoteAudit(input) {
   // the index and listing pages that print the name from it), printed: Map }
   const named = new Map();
   const covered = new Set();   // link targets (NFC) that name a note with no page
-  const aliasHits = [];
+  const secretHits = [];
   const marks = [];            // marks[id - 1] = { record, words, source }, for the whole vault
   // The marks the vault's own text holds, read once from what the pages are made of.
   let ownIds = null;
@@ -590,29 +659,47 @@ function startNoteAudit(input) {
   // `only: 'withheld'` looks for withheld names alone: for texts that have never been read for
   // gm_aliases names (the records the search index is made of).
   function read(rel, html, out = null, where = 'the page', only = null) {
-    if (!probe || (only && !aliasRes.some((a) => a.kind === only)) || !mayHold(html)) return;
-    for (const hit of findSecretNames(html, aliasRes, { publicWords: publicWords(), listing: out !== null, only })) {
-      aliasHits.push({ ...hit, rel, out, where });
-    }
+    if (!probe || (only && !secretNames.some((a) => a.kind === only)) || !mayHold(html)) return;
+    const options = { publicWords: publicWords(), listing: out !== null, only };
+    // A note's own page has its addresses read on their own (readAddresses): a link that prints its own address (a
+    // bare https://… in the text) is told as an address for a withheld name, not as words of the page.
+    const plain = out === null && where === 'the page' ? withoutAutolinks(String(html)) : String(html);
+    const hits = plain === String(html) ? findSecretNames(html, secretNames, options)
+      : [...findSecretNames(plain, secretNames.filter((a) => a.kind === 'withheld'), options), ...findSecretNames(html, secretNames.filter((a) => a.kind !== 'withheld'), options)];
+    for (const hit of hits) secretHits.push({ ...hit, rel, out, where });
   }
 
   // The address of a link on a page that is not one of the site's own files: a Markdown-style
-  // `[x](Lord_Zorn.md)` is written to the page as it stands. Withheld names only.
-  const SITE_FILES = /^(?:images|css|js|fonts|story|[\w-]+)\/?.*\.(?:html|css|js|json|png|jpe?g|gif|webp|svg|avif|woff2?|ttf|otf)$/i;
+  // `[x](Lord_Zorn.md)` or `[x](lord_zorn.html)` is written to the page as it stands, and so is
+  // an address on another site (`https://…/Lord_Zorn`), whose words a reader sees too. Withheld names only.
+  const SITE_ASSETS = /\.(?:css|js|json|png|jpe?g|gif|webp|svg|avif|woff2?|ttf|otf)$/i;
+  // The site's own pages, by file name: a page whose name holds a withheld name (lord-zorn-jr.html) is a public name.
+  let sitePages = null;
+  const isSitePage = (value) => {
+    if (sitePages === null) {
+      sitePages = new Set(['index', '404', 'story', 'timeline', 'search']);
+      for (const page of input.published) if (page.outputPath) sitePages.add(path.posix.basename(String(page.outputPath), '.html').toLowerCase());
+    }
+    return sitePages.has(path.posix.basename(value.replace(/\\/g, '/'), path.posix.extname(value)).toLowerCase());
+  };
+  const EXTERNAL = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
   function readAddresses(rel, html) {
-    if (!aliasRes.some((a) => a.kind === 'withheld')) return;
+    if (!secretNames.some((a) => a.kind === 'withheld')) return;
     const seenNames = new Set();
     for (const m of String(html).matchAll(/\shref="([^"]*)"/gi)) {
-      let value = decodeEntities(m[1]).replace(/[?#].*$/, '');
-      if (!value || /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(value) || SITE_FILES.test(value)) continue;
+      const written = decodeEntities(m[1]);
+      const external = EXTERNAL.test(written);
+      // Another site's address is read whole (its path, query and anchor are all printed in it); one of this site's
+      // is read without its anchor, which names a heading of the page.
+      let value = external ? written.replace(EXTERNAL, '').replace(/\+/g, ' ') : written.replace(/[?#].*$/, '');
+      if (!value || (!external && (SITE_ASSETS.test(value) || (/\.html?$/i.test(value) && isSitePage(value))))) continue;
       try { value = decodeURIComponent(value); } catch (e) { /* as written */ }
       const address = foldQuotes(value.replace(/\.md$/i, ''));
-      for (const a of aliasRes) {
+      for (const a of secretNames) {
         if (a.kind !== 'withheld' || seenNames.has(a.alias)) continue;
-        a.re.lastIndex = 0;
-        if (!a.re.test(address)) continue;
+        if (!hasName(a.re, address)) continue;
         seenNames.add(a.alias);
-        aliasHits.push({ kind: 'withheld', alias: a.alias, owner: a.rel, re: a.re, rel, out: null, where: 'address', count: 1, context: m[1] });
+        secretHits.push({ kind: 'withheld', alias: a.alias, owner: a.rel, re: a.re, rel, out: null, where: 'address', count: 1, context: m[1] });
       }
     }
   }
@@ -620,13 +707,12 @@ function startNoteAudit(input) {
   // A copied file (an attachment) whose name carries a withheld name. `file` is its path in
   // the vault, `copied` its path on the site. The name is on the site in the file's address.
   function readFileName(file, copied = file) {
-    if (!aliasRes.some((a) => a.kind === 'withheld')) return;
+    if (!secretNames.some((a) => a.kind === 'withheld')) return;
     const address = foldQuotes(String(copied).replace(/\.[^./]+$/, ''));
-    for (const a of aliasRes) {
+    for (const a of secretNames) {
       if (a.kind !== 'withheld') continue;
-      a.re.lastIndex = 0;
-      if (!a.re.test(address)) continue;
-      aliasHits.push({
+      if (!hasName(a.re, address)) continue;
+      secretHits.push({
         kind: 'withheld', alias: a.alias, owner: a.rel, re: a.re, rel: file, out: null, where: 'file', count: 1,
         context: path.posix.basename(String(copied)),
       });
@@ -654,7 +740,7 @@ function startNoteAudit(input) {
       ? `"${hit.alias}", the name of ${hit.owner === rel ? 'this note, which you marked withheld' : `a note you marked withheld (${hit.owner})`}`
       : `"${hit.alias}", a name you keep secret in gm_aliases${hit.owner === rel ? '' : ` (of ${hit.owner})`}`);
     const base = (hit) => (never ? { word: hit.alias } : withheld ? { name: hit.alias } : { alias: hit.alias });
-    const hits = aliasHits.filter((h) => h.kind === kind);
+    const hits = secretHits.filter((h) => h.kind === kind);
     for (const hit of hits.filter((h) => h.out === null)) {
       // A name a note's own page prints is told as that; the same name only the search index
       // holds (read after the pages) is told only when the page does not print it.
@@ -682,8 +768,7 @@ function startNoteAudit(input) {
       if (!textOf.has(page)) {
         textOf.set(page, foldQuotes(strings(page.frontmatter || {}, [String(page.displayTitle || ''), String(page.publishedMarkdown || '')]).join('\n')));
       }
-      re.lastIndex = 0;
-      return re.test(textOf.get(page));
+      return hasName(re, textOf.get(page));
     };
     for (const hit of listed) {
       // A section index lists the notes of its own folder: where one of those holds the
@@ -963,6 +1048,8 @@ function summaryLines(findings) {
       lines.push(`${m} ${plural(m, 'row of a PC sheet is', 'rows of PC sheets are')} not fully read by the to-hit calculator (${worst.join(', ')}) — ${where} ${plural(m, 'it', 'these')}.`);
     } else if (code === 'SKILL_BELOW_BASE') {
       continue;   // information for campaign-qa; the build has nothing to say about it
+    } else if (code === 'HEADING_IN_HIDDEN_BLOCK') {
+      continue;   // information for campaign-qa; the build said it per page as it went
     } else if (code === 'WITHHELD_NAME_PUBLIC') {
       const names = [...new Set(rows.map((f) => f.name))];
       lines.push(`${names.length} withheld ${plural(names.length, 'name is also the name of a published page', 'names are also the names of published pages')}, so ${plural(names.length, 'it is', 'they are')} not looked for (${names.slice(0, WORST).join(', ')}) — ${where} ${plural(names.length, 'it', 'these')}.`);
@@ -977,4 +1064,4 @@ function summaryLines(findings) {
   return lines;
 }
 
-module.exports = { startNoteAudit, summaryLines, PAGES_SHOWN, kindOfType, pageText, mainOf, CODES, MARK_RE, foldQuotes, secretNamesOf, publicWordsOf, findSecretNames };
+module.exports = { startNoteAudit, summaryLines, PAGES_SHOWN, kindOfType, pageText, mainOf, CODES, MARK_RE, foldQuotes, secretNamesOf, publicWordsOf, findSecretNames, nameMatcher, nameHits, hasName };

@@ -5,16 +5,8 @@
 // features the GM site never has, set here. Only settings the registry lists as twins are laid over:
 // any other name a file holds under `gm_site` is never read as a value of the site.
 const { REGISTRY } = require('./registry');
-const { getPath } = require('./types');
+const { getPath, setIn } = require('./types');
 
-function setIn(obj, segs, value) {
-  let cur = obj;
-  for (const s of segs.slice(0, -1)) {
-    if (cur[s] == null || typeof cur[s] !== 'object' || Array.isArray(cur[s])) cur[s] = {};
-    cur = cur[s];
-  }
-  cur[segs[segs.length - 1]] = value;
-}
 const TWINS = REGISTRY.filter((e) => e.twinOf && !e.container);
 const GM_OFF = ['features.live_stats', 'features.inbox'];
 
@@ -33,11 +25,11 @@ function forSite(read, site) {
     const rest = t.name.split('.').slice(1);
     const own = origins[t.name] === 'file' ? getPath(gmValues, rest) : undefined;
     if (own !== undefined) {
-      setIn(out, rest, structuredClone(own));
+      setIn(out, rest.join('.'), structuredClone(own));
       siteOrigins[`player_site.${rest.join('.')}`] = 'file';
-    } else if (t.gmDefault !== undefined) setIn(out, rest, structuredClone(t.gmDefault));
+    } else if (t.gmDefault !== undefined) setIn(out, rest.join('.'), structuredClone(t.gmDefault));
   }
-  for (const name of GM_OFF) setIn(out, name.split('.'), false);
+  for (const name of GM_OFF) setIn(out, name, false);
   return { vault: values.vault, site: out, origins: siteOrigins, gm };
 }
 

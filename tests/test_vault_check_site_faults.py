@@ -255,6 +255,21 @@ class SiteFaultRowsTests(unittest.TestCase):
                       "leave it as written", rows[0])
         self.assertIn("SKILL_BELOW_BASE", vc.NOTE_FAULT_CODES)
 
+    def test_a_hidden_heading_inside_a_hidden_block_is_a_row(self):
+        # #447: the tool withholds the text after the block and says so;
+        # Python only carries the tool's words.
+        body = ("## Appearance\nTall.\n%% working note\n## GM Notes\n%%\n"
+                "She is the informant.\n")
+        vault, _site = make(self, {MARA: npc(body)})
+        rows = [r for r in vc.check_site_faults(vault)
+                if "HEADING_IN_HIDDEN_BLOCK" in r]
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith(
+            f"INFO\t{MARA}\tHEADING_IN_HIDDEN_BLOCK: the heading \"GM Notes\" "
+            "is inside a hidden block"), rows)
+        self.assertIn("— move the heading out of the hidden block", rows[0])
+        self.assertIn("HEADING_IN_HIDDEN_BLOCK", vc.NOTE_FAULT_CODES)
+
     def test_a_withheld_name_printed_on_a_page_is_a_row(self):
         vault, _site = make(self, {
             MARA: npc("Lord Zorn rides at dawn."),
@@ -262,7 +277,7 @@ class SiteFaultRowsTests(unittest.TestCase):
         rows = findings(vc.check_site_faults(vault))
         self.assertEqual(rows, [
             f"WARNING\t{MARA}\tWITHHELD_IN_PROSE: \"Lord Zorn\" (a withheld "
-            f"note: {ZORN}), printed 2 times | Lord Zorn rides at dawn."])
+            f"note: {ZORN}), printed 1 time | Lord Zorn rides at dawn."])
 
     def test_a_withheld_note_that_publishes_is_an_error_row_that_does_not_stop_the_audit(self):
         vault, _site = make(self, {

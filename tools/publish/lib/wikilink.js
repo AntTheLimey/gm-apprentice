@@ -23,6 +23,89 @@ function wikilinkRe(flags = 'g', withBang = false) {
   return new RegExp((withBang ? '!?' : '') + WIKILINK_SOURCE, flags);
 }
 
+// The links in a text, found by what the pattern above needs and no more, so a long run of `[`
+// costs time in step with its length (the pattern alone retries every `[[` along a run to its
+// end; 50,000 of them took seconds). A link holds no `]` but its closing `]]`, so a `[[` can
+// only start one when the first `]` after it is followed by a second. Where that holds the
+// pattern runs from that spot, and a start that fails does so at once (an empty target), so
+// no stretch of text is read twice. The same links, in the same order, as `wikilinkRe`.
+// `withBang` takes a `!` right before the `[[` into the span, as `wikilinkRe('g', true)` does.
+function wikilinkSpans(text, withBang = false, max = Infinity) {
+  const n = text.length;
+  const nextClose = new Int32Array(n + 3).fill(-1);
+  for (let i = n - 1; i >= 0; i--) nextClose[i] = text[i] === ']' ? i : nextClose[i + 1];
+  const sticky = new RegExp(WIKILINK_SOURCE, 'y');
+  const spans = [];
+  let from = 0;
+  for (let p = text.indexOf('[[', from); p !== -1 && spans.length < max; p = text.indexOf('[[', from)) {
+    const q = nextClose[p + 2];
+    sticky.lastIndex = p;
+    const m = q !== -1 && text[q + 1] === ']' ? sticky.exec(text) : null;
+    if (!m) { from = p + 1; continue; }
+    const bang = withBang && p - 1 >= from && text[p - 1] === '!';
+    const end = p + m[0].length;
+    spans.push({ index: bang ? p - 1 : p, end, body: m[1] });
+    from = end;
+  }
+  return spans;
+}
+
+// `text.replace(wikilinkRe('g', withBang), fn)`, in time linear in the text. `fn(link, body)`.
+function replaceWikilinks(text, fn, withBang = false) {
+  const s = String(text);
+  let out = '';
+  let at = 0;
+  for (const span of wikilinkSpans(s, withBang)) {
+    out += s.slice(at, span.index) + fn(s.slice(span.index, span.end), span.body);
+    at = span.end;
+  }
+  return out + s.slice(at);
+}
+
+// `text.replace(LOOSE_LABELLED_RE, (_, label) => fn(label))` in time linear in the text. The
+// target runs to the first `|`, newline, `]]` or `[[` (and must end at a `|`), the label to the
+// first `]]` after the pipe on the same line, so each is a lookup, never a rescan.
+function replaceLooseLabelled(text, fn) {
+  const s = String(text);
+  const n = s.length;
+  const nextPair = new Int32Array(n + 3).fill(-1);
+  const nextNewline = new Int32Array(n + 3).fill(-1);
+  for (let i = n - 1; i >= 0; i--) {
+    nextPair[i] = s[i] === ']' && s[i + 1] === ']' ? i : nextPair[i + 1];
+    nextNewline[i] = s[i] === '\n' ? i : nextNewline[i + 1];
+  }
+  let out = '';
+  let at = 0;
+  let from = 0;
+  for (let p = s.indexOf('[[', from); p !== -1; p = s.indexOf('[[', from)) {
+    let j = p + 2;
+    while (j < n && s[j] !== '|' && s[j] !== '\n' && !(s[j] === ']' && s[j + 1] === ']') && !(s[j] === '[' && s[j + 1] === '[')) j++;
+    const q = s[j] === '|' ? nextPair[j + 1] : -1;
+    if (q === -1 || (nextNewline[j + 1] !== -1 && nextNewline[j + 1] < q)) { from = p + 1; continue; }
+    out += s.slice(at, p) + fn(s.slice(j + 1, q));
+    at = from = q + 2;
+  }
+  return out + s.slice(at);
+}
+
+// `text` with every `![[...]]` taken out (an embed: no `]` inside), in linear time.
+function removeEmbeds(text) {
+  const s = String(text);
+  const n = s.length;
+  const nextClose = new Int32Array(n + 4).fill(-1);
+  for (let i = n - 1; i >= 0; i--) nextClose[i] = s[i] === ']' ? i : nextClose[i + 1];
+  let out = '';
+  let at = 0;
+  let from = 0;
+  for (let p = s.indexOf('![[', from); p !== -1; p = s.indexOf('![[', from)) {
+    const q = nextClose[p + 3];
+    if (q === -1 || s[q + 1] !== ']') { from = p + 1; continue; }
+    out += s.slice(at, p);
+    at = from = q + 2;
+  }
+  return out + s.slice(at);
+}
+
 // The target of the first link in a value (`[[Name|x]]`, closing brackets optional), for
 // frontmatter values. Returns the raw target or null.
 function firstWikilinkTarget(value) {
@@ -106,8 +189,8 @@ function linkText(value, { humanize = false } = {}) {
 // a `]` or a whole link. Strict first; then the outer brackets are taken off and the rest is
 // the link if its own brackets pair up (so `[[A|x]] and [[B|y]]` is not one link).
 function onlyLink(text) {
-  const strict = wikilinkRe('').exec(text);
-  if (strict && strict.index === 0 && strict[0].length === text.length) return parseWikilink(strict[1]);
+  const [strict] = wikilinkSpans(text, false, 1);
+  if (strict && strict.index === 0 && strict.end === text.length) return parseWikilink(strict.body);
   if (!text.startsWith('[[') || !text.endsWith(']]') || text.length < 5) return null;
   const inner = text.slice(2, -2);
   let open = 0;
@@ -129,14 +212,14 @@ function markLabels(text) {
   const bound = s.length + 1;
   const mark = (label) => MARK_OPEN + label + MARK_CLOSE;
   for (let i = 0; i <= bound; i++) {
-    const next = s.replace(wikilinkRe('g'), (link, body) => {
+    const next = replaceLooseLabelled(replaceWikilinks(s, (link, body) => {
       const label = parseWikilink(body).display.trim();
       return label ? mark(label) : body;
-    }).replace(LOOSE_LABELLED_RE, (_, label) => mark(label.trim()));
+    }), (label) => mark(label.trim()));
     if (next === s) return s;
     s = next;
   }
-  return s.replace(wikilinkRe('g'), '');
+  return replaceWikilinks(s, () => '');
 }
 
 // `text` with every labelled link in it turned into its label. For text that goes to the
@@ -150,15 +233,14 @@ function labelsForLinks(text) {
   // nothing, never its target and never the stray `!300`. A link left unread by the pattern
   // above because `]` stands inside it is read loosely, up to the first `]]`: the label is
   // everything after the pipe, so its target still does not print.
-  return s.replace(wikilinkRe('g', true), (whole, body) => {
+  return replaceLooseLabelled(replaceWikilinks(s, (whole, body) => {
     const label = parseWikilink(body).display.trim();
     if (whole[0] === '!') return label || body.includes('|') ? '' : whole;
     return label || whole;
-  }).replace(LOOSE_LABELLED_RE, (_, label) => label.trim());
+  }, true), (label) => label.trim());
 }
 // `[[target|label]]` where target or label holds a lone `]`: a target stops at the first `|`
-// and may hold no `[[` or `]]`; the label runs to the first `]]`.
-const LOOSE_LABELLED_RE = /\[\[(?:(?!\]\]|\[\[)[^|\n])*\|([^\n]*?)\]\]/g;
+// and may hold no `[[` or `]]`; the label runs to the first `]]`. Read by replaceLooseLabelled.
 
 // `labelsForLinks` applied until the text stops changing, so a link nested in a label
 // (`[[A|[[B|c]]]]`) comes down to `c` and no target is left standing. Each pass that changes
@@ -173,7 +255,7 @@ function labelsForLinksFully(text) {
     if (next === s) return s;
     s = next;
   }
-  return s.replace(wikilinkRe('g'), '');
+  return replaceWikilinks(s, () => '');
 }
 
 // Split a markdown table row on its cell pipes, not on the pipe inside a `[[link|alias]]` or
@@ -194,4 +276,4 @@ function splitTableRow(line) {
   return out;
 }
 
-module.exports = { splitTableRow, WIKILINK_SOURCE, wikilinkRe, parseWikilink, firstWikilinkTarget, refTarget, linkText, labelsForLinks, labelsForLinksFully };
+module.exports = { splitTableRow, WIKILINK_SOURCE, wikilinkRe, wikilinkSpans, replaceWikilinks, replaceLooseLabelled, removeEmbeds, parseWikilink, firstWikilinkTarget, refTarget, linkText, labelsForLinks, labelsForLinksFully };

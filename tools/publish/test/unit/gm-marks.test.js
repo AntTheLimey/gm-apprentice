@@ -256,3 +256,31 @@ test('a heading in a code block is not a heading', () => {
   const md = [...blockLines(m.open('spoilers', 's')), '```', '## not a heading', '```', ...blockLines(m.close())].join('\n');
   assert.equal(marksAtHeadings(md, findHeadings), md);
 });
+
+test('a mark opened mid-line, across a ## heading and closed mid-line later: the words after the close are not marked', () => {
+  const m = createMarks();
+  const md = [`Lead ${m.open('gm_only_blocks', 'g')}hidden one`, '', '## Head', '', `hidden two ${m.close()} shown after.`, '', 'Plain.'].join('\n');
+  const out = renderMarks(renderMarkdown(marksAtHeadings(md, findHeadings)), m);
+  assert.equal(wellNested(out), true);
+  assert.doesNotMatch(out, PUA);
+  assert.match(out, /<p>hidden two\s*<\/p><\/div>\s*<p>\s*shown after\.<\/p>/);
+  assert.match(out, /<p>Plain\.<\/p>/);
+});
+
+test('a panel closed at the very start of a paragraph leaves no empty paragraph behind', () => {
+  const m = createMarks();
+  const html = `<p>${m.open('spoilers', 's')}</p>\n<p>a</p>\n<p>${CLOSE}after</p>\n`;
+  const out = renderMarks(html, m);
+  assert.equal(wellNested(out), true);
+  assert.doesNotMatch(out, /<p><\/p>/);
+  assert.match(out, /<\/div>\s*<p>after<\/p>/);
+});
+
+test('a CRLF note keeps CRLF in the lines marksAtHeadings adds', () => {
+  const m = createMarks();
+  const md = [...blockLines(m.open('gm_only_blocks', 'g')), 'before', '', '## Plans', '', 'after', ...blockLines(m.close())].join('\r\n');
+  const out = marksAtHeadings(md, findHeadings);
+  assert.ok(out.includes(CLOSE), 'the marks were split at the heading');
+  assert.equal(/[^\r]\n/.test(out), false, 'every line break is CRLF');
+  assert.equal(wellNested(renderMarks(renderMarkdown(out), m)), true);
+});

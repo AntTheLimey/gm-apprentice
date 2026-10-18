@@ -46,7 +46,8 @@ does the waiting, and you only wake when a request actually arrives.
 1. Pick a memorable 4-character code (letters, e.g. `WOLF`, `BEAR`, `MOTH`).
 2. Set it live:  `npx gm-apprentice-publish inbox open WOLF`
    (or `node <tool>/bin/gm-publish.js inbox open WOLF`). A new code starts a
-   new session, so the watcher forgets which requests it showed you before.
+   new session: the watcher forgets which requests it showed you before, and
+   runs 5 hours from now (`--hours N` for another length, 1 to 12).
    Stop any watcher still running first: a monitor-mode watcher keeps its
    shown ids in memory and would write the old ones back.
 3. Print it prominently for the GM to read to the table:
@@ -60,14 +61,8 @@ does the waiting, and you only wake when a request actually arrives.
    prints `WATCHER: still pending: <id> <id>...`, and again every 5 minutes
    while it stays pending. After 5 failed polls in a row it prints
    `WATCHER: inbox pull failed N times in a row`, and again every 5 more.
-   Every wrangler call is bounded at 60s, so a hung network turn is a failed
-   poll, not a frozen loop.
-   - **If the host offers a supervised or persistent monitor primitive** —
-     something that runs a task for the whole session and notifies you per
-     line of output, rather than only when the process exits — prefer it: a
-     plain background shell can die without anyone noticing, and a dead
-     watcher looks exactly like a quiet table. Run it once, for the rest of
-     the session:
+   - **If the host offers a monitor primitive** that notifies you per line
+     of output, prefer it:
 
      ```bash
      npx gm-apprentice-publish inbox watch
@@ -76,16 +71,23 @@ does the waiting, and you only wake when a request actually arrives.
    - **Otherwise, a background shell command** (`run_in_background: true`),
      which only notifies you when it exits. It exits 0 after a new batch or
      a reminder line, 1 after the first failure line and 2 on a usage error
-     (fix the command), and is relaunched each time:
+     (fix the command):
 
      ```bash
      npx gm-apprentice-publish inbox watch --exit-on-batch
      ```
 
+   **Whenever the watcher ends without a `WATCHER: session time is up`
+   line** and the GM has not said stop, relaunch it at once and say nothing:
+   a monitor reaching its time limit, or an `--exit-on-batch` exit once its
+   batch is handled. Never ask, and never take a quiet table for the end of
+   the session. **On `WATCHER: session time is up`**, ask the GM once
+   whether to keep watching; on yes, run `inbox open` again with the same
+   code (it restarts the clock) and relaunch the watcher.
    `--every N` sets another interval in seconds (kept between 1 and 300).
    What neither mode can self-report is dying outright (terminal closed,
    process killed); that's what `.watcher-heartbeat` is for — see Stop
-   below. Idle time between requests costs no model tokens.
+   below.
 
 ## When a batch arrives
 
@@ -200,9 +202,8 @@ the cell being changed, on a PC that is not live), read first from the PC's
      a `still pending` line 5 minutes later: retry the deploy then, and
      reply once it succeeds.
 5. **Get the watcher running again for the next request.** On the monitor
-   primitive it is still running: nothing to do. With `--exit-on-batch`,
-   relaunch the same command. Idle resumes at zero model-token cost either
-   way. **On a `WATCHER: still pending` line**, those ids were shown before
+   primitive it is still running, unless it ended (Start step 4). With
+   `--exit-on-batch`, relaunch the same command. **On a `WATCHER: still pending` line**, those ids were shown before
    and never replied to: retry their deploy (a leak-held batch only once the
    GM has cleared the check) and reply, then step 5 again.
 
@@ -295,10 +296,8 @@ request was handled: when a player says nothing happened, also run
 
 - **`--exit-on-batch`:** relaunch it (Start step 4) before assuming the
   queue is simply empty.
-- **Monitor primitive:** there's nothing to relaunch on your end — a
-  supervised task dying silently means the supervision itself failed, so ask
-  the host whether the task is still running rather than starting a second
-  poller on top of a primitive you can't directly restart.
+- **Monitor primitive:** ask the host whether the task is still running;
+  if it ended, relaunch it, and never start a second poller beside a live one.
 
 On "stop", **flush live state to the vault, then terminate the background
 watcher** and do not relaunch it:
@@ -318,7 +317,7 @@ watcher** and do not relaunch it:
    frontmatter and ignores the body, so a body write wouldn't take effect —
    author current status in the body block to let flush sync it.
 2. Terminate the background watcher, then
-   `rm -f <site_dir>/.watcher-heartbeat <site_dir>/.watcher-seen.json` —
+   `rm -f <site_dir>/.watcher-heartbeat <site_dir>/.watcher-seen.json <site_dir>/.watcher-session.json` —
    they're session-scoped scratch state, not something to leave behind in
    the GM's site repo between sessions.
 

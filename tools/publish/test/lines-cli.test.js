@@ -37,6 +37,24 @@ describe('lines: published', () => {
   });
 });
 
+describe('lines: withheld (links.py asks it, so the two never read the flag two ways, #352)', () => {
+  const { isWithheld } = require('../lib/processor');
+  it('reads the flag with the build\'s YAML reader: every number spelling YAML makes 1 is a yes', () => {
+    for (const value of ['true', '1', '0x1', '0b1', '1e0', '1.0e0', 'yes', '"on"']) {
+      assert.strictEqual(answer({ op: 'withheld', text: `---\nwithheld: ${value}\n---\nx` }).withheld, true, value);
+    }
+    for (const value of ['false', '0', '"0x1"', '2', 'tru', '[true]']) {
+      assert.strictEqual(answer({ op: 'withheld', text: `---\nwithheld: ${value}\n---\nx` }).withheld, false, value);
+    }
+    assert.strictEqual(answer({ op: 'withheld', text: '---\nwithheld : true\n---\nx' }).withheld, isWithheld({ withheld: true }));
+  });
+  it('gives the names the note answers to, and refuses a note whose frontmatter cannot be read', () => {
+    const got = answer({ op: 'withheld', text: '---\nwithheld: true\ntitle: "[[X|The Ferryman]]"\naliases: Old Nick\ngm_aliases: [Vesper]\n---\n' });
+    assert.deepStrictEqual(got, { withheld: true, names: ['The Ferryman', 'Old Nick', 'Vesper'] });
+    assert.match(JSON.parse(answerLine(JSON.stringify({ op: 'withheld', text: '---\nwithheld: [\n---\n' }))).error, /cannot be read/);
+  });
+});
+
 describe('lines: cut', () => {
   it('gives each line as the strip chain leaves it, null when the chain removes it', () => {
     const text = 'a %%x%% b\n%%\nhidden\n%%\n<!-- c -->\nkept\n<!-- gm-only -->\nsecret\n<!-- /gm-only -->\nend';
@@ -46,6 +64,68 @@ describe('lines: cut', () => {
   it('is the build\'s own strip chain: fenced code is kept, a comment in indented code is cut', () => {
     const { cut } = answer({ op: 'cut', text: '```\n%%x\n```\n    %%y%%' });
     assert.deepStrictEqual(cut, ['```', '%%x', '```', null]);
+  });
+  it('names the block markers the strips found unbalanced, by line of `text` (#441)', () => {
+    const text = [
+      'a',
+      '<!-- /gm-only -->',            // 1: closes nothing
+      '<!--',                          // 2: a marker over three lines, never closed
+      'gm-only',
+      '-->',
+      'hidden',
+      '<!-- spoiler -->',              // 6: inside the open gm-only block: cut, not a fault
+      '```',
+      '<!-- /spoiler -->',
+      '```',
+    ].join('\n');
+    const { cut, unbalanced } = answer({ op: 'cut', text });
+    assert.strictEqual(cut.length, 10);
+    assert.deepStrictEqual(unbalanced, [
+      { line: 1, marker: 'gm-only', close: true },
+      { line: 2, marker: 'gm-only', close: false },
+    ]);
+    const fenced = answer({ op: 'cut', text: 'x\r\n```\n<!-- /spoiler -->\n```\n<!-- /spoiler -->\n<!-- spoiler -->\n<!-- spoiler -->\n<!-- /spoiler -->' });
+    assert.deepStrictEqual(fenced.unbalanced, [
+      { line: 4, marker: 'spoiler', close: true },
+      { line: 5, marker: 'spoiler', close: false },
+    ]);
+    assert.deepStrictEqual(answer({ op: 'cut', text: 'plain' }).unbalanced, []);
+  });
+  it('keeps a heading that follows a closer on its line, and does not split at a form feed (#441)', () => {
+    const { cut } = answer({ op: 'cut', text: '<!-- gm-only -->\nx\n<!-- /gm-only -->## Public\n## A\fB\r\n<!--\n## C\n-->' });
+    assert.deepStrictEqual(cut, ['', null, '## Public', '## A\fB', null, null, null]);
+  });
+});
+
+describe('lines: cut with the page\'s section rules (#447)', () => {
+  const HIDDEN = '## Appearance\nTall.\n<!-- gm-only -->\n## GM Notes\n<!-- /gm-only -->\n### Keeper Secrets\nThe informant.\n## Voice\nLow.';
+  it('answers per line what withholds it, a heading in a hidden block withholding the text after it as the build does', () => {
+    const { cut, withheldBy } = answer({ op: 'cut', text: HIDDEN, excludeSections: ['GM Notes'] });
+    assert.deepStrictEqual(cut, ['## Appearance', 'Tall.', '', null, null, '### Keeper Secrets', 'The informant.', '## Voice', 'Low.']);
+    assert.deepStrictEqual(withheldBy, [null, null, null, null, null, 'GM Notes', 'GM Notes', null, null]);
+    // The lines it calls kept are the lines the build prints.
+    const printed = cut.filter((c, i) => c !== null && withheldBy[i] === null).join('\n');
+    assert.strictEqual(printed, playerSafeMarkdown(HIDDEN, { excludeSections: ['GM Notes'] }).text);
+  });
+  it('takes the document type, the PC keep-list and the hidden callouts', () => {
+    const doc = '## Content\nThe chit.\n%%\n## Context\n%%\nThe man.';
+    assert.deepStrictEqual(answer({ op: 'cut', text: doc, excludeSections: [], type: 'handout' }).withheldBy,
+      [null, null, null, null, null, 'Context']);
+    const pc = '## Background\nBorn.\n## Skills\nSword.';
+    assert.deepStrictEqual(answer({ op: 'cut', text: pc, excludeSections: [], type: 'pc', pcKeepSections: ['Background'] }).withheldBy,
+      [null, null, 'Skills', 'Skills']);
+    const callout = 'Intro.\n> [!gm] Keeper\n> secret\nAfter.';
+    assert.deepStrictEqual(answer({ op: 'cut', text: callout, excludeSections: [], excludeCallouts: ['gm'] }).cut,
+      ['Intro.', null, null, 'After.']);
+  });
+  it('without the rules it answers as before, with no withheldBy', () => {
+    const got = answer({ op: 'cut', text: HIDDEN });
+    assert.strictEqual(got.withheldBy, undefined);
+    assert.deepStrictEqual(got.cut, ['## Appearance', 'Tall.', '', null, null, '### Keeper Secrets', 'The informant.', '## Voice', 'Low.']);
+  });
+  it('a rule that is not a list is an error, not "nothing withheld"', () => {
+    assert.throws(() => answer({ op: 'cut', text: 'x', excludeSections: 'GM Notes' }), /excludeSections/);
+    assert.throws(() => answer({ op: 'cut', text: 'x', excludeSections: [], excludeCallouts: 'gm' }), /excludeCallouts/);
   });
 });
 

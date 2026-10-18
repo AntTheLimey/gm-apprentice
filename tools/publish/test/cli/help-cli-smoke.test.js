@@ -23,7 +23,7 @@ function runIn(args) {
 const CASES = {
   init: [/init \[target-dir\]/, /Refuses to overwrite/],
   build: [/build \[--site player\|gm\] \[--config/, /--config <path>/, /--site <name>/],
-  inbox: [/inbox <open\|code\|pull\|watch\|handled\|flag\|reply>/, /inbox reply <id>/, /inbox watch \[--every N\] \[--remind-after N\] \[--exit-on-batch\]/],
+  inbox: [/inbox <open\|code\|pull\|watch\|handled\|flag\|reply>/, /inbox reply <id>/, /inbox open <CODE> \[--hours N\]/, /session time is up/, /inbox watch \[--every N\] \[--remind-after N\] \[--exit-on-batch\]/],
   doctor: [/doctor \[--host/, /--set-cloudflare-creds/, /--json/, /doctor --site/],
   'setup-status-bar': [/setup-status-bar \[--config/, /--config <path>/],
   'setup-inbox': [/setup-inbox \[--config/, /--config <path>/],

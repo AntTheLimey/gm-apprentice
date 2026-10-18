@@ -7,6 +7,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.79] — 2026-10-18
+
+Bug Bash batch 2: the leak checks. Places where hidden material could
+still reach players, or where a check that should have spoken went
+quiet. Publish tool 1.38.0.
+
+### Added
+
+- campaign-qa's Site Faults check names a heading the page withholds
+  (such as `## GM Notes`) written inside a hidden block
+  (`HEADING_IN_HIDDEN_BLOCK`, info), shows the text after the block,
+  and asks whether it should stay hidden: move the heading out above
+  the block, or move the text under a heading the site shows (#447).
+- The leak gate reads `search-index.json`: a hidden piece whose words
+  all sit in one entry's index, with at least one of them not printed
+  on that entry's page, stops the deploy (#408).
+- `migrate.py VAULT apply --choose <id>=leave` declines a yes/no change by
+  name and runs nothing; before, `fonts-self-host=leave` ran the
+  change, and any other value on a yes/no change is now refused. A
+  `leave` is remembered while another choice is unanswered
+  (`update_held` in `_meta/vault-state.json`), and a notice said once
+  is not said again until the vault is stamped (#355).
+- `inbox open` starts a session clock, 5 hours by default
+  (`--hours N`, 1 to 12), and `inbox watch` ends with
+  `WATCHER: session time is up` when it runs out. The change-request
+  loop relaunches a watcher that stopped for any other reason at once,
+  without asking, and asks the GM once at the end of the session time;
+  a host monitor ends after 30 minutes, and the watch lapsed mid-game.
+  `inbox open` also adds the watcher's files to an older site's
+  `.gitignore` (#451).
+
+### Fixed
+
+- A hidden block (gm-only, spoiler, comment or hidden callout) that
+  held a heading the page withholds took the heading with it, so the
+  text after the block published under the section before it. That
+  text is now withheld up to the next heading of the same or higher
+  level, on stub and full pages and on the GM site, and the build says
+  so (#447).
+- A `title:` that links a withheld note printed the note's name in the
+  page heading, the tab title, search, link previews and other pages'
+  Connections; it now prints the withheld word, as page text does
+  (#448).
+- `vault_check.py gm-leak` and `pc-body` ask the publish tool where the
+  gm-only and spoiler blocks run, instead of keeping their own copy.
+  The copy differed from the build in three ways; in one,
+  `<!-- /gm-only -->## Public`, gm-leak checked nothing after the
+  closer. On a site whose publish tool predates 1.17.0 they say to run
+  update-pin (#441).
+- The secret-name checks find a plural of a withheld name ("the Lord
+  Zorns"; a one-word name's plural only mid-sentence, so a note called
+  Hope does not flag "Hopes were high"), a name in a script
+  written without spaces, a name split by `&shy;`, a name in a
+  hand-written `.html` address or an external link's address, and
+  `withheld : true` written with a space before the colon. A name in a
+  page's first paragraph is counted once, not twice. A published page
+  listing a withheld note's file name in both `aliases` and
+  `gm_aliases` no longer turns links to that note into links to
+  itself. The vault scripts ask the publish tool whether a note is
+  withheld, so `0x1` and `1e0` read the same on both sides
+  (#352, #415).
+- gm-leak's Keeper-text check matches whole words ("Secretary" and
+  "Tactician" no longer flag), catches a bold label without its colon
+  (`**Private Keeper**`), reads "Lore-Keeper" as "Lore Keeper", and
+  tells a flagged note title to rename the title, not to nest it
+  (#355).
+- Updating a vault: an older Regency NPC template updates on its own;
+  the "looks Regency" notice also reads the Game System row in
+  `_meta/vault-config.md`; a stamp row behind a repin says only what it
+  knows (#355).
+- The publish manifest is written with `type: meta`, so the frontmatter
+  check reads it, and broken frontmatter in it is named (#355).
+- Connections descriptions print `[[X#A_head]]` as "X", `\_` as `_`,
+  `![alt](u)` as "alt" and an unfinished `[x](` as "x". Reading links
+  in a long run of `[` was quadratic (36 seconds for 50,000); it is
+  linear (#355).
+- GM site: a mark that closes mid-line no longer marks the rest of the
+  line; a whole-body fallback warns; no duplicate title when a marked
+  block comes first; an unsteady PC's hidden text before the first
+  heading shows, its section links sit inside the mark, and its
+  section anchors match the player site's; a secret label names the
+  public page's title; a CRLF note keeps CRLF line endings in its marks.
+  `serve` no longer copies the query string into a redirect (#400,
+  #401).
+
+### Changed
+
+- A note in a folder named `Personal`, `_Meta` or `_Templates` in any
+  capitalisation, at any depth, is no longer published; the player site
+  matched only the exact spelling below the vault root, while the GM site
+  already called these notes never published (#401).
+- ROADMAP: a row for house rules (a home for a campaign's own table
+  rules, read wherever rules are answered).
+
 ## [1.10.78] — 2026-10-18
 
 Bug Bash batch 1: places where the site said something wrong, or the

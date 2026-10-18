@@ -1072,6 +1072,7 @@ describe('a vault still on the old Markdown list stays on it', () => {
     assert.strictEqual(fs.existsSync(newFile(vault)), false, 'no new file');
     assert.strictEqual(fs.readFileSync(oldFile(vault), 'utf8'), [
       '---',
+      'type: meta',
       'generated: 2026-09-07T12:00:00.000Z',
       'vault: "Test Campaign"',
       'mode: player',
