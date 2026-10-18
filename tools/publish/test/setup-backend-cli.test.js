@@ -143,3 +143,10 @@ test('a vault with no settings file whose site file holds no settings gets the n
   assert.strictEqual(rc, 0);
   assert.match(fs.readFileSync(nodePath.join(vault, '_meta', 'vault-config.yaml'), 'utf8'), /inbox: true/);
 });
+
+test('defaultRunWrangler passes a kill signal through', () => {
+  const { defaultRunWrangler } = require('../lib/setup-backend');
+  const res = defaultRunWrangler(['kv', 'namespace', 'list'], {}, () => ({ code: 0, stdout: '', stderr: '', signal: 'SIGTERM' }));
+  assert.equal(res.signal, 'SIGTERM');
+  assert.equal(defaultRunWrangler(['x'], {}, () => ({ code: 0 })).signal, null);
+});

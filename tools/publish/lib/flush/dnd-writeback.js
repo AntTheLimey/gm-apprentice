@@ -2,7 +2,7 @@
 
 const { splitTableRow } = require('../wikilink');
 const { findHeadings, renderInline } = require('../processor');
-const { splitReason, COLS, countCells, wholeNumber } = require('../templates/dnd/parse');
+const { splitReason, linkInReason, COLS, countCells, wholeNumber, slotTotal } = require('../templates/dnd/parse');
 const { ATTRIBUTE_COLUMNS, cellText, filled, yesNo } = require('../templates/sheet-parse');
 const { normalizeTitle } = require('../templates/gurps/tables');
 const { liveKey, shown, trackable, holdsNothing, saysNone } = require('../templates/dnd/live-key');
@@ -35,6 +35,9 @@ const FEATURE_SECTIONS = [['class features', 'class'], ['species traits', 'speci
 // instance (links, emphasis, the typographer's quotes), then its text.
 const plain = cell => cellText(renderInline(shown(String(cell == null ? '' : cell))));
 const hasLink = raw => /\[\[|\]\(/.test(raw);
+// A value cell as the page holds it, for the page's own rule on where a link may sit (linkInReason): rendered,
+// with a [[wikilink]] taken as the link it becomes on the page.
+const asHtml = raw => renderInline(shown(String(raw == null ? '' : raw).replace(/\[\[([^\]|]*)(?:\|([^\]]*))?\]\]/g, (_, t, a) => `[${a || t}](#)`)));
 
 // The note's sections, subsections and tables, found as the build finds them: headings
 // and code from the renderer's own parser (so a fence of either kind is exact), the
@@ -75,10 +78,25 @@ function readNote(lines) {
   return sections;
 }
 
-function applyDnDFlush(markdown, blob) {
+const SCALARS = ['hp', 'temp', 'exhaustion', 'conditions', 'inspiration'];
+
+// `options.only`: the names (a scalar, or a key of `used`) to write; every other value of the record is left
+// out, as if the record did not carry it. A later flush uses it to retry just what an earlier one could not write.
+function narrowed(blob, only) {
+  const keep = new Set(only);
+  const out = {};
+  for (const k of SCALARS) if (keep.has(k) && k in blob) out[k] = blob[k];
+  const used = (blob.used && typeof blob.used === 'object') ? blob.used : {};
+  out.used = Object.fromEntries(Object.entries(used).filter(([k]) => keep.has(k)));
+  return out;
+}
+
+function applyDnDFlush(markdown, record, options) {
   const changes = [];
   const skipped = [];
-  if (!blob || typeof blob !== 'object') return { markdown, changes, skipped };
+  const skippedFields = [];
+  if (!record || typeof record !== 'object') return { markdown, changes, skipped, skippedFields };
+  const blob = options && Array.isArray(options.only) ? narrowed(record, options.only) : record;
   const used = (blob.used && typeof blob.used === 'object') ? blob.used : {};
   // A saved number is fitted to the note as the page fits it (fit in js/dnd-live.js): a whole
   // number, never below 0, never above the cell's own maximum. A record saved before a
@@ -127,12 +145,7 @@ function applyDnDFlush(markdown, blob) {
       if (everyRow) return true;
       if (row.cells.slice(2).some(c => plain(c))) return false;
       if (hasLink(row.cells[0] || '')) return false;
-      const value = row.cells[1] || '';
-      if (hasLink(value)) {                      // only a reason may hold a link
-        const m = value.match(/^(.*?\S)\s*\(([^()]+)\)$/);
-        return !!m && !hasLink(m[1]) && hasLink(m[2]);
-      }
-      return true;
+      return linkInReason(asHtml(row.cells[1])) !== false;   // only a reason may hold a link
     }).map(row => ({ row, label: plain(row.cells[0]), raw: row.cells[1] || '' }));
   };
   // A cell read as the build reads a number: blank, a whole number (a reason may follow), or other.
@@ -293,10 +306,12 @@ function applyDnDFlush(markdown, blob) {
   const spell = section('spellcasting');
   const slotTable = subsection({ subs: firstOfEach(spell ? spell.subs : []) }, 'spell slots');
   for (const row of countedRows(slotTable && slotTable.tables[0], COLS.slots)) {
-    if (row.cells.some(hasLink)) continue;
+    // A link is read only in the Total's trailing `(reason)`, as the build reads it.
+    if (row.cells.some((cell, i) => i !== 1 && hasLink(cell))) continue;
+    if (linkInReason(asHtml(row.cells[1])) === false) continue;
     const c = row.cells.map(plain);
     if (!c[1] && !c[2]) continue;
-    const t = wholeNumber(c[1]);
+    const t = slotTotal(c[1]);
     const e = c[2] ? wholeNumber(c[2]) : 0;
     if (t === null || e === null || e > t) continue;
     count(liveKey('slot', shown(c[0])), c[0], row, 2, t, e, row.cells[2] || '');
@@ -312,7 +327,7 @@ function applyDnDFlush(markdown, blob) {
 
   // Named: a value the record carries that the note could not take. A count of 0 with no
   // live row to hold it has lost nothing (a renamed feature, a row the page shows as written).
-  for (const k of ['hp', 'temp', 'exhaustion', 'conditions', 'inspiration']) if (carries[k] && !okScalar.has(k)) skipped.push(k);
+  for (const k of SCALARS) if (carries[k] && !okScalar.has(k)) skipped.push(k);
   // A key is named only when it has the shape of a real one (the kinds live-key.js makes, a
   // short name with no control or line-separator character). The record is public, so any
   // other key is only counted, and past MAX_NAMED the rest are counted too: no text from the
@@ -320,10 +335,11 @@ function applyDnDFlush(markdown, blob) {
   const unplaced = Object.keys(used).filter(k => has(k) && !resolved.has(k) && (tried.has(k) || Math.round(used[k]) > 0));
   const named = unplaced.filter(wellFormedKey);
   const unrecognised = unplaced.length - named.length;
+  skippedFields.push(...skipped, ...named);
   skipped.push(...named.slice(0, MAX_NAMED));
   if (named.length > MAX_NAMED) skipped.push(`and ${named.length - MAX_NAMED} more`);
   if (unrecognised) skipped.push(`${unrecognised} unrecognised ${unrecognised === 1 ? 'entry' : 'entries'}`);
-  return { markdown: changes.length ? lines.join('\n') : markdown, changes, skipped };
+  return { markdown: changes.length ? lines.join('\n') : markdown, changes, skipped, skippedFields };
 }
 
 // The build reads only the first subsection of each title.

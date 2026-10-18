@@ -19,15 +19,19 @@ const TOML = [
   '',
 ].join('\n');
 
+const DEPLOYED = 'https://1a2b3c4d.canticle.pages.dev';
+
 // Everything the runner can touch, recorded. No wrangler, no git, no network.
 function harness(overrides = {}) {
   const out = [];
   const writes = {};
   const wrangler = [];
+  const wranglerOpts = [];
   const commands = [];
   const builds = [];
   const sleeps = [];
   const fetches = [];
+  const bodyFetches = [];
   const files = Object.assign({ [path.join(SITE, 'wrangler.toml')]: TOML }, overrides.files);
 
   const deps = {
@@ -38,9 +42,13 @@ function harness(overrides = {}) {
     },
     writeFile: (p, content) => { files[p] = content; writes[p] = content; },
     exists: overrides.exists || ((p) => p in files),
-    runWrangler: (args) => {
+    runWrangler: (args, opts) => {
       wrangler.push(args);
-      return (overrides.wrangler || (() => ({ code: 0, stdout: '', stderr: '' })))(args);
+      wranglerOpts.push(opts);
+      const quiet = { code: 0, stdout: '', stderr: '' };
+      // A real `pages deploy` prints the address of the deployment it made.
+      const made = { code: 0, stdout: `Uploaded 3 files\n✨ Deployment complete! Take a peek over at ${DEPLOYED}\n`, stderr: '' };
+      return (overrides.wrangler || (([sub]) => (sub === 'pages' ? made : quiet)))(args);
     },
     runCommand: (cmd, args, opts) => {
       commands.push({ cmd, args, cwd: opts && opts.cwd });
@@ -54,12 +62,16 @@ function harness(overrides = {}) {
       fetches.push(url);
       return (overrides.statuses || [200])[Math.min(fetches.length - 1, (overrides.statuses || [200]).length - 1)];
     },
+    fetchBody: async (url) => {
+      bodyFetches.push(url);
+      return (overrides.body || (() => '<html>one build</html>'))(url, bodyFetches.length);
+    },
     sleep: async (ms) => { sleeps.push(ms); },
     now: () => new Date('2026-09-07T12:00:00.000Z'),
     config: Object.assign({ host: 'cloudflare-pages', outputDir: './docs' }, overrides.config),
     leakGate: overrides.leakGate || (() => ({ skipped: null, missing: false, findings: [], unneeded: [], files: 3, seconds: 0.01 })),
   };
-  return { deps, out, writes, wrangler, commands, builds, sleeps, fetches, files, text: () => out.join('\n') };
+  return { deps, out, writes, wrangler, wranglerOpts, commands, builds, sleeps, fetches, bodyFetches, files, text: () => out.join('\n') };
 }
 
 describe('alignProjectName', () => {
@@ -80,12 +92,12 @@ describe('alignProjectName', () => {
 });
 
 describe('deploy: cloudflare-pages', () => {
-  it('builds first, then deploys bare when wrangler.toml is present', async () => {
+  it('builds first, then deploys to the production branch when wrangler.toml is present', async () => {
     const h = harness();
     const rc = await runDeploy({ configPath: CONFIG }, h.deps);
     assert.strictEqual(rc, 0);
     assert.deepStrictEqual(h.builds, [{ configPath: CONFIG, site: 'player' }]);
-    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy', '--branch=main', '--commit-dirty=true']]);
   });
 
   it('aligns the wrangler.toml project name before deploying', async () => {
@@ -111,6 +123,30 @@ describe('deploy: cloudflare-pages', () => {
     assert.deepStrictEqual(h.wrangler[1], [
       'pages', 'deploy', 'docs/', '--project-name=canticle', '--branch=main', '--commit-dirty=true',
     ]);
+  });
+
+  it('gives the upload its own 10 minute timeout, longer than the other wrangler calls', async () => {
+    const h = harness();
+    await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.strictEqual(h.wranglerOpts[1].timeoutMs, 600000);
+    assert.strictEqual(h.wranglerOpts[0].timeoutMs, undefined, 'whoami keeps the shared bound');
+  });
+
+  it('fails plainly, exit 1, when the upload timed out, even with a zero exit status', async () => {
+    const h = harness({ wrangler: ([sub]) => ({ code: 0, stdout: '', stderr: '', error: sub === 'pages' ? 'ETIMEDOUT' : null }) });
+    const rc = await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.match(h.text(), /Deploy failed: the upload did not finish within 10 minutes, so it may not have been deployed/);
+    assert.doesNotMatch(h.text(), /live at|Deployed\./);
+    assert.deepStrictEqual(h.fetches, []);
+  });
+
+  it('the timeout message points at the deployment list and says to run deploy again', async () => {
+    const h = harness({ wrangler: ([sub]) => ({ code: 0, stdout: '', stderr: '', error: sub === 'pages' ? 'ETIMEDOUT' : null }) });
+    await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.match(h.text(), /npx wrangler@4 pages deployment list/);
+    assert.match(h.text(), /Run deploy again/);
+    assert.doesNotMatch(h.text(), /nothing was deployed/);
   });
 
   it('stops before deploying when wrangler is not authenticated', async () => {
@@ -166,7 +202,7 @@ describe('deploy: cloudflare-pages', () => {
     const h = harness();
     await runDeploy({ configPath: CONFIG, noBuild: true }, h.deps);
     assert.deepStrictEqual(h.builds, []);
-    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy', '--branch=main', '--commit-dirty=true']]);
   });
 
   it('a build failure stops before any deploy', async () => {
@@ -352,15 +388,126 @@ describe('deploy --verify', () => {
     const h = harness({ config: { siteUrl: 'https://canticle.pages.dev' }, statuses: [200] });
     const rc = await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
     assert.strictEqual(rc, 0);
-    assert.deepStrictEqual(h.fetches, ['https://canticle.pages.dev']);
+    assert.deepStrictEqual(h.fetches, [DEPLOYED]);
     assert.deepStrictEqual(h.sleeps, []);
     assert.match(h.text(), /live at https:\/\/canticle\.pages\.dev/);
   });
 
-  it('defaults the URL to the pages.dev project host', async () => {
+  it('checks the deployment address wrangler printed, not the site root the old build answers', async () => {
     const h = harness({ statuses: [200] });
     await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
-    assert.deepStrictEqual(h.fetches, ['https://canticle.pages.dev']);
+    assert.deepStrictEqual(h.fetches, [DEPLOYED]);
+  });
+
+  it('does not say live, and exits non-zero, when wrangler printed no deployment address', async () => {
+    const h = harness({ statuses: [200], wrangler: () => ({ code: 0, stdout: 'Uploaded 3 files\n', stderr: '' }) });
+    const rc = await runDeploy({ configPath: CONFIG, verify: true, json: true }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.deepStrictEqual(h.fetches, [], 'the site root is not fetched as proof');
+    const payload = JSON.parse(h.out.join(''));
+    assert.strictEqual(payload.verified, false);
+    assert.match(payload.messages.join('\n'), /could not confirm which build is served/);
+    assert.doesNotMatch(payload.messages.join('\n'), /live at/);
+  });
+
+  it('says it was deployed as a preview, and exits 1, when wrangler printed a branch alias', async () => {
+    const h = harness({
+      statuses: [200],
+      config: { siteUrl: 'https://canticle.pages.dev' },
+      wrangler: ([sub]) => (sub === 'pages'
+        ? { code: 0, stdout: `Take a peek over at ${DEPLOYED}\nDeployment alias URL: https://my-branch.canticle.pages.dev\n`, stderr: '' }
+        : { code: 0, stdout: '', stderr: '' }),
+    });
+    const rc = await runDeploy({ configPath: CONFIG, verify: true, json: true }, h.deps);
+    assert.strictEqual(rc, 1);
+    const payload = JSON.parse(h.out.join(''));
+    assert.strictEqual(payload.verified, false);
+    assert.strictEqual(payload.preview, true);
+    assert.strictEqual(payload.deployed, true);
+    assert.match(payload.messages.join('\n'), /deployed as a preview/);
+    assert.match(payload.messages.join('\n'), /production branch is not `main`/);
+    assert.match(payload.messages.join('\n'), /set the project's production branch to `main` in the Cloudflare dashboard/);
+    assert.doesNotMatch(payload.messages.join('\n'), /live at/);
+    assert.deepStrictEqual(h.fetches, []);
+  });
+
+  it('a production alias (the project address) is not a preview', async () => {
+    const h = harness({
+      statuses: [200],
+      config: { siteUrl: 'https://canticle.pages.dev' },
+      wrangler: ([sub]) => (sub === 'pages'
+        ? { code: 0, stdout: `Take a peek over at ${DEPLOYED}\nDeployment alias URL: https://canticle.pages.dev\n`, stderr: '' }
+        : { code: 0, stdout: '', stderr: '' }),
+    });
+    const rc = await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
+    assert.strictEqual(rc, 0);
+    assert.match(h.text(), /live at https:\/\/canticle\.pages\.dev/);
+  });
+
+  // The deployment's own address answering does not prove the site's address serves it (the project's production
+  // branch may not be the one deployed to): one file from each is compared, the search index when the site has one
+  // (a custom domain's Cloudflare features can rewrite a page, never JSON), else the home page.
+  it('says live at the site address only when its search index is the deployment\'s', async () => {
+    const h = harness({ statuses: [200] });
+    const rc = await runDeploy({ configPath: CONFIG, verify: true, json: true }, h.deps);
+    assert.strictEqual(rc, 0);
+    assert.deepStrictEqual(h.bodyFetches.slice(1).sort(), ['https://1a2b3c4d.canticle.pages.dev/search-index.json', 'https://canticle.pages.dev/search-index.json'].sort());
+    const payload = JSON.parse(h.out.join(''));
+    assert.strictEqual(payload.verified, true);
+    assert.strictEqual(payload.siteServesDeployment, true);
+    assert.match(payload.messages.join('\n'), /live at https:\/\/canticle\.pages\.dev/);
+  });
+
+  it('retries while the site address serves a different page, then catches up', async () => {
+    const h = harness({
+      statuses: [200],
+      body: (url, n) => (url.startsWith('https://canticle.') && n < 6 ? '<html>earlier build</html>' : '<html>one build</html>'),
+    });
+    const rc = await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
+    assert.strictEqual(rc, 0);
+    assert.ok(h.sleeps.length >= 1 && h.sleeps.length <= 3, String(h.sleeps));
+    assert.match(h.text(), /live at https:\/\/canticle\.pages\.dev/);
+  });
+
+  it('exits 1 with verified false when the site address keeps serving an earlier build', async () => {
+    const h = harness({
+      statuses: [200],
+      body: (url) => (url.startsWith('https://canticle.') ? '<html>earlier build</html>' : '<html>one build</html>'),
+    });
+    const rc = await runDeploy({ configPath: CONFIG, verify: true, json: true }, h.deps);
+    assert.strictEqual(rc, 1);
+    const payload = JSON.parse(h.out.join(''));
+    assert.strictEqual(payload.deployed, true);
+    assert.strictEqual(payload.verified, false);
+    assert.strictEqual(payload.siteServesDeployment, false);
+    assert.strictEqual(payload.deploymentUrl, DEPLOYED);
+    const text = payload.messages.join('\n');
+    assert.match(text, /the deployment is up at https:\/\/1a2b3c4d\.canticle\.pages\.dev/);
+    assert.match(text, /https:\/\/canticle\.pages\.dev still serves an earlier build/);
+    assert.doesNotMatch(text, /live at/);
+    assert.ok(h.sleeps.length >= 2 && h.sleeps.reduce((a, b) => a + b, 0) <= 40000);
+  });
+
+  it('a site without a search index compares the home pages', async () => {
+    const h = harness({ statuses: [200], body: (url) => (url.endsWith('/search-index.json') ? null : '<html>one build</html>') });
+    const rc = await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
+    assert.strictEqual(rc, 0);
+    assert.deepStrictEqual(h.bodyFetches.slice(1).sort(), ['https://1a2b3c4d.canticle.pages.dev/', 'https://canticle.pages.dev/'].sort());
+    assert.match(h.text(), /live at https:\/\/canticle\.pages\.dev/);
+  });
+
+  it('github-pages does not compare pages', async () => {
+    const h = harness({ config: { host: 'github-pages', siteUrl: 'https://u.github.io/c' }, statuses: [200] });
+    await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
+    assert.deepStrictEqual(h.bodyFetches, []);
+  });
+
+  it('github-pages still verifies the site address', async () => {
+    const h = harness({ config: { host: 'github-pages', siteUrl: 'https://u.github.io/c' }, statuses: [200] });
+    const rc = await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
+    assert.strictEqual(rc, 0);
+    assert.deepStrictEqual(h.fetches, ['https://u.github.io/c']);
+    assert.match(h.text(), /live at https:\/\/u\.github\.io\/c/);
   });
 
   it('tries three times with a wait between, then exits 0 with verified false', async () => {
@@ -409,7 +556,7 @@ describe('deploy --verify', () => {
     assert.strictEqual(payload.verified, true);
     assert.strictEqual(payload.status, 200);
     assert.strictEqual(payload.url, 'https://canticle.pages.dev');
-    assert.deepStrictEqual(payload.commands, ['npx wrangler@4 pages deploy']);
+    assert.deepStrictEqual(payload.commands, ['npx wrangler@4 pages deploy --branch=main --commit-dirty=true']);
   });
 });
 
@@ -447,7 +594,7 @@ describe('deploy runs the site\'s own build hooks (#248)', () => {
     assert.strictEqual(rc, 0);
     assert.deepStrictEqual(order, ['npm run prebuild', 'build', 'npm run postbuild']);
     assert.ok(h.commands.every(c => c.cwd === SITE));
-    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy', '--branch=main', '--commit-dirty=true']]);
   });
 
   it('runs nothing extra for a site with no hooks or no package.json', async () => {
@@ -712,7 +859,7 @@ describe('deploy: the leak gate', () => {
     const h = harness();
     assert.strictEqual(await runDeploy({ configPath: CONFIG }, h.deps), 0);
     assert.match(h.text(), /Leak check: nothing hidden on the player site \(3 files/);
-    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy', '--branch=main', '--commit-dirty=true']]);
     const j = harness();
     await runDeploy({ configPath: CONFIG, json: true }, j.deps);
     const payload = JSON.parse(j.out.join(''));
@@ -773,7 +920,7 @@ describe('deploy: the leak gate', () => {
     assert.strictEqual(rc, 0);
     assert.match(h.text(), /\[abc123\] npcs\/a\.html: "The baker poisoned the mayor\."/);
     assert.match(h.text(), /Deploying anyway: --ignore-leaks/);
-    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy', '--branch=main', '--commit-dirty=true']]);
   });
 
   it('--ignore-leaks --json says leaksIgnored and keeps the findings', async () => {
@@ -791,7 +938,7 @@ describe('deploy: the leak gate', () => {
     assert.strictEqual(await runDeploy({ configPath: CONFIG, ignoreLeaks: true }, h.deps), 0);
     assert.match(h.text(), /leak check could not run: vault unreadable/i);
     assert.doesNotMatch(h.text(), /Nothing was uploaded/);
-    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy', '--branch=main', '--commit-dirty=true']]);
   });
 
   it('--ignore-leaks still stops when there is no built site to upload', async () => {
@@ -825,6 +972,6 @@ describe('deploy: the leak gate', () => {
     assert.strictEqual(await runDeploy({ configPath: CONFIG }, h.deps), 0);
     assert.match(h.text(), /kept by a player/);
     assert.doesNotMatch(h.text(), /nothing hidden on the player site/);
-    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy', '--branch=main', '--commit-dirty=true']]);
   });
 });

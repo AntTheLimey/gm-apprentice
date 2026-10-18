@@ -548,7 +548,8 @@ node "$TOOL" deploy --verify --config vault.config.json
 
 If `project create` reports "a project with this name already exists,"
 skip it and run `deploy` directly. `deploy --verify` builds, deploys, and
-probes the live URL in one step — relay its final line to the GM
+probes the deployment wrangler printed in one step (exit 1 when it
+cannot tell which build is served) — relay its final line to the GM
 verbatim. If it fails on authentication, re-check the token dance
 (Phase A, Step 5): `node "$TOOL" doctor --set-cloudflare-creds`. A
 deploy failure otherwise routes to `troubleshooting.md` (and

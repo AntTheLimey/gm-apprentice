@@ -475,9 +475,9 @@ differs.
 - **A number is written through emphasis.** `**38**` becomes `**31**`.
 - **A live value is changed on the PC's page (from any device), not in
   the note.** For 30 days after a player last saved, `flush` writes that
-  saved value over the note's cell, so a number typed into one of these
-  cells between sessions can be replaced by an older one at the next
-  `flush`. A device using the same session code shows the saved value;
+  saved value over the note's cell, but only a record saved since the
+  last `flush` wrote one: a number typed into the cell afterwards stays
+  until the player saves again. A device using the same session code shows the saved value;
   one with no session code or a different one shows the note. The maxima (`HP (Max)`, `Uses`, `Charges`,
   `Total`, the maximum half of hit dice) always come from the note, and
   a saved count above a new maximum is cut to it.

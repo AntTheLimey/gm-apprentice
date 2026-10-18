@@ -333,3 +333,44 @@ describe('the template\'s untouched empty row', () => {
     assert.match(m.asWritten.feats.join(''), /A stray summary/);
   });
 });
+
+describe('parseDnd: a slot total written with a reason (#444)', () => {
+  const m = parse(`
+## Spellcasting
+
+### Spell Slots
+
+| Level | Total | Expended |
+|---|---|---|
+| 1st | 5 (Ring of Spell Storing) | 1 |
+| 2nd | 2 | 0 |
+| 3rd | lots (varies) | 0 |
+`);
+  it('reads the number and keeps the row live', () => {
+    assert.deepEqual(m.slots, [{ level: '1st', total: 5, expended: 1 }, { level: '2nd', total: 2, expended: 0 }]);
+  });
+  it('still shows a total that is not a number as written', () => {
+    assert.match(m.asWritten.spellcasting.join(''), /lots \(varies\)/);
+  });
+});
+
+describe('parseDnd: a slot total whose reason is a link (#444)', () => {
+  const m = parse(`
+## Spellcasting
+
+### Spell Slots
+
+| Level | Total | Expended |
+|---|---|---|
+| 1st | 5 ([Ring of Spell Storing](Ring.md)) | 1 |
+| 2nd | [Cloak](Cloak.md) | 0 |
+| 3rd | 2 | [Cloak](Cloak.md) |
+`);
+  it('keeps the row live', () => {
+    assert.deepEqual(m.slots, [{ level: '1st', total: 5, expended: 1 }]);
+  });
+  it('a link anywhere else in the row leaves it as written', () => {
+    const shown = m.asWritten.spellcasting.join('');
+    assert.match(shown, /Cloak/);
+  });
+});

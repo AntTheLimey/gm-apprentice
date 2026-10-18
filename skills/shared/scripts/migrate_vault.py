@@ -364,8 +364,10 @@ def find_regency_looks(vault: Path) -> list[Item]:
         f"{settings_file(vault)}\tthe templates look like Regency Cthulhu, "
         f"but vault.system is coc-7e; if this is a Regency Cthulhu "
         f"campaign, set vault.system to coc-7e-regency in "
-        f"{settings_file(vault)} (the site builds differently). Nothing else "
-        f"changes, and this is said once"])]
+        f"{settings_file(vault)}. That changes two things on the site: every "
+        f"sheet gets the Regency skill list, and a PC with no era is headed "
+        f"Regency Cthulhu instead of Call of Cthulhu. Nothing else changes, "
+        f"and this is said once"])]
 
 
 def find_pc_template_field(vault: Path) -> list[Item]:

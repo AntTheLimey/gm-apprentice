@@ -12,7 +12,7 @@
 // not a failed deploy, so a 404 on the third try still exits 0 and says why.
 const fs = require('fs');
 const path = require('path');
-const { failureDetail } = require('./run-command');
+const { failureDetail, WRANGLER_DEPLOY_TIMEOUT_MS } = require('./run-command');
 const { alignProjectName } = require('./setup-backend');
 const { loadVaultConfig, siteConfigFor, outputFolderOf, tomlOutputFolder, loadPublishConfig } = require('./config');
 const { buildHooks, HOOK_TIMEOUT_MS } = require('./settings/legacy');
@@ -22,6 +22,9 @@ const leakGateLib = require('./leak-gate');
 
 const VERIFY_ATTEMPTS = 3;
 const VERIFY_WAIT_MS = 20000;
+// Once the deployment answers, the site's own address gets about 30 seconds to serve the same page.
+const SAME_PAGE_ATTEMPTS = 4;
+const SAME_PAGE_WAIT_MS = 10000;
 const FETCH_TIMEOUT_MS = 15000;
 const MAX_REDIRECTS = 5;
 
@@ -40,13 +43,15 @@ function outputDirArg(config) {
   return outputFolderOf(config) + '/';
 }
 
-// GET the URL and hand back the status, following redirects. Resolves null on any
-// transport failure or timeout — "the host did not answer" is a legitimate answer
-// during propagation, not an error to throw.
-function defaultFetchStatus(url, depth = 0) {
+// GET the URL, following redirects, and hand back {status, body}. Resolves {status: null, body: null} on any
+// transport failure or timeout — "the host did not answer" is a legitimate answer during propagation, not an
+// error to throw. The body is read only when asked for, and capped.
+const MAX_BODY_BYTES = 5 * 1024 * 1024;
+function fetchGet(url, wantBody, depth = 0) {
   return new Promise((resolve) => {
     let settled = false;
     const finish = (value) => { if (!settled) { settled = true; resolve(value); } };
+    const none = { status: null, body: null };
     let request;
     try {
       const target = new URL(url);
@@ -54,20 +59,63 @@ function defaultFetchStatus(url, depth = 0) {
       request = client.get(target, { timeout: FETCH_TIMEOUT_MS }, (res) => {
         const status = res.statusCode;
         const location = res.headers && res.headers.location;
-        res.resume();
         if (location && status >= 300 && status < 400 && depth < MAX_REDIRECTS) {
-          finish(defaultFetchStatus(new URL(location, target).toString(), depth + 1));
+          res.resume();
+          finish(fetchGet(new URL(location, target).toString(), wantBody, depth + 1));
           return;
         }
-        finish(status);
+        if (!wantBody) {
+          res.resume();
+          finish({ status, body: null });
+          return;
+        }
+        const chunks = [];
+        let size = 0;
+        res.on('data', (chunk) => {
+          size += chunk.length;
+          if (size > MAX_BODY_BYTES) { request.destroy(); finish(none); return; }
+          chunks.push(chunk);
+        });
+        res.on('end', () => finish({ status, body: Buffer.concat(chunks).toString('utf8') }));
+        res.on('error', () => finish(none));
       });
     } catch {
-      finish(null);
+      finish(none);
       return;
     }
-    request.on('timeout', () => { request.destroy(); finish(null); });
-    request.on('error', () => finish(null));
+    request.on('timeout', () => { request.destroy(); finish(none); });
+    request.on('error', () => finish(none));
   });
+}
+
+const defaultFetchStatus = async (url) => (await fetchGet(url, false)).status;
+// The page at the address, or null when it did not answer with a 2xx.
+const defaultFetchBody = async (url) => {
+  const got = await fetchGet(url, true);
+  return got.status >= 200 && got.status < 300 ? got.body : null;
+};
+
+// The address wrangler prints for the deployment it just made (https://<8 hex>.<project>.pages.dev), the one
+// thing that tells this build apart from the previous one still answering at the site's own address (#350).
+// Wrangler's line is "Take a peek over at <address>"; failing that, the first address of that shape.
+function deploymentUrlFrom(text) {
+  const plain = String(text || '').replace(/\u001b\[[0-9;]*m/g, '');
+  const peek = plain.match(/peek over at\s+(https:\/\/[0-9a-f]{8}\.[a-z0-9-]+\.pages\.dev)/i);
+  const any = plain.match(/https:\/\/[0-9a-f]{8}\.[a-z0-9-]+\.pages\.dev/i);
+  return peek ? peek[1] : any ? any[0] : null;
+}
+
+// wrangler prints "Deployment alias URL: <address>" after the deployment address. A production deployment's alias is
+// the project's own address (<project>.pages.dev); a preview's carries the branch in front (<branch>.<project>.pages.dev).
+function aliasUrlFrom(text) {
+  const plain = String(text || '').replace(/\u001b\[[0-9;]*m/g, '');
+  const m = plain.match(/Deployment alias URL:\s*(https:\/\/[a-z0-9.-]+\.pages\.dev)/i);
+  return m ? m[1] : null;
+}
+
+function isPreviewAlias(alias) {
+  if (!alias) return false;
+  return alias.replace(/^https:\/\//, '').split('.').length > 3;
 }
 
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -90,6 +138,7 @@ async function runDeploy(options, deps) {
     return require('./build').build({ ...o, runSteps: true, ...(opts.json ? { stepsStdio: ['ignore', 2, 2], stepsLog: console.error } : {}) });
   });
   const fetchStatus = d.fetchStatus || defaultFetchStatus;
+  const fetchBody = d.fetchBody || defaultFetchBody;
   const sleep = d.sleep || defaultSleep;
   const now = d.now || (() => new Date());
   const { formatFindings, gateSummary } = leakGateLib;
@@ -130,7 +179,7 @@ async function runDeploy(options, deps) {
 
   const commands = [];
   const wranglerDeployArgs = hasToml
-    ? ['pages', 'deploy']
+    ? ['pages', 'deploy', '--branch=main', '--commit-dirty=true']
     : ['pages', 'deploy', outDir, `--project-name=${projectName}`, '--branch=main', '--commit-dirty=true'];
 
   // The vault's own steps run inside the build. A package.json hook is skipped only for a slot the settings hold steps
@@ -293,6 +342,8 @@ async function runDeploy(options, deps) {
     return finish({ refused: true }, 1);
   } else if (gateResult && !gateResult.skipped) say(`Leak check: nothing hidden on the player site (${gateResult.files} files, ${gateResult.seconds.toFixed(1)} s).`);
 
+  let deploymentUrl = null;
+  let aliasUrl = null;
   if (isCloudflare) {
     const who = runWrangler(['whoami'], { cwd: siteRoot });
     if (who.code !== 0) {
@@ -309,11 +360,17 @@ async function runDeploy(options, deps) {
       }
     }
     commands.push(`npx wrangler@4 ${wranglerDeployArgs.join(' ')}`);
-    const deployed = runWrangler(wranglerDeployArgs, { cwd: siteRoot });
-    if (deployed.code !== 0) {
-      say(`Deploy failed: ${failureDetail(deployed)}`);
+    const deployed = runWrangler(wranglerDeployArgs, { cwd: siteRoot, timeoutMs: WRANGLER_DEPLOY_TIMEOUT_MS });
+    // A killed upload can come back with a zero exit status; a set error or signal is a failure all the same.
+    if (deployed.code !== 0 || deployed.error || deployed.signal) {
+      say(deployed.error === 'ETIMEDOUT'
+        ? `Deploy failed: the upload did not finish within ${WRANGLER_DEPLOY_TIMEOUT_MS / 60000} minutes, so it may not have been deployed. \`npx wrangler@4 pages deployment list\` shows whether it was. Run deploy again.`
+        : `Deploy failed: ${failureDetail(deployed)}`);
       return finish({}, 1);
     }
+    const wranglerText = `${deployed.stdout || ''}\n${deployed.stderr || ''}`;
+    deploymentUrl = deploymentUrlFrom(wranglerText);
+    aliasUrl = aliasUrlFrom(wranglerText);
   } else {
     const git = (args) => {
       commands.push(`git ${args.join(' ')}`);
@@ -364,22 +421,53 @@ async function runDeploy(options, deps) {
     return finish({ deployed: true, url: null }, 0);
   }
 
+  // On Cloudflare the site's own address is still answered by the previous deployment until this one is promoted, so a
+  // 200 there proves nothing: check the address wrangler gave this deployment. Without one, say so and fail.
+  if (isCloudflare && !deploymentUrl) {
+    say(`deployed, but could not confirm which build is served: wrangler printed no address for this deployment. Run \`npx wrangler@4 pages deployment list\` to see whether it exists.`);
+    return finish({ deployed: true, url, verified: false }, 1);
+  }
+  if (isCloudflare && isPreviewAlias(aliasUrl)) {
+    say(`deployed as a preview, not to the site's address: wrangler gave it ${aliasUrl}, so ${url} still serves the earlier build. Most likely the Cloudflare project's production branch is not \`main\`, and this deploy sends to \`main\`. To fix it, set the project's production branch to \`main\` in the Cloudflare dashboard (Workers & Pages, the project, Settings, Branch control), then deploy again.`);
+    return finish({ deployed: true, url, verified: false, preview: true, deploymentUrl, aliasUrl }, 1);
+  }
+  const target = isCloudflare ? deploymentUrl : url;
+
   let status = null;
   let attempts = 0;
   for (let i = 0; i < VERIFY_ATTEMPTS; i++) {
     if (i > 0) await sleep(VERIFY_WAIT_MS);
     attempts++;
-    status = await fetchStatus(url);
+    status = await fetchStatus(target);
     if (status >= 200 && status < 300) {
-      say(`live at ${url}`);
-      return finish({ deployed: true, url, verified: true, status, attempts }, 0);
+      if (isCloudflare) {
+        // The deployment's own address answering does not prove the site's address serves it: compare one
+        // file from each. The search index is JSON, which a custom domain's Cloudflare features (e-mail
+        // obfuscation, Rocket Loader) never rewrite as they can a page; a site without search compares `/`.
+        const at = (address, file) => `${address.replace(/\/+$/, '')}/${file}`;
+        const file = (await fetchBody(at(deploymentUrl, 'search-index.json'))) != null ? 'search-index.json' : '';
+        let same = false;
+        for (let k = 0; k < SAME_PAGE_ATTEMPTS && !same; k++) {
+          if (k > 0) await sleep(SAME_PAGE_WAIT_MS);
+          const [onSite, onDeployment] = await Promise.all([fetchBody(at(url, file)), fetchBody(at(deploymentUrl, file))]);
+          same = onSite != null && onSite === onDeployment;
+        }
+        if (!same) {
+          say(`the deployment is up at ${deploymentUrl}, but ${url} still serves an earlier build`);
+          return finish({ deployed: true, url, verified: false, status, attempts, deploymentUrl, siteServesDeployment: false }, 1);
+        }
+        say(`live at ${url}`);
+        return finish({ deployed: true, url, verified: true, status, attempts, deploymentUrl, siteServesDeployment: true }, 0);
+      }
+      say(`live at ${target}`);
+      return finish({ deployed: true, url, verified: true, status, attempts, ...(isCloudflare ? { deploymentUrl } : {}) }, 0);
     }
   }
 
   // The deploy itself succeeded; propagation is the host's business, not a failure
   // to report as one.
-  say(`deployed, but ${url} returned ${status == null ? 'no response' : status} after ${VERIFY_ATTEMPTS} tries — the host is still propagating; check it in a minute`);
-  return finish({ deployed: true, url, verified: false, status, attempts }, 0);
+  say(`deployed, but ${target} returned ${status == null ? 'no response' : status} after ${VERIFY_ATTEMPTS} tries — the host is still propagating; check it in a minute`);
+  return finish({ deployed: true, url, verified: false, status, attempts, ...(isCloudflare ? { deploymentUrl } : {}) }, 0);
 }
 
-module.exports = { runDeploy, defaultFetchStatus, projectNameFor, outputDirArg };
+module.exports = { runDeploy, deploymentUrlFrom, aliasUrlFrom, defaultFetchStatus, defaultFetchBody, projectNameFor, outputDirArg };

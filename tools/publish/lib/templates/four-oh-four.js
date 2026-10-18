@@ -1,4 +1,4 @@
-const { escapeHtml } = require('../processor');
+const { escapeHtml, campaignImageSrc, isWebImageAddress } = require('../processor');
 const { colorModeHeadHtml, previewsAttr } = require('./base');
 
 // The 404 page loads the previews script like every page, from the site root; nothing when off.
@@ -30,7 +30,7 @@ function fourOhFourTemplate(config) {
     : '';
 
   const imageHtml = campaignImage
-    ? `<img src="${href(escapeHtml(campaignImage))}" alt="${siteTitle}" class="four-oh-four-image">`
+    ? `<img src="${isWebImageAddress(campaignImage) ? '' : basePath}${escapeHtml(campaignImageSrc(campaignImage))}" alt="${siteTitle}" class="four-oh-four-image">`
     : '';
 
   return `<!DOCTYPE html>

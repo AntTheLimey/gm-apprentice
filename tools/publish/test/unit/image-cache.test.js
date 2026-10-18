@@ -158,6 +158,22 @@ describe('ignoreCacheInGit', () => {
     assert.ok(!fs.existsSync(path.join(bare, '.gitignore')));
   });
 
+  it('warns once and carries on when the .gitignore cannot be written', (t) => {
+    if (typeof process.getuid === 'function' && process.getuid() === 0) { t.skip('root can write a read-only file'); return; }
+    const locked = path.join(dir, 'locked');
+    fs.mkdirSync(locked);
+    const file = path.join(locked, '.gitignore');
+    fs.writeFileSync(file, 'node_modules/\n');
+    fs.chmodSync(file, 0o444);
+    const warnings = [];
+    const saved = console.warn;
+    console.warn = (...a) => warnings.push(a.join(' '));
+    try { ignoreCacheInGit(locked); } finally { console.warn = saved; }
+    assert.strictEqual(warnings.length, 1);
+    assert.ok(warnings[0].includes(file) && warnings[0].includes('image cache folder'), warnings[0]);
+    assert.strictEqual(fs.readFileSync(file, 'utf8'), 'node_modules/\n');
+  });
+
   it('leaves a .gitignore that already names the folder', () => {
     const other = path.join(dir, 'named');
     fs.mkdirSync(other);

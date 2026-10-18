@@ -407,9 +407,11 @@ class TemplateTests(unittest.TestCase):
                     "_meta/vault-config.md\tthe templates look like Regency "
                     "Cthulhu, but vault.system is coc-7e; if this is a "
                     "Regency Cthulhu campaign, set vault.system to "
-                    "coc-7e-regency in _meta/vault-config.md (the site "
-                    "builds differently). Nothing else changes, and this "
-                    "is said once"])
+                    "coc-7e-regency in _meta/vault-config.md. That changes "
+                    "two things on the site: every sheet gets the Regency "
+                    "skill list, and a PC with no era is headed Regency "
+                    "Cthulhu instead of Call of Cthulhu. Nothing else "
+                    "changes, and this is said once"])
 
     def test_a_plain_coc_vault_is_not_told_it_looks_regency(self):
         vault = self.npc_vault(mv.expected_templates(

@@ -7,6 +7,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.78] — 2026-10-18
+
+Bug Bash batch 1: places where the site said something wrong, or the
+tool said "fine" when it wasn't. Publish tool 1.37.0.
+
+### Added
+
+- campaign-qa's Site Faults check names a CoC skill written below the
+  base the sheet works out from the PC's characteristics
+  (`SKILL_BELOW_BASE`, info) and asks whether to raise it to the base
+  or leave it. The sheet keeps showing the written number (#396).
+
+### Fixed
+
+- `deploy` treats a timed-out or killed upload as a failure and says it
+  may not have been deployed (`npx wrangler@4 pages deployment list`
+  shows whether it was); it said "live" while the site stayed on the
+  previous build. The Cloudflare upload gets ten minutes, not sixty
+  seconds, and always goes to the production branch, even with a
+  `wrangler.toml`. `--verify` checks the deployment wrangler printed,
+  then fetches the site's address and the deployment's address and
+  compares the pages: "live at" the site's address only when they match
+  (it retries for about 30 seconds), and exit 1 when the site still
+  serves an earlier build, when it cannot tell which build is served, or
+  when the deployment went out as a preview, in which case it says the
+  project's production branch is probably not `main` and how to set it
+  (#350).
+- `flush` remembers, per PC, which saved live record it last wrote
+  (`flush_written` in `_meta/vault-state.json`) and skips it next time,
+  so a value the GM sets in the note afterwards is no longer
+  overwritten by the older record. GURPS, CoC and D&D (#438). On D&D,
+  a saved value the note had no cell for is remembered by name, and
+  when the GM adds the cell the next flush writes only those values,
+  never the ones already written.
+- A D&D slot total written with a reason, such as
+  `5 (Ring of Spell Storing)` or a link (wikilink or markdown link) as
+  the reason, stays on the live sheet and in the flush, and the D&D
+  sheet guide says a reason works there (#444).
+- A CoC skill name with a trailing tick (`Charm ✓`) merges with the
+  skill instead of showing as a second row (#365). The "looks Regency"
+  notice says what the Regency setting changes: the skill list and the
+  sheet heading for a PC with no era.
+- A CoC experience tick on a skill the sheet leaves off is kept, and
+  returns with the skill (#396).
+- A read-only `.gitignore` prints one warning instead of stopping the
+  build (#442).
+- The landing page and the 404 page encode the campaign picture's
+  address, so a name with a space or a bracket loads; a web address on
+  the 404 page no longer gets the site's base path in front (#385).
+- A Connections description full of unclosed link addresses reads in
+  linear time; one test input took over two seconds.
+
+---
+
 ## [1.10.77] — 2026-10-18
 
 World rules are read, not evaluated, and deferred world threads are

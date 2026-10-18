@@ -172,11 +172,11 @@ From the site directory:
 ```bash
 npm run build                                   # generate docs/
 npx wrangler@4 pages project create <project-name> --production-branch=main
-npx wrangler@4 pages deploy
+npx wrangler@4 pages deploy --branch=main
 ```
 
 The scaffold ships a `wrangler.toml` with `pages_build_output_dir = "docs"`,
-so the deploy is the **bare** `npx wrangler@4 pages deploy` — no `docs/`
+so the deploy is `npx wrangler@4 pages deploy --branch=main` — no `docs/`
 argument; passing it positionally conflicts with the config and errors.
 Only a site with no `wrangler.toml` (an older scaffold) uses the explicit
 `pages deploy docs/ --project-name=<project-name> --branch=main --commit-dirty=true`
@@ -200,12 +200,13 @@ no `project create`, no git, no browser:
 
 ```bash
 npm run build
-npx wrangler@4 pages deploy
+npx wrangler@4 pages deploy --branch=main
 ```
 
 wrangler only uploads files that changed, so repeat deploys are fast.
 `gm-publish deploy --verify` runs this same build-then-deploy pair and
-also probes the live URL — the commands above are the fallback for
+also checks that the site's address serves the deployment wrangler
+printed (exit 1 if it does not) — the commands above are the fallback for
 running it by hand. The vault's build steps run with every build,
 and a step that fails stops it before anything is deployed. `settings
 get player_site.before_build player_site.after_build` lists them.

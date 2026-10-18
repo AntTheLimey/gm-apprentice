@@ -1,4 +1,4 @@
-const { escapeHtml, plainMetaValue, encodeHref, encodeAddress, encodeImageUrl } = require('../processor');
+const { escapeHtml, plainMetaValue, encodeHref, encodeAddress, encodeImageUrl, campaignImageSrc } = require('../processor');
 const { refTarget, linkText } = require('../wikilink');
 const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, canonStatusBadge, clientScripts, noPreviewAttr } = require('./base');
 const {
@@ -67,8 +67,9 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   const inGameLabel = overviewFm.current_game_date || settingYear;
 
   // --- Zone 1: Hero ---
+  const heroSrc = campaignImage ? campaignImageSrc(campaignImage) : '';
   const heroImgHtml = campaignImage
-    ? `<img class="landing-hero-img" src="${escapeHtml(campaignImage)}" alt="${escapeHtml(config.siteTitle)}">`
+    ? `<img class="landing-hero-img" src="${escapeHtml(heroSrc)}" alt="${escapeHtml(config.siteTitle)}">`
     : '';
   const tagline = theme.tagline ? `<p class="hero-tagline">${escapeHtml(theme.tagline)}</p>` : '';
   const sessionCount = (overviewFm.sessions_played != null)
@@ -91,7 +92,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   const banner = landingConfig.banner;
   if (banner && (banner.title || banner.text || banner.image)) {
     // A web address is printed as written (spaces aside); a picture copied into the site goes through encodeImageUrl.
-    const imgSrc = !banner.image ? '' : /^https?:\/\//i.test(banner.image) ? banner.image.replace(/ /g, '%20') : encodeImageUrl(banner.image);
+    const imgSrc = banner.image ? campaignImageSrc(banner.image) : '';
     const img = imgSrc ? `<img class="landing-banner-img" src="${escapeHtml(imgSrc)}" alt="">` : '';
     const words = (banner.title || banner.text)
       ? `<div class="landing-banner-body">${banner.title ? `<h2 class="landing-banner-title">${escapeHtml(banner.title)}</h2>` : ''}${banner.text ? `<p class="landing-banner-text">${escapeHtml(banner.text)}</p>` : ''}</div>`

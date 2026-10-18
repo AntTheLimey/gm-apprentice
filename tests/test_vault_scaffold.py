@@ -634,6 +634,55 @@ class NewFilesTests(unittest.TestCase):
     """A new vault gets the new settings file and the state file, and
     nothing of the old layout."""
 
+    def test_a_state_file_flush_made_first_gets_the_stamp_merged_in(self):
+        vault = scratch(self) / "V"
+        (vault / "_meta").mkdir(parents=True)
+        (vault / "_meta" / "vault-state.json").write_text(
+            '{"flush_written": {"mara": "k1"}}\n', encoding="utf-8")
+        code, out = run(vault, "--system", "coc", "--name", "Ashford",
+                        "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("UPDATED\t_meta/vault-state.json", out)
+        self.assertNotIn("CREATED\t_meta/vault-state.json", out)
+        self.assertEqual(read_stamp(vault), plugin_version()[0])
+        state = json.loads((vault / "_meta" / "vault-state.json").read_text())
+        self.assertEqual(state["flush_written"], {"mara": "k1"})
+
+    def test_a_state_file_that_cannot_be_put_back_does_not_stop_the_undo(self):
+        vault = scratch(self) / "V"
+        (vault / "_meta").mkdir(parents=True)
+        state = vault / "_meta" / "vault-state.json"
+        state.write_text('{"flush_written": {"mara": "k1"}}\n', encoding="utf-8")
+        real = vs.write_text_atomic
+
+        def refuses_state(path, text):
+            if Path(path).name == "vault-state.json":
+                raise vs.StepFailed("vault-state.json cannot be written")
+            return real(path, text)
+
+        with mock.patch.object(vs, "write_text_atomic", refuses_state):
+            code, out = run(vault, "--system", "coc", "--name", "Ashford",
+                            "--write")
+        self.assertEqual(code, 1, out)
+        error = next(r for r in out.split("\n") if r.startswith("ERROR\t"))
+        self.assertIn("_meta/vault-state.json", error)
+        self.assertIn("could not be put back", error)
+        self.assertNotIn("# nothing written", out)
+        self.assertIn("# some of this run's files were left", out)
+        # The earlier files of this run were still undone.
+        self.assertFalse((vault / "vault.config.json").exists())
+        self.assertFalse((vault / "_meta" / "vault.config.json").exists())
+
+    def test_a_corrupt_state_file_stops_the_scaffold_in_one_line(self):
+        vault = scratch(self) / "V"
+        (vault / "_meta").mkdir(parents=True)
+        (vault / "_meta" / "vault-state.json").write_text("{nope", encoding="utf-8")
+        code, out = run(vault, "--system", "coc", "--name", "Ashford",
+                        "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("vault-state.json is not valid JSON", out)
+        self.assertEqual((vault / "_meta" / "vault-state.json").read_text(), "{nope")
+
     def test_an_empty_folder_gets_exactly_the_two_files_and_is_clean(self):
         vault = scratch(self) / "V"
         code, out = run(vault, "--system", "coc", "--name", "Ashford",

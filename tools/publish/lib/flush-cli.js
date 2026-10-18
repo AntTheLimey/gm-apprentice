@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { scanVault, slugify, pcLiveKey } = require('./scanner');
 const { readNamespaceId, makeAdapter } = require('./inbox-wrangler');
-const { latestStateByPcSlug } = require('./flush/reconcile');
+const { latestRecordsByPcSlug, recordMarker } = require('./flush/reconcile');
 const { applyCoCFlush } = require('./flush/coc-writeback');
 const { applyDnDFlush } = require('./flush/dnd-writeback');
 const { applyGURPSFlush } = require('./flush/gurps-writeback');
@@ -19,6 +19,7 @@ const { detectStatusBar } = require('./backend-flags');
 
 const { runCommand, WRANGLER_TIMEOUT_MS } = require('./run-command');
 const { nameIn } = require('./settings');
+const { readState, writeState } = require('./settings/state');
 
 // Bounded like the watcher's poll (#154). The failure here is milder — the GM
 // watches a flush hang rather than a background watcher going silently dark —
@@ -65,8 +66,9 @@ function resolveSystem(frontmatter, campaignSystem) {
   return 'coc';
 }
 
-// One writer per system: (raw note, stored record, page, out) -> { markdown, changes, skipped? },
-// or null to skip the note after saying why.
+// One writer per system: (raw note, stored record, page, out, options) -> { markdown, changes, skipped?, skippedFields? },
+// or null to skip the note after saying why. `options.only` limits the writeback to those fields; a writer that
+// reports `skippedFields` (the values it had no cell for) takes it, and the others never skip a value.
 const WRITERS = {
   gurps: function (raw, rec, page, out) {
     // GURPS flush edits the body `## Current Status` block, but the parser
@@ -81,7 +83,7 @@ const WRITERS = {
     const { maxHp, maxFp } = deriveGurpsMax(raw, page.frontmatter);
     return applyGURPSFlush(raw, rec, { maxHp: maxHp, maxFp: maxFp });
   },
-  dnd: function (raw, rec) { return applyDnDFlush(raw, rec); },
+  dnd: function (raw, rec, page, out, options) { return applyDnDFlush(raw, rec, options); },
   coc: function (raw, rec) { return applyCoCFlush(raw, rec); },
 };
 
@@ -130,7 +132,7 @@ async function runFlush(deps) {
     out('  Nothing was written. Check `npx wrangler@4 whoami` and the INBOX namespace id in wrangler.toml, then re-run flush.');
     return 1;
   }
-  const latest = latestStateByPcSlug(states);
+  const latest = latestRecordsByPcSlug(states);
 
   if (dryRun) out('DRY RUN — nothing will be written.');
   if (!Object.keys(latest).length) {
@@ -144,26 +146,62 @@ async function runFlush(deps) {
     if (p.frontmatter && p.frontmatter.type === 'pc') bySlug[pcLiveKey(p.frontmatter, p.title)] = p;
   }
 
-  for (const slug of Object.keys(latest)) {
-    const page = bySlug[slug];
-    if (!page) { out('⚠ ' + safeSlug(slug) + ' — in KV but no matching vault sheet (skipped)'); continue; }
-    const name = page.displayTitle || page.title;
-    const raw = readFile(page.sourcePath);
-    const writer = resolveSystem(page.frontmatter, campaignSystem);
-    if (!writer) { out('⚠ ' + name + ' — this system has no live sheet to write back (skipped)'); continue; }
-    const res = WRITERS[writer](raw, latest[slug], page, out);
-    if (!res) continue;
-    if (res.changes.length) {
-      if (dryRun) {
-        out('✓ ' + name + ' — ' + summarize(res.changes) + '  (would write)');
-      } else {
-        writeFile(page.sourcePath, res.markdown);
-        out('✓ ' + name + ' — ' + summarize(res.changes));
+  // Which saved record was last written into each PC's note, kept in the vault's bookkeeping file
+  // (never in the note). A record already written is skipped, so a value the GM set in the note
+  // since then is not overwritten by it.
+  const loadState = deps.readState || readState;
+  const saveState = deps.writeState || writeState;
+  let state;
+  try {
+    state = loadState(vaultPath);
+  } catch (e) {
+    out('✖ ' + e.message + '. Fix or delete that file, then flush again. Nothing was written.');
+    return 1;
+  }
+  const written = Object.assign({}, state.flush_written);
+  let markersChanged = false;
+
+  // A throw part-way (a file that cannot be written) still keeps the markers of the PCs already written.
+  try {
+    for (const slug of Object.keys(latest)) {
+      const marker = recordMarker(latest[slug].key, latest[slug].blob);
+      // A marker is the record's name, or { marker, skipped }: the values the note had no cell for when it was
+      // written. The same record seen again writes only those, never what the GM may have edited since.
+      const seen = written[slug];
+      const seenMarker = seen && typeof seen === 'object' ? seen.marker : seen;
+      const retry = seen && typeof seen === 'object' && Array.isArray(seen.skipped) && seen.skipped.length ? seen.skipped : null;
+      if (seenMarker === marker && !retry) {
+        const page0 = bySlug[slug];
+        if (page0) out('· ' + (page0.displayTitle || page0.title) + ' — already written, left as the note has it');
+        continue;
       }
-    } else {
-      out('· ' + name + ' — no change');
+      const page = bySlug[slug];
+      if (!page) { out('⚠ ' + safeSlug(slug) + ' — in KV but no matching vault sheet (skipped)'); continue; }
+      const name = page.displayTitle || page.title;
+      const raw = readFile(page.sourcePath);
+      const writer = resolveSystem(page.frontmatter, campaignSystem);
+      if (!writer) { out('⚠ ' + name + ' — this system has no live sheet to write back (skipped)'); continue; }
+      const res = WRITERS[writer](raw, latest[slug].blob, page, out, seenMarker === marker ? { only: retry } : undefined);
+      if (!res) continue;
+      if (res.changes.length) {
+        if (dryRun) {
+          out('✓ ' + name + ' — ' + summarize(res.changes) + '  (would write)');
+        } else {
+          writeFile(page.sourcePath, res.markdown);
+          out('✓ ' + name + ' — ' + summarize(res.changes));
+        }
+      } else {
+        out('· ' + name + ' — no change');
+      }
+      if (res.skipped && res.skipped.length) out('  ' + name + ' — not written, no cell in the note can hold: ' + res.skipped.join(', '));
+      if (!dryRun) {
+        const left = res.skippedFields || [];
+        written[slug] = left.length ? { marker, skipped: left } : marker;
+        markersChanged = true;
+      }
     }
-    if (res.skipped && res.skipped.length) out('  ' + name + ' — not written, no cell in the note can hold: ' + res.skipped.join(', '));
+  } finally {
+    if (markersChanged) saveState(vaultPath, { flush_written: written });
   }
   return 0;
 }

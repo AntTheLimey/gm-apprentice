@@ -52,22 +52,32 @@ function splitReason(text) {
 const LINKS = { links: true };
 const hasLink = html => /<a[ >]/i.test(html || '');
 
+// How a value cell's html holds a link: null for none, the reason's html when the only link sits in the trailing
+// `(reason)`, false for a link anywhere else (it would be lost from a tile, so the row stays as written).
+// The flush's write-back reads a cell by this same rule.
+function linkInReason(html) {
+  if (!hasLink(html)) return null;
+  const m = String(html).match(/^([\s\S]*?\S)\s*\(((?:[^()<]|<[^>]*>)+)\)$/);
+  return m && !hasLink(m[1]) && hasLink(m[2]) ? m[2].trim() : false;
+}
+
 // Offered to a rich `Attribute | Value` table: a row whose only link sits in the value's trailing
 // `(reason)` is placed, and the reason's html is kept for the page. A link in the label or in the
 // value itself would be lost from a tile, so that row stays as written.
 function keepReasonLink(model, place) {
   return (cells, h) => {
     if (hasLink(h[0])) return false;
-    if (hasLink(h[1])) {
-      const m = String(h[1]).match(/^([\s\S]*?\S)\s*\(((?:[^()<]|<[^>]*>)+)\)$/);
-      if (!m || hasLink(m[1]) || !hasLink(m[2])) return false;
-      model.whyHtml.set(cells[1], m[2].trim());
-    }
+    const why = linkInReason(h[1]);
+    if (why === false) return false;
+    if (why !== null) model.whyHtml.set(cells[1], why);
     return place(cells, h);
   };
 }
 
 const wholeNumber = s => (/^\d+$/.test(String(s).trim()) ? parseInt(s, 10) : null);
+
+// A spell slot Total: a whole number, a reason in brackets may follow (`5 (Ring of Spell Storing)`).
+const slotTotal = s => wholeNumber(splitReason(s).value);
 
 function stripNotes(html) {
   return String(html || '').replace(/<(blockquote|p)>([\s\S]*?)<\/\1>/gi,
@@ -277,14 +287,16 @@ function readSpellcasting(model, section) {
     seen.add(key);
     let left = sub.html;
     if (key === 'spell slots' && first) {
-      left = consumeTable(sub.html, COLS.slots, ([level, total, expended]) => {
+      // Only the Total may hold a link, and only in its trailing `(reason)`, as for an ability score.
+      left = consumeTable(sub.html, COLS.slots, keepReasonLink(model, ([level, total, expended], h) => {
+        if (hasLink(h[2])) return false;
         if (!total && !expended) return /^(\d+(st|nd|rd|th)?|cantrips?|pact\b.*)$/i.test(level);
-        const t = wholeNumber(total);
+        const t = slotTotal(total);
         const e = expended ? wholeNumber(expended) : 0;
         if (t === null || e === null || e > t) return false;
         model.slots.push({ level, total: t, expended: e });
         return true;
-      });
+      }), LINKS);
     } else if (key === 'spells' && first) {
       // Ten columns with Source before Summary, or the nine before it.
       const withSource = SOURCE_COLUMN.test(firstHeader(sub.html)[8] || '');
@@ -415,4 +427,4 @@ function parseDnd(frontmatter, sections) {
   return model;
 }
 
-module.exports = { parseDnd, splitReason, ABILITIES, COLS, countCells, wholeNumber };
+module.exports = { parseDnd, splitReason, linkInReason, ABILITIES, COLS, countCells, wholeNumber, slotTotal };

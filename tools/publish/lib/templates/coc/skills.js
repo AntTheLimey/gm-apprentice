@@ -17,12 +17,15 @@ const SKILL_ALIASES = {
 // suppressed when the PC has at least one specialisation of it.
 const GENERIC_PARENTS = new Set(['art/craft', 'language', 'science', 'pilot', 'survival']);
 
+const TRAILING_MARK = /[\s\u2713\u2714\u2611\u2705\uFE0E\uFE0F]+$/u;
+
 function normalizeName(name) {
   // Collapse an empty specialisation placeholder ("Art/Craft ()") — which the
   // shipped template ships for every specialisable skill — onto its canonical
   // parent, so a freshly-templated sheet doesn't render phantom "()" rows that
   // also suppress the real parent.
-  const stripped = String(name || '').trim().replace(/\s*\(\s*\)\s*$/, '').trim();
+  // A trailing check mark (the paper sheet's tick box, copied across) is not part of the name.
+  const stripped = String(name || '').trim().replace(TRAILING_MARK, '').replace(/\s*\(\s*\)\s*$/, '').trim();
   const key = stripped.toLowerCase();
   return SKILL_ALIASES[key] || stripped;
 }
@@ -71,7 +74,7 @@ function mergeSkills(pcSkills, variant, chars) {
     const regNum = Number(pc.reg);
     if (base === null && (blank || !Number.isFinite(regNum))) continue;   // nothing to show but a guess
     const reg = (blank || !Number.isFinite(regNum)) ? base : regNum;
-    byName.set(key, { name: existing ? existing.name : name, base, reg });
+    byName.set(key, { name: existing ? existing.name : name, base, reg, worked: !!existing });
     const p = parentOf(name);
     if (p && GENERIC_PARENTS.has(p.toLowerCase())) specParents.add(p.toLowerCase());
   }
@@ -88,6 +91,8 @@ function mergeSkills(pcSkills, variant, chars) {
     .map(s => ({
       name: s.name, reg: s.reg, half: half(s.reg), fifth: fifth(s.reg),
       developed: s.base !== null && s.reg > s.base,
+      // Written below the base worked out for it from the PC's characteristics; the sheet still shows the written number.
+      ...(s.worked && s.base !== null && s.reg < s.base ? { belowBase: s.base } : {}),
     }))
     .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
 }
