@@ -42,6 +42,15 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(len(rows), 1, rows)
         return rows[0]
 
+    def test_links_in_a_frontmatter_comment_are_not_links(self):
+        # #443: the build never renders a YAML comment.
+        vault = make_vault(self, {
+            "A.md": '---\n# between [[Ghost A]] and [[Ghost B]]\n'
+                    'loc: "x"  # outer rim of [[Ghost C]]\n'
+                    'tag: "a # [[Real Broken]]"\n---\nbody\n'})
+        rows, _ = links.report(vault)
+        self.assertEqual([r.spellings for r in rows], [["Real Broken"]])
+
     def test_same_ignores_punctuation(self):
         row = self.one({"Locations/Dunmoor's Rest.md": "x\n",
                         "A.md": "[[Dunmoors Rest]]\n"})

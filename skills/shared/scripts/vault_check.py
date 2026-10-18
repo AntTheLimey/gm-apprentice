@@ -86,7 +86,8 @@ publish pipeline — or a fence would unbalance (ERROR row instead),
 and one refusal blocks the whole migration.
 
 `pc-body` runs over every `type: pc` sheet except `*_Story.md`
-companions and `publish: none` pages. ERROR is `## Current Status`
+companions, `_Template_*` files, notes under `_archive/` and `_QA/`, and
+`publish: none` pages. ERROR is `## Current Status`
 sitting inside a gm-only/spoiler fence; WARNING is `## Current
 Status` coming after `## Notes`/`## GM Notes`, not being an H2, or a
 duplicated H2; INFO is the block missing, having no labelled
@@ -180,6 +181,7 @@ from vaultlib import (  # noqa: F401
     SKIP_DIRS,
     WRAP_UP_TYPE,
     WRAP_UP_TYPES,
+    is_unchecked_source,
     BuildLine,
     LineState,
     active_pc_names,
@@ -3114,6 +3116,9 @@ def _pc_body(vault: Path, folder: str | None = None,
         text = raw.replace("\r\n", "\n").replace("\r", "\n")
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
+            continue
+        # A template, or a note in the archive, is not a PC (#389).
+        if is_unchecked_source(rel) or rel.rsplit("/", 1)[-1].startswith("_Template_"):
             continue
         if publish_mode(fm) == "none":
             continue

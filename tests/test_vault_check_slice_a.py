@@ -3212,6 +3212,20 @@ class PcBodyCommandTests(unittest.TestCase):
             "## Background\n\nA sailor.\n", encoding="utf-8")
         self.assertFalse(rows_for(vc.check_pc_body(vault), "Stat Sheet section"))
 
+    def test_an_archived_or_template_pc_is_not_a_pc(self):
+        # #389: an old PC template moved to _archive/ holds placeholders by
+        # nature, and the warning's own advice makes no sense on it.
+        template = (Path(vc.__file__).resolve().parent.parent / "templates"
+                    / "pc-dnd-5e-2024.md").read_text(encoding="utf-8")
+        for rel in ("_archive/templates/_Template_PC_2026-10-12.md",
+                    "Cast/_Template_PC.md"):
+            with self.subTest(rel=rel):
+                vault = make_vault(self)
+                path = vault / rel
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(template, encoding="utf-8")
+                self.assertEqual(vc.check_pc_body(vault), [])
+
     def test_a_blank_sheet_source_settles_nothing(self):
         vault = make_vault(self)
         (vault / "Away.md").write_text(

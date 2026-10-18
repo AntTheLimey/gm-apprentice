@@ -2194,9 +2194,27 @@ class LinkLine:
     line: str  # with its line ending
     in_code: bool  # in a code fence: nothing on it is a link
     in_frontmatter: bool
-    # Inline code spans, where a link is quoted, not made. Empty in
-    # frontmatter: a backtick there is YAML, not code.
+    # Inline code spans, where a link is quoted, not made. In frontmatter a
+    # backtick is YAML, not code, so the only span there is a YAML comment.
     spans: list[tuple[int, int]]
+
+
+def yaml_comment_spans(line: str) -> list[tuple[int, int]]:
+    """The span of a YAML comment on a frontmatter line: from a `#` at the
+    start or after whitespace, outside quotes, to the line's end. The build
+    never renders it, so a `[[link]]` in it is an example, not a link."""
+    quote = ""
+    for i, ch in enumerate(line):
+        if quote:
+            if ch == quote:
+                quote = ""
+            elif ch == "\\" and quote == '"':
+                continue
+        elif ch in "\"'" and (i == 0 or not line[i - 1].isalnum()):
+            quote = ch
+        elif ch == "#" and (i == 0 or line[i - 1].isspace()):
+            return [(i, len(line))]
+    return []
 
 
 def link_lines(text: str) -> Iterator[LinkLine]:
@@ -2214,7 +2232,8 @@ def link_lines(text: str) -> Iterator[LinkLine]:
     for lineno, line in enumerate(lines, 1):
         in_fm = lineno < body_start
         yield LinkLine(lineno, line, lineno in code, in_fm,
-                       [] if in_fm else inline_code_spans(line))
+                       yaml_comment_spans(line) if in_fm
+                       else inline_code_spans(line))
 
 
 def live_wikilinks(line: str,

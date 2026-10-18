@@ -94,6 +94,7 @@ class Scan(unittest.TestCase):
             "  NPCs/Lady_Grey.md",
             "older draft entities linked (the quick path leaves them): 1",
             "  Locations/Hall.md (createdSession: Session 2)",
+            "unverified in linked notes: 0",
             "open spoilers: 1",
             "  NPCs/Lady_Grey.md:10: She is the Duke's sister and has been lying to...",
             "quick path: no (2 UNVERIFIED markers, a Plan file)",
@@ -105,6 +106,36 @@ class Scan(unittest.TestCase):
         self.assertIn("unverified: 0", out)
         self.assertEqual(out[-1], "quick path: yes, unless a DRAFT entity created "
                          "this session contradicts AUTHORITATIVE canon on the same facts")
+
+    def test_a_same_numbered_draft_from_another_chapter_is_older(self):
+        # #440: session numbers restart each chapter.
+        files = plain_wrap(FILES)
+        files["NPCs/Lady_Grey.md"] = files["NPCs/Lady_Grey.md"].replace(
+            '"Session 5"', '"Chapter 2, Session 5"')
+        files[INDEX] = files[INDEX].replace(
+            "status: wrap-up", 'status: wrap-up\nchapter: "[[Chapter 1 - Start]]"')
+        out = scan(files)
+        self.assertIn("draft entities created this session: 0", out)
+        self.assertIn("  NPCs/Lady_Grey.md (createdSession: Chapter 2, Session 5)", out)
+        files["NPCs/Lady_Grey.md"] = files["NPCs/Lady_Grey.md"].replace(
+            "Chapter 2,", "Chapter 1,")
+        self.assertIn("draft entities created this session: 1", scan(files))
+
+    def test_the_chapter_comes_from_the_indexs_folder_too(self):
+        files = plain_wrap(FILES)
+        files["NPCs/Lady_Grey.md"] = files["NPCs/Lady_Grey.md"].replace(
+            '"Session 5"', '"Chapter 2, Session 5"')
+        self.assertIn("draft entities created this session: 0", scan(files))
+
+    def test_unverified_on_a_linked_entity_file_is_not_the_quick_path(self):
+        # #434: a held claim may sit on the entity file, not the Wrap-Up.
+        files = plain_wrap(FILES)
+        files["NPCs/The Duke.md"] += "\nHe fled.\n<!-- UNVERIFIED: he fled -->\n"
+        out = scan(files)
+        self.assertIn("unverified: 0", out)
+        self.assertIn("unverified in linked notes: 1", out)
+        self.assertIn("  NPCs/The Duke.md:11: he fled", out)
+        self.assertEqual(out[-1], "quick path: no (1 UNVERIFIED marker on a linked note)")
 
     def test_only_older_drafts_is_a_plain_yes(self):
         files = plain_wrap(FILES)
