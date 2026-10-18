@@ -117,8 +117,11 @@ gm-apprentice-publish inbox <open|code|pull|watch|handled|flag|reply> [args]
 Drives the at-table change-request queue (Cloudflare KV, via wrangler). Used
 by the publish-site skill's checking loop; run it by hand to inspect the queue.
 
-  inbox open <CODE>                          Publish CODE as the session code players enter
-                                             (and forget the ids the last watch printed)
+  inbox open <CODE> [--hours N]              Publish CODE as the session code players enter,
+                                             forget the ids the last watch printed, and
+                                             start the session clock in
+                                             .watcher-session.json: the watcher runs N
+                                             hours from now (default 5, 1-12)
   inbox code                                 Print the current session code
   inbox pull                                 Print pending requests as JSON
   inbox watch [--every N] [--remind-after N] [--exit-on-batch]
@@ -133,9 +136,12 @@ by the publish-site skill's checking loop; run it by hand to inspect the queue.
                                              every N seconds after; and
                                              "WATCHER: inbox pull failed N times in a row"
                                              after 5 failed polls and every 5 more.
-                                             Runs until stopped; with --exit-on-batch it
-                                             exits 0 after a batch or reminder line, 1
-                                             after a failure line. A usage error exits 2
+                                             Once the open's hours have passed it prints
+                                             "WATCHER: session time is up" and exits 0.
+                                             Otherwise runs until stopped; with
+                                             --exit-on-batch it exits 0 after a batch or
+                                             reminder line, 1 after a failure line. A
+                                             usage error exits 2
   inbox handled <id> [<id>...]               Mark requests handled
   inbox flag <id> [<id>...]                  Mark requests flagged for the GM
   inbox reply <id> <applied|rejected|advice> "<text>"
