@@ -16,6 +16,13 @@ test('reassocTicks keeps ticks whose skill still exists and drops the rest', () 
   assert.deepEqual(cl.reassocTicks(null, ['Spot Hidden']), {});
 });
 
+test('offSheetTicks returns the stored ticks for skills not on the sheet, so a save can keep them (#396)', () => {
+  const ticks = { 'Spot Hidden': true, Dancing: true, Etiquette: false };
+  assert.deepEqual(cl.offSheetTicks(ticks, ['Spot Hidden']), { Dancing: true });
+  assert.deepEqual(cl.offSheetTicks(ticks, ['Spot Hidden', 'Dancing']), {});
+  assert.deepEqual(cl.offSheetTicks(null, ['Spot Hidden']), {});
+});
+
 test('clampScalar clamps to [0, max] and floors when max is null', () => {
   assert.equal(cl.clampScalar(5, 10), 5);
   assert.equal(cl.clampScalar(-3, 10), 0);
