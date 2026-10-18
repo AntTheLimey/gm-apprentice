@@ -941,6 +941,12 @@ class UnverifiedMarkerTests(unittest.TestCase):
         ])
         self.assertEqual([m.tag for m in got], ["S12", "Ch4 S3", "Ch0.1 S2", "", ""])
 
+    def test_an_example_in_an_inline_code_span_is_not_a_marker(self):
+        got = vl.unverified_markers(
+            "Write `<!-- UNVERIFIED (S5): example -->` like so.\n"
+            "<!-- UNVERIFIED (S6): real --> and `x` after\n")
+        self.assertEqual(got, [vl.Unverified(2, None, 6, "real")])
+
     def test_from_session(self):
         m = vl.Unverified
         self.assertTrue(m(1, None, 5, "").from_session(5, "1"))

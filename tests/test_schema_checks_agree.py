@@ -47,6 +47,25 @@ def both(front: str, settings_yaml: str | None = None
     return found, errors
 
 
+class ValidatorSurvivesUnreadableSettings(unittest.TestCase):
+    def test_a_pc_status_outside_the_schema_words_does_not_crash(self):
+        from unittest import mock
+
+        import vaultlib
+        front = front_of({**a_valid_note("pc"), "status": "wandering"})
+        text = f"---\n{front}\n---\n\nbody\n"
+        with tempfile.TemporaryDirectory() as tmp:
+            vault = Path(tmp)
+            (vault / "Note.md").write_text(text, encoding="utf-8")
+            with mock.patch.object(validate_schema, "setting_or_builtin",
+                                   side_effect=vaultlib.SettingsUnavailable("no")):
+                errors = validate_schema.validate_file(vault / "Note.md", text, vault)
+            with mock.patch.object(validate_schema, "setting_or_builtin",
+                                   return_value=None):
+                validate_schema.validate_file(vault / "Note.md", text, vault)
+        self.assertTrue(any("wandering" in e for e in errors), errors)
+
+
 def a_valid_note(etype: str) -> dict[str, str]:
     allowed = sr.checked_values(etype)
     return {f: (etype if f == "type" else sorted(allowed[f])[0] if f in allowed else "x")

@@ -17,6 +17,7 @@ import re
 import sys
 from collections import namedtuple
 from pathlib import Path
+from typing import Any, Callable
 
 # Schema rules and the frontmatter parser are shared with the
 # plugin-bundled vault utility — single source of truth in
@@ -30,7 +31,7 @@ from schema_rules import (  # noqa: E402
     is_schema_type,
 )
 import vault_check  # noqa: E402
-from vaultlib import raw_frontmatter, setting_or_builtin  # noqa: E402
+from vaultlib import SettingsUnavailable, raw_frontmatter, setting_or_builtin  # noqa: E402
 
 
 def validate_file(filepath: Path, content: str | None = None,
@@ -61,7 +62,14 @@ def validate_file(filepath: Path, content: str | None = None,
     if entity_type and isinstance(entity_type, str) and not is_schema_type(entity_type):
         return [f"Unknown type '{entity_type}' — must be one of: "
                 f"{', '.join(sorted(REQUIRED_FIELDS))}, or a subtype in the ontology"]
-    setting = None if vault is None else (lambda name: setting_or_builtin(vault, name))
+    setting: Callable[[str], list[Any]] | None = None
+    if vault is not None:
+        def setting(name: str) -> list[Any]:
+            # Unreadable settings: only the schema's words pass, as in vault_check.
+            try:
+                return list(setting_or_builtin(vault, name) or [])
+            except SettingsUnavailable:
+                return []
     return [message for level, message
             in frontmatter_findings(frontmatter, setting, raw_frontmatter(content))
             if level == "ERROR"]

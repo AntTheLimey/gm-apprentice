@@ -739,7 +739,7 @@ function startNoteAudit(input) {
       if (never) return `reword it, or move it into a part of the note players do not see (a GM Notes section, a gm-only block); deploy stops while the player site shows it. If the word no longer needs guarding, take it off player_site.never_show`;
       if (withheld && everyday.has(alias)) {
         const what = fold(baseName(owner).replace(/_/g, ' ')) === fold(alias)
-          ? `rename the note (${owner}) to a name players will not write by chance; campaign-qa offers to rename it, links included`
+          ? `rename the note (${owner}) to a name players will not write by chance and remove any matching title or aliases; campaign-qa offers to rename it, links included`
           : `take it out of the title or aliases of ${owner}`;
         return `"${alias}" is an everyday word, so every ordinary use of it is reported: ${what}. If the name is no secret, take withheld: true off`;
       }

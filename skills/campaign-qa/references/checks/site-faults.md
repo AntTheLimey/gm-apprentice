@@ -140,7 +140,8 @@ For an attachment, rename the file and the embeds that name it.
 A name in plain text has no "leave it" answer, and `stays hidden:`
 does not settle this row: the GM rewords the sentence, links the note
 (the neutral word prints), or takes `withheld: true` off. When the fix
-says the name is an everyday word and to rename the note, offer to:
+says the name is an everyday word and to rename the note, also take
+the same name off its `title:` and `aliases:`, then offer to:
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/relink.py"
 "<vault>" "<note>" "<new name>"` previews it, links included; on a yes,
 again with `--apply`.

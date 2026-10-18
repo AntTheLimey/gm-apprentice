@@ -609,7 +609,7 @@ describe('a withheld name that is an everyday word (#454)', () => {
     const [f] = await found(files, { excluded: ['Heritages/Human.md'] });
     assert.strictEqual(f.name, 'Human');
     assert.match(f.fix, /^"Human" is an everyday word, so every ordinary use of it is reported: rename the note \(Heritages\/Human\.md\)/);
-    assert.match(f.fix, /campaign-qa offers to rename it, links included/);
+    assert.match(f.fix, /and remove any matching title or aliases; campaign-qa offers to rename it, links included/);
     const caps = await found({ ...files, 'Characters/Mara_Quill.md': mara('Human or not, she sails.') }, { excluded: ['Heritages/Human.md'] });
     assert.match(caps[0].fix, /^reword it/);
     assert.strictEqual(f.everyday, true, 'vault_check prints the fix of a row that carries this');

@@ -16,8 +16,23 @@ const HEADING_RE = /^(#{1,6})\s+(.+)$/;
 const EMPHASIS_RE = /^(\*\*|\*|__|_)(.+?)\1$/;
 function headingTitles(text) {
   const titles = new Set();
-  for (const line of text.split('\n')) {
-    const m = HEADING_RE.exec(line.replace(/\r$/, ''));
+  const lines = text.split('\n').map((l) => l.replace(/\r$/, ''));
+  let i = 0;
+  // Frontmatter is the opening --- block (an unclosed one is not frontmatter); a fence closes on its own character, at least as long.
+  if (lines[0] === '---') {
+    const end = lines.indexOf('---', 1);
+    if (end > 0) i = end + 1;
+  }
+  let fence = null;
+  for (; i < lines.length; i++) {
+    const line = lines[i];
+    const f = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+    if (fence) {
+      if (f && f[1][0] === fence[0] && f[1].length >= fence.length && !f[2].trim()) fence = null;
+      continue;
+    }
+    if (f) { fence = f[1]; continue; }
+    const m = HEADING_RE.exec(line);
     if (!m) continue;
     const raw = m[2].trim().replace(/\s+#+$/, '').trim();
     const e = EMPHASIS_RE.exec(raw);

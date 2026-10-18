@@ -2317,10 +2317,17 @@ def same_chapter(a: str | None, b: str | None) -> bool:
     return a is None or b is None or float(a) == float(b)
 
 
+def _blank_spans(line: str, spans: list[tuple[int, int]]) -> str:
+    """The line with each character inside a span turned to a space."""
+    return "".join(" " if inside_spans(i, spans) and c != "\n" else c
+                   for i, c in enumerate(line))
+
+
 def unverified_markers(text: str) -> list[Unverified]:
-    """Each UNVERIFIED marker outside code and frontmatter (any case; one
-    may span lines)."""
-    body = "".join("\n" if ll.in_code or ll.in_frontmatter else ll.line
+    """Each UNVERIFIED marker outside code, inline code and frontmatter (any
+    case; one may span lines)."""
+    body = "".join("\n" if ll.in_code or ll.in_frontmatter
+                   else _blank_spans(ll.line, ll.spans)
                    for ll in link_lines(text))
     return [Unverified(body.count("\n", 0, m.start()) + 1, m.group(1),
                        int(m.group(2)) if m.group(2) else None,

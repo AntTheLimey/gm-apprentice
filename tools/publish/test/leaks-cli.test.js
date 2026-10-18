@@ -236,6 +236,23 @@ describe('leaks', () => {
     } finally { site.cleanup(); }
   });
 
+  it('a settled heading moved into a code fence or the frontmatter is no longer a heading, so check lists it and prune drops it', async () => {
+    const site = leakSite(TACTICS, SETTINGS);
+    try {
+      const vault = vaultOf(site);
+      const note = path.join(vault, 'NPCs', 'A.md');
+      const plain = fs.readFileSync(note, 'utf8');
+      assert.equal((await run(site, 'settle', { page: 'NPCs/A.md', text: 'Secret Tactics' })).rc, 0);
+      fs.writeFileSync(note, plain.replace('## Secret Tactics', '```\n## Secret Tactics\n```'));
+      assert.match((await run(site, 'check')).text, /no longer needed: the settled heading "Secret Tactics" in NPCs\/A\.md/);
+      fs.writeFileSync(note, plain.replace('## Secret Tactics', '~~~md\n## Secret Tactics\n~~~'));
+      assert.match((await run(site, 'check')).text, /no longer needed: the settled heading "Secret Tactics"/);
+      fs.writeFileSync(note, plain.replace('\n\n## Secret Tactics\n\nHe flanks.\n', '').replace('\n---\n', '\nnote: |\n  # Secret Tactics\n---\n'));
+      assert.match((await run(site, 'check')).text, /no longer needed: the settled heading "Secret Tactics"/);
+      assert.match((await run(site, 'prune')).text, /Pruned 1/);
+    } finally { site.cleanup(); }
+  });
+
   it('settle records a reviewed heading in the accepted list, once, with no built site; check and prune leave it (#453)', async () => {
     const site = leakSite(TACTICS, SETTINGS);
     try {
