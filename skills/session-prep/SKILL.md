@@ -141,13 +141,12 @@ one not struck through).
 **10. World state** — date, location, threats, factions, clocks from
 the Wrap-Up's World State. → `## World State`
 
-**10b. World threads** — If `_World/_flags.md` exists, surface
-**Deferred** items gaining traction (3+ sessions, 3+ mentions in one
-session, or tied to the upcoming adventure's themes or locations):
+**10b. World threads** — If `_World/_flags.md` exists, list its
+**Deferred** items with the sessions each came up in, the ones tied to
+the upcoming adventure's themes or locations first:
 
-> **World threads gaining traction:**
-> - "The Old Empire" — mentioned 3 times across sessions 3-5, still no
->   detail. Worth a midwife worldbuilding session?
+> **Deferred world threads:**
+> - "The Old Empire" — sessions 3, 4 and 5, still no detail.
 
 Awareness only, no three-state prompt; if the GM wants to resolve one,
 suggest a midwife worldbuilding conversation.

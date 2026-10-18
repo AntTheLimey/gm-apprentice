@@ -205,9 +205,9 @@ the GM to keep, unwrap (revealed in play) or delete (dropped).
 ### World Consistency — `references/world-audit-criteria.md`
 
 Only if `_World/` exists; only domains with `status: active` and
-`rules` entries — skip undefined domains. Checks heritage ages
-and values, geographic plausibility, economic base (soft),
-entity dates vs history-timeline eras, and deferred-flag review.
+rules — skip undefined domains. Notes that contradict a rule
+(heritage ages, geography, dates vs history-timeline eras),
+economic base (soft), and deferred-flag review.
 
 ### Full Audit
 

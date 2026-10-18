@@ -114,4 +114,11 @@ describe('worldDomainTemplate', () => {
     const html = worldDomainTemplate(page, baseContent, stubNav, baseConfig, {}, {});
     assert.ok(html.includes('MAX_ALTITUDE_5000'), 'should fall back to id field');
   });
+
+  it('renders a rule written as a plain sentence', () => {
+    const page = { ...basePage, frontmatter: { ...basePage.frontmatter, rules: ['Rivers flow south', { rule: 'No flying mounts' }] } };
+    const html = worldDomainTemplate(page, baseContent, stubNav, baseConfig, {}, {});
+    assert.ok(html.includes('<li>Rivers flow south</li>'), 'a string rule is its own text');
+    assert.ok(html.includes('<li>No flying mounts</li>'), 'an object rule still reads');
+  });
 });

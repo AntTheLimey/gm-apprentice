@@ -12,7 +12,8 @@ function worldDomainTemplate(page, processedContent, navFor, config, imageMap, c
   const publishRules = fm.publish_rules !== false;
   if (publishRules && fm.rules && Array.isArray(fm.rules) && fm.rules.length > 0) {
     const items = fm.rules.map(r => {
-      const desc = meta(r.rule || r.id || '');
+      // A rule is a sentence, or an object carrying one under `rule` (or only an `id`).
+      const desc = meta(typeof r === 'string' ? r : (r && (r.rule || r.id)) || '');
       return `<li>${desc}</li>`;
     }).join('\n');
     rulesHtml = `<section class="world-rules"><h2>World Rules</h2><ul>${items}</ul></section>`;
