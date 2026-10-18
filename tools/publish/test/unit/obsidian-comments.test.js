@@ -39,8 +39,9 @@ describe('%% comments (Obsidian), #305', () => {
   it('a comment spanning an excluded heading hides the heading, not what follows it as visible', () => {
     // The heading inside the comment is not a heading; the section stays open and hides what follows.
     assert.strictEqual(safe('## GM Notes\nsecret\n%%\n## Next\n%%\nstill secret\n## Real\npub').text, '## Real\npub');
-    // A heading inside a comment starts nothing.
-    assert.strictEqual(safe('x\n%%\n## GM Notes\n%%\nvisible').text, 'x\nvisible');
+    // A withheld heading inside a comment still withholds what follows the comment: Obsidian shows it under that
+    // heading (#447).
+    assert.strictEqual(safe('x\n%%\n## GM Notes\n%%\nunder it').text, 'x');
   });
   it('a %% inside an HTML comment is part of that comment', () => {
     assert.strictEqual(safe('a <!-- 50%% off --> b %%gone%% c').text, 'a  b  c');

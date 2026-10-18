@@ -74,6 +74,7 @@ every page that names it. Use it to confirm each fix.
 | `TOHIT_UNREAD` (`WARNING`) | Warning | The to-hit calculator gives a row less than it should |
 | `TOHIT_UNREAD` (`INFO`) | Info | A row's numbers do not add up, or it is written another way |
 | `SKILL_BELOW_BASE` (`INFO`) | Info | A CoC skill is written below the base its characteristics give |
+| `HEADING_IN_HIDDEN_BLOCK` (`INFO`) | Info | A hidden heading sits inside a hidden block, so the text after it is withheld |
 
 A row is raised only where the site shows the fault. A stray `%%` or
 an open fence that lies wholly under `## GM Notes` changes nothing a
@@ -436,6 +437,15 @@ number written either way. Per PC, ask: raise it to the base, or leave
 it? On a raise, write the base in the Regular column and, if the
 Half and Fifth cells hold numbers, work them out again. On leave, log
 "left as written" and do not raise it again in the same run.
+
+## HEADING_IN_HIDDEN_BLOCK
+
+A hidden heading (`## GM Notes`) is written inside a gm-only block, a
+comment or a hidden callout. The site withholds the text after the
+block too, to the next heading of the same or higher level. Show the
+GM that text and ask: should it stay hidden? On yes, move the heading
+out of the block, just above it. On no, move that text above the
+block or under a heading the site shows. Edit only on an answer.
 
 ## Reporting
 

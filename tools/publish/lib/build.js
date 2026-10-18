@@ -8,7 +8,7 @@ const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllN
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
-const { nameList, gmAliasList, strippedLines, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
+const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
@@ -824,7 +824,7 @@ function buildSite(options) {
         if (page.storyMarkdown) page.storyMarkdown = stubMarked(page.storyMarkdown, include, quiet, mark, { warn });
       } else {
         const cut = stubCut(source, include, withhold);
-        stubFacts.set(page, { source, strays: cut.strays, openFence: cut.openFence });
+        stubFacts.set(page, { source, strays: cut.strays, openFence: cut.openFence, hidden: cut.hidden });
         page.markdown = cut.text;
         // A PC's story companion is a SEPARATE file paired in by the scanner and
         // rendered on its own page. Reducing only page.markdown left a stubbed PC
@@ -896,22 +896,25 @@ function buildSite(options) {
       // is that text with each marked span dropped, as players see it: an excerpt that cut a mark open would wrap the
       // rest of its page. A PC whose headings a link label changes has neither, as on the player site: its page shows
       // the body, marked. No note-faults facts.
-      page.gmMarkedPublished = page.headingsUnstable ? '' : filterSections(strippedLines(source, excludeCallouts, mark).lines.join('\n'),
-        excludeSections, page.sourceFrontmatter || page.frontmatter, { pcKeepSections, mark });
+      const gmFm = page.sourceFrontmatter || page.frontmatter;
+      page.gmMarkedPublished = page.headingsUnstable ? '' : filterSections(
+        strippedLines(source, excludeCallouts, mark, sectionWithholder(excludeSections, gmFm, { pcKeepSections })).lines.join('\n'),
+        excludeSections, gmFm, { pcKeepSections, mark });
       page.publishedMarkdown = withoutMarked(page.gmMarkedPublished, mark.marks);
       continue;
     }
-    const stripped = strippedLines(source, excludeCallouts);
     const fm = page.sourceFrontmatter || page.frontmatter;
+    // A withheld heading inside a hidden block comes back where the block ended, as on the page (#447).
+    const stripped = strippedLines(source, excludeCallouts, null, sectionWithholder(excludeSections, fm, { pcKeepSections }));
     // A stub's facts were taken when it was cut. A fault that lies wholly in text the page
     // hides anyway (noteFacts) is none; a note withheld whole shows none.
     stripFacts.set(page, stubFacts.get(page) || {
-      source,
-      ...noteFacts(stripped, (lines) => (page.headingsUnstable ? lines.map(() => false) : keptFlags(lines, excludeSections, fm, { pcKeepSections }))),
+      source, hidden: page.headingsUnstable ? [] : stripped.hidden,
+      ...noteFacts(stripped, (lines) => (page.headingsUnstable ? lines.map(() => false) : keptFlags(lines, excludeSections, fm, { pcKeepSections, restored: lines === stripped.lines ? stripped.restored : undefined }))),
     });
     const text = stripped.lines.join('\n');
     page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(text, excludeSections, fm,
-      { pcKeepSections });   // its warnings are the page render's to print, once
+      { pcKeepSections, restored: stripped.restored });   // its warnings are the page render's to print, once
   }
 
   // Whether a Story section will exist. Computed early (pure function of pages) so the
@@ -2119,6 +2122,16 @@ function buildSite(options) {
   // Every file is written: the after steps run, then the check of the notes and "Done!".
   if (runningSteps && errorCount === 0 && publishConfig.steps.after.length) runSteps(publishConfig.steps.after, { cwd: configDir, label: 'after_build', log: options.stepsLog, stdio: options.stepsStdio, extraEnv: stepEnv });
   if (!gm) for (const pc of tohitRows) audit.calculator(pc.rel, pc.rows);
+  // A withheld heading inside a hidden block (#447): the text after it is withheld; campaign-qa offers to move it.
+  if (!gm) {
+    for (const [page, facts] of stripFacts) {
+      audit.calculator(vaultRelPathOf(page), (facts.hidden || []).map((h) => ({
+        code: 'HEADING_IN_HIDDEN_BLOCK', severity: 'info',
+        detail: `the heading "${h.title}" is inside a hidden block (a gm-only block, a comment or a hidden callout), so the text after the block is withheld as part of that section`,
+        fix: 'move the heading out of the hidden block if that section is meant to start there; if the text after the block should publish, leave the heading where it is and put that text under a heading the site shows',
+      })));
+    }
+  }
   const noteFaults = gm ? [] : audit.findings((page) => stripFacts.get(page));
   if (options.onNoteFaults) options.onNoteFaults(noteFaults);
   for (const line of summaryLines(noteFaults)) console.warn(`  WARNING: ${line}`);
