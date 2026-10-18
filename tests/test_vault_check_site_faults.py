@@ -262,7 +262,7 @@ class SiteFaultRowsTests(unittest.TestCase):
         rows = findings(vc.check_site_faults(vault))
         self.assertEqual(rows, [
             f"WARNING\t{MARA}\tWITHHELD_IN_PROSE: \"Lord Zorn\" (a withheld "
-            f"note: {ZORN}), printed 2 times | Lord Zorn rides at dawn."])
+            f"note: {ZORN}), printed 1 time | Lord Zorn rides at dawn."])
 
     def test_a_withheld_note_that_publishes_is_an_error_row_that_does_not_stop_the_audit(self):
         vault, _site = make(self, {
