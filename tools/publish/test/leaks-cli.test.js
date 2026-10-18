@@ -207,8 +207,33 @@ describe('leaks', () => {
     } finally { site.cleanup(); }
   });
 
+  const TACTICS = { ...NOTES, 'NPCs/A.md': NOTES['NPCs/A.md'].replace('The baker is a kind man.\n', 'The baker is a kind man.\n\n## Secret Tactics\n\nHe flanks.\n') };
+  const settledList = (vault) => loadPublishList(vault, { warn: () => {} }).accepted.filter((a) => a.note === 'gm-leak.heading');
+
+  it('a settled heading whose note no longer has it, or is gone, is no longer needed, and prune drops it', async () => {
+    const site = leakSite(TACTICS, SETTINGS);
+    try {
+      const vault = vaultOf(site);
+      const note = path.join(vault, 'NPCs', 'A.md');
+      assert.equal((await run(site, 'settle', { page: 'NPCs/A.md', text: 'Secret Tactics' })).rc, 0);
+      assert.equal((await run(site, 'settle', { page: 'NPCs/B.md', text: 'Keeper Notes' })).rc, 0);
+      // B.md has no such heading: that record is no longer needed; A's still is, emphasis-wrapped or with a closing #.
+      fs.writeFileSync(note, fs.readFileSync(note, 'utf8').replace('## Secret Tactics', '## **Secret Tactics** ##'));
+      const check = await run(site, 'check');
+      assert.match(check.text, /no longer needed: the settled heading "Keeper Notes" in NPCs\/B\.md/);
+      assert.doesNotMatch(check.text, /"Secret Tactics"/);
+      // The heading renamed and B.md deleted: both go on prune.
+      fs.writeFileSync(note, fs.readFileSync(note, 'utf8').replace('## **Secret Tactics** ##', '## Tactics Revised'));
+      fs.rmSync(path.join(vault, 'NPCs', 'B.md'));
+      assert.match((await run(site, 'check')).text, /no longer needed: the settled heading "Secret Tactics" in NPCs\/A\.md/);
+      assert.equal(settledList(vault).length, 2);
+      assert.match((await run(site, 'prune')).text, /Pruned 2/);
+      assert.deepEqual(settledList(vault), []);
+    } finally { site.cleanup(); }
+  });
+
   it('settle records a reviewed heading in the accepted list, once, with no built site; check and prune leave it (#453)', async () => {
-    const site = leakSite(NOTES, SETTINGS);
+    const site = leakSite(TACTICS, SETTINGS);
     try {
       fs.rmSync(site.outputDir, { recursive: true, force: true });
       const r = await run(site, 'settle', { page: 'NPCs/A.md', text: 'Secret Tactics' });
@@ -221,7 +246,7 @@ describe('leaks', () => {
       assert.equal(missing.rc, 1);
       assert.match(missing.text, /no note NPCs\/Nobody\.md/);
       // The leak gate reads it as no finding of its own: not "no longer needed", and prune keeps it.
-      const rebuilt = leakSite(NOTES, SETTINGS);
+      const rebuilt = leakSite(TACTICS, SETTINGS);
       try {
         fs.copyFileSync(path.join(vaultOf(site), '_meta', 'publish-list.yaml'), path.join(vaultOf(rebuilt), '_meta', 'publish-list.yaml'));
         const check = await run(rebuilt, 'check');

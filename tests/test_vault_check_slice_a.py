@@ -1685,6 +1685,18 @@ class GmLeakSettleTests(unittest.TestCase):
                                  "Keeper-facing heading 'Secret Tactics "
                                  "Revised'"))
 
+    def test_a_site_tool_too_old_to_settle_says_so_in_one_plain_line(self):
+        vault = self.vault()
+        old = vc.ToolAnswer(why="leaks settle exited 1: Error: Unknown "
+                                "leaks command: settle")
+        with mock.patch.object(vc, "ask_publish_tool", return_value=old):
+            rows, code = vc.settle_heading(vault, "Bob.md:7")
+        self.assertEqual(code, 1)
+        self.assertEqual(rows, [
+            "ERROR\tBob.md:7\t'Secret Tactics' was not settled: the site's "
+            "publish tool is too old to settle a heading — run update-pin, "
+            "then run this again"])
+
     def test_settle_refuses_a_line_that_is_no_heading(self):
         vault = self.vault()
         done = run_cli(vault, "gm-leak", "--settle", "Bob.md:9")

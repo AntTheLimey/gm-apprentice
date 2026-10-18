@@ -2136,6 +2136,11 @@ def settle_heading(vault: Path, where: str) -> tuple[list[str], int]:
     if answer.data is None or not isinstance(answer.data, dict) \
             or answer.data.get("settled") is not True:
         why = answer.why or "the publish tool did not settle it"
+        if "Unknown leaks command: settle" in why:
+            # A site pinned to a tool from before `leaks settle`: an old
+            # pin, which update-pin fixes (as `_tool_too_old_row`).
+            why = ("the site's publish tool is too old to settle a heading "
+                   "— run update-pin, then run this again")
         return [f"ERROR\t{rel}:{n}\t'{title}' was not settled: {why}"], 1
     return [f"SETTLED\t{rel}:{n}\t'{title}' is for players: gm-leak does "
             f"not flag it while the note's path and the heading stay the "
