@@ -65,10 +65,14 @@ adding a new field, renaming a field, changing a field's type
 
 ### 6. Update schema validation
 
-- [ ] If `scripts/validate_schema.py` validates the entity
-  type, add the new field to the schema (required or optional
-  as appropriate)
-- [ ] Run validation against a test vault to confirm
+- [ ] A required field goes in `REQUIRED_FIELDS` in
+  `skills/shared/scripts/schema_rules.py`. A field with a fixed set
+  of values goes in `CHECKED_VALUES` there (the validator rejects
+  anything else) or `LISTED_VALUES` (named, not checked). Both feed
+  `scripts/validate_schema.py` and `schema_rules.py show <type>`; an
+  optional field is listed by `show` once the type's template has it
+- [ ] Run validation against a test vault to confirm, and check
+  `schema_rules.py show <type>`
 
 ### 7. Add migration check
 

@@ -24,20 +24,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent
                         / "skills" / "shared" / "scripts"))
 from schema_rules import (  # noqa: E402
-    ADVENTURE_BRIEF_CONTINUATION,
-    ADVENTURE_BRIEF_SCOPE,
-    ADVENTURE_BRIEF_SHAPE,
-    CAMPAIGN_OVERVIEW_STATUS,
-    CANON_STATUS_VALUES,
     DEPRECATED_FIELDS,
-    NPC_STATUS,
-    PLAN_TYPES,
     PORTRAIT_TYPES,
     REQUIRED_FIELDS,
-    SCENE_STATUS,
-    SCENE_TYPES,
-    SESSION_STATUS,
-    WORLD_DOMAIN_STATUS,
+    checked_values,
     extract_frontmatter,
 )
 import vault_check  # noqa: E402
@@ -66,6 +56,9 @@ def validate_file(filepath: Path, content: str | None = None) -> list[str]:
     if not entity_type:
         errors.append("Missing 'type' field")
         return errors
+    if not isinstance(entity_type, str):
+        errors.append(f"Field 'type' must be one type name, got {entity_type!r}")
+        return errors
 
     # Check required fields — reject unknown entity types
     if entity_type not in REQUIRED_FIELDS:
@@ -79,139 +72,26 @@ def validate_file(filepath: Path, content: str | None = None) -> list[str]:
         if field not in frontmatter:
             errors.append(f"Missing required field '{field}' for type '{entity_type}'")
 
-    # Validate canon_status enum
-    if "canon_status" in frontmatter:
-        value = frontmatter["canon_status"]
+    # Enumerated fields: schema_rules.CHECKED_VALUES is the one table
+    # (`schema_rules.py show <type>` prints it).
+    for field, allowed in checked_values(entity_type).items():
+        if field not in frontmatter:
+            continue
+        value = frontmatter[field]
+        label = (f"{entity_type} status"
+                 if field == "status" and entity_type in ("session", "scene") else field)
         if not isinstance(value, str):
-            errors.append("Field 'canon_status' must be a string")
-        elif value not in CANON_STATUS_VALUES:
+            errors.append(f"Field '{field}' must be a string")
+        elif value not in allowed:
             errors.append(
-                f"Invalid canon_status '{value}' — "
-                f"must be one of: {', '.join(sorted(CANON_STATUS_VALUES))}"
+                f"Invalid {label} '{value}' — "
+                f"must be one of: {', '.join(sorted(allowed))}"
             )
-        elif value == "SUPERSEDED":
-            superseded_by = frontmatter.get("superseded_by", "")
-            if not superseded_by:
-                errors.append(
-                    "SUPERSEDED entity missing 'superseded_by' reference"
-                )
+        elif field == "canon_status" and value == "SUPERSEDED" \
+                and not frontmatter.get("superseded_by", ""):
+            errors.append("SUPERSEDED entity missing 'superseded_by' reference")
 
-    # Validate session status
-    if entity_type == "session" and "status" in frontmatter:
-        value = frontmatter["status"]
-        if not isinstance(value, str):
-            errors.append("Field 'status' must be a string")
-        elif value not in SESSION_STATUS:
-            errors.append(
-                f"Invalid session status '{value}' — "
-                f"must be one of: {', '.join(sorted(SESSION_STATUS))}"
-            )
-
-    # Validate scene fields
-    if entity_type == "scene":
-        if "status" in frontmatter:
-            value = frontmatter["status"]
-            if not isinstance(value, str):
-                errors.append("Field 'status' must be a string")
-            elif value not in SCENE_STATUS:
-                errors.append(
-                    f"Invalid scene status '{value}' — "
-                    f"must be one of: {', '.join(sorted(SCENE_STATUS))}"
-                )
-        if "scene_type" in frontmatter:
-            value = frontmatter["scene_type"]
-            if not isinstance(value, str):
-                errors.append("Field 'scene_type' must be a string")
-            elif value not in SCENE_TYPES:
-                errors.append(
-                    f"Invalid scene_type '{value}' — "
-                    f"must be one of: {', '.join(sorted(SCENE_TYPES))}"
-                )
-
-    # Validate NPC/PC status if present
-    if entity_type in ("npc", "pc") and "status" in frontmatter:
-        value = frontmatter["status"]
-        if not isinstance(value, str):
-            errors.append("Field 'status' must be a string")
-        elif value not in NPC_STATUS:
-            errors.append(
-                f"Invalid status '{value}' — "
-                f"must be one of: {', '.join(sorted(NPC_STATUS))}"
-            )
-
-    # Validate adventure-brief fields
-    if entity_type == "adventure-brief":
-        if "scope" in frontmatter:
-            value = frontmatter["scope"]
-            if not isinstance(value, str):
-                errors.append("Field 'scope' must be a string")
-            elif value not in ADVENTURE_BRIEF_SCOPE:
-                errors.append(
-                    f"Invalid scope '{value}' — "
-                    f"must be one of: {', '.join(sorted(ADVENTURE_BRIEF_SCOPE))}"
-                )
-        if "continuation_type" in frontmatter:
-            value = frontmatter["continuation_type"]
-            if not isinstance(value, str):
-                errors.append("Field 'continuation_type' must be a string")
-            elif value not in ADVENTURE_BRIEF_CONTINUATION:
-                errors.append(
-                    f"Invalid continuation_type '{value}' — "
-                    f"must be one of: {', '.join(sorted(ADVENTURE_BRIEF_CONTINUATION))}"
-                )
-        if "adventure_shape" in frontmatter:
-            value = frontmatter["adventure_shape"]
-            if not isinstance(value, str):
-                errors.append("Field 'adventure_shape' must be a string")
-            elif value not in ADVENTURE_BRIEF_SHAPE:
-                errors.append(
-                    f"Invalid adventure_shape '{value}' — "
-                    f"must be one of: {', '.join(sorted(ADVENTURE_BRIEF_SHAPE))}"
-                )
-
-    # Validate campaign_overview fields
-    if entity_type == "campaign_overview":
-        if "status" in frontmatter:
-            value = frontmatter["status"]
-            if not isinstance(value, str):
-                errors.append("Field 'status' must be a string")
-            elif value not in CAMPAIGN_OVERVIEW_STATUS:
-                errors.append(
-                    f"Invalid status '{value}' — "
-                    f"must be one of: {', '.join(sorted(CAMPAIGN_OVERVIEW_STATUS))}"
-                )
-        if "scope" in frontmatter:
-            value = frontmatter["scope"]
-            if not isinstance(value, str):
-                errors.append("Field 'scope' must be a string")
-            elif value not in ADVENTURE_BRIEF_SCOPE:
-                errors.append(
-                    f"Invalid scope '{value}' — "
-                    f"must be one of: {', '.join(sorted(ADVENTURE_BRIEF_SCOPE))}"
-                )
-
-    # Validate world_domain status
-    if entity_type == "world_domain" and "status" in frontmatter:
-        value = frontmatter["status"]
-        if not isinstance(value, str):
-            errors.append("Field 'status' must be a string")
-        elif value not in WORLD_DOMAIN_STATUS:
-            errors.append(
-                f"Invalid status '{value}' — "
-                f"must be one of: {', '.join(sorted(WORLD_DOMAIN_STATUS))}"
-            )
-
-    # Validate plan fields
     if entity_type == "plan":
-        if "plan_type" in frontmatter:
-            value = frontmatter["plan_type"]
-            if not isinstance(value, str):
-                errors.append("Field 'plan_type' must be a string")
-            elif value not in PLAN_TYPES:
-                errors.append(
-                    f"Invalid plan_type '{value}' — "
-                    f"must be one of: {', '.join(sorted(PLAN_TYPES))}"
-                )
         # leads_to: optional node-based sequencing — array of wiki-links to the
         # plan node(s) this one leads to (2+ targets = a branch). Absent is fine.
         if "leads_to" in frontmatter and frontmatter["leads_to"] is not None:

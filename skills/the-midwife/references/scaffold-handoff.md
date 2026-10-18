@@ -8,7 +8,9 @@ the skill root, as in SKILL.md.
 
 ### Step 1: Synthesize Adventure Brief
 
-Read `shared/entity-schema.md` for adventure-brief type.
+Fields:
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/schema_rules.py"
+show adventure-brief`.
 Assemble the adventure index and topic files into the brief
 using the template below. Apply the block/seam test: where a
 topic file already holds finished prose, lift it verbatim;

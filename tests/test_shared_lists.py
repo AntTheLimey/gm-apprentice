@@ -41,8 +41,6 @@ def _words(text: str) -> set[str]:
 # (file under skills/, a pattern whose group 1 is the list, the values it must name)
 PROSE: list[tuple[str, str, frozenset[str] | set[str]]] = [
     # Session status and stage
-    ("shared/entity-schema.md", r"^status: planned {11}# (.+)$", sr.SESSION_STATUS),
-    ("shared/entity-schema.md", r"^stage: outline +# (.+)$", sr.SESSION_STAGE),
     ("publish-site/references/content-filtering.md",
      r"`status: (planned[^`]+)`", sr.SESSION_NOT_YET_RUN),
     ("publish-site/references/content-filtering.md",
@@ -54,7 +52,6 @@ PROSE: list[tuple[str, str, frozenset[str] | set[str]]] = [
     ("publish-site/references/setup-wizard.md",
      r"`stage: ([^`]+)`", sr.SESSION_STAGE_IN_PREP),
     # canon_status
-    ("shared/entity-schema.md", r"^canon_status: DRAFT +# (.+)$", sr.CANON_STATUS_VALUES),
     ("shared/entity-schema.md", r"Canon status: ([A-Z /]+) \|", sr.CANON_STATUS_VALUES),
     ("shared/canon-status.md", r"^canon_status: (DRAFT +# .+)$", sr.CANON_STATUS_VALUES),
     ("publish-site/references/schema-reference.md",
@@ -72,8 +69,10 @@ PROSE: list[tuple[str, str, frozenset[str] | set[str]]] = [
     ("shared/entity-schema.md", r"^\(([a-z/]+)\), `location`", sr.NPC_STATUS),
     ("shared/entity-schema.md", r"^`status` \((alive[a-z/]+)\)", sr.NPC_STATUS),
     ("shared/templates/npc.md", r"^status: alive +# (.+)$", sr.NPC_STATUS),
+    # Faction and organization status
+    ("shared/entity-schema.md", r"^`status` \((active[a-z/]+)\)", sr.FACTION_STATUS),
+    ("shared/templates/organization.md", r"^status: active +# (.+)$", sr.FACTION_STATUS),
     # Plan types
-    ("shared/entity-schema.md", r"plan_type \((`arc`[^)]+)\)", sr.PLAN_TYPES),
     ("shared/entity-schema.md", r"`plan_type` \(([a-z/]+)\)", sr.PLAN_TYPES),
     ("shared/templates/plan.md", r'^plan_type: "" +# (.+)$', sr.PLAN_TYPES),
     ("vault-ingest/SKILL.md", r"`plan_type` (`arc`[^.]+)\.", sr.PLAN_TYPES),

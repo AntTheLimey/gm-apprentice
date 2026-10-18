@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.75] — 2026-10-17
+
+Two lookups the model did by reading are now commands.
+
+### Added
+
+- `schema_rules.py show <type>` prints one note type's fields in about
+  150 tokens: required and optional fields, the values its enumerated
+  fields take (and which of those the schema check enforces), its
+  template, folder, place in the type hierarchy, relationship rules and
+  old field names. `show` alone lists the types and the fields any type
+  takes. It reads the schema rules, the templates (or, for a type with
+  none, its example frontmatter) and the ontology, and a test fails if it
+  and the schema check disagree.
+- `reconcile_scan.py VAULT WRAP_UP` prints what reconcile counted by
+  hand: the Wrap-Up's UNVERIFIED markers and reconstruction notes, this
+  session's Plan file, the DRAFT entities and open spoiler blocks among
+  the notes the Wrap-Up links, whether reconcile should skip, and whether
+  the quick path applies (no UNVERIFIED marker, no Plan file, and no DRAFT
+  created this session that contradicts AUTHORITATIVE canon). Whether a
+  DRAFT contradicts canon stays the GM's call.
+
+### Changed
+
+- `entity-schema.md` loses its required-fields list, its per-type
+  attribute list and its session example, which `show` now answers
+  (23,273 to 18,551 bytes). What some fields hold (a clue's
+  `discoveryState`, a world domain's `rules`) stays.
+- The scripts/validate_schema.py value checks read one table in
+  `schema_rules.py`, the one `show` prints, instead of twelve copies of
+  the same check.
+- Reconcile runs `reconcile_scan.py` in place of its three hand checks and
+  its inventory list, and session prep reads its `skip:` line. Two rules
+  are now written down where they were left to the reader: a first
+  session (skipped) is `session_number` 1 with no UNVERIFIED marker or
+  reconstruction note; the quick path promotes only the DRAFTs whose
+  `createdSession` is this session, and lists older linked DRAFTs apart.
+  A Wrap-Up's session index is found by its `session:` link or by the
+  index's `documents.wrap_up` link.
+- campaign-organizer, campaign-qa, the-midwife and the scene note
+  template ask `show` instead of reading the schema; world evolution
+  creates a new entity from its `_Templates/` copy. Skill text is 4,788
+  bytes shorter in all.
+- `scripts/validate_schema.py` reports a note whose `type` is a list as
+  an error instead of crashing.
+- A new vault's `_meta/entity-types.md` no longer copies the
+  required-fields list; it points at `show`.
+
+---
+
 ## [1.10.74] — 2026-10-17
 
 Publish tool 1.36.1: note frontmatter is read as YAML and nothing else.

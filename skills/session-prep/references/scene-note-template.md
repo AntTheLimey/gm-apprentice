@@ -1,8 +1,9 @@
 # Scene Note Template
 
 A standalone scene note lives in the chapter's `Scenes/` folder and is
-linked from the session index `scenes:` list. Frontmatter per
-`shared/entity-schema.md` (Scene).
+linked from the session index `scenes:` list. Fields and values:
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/schema_rules.py"
+show scene`.
 
 ```markdown
 ---

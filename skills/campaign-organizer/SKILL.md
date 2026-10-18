@@ -85,11 +85,10 @@ Evolved types are identical to built-in ones.
 
 ### Temporal and Entity Fields
 
-Universal temporal fields (`lastUpdated`, `asOfSession`,
-`createdSession`, `source`) and faction/clue world-evolution fields
-are in `shared/entity-schema.md` (§ Universal
-Fields, § Core Entity Types — read those sections, not the whole
-file). Preserve them in every Organize or Weave pass.
+A type's fields and values: `schema_rules.py show <type>`. What the
+universal and world-evolution fields mean: `shared/entity-schema.md`
+§ Universal Fields, § Core Entity Types. Preserve them in every
+Organize or Weave pass.
 
 `campaign-timeline.md` at the vault root, if present, is the
 append-only canonical record of what happened. Never reorganise

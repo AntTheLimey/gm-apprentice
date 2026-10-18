@@ -28,6 +28,7 @@ from vaultlib import (  # noqa: E402,F401
     MAX_PLAUSIBLE_SESSION,
     ONTOLOGY_PATH,
     QUOTED_SCALAR_RE,
+    WRAP_UP_TYPE,
     WRAP_UP_TYPES,
     chapter_key,
     chapter_of,
@@ -104,6 +105,39 @@ ADVENTURE_BRIEF_SHAPE = {
 }
 WORLD_DOMAIN_STATUS = {"active", "stub", "inactive"}
 PLAN_TYPES = {"arc", "scene", "investigation", "timeline"}
+# Named by the schema, checked by nothing: how a note entered canon, and
+# where a faction or organization stands.
+SOURCE_VALUES = frozenset({"play", "prep", "backstory", "world-evolution"})
+FACTION_STATUS = frozenset({"active", "weakened", "destroyed", "allied", "dormant"})
+
+# The values a field takes, by note type ("*": any type). CHECKED_VALUES is
+# what scripts/validate_schema.py rejects anything outside of; LISTED_VALUES
+# are words the schema names that no check enforces (`show`: unchecked).
+CHECKED_VALUES: dict[str, dict[str, frozenset[str]]] = {
+    "*": {"canon_status": frozenset(CANON_STATUS_VALUES)},
+    "session": {"status": frozenset(SESSION_NOT_YET_RUN | SESSION_PLAYED)},
+    "scene": {"status": frozenset(SCENE_STATUS), "scene_type": frozenset(SCENE_TYPES)},
+    "npc": {"status": frozenset(NPC_STATUS)},
+    "pc": {"status": frozenset(NPC_STATUS)},
+    "adventure-brief": {"scope": frozenset(ADVENTURE_BRIEF_SCOPE),
+                        "continuation_type": frozenset(ADVENTURE_BRIEF_CONTINUATION),
+                        "adventure_shape": frozenset(ADVENTURE_BRIEF_SHAPE)},
+    "campaign_overview": {"status": frozenset(CAMPAIGN_OVERVIEW_STATUS),
+                          "scope": frozenset(ADVENTURE_BRIEF_SCOPE)},
+    "world_domain": {"status": frozenset(WORLD_DOMAIN_STATUS)},
+    "plan": {"plan_type": frozenset(PLAN_TYPES)},
+}
+LISTED_VALUES: dict[str, dict[str, frozenset[str]]] = {
+    "*": {"source": SOURCE_VALUES},
+    "session": {"stage": SESSION_STAGE},
+    "faction": {"status": FACTION_STATUS},
+    "organization": {"status": FACTION_STATUS},
+}
+
+
+def checked_values(etype: str) -> dict[str, frozenset[str]]:
+    """Field -> the values the validator accepts, for a note of this type."""
+    return {**CHECKED_VALUES["*"], **CHECKED_VALUES.get(etype, {})}
 
 # Required fields per entity type
 # All entities need: type, canon_status
@@ -137,6 +171,48 @@ REQUIRED_FIELDS = {
     "world_domain": ["type", "canon_status", "domain", "status"],
     "world_flags": ["type"],
 }
+
+# Fields any note may carry, beside its type's own: on every entity, then
+# recommended (not enforced), then optional anywhere.
+UNIVERSAL_FIELDS = ("lastUpdated", "asOfSession", "createdSession", "source", "era")
+RECOMMENDED_FIELDS = ("aliases", "tags", "source_document", "campaign", "first_appearance")
+ANYWHERE_FIELDS = ("gm_aliases", "withheld", "superseded_by", "publish",
+                   "publish_exclude_fields", "publish_include_sections")
+COMMON_FIELDS = frozenset(UNIVERSAL_FIELDS + RECOMMENDED_FIELDS + ANYWHERE_FIELDS)
+
+# shared/templates name -> _Templates name: the one definition. A PC
+# template (pc-{system}.md, crew-fitd.md) keeps its own name.
+TEMPLATE_NAMES = {
+    "npc.md": "_Template_NPC.md",
+    "location.md": "_Template_Location.md",
+    "item.md": "_Template_Item.md",
+    "creature.md": "_Template_Creature.md",
+    "organization.md": "_Template_Organization.md",
+    "faction.md": "_Template_Faction.md",
+    "event.md": "_Template_Event.md",
+    "clue.md": "_Template_Clue.md",
+    "document.md": "_Template_Document.md",
+    "heritage.md": "_Template_Heritage.md",
+    "world-domain.md": "_Template_World_Domain.md",
+    "plan.md": "_Template_Plan.md",
+    "campaign-overview.md": "_Template_Campaign_Overview.md",
+    "session.md": "_Template_Session.md",
+    "session-plan.md": "_Template_Session_Plan.md",
+    "session-wrap.md": "_Template_Session_WrapUp.md",
+    "character-story.md": "character-story.md",
+}
+TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
+# Templates a new vault gets as a page, not under _Templates/ (vault_scaffold).
+WORLD_STUBS = {"world-index.md": "_World/world-index.md", "world-flags.md": "_World/_flags.md"}
+# Types with no template: the example frontmatter their fields are read from,
+# under skills/ (a skill zip holds only its own skill beside shared/).
+EXAMPLE_FILES = {
+    "adventure-brief": "the-midwife/references/scaffold-handoff.md",
+    "scene": "session-prep/references/scene-note-template.md",
+    "chapter": "shared/entity-schema.md",
+    "session-play-notes": "shared/session-document-chain.md",
+}
+SKILLS_DIR = TEMPLATES_DIR.parent.parent
 
 # Optional fields that support portraits (for future validation)
 PORTRAIT_TYPES = {
@@ -214,3 +290,209 @@ def tone_proposal(raw: object) -> str | None:
     if key in tone_families():
         return key
     return _ontology().get("tone_near", {}).get(key)
+
+
+# `show`: one note type's fields, read from the rules above, the
+# templates and the ontology, so the skills ask instead of reading the
+# schema files.
+#
+#     schema_rules.py show [TYPE]
+
+# Older spellings of a type: the name to write instead.
+OLDER_TYPE_NAMES: dict[str, str] = {
+    "player-characters": "pc_roster",
+    **{t: WRAP_UP_TYPE for t in sorted(WRAP_UP_TYPES) if t != WRAP_UP_TYPE},
+}
+
+
+def template_sources(etype: str) -> list[str]:
+    """The shared/templates files a vault gets for notes of this type: under
+    `_Templates/`, or as a `_World/` page (a type's older spelling has its new
+    name's)."""
+    etype = OLDER_TYPE_NAMES.get(etype, etype)
+    found = []
+    for path in sorted(TEMPLATES_DIR.glob("*.md")):
+        if path.name not in TEMPLATE_NAMES and path.name not in WORLD_STUBS \
+                and not path.name.startswith("pc-") and path.name != "crew-fitd.md":
+            continue
+        fm = extract_frontmatter(path.read_text(encoding="utf-8")) or {}
+        if fm.get("type") == etype:
+            found.append(path.name)
+    return found
+
+
+EXAMPLE_BLOCK_RE = re.compile(r"^```(?:yaml|markdown)\n(---\n.*?\n---)\n", re.M | re.S)
+
+
+def example_fields(etype: str) -> list[str]:
+    """The fields of the example frontmatter for a type with no template;
+    empty when there is none (or its skill is not installed)."""
+    rel = EXAMPLE_FILES.get(etype)
+    path = SKILLS_DIR / rel if rel else None
+    if path is None or not path.is_file():
+        return []
+    for m in EXAMPLE_BLOCK_RE.finditer(path.read_text(encoding="utf-8")):
+        fm = extract_frontmatter(m.group(1) + "\n") or {}
+        if fm.get("type") == etype:
+            return list(fm)
+    return []
+
+
+def template_fields(etype: str) -> list[str]:
+    """Every frontmatter field the type's templates (or, with none, its
+    example) carry, in order."""
+    fields: list[str] = []
+    for name in template_sources(etype):
+        fm = extract_frontmatter((TEMPLATES_DIR / name).read_text(encoding="utf-8")) or {}
+        fields.extend(f for f in fm if f not in fields)
+    return fields or example_fields(etype)
+
+
+def _ancestors(name: str) -> list[str]:
+    hierarchy = _ontology()["entity_types"]["hierarchy"]
+    out: list[str] = []
+    todo = [name]
+    while todo:
+        child = todo.pop(0)
+        for parent, kids in hierarchy.items():
+            if child in kids and parent not in out:
+                out.append(parent)
+                todo.append(parent)
+    return out
+
+
+def known_types() -> list[str]:
+    """The types the schema has rules for."""
+    return sorted(REQUIRED_FIELDS)
+
+
+def _values(table: dict[str, frozenset[str]]) -> str:
+    return "; ".join(f"{field} {'|'.join(sorted(vals))}" for field, vals in table.items())
+
+
+def _common_line() -> str:
+    universal = [f"{f} {'|'.join(sorted(LISTED_VALUES['*'][f]))}" if f in LISTED_VALUES["*"]
+                 else f for f in UNIVERSAL_FIELDS]
+    return ("any type: " + ", ".join(universal) + "; recommended "
+            + " ".join(RECOMMENDED_FIELDS) + "; optional " + " ".join(ANYWHERE_FIELDS))
+
+
+def show_types() -> str:
+    """`show` with no type: the types, and the fields any type takes."""
+    return "\n".join([
+        "types: " + " ".join(known_types()),
+        "any other type is custom: no rules (vault_check reports it as INFO)",
+        _common_line(),
+        "canon_status SUPERSEDED needs superseded_by",
+        "show <type> for one type's fields",
+    ])
+
+
+def show(etype: str) -> str | None:
+    """One type's fields, compactly; None when the schema has no such type."""
+    hierarchy = _ontology()["entity_types"]["hierarchy"]
+    in_hierarchy = etype in hierarchy or any(etype in k for k in hierarchy.values())
+    if etype not in REQUIRED_FIELDS and not in_hierarchy:
+        return None
+    lines = []
+    head = etype
+    if etype in OLDER_TYPE_NAMES:
+        head += f" (older name: write {OLDER_TYPE_NAMES[etype]})"
+    kinds = _ancestors(etype)
+    if kinds:
+        head += " — kind of: " + ", ".join(kinds)
+    lines.append(head)
+    if etype in _ontology()["entity_types"]["abstract"]:
+        lines.append("abstract: never a note's type; " + "subtypes: "
+                     + " ".join(hierarchy.get(etype, [])))
+        return "\n".join(lines)
+    if etype not in REQUIRED_FIELDS:
+        lines.append("no rules of its own: a custom type to vault_check")
+    subtypes = hierarchy.get(etype, [])
+    if subtypes:
+        lines.append("subtypes: " + " ".join(subtypes))
+    sources = template_sources(etype)
+    systems = [s[3:-3] for s in sources if s.startswith("pc-")]
+    names = [WORLD_STUBS[s] + " page" if s in WORLD_STUBS
+             else f"_Templates/{TEMPLATE_NAMES.get(s, s)}"
+             for s in sources if not s.startswith("pc-")]
+    if systems:
+        names.insert(0, "_Templates/pc-{system}.md (" + " ".join(systems) + ")")
+    if names:
+        lines.append("template: " + ", ".join(names))
+    elif example_fields(etype):
+        lines.append(f"template: none; fields from the example in {EXAMPLE_FILES[etype]}")
+    folders = [f for f, types in TYPE_FOLDERS.items() if etype in types]
+    if folders:
+        lines.append("folder: " + ", ".join(folders))
+    required = REQUIRED_FIELDS.get(etype, [])
+    if required:
+        lines.append("required: " + ", ".join(required))
+    fields = template_fields(etype)
+    # canon_status is checked wherever it is written; shown where the type takes it.
+    checked = {f: v for f, v in checked_values(etype).items()
+               if f != "canon_status" or f in required or f in fields}
+    listed = LISTED_VALUES.get(etype, {})
+    optional = [f for f in fields if f not in required and f not in COMMON_FIELDS]
+    optional += [f for f in (*CHECKED_VALUES.get(etype, {}), *listed)
+                 if f not in required and f not in optional]
+    lines.append("optional: " + (", ".join(optional) if optional
+                                 else "none listed (no template or example)"))
+    if checked:
+        lines.append("values (checked): " + _values(checked))
+    if listed:
+        lines.append("values (unchecked): " + _values(listed))
+    lines.append("run `show` alone for the fields any type takes")
+    rules = []
+    if etype in PORTRAIT_TYPES:
+        rules.append("portrait is a path under _attachments/")
+    if etype == "plan":
+        rules.append("leads_to is a list of [[links]]")
+    if rules:
+        lines.append("rules: " + "; ".join(rules))
+    ont = _ontology()
+    edge_name = etype.replace("-", "_")
+    if edge_name in ont["not_edge_target_types"]:
+        lines.append("relationships: never a relationship target")
+    elif "relationships" in fields:
+        edge = [f for f in ont["edge_fields"] if f != "source"]
+        low, high = ont["edge_fields"]["strength"]["range"]
+        lines.append(f"relationships: list of {{{', '.join(edge)}}}; type one of "
+                     f"{len(ont['predicates'])} in _meta/relationship-types.md; tone one "
+                     f"of {len(tone_families())} listed; strength {low}-{high}")
+        stands = [f"{p['field']} ({p['predicate']})" for p in ont["place_fields"]
+                  if p["field"] in fields]
+        if stands:
+            lines.append("fields that stand for an edge: " + ", ".join(stands))
+    renamed: dict[str, list[str]] = {}
+    for old, new, _since in DEPRECATED_FIELDS.get("*", []) + DEPRECATED_FIELDS.get(etype, []):
+        renamed.setdefault(new, []).append(old)
+    if renamed:
+        lines.append("old names: " + "; ".join(
+            f"{', '.join(olds)} -> {new}" for new, olds in renamed.items()))
+    return "\n".join(lines)
+
+
+def main(argv: list[str] | None = None) -> int:
+    import argparse
+    parser = argparse.ArgumentParser(
+        prog="schema_rules.py",
+        description="Print the frontmatter rules for a note type.")
+    sub = parser.add_subparsers(dest="command", required=True)
+    one = sub.add_parser("show", help="one type's fields; no type lists the types")
+    one.add_argument("type", nargs="?")
+    args = parser.parse_args(argv)
+    if args.type is None:
+        print(show_types())
+        return 0
+    text = show(args.type)
+    if text is None:
+        print(f"no type '{args.type}' in the schema; known: {' '.join(known_types())}",
+              file=sys.stderr)
+        return 1
+    print(text)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

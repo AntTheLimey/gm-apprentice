@@ -58,9 +58,9 @@ wrong vault path; ask for it.
   drafts) — ignore in every mode; never flag them.
 
 **Schema:** field, enum and legacy-key checks come from
-`vault_check.py frontmatter`. For type hierarchy or required
-relationships read only those sections of `shared/entity-schema.md`;
-canon states are in `shared/canon-status.md`.
+`vault_check.py frontmatter`; a type's fields and place in the
+hierarchy from `schema_rules.py show <type>`; canon states are in
+`shared/canon-status.md`.
 
 **Reports** go in `_QA/` at the vault root (create on first use),
 named `QA_{mode}_{YYYY-MM-DD}.md`, from

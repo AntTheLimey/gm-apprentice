@@ -34,7 +34,8 @@ from pathlib import Path
 
 import index_build
 import migrate_vault as mv
-from schema_rules import SYSTEMS, TYPE_FOLDERS, system_id, without_generated_markers
+from schema_rules import (SYSTEMS, TYPE_FOLDERS, WORLD_STUBS, system_id,
+                          without_generated_markers)
 from migrate_core import StepFailed, write_text_atomic
 from vault_write import utf8_output
 from vaultlib import (PUBLISH_TOOL, SETTINGS_FILE, STAMP_KEY, STATE_FILE,
@@ -263,10 +264,10 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
             # lambda here.
             file(f"_Templates/{name}", partial(str, text))
     if pages:
-        file("_World/world-index.md",
+        file(WORLD_STUBS["world-index.md"],
              lambda: _plugin_text(mv.TEMPLATES / "world-index.md"),
              present=has_world_index)
-        file("_World/_flags.md",
+        file(WORLD_STUBS["world-flags.md"],
              lambda: _plugin_text(mv.TEMPLATES / "world-flags.md"),
              present="world_flags" in types)
         file(TIMELINE, lambda: seed("timeline.md", campaign),

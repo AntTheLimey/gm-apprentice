@@ -183,7 +183,7 @@ or rejects each. Then execute the filing protocol.
 
 ### Filing Protocol
 
-**New entities:** create file per `shared/entity-schema.md` schema,
+**New entities:** create the file from its `_Templates/` copy,
 setting `createdSession` in the initial write. Then stamp the rest
 with the bundled stamper (dry-run first, `--write` on confirmation):
 
