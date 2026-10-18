@@ -205,7 +205,8 @@ npx wrangler@4 pages deploy
 
 wrangler only uploads files that changed, so repeat deploys are fast.
 `gm-publish deploy --verify` runs this same build-then-deploy pair and
-also probes the live URL — the commands above are the fallback for
+also probes the deployment wrangler printed (exit 1 if it cannot tell
+which build is served) — the commands above are the fallback for
 running it by hand. The vault's build steps run with every build,
 and a step that fails stops it before anything is deployed. `settings
 get player_site.before_build player_site.after_build` lists them.
