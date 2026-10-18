@@ -83,13 +83,10 @@ saying so and reads nothing from KV.
 A live value is changed on the PC's page (from any device), not in the
 note.
 
-- The site keeps what a player last saved for 30 days. For those 30 days
-  `flush` writes that saved value over the note's cell, every time it
-  runs, whether or not the player was at the session.
-- So a number typed into a live cell between sessions does not last. The
-  GM sets `HP (Current)` to 17 after an off-screen rest; the player is
-  away next session; `flush` at wrap-up writes the 3 that player saved a
-  fortnight ago. GURPS and CoC live values behave the same way.
+- The site keeps what a player last saved for 30 days. `flush` writes a
+  saved record into the note once, and remembers which one in
+  `_meta/vault-state.json`. A value the GM sets in the note afterwards
+  stays until the player saves again.
 - What the page shows depends on the device. A device that saved the
   value shows the saved one, and so does any device using the same
   session code. A device with no session code or a different one, or a

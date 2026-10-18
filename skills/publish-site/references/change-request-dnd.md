@@ -52,8 +52,8 @@ Vault". Follow it; it is not repeated here.
 
   1. **The thing is live: `advice`.** Consider nothing else. A live value
      is changed on the PC's page (from any device), not in the note: for
-     30 days after it was last saved there, `flush` writes the saved value
-     over the note's cell, so an edit to the cell would be undone. Apply
+     30 days after it was last saved there, the page shows the saved value,
+     so an edit to the cell would not show. Apply
      nothing and finalize:
 
      ```bash

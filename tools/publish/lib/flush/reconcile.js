@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('node:crypto');
+
 // KV member key shape: loadout:<campaignId>:<pcSlug>:<player>. The pcSlug is
 // segment 2. Mirrors loadout-core.mjs's campaignOfKey (which reads segment 1).
 function pcSlugOfKey(key) {
@@ -12,7 +14,7 @@ function pcSlugOfKey(key) {
 // (each live-state save writes the whole blob, so newest = complete snapshot).
 // Missing updatedAt sorts oldest; equal times break on the greater key so the
 // result is deterministic regardless of object iteration order.
-function latestStateByPcSlug(states) {
+function latestRecordsByPcSlug(states) {
   const best = {}; // pcSlug -> { key, blob, at }
   for (const key of Object.keys(states || {})) {
     const slug = pcSlugOfKey(key);
@@ -25,9 +27,21 @@ function latestStateByPcSlug(states) {
       best[slug] = { key: key, blob: blob, at: at };
     }
   }
+  return best;
+}
+
+function latestStateByPcSlug(states) {
+  const best = latestRecordsByPcSlug(states);
   const out = {};
   for (const slug of Object.keys(best)) out[slug] = best[slug].blob;
   return out;
 }
 
-module.exports = { pcSlugOfKey, latestStateByPcSlug };
+// What names one saved record: its key and save time. A record with no save time is named by its
+// content instead, so a changed one still reads as new.
+function recordMarker(key, blob) {
+  const stamp = typeof blob.updatedAt === 'number' ? String(blob.updatedAt) : 'c' + crypto.createHash('sha1').update(JSON.stringify(blob)).digest('hex');
+  return key + '@' + stamp;
+}
+
+module.exports = { pcSlugOfKey, latestStateByPcSlug, latestRecordsByPcSlug, recordMarker };
