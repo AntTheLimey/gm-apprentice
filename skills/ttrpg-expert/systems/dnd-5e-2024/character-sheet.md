@@ -86,13 +86,12 @@ report has an `ERROR` row, the rules checks do not run: fix the note first.
 | `LOOK` | A number differs from the free rules' table for the class and level | Tell the GM. If the number is right (an item, a boon, a house rule), write the reason in brackets beside it, `22 (belt of giant strength)`, and the row goes away. That works for a score over 20, `HP (Max)` and a slot Total; the other `LOOK` rows are handled as listed below |
 | `CANTCHECK` | A class is outside the free rules, the class line cannot be read, or slot totals differ for a class with no spells of its own | Mention it once. It is not a fault |
 
+Slot totals: a Warlock's `Pact (3rd)` row is held to the Warlock's own
+count and slot level, and the numbered rows to the rest. A reason in
+brackets works here too, `5 (Ring of Spell Storing)`.
+
 Other `LOOK` rows have no cell for a reason:
 
-- Slot totals: a Warlock's `Pact (3rd)` row is held to the Warlock's own
-  count and slot level, and the numbered rows to the rest. If the total
-  is right for the character (a ring that stores spells), write the reason
-  in brackets beside it, `5 (Ring of Spell Storing)`; the page still reads
-  the number.
 - Cantrip or prepared-spell counts, or a spell above what the class can
   prepare: a spell from an item, feat or species trait is left out of the
   count when its `Source` cell says so; one the character always has

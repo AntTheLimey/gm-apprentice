@@ -34,7 +34,8 @@ tool said "fine" when it wasn't. Publish tool 1.37.0.
   so a value the GM sets in the note afterwards is no longer
   overwritten by the older record. GURPS, CoC and D&D (#438).
 - A D&D slot total written with a reason, such as
-  `5 (Ring of Spell Storing)`, stays on the live sheet, and the D&D
+  `5 (Ring of Spell Storing)` or a link as the reason, stays on the live
+  sheet and in the flush, and the D&D
   sheet guide says a reason works there (#444).
 - A CoC skill name with a trailing tick (`Charm ✓`) merges with the
   skill instead of showing as a second row (#365). The "looks Regency"
