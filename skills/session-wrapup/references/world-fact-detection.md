@@ -36,8 +36,8 @@ during wrap-up.
 Before staging a finding:
 1. `_World/_flags.md`:
    - **Ignored** → suppress silently
-   - **Deferred** → increment the mention count and note the
-     session; stage for reconcile once mentioned in 3+ sessions
+   - **Deferred** → record this session on the entry (raise its
+     counts, if it keeps counts) and list it
    - **Canon** → suppress
 2. `_World/` domain files — already encoded → suppress.
 3. Entity files — matching entity exists → suppress.
@@ -54,8 +54,7 @@ it touches, and whether it's new or accumulated:
 - **Dwarf heritage** — Torga described as "a dwarf merchant"
   (first mention). No heritage definition exists.
   Domains: heritages
-- **The Old Empire** — referenced again (deferred, 3 prior
-  mentions, threshold reached). Sessions: 3, 4, 5, 7.
-  Recommend resurfacing.
+- **The Old Empire** — referenced again (deferred).
+  Sessions: 3, 4, 5, 7.
   Domains: history-timeline, politics-governance
 ```

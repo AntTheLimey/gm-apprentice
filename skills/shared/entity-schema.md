@@ -341,7 +341,7 @@ publish; keep them in the body's GM Notes to hide them
 `average_height`, `notable_traits`, `portrait` (optional)
 
 **World Domain:** `domain`, `status` (active/stub/inactive),
-`summary`, `rules` (array of machine-checkable world rules)
+`summary`, `rules` (array of world rules, a sentence each)
 
 **World Flags:** `last_reviewed`
 

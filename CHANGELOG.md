@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.77] — 2026-10-18
+
+World rules are read, not evaluated, and deferred world threads are
+counted, not judged. Publish tool 1.36.2.
+
+### Changed
+
+- campaign-organizer and campaign-qa read each world rule and ask about
+  a note that contradicts it, instead of evaluating `check` objects
+  (`field`, `max`, `allowed_values`). World rules are written as
+  sentences; an `{ id, rule, check }` entry still reads.
+- Deferred world flags are listed with the sessions each came up in.
+  session-prep no longer picks out items "gaining traction" (3+
+  sessions or mentions), wrap-up no longer stages one for reconcile
+  after 3 sessions, and campaign-qa no longer highlights "resurfacing
+  criteria". What a count means is the GM's call.
+
+### Removed
+
+- campaign-qa's world soft checks (no economic base, no water source,
+  monoculture, stasis and the rest). They judged how a world is built;
+  the midwife's worldbuilding questions and principles already ask each
+  one when the GM wants that conversation.
+
+### Fixed
+
+- A world domain page whose rules are plain sentences shows them; it
+  showed empty bullets.
+
+---
 ## [1.10.76] — 2026-10-18
 
 The site set-up guide reads 6.5 KB less (31,378 to 24,871 bytes).

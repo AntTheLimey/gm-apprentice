@@ -17,9 +17,8 @@ relative to the skill root, as in SKILL.md.
    `references/worldbuilding-questions.md` for the target domain.
    One question at a time. Drill into causes and consequences
    for 2-3 turns per thread before moving to the next question.
-4. **Update the domain file** — narrative body and any
-   machine-checkable rules that emerged from the conversation.
-   Rules use the `{ id, rule, check }` format.
+4. **Update the domain file** — narrative body and any rules
+   that emerged from the conversation, one sentence each.
 5. **Surface cross-domain implications.** After the
    conversation, check `references/cross-domain-implications.md`
    and offer to update related domain files.

@@ -1,14 +1,15 @@
 # World Audit Criteria
 
 Audit checks for world consistency. Only fire when `_World/`
-exists with active domain files containing rules.
+exists with active domain files containing rules; look for
+notes that contradict a rule.
 
-## Hard Checks (clear right/wrong)
+## Contradictions
 
 | Check | Domain Source | Entity Types | What's Flagged |
 |-------|-------------|-------------|----------------|
-| Age exceeds heritage lifespan | heritages.md | npc, pc | NPC age > max lifespan for their heritage |
-| Unknown heritage | heritages.md | npc, pc | Heritage value not in allowed_values list |
+| Age beyond a heritage's lifespan | heritages.md | npc, pc | An age the heritage's rules rule out |
+| Unknown heritage | heritages.md | npc, pc | A heritage outside a rule that lists the heritages there are |
 | Timeline contradiction | history-timeline.md | event, any with era | Event date contradicts era ordering |
 | Tech-level violation | magic-technology.md | item, location | Item or feature from wrong tech era |
 | Climate inconsistency | geography-climate.md | location | Location claims climate inconsistent with defined geography |
@@ -16,30 +17,16 @@ exists with active domain files containing rules.
 **Output format:** "Inconsistency found — review needed."
 Reference the specific world rule being violated.
 
-## Soft Checks (questions, not errors)
-
-| Check | What's Flagged |
-|-------|----------------|
-| No economic base | Faction with no described revenue source or economic activity |
-| No water source | Settlement with no apparent water source or trade justification |
-| No heritage culture | Heritage entity with no described culture or societal structure |
-| Long-lived no-impact | Long-lived NPC with no explanation for how they've affected history |
-| Monoculture | Neighboring regions with identical cultures (planet-of-hats signal) |
-| Stasis signal | Historical period with no recorded change (medieval stasis signal) |
-
-**Output format:** "Question — worth considering." These are
-suggestions, not errors.
-
 ## Deferred Flag Review
 
-Report all deferred items from `_flags.md` with mention counts
-and session references. Group by domain. Highlight items that
-meet resurfacing criteria (3+ sessions or 3+ mentions).
+Report all deferred items from `_flags.md` with how often and in
+which sessions each came up, grouped by domain. What a count
+means is the GM's call.
 
 ## Scoping
 
 - Only run checks for domains with `status: active` files
-  containing `rules` entries
+  containing rules
 - No false positives from undefined domains — if
   `geography-climate.md` doesn't exist, skip geographic checks
 - Cross-reference each finding with `_flags.md` — if the topic

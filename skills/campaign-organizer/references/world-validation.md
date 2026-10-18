@@ -8,25 +8,31 @@ advisory — never blocking.
 
 - During entity creation (Organize, Dissect modes)
 - During entity updates (Weave mode)
-- Only when `_World/` exists and relevant domain files have
-  `status: active` with `rules` entries
+- Only when `_World/` exists and a domain file that could apply
+  has `status: active` and `rules`
 
 ## Validation Procedure
 
-1. Read `_World/` domain files that could apply to this entity
-   type:
-   - NPCs/PCs → `heritages.md` (lifespan, heritage list)
-   - Locations → `geography-climate.md`
-   - Factions → `politics-governance.md`, `economics-trade.md`
-   - Any entity → `magic-technology.md` (tech era constraints)
+1. Read the domain files that could apply to this entity type:
 
-2. For each rule with a `check` object, evaluate:
-   - `field` — does this entity have this field?
-   - `max` / `min` — is the value within range?
-   - `allowed_values` — is the value in the list?
-   - `entity_type` — does this rule apply to this entity type?
+   | Domain File | Entity Types |
+   |-------------|-------------|
+   | heritages.md | npc, pc |
+   | history-timeline.md | event, any with a date or era |
+   | geography-climate.md | location |
+   | politics-governance.md | faction, organization |
+   | economics-trade.md | faction, location |
+   | magic-technology.md | any |
 
-3. For each violation, surface the finding:
+   A vault may name its domain files differently; go by each
+   file's `domain` and `summary`.
+
+2. Read each rule (a sentence, or the `rule` of an
+   `{ id, rule, check }` entry) and ask whether the entity
+   contradicts it. A rule describes the world; an entity that
+   bends it may be the point.
+
+3. For each contradiction, surface the finding:
    > "This NPC is 400 years old, but world rules say humans live
    > 60-85 years. Intentional?"
 
@@ -34,20 +40,10 @@ advisory — never blocking.
    - **Canon** — the exception is intentional. Note it on the
      entity (e.g., `age_note: "Unnaturally long-lived due to
      Mythos exposure"`). Optionally update the world rule.
-   - **Ignore** — the violation doesn't matter. Add to
+   - **Ignore** — the contradiction doesn't matter. Add to
      `_flags.md` ignored section to suppress future flags.
    - **Defer** — not sure yet. Add to `_flags.md` deferred
      section. Continue with entity creation.
-
-## Checks That Fire
-
-| Domain File | Entity Types | What's Checked |
-|-------------|-------------|----------------|
-| heritages.md | npc, pc | Age vs lifespan range, heritage vs allowed list |
-| geography-climate.md | location | Settlement rules (if defined) |
-| politics-governance.md | faction, organization | Hierarchy depth |
-| economics-trade.md | faction, location | Economic base rules (if defined) |
-| magic-technology.md | any | Tech era constraints (if defined) |
 
 ## Reading _flags.md
 
