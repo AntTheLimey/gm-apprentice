@@ -148,7 +148,7 @@ const foldQuotes = (text) => canonicalNfc(text).replace(/[\u2018\u2019\u02bc\u20
 // "hopes" is a word, not the note Hope. Read the hits with nameHits, which applies that rule.
 const NO_SPACE = '\\p{scx=Han}\\p{scx=Hiragana}\\p{scx=Katakana}\\p{scx=Hangul}\\p{scx=Thai}\\p{scx=Lao}\\p{scx=Khmer}\\p{scx=Myanmar}';
 const SPACED = `(?:(?=[\\p{L}\\p{N}])[^${NO_SPACE}])`;
-const NAME_SEP = /[\s_\-‐‑]+/;
+const NAME_SEP = /[\s_\-\u2010\u2011]+/;
 function nameMatcher(alias) {
   const words = foldQuotes(String(alias).trim()).split(NAME_SEP).filter(Boolean);
   const last = words.pop() || '';
@@ -284,17 +284,16 @@ function secretNamesOf(input) {
     if (aliasOwners.has(key)) withheldOwners.delete(key);
     else if (publicNames.has(key)) { collisions.push({ ...owner, key }); withheldOwners.delete(key); }
   }
-  const matcher = nameMatcher;
   const names = [...aliasOwners.values()].map((a) => ({
     ...a,
     kind: 'alias',
     // Between the words of a name a space, an underscore or a hyphen all read as the same
     // name ("The_Watcher", "The-Watcher"), whichever of them gm_aliases has.
-    re: matcher(a.alias),
-  })).concat([...withheldOwners.values()].map((a) => ({ ...a, kind: 'withheld', re: matcher(a.alias) })))
+    re: nameMatcher(a.alias),
+  })).concat([...withheldOwners.values()].map((a) => ({ ...a, kind: 'withheld', re: nameMatcher(a.alias) })))
     // The GM's never-show words (player_site.never_show): searched as names are, but a public name that holds one is no
     // excuse (the GM said never), so none is dropped for colliding with one. They belong to no note.
-    .concat([...new Map((input.neverShow || []).map((w) => [fold(w), w])).values()].map((w) => ({ alias: w, rel: null, kind: 'never_show', re: matcher(w) })));
+    .concat([...new Map((input.neverShow || []).map((w) => [fold(w), w])).values()].map((w) => ({ alias: w, rel: null, kind: 'never_show', re: nameMatcher(w) })));
   // One cheap look at the raw HTML decides whether a page is read at all: the longest word
   // of each secret name. A name with no word of three letters is looked for on every page.
   const probeWords = names.map((a) => (foldQuotes(a.alias).match(/[\p{L}\p{N}]+/gu) || []).sort((x, y) => y.length - x.length)[0] || '');
