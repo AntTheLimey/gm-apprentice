@@ -251,12 +251,14 @@ would do.
 
 ## The state file
 
-`_meta/vault-state.json` is a JSON object. Two keys matter:
+`_meta/vault-state.json` is a JSON object. Three keys matter:
 
 - `gm_apprentice_version` is the plugin version the vault was last updated
   to.
 - `setup` is the note the publish set-up guide leaves for itself between
   runs.
+- `flush_written` holds, per PC, which saved live record `flush` last
+  wrote into the note, so the same record is not written twice.
 
 Other keys may appear and must be kept. Do not edit the file by hand. The
 `settings setup-note` command reads and writes `setup`.
