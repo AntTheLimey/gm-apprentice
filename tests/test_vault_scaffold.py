@@ -642,6 +642,8 @@ class NewFilesTests(unittest.TestCase):
         code, out = run(vault, "--system", "coc", "--name", "Ashford",
                         "--write")
         self.assertEqual(code, 0, out)
+        self.assertIn("UPDATED\t_meta/vault-state.json", out)
+        self.assertNotIn("CREATED\t_meta/vault-state.json", out)
         self.assertEqual(read_stamp(vault), plugin_version()[0])
         state = json.loads((vault / "_meta" / "vault-state.json").read_text())
         self.assertEqual(state["flush_written"], {"mara": "k1"})

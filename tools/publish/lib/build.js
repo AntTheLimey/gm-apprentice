@@ -8,7 +8,7 @@ const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllN
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
-const { nameList, gmAliasList, strippedLines, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { nameList, gmAliasList, strippedLines, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
@@ -1788,7 +1788,7 @@ function buildSite(options) {
       banner.link = null;
       return;
     }
-    if (banner.image && !/^https?:\/\//i.test(banner.image)) {
+    if (banner.image && !isWebImageAddress(banner.image)) {
       const imageFull = resolveVaultAsset(banner.image, nm('player_site.landing.banner.image'));
       banner.image = imageFull ? (writes !== 'all' ? `images/banners/landing/${path.basename(imageFull)}` : copyBannerAsset(imageFull, 'landing')) : null;
     }
@@ -1951,7 +1951,7 @@ function buildSite(options) {
     const vaultRoot = path.resolve(config.vaultPath);
     const there = (rel) => fs.existsSync(path.resolve(vaultRoot, rel));
     const rel = (p) => canonicalNfc(String(p).replace(/\\/g, '/'));
-    if (!onlySheets && campaignImageSource && !/^https?:\/\//.test(campaignImageSource) && there(campaignImageSource)) {
+    if (!onlySheets && campaignImageSource && !isWebImageAddress(campaignImageSource) && there(campaignImageSource)) {
       audit.readFileName(rel(campaignImageSource), `images/${path.basename(campaignImageSource)}`);
     }
     for (const dir of onlySheets ? [] : Object.keys(DIR_LABELS)) {

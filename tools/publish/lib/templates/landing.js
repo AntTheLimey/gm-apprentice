@@ -92,7 +92,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   const banner = landingConfig.banner;
   if (banner && (banner.title || banner.text || banner.image)) {
     // A web address is printed as written (spaces aside); a picture copied into the site goes through encodeImageUrl.
-    const imgSrc = !banner.image ? '' : /^https?:\/\//i.test(banner.image) ? banner.image.replace(/ /g, '%20') : encodeImageUrl(banner.image);
+    const imgSrc = banner.image ? campaignImageSrc(banner.image) : '';
     const img = imgSrc ? `<img class="landing-banner-img" src="${escapeHtml(imgSrc)}" alt="">` : '';
     const words = (banner.title || banner.text)
       ? `<div class="landing-banner-body">${banner.title ? `<h2 class="landing-banner-title">${escapeHtml(banner.title)}</h2>` : ''}${banner.text ? `<p class="landing-banner-text">${escapeHtml(banner.text)}</p>` : ''}</div>`
