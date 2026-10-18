@@ -147,7 +147,12 @@ function ignoreCacheInGit(siteDir) {
   if (named) return;
   const eol = text.includes('\r\n') ? '\r\n' : '\n';
   const lead = text === '' || text.endsWith('\n') ? '' : eol;
-  fs.appendFileSync(file, `${lead}${CACHE_FOLDER}/${eol}`);
+  try {
+    fs.appendFileSync(file, `${lead}${CACHE_FOLDER}/${eol}`);
+  } catch (err) {
+    // A .gitignore that cannot be written (read-only) must not stop the build; the cache still works.
+    console.warn(`  WARNING: could not add the image cache folder ${CACHE_FOLDER}/ to ${file} (${err.code || err.message}); add it by hand.`);
+  }
 }
 
 // The way this tool asks the encoder for a picture (buildCwebpArgs, the width probe). Raise it whenever
