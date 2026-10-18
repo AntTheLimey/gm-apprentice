@@ -938,6 +938,15 @@ class PublishToolUnavailable(Exception):
     """The publish tool could not say what publishes. The message is why."""
 
 
+# The first publish tool with the `lines` op `cut` (`build_lines`).
+CUT_SINCE = "1.17.0"
+
+
+class PublishToolTooOld(PublishToolUnavailable):
+    """The tool answers, but predates a question asked of it. The message
+    is the first version that has it."""
+
+
 class PublishLines:
     """A `gm-publish lines` process: one JSON question per line."""
 
@@ -1902,7 +1911,8 @@ def build_lines(text: str, exclude_sections: Iterable[str] = ()
     what it leaves of the rest is the publish tool's `cut` answer; the
     section filter is then asked about the lines left, as the build runs
     it. Headings and code fences are read from what is left. Raises
-    `PublishToolUnavailable` when the tool cannot be asked."""
+    `PublishToolUnavailable` when the tool cannot be asked, and
+    `PublishToolTooOld` when it predates `cut`."""
     lines = text.split("\n")
     if len(lines) > 1 and lines[-1] == "":
         lines.pop()
@@ -1915,7 +1925,12 @@ def build_lines(text: str, exclude_sections: Iterable[str] = ()
     if not body:
         return [], []
     request = {"op": "cut", "text": "\n".join(body)}
-    answer = PUBLISH_LINES.ask(request)
+    try:
+        answer = PUBLISH_LINES.ask(request)
+    except PublishToolUnavailable as e:
+        if "unknown op" in str(e):
+            raise PublishToolTooOld(CUT_SINCE) from e
+        raise
     cut = answer.get("cut")
     unbalanced = answer.get("unbalanced")
     own = _LINES_BY_TOOL[PUBLISH_TOOL]

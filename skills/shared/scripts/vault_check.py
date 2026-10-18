@@ -190,6 +190,7 @@ from vaultlib import (  # noqa: F401
     entity_type,
     body_text,
     PUBLISH_TOOL,
+    PublishToolTooOld,
     PublishToolUnavailable,
     publish_tool_problem,
     publisher_lines,
@@ -1957,6 +1958,14 @@ def check_site_faults(vault: Path, files: list[str] | None = None
     return rows
 
 
+def _tool_too_old_row(check: str, e: PublishToolTooOld) -> str:
+    """The row for a site whose publish tool answers but predates a
+    question the check needs: an old pin, which update-pin fixes."""
+    return (f"ERROR\t(vault)\t{check} did not run: the site's publish tool "
+            f"predates {e} and is too old for this check — run update-pin, "
+            f"then run this again")
+
+
 def _tool_gone_row(check: str, e: Exception) -> str:
     """The row for a publish tool that stopped answering after a check
     began: what came before it stands, nothing after it was done."""
@@ -2571,6 +2580,8 @@ def check_gm_leak(vault: Path, folder: str | None,
     Its writes all come after the last question, so nothing is written."""
     try:
         return _gm_leak(vault, folder, fix, renest_excludes, explain)
+    except PublishToolTooOld as e:
+        return [_tool_too_old_row("gm-leak", e)]
     except PublishToolUnavailable as e:
         return [_tool_gone_row("gm-leak", e)]
 
@@ -2854,7 +2865,8 @@ def _normalise_sheet(lines: Iterable[str]) -> list[str]:
     return out
 
 
-def _stat_sheet_lines(states: list[LineState], start: LineState) -> list[str]:
+def _stat_sheet_lines(states: Sequence[LineState | BuildLine],
+                      start: LineState | BuildLine) -> list[str]:
     """The published lines of the `## Stat Sheet` section `start` opens, up
     to the next H2, normalised."""
     lines = []
@@ -2960,7 +2972,8 @@ def _stat_sheet_problem(lines: list[str]) -> str | None:
     return None
 
 
-def _has_labelled_field(states: list[LineState], start: LineState,
+def _has_labelled_field(states: Sequence[LineState | BuildLine],
+                        start: LineState | BuildLine,
                         level: int, kept: set[int] | None = None) -> bool:
     """Does the block `start` opens carry any `**Label:**` field?
 
@@ -2989,6 +3002,8 @@ def check_pc_body(vault: Path, folder: str | None = None,
     part-way. The check writes nothing."""
     try:
         return _pc_body(vault, folder, files, newer_than, explain)
+    except PublishToolTooOld as e:
+        return [_tool_too_old_row("pc-body", e)]
     except PublishToolUnavailable as e:
         return [_tool_gone_row("pc-body", e)]
 
@@ -3033,7 +3048,12 @@ def _pc_body(vault: Path, folder: str | None = None,
     # False once the tool says character sheets are off: no sheet is built, so
     # nothing about one is worth a row. Unknown (an older tool) means on.
     sheets_on = True
-    for rel, text in vault_files(vault, folder, files, newer_than=newer_than):
+    # Read as written, as gm-leak reads it: the build splits a note at `\n`
+    # alone (`build_lines`). Frontmatter and the structure model read it
+    # with universal newlines, as every other check does.
+    for rel, raw in vault_files(vault, folder, files, newer_than=newer_than,
+                                newline=""):
+        text = raw.replace("\r\n", "\n").replace("\r", "\n")
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
             continue
@@ -3051,7 +3071,14 @@ def _pc_body(vault: Path, folder: str | None = None,
                 excludes, no_tool = [], True
         if excludes is None:
             excludes = vault_settings(vault).get("player_site.hide.sections")
-        states, problems = scan_body(text, excludes)
+        # Which headings publish, and the fence rows, are the build's reading
+        # (#441). With no site and no tool to ask, scan_body's model: nothing
+        # publishes then, and only the structure is checked.
+        states: Sequence[LineState | BuildLine]
+        if no_tool:
+            states, problems = scan_body(text, excludes)
+        else:
+            states, problems = build_lines(raw, excludes)
         kept = None if no_tool else _published_linenos(states, fm)
         if kept is not None and not kept:
             continue
@@ -3069,7 +3096,7 @@ def _pc_body(vault: Path, folder: str | None = None,
                         f"character sheet \u2014 move the values into the "
                         f"note's ## {CANONICAL_FIRST_H2} sections")
 
-        headings: list[tuple[LineState, int, str]] = []
+        headings: list[tuple[LineState | BuildLine, int, str]] = []
         for state in states:
             if kept is not None and state.lineno not in kept:
                 continue
@@ -3078,6 +3105,16 @@ def _pc_body(vault: Path, folder: str | None = None,
         h2s = [(s, title) for s, level, title in headings if level == 2]
 
         named = [h for h in headings if h[2].casefold() == CURRENT_STATUS]
+        # The build cuts a Current Status inside a gm-only or spoiler block,
+        # so only the structure model sees it there, which the ERROR below
+        # is about. A stub never ships a line in a block.
+        inside: list[LineState] = []
+        if not named and not no_tool and kept is None:
+            inside = scan_body(text, ())[0]
+            named = [(s, s.heading[0], s.heading[1]) for s in inside
+                     if s.heading is not None
+                     and s.heading[1].casefold() == CURRENT_STATUS
+                     and (s.gm_depth or s.spoiler_depth)]
         current = next((h for h in named if h[1] == 2), None)
         if current is None and named:
             current = named[0]
@@ -3092,7 +3129,8 @@ def _pc_body(vault: Path, folder: str | None = None,
         else:
             state, level, _title = current
             n = state.lineno
-            if state.gm_depth or state.spoiler_depth:
+            if isinstance(state, LineState) and (state.gm_depth
+                                                 or state.spoiler_depth):
                 rows.append(f"ERROR\t{rel}:{n}\t## Current Status is inside "
                             f"a <!-- gm-only --> / <!-- spoiler --> fence — "
                             f"it publishes; move it outside")
@@ -3108,7 +3146,7 @@ def _pc_body(vault: Path, folder: str | None = None,
                     rows.append(f"WARNING\t{rel}:{n}\t## Current Status "
                                 f"comes after ## {first_title} — it must "
                                 f"precede the protected sections")
-            if not _has_labelled_field(states, state, level, kept):
+            if not _has_labelled_field(inside or states, state, level, kept):
                 rows.append(f"INFO\t{rel}:{n}\t## Current Status has no "
                             f"labelled fields (**Location:** …) — machine "
                             f"consumers read the labels")

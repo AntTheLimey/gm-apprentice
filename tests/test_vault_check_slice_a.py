@@ -69,6 +69,22 @@ def rows_for(rows, needle):
     return [r for r in rows if needle in r]
 
 
+def refuse_cut(ask):
+    """`PublishLines.ask` as a publish tool older than 1.17.0 answers: it
+    has no `cut` op."""
+    def old_ask(self, request):
+        if request.get("op") == "cut":
+            raise vaultlib.PublishToolUnavailable(
+                'the publish tool refused: unknown op: "cut"')
+        return ask(self, request)
+    return old_ask
+
+
+TOO_OLD_ROW = ("ERROR\t(vault)\t{check} did not run: the site's publish tool "
+               "predates 1.17.0 and is too old for this check — run "
+               "update-pin, then run this again")
+
+
 # Found once, before any test patches `shutil.which` or `subprocess.run`.
 REAL_NODE = shutil.which("node")
 REAL_RUN = subprocess.run
@@ -1380,6 +1396,17 @@ class GmLeakCommandTests(unittest.TestCase):
             "strips to end of file",
             "WARNING\tBob.md:22\tKeeper-facing heading 'Tactics' publishes "
             "— nest it under ## GM Notes or fence it"], rows)
+
+    def test_a_site_tool_too_old_for_cut_names_the_pin(self):
+        # `cut` came in publish tool 1.17.0; an older site tool refuses it.
+        # That is an old pin to update, not a tool that stopped answering.
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text("---\ntype: npc\n---\n\n# Bob\n",
+                                      encoding="utf-8")
+        with mock.patch.object(vaultlib.PublishLines, "ask",
+                               refuse_cut(vaultlib.PublishLines.ask)):
+            self.assertEqual(vc.check_gm_leak(vault, None), [TOO_OLD_ROW
+                             .format(check="gm-leak")])
 
     def test_an_occupation_ending_in_keeper_is_not_keeper_facing(self):
         # #316: "keeper" matched as a substring, so Innkeeper, Housekeeper
@@ -2849,6 +2876,54 @@ class PcBodyCommandTests(unittest.TestCase):
 
     def test_the_story_companion_is_ignored(self):
         self.assertFalse(rows_for(self.rows, STORY), self.rows)
+
+    # #441: which headings publish, and the fence rows, are the build's own
+    # reading (`build_lines`), not scan_body's model.
+
+    def _hero(self, body, raw=False):
+        vault = make_vault(self)
+        note = f"---\ntype: pc\n---\n\n{body}"
+        if raw:
+            (vault / "Hero.md").write_bytes(note.encode("utf-8"))
+        else:
+            (vault / "Hero.md").write_text(note, encoding="utf-8")
+        return vc.check_pc_body(vault)
+
+    def test_a_stat_sheet_after_a_closer_on_its_line_publishes(self):
+        rows = self._hero("## Current Status\n\n**Location:** the quay\n\n"
+                        "<!-- gm-only -->\nsecret\n<!-- /gm-only -->"
+                        "## Stat Sheet\n\nST 14, DX 12, IQ 11.\n")
+        self.assertFalse(rows_for(rows, "no published ## Stat Sheet"), rows)
+
+    def test_a_heading_in_a_multi_line_comment_is_no_heading(self):
+        rows = self._hero("## Stat Sheet\n\nST 14, DX 12, IQ 11.\n\n<!--\n"
+                        "## Notes\n-->\n\n## Current Status\n\n"
+                        "**Location:** the quay\n")
+        self.assertFalse(rows_for(rows, "comes after"), rows)
+
+    def test_a_form_feed_nel_or_lone_cr_does_not_split_a_heading(self):
+        for ch in ("\r", "\x0c", "\x85"):
+            with self.subTest(ch=repr(ch)):
+                rows = self._hero(
+                    f"## Stat Sheet\n\nST 14, DX 12, IQ 11.\n\n## Notes{ch}"
+                    f"more\n\n## Current Status\n\n**Location:** x\n",
+                    raw=True)
+                self.assertFalse(rows_for(rows, "comes after"), rows)
+
+    def test_fence_rows_are_the_builds(self):
+        # The spoiler opener sits inside the gm-only block, which the build
+        # cuts first: it never opens anything.
+        rows = self._hero("## Stat Sheet\n\nST 14, DX 12, IQ 11.\n\n"
+                        "## Current Status\n\n**Location:** x\n\n"
+                        "<!-- gm-only -->\n<!-- spoiler -->\n"
+                        "<!-- /gm-only -->\n")
+        self.assertFalse(rows_for(rows, "never closed"), rows)
+
+    def test_a_site_tool_too_old_for_cut_names_the_pin(self):
+        with mock.patch.object(vaultlib.PublishLines, "ask",
+                               refuse_cut(vaultlib.PublishLines.ask)):
+            rows = self._hero("## Stat Sheet\n\nST 14\n")
+        self.assertEqual(rows, [TOO_OLD_ROW.format(check="pc-body")])
 
     def test_that_is_every_row(self):
         self.assertEqual(len(self.rows), 6, self.rows)
