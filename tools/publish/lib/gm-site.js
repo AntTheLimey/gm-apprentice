@@ -15,11 +15,16 @@ const GM_META_TAG = '<meta name="gm-apprentice-build" content="gm">';
 function real(p) {
   const tail = [];
   let cur = path.resolve(p);
+  const MAX_LINK_HOPS = 40;   // a ring of links ends here, and the path is read as written
   for (let hops = 0; ;) {
     try { return path.join(fs.realpathSync.native(cur), ...tail); } catch {
       let target = null;
       try {
-        if (fs.lstatSync(cur).isSymbolicLink() && hops++ < 40) target = path.resolve(path.dirname(cur), fs.readlinkSync(cur));
+        // The link the path stops at, when there are hops left to follow it.
+        if (fs.lstatSync(cur).isSymbolicLink()) {
+          hops += 1;
+          if (hops <= MAX_LINK_HOPS) target = path.resolve(path.dirname(cur), fs.readlinkSync(cur));
+        }
       } catch { /* not a link */ }
       if (target) { cur = target; continue; }
       const up = path.dirname(cur);

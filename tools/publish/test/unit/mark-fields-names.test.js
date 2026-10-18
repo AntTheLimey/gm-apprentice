@@ -124,3 +124,21 @@ test('7b: one kind on and the other off marks only the one that is on', () => {
   assert.equal(r.markdown('[[Vesper]]'), '[[Vesper|someone]]');
   assert.equal(r.markdown('[[Elias Crowe]]'), `[[Lord Vane|${OPEN(0)}Elias Crowe${CLOSE}]]`);
 });
+
+test('8: a secret label on a public target is named by the target page\'s display title, not the target text', () => {
+  const { marks, mark } = setup();
+  const elder = { ...vane, displayTitle: 'Lord Vane the Elder' };
+  const out = rewriter([elder], [elder], mark).markdown('[[Lord Vane|Elias Crowe]]');
+  assert.equal(out, `[[Lord Vane|${OPEN(0)}Elias Crowe${CLOSE}]]`);
+  assert.equal(marks.get(0).label, 'gm_aliases; players see: Lord Vane the Elder');
+});
+
+test('9: a link by the secret alias of a withheld note keeps the alias as written in the mark, not the owner\'s name', () => {
+  const { marks, mark } = setup();
+  const hidden = { ...vesper, frontmatter: { type: 'npc', withheld: true, gm_aliases: ['Elias Crowe'] } };
+  const r = rewriter([hidden], [], mark);
+  assert.equal(r.markdown('[[Elias Crowe]]'), `[[Vesper|${OPEN(0)}Elias Crowe${CLOSE}]]`);
+  assert.deepEqual(marks.get(0), { kind: 'withheld_names', label: 'players see: someone' });
+  // as a bare name in a name field
+  assert.equal(r.frontmatter({ location: 'Elias Crowe' }).location, `[[Vesper|${OPEN(1)}Elias Crowe${CLOSE}]]`);
+});

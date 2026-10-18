@@ -480,8 +480,9 @@ player_site:
 ## The GM site
 
 The GM site is a second copy of your campaign site, for you at the table.
-It holds every note and shows every part players do not see, each one
-marked with the reason players do not see it. It is written to its own
+It holds every note and shows the parts players do not see (the
+`gm_site.show.*` switches choose which), each one marked with the reason
+players do not see it. It is written to its own
 folder, and it is never put online: you read it on your own computer, or
 serve it to your home network with `gm-apprentice-publish serve`.
 
@@ -500,7 +501,7 @@ mark, so do not read those places aloud as if players had them.
 
 | Setting | What it does | Values | Left out |
 |---------|--------------|--------|----------|
-| `gm_site.publish` | Whether this vault has a GM site: a second copy of the site with every note and every hidden part shown and marked, for you at the table. It is never put online | A switch | Off |
+| `gm_site.publish` | Whether this vault has a GM site: a second copy of the site with every note shown and the hidden parts marked (the `gm_site.show.*` switches choose which), for you at the table. It is never put online | A switch | Off |
 | `gm_site.folder` | The folder the GM site's pages are written to. It holds built pages only, and cannot be the player site's folder, inside it, or hold it. Turning the GM site on with this unset makes one beside the player site's folder | A folder path | A folder beside the player site's, made when the GM site is turned on |
 | `gm_site.show.notes` | Notes the player site leaves out (prep, drafts, the ones held back by the publish list) get a page, marked | A switch | On |
 | `gm_site.show.sections` | Sections the player site hides (by heading) are shown, marked | A switch | On |

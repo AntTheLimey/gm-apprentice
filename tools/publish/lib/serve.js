@@ -82,7 +82,6 @@ function handler(root, { notFound = '404.html' } = {}) {
     // The URL's path only: never parsed as a full URL, so "//host/x" cannot name another place.
     const target = String(req.url || '');
     const rawPath = target.split('#')[0].split('?')[0];
-    const query = target.includes('?') ? `?${target.split('#')[0].split('?').slice(1).join('?')}` : '';
     if (!rawPath.startsWith('/')) { plain(req, res, 400, 'Bad request'); return; }
     let pathname;
     try { pathname = decodeURIComponent(rawPath); } catch { plain(req, res, 400, 'Bad request'); return; }
@@ -103,7 +102,8 @@ function handler(root, { notFound = '404.html' } = {}) {
         // the folder's own segments, so a path like "//evil.com/.." cannot name another host.
         const segments = path.relative(lexicalRoot, resolved).split(path.sep).filter(Boolean).map(encodeURIComponent);
         const location = `/${segments.map((s) => `${s}/`).join('')}`;
-        res.writeHead(301, { Location: `${location}${query}`, 'X-Content-Type-Options': 'nosniff' });
+        // The query string is not carried over: nothing the request text holds goes into the Location.
+        res.writeHead(301, { Location: location, 'X-Content-Type-Options': 'nosniff' });
         res.end();
         return;
       }

@@ -8,7 +8,7 @@ const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllN
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
-const { nameList, gmAliasList, strippedLines, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
+const { nameList, gmAliasList, strippedLines, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
@@ -818,8 +818,10 @@ function buildSite(options) {
         // read, so the strips that run on it later keep these marks.
         // Its cut is decided by the player strips, which would warn in their own words; the page's marked strips say it.
         const quiet = { ...withhold, warn: undefined };
-        page.markdown = stubMarked(source, include, quiet, mark);
-        if (page.storyMarkdown) page.storyMarkdown = stubMarked(page.storyMarkdown, include, quiet, mark);
+        const said = new Set();   // the one fault of one note is said once, though both texts are cut
+        const warn = (message) => { if (!said.has(message)) { said.add(message); withhold.warn(message); } };
+        page.markdown = stubMarked(source, include, quiet, mark, { warn });
+        if (page.storyMarkdown) page.storyMarkdown = stubMarked(page.storyMarkdown, include, quiet, mark, { warn });
       } else {
         const cut = stubCut(source, include, withhold);
         stubFacts.set(page, { source, strays: cut.strays, openFence: cut.openFence });
@@ -1245,8 +1247,14 @@ function buildSite(options) {
   // sheet): the build's own (`liveFx`), or throwaway ones when the audit renders a page again.
   // The body of a PC note whose headings a link label changes: none on the player site; on the GM site the whole note
   // after the strips, in one mark (processContent marks the page's own copy the same way).
+  const unstableBodyWarned = new Set();
   function unstableBody(page) {
-    return gm ? unstableBodyMarked(strippedLines(String(page.markdown || ''), excludeCallouts, mark).lines.join('\n'), mark) : '';
+    const warn = (message) => {
+      if (unstableBodyWarned.has(page)) return;
+      unstableBodyWarned.add(page);
+      console.warn(`  WARNING: ${page.outputPath}: ${message}`);
+    };
+    return gm ? unstableBodyMarked(strippedLines(String(page.markdown || ''), excludeCallouts, mark).lines.join('\n'), mark, { warn }) : '';
   }
 
   function renderPage(page, fx) {
@@ -1272,7 +1280,8 @@ function buildSite(options) {
           portraitBasename: portraitBasename(page.frontmatter),
         });
         filtered = resolveWikiLinks(filtered, linkMap, page.outputPath);
-        const sections = extractSections(filtered);
+        let sections = extractSections(filtered, gm ? { preamble: true } : undefined);
+        if (gm && page.headingsUnstable) sections = unstableSectionsMarked(sections, mark);
 
         let storyHtml;
         // The page links to the story's own page (storyHref below) and prints none of it;

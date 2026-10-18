@@ -199,7 +199,7 @@ const REGISTRY = [
   // player_site setting also has a twin under gm_site (generated below).
   {
     name: 'gm_site.publish', type: 'switch', default: false, group: 'gm',
-    does: 'Whether this vault has a GM site: a second copy of the site with every note and every hidden part shown and marked, for you at the table. It is never put online',
+    does: 'Whether this vault has a GM site: a second copy of the site with every note shown and the hidden parts marked (the `gm_site.show.*` switches choose which), for you at the table. It is never put online',
     left_out: 'Off',
   },
   {

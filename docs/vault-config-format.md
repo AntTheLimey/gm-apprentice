@@ -36,7 +36,7 @@ The top level holds four names and nothing else: `version`, `vault`,
   be turned on.
 - `player_site` holds everything about the site the players see.
 - `gm_site` holds the settings of the GM site, a second build for the GM
-  that shows every hidden part and never goes online.
+  that shows the hidden parts and never goes online.
 
 Names are grouped, so a setting is a path: `player_site.hide.sections` is
 `sections` inside `hide` inside `player_site`. A key written with nothing

@@ -12,7 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const { mapFolder, matchExcludedDir } = require('./scanner');
-const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
+const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, alwaysExcludedSegment } = require('./publish-decision');
 const { surveyVault, pairsWith } = require('./manifest-cli');
 const { assertNoStops, outputFolderOf } = require('./config');
 const { canonicalPath } = require('./manifest');
@@ -100,7 +100,7 @@ async function runExplain(options, deps) {
   // case-insensitively — otherwise this command disagreed with the build about a folder
   // excluded only via vault-config.md, or via a differently-cased spelling (#209 follow-up).
   const configExcluded = matchExcludedDir(dir, publishConfig.exclude_dirs);
-  const alwaysExcluded = dir.split('/').some((segment) => ALWAYS_EXCLUDE_DIRS.includes(segment));
+  const alwaysExcluded = alwaysExcludedSegment(`${dir}/`) !== null;
 
   // `excludeDirs` names a folder never true of every site — that is ALWAYS_EXCLUDE_DIRS,
   // a fixed rule (#2 below). Reusing DIR_ALWAYS_EXCLUDED for this vault's own config

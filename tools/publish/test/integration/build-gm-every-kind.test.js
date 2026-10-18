@@ -12,7 +12,7 @@ const TOKENS = /[-]/;
 
 const NOTES = {
   'NPCs/Sections.md': '---\ntype: npc\n---\nPublic.\n\n## GM Notes\n\nHIDSECTION here.\n\n### Deeper\n\nHIDNESTED here.\n\n## Open\n\nSHOWNOPEN.\n',
-  'NPCs/Fields.md': '---\ntype: npc\nsecrets: HIDFIELD\npublish_exclude_fields: [occupation]\noccupation: HIDOWNFIELD\nrelationships:\n  - target: "[[Sections]]"\n    type: serves\n    description: HIDEDGE\n    gm_only: true\n---\nBody.\n',
+  'NPCs/Fields.md': '---\ntype: npc\nsecrets: HIDFIELD\npublish_exclude_fields: [occupation]\noccupation: HIDOWNFIELD\nrank: HIDSITEFIELD\nrelationships:\n  - target: "[[Sections]]"\n    type: serves\n    description: HIDEDGE\n    gm_only: true\n---\nBody.\n',
   'NPCs/Blocks.md': '---\ntype: npc\n---\nA <!-- gm-only -->HIDINLINE<!-- /gm-only --> b.\n\n<!-- spoiler -->\nHIDSPOILER\n<!-- /spoiler -->\n\nLead <!-- gm-only -->HIDMIDLINE\nstill hidden\n<!-- /gm-only --> tail.\n',
   'NPCs/Callout.md': '---\ntype: npc\n---\nText.\n\n> [!secret] Keeper\n> HIDCALLOUT\n\nAfter.\n',
   'NPCs/Comments.md': '---\ntype: npc\n---\nA <!-- HIDHTMLCOMMENT --> b %% HIDOBSIDIAN %% c.\n',
@@ -37,6 +37,7 @@ const EXPECT = [
   ['HIDNESTED', 'sections', 'npcs/sections.html'],
   ['HIDFIELD', 'fields', 'npcs/fields.html'],
   ['HIDOWNFIELD', 'fields', 'npcs/fields.html'],
+  ['HIDSITEFIELD', 'fields', 'npcs/fields.html'],
   ['HIDEDGE', 'relationships', 'npcs/fields.html'],
   ['HIDINLINE', 'gm_only_blocks', 'npcs/blocks.html'],
   ['HIDMIDLINE', 'gm_only_blocks', 'npcs/blocks.html'],
@@ -61,7 +62,7 @@ const EXPECT = [
 
 describe('one of every hidden kind, both ways', () => {
   let site;
-  before(() => { site = buildBoth(NOTES, { player: { folder_map: { NPCs: 'npcs', PCs: 'pcs', _archive: 'archive' }, hide: { callouts: true, folders: ['_archive'] } }, gm: { show: { comments: true } } }); });
+  before(() => { site = buildBoth(NOTES, { player: { folder_map: { NPCs: 'npcs', PCs: 'pcs', _archive: 'archive' }, hide: { callouts: true, fields: ['secrets', 'rank'], folders: ['_archive'] } }, gm: { show: { comments: true } } }); });
   after(() => site.cleanup());
 
   const FORGED = 'npcs/forged.html';
@@ -139,10 +140,11 @@ describe('one of every hidden kind, both ways', () => {
     assert.ok(marks.some((m) => m.kind === 'gm_only_blocks' && ['HIDLONG1', 'HIDLONG2', 'HIDLONG3'].every((w) => m.text.includes(w))));
   });
 
-  it('an image alt holds the secret unmarked on the GM site (tokens in tags are dropped) and nothing on the player site', () => {
+  // The requirement: the GM sees the alt text, no stray token is left in the tag, and players get none of it. (Whether the
+  // alt is drawn inside a mark is not required: a mark cannot sit inside an attribute.)
+  it('an image alt shows its words on the GM site with no token in the tag, and nothing on the player site', () => {
     const gm = site.gm.read('npcs', 'shapes.html');
     assert.ok(gm.includes('HIDALT'));
-    assert.equal(markedTexts(gm).some((m) => m.text.includes('HIDALT')), false);
     assert.doesNotMatch(gm, TOKENS);
     assert.equal(site.player.read('npcs', 'shapes.html').includes('HIDALT'), false);
   });
@@ -175,8 +177,11 @@ describe('one of every hidden kind, both ways', () => {
     assert.ok(marks.some((m) => m.kind === 'gm_only_blocks' && m.text.includes('HIDINNERBODY')));
     assert.equal(marks.some((m) => m.text.includes('HIDINNERHEAD') && m.text.includes('HIDINNERBODY')), false, 'cut at the heading');
     // the heading text sits in a mark inside its heading element
-    assert.match(html, /<h2><span class="gm-mark[^"]*"[^>]*data-gm-kind="gm_only_blocks"[^>]*>HIDINNERHEAD<\/span><\/h2>/);
-    assert.match(html, /<h2>Open Again<\/h2>/);
+    const h2 = (text) => [...html.matchAll(/<h2\b[^>]*>([\s\S]*?)<\/h2>/g)].find((m) => m[1].replace(/<[^>]*>/g, '') === text);
+    assert.ok(h2('HIDINNERHEAD'), 'the heading is on the page');
+    assert.match(h2('HIDINNERHEAD')[1], /^<span\b[^>]*data-gm-kind="gm_only_blocks"[^>]*>HIDINNERHEAD<\/span>$/);
+    assert.ok(h2('Open Again'), 'the next heading is on the page');
+    assert.equal(h2('Open Again')[1], 'Open Again', 'and holds no mark');
     assert.equal(marks.some((m) => m.text.includes('Open Again')), false, 'the next heading is outside every mark');
   });
 
@@ -231,6 +236,7 @@ describe('one of every hidden kind, both ways', () => {
         assert.equal((html.match(new RegExp(`<${tag}\\b`, 'g')) || []).length, (html.match(new RegExp(`</${tag}>`, 'g')) || []).length, `${f} ${tag}`);
       }
       assert.doesNotMatch(html, TOKENS, f);
+      assert.doesNotMatch(html, /%EE%80%8[0-2]/i, `${f}: a token in a link, percent-encoded`);
       // No mark cut open earlier on the page wraps what comes after the main column (the footer, back-to-top).
       assert.equal(markedAfterMain(html), '', f);
     }

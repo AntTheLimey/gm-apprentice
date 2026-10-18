@@ -75,8 +75,44 @@ describe('serve', () => {
     const r = await request(port, 'GET', '//evil.com/..');
     assert.equal(r.status, 301);
     assert.equal(r.headers.location, '/');
-    const q = await request(port, 'GET', '/npcs?x=1');
-    assert.equal(q.headers.location, '/npcs/?x=1');
+    // the query string is not echoed into the Location
+    const q = await request(port, 'GET', '/npcs?x=1&next=http://evil.com');
+    assert.equal(q.status, 301);
+    assert.equal(q.headers.location, '/npcs/');
+  });
+
+  it('a backslash host trick is a 403; an encoded double slash goes to the site\'s own root', async () => {
+    assert.equal((await request(port, 'GET', '/\\evil.com/..')).status, 403);
+    const r = await request(port, 'GET', '/%2f%2fevil.com/..');
+    assert.equal(r.status, 301);
+    assert.equal(r.headers.location, '/');
+  });
+
+  it('a missing file is silent; a read that fails for another reason is said on the console', async (t) => {
+    const said = [];
+    t.mock.method(console, 'error', (...a) => said.push(a.join(' ')));
+    assert.equal((await request(port, 'GET', '/nothing.html')).status, 404);
+    assert.deepEqual(said, [], 'a plain miss says nothing');
+    if (!linked) { t.skip('no symlinks on this machine'); return; }
+    fs.symlinkSync('loop.txt', path.join(root, 'loop.txt'));   // a link to itself: the read fails with ELOOP
+    assert.equal((await request(port, 'GET', '/loop.txt')).status, 404);
+    assert.equal(said.length, 1, said.join('\n'));
+    assert.match(said[0], /^serve: could not read .*loop\.txt \(ELOOP\)$/);
+  });
+
+  it('a file that cannot be opened is a 500 and says why', async (t) => {
+    if (process.platform === 'win32' || (process.getuid && process.getuid() === 0)) { t.skip('file permissions do not stop this user'); return; }
+    const said = [];
+    t.mock.method(console, 'error', (...a) => said.push(a.join(' ')));
+    const locked = path.join(root, 'locked.txt');
+    fs.writeFileSync(locked, 'x');
+    fs.chmodSync(locked, 0);
+    try {
+      const r = await request(port, 'GET', '/locked.txt');
+      assert.equal(r.status, 500);
+      assert.equal(r.body, 'Could not read the file');
+      assert.match(said.join('\n'), /serve: could not read .*locked\.txt \(EACCES\)/);
+    } finally { fs.chmodSync(locked, 0o644); }
   });
 
   it('a miss gets the site\'s 404 page with status 404', async () => {

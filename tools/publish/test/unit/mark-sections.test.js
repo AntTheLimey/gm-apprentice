@@ -8,6 +8,7 @@ const {
   filterSections, processContent, playerSafeMarkdown, extractSections, stubMarked,
 } = require('../../lib/processor');
 const { createMarks, markKinds, renderMarks } = require('../../lib/gm-marks');
+const { unstableBodyMarked } = require('../../lib/processor');
 
 const ALL = new Set(markKinds());
 const OPEN = (n) => String.fromCharCode(0xE000) + n.toString(36) + String.fromCharCode(0xE001);
@@ -134,4 +135,48 @@ test('G11: the PC page path keeps balanced marks in every section it cuts', () =
   for (const s of sections) {
     assert.equal(count(s.html, //g), count(s.html, //g), `${s.title}: ${s.html}`);
   }
+});
+
+test('6c: stubMarked says so when it cannot read the headings; the marks then cover the runs the flags leave', () => {
+  const { mark } = setup();
+  const said = [];
+  const out = stubMarked('## Overview\n\nOne.\n\n## Prep\n\nCut me.', ['Overview'], {}, mark, { warn: (m) => said.push(m), parse: () => { throw new Error('boom'); } });
+  assert.equal(said.length, 1);
+  assert.match(said[0], /could not parse the note's headings/);
+  assert.match(out, /Cut me\./);
+  // a good parse says nothing
+  const quiet = [];
+  stubMarked('## Overview\n\nOne.\n\n## Prep\n\nCut me.', ['Overview'], {}, setup().mark, { warn: (m) => quiet.push(m) });
+  assert.deepEqual(quiet, []);
+});
+
+test('5d: unstableBodyMarked says so when it cannot read the headings and the whole body stays one mark', () => {
+  const { marks, mark } = setup();
+  const said = [];
+  const out = unstableBodyMarked('# Ada\n\ntext', mark, { warn: (m) => said.push(m), parse: () => { throw new Error('boom'); } });
+  assert.equal(said.length, 1);
+  assert.match(said[0], /could not parse the note's headings/);
+  assert.match(renderMarks(out, marks), /text/);
+});
+
+test('5e: a marked block above the "# Title" line does not leave the title on the page twice', () => {
+  const { marks, mark } = setup();
+  const page = { markdown: '<!-- gm-only -->\nHIDDEN\n<!-- /gm-only -->\n\n# Vane\n\nBody.', frontmatter: { type: 'npc' }, outputPath: 'npcs/vane.html' };
+  const { html } = processContent(page, {}, [], {}, { mark });
+  const rendered = renderMarks(html, marks);
+  assert.doesNotMatch(rendered, /<h1/);
+  assert.match(rendered, /HIDDEN/);
+  assert.match(rendered, /Body\./);
+  // as on the player site
+  assert.doesNotMatch(processContent(page, {}, [], {}).html, /<h1/);
+});
+
+test('5f: a marked heading has the anchor an unmarked one has; the text above the first heading is a section only on request, and only when marked', () => {
+  const { marks, mark } = setup();
+  const open = marks.open('sections', 'x');
+  const md = `${open}Intro hidden${CLOSE}\n\n## ${marks.open('sections', 'y')}GM Notes${CLOSE}\n\nbody\n`;
+  assert.deepEqual(extractSections(md).map((s) => s.id), ['gm-notes']);
+  assert.deepEqual(extractSections(md, { preamble: true }).map((s) => s.id), ['before-the-first-heading', 'gm-notes']);
+  assert.deepEqual(extractSections('Plain intro.\n\n## A\n\nx', { preamble: true }).map((s) => s.id), ['a']);
+  assert.ok(mark);
 });

@@ -118,7 +118,8 @@ function marksAtHeadings(markdown, findHeadings) {
   const out = [];     // { text, open }: `open` is the token of a line that is an open token alone, outside code
   const stack = [];   // the tokens open, outermost first
   const lastFull = () => { for (let j = out.length - 1; j >= 0; j--) if (out[j].text.trim()) return j; return -1; };
-  const push = (t) => out.push({ text: t, open: /^\uE000[0-9a-z]+\uE001$/.test(t) ? t : null });
+  const eol = text.includes('\r\n') ? '\r' : '';   // a CRLF note keeps CRLF in the lines added
+  const push = (t) => out.push({ text: t + eol, open: /^\uE000[0-9a-z]+\uE001$/.test(t) ? t : null });
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const bare = line.replace(/\r$/, '');
@@ -226,6 +227,18 @@ function renderMarks(html, marks) {
   const closeMark = () => {
     const rec = live.pop();
     if (!rec || !rec.as) return;
+    // A panel closed in the middle of the paragraph it stands directly around: the paragraph is split there, so the
+    // words after the close are outside the panel.
+    const n = open.length;
+    if (rec.as === 'div' && n >= 2 && open[n - 1].tag === 'p' && open[n - 2].rec === rec) {
+      while (out.length && out[out.length - 1] === '') out.pop();
+      if (out[out.length - 1] === '<p>') out.pop(); else out.push('</p>');
+      open.pop();
+      undraw(open.pop().rec);
+      out.push('<p>');
+      open.push({ tag: 'p' });
+      return;
+    }
     rec.closed = true;
     flush();
   };
