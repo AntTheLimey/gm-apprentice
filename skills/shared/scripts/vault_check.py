@@ -314,6 +314,20 @@ def check_frontmatter(vault: Path, folder: str | None,
                         f"cannot parse this frontmatter{detail} and skips "
                         f"the note — {_yaml_hint(message)}")
         unparsed = {on_disk[key] for key, _message in named if key in on_disk}
+    unread: list[str] = []
+
+    def setting(name: str) -> list[Any]:
+        """A setting's value, as the publish tool reads it; asked only
+        for a value outside the schema's words. Unreadable: one row, and
+        only the schema's words pass."""
+        try:
+            return list(setting_or_builtin(vault, name) or [])
+        except SettingsUnavailable as e:
+            if name not in unread:
+                unread.append(name)
+                rows.append(f"WARNING\t(vault)\t{name} could not be read ({e}); "
+                            f"only the schema's words were taken")
+            return []
     for rel, text in notes:
         if rel in unparsed:
             # Schema rows would come from the line reader's guess at YAML
@@ -339,7 +353,7 @@ def check_frontmatter(vault: Path, folder: str | None,
         # The schema's rules, from the one place they live (the repo's
         # validator asks the same function); custom types are INFO.
         rows += [f"{level}\t{rel}\t{message}"
-                 for level, message in frontmatter_findings(fm)]
+                 for level, message in frontmatter_findings(fm, setting)]
         for line in raw_frontmatter(text).splitlines():
             if UNQUOTED_LINK_RE.match(line):
                 rows.append(f"WARNING\t{rel}\tunquoted wikilink in "

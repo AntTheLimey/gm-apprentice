@@ -23,16 +23,22 @@ import validate_schema  # noqa: E402
 import vault_check as vc  # noqa: E402
 
 
-def both(front: str) -> tuple[list[tuple[str, str]], list[str]]:
+def both(front: str, settings_yaml: str | None = None
+         ) -> tuple[list[tuple[str, str]], list[str]]:
     """(vault_check's rows as (level, message), validate_schema's errors)
-    for one note with this frontmatter."""
+    for one note with this frontmatter, in a vault whose settings file
+    holds `settings_yaml` (none: the built-in settings)."""
     text = f"---\n{front}\n---\n\nbody\n"
     with tempfile.TemporaryDirectory() as tmp:
         vault = Path(tmp)
         (vault / "Note.md").write_text(text, encoding="utf-8")
+        if settings_yaml is not None:
+            (vault / "_meta").mkdir()
+            (vault / "_meta" / "vault-config.yaml").write_text(
+                "version: 1\n" + settings_yaml, encoding="utf-8")
         # No site: the publish tool has nothing to say about parsing.
         rows = vc.check_frontmatter(vault, None, explain=lambda: vc.ToolAnswer())
-        errors = validate_schema.validate_file(vault / "Note.md", text)
+        errors = validate_schema.validate_file(vault / "Note.md", text, vault)
     found = []
     for row in rows:
         level, rel, message = row.split("\t", 2)
@@ -52,11 +58,37 @@ def front_of(fm: dict[str, str]) -> str:
 
 
 class BothChecksAgree(unittest.TestCase):
-    def assertAgree(self, front: str, errors_expected: int):
-        rows, errors = both(front)
+    def assertAgree(self, front: str, errors_expected: int,
+                    settings_yaml: str | None = None) -> list[str]:
+        rows, errors = both(front, settings_yaml)
         vault_errors = [m for level, m in rows if level == "ERROR"]
         self.assertEqual(vault_errors, errors, front)
         self.assertEqual(len(errors), errors_expected, (front, errors))
+        return errors
+
+    def test_a_retired_pc_passes(self):
+        self.assertIn("retired", sr.checked_values("pc")["status"])
+        self.assertAgree("type: pc\ncanon_status: DRAFT\nstatus: retired", 0)
+
+    OUT_OF_PLAY = "vault:\n  statuses:\n    out_of_play: [dead, Ascended]\n"
+
+    def test_a_pc_status_only_in_the_vaults_out_of_play_list_passes(self):
+        # A word the GM added for the campaign, read through the publish
+        # tool's settings, never a second reading here.
+        self.assertAgree("type: pc\ncanon_status: DRAFT\nstatus: ascended", 0,
+                         self.OUT_OF_PLAY)
+        self.assertAgree("type: pc\ncanon_status: DRAFT\nstatus: Ascended", 0,
+                         self.OUT_OF_PLAY)
+
+    def test_a_pc_status_in_neither_list_is_flagged(self):
+        errors = self.assertAgree("type: pc\ncanon_status: DRAFT\nstatus: wandering", 1,
+                                  self.OUT_OF_PLAY)
+        self.assertIn("vault.statuses.out_of_play", errors[0])
+        # The built-in list counts when the vault sets none.
+        self.assertAgree("type: pc\ncanon_status: DRAFT\nstatus: kia", 0)
+        # An NPC's status does not take the setting's words.
+        self.assertAgree("type: npc\ncanon_status: DRAFT\nstatus: ascended", 1,
+                         self.OUT_OF_PLAY)
 
     def test_every_checked_value_is_checked_by_both(self):
         # The vault's check used to check canon_status, scene_type and three
@@ -71,6 +103,20 @@ class BothChecksAgree(unittest.TestCase):
         for etype in sr.known_types():
             with self.subTest(type=etype):
                 self.assertAgree(front_of(a_valid_note(etype)), 0)
+
+    def test_campaign_overview_status_takes_active_as_in_progress(self):
+        overview = "type: campaign_overview\ncanon_status: DRAFT\nstatus: "
+        self.assertAgree(overview + "active", 0)
+        self.assertAgree(overview + "in_progress", 0)
+        errors = self.assertAgree(overview + "ongoing", 1)
+        self.assertIn("active = in_progress", errors[0])
+        self.assertEqual(sr.VALUE_ALIASES["campaign_overview"]["status"],
+                         {"active": "in_progress"})
+
+    def test_show_names_the_alias_and_the_setting(self):
+        self.assertIn("status active = in_progress", sr.show("campaign_overview") or "")
+        self.assertIn("status may also be a word in vault.statuses.out_of_play",
+                      sr.show("pc") or "")
 
     def test_missing_required_fields(self):
         self.assertAgree("type: scene\ncanon_status: DRAFT", 2)

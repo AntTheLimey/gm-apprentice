@@ -274,7 +274,7 @@ the mirror against these entries.
 usually found), `portrait` (optional)
 
 **PC:** `player_name`, `occupation`, `age`, `gender`, `nationality`,
-`status` (alive/dead/missing/unknown), `key_traits`, `portrait` (optional),
+`status` (alive/dead/missing/retired/unknown), `key_traits`, `portrait` (optional),
 `display_meta` (optional array: ordered field names for published site meta row;
 when omitted, the setting `player_site.sheets.header_facts` decides), `sheet_source`
 (optional string: where the character sheet is kept when it is not in this
