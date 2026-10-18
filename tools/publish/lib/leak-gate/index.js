@@ -9,6 +9,7 @@ const { collectHidden } = require('./collect');
 const { createMatcher, readOutput, listFiles } = require('./match');
 const { nameFindings, neverShowFindings } = require('./names');
 const { wordsOf, nameSet, onlyNames } = require('./text');
+const { isSettledHeading, settledHeadingGone } = require('../settled-headings');
 
 const findingId = (page, text) => crypto.createHash('sha1').update(`${page}\n${text}`).digest('hex').slice(0, 6);
 const keyOf = (page, text) => `${page}\n${text}`;
@@ -59,10 +60,14 @@ function runLeakGate({ configPath, outputDir }) {
 
   // The whole file, an accepted-only one included (loadManifest answers null for that: it is no publish list).
   const list = loadPublishList(hidden.vaultPath, { warn: () => {} });
-  const accepted = (list && list.accepted) || [];
+  // A heading gm-leak's settled for players is no finding of this gate (settled-headings.js): it is no longer needed
+  // only when its note is gone or no longer has that heading.
+  const everyAccepted = (list && list.accepted) || [];
+  const accepted = everyAccepted.filter((a) => !isSettledHeading(a));
   const acceptedKeys = new Set(accepted.map(acceptedKey));
   const findings = [...raw.values()].filter((f) => !acceptedKeys.has(findingKey(f))).sort(byPageText);
-  const unneeded = accepted.filter((a) => !raw.has(acceptedKey(a)));
+  const unneeded = [...accepted.filter((a) => !raw.has(acceptedKey(a))),
+    ...everyAccepted.filter((a) => isSettledHeading(a) && settledHeadingGone(hidden.vaultPath, a))];
   return done({ findings, unneeded, warnings: hidden.warnings || [], files: files.length });
 }
 
@@ -82,7 +87,11 @@ function formatFindings(result) {
     if (rest.length) lines.push(`         also in ${rest.map((r) => `${r.page} [${r.id}]`).join(', ')}`);
     lines.push(`         from ${f.note} (${f.reason})`);
   }
-  for (const a of result.unneeded) lines.push(`  no longer needed: the accepted "${a.text}" on ${a.page} (leaks prune removes it)`);
+  for (const a of result.unneeded) {
+    lines.push(isSettledHeading(a)
+      ? `  no longer needed: the settled heading "${a.text}" in ${a.page}, which the note no longer has (leaks prune removes it)`
+      : `  no longer needed: the accepted "${a.text}" on ${a.page} (leaks prune removes it)`);
+  }
   return lines;
 }
 

@@ -38,7 +38,7 @@ Usage:
   gm-apprentice-publish sheet show [options] Print one PC's sheet (--player-safe shows only what players see)
   gm-apprentice-publish update-pin [options] Repoint this site at the newest installed build tool
   gm-apprentice-publish manifest <cmd>       Compare the publish manifest with the vault, or update it
-  gm-apprentice-publish leaks <cmd>          Check the built player site for hidden text (list, check, accept, prune)
+  gm-apprentice-publish leaks <cmd>          Check the built player site for hidden text (list, check, accept, prune, settle)
   gm-apprentice-publish relationships <cmd>  The relationship words, short (words); every relationship rule checked (check); the tones listed (list); the certain repairs (fix)
   gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
@@ -214,7 +214,7 @@ vocabulary are listed on one line.
   --help, -h                 Show this help
 `,
   leaks: `
-gm-apprentice-publish leaks <list|check|accept|prune> [--config <path>] [--json]
+gm-apprentice-publish leaks <list|check|accept|prune|settle> [--config <path>] [--json]
 
 The leak check reads the built player site (the folder deploy uploads) for
 hidden text and secret names: any hidden sentence, list item or table cell of
@@ -236,6 +236,13 @@ deploy --ignore-leaks); these commands run it without deploying.
                              (each is still recorded as its page and sentence;
                              accepting needs the site's tool at 1.30.0 or later)
   leaks prune                Remove accepted findings that are no longer needed
+  leaks settle <note> <heading>
+                             Settle a Keeper-looking heading that vault_check
+                             gm-leak flags and the GM means for players: it is
+                             written to the accepted list and not flagged again
+                             while the note's path and the heading stay the
+                             same (needs no built site)
+  --vault <dir>              settle: the vault (default: the one the config names)
   --config <path>            Path to vault.config.json (default: ./vault.config.json)
   --json                     Print the result as JSON
   --help, -h                 Show this help
@@ -1065,15 +1072,20 @@ if (command === 'manifest') {
 
 if (command === 'leaks') {
   const verb = args[1];
-  if (!['list', 'check', 'accept', 'prune'].includes(verb)) {
-    console.error(verb ? `Error: Unknown leaks command: ${verb}` : 'Error: leaks needs a command (list, check, accept or prune)');
+  if (!['list', 'check', 'accept', 'prune', 'settle'].includes(verb)) {
+    console.error(verb ? `Error: Unknown leaks command: ${verb}` : 'Error: leaks needs a command (list, check, accept, prune or settle)');
     printSubcommandHelp('leaks');
     process.exit(1);
   }
   const rest = args.slice(2);
   const positional = [];
-  if (verb === 'accept') { while (rest.length && !rest[0].startsWith('--')) positional.push(rest.shift()); }
-  const parsed = parseSubcommandArgs(rest, { '--json': 'json' }, verb === 'accept' ? { '--page': 'page', '--note': 'note' } : {});
+  if (verb === 'accept' || verb === 'settle') { while (rest.length && !rest[0].startsWith('--')) positional.push(rest.shift()); }
+  const parsed = parseSubcommandArgs(rest, { '--json': 'json' }, verb === 'accept' ? { '--page': 'page', '--note': 'note' } : verb === 'settle' ? { '--vault': 'vault' } : {});
+  if (verb === 'settle' && (parsed.error || positional.length !== 2)) {
+    console.error(`Error: ${parsed.error || 'leaks settle needs a note and its heading'}`);
+    printSubcommandHelp('leaks');
+    process.exit(1);
+  }
   // accept takes one finding (a page and its id or sentence), or every finding on a page (--page), or from a note (--note).
   const several = parsed.flags ? [parsed.flags.page, parsed.flags.note].filter(Boolean).length : 0;
   const acceptForm = several === 1 ? positional.length === 0 : several === 0 && positional.length === 2;
@@ -1083,7 +1095,7 @@ if (command === 'leaks') {
     process.exit(1);
   }
   const { runLeaks } = require('../lib/leaks-cli.js');
-  runLeaks({ verb, configPath: parsed.configPath, json: !!parsed.flags.json, page: positional[0], text: positional[1], allOnPage: parsed.flags.page, note: parsed.flags.note })
+  runLeaks({ verb, configPath: parsed.configPath, json: !!parsed.flags.json, page: positional[0], text: positional[1], allOnPage: parsed.flags.page, note: parsed.flags.note, vault: parsed.flags.vault })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
   return;

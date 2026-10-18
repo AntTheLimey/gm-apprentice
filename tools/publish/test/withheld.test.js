@@ -597,6 +597,36 @@ describe('the name matcher\'s word boundaries', () => {
   });
 });
 
+describe('a withheld name that is an everyday word (#454)', () => {
+  // A one-word name the site also prints in lower case is an everyday word: every ordinary use is reported, so the fix
+  // line says to rename the note (or, for a title or alias, to take that name off). A `title:` adds a name to look for
+  // and takes none away, so it is no way out.
+  it('a one-word file name printed in lower case says to rename the note; a capital-only one keeps the usual line', async () => {
+    const files = {
+      'Heritages/Human.md': npc('Secret: the humans are clones.', 'withheld: true\ntitle: The First Folk\n'),
+      'Characters/Mara_Quill.md': mara('Mara is human. Human or not, she sails.'),
+    };
+    const [f] = await found(files, { excluded: ['Heritages/Human.md'] });
+    assert.strictEqual(f.name, 'Human');
+    assert.match(f.fix, /^"Human" is an everyday word, so every ordinary use of it is reported: rename the note \(Heritages\/Human\.md\)/);
+    assert.match(f.fix, /campaign-qa offers to rename it, links included/);
+    const caps = await found({ ...files, 'Characters/Mara_Quill.md': mara('Human or not, she sails.') }, { excluded: ['Heritages/Human.md'] });
+    assert.match(caps[0].fix, /^reword it/);
+    assert.strictEqual(f.everyday, true, 'vault_check prints the fix of a row that carries this');
+    assert.strictEqual(caps[0].everyday, undefined);
+  });
+
+  it('a one-word title or alias printed in lower case says to take that name off the note; two words never count', async () => {
+    const files = {
+      'Characters/Vesper_Hale.md': zornNote('withheld: true\naliases: [Hope, Old Nick]\n'),
+      'Characters/Mara_Quill.md': mara('There is hope yet. old nick laughs.'),
+    };
+    const byName = new Map((await found(files, { excluded: ['Characters/Vesper_Hale.md'] })).map((f) => [f.name, f]));
+    assert.match(byName.get('Hope').fix, /^"Hope" is an everyday word, so every ordinary use of it is reported: take it out of the title or aliases of Characters\/Vesper_Hale\.md/);
+    assert.match(byName.get('Old Nick').fix, /^reword it/);
+  });
+});
+
 describe('a "stays hidden:" reason beside a Publishing entry', () => {
   it('does not settle the link report of a withheld note', async () => {
     const files = { 'Characters/Lord_Zorn.md': zornNote('withheld: true\npublish: false\n'), 'Characters/Mara_Quill.md': mara('Met [[Lord_Zorn]].') };

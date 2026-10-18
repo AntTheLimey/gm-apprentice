@@ -647,6 +647,15 @@ describe('explain --all (#276)', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  it('names the headings the GM settled for players, from the publish list\'s accepted list (#453)', async () => {
+    const vault = makeVault();
+    write(vault, '_meta/publish-list.yaml', 'accepted:\n  - page: Sessions/Session_07.md\n    text: Secret Tactics\n    note: gm-leak.heading\n'
+      + '  - page: sessions/session_07.html\n    text: the dockmaster is the informant\n    note: Sessions/Session_07.md\n');
+    const { json } = await all(siteFor(vault));
+    assert.deepStrictEqual(json.settledHeadings, [{ page: 'Sessions/Session_07.md', heading: 'Secret Tactics' }]);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('carries the parser message for a file whose frontmatter cannot be parsed (#287)', async () => {
     const vault = makeVault();
     write(vault, 'Sessions/Dup.md', '---\ntype: pc\nsheet_source: paper\nsheet_source: PDF\n---\n\nA sailor.\n');
