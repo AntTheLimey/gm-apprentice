@@ -1666,8 +1666,7 @@ class ToneListTests(unittest.TestCase):
 
     def test_two_lists_in_one_file_are_both_replaced(self):
         self.put(self.ENTITY, "Tone values: " + OLD_LIST + "\n\nMiddle.\n\n"
-                 "**tone** ∈ friendly|hostile|neutral|unknown|fearful."
-                 " End.\n")
+                 "**tone** ∈ " + OLD_LIST.replace(", ", "|") + ". End.\n")
         item, done = self.applied()
         self.assertEqual(item.lines, [
             "_meta/entity-types.md: the 2 tone lists become the 27 listed "
@@ -1717,6 +1716,35 @@ class ToneListTests(unittest.TestCase):
                 self.put(self.ENTITY, text)
                 self.assertEqual(mv.find_tone_list(self.vault), [])
                 self.assertEqual(self.get(self.ENTITY), text)
+
+    def test_a_line_the_gm_wrote_is_never_taken_for_the_plugins(self):
+        # The plugin wrote all eleven old words; five words, listed or old,
+        # under a tone label are the GM's own (#338).
+        for text in ("Tone list: hostile, fearful, cold, tense, ominous.\n",
+                     "Her tone: friendly, hostile, neutral, unknown, "
+                     "complicated\n",
+                     "**tone** ∈ friendly|hostile|neutral|unknown|fearful.\n",
+                     "Tone values: " + OLD_LIST.replace(", neutral", "")
+                     + "\n"):
+            with self.subTest(text=text):
+                self.put(self.ENTITY, text)
+                self.assertEqual(mv.find_tone_list(self.vault), [])
+                self.assertEqual(self.get(self.ENTITY), text)
+
+    def test_a_big_meta_file_is_not_slow(self):
+        # Finding where each line starts was a backwards search per match:
+        # quadratic, 38 s on 2 MB (#338). Linear now, about 1.5 s on 2 MB.
+        import time
+        filler = ("alpha, beta, gamma, delta, epsilon, zeta, eta, theta, "
+                  "iota, kappa, lambda, mu, nu, xi, omicron, pi, rho\n")
+        text = (filler * 40 + "\nTone values: " + OLD_LIST + "\n\n") * 150
+        self.put(self.ENTITY, text)
+        start = time.monotonic()
+        (item,) = mv.find_tone_list(self.vault)
+        self.assertLess(time.monotonic() - start, 6)
+        self.assertEqual(item.lines, [
+            "_meta/entity-types.md: the 150 tone lists become the 27 listed "
+            "words"])
 
     def test_a_half_list_is_never_taken_for_the_whole(self):
         by_family = "; ".join(

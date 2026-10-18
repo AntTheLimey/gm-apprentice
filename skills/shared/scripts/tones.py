@@ -77,7 +77,7 @@ from schema_rules import (
     tone_proposal,
 )
 from vaultlib import (UNCHECKED_DIRS, PublishToolUnavailable,
-                      SettingsUnavailable, extract_frontmatter,
+                      SettingsUnavailable,
                       run_relationships, settings)
 
 
@@ -210,13 +210,6 @@ def use_lines(uses: list[Use], words: Iterable[str]) -> list[str]:
     return out + [f"# {len(out)} use(s) of {len(wanted)} word(s)"]
 
 
-def site_family(raw: str) -> str | None:
-    """The family the site shows a tone as. The same rule as `toneFamily`
-    in tools/publish/lib/ontology.js: trimmed and lower-cased, then looked
-    up in the list (`tone_family` itself is exact, to find strays)."""
-    return tone_families().get(tone_key(raw))
-
-
 def _hides_relationships(fields: object) -> bool:
     """Does this exclude list strip `relationships` on the site? Only a YAML
     list does, and it matches an item exactly (processor.js filterFields and
@@ -238,33 +231,21 @@ def _campaign_hides_relationships(vault: Path) -> bool:
     return "relationships" not in json.dumps(s.get("player_site.hide.field_exceptions"))
 
 
-def _note_frontmatter(vault: Path, rel: str) -> dict[str, Any]:
-    try:
-        text = (vault / rel).read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return {}
-    return extract_frontmatter(text) or {}
-
-
 def shown_edges(vault: Path, published: set[str]
                 ) -> Iterator[dict[str, Any]]:
     """Every relationship a published note shows on the site with a tone
-    the site draws (a listed word), as the tool lists it (`rel`, `line`,
-    `tone`, `target`, `description`)."""
+    the site draws (a listed word, by the tool's own `toneFamily`), as the
+    tool lists it (`rel`, `line`, `tone`, `target`, `description`)."""
     # The vault's own exclude_fields; a list only the site file holds is not
     # known here, and its notes are listed (the safe side).
     if _campaign_hides_relationships(vault):
         return
-    hidden: dict[str, bool] = {}
     for edge in _listed(vault)["tones"]:
         rel = edge["rel"]
-        if (edge["gmOnly"] or not site_family(edge["tone"])
+        if (edge["gmOnly"] or not edge["siteFamily"]
                 or unicodedata.normalize("NFC", rel) not in published):
             continue
-        if rel not in hidden:
-            hidden[rel] = _hides_relationships(
-                _note_frontmatter(vault, rel).get("publish_exclude_fields"))
-        if not hidden[rel]:
+        if not edge["hidesRelationships"]:
             yield edge
 
 
@@ -283,7 +264,7 @@ def shown_lines(vault: Path, published: set[str]) -> list[str]:
     rows: list[str] = []
     notes: set[str] = set()
     for edge in shown_edges(vault, published):
-        if site_family(edge["tone"]) != "negative":
+        if edge["siteFamily"] != "hostile":
             continue
         rows.append("\t".join([
             f"{edge['rel']}:{edge['line']}", edge["tone"],
@@ -432,6 +413,8 @@ def main(argv: list[str] | None = None) -> int:
         usage = "only uses takes words"
     elif args.command == "fix" and args.words:
         usage = "only uses takes words; fix takes --set OLD=NEW"
+    elif any(not word.strip() for word in args.excepts or ()):
+        usage = "--except takes a word"
     elif args.excepts and not args.near:
         usage = "--except goes with --near"
     elif args.command == "fix" and not (args.near or args.sets):

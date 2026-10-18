@@ -54,9 +54,17 @@ Body. tone: ominous
 test('list gives the tones of the note\'s own relationships, with their lines, as written', () => {
   const dir = vault({ 'NPCs/A.md': NOTE });
   assert.deepStrictEqual(list(dir), [
-    { rel: 'NPCs/A.md', line: 7, tone: 'Cordial', target: '[[A]]', description: 'tone: dread\na line of prose\n', gmOnly: false },
-    { rel: 'NPCs/A.md', line: 13, tone: 'warm', target: '[[B]]', description: '', gmOnly: false },
+    { rel: 'NPCs/A.md', line: 7, tone: 'Cordial', target: '[[A]]', description: 'tone: dread\na line of prose\n', gmOnly: false, hidesRelationships: false, siteFamily: null },
+    { rel: 'NPCs/A.md', line: 13, tone: 'warm', target: '[[B]]', description: '', gmOnly: false, hidesRelationships: false, siteFamily: 'warm' },
   ]);
+});
+
+test('list says when a note hides its relationships, and reads flow-style ties', () => {
+  const dir = vault({
+    'NPCs/H.md': '---\ntype: npc\npublish_exclude_fields:\n  - relationships  # secret\nrelationships: [{target: "[[A]]", type: knows, tone: cold}]\n---\n',
+    'NPCs/S.md': '---\ntype: npc\npublish_exclude_fields: relationships\nrelationships:\n  - {target: "[[A]]", type: knows, tone: cold}\n---\n',
+  });
+  assert.deepStrictEqual(list(dir).map((r) => [r.rel, r.tone, r.hidesRelationships]), [['NPCs/H.md', 'cold', true], ['NPCs/S.md', 'cold', false]]);
 });
 
 test('list gives the same lines for a CRLF note, and reads past a byte order mark', () => {
@@ -107,7 +115,7 @@ test('list --json is one row per tone, and a scoped run lists only that note', (
   assert.deepStrictEqual(Object.keys(all), ['tones', 'unread']);
   assert.strictEqual(all.tones.length, 4);
   assert.deepStrictEqual(all.unread, []);
-  assert.deepStrictEqual(Object.keys(all.tones[0]), ['rel', 'line', 'tone', 'target', 'description', 'gmOnly']);
+  assert.deepStrictEqual(Object.keys(all.tones[0]), ['rel', 'line', 'tone', 'target', 'description', 'gmOnly', 'hidesRelationships', 'siteFamily']);
   assert.deepStrictEqual(JSON.parse(cli(dir, 'list', '--json', '--file', 'B.md').stdout).tones.map((r) => r.rel), ['B.md', 'B.md']);
   assert.match(cli(dir, 'list').stdout, /^# tones: 4\nA\.md:7\tCordial\t\[\[A\]\]\ttone: dread a line of prose\n/);
 });
