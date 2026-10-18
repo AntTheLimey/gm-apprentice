@@ -37,6 +37,24 @@ describe('lines: published', () => {
   });
 });
 
+describe('lines: withheld (links.py asks it, so the two never read the flag two ways, #352)', () => {
+  const { isWithheld } = require('../lib/processor');
+  it('reads the flag with the build\'s YAML reader: every number spelling YAML makes 1 is a yes', () => {
+    for (const value of ['true', '1', '0x1', '0b1', '1e0', '1.0e0', 'yes', '"on"']) {
+      assert.strictEqual(answer({ op: 'withheld', text: `---\nwithheld: ${value}\n---\nx` }).withheld, true, value);
+    }
+    for (const value of ['false', '0', '"0x1"', '2', 'tru', '[true]']) {
+      assert.strictEqual(answer({ op: 'withheld', text: `---\nwithheld: ${value}\n---\nx` }).withheld, false, value);
+    }
+    assert.strictEqual(answer({ op: 'withheld', text: '---\nwithheld : true\n---\nx' }).withheld, isWithheld({ withheld: true }));
+  });
+  it('gives the names the note answers to, and refuses a note whose frontmatter cannot be read', () => {
+    const got = answer({ op: 'withheld', text: '---\nwithheld: true\ntitle: "[[X|The Ferryman]]"\naliases: Old Nick\ngm_aliases: [Vesper]\n---\n' });
+    assert.deepStrictEqual(got, { withheld: true, names: ['The Ferryman', 'Old Nick', 'Vesper'] });
+    assert.match(JSON.parse(answerLine(JSON.stringify({ op: 'withheld', text: '---\nwithheld: [\n---\n' }))).error, /cannot be read/);
+  });
+});
+
 describe('lines: cut', () => {
   it('gives each line as the strip chain leaves it, null when the chain removes it', () => {
     const text = 'a %%x%% b\n%%\nhidden\n%%\n<!-- c -->\nkept\n<!-- gm-only -->\nsecret\n<!-- /gm-only -->\nend';

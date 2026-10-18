@@ -242,15 +242,12 @@ def test_version_row_for_a_vault_with_no_settings_file(tmp_path):
 
 # ---- the yes-words (#374) -------------------------------------------------
 
-def test_the_yes_words_are_the_publish_tools():
-    """`gm_only_hides` and `is_withheld` run in checks that need no Node (the
-    frontmatter and relationship checks, the link tools), so they keep their
-    own copy of the words that mean yes; this pins it to the tool's list."""
-    node = shutil.which("node")
-    if not node:
-        pytest.skip("node is not on PATH")
-    js = ("const {SWITCH_WORDS}=require(process.argv[1]);"
-          "console.log(JSON.stringify([...SWITCH_WORDS].filter(([,v])=>v===true).map(([k])=>k)));")
-    done = subprocess.run([node, "-e", js, str(TOOL / "lib" / "settings" / "types.js")],
-                          capture_output=True, text=True, check=True)
-    assert sorted(json.loads(done.stdout)) == sorted(vaultlib.GM_ONLY_YES_WORDS)
+def test_no_script_reads_a_yes_no_flag_a_second_way():
+    """`gm_only` and `withheld` are read by the publish tool only (#352): a
+    script asks it (the `relationships` command, the `withheld` lines op),
+    so a YAML spelling (`0x1`, `1e0`) can never read one way here and
+    another in the build. No script keeps its own reading or yes-words."""
+    for script in sorted((TOOL.parent.parent / "skills" / "shared" / "scripts").glob("*.py")):
+        text = script.read_text(encoding="utf-8")
+        for name in ("gm_only_hides", "GM_ONLY_YES_WORDS", "is_withheld"):
+            assert name not in text, f"{script.name} reads a flag itself ({name})"

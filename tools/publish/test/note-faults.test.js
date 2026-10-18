@@ -417,8 +417,8 @@ describe('ALIAS_IN_PROSE', () => {
     assert.deepStrictEqual(f, {
       code: 'ALIAS_IN_PROSE', severity: 'warning', path: 'Characters/Mara_Quill.md',
       detail: f.detail, fix: f.fix,
-      // As often as the page prints it: an NPC page prints its opening line twice (the pull quote).
-      alias: 'Old Smuggler', owner: 'Characters/Vesper_Hale.md', count: 2,
+      // As often as the GM wrote it: an NPC page prints its opening line twice (the pull quote), counted once (#352).
+      alias: 'Old Smuggler', owner: 'Characters/Vesper_Hale.md', count: 1,
       context: 'Everyone feared the old smuggler of the quay.',
       listings: [],
     });
