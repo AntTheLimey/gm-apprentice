@@ -63,25 +63,36 @@ const printed = (text) => {
 // Past that depth every `](address)` goes, through the next `)`, and the brackets stay.
 // Where an address that could not be read ends: its balancing `)`, or the first `)` when
 // its brackets never balance.
-function addressEnd(text, start) {
-  let nested = 0;
-  let firstClose = -1;
-  for (let i = start; i < text.length; i++) {
-    if (text[i] === '\\') { i++; continue; }
-    if (text[i] === '(') nested++;
-    else if (text[i] === ')') {
-      if (!nested) return i;
-      nested--;
-      if (firstClose === -1) firstClose = i;
-    }
+// The text's brackets are counted once, so asking for every link in it stays linear: the
+// balancing `)` is the first place the running count drops below its value at the start.
+function addressEnds(text) {
+  const n = text.length;
+  const count = new Int32Array(n + 1);
+  const nextClose = new Int32Array(n + 1).fill(-1);
+  let open = 0;
+  for (let i = 0; i < n; i++) {
+    count[i] = open;
+    if (text[i] === '\\') { count[++i] = open; continue; }
+    if (text[i] === '(') open++;
+    else if (text[i] === ')') { open--; nextClose[i] = i; }
   }
-  return firstClose;
+  count[n] = open;
+  for (let i = n - 1; i >= 0; i--) if (nextClose[i] === -1) nextClose[i] = nextClose[i + 1];
+  const drop = new Int32Array(n + 1).fill(-1);
+  const stack = [];
+  for (let i = n; i >= 0; i--) {
+    while (stack.length && count[stack[stack.length - 1]] >= count[i]) stack.pop();
+    if (stack.length) drop[i] = stack[stack.length - 1];
+    stack.push(i);
+  }
+  return (start) => (drop[start] !== -1 ? drop[start] - 1 : nextClose[start]);
 }
 function dropAddresses(text) {
+  const addressEnd = addressEnds(text);
   let out = '';
   let at = 0;
   for (let i = text.indexOf(']('); i !== -1; i = text.indexOf('](', at)) {
-    const end = addressEnd(text, i + 2);
+    const end = addressEnd(i + 2);
     if (end === -1) break;
     out += text.slice(at, i);
     at = end + 1;
@@ -102,6 +113,7 @@ function markdownLinkLabels(text, depth = 0) {
   // The `[` of a `[[`..`]]` pair, outer or inner: a wiki-link, never a markdown link.
   const wikiBracket = (i) => (text[i + 1] === '[' && closeOf.get(i + 1) === closeOf.get(i) - 1)
     || (text[i - 1] === '[' && closeOf.get(i - 1) === closeOf.get(i) + 1);
+  let addressEnd;
   let out = '';
   let at = 0;
   for (let i = text.indexOf('['); i !== -1; i = text.indexOf('[', Math.max(at, i + 1))) {
@@ -114,7 +126,7 @@ function markdownLinkLabels(text, depth = 0) {
       const title = end > dest.pos ? parseLinkTitle(text, end, text.length) : { ok: false };
       if (title.ok) end = blank(title.pos);
     }
-    if (end === -1 || text[end] !== ')') end = addressEnd(text, close + 2);
+    if (end === -1 || text[end] !== ')') end = (addressEnd ||= addressEnds(text))(close + 2);
     if (end === -1) continue;
     const label = text.slice(i + 1, close);
     out += text.slice(at, i) + (depth < LINK_DEPTH ? markdownLinkLabels(label, depth + 1) : dropAddresses(label));

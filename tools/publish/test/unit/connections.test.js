@@ -342,7 +342,7 @@ test('a parenthesis after a wiki-link is not a markdown address', () => {
 test('no description can overflow the stack or take long to read', () => {
   const nested = '['.repeat(8000) + 'x' + '](y)'.repeat(8000);
   assert.doesNotThrow(() => lineOf(nested));
-  for (const text of ['['.repeat(50000), '[a'.repeat(25000) + '](', '[a](('.repeat(10000)]) {
+  for (const text of ['['.repeat(50000), '[a'.repeat(25000) + '](', '[a](('.repeat(10000), '[a](('.repeat(10000) + ')']) {
     const start = Date.now();
     markdownLinkLabels(text);
     assert.ok(Date.now() - start < 2500, `${text.slice(0, 8)}… took ${Date.now() - start} ms`);
