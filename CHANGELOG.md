@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.80] — 2026-10-18
+
+Publish tool 1.38.1.
+
+### Fixed
+
+- The leak gate no longer reads `search-index.json` word by word. 1.10.79
+  counted a hidden sentence as found in the index when one entry held
+  all its words and its page did not print one of them; but an entry
+  holds its page's whole published text, including words the page does
+  not print (a PC's story companion, its Current Status prose), and the
+  words come in no order, so a real site's deploy stopped on 403
+  findings, every one of them public text. The index is checked again
+  as it was before 1.10.79; a sentence check of the index's text at
+  build time is the next step (#408).
+
 ## [1.10.79] — 2026-10-18
 
 Bug Bash batch 2: the leak checks. Places where hidden material could
