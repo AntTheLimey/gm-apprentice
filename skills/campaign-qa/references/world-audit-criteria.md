@@ -17,20 +17,6 @@ notes that contradict a rule.
 **Output format:** "Inconsistency found — review needed."
 Reference the specific world rule being violated.
 
-## Soft Checks (questions, not errors)
-
-| Check | What's Flagged |
-|-------|----------------|
-| No economic base | Faction with no described revenue source or economic activity |
-| No water source | Settlement with no apparent water source or trade justification |
-| No heritage culture | Heritage entity with no described culture or societal structure |
-| Long-lived no-impact | Long-lived NPC with no explanation for how they've affected history |
-| Monoculture | Neighboring regions with identical cultures (planet-of-hats signal) |
-| Stasis signal | Historical period with no recorded change (medieval stasis signal) |
-
-**Output format:** "Question — worth considering." These are
-suggestions, not errors.
-
 ## Deferred Flag Review
 
 Report all deferred items from `_flags.md` with how often and in

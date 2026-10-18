@@ -24,6 +24,13 @@ counted, not judged. Publish tool 1.36.2.
   after 3 sessions, and campaign-qa no longer highlights "resurfacing
   criteria". What a count means is the GM's call.
 
+### Removed
+
+- campaign-qa's world soft checks (no economic base, no water source,
+  monoculture, stasis and the rest). They judged how a world is built;
+  the midwife's worldbuilding questions and principles already ask each
+  one when the GM wants that conversation.
+
 ### Fixed
 
 - A world domain page whose rules are plain sentences shows them; it

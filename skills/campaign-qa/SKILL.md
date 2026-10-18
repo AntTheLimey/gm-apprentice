@@ -206,8 +206,8 @@ the GM to keep, unwrap (revealed in play) or delete (dropped).
 
 Only if `_World/` exists; only domains with `status: active` and
 rules — skip undefined domains. Notes that contradict a rule
-(heritage ages, geography, dates vs history-timeline eras),
-economic base (soft), and deferred-flag review.
+(heritage ages, geography, dates vs history-timeline eras) and
+deferred-flag review.
 
 ### Full Audit
 
