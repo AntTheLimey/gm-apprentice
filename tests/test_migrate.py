@@ -525,6 +525,22 @@ class ApplyTests(unittest.TestCase):
         _, plan, _ = call([str(vault), "plan"], checks)
         self.assertIn("one=<a or b>", plan)
 
+    def test_answers_that_could_not_be_remembered_are_said(self):
+        # CodeRabbit #452: a failed held write was silent, and the next plan asked again.
+        vault = self.new_layout(make_vault(self))
+
+        def find(v):
+            return [Item("one", CHOICE, ["a or b"], lambda x: [],
+                         wants="a or b", holds_stamp=True)]
+        checks = [Check("one", "1.10.30", 3, "one", find, choices=("one=",)),
+                  *self.two_holders([])[1:]]
+        with mock.patch.object(migrate, "write_held",
+                               side_effect=OSError("read-only")):
+            code, _, err = call([str(vault), "apply", "--choose", "one=leave"],
+                                checks)
+        self.assertIn("could not be remembered", err)
+        self.assertIn("asked again", err)
+
     def test_a_person_row_that_is_not_a_notice_comes_back_every_time(self):
         vault = self.new_layout(make_vault(self))
 

@@ -333,8 +333,10 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
     if not stamped:
         try:   # the next plan does not ask these again
             write_held(vault, left_ids, said)
-        except (StateUnreadable, OSError):
-            pass
+        except (StateUnreadable, OSError) as e:
+            print(f"migrate.py: answers could not be remembered "
+                  f"({e.__class__.__name__}); they will be asked again",
+                  file=sys.stderr)
     emit("Did", did)
     for choice in dict.fromkeys(i for i, _v in chosen if i not in used):
         print(f"not offered: {choice}")
