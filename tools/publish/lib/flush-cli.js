@@ -66,8 +66,9 @@ function resolveSystem(frontmatter, campaignSystem) {
   return 'coc';
 }
 
-// One writer per system: (raw note, stored record, page, out) -> { markdown, changes, skipped? },
-// or null to skip the note after saying why.
+// One writer per system: (raw note, stored record, page, out, options) -> { markdown, changes, skipped?, skippedFields? },
+// or null to skip the note after saying why. `options.only` limits the writeback to those fields; a writer that
+// reports `skippedFields` (the values it had no cell for) takes it, and the others never skip a value.
 const WRITERS = {
   gurps: function (raw, rec, page, out) {
     // GURPS flush edits the body `## Current Status` block, but the parser
@@ -82,7 +83,7 @@ const WRITERS = {
     const { maxHp, maxFp } = deriveGurpsMax(raw, page.frontmatter);
     return applyGURPSFlush(raw, rec, { maxHp: maxHp, maxFp: maxFp });
   },
-  dnd: function (raw, rec) { return applyDnDFlush(raw, rec); },
+  dnd: function (raw, rec, page, out, options) { return applyDnDFlush(raw, rec, options); },
   coc: function (raw, rec) { return applyCoCFlush(raw, rec); },
 };
 
@@ -164,7 +165,12 @@ async function runFlush(deps) {
   try {
     for (const slug of Object.keys(latest)) {
       const marker = recordMarker(latest[slug].key, latest[slug].blob);
-      if (written[slug] === marker) {
+      // A marker is the record's name, or { marker, skipped }: the values the note had no cell for when it was
+      // written. The same record seen again writes only those, never what the GM may have edited since.
+      const seen = written[slug];
+      const seenMarker = seen && typeof seen === 'object' ? seen.marker : seen;
+      const retry = seen && typeof seen === 'object' && Array.isArray(seen.skipped) && seen.skipped.length ? seen.skipped : null;
+      if (seenMarker === marker && !retry) {
         const page0 = bySlug[slug];
         if (page0) out('· ' + (page0.displayTitle || page0.title) + ' — already written, left as the note has it');
         continue;
@@ -175,7 +181,7 @@ async function runFlush(deps) {
       const raw = readFile(page.sourcePath);
       const writer = resolveSystem(page.frontmatter, campaignSystem);
       if (!writer) { out('⚠ ' + name + ' — this system has no live sheet to write back (skipped)'); continue; }
-      const res = WRITERS[writer](raw, latest[slug].blob, page, out);
+      const res = WRITERS[writer](raw, latest[slug].blob, page, out, seenMarker === marker ? { only: retry } : undefined);
       if (!res) continue;
       if (res.changes.length) {
         if (dryRun) {
@@ -188,7 +194,11 @@ async function runFlush(deps) {
         out('· ' + name + ' — no change');
       }
       if (res.skipped && res.skipped.length) out('  ' + name + ' — not written, no cell in the note can hold: ' + res.skipped.join(', '));
-      if (!dryRun) { written[slug] = marker; markersChanged = true; }
+      if (!dryRun) {
+        const left = res.skippedFields || [];
+        written[slug] = left.length ? { marker, skipped: left } : marker;
+        markersChanged = true;
+      }
     }
   } finally {
     if (markersChanged) saveState(vaultPath, { flush_written: written });

@@ -187,7 +187,7 @@ test('a second row of a name whose first row is not live is not written either',
   assert.deepEqual(r.changes, []);
   assert.deepEqual(r.skipped, ['class:rage']);
   // A saved 0 for a row the page does not track has lost nothing, so it is not named.
-  assert.deepEqual(applyDnDFlush(md, { used: { 'class:rage': 0 } }), { markdown: md, changes: [], skipped: [] });
+  assert.deepEqual(applyDnDFlush(md, { used: { 'class:rage': 0 } }), { markdown: md, changes: [], skipped: [], skippedFields: [] });
 });
 
 test('when the first row of a name is live, it alone is written', () => {
@@ -480,4 +480,29 @@ test('a link in the slot total itself, not a trailing reason, is not written', (
   const md = note('Brannoch_Vale.md').replace(/^\| 1st \| (\d+) \|/m, '| 1st | [[Ring]] $1 |');
   const r = applyDnDFlush(md, blob({ used: { 'slot:1st': 3 } }));
   assert.equal(row(r.markdown, /^\| 1st \|/), row(md, /^\| 1st \|/), 'the row is left as written');
+});
+
+// A saved value with no writable cell is kept as a name to try again; `only` limits a writeback to those names.
+test('skippedFields names every value left unwritten, past the shown limit', () => {
+  const md = mini(['| HP (Current) | 20 | ', '| HP (Max) | 20 |'], []);
+  const used = {};
+  for (let i = 0; i < 25; i++) used[`class:feature ${i}`] = 1;
+  const r = applyDnDFlush(md, { hp: 5, temp: 2, used });
+  assert.equal(r.skippedFields.length, 1 + 25, r.skippedFields.join(','));
+  assert.ok(r.skippedFields.includes('temp') && r.skippedFields.includes('class:feature 24'));
+  assert.ok(!r.skippedFields.includes('hp'), 'hp was written');
+  assert.ok(r.skipped.length < r.skippedFields.length, 'the report still stops at its limit');
+});
+
+test('only limits the writeback to the named fields, scalars and counts alike', () => {
+  const md = mini(['| HP (Current) | 20 |', '| HP (Max) | 20 |'], [rage(''), rage('', 'Second Wind')]);
+  const r = applyDnDFlush(md, { hp: 5, used: { 'class:rage': 1, 'class:second wind': 1 } }, { only: ['class:rage'] });
+  assert.match(row(r.markdown, /^\| Rage/), /\| 1 \|/);
+  assert.match(row(r.markdown, /^\| HP \(Current\)/), /\| 20 \|/, 'hp was not asked for');
+  assert.match(row(r.markdown, /^\| Second Wind/), /\|\s*\|/, 'the other count was not asked for');
+  assert.deepEqual(r.changes.map(c => c.field), ['Rage']);
+  const hpOnly = applyDnDFlush(md, { hp: 5, used: { 'class:rage': 1 } }, { only: ['hp'] });
+  assert.match(row(hpOnly.markdown, /^\| HP \(Current\)/), /\| 5 \|/);
+  assert.match(row(hpOnly.markdown, /^\| Rage/), /\|\s*\|/);
+  assert.deepEqual(hpOnly.skippedFields, []);
 });

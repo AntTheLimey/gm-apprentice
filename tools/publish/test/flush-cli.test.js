@@ -475,3 +475,45 @@ test('a corrupt vault-state.json stops flush with one plain line naming the file
   assert.match(lines[0], /_meta\/vault-state\.json is not valid JSON/);
   assert.doesNotMatch(lines[0], /\n\s+at /);
 });
+
+// A saved value with no cell to hold it is retried, alone, once the GM adds the cell.
+test('flush retries only the values it could not write, and leaves what the GM edited since (dnd)', async () => {
+  const head = ['## Stat Sheet', '', '### Combat', '', '| Attribute | Value |', '|---|---|', '| HP (Current) | 20 |', '| HP (Max) | 20 |', ''];
+  const rageRow = ['## Class Features', '', '| Name | Action | Uses | Used | Recovers | Summary |', '|---|---|---|---|---|---|', '| Rage |  | 2 |  | Long Rest | a |', ''];
+  let note = head.join('\n');
+  const key = 'loadout:dnd-camp:vale:ABCD';
+  const adapter = fakeAdapter({ 'roster:dnd-camp': JSON.stringify([key]), [key]: JSON.stringify({ v: 1, hp: 10, used: { 'class:rage': 1 }, updatedAt: 5 }) });
+  const st = memoryState();
+  const go = async () => {
+    const lines = [];
+    const rc = await runFlush({
+      ...st, config: { vaultPath: '/vault', siteTitle: 'DnD Camp', system: 'dnd-5e-2024', excludeDirs: [], folderMap: {} },
+      publishConfig: { system: 'dnd-5e-2024', switches: { characterSheets: true, liveStats: true } }, adapter,
+      scan: () => [{ sourcePath: '/vault/PCs/V.md', title: 'vale', displayTitle: 'vale', frontmatter: { type: 'pc' } }],
+      readFile: () => note, writeFile: (_p, s) => { note = s; }, out: (m) => lines.push(String(m)),
+    });
+    assert.strictEqual(rc, 0);
+    return lines.join('\n');
+  };
+  await go();
+  assert.match(note, /\| HP \(Current\) \| 10 \|/);
+  assert.deepEqual(st.peek().flush_written.vale.skipped, ['class:rage']);
+  // The GM edits HP, then adds the Rage row.
+  note = note.replace('| HP (Current) | 10 |', '| HP (Current) | 15 |') + '\n' + rageRow.join('\n');
+  const text = await go();
+  assert.match(note, /\| HP \(Current\) \| 15 \|/, 'the GM\'s HP is not overwritten');
+  assert.match(note, /\| Rage \|  \| 2 \| 1 \|/, 'the skipped value arrived');
+  assert.match(text, /Rage/);
+  assert.equal(typeof st.peek().flush_written.vale, 'string', 'nothing left to retry: a plain marker again');
+  const again = await go();
+  assert.match(again, /already written/);
+});
+
+test('an old plain-string marker is read as nothing left to retry', async () => {
+  const st = memoryState();
+  st.writeState('/vault', { flush_written: { 'jane-ashford': 'loadout:test-campaign:jane-ashford:ABCD@5' } });
+  const r = run({ ...st });
+  await r.promise;
+  assert.deepEqual(r.writes, {});
+  assert.ok(r.lines.some((l) => /already written/.test(l)), r.lines.join('\n'));
+});

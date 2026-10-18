@@ -75,10 +75,25 @@ function readNote(lines) {
   return sections;
 }
 
-function applyDnDFlush(markdown, blob) {
+const SCALARS = ['hp', 'temp', 'exhaustion', 'conditions', 'inspiration'];
+
+// `options.only`: the names (a scalar, or a key of `used`) to write; every other value of the record is left
+// out, as if the record did not carry it. A later flush uses it to retry just what an earlier one could not write.
+function narrowed(blob, only) {
+  const keep = new Set(only);
+  const out = {};
+  for (const k of SCALARS) if (keep.has(k) && k in blob) out[k] = blob[k];
+  const used = (blob.used && typeof blob.used === 'object') ? blob.used : {};
+  out.used = Object.fromEntries(Object.entries(used).filter(([k]) => keep.has(k)));
+  return out;
+}
+
+function applyDnDFlush(markdown, record, options) {
   const changes = [];
   const skipped = [];
-  if (!blob || typeof blob !== 'object') return { markdown, changes, skipped };
+  const skippedFields = [];
+  if (!record || typeof record !== 'object') return { markdown, changes, skipped, skippedFields };
+  const blob = options && Array.isArray(options.only) ? narrowed(record, options.only) : record;
   const used = (blob.used && typeof blob.used === 'object') ? blob.used : {};
   // A saved number is fitted to the note as the page fits it (fit in js/dnd-live.js): a whole
   // number, never below 0, never above the cell's own maximum. A record saved before a
@@ -317,7 +332,7 @@ function applyDnDFlush(markdown, blob) {
 
   // Named: a value the record carries that the note could not take. A count of 0 with no
   // live row to hold it has lost nothing (a renamed feature, a row the page shows as written).
-  for (const k of ['hp', 'temp', 'exhaustion', 'conditions', 'inspiration']) if (carries[k] && !okScalar.has(k)) skipped.push(k);
+  for (const k of SCALARS) if (carries[k] && !okScalar.has(k)) skipped.push(k);
   // A key is named only when it has the shape of a real one (the kinds live-key.js makes, a
   // short name with no control or line-separator character). The record is public, so any
   // other key is only counted, and past MAX_NAMED the rest are counted too: no text from the
@@ -325,10 +340,11 @@ function applyDnDFlush(markdown, blob) {
   const unplaced = Object.keys(used).filter(k => has(k) && !resolved.has(k) && (tried.has(k) || Math.round(used[k]) > 0));
   const named = unplaced.filter(wellFormedKey);
   const unrecognised = unplaced.length - named.length;
+  skippedFields.push(...skipped, ...named);
   skipped.push(...named.slice(0, MAX_NAMED));
   if (named.length > MAX_NAMED) skipped.push(`and ${named.length - MAX_NAMED} more`);
   if (unrecognised) skipped.push(`${unrecognised} unrecognised ${unrecognised === 1 ? 'entry' : 'entries'}`);
-  return { markdown: changes.length ? lines.join('\n') : markdown, changes, skipped };
+  return { markdown: changes.length ? lines.join('\n') : markdown, changes, skipped, skippedFields };
 }
 
 // The build reads only the first subsection of each title.
