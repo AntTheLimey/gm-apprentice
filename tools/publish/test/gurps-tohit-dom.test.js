@@ -611,6 +611,16 @@ describe('the damage rolls to make', () => {
     const rows = p.all('.th-dmg-runs tr').map((tr) => tr.children.map((td) => td.textContent));
     assert.deepStrictEqual(rows, [['You roll', 'Damage rolls'], ['14', '1'], ['13', '2'], ['3 to 12', '3']]);
   });
+  it('the weapon line says when the sheet gives no Rcl', () => {
+    const d = dataBlock();
+    d.weapons[2] = Object.assign({}, d.weapons[2], { noRcl: true });
+    const p = load(d);
+    p.set('#th-weapon', 'Blaster pistol');
+    assert.match(p.$('#th-wline').textContent, /Rcl 1 \(not on the sheet\) · /);
+    const q = load(dataBlock());
+    q.set('#th-weapon', 'Blaster pistol');
+    assert.doesNotMatch(q.$('#th-wline').textContent, /not on the sheet/);
+  });
   it('the last place on the page, after the notes', () => {
     const p = load(dataBlock());
     const out = p.$('.th-out');

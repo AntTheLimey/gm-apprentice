@@ -1009,7 +1009,7 @@
       }
       weaponSel.value = weaponId(w);
       wline.textContent = res.type === 'ranged'
-        ? ['Acc ' + int(w.acc, 0, 99), 'RoF ' + rofText(w), 'Rcl ' + int(w.rcl, 1, 99, 1), 'Bulk −' + Math.abs(int(w.bulk, -99, 99)), String(w.range || '')].filter(Boolean).join(' · ')
+        ? ['Acc ' + int(w.acc, 0, 99), 'RoF ' + rofText(w), 'Rcl ' + int(w.rcl, 1, 99, 1) + (w.noRcl === true ? ' (not on the sheet)' : ''),'Bulk −' + Math.abs(int(w.bulk, -99, 99)), String(w.range || '')].filter(Boolean).join(' · ')
         : String(w.damage || '');
 
       const c = conflicts(state);
