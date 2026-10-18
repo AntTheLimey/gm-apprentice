@@ -87,12 +87,12 @@ describe('alignProjectName', () => {
 });
 
 describe('deploy: cloudflare-pages', () => {
-  it('builds first, then deploys bare when wrangler.toml is present', async () => {
+  it('builds first, then deploys to the production branch when wrangler.toml is present', async () => {
     const h = harness();
     const rc = await runDeploy({ configPath: CONFIG }, h.deps);
     assert.strictEqual(rc, 0);
     assert.deepStrictEqual(h.builds, [{ configPath: CONFIG, site: 'player' }]);
-    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy', '--branch=main', '--commit-dirty=true']]);
   });
 
   it('aligns the wrangler.toml project name before deploying', async () => {
@@ -131,9 +131,17 @@ describe('deploy: cloudflare-pages', () => {
     const h = harness({ wrangler: ([sub]) => ({ code: 0, stdout: '', stderr: '', error: sub === 'pages' ? 'ETIMEDOUT' : null }) });
     const rc = await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
     assert.strictEqual(rc, 1);
-    assert.match(h.text(), /Deploy failed: the upload did not finish within 10 minutes, so nothing was deployed/);
+    assert.match(h.text(), /Deploy failed: the upload did not finish within 10 minutes, so it may not have been deployed/);
     assert.doesNotMatch(h.text(), /live at|Deployed\./);
     assert.deepStrictEqual(h.fetches, []);
+  });
+
+  it('the timeout message points at the deployment list and says to run deploy again', async () => {
+    const h = harness({ wrangler: ([sub]) => ({ code: 0, stdout: '', stderr: '', error: sub === 'pages' ? 'ETIMEDOUT' : null }) });
+    await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.match(h.text(), /npx wrangler@4 pages deployment list/);
+    assert.match(h.text(), /Run deploy again/);
+    assert.doesNotMatch(h.text(), /nothing was deployed/);
   });
 
   it('stops before deploying when wrangler is not authenticated', async () => {
@@ -189,7 +197,7 @@ describe('deploy: cloudflare-pages', () => {
     const h = harness();
     await runDeploy({ configPath: CONFIG, noBuild: true }, h.deps);
     assert.deepStrictEqual(h.builds, []);
-    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy', '--branch=main', '--commit-dirty=true']]);
   });
 
   it('a build failure stops before any deploy', async () => {
@@ -397,6 +405,38 @@ describe('deploy --verify', () => {
     assert.doesNotMatch(payload.messages.join('\n'), /live at/);
   });
 
+  it('says it was deployed as a preview, and exits 1, when wrangler printed a branch alias', async () => {
+    const h = harness({
+      statuses: [200],
+      config: { siteUrl: 'https://canticle.pages.dev' },
+      wrangler: ([sub]) => (sub === 'pages'
+        ? { code: 0, stdout: `Take a peek over at ${DEPLOYED}\nDeployment alias URL: https://my-branch.canticle.pages.dev\n`, stderr: '' }
+        : { code: 0, stdout: '', stderr: '' }),
+    });
+    const rc = await runDeploy({ configPath: CONFIG, verify: true, json: true }, h.deps);
+    assert.strictEqual(rc, 1);
+    const payload = JSON.parse(h.out.join(''));
+    assert.strictEqual(payload.verified, false);
+    assert.strictEqual(payload.preview, true);
+    assert.strictEqual(payload.deployed, true);
+    assert.match(payload.messages.join('\n'), /deployed as a preview/);
+    assert.doesNotMatch(payload.messages.join('\n'), /live at/);
+    assert.deepStrictEqual(h.fetches, []);
+  });
+
+  it('a production alias (the project address) is not a preview', async () => {
+    const h = harness({
+      statuses: [200],
+      config: { siteUrl: 'https://canticle.pages.dev' },
+      wrangler: ([sub]) => (sub === 'pages'
+        ? { code: 0, stdout: `Take a peek over at ${DEPLOYED}\nDeployment alias URL: https://canticle.pages.dev\n`, stderr: '' }
+        : { code: 0, stdout: '', stderr: '' }),
+    });
+    const rc = await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
+    assert.strictEqual(rc, 0);
+    assert.match(h.text(), /this deployment is live at https:\/\/1a2b3c4d\.canticle\.pages\.dev/);
+  });
+
   it('github-pages still verifies the site address', async () => {
     const h = harness({ config: { host: 'github-pages', siteUrl: 'https://u.github.io/c' }, statuses: [200] });
     const rc = await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
@@ -451,7 +491,7 @@ describe('deploy --verify', () => {
     assert.strictEqual(payload.verified, true);
     assert.strictEqual(payload.status, 200);
     assert.strictEqual(payload.url, 'https://canticle.pages.dev');
-    assert.deepStrictEqual(payload.commands, ['npx wrangler@4 pages deploy']);
+    assert.deepStrictEqual(payload.commands, ['npx wrangler@4 pages deploy --branch=main --commit-dirty=true']);
   });
 });
 
@@ -489,7 +529,7 @@ describe('deploy runs the site\'s own build hooks (#248)', () => {
     assert.strictEqual(rc, 0);
     assert.deepStrictEqual(order, ['npm run prebuild', 'build', 'npm run postbuild']);
     assert.ok(h.commands.every(c => c.cwd === SITE));
-    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy', '--branch=main', '--commit-dirty=true']]);
   });
 
   it('runs nothing extra for a site with no hooks or no package.json', async () => {
@@ -754,7 +794,7 @@ describe('deploy: the leak gate', () => {
     const h = harness();
     assert.strictEqual(await runDeploy({ configPath: CONFIG }, h.deps), 0);
     assert.match(h.text(), /Leak check: nothing hidden on the player site \(3 files/);
-    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy', '--branch=main', '--commit-dirty=true']]);
     const j = harness();
     await runDeploy({ configPath: CONFIG, json: true }, j.deps);
     const payload = JSON.parse(j.out.join(''));
@@ -815,7 +855,7 @@ describe('deploy: the leak gate', () => {
     assert.strictEqual(rc, 0);
     assert.match(h.text(), /\[abc123\] npcs\/a\.html: "The baker poisoned the mayor\."/);
     assert.match(h.text(), /Deploying anyway: --ignore-leaks/);
-    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy', '--branch=main', '--commit-dirty=true']]);
   });
 
   it('--ignore-leaks --json says leaksIgnored and keeps the findings', async () => {
@@ -833,7 +873,7 @@ describe('deploy: the leak gate', () => {
     assert.strictEqual(await runDeploy({ configPath: CONFIG, ignoreLeaks: true }, h.deps), 0);
     assert.match(h.text(), /leak check could not run: vault unreadable/i);
     assert.doesNotMatch(h.text(), /Nothing was uploaded/);
-    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy', '--branch=main', '--commit-dirty=true']]);
   });
 
   it('--ignore-leaks still stops when there is no built site to upload', async () => {
@@ -867,6 +907,6 @@ describe('deploy: the leak gate', () => {
     assert.strictEqual(await runDeploy({ configPath: CONFIG }, h.deps), 0);
     assert.match(h.text(), /kept by a player/);
     assert.doesNotMatch(h.text(), /nothing hidden on the player site/);
-    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy', '--branch=main', '--commit-dirty=true']]);
   });
 });

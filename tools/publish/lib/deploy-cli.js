@@ -80,6 +80,19 @@ function deploymentUrlFrom(text) {
   return peek ? peek[1] : any ? any[0] : null;
 }
 
+// wrangler prints "Deployment alias URL: <address>" after the deployment address. A production deployment's alias is
+// the project's own address (<project>.pages.dev); a preview's carries the branch in front (<branch>.<project>.pages.dev).
+function aliasUrlFrom(text) {
+  const plain = String(text || '').replace(/\u001b\[[0-9;]*m/g, '');
+  const m = plain.match(/Deployment alias URL:\s*(https:\/\/[a-z0-9.-]+\.pages\.dev)/i);
+  return m ? m[1] : null;
+}
+
+function isPreviewAlias(alias) {
+  if (!alias) return false;
+  return alias.replace(/^https:\/\//, '').split('.').length > 3;
+}
+
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function runDeploy(options, deps) {
@@ -140,7 +153,7 @@ async function runDeploy(options, deps) {
 
   const commands = [];
   const wranglerDeployArgs = hasToml
-    ? ['pages', 'deploy']
+    ? ['pages', 'deploy', '--branch=main', '--commit-dirty=true']
     : ['pages', 'deploy', outDir, `--project-name=${projectName}`, '--branch=main', '--commit-dirty=true'];
 
   // The vault's own steps run inside the build. A package.json hook is skipped only for a slot the settings hold steps
@@ -304,6 +317,7 @@ async function runDeploy(options, deps) {
   } else if (gateResult && !gateResult.skipped) say(`Leak check: nothing hidden on the player site (${gateResult.files} files, ${gateResult.seconds.toFixed(1)} s).`);
 
   let deploymentUrl = null;
+  let aliasUrl = null;
   if (isCloudflare) {
     const who = runWrangler(['whoami'], { cwd: siteRoot });
     if (who.code !== 0) {
@@ -324,11 +338,13 @@ async function runDeploy(options, deps) {
     // A killed upload can come back with a zero exit status; a set error or signal is a failure all the same.
     if (deployed.code !== 0 || deployed.error || deployed.signal) {
       say(deployed.error === 'ETIMEDOUT'
-        ? `Deploy failed: the upload did not finish within ${WRANGLER_DEPLOY_TIMEOUT_MS / 60000} minutes, so nothing was deployed. Run deploy again.`
+        ? `Deploy failed: the upload did not finish within ${WRANGLER_DEPLOY_TIMEOUT_MS / 60000} minutes, so it may not have been deployed. \`npx wrangler@4 pages deployment list\` shows whether it was. Run deploy again.`
         : `Deploy failed: ${failureDetail(deployed)}`);
       return finish({}, 1);
     }
-    deploymentUrl = deploymentUrlFrom(`${deployed.stdout || ''}\n${deployed.stderr || ''}`);
+    const wranglerText = `${deployed.stdout || ''}\n${deployed.stderr || ''}`;
+    deploymentUrl = deploymentUrlFrom(wranglerText);
+    aliasUrl = aliasUrlFrom(wranglerText);
   } else {
     const git = (args) => {
       commands.push(`git ${args.join(' ')}`);
@@ -385,6 +401,10 @@ async function runDeploy(options, deps) {
     say(`deployed, but could not confirm which build is served: wrangler printed no address for this deployment. Run \`npx wrangler@4 pages deployment list\` to see whether it exists.`);
     return finish({ deployed: true, url, verified: false }, 1);
   }
+  if (isCloudflare && isPreviewAlias(aliasUrl)) {
+    say(`deployed as a preview, not to the site's address: wrangler gave it ${aliasUrl}, so ${url} still serves the earlier build. Check the project's production branch in Cloudflare.`);
+    return finish({ deployed: true, url, verified: false, preview: true, deploymentUrl, aliasUrl }, 1);
+  }
   const target = isCloudflare ? deploymentUrl : url;
 
   let status = null;
@@ -394,7 +414,7 @@ async function runDeploy(options, deps) {
     attempts++;
     status = await fetchStatus(target);
     if (status >= 200 && status < 300) {
-      say(`live at ${target}`);
+      say(isCloudflare ? `this deployment is live at ${target}` : `live at ${target}`);
       return finish({ deployed: true, url, verified: true, status, attempts, ...(isCloudflare ? { deploymentUrl } : {}) }, 0);
     }
   }
@@ -405,4 +425,4 @@ async function runDeploy(options, deps) {
   return finish({ deployed: true, url, verified: false, status, attempts, ...(isCloudflare ? { deploymentUrl } : {}) }, 0);
 }
 
-module.exports = { runDeploy, deploymentUrlFrom, defaultFetchStatus, projectNameFor, outputDirArg };
+module.exports = { runDeploy, deploymentUrlFrom, aliasUrlFrom, defaultFetchStatus, projectNameFor, outputDirArg };

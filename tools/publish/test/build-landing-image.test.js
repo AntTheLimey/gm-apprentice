@@ -50,3 +50,16 @@ test('a web address for the hero picture is printed as written, spaces aside', (
   const { src } = heroSrc(false, 'https://example.com/a b/crest.png', false);
   assert.equal(src, 'https://example.com/a%20b/crest.png');
 });
+
+// Bug Bash 1: a data: URI or a protocol-relative address is a web address too, on the landing page and the 404 page.
+test('data: and protocol-relative campaign pictures are printed as written, with no base path on the 404 page', () => {
+  const { campaignImageSrc } = require('../lib/processor');
+  const { fourOhFourTemplate } = require('../lib/templates/four-oh-four');
+  const data = 'data:image/png;base64,iVBORw0KGgo=';
+  assert.equal(campaignImageSrc(data), data);
+  assert.equal(campaignImageSrc('//cdn.example.com/a b/crest.png'), '//cdn.example.com/a%20b/crest.png');
+  for (const [image, printed] of [[data, data], ['//cdn.example.com/crest.png', '//cdn.example.com/crest.png']]) {
+    const html = fourOhFourTemplate({ four_oh_four: { message: 'x' }, siteTitle: 'S', siteUrl: 'https://x.example/camp/', theme: { campaign_image: image } });
+    assert.ok(html.includes(`<img src="${printed}"`), html.match(/<img[^>]*>/)[0]);
+  }
+});

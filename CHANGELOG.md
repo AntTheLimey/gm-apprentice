@@ -21,11 +21,14 @@ tool said "fine" when it wasn't. Publish tool 1.37.0.
 
 ### Fixed
 
-- `deploy` treats a timed-out or killed upload as a failure and says
-  nothing was deployed; it said "live" while the site stayed on the
+- `deploy` treats a timed-out or killed upload as a failure and says it
+  may not have been deployed (`npx wrangler@4 pages deployment list`
+  shows whether it was); it said "live" while the site stayed on the
   previous build. The Cloudflare upload gets ten minutes, not sixty
-  seconds, and `--verify` checks the deployment wrangler printed,
-  exiting 1 when it cannot tell which build is served (#350).
+  seconds, and always goes to the production branch, even with a
+  `wrangler.toml`. `--verify` checks the deployment wrangler printed,
+  says "this deployment is live at", and exits 1 when it cannot tell
+  which build is served or the deployment went out as a preview (#350).
 - `flush` remembers, per PC, which saved live record it last wrote
   (`flush_written` in `_meta/vault-state.json`) and skips it next time,
   so a value the GM sets in the note afterwards is no longer
