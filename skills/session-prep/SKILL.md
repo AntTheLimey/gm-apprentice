@@ -215,7 +215,8 @@ never copy a snapshot into the plan.
 > Katherine, who hasn't had a solo beat in three sessions. Or someone
 > else entirely?
 
-The GM picks who the session leans on. Then sketch a touchpoint
+Last session's Moment lines show who had none. The GM picks who
+the session leans on. Then sketch a touchpoint
 for every PC at the table from the six types in
 arc-spotlight-reference.md; a PC with none is a gap to fill:
 
