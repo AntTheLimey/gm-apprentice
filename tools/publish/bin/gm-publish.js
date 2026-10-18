@@ -487,6 +487,10 @@ change what the site shows:
                   a skill of a Call of Cthulhu PC written below the base worked
                   out for it from the characteristics (a note; the sheet shows
                   the number written)
+  HEADING_IN_HIDDEN_BLOCK
+                  a withheld section's heading written inside a hidden block
+                  (gm-only, a comment, a hidden callout), so the text after the
+                  block is withheld with it (a note)
 To find them the site is built in memory, every page rendered and nothing
 written, so the names are read off the pages as built and the list is the
 build's own. That is every page: a note's own, a PC's story, the section

@@ -822,7 +822,7 @@ function buildSite(options) {
         if (page.storyMarkdown) page.storyMarkdown = stubMarked(page.storyMarkdown, include, quiet, mark);
       } else {
         const cut = stubCut(source, include, withhold);
-        stubFacts.set(page, { source, strays: cut.strays, openFence: cut.openFence });
+        stubFacts.set(page, { source, strays: cut.strays, openFence: cut.openFence, hidden: cut.hidden });
         page.markdown = cut.text;
         // A PC's story companion is a SEPARATE file paired in by the scanner and
         // rendered on its own page. Reducing only page.markdown left a stubbed PC
@@ -907,7 +907,7 @@ function buildSite(options) {
     // A stub's facts were taken when it was cut. A fault that lies wholly in text the page
     // hides anyway (noteFacts) is none; a note withheld whole shows none.
     stripFacts.set(page, stubFacts.get(page) || {
-      source,
+      source, hidden: page.headingsUnstable ? [] : stripped.hidden,
       ...noteFacts(stripped, (lines) => (page.headingsUnstable ? lines.map(() => false) : keptFlags(lines, excludeSections, fm, { pcKeepSections, restored: lines === stripped.lines ? stripped.restored : undefined }))),
     });
     const text = stripped.lines.join('\n');
@@ -2113,6 +2113,16 @@ function buildSite(options) {
   // Every file is written: the after steps run, then the check of the notes and "Done!".
   if (runningSteps && errorCount === 0 && publishConfig.steps.after.length) runSteps(publishConfig.steps.after, { cwd: configDir, label: 'after_build', log: options.stepsLog, stdio: options.stepsStdio, extraEnv: stepEnv });
   if (!gm) for (const pc of tohitRows) audit.calculator(pc.rel, pc.rows);
+  // A withheld heading inside a hidden block (#447): the text after it is withheld; campaign-qa offers to move it.
+  if (!gm) {
+    for (const [page, facts] of stripFacts) {
+      audit.calculator(vaultRelPathOf(page), (facts.hidden || []).map((h) => ({
+        code: 'HEADING_IN_HIDDEN_BLOCK', severity: 'info',
+        detail: `the heading "${h.title}" is inside a hidden block (a gm-only block, a comment or a hidden callout), so the text after the block is withheld as part of that section`,
+        fix: 'move the heading out of the hidden block if that section is meant to start there; if the text after the block should publish, leave the heading where it is and put that text under a heading the site shows',
+      })));
+    }
+  }
   const noteFaults = gm ? [] : audit.findings((page) => stripFacts.get(page));
   if (options.onNoteFaults) options.onNoteFaults(noteFaults);
   for (const line of summaryLines(noteFaults)) console.warn(`  WARNING: ${line}`);
