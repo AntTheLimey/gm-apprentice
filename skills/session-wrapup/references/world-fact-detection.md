@@ -36,8 +36,8 @@ during wrap-up.
 Before staging a finding:
 1. `_World/_flags.md`:
    - **Ignored** → suppress silently
-   - **Deferred** → add this session to its mentions and list
-     it with its sessions
+   - **Deferred** → record this session on the entry (raise its
+     counts, if it keeps counts) and list it
    - **Canon** → suppress
 2. `_World/` domain files — already encoded → suppress.
 3. Entity files — matching entity exists → suppress.

@@ -9,7 +9,7 @@ notes that contradict a rule.
 | Check | Domain Source | Entity Types | What's Flagged |
 |-------|-------------|-------------|----------------|
 | Age beyond a heritage's lifespan | heritages.md | npc, pc | An age the heritage's rules rule out |
-| Unknown heritage | heritages.md | npc, pc | A heritage the rules don't list |
+| Unknown heritage | heritages.md | npc, pc | A heritage outside a rule that lists the heritages there are |
 | Timeline contradiction | history-timeline.md | event, any with era | Event date contradicts era ordering |
 | Tech-level violation | magic-technology.md | item, location | Item or feature from wrong tech era |
 | Climate inconsistency | geography-climate.md | location | Location claims climate inconsistent with defined geography |

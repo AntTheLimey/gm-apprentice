@@ -18,6 +18,7 @@ advisory — never blocking.
    | Domain File | Entity Types |
    |-------------|-------------|
    | heritages.md | npc, pc |
+   | history-timeline.md | event, any with a date or era |
    | geography-climate.md | location |
    | politics-governance.md | faction, organization |
    | economics-trade.md | faction, location |

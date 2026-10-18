@@ -142,7 +142,8 @@ one not struck through).
 the Wrap-Up's World State. → `## World State`
 
 **10b. World threads** — If `_World/_flags.md` exists, list its
-**Deferred** items with the sessions each came up in, the ones tied to
+**Deferred** items with how often and when each came up (as the entry
+records it), the ones tied to
 the upcoming adventure's themes or locations first:
 
 > **Deferred world threads:**
