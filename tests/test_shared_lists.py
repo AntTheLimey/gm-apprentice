@@ -69,6 +69,8 @@ PROSE: list[tuple[str, str, frozenset[str] | set[str]]] = [
     ("shared/entity-schema.md", r"^\(([a-z/]+)\), `location`", sr.NPC_STATUS),
     ("shared/entity-schema.md", r"^`status` \((alive[a-z/]+)\)", sr.NPC_STATUS),
     ("shared/templates/npc.md", r"^status: alive +# (.+)$", sr.NPC_STATUS),
+    ("publish-site/references/schema-reference.md",
+     r"^\| `status` \| Optional \| (alive[^|]+) \|$", sr.NPC_STATUS),
     # Faction and organization status
     ("shared/entity-schema.md", r"^`status` \((active[a-z/]+)\)", sr.FACTION_STATUS),
     ("shared/templates/organization.md", r"^status: active +# (.+)$", sr.FACTION_STATUS),

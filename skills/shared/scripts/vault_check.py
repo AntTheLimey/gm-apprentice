@@ -160,15 +160,9 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 
 from schema_rules import (
-    CANON_STATUS_VALUES,
-    DEPRECATED_FIELDS,
-    NPC_STATUS,
-    REQUIRED_FIELDS,
-    SCENE_STATUS,
-    SCENE_TYPES,
     SESSION_PLAYED,
-    SESSION_STATUS,
     extract_frontmatter,
+    frontmatter_findings,
     chapter_key,
     parse_session_number,
 )
@@ -252,17 +246,6 @@ from vaultlib import (  # noqa: F401
 
 # A frontmatter line carrying an unquoted wikilink (Juggl breaks on these)
 UNQUOTED_LINK_RE = re.compile(r'^\s*(?:[\w-]+:|-)\s*\[\[')
-
-ENUM_CHECKS = {
-    # field -> (allowed values, entity types it applies to; None = any)
-    "canon_status": (CANON_STATUS_VALUES, None),
-    "scene_type": (SCENE_TYPES, {"scene"}),
-}
-STATUS_BY_TYPE = {
-    "session": SESSION_STATUS,
-    "scene": SCENE_STATUS,
-    "npc": NPC_STATUS,
-}
 
 
 def emit(label: str, rows: list[str]):
@@ -349,38 +332,10 @@ def check_frontmatter(vault: Path, folder: str | None,
         if fm is None:
             rows.append(f"INFO\t{rel}\tno frontmatter")
             continue
-        etype = fm.get("type")
-        if not etype or isinstance(etype, list):
-            rows.append(f"ERROR\t{rel}\tmissing 'type' field")
-            continue
-        if etype not in REQUIRED_FIELDS:
-            # Custom entity types are allowed; surface for awareness.
-            rows.append(f"INFO\t{rel}\tcustom type '{etype}' "
-                        f"(no schema rules applied)")
-        else:
-            for field in REQUIRED_FIELDS[etype]:
-                if field not in fm:
-                    rows.append(f"ERROR\t{rel}\tmissing required "
-                                f"field '{field}' for type '{etype}'")
-        for field, (allowed, types) in ENUM_CHECKS.items():
-            value = fm.get(field)
-            if value and not isinstance(value, list) \
-                    and (types is None or etype in types) \
-                    and value not in allowed:
-                rows.append(f"ERROR\t{rel}\t{field}: '{value}' not in "
-                            f"{{{', '.join(sorted(allowed))}}}")
-        status = fm.get("status")
-        status_values = STATUS_BY_TYPE.get(etype)
-        if status and status_values and not isinstance(status, list) \
-                and status not in status_values:
-            rows.append(f"ERROR\t{rel}\tstatus: '{status}' not in "
-                        f"{{{', '.join(sorted(status_values))}}}")
-        for scope in ("*", etype):
-            for old, new, since in DEPRECATED_FIELDS.get(scope, []):
-                if old in fm:
-                    rows.append(f"ERROR\t{rel}\tlegacy field '{old}' — "
-                                f"renamed to '{new}' in {since} "
-                                f"(see shared/canon-status.md)")
+        # The schema's rules, from the one place they live (the repo's
+        # validator asks the same function); custom types are INFO.
+        rows += [f"{level}\t{rel}\t{message}"
+                 for level, message in frontmatter_findings(fm)]
         for line in raw_frontmatter(text).splitlines():
             if UNQUOTED_LINK_RE.match(line):
                 rows.append(f"WARNING\t{rel}\tunquoted wikilink in "
