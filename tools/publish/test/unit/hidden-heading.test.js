@@ -82,6 +82,33 @@ test('a heading inside a hidden block ends no hidden section, on the player site
   assert.match(seen, /Low\./);
 });
 
+// The kind and label of the innermost mark around `needle` in a GM site's text, reading the tokens as they nest.
+function innermost(text, marks, needle) {
+  const at = text.indexOf(needle);
+  const stack = [];
+  for (const m of text.slice(0, at).matchAll(/\uE000([0-9a-z]+)\uE001|\uE002/g)) {
+    if (m[1] !== undefined) stack.push(parseInt(m[1], 36));
+    else stack.pop();
+  }
+  return stack.length ? marks.get(stack[stack.length - 1]) : null;
+}
+
+test('GM site: a withheld run that changes section inside a gm-only block does not cut the block\'s mark short', () => {
+  const note = '## Background\nKept.\n\n## Secrets\ns1\n<!-- gm-only -->\n## GM Notes\nINNER\n<!-- /gm-only -->\nAFTER\n\n## Background Two\nx\n';
+  const marks = createMarks();
+  const out = playerSafeMarkdown(note, {
+    excludeSections: EXCLUDE, frontmatter: { type: 'pc' }, pcKeepSections: ['Background'], mark: { marks, show: new Set(markKinds()) },
+  }).text;
+  assert.equal(innermost(out, marks, 'INNER').kind, 'gm_only_blocks');
+  assert.equal(innermost(out, marks, 's1').kind, 'sections');
+  assert.equal(innermost(out, marks, 'AFTER').kind, 'sections');
+  assert.equal(innermost(out, marks, 'Kept.'), null);
+  // Every close has an open, and none is left open.
+  let depth = 0;
+  for (const m of out.matchAll(/\uE000[0-9a-z]+\uE001|\uE002/g)) { depth += m[0] === '\uE002' ? -1 : 1; assert.ok(depth >= 0); }
+  assert.equal(depth, 0);
+});
+
 test('a stub: a hidden heading the stub does not name ends the kept section; the heading itself never prints', () => {
   const note = '## Appearance\nTall.\n%%\n## Plans\n%%\nPLANTEXT\n\n## Voice\nLow.\n';
   const out = keepOnlySections(note, ['Appearance', 'Voice'], {});

@@ -245,11 +245,15 @@ function markedSections(markdown, withheldBy, mark) {
     run = null;
   };
   lines.forEach((line, i) => {
+    // A mark opened inside this run's own mark closes inside it: the run takes every line until it does, whatever
+    // the walk says of them (a keep-list section that gives way to `## GM Notes` written inside a gm-only block).
+    if (run && run.open && inside.has(i)) { run.lines.push(line); return; }
     const by = withheldBy[i] === undefined ? null : withheldBy[i];
     if (by === null) { flush(); out.push(line); return; }
     if (run && run.by !== by) flush();
-    if (!run) run = { by, lines: [], at: i };
+    if (!run) run = { by, lines: [], at: i, open: false };
     run.lines.push(line);
+    if (!inside.has(i)) run.open = true;   // the run's mark opens at or before this line
   });
   flush();
   return out.join('\n');
@@ -618,7 +622,7 @@ function stubView(markdown, includeSections, withhold) {
     .filter(s => typeof s === 'string')
     .map(headingKey)
     .filter(k => k !== '');
-  if (wanted.length === 0) return { kept: [], flags, facts: { strays: [], openFence: null } };
+  if (wanted.length === 0) return { kept: [], flags, facts: { strays: [], openFence: null }, hidden: [] };
 
   // What the whole note publishes, each line with the line of the note it came from.
   // A withheld heading the strips took out comes back where its block ended (#447): the exclude list's, or one this
@@ -634,7 +638,7 @@ function stubView(markdown, includeSections, withhold) {
     flags[stripped.from[i]] = true;
   });
   // The chain's faults that show in the kept sections (noteFacts), by this same cut.
-  return { kept, flags, facts: noteFacts(stripped, (lines) => stubKept(lines, wanted, withhold, null, lines === stripped.lines ? stripped.restored : null)) };
+  return { kept, flags, hidden: stripped.hidden, facts: noteFacts(stripped, (lines) => stubKept(lines, wanted, withhold, null, lines === stripped.lines ? stripped.restored : null)) };
 }
 
 // Per line of `lines` (a note after the strip chain), whether a stub that keeps the `wanted`
@@ -693,7 +697,7 @@ function stubKept(lines, wanted, withhold, warn, restored) {
 // this for a stub page, whose cut text no longer holds the stray marker.
 function stubCut(markdown, includeSections = [], withhold = {}) {
   const view = stubView(markdown, includeSections, withhold);
-  return { text: view.kept.join('\n'), strays: view.facts.strays, openFence: view.facts.openFence };
+  return { text: view.kept.join('\n'), strays: view.facts.strays, openFence: view.facts.openFence, hidden: view.hidden };
 }
 
 const DATAVIEW_RE = /```dataview[\s\S]*?```/g;
@@ -1763,14 +1767,14 @@ function strippedLines(text, excludeCallouts, mark, withholds) {
     }
   }
   const restored = new Set();
-  const hidden = [];   // the titles put back with text after them: the GM hears of each
+  const hidden = [];   // the headings put back with text after them ({ title, line of `text` }): the GM hears of each
   if (withholds && lines !== null && lines.length > 0) {
     for (const h of restoreHiddenHeadings(text, lines, from, notCode, withholds)) {
       restored.add(h.at);
-      if (h.hides) hidden.push(h.title);
+      if (h.hides) hidden.push({ title: h.title, line: from[h.at] });
     }
   }
-  warnings.push(...hidden.map(hiddenHeadingWarning));
+  warnings.push(...hidden.map((h) => hiddenHeadingWarning(h.title)));
   return { lines, from, warnings, strays, pre, blocks, restored, hidden };
 }
 
@@ -1955,7 +1959,7 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   const source = page.markdown.replace(/\r/g, '');
   const stripped = strippedLines(source, options.excludeCallouts, mark, withholds);
   warnings.push(...stripped.warnings);
-  if (mark) warnings.push(...strippedLines(source, options.excludeCallouts, null, withholds).hidden.map(hiddenHeadingWarning));
+  if (mark) warnings.push(...strippedLines(source, options.excludeCallouts, null, withholds).hidden.map((h) => hiddenHeadingWarning(h.title)));
   let markdown = stripped.lines.join('\n');
   // A note whose title line is itself withheld (`# GM Notes`) has that section
   // removed before the title is dropped: once the line is gone nothing below would
