@@ -14,13 +14,18 @@ with the files under a count indented below it:
                those, and is reviewed)
     unverified           `<!-- UNVERIFIED -->` markers in the Wrap-Up (any
                          case, one may span lines), line and text
+    unverified in linked notes
+                         the same markers on the notes the Wrap-Up links
+                         (a held claim may sit on an entity file); they
+                         rule out the quick path too
     reconstruction notes `> [!info] Reconstruction Note` callouts
     plan                 this session's Plan file, or `none`
     linked entities      notes the Wrap-Up links to (sessions, scenes,
                          chapters and other structural notes left out)
     draft entities created this session
                          linked DRAFTs whose `createdSession` names this
-                         session's number: what the quick path promotes
+                         session's number (and chapter, when both name one):
+                         what the quick path promotes
     older draft entities linked
                          the other linked DRAFTs; the quick path leaves them
     open spoilers        `<!-- spoiler -->` blocks in the linked
@@ -165,6 +170,28 @@ def unverified_markers(text: str) -> list[tuple[int, str]]:
             for m in UNVERIFIED_RE.finditer(body)]
 
 
+CHAPTER_RE = re.compile(r"chapter\D{0,3}(\d+(?:\.\d+)?)", re.I)
+
+
+def _chapter(*values: object) -> str | None:
+    """The chapter number the first value that names one gives."""
+    for value in values:
+        m = CHAPTER_RE.search(str(value or ""))
+        if m:
+            return m.group(1)
+    return None
+
+
+def _created_this_session(note: Note, number: int | None, chapter: str | None) -> bool:
+    """Session numbers restart each chapter, so a `createdSession` that names
+    another chapter is not this session's, whatever its number. One that
+    names no chapter is judged by number alone."""
+    if number is None or parse_session_number(note.fm.get("createdSession")) != number:
+        return False
+    theirs = _chapter(note.fm.get("createdSession"))
+    return chapter is None or theirs is None or theirs == chapter
+
+
 def _wrap_rel(vault: Path, raw: str) -> str:
     path = Path(raw)
     if path.is_absolute():
@@ -222,8 +249,8 @@ def scan(vault: Path, wrap_arg: str) -> list[str]:
                     and note.type not in STRUCTURAL_TYPES:
                 linked.append(note)
     drafts = [n for n in linked if n.fm.get("canon_status") == "DRAFT"]
-    new = [n for n in drafts if number is not None
-           and parse_session_number(n.fm.get("createdSession")) == number]
+    chapter = _chapter(index.fm.get("chapter"), index.rel) if index else None
+    new = [n for n in drafts if _created_this_session(n, number, chapter)]
     older = [n for n in drafts if n not in new]
     out.append(f"linked entities: {len(linked)}")
     out.append(f"draft entities created this session: {len(new)}")
@@ -231,6 +258,9 @@ def scan(vault: Path, wrap_arg: str) -> list[str]:
     out.append(f"older draft entities linked (the quick path leaves them): {len(older)}")
     out.extend(f"  {n.rel} (createdSession: {n.fm.get('createdSession') or 'none'})"
                for n in older)
+    held = [(n.rel, line, what) for n in linked for line, what in unverified_markers(n.text)]
+    out.append(f"unverified in linked notes: {len(held)}")
+    out.extend(f"  {rel}:{line}: {what or '(bare)'}" for rel, line, what in held)
     spoilers = [(n.rel, line, words) for n in linked for line, words in open_spoilers(n.text)]
     out.append(f"open spoilers: {len(spoilers)}")
     out.extend(f"  {rel}:{line}: {words}" for rel, line, words in spoilers)
@@ -240,6 +270,9 @@ def scan(vault: Path, wrap_arg: str) -> list[str]:
         fails.append("session index not found")
     if unverified:
         fails.append(f"{len(unverified)} UNVERIFIED marker{'s' if len(unverified) != 1 else ''}")
+    if held:
+        fails.append(f"{len(held)} UNVERIFIED marker{'s' if len(held) != 1 else ''} "
+                     f"on {'a linked note' if len(held) == 1 else 'linked notes'}")
     if plan is not None:
         fails.append("a Plan file")
     if fails:
