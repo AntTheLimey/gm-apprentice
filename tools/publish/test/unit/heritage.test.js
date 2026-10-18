@@ -121,4 +121,11 @@ describe('worldDomainTemplate', () => {
     assert.ok(html.includes('<li>Rivers flow south</li>'), 'a string rule is its own text');
     assert.ok(html.includes('<li>No flying mounts</li>'), 'an object rule still reads');
   });
+
+  it('skips a rule entry with no text', () => {
+    const page = { ...basePage, frontmatter: { ...basePage.frontmatter, rules: [null, 7, { rule: { nested: 1 } }, '', 'Rivers flow south'] } };
+    const html = worldDomainTemplate(page, baseContent, stubNav, baseConfig, {}, {});
+    assert.ok(!html.includes('<li></li>') && !html.includes('[object Object]'), 'no empty or object bullets');
+    assert.ok(html.includes('<li>Rivers flow south</li>'));
+  });
 });

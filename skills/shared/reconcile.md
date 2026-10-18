@@ -65,9 +65,7 @@ finding one at a time and wait for the GM's call:
 - **Ignore** → `_flags.md` ignored section, with date and context;
   future flags on the topic are suppressed.
 - **Defer** → `_flags.md` deferred section, with session number and
-  context. For a re-surfaced item, show the accumulated context ("The
-  Old Empire has come up in 3 sessions now — should we flesh this
-  out?").
+  context. For a re-surfaced item, show the sessions it came up in.
 
 Record each resolution for step 7.
 
