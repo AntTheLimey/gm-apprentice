@@ -275,7 +275,7 @@ const REGISTRY = [
   {
     name: 'vault.system', was: [{ name: 'publish.system', in: 'vault' }, { name: 'system', in: 'site' }], type: 'choice', values: SYSTEM_IDS, aliases: SYSTEM_ALIASES, keepOnFault: true, legacyKind: 'scalar', group: 'site',
     shape: SYSTEM_SHAPE,
-    does: 'The game system, which decides how a character sheet is drawn',
+    does: 'The game system, which decides how a character sheet is drawn. `coc-7e-regency` changes two things from `coc-7e`: the Regency skill list on every sheet, and the masthead label "Regency Cthulhu" for a PC with no era',
     left_out: "A plain character page with no system's sheet",
   },
   {

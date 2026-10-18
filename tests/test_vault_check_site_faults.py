@@ -235,6 +235,26 @@ class SiteFaultRowsTests(unittest.TestCase):
             and "— name the weapon's skill at its default level" in r
             for r in rows), rows)
 
+    def test_a_coc_skill_below_its_worked_out_base_is_a_row(self):
+        # The tool works the base out from the characteristics; Python only
+        # carries the tool's words.
+        pc = ("---\ntype: pc\nstatus: alive\n---\n\n## Stat Sheet\n\n"
+              "### Characteristics\n\n| Characteristic | Regular | Half | Fifth |\n"
+              "|---|---|---|---|\n| DEX | 70 | 35 | 14 |\n\n"
+              "## Skills\n\n| Skill | Base | Regular | Half | Fifth |\n"
+              "|---|---|---|---|---|\n| Dancing | 05 | 10 | 5 | 2 |\n")
+        vault, _site = make(self, {"Characters/Ann_Vole.md": pc},
+                            system="coc-7e-regency")
+        rows = [r for r in vc.check_site_faults(vault)
+                if "SKILL_BELOW_BASE" in r]
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith(
+            "INFO\tCharacters/Ann_Vole.md\tSKILL_BELOW_BASE: Dancing is "
+            "written as 10, below its base of 14"), rows)
+        self.assertIn("— raise Dancing to 14 in the Regular column, or "
+                      "leave it as written", rows[0])
+        self.assertIn("SKILL_BELOW_BASE", vc.NOTE_FAULT_CODES)
+
     def test_a_withheld_name_printed_on_a_page_is_a_row(self):
         vault, _site = make(self, {
             MARA: npc("Lord Zorn rides at dawn."),

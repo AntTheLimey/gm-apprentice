@@ -123,3 +123,25 @@ test('doctor --site --json lists the rows with their fix', () => {
   const rows = (report.findings || []).filter((f) => f.code === 'TOHIT_UNREAD');
   assert.ok(rows.some((f) => f.severity === 'warning' && f.path === 'Characters/PCs/Test_Hero.md' && /names the attribute DX/.test(f.detail) && /default level/.test(f.fix)), out);
 });
+
+// #396: a CoC skill written below the base worked out for it is a note on the PC, and the sheet keeps the GM's number.
+test('a CoC skill written below its worked-out base is a SKILL_BELOW_BASE finding', () => {
+  const { setRow } = require('../helpers/pc-template');
+  let body = templateBody('pc-coc-7e-regency.md');
+  body = setRow(body, 'DEX', ['70', '35', '14']);
+  body = setRow(body, 'Dancing', ['05', '10', '5', '2']);
+  let faults = null;
+  const lines = [];
+  const warn = console.warn; const log = console.log;
+  console.log = () => {}; console.warn = (m) => lines.push(String(m));
+  let built;
+  try { built = buildPc('coc-7e-regency', body, [], { onNoteFaults: (f) => { faults = f; } }); } finally { console.warn = warn; console.log = log; }
+  const mine = faults.filter((f) => f.code === 'SKILL_BELOW_BASE');
+  assert.strictEqual(mine.length, 1, JSON.stringify(mine));
+  assert.strictEqual(mine[0].severity, 'info');
+  assert.strictEqual(mine[0].path, 'Characters/PCs/Test_Hero.md');
+  assert.match(mine[0].detail, /Dancing is written as 10, below its base of 14/);
+  assert.match(mine[0].fix, /raise Dancing to 14/);
+  assert.ok(!lines.some((l) => /SKILL_BELOW_BASE|below/.test(l)), 'the build says nothing about it');
+  assert.match(built.html, /Dancing/);
+});

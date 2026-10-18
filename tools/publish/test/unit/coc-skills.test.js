@@ -116,4 +116,24 @@ describe('mergeSkills', () => {
     const second = mergeSkills([{ name: 'Language (French)', base: 1, reg: 30 }], 'regency', chars);
     assert.equal(second.find(s => s.name === 'Language (Own)').reg, 80, 'a second language below EDU leaves Own alone');
   });
+  it('a trailing check mark on a skill name merges with the canonical skill (#365)', () => {
+    for (const mark of ['✓', '✔', '☑', '✅', '✔️', ' ✓ ']) {
+      for (const variant of ['regency', 'base']) {
+        const out = mergeSkills([{ name: `Charm${mark}`, base: 15, reg: 35 }], variant);
+        assert.equal(out.filter(s => /charm/i.test(s.name)).length, 1, `${JSON.stringify(mark)} ${variant}`);
+        assert.equal(out.find(s => /^charm/i.test(s.name)).name, 'Charm');
+        assert.equal(out.find(s => s.name === 'Charm').reg, 35);
+      }
+    }
+    const ticked = mergeSkills([{ name: 'Etiquette ✓', base: 5, reg: 40 }], 'regency', { DEX: { reg: 50 } });
+    assert.equal(ticked.filter(s => /etiquette/i.test(s.name)).length, 1);
+  });
+  it('a skill written below its worked-out base keeps the written number and says what the base is (#396)', () => {
+    const out = mergeSkills([{ name: 'Dancing', base: 5, reg: 10 }, { name: 'Charm', base: 15, reg: 15 }], 'regency', { DEX: { reg: 70 } });
+    const dancing = out.find(s => s.name === 'Dancing');
+    assert.equal(dancing.reg, 10);
+    assert.equal(dancing.belowBase, 14);
+    assert.equal(out.find(s => s.name === 'Charm').belowBase, undefined);
+    assert.equal(out.find(s => s.name === 'Etiquette'), undefined, 'a skill left off has nothing to flag');
+  });
 });

@@ -23,6 +23,17 @@
     return out;
   }
 
+  // Stored ticks for skills the sheet does not show now. They are written back with the next save so the tick
+  // returns if the skill does (a derived skill left off for lack of a characteristic, say).
+  function offSheetTicks(ticks, skillNames) {
+    var out = {};
+    if (!ticks) return out;
+    var live = {};
+    (skillNames || []).forEach(function (n) { live[n] = true; });
+    Object.keys(ticks).forEach(function (n) { if (ticks[n] && !live[n]) out[n] = true; });
+    return out;
+  }
+
   function clampScalar(n, max) {
     var x = Math.round(Number(n));
     if (isNaN(x)) x = 0;
@@ -45,7 +56,7 @@
     return Math.round((Number(val) / Number(max)) * 100);
   }
 
-  var api = { cocNotes: cocNotes, reassocTicks: reassocTicks, clampScalar: clampScalar,
+  var api = { cocNotes: cocNotes, reassocTicks: reassocTicks, offSheetTicks: offSheetTicks, clampScalar: clampScalar,
     pipTarget: pipTarget, barPct: barPct };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.__cocLive = api;
@@ -97,6 +108,7 @@
       var row = btn.closest('.skill');
       if (row) row.classList.toggle('checked', on);
     }
+    var offSheet = {};   // stored ticks for skills not on the sheet, kept for the next save
     function skillName(btn) {
       var row = btn.closest('.skill');
       return row ? row.getAttribute('data-skill') : null;
@@ -109,6 +121,7 @@
         if (COND_KEYS[i]) conditions[COND_KEYS[i]] = chip.classList.contains('on');
       });
       var ticks = {};
+      Object.keys(offSheet).forEach(function (n) { ticks[n] = true; });
       skillButtons().forEach(function (btn) {
         if (btn.getAttribute('aria-pressed') === 'true') { var n = skillName(btn); if (n) ticks[n] = true; }
       });
@@ -163,6 +176,7 @@
         });
       }
       var ticks = reassocTicks(blob.ticks, data.skills || []);
+      offSheet = offSheetTicks(blob.ticks, data.skills || []);
       skillButtons().forEach(function (btn) {
         var n = skillName(btn);
         setTick(btn, !!(n && ticks[n]));

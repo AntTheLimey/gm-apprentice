@@ -73,6 +73,7 @@ every page that names it. Use it to confirm each fix.
 | `NAMED_NO_PAGE`, working or no type | Info | A prep note's name is printed on the site |
 | `TOHIT_UNREAD` (`WARNING`) | Warning | The to-hit calculator gives a row less than it should |
 | `TOHIT_UNREAD` (`INFO`) | Info | A row's numbers do not add up, or it is written another way |
+| `SKILL_BELOW_BASE` (`INFO`) | Info | A CoC skill is written below the base its characteristics give |
 
 A row is raised only where the site shows the fault. A stray `%%` or
 an open fence that lies wholly under `## GM Notes` changes nothing a
@@ -425,6 +426,16 @@ the GM where it came from.
 A row the GM wants left as it is stays a row: it comes back on every
 run and in the build's count. Log it as "left as written" and do not
 raise it again in the same run.
+
+## SKILL_BELOW_BASE
+
+A Call of Cthulhu skill written lower than the base the PC's
+characteristics give it (`Dancing | 05 | 10` with DEX 70, base 14).
+The row says the number written and the base. The sheet shows the
+number written either way. Per PC, ask: raise it to the base, or leave
+it? On a raise, write the base in the Regular column and, if the
+Half and Fifth cells hold numbers, work them out again. On leave, log
+"left as written" and do not raise it again in the same run.
 
 ## Reporting
 
