@@ -420,6 +420,8 @@ describe('deploy --verify', () => {
     assert.strictEqual(payload.preview, true);
     assert.strictEqual(payload.deployed, true);
     assert.match(payload.messages.join('\n'), /deployed as a preview/);
+    assert.match(payload.messages.join('\n'), /production branch is not `main`/);
+    assert.match(payload.messages.join('\n'), /set the project's production branch to `main` in the Cloudflare dashboard/);
     assert.doesNotMatch(payload.messages.join('\n'), /live at/);
     assert.deepStrictEqual(h.fetches, []);
   });

@@ -402,7 +402,7 @@ async function runDeploy(options, deps) {
     return finish({ deployed: true, url, verified: false }, 1);
   }
   if (isCloudflare && isPreviewAlias(aliasUrl)) {
-    say(`deployed as a preview, not to the site's address: wrangler gave it ${aliasUrl}, so ${url} still serves the earlier build. Check the project's production branch in Cloudflare.`);
+    say(`deployed as a preview, not to the site's address: wrangler gave it ${aliasUrl}, so ${url} still serves the earlier build. Most likely the Cloudflare project's production branch is not \`main\`, and this deploy sends to \`main\`. To fix it, set the project's production branch to \`main\` in the Cloudflare dashboard (Workers & Pages, the project, Settings, Branch control), then deploy again.`);
     return finish({ deployed: true, url, verified: false, preview: true, deploymentUrl, aliasUrl }, 1);
   }
   const target = isCloudflare ? deploymentUrl : url;
