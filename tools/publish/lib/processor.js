@@ -1953,7 +1953,7 @@ function flagIsYes(v) {
 }
 
 // `withheld: true` on a note: its own name is a secret (#291). Read as `gm_only` is read.
-// skills/shared/scripts/vaultlib.py `is_withheld` is this function.
+// skills/shared/scripts/vaultlib.py `note_withheld` asks this function (lines-cli.js, op withheld).
 function isWithheld(frontmatter) {
   return flagIsYes(frontmatter && frontmatter.withheld);
 }
@@ -2141,11 +2141,15 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
   // The note as written: a scanned page's frontmatter has had a value of the wrong shape (one
   // alias written alone) taken out, and a secret name must not go with it.
   const written = new Map((rawNotes || []).map((n) => [n.sourcePath, n.frontmatter || {}]));
+  // The file names of those notes: a link that names a file reaches that file, as in Obsidian, ahead of any gm_aliases
+  // owner of the same name (#352).
+  const withheldFiles = new Set();
   for (const page of pages) {
     const fm = page.frontmatter || {};
     if (!isWithheld(fm) || (published && published.includes(page))) continue;
     const word = withheldPlaceholder(fm.type, words);
     const raw = written.get(page.sourcePath) || fm;
+    withheldFiles.add(gmAliasKey(page.title));
     for (const name of [page.title, page.displayTitle, typeof fm.title === 'string' ? labelsForLinks(fm.title) : '',
       ...nameList(fm.aliases), ...nameList(raw.aliases), ...gmAliasList(fm)]) {
       if (typeof name === 'string' && name.trim() && !withheldKeys.has(gmAliasKey(name))) withheldKeys.set(gmAliasKey(name), word);
@@ -2158,10 +2162,17 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
     for (const page of published || pages) {
       const fm = page.frontmatter || {};
       withheldKeys.delete(gmAliasKey(page.title));
-      for (const a of Array.isArray(fm.aliases) ? fm.aliases : []) withheldKeys.delete(gmAliasKey(a));
+      // Not an alias that is also the page's own gm_aliases name: that one is no public name (publishedFrontmatter drops it).
+      const secret = new Set(gmAliasList(fm).map(gmAliasKey));
+      for (const a of Array.isArray(fm.aliases) ? fm.aliases : []) if (!secret.has(gmAliasKey(a))) withheldKeys.delete(gmAliasKey(a));
     }
   }
   if (owners.size === 0 && secretKeys.size === 0 && withheldKeys.size === 0) return null;
+  // The page a gm_aliases name belongs to, unless the name is a withheld note's own file name.
+  const ownerOf = (name) => {
+    const key = gmAliasKey(String(name).split('/').pop());
+    return withheldFiles.has(key) && withheldKeys.has(key) ? null : owners.get(key);
+  };
 
   // `text` wrapped in a mark of `kind`, or null when the GM site does not show that kind.
   const marked = (kind, label, text) => (mark && mark.show.has(kind) ? `${mark.marks.open(kind, label)}${text}${mark.marks.close()}` : null);
@@ -2180,7 +2191,7 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
       const bar = w.escapedPipe ? '\\|' : '|';
       const label = w.display ? bar + w.display : '';
       // A folder path names the note by its last segment (`[[NPCs/Elias Crowe]]`).
-      const owner = owners.get(gmAliasKey(target.split('/').pop()));
+      const owner = ownerOf(target);
       const labelIsSecret = !!label && secretKeys.has(gmAliasKey(w.display));
       const hidden = placeholderFor(target);
       // A link with a label of its own prints that label, as it does for any page.
@@ -2225,7 +2236,7 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
   // be an ordinary word must not rewrite `status:` or `occupation:`.
   function nameIn(v) {
     if (typeof v === 'string') {
-      const owner = owners.get(gmAliasKey(v.split('/').pop()));
+      const owner = ownerOf(v);
       // A bare name that is a withheld note's: the page prints the placeholder, as for a link.
       const hidden = placeholderFor(v);
       if (owner && hidden) {

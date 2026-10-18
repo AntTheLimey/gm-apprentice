@@ -24,6 +24,10 @@
 //                            gm-only block, a spoiler block or a comment is not kept;
 //                            nor, when `excludeSections` is given, one it withholds
 //
+//   {"op":"withheld","text":…}
+//       -> {"withheld":…,"names":[…]}  for a whole note: whether the build reads it as withheld (its YAML reader, its
+//                            flag rule), and the names its title, aliases and gm_aliases give it, as the build reads them
+//
 //   {"op":"cut","text":…}
 //       -> {"cut":[…]}       per line of `text`: the line as the strip chain leaves it
 //                            (the build's own: gm-only, spoiler, HTML and %% comments),
@@ -49,7 +53,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { readSettings, nameIn, fileLabel, layoutOf } = require('./settings');
-const { strippedLines, playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts } = require('./processor');
+const { strippedLines, playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts, isWithheld, nameList, gmAliasList } = require('./processor');
+const { parseNote } = require('./frontmatter');
+const { labelsForLinks } = require('./wikilink');
 
 // A request is checked, not coerced: a list that is not a list read as "no list"
 // would answer "nothing is withheld".
@@ -128,6 +134,12 @@ function answer(request) {
     case 'stub':
       return { kept: keptSectionFlags(text, list(request, 'include'),
         { excludeSections: request.excludeSections === undefined ? [] : list(request, 'excludeSections') }) };
+    case 'withheld': {
+      let fm;
+      try { fm = parseNote(text).data || {}; } catch (e) { throw new Error(`the frontmatter cannot be read (${String(e.message).split('\n')[0]})`); }
+      const title = typeof fm.title === 'string' ? labelsForLinks(fm.title).trim() : '';
+      return { withheld: isWithheld(fm), names: [...(title ? [title] : []), ...nameList(fm.aliases), ...gmAliasList(fm)] };
+    }
     case 'cut': {
       const { lines, from } = strippedLines(text.replace(/\r/g, ''), false);
       const cut = text.split('\n').map(() => null);

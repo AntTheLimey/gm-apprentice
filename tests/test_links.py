@@ -13,6 +13,7 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "shared" / "script
 sys.path.insert(0, str(SCRIPTS))
 
 import links  # noqa: E402
+import vaultlib  # noqa: E402
 
 
 def make_vault(case, files):
@@ -384,6 +385,38 @@ class UnlinkTests(unittest.TestCase):
                               "\n".join(links.rows(p)))
         q = links.plan_unlink(vault, ["Zorn the Pale"], ["People/Host.md"], "a stranger")
         self.assertIn("Met a stranger and", q.texts["People/Host.md"])
+
+    def test_the_flag_is_read_as_the_build_reads_it(self):
+        # #352: the publish tool is asked, so a number YAML makes 1 (0x1, 1e0)
+        # is a yes here as it is in the build, and a quoted one is not.
+        for value, kept in (("0x1", True), ("1e0", True), ("true", True),
+                            ('"0x1"', False), ("0", False)):
+            with self.subTest(value=value):
+                vault = make_vault(self, {
+                    "People/Lord_Zorn.md": f"---\ntype: npc\nwithheld : {value}\n---\n\nx\n",
+                    "People/Host.md": "Met [[Lord_Zorn]].\n"})
+                p = links.plan_unlink(vault, ["Lord_Zorn"], ["People/Host.md"])
+                self.assertEqual("[[Lord_Zorn]]" in p.texts.get("People/Host.md", "Met [[Lord_Zorn]].\n"), kept)
+
+    def test_a_name_in_other_capitals_is_guarded(self):
+        # #352: the name is matched as a link is, not as a path on disk, so a
+        # case-sensitive file system makes no difference.
+        vault = make_vault(self, {
+            "People/Lord_Zorn.md": "---\ntype: npc\nwithheld: true\n---\n\nx\n",
+            "People/Host.md": "Met [[people/lord_zorn]] and [[LORD ZORN]].\n"})
+        p = links.plan_unlink(vault, ["people/lord_zorn", "LORD ZORN"], ["People/Host.md"])
+        self.assertEqual(p.texts.get("People/Host.md"), None)
+        self.assertEqual(len(p.kept), 2)
+
+    def test_with_no_publish_tool_a_note_with_the_key_is_guarded(self):
+        # Fails closed: a link is kept rather than its name printed.
+        vault = make_vault(self, {
+            "People/Lord_Zorn.md": "---\ntype: npc\nwithheld: false\n---\n\nx\n",
+            "People/Host.md": "Met [[Lord_Zorn]].\n"})
+        with mock.patch.object(links, "note_withheld",
+                               side_effect=vaultlib.PublishToolUnavailable("no node")):
+            p = links.plan_unlink(vault, ["Lord_Zorn"], ["People/Host.md"])
+        self.assertEqual(p.texts.get("People/Host.md"), None)
 
     def test_a_note_that_is_not_withheld_is_unlinked_as_before(self):
         vault = make_vault(self, {

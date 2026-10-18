@@ -243,8 +243,8 @@ def test_version_row_for_a_vault_with_no_settings_file(tmp_path):
 # ---- the yes-words (#374) -------------------------------------------------
 
 def test_the_yes_words_are_the_publish_tools():
-    """`gm_only_hides` and `is_withheld` run in checks that need no Node (the
-    frontmatter and relationship checks, the link tools), so they keep their
+    """`gm_only_hides` runs in checks that need no Node (the
+    frontmatter and relationship checks), so it keeps its
     own copy of the words that mean yes; this pins it to the tool's list."""
     node = shutil.which("node")
     if not node:

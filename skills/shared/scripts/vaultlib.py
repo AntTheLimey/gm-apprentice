@@ -2148,14 +2148,27 @@ def gm_only_hides(value: Any) -> bool:
         r"\+?0*1(?:\.0*)?", word, re.ASCII) is not None
 
 
-def is_withheld(frontmatter: dict[str, Any] | None) -> bool:
-    """Whether a note's own name is a secret (`withheld: true`, #291).
+WITHHELD_KEY_RE = re.compile(r"""^["']?withheld["']?[ \t]*:""", re.M)
 
-    Read exactly as `gm_only` is, so the two flags read alike: this is
-    `gm_only_hides` on the `withheld` field. Mirrors
-    tools/publish/lib/processor.js `isWithheld`; absent means false.
-    """
-    return gm_only_hides((frontmatter or {}).get("withheld"))
+
+def note_withheld(text: str) -> tuple[bool, list[str]]:
+    """Whether a note's own name is a secret (`withheld: true`, #291), and
+    the names its title, aliases and gm_aliases give it. Asked of the
+    publish tool, which reads the frontmatter with the build's YAML reader
+    and the flag with the build's rule (`isWithheld`), so a number YAML
+    makes 1 (`0x1`, `1e0`) reads the same on both sides (#352). A note
+    with no `withheld` key is not asked about. Raises
+    `PublishToolUnavailable` when the tool cannot be asked or cannot read
+    the note's frontmatter."""
+    if not WITHHELD_KEY_RE.search(raw_frontmatter(text)):
+        return False, []
+    answer = PUBLISH_LINES.ask({"op": "withheld", "text": text})
+    withheld, names = answer.get("withheld"), answer.get("names")
+    if not isinstance(withheld, bool) or not (
+            isinstance(names, list) and all(isinstance(n, str) for n in names)):
+        raise PublishToolUnavailable(
+            "the publish tool's answer about withheld is not understood")
+    return withheld, names
 
 
 # The two explicit opt-outs processor.js honours, and nothing else.

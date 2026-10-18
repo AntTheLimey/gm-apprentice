@@ -673,7 +673,7 @@ describe('publishMode (shared vectors; vaultlib.publish_mode must agree)', () =>
   }
 });
 
-describe('isWithheld (the gm_only vectors; vaultlib.is_withheld must agree)', () => {
+describe('isWithheld (the gm_only vectors; vaultlib.note_withheld asks it)', () => {
   const { isWithheld, gmAliasRewriter, withheldPlaceholder: place, publishedFrontmatter: published } = require('../../lib/processor');
   const WORDS = { person: 'someone', place: 'somewhere', thing: 'something' };
   const withheldPlaceholder = (type) => place(type, WORDS);
@@ -717,6 +717,17 @@ describe('isWithheld (the gm_only vectors; vaultlib.is_withheld must agree)', ()
   it('a name a published page answers to is not rewritten', () => {
     const pages = [{ title: 'Lord_Zorn', displayTitle: 'Lord Zorn', frontmatter: { withheld: true } }];
     assert.strictEqual(gmAliasRewriter(pages, pages, undefined, WORDS), null);
+  });
+  it('a withheld note\'s file name that a published page lists in aliases and gm_aliases is still the withheld note\'s (#352)', () => {
+    const zorn = { title: 'Lord_Zorn', displayTitle: 'Lord Zorn', frontmatter: { type: 'npc', withheld: true } };
+    const vane = { title: 'Lord_Vane', displayTitle: 'Lord Vane', frontmatter: { type: 'npc', aliases: ['Lord Zorn'], gm_aliases: ['Lord Zorn'] } };
+    const rw = gmAliasRewriter([zorn, vane], [vane], undefined, WORDS);
+    // The file wins, as in Obsidian: the link is the withheld note's, so it prints the placeholder, not Lord Vane.
+    assert.strictEqual(rw.markdown('[[Lord_Zorn]] [[Lord Zorn]]'), `[[Lord_Zorn|${withheldPlaceholder('npc')}]] [[Lord Zorn|${withheldPlaceholder('npc')}]]`);
+    assert.strictEqual(rw.frontmatter({ location: 'Lord Zorn' }).location, `[[Lord Zorn|${withheldPlaceholder('npc')}]]`);
+    // A gm_aliases name that is no note's file name still prints the owner's public title.
+    const crowe = { ...vane, frontmatter: { type: 'npc', gm_aliases: ['Elias Crowe'] } };
+    assert.strictEqual(gmAliasRewriter([zorn, crowe], [crowe], undefined, WORDS).markdown('[[Elias Crowe]]'), '[[Lord_Vane]]');
   });
 });
 

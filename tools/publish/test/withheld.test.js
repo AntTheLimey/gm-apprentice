@@ -761,6 +761,19 @@ describe('secret-name leftovers (#352)', () => {
     assert.strictEqual(f.count, 1);
     assert.doesNotMatch(f.detail, /times/);
   });
+  it('a PC heading that links a withheld note keeps the PC\'s page whole while sheets are off', () => {
+    const sheetsOff = '  character_sheets: false\n  pc_prose_sections:\n    - Background\n';
+    for (const heading of ['## [[Lord_Zorn]]', '## Debts to [[Lord_Zorn]]']) {
+      const { configPath, docs } = site({
+        'Characters/Lord_Zorn.md': zornNote(),
+        'PCs/Jean.md': `---\ntype: pc\nplayer_name: Pat\n---\n\n# Jean\n## Background\nRaised in the docks.\n${heading}\nOwes a debt.\n`,
+      }, { excluded: ZORN_EXCLUDED, extra: sheetsOff });
+      const warnings = buildQuiet(configPath);
+      assert.deepStrictEqual(warnings.filter((w) => /changes this note's headings/.test(w)), [], heading);
+      const html = fs.readFileSync(path.join(docs, 'pcs', 'jean.html'), 'utf8');
+      assert.ok(html.includes('Raised in the docks.') && !html.includes(ZORN), heading);
+    }
+  });
   it('`withheld : true` (a space before the colon) on a note the scan never reads keeps the flag', async () => {
     for (const key of ['withheld : true', '"withheld": true']) {
       const files = { 'Quiet/Lord_Zorn.md': zornNote(`${key}\n`), 'Characters/Mara_Quill.md': mara('Intro.\n\nLord Zorn rides.') };
