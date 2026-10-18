@@ -9,15 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.10.76] — 2026-10-18
 
-The site set-up guide reads 6.5 KB less (31,378 to 24,811 bytes).
+The site set-up guide reads 6.5 KB less (31,378 to 24,871 bytes).
 
 ### Changed
 
-- Step 14 runs `update-pin --site <dir>`, which checks the site's tool
-  pin and links the tool, instead of having the model open
-  `package.json` and compare paths; Step 16's separate `npm install` is
-  folded into it (the step numbers stay, so an interrupted set-up still
-  resumes).
+- Step 14 runs `update-pin --site <dir>`, which checks and mends the
+  site's tool pin, instead of having the model open `package.json` and
+  compare paths.
 - The GitHub Pages deploy (Step 21b) moves to `github-pages.md` §
   First deploy, so a Cloudflare set-up no longer reads it.
 - Step 23 points at `cloudflare-pages.md` § The fast way for the

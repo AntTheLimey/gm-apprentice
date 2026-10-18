@@ -235,7 +235,9 @@ infra only; the at-table session is capability 7.
   renders.
 - `references/cloudflare-pages.md` — Cloudflare token, credentials
   (`doctor --set-cloudflare-creds`), first deploy, custom domains.
-- `references/github-pages.md` — manual GitHub Pages enablement.
+- `references/github-pages.md` — GitHub Pages first deploy and
+  enablement by hand.
+- `references/gm-site.md` — the GM's own copy of the site.
   Both hosts can run in parallel from the same `docs/`.
 
 ## Companion Skills

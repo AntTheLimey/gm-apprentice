@@ -420,11 +420,10 @@ rare fallback.)
 
 ### Step 14: Confirm the build tool pin
 
-Run `node "$TOOL" update-pin --site <site_dir>` and report its one
-line. It points the site at the installed plugin's copy of the tool
-and runs `npm install`, which only links it (nothing downloads). If
-it says npm install left something else, show the GM the lines it
-printed and stop.
+Run `node "$TOOL" update-pin --site <site_dir>` and report what it
+prints. It points the site's `package.json` at the installed plugin's
+copy of the tool when it names any other copy. If it prints `could
+not record` or `npm install left`, show the GM those lines and stop.
 
 ### Step 15: Check the settings
 
@@ -458,7 +457,8 @@ the GM to edit a file.
 
 ### Step 16: Link the build tool
 
-Step 14's `update-pin` already ran `npm install`. Go on.
+From `<site_dir>` run `npm install`. It links the tool Step 14
+pinned; the tool's dependencies ship with it, so nothing downloads.
 
 ### Step 17: Initial build
 

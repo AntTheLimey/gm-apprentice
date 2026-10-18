@@ -2,7 +2,9 @@
 
 ## First deploy
 
-Step 21b of the set-up guide.
+Step 21b of the set-up guide. `<project_name>` and the GitHub user
+come from `node "$TOOL" settings setup-note get --vault <vault>`;
+`$TOOL` is set up in `SKILL.md` → "The build tool".
 
 Initialise git, commit, and push, then enable Pages.
 
@@ -67,7 +69,8 @@ gh api repos/<github_username>/<project_name>/pages \
 ```
 
 If that command fails (permissions, Pages already enabled) or `gh` isn't
-available, walk the GM through Step 1 onwards below.
+available, walk the GM through the numbered steps under
+Enabling Pages by hand.
 
 ---
 
