@@ -473,6 +473,58 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("fonts\tleft as it is", out)
         self.assertEqual(stamp_of(vault), PLUGIN)
 
+    def yes_no_checks(self, log):
+        def find(v):
+            return [Item("fonts", CHOICE, ["self-host"],
+                         lambda x: log.append(x) or ["done"])]
+        return [Check("fonts", "1.10.30", 3, "fonts", find,
+                      choices=("fonts",)),
+                *self.two_holders([])[1:]]
+
+    def test_a_yes_no_choice_refuses_any_value_but_leave(self):
+        # Review B L1: `fonts=no` ran the change.
+        vault = make_vault(self)
+        log = []
+        for raw in ("fonts=no", "fonts=yes", "fonts="):
+            code, out, err = call([str(vault), "apply", "--choose", raw],
+                                  self.yes_no_checks(log))
+            self.assertEqual(code, 2, raw)
+            self.assertIn("fonts=leave", err)
+            self.assertEqual(out, "")
+        self.assertEqual(log, [])
+        self.assertEqual(stamp_of(vault), "1.10.12")
+
+    def test_a_yes_no_leave_is_remembered_while_the_stamp_is_held(self):
+        # Review B L2: it was asked again on every pass.
+        vault = self.new_layout(make_vault(self))
+        log = []
+        checks = self.yes_no_checks(log)
+        call([str(vault), "apply", "--choose", "fonts=leave"], checks)
+        self.assertEqual(stamp_of(vault), "1.10.12")
+        _, plan, _ = call([str(vault), "plan"], checks)
+        self.assertNotIn("fonts\t", plan)
+        self.assertIn("two=<a or b>", plan)
+        call([str(vault), "apply", "--choose", "fonts"], checks)
+        self.assertEqual(log, [None])   # naming it alone still runs it
+
+    def test_a_leave_that_failed_is_not_remembered(self):
+        # Review B L3: the leave was recorded before it was applied.
+        vault = self.new_layout(make_vault(self))
+
+        def boom(x):
+            raise StepFailed("could not")
+
+        def find(v):
+            return [Item("one", CHOICE, ["a or b"], boom, wants="a or b",
+                         holds_stamp=True)]
+        checks = [Check("one", "1.10.30", 3, "one", find, choices=("one=",)),
+                  *self.two_holders([])[1:]]
+        code, _, _ = call([str(vault), "apply", "--choose", "one=leave"],
+                          checks)
+        self.assertNotIn("one", (self.held(vault) or {}).get("left", []))
+        _, plan, _ = call([str(vault), "plan"], checks)
+        self.assertIn("one=<a or b>", plan)
+
     def test_a_person_row_that_is_not_a_notice_comes_back_every_time(self):
         vault = self.new_layout(make_vault(self))
 

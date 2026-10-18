@@ -91,7 +91,7 @@ Row = tuple[str, str]   # (the check or item that printed it, its row)
 def _answered(item: Item, held: dict[str, set[str]]) -> bool:
     """Is this item settled by what a held update remembered: a "leave"
     already given, or a notice already said?"""
-    if item.group == CHOICE and item.holds_stamp:
+    if item.group == CHOICE:
         return item.id in held["left"]
     return item.notice and item.id in held["said"]
 
@@ -224,6 +224,9 @@ def _choice_problem(choice: str, value: str | None,
             if entry.endswith("=") and not value:
                 return (f"--choose {choice} needs a value: "
                         f"{choice}=<value>")
+            if not entry.endswith("=") and value not in (None, "leave"):
+                return (f"--choose {choice} takes no value but "
+                        f"{choice}=leave; to run it, name {choice} alone")
             return None
     return (f"--choose {choice}: not something this vault is offered; "
             f"run plan to see the ids")
@@ -286,11 +289,10 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                     # stamp the release gate would never offer it again.
                     unanswered.append(f"{item.id}=<{item.wants}>")
                 for value in picks:
-                    if value == "leave" and item.holds_stamp:
-                        left_ids.add(item.id)
-                    elif value == "leave" and not item.wants:
+                    if value == "leave" and not item.wants:
                         # A yes/no choice declined by name: nothing is run,
                         # and the release gate does not offer it again.
+                        left_ids.add(item.id)
                         did.append((item.id, f"{item.id}\tleft as it is"))
                         used.add(item.id)
                         continue
@@ -303,6 +305,8 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                     did.extend((item.id, f"{item.id}\t{line}")
                                for line in item.apply(value))
                     used.add(item.id)
+                    if value == "leave" and item.holds_stamp:
+                        left_ids.add(item.id)   # only once it has worked
                     repinned = repinned or (check.name == REPIN
                                             and item.group == WILL)
         except (StepFailed, SettingsUnavailable) as e:

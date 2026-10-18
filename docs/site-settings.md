@@ -16,7 +16,7 @@ what is possible, or to read what your file already says.
 | File | Where | What it holds | Who writes it |
 |------|-------|---------------|---------------|
 | `_meta/vault-config.yaml` | In the vault | Every setting: the campaign's name and system, the site's title and theme, what is published, character sheets, the landing page | You, or the apprentice when you ask |
-| `_meta/vault-state.json` | In the vault | The apprentice's own bookkeeping: which version last updated the vault, and how far setting up a site got | The apprentice only. Leave it alone |
+| `_meta/vault-state.json` | In the vault | The apprentice's own bookkeeping: which version last updated the vault, how far setting up a site got, and what an unfinished update has already asked or said | The apprentice only. Leave it alone |
 | `vault.config.json` | In the site folder, the one `player_site.folder` names | One setting: where the vault is | The apprentice, when it sets the site up |
 
 The two vault files travel with the campaign. The site file belongs to

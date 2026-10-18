@@ -339,6 +339,14 @@ test('a link to a heading prints the note name, an escaped underscore prints the
   assert.deepStrictEqual(lineOf('a _plain_ word'), ['a _plain_ word']);
 });
 
+test('an address that never ends is dropped up to the next space, and an image in a type prints its alt text (review B L4)', () => {
+  assert.deepStrictEqual(lineOf('see [Shadow](Hidden_Man.md'), ['see Shadow']);
+  assert.deepStrictEqual(lineOf('see [Shadow](Hidden_Man.md and more'), ['see Shadow and more']);
+  const emma = page('Emma', 'npc', { relationships: [{ target: 'Hallam', type: '![serves](pic.png)' }] });
+  const labels = tab(buildConnections(ctx([emma, page('Hallam', 'npc')])).for(emma), 'people').groups.map((g) => g.label);
+  assert.ok(labels.length && labels.every((l) => !l.includes('!')), labels.join('|'));
+});
+
 test('descriptions made of unfinished brackets are read in time linear in their length (#355)', () => {
   for (const text of ['[[a|'.repeat(12500), '![['.repeat(16000), '['.repeat(50000), '[[a\\'.repeat(12500), '[x]('.repeat(10000)]) {
     const start = Date.now();

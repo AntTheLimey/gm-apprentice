@@ -29,8 +29,9 @@ migration is a script; this file says how to drive it.
    value was left open: everything else was applied, but the vault stays
    unstamped so the choice comes back. Ask the GM, then run `apply` again
    with `--choose "<id>=<value>"` for it (the plan's stamp row names the
-   choices it waits for). While the stamp is held, the whole
-   plan, said-once notices included, comes back on the next pass.
+   choices it waits for). While the stamp is held, a `leave` answer and the said-once
+   notices are not asked again; `--choose "<id>=<value>"` still overrides
+   a remembered leave. A yes/no choice takes no value but `leave`.
 4. Report what it printed under Did, and any `not offered: <id>` line
    (a choice it had nothing to apply to). Work through Needs a person with
    the GM, one row at a time; the script never changes those. A row

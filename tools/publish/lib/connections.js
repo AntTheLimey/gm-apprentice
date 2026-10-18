@@ -48,7 +48,7 @@ function tabOf(page) {
 // the page. A description goes through printedProse below.
 const printed = (text) => {
   const reduced = removeEmbeds(labelsForLinksFully(text))
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
+    .replace(/(?<!\\)!?\[([^\]]*)\]\([^)]*\)/g, '$1');
   return linkText(reduced, { humanize: true }).words.replace(/\s+/g, ' ').trim();
 };
 
@@ -132,7 +132,11 @@ function markdownLinkLabels(text, depth = 0) {
     // An image (`![alt](address)`) prints its alt text, not the `!` before it.
     const image = i > at && text[i - 1] === '!' && text[i - 2] !== '\\';
     out += text.slice(at, image ? i - 1 : i) + (depth < LINK_DEPTH ? markdownLinkLabels(label, depth + 1) : dropAddresses(label));
-    at = unfinished ? close + 2 : end + 1;
+    // The address that never ends is dropped up to the next space, so `[Shadow](Hidden_Man.md`
+    // prints `Shadow`, and the words after a space stay.
+    let after = close + 2;
+    if (unfinished) while (after < text.length && !/\s/.test(text[after])) after++;
+    at = unfinished ? after : end + 1;
   }
   return out + text.slice(at);
 }
