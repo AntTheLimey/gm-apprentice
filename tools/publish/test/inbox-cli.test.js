@@ -20,7 +20,9 @@ function capture() { const lines = []; return { out: (s) => lines.push(String(s)
 
 test('open sets the session code', async () => {
   const kv = fakeKV(); const c = capture();
-  const rc = await runInbox(['open', 'wolf'], { adapter: kv, out: c.out });
+  const os = require('os'); const fs = require('fs'); const path = require('path');
+  const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-inbox-open-'));
+  const rc = await runInbox(['open', 'wolf'], { adapter: kv, out: c.out, cwd });
   assert.equal(rc, 0);
   assert.equal(await inbox.getCode(kv), 'WOLF');
   assert.match(c.lines.join('\n'), /Session code set: WOLF/);

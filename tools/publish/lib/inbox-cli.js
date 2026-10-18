@@ -43,6 +43,15 @@ const USAGE = 'Usage: inbox <open|code|pull|watch|handled|flag|reply> [args]';
 // failed wakes the loop again to retry it.
 const HEARTBEAT_FILE = '.watcher-heartbeat';
 const SEEN_FILE = '.watcher-seen.json';
+// `inbox open` writes {start: Unix seconds, hours} here; `inbox watch` stops once
+// that time has passed (#451). A missing or broken file means no limit, as before.
+const SESSION_FILE = '.watcher-session.json';
+const DEFAULT_HOURS = 5;
+const MIN_HOURS = 1;
+const MAX_HOURS = 12;
+const TIME_UP = 'WATCHER: session time is up';
+const OPEN_USAGE = `Usage: inbox open <CODE> [--hours N]
+  --hours N  hours the watcher runs from now (default ${DEFAULT_HOURS}, kept between ${MIN_HOURS} and ${MAX_HOURS})`;
 const DEFAULT_EVERY = 30;
 const DEFAULT_REMIND = 300;
 const STREAK = 5;
@@ -56,8 +65,38 @@ Prints a new batch as the JSON array \`inbox pull\` prints, once; a batch it pri
 prints nothing. An id shown before and still pending N seconds later prints
 "WATCHER: still pending: <id> <id>...", and again every N seconds while it stays pending.
 After ${STREAK} failed polls in a row it prints "WATCHER: inbox pull failed N times in a row",
-and again every ${STREAK} more. Without --exit-on-batch it runs until stopped.
-Exit codes: 0 batch or reminder (or polls done), 1 failure line, 2 usage error.`;
+and again every ${STREAK} more. Once the hours set by \`inbox open\` have passed it prints
+"${TIME_UP}" and exits 0. Without --exit-on-batch it otherwise runs until stopped.
+Exit codes: 0 batch, reminder or time up (or polls done), 1 failure line, 2 usage error.`;
+
+// The ms when the session opened by `inbox open` ends, or null for no limit.
+function readSessionEnd(file) {
+  try {
+    const { start, hours } = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (!Number.isFinite(start) || !Number.isFinite(hours)) return null;
+    return (start + hours * 3600) * 1000;
+  } catch {
+    return null;
+  }
+}
+
+function parseOpenArgs(args) {
+  const opts = { code: null, hours: DEFAULT_HOURS, notes: [] };
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--hours') {
+      const raw = args[++i];
+      if (raw === undefined || raw.startsWith('--')) return { error: '--hours needs a number of hours' };
+      if (/^\d+$/.test(raw)) opts.hours = Math.min(MAX_HOURS, Math.max(MIN_HOURS, Number(raw)));
+      else opts.notes.push(`Note: --hours ${JSON.stringify(raw)} is not a whole number of hours; running ${DEFAULT_HOURS} hours.`);
+      continue;
+    }
+    if (a.startsWith('--') || opts.code) return { error: `Unknown argument: ${a}` };
+    opts.code = a;
+  }
+  if (!opts.code) return { error: 'inbox open needs a session code' };
+  return opts;
+}
 
 // The seen file maps id -> ms when it was last shown (or reminded). The old
 // {"ids":[...]} shape reads as "shown now"; a missing or broken file as empty.
@@ -127,9 +166,13 @@ async function runWatch(inbox, kv, args, deps) {
   const seenFile = path.join(dir, SEEN_FILE);
   const seen = readSeen(seenFile, now());
   const remindMs = opts.remindAfter * 1000;
+  const sessionFile = path.join(dir, SESSION_FILE);
   let fails = 0;
   for (let polls = 0; deps.maxPolls === undefined || polls < deps.maxPolls; polls++) {
     if (polls > 0) await sleep(opts.every * 1000);
+    // Read each poll, so an `inbox open` while this runs moves the end.
+    const end = readSessionEnd(sessionFile);
+    if (end !== null && now() >= end) { out(TIME_UP); return 0; }
     let pending = null;
     try {
       pending = await inbox.readPending(kv);
@@ -182,11 +225,17 @@ async function runInbox(argv, deps = {}) {
 
   switch (sub) {
     case 'open': {
-      if (!rest[0]) { out('Usage: inbox open <CODE>'); return 1; }
-      const code = await inbox.setCode(kv, rest[0]);
-      // A new code is a new session: forget the ids the last watcher printed.
-      fs.rmSync(path.join(deps.cwd || process.cwd(), SEEN_FILE), { force: true });
-      out(`Session code set: ${code}`);
+      const opts = parseOpenArgs(rest);
+      if (opts.error) { out(opts.error); out(OPEN_USAGE); return 1; }
+      opts.notes.forEach((n) => out(n));
+      const code = await inbox.setCode(kv, opts.code);
+      const dir = deps.cwd || process.cwd();
+      // A new code is a new session: forget the ids the last watcher printed,
+      // and start the session clock.
+      fs.rmSync(path.join(dir, SEEN_FILE), { force: true });
+      const start = Math.floor((deps.now || Date.now)() / 1000);
+      fs.writeFileSync(path.join(dir, SESSION_FILE), JSON.stringify({ start, hours: opts.hours }) + '\n');
+      out(`Session code set: ${code} (the watcher stops after ${opts.hours} hours)`);
       return 0;
     }
     case 'code': {
@@ -235,4 +284,4 @@ async function runInbox(argv, deps = {}) {
   }
 }
 
-module.exports = { runInbox, defaultRunWrangler, WRANGLER_TIMEOUT_MS, HEARTBEAT_FILE, SEEN_FILE };
+module.exports = { runInbox, defaultRunWrangler, WRANGLER_TIMEOUT_MS, HEARTBEAT_FILE, SEEN_FILE, SESSION_FILE };

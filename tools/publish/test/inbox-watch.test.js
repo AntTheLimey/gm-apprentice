@@ -5,7 +5,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { runInbox, HEARTBEAT_FILE, SEEN_FILE } = require('../lib/inbox-cli.js');
+const { runInbox, HEARTBEAT_FILE, SEEN_FILE, SESSION_FILE } = require('../lib/inbox-cli.js');
 
 let inbox;
 before(async () => { inbox = await import('../templates-scaffold/functions/api/inbox-core.mjs'); });
@@ -252,6 +252,101 @@ test('inbox open clears the seen ids: a new code is a new session', async () => 
   assert.equal(fs.existsSync(path.join(dir, SEEN_FILE)), false);
   const again = await watch(kv, dir, [], { polls: 1 });
   assert.equal(again.lines.length, 1, 'the still-pending request is announced in the new session');
+});
+
+// The session clock (#451): `inbox open` records when the session started and
+// how long it runs; `inbox watch` stops with one line once that time is up.
+const T0 = 1_700_000_000_000;
+const HOUR = 3_600_000;
+async function open(kv, dir, args, clock = T0) {
+  const lines = [];
+  const rc = await runInbox(['open', ...args], { adapter: kv, cwd: dir, out: (s) => lines.push(String(s)), now: () => clock });
+  return { rc, lines, session: fs.existsSync(path.join(dir, SESSION_FILE)) ? JSON.parse(fs.readFileSync(path.join(dir, SESSION_FILE), 'utf8')) : null };
+}
+
+test('inbox open records the session start and a 5-hour length by default', async () => {
+  const r = await open(fakeKV(), siteDir(), ['wolf']);
+  assert.equal(r.rc, 0);
+  assert.deepEqual(r.session, { start: T0 / 1000, hours: 5 });
+  assert.match(r.lines.join('\n'), /watcher stops after 5 hours/);
+});
+
+test('inbox open --hours sets the length, kept between 1 and 12, before or after the code', async () => {
+  const kv = fakeKV(); const dir = siteDir();
+  assert.equal((await open(kv, dir, ['wolf', '--hours', '3'])).session.hours, 3);
+  assert.equal((await open(kv, dir, ['--hours', '8', 'wolf'])).session.hours, 8);
+  assert.equal((await open(kv, dir, ['wolf', '--hours', '0'])).session.hours, 1);
+  assert.equal((await open(kv, dir, ['wolf', '--hours', '99'])).session.hours, 12);
+  const bad = await open(kv, dir, ['wolf', '--hours', 'long']);
+  assert.equal(bad.session.hours, 5);
+  assert.match(bad.lines[0], /--hours "long" is not a whole number of hours; running 5 hours/);
+  assert.equal(await inbox.getCode(kv), 'WOLF');
+});
+
+test('inbox open --hours with no number, or an unknown flag, is a usage error and writes nothing', async () => {
+  for (const args of [['wolf', '--hours'], ['--hours', '--x', 'wolf'], ['wolf', '--frob'], ['--hours', '3']]) {
+    const kv = fakeKV(); const dir = siteDir();
+    const r = await open(kv, dir, args);
+    assert.equal(r.rc, 1, args.join(' '));
+    assert.match(r.lines.join('\n'), /Usage: inbox open <CODE> \[--hours N\]/, args.join(' '));
+    assert.equal(r.session, null, args.join(' '));
+    assert.equal(await inbox.getCode(kv), null, args.join(' '));
+  }
+});
+
+test('opening a new code starts a new clock', async () => {
+  const kv = fakeKV(); const dir = siteDir();
+  await open(kv, dir, ['wolf', '--hours', '2']);
+  const again = await open(kv, dir, ['bear'], T0 + 3 * HOUR);
+  assert.deepEqual(again.session, { start: (T0 + 3 * HOUR) / 1000, hours: 5 });
+});
+
+test('watch prints "session time is up" and exits 0 once the session has run its hours, in both modes', async () => {
+  for (const mode of [[], ['--exit-on-batch']]) {
+    const kv = fakeKV(); const dir = siteDir();
+    await open(kv, dir, ['wolf', '--hours', '1']);
+    // Polls every 10 minutes from the start: 0, 10, ... 50 min poll; at 60 min it stops.
+    const r = await clockedWatch(kv, dir, mode, { polls: 100, step: 10 * 60_000, start: T0 });
+    assert.equal(r.rc, 0, mode.join(' '));
+    assert.deepEqual(r.lines, ['WATCHER: session time is up'], mode.join(' '));
+    assert.equal(r.clock, T0 + HOUR, mode.join(' '));
+  }
+});
+
+test('a watch launched after the session time prints "session time is up" at once', async () => {
+  const kv = fakeKV(); const dir = siteDir();
+  await open(kv, dir, ['wolf']);
+  await inbox.enqueue(kv, entry('a', '2026-07-11T14:01:00.000Z'));
+  const r = await clockedWatch(kv, dir, [], { polls: 5, step: 30000, start: T0 + 6 * HOUR });
+  assert.deepEqual(r.lines, ['WATCHER: session time is up']);
+});
+
+test('a watch keeps running before the session time is up', async () => {
+  const kv = fakeKV(); const dir = siteDir();
+  await open(kv, dir, ['wolf']);
+  const r = await clockedWatch(kv, dir, [], { polls: 50, step: 5 * 60_000, start: T0 });
+  assert.deepEqual(r.lines, [], 'about 4 hours of polls, no stop line');
+});
+
+test('with no session file (opened by an older tool) or a broken one, the watch never stops for time', async () => {
+  for (const content of [null, 'not json', '{"start":"x","hours":5}']) {
+    const kv = fakeKV(); const dir = siteDir();
+    if (content !== null) fs.writeFileSync(path.join(dir, SESSION_FILE), content);
+    const r = await clockedWatch(kv, dir, [], { polls: 30, step: HOUR, start: T0 });
+    assert.equal(r.rc, 0);
+    assert.deepEqual(r.lines, [], String(content));
+  }
+});
+
+test('an inbox open during a running watch extends its time', async () => {
+  const kv = fakeKV(); const dir = siteDir();
+  await open(kv, dir, ['wolf', '--hours', '1']);
+  const r = await clockedWatch(kv, dir, [], {
+    polls: 100, step: 10 * 60_000, start: T0,
+    onPoll: async (n) => { if (n === 3) await open(kv, dir, ['wolf', '--hours', '1'], T0 + 30 * 60_000); },
+  });
+  assert.deepEqual(r.lines, ['WATCHER: session time is up']);
+  assert.equal(r.clock, T0 + 90 * 60_000);
 });
 
 test('watch --help prints the usage without needing a site', async () => {
