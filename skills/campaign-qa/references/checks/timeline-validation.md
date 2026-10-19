@@ -47,11 +47,13 @@ fast travel, adjust thresholds accordingly.
 
 ### Step 4: Date Reference Consistency
 
+Run `vault_check.py <vault-path> timeline --order`: each WARNING
+row is a session dated before the one played ahead of it. Ask
+the GM whether it is a flashback or a wrong date.
+
 Search for in-game date references across session notes.
 Verify:
 - The same event isn't dated differently in different files
-- Session notes' in-game dates progress forward (no
-  accidental time reversals between sessions)
 - Ticking clocks and deadlines are tracked (if a deadline
   was set for "August 15" and the in-game date is now
   August 10, is the clock reflected in current prep?)

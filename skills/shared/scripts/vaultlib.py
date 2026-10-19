@@ -2523,6 +2523,8 @@ def active_pcs(vault: Path) -> list[tuple[str, dict[str, Any]]]:
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
             continue
+        if rel.split("/")[0] in UNCHECKED_DIRS:
+            continue  # an archived copy of a sheet or template plays nobody
         if is_out_of_play(fm, gone):
             continue
         out.append((rel, fm))

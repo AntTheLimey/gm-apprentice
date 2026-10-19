@@ -329,3 +329,23 @@ describe('lines: google-fonts', () => {
     assert.throws(() => answer({ op: 'google-fonts' }), /vault must be a path/);
   });
 });
+
+describe('lines: dates (vault_check timeline --order asks it, so the two never read a date two ways)', () => {
+  const { buildTimelineData } = require('../lib/timeline');
+  it('reads each value with the timeline\'s own parseDate, and says whether a day was named', () => {
+    const got = answer({ op: 'dates', values: ['August 3, 1814', '12 August 1814', 'September 10–16, 1814', 'Late September – early October 1814', 'Autumn 1813', '1921-03-01', 'soon'] }).dates;
+    assert.deepStrictEqual(got.map((d) => d.iso), ['1814-08-03', '1814-08-12', '1814-09-10', '1814-09-01', '1813-10-01', '1921-03-01', null]);
+    assert.deepStrictEqual(got.map((d) => d.day), [true, true, true, false, false, true, false]);
+  });
+  it('agrees with the timeline page for the same value', () => {
+    const page = { frontmatter: { type: 'session', in_game_date: 'August 12-20, 1814', session_number: 1 }, displayTitle: 'S', outputPath: 's.html' };
+    const fromTimeline = buildTimelineData([page]);
+    const t = fromTimeline.events[0].date;
+    const asked = Date.parse(answer({ op: 'dates', values: ['August 12-20, 1814'] }).dates[0].iso);
+    assert.strictEqual(t.getTime(), asked);
+  });
+  it('refuses values that are not a list of strings', () => {
+    assert.throws(() => answer({ op: 'dates' }), /values must be a list of strings/);
+    assert.throws(() => answer({ op: 'dates', values: [7] }), /values must be a list of strings/);
+  });
+});

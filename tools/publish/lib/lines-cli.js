@@ -59,6 +59,11 @@
 //                            (`config`, the site's vault.config.json, is optional); none
 //                            when the fonts are hosted.
 //
+//   {"op":"dates","values":[…]}
+//       -> {"dates":[{"iso":"1814-08-12"|null,"day":bool}]}  each in-game date as the timeline page reads it
+//                            (`parseDate`); `day` is false when no day of the month was named, so the
+//                            date is a placed guess. vault_check's timeline --order asks this.
+//
 // A request that cannot be answered gets {"error":…}; the process carries on.
 const { StringDecoder } = require('string_decoder');
 const fs = require('fs');
@@ -128,6 +133,13 @@ function answer(request) {
   if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('a request is a JSON object');
   if (request.op === 'site') return site(request.vault);
   if (request.op === 'google-fonts') return googleFonts(request.vault, request.config);
+  if (request.op === 'dates') {
+    const { parseDateDetail } = require('./timeline');
+    return { dates: list(request, 'values').map((v) => {
+      const { date, dayKnown } = parseDateDetail(v);
+      return { iso: Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10), day: dayKnown };
+    }) };
+  }
   if (typeof request.text !== 'string') throw new Error('text must be a string');
   const { text } = request;
   switch (request.op) {
