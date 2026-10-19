@@ -12,6 +12,7 @@ Usage:
   session_context.py VAULT [--session N]
   session_context.py VAULT --brief
   session_context.py VAULT --arcs
+  session_context.py VAULT --carry [--before INDEX]
 
 --session N treats N as the just-played session. Otherwise the
 campaign overview's `last_session` decides, and failing that the
@@ -56,6 +57,11 @@ carried the B- and C-plot. A forecast section has three states, kept
 apart because they mean different things: absent, present but written
 as prose (listed for direct reading, never counted as evidence of a
 spotlight drought), and a real table.
+
+`--carry` is session-wrapup's: from the Wrap-Up before session INDEX
+(chapter, then session order; the latest without --before) it prints
+only the Handoff, Unresolved Threads, Player-Stated Intentions,
+Pending Consequences and open Keeper Checklist items.
 """
 
 from __future__ import annotations
@@ -63,6 +69,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+from collections.abc import Callable
 from difflib import SequenceMatcher
 from pathlib import Path
 
@@ -72,7 +79,8 @@ from schema_rules import (SESSION_PLAYED, chapter_key, chapter_of,
 from vaultlib import (GM_MARKER_RE, is_out_of_play, out_of_play,  # noqa: F401
                       report_unreadable_settings, setting_or_builtin,
                       SKIP_DIRS, WRAP_UP_TYPES, body_of, entity_type,
-                      h3_blocks, nested_mapping, raw_frontmatter, section,
+                      fenced_headings, h3_blocks, nested_mapping,
+                      raw_frontmatter, section,
                       session_ref_number, word_count)
 from vaultlib import vault_files as _vault_files
 
@@ -703,6 +711,129 @@ def arcs_report(files, chapter, upcoming: int, vault: Path) -> str:
     return "\n".join(lines)
 
 
+# --------------------------------------------------------------------------
+# --carry
+# --------------------------------------------------------------------------
+
+def _heading_key(title: str) -> str:
+    return " ".join(re.sub(r"[*_`]", "", title).split()).casefold()
+
+
+# (title printed when the part is missing, level-free test on the heading's
+# key). Older Wrap-Ups name these differently ("Unresolved Cliffhanger",
+# "Unrealised Consequences"); Reconciliation Context's bare "Consequences"
+# is reconcile's record, not a carried item.
+CARRY_PARTS: tuple[tuple[str, Callable[[str], bool]], ...] = (
+    ("Handoff to session-prep", lambda k: k.startswith("handoff")),
+    ("Unresolved Threads", lambda k: k.startswith("unresolved")),
+    ("Player-Stated Intentions", lambda k: k.endswith("intentions")),
+    ("Pending Consequences",
+     lambda k: k.endswith("consequences") and k != "consequences"),
+)
+_CHECK_OPEN_RE = re.compile(r"^[-*+] \[ \]")
+_CHECK_ANY_RE = re.compile(r"^[-*+] \[.\]")
+_CHAPTER_NUM_RE = re.compile(r"chapter\D{0,3}(\d+(?:\.\d+)?)", re.IGNORECASE)
+
+
+def campaign_order(rel: str, fm: dict) -> tuple[float, float]:
+    """(chapter number, session number) for ordering session notes and
+    Wrap-Ups across a campaign. An unknown chapter sorts first; a Wrap-Up
+    with no session number (a chapter's own Wrap-Up) sorts after the
+    chapter's sessions."""
+    ch = (chapter_of(rel, fm) or "").strip()
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)", ch) or _CHAPTER_NUM_RE.search(ch)
+    n = parse_session_number(fm.get("session_number"))
+    if n is None:
+        n = session_ref_number(fm)
+    return (float(m.group(1)) if m else -1.0,
+            float(n) if n is not None else float("inf"))
+
+
+def _blocks(body: str) -> list[tuple[int, str, list[str]]]:
+    """(level, title, lines up to the next heading of that level or
+    higher) for every heading outside code, gm-only marker lines left
+    out."""
+    lines = body.splitlines()
+    heads = fenced_headings(body)
+    out = []
+    for n, (i, level, title) in enumerate(heads):
+        end = next((j for j, lvl, _t in heads[n + 1:] if lvl <= level),
+                   len(lines))
+        out.append((level, title,
+                    [ln for ln in lines[i + 1:end]
+                     if not GM_MARKER_RE.fullmatch(ln.strip())]))
+    return out
+
+
+def _open_items(lines: list[str]) -> str:
+    """The unchecked `- [ ]` items of a checklist, each with the indented
+    lines that continue it."""
+    out: list[str] = []
+    keep = False
+    for line in lines:
+        if _CHECK_ANY_RE.match(line):
+            keep = bool(_CHECK_OPEN_RE.match(line))
+        elif not line.strip() or not line[:1].isspace():
+            keep = False
+        if keep:
+            out.append(line)
+    return "\n".join(out)
+
+
+def carry_report(files, before: str | None) -> tuple[str | None, str]:
+    """(error, report): what the Wrap-Up ahead of the session note `before`
+    (vault-relative, `.md` optional, or its file name alone) carries
+    forward: its Handoff, Unresolved Threads, Player-Stated Intentions,
+    Pending Consequences and open Keeper Checklist items. With no
+    `before`, the latest Wrap-Up's."""
+    limit = (float("inf"), float("inf"))
+    if before:
+        want = before.strip().removesuffix(".md").casefold()
+        hits = [(rel, fm) for rel, _t, fm in files
+                if rel[:-3].casefold() == want]
+        if not hits:
+            hits = [(rel, fm) for rel, _t, fm in files
+                    if Path(rel).stem.casefold() == want
+                    and fm.get("type") == "session"]
+        if len(hits) != 1:
+            why = "matches no note" if not hits else "matches " + ", ".join(
+                rel for rel, _fm in hits)
+            return f"--before {before}: {why}", ""
+        limit = campaign_order(*hits[0])
+    wraps = sorted(((campaign_order(rel, fm), rel, text, fm)
+                    for rel, text, fm in files
+                    if entity_type(fm) in WRAP_UP_TYPES
+                    and not rel.startswith("_Templates/")),
+                   key=lambda w: (w[0], w[1]))
+    wraps = [w for w in wraps if w[0] < limit]
+    if not wraps:
+        return None, "===== Carry =====\n(no earlier Wrap-Up)"
+    _order, rel, text, fm = wraps[-1]
+    canon = str(fm.get("canon_status") or "?")
+    out = [f"===== Carry =====\n(source: {rel}, canon_status: {canon})"]
+    if canon.upper() != "AUTHORITATIVE":
+        out.append(f"Note: this Wrap-Up is not reviewed yet "
+                   f"(canon_status: {canon})")
+    blocks = _blocks(body_of(text))
+    carries = next((b for b in blocks
+                    if _heading_key(b[1]) == "what carries forward"), None)
+    scoped = _blocks("\n".join(carries[2])) if carries else blocks
+    for name, test in CARRY_PARTS:
+        pool = blocks if name.startswith("Handoff") else scoped
+        hit = next((b for b in pool
+                    if b[0] >= 3 and test(_heading_key(b[1]))), None)
+        body = "\n".join(hit[2]).strip() if hit else ""
+        out.append(f"\n===== {hit[1] if hit else name} =====\n"
+                   f"{body or '(none found)'}")
+    checklist = next((b for b in blocks
+                      if _heading_key(b[1]).startswith("keeper checklist")),
+                     None)
+    items = _open_items(checklist[2]) if checklist else ""
+    out.append(f"\n===== Keeper Checklist (open items) =====\n"
+               f"{items or '(none found)'}")
+    return None, "\n".join(out)
+
+
 def select_session(files, session_arg: int | None) -> tuple[dict | None, list[str]]:
     """Which session is "just played", and the warnings that go with it.
 
@@ -902,6 +1033,17 @@ def main() -> int:
              "— no per-PC row, and not counted in the 'plans read' "
              "denominator), or a table. Arc stage is not a field: judge "
              "it against the five-stage model from this evidence.")
+    mode.add_argument(
+        "--carry", action="store_true",
+        help="print only what the previous Wrap-Up carries forward: its "
+             "Handoff to session-prep, Unresolved Threads, Player-Stated "
+             "Intentions, Pending Consequences and open Keeper Checklist "
+             "items. Runs on a vault kept by a player too.")
+    ap.add_argument(
+        "--before", metavar="INDEX",
+        help="with --carry: the session being wrapped (its index, "
+             "vault-relative); the Wrap-Up read is the one before it in "
+             "chapter and session order. Default: the latest Wrap-Up.")
     ap.add_argument(
         "--brief", action="store_true",
         help="default mode only: Wrap-Up with the reconcile-provenance "
@@ -919,9 +1061,26 @@ def main() -> int:
         print("error: --brief applies to the default bundle only",
               file=sys.stderr)
         return 2
+    if args.before and not args.carry:
+        print("error: --before applies to --carry only", file=sys.stderr)
+        return 2
+    if args.carry and (args.brief or args.session is not None):
+        print("error: --carry takes --before, not --brief or --session",
+              file=sys.stderr)
+        return 2
     if not args.vault.is_dir():
         print(f"error: not a directory: {args.vault}", file=sys.stderr)
         return 2
+
+    # session-wrapup reads the carry on any vault, a player's included.
+    if args.carry:
+        error, report = carry_report(list(vault_files(args.vault)),
+                                     args.before)
+        if error:
+            print(f"error: {error}", file=sys.stderr)
+            return 2
+        print(report)
+        return 0
 
     # Session prep is the GM's job; a vault kept by a player has none.
     if setting_or_builtin(args.vault, "vault.kept_by") == "player":

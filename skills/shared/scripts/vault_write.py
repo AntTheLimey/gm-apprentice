@@ -7,6 +7,8 @@
                                [--write]                                < markdown
     vault_write.py VAULT story --wrapup WRAPUP [--label TEXT] [--as-of TEXT]
                                [--date YYYY-MM-DD] [--write]            < entries
+    vault_write.py VAULT status PC [--write]                            < fields
+    vault_write.py VAULT status PC --show
     vault_write.py VAULT log [--write]                                  < rows
     vault_write.py VAULT timeline --under HEADING [--after HEADING]
                                [--file REL] [--write]                   < entries
@@ -1085,6 +1087,235 @@ def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
                       "no --date: lastUpdated left as it was")
 
 
+# --- PC Current Status -------------------------------------------------------
+
+CURRENT_STATUS = "Current Status"
+FIELD_RE = re.compile(r"^(?P<bullet>[-*+][ \t]+)?\*\*(?P<label>[A-Za-z][^*]*?):\*\*")
+PROTECTED = ("notes", GM_NOTES)
+
+
+@dataclass
+class Field:
+    label: str
+    bullet: str         # the list marker and its space, "" when unbulleted
+    start: int          # line index in the note (or on stdin)
+    end: int            # one past its last line
+    lines: list[str]    # without line endings
+
+
+def _blank_then(lines: list[str], i: int, end: int,
+                ok: Callable[[str], bool]) -> bool:
+    """Whether the blank run at `i` is followed, before `end`, by a line
+    `ok` accepts."""
+    k = i
+    while k < end and not lines[k].strip():
+        k += 1
+    return k < end and ok(lines[k])
+
+
+def read_fields(lines: list[str], rows: list[int]) -> list[Field]:
+    """The labelled fields among `lines[i]` for i in `rows` (consecutive
+    runs; a gap ends a field). A field is a `**Label:**` line at the
+    margin, or a `- **Label:**` one where no unbulleted field's list is
+    open (there it is a thread item). An unbulleted field keeps the list
+    items and indented lines under it; a bulleted one keeps its indented
+    lines. A blank line ends a field unless what follows still continues
+    it; a plain line (a lede) ends it."""
+    fields: list[Field] = []
+    cur: Field | None = None
+    listed = False
+    prev = -2
+    stop = rows[-1] + 1 if rows else 0
+    for i in rows:
+        line = lines[i]
+        if cur is not None and i != prev + 1:
+            cur = None
+        prev = i
+        m = FIELD_RE.match(line)
+        if cur is not None:
+            lists = not cur.bullet       # an unbulleted field holds a list
+            if not line.strip():
+                if not _blank_then(lines, i, stop, lambda nxt: bool(
+                        nxt[:1].isspace()
+                        or (lists and listed and LIST_RE.match(nxt)))):
+                    cur = None
+                continue
+            if line[:1].isspace() or (lists and LIST_RE.match(line)):
+                listed = listed or bool(LIST_RE.match(line))
+                cur.end = i + 1
+                continue
+            cur = None
+        if m and not line[:1].isspace():
+            cur = Field(m.group("label").strip(), m.group("bullet") or "",
+                        i, i + 1, [])
+            listed = False
+            fields.append(cur)
+    for f in fields:
+        f.lines = [ln.rstrip("\r\n") for ln in lines[f.start:f.end]]
+    return fields
+
+
+def _status_region(doc: Doc) -> tuple[Head | None, list[int]]:
+    """(the public `## Current Status` heading, the lines its fields may
+    sit on: its own lines up to its first subheading)."""
+    head = next((h for h in doc.heads if h.level == 2 and not h.gm
+                 and key(h.title) == key(CURRENT_STATUS)), None)
+    if head is None:
+        return None, []
+    end = section_end(doc, head)
+    end = next((h.idx for h in doc.heads if head.idx < h.idx < end), end)
+    return head, own_lines(doc, head, end)
+
+
+def stdin_fields(text: str) -> list[Field]:
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    while lines and not lines[-1].strip():
+        lines.pop()
+    if not any(line.strip() for line in lines):
+        raise WriteError("nothing on stdin")
+    if vl.fenced_headings("\n".join(lines)):
+        raise WriteError("stdin holds a heading: send labelled fields only")
+    lines = lines[next(i for i, line in enumerate(lines) if line.strip()):]
+    if not FIELD_RE.match(lines[0]) or lines[0][:1].isspace():
+        raise WriteError("stdin must start with a labelled field "
+                         "('**Location:** ...')")
+    fields: list[Field] = []
+    for i, line in enumerate(lines):
+        m = FIELD_RE.match(line)
+        bulleted_item = (m and m.group("bullet") and fields
+                         and not fields[-1].bullet)
+        if m and not line[:1].isspace() and not bulleted_item:
+            fields.append(Field(m.group("label").strip(),
+                                m.group("bullet") or "", i, i + 1, [line]))
+        else:
+            fields[-1].lines.append(line)
+    seen: set[str] = set()
+    for f in fields:
+        while f.lines and not f.lines[-1].strip():
+            f.lines.pop()
+        if key(f.label) in seen:
+            raise WriteError(f"'{f.label}' is on stdin twice")
+        seen.add(key(f.label))
+    return fields
+
+
+def reshape(field: Field, bullet: str) -> list[str]:
+    """`field`'s lines in the note's shape: `bullet` is the marker the
+    note's field carries ("" for an unbulleted one)."""
+    m = FIELD_RE.match(field.lines[0])
+    assert m is not None
+    head = bullet + field.lines[0][m.end("bullet") if m.group("bullet")
+                                   else 0:]
+    rest = field.lines[1:]
+    if field.bullet:
+        indents = [len(ln) - len(ln.lstrip()) for ln in rest if ln.strip()]
+        cut = min(indents, default=0)
+        rest = [ln[cut:] for ln in rest]
+    if bullet:
+        pad = " " * len(bullet)
+        rest = [pad + ln if ln.strip() else "" for ln in rest]
+    return [head, *rest]
+
+
+def status_target(batch: Batch, raw: str) -> tuple[str, str]:
+    """(the PC note's path, its text): a vault-relative path, or a PC's
+    name or alias."""
+    rel = batch.resolve(raw) if raw.lower().endswith(".md") else find_pc(
+        batch, raw)
+    text = batch.read(rel)
+    if vl.entity_type(vl.extract_frontmatter(text) or {}) != "pc":
+        raise WriteError(f"{rel}: not a PC note")
+    return rel, text
+
+
+def show_status(batch: Batch, raw: str) -> str:
+    """The labelled fields of a PC's Current Status, verbatim, and a line
+    naming what else the section holds (left alone by `status`)."""
+    rel, text = status_target(batch, raw)
+    doc = parse(text)
+    head, rows = _status_region(doc)
+    if head is None:
+        return f"{rel}: no ## {CURRENT_STATUS}\n"
+    fields = read_fields(doc.lines, rows)
+    used = {i for f in fields for i in range(f.start, f.end)}
+    other = sum(1 for i in rows if i not in used and doc.lines[i].strip())
+    subs = [f"{'#' * h.level} {h.title}" for h in doc.heads
+            if head.idx < h.idx < section_end(doc, head)]
+    out = [f"# {rel} §{CURRENT_STATUS}"]
+    out += [line for f in fields for line in f.lines]
+    out.append(f"# left alone: {other} other lines"
+               + "".join(f"; {s}" for s in subs))
+    return "\n".join(out) + "\n"
+
+
+def cmd_status(batch: Batch, args: argparse.Namespace, text: str) -> None:
+    rel, note = status_target(batch, args.pc)
+    given = stdin_fields(text)
+    doc = parse(note)
+    if doc.problems:
+        raise WriteError(f"{rel}: gm-only fence is unbalanced "
+                         f"({doc.problems[0]})")
+    head, rows = _status_region(doc)
+    where = f"§{CURRENT_STATUS}/"
+    if head is None:
+        block = [f"## {CURRENT_STATUS}", ""]
+        for f in given:
+            block += reshape(f, f.bullet)
+            batch.row("WOULD-ADD", rel, where + f.label, "new field")
+        gm = _gm_notes_head(doc)
+        stops = [h.idx for h in doc.heads if h.level == 2
+                 and key(h.title) in PROTECTED]
+        if gm is not None and gm.gm:
+            stops += [s.lineno - 1 for s in doc.states
+                      if s.marker == OPEN_GM and s.lineno - 1 < gm.idx]
+            stops = [i for i in stops if i != gm.idx]
+        at = min(stops, default=len(doc.lines))
+        batch.put(rel, place(doc, at, block))
+        return
+    have = read_fields(doc.lines, rows)
+    by_key: dict[str, Field] = {}
+    for f in have:
+        if key(f.label) in by_key:
+            raise WriteError(f"{rel}: '{f.label}' is in {CURRENT_STATUS} "
+                             f"twice: fix it by hand first")
+        by_key[key(f.label)] = f
+    edits: list[tuple[int, int, list[str]]] = []
+    fresh: list[str] = []
+    for f in given:
+        old = by_key.get(key(f.label))
+        if old is None:
+            shape = have[-1].bullet if have else f.bullet
+            fresh += reshape(f, shape)
+            batch.row("WOULD-ADD", rel, where + f.label, "new field")
+            continue
+        new = reshape(f, old.bullet)
+        if new == old.lines:
+            batch.row("SKIP", rel, where + f.label, "unchanged")
+            continue
+        edits.append((old.start, old.end, new))
+        batch.row("WOULD-ADD", rel, where + f.label,
+                  f"replaced ({old.end - old.start} lines)")
+    lines = list(doc.lines)
+    if fresh:
+        if have:
+            at = have[-1].end
+            if not lines[at - 1].endswith(("\n", "\r")):
+                lines[at - 1] += doc.eol
+            edits.append((at, at, fresh))
+        else:
+            batch.put(rel, place(doc, (rows[-1] + 1) if rows
+                                 else head.idx + 1, fresh))
+            doc = parse(batch.texts[rel])
+            lines = list(doc.lines)
+    for start, end, new in sorted(edits, reverse=True):
+        last = doc.eol
+        if (end > start and end == len(lines)
+                and not lines[end - 1].endswith(("\n", "\r"))):
+            last = ""       # the note's last line had no line ending
+        lines[start:end] = [ln + doc.eol for ln in new[:-1]] + [new[-1] + last]
+    batch.put(rel, "".join(lines))
+
+
 def type_template(note_type: str) -> tuple[TemplateMap | None, bool]:
     """(the shared template's section map for a note type, whether that
     template fences its GM Notes). An unknown type has no map and is
@@ -1427,6 +1658,20 @@ def build_parser() -> argparse.ArgumentParser:
     story.add_argument("--as-of", dest="as_of", help="asOfSession value")
     story.add_argument("--date", help="lastUpdated value, YYYY-MM-DD")
     story.add_argument("--write", action="store_true")
+    status = sub.add_parser(
+        "status", help="rewrite a PC's Current Status fields (stdin)",
+        formatter_class=raw, description=(
+            "stdin: labelled fields, each opened by '**Label:** value' at\n"
+            "the margin; lines under it (an Open threads list) belong to it.\n"
+            "Each field sent replaces the one with that label in\n"
+            "## Current Status, in the note's own shape; a label the note\n"
+            "lacks is added after its last field. Fields not sent, the\n"
+            "lede, subsections and asides are left alone. --show prints\n"
+            "the fields as they stand, and reads no stdin."))
+    status.add_argument("pc", help="the PC note, vault-relative, or its name")
+    how_status = status.add_mutually_exclusive_group()
+    how_status.add_argument("--show", action="store_true")
+    how_status.add_argument("--write", action="store_true")
     log = sub.add_parser(
         "log", help="add log lines to notes (stdin rows)",
         formatter_class=raw, description=(
@@ -1453,6 +1698,7 @@ Command = Callable[[Batch, argparse.Namespace, str], None]
 COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "wrapup-add": cmd_wrapup_add,
                                 "story": cmd_story,
+                                "status": cmd_status,
                                 "log": cmd_log,
                                 "timeline": cmd_timeline}
 
@@ -1487,6 +1733,13 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
         return 2
     needs_stdin = args.command != "wrapup-new"
     batch = Batch(args.vault)
+    if args.command == "status" and args.show:
+        try:
+            sys.stdout.write(show_status(batch, args.pc))
+        except WriteError as e:
+            print(f"ERROR\t{e}")
+            return 1
+        return 0
     try:
         text = ""
         if needs_stdin:
