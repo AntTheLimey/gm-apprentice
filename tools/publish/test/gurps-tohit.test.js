@@ -1139,6 +1139,11 @@ describe('shots fired follow the weapon\'s RoF', () => {
 // #458: the calculator ends with the damage rolls to make (B373, B379, B409). It never rolls.
 describe('the damage rolls to make', () => {
   const gun = (patch) => withWeapon(mk(), 'Blaster pistol', Object.assign({ rof: 10 }, patch));
+  it('says whether the Damage cell holds dice to roll', () => {
+    const rolled = (damage) => T.effective(gun({ damage }), { weapon: 'Blaster pistol' }).damage.rolled;
+    assert.deepStrictEqual(['3d (10) burn, sur', '1d-3 burn', 'sw+1 cut', 'thr cr', 'd6', 'HT-2 (2) stun + 1d-3 burn'].map(rolled), [true, true, true, true, true, true]);
+    assert.deepStrictEqual(['control', '— / slam', 'HT-6(3) aff', ''].map(rolled), [false, false, false, false]);
+  });
   it('one shot: the damage, one roll', () => {
     const d = T.effective(gun({}), { weapon: 'Blaster pistol', shots: 1 }).damage;
     assert.strictEqual(d.text, '3d burn');

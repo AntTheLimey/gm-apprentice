@@ -462,8 +462,12 @@
           bands.push({ from: (hits - 1) * rcl, to: hits === maxHits ? null : hits * rcl - 1, hits });
         }
       }
+      const text = typeof w.damage === 'string' ? w.damage.trim() : '';
       return {
-        text: typeof w.damage === 'string' ? w.damage.trim() : '',
+        text,
+        // Dice to roll: `3d`, `1d-3`, `d6`, or swing or thrust (sw, thr). A cell without them
+        // (`control`, an affliction's `HT-6(3) aff`) is shown as written, with no damage roll.
+        rolled: /\d*d\d*(?![a-z])|\b(?:sw|thr)\b/i.test(text.replace(/\b[a-z]*d[a-z]+\b/gi, '')),
         none: roll < LOW,
         maxHits,
         perHit: rcl,
@@ -1113,12 +1117,15 @@
       // Laid out by the margin of success the player rolled (Ant, 2026-10-18): each row the hits
       // and the damage rolls to make, in full.
       const dmg = dm.text || "the weapon's damage";
+      const roll = !dm.text || dm.rolled;
       const times = (n) => (n === 1 ? 'once' : n + ' times');
       const line = (cls, text) => dmgEl.appendChild(h('p', { class: cls, text }));
-      if (!dm.bands.length) line('th-dmg-row', 'Hit: roll ' + dmg + ' once');
+      // No dice in the cell: it is shown as written, and the rows say only the hits.
+      if (!roll) line('th-dmg-row', 'Damage: ' + dm.text + ' (no damage roll)');
+      if (!dm.bands.length && roll) line('th-dmg-row', 'Hit: roll ' + dmg + ' once');
       for (const b of dm.bands) {
         const by = b.to === null ? b.from + ' or more' : b.from === b.to ? String(b.from) : b.from + '-' + b.to;
-        line('th-dmg-row', 'Made it by ' + by + ': ' + b.hits + (b.hits === 1 ? ' hit' : ' hits') + ', roll ' + dmg + ' ' + times(b.hits));
+        line('th-dmg-row', 'Made it by ' + by + ': ' + b.hits + (b.hits === 1 ? ' hit' : ' hits') + (roll ? ', roll ' + dmg + ' ' + times(b.hits) : ''));
       }
       if (dm.attacks) line('th-dmg-how', 'Make 1 damage roll for each attack that hits.');
       if (dm.strong) line('th-dmg-strong', 'All-Out Attack (Strong): add ' + sgn(dm.strong[0]) + ' to that damage, or ' + sgn(dm.strong[1]) + ' a die if better.');

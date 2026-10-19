@@ -651,6 +651,21 @@ describe('the damage rolls to make', () => {
     const ids = out.children.map((c) => c.attrs.id || c.attrs.class);
     assert.ok(ids.indexOf('th-dmg') > ids.indexOf('th-notes'), ids.join(', '));
   });
+  it('a Damage cell with no dice in it is shown as written, with no roll to make', () => {
+    for (const [cell, want] of [['control', 'Damage: control (no damage roll)'], ['— / slam', 'Damage: — / slam (no damage roll)'], ['HT-6(3) aff', 'Damage: HT-6(3) aff (no damage roll)']]) {
+      const d = dataBlock();
+      d.weapons[0] = Object.assign({}, d.weapons[0], { damage: cell });
+      const p = load(d);
+      p.set('#th-weapon', 'Hatchet');
+      assert.deepStrictEqual(p.all('.th-dmg-row').map((r) => r.textContent), [want]);
+    }
+    const d = dataBlock();
+    d.weapons[2] = Object.assign({}, d.weapons[2], { damage: 'HT-6(3) aff' });
+    const p = load(d);
+    p.set('#th-weapon', 'Blaster pistol');
+    p.set('#th-shots', 2);
+    assert.deepStrictEqual(p.all('.th-dmg-row').map((r) => r.textContent), ['Damage: HT-6(3) aff (no damage roll)', 'Made it by 0: 1 hit', 'Made it by 1 or more: 2 hits']);
+  });
   it('melee: the damage as the sheet writes it', () => {
     const p = load(dataBlock());
     p.set('#th-weapon', 'Hatchet');
