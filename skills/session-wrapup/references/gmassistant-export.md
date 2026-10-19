@@ -19,10 +19,12 @@ moments name the PCs in them: use them for each PC's Moment.
 ## Step 4 — Entities
 
 - Build entities from the export's `## NPCs`, `## Locations` and
-  `## Items` entries (each has a name and description) instead of
-  extracting from raw notes; there are no `NEW-NPC:`/`UPDATE:`
-  markers. Compare each entry against the vault to decide new vs.
-  update.
+  `## Items` entries instead of extracting from raw notes; there
+  are no `NEW-NPC:`/`UPDATE:` markers. `vw resolve --export
+  <file>` (the export, or the Play Notes holding it) gives one
+  row each:
+  EXACT/ALIAS → update that note, NEAR → check its candidates,
+  NONE → new.
 - An export description that conflicts with existing vault content
   → flag the entity CONFLICT for GM review.
 - Record every export-vs-vault name correction made anywhere in

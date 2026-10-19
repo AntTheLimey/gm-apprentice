@@ -68,41 +68,21 @@ Timeline:
 
 Which should I promote to the vault?"
 
-For each approved plan:
-1. Create `Planning/` under the chapter directory if it
-   doesn't exist
-2. Read `_Templates/_Template_Plan.md` for the frontmatter
-   structure
-3. Reshape the freeform Midwife draft into a vault entity —
-   structure only, never the prose:
-   - Set `plan_type` based on the categorization above
-   - Set `chapter` to the chapter overview wiki-link
-   - Populate `participants` with wiki-links to NPCs,
-     factions, and creatures mentioned in the plan
-   - Populate `locations` with wiki-links to locations
-     mentioned in the plan
-   - Record sequencing/branching between plans in the plan's
-     `leads_to` frontmatter field (wiki-links to the plan node(s)
-     this one leads to; two or more targets is a branch) —
-     **not** as `relationships:` edges. Node-based flow is a
-     `leads_to` field, not a graph predicate (see
-     `shared/entity-schema.md`). A genuine `relationships:` edge
-     on a plan takes its `type:` from the controlled vocabulary
-     in `_meta/relationship-types.md`.
-   - **Preserve the body prose verbatim.** Carry the full
-     narrative content across unchanged; only adapt section
-     headers to the plan type and add `[[wiki-links]]`. Do not
-     condense, paraphrase, re-voice, or "improve" it — promotion
-     files the GM's writing, it does not re-author it.
-     (rationale: `shared/content-fidelity.md`)
-4. Write to `Chapters/{chapter}/Planning/{Plan_Name}.md`
+For each approved plan, dry-run, show the GM the rows, then
+`--write`:
 
-**Self-check after each promoted entity or plan:**
-1. Re-read the file just created
-2. Compare frontmatter fields against `_Templates/_Template_{Type}.md`
-3. Verify: `type` matches, `canon_status: DRAFT` is set, all required fields present
-4. Verify: wiki-links use `[[Entity Name]]` format (no bare text references to entities)
-5. Fix any issues before promoting the next item
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" \
+  <vault> promote-plan "_midwife/{adventure}/{file}.md" \
+  --to "Chapters/{chapter}/Planning/{Plan_Name}.md" \
+  --plan-type <type> [--leads-to "<Plan_Name>"]...
+```
+
+It fills the template, copies the body unchanged and lists
+the people and places the body names (PARTICIPANT and
+LOCATION rows). A WARNING is a name several notes share, left
+out: ask the GM which. `--leads-to` (a branch when repeated)
+records sequencing, never a `relationships:` edge.
 
 **2c. World fact flush** — Write the world facts accumulated
 through Woven Worldbuilding (Phases 1-3) to their `_World/`

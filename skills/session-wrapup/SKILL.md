@@ -68,8 +68,10 @@ flush` in the site directory and report its per-PC summary
 (publish-site `references/live-state-flush.md`). No Tier-2 site →
 skip.
 
-Read the session's Play Notes (`type: session-play-notes`); if
-none exists, ask the GM for notes (paste, path, or dictation).
+Read the session's Play Notes (`type: session-play-notes`). A
+session with no index or Play Notes: `vw session-new --number N
+--title "T" --play-date D [--export PATH]` files both; without an
+export, ask the GM for notes (paste, path, or dictation) for them.
 Read the PC roster and the session's Plan for planned-vs-actual.
 `plan_check.py <plan> --inventory` gives per-section status and
 word counts but not scene titles — open the plan body for those.
