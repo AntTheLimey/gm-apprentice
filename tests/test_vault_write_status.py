@@ -98,6 +98,36 @@ Mine.
 """
 
 
+# Shackleton's shape: unbulleted labels, then after a blank line a run of
+# bulleted per-session journal and open-thread bullets in the same section.
+JOURNAL = """---
+type: pc
+---
+
+# Shack
+
+## Current Status
+
+**Location:** aboard.
+**Open threads:**
+- The Corvid debt.
+**Knows (exclusive):** the cover-ups.
+  - **Session 5:** fled the system.
+
+- **Session 6 — The Albatross:** took the helm.
+  He shot the drone.
+- **New open threads (Session 6):** the cube's two destinations;
+  Gary Johnson unfound.
+
+- **Session 7 — Goodwin:** dug through logs.
+- **New open threads (Session 7):** the Goodwin Contract.
+
+## GM Notes
+
+Hidden.
+"""
+
+
 def make_vault(case, files):
     vault = Path(tempfile.mkdtemp(prefix="vwstatus-"))
     case.addCleanup(shutil.rmtree, vault, ignore_errors=True)
@@ -236,6 +266,26 @@ class StatusWriteTests(unittest.TestCase):
         code, out = run(vault, "status", PC, stdin="**Location:** x\n")
         self.assertEqual(code, 1, out)
         self.assertIn("twice", out)
+
+    def test_a_blank_line_ends_an_unbulleted_fields_list(self):
+        vault = make_vault(self, {PC: JOURNAL})
+        code, out = run(vault, "status", PC, "--write",
+                        stdin="**Knows (exclusive):** less.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("replaced (2 lines)", out)
+        self.assertEqual(read(vault, PC), JOURNAL.replace(
+            "**Knows (exclusive):** the cover-ups.\n"
+            "  - **Session 5:** fled the system.\n",
+            "**Knows (exclusive):** less.\n"))
+
+    def test_a_label_twice_blocks_only_a_write_to_that_label(self):
+        twice = SPEC.replace("**Carrying:** Tiger claws.",
+                             "**Knows (exclusive):** Again.")
+        vault = make_vault(self, {PC: twice})
+        code, out = run(vault, "status", PC, "--write",
+                        stdin="**Location:** Bath.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("**Location:** Bath.", read(vault, PC))
 
     def test_crlf_stays_crlf(self):
         vault = make_vault(self, {PC: SPEC.replace("\n", "\r\n")})

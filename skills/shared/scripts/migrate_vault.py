@@ -1296,6 +1296,58 @@ def find_tone_list(vault: Path) -> list[Item]:
     return [Item("tone-list", WILL, lines, apply)]
 
 
+# --- per-session open threads in PC Current Status ---------------------------
+
+def _sessions(numbers: list[int]) -> str:
+    return (f"Session{'s' if len(numbers) > 1 else ''} "
+            + ", ".join(map(str, numbers)))
+
+
+def find_open_threads_fold(vault: Path) -> list[Item]:
+    """1.10.82: Current Status holds one cumulative Open threads list
+    (`shared/pc-body-structure.md`). Wrap-ups once appended a
+    `**New open threads (Session N):**` bullet each session instead; the
+    GM may fold them into the list, each as `**Session N:**` and its text
+    word for word. It rewrites what the GM wrote, so it is a choice."""
+    import vault_write as vw
+
+    found: list[tuple[str, list[int]]] = []
+    for rel, text in vault_files(vault):
+        if (rel.endswith("_Story.md") or rel.startswith("_Templates/")
+                or entity_type(extract_frontmatter(text) or {}) != "pc"):
+            continue
+        numbers = [n for n, _f in vw.session_threads(text)]
+        if numbers:
+            found.append((rel, numbers))
+    if not found:
+        return []
+
+    def apply(value: str | None) -> list[str]:
+        if value not in ("fold", "leave"):
+            raise StepFailed("open-threads-fold takes fold or leave")
+        if value == "leave":
+            return ["left the per-session open threads as they are"]
+        batch = vw.Batch(vault)
+        done = []
+        try:
+            for rel, _numbers in found:
+                folded = vw.fold_session_threads(batch, rel)
+                if folded:
+                    done.append(f"{rel}: folded {_sessions(folded)}")
+            vw.check_fences(batch)
+            vw.apply(batch)
+        except vw.WriteError as e:
+            raise StepFailed(str(e)) from e
+        return done
+
+    return [Item("open-threads-fold", CHOICE,
+                 ["fold: put each PC's per-session 'New open threads' "
+                  "bullets into its one Open threads list, text unchanged; "
+                  "leave: keep them as written",
+                  *(f"{rel}: {_sessions(numbers)}" for rel, numbers in found)],
+                 apply, wants="fold or leave", holds_stamp=True)]
+
+
 VAULT_CHECKS: list[Check] = [
     Check("skeleton", None, 3, "the vault skeleton", find_skeleton),
     Check("templates", None, 3, "templates", find_templates,
@@ -1337,4 +1389,7 @@ VAULT_CHECKS: list[Check] = [
     Check("heritage-notes", "1.10.15", 4, "mobRPG heritage notes",
           find_heritage_notes, asks_site=True,
           choices=("heritage-notes",)),
+    Check("open-threads-fold", "1.10.82", 3,
+          "per-session open threads in PC Current Status",
+          find_open_threads_fold, choices=("open-threads-fold=",)),
 ]

@@ -1103,14 +1103,13 @@ class Field:
     lines: list[str]    # without line endings
 
 
-def _blank_then(lines: list[str], i: int, end: int,
-                ok: Callable[[str], bool]) -> bool:
-    """Whether the blank run at `i` is followed, before `end`, by a line
-    `ok` accepts."""
+def _indented_after(lines: list[str], i: int, end: int) -> bool:
+    """Whether the blank run at `i` is followed, before `end`, by an
+    indented line."""
     k = i
     while k < end and not lines[k].strip():
         k += 1
-    return k < end and ok(lines[k])
+    return k < end and lines[k][:1].isspace()
 
 
 def read_fields(lines: list[str], rows: list[int]) -> list[Field]:
@@ -1119,11 +1118,10 @@ def read_fields(lines: list[str], rows: list[int]) -> list[Field]:
     margin, or a `- **Label:**` one where no unbulleted field's list is
     open (there it is a thread item). An unbulleted field keeps the list
     items and indented lines under it; a bulleted one keeps its indented
-    lines. A blank line ends a field unless what follows still continues
-    it; a plain line (a lede) ends it."""
+    lines. A blank line ends a field unless an indented line follows it;
+    a plain line (a lede) ends it."""
     fields: list[Field] = []
     cur: Field | None = None
-    listed = False
     prev = -2
     stop = rows[-1] + 1 if rows else 0
     for i in rows:
@@ -1133,22 +1131,21 @@ def read_fields(lines: list[str], rows: list[int]) -> list[Field]:
         prev = i
         m = FIELD_RE.match(line)
         if cur is not None:
-            lists = not cur.bullet       # an unbulleted field holds a list
             if not line.strip():
-                if not _blank_then(lines, i, stop, lambda nxt: bool(
-                        nxt[:1].isspace()
-                        or (lists and listed and LIST_RE.match(nxt)))):
+                # Only an indented line carries a field past a blank line:
+                # a margin bullet after one is the next thing in the
+                # section (a journal entry), not this field's list.
+                if not _indented_after(lines, i, stop):
                     cur = None
                 continue
-            if line[:1].isspace() or (lists and LIST_RE.match(line)):
-                listed = listed or bool(LIST_RE.match(line))
+            # An unbulleted field holds the margin list under it.
+            if line[:1].isspace() or (not cur.bullet and LIST_RE.match(line)):
                 cur.end = i + 1
                 continue
             cur = None
         if m and not line[:1].isspace():
             cur = Field(m.group("label").strip(), m.group("bullet") or "",
                         i, i + 1, [])
-            listed = False
             fields.append(cur)
     for f in fields:
         f.lines = [ln.rstrip("\r\n") for ln in lines[f.start:f.end]]
@@ -1250,7 +1247,14 @@ def show_status(batch: Batch, raw: str) -> str:
 
 def cmd_status(batch: Batch, args: argparse.Namespace, text: str) -> None:
     rel, note = status_target(batch, args.pc)
-    given = stdin_fields(text)
+    write_fields(batch, rel, note, stdin_fields(text))
+
+
+def write_fields(batch: Batch, rel: str, note: str,
+                 given: list[Field]) -> None:
+    """Put `given` into the PC note's Current Status: each replaces the
+    field with its label, in that field's shape; a new label goes after
+    the last field; a missing section is created before Notes/GM Notes."""
     doc = parse(note)
     if doc.problems:
         raise WriteError(f"{rel}: gm-only fence is unbalanced "
@@ -1273,12 +1277,13 @@ def cmd_status(batch: Batch, args: argparse.Namespace, text: str) -> None:
         batch.put(rel, place(doc, at, block))
         return
     have = read_fields(doc.lines, rows)
+    sent = {key(f.label) for f in given}
     by_key: dict[str, Field] = {}
     for f in have:
-        if key(f.label) in by_key:
+        if key(f.label) in by_key and key(f.label) in sent:
             raise WriteError(f"{rel}: '{f.label}' is in {CURRENT_STATUS} "
                              f"twice: fix it by hand first")
-        by_key[key(f.label)] = f
+        by_key.setdefault(key(f.label), f)
     edits: list[tuple[int, int, list[str]]] = []
     fresh: list[str] = []
     for f in given:
@@ -1314,6 +1319,68 @@ def cmd_status(batch: Batch, args: argparse.Namespace, text: str) -> None:
             last = ""       # the note's last line had no line ending
         lines[start:end] = [ln + doc.eol for ln in new[:-1]] + [new[-1] + last]
     batch.put(rel, "".join(lines))
+
+
+# `**New open threads (Session 6):**`, the per-session bullet wrap-ups once
+# appended to Current Status instead of reconciling its Open threads list.
+SESSION_THREADS_RE = re.compile(
+    r"(?:new\s+)?open threads\s*\(\s*session\s*(\d+)\s*\)")
+
+
+def session_threads(text: str) -> list[tuple[int, Field]]:
+    """(session number, field) for each per-session open-threads field
+    anywhere in the note's public Current Status, subsections included."""
+    doc = parse(text)
+    head, _rows = _status_region(doc)
+    if head is None or doc.problems:
+        return []
+    rows = own_lines(doc, head, section_end(doc, head))
+    out = []
+    for f in read_fields(doc.lines, rows):
+        m = SESSION_THREADS_RE.fullmatch(key(f.label))
+        if m:
+            out.append((int(m.group(1)), f))
+    return out
+
+
+def fold_session_threads(batch: Batch, rel: str) -> list[int]:
+    """Fold the note's per-session open-threads fields into its one Open
+    threads field (created when it has none), through `write_fields`.
+    Each becomes an item `**Session N:**` followed by its text word for
+    word; the bullet itself is removed. Returns the sessions folded."""
+    note = batch.read(rel)
+    found = session_threads(note)
+    if not found:
+        return []
+    doc = parse(note)
+    _head, region = _status_region(doc)
+    main = [f for f in read_fields(doc.lines, region)
+            if key(f.label) == "open threads"]
+    if len(main) > 1:
+        raise WriteError(f"{rel}: 'Open threads' is in {CURRENT_STATUS} "
+                         f"twice: fix it by hand first")
+    lines = (reshape(main[0], "") if main else ["**Open threads:**"])
+    for n, f in found:
+        m = FIELD_RE.match(f.lines[0])
+        assert m is not None
+        rest = f.lines[1:]
+        cut = min((len(ln) - len(ln.lstrip()) for ln in rest if ln.strip()),
+                  default=0)
+        lines.append(f"- **Session {n}:**{f.lines[0][m.end():]}")
+        lines += ["  " + ln[cut:] if ln.strip() else "" for ln in rest]
+    label = main[0].label if main else "Open threads"
+    out = list(doc.lines)
+    for _n, f in sorted(found, key=lambda x: x[1].start, reverse=True):
+        start, end = f.start, f.end
+        # Don't leave two blank lines where the bullet stood alone.
+        if (0 < start and end < len(out) and not out[start - 1].strip()
+                and not out[end].strip()):
+            end += 1
+        del out[start:end]
+    note = "".join(out)
+    batch.put(rel, note)
+    write_fields(batch, rel, note, [Field(label, "", 0, 0, lines)])
+    return [n for n, _f in found]
 
 
 def type_template(note_type: str) -> tuple[TemplateMap | None, bool]:
