@@ -16,8 +16,9 @@
   const SCOPE_MAX = 6;
   const SM_LOW = -6;
   const SM_HIGH = 10;
-  // Shots fired: every count up to this many is offered, then only the counts where the bonus steps.
-  const SHOTS_EACH = 50;
+  // Shots fired: every count up to this many is offered, then only the counts where the bonus
+  // steps. Past it, more shots no longer change the hits a roll can make.
+  const SHOTS_EACH = 200;
 
   // ---------- reading input without trusting it ----------
 
@@ -132,6 +133,8 @@
       const options = [];
       for (let n = min; n <= Math.min(max, SHOTS_EACH); n++) options.push(n);
       if (max > SHOTS_EACH) {
+        // A full-auto weapon's least burst is always offered, however large.
+        if (min > SHOTS_EACH) options.push(min);
         for (const [n] of R.rofSteps.slice().reverse()) if (n > Math.max(min, SHOTS_EACH) && n < max) options.push(n);
         options.push(max);
       }
@@ -312,9 +315,10 @@
         add('target', `Range ${yards} yd` + (speed ? ` + speed ${speed}` : ''), rangePenalty(yards + speed));
         const sf = shotsFor(w, st);
         const shots = sf.shots;
-        // A shotgun closer than a tenth of its 1/2D: each shell is one shot (B409).
+        // A shotgun closer than a tenth of its 1/2D: each shell is one shot (B409). Only a range the
+        // player entered counts: a blank one shows the ordinary view.
         const halfD = num(w.halfD);
-        const close = sf.mult > 1 && halfD !== null && yards * R.closeRangeDivisor < halfD;
+        const close = sf.mult > 1 && halfD !== null && num(st.yards) !== null && yards * R.closeRangeDivisor < halfD;
         const fired = close ? shots : shots * sf.mult;
         add('attack', sf.mult > 1 && !close ? `Rapid fire, ${shots}×${sf.mult} = ${fired} shots` : `Rapid fire, ${shots} shots`, rofBonus(fired));
         if (sf.over) notes.push(`This weapon's RoF is ${rofText(w)}.`);
@@ -457,17 +461,24 @@
       const ranged = w.type === 'ranged';
       const maxHits = rapid ? rapid.fired : 1;
       const bands = [];
-      if (maxHits > 1) {
-        for (let hits = 1; hits <= maxHits; hits++) {
-          bands.push({ from: (hits - 1) * rcl, to: hits === maxHits ? null : hits * rcl - 1, hits });
+      // The largest margin the roll can be made by is the roll less the lowest roll: the bands
+      // stop there, and the last one reads "or more".
+      const most = roll - LOW;
+      if (maxHits > 1 && most >= 0) {
+        for (let hits = 1; hits <= maxHits && (hits - 1) * rcl <= most; hits++) {
+          const last = hits === maxHits || hits * rcl > most;
+          bands.push({ from: (hits - 1) * rcl, to: last ? null : hits * rcl - 1, hits });
         }
       }
       const text = typeof w.damage === 'string' ? w.damage.trim() : '';
+      // Dice to roll: `3d`, `1d-3`, `d6`, `4dx3`, or swing or thrust (sw, thr). A cell without them
+      // (`control`, an affliction's `HT-6(3) aff`) is shown as written, with no damage roll; a
+      // slam's damage comes from the slam rules (B371).
+      const rolled = /\d*d\d*(?:x\d+)?(?![a-z])|\b(?:sw|thr)\b/i.test(text.replace(/\b[a-z]*d[a-z]+\b/gi, ''));
       return {
         text,
-        // Dice to roll: `3d`, `1d-3`, `d6`, or swing or thrust (sw, thr). A cell without them
-        // (`control`, an affliction's `HT-6(3) aff`) is shown as written, with no damage roll.
-        rolled: /\d*d\d*(?![a-z])|\b(?:sw|thr)\b/i.test(text.replace(/\b[a-z]*d[a-z]+\b/gi, '')),
+        rolled,
+        slam: !rolled && /\bslam\b/i.test(text),
         none: roll < LOW,
         maxHits,
         perHit: rcl,
@@ -851,6 +862,9 @@
         if (!isObj(state.rcl)) state.rcl = {};
         if (n !== null && Number.isInteger(n) && n >= 1 && n <= 99) state.rcl[id] = n; else delete state.rcl[id];
       });
+      // Once the entry is done, an Rcl it cannot use shows the one that counts. (Not while typing:
+      // clearing the box to type a new number must not refill it.)
+      inp.addEventListener('change', () => { inp.value = String(rclFor(w, state)); });
       refs.rcl = inp;
       return wrap('rcl', 'Rcl' + (w.noRcl === true ? ' (not on the sheet)' : ''), inp);
     }
@@ -1121,14 +1135,15 @@
       const times = (n) => (n === 1 ? 'once' : n + ' times');
       const line = (cls, text) => dmgEl.appendChild(h('p', { class: cls, text }));
       // No dice in the cell: it is shown as written, and the rows say only the hits.
-      if (!roll) line('th-dmg-row', 'Damage: ' + dm.text + ' (no damage roll)');
+      if (!roll) line('th-dmg-row', 'Damage: ' + dm.text + (dm.slam ? '; slam damage: see the slam rules (B371)' : ' (no damage roll)'));
       if (!dm.bands.length && roll) line('th-dmg-row', 'Hit: roll ' + dmg + ' once');
       for (const b of dm.bands) {
         const by = b.to === null ? b.from + ' or more' : b.from === b.to ? String(b.from) : b.from + '-' + b.to;
         line('th-dmg-row', 'Made it by ' + by + ': ' + b.hits + (b.hits === 1 ? ' hit' : ' hits') + (roll ? ', roll ' + dmg + ' ' + times(b.hits) : ''));
       }
       if (dm.attacks) line('th-dmg-how', 'Make 1 damage roll for each attack that hits.');
-      if (dm.strong) line('th-dmg-strong', 'All-Out Attack (Strong): add ' + sgn(dm.strong[0]) + ' to that damage, or ' + sgn(dm.strong[1]) + ' a die if better.');
+      // All-Out Attack (Strong) adds to damage, so it is said only where there is damage to add to.
+      if (dm.strong && (roll || dm.slam)) line('th-dmg-strong', 'All-Out Attack (Strong): add ' + sgn(dm.strong[0]) + ' to that damage, or ' + sgn(dm.strong[1]) + ' a die if better.');
       if (dm.close) line('th-dmg-close', 'Close range: each hit does ' + dm.close + ' times the damage, and the target\'s DR counts ' + dm.close + ' times against it.');
       if (dm.rclAssumed) line('th-dmg-how', 'The sheet gives no Rcl, so this counts Rcl 1: set the real one beside Shots fired.');
     }

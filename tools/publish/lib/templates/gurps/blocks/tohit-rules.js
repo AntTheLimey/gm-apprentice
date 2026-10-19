@@ -86,7 +86,7 @@ const TOHIT_RULES = {
   offHandBoughtMax: 4,               // the technique buys off at most the -4 (B232)
   badFooting: -2,                    // -2 or worse at the GM's option (B547)
   shockMax: 4,                       // shock is at most -4 (B419)
-  totalDarkness: -10,                // darkness is -1 to -9, total darkness -10 (B358); Night Vision
+  totalDarkness: -10,                // darkness is -1 to -9, total darkness -10 (B547, B548); Night Vision
                                      // takes off one point a level but not from -10 (B71)
   blindCap: 9,                       // adjusted skill at most 9 when fighting blind (B389, B547)
   freeFallBeamRcl: 2,                // zero gravity caps DX rolls at Free Fall; beam weapons exempt

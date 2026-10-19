@@ -622,6 +622,16 @@ describe('the Rcl control', () => {
     assert.strictEqual(p.$('#th-rcl').value, '2');
     assert.deepStrictEqual(JSON.parse([...p.store.values()][0]).state.rcl, { 'Blaster pistol': 2 });
   });
+  it('an entry it cannot use puts back the Rcl in use (review L6)', () => {
+    const p = load(noRcl());
+    p.set('#th-weapon', 'Rifle');
+    p.set('#th-rcl', 2);
+    p.set('#th-rcl', 0);
+    assert.strictEqual(p.$('#th-rcl').value, '3', 'the row\'s Rcl, which is what counts now');
+    p.set('#th-rcl', 2);
+    p.set('#th-rcl', 150);
+    assert.strictEqual(p.$('#th-rcl').value, '3');
+  });
   it('a melee weapon has none', () => {
     const p = load(noRcl());
     p.set('#th-weapon', 'Hatchet');
@@ -652,7 +662,7 @@ describe('the damage rolls to make', () => {
     assert.ok(ids.indexOf('th-dmg') > ids.indexOf('th-notes'), ids.join(', '));
   });
   it('a Damage cell with no dice in it is shown as written, with no roll to make', () => {
-    for (const [cell, want] of [['control', 'Damage: control (no damage roll)'], ['— / slam', 'Damage: — / slam (no damage roll)'], ['HT-6(3) aff', 'Damage: HT-6(3) aff (no damage roll)']]) {
+    for (const [cell, want] of [['control', 'Damage: control (no damage roll)'], ['— / slam', 'Damage: — / slam; slam damage: see the slam rules (B371)'], ['HT-6(3) aff', 'Damage: HT-6(3) aff (no damage roll)']]) {
       const d = dataBlock();
       d.weapons[0] = Object.assign({}, d.weapons[0], { damage: cell });
       const p = load(d);
@@ -665,6 +675,18 @@ describe('the damage rolls to make', () => {
     p.set('#th-weapon', 'Blaster pistol');
     p.set('#th-shots', 2);
     assert.deepStrictEqual(p.all('.th-dmg-row').map((r) => r.textContent), ['Damage: HT-6(3) aff (no damage roll)', 'Made it by 0: 1 hit', 'Made it by 1 or more: 2 hits']);
+  });
+  it('no All-Out Attack (Strong) note on a row with no damage roll; a slam row keeps it (review L7)', () => {
+    const at = (cell) => {
+      const d = dataBlock();
+      d.weapons[0] = Object.assign({}, d.weapons[0], { damage: cell });
+      const p = load(d);
+      p.set('#th-weapon', 'Hatchet');
+      p.set('#th-man', 'aos');
+      return p.$('.th-dmg-strong');
+    };
+    assert.strictEqual(at('control'), null);
+    assert.ok(at('— / slam'));
   });
   it('melee: the damage as the sheet writes it', () => {
     const p = load(dataBlock());
