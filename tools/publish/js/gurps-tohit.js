@@ -474,7 +474,7 @@
       // Dice to roll: `3d`, `1d-3`, `d6`, `4dx3`, or swing or thrust (sw, thr). A cell without them
       // (`control`, an affliction's `HT-6(3) aff`) is shown as written, with no damage roll; a
       // slam's damage comes from the slam rules (B371).
-      const rolled = /\d*d\d*(?:x\d+)?(?![a-z])|\b(?:sw|thr)\b/i.test(text.replace(/\b[a-z]*d[a-z]+\b/gi, ''));
+      const rolled = /(?<![a-z])\d*d\d*(?:x\d+)?(?![a-z])|\b(?:sw|thr)\b/i.test(text);
       return {
         text,
         rolled,

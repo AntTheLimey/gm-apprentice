@@ -1157,7 +1157,7 @@ describe('the damage rolls to make', () => {
   it('says whether the Damage cell holds dice to roll', () => {
     const rolled = (damage) => T.effective(gun({ damage }), { weapon: 'Blaster pistol' }).damage.rolled;
     assert.deepStrictEqual(['3d (10) burn, sur', '1d-3 burn', 'sw+1 cut', 'thr cr', 'd6', 'HT-2 (2) stun + 1d-3 burn', '4dx3 cr', '2Dx2'].map(rolled), [true, true, true, true, true, true, true, true]);
-    assert.deepStrictEqual(['control', '— / slam', 'HT-6(3) aff', ''].map(rolled), [false, false, false, false]);
+    assert.deepStrictEqual(['control', '— / slam', 'HT-6(3) aff', '', 'HT-3 aff (Stunned)', 'Paralyzed', 'linked'].map(rolled), [false, false, false, false, false, false, false]);
   });
   it('one shot: the damage, one roll', () => {
     const d = T.effective(gun({}), { weapon: 'Blaster pistol', shots: 1 }).damage;
