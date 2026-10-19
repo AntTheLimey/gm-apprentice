@@ -125,7 +125,10 @@ function pureCases(name, data) {
     for (const [label, st] of states(data, w)) {
       const r = T.effective(data, st);
       const r2 = T.effective(data, st, { delta: -2 });
-      out[`${name} ${id} ${label}`] = hash([r, r2, T.odds(r.roll, r.critSkill), T.conflicts(st), T.cleanState(data, st)]);
+      // The to-hit sum and the damage rolls are pinned apart, so a change to one never hides in the other.
+      const toHit = (x) => { const c = Object.assign({}, x); delete c.damage; return c; };
+      out[`${name} ${id} ${label}`] = hash([toHit(r), toHit(r2), T.odds(r.roll, r.critSkill), T.conflicts(st), T.cleanState(data, st)]);
+      out[`${name} ${id} ${label} damage`] = hash([r.damage, r2.damage]);
     }
   }
   return out;
