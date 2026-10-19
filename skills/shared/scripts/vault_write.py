@@ -12,6 +12,11 @@
     vault_write.py VAULT log [--write]                                  < rows
     vault_write.py VAULT timeline --under HEADING [--after HEADING]
                                [--file REL] [--write]                   < entries
+    vault_write.py VAULT session-new --number N --title T [--play-date D]
+                               [--chapter C] [--export PATH] [--write]
+    vault_write.py VAULT resolve --export PATH                (read-only)
+    vault_write.py VAULT promote-plan DRAFT --to PLAN --plan-type T
+                               [--chapter C] [--leads-to PLAN]... [--write]
 
 Paths are vault-relative. Without --write every command prints its plan and
 writes nothing. The script never writes prose: it places the text on stdin.
@@ -39,6 +44,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+import schema_rules
 import vault_check as vc
 import vaultlib as vl
 from migrate_core import StepFailed, write_text_atomic
@@ -1742,6 +1748,480 @@ def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
                       f"year: a published timeline cannot sort it")
 
 
+# --- session-new and promote-plan --------------------------------------------
+
+SESSION_TEMPLATES = ("_Template_Session.md",)
+PLAN_TEMPLATES = ("_Template_Plan.md",)
+# What a file name or a link cannot hold.
+BAD_NAME_RE = re.compile(r'[\\/:*?"<>|#^\[\]]')
+SESSION_DIR_RE = re.compile(r"^(Session\s*)(\d+)$", re.IGNORECASE)
+TOP_KEY_RE = re.compile(r"^([A-Za-z_][\w.-]*):(.*)$")
+ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+EXPORT_SECTIONS = ("NPCs", "Locations", "Items")
+NAME_VERBS = ("EXACT", "ALIAS", "NEAR", "NONE")
+PLAN_LISTS = {"npc": "participants", "faction": "participants",
+              "organization": "participants", "creature": "participants",
+              "location": "locations"}
+
+
+def is_record(rel: str) -> bool:
+    """A note no name means: archived, a QA report, or a Midwife draft."""
+    return vl.is_unchecked_source(rel) or rel.split("/", 1)[0] == "_midwife"
+
+
+def set_block(lines: list[str], key: str, value: str,
+              children: list[str] | None = None) -> None:
+    """Set a top-level frontmatter key (lines without endings) to `value`,
+    replacing the block indented under it with `children`."""
+    new = [f"{key}:" + (f" {value}" if value else ""), *(children or [])]
+    for i, line in enumerate(lines):
+        if line.startswith(f"{key}:"):
+            j = i + 1
+            while j < len(lines) and (not lines[j].strip()
+                                      or lines[j][:1].isspace()):
+                j += 1
+            lines[i:j] = new
+            return
+    lines.extend(new)
+
+
+def link_list(links: list[str]) -> tuple[str, list[str]]:
+    """(value, children) for set_block: a block list of quoted links, or
+    `[]`."""
+    if not links:
+        return "[]", []
+    return "", [f'  - "[[{link}]]"' for link in links]
+
+
+def bare_link(raw: str) -> str:
+    return raw.strip().removeprefix("[[").removesuffix("]]").strip()
+
+
+def template_body(text: str) -> str:
+    lines = text.splitlines(keepends=True)
+    end, error = vl.frontmatter_span(lines)
+    if error:
+        raise WriteError(f"template: {error}")
+    return "".join(lines[end + 1:])
+
+
+def schema_check(batch: Batch, rel: str, text: str) -> None:
+    """The schema's own rules on a note about to be created: an ERROR
+    refuses the call, a WARNING is a row."""
+    fm = vl.extract_frontmatter(text) or {}
+    for level, message in schema_rules.frontmatter_findings(
+            fm, None, vl.raw_frontmatter(text)):
+        if level == "ERROR":
+            raise WriteError(f"{rel}: {message}")
+        if level == "WARNING":
+            batch.row("WARNING", rel, "", message)
+
+
+def session_indexes(vault: Path) -> list[tuple[str, int, str | None, str]]:
+    """(rel, session number, chapter, play date) of every session index."""
+    out = []
+    for rel, text in vl.vault_files(vault):
+        if is_record(rel):
+            continue
+        fm = vl.extract_frontmatter(text) or {}
+        if vl.entity_type(fm) != "session":
+            continue
+        number = vl.parse_session_number(fm.get("session_number"))
+        if number is not None:
+            # Only an ISO date compares as text ("May 21, 2026" is real).
+            date = str(fm.get("play_date") or "")
+            out.append((rel, number, vl.chapter_of(rel, fm),
+                        date if ISO_DATE_RE.fullmatch(date) else ""))
+    return out
+
+
+def carried_keys(prev: str, have: set[str], title: str) -> list[str]:
+    """The previous index's own top-level keys the template lacks, each
+    with the comment lines above it, and empty: `title` gets the new
+    title."""
+    out: list[str] = []
+    comments: list[str] = []
+    lines = vl.raw_frontmatter(prev).splitlines()
+    for i, line in enumerate(lines):
+        if line.startswith("#"):
+            comments.append(line)
+            continue
+        m = TOP_KEY_RE.match(line)
+        if not m:
+            if line.strip() and not line[:1].isspace():
+                comments = []
+            continue
+        name, value = m.group(1), strip_comment(m.group(2)).strip()
+        if name not in have:
+            nxt = lines[i + 1] if i + 1 < len(lines) else ""
+            if name == "title":
+                empty = f'"{title}"'
+            elif value.startswith("[") or (
+                    not value and nxt.lstrip().startswith("- ")):
+                empty = "[]"
+            elif value.startswith("{") or (not value and nxt[:1].isspace()):
+                empty = "{}"
+            else:
+                empty = "null"
+            out += [*comments, f"{name}: {empty}"]
+        comments = []
+    return out
+
+
+def export_entries(text: str) -> list[tuple[str, str]]:
+    """(section, name) for each entry under an export's `## NPCs`,
+    `## Locations` and `## Items`: its `###` headings, or, in a section
+    with none, its top-level list items (a bold name, or the text before
+    the first dash, colon or comma)."""
+    out: list[tuple[str, str]] = []
+    section: str | None = None
+    headed: set[str] = set()
+    fence = False
+    for line in text.splitlines():
+        if line.lstrip().startswith(("```", "~~~")):
+            fence = not fence
+            continue
+        if fence:
+            continue
+        head = re.match(r"^(#{1,6})\s+(.*?)\s*$", line)
+        if head:
+            level, title = len(head.group(1)), head.group(2)
+            if level <= 2:
+                section = next((s for s in EXPORT_SECTIONS
+                                if key(title) == s.casefold()), None)
+            elif level == 3 and section:
+                name = re.sub(r"[*`]", "", title).strip()
+                if name:
+                    out.append((section, name))
+                    headed.add(section)
+            continue
+        item = re.match(r"^[-*+]\s+(.+)$", line)
+        if section and item and section not in headed:
+            raw = item.group(1).strip()
+            bold = re.match(r"^\*\*(.+?)\*\*", raw)
+            name = (bold.group(1) if bold else
+                    re.split(r"\s[—–-]\s|:\s|,\s", raw)[0])
+            name = name.strip().rstrip(".")
+            if name:
+                out.append((section, name))
+    return out
+
+
+def resolve_export(batch: Batch, entries: list[tuple[str, str]]) -> None:
+    """One row per export entry: EXACT (a note's file name), ALIAS, NEAR
+    (the candidates `links.py` offers for a broken link) or NONE. A name
+    in parentheses after another is tried too. Archived notes and Midwife
+    drafts are never a match."""
+    import graph_check
+    import links
+    notes, names, _out, _spelt = graph_check.collect(batch.vault, [])
+    live = {n: {r for r in rels if not is_record(r)}
+            for n, rels in names.items()}
+    live = {n: rels for n, rels in live.items() if rels}
+    index = links._index(live)
+
+    def direct(spelling: str) -> tuple[str, list[str]] | None:
+        n = vl.normalize(spelling)
+        rels = live.get(n, set())
+        exact = sorted(r for r in rels if notes[r] == n)
+        if exact:
+            return "EXACT", exact
+        return ("ALIAS", sorted(rels)) if rels else None
+
+    for section, name in entries:
+        where = f"§{section}"
+        tries = [(name, "")]
+        paren = re.match(r"^(.*?)\s*\(([^()]+)\)$", name)
+        if paren:
+            tries += [(p.strip(), f' — as "{p.strip()}"')
+                      for p in paren.groups() if p.strip()]
+        for spelling, how in tries:
+            hit = direct(spelling)
+            if hit:
+                verb, rels = hit
+                also = (f" — also {', '.join(rels[1:])}"
+                        if len(rels) > 1 else "")
+                batch.row(verb, rels[0], where, name + how + also)
+                break
+        else:
+            near: list[tuple[str, str]] = []
+            for spelling, _how in tries:
+                near = links.candidates(spelling, index)
+                if near:
+                    break
+            if near:
+                more = "".join(f"; or {rel} ({tag})" for rel, tag in near[1:])
+                batch.row("NEAR", near[0][0], where,
+                          f"{name} — {near[0][1]}{more}")
+            else:
+                batch.row("NONE", "", where, name)
+
+
+def read_export(path: str) -> str:
+    """An export file's text, UTF-8, with LF line endings."""
+    try:
+        text = Path(path).read_bytes().decode("utf-8-sig")
+    except (OSError, UnicodeDecodeError) as e:
+        raise WriteError(f"{path}: unreadable "
+                         f"({e.__class__.__name__})") from e
+    return text.replace("\r\n", "\n")
+
+
+def cmd_resolve(batch: Batch, args: argparse.Namespace, _text: str) -> None:
+    resolve_export(batch, export_entries(read_export(args.export)))
+
+
+def cmd_session_new(batch: Batch, args: argparse.Namespace,
+                    _text: str) -> None:
+    n = args.number
+    title = " ".join(args.title.split())
+    if n < 1:
+        raise WriteError("--number must be 1 or more")
+    if not title or BAD_NAME_RE.search(title):
+        raise WriteError(f"title {args.title!r} cannot be a file name "
+                         f"(none of \\ / : * ? \" < > | # ^ [ ])")
+    if args.play_date and not ISO_DATE_RE.fullmatch(args.play_date):
+        raise WriteError("--play-date must be YYYY-MM-DD")
+    export = read_export(args.export) if args.export else ""
+    want =bare_link(args.chapter) if args.chapter else None
+
+    def in_chapter(chapter: str | None) -> bool:
+        return want is None or (chapter or "").casefold() == want.casefold()
+
+    indexes = session_indexes(batch.vault)
+    earlier = [x for x in indexes if x[1] < n and in_chapter(x[2])]
+    prev: tuple[str, int, str | None, str] | None
+    chose = ""
+    if want is None:
+        # Session numbers restart per chapter: of several session N-1
+        # indexes, the one played last, when its date says so.
+        lasts = sorted((x for x in earlier if x[1] == n - 1),
+                       key=lambda x: x[3], reverse=True)
+        if len(lasts) > 1 and lasts[0][3] > lasts[1][3]:
+            chose = f" (the latest played of {len(lasts)})"
+            lasts = lasts[:1]
+        if len(lasts) != 1:
+            raise WriteError(
+                (f"no session {n - 1} index found" if not lasts else
+                 f"{len(lasts)} chapters have a session {n - 1} index") +
+                ": pass --chapter \"Chapter N - Title\"")
+        prev = lasts[0]
+    else:
+        prev = max(earlier, key=lambda x: x[1]) if earlier else None
+    chapter = (prev[2] if prev else None) or want
+    taken = [rel for rel, number, ch, _date in indexes
+             if number == n and (ch or "").casefold()
+             == (chapter or "").casefold()]
+    if taken:
+        raise WriteError(f"session {n} already has an index: {taken[0]}")
+    prev_text = batch.read(prev[0]) if prev else ""
+    if prev:
+        folder = prev[0].rpartition("/")[0]
+        parent, _, base = folder.rpartition("/")
+        dir_m = SESSION_DIR_RE.match(base)
+        if dir_m and int(dir_m.group(2)) == prev[1]:
+            width = len(dir_m.group(2))
+            base = f"{dir_m.group(1)}{n:0{width}d}"
+            folder = f"{parent}/{base}" if parent else base
+    else:
+        chapter_dir = next(
+            (rel.rpartition("/")[0] for rel, text in
+             vl.vault_files(batch.vault)
+             if Path(rel).stem.casefold() == (want or "").casefold()
+             and vl.entity_type(vl.extract_frontmatter(text)) == "chapter"),
+            None)
+        if chapter_dir is None:
+            raise WriteError(f"no chapter note named {want!r}, and no "
+                             f"earlier session in it to file beside")
+        folder = f"{chapter_dir}/Sessions/Session {n:02d}".lstrip("/")
+    stem = f"Session {n:02d} - {title}"
+    index_rel, notes_rel = f"{folder}/{stem}.md", f"{folder}/{stem} - Play Notes.md"
+
+    chapter_raw = ((raw_value(prev_text, "chapter") if prev else None)
+                   or f'"[[{chapter}]]"')
+    campaign_raw = raw_value(prev_text, "campaign") if prev else None
+    template = template_text(batch.vault, SESSION_TEMPLATES, "session.md")
+    fm = template_frontmatter(template)
+    have = {m.group(1) for line in fm if (m := TOP_KEY_RE.match(line))}
+    values = {"session_number": str(n), "chapter": chapter_raw,
+              "status": "played", "scenes": "[]"}
+    if campaign_raw:
+        values["campaign"] = campaign_raw
+    if args.play_date:
+        values["play_date"] = f'"{args.play_date}"'
+    for field, value in values.items():
+        set_block(fm, field, value)
+    children = []
+    start = next((i for i, ln in enumerate(fm)
+                  if ln.startswith("documents:")), None)
+    if start is not None:
+        for line in fm[start + 1:]:
+            if not line[:1].isspace():
+                break
+            child = line.strip().split(":", 1)[0]
+            children.append(f"  {child}: " + (f'"[[{stem} - Play Notes]]"'
+                                              if child == "play_notes"
+                                              else "null"))
+    if "play_notes" not in "".join(children):
+        children.append(f'  play_notes: "[[{stem} - Play Notes]]"')
+    set_block(fm, "documents", "", children)
+    carried = carried_keys(prev_text, have, title) if prev else []
+    body = template_body(template)
+    body = re.sub(r"(?m)^(# .*)$", lambda m: m.group(1).replace(
+        "NN", f"{n:02d}").replace("{Title}", title), body, count=1)
+    body = re.sub(r"(?m)^\{[^{}]*\}[ \t]*\n?", "", body)
+    index_text = "---\n" + "\n".join(fm + carried) + "\n---\n" + body
+    batch.create(index_rel, index_text)
+    schema_check(batch, index_rel, index_text)
+    note_fm = ["type: session-play-notes", f'session: "[[{stem}]]"',
+               f"chapter: {chapter_raw}", f"campaign: {campaign_raw or chr(34) * 2}",
+               "canon_status: AUTHORITATIVE", "created_by: manual"]
+    if args.play_date:
+        note_fm.append(f'play_date: "{args.play_date}"')
+    note_fm.append("tags: []")
+    notes_text = ("---\n" + "\n".join(note_fm) + "\n---\n\n"
+                  f"# {stem} - Play Notes\n")
+    if args.export:
+        notes_text += (f"\n## Narrative Record\n\nExport "
+                       f"`{Path(args.export).name}`, placed whole and "
+                       f"unedited.\n\n" + export)
+    batch.create(notes_rel, notes_text)
+    schema_check(batch, notes_rel, notes_text)
+    source = (f"after {prev[0]}{chose}" if prev
+              else "first session of the chapter")
+    kept = [ln.split(":", 1)[0] for ln in carried if not ln.startswith("#")]
+    batch.row("WOULD-CREATE", index_rel, "", f"session template, {source}"
+              + (f"; its own keys carried: {', '.join(kept)}" if kept
+                 else ""))
+    batch.row("WOULD-CREATE", notes_rel, "",
+              f"export {Path(args.export).name} under ## Narrative Record"
+              if args.export else "no export: the notes are empty")
+    if not prev:
+        batch.row("WARNING", index_rel, "", "no earlier session in this "
+                  "chapter: campaign and the vault's own keys not carried")
+    if args.export:
+        resolve_export(batch, export_entries(export))
+
+
+def entity_names(vault: Path) -> tuple[dict[str, set[str]],
+                                        dict[str, set[str]],
+                                        dict[str, str]]:
+    """(name -> notes, link name -> notes, note -> which plan list) for
+    every NPC, faction, organization, creature and location outside the
+    archive and the Midwife's drafts. A name is the file name with and
+    without its underscores, an alias, or an NPC's surname (the last word
+    of a name of two or more, four letters or longer, capitalised): prose
+    says "Ashworth" more than "Charles Ashworth". A link resolves by file
+    name and alias only, as Obsidian does."""
+    names: dict[str, set[str]] = {}
+    linked: dict[str, set[str]] = {}
+    lists: dict[str, str] = {}
+    for rel, text in vl.vault_files(vault):
+        if is_record(rel):
+            continue
+        fm = vl.extract_frontmatter(text) or {}
+        etype = vl.entity_type(fm)
+        which = PLAN_LISTS.get(etype)
+        if which is None:
+            continue
+        lists[rel] = which
+        stem = Path(rel).stem
+        own = {" ".join(n.split()) for n in
+               (stem, stem.replace("_", " "), *vl.link_aliases(fm))}
+        for name in own:
+            linked.setdefault(vl.normalize(name), set()).add(rel)
+        words = stem.replace("_", " ").split()
+        if (etype == "npc" and len(words) > 1 and len(words[-1]) >= 4
+                and words[-1][:1].isupper()):
+            own.add(words[-1])
+        for name in own:
+            if len(name) >= 3:
+                names.setdefault(name, set()).add(rel)
+    return names, linked, lists
+
+
+def name_pattern(name: str) -> re.Pattern[str]:
+    """`name` as a whole word, case and all, except that a leading "The"
+    may be written "the"."""
+    rest = name[4:] if name.startswith("The ") else None
+    body = (r"[Tt]he\s+" + re.escape(rest).replace(r"\ ", r"\s+")
+            if rest else re.escape(name).replace(r"\ ", r"\s+"))
+    return re.compile(rf"(?<!\w){body}(?!\w)")
+
+
+def cmd_promote_plan(batch: Batch, args: argparse.Namespace,
+                     _text: str) -> None:
+    draft = batch.resolve(args.draft)
+    text = batch.read(draft)
+    lines = text.splitlines(keepends=True)
+    end, error = vl.frontmatter_span(lines)
+    if error is None:
+        body = "".join(lines[end + 1:])
+    elif error == "no frontmatter":
+        body = text
+    else:
+        raise WriteError(f"{draft}: {error}")
+    target = vl.normalize_file_arg(args.to)
+    if not re.fullmatch(r"[\w-]+", args.plan_type):
+        raise WriteError(f"--plan-type {args.plan_type!r} is not one word")
+    chapter = (bare_link(args.chapter) if args.chapter
+               else vl.chapter_of(target, {}))
+    if not chapter:
+        raise WriteError(f"{target} is not in a chapter folder: pass "
+                         f"--chapter \"Chapter N - Title\"")
+
+    names, linked, lists = entity_names(batch.vault)
+    first: dict[str, tuple[int, str]] = {}
+
+    def seen(rel: str, at: int, said: str) -> None:
+        if rel not in first or at < first[rel][0]:
+            first[rel] = (at, said)
+
+    shared: dict[str, set[str]] = {}
+    for m in vl.LINK_RE.finditer(body):
+        rels = linked.get(vl.link_target(m.group(1)), set())
+        if len(rels) == 1:
+            seen(next(iter(rels)), m.start(), m.group(0))
+        elif rels:
+            shared[vl.link_name(m.group(1))] = rels
+    for name, rels in names.items():
+        hit = name_pattern(name).search(body)
+        if not hit:
+            continue
+        if len(rels) == 1:
+            seen(next(iter(rels)), hit.start(), hit.group(0))
+        else:
+            shared[name] = rels
+    for name, rels in sorted(shared.items()):
+        if rels & first.keys():
+            continue    # one of them is named outright: no news
+        batch.row("WARNING", target, "", f'"{name}" names {len(rels)} '
+                  f"notes ({', '.join(sorted(rels))}): left out")
+    found = sorted(first, key=lambda rel: first[rel][0])
+
+    eol = "\r\n" if "\r\n" in body else "\n"
+    fm = template_frontmatter(
+        template_text(batch.vault, PLAN_TEMPLATES, "plan.md"))
+    set_block(fm, "name", f'"{Path(target).stem.replace("_", " ")}"')
+    set_block(fm, "plan_type", args.plan_type)
+    set_block(fm, "chapter", f'"[[{chapter}]]"')
+    for field in ("participants", "locations"):
+        set_block(fm, field, *link_list(
+            [Path(rel).stem for rel in found if lists[rel] == field]))
+    set_block(fm, "leads_to", *link_list(
+        [bare_link(x) for x in args.leads_to or []]))
+    set_block(fm, "relationships", "[]")
+    new = "---" + eol + eol.join(fm) + eol + "---" + eol + body
+    batch.create(target, new)
+    schema_check(batch, target, new)
+    batch.row("WOULD-CREATE", target, "",
+              f"from {draft}: body copied as written ({len(body.encode())} "
+              f"bytes)")
+    for rel in found:
+        batch.row("PARTICIPANT" if lists[rel] == "participants"
+                  else "LOCATION", rel, "", f'"{first[rel][1]}"')
+
+
 # --- CLI ---------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1818,6 +2298,40 @@ def build_parser() -> argparse.ArgumentParser:
     tl.add_argument("--after", help="where a new heading goes")
     tl.add_argument("--file", help=f"the timeline note (default {TIMELINE})")
     tl.add_argument("--write", action="store_true")
+    sn = sub.add_parser(
+        "session-new", help="a cold session's index and Play Notes",
+        formatter_class=raw, description=(
+            "Files both beside the previous session, from the session\n"
+            "template; the previous index's own keys come forward empty.\n"
+            "--export places a table-assistant export whole under\n"
+            "## Narrative Record and resolves its NPCs, Locations and\n"
+            "Items: EXACT, ALIAS, NEAR (candidates) or NONE, one row each."))
+    sn.add_argument("--number", type=int, required=True)
+    sn.add_argument("--title", required=True)
+    sn.add_argument("--play-date", dest="play_date", help="YYYY-MM-DD")
+    sn.add_argument("--chapter", help="the chapter, when the number "
+                    "alone does not say which")
+    sn.add_argument("--export", help="the export file (any path)")
+    sn.add_argument("--write", action="store_true")
+    rs = sub.add_parser(
+        "resolve", help="an export's names against the vault (read-only)",
+        description="The name rows session-new prints, for an export "
+                    "whose session is already filed.")
+    rs.add_argument("--export", required=True, help="the export file")
+    rs.add_argument("--write", action="store_true", help=argparse.SUPPRESS)
+    pp = sub.add_parser(
+        "promote-plan", help="file a Midwife draft as a vault plan",
+        formatter_class=raw, description=(
+            "Scaffolds from the plan template, copies the draft's body\n"
+            "exactly, fills participants and locations from the entity\n"
+            "names and aliases it mentions, and runs the schema check."))
+    pp.add_argument("draft", help="the draft, vault-relative")
+    pp.add_argument("--to", required=True, help="the plan, vault-relative")
+    pp.add_argument("--plan-type", dest="plan_type", required=True)
+    pp.add_argument("--chapter", help="default: the chapter folder of --to")
+    pp.add_argument("--leads-to", dest="leads_to", action="append",
+                    help="a plan this one leads to (repeatable)")
+    pp.add_argument("--write", action="store_true")
     return ap
 
 
@@ -1827,7 +2341,12 @@ COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "story": cmd_story,
                                 "status": cmd_status,
                                 "log": cmd_log,
-                                "timeline": cmd_timeline}
+                                "timeline": cmd_timeline,
+                                "session-new": cmd_session_new,
+                                "resolve": cmd_resolve,
+                                "promote-plan": cmd_promote_plan}
+NO_STDIN = frozenset({"wrapup-new", "session-new", "resolve",
+                      "promote-plan"})
 
 
 def read_stdin() -> str:
@@ -1858,7 +2377,7 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
         print(f"vault_write.py: {args.vault} is not a folder",
               file=sys.stderr)
         return 2
-    needs_stdin = args.command != "wrapup-new"
+    needs_stdin = args.command not in NO_STDIN
     batch = Batch(args.vault)
     if args.command == "status" and args.show:
         try:
