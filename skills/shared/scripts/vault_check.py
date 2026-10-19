@@ -12,7 +12,10 @@ Usage:
   vault_check.py VAULT stale-drafts
   vault_check.py VAULT changed --since N
   vault_check.py VAULT tables [--folder SUB] [--file REL ...] [--newer-than REL]
-  vault_check.py VAULT timeline
+  vault_check.py VAULT timeline [--order]
+  vault_check.py VAULT stories
+  vault_check.py VAULT report-new --mode M --scope S
+  vault_check.py VAULT report-stats --file _QA/REPORT.md
   vault_check.py VAULT read-aloud
   vault_check.py VAULT relationships [--folder SUB] [--file REL ...] [--newer-than REL]
   vault_check.py VAULT sessions      (also: played sessions/Wrap-Ups not under Publishing)
@@ -163,6 +166,7 @@ import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 
+import qa_checks
 from schema_rules import (
     SESSION_PLAYED,
     extract_frontmatter,
@@ -5943,7 +5947,15 @@ def main() -> int:
                                         "relationships", "sessions",
                                         "gm-leak", "pc-body", "wrapup",
                                         "site-faults", "settings",
-                                        "version", "active-pcs", "all"])
+                                        "version", "active-pcs", "stories",
+                                        "report-new", "report-stats", "all"])
+    ap.add_argument("--order", action="store_true",
+                    help="timeline only: check the sessions' in_game_date "
+                         "never goes backwards (qa_checks.py)")
+    ap.add_argument("--mode", help="report-new only: canon_audit, full_audit...")
+    ap.add_argument("--scope", help="report-new only: full_vault, chapter_N "
+                                    "or custom")
+    ap.add_argument("--date", help="report-new only: YYYY-MM-DD (default today)")
     ap.add_argument("--folder",
                     help="restrict the frontmatter, tables, relationships, "
                          "gm-leak and pc-body checks to a subfolder")
@@ -6039,6 +6051,29 @@ def main() -> int:
         return code
     if args.command == "active-pcs":
         emit("active-pcs", list_active_pcs(args.vault))
+        return 0
+    if args.command == "stories":
+        emit("stories", qa_checks.check_stories(args.vault))
+        return 0
+    if args.command == "timeline" and args.order:
+        emit("timeline --order", qa_checks.check_session_order(args.vault))
+        return 0
+    if args.command in ("report-new", "report-stats"):
+        try:
+            if args.command == "report-new":
+                if not (args.mode and args.scope):
+                    raise ValueError("report-new needs --mode and --scope")
+                out = qa_checks.report_new(args.vault, args.mode, args.scope,
+                                           args.date)
+            else:
+                if not args.file or len(args.file) != 1:
+                    raise ValueError("report-stats needs one --file REPORT")
+                out = qa_checks.report_stats(args.vault, args.file[0],
+                                             args.folder)
+        except ValueError as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 2
+        print("\n".join(out))
         return 0
     # The site's own audit, asked whole: a long list with its own fixes
     # (campaign-qa's Site Faults), so it stays out of `all` too.

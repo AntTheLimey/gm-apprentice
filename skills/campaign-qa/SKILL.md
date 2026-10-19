@@ -63,10 +63,9 @@ hierarchy from `schema_rules.py show <type>`; canon states are in
 `shared/canon-status.md`.
 
 **Reports** go in `_QA/` at the vault root (create on first use),
-named `QA_{mode}_{YYYY-MM-DD}.md`, from
-`references/report-template.md`: run metadata, findings with
-resolutions, counts by severity and category, follow-up
-recommendations.
+made by `vault_check.py report-new` and counted by `report-stats`
+(`references/report-template.md`): findings with resolutions,
+follow-up recommendations.
 
 ## Absolute Rules
 

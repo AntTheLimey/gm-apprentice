@@ -6,11 +6,17 @@ const MONTHS = { january:0, february:1, march:2, april:3, may:4, june:5,
   july:6, august:7, september:8, october:9, november:10, december:11 };
 
 function parseDate(value) {
+  return parseDateDetail(value).date;
+}
+
+// parseDate, plus whether the value named a day of the month (a bare month or season
+// is placed on the 1st, which is a guess, not a date).
+function parseDateDetail(value) {
   // An unquoted `1921-03-01` reaches here as a Date; its string form has no ISO date in it.
-  if (value instanceof Date) return value;
+  if (value instanceof Date) return { date: value, dayKnown: true };
   const s = String(value);
   const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) return new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3]));
+  if (iso) return { date: new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3])), dayKnown: true };
 
   // "August 11, 1814" or "11 August 1814" or "July 1814"
   const monthName = s.match(/\b(january|february|march|april|may|june|july|august|september|october|november|december)\b/i);
@@ -18,8 +24,8 @@ function parseDate(value) {
   if (monthName && yearMatch) {
     const m = MONTHS[monthName[1].toLowerCase()];
     const dayMatch = s.match(/\b(\d{1,2})\b/);
-    const day = dayMatch && +dayMatch[1] <= 31 ? +dayMatch[1] : 1;
-    return new Date(Date.UTC(+yearMatch[1], m, day));
+    const dayKnown = !!(dayMatch && +dayMatch[1] <= 31);
+    return { date: new Date(Date.UTC(+yearMatch[1], m, dayKnown ? +dayMatch[1] : 1)), dayKnown };
   }
 
   // Vague/seasonal: "Autumn 1813", "Late Spring 1813"
@@ -37,10 +43,10 @@ function parseDate(value) {
       }
     }
     if (month === null) month = 5;
-    return new Date(Date.UTC(year, month, 1));
+    return { date: new Date(Date.UTC(year, month, 1)), dayKnown: false };
   }
 
-  return new Date(s);
+  return { date: new Date(s), dayKnown: false };
 }
 
 function buildTimelineData(pages) {
@@ -170,4 +176,4 @@ function renderTimelineStrip(data, options) {
   return `<div class="tl-timeline tl-compact">\n${nodes}\n</div>`;
 }
 
-module.exports = { buildTimelineData, eventsNaming, renderTimelineHTML, renderTimelineStrip };
+module.exports = { parseDate, parseDateDetail, buildTimelineData, eventsNaming, renderTimelineHTML, renderTimelineStrip };

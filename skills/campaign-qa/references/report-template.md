@@ -4,27 +4,21 @@ Use this template when generating QA reports in the `_QA/`
 folder. The report is both a record of what was checked and
 a log of GM decisions.
 
+## Creating and counting
+
+Start the file with `vault_check.py <vault-path> report-new --mode
+M --scope S` (mode: `canon_audit`, `timeline`, `name_similarity`,
+`clue_redundancy`, `graph_health`, `site_faults`, `full_audit`;
+scope: `full_vault`, `chapter_N` or `custom`). It writes
+`_QA/QA_{mode}_{date}.md` (a `_2`, `_3` suffix when the name is
+taken) with the frontmatter and the headings below, and prints the
+path. Set `in_game_date` if known. When the findings are in, run
+`report-stats --file <that path>`: it writes the nine `vault_stats`
+counts. Never count them by hand.
+
 ## Template
 
 ```markdown
----
-type: qa_report
-mode: canon_audit | timeline | name_similarity | clue_redundancy | graph_health | site_faults | full_audit
-scope: full_vault | chapter_N | custom
-date: YYYY-MM-DD
-in_game_date: "[current in-game date if known]"
-vault_stats:
-  entities_scanned: N
-  files_read: N
-  findings_total: N
-  findings_critical: N
-  findings_warning: N
-  findings_info: N
-  findings_fixed: N
-  findings_skipped: N
-  findings_dismissed: N
----
-
 # QA Report: [Mode Name] — [Date]
 
 **Scope:** [What was checked — full vault, Chapter 3, etc.]
@@ -85,18 +79,6 @@ reference the GM's reasoning.]
 |---------|--------|-------|
 | ... | ... | ... |
 ```
-
-## Naming Convention
-
-Reports are named: `QA_{mode}_{YYYY-MM-DD}.md`
-
-Examples:
-- `QA_canon_audit_2026-03-27.md`
-- `QA_full_audit_2026-03-27.md`
-- `QA_timeline_2026-03-27.md`
-
-If multiple reports of the same mode are run on the same day,
-append a sequence number: `QA_canon_audit_2026-03-27_2.md`
 
 ## Incremental Reports
 
