@@ -1389,7 +1389,7 @@ VAULT_CHECKS: list[Check] = [
     Check("heritage-notes", "1.10.15", 4, "mobRPG heritage notes",
           find_heritage_notes, asks_site=True,
           choices=("heritage-notes",)),
-    Check("open-threads-fold", "1.10.82", 3,
+    Check("open-threads-fold", "1.10.83", 3,
           "per-session open threads in PC Current Status",
           find_open_threads_fold, choices=("open-threads-fold=",)),
 ]
