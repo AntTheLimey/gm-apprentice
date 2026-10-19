@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.82] — 2026-10-18
+
+Bug Bash batch 3.5: the GURPS to-hit calculator on the PC sheet.
+Publish tool 1.40.0.
+
+### Added
+
+- The shots-fired choice follows the selected weapon's RoF from the
+  PC's weapon table (plain, `3*`, shotgun `2x9`, full auto `8!`) and
+  starts at the weapon's full RoF; a saved count above the RoF is cut
+  to it (#457).
+- The calculator ends with the damage rolls to make, laid out by how
+  much the roll was made by: for rapid fire one row per margin band,
+  "Made it by 1: 2 hits, roll 3d (10) burn, sur 2 times", up to the
+  shots fired; a single shot reads "Hit: roll ... once"; a cell with no
+  dice is shown as written. It never rolls (#458).
+- An Rcl box beside shots fired, starting at the sheet's Rcl, or at 1
+  marked "not on the sheet" when the sheet has none; it sets the hits
+  and damage rows (the RoF bonus comes from the shots alone) and is
+  remembered per weapon (#458).
+
+### Changed
+
+- The calculator's rules numbers live in one data module
+  (`lib/templates/gurps/blocks/tohit-rules.js`), each with its page
+  reference, and reach the page as data; `js/gurps-tohit.js` holds only
+  logic and is copied only to a site whose pages use it (#420).
+
 ## [1.10.81] — 2026-10-18
 
 Bug Bash batch 3: vault checks that reported wrongly on real vaults,
