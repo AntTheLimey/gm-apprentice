@@ -950,6 +950,10 @@ class PublishToolUnavailable(Exception):
 CUT_SINCE = "1.17.0"
 
 
+# The first publish tool with the `lines` op `dates` (`timeline --order`).
+DATES_SINCE = "1.41.0"
+
+
 class PublishToolTooOld(PublishToolUnavailable):
     """The tool answers, but predates a question asked of it. The message
     is the first version that has it."""

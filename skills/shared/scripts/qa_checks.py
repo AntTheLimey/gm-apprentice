@@ -137,6 +137,12 @@ def check_session_order(vault: Path) -> list[str]:
             raise PublishToolUnavailable("its answer about dates is not "
                                          "understood")
     except PublishToolUnavailable as e:
+        if "unknown op" in str(e):
+            # The wording of vault_check._tool_too_old_row.
+            return [f"ERROR\t(vault)\ttimeline --order did not run: the "
+                    f"site's publish tool predates {vaultlib.DATES_SINCE} "
+                    f"and is too old for this check — run update-pin, then "
+                    f"run this again"]
         return [f"ERROR\t(vault)\tthe session order was not checked: the "
                 f"publish tool could not read the dates ({e})"]
     rows: list[str] = []

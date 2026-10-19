@@ -169,6 +169,22 @@ class SessionOrderTests(unittest.TestCase):
         self.assertIn("# count: 1", proc.stdout)
 
 
+class SessionOrderOldToolTests(unittest.TestCase):
+    def test_a_tool_without_the_dates_op_is_named_with_its_fix(self):
+        from unittest import mock
+        v = make(self, {"Chapters/Chapter 1 - X/S1.md":
+                        session(1, 1, '"May 5, 1814"')})
+        refuse = vaultlib.PublishToolUnavailable(
+            'the publish tool refused: unknown op: "dates"')
+        with mock.patch.object(vaultlib.PUBLISH_LINES, "ask",
+                               side_effect=refuse):
+            rows = qa.check_session_order(v)
+        self.assertEqual(rows, [
+            "ERROR\t(vault)\ttimeline --order did not run: the site's publish "
+            "tool predates 1.41.0 and is too old for this check — run "
+            "update-pin, then run this again"])
+
+
 class ActivePcsArchiveTests(unittest.TestCase):
     def test_an_archived_template_is_not_an_active_pc(self):
         v = make(self, {"_archive/t/_Template_PC.md": pc(),
