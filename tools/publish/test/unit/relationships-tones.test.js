@@ -54,8 +54,8 @@ Body. tone: ominous
 test('list gives the tones of the note\'s own relationships, with their lines, as written', () => {
   const dir = vault({ 'NPCs/A.md': NOTE });
   assert.deepStrictEqual(list(dir), [
-    { rel: 'NPCs/A.md', line: 7, tone: 'Cordial', target: '[[A]]', description: 'tone: dread\na line of prose\n', gmOnly: false, hidesRelationships: false, siteFamily: null },
-    { rel: 'NPCs/A.md', line: 13, tone: 'warm', target: '[[B]]', description: '', gmOnly: false, hidesRelationships: false, siteFamily: 'warm' },
+    { rel: 'NPCs/A.md', line: 7, tone: 'Cordial', target: '[[A]]', description: 'tone: dread\na line of prose\n', gmOnly: false, hidesRelationships: false, siteFamily: null, accepted: false },
+    { rel: 'NPCs/A.md', line: 13, tone: 'warm', target: '[[B]]', description: '', gmOnly: false, hidesRelationships: false, siteFamily: 'warm', accepted: false },
   ]);
 });
 
@@ -115,7 +115,7 @@ test('list --json is one row per tone, and a scoped run lists only that note', (
   assert.deepStrictEqual(Object.keys(all), ['tones', 'unread']);
   assert.strictEqual(all.tones.length, 4);
   assert.deepStrictEqual(all.unread, []);
-  assert.deepStrictEqual(Object.keys(all.tones[0]), ['rel', 'line', 'tone', 'target', 'description', 'gmOnly', 'hidesRelationships', 'siteFamily']);
+  assert.deepStrictEqual(Object.keys(all.tones[0]), ['rel', 'line', 'tone', 'target', 'description', 'gmOnly', 'hidesRelationships', 'siteFamily', 'accepted']);
   assert.deepStrictEqual(JSON.parse(cli(dir, 'list', '--json', '--file', 'B.md').stdout).tones.map((r) => r.rel), ['B.md', 'B.md']);
   assert.match(cli(dir, 'list').stdout, /^# tones: 4\nA\.md:7\tCordial\t\[\[A\]\]\ttone: dread a line of prose\n/);
 });

@@ -375,7 +375,7 @@ or `related_to` add edges without meaning.
 | Kinship | parent_of, ancestor_of, sibling_of, spouse_of, betrothed_to |
 | Social | knows, friend_of, rival_of, mentors, trusts, betrayed |
 | Power | rules, employs, commands, serves, vassal_of, imprisons |
-| Spatial | located_at, headquartered_at, part_of, borders, haunts |
+| Spatial | located_at, headquartered_at, part_of, borders, haunts, visited |
 | Possession | owns, created, wields, seeks |
 | Knowledge | discovered, conceals, recorded_in, studies |
 | Conflict | enemy_of, at_war_with, conspires_against, allied_with |

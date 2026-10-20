@@ -400,3 +400,122 @@ test('generated descriptions never print a link address', () => {
     for (const line of lineOf(text)) assert.ok(!line.includes(']('), `"${text}" printed "${line}"`);
   }
 });
+
+// --- an event's own fields are connections (#368) ---
+const ev = (title, fm) => page(title, 'event', fm, [], 'events');
+
+test('an event participant is a connection both ways, the parenthetical its line', () => {
+  const e = ev('Sale', { participants: ['[[Emma]] (climbed the pyramid; cut him down)', '[[Hallam]]'] });
+  const emma = page('Emma', 'pc', {}, [], 'pcs');
+  const hallam = page('Hallam', 'npc');
+  const idx = buildConnections(ctx([e, emma, hallam]));
+  const mine = group(idx.for(emma), 'events', 'Participated in');
+  assert.deepStrictEqual(names(mine), ['Sale']);
+  assert.deepStrictEqual(mine.items[0].lines, ['climbed the pyramid; cut him down']);
+  assert.deepStrictEqual(names(group(idx.for(e), 'people', 'Had participant')).sort(), ['Emma', 'Hallam']);
+  assert.deepStrictEqual(group(idx.for(hallam), 'events', 'Participated in').items[0].lines, []);
+  assert.ok(!idx.for(emma).mentions.some((g) => g.items.some((i) => i.title === 'Sale')));
+});
+
+test('an explicit relationship between the event and a participant wins, in either direction', () => {
+  const e = ev('Sale', { participants: ['[[Emma]] (there)', '[[Hallam]] (there)'],
+    relationships: [{ target: 'Emma', type: 'rescued', description: 'Saved her.' }] });
+  const emma = page('Emma', 'pc', {}, [], 'pcs');
+  const hallam = page('Hallam', 'npc', { relationships: [{ target: 'Sale', type: 'witnessed' }] });
+  const idx = buildConnections(ctx([e, emma, hallam]));
+  assert.deepStrictEqual(tab(idx.for(emma), 'events').groups.map((g) => g.label), ['Rescued by']);
+  assert.deepStrictEqual(tab(idx.for(hallam), 'events').groups.map((g) => g.label), ['Witnessed']);
+  assert.deepStrictEqual(tab(idx.for(e), 'people').groups.map((g) => g.label).sort(), ['Rescued', 'Witnessed by']);
+});
+
+test('only the note a participant entry starts with is read, and only when it has a page', () => {
+  const e = ev('Sale', { participants: ['[[Emma]] (with [[Hallam]])', 'the crowd', '[[Nobody_Here]] (a ghost)', { name: '[[Hallam]]' }, 7, null] });
+  const emma = page('Emma', 'pc');
+  const hallam = page('Hallam', 'npc');
+  const idx = buildConnections(ctx([e, emma, hallam]));
+  assert.deepStrictEqual(names(group(idx.for(e), 'people', 'Had participant')), ['Emma']);
+  assert.strictEqual(tab(idx.for(e), 'other'), undefined);
+  assert.strictEqual(idx.for(emma).tabs[0].groups[0].items[0].lines[0], 'with Hallam');
+  assert.ok(isEmpty(idx.for(hallam)));
+});
+
+test('an event location is a connection both ways; plain text there is not', () => {
+  const e = ev('Sale', { location: '[[Godown]]' });
+  const e2 = ev('Chase', { location: 'Garden Reach -> Chowringhee' });
+  const e3 = ev('Fog', { location: '[[Godown]] and [[Quay]]' });
+  const godown = page('Godown', 'location', {}, [], 'locs');
+  const quay = page('Quay', 'location', {}, [], 'locs');
+  const idx = buildConnections(ctx([e, e2, e3, godown, quay]));
+  assert.deepStrictEqual(names(group(idx.for(godown), 'events', 'Location of')), ['Sale']);
+  assert.deepStrictEqual(names(group(idx.for(e), 'places', 'Located at')), ['Godown']);
+  assert.ok(isEmpty(idx.for(e2)) && isEmpty(idx.for(e3)));
+  assert.ok(isEmpty(idx.for(quay)));
+});
+
+test('being at an event place is a visit, unless the two are already tied', () => {
+  const e1 = ev('Sale', { location: '[[Godown]]', participants: ['[[Emma]]', '[[Hallam]]'] });
+  const e2 = ev('Raid', { location: '[[Godown]]', participants: ['[[Emma]] (again)'] });
+  const emma = page('Emma', 'pc', {}, [], 'pcs');
+  const hallam = page('Hallam', 'npc', { relationships: [{ target: 'Godown', type: 'owns' }] });
+  const godown = page('Godown', 'location', {}, [], 'locs');
+  const idx = buildConnections(ctx([e1, e2, emma, hallam, godown]));
+  assert.deepStrictEqual(names(group(idx.for(emma), 'places', 'Visited')), ['Godown']);
+  assert.deepStrictEqual(names(group(idx.for(godown), 'people', 'Visited by')), ['Emma']);
+  assert.deepStrictEqual(tab(idx.for(hallam), 'places').groups.map((g) => g.label), ['Owns']);
+});
+
+test('an event with no page for its location derives no visit', () => {
+  const e = ev('Sale', { location: '[[Nowhere]]', participants: ['[[Emma]]'] });
+  const emma = page('Emma', 'pc');
+  const m = buildConnections(ctx([e, emma])).for(emma);
+  assert.deepStrictEqual(m.tabs.map((t) => t.id), ['events']);
+});
+
+// --- group wording by the pair (#344) ---
+test('located_at over a person reads "Located with", over a place stays "Located at" / "Location of"', () => {
+  const kartik = page('Kartik', 'npc', { relationships: [{ target: 'Rashid', type: 'located_at' }, { target: 'Godown', type: 'located_at' }] });
+  const rashid = page('Rashid', 'npc');
+  const godown = page('Godown', 'location', {}, [], 'locs');
+  const idx = buildConnections(ctx([kartik, rashid, godown]));
+  assert.deepStrictEqual(names(group(idx.for(kartik), 'people', 'Located with')), ['Rashid']);
+  assert.deepStrictEqual(names(group(idx.for(rashid), 'people', 'Located with')), ['Kartik']);
+  assert.deepStrictEqual(names(group(idx.for(kartik), 'places', 'Located at')), ['Godown']);
+  assert.deepStrictEqual(names(group(idx.for(godown), 'people', 'Location of')), ['Kartik']);
+});
+
+// --- review of batch 6 ---
+test('a participant the GM also tied to the event still visits its place', () => {
+  const e = ev('Sale', { location: '[[Godown]]', participants: ['[[Emma]] (there)', '[[Hallam]] (there)'],
+    relationships: [{ target: 'Emma', type: 'rescued' }] });
+  const emma = page('Emma', 'pc', {}, [], 'pcs');
+  const hallam = page('Hallam', 'npc', { relationships: [{ target: 'Sale', type: 'witnessed' }] });
+  const godown = page('Godown', 'location', {}, [], 'locs');
+  const idx = buildConnections(ctx([e, emma, hallam, godown]));
+  assert.deepStrictEqual(names(group(idx.for(emma), 'places', 'Visited')), ['Godown']);
+  assert.deepStrictEqual(names(group(idx.for(hallam), 'places', 'Visited')), ['Godown']);
+});
+
+test('a leading run of links is one participant each, with the one line; a leading dash or comma is not part of it', () => {
+  const e = ev('Sale', { participants: [
+    '[[Emma]], [[Hallam]] / [[Vane]] & [[Rock]] and [[Six]] (all there)',
+    '[[Colonel]] — garrison commander, [[Fort]]',
+    '[[Pratrock]] — , [[Quill]], more'] });
+  const pages = ['Emma', 'Hallam', 'Vane', 'Rock', 'Six', 'Colonel', 'Pratrock', 'Quill'].map((n) => page(n, 'npc'));
+  const idx = buildConnections(ctx([e, ...pages]));
+  const who = group(idx.for(e), 'people', 'Had participant');
+  const line = (n) => who.items.find((i) => i.title === n).lines;
+  for (const n of ['Emma', 'Hallam', 'Vane', 'Rock', 'Six']) assert.deepStrictEqual(line(n), ['all there'], n);
+  assert.deepStrictEqual(line('Colonel'), ['garrison commander, Fort']);
+  assert.deepStrictEqual(line('Pratrock'), ['Quill, more']);
+  assert.ok(!who.items.some((i) => i.title === 'Quill'));
+});
+
+test('only people visit: a faction or an item at an event gets no derived visit', () => {
+  const e = ev('Sale', { location: '[[Godown]]', participants: ['[[Emma]]', '[[Guild]]', '[[Lantern]]'] });
+  const emma = page('Emma', 'pc'); const guild = page('Guild', 'faction'); const lamp = page('Lantern', 'item');
+  const godown = page('Godown', 'location', {}, [], 'locs');
+  const idx = buildConnections(ctx([e, emma, guild, lamp, godown]));
+  assert.deepStrictEqual(names(group(idx.for(godown), 'people', 'Visited by')), ['Emma']);
+  assert.ok(!tab(idx.for(guild), 'places') && !tab(idx.for(lamp), 'places'));
+  assert.deepStrictEqual(names(group(idx.for(guild), 'events', 'Participated in')), ['Sale']);
+});

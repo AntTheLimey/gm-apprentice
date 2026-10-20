@@ -198,7 +198,7 @@ test('two fixes on one note land together in one text', () => {
 
 test('a mobrpg edge and every finding that is not certain are not in the plan', () => {
   const dir = vault({
-    'A.md': note('npc', [...rels(edge('visited_by', 'B')), 'mobrpg:', '  relationships:', '    - predicate: child_of', '      target: "[[B]]"']),
+    'A.md': note('npc', [...rels(edge('affiliated_with', 'B')), 'mobrpg:', '  relationships:', '    - predicate: child_of', '      target: "[[B]]"']),
     'B.md': note('npc'),
   });
   const p = plan(dir);

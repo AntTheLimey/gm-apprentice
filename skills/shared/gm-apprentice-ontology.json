@@ -95,7 +95,6 @@
     "spies_on": [{"use": "infiltrates", "flip": false}, {"use": "studies", "flip": false}],
     "watches": [{"use": "infiltrates", "flip": false}, {"use": "studies", "flip": false}],
     "affiliated_with": [{"use": "member_of", "flip": false}, {"use": "allied_with", "flip": false}],
-    "visited_by": [{"use": "located_at", "flip": true}, {"use": "participated_in", "flip": true}],
     "investigated_by": [],
     "questioned": [],
     "interrogated": [],
@@ -193,6 +192,7 @@
     {"type": "part_of", "inverse": "has_part", "category": "spatial", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": "Link", "mobrpg_event_type": "Generic"},
     {"type": "borders", "inverse": "borders", "category": "spatial", "symmetric": true, "genre": ["universal"], "mobrpg_relation_type": "Link", "mobrpg_event_type": "Generic"},
     {"type": "haunts", "inverse": "haunted_by", "category": "spatial", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
+    {"type": "visited", "inverse": "visited_by", "category": "spatial", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},
 
     {"type": "owns", "inverse": "owned_by", "category": "possession", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Reign"},
     {"type": "created", "inverse": "created_by", "category": "possession", "symmetric": false, "genre": ["universal"], "mobrpg_relation_type": null, "mobrpg_event_type": "Generic"},

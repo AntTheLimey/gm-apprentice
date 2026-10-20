@@ -28,6 +28,9 @@ function toneFamily(raw) {
   return families.get(word) || 'neutral';
 }
 
+const PEOPLE = new Set(['pc', 'npc', 'creature']);
+
+// A type name read as words: underscores become spaces and the first letter is capitalised.
 function words(type) {
   const text = String(type == null ? '' : type).replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
   return text ? text[0].toUpperCase() + text.slice(1) : '';
@@ -35,17 +38,21 @@ function words(type) {
 
 // The heading a group of connections sits under. `direction` is 'out' for a relationship
 // the page's own note declares and 'in' for one another note declares about it.
-function groupLabel(type, direction) {
+function groupLabel(type, direction, ends) {
   const written = typeof type === 'string' ? type.trim() : '';
   // A kind typed `Member_Of`, `member of` or `member-of` is the ontology's `member_of`.
   const spelled = written.toLowerCase().replace(/[\s-]+/g, '_');
   const key = predicates.has(spelled) || inverses.has(spelled) ? spelled : written;
   const p = predicates.get(key);
+  const base = inverses.get(key);
+  // Where something is "located" at a person, "Location of" would call the person a place; the
+  // pair reads the same from both ends. `ends` are the types of the page that wrote the edge and
+  // of the one it names.
+  if (ends && (p || base) && (p || base).type === 'located_at' && PEOPLE.has(String(p ? ends.to : ends.from))) return 'Located with';
   if (p) {
     if (p.category === 'kinship') return 'Family';
     return words(direction === 'in' && !p.symmetric ? p.inverse : p.type);
   }
-  const base = inverses.get(key);
   if (base) {
     if (base.category === 'kinship') return 'Family';
     return words(direction === 'in' ? base.type : key);
@@ -56,4 +63,4 @@ function groupLabel(type, direction) {
 }
 
 // The whole export, for the commands that print or check the vocabulary (lib/relationships).
-module.exports = { toneFamily, groupLabel, ontology: data };
+module.exports = { toneFamily, groupLabel, PEOPLE, ontology: data };

@@ -10,6 +10,7 @@ const { createMatcher, readOutput, listFiles } = require('./match');
 const { nameFindings, neverShowFindings } = require('./names');
 const { wordsOf, nameSet, onlyNames } = require('./text');
 const { isSettledHeading, settledHeadingGone } = require('../settled-headings');
+const { isAcceptedTie } = require('../accepted-ties');
 
 const findingId = (page, text) => crypto.createHash('sha1').update(`${page}\n${text}`).digest('hex').slice(0, 6);
 const keyOf = (page, text) => `${page}\n${text}`;
@@ -63,7 +64,8 @@ function runLeakGate({ configPath, outputDir }) {
   // A heading gm-leak's settled for players is no finding of this gate (settled-headings.js): it is no longer needed
   // only when its note is gone or no longer has that heading.
   const everyAccepted = (list && list.accepted) || [];
-  const accepted = everyAccepted.filter((a) => !isSettledHeading(a));
+  // A hostile tie the GM left (accepted-ties.js) is no finding of this gate either, and is never pruned here.
+  const accepted = everyAccepted.filter((a) => !isSettledHeading(a) && !isAcceptedTie(a));
   const acceptedKeys = new Set(accepted.map(acceptedKey));
   const findings = [...raw.values()].filter((f) => !acceptedKeys.has(findingKey(f))).sort(byPageText);
   const unneeded = [...accepted.filter((a) => !raw.has(acceptedKey(a))),

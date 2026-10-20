@@ -42,8 +42,9 @@ const VAULT = {
 function journey(html) {
   const start = html.indexOf('id="tab-journey">');
   assert.notStrictEqual(start, -1, 'the page has a Journey tab');
-  const end = html.indexOf('<script', start);
-  return html.slice(start, end === -1 ? undefined : end);
+  // The Journey panel is the timeline; the Connections section after it lists the same events by their own rules.
+  const ends = [html.indexOf('<script', start), html.indexOf('<section class="cx"', start)].filter((n) => n !== -1);
+  return html.slice(start, ends.length ? Math.min(...ends) : undefined);
 }
 
 test("a PC's Journey tab lists the events that name that PC, oldest first, and no others", () => {

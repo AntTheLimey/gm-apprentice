@@ -1,5 +1,8 @@
 # Publish Tool: Landing Page Recap + Wrap-Up Sidebar Fix
 
+> Historical note: the "Mentioned In" sidebar described below was removed when
+> Connections replaced it (#334).
+
 Three related bugs in the publish tool's handling of session
 wrap-up pages.
 

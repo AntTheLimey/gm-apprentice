@@ -396,16 +396,6 @@
         "flip": false
       }
     ],
-    "visited_by": [
-      {
-        "use": "located_at",
-        "flip": true
-      },
-      {
-        "use": "participated_in",
-        "flip": true
-      }
-    ],
     "investigated_by": [],
     "questioned": [],
     "interrogated": [],
@@ -786,6 +776,15 @@
     {
       "type": "haunts",
       "inverse": "haunted_by",
+      "category": "spatial",
+      "symmetric": false,
+      "genre": [
+        "universal"
+      ]
+    },
+    {
+      "type": "visited",
+      "inverse": "visited_by",
       "category": "spatial",
       "symmetric": false,
       "genre": [

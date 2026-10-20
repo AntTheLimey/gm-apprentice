@@ -22,6 +22,9 @@ const KIND_ORDER = [
   'place-missing-field', 'place-disagrees', 'not-an-edge', 'genre-subset', 'childless-container', 'hub', 'unreadable',
 ];
 const MAP_HINT = ' (map it via shared/relationship-normalization.md)';
+// Inverse names the check lets stand as written: Ant's vaults use `visited_by` on place notes by the hundred,
+// and the site reads it as the inverse of `visited` (lib/ontology.js), so no finding and no flip.
+const WRITTEN_AS_IS = new Set(['visited_by']);
 const HUB_MIN_NOTES = 5;
 // A note with fewer ties than this is no hub, however empty its type is (one tie among notes with none is not a crowd).
 const HUB_MIN_TIES = 5;
@@ -126,7 +129,7 @@ function check(model, ontology, { vaultPath } = {}) {
     for (const e of note.edges) {
       if (!note.inScope) continue;
       const key = e.mobrpg ? 'predicate' : 'type';
-      if (!vocab.has(e.type)) {
+      if (!vocab.has(e.type) && !WRITTEN_AS_IS.has(typeKey(e.type))) {
         offVocabulary(note, e, key);
       }
       if (e.mobrpg) continue;
