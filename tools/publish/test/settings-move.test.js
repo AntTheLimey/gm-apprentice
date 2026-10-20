@@ -1159,6 +1159,14 @@ test('a folder setting that would stop the build blocks the move and writes noth
   assert.deepEqual(hashes(s.root), before);
 });
 
+test('an absolute output folder outside the site folder blocks the move too (#386)', () => {
+  const s = scratch(old('  mode: player\n'), { site: { vaultPath: './Vault', outputDir: path.join(os.tmpdir(), 'somewhere-else') } });
+  const before = hashes(s.root);
+  const r = cliMove({ vault: s.vault, config: s.config });
+  assert.equal(r.rc, 1);
+  assert.deepEqual(hashes(s.root), before);
+});
+
 // ---- The site's build steps: package.json's prebuild and postbuild become the vault's before_build and after_build ----
 
 const sitePackage = (s) => path.join(path.dirname(s.config), 'package.json');

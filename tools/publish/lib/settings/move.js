@@ -648,8 +648,10 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
     ? planCarry(site, (name) => {
       const origin = old.origins[name];
       return { set: origin !== undefined && origin !== 'default' && origin !== 'site-file', value: getPath(old.values, name.split('.')) };
-    }, undefined, { holdKeys: keysHeld })
+    }, path.dirname(siteFile), { holdKeys: keysHeld })
     : { carried: [], dropped: [], lines: [], values: {}, changes: [] };
+  // A folder value the build would stop on (an output folder outside the site folder) is a blocker here as on a moved vault.
+  if (carry.blockers) blockers.push(...carry.blockers);
   for (const [name, value] of Object.entries(carry.values)) if (!Object.prototype.hasOwnProperty.call(planned, name)) planned[name] = value;
   // The site's build steps, from its package.json (the same folder as the site file).
   const stepsPlan = siteFile
