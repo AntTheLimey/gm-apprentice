@@ -24,6 +24,9 @@ NEEDS_NODE = unittest.skipUnless(shutil.which("node"), "needs node")
 
 CHECKS = ("gm-leak", "stale-drafts", "read-aloud", "sessions", "wrapup")
 
+sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
+import vault_check  # noqa: E402
+
 
 def row(name):
     return (f"INFO\t(vault)\tthis vault is kept by a player (vault.kept_by: "
@@ -63,14 +66,18 @@ def section(out, label):
 
 @NEEDS_NODE
 class KeptByPlayerTests(unittest.TestCase):
-    def test_each_check_prints_exactly_the_one_row(self):
+    def test_the_gate_covers_the_five_checks_the_command_line_takes(self):
+        # In process and cheap: a check that drops out of the gate fails here.
+        self.assertEqual(set(vault_check.GM_OWN_CHECKS), set(CHECKS))
+
+    def test_a_check_run_alone_prints_exactly_the_one_row(self):
+        # One check through the command line; `all` below covers the other
+        # four, which share the same gate.
         vault = make(self, "player")
-        for name in CHECKS:
-            with self.subTest(check=name):
-                r = run(vault, name)
-                self.assertEqual(r.returncode, 0, r.stderr)
-                self.assertEqual(section(r.stdout, name), [row(name)])
-                self.assertIn("# count: 1", r.stdout)
+        r = run(vault, "gm-leak")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(section(r.stdout, "gm-leak"), [row("gm-leak")])
+        self.assertIn("# count: 1", r.stdout)
 
     def test_all_gives_the_one_row_for_each_of_the_five(self):
         vault = make(self, "player")
@@ -84,11 +91,11 @@ class KeptByPlayerTests(unittest.TestCase):
 
     def test_kept_by_gm_runs_the_checks_as_before(self):
         vault = make(self, "gm")
+        r = run(vault, "all")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertNotIn("kept by a player", r.stdout)
         for name in CHECKS:
             with self.subTest(check=name):
-                r = run(vault, name)
-                self.assertEqual(r.returncode, 0, r.stderr)
-                self.assertNotIn("kept by a player", r.stdout)
                 self.assertIn(f"## {name}", r.stdout)
 
     def test_without_node_the_built_in_gm_is_used(self):

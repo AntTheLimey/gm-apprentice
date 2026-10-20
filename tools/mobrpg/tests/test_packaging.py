@@ -54,22 +54,25 @@ def test_wheel_contains_no_legacy_files(tmp_path):
     a package-data or MANIFEST regression could resurrect _legacy without
     any in-process check noticing, since importlib.resources only sees
     what's on disk in this checkout, not what setuptools decides to ship."""
-    project_root = pathlib.Path(__file__).resolve().parents[1]
-    # setuptools' build_py caches copies in build/lib and doesn't prune files
-    # that were deleted from source between builds, which would leak stale
-    # _legacy/* into this wheel even after the source dir is clean. Both dirs
-    # are gitignored scratch output, safe to blow away before a fresh build.
-    for stale in ("build", "mobrpg_cli.egg-info"):
-        stale_path = project_root / stale
-        if stale_path.exists():
-            shutil.rmtree(stale_path)
+    pytest.importorskip("build")  # CI installs it (the [test] extra)
+    # Built from a copy of the project, so the tree under test is never
+    # touched: setuptools' build_py caches copies in build/lib and doesn't
+    # prune files deleted from source between builds, which would leak stale
+    # _legacy/* into the wheel. A fresh copy has no build/ or egg-info.
+    source = pathlib.Path(__file__).resolve().parents[1]
+    project_root = tmp_path / "project"
+    shutil.copytree(
+        source, project_root,
+        ignore=shutil.ignore_patterns("build", "*.egg-info", ".venv",
+                                      "__pycache__", ".pytest_cache"))
+    wheel_dir = tmp_path / "wheels"
     result = subprocess.run(
         [sys.executable, "-m", "build", "--wheel", "--no-isolation",
-         "--outdir", str(tmp_path)],
+         "--outdir", str(wheel_dir)],
         cwd=project_root, capture_output=True, text=True,
     )
     assert result.returncode == 0, f"wheel build failed:\n{result.stderr}"
-    wheels = list(tmp_path.glob("*.whl"))
+    wheels = list(wheel_dir.glob("*.whl"))
     assert len(wheels) == 1, f"expected exactly one wheel, got {wheels}"
     with zipfile.ZipFile(wheels[0]) as zf:
         names = zf.namelist()
