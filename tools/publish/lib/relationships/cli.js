@@ -11,9 +11,56 @@ const { planFix, applyFix, renderPlan, removeLeftovers } = require('./fix');
 const { ontology } = require('../ontology');
 const { listTones, planTones, parseSets, skipped } = require('./tones');
 
-const VERBS = ['words', 'check', 'list', 'fix'];
+const { loadPublishList, writeAccepted } = require('../manifest');
+const { acceptedTieKeys, tieText, TIE_NOTE, keyOf } = require('../accepted-ties');
+const { TIE_FROM } = require('../settings/layout');
+const { siteToolOlderThan } = require('../settings/move');
 
-async function runRelationships({ verb, vault, json, folder, files, newerThan, kinds, write, sets, skip }) {
+const VERBS = ['words', 'check', 'list', 'fix', 'accept'];
+
+const publishList = (root) => loadPublishList(root, { warn: () => {} });
+
+// `accept --at NOTE:LINE ...`: record each tie the GM reviewed and left. Without --write it says what it would record.
+function acceptTies(root, { at, write, config }) {
+  if (!at || !at.length) throw new Error('accept needs --at NOTE:LINE (a row of tones.py shown)');
+  const rows = listTones(readVault(root));
+  const picked = [];
+  for (const where of at) {
+    const cut = String(where).lastIndexOf(':');
+    const rel = cut < 0 ? '' : String(where).slice(0, cut).replace(/\\/g, '/');
+    const line = cut < 0 ? NaN : Number(String(where).slice(cut + 1));
+    const row = rows.find((r) => r.rel.normalize('NFC') === rel.normalize('NFC') && r.line === line);
+    if (!row) throw new Error(`${where} is not a relationship's tone line; relationships list shows the ties`);
+    picked.push(row);
+  }
+  if (write && config) {
+    const old = siteToolOlderThan(path.dirname(path.resolve(config)), TIE_FROM);
+    if (old) {
+      throw new Error(`this site's publish tool is ${old.shown}, and accepting a tie needs ${TIE_FROM} or later (an older tool reads the record as an accepted leak finding no longer needed, and prune deletes it). Update the site first (gm-apprentice-publish update-pin --site ${path.dirname(path.resolve(config))}), then accept again.`);
+    }
+  }
+  const list = publishList(root);
+  const accepted = (list && list.accepted) || [];
+  const have = acceptedTieKeys(list);
+  const fresh = [];
+  for (const row of picked) {
+    const record = { page: row.rel, text: tieText(row), note: TIE_NOTE };
+    const key = keyOf(record.page, record.text);
+    if (have.has(key)) continue;
+    have.add(key);
+    fresh.push(record);
+  }
+  if (write && fresh.length) writeAccepted(root, [...accepted, ...fresh]);
+  return { written: !!write && fresh.length > 0, recorded: fresh.length, already: picked.length - fresh.length, ties: picked.map((r) => ({ rel: r.rel, line: r.line, tone: r.tone, target: r.target })) };
+}
+
+async function runRelationships({ verb, vault, json, folder, files, newerThan, kinds, write, sets, skip, at, config }) {
+  if (verb === 'accept') {
+    const done = acceptTies(path.resolve(vault || '.'), { at, write, config });
+    if (json) console.log(JSON.stringify(done, null, 2));
+    else console.log(`${write ? 'Recorded' : 'Would record'} ${done.recorded} tie${done.recorded === 1 ? '' : 's'}${done.already ? ` (${done.already} already accepted)` : ''}`);
+    return 0;
+  }
   if (verb === 'check' || verb === 'fix' || verb === 'list') {
     const root = path.resolve(vault || '.');
     let since;
@@ -26,7 +73,7 @@ async function runRelationships({ verb, vault, json, folder, files, newerThan, k
     }
     const model = readVault(root, { folder, files: files && files.length ? files : undefined, newerThan: since });
     if (verb === 'list') {
-      const rows = listTones(model, { skip });
+      const rows = listTones(model, { skip, accepted: acceptedTieKeys(publishList(root)) });
       // The notes whose frontmatter does not read: their tones are not in the list, and the caller says so.
       const unread = (model.faults || []).filter((f) => f.inScope && !skipped(f.rel, skip))
         .map((f) => ({ rel: f.rel, message: String(f.message).replace(/\s+/g, ' ').trim() }));

@@ -100,7 +100,7 @@ does, so `Cold` and `HOSTILE` count. Exit 1 means the site's tool could
 not be asked.
 
 Every time this check runs, run `tones.py shown` and add its count to
-the report as one Info line: "N hostile ties show on the site". Say
+the report as one Info line: "N hostile ties show on the site" (N counts those still to review; add its "(M accepted)"). Say
 nothing when the vault has no site or the tool could not be asked. With
 N above 0, offer the walk in one short sentence beside that line. Walk
 the ties only when the GM asks what the site shows of who is against
@@ -117,8 +117,9 @@ whom, tone, the line). For each the GM says one of:
   relationship then leaves the site whole, from both pages.
 
 A batch answer ("leave all of these", "hide the two about Hallam") is
-fine. Record nothing for a `leave`: the list is short enough to show
-again. Do not rebuild or deploy the site; say the changes show at the
+fine. Record each `leave` with `tones.py shown --accept NOTE:LINE ...`
+(no place: every tie listed), then again with `--write`; `shown` then
+stops listing it, until its tone, target or description changes. Do not rebuild or deploy the site; say the changes show at the
 next build.
 
 The list errs on the side of showing more. The site colours an item by

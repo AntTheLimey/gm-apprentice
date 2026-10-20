@@ -182,6 +182,7 @@ gm-apprentice-publish relationships words [--vault <path>] [--json]
 gm-apprentice-publish relationships check [--vault <path>] [--folder <sub>] [--file <rel>]... [--newer-than <rel>] [--json]
 gm-apprentice-publish relationships list [--vault <path>] [--folder <sub>] [--file <rel>]... [--newer-than <rel>] [--skip <folder>]... [--json]
 gm-apprentice-publish relationships fix [--vault <path>] [--folder <sub>] [--file <rel>]... [--newer-than <rel>] [--kind <kind>]... [--set <OLD=NEW>]... [--skip <folder>]... [--write] [--json]
+gm-apprentice-publish relationships accept --at <note:line>... [--vault <path>] [--config <path>] [--write] [--json]
 
 Prints the relationship types (each with its reverse name), the tone words and the
 strength scale in a few lines. With --vault, a vault whose _meta/relationship-types.md
@@ -195,6 +196,8 @@ vocabulary are listed on one line.
                              written, the target as written, the description on one line; the header counts the notes whose
                              frontmatter does not read. --json gives { tones: [{ rel, line, tone, target, description, gmOnly }],
                              unread: [{ rel, message }] }
+  relationships accept       Record hostile ties the GM reviewed and left (--at rows of tones.py shown); a tie stops being accepted when its
+                             tone, target or description changes. Without --write it only says what it would record.
   relationships fix          The certain repairs. Without --write it lists them (WOULD-CHANGE and KEEP rows); with
                              --write it makes them in every note at once or in none (CHANGED rows). A tie it cannot move
                              or edit safely is a KEEP row with the reason.
@@ -203,6 +206,7 @@ vocabulary are listed on one line.
   --kind tone                fix: rewrite tone words instead; alone, with one or more --set. It keeps quotes, spacing, comments and
                              line endings, and a tone it cannot edit in place (a block scalar, a tag) is a KEEP row
   --set <OLD=NEW>            fix --kind tone: rewrite a tone written exactly OLD to the listed tone NEW (repeatable)
+  --at <note:line>          accept: the tie whose tone key is on that line (repeatable)
   --skip <folder>            list, fix --kind tone: leave out the notes under this top-level folder (repeatable)
   --write                    fix: make the changes
   --vault <path>             The vault folder (reads _meta/relationship-types.md; default: .)
@@ -1113,7 +1117,7 @@ if (command === 'relationships') {
     args.slice(2),
     { '--json': 'json', '--write': 'write' },
     { '--vault': 'vault', '--folder': 'folder', '--newer-than': 'newerThan' },
-    { '--file': 'files', '--kind': 'kinds', '--set': 'sets', '--skip': 'skip' },
+    { '--file': 'files', '--kind': 'kinds', '--set': 'sets', '--skip': 'skip', '--at': 'at' },
   );
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
@@ -1125,8 +1129,9 @@ if (command === 'relationships') {
     check: { '--vault': 'vault', '--json': 'json', '--folder': 'folder', '--file': 'files', '--newer-than': 'newerThan' },
     list: { '--vault': 'vault', '--json': 'json', '--folder': 'folder', '--file': 'files', '--newer-than': 'newerThan', '--skip': 'skip' },
     fix: { '--vault': 'vault', '--json': 'json', '--folder': 'folder', '--file': 'files', '--newer-than': 'newerThan', '--kind': 'kinds', '--set': 'sets', '--skip': 'skip', '--write': 'write' },
+    accept: { '--vault': 'vault', '--json': 'json', '--at': 'at', '--write': 'write' },
   };
-  const ALL = { ...TAKES.fix };
+  const ALL = { ...TAKES.fix, ...TAKES.accept };
   for (const [flag, key] of Object.entries(ALL)) {
     const given = Array.isArray(parsed.flags[key]) ? parsed.flags[key].length > 0 : parsed.flags[key] !== undefined;
     if (given && !Object.prototype.hasOwnProperty.call(TAKES[verb], flag)) {
@@ -1134,8 +1139,9 @@ if (command === 'relationships') {
       process.exit(1);
     }
   }
-  const { vault, json, folder, files, newerThan, kinds, write, sets, skip } = parsed.flags;
-  runRelationships({ verb, vault, json: !!json, folder, files, newerThan, kinds, write: !!write, sets, skip })
+  const { vault, json, folder, files, newerThan, kinds, write, sets, skip, at } = parsed.flags;
+  const config = parsed.configPath;
+  runRelationships({ verb, vault, json: !!json, folder, files, newerThan, kinds, write: !!write, sets, skip, at, config })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
   return;

@@ -76,7 +76,8 @@ The site shows each relationship's tone as warm, hostile or neutral.
 Every tone check tells you how many hostile ties the site shows. Say
 yes to the offer, or ask "what does the site show of who is against
 whom?", and Claude lists them a few at a time. For each you say leave,
-re-tone or hide, and Claude writes the change into the note.
+re-tone or hide, and Claude writes the change into the note. A leave is
+remembered: that tie is not offered again unless you change it.
 
 ### Site Faults
 
