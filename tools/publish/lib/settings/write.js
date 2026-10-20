@@ -219,6 +219,9 @@ function replaceValue(text, pair, value, ctx) {
     if (sameLine) return [{ from: cEnd, to: empty ? cEnd : endOf(v, text), text: text1 }];
     // Comment lines the list had between its entries stay, at the key's level: left indented they would read as part of `[]`.
     const dropped = dropLines(text, v.range[0], endOf(v, text), eol);
+    // Comment lines between the entries are inside the dropped range: they go back in its place, at the key's level.
+    const between = [...text.slice(dropped.from, dropped.to).matchAll(/^[ \t]*(#[^\n]*?)\r?$/gm)].map((m) => ' '.repeat(keyCol) + m[1]);
+    if (between.length) dropped.text = (dropped.from < lineStart(text, v.range[0]) ? eol : '') + between.join(eol) + (dropped.to === text.length && !text.endsWith('\n') ? '' : eol);
     const kept = [];
     const reindent = (from, to) => {
       for (const m of text.slice(from, to).matchAll(/^([ \t]+)#[^\n]*$/gm)) kept.push({ from: from + m.index, to: from + m.index + m[1].length, text: ' '.repeat(keyCol) });

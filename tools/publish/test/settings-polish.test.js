@@ -174,3 +174,10 @@ test('--vault with an explicit --config that does not exist is an error naming t
   assert.ok(bad.err.some((l) => l.includes(missing)), bad.err.join('\n'));
   assert.equal(run(s, 'get', ['player_site.title'], { config: undefined }).rc, 0);
 });
+
+test('removing the last list entry keeps comments that sat between entries, in order (CodeRabbit on #468)', () => {
+  const { applyChanges } = require('../lib/settings/write');
+  const s = scratch('version: 1\nplayer_site:\n  menu_extra:\n    # first\n    - label: A\n      link: x\n    # between\n    - label: B\n      link: y\n    # last\n  title: T\n');
+  applyChanges(s.vault, [{ op: 'remove', name: 'player_site.menu_extra', entries: [{ label: 'A' }, { label: 'B' }], same: (a, b) => a.label === b.label }]);
+  assert.equal(fs.readFileSync(s.yaml, 'utf8'), 'version: 1\nplayer_site:\n  menu_extra: []\n  # first\n  # between\n  # last\n  title: T\n');
+});
