@@ -411,19 +411,83 @@ class BuildTests(unittest.TestCase):
                       [p.name for p in (vault / "_Templates").iterdir()])
         self.assertEqual(settings(vault).get("vault.system"), "gurps-4e")
 
-    def test_no_system_and_no_flag_is_a_refusal(self):
-        root = scratch(self)
-        code, out = run(root / "V", "--write")
-        self.assertEqual(code, 1)
-        self.assertIn("ERROR\t", out)
-        self.assertIn("--system", out)
-        self.assertIn("# nothing written", out)
-        self.assertEqual(tree(root), {})
+    def test_each_refusal(self):
+        """A run that cannot be done says why in one ERROR and writes
+        nothing."""
+        with self.subTest("no system and no flag"):
+            root = scratch(self)
+            code, out = run(root / "V", "--write")
+            self.assertEqual(code, 1)
+            self.assertIn("ERROR\t", out)
+            self.assertIn("--system", out)
+            self.assertIn("# nothing written", out)
+            self.assertEqual(tree(root), {})
 
-    def test_an_unknown_system_is_a_refusal(self):
-        code, out = run(scratch(self) / "V", "--system", "savage-worlds")
-        self.assertEqual(code, 1)
-        self.assertIn("coc-7e", out)
+        with self.subTest("an unknown system"):
+            code, out = run(scratch(self) / "V", "--system", "savage-worlds")
+            self.assertEqual(code, 1)
+            self.assertIn("coc-7e", out)
+
+        with self.subTest("a vault ahead of the plugin"):
+            vault = scratch(self) / "V"
+            note(vault, "_meta/vault-config.md",
+                 '---\ngm_apprentice_version: "99.0.0"\n---\n')
+            before = tree(vault)
+            code, out = run(vault, "--no-system", "--write")
+            self.assertEqual(code, 1)
+            self.assertIn("update the plugin", out)
+            self.assertEqual(tree(vault), before)
+
+        for front in ("publish:\n  site: true\n",
+                      "gm_apprentice_version:\n",
+                      'gm_apprentice_version: "soon"\n'):
+            with self.subTest("a config with no version", front=front):
+                vault = scratch(self) / "V"
+                note(vault, "_meta/vault-config.md", f"---\n{front}---\n")
+                before = tree(vault)
+                code, out = run(vault, "--no-system", "--write")
+                self.assertEqual(code, 1, front)
+                self.assertIn("has no gm_apprentice_version", out)
+                self.assertIn("# nothing written", out)
+                self.assertEqual(tree(vault), before)
+
+        with self.subTest("a path that is a file"):
+            root = scratch(self)
+            (root / "V").write_text("x", encoding="utf-8")
+            code, out = run(root / "V", "--no-system", "--write")
+            self.assertEqual(code, 1)
+            self.assertIn("not a folder", out)
+
+        with self.subTest("an unreadable plugin version"):
+            with mock.patch.object(vs, "plugin_version", return_value=None):
+                code, out = run(scratch(self) / "V", "--no-system")
+            self.assertEqual(code, 1)
+            self.assertIn("plugin version", out)
+
+        with self.subTest("an unrecognised recorded system"):
+            vault = self.unrecognised()
+            before = tree(vault)
+            code, out = run(vault, "--write")
+            self.assertEqual(code, 1, out)
+            self.assertIn("the vault names its system 'call of cthulhu 7e'",
+                          out)
+            self.assertIn("--system ID (one of coc-7e, ", out)
+            self.assertIn("or --no-system", out)
+            self.assertIn("# nothing written", out)
+            self.assertEqual(tree(vault), before)
+
+        with self.subTest("a flag that disagrees with the vault"):
+            vault = scratch(self) / "V"
+            note(vault, "_Campaign/Campaign Overview.md",
+                 "---\ntype: campaign_overview\ngame_system: coc\n---\n")
+            before = tree(vault)
+            code, out = run(vault, "--system", "gurps", "--write")
+            self.assertEqual(code, 1, out)
+            self.assertIn(
+                "the vault records coc-7e; --system gurps-4e disagrees", out)
+            self.assertEqual(tree(vault), before)
+            self.assertEqual(run(vault, "--system", "coc-7e", "--write")[0], 0)
+            self.assertEqual(run(vault, "--no-system")[0], 0)
 
     def test_a_set_up_vault_with_no_system_needs_no_flag(self):
         vault = scratch(self) / "V"
@@ -431,42 +495,6 @@ class BuildTests(unittest.TestCase):
         code, out = run(vault)
         self.assertEqual(code, 0, out)
         self.assertTrue(out.startswith("OK\t"), out)
-
-    def test_a_vault_ahead_of_the_plugin_is_a_refusal(self):
-        vault = scratch(self) / "V"
-        note(vault, "_meta/vault-config.md",
-             '---\ngm_apprentice_version: "99.0.0"\n---\n')
-        before = tree(vault)
-        code, out = run(vault, "--no-system", "--write")
-        self.assertEqual(code, 1)
-        self.assertIn("update the plugin", out)
-        self.assertEqual(tree(vault), before)
-
-    def test_a_config_with_no_version_is_a_refusal(self):
-        for front in ("publish:\n  site: true\n",
-                      "gm_apprentice_version:\n",
-                      'gm_apprentice_version: "soon"\n'):
-            vault = scratch(self) / "V"
-            note(vault, "_meta/vault-config.md", f"---\n{front}---\n")
-            before = tree(vault)
-            code, out = run(vault, "--no-system", "--write")
-            self.assertEqual(code, 1, front)
-            self.assertIn("has no gm_apprentice_version", out)
-            self.assertIn("# nothing written", out)
-            self.assertEqual(tree(vault), before)
-
-    def test_a_path_that_is_a_file_is_a_refusal(self):
-        root = scratch(self)
-        (root / "V").write_text("x", encoding="utf-8")
-        code, out = run(root / "V", "--no-system", "--write")
-        self.assertEqual(code, 1)
-        self.assertIn("not a folder", out)
-
-    def test_an_unreadable_plugin_version_is_a_refusal(self):
-        with mock.patch.object(vs, "plugin_version", return_value=None):
-            code, out = run(scratch(self) / "V", "--no-system")
-        self.assertEqual(code, 1)
-        self.assertIn("plugin version", out)
 
     def test_the_inbox_flag(self):
         vault = scratch(self) / "V"
@@ -531,17 +559,6 @@ class BuildTests(unittest.TestCase):
              'game_system: "Call of Cthulhu 7e"\n---\n')
         return vault
 
-    def test_an_unrecognised_recorded_system_is_a_refusal(self):
-        vault = self.unrecognised()
-        before = tree(vault)
-        code, out = run(vault, "--write")
-        self.assertEqual(code, 1, out)
-        self.assertIn("the vault names its system 'call of cthulhu 7e'", out)
-        self.assertIn("--system ID (one of coc-7e, ", out)
-        self.assertIn("or --no-system", out)
-        self.assertIn("# nothing written", out)
-        self.assertEqual(tree(vault), before)
-
     def test_no_system_builds_generic_over_an_unrecognised_one(self):
         vault = self.unrecognised()
         code, out = run(vault, "--no-system", "--write")
@@ -556,19 +573,6 @@ class BuildTests(unittest.TestCase):
         code, out = run(vault, "--system", "coc", "--write")
         self.assertEqual(code, 0, out)
         self.assertEqual(settings(vault).get("vault.system"), "coc-7e")
-
-    def test_a_flag_that_disagrees_with_the_vault_is_a_refusal(self):
-        vault = scratch(self) / "V"
-        note(vault, "_Campaign/Campaign Overview.md",
-             "---\ntype: campaign_overview\ngame_system: coc\n---\n")
-        before = tree(vault)
-        code, out = run(vault, "--system", "gurps", "--write")
-        self.assertEqual(code, 1, out)
-        self.assertIn("the vault records coc-7e; --system gurps-4e disagrees",
-                      out)
-        self.assertEqual(tree(vault), before)
-        self.assertEqual(run(vault, "--system", "coc-7e", "--write")[0], 0)
-        self.assertEqual(run(vault, "--no-system")[0], 0)
 
     def test_a_set_up_vault_naming_an_unsupported_system_needs_no_flag(self):
         vault = self.unrecognised()
