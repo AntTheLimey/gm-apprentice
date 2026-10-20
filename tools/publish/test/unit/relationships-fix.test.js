@@ -403,11 +403,42 @@ const visitVault = (extra = {}) => vault({
   'Bea.md': note('npc'),
   'Cy.md': note('npc'),
   'Hall.md': note('location', rels(
-    edge('visited_by', 'Ada', ['tone: neutral', 'strength: 5', 'description: "Visited Hall for the dinner"']),
+    edge('visited_by', 'Ada', ['tone: neutral', 'description: "Visited Hall for the dinner"']),
     edge('visited_by', 'Bea', ['description: "Hid the ledger under the stairs"']),
     edge('visited_by', 'Cy', ['gm_only: true']),
   )),
   ...extra,
+});
+
+test('a visit copy that carries a strength or a key of the GM\'s own is kept, not removed', () => {
+  const dir = vault({
+    'Dinner.md': note('event', ['location: "[[Hall]]"', 'participants:', '  - "[[Ada]]"', '  - "[[Bea]]"']),
+    'Ada.md': note('npc'),
+    'Bea.md': note('npc'),
+    'Hall.md': note('location', rels(edge('visited_by', 'Ada', ['strength: 8']), edge('visited_by', 'Bea', ['since: 1921']))),
+  });
+  const f = check(readVault(dir), ontology, { vaultPath: dir, publishes: () => true }).filter((x) => x.kind === 'visit-duplicate');
+  assert.deepStrictEqual(f.map((x) => [x.level, x.fix.certain]), [['INFO', false], ['INFO', false]]);
+  const p = plan(dir);
+  assert.deepStrictEqual(p.changes, []);
+  assert.deepStrictEqual(p.kept.map((k) => k.why), ['carries the strength 8', "carries 'since', which the event does not"]);
+});
+
+test('the removal itself refuses a visit copy that has gained a key since the check', () => {
+  const dir = vault({
+    'Dinner.md': note('event', ['location: "[[Hall]]"', 'participants:', '  - "[[Ada]]"']),
+    'Ada.md': note('npc'),
+    'Hall.md': note('location', rels(edge('visited_by', 'Ada'))),
+  });
+  const model = readVault(dir);
+  const findings = check(model, ontology, { vaultPath: dir, publishes: () => true });
+  assert.deepStrictEqual(findings.map((x) => [x.kind, x.fix.certain]), [['visit-duplicate', true]]);
+  const text = note('location', rels(edge('visited_by', 'Ada', ['strength: 8'])));
+  fs.writeFileSync(path.join(dir, 'Hall.md'), text);
+  const p = planFix(model, findings, { vaultPath: dir });
+  assert.deepStrictEqual(p.changes, []);
+  assert.deepStrictEqual(p.kept.map((k) => k.why), ['the tie carries strength, which removing it would lose']);
+  assert.strictEqual(read(dir, 'Hall.md'), text);
 });
 
 test('a visited_by the event already supplies is removed; one that says more is left alone with no row', () => {

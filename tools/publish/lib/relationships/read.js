@@ -15,9 +15,10 @@
 //                                    note it names when the value is exactly one wiki-link to a
 //                                    note that exists, else null.
 //   Edge  { index, line, typeLine, type, target, targetRel, bidirectional, strength, tone,
-//           toneLine, strengthLine, description, gmOnly, mobrpg, form, rawTarget }
+//           toneLine, strengthLine, description, gmOnly, mobrpg, form, rawTarget, extraKeys }
 //         (`description` is the value as the YAML reader gives it, '' when none; `gmOnly` is whether
-//         the site drops the edge, read by the site's own rule, processor.js isGmOnlyEdge)
+//         the site drops the edge, read by the site's own rule, processor.js isGmOnlyEdge;
+//         `extraKeys` the list item's keys beyond those named here, such as a GM's own `since:`)
 //
 // `target` is read by the site's rule (connections.js targetRef); where that names no note
 // it is '' (and `targetRel` null), and `rawTarget` keeps the text as written.
@@ -47,6 +48,7 @@ const { targetRef } = require('../connections');
 
 const SKIP_DIRS = new Set(['_Templates', '_templates', '_inbox']);
 const FIELDS = ['parent_location', 'current_holder'];
+const EDGE_KEYS = new Set(['type', 'target', 'bidirectional', 'strength', 'tone', 'description', 'gm_only']);
 
 // vaultlib.normalize_file_arg: slashes forward, any leading "./" off, trailing "/" off.
 function normalizeFileArg(raw) {
@@ -209,6 +211,7 @@ function readVault(vaultPath, { files, folder, newerThan } = {}) {
         targetRel: target ? resolve(target) : null,
         rawTarget,
         mobrpg: !!fieldsOf.mobrpg,
+        extraKeys: fieldsOf.extraKeys || [],
       });
     };
 
@@ -240,6 +243,7 @@ function readVault(vaultPath, { files, folder, newerThan } = {}) {
           description: description ? textOf(description.value) : '',
           gmOnly: gmOnly ? require('../processor').isGmOnlyEdge({ gm_only: scalarOf(gmOnly.value) }) : false,
           form: 'list',
+          extraKeys: item.items.map((pair) => textOf(pair.key)).filter((k) => !EDGE_KEYS.has(k)),
         });
       });
     } else if (YAML.isMap(rels)) {

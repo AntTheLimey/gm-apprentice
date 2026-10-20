@@ -373,6 +373,8 @@ function check(model, ontology, { vaultPath, publishes } = {}) {
       let why = null;
       if (e.gmOnly) why = 'is hidden from players on purpose';
       else if (e.tone && toneKey(e.tone) !== 'neutral') why = `carries the tone '${e.tone}'`;
+      else if (e.strength !== undefined) why = `carries the strength ${JSON.stringify(e.strength)}`;
+      else if (e.extraKeys.length) why = `carries ${e.extraKeys.map((k) => `'${k}'`).join(', ')}, which the event does not`;
       else if (blockers.length) why = `stands in for the visit because the ${[...new Set(blockers.map((b) => b.type))].join(', ')} tie between the two would hide the event's`;
       if (why) add(note, e, 'INFO', 'visit-duplicate', e.line, `${head} repeats the visit ${said} already supplies, but ${why}; kept`, { certain: false, why: `${why}` });
       else add(note, e, 'WARNING', 'visit-duplicate', e.line, `${head} repeats the visit ${said} already supplies; remove it`, { certain: true });

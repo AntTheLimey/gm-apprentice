@@ -23,6 +23,8 @@ const FORM = 'written in a form the fix does not edit';
 const CARRIED = ['tone', 'strength', 'description', 'gm_only'];
 const KNOWN_KEYS = new Set(['type', 'target', 'bidirectional', ...CARRIED]);
 const COMPARED = ['description', 'tone', 'strength', 'gm_only'];
+// What a visit copy may hold and still be removed: check.js has judged the description, tone and gm_only.
+const VISIT_KEYS = new Set(['type', 'target', 'bidirectional', 'description', 'tone', 'gm_only']);
 
 const quote = (s) => JSON.stringify(s);
 const keyName = (p) => String(YAML.isScalar(p.key) ? p.key.value : p.key);
@@ -356,6 +358,9 @@ function planFix(model, findings, { vaultPath, kinds, ontology = defaultOntology
       const hit = locateEdge(src, edge);
       if (hit.why) { fail(hit.why); continue; }
       if (!claim(f.rel, edge.index)) { fail('another change already edits this tie'); continue; }
+      // Removing the tie loses whatever it holds beyond what the event supplies.
+      const extra = hit.item.items.map(keyName).find((k) => !VISIT_KEYS.has(k));
+      if (extra) { fail(`the tie carries ${extra}, which removing it would lose`); continue; }
       const r = removeItemEdit(src, hit, edge.index);
       if (r.why) { fail(r.why); continue; }
       unit.ops.push({ rel: f.rel, ...r });
