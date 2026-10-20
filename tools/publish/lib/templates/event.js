@@ -1,6 +1,6 @@
 const { escapeHtml, relativePath, wikiTargetLabel, encodeHref, renderMetaValue, refMetaValue } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection, badgeSpan } = require('./base');
-const { WIKILINK_SOURCE, parseWikilink } = require('../wikilink');
+const { WIKILINK_SOURCE, parseWikilink, wikilinkSpans } = require('../wikilink');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { participantsOf, targetRef } = require('../connections');
 
@@ -62,10 +62,14 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
   }
 
   // A participant that is a note with no page is left off, name and line, as Connections leaves off such a tie
-  // (#476); a name with no note at all (a red link) still prints.
+  // (#476); a name with no note at all (a red link) still prints. Such a note named anywhere else in the entry (in
+  // its line, or in an entry that starts with no link) leaves the whole entry off.
   const hiddenNote = publishConfig._hiddenNote || (() => false);
   const shownParticipants = (Array.isArray(fm.participants) ? fm.participants : []).map((raw) => {
     const run = participantsOf(raw);
+    const text = String(raw).trim();
+    const elsewhere = wikilinkSpans(text).slice(run.length).map((span) => text.slice(span.index, span.end));
+    if (elsewhere.some((link) => hiddenNote(targetRef(link).name))) return null;
     const shown = run.filter((who) => !hiddenNote(targetRef(who.link).name));
     if (!run.length || shown.length === run.length) return raw;
     if (!shown.length) return null;
