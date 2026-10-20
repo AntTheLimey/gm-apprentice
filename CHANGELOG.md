@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.87] — 2026-10-20
+
+### Changed
+
+- campaign-qa's relationship walk asks once per type word, with its
+  count and an example, and applies the answer wherever the word
+  appears, instead of asking tie by tie.
+
 ## [1.10.86] — 2026-10-20
 
 Bug Bash batch 7: tests, tidying and the publish tool's library asks.
