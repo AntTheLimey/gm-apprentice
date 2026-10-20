@@ -312,51 +312,18 @@ describe('build integration', () => {
       fs.rmSync(outputDir, { recursive: true, force: true });
     });
 
-    it('maps _Campaign correctly', () => {
-      const campaignPath = path.join(outputDir, 'docs', 'campaign', 'campaign-overview.html');
-      assert.ok(fs.existsSync(campaignPath));
+    it('maps each source folder to its output folder', () => {
+      for (const [folder, page] of [
+        ['_Campaign', 'campaign/campaign-overview.html'], ['Characters/PCs', 'characters/pcs/hero.html'], ['Characters/NPCs', 'characters/npcs/villain.html'],
+        ['Locations', 'locations/city.html'], ['Factions & Organizations', 'factions/guild.html'], ['Events', 'events/battle.html'], ['Items & Artifacts', 'items/sword.html'],
+      ]) assert.ok(fs.existsSync(path.join(outputDir, 'docs', ...page.split('/'))), `${folder} -> ${page}`);
     });
 
-    it('maps Characters/PCs correctly', () => {
-      const pcPath = path.join(outputDir, 'docs', 'characters', 'pcs', 'hero.html');
-      assert.ok(fs.existsSync(pcPath));
-    });
-
-    it('maps Characters/NPCs correctly', () => {
-      const npcPath = path.join(outputDir, 'docs', 'characters', 'npcs', 'villain.html');
-      assert.ok(fs.existsSync(npcPath));
-    });
-
-    it('maps Locations correctly', () => {
-      const locPath = path.join(outputDir, 'docs', 'locations', 'city.html');
-      assert.ok(fs.existsSync(locPath));
-    });
-
-    it('maps Factions & Organizations correctly', () => {
-      const factionPath = path.join(outputDir, 'docs', 'factions', 'guild.html');
-      assert.ok(fs.existsSync(factionPath));
-    });
-
-    it('maps Events correctly', () => {
-      const eventPath = path.join(outputDir, 'docs', 'events', 'battle.html');
-      assert.ok(fs.existsSync(eventPath));
-    });
-
-    it('maps Items & Artifacts correctly', () => {
-      const itemPath = path.join(outputDir, 'docs', 'items', 'sword.html');
-      assert.ok(fs.existsSync(itemPath));
-    });
-
-    it('renders event with header card', () => {
+    it('renders event with header card and type badge', () => {
       const eventPath = path.join(outputDir, 'docs', 'events', 'battle.html');
       const html = fs.readFileSync(eventPath, 'utf-8');
       assert.ok(html.includes('char-header'));
       assert.ok(html.includes('Battle'));
-    });
-
-    it('renders event type badge', () => {
-      const eventPath = path.join(outputDir, 'docs', 'events', 'battle.html');
-      const html = fs.readFileSync(eventPath, 'utf-8');
       assert.ok(html.includes('metadata-badge'));
       assert.ok(html.includes('battle'));
     });
@@ -500,15 +467,10 @@ describe('build integration', () => {
       assert.ok(html.includes('Vulnerable to fire'));
     });
 
-    it('renders creature type badge', () => {
+    it('renders creature type and threat level badges', () => {
       const creaturePath = path.join(outputDir, 'docs', 'creatures', 'test-creature.html');
       const html = fs.readFileSync(creaturePath, 'utf-8');
       assert.ok(html.includes('Undead'));
-    });
-
-    it('renders threat level badge', () => {
-      const creaturePath = path.join(outputDir, 'docs', 'creatures', 'test-creature.html');
-      const html = fs.readFileSync(creaturePath, 'utf-8');
       assert.ok(html.includes('Threat: High'));
     });
   });
@@ -551,15 +513,10 @@ describe('build integration', () => {
       assert.ok(html.includes('2d+1 cut'));
     });
 
-    it('renders item type badge', () => {
+    it('renders item type and rarity badges', () => {
       const itemPath = path.join(outputDir, 'docs', 'items', 'test-sword.html');
       const html = fs.readFileSync(itemPath, 'utf-8');
       assert.ok(html.includes('Weapon'));
-    });
-
-    it('renders rarity badge', () => {
-      const itemPath = path.join(outputDir, 'docs', 'items', 'test-sword.html');
-      const html = fs.readFileSync(itemPath, 'utf-8');
       assert.ok(html.includes('Rare'));
     });
 
