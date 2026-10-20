@@ -148,7 +148,7 @@ function get(options, names) {
     written: Object.fromEntries(Object.keys(now).map((n) => [n, nameInFor(read.layout, n)])),
     faults: faults.map(faultJson),
   };
-  const lines = Object.entries(now).map(([n, s]) => `${n}: ${plainValue(s.value)} (${ORIGIN_WORDS[s.origin] || s.origin})`);
+  const lines = Object.entries(now).map(([n, s]) => `${n}: ${s.value === null ? 'not set' : plainValue(s.value)} (${ORIGIN_WORDS[s.origin] || s.origin})`);
   if (faults.length) lines.push('', ...faults.map(faultLine));
   return { result, lines, notices: noticesFor(names) };
 }

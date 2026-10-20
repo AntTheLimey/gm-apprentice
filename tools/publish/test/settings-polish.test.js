@@ -49,3 +49,10 @@ test('a stop and a warning together: the stop message carries the warning too (#
   assert.match(message, /hide\.sections/);
   assert.match(message, /player_site\.title/, message);
 });
+
+test('get prints a setting nobody set as "not set", not null (#373)', () => {
+  const s = scratch('version: 1\nvault:\n  campaign: X\n');
+  const { rc, out } = run(s, 'get', ['vault.setting_year']);
+  assert.equal(rc, 0);
+  assert.equal(out, 'vault.setting_year: not set (default)');
+});
