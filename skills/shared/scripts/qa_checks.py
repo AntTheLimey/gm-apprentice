@@ -376,7 +376,7 @@ def report_stats(vault: Path, rel: str, folder: str | None = None,
     old: dict[str, int] = {}
     kept: dict[str, str] = {}   # a count that is not a plain integer
     for ln in head[(at or 0) + 1:stop]:
-        m = re.match(r"\s+([A-Za-z_]+)\s*:\s*(\S+)\s*$", ln)
+        m = re.match(r"\s+([A-Za-z_]+)\s*:\s*(.*?)\s*(?:\s#.*)?$", ln)
         if m and m.group(1) in STAT_KEYS:
             if re.fullmatch(r"\d+", m.group(2)):
                 old[m.group(1)] = int(m.group(2))

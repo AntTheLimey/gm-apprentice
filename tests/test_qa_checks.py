@@ -495,6 +495,13 @@ class ReportStatsTests(unittest.TestCase):
                      qa.report_stats(v, self.PATH, force=True))
         self.assertEqual(lines["findings_total"], "7")
 
+    def test_a_count_with_a_trailing_comment_is_still_guarded(self):
+        v = self.old_report("  findings_total: 86  # first pass\n")
+        before = (v / self.PATH).read_text(encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "findings_total 86 -> 7"):
+            qa.report_stats(v, self.PATH)
+        self.assertEqual((v / self.PATH).read_text(encoding="utf-8"), before)
+
     def test_a_dry_run_prints_old_and_new_and_writes_nothing(self):
         v = self.old_report("  findings_total: 86\n  files_read: 5\n")
         before = (v / self.PATH).read_text(encoding="utf-8")
