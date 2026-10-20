@@ -350,6 +350,15 @@ class StatusRoundTripTests(unittest.TestCase):
                                  "- the tell.\n")
         self.assertEqual([f.label for f in fields], ["Open threads"])
 
+    def test_an_indented_bullet_does_not_make_vitals_a_list_field(self):
+        text = ("**HP:** 10/10\n  - wound note\n- **Location:** ship\n")
+        self.assertEqual([f.label for f in vw.stdin_fields(text)],
+                         ["HP", "Location"])
+        lines = text.splitlines(keepends=True)
+        self.assertEqual([f.label for f in
+                          vw.read_fields(lines, list(range(len(lines))))],
+                         ["HP", "Location"])
+
     def test_show_marks_each_run_with_a_blank_line(self):
         vault = make_vault(self, {PC: DRIFTED})
         text = show_fields(vault, PC)

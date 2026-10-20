@@ -1121,12 +1121,13 @@ def _indented_after(lines: list[str], i: int, end: int) -> bool:
 def holds_list(first: str, rest: list[str]) -> bool:
     """Whether an unbulleted field (its first line `first`, then `rest`)
     is a list field: its label stands alone on its line, or a plain list
-    item already sits under it. Only under such a field is a `- **Label:**`
-    line a list item; under `**HP:** 12/12` it is the next field."""
+    item at the margin already sits under it. Only under such a field is
+    a `- **Label:**` line a list item; under `**HP:** 12/12` it is the next field."""
     m = FIELD_RE.match(first)
     if m and not first[m.end():].strip():
         return True
-    return any(LIST_RE.match(ln) and not FIELD_RE.match(ln) for ln in rest)
+    return any(LIST_RE.match(ln) and not ln[:1].isspace()
+               and not FIELD_RE.match(ln) for ln in rest)
 
 
 def read_fields(lines: list[str], rows: list[int]) -> list[Field]:
@@ -1799,7 +1800,6 @@ SESSION_DIR_RE = re.compile(r"^(Session\s*)(\d+)$", re.IGNORECASE)
 TOP_KEY_RE = re.compile(r"^([A-Za-z_][\w.-]*):(.*)$")
 ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 EXPORT_SECTIONS = ("NPCs", "Locations", "Items")
-NAME_VERBS = ("EXACT", "ALIAS", "NEAR", "NONE")
 
 
 def is_record(rel: str) -> bool:
