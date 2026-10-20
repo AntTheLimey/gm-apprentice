@@ -31,10 +31,8 @@ class ListTests(unittest.TestCase):
         self.assertEqual(ONTOLOGY["tones"], LISTED)
         self.assertEqual(len(sr.tone_families()), 27)
 
-    def test_professional_is_neutral(self):
+    def test_family_lookup(self):
         self.assertEqual(sr.tone_family("professional"), "neutral")
-
-    def test_family_is_exact(self):
         self.assertEqual(sr.tone_family("warm"), "positive")
         self.assertIsNone(sr.tone_family("Warm"))
         self.assertIsNone(sr.tone_family("dread"))
@@ -257,13 +255,64 @@ class FixTests(VaultCase):
         self.assertIn("tone: dread\n", text)
 
     def test_refusals(self):
-        self.put("NPCs/A.md", note("    tone: central", "    tone: warm"))
-        for sets, said in (({"central": "ominouss"}, "not a listed tone"),
-                           ({"warm": "friendly"}, "already a listed tone"),
-                           ({"sibling": "neutral"}, "no relationship has")):
+        self.put("NPCs/A.md", note("    tone: dread", "    tone: central",
+                                   "    tone: warm"))
+        before = self.get("NPCs/A.md")
+
+        def refused(why, **plan):
             with self.assertRaises(tones.TonesError) as raised:
-                tones.plan_fix(self.vault, near=False, sets=sets)
-            self.assertIn(said, str(raised.exception))
+                tones.plan_fix(self.vault, **plan)
+            self.assertIn(why, str(raised.exception))
+            return str(raised.exception)
+
+        with self.subTest("a set that is no listed tone, or already one, or unused"):
+            refused("not a listed tone", near=False, sets={"central": "ominouss"})
+            refused("already a listed tone", near=False, sets={"warm": "friendly"})
+            refused("no relationship has", near=False, sets={"sibling": "neutral"})
+
+        with self.subTest("two set keys for one word"):
+            refused("dread is set to both", near=False,
+                    sets={"Dread": "ominous", "dread": "tense"})
+            p = tones.plan_fix(self.vault, near=False,
+                               sets={"Dread": "ominous", "dread": "ominous"})
+            self.assertEqual(len(p.changes), 1)
+
+        with self.subTest("the same word set twice, as main gives the pairs"):
+            # A list of pairs: nothing collapses first.
+            self.assertEqual(
+                refused("dread is set to both", near=False,
+                        sets=[("dread", "ominous"), ("dread", "tense")]),
+                "dread is set to both ominous and tense")
+            p = tones.plan_fix(self.vault, near=False,
+                               sets=[("dread", "ominous"), ("dread", "ominous")])
+            self.assertEqual(len(p.changes), 1)
+
+        with self.subTest("the same word set twice on the command line"):
+            code, _out, err = self.run_main(
+                "fix", "--set", "dread=ominous", "--set", "dread=tense",
+                "--write")
+            self.assertEqual(code, 1)
+            self.assertEqual(err, "tones.py: dread is set to both ominous and "
+                                  "tense\n")
+            self.assertEqual(self.get("NPCs/A.md"), before)
+            code, out, _err = self.run_main(
+                "fix", "--set", "dread=ominous", "--set", "dread=ominous")
+            self.assertEqual(code, 0)
+            self.assertIn("WOULD-CHANGE\tNPCs/A.md:6\tdread -> ominous", out)
+
+        with self.subTest("an except no near row has"):
+            for word in ("cordial", "central", "warm"):
+                self.assertEqual(
+                    refused("no NEAR row has the tone", near=True, sets={},
+                            excepts=[word]),
+                    f"no NEAR row has the tone {word}")
+
+        with self.subTest("an empty except is a usage error"):
+            for empty in ("", "  "):
+                code, _out, err = self.run_main("fix", "--near", "--except",
+                                                empty)
+                self.assertEqual((code, err),
+                                 (2, "tones.py: --except takes a word\n"))
 
     def test_other_tone_text_is_never_touched(self):
         text = ("---\ntype: npc\ntone: dread\nrelationships:\n"
@@ -351,43 +400,6 @@ class FixTests(VaultCase):
             self.assertEqual([i for i in range(len(old)) if old[i] != new[i]],
                              [5, 11])
 
-    def test_two_set_keys_for_one_word_are_refused(self):
-        self.put("NPCs/A.md", note("    tone: dread"))
-        with self.assertRaises(tones.TonesError) as raised:
-            tones.plan_fix(self.vault, near=False,
-                           sets={"Dread": "ominous", "dread": "tense"})
-        self.assertIn("dread is set to both", str(raised.exception))
-        p = tones.plan_fix(self.vault, near=False,
-                           sets={"Dread": "ominous", "dread": "ominous"})
-        self.assertEqual(len(p.changes), 1)
-
-    def test_the_same_word_set_twice_is_refused(self):
-        # A list of pairs, as main gives them: nothing collapses first.
-        self.put("NPCs/A.md", note("    tone: dread"))
-        with self.assertRaises(tones.TonesError) as raised:
-            tones.plan_fix(self.vault, near=False,
-                           sets=[("dread", "ominous"), ("dread", "tense")])
-        self.assertEqual(str(raised.exception),
-                         "dread is set to both ominous and tense")
-        p = tones.plan_fix(self.vault, near=False,
-                           sets=[("dread", "ominous"), ("dread", "ominous")])
-        self.assertEqual(len(p.changes), 1)
-
-    def test_the_same_word_set_twice_on_the_command_line(self):
-        self.put("NPCs/A.md", note("    tone: dread"))
-        before = self.get("NPCs/A.md")
-        code, _out, err = self.run_main(
-            "fix", "--set", "dread=ominous", "--set", "dread=tense",
-            "--write")
-        self.assertEqual(code, 1)
-        self.assertEqual(err, "tones.py: dread is set to both ominous and "
-                              "tense\n")
-        self.assertEqual(self.get("NPCs/A.md"), before)
-        code, out, _err = self.run_main(
-            "fix", "--set", "dread=ominous", "--set", "dread=ominous")
-        self.assertEqual(code, 0)
-        self.assertIn("WOULD-CHANGE\tNPCs/A.md:6\tdread -> ominous", out)
-
     def test_except_leaves_a_near_word_alone(self):
         self.put("NPCs/A.md", note("    tone: dread", "    tone: Dread",
                                    "    tone: cordial", "    tone: Warm"))
@@ -403,23 +415,6 @@ class FixTests(VaultCase):
                            excepts=["dread"])
         self.assertEqual([(c.before, c.after) for c in p.changes],
                          [("dread", "tense"), ("cordial", "friendly")])
-
-    def test_an_except_no_near_row_has_is_refused(self):
-        self.put("NPCs/A.md", note("    tone: dread", "    tone: central",
-                                   "    tone: warm"))
-        for word in ("cordial", "central", "warm"):
-            with self.assertRaises(tones.TonesError) as raised:
-                tones.plan_fix(self.vault, near=True, sets={},
-                               excepts=[word])
-            self.assertEqual(str(raised.exception),
-                             f"no NEAR row has the tone {word}")
-
-    def test_an_empty_except_is_a_usage_error_not_an_empty_word(self):
-        self.put("NPCs/A.md", note("    tone: dread"))
-        for empty in ("", "  "):
-            code, _out, err = self.run_main("fix", "--near", "--except", empty)
-            self.assertEqual((code, err),
-                             (2, "tones.py: --except takes a word\n"))
 
     def test_hand_written_shapes_are_read_by_the_tool_not_by_line(self):
         # Flow-style ties, a `>-` tone, a quoted "tone" key, a quoted
