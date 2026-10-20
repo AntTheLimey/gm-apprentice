@@ -175,7 +175,10 @@ Then make the repairs yourself:
 
    Each finding has a `kind` and a message that names its choices (a
    near type, `one of:`, store it on the other note, drop it, keep one
-   copy). Edit the note on the GM's answer.
+   copy). Ask once per type word, not per tie: list each word with its
+   count and an example, take one answer, and apply it wherever that
+   word appears. Ask about a single tie only when the GM wants it
+   handled differently. Edit the notes on the GM's answers.
 4. List the INFO rows once, without a question each. A
    `childless-container` row is answered per
    `shared/relationship-normalization.md` § Interposing a new
