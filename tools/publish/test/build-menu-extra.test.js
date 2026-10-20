@@ -475,7 +475,7 @@ test('a [[wikilink]] in a label prints as its name, as page text does (#388)', (
   assert.doesNotMatch(root, /\[\[/);
 });
 
-test('rule 6: the menu with no extra entries is the text a build made before there were extra entries (frozen from main, re-frozen for the aria-expanded markup, #439)', () => {
+test('rule 6: the menu with no extra entries is the text a build made before there were extra entries (frozen from main, re-frozen for the aria-expanded and data-nav markup, #439)', () => {
   const out = generateNav([{ outputDir: 'world', outputPath: 'world/a.html', title: 'A', frontmatter: {} }], {})('index.html', { siteTitle: 'T' });
-  assert.equal(require('node:crypto').createHash('sha256').update(out).digest('hex'), '39445df2e90bf36722bfff7e25d35b586194bb330cbaaf0995ec3b99c889c9e4');
+  assert.equal(require('node:crypto').createHash('sha256').update(out).digest('hex'), '0ef48ab93aae1b22c8ccd09aaa8dd07e7e224e900f145700a29b061940e87bdb');
 });
