@@ -318,14 +318,6 @@ def tally_findings(body: str) -> dict[str, int]:
     return counts
 
 
-def _count(value: Any) -> int:
-    """A stored count as a number; 0 when it is not one."""
-    try:
-        return int(str(value).strip())
-    except ValueError:
-        return 0
-
-
 def _scan_counts(vault: Path, fm: dict[str, Any], folder: str | None
                  ) -> tuple[int, int]:
     """(typed notes, notes) in the report's scope, QA reports left out."""
@@ -359,7 +351,8 @@ def report_stats(vault: Path, rel: str, folder: str | None = None,
     taken from today's vault only while the report holds 0 and is dated
     today: a scan count already there, or on an older report, is the vault
     as it was. A count that would drop below a
-    non-zero one is refused unless `force`."""
+    non-zero one is refused unless `force`. A count that is not a plain
+    integer ("272+") is left as written, even under `force`."""
     path = vault / rel
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines(keepends=True)
@@ -380,26 +373,41 @@ def report_stats(vault: Path, rel: str, folder: str | None = None,
                                     or not head[stop].strip()):
             stop += 1
     old: dict[str, int] = {}
+    kept: dict[str, str] = {}   # a count that is not a plain integer
     for ln in head[(at or 0) + 1:stop]:
         m = re.match(r"\s+([A-Za-z_]+)\s*:\s*(\S+)\s*$", ln)
-        if m:
-            old[m.group(1)] = _count(m.group(2))
+        if m and m.group(1) in STAT_KEYS:
+            if re.fullmatch(r"\d+", m.group(2)):
+                old[m.group(1)] = int(m.group(2))
+            else:
+                kept[m.group(1)] = m.group(2)
     counts = tally_findings("".join(lines[end + 1:]))
     values = dict(counts)
     values["entities_scanned"] = old.get("entities_scanned", 0)
     values["files_read"] = old.get("files_read", 0)
     # Today's vault describes only a report written today.
-    if (not values["entities_scanned"] or not values["files_read"]) and (
-            str(fm.get("date")) == datetime.date.today().isoformat()):
-        entities, notes = _scan_counts(vault, fm, folder)
-        values["entities_scanned"] = values["entities_scanned"] or entities
-        values["files_read"] = values["files_read"] or notes
-    lower = [k for k in STAT_KEYS if values[k] < old.get(k, 0)]
+    notes_out: list[str] = []
+    open_scans = [k for k in ("entities_scanned", "files_read")
+                  if not values[k] and k not in kept]
+    if open_scans:
+        day = str(fm.get("date"))
+        if day == datetime.date.today().isoformat():
+            entities, notes = _scan_counts(vault, fm, folder)
+            for k, v in zip(("entities_scanned", "files_read"),
+                            (entities, notes)):
+                if k in open_scans:
+                    values[k] = v
+        else:
+            notes_out = [f"# scan counts not taken from today's vault "
+                         f"(the report is dated {day}, not today)"]
+    lower = [k for k in STAT_KEYS if k not in kept
+             and values[k] < old.get(k, 0)]
     if dry_run:
-        return [f"{k}: {old.get(k, '-')} -> {values[k]}"
+        return [f"{k}: {kept[k]} (kept, not a number)" if k in kept else
+                f"{k}: {old.get(k, '-')} -> {values[k]}"
                 + ("  (refused: lower; needs --force)"
                    if k in lower and not force else "")
-                for k in STAT_KEYS]
+                for k in STAT_KEYS] + notes_out
     if lower and not force:
         raise ValueError(
             f"{rel}: would lower " + ", ".join(
@@ -409,7 +417,7 @@ def report_stats(vault: Path, rel: str, folder: str | None = None,
         head += ["vault_stats:\n"] + [f"  {k}: {values[k]}\n"
                                       for k in STAT_KEYS]
     else:
-        todo = dict(values)
+        todo = {k: v for k, v in values.items() if k not in kept}
         for j in range(at + 1, stop):
             m = re.match(r"(\s+)([A-Za-z_]+)\s*:", head[j])
             if m and m.group(2) in todo:
@@ -423,4 +431,4 @@ def report_stats(vault: Path, rel: str, folder: str | None = None,
         head[last + 1:last + 1] = extra
     path.write_text("".join([lines[0], *head, *lines[end:]]),
                     encoding="utf-8")
-    return [f"{k}: {values[k]}" for k in STAT_KEYS]
+    return [f"{k}: {kept.get(k, values[k])}" for k in STAT_KEYS] + notes_out

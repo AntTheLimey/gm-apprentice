@@ -443,9 +443,29 @@ class ReportStatsTests(unittest.TestCase):
         path.write_text(path.read_text(encoding="utf-8").replace(
             f"date: {datetime.date.today().isoformat()}", "date: 2026-05-08"),
             encoding="utf-8")
-        lines = dict(ln.split(": ") for ln in qa.report_stats(v, self.PATH))
+        out = qa.report_stats(v, self.PATH)
+        lines = dict(ln.split(": ") for ln in out if not ln.startswith("#"))
         self.assertEqual((lines["entities_scanned"], lines["files_read"],
                           lines["findings_total"]), ("0", "0", "7"))
+        note = "# scan counts not taken from today's vault (the report is " \
+               "dated 2026-05-08, not today)"
+        self.assertEqual(out[-1], note)
+        self.assertEqual(qa.report_stats(v, self.PATH, dry_run=True)[-1],
+                         note)
+
+    def test_a_count_that_is_not_a_number_is_left_as_written(self):
+        v = self.old_report("  entities_scanned: 272+\n  files_read: 200+\n"
+                            "  findings_fixed: \"5\"\n")
+        dry = qa.report_stats(v, self.PATH, dry_run=True)
+        self.assertIn("entities_scanned: 272+ (kept, not a number)", dry)
+        self.assertIn('findings_fixed: "5" (kept, not a number)', dry)
+        for force in (False, True):
+            qa.report_stats(v, self.PATH, force=force)
+            text = (v / self.PATH).read_text(encoding="utf-8")
+            self.assertIn("\n  entities_scanned: 272+\n", text)
+            self.assertIn("\n  files_read: 200+\n", text)
+            self.assertIn('\n  findings_fixed: "5"\n', text)
+            self.assertIn("\n  findings_total: 7\n", text)
 
     def test_only_a_qa_report_is_written(self):
         v = make(self, {"CONTINUE_HERE.md": "---\ntype: note\n---\n\nx\n",
