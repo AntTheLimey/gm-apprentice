@@ -199,15 +199,52 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
   // Every relationship, once, filed under the page it points at.
   const outgoing = new Map();
   const incoming = new Map();
+  const tied = new Set();   // pairs of pages (by output path, in one order) that already have a tie
+  const pairKey = (a, b) => [a.outputPath, b.outputPath].sort().join('\u0000');
+  const file = (page, edge, to) => {
+    if (!outgoing.has(page)) outgoing.set(page, []);
+    outgoing.get(page).push({ edge, to });
+    if (!to.page || to.page === page) return;
+    if (!incoming.has(to.page)) incoming.set(to.page, []);
+    incoming.get(to.page).push({ edge, from: page });
+    tied.add(pairKey(page, to.page));
+  };
   for (const page of pages) {
     if (isIndex(page)) continue;
-    const list = edgesOf(page.frontmatter).map((edge) => ({ edge, to: resolve(edge.target) }));
-    outgoing.set(page, list);
-    for (const { edge, to } of list) {
-      if (!to.page || to.page === page) continue;
-      if (!incoming.has(to.page)) incoming.set(to.page, []);
-      incoming.get(to.page).push({ edge, from: page });
+    outgoing.set(page, []);
+    for (const edge of edgesOf(page.frontmatter)) file(page, edge, resolve(edge.target));
+  }
+
+  // An event's own fields are ties too (#368): each participant took part, the location is
+  // where it was held, and everyone who took part visited that place. A tie the GM wrote
+  // between the same two notes, in either direction, wins, and a name with no page is left to
+  // the list the event prints.
+  const derive = (from, type, to, text) => {
+    if (!to.page || to.page === from || isIndex(to.page) || tied.has(pairKey(from, to.page))) return false;
+    file(from, { target: to.name, type, tone: undefined, line: text ? printedProse(text) : '' }, to);
+    return true;
+  };
+  // The note a participant entry starts with, and what follows it, bare of one pair of brackets.
+  const participantOf = (entry) => {
+    if (typeof entry !== 'string') return null;
+    const text = entry.trim();
+    const [span] = wikilinkSpans(text, false, 1);
+    if (!span || span.index !== 0) return null;
+    const rest = text.slice(span.end).trim();
+    return { link: text.slice(0, span.end), line: /^\(([\s\S]*)\)$/.test(rest) ? rest.slice(1, -1).trim() : rest };
+  };
+  for (const event of pages) {
+    if (isIndex(event) || typeOf(event) !== 'event') continue;
+    const fm = event.frontmatter;
+    const place = typeof fm.location === 'string' && wikilinkSpans(fm.location).length === 1 ? resolve(fm.location) : null;
+    if (place) derive(event, 'located_at', place, '');
+    const guests = [];
+    for (const entry of Array.isArray(fm.participants) ? fm.participants : []) {
+      const who = participantOf(entry);
+      const to = who && resolve(who.link);
+      if (to && derive(event, 'had_participant', to, who.line)) guests.push(to);
     }
+    if (place && place.page) for (const to of guests) derive(to.page, 'visited', place, '');
   }
 
   // The sessions whose published text links a page. A Wrap-Up stands for its hub, so the
@@ -273,10 +310,10 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
 
     for (const { edge, to } of outgoing.get(page) || []) {
       if (to.page === page || (!to.page && !to.name) || (to.page && isIndex(to.page))) continue;
-      note(add(to.page, to, tabOf(to.page), groupLabel(edge.type, 'out')), edge, true);
+      note(add(to.page, to, tabOf(to.page), groupLabel(edge.type, 'out', { from: typeOf(page), to: typeOf(to.page) })), edge, true);
     }
     for (const { edge, from } of incoming.get(page) || []) {
-      note(add(from, null, tabOf(from), groupLabel(edge.type, 'in')), edge, false);
+      note(add(from, null, tabOf(from), groupLabel(edge.type, 'in', { from: typeOf(from), to: typeOf(page) })), edge, false);
     }
     // A parent with no page stays in Places, as a name with no link.
     if (typeOf(page) === 'location' && typeof page.frontmatter.parent_location === 'string') {
