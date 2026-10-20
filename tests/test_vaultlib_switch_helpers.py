@@ -90,5 +90,5 @@ def test_writing_a_note_keeps_what_was_read(tmp_path, monkeypatch):
     def no_run(*_a, **_k):
         raise AssertionError("the tool was asked again")
 
-    monkeypatch.setattr(vaultlib.subprocess, "run", no_run)
+    monkeypatch.setattr(vaultlib, "run_tool", no_run)
     assert vaultlib.settings(vault).get("player_site.features.connections") == "web"

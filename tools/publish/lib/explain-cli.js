@@ -27,6 +27,7 @@ const YAML = require('yaml');
 const { nearestNames, readerView } = require('./site-doctor');
 const { nameIn } = require('./settings');
 const { sheetFamilyOf } = require('./party-board-registry');
+const { parseSubcommandArgs } = require('./subcommand-args');
 
 // The switches as the build resolves them, without the config notes.
 function switchesOf(publishConfig) {
@@ -347,6 +348,14 @@ function publishedPagesOf(survey) {
 //                  body is the only source); [] when none, null for any other file
 //   frontmatterError the parser's message for a file whose frontmatter could not be
 //                  parsed (code FILE_UNPARSEABLE, no page is built); null otherwise (#287)
+// `explain --all` as typed (the words after `--all`): the options runExplainAll takes,
+// or { error }.
+function explainAllOptions(args) {
+  const parsed = parseSubcommandArgs(args, { '--json': 'json' }, { '--vault': 'vault' });
+  if (parsed.error || !parsed.flags.json) return { error: parsed.error || 'explain --all needs --json' };
+  return { options: { configPath: parsed.configPath, vaultPath: parsed.flags.vault } };
+}
+
 async function runExplainAll(options, deps) {
   const opts = options || {};
   const d = deps || {};
@@ -401,4 +410,4 @@ function autoExcludeLabel(frontmatter, code) {
   return `${field}: ${String(frontmatter[field]).toLowerCase()}`;
 }
 
-module.exports = { runExplain, runExplainAll };
+module.exports = { runExplain, runExplainAll, explainAllOptions };
