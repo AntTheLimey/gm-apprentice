@@ -503,8 +503,10 @@ class SessionsCommandTests(unittest.TestCase):
     """`vault_check.py VAULT sessions` — derive each session's status from
     which chain documents exist, per shared/session-document-chain.md."""
 
-    def setUp(self):
-        self.rows = vc.check_sessions(FIXTURES / "sessions")
+    @classmethod
+    def setUpClass(cls):
+        # one run of the check for the whole class: the rows are only read
+        cls.rows = vc.check_sessions(FIXTURES / "sessions")
 
     def summary(self, rel):
         found = [r for r in self.rows
@@ -1233,8 +1235,10 @@ class GmLeakCommandTests(unittest.TestCase):
     actually reach the published site, with the fence and excluded-section
     containment a grep cannot express."""
 
-    def setUp(self):
-        self.rows = vc.check_gm_leak(LEAK, None)
+    @classmethod
+    def setUpClass(cls):
+        # one run of the check for the whole class: the rows are only read
+        cls.rows = vc.check_gm_leak(LEAK, None)
 
     def test_an_emphasised_exclude_heading_is_hidden_by_the_site_so_no_row(self):
         # heading-key.js reads `### **GM Notes**` and `### *GM Notes*` as
@@ -3014,8 +3018,10 @@ class PcBodyCommandTests(unittest.TestCase):
     """`vault_check.py VAULT pc-body` — the skeleton and `## Current Status`
     placement rules from shared/pc-body-structure.md."""
 
-    def setUp(self):
-        self.rows = vc.check_pc_body(LEAK)
+    @classmethod
+    def setUpClass(cls):
+        # one run of the check for the whole class: the rows are only read
+        cls.rows = vc.check_pc_body(LEAK)
 
     def test_current_status_inside_a_fence_is_an_error(self):
         self.assertIn(
@@ -3085,8 +3091,8 @@ class PcBodyCommandTests(unittest.TestCase):
     # #441: which headings publish, and the fence rows, are the build's own
     # reading (`build_lines`), not scan_body's model.
 
-    def _hero(self, body, raw=False):
-        vault = make_vault(self)
+    def _hero(self, body, raw=False, vault=None):
+        vault = vault or make_vault(self)
         note = f"---\ntype: pc\n---\n\n{body}"
         if raw:
             (vault / "Hero.md").write_bytes(note.encode("utf-8"))
@@ -3107,12 +3113,13 @@ class PcBodyCommandTests(unittest.TestCase):
         self.assertFalse(rows_for(rows, "comes after"), rows)
 
     def test_a_form_feed_nel_or_lone_cr_does_not_split_a_heading(self):
+        vault = make_vault(self)
         for ch in ("\r", "\x0c", "\x85"):
             with self.subTest(ch=repr(ch)):
                 rows = self._hero(
                     f"## Stat Sheet\n\nST 14, DX 12, IQ 11.\n\n## Notes{ch}"
                     f"more\n\n## Current Status\n\n**Location:** x\n",
-                    raw=True)
+                    raw=True, vault=vault)
                 self.assertFalse(rows_for(rows, "comes after"), rows)
 
     def test_fence_rows_are_the_builds(self):
@@ -3140,14 +3147,14 @@ class PcBodyCommandTests(unittest.TestCase):
             f"to where the sheet is kept",
             self.rows)
 
-    def _template_pc(self, name, frontmatter="", edit=None):
+    def _template_pc(self, name, frontmatter="", edit=None, vault=None):
         """A PC whose body is a shipped template's, optionally edited."""
         template = (Path(vc.__file__).resolve().parent.parent / "templates"
                     / name).read_text(encoding="utf-8")
         body = template.split("---\n", 2)[2]
         if edit:
             body = edit(body)
-        vault = make_vault(self)
+        vault = vault or make_vault(self)
         (vault / "Hero.md").write_text(
             f"---\ntype: pc\n{frontmatter}---\n{body}", encoding="utf-8")
         return vc.check_pc_body(vault)
@@ -3156,9 +3163,11 @@ class PcBodyCommandTests(unittest.TestCase):
         templates = Path(vc.__file__).resolve().parent.parent / "templates"
         names = sorted(p.name for p in templates.glob("pc-*.md"))
         self.assertGreaterEqual(len(names), 7, names)
+        vault = make_vault(self)
         for name in names:
             with self.subTest(template=name):
-                rows = rows_for(self._template_pc(name), "placeholder values")
+                rows = rows_for(self._template_pc(name, vault=vault),
+                                "placeholder values")
                 self.assertEqual(len(rows), 1, rows)
                 self.assertTrue(rows[0].startswith("WARNING\tHero.md:"), rows)
 
@@ -3202,73 +3211,85 @@ class PcBodyCommandTests(unittest.TestCase):
         self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
 
     def test_a_pointer_or_tbd_where_the_stats_should_be_warns(self):
-        for body in ("TBD", "See D&D Beyond: https://example.com/c/12345",
-                     "[[Hero Sheet 2.pdf]]"):
+        bodies = ("TBD", "See D&D Beyond: https://example.com/c/12345",
+                     "[[Hero Sheet 2.pdf]]")
+        cases = self._pc_cases(
+            [f"---\ntype: pc\n---\n\n## Stat Sheet\n\n{body}\n"
+             for body in bodies])
+        for body, rows in zip(bodies, cases):
             with self.subTest(body=body):
-                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
-                                f"{body}\n")
                 self.assertTrue(rows_for(rows, "## Stat Sheet holds no stats;"),
                                 rows)
 
     def test_a_sheet_in_words_dots_or_an_image_is_a_sheet(self):
-        for body in ("**High Concept:** Disgraced Knight\n\n**Trouble:** Owes "
+        bodies = ("**High Concept:** Disgraced Knight\n\n**Trouble:** Owes "
                      "the Guild\n\nGreat Fight, Good Athletics, Fair Will",
                      "- Skirmish ●●○○\n- Command ●○○○",
-                     "![[Bryn_sheet_p1.png]]"):
+                     "![[Bryn_sheet_p1.png]]")
+        cases = self._pc_cases(
+            [f"---\ntype: pc\n---\n\n## Stat Sheet\n\n{body}\n"
+             for body in bodies])
+        for body, rows in zip(bodies, cases):
             with self.subTest(body=body):
-                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
-                                f"{body}\n")
                 self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
 
     def test_a_longer_pointer_tbd_or_bare_skeleton_warns(self):
-        for body in ("See D&D Beyond.\n\nLink in Discord.\n\nAsk Bob.",
+        bodies = ("See D&D Beyond.\n\nLink in Discord.\n\nAsk Bob.",
                      "TBD\n\nTBD\n\nTBD",
                      "### Attributes\n\n### Skills\n\n### Equipment",
                      "See D&D Beyond (2024).",
                      "Sheet is on page 12 of the group PDF.",
-                     "See Bryn_2.pdf in the drive"):
+                     "See Bryn_2.pdf in the drive")
+        cases = self._pc_cases(
+            [f"---\ntype: pc\n---\n\n## Stat Sheet\n\n{body}\n"
+             for body in bodies])
+        for body, rows in zip(bodies, cases):
             with self.subTest(body=body):
-                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
-                                f"{body}\n")
                 self.assertTrue(rows_for(rows, "## Stat Sheet holds no stats;"),
                                 rows)
 
     def test_digits_that_are_not_stats_do_not_make_a_sheet(self):
-        for body in ("1. Open Roll20\n2. Find Bryn",
+        bodies = ("1. Open Roll20\n2. Find Bryn",
                      "[Sheet 2](https://example.com/z)",
                      "www.dndbeyond.com/characters/12345678",
                      "dndbeyond.com/characters/12345678",
                      "Bryn_2.gcs", "Bryn_2.odt in the drive",
-                     "See pp. 3 of the PDF", "pg. 12", "pages 12 and 14"):
+                     "See pp. 3 of the PDF", "pg. 12", "pages 12 and 14")
+        cases = self._pc_cases(
+            [f"---\ntype: pc\n---\n\n## Stat Sheet\n\n{body}\n"
+             for body in bodies])
+        for body, rows in zip(bodies, cases):
             with self.subTest(body=body):
-                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
-                                f"{body}\n")
                 self.assertTrue(rows_for(rows, "## Stat Sheet holds no stats;"),
                                 rows)
 
     def test_a_lone_stat_that_looks_like_a_pointer_is_still_a_stat(self):
         # A warning the GM cannot clear by filling in the sheet is the
         # worse error, so each strip needs a mark a stat line lacks.
-        for body in ("PP 5", "Psi P 12", "Pg 12", "Armor p 3",
+        bodies = ("PP 5", "Psi P 12", "Pg 12", "Armor p 3",
                      "Speed 6.md", "Move 5.csv", "Hit Points 4.txt",
-                     "Move 6.5/turn", "Ver 2.0/ x"):
+                     "Move 6.5/turn", "Ver 2.0/ x")
+        cases = self._pc_cases(
+            [f"---\ntype: pc\n---\n\n## Stat Sheet\n\n{body}\n"
+             for body in bodies])
+        for body, rows in zip(bodies, cases):
             with self.subTest(body=body):
-                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
-                                f"{body}\n")
                 self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
 
     def test_a_sheet_in_words_takes_several_shapes(self):
-        for body in ("Fight: Great\nShoot: Good\nWill: Fair",
+        bodies = ("Fight: Great\nShoot: Good\nWill: Fair",
                      "Fight — Great\nShoot — Good\nWill — Fair",
                      "*Fight* Great\n*Shoot* Good\n*Will* Fair",
                      "__Fight__ Great\n__Shoot__ Good\n__Will__ Fair",
                      "- Fight, Great\n- Shoot, Good\n- Will, Fair",
                      "1. Fight, Great\n2. Shoot, Good\n3. Will, Fair",
                      "### Fight\n\nGreat\n\n### Shoot\n\nGood\n\n"
-                     "### Will\n\nFair"):
+                     "### Will\n\nFair")
+        cases = self._pc_cases(
+            [f"---\ntype: pc\n---\n\n## Stat Sheet\n\n{body}\n"
+             for body in bodies])
+        for body, rows in zip(bodies, cases):
             with self.subTest(body=body):
-                rows = self._pc(f"---\ntype: pc\n---\n\n## Stat Sheet\n\n"
-                                f"{body}\n")
                 self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
 
     def test_a_small_table_in_words_is_a_sheet(self):
@@ -3314,10 +3335,10 @@ class PcBodyCommandTests(unittest.TestCase):
         # nature, and the warning's own advice makes no sense on it.
         template = (Path(vc.__file__).resolve().parent.parent / "templates"
                     / "pc-dnd-5e-2024.md").read_text(encoding="utf-8")
+        vault = make_vault(self)
         for rel in ("_archive/templates/_Template_PC_2026-10-12.md",
                     "Cast/_Template_PC.md"):
             with self.subTest(rel=rel):
-                vault = make_vault(self)
                 path = vault / rel
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(template, encoding="utf-8")
@@ -3335,6 +3356,18 @@ class PcBodyCommandTests(unittest.TestCase):
         (vault / "Hero.md").write_text(text, encoding="utf-8")
         return vc.check_pc_body(vault)
 
+    def _pc_cases(self, texts, raw=False):
+        """pc-body rows for each text, as its own PC note in one vault: one
+        check (one question to the publish tool) for the whole loop, not one
+        per case. Returns the rows that name each note, in order."""
+        vault = make_vault(self)
+        for i, text in enumerate(texts):
+            data = text.encode("utf-8")
+            (vault / f"Hero{i}.md").write_bytes(data)
+        rows = vc.check_pc_body(vault)
+        return [[r for r in rows if re.search(rf"\tHero{i}\.md(:|$|\t)", r)]
+                for i in range(len(texts))]
+
     SHEETLESS = "## Background\n\nA sailor.\n"
 
     def _asked(self, value, **stub):
@@ -3342,6 +3375,12 @@ class PcBodyCommandTests(unittest.TestCase):
         a vault whose publish tool is stubbed; and the tool calls made."""
         vault = make_vault(self)
         calls = stub_publish_tool(self, vault, **stub)
+        return self._asked_in(vault, calls, value)[0], calls
+
+    def _asked_in(self, vault, calls, value):
+        """The same, on a vault and stub a loop built once: the calls list
+        is emptied first, so it holds this case's calls alone."""
+        del calls[:]
         (vault / "Hero.md").write_text(
             f"---\ntype: pc\nsheet_source: {value}\n---\n\n{self.SHEETLESS}",
             encoding="utf-8")
@@ -3349,9 +3388,11 @@ class PcBodyCommandTests(unittest.TestCase):
 
     def test_the_publish_tool_says_whether_sheet_source_is_set(self):
         # One reading of the field, the tool's: nothing here parses it.
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, sheet_source={"Hero.md": False})
         for value in ("null", "~", "false", "[]", "5", "{where: paper}"):
             with self.subTest(sheet_source=value):
-                rows, calls = self._asked(value, sheet_source={"Hero.md": False})
+                rows, _ = self._asked_in(vault, calls, value)
                 self.assertTrue(rows_for(rows, "Stat Sheet section"), rows)
                 self.assertEqual(len(calls), 1, calls)
         rows, _calls = self._asked("[PDF, group drive]",
@@ -3361,9 +3402,11 @@ class PcBodyCommandTests(unittest.TestCase):
     def test_a_blank_sheet_source_is_never_what_asks_the_tool(self):
         # The one `explain --all` a run makes (for retiredSheetFields) is the
         # only call; the stubbed sheet_source answer is not used for a blank.
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, sheet_source={"Hero.md": True})
         for value in ("", '""', "''", '"  "'):
             with self.subTest(sheet_source=value):
-                rows, calls = self._asked(value, sheet_source={"Hero.md": True})
+                rows, _ = self._asked_in(vault, calls, value)
                 self.assertTrue(rows_for(rows, "Stat Sheet section"), rows)
                 self.assertEqual(len(calls), 1, calls)
 
@@ -3386,13 +3429,13 @@ class PcBodyCommandTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
 
     def test_other_ways_of_writing_the_key_are_asked_about(self):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, sheet_source={"Hero.md": True})
         for fm in ("sheet_source : paper", '"sheet_source": paper',
                    "'sheet_source': paper",
                    "sheet_source:\n# where\n  - PDF"):
             with self.subTest(frontmatter=fm):
-                vault = make_vault(self)
-                calls = stub_publish_tool(self, vault,
-                                          sheet_source={"Hero.md": True})
+                del calls[:]
                 (vault / "Hero.md").write_text(
                     f"---\ntype: pc\n{fm}\n---\n\n{self.SHEETLESS}",
                     encoding="utf-8")
@@ -3791,8 +3834,10 @@ class WrapupCommandTests(unittest.TestCase):
     Wrap-Up conformance check from campaign-qa's wrapup-conformance.md
     Steps 2-4, with the 1.9.5 migration's structural re-nest as `--fix`."""
 
-    def setUp(self):
-        self.rows = vc.check_wrapup(WRAPUP, None, False)
+    @classmethod
+    def setUpClass(cls):
+        # one run of the check for the whole class: the rows are only read
+        cls.rows = vc.check_wrapup(WRAPUP, None, False)
 
     def findings(self, rel):
         """The finding rows for one file — fix rows excluded."""
