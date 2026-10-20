@@ -7,6 +7,9 @@ a hand-rolled script. Reports, per category:
   new    — entities in mobRPG with no linked vault node (pull candidates)
   gone   — vault nodes whose element_id is absent from mobRPG (deleted upstream /
            zombie notes to reconcile)
+  loose  — vault locations with no parent_location, when the vault has a star
+           system (the site files them loose; a city or station no naming rule
+           could parent shows up here)
   types  — classifier types in mobRPG not represented in the vault map (needs
            `map` to bind/create) — surfaced via pull's `types` section
 
@@ -20,10 +23,12 @@ import argparse
 import glob
 import json
 import os
+import re
 import sys
 
 from mobrpg import client
 from mobrpg import node
+from mobrpg.commands import link_orphans
 from mobrpg.commands import map_cmd
 from mobrpg.commands import pull
 
@@ -80,6 +85,29 @@ def _vault_nodes(vault: str) -> dict:
             if nd and nd.get("element_id"):
                 out[nd["element_id"]] = {
                     "name": os.path.splitext(os.path.basename(p))[0], "path": p}
+    return out
+
+
+def parentless_locations(vault: str) -> list[str]:
+    """Locations whose `parent_location:` is empty or missing, while the vault holds
+    a star system (a `<X> System` note, or `location_type: star system`). The site
+    groups locations on that scalar, so a city, station or base that no naming rule
+    could parent stays loose until someone sets it. The systems themselves have no
+    parent and are left out. Nothing to report in a vault with no system."""
+    vault = os.path.expanduser(vault)
+    systems = {s.lower() for s in link_orphans.vault_systems(vault)}
+    if not systems:
+        return []
+    out = []
+    for p in sorted(glob.glob(os.path.join(vault, "Locations", "*.md"))):
+        stem = os.path.splitext(os.path.basename(p))[0]
+        if stem.lower() in systems or stem.lower().removesuffix(" system") in systems:
+            continue
+        with open(p, encoding="utf-8") as fh:
+            fm = re.match(r"^---\r?\n(.*?)\r?\n---", fh.read(), flags=re.S)
+        m = re.search(r"^parent_location:(.*)$", fm.group(1), flags=re.M) if fm else None
+        if m is None or m.group(1).strip() in ("", '""', "''", "null", "~"):
+            out.append(stem)
     return out
 
 
@@ -143,6 +171,12 @@ def _report(diff: dict) -> None:
         print("\nRECORDED classifier types, still unbound (no vault note uses them yet):")
         for x in u:
             print(f"  · {x['kind']:18} {x['name']}  — recorded, unbound (no vault note uses it yet)")
+    loose = diff.get("parentless_locations") or []
+    if loose:
+        print(f"\nLOCATIONS with no parent_location ({len(loose)}; the vault has a star "
+              f"system, so the site files these loose; set one, or leave top-level places):")
+        for name in loose:
+            print(f"  ? {name}")
 
 
 def run(argv: list[str]) -> int:
@@ -172,6 +206,7 @@ def run(argv: list[str]) -> int:
 
     diff = diff_world(extract, _vault_nodes(args.vault), _vault_type_names(args.vault),
                       _discovered_vocab(args.vault))
+    diff["parentless_locations"] = parentless_locations(args.vault)
     if args.json:
         print(json.dumps(diff, indent=2, ensure_ascii=False))
     else:

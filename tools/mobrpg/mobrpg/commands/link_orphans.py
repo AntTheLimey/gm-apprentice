@@ -31,6 +31,7 @@ import re
 import sys
 
 from mobrpg.commands import map_cmd
+from mobrpg.vault import warn_subfolder_notes
 
 ROMAN = r"(?:I{1,3}|IV|VI{0,3}|IX|XI{0,2})"
 
@@ -238,6 +239,7 @@ def run(argv: list[str]) -> int:
     args = ap.parse_args(argv)
 
     vault = os.path.expanduser(args.vault)
+    warn_subfolder_notes(vault, map_cmd.FOLDERS)
     # longest first, like the vault-derived list, so "Corwin Prime Gate" is tried
     # against "Corwin Prime" before "Corwin"
     systems = sorted((s.strip() for s in args.systems.split(",") if s.strip()),

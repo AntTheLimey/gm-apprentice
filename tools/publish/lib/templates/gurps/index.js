@@ -17,7 +17,8 @@ function renderGURPSSheet(frontmatter, sections, meta) {
   const sheetHtml = buildSheet(model, overflowNotes(sections, [...GURPS_CONSUMED_TITLES, ...EQUIPMENT_SECTION_TITLES].filter(t => !RICH_COMBAT_TITLES.includes(t))));
   let equipmentHtml = buildEquipment(model);
   // With no sheet to carry them, the Equipment tab (which takes those sections off the page) lists their extra cells.
-  if (!sheetHtml && equipmentHtml) equipmentHtml += '\n' + (renderRowNotes(overflowNotes(sections, [...EQUIPMENT_SECTION_TITLES])) || '');
+  const equipmentNotes = !sheetHtml && equipmentHtml ? renderRowNotes(overflowNotes(sections, [...EQUIPMENT_SECTION_TITLES])) : null;
+  if (equipmentNotes) equipmentHtml += '\n' + equipmentNotes;
   return {
     sheetHtml,
     combatHtml: buildCombat(model, sections || [], tohitData ? tohitMarkup(tohitData) : ''),

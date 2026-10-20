@@ -53,12 +53,36 @@ def iter_linked_notes(vault: str, folders=None):
     notes are covered too; sync and suggest must not, since nothing pushes a
     heritage upstream."""
     vault = os.path.expanduser(vault)
+    warn_subfolder_notes(vault, folders or map_cmd.FOLDERS)
     for folder in (folders or map_cmd.FOLDERS):
         for path in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
-            txt = open(path, encoding="utf-8").read()
+            try:
+                with open(path, encoding="utf-8") as fh:
+                    txt = fh.read()
+            except (OSError, UnicodeDecodeError) as e:
+                print(f"  could not read {os.path.relpath(path, vault)} ({e}); skipped",
+                      file=sys.stderr)
+                continue
             nd = node.read_node(txt)
             if nd and nd.get("element_id"):
                 yield path, txt, nd
+
+
+def warn_subfolder_notes(vault: str, folders) -> list[str]:
+    """Say which notes sit in a subfolder of a push folder. The vault layout is flat
+    and every command lists `<folder>/*.md`, so such a note is invisible to sync,
+    suggest and link-orphans; a warning beats a silent miss. Returns the paths."""
+    vault = os.path.expanduser(vault)
+    deep = []
+    for folder in folders:
+        for p in sorted(glob.glob(os.path.join(vault, folder, "**", "*.md"), recursive=True)):
+            if os.path.dirname(p) == os.path.join(vault, folder):
+                continue
+            rel = os.path.relpath(p, vault).replace(os.sep, "/")
+            deep.append(rel)
+            print(f"  WARNING: {rel} is in a subfolder and is not seen; move it up into "
+                  f"{folder}/ (the vault layout is flat)", file=sys.stderr)
+    return deep
 
 
 def read_map(vault: str) -> dict:
