@@ -94,6 +94,7 @@
     "has_intelligence_on": [{"use": "infiltrates", "flip": false}, {"use": "studies", "flip": false}],
     "spies_on": [{"use": "infiltrates", "flip": false}, {"use": "studies", "flip": false}],
     "watches": [{"use": "infiltrates", "flip": false}, {"use": "studies", "flip": false}],
+    "visited_by": [{"use": "located_at", "flip": true}, {"use": "participated_in", "flip": true}],
     "affiliated_with": [{"use": "member_of", "flip": false}, {"use": "allied_with", "flip": false}],
     "investigated_by": [],
     "questioned": [],

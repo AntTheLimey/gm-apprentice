@@ -386,6 +386,16 @@
         "flip": false
       }
     ],
+    "visited_by": [
+      {
+        "use": "located_at",
+        "flip": true
+      },
+      {
+        "use": "participated_in",
+        "flip": true
+      }
+    ],
     "affiliated_with": [
       {
         "use": "member_of",

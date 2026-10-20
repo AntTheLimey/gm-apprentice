@@ -91,7 +91,11 @@ function check(model, ontology, { vaultPath } = {}) {
   const symmetric = new Set(ontology.predicates.filter((p) => p.symmetric).map((p) => p.type));
   // Python's dict keeps the last of two predicates that share an inverse name; so does this.
   const inverseOf = new Map();
-  for (const p of ontology.predicates) if (p.inverse) inverseOf.set(p.inverse, p.type);
+  // A name that has its own row in `verbs` (visited_by) keeps that row's findings; the site
+  // reads it as an inverse name all the same (lib/ontology.js).
+  for (const p of ontology.predicates) {
+    if (p.inverse && !Object.prototype.hasOwnProperty.call(ontology.verbs, p.inverse)) inverseOf.set(p.inverse, p.type);
+  }
   const toneWords = new Map();
   for (const [family, list] of Object.entries(ontology.tones)) for (const w of list) toneWords.set(w, family);
   const notEdgeTypes = new Set(ontology.not_edge_target_types);

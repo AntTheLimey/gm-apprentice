@@ -58,10 +58,10 @@ test('an inverse name is the old inverse row, byte for byte, and its fix is cert
   assert.deepStrictEqual([f.kind, f.fix, f.edgeIndex, f.form, f.mobrpg], ['off-vocabulary', { certain: true, choices: ['employs'], flip: true }, 0, 'list', false]);
 });
 
-test('visited_by is the inverse of visited, so its fix is certain (#368)', () => {
+test('visited_by is read by the site but checked as it always was: a finding that asks, never a flip (#368)', () => {
   const dir = vault({ 'A.md': note('location', rels(edge('visited_by', 'B'))), ...Object.fromEntries([target('B')]) });
   const [f] = findings(dir);
-  assert.deepStrictEqual(f.fix, { certain: true, choices: ['visited'], flip: true });
+  assert.deepStrictEqual(f.fix, { certain: false, choices: ['located_at', 'participated_in'] });
 });
 
 test('a verb with one meaning says what it means, and says when to store it on the other note', () => {
