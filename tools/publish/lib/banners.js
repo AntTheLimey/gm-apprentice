@@ -1,4 +1,4 @@
-const fs = require('fs');
+const { readerFrom } = require('./vault-reader');
 const path = require('path');
 const { escapeHtml, encodeImageUrl } = require('./processor');
 
@@ -37,11 +37,12 @@ function sourceFolderFor(dir, folderMap) {
   return null;
 }
 
-function findConventionBanner(vaultPath, folder) {
+function findConventionBanner(vaultPath, folder, deps) {
+  const rd = readerFrom(deps);
   if (!folder) return null;
   for (const ext of BANNER_EXTS) {
     const rel = `${folder}/${CONVENTION_BASENAME}.${ext}`;
-    if (fs.existsSync(path.join(vaultPath, rel))) return rel;
+    if (rd.exists(path.join(vaultPath, rel))) return rel;
   }
   return null;
 }
@@ -51,11 +52,11 @@ function findConventionBanner(vaultPath, folder) {
  *
  * @returns {{image: string, link: string|null, alt: string|null}|null} vault-relative paths
  */
-function resolveBanner(dir, { vaultPath, folderMap, banners }) {
+function resolveBanner(dir, { vaultPath, folderMap, banners, deps }) {
   const configured = normalizeEntry((banners || {})[dir]);
   if (configured) return configured;
 
-  const conventional = findConventionBanner(vaultPath, sourceFolderFor(dir, folderMap));
+  const conventional = findConventionBanner(vaultPath, sourceFolderFor(dir, folderMap), deps);
   return conventional ? { image: conventional, link: null, alt: null } : null;
 }
 

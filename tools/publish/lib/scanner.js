@@ -1,4 +1,3 @@
-const fs = require('fs');
 const path = require('path');
 const { parseNote, cutValueComments, commentFields } = require('./frontmatter');
 const { shapeFrontmatter } = require('./frontmatter-shape');
@@ -7,6 +6,15 @@ const { canonicalNfc, nfcLookupTable } = require('./unicode');
 const { linkText, labelsForLinks } = require('./wikilink');
 const { entry, nameIn, fileLabel } = require('./settings');
 const { WRAP_UP_TYPES } = require('./shared-lists');
+const { readerFrom, readError } = require('./vault-reader');
+
+// A listing or a read through `rd`, with a failure named by its vault-relative path.
+function listing(rd, vaultPath, dir) {
+  try { return rd.readdir(dir); } catch (err) { throw readError(toPosix(path.relative(vaultPath, dir)) || '.', err); }
+}
+function reading(rd, vaultPath, file) {
+  try { return rd.readFile(file); } catch (err) { throw readError(toPosix(path.relative(vaultPath, file)), err); }
+}
 
 function slugify(name) {
   const slug = name
@@ -79,7 +87,8 @@ function mapFolder(vaultRelPath, folderMap) {
 // the walk reports and the printing lives one level up.
 // `quiet` skips the one warning printed during the walk (a page-slug collision) for a
 // caller that only needs the pages and will have the build report it.
-function scanVaultReport(config, { quiet = false } = {}) {
+function scanVaultReport(config, { quiet = false, deps } = {}) {
+  const rd = readerFrom(deps);
   const { vaultPath, excludeDirs, folderMap } = config;
   const pages = [];
   // Vault-relative paths of .md files carrying no `type:`. They never publish,
@@ -105,7 +114,7 @@ function scanVaultReport(config, { quiet = false } = {}) {
   const claimedOutputPaths = new Map();
 
   function walk(dir) {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    const entries = listing(rd, vaultPath, dir);
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
       const relPath = toPosix(path.relative(vaultPath, fullPath));
@@ -114,7 +123,7 @@ function scanVaultReport(config, { quiet = false } = {}) {
         if (dirIsExcluded(relPath, excludeDirs) || entry.name.startsWith('.')) continue;
         walk(fullPath);
       } else if (entry.name.endsWith('.md')) {
-        const raw = fs.readFileSync(fullPath, 'utf-8');
+        const raw = reading(rd, vaultPath, fullPath);
         let frontmatter, content;
         try {
           ({ data: frontmatter, content } = parseNote(raw));
@@ -194,8 +203,8 @@ function scanVaultReport(config, { quiet = false } = {}) {
 
 // The build's entry point: the pages, with the three "could not publish this"
 // classes reported to the console rather than returned.
-function scanVault(config) {
-  return warnScanReport(scanVaultReport(config));
+function scanVault(config, opts = {}) {
+  return warnScanReport(scanVaultReport(config, opts));
 }
 
 const MISTYPED_SHOWN = 10;
@@ -296,13 +305,14 @@ function buildLinkMap(pages) {
   return nfcLookupTable(map);
 }
 
-function scanAttachments(config) {
+function scanAttachments(config, deps) {
+  const rd = readerFrom(deps);
   const { vaultPath, attachmentsDir, excludeDirs } = config;
   const attachmentsPath = path.join(vaultPath, attachmentsDir || entry('vault.attachments').default);
   const map = Object.create(null);
 
   // Wrapped on this path too: the returned type must not depend on whether _attachments/ exists.
-  if (!fs.existsSync(attachmentsPath)) return nfcLookupTable(map);
+  if (!rd.exists(attachmentsPath)) return nfcLookupTable(map);
 
   // Same vault-relative exclusion rule scanVaultReport applies to pages (#210): a GM who
   // lists a folder in excludeDirs — including a subfolder of the attachments tree, e.g.
@@ -324,7 +334,7 @@ function scanAttachments(config) {
   const IMAGE_EXTS = /\.(jpe?g|png|webp|gif|svg|avif)$/i;
 
   function walk(dir) {
-    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    const entries = listing(rd, vaultPath, dir);
     for (const entry of entries) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
@@ -376,7 +386,8 @@ function isStoryCompanion(pcFrontmatter, storyFrontmatter) {
   return !!(pcFrontmatter && pcFrontmatter.type === 'pc' && storyFrontmatter && storyFrontmatter.type);
 }
 
-function pairStoryFiles(pages, vaultPath) {
+function pairStoryFiles(pages, vaultPath, deps) {
+  const rd = readerFrom(deps);
   const pcPages = pages.filter(p => p.frontmatter.type === 'pc');
   const storyIndices = new Set();
 
@@ -388,10 +399,12 @@ function pairStoryFiles(pages, vaultPath) {
     const idx = pages.findIndex(p => p.sourcePath === storyPath);
     if (idx !== -1 && isStoryCompanion(pc.frontmatter, pages[idx].frontmatter)) storyIndices.add(idx);
 
-    if (fs.existsSync(storyPath)) {
+    if (rd.exists(storyPath)) {
       let data, content;
+      // A file that cannot be read stops the scan; one that reads but does not parse is skipped, with a warning.
+      const text = reading(rd, vaultPath, storyPath);
       try {
-        ({ data, content } = parseNote(fs.readFileSync(storyPath, 'utf-8')));
+        ({ data, content } = parseNote(text));
       } catch (e) {
         console.warn(`scanner: skipping story file ${storyPath} — malformed frontmatter: ${e.message}`);
         continue;
@@ -413,11 +426,12 @@ function pairStoryFiles(pages, vaultPath) {
 const HOUSEKEEPING_TYPE_LINE = /^type[ \t]*:\s*["']?(meta|template)["']?\s*$/m;
 const SESSION_TYPE_LINE = new RegExp(`^type[ \\t]*:\\s*["']?(session|${[...WRAP_UP_TYPES].join('|')})["']?\\s*$`, 'm');
 
-function scanAllNotes(vaultPath) {
+function scanAllNotes(vaultPath, deps) {
+  const rd = readerFrom(deps);
   const out = [];
   (function walk(dir) {
-    let entries;
-    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { return; }
+    // A folder that cannot be listed stops the scan: a quiet return here left its notes out of the audit (#424).
+    const entries = listing(rd, vaultPath, dir);
     for (const e of entries) {
       if (e.name.startsWith('.') || e.name === 'node_modules') continue;
       const full = path.join(dir, e.name);
@@ -425,9 +439,9 @@ function scanAllNotes(vaultPath) {
       if (!e.isFile() || !e.name.toLowerCase().endsWith('.md')) continue;
       const title = e.name.slice(0, -3);
       let frontmatter = {};
-      let text = '';
+      // A note that cannot be read stops the scan; one that reads but does not parse keeps its name below.
+      const text = reading(rd, vaultPath, full);
       try {
-        text = fs.readFileSync(full, 'utf8');
         // Only a note that declares aliases (or is `withheld`) needs its frontmatter parsed — or a session
         // index or Wrap-Up the scan skipped, which session-hub.js still counts when it
         // resolves a pairing link (a same-titled hub elsewhere makes a link ambiguous).

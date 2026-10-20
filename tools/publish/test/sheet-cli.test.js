@@ -124,6 +124,7 @@ function run(over = {}) {
     config: CONFIG,
     publishConfig: PUBLISH_CONFIG,
     scan: pages,
+    scanAllNotes: () => [],
     readFile: (p) => (p === '/vault/Characters/PCs/Jane_Ashford.md' ? JANE_RAW : '---\ntype: pc\n---\n'),
     out: (m) => out.push(String(m)),
     err: (m) => err.push(String(m)),
