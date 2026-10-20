@@ -1,6 +1,7 @@
 """migrate_vault.py: the checks that read and write vault files alone."""
 
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -691,6 +692,12 @@ class TemplateTests(unittest.TestCase):
             "_Template_Document.md": {mv.text_hash(old): "1.10.20"}}})
         self.assertEqual(self.doc(vault).group, WILL)
 
+    # Rebuilding the history from every release tag takes ~10 s. CI sets CI,
+    # so it runs there on every change; locally it runs when asked for:
+    # GM_FULL_HISTORY_CHECK=1 python -m pytest tests/test_migrate_vault.py
+    @unittest.skipUnless(
+        os.environ.get("CI") or os.environ.get("GM_FULL_HISTORY_CHECK"),
+        "slow: runs in CI, or locally with GM_FULL_HISTORY_CHECK=1")
     def test_the_checked_in_history_is_what_the_script_would_write(self):
         history = json.loads(mv.HISTORY.read_text(encoding="utf-8"))
         tags = th.release_tags()
