@@ -39,3 +39,13 @@ test('removing two spellings of one built-in entry says "no longer hidden" once 
   assert.equal(rc, 0, out);
   assert.equal(out.split('\n').filter((l) => l.includes('no longer hidden')).length, 1, out);
 });
+
+test('a stop and a warning together: the stop message carries the warning too (#373)', () => {
+  const s = scratch('version: 1\nplayer_site:\n  title: [a, b]\n  hide:\n    sections: {a: 1}\n');
+  const { loadPublishConfig, assertNoStops } = require('../lib/config');
+  const cfg = loadPublishConfig(s.vault, { vaultPath: s.vault }, () => {}, { siteDir: s.root });
+  let message = '';
+  try { assertNoStops(cfg, 'build'); } catch (e) { message = e.message; }
+  assert.match(message, /hide\.sections/);
+  assert.match(message, /player_site\.title/, message);
+});
