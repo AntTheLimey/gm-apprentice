@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.84] — 2026-10-20
+
+Bug Bash batch 5: update, settings and migrate left-overs.
+Publish tool 1.42.0.
+
+### Changed
+
+- Old template fingerprints expire by version: `template-history.json`
+  records the last release that wrote each one and drops those last
+  written before the oldest vault the update migrates from (349 to 224)
+  (#455).
+- A vault with `_meta` but no settings file and no version stamp is
+  reported as first-time setup, not as a migration (#381).
+- A stop that comes with warnings lists the warnings too ("Also:"); a
+  failed after-build step says the pages were built but not published
+  (#373, #386).
+- Settings messages: `settings get` says "not set" instead of `null`; an
+  empty `settings add` is refused; an `exclude_dirs` entry outside the
+  vault says so; a missing menu link reads "is missing its `link`"
+  (#373, #386).
+- `--vault` without `--config` reads the settings still in the site
+  file the vault names (#373).
+- Build steps run as plain shell commands without npm's variables; the
+  settings guide says so (#386).
+
+### Fixed
+
+- `manifest apply` on a vault still on the old publish manifest kept an
+  unticked entry unticked; it used to write it back ticked, so the note
+  would publish (#403).
+- A vault `player_site.keep` that leaves out folders the site file
+  keeps is a stop naming them; the build would have emptied them
+  (#386).
+- The settings move refuses an absolute output folder outside the site
+  folder, and reports an empty `after_build` it replaced with the
+  site's `postbuild` (#386).
+- A site pin given as an address or a range the build can't read for
+  sure is held, not read by the first numbers in it (#381).
+- A misplaced setting nested inside a known group gets one finding per
+  value with where it belongs, so the Settings check can carry it
+  (#381).
+- `[[wikilinks]]` in the landing banner print as names; a tall banner
+  picture has a height cap (#388, #386).
+- The update plan names `vault-config.yaml` for the exclude lists; a
+  vault number the scripts can't read says the default was used (#388).
+- The settings writer refuses a hiding list written as a YAML alias
+  instead of losing its entries, adds after a `|+` block with trailing
+  blank lines, and moves a removed list's comments to the key (#380,
+  #386).
+- Shell built-ins such as `unset` and `eval` keep a build step whole
+  (#386).
+- `migrate --choose schema-mirror=leave` is covered by tests (#405).
+
 ## [1.10.83] — 2026-10-20
 
 Bug Bash batch 4: wrap-up and QA chores the model did by hand become

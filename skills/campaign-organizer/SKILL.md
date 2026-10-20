@@ -65,7 +65,7 @@ On first contact with a vault:
 
 **Version check** (once per session): run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
-version`. `OK`/`SETUP` → proceed. `MISMATCH` → announce the row,
+version`. `OK` → proceed. `SETUP` → run `references/vault-setup.md`. `MISMATCH` → announce the row,
 run `references/migration-procedure.md`, then resume the request.
 `AHEAD` → announce the row, tell the GM to update the plugin, stop.
 `ERROR` → report the row (broken plugin install), stop. No verdict

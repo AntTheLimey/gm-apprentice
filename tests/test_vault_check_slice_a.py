@@ -386,6 +386,18 @@ class VersionCommandTests(unittest.TestCase):
                         message)
         self.assertEqual(code, 1)
 
+    def test_meta_with_no_settings_file_is_setup_not_migration(self):
+        # #381: a `_meta/` that never had a settings file read as a vault
+        # behind its plugin, and the migration refused it with "1.10.25 first".
+        vault = make_vault(self, config=None, meta=True, site=False)
+        (token, path, message), code = self.verdict(vault)
+        self.assertEqual(token, "SETUP")
+        self.assertEqual(path, "(vault)")
+        self.assertIn("no settings file", message)
+        self.assertIn("references/vault-setup.md", message)
+        self.assertNotIn("vault-config.md", message)
+        self.assertEqual(code, 0)
+
     def test_no_meta_is_first_time_setup_not_migration(self):
         (token, path, message), code = self.verdict(FIXTURES / "version-nometa")
         self.assertEqual(token, "SETUP")

@@ -475,14 +475,14 @@ describe('getExploreDescriptions', () => {
 describe('statusLabel (In Memoriam labels)', () => {
   const { statusLabel } = require('../../lib/templates/landing');
   const DEFAULT_OUT_OF_PLAY = require('../../lib/settings').entry('vault.statuses.out_of_play').default;
-  it('never labels an out-of-play status "Active"', () => {
+  it('gives every default out-of-play status a label of its own', () => {
     for (const s of DEFAULT_OUT_OF_PLAY) {
-      assert.notStrictEqual(statusLabel(s), 'Active', s);
-      assert.notStrictEqual(statusLabel(` ${s.toUpperCase()} `), 'Active', s);
+      assert.ok(statusLabel(s), s);
+      assert.strictEqual(statusLabel(` ${s.toUpperCase()} `), statusLabel(s), s);
     }
   });
-  it('labels in-play and absent statuses "Active"', () => {
-    assert.strictEqual(statusLabel('active'), 'Active');
-    assert.strictEqual(statusLabel(undefined), 'Active');
+  it('has no label for a status the GM added, or none (the card shows it as written)', () => {
+    assert.strictEqual(statusLabel('active'), null);
+    assert.strictEqual(statusLabel(undefined), null);
   });
 });

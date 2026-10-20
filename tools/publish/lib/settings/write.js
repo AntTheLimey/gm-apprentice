@@ -81,6 +81,8 @@ function endOf(node, text) {
   // A block scalar's range runs through its last line break; the content ends before it.
   if (isScalar(node) && (node.type === 'BLOCK_LITERAL' || node.type === 'BLOCK_FOLDED')) {
     let end = node.range[1];
+    // A keep-chomped one (`|+`) holds its trailing blank lines as content: it ends at its last line break, not before them.
+    if (/^[|>][^\s#]*\+/.test(text.slice(node.range[0], node.range[0] + 6)) && end > node.range[0]) return end - 1;
     while (end > node.range[0] && (text[end - 1] === '\n' || text[end - 1] === '\r')) end--;
     return end;
   }
@@ -215,7 +217,27 @@ function replaceValue(text, pair, value, ctx) {
   if (!isFilled(value)) {
     const text1 = ` ${inline(value, v, ctx)}`;
     if (sameLine) return [{ from: cEnd, to: empty ? cEnd : endOf(v, text), text: text1 }];
-    return [{ from: cEnd, to: cEnd, text: text1 }, dropLines(text, v.range[0], endOf(v, text), eol)];
+    // Comment lines the list had between its entries stay, at the key's level: left indented they would read as part of `[]`.
+    const dropped = dropLines(text, v.range[0], endOf(v, text), eol);
+    // Comment lines between the entries are inside the dropped range: they go back in its place, at the key's level.
+    const between = [...text.slice(dropped.from, dropped.to).matchAll(/^[ \t]*(#[^\n]*?)\r?$/gm)].map((m) => ' '.repeat(keyCol) + m[1]);
+    if (between.length) dropped.text = (dropped.from < lineStart(text, v.range[0]) ? eol : '') + between.join(eol) + (dropped.to === text.length && !text.endsWith('\n') ? '' : eol);
+    const kept = [];
+    const reindent = (from, to) => {
+      for (const m of text.slice(from, to).matchAll(/^([ \t]+)#[^\n]*$/gm)) kept.push({ from: from + m.index, to: from + m.index + m[1].length, text: ' '.repeat(keyCol) });
+    };
+    reindent(lineFullEnd(text, cEnd), dropped.from);
+    // After the list: the comment lines indented deeper than the key, up to the next line that is neither.
+    let end = dropped.to;
+    for (let at = dropped.to; at < text.length;) {
+      const line = text.slice(at, lineFullEnd(text, at));
+      const indent = /^[ \t]*/.exec(line)[0].length;
+      if (!(line.trim() === '' || (line.trim().startsWith('#') && indent > keyCol))) break;
+      at += line.length;
+      end = at;
+    }
+    reindent(dropped.to, end);
+    return [{ from: cEnd, to: cEnd, text: text1 }, dropped, ...kept];
   }
   const block = entryLines('k', value, ctx, keyCol).slice(1);
   if (empty) return [addLines(text, cEnd, block, eol)];
@@ -617,6 +639,8 @@ function runStep(text, step, label, eol, keepBlock) {
     return { text: cur, expected, wrote, removed, notes };
   }
   // list
+  // A list written as an alias (`sections: *a`) is not read here as a list, so a change would start from the built-in entries and lose its own.
+  if (YAML.isAlias(doc.getIn(step.keys, true))) throw plain(`${step.setting} is written as a YAML alias (a * reference); write the list out in full there first, then change it.`);
   const held = getPath(before, step.keys);
   if (held === true || held === false) {
     if (step.entry.type === 'switchOrList' && held === true) throw plain(`${step.setting} is on, which hides every one of its kind, so a list cannot be changed; use settings set ${step.setting} to give a list or turn it off.`);

@@ -24,8 +24,8 @@ const sources = [...files(path.join(ROOT, 'lib')), ...files(path.join(ROOT, 'bin
 const rel = (f) => path.relative(ROOT, f).split(path.sep).join('/');
 const text = (f) => fs.readFileSync(f, 'utf8');
 // A source file with its comments taken out, so a sentence about a setting is not code: whole
-// comment lines, block comments that start a line, and `  // ...` after code.
-const code = (f) => text(f).replace(/^[ \t]*\/\*[\s\S]*?\*\//gm, '').replace(/^[ \t]*\/\/.*$/gm, '').replace(/\s\/\/\s.*$/gm, '');
+// comment lines, block comments that start a line, `  // ...` after code, and `/* ... */` inside one line.
+const code = (f) => text(f).replace(/^[ \t]*\/\*[\s\S]*?\*\//gm, '').replace(/^[ \t]*\/\/.*$/gm, '').replace(/\s\/\/\s.*$/gm, '').replace(/\/\*[^\n]*?\*\//g, '');
 const grep = (re, read = text) => sources.filter((f) => re.test(read(f))).map(rel);
 
 test('the scan sees the code it is meant to check', () => {

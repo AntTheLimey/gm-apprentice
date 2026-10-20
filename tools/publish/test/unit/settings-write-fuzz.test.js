@@ -91,7 +91,7 @@ function generate(r, legacy) {
     if (leaf.kind === 'switch') {
       lines.push({ t: `${pad}${k}: ${pick(['true', 'false', '"on"', 'no'])}${eolComment()}`, owner: own });
     } else if (leaf.kind === 'text') {
-      const style = pick(['inline', 'inline', 'inline', 'literal', 'literal-strip', 'folded']);
+      const style = pick(['inline', 'inline', 'inline', 'literal', 'literal-strip', 'folded', 'literal-keep']);
       if (style === 'inline') {
         lines.push({ t: `${pad}${k}: ${scalarText()}${eolComment()}`, owner: own });
       } else {
@@ -99,6 +99,8 @@ function generate(r, legacy) {
         lines.push({ t: `${pad}${k}: ${head}`, owner: own });
         const n = 1 + Math.floor(r() * 3);
         for (let i = 0; i < n; i++) lines.push({ t: `${' '.repeat(col + indent)}${unique('body line')}`, owner: own });
+        // A keep-chomped block holds its trailing blank lines as content.
+        if (style === 'literal-keep') for (let i = 0; i < 1 + Math.floor(r() * 2); i++) lines.push({ t: '', owner: own });
       }
     } else {
       const style = pick(['block', 'block', 'flow', 'empty', 'null']);

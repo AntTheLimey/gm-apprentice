@@ -49,8 +49,17 @@ const reaches = (e, scope) => inScope(e.name, scope) || oldNamesOf(e).some((n) =
 function target(options) {
   const { loadVaultConfig } = require('../config');
   if (options.vault) {
-    const config = options.config ? path.resolve(options.config) : null;
-    return { vaultPath: path.resolve(options.vault), siteConfig: config && fs.existsSync(config) ? loadVaultConfig(config) : {} };
+    const vaultPath = path.resolve(options.vault);
+    // With no --config, the site folder is the one the vault names, as the move finds it; --no-site-file reads none
+    // (the vault scripts ask for it, and read the site file themselves).
+    const named = options.config || options.noSiteFile ? null : siteFileNamedBy(vaultPath);
+    const config = options.config ? path.resolve(options.config) : (named && named.exists ? named.file : null);
+    let siteConfig = {};
+    if (options.config && !fs.existsSync(config)) throw new Error(`--config ${config} does not exist`);
+    if (config && fs.existsSync(config)) {
+      try { siteConfig = loadVaultConfig(config); } catch (e) { if (options.config) throw e; }
+    }
+    return { vaultPath, siteConfig };
   }
   const config = path.resolve(options.config || './vault.config.json');
   const siteConfig = loadVaultConfig(config);
@@ -148,7 +157,7 @@ function get(options, names) {
     written: Object.fromEntries(Object.keys(now).map((n) => [n, nameInFor(read.layout, n)])),
     faults: faults.map(faultJson),
   };
-  const lines = Object.entries(now).map(([n, s]) => `${n}: ${plainValue(s.value)} (${ORIGIN_WORDS[s.origin] || s.origin})`);
+  const lines = Object.entries(now).map(([n, s]) => `${n}: ${s.value === null ? 'not set' : plainValue(s.value)} (${ORIGIN_WORDS[s.origin] || s.origin})`);
   if (faults.length) lines.push('', ...faults.map(faultLine));
   return { result, lines, notices: noticesFor(names) };
 }
@@ -275,6 +284,7 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
 
   --vault <dir>    The vault (default: the vaultPath in the config)
   --config <path>  The site folder's vault.config.json (default: ./vault.config.json)
+  --no-site-file   With --vault and no --config: do not read the site folder file the vault names
   --create         With set: make the settings file when the vault has none yet
   --json           Print JSON
   --help, -h       Show this help
@@ -551,9 +561,14 @@ function changeList(options, verb, args) {
       return { errors: [`${item.length > 60 ? `${item.slice(0, 60)}…` : item} is not an entry; write each entry as plain text or in quotes, or give a list of text like '["A","B"]'.`] };
     } else texts.push(typeof v === 'string' ? v : item.trim());
   }
+  if (!texts.length) return { errors: [`${name}: there are no entries to ${verb}; give each entry as plain text or in quotes.`] };
   const entries = [];
   for (let v of texts) {
-    if (e.same === 'folder') v = normalizeExcludeDir(v, vaultPath) ?? '';
+    if (e.same === 'folder' && v.trim() !== '') {
+      const tidy = normalizeExcludeDir(v, vaultPath);
+      if (tidy === null) return { errors: [`${name} has an entry that is not a folder inside the vault: ${JSON.stringify(v)}; remove it.`] };
+      v = tidy;
+    }
     if (v.trim() === '') return { errors: [`${name} has a blank entry; remove it.`] };
     entries.push(v);
   }
@@ -591,9 +606,15 @@ function changeList(options, verb, args) {
       const after = getPath(readSettings({ vaultPath, siteConfig }).values, e.name.split('.')) || [];
       for (const x of result.removed) {
         if (Array.isArray(after) && after.some((a) => isSame(a, x))) result.notes.push(`${JSON.stringify(x)} still applies, because vault.config.json also lists it; remove it there too.`);
-        else if (e.guards && Array.isArray(e.default) && e.default.some((d) => isSame(d, x))) result.notes.push(`${JSON.stringify(x)} was built in to ${shownAs} and is no longer hidden.`);
+        else if (e.guards && Array.isArray(e.default) && e.default.some((d) => isSame(d, x))) {
+          // One note for each built-in entry, however many spellings of it were taken out.
+          const note = `${JSON.stringify(e.default.find((d) => isSame(d, x)))} was built in to ${shownAs} and is no longer hidden.`;
+          if (!result.notes.includes(note)) result.notes.push(note);
+        }
       }
     }
+    // Adding to a list the file holds empty (`[]`) starts from nothing: the built-in entries are not in it.
+    if (verb === 'add' && e.guards && Array.isArray(e.default) && e.default.length > 0 && current.length === 0 && read.origins[e.name] === 'file') result.notes.push(`${shownAs} was empty, so the built-in ${e.of || 'entries'} are not in it; add any you still want hidden.`);
     // Not said when the site file's own entries still hide something.
     const stillApplies = verb === 'remove' && result.notes.some((n) => n.includes(' still applies,'));
     if (!stillApplies && list.length === 0 && Array.isArray(e.default) && e.default.length > 0) result.notes.push(emptyNote(shownAs));
