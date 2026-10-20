@@ -86,6 +86,10 @@ def _base_repo() -> Path:
         _BASE = tempfile.TemporaryDirectory()
         root = Path(_BASE.name)
         git(root, "init", "-q", "-b", "main")
+        # No background gc/maintenance after the commit: it writes lock
+        # files into .git while the tests copy it.
+        git(root, "config", "maintenance.auto", "false")
+        git(root, "config", "gc.auto", "0")
         _write(root, "ATTRIBUTION.md", ATTRIBUTION)
         _write(root, ".gitignore", GITIGNORE)
         for system, notice in NOTICES.items():
