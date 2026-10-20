@@ -1,15 +1,15 @@
 'use strict';
 // A tall banner picture on a phone, measured in a real browser (#386): the picture is capped in height and shown
-// whole, not stretched to its own height. Skipped without Chrome or Chromium (set GM_TEST_CHROME to point at one).
+// whole, not stretched to its own height. Skipped without Chrome or Chromium (set GM_TEST_CHROME to point at one), except on CI.
 // Replaces a test of the stylesheet's rule text.
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { buildBoth } = require('./helpers/gm-build');
 const { makePng } = require('./helpers/make-png');
-const { findChrome, measure } = require('./helpers/browser');
+const { browserSkip, measure } = require('./helpers/browser');
 
-const skip = findChrome() ? false : 'no Chrome or Chromium found';
+const skip = browserSkip();
 
 describe('the landing banner picture on a phone, in a browser', { skip }, () => {
   let site;

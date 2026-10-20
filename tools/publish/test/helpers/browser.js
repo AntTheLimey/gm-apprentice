@@ -2,7 +2,8 @@
 // A real browser for the few checks a vm cannot make (layout: wrapping, stacking, measured lines). It drives an
 // installed Chrome or Chromium straight from the command line (no npm package): the page under test is shown in an
 // iframe of the width asked for, so its media queries see that width, a probe script written into the page measures it,
-// and `--dump-dom` carries the answer out. Without a browser the test is skipped, and says so; CI's runners have one.
+// and `--dump-dom` carries the answer out. Without a browser the test is skipped, and says so, except on CI, where
+// it fails: CI's runners have one, and a check that skips there is a check that never runs.
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
@@ -12,15 +13,25 @@ const CANDIDATES = [
   process.env.CHROME_PATH,
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
+  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
   'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'chrome',
 ].filter(Boolean);
 
 function findChrome() {
   for (const c of CANDIDATES) {
-    if (c.includes('/') ? fs.existsSync(c) : spawnSync(c, ['--version'], { stdio: 'ignore' }).status === 0) return c;
+    if (/[\\/]/.test(c) ? fs.existsSync(c) : spawnSync(c, ['--version'], { stdio: 'ignore' }).status === 0) return c;
   }
   return null;
 }
+
+// The `skip` for a browser check: a reason without a browser, but never on CI, where the check runs and fails.
+function browserSkip() {
+  return findChrome() || process.env.CI ? false : 'no Chrome or Chromium found (set GM_TEST_CHROME to point at one)';
+}
+
+// A file URL that also works for a Windows path.
+const fileUrl = (p) => `file://${p.replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')}`;
 
 // `script` runs in the page once it has loaded, with `done(result)` to call with a JSON-able answer. A page error
 // raised at any time is added to the result as `errors`. Returns the result.
@@ -41,11 +52,11 @@ function measure(pagePath, width, script, { height = 900, wait = 6000 } = {}) {
     + `<pre id="out"></pre><script>var t=setInterval(function(){try{var p=document.getElementById('f').contentDocument.getElementById('probe');`
     + `if(p){document.getElementById('out').textContent='RESULT'+p.textContent+'END';clearInterval(t);}}catch(e){document.getElementById('out').textContent='RESULT'+JSON.stringify({harnessError:String(e)})+'END';clearInterval(t);}},100);</script>`);
   const run = spawnSync(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--allow-file-access-from-files', '--window-size=1200,1000',
-    `--virtual-time-budget=${wait}`, '--dump-dom', `file://${harness}`], { encoding: 'utf8', timeout: 90000, stdio: ['ignore', 'pipe', 'ignore'] });
+    `--virtual-time-budget=${wait}`, '--dump-dom', fileUrl(harness)], { encoding: 'utf8', timeout: 90000, stdio: ['ignore', 'pipe', 'ignore'] });
   const m = /RESULT([\s\S]*?)END/.exec(run.stdout || '');
   if (!m) throw new Error(`the browser gave no answer (status ${run.status})`);
   const text = m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
   return JSON.parse(text);
 }
 
-module.exports = { findChrome, measure };
+module.exports = { findChrome, browserSkip, measure };

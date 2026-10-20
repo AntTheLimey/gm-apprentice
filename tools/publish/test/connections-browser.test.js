@@ -1,11 +1,11 @@
 'use strict';
 // The Connections layout in a real browser (#342): what the CSS tests (rule text) and the vm tests cannot hold.
-// Skipped without Chrome or Chromium (set GM_TEST_CHROME to point at one).
+// Skipped without Chrome or Chromium (set GM_TEST_CHROME to point at one), except on CI, where it fails.
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { buildBoth } = require('./helpers/gm-build');
-const { findChrome, measure } = require('./helpers/browser');
+const { browserSkip, measure } = require('./helpers/browser');
 
 const LONG = 'Wolfeschlegelsteinhausenbergerdorff'.repeat(2);
 const FILES = {
@@ -15,7 +15,7 @@ const FILES = {
   'Characters/Third.md': '---\ntype: npc\n---\nThird.\n',
   'Places/The Quay.md': '---\ntype: location\n---\nA quay.\n',
 };
-const skip = findChrome() ? false : 'no Chrome or Chromium found';
+const skip = browserSkip();
 
 describe('Connections in a browser at phone width', { skip }, () => {
   let site;
