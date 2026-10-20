@@ -237,7 +237,7 @@ Transformation: reproduced as an optional collapsible
 reference appendix with citation, displayed only when the
 user expands the details element.
 
-**`tools/publish/js/gurps-tohit.js`, `tools/publish/lib/templates/gurps/tohit-data.js`**
+**`tools/publish/lib/templates/gurps/blocks/tohit-rules.js`, `tools/publish/lib/templates/gurps/tohit-data.js`**
 Source: *GURPS Basic Set 4th Edition*, *GURPS Martial Arts* and
 *GURPS High-Tech* (Steve Jackson Games).
 License: SJG Online Policy

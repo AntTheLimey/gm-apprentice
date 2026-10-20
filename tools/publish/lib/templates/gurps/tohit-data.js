@@ -4,8 +4,10 @@
 // values come from the reference rows already shipped (B552, B550); the
 // Dual-Weapon Attack figure is the technique's default of skill-4, capped at
 // the skill (MA83, B230). Aid names are looked for; the bonus is whatever the note says.
+// The calculator's own rules numbers ride in the block as `rules` (blocks/tohit-rules.js, #420).
 
 const { HIT_LOCATION_ROWS, SIZE_SPEED_RANGE_ROWS } = require('./blocks/reference');
+const { TOHIT_RULES } = require('./blocks/tohit-rules');
 const { levelAtEnd } = require('./weapon-level');
 
 const AID_NAMES = [
@@ -23,7 +25,7 @@ const ALWAYS_ACC = new Set(['Scope', 'HUD link']);
 const SIGNED_RE = /(?:([+−])|(?:^|[\s(])(-))\s*(\d+)/;
 
 // Dual-Weapon Attack: default skill-4, so up to 4 points can be bought off (MA83, B230).
-const DUAL_PENALTY = 4;
+const DUAL_PENALTY = TOHIT_RULES.dualBoughtMax;
 
 // [key, label, the reference-table row label whose penalty it carries]. Arms and legs
 // are apart (a low target is harder to hit in the torso, groin and legs, not the arms, B548);
@@ -263,6 +265,20 @@ function readRowNotes(notes) {
     bonuses.push({ name: b[1].replace(/[\s:=(]+$/, '').trim(), bonus: (b[2] === '+' ? 1 : -1) * parseInt(b[3], 10) });
   }
   return { aids, bonuses };
+}
+
+// The RoF cell: `3`, a shotgun's `3x9` or `3×9` (shells, and the shots in each), a full-auto
+// `10!`. Markers after it (`3*`) are dropped. No number reads as 1 (#457).
+function readRof(cell) {
+  const m = /^\s*(\d+)\s*(?:[x×]\s*(\d+))?\s*(!)?/i.exec(str(cell));
+  if (!m) return { rof: 1, rofMult: 1, fullAuto: false };
+  return { rof: parseInt(m[1], 10) || 1, rofMult: m[2] ? parseInt(m[2], 10) || 1 : 1, fullAuto: !!m[3] };
+}
+// The 1/2D range in yards: the number before the slash (`700/2,100` is 700). A range written
+// as a multiple of ST (`×10/×15`) has none here.
+function halfDOf(cell) {
+  const m = /^\s*(\d[\d,]*)/.exec(str(cell));
+  return m ? parseInt(m[1].replace(/,/g, ''), 10) : null;
 }
 
 function readAccCell(cell) {
@@ -567,10 +583,12 @@ function buildTohitData(model, meta, report) {
       // An Equipment row named like this weapon is part of this weapon's own row.
       const stem = weaponStem(key);
       const own = items.filter(i => weaponStem(i.name) === stem).map(i => readRowNotes(i.notes));
-      Object.assign(w, {
-        acc: acc.acc, rof: firstInt(row.rof, 1) || 1, rcl: firstInt(row.rcl, 1) || 1,
-        bulk: firstInt(row.bulk, 0),
+      Object.assign(w, readRof(row.rof), {
+        acc: acc.acc, rcl: firstInt(row.rcl, 1) || 1,
+        bulk: firstInt(row.bulk, 0), halfD: halfDOf(row.range),
       });
+      // Most sheets have no Rcl column: the calculator then counts hits at Rcl 1 and says so.
+      if (!/\d/.test(str(row.rcl))) w.noRcl = true;
       // The same aid written twice (Acc `5+2` and Notes `Scope +2 Acc`): the later one stays,
       // since the Notes can say `fixed`.
       const all = [...acc.aids, ...notes.aids, ...own.flatMap(o => o.aids)];
@@ -665,6 +683,7 @@ function buildTohitData(model, meta, report) {
     freeFall: ff ? ff.level : null,
     locations,
     bands: buildBands(),
+    rules: TOHIT_RULES,
   };
 }
 
