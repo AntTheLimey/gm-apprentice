@@ -154,8 +154,9 @@ class PcBodyFileScopeTests(unittest.TestCase):
     """`Characters/PCs/Fenced.md` and `.../Late.md` each carry a finding;
     scoping to one must not surface the other's."""
 
-    def setUp(self):
-        self.unscoped = vc.check_pc_body(LEAK)
+    @classmethod
+    def setUpClass(cls):
+        cls.unscoped = vc.check_pc_body(LEAK)
 
     def test_unscoped_behaviour_unchanged(self):
         self.assertEqual(self.unscoped, vc.check_pc_body(LEAK, None, None))
@@ -249,123 +250,59 @@ class PathNormalizationTests(unittest.TestCase):
         self.assertEqual(plain.stdout, dotted.stdout)
         self.assertIn("Notes/Dirty Note.md", plain.stdout)
 
-    def test_repeated_leading_dot_slash_is_also_stripped(self):
+    def test_these_spellings_name_the_note(self):
+        # In-process on the resolver every `--file` goes through; the two
+        # CLI tests above and in NewerThanScopeTests keep the flag itself.
         parent, vault = make_scoped_vault(self)
-        proc = run_cli(vault, "tables",
-                       "--file", "././Notes/Dirty Note.md")
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn("Notes/Dirty Note.md", proc.stdout)
+        note = "Notes/Dirty Note.md"
+        for form, raw in (
+                ("repeated ./", "././Notes/Dirty Note.md"),
+                ("backslashes", "Notes\\Dirty Note.md"),
+                ("interior .. inside the vault", "Notes/../Notes/Dirty Note.md"),
+                ("doubled slashes", "Notes//Dirty Note.md"),
+                ("absolute", str(vault / "Notes" / "Dirty Note.md"))):
+            with self.subTest(form):
+                self.assertEqual(vc._resolve_vault_paths(vault, [raw]),
+                                 ([note], []))
+        # A name with spaces, matched on its own.
+        self.assertEqual(
+            vc._resolve_vault_paths(vault, ["Player Characters.md"]),
+            (["Player Characters.md"], []))
 
-    def test_backslashes_are_converted_to_forward_slashes(self):
-        parent, vault = make_scoped_vault(self)
-        proc = run_cli(vault, "tables",
-                       "--file", "Notes\\Dirty Note.md")
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn("Notes/Dirty Note.md", proc.stdout)
-
-    def test_a_path_that_escapes_the_vault_is_rejected(self):
-        # Real file, real relative path — but it resolves outside the
-        # vault, which must be caught even though the file exists.
-        parent, vault = make_scoped_vault(self)
-        proc = run_cli(vault, "tables", "--file", "../Outside.md")
-        self.assertEqual(proc.returncode, 2)
-        self.assertIn("../Outside.md", proc.stderr)
-        self.assertEqual(proc.stdout, "")
-
-    def test_a_skipped_directory_is_rejected_not_silently_empty(self):
-        # _Templates/Ignored.md is real on disk but vault_files never
-        # walks it — scoping to it must not read as a clean report.
-        parent, vault = make_scoped_vault(self)
-        proc = run_cli(vault, "tables", "--file", "_Templates/Ignored.md")
-        self.assertEqual(proc.returncode, 2)
-        self.assertIn("_Templates/Ignored.md", proc.stderr)
-
-    def test_a_hidden_path_is_rejected_not_silently_empty(self):
-        parent, vault = make_scoped_vault(self)
-        hidden = vault / ".obsidian"
-        hidden.mkdir()
-        (hidden / "Config.md").write_text(
-            "---\ntype: reference\n---\n", encoding="utf-8")
-        proc = run_cli(vault, "tables", "--file", ".obsidian/Config.md")
-        self.assertEqual(proc.returncode, 2)
-        self.assertIn(".obsidian/Config.md", proc.stderr)
-
-    def test_an_absolute_path_matches_the_relative_form(self):
+    def test_an_absolute_path_under_a_symlinked_tmp_still_matches(self):
         # Forced under /tmp, which is itself a symlink to /private/tmp on
         # macOS — exactly the case that breaks a naive string-prefix
         # comparison between an absolute --file value and the vault root.
         parent, vault = make_scoped_vault(self, tmp_dir="/tmp")
-        relative = run_cli(vault, "tables", "--file", "Notes/Dirty Note.md")
-        absolute = run_cli(
-            vault, "tables", "--file",
-            str(vault / "Notes" / "Dirty Note.md"))
-        self.assertEqual(relative.returncode, 0, relative.stderr)
-        self.assertEqual(absolute.returncode, 0, absolute.stderr)
-        self.assertEqual(relative.stdout, absolute.stdout)
-        self.assertIn("Notes/Dirty Note.md", absolute.stdout)
+        self.assertEqual(
+            vc._resolve_vault_paths(
+                vault, [str(vault / "Notes" / "Dirty Note.md")]),
+            (["Notes/Dirty Note.md"], []))
 
-    def test_wrong_case_is_rejected_not_silently_unmatched(self):
-        # The old validation resolved this against a case-insensitive
-        # filesystem and passed it through, giving "# count: 0" — a
-        # clean-looking report for a typo, not an error.
+    def test_these_paths_are_rejected_not_silently_empty(self):
         parent, vault = make_scoped_vault(self)
-        proc = run_cli(vault, "tables", "--file", "notes/dirty note.md")
-        self.assertEqual(proc.returncode, 2)
-        self.assertIn("notes/dirty note.md", proc.stderr)
-
-    def test_interior_dotdot_that_stays_inside_the_vault_is_accepted(self):
-        parent, vault = make_scoped_vault(self)
-        proc = run_cli(vault, "tables", "--file",
-                       "Notes/../Notes/Dirty Note.md")
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn("Notes/Dirty Note.md", proc.stdout)
-
-    def test_doubled_slashes_are_collapsed(self):
-        parent, vault = make_scoped_vault(self)
-        proc = run_cli(vault, "tables", "--file", "Notes//Dirty Note.md")
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn("Notes/Dirty Note.md", proc.stdout)
-
-    def test_filename_with_spaces_is_matched(self):
-        parent, vault = make_scoped_vault(self)
-        proc = run_cli(vault, "tables", "--file", "Player Characters.md")
-        self.assertEqual(proc.returncode, 0, proc.stderr)
-        self.assertIn("Player Characters.md", proc.stdout)
-        self.assertNotIn("Notes/Dirty Note.md", proc.stdout)
-
-    def test_an_absolute_path_outside_the_vault_is_rejected(self):
-        parent, vault = make_scoped_vault(self)
-        proc = run_cli(vault, "tables", "--file", str(parent / "Outside.md"))
-        self.assertEqual(proc.returncode, 2)
-        self.assertIn("Outside.md", proc.stderr)
-        self.assertEqual(proc.stdout, "")
-
-    def test_a_path_that_normalises_to_the_vault_root_is_rejected(self):
-        parent, vault = make_scoped_vault(self)
-        proc = run_cli(vault, "tables", "--file", "Notes/..")
-        self.assertEqual(proc.returncode, 2)
-        self.assertIn("Notes/..", proc.stderr)
-        self.assertEqual(proc.stdout, "")
-
-    def test_a_directory_named_dot_md_is_rejected_not_silently_empty(self):
+        (vault / ".obsidian").mkdir()
+        (vault / ".obsidian" / "Config.md").write_text(
+            "---\ntype: reference\n---\n", encoding="utf-8")
         # A directory can be named "Foo.md" too — rglob("*.md") matches it,
         # and only an explicit is_file() check tells it apart from a note.
-        parent, vault = make_scoped_vault(self)
         (vault / "Weird.md").mkdir()
-        proc = run_cli(vault, "tables", "--file", "Weird.md")
-        self.assertEqual(proc.returncode, 2)
-        self.assertIn("Weird.md", proc.stderr)
-        self.assertEqual(proc.stdout, "")
-
-
-    def test_a_symlink_to_a_note_outside_the_vault_is_rejected(self):
-        parent, vault = make_scoped_vault(self)
-        (parent / "Outside.md").write_text(DIRTY_TABLE, encoding="utf-8")
         (vault / "Inside.md").symlink_to(parent / "Outside.md")
-        proc = run_cli(vault, "tables", "--file", "Inside.md")
-        self.assertEqual(proc.returncode, 2)
-        self.assertIn("Inside.md", proc.stderr)
-        self.assertEqual(proc.stdout, "")
+        for form, raw in (
+                ("escapes the vault", "../Outside.md"),
+                ("a skipped directory (real on disk, never walked)",
+                 "_Templates/Ignored.md"),
+                ("a hidden path", ".obsidian/Config.md"),
+                ("wrong case (a case-insensitive disk would pass it)",
+                 "notes/dirty note.md"),
+                ("an absolute path outside the vault",
+                 str(parent / "Outside.md")),
+                ("normalises to the vault root", "Notes/.."),
+                ("a directory named .md", "Weird.md"),
+                ("a symlink to a note outside the vault", "Inside.md")):
+            with self.subTest(form):
+                self.assertEqual(vc._resolve_vault_paths(vault, [raw]),
+                                 ([], [raw]))
 
     def test_an_empty_file_scope_scans_nothing(self):
         parent, vault = make_scoped_vault(self)
