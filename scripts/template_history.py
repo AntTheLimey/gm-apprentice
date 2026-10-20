@@ -9,8 +9,14 @@ been given (the migration's own `templates_for`) and records a hash of each
 text, keyed by system ("generic" for none), then by vault filename.
 migrate.py upgrades an untouched `_Templates/` file whose text is in its own
 system's list as Will do instead of asking. Run this whenever a template under
-skills/shared/templates/ changes; a test fails until you do. The history only
-grows: a hash once recorded is never dropped.
+skills/shared/templates/ changes; a test fails until you do.
+
+Each hash records the last release that wrote that text (null while the
+working tree still writes it). A hash whose last release is older than the
+oldest vault migrate.py migrates from (its FLOOR) is dropped: no supported
+migration can meet a vault that got that text from a release that old. The
+file is rebuilt whole from the tags and the working tree, so a hash nothing
+here can trace is not kept either.
 """
 
 from __future__ import annotations
@@ -25,7 +31,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
 
+from migrate import FLOOR  # noqa: E402
 from migrate_vault import GENERIC, HISTORY, TEMPLATES, templates_for, text_hash  # noqa: E402
+from vaultlib import parse_version  # noqa: E402
 
 FIRST_TAG = (1, 4, 22)   # the first tag with skills/shared/templates/
 SUBPATH = "skills/shared/templates"
@@ -42,10 +50,13 @@ def systems_in(source: Path) -> set[str | None]:
     return found
 
 
-History = dict[str, dict[str, list[str]]]   # system -> filename -> hashes
+# system -> filename -> {hash: last release that wrote it, or None while the
+# working tree still does}
+History = dict[str, dict[str, dict[str, str | None]]]
+Seen = dict[str, dict[str, set[str]]]
 
 
-def collect(source: Path, into: dict[str, dict[str, set[str]]]) -> None:
+def collect(source: Path, into: Seen) -> None:
     for system in systems_in(source):
         names = into.setdefault(system or GENERIC, {})
         for name, text in templates_for(system, source, skip_missing=True).items():
@@ -75,31 +86,42 @@ def tag_templates(tag: str, dest: Path) -> bool:
 
 
 def build(tags: list[str] | None = None) -> History:
-    hashes: dict[str, dict[str, set[str]]] = {}
-    collect(TEMPLATES, hashes)
+    """Every hash the tags and the working tree write, with the last release
+    (tag without its `v`) that wrote it; None for one the working tree still
+    writes. Tags are read oldest first, so a later one overwrites."""
+    current: Seen = {}
+    collect(TEMPLATES, current)
+    last: dict[str, dict[str, dict[str, str | None]]] = {}
     for tag in release_tags() if tags is None else tags:
         with tempfile.TemporaryDirectory() as tmp:
             if tag_templates(tag, Path(tmp)):
-                collect(Path(tmp) / SUBPATH, hashes)
-    return {system: {name: sorted(hashes[system][name])
-                     for name in sorted(hashes[system])}
-            for system in sorted(hashes)}
-
-
-def merge(old: History, new: History) -> History:
-    """The history is append-only: every hash in `old` stays, whatever `new`
-    holds, and the hashes of `new` are added. A hash is recorded from the
-    working tree as well as from the tags, so one can be recorded for a
-    draft of a template that no tag ever held; it is harmless (a vault never
-    holds that text) and dropping it would make the script refuse to run."""
+                seen: Seen = {}
+                collect(Path(tmp) / SUBPATH, seen)
+                for system, names in seen.items():
+                    for name, found in names.items():
+                        into = last.setdefault(system, {}).setdefault(name, {})
+                        for h in found:
+                            into[h] = tag.removeprefix("v")
     out: History = {}
-    for system in sorted(set(old) | set(new)):
-        names = set(old.get(system, {})) | set(new.get(system, {}))
-        out[system] = {
-            name: sorted(set(old.get(system, {}).get(name, []))
-                         | set(new.get(system, {}).get(name, [])))
-            for name in sorted(names)}
+    for system in sorted(set(last) | set(current)):
+        out[system] = {}
+        for name in sorted(set(last.get(system, {})) | set(current.get(system, {}))):
+            hashes = dict(last.get(system, {}).get(name, {}))
+            for h in current.get(system, {}).get(name, ()):
+                hashes[h] = None
+            out[system][name] = dict(sorted(hashes.items()))
     return out
+
+
+def expire(history: History, floor: str) -> History:
+    """`history` without the hashes whose last release is older than `floor`.
+    A system or file left with nothing stays, empty: a system the file does
+    not name is read as generic."""
+    least = parse_version(floor)
+    return {system: {name: {h: last for h, last in hashes.items()
+                            if last is None or parse_version(last) >= least}
+                     for name, hashes in names.items()}
+            for system, names in history.items()}
 
 
 def refusal(tags: list[str]) -> str | None:
@@ -112,18 +134,12 @@ def refusal(tags: list[str]) -> str | None:
 
 def main() -> int:
     tags = release_tags()
-    new = build(tags)
-    try:
-        old = json.loads(HISTORY.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        old = {}
-    if not all(isinstance(v, dict) for v in old.values()):
-        old = {}   # the earlier flat shape: nothing to compare per system
     problem = refusal(tags)
     if problem:
         print(f"template_history.py: {problem}", file=sys.stderr)
         return 1
-    HISTORY.write_text(json.dumps(merge(old, new), indent=1) + "\n", encoding="utf-8")
+    HISTORY.write_text(json.dumps(expire(build(tags), FLOOR), indent=1) + "\n",
+                       encoding="utf-8")
     print(f"wrote {HISTORY.relative_to(ROOT)}")
     return 0
 

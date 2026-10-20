@@ -1319,7 +1319,7 @@ def _stderr_reason(raw: bytes) -> tuple[str, bool]:
     """(the reason, whether it is the command's own). The command's own
     complaint is made only of `Error: ...` lines, and its reason is the last
     one. Anything else (a Node stack trace, a missing module) is a tool that
-    did not start: the first line that begins with `Error`, else the first
+    did not start: the first line that names an error (`Error`, `TypeError`, ...), else the first
     line."""
     lines = [ln.strip() for ln in raw.decode("utf-8", "replace").splitlines()
              if ln.strip()]
@@ -1327,7 +1327,7 @@ def _stderr_reason(raw: bytes) -> tuple[str, bool]:
         return "", False
     if all(ln.startswith("Error: ") for ln in lines):
         return _cut(lines[-1].removeprefix("Error: ")), True
-    first = next((ln for ln in lines if ln.startswith("Error")), lines[0])
+    first = next((ln for ln in lines if re.match(r"\w*Error\b", ln)), lines[0])
     return _cut(first), False
 
 
@@ -1438,6 +1438,10 @@ def _target_args(vault: Path, site_config: Path | None = None) -> list[str]:
     args = ["--vault", str(vault)]
     if site_config is not None:
         args += ["--config", str(site_config)]
+    else:
+        # The scripts read the site folder file themselves; the tool must not
+        # also read the one the vault names, or its rows would be said twice.
+        args.append("--no-site-file")
     return args
 
 
@@ -1688,6 +1692,7 @@ SETTINGS_SCHEMA = (Path(__file__).resolve().parents[3] / "tools" / "publish"
 _NO_NODE_NOTICE = ("Node was not found, so this vault's own settings were not "
                    "read; the built-in values were used.")
 _NO_NODE_NOTICE_GIVEN = False
+_FELL_BACK_SAID: set[tuple[Path, str]] = set()   # bad values already said
 
 
 def _schema_default(name: str) -> Any:
@@ -1716,7 +1721,16 @@ def setting_or_builtin(vault: Path, name: str) -> Any:
     other failure of the tool is raised, never hidden."""
     global _NO_NODE_NOTICE_GIVEN
     try:
-        return settings(vault).get(name)
+        found = settings(vault)
+        if found.origins.get(name) == "fault" and (vault, name) not in _FELL_BACK_SAID:
+            # A value the tool could not accept: it gave the default. Say so
+            # once, in the tool's own words.
+            _FELL_BACK_SAID.add((vault, name))
+            why = next((f.get("message") for f in found.faults
+                        if f.get("setting") == name), None)
+            print(f"{why or f'{name} could not be read'}; the default was used.",
+                  file=sys.stderr)
+        return found.get(name)
     except SettingsUnavailable:
         if shutil.which("node"):
             raise

@@ -94,7 +94,7 @@ const TYPES = {
           if (String(v).trim() !== '') out[k] = String(v);
         }
         const missing = Object.keys(fields).find((k) => fields[k].required && out[k] === undefined);
-        if (missing) return drop(`has no \`${missing}\``);
+        if (missing) return drop(`is missing its \`${missing}\``);
         value.push(out);
       });
       return { value, dropped };

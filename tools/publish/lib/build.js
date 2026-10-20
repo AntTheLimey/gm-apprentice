@@ -8,7 +8,7 @@ const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllN
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
-const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
+const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
@@ -177,7 +177,7 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {
   if (wiki) return { kind: 'none', href: null };
   // The address of a published page, spelled as the build writes it, stands.
   const address = parts.join('/').toLowerCase();
-  if (Object.values(linkMap).some((p) => String(p).toLowerCase() === address)) return { kind: 'site', href: text.replace(/^\.\//, '') };
+  if (Object.values(linkMap).some((p) => pathParts(String(p)).join('/').toLowerCase() === address)) return { kind: 'site', href: text.replace(/^\.\//, '') };
   // Anything else: if ANY part of the path is the name, file name, title, alias or slug of a hidden note, it is dropped.
   const hiddenNames = HIDDEN_NAMES.get(linkMap) || new Set();
   const hiddenSlugs = HIDDEN_SLUGS.get(linkMap) || new Set();
@@ -1800,6 +1800,9 @@ function buildSite(options) {
     if (landingBannerResolved) return;
     landingBannerResolved = true;
     const banner = publishConfig.landing.banner;
+    // A [[wikilink]] in the words prints as its name, as it does in page text (the note audit reads what prints).
+    if (banner.title) banner.title = plainMetaValue(banner.title);
+    if (banner.text) banner.text = plainMetaValue(banner.text);
     if (!banner.title && !banner.text && !banner.image) {
       if (banner.link) console.warn(`  WARNING: ${nm('player_site.landing.banner.link')} is set but the banner has no title, text or picture — no banner is shown`);
       banner.link = null;

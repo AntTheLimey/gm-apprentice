@@ -8,11 +8,12 @@ const stop = makeFault({ name: 'publish.mode', kind: 'not-allowed', level: 'stop
 const warn = makeFault({ name: 'publish.zebra', kind: 'unknown-name', level: 'warn', value: 1, suggest: null });
 
 describe('assertNoStops', () => {
-  it('throws for a stop, with what stopped, the fault lines and what to do', () => {
+  it('throws for a stop, with what stopped, the fault lines, the warnings beside it and what to do', () => {
     assert.throws(() => assertNoStops({ faults: [warn, stop] }, 'build'), (err) => {
       assert.strictEqual(err.message,
         'build stopped: the settings have a fault that could show players more than you meant.\n'
         + `  ${formatFault(stop)}\n`
+        + `Also:\n  ${formatFault(warn)}\n`
         + 'Fix it, or ask the apprentice to run the Settings check.');
       return true;
     });

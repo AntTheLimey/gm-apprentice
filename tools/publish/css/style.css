@@ -1084,10 +1084,13 @@ a.landing-banner:focus-visible {
   border-color: var(--accent);
   background: var(--accent-dim);
 }
+/* A tall picture is capped on a phone too, and shown whole; the desktop rule below crops it to its box. */
 .landing-banner-img {
   display: block;
   max-width: 100%;
   height: auto;
+  max-height: 18rem;
+  object-fit: contain;
   border-radius: 0.5rem;
 }
 .landing-banner-title {

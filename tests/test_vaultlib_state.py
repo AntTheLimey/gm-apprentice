@@ -237,7 +237,8 @@ def test_version_row_on_the_old_layout_still_reads_the_old_file(tmp_path):
 def test_version_row_for_a_vault_with_no_settings_file(tmp_path):
     vault = vault_with(tmp_path)
     code, out = version_row(vault)
-    assert code == 1 and "MISMATCH\t_meta/vault-config.md\tgm_apprentice_version absent" in out
+    # #381: a _meta with no settings file is first-time setup, not a migration.
+    assert code == 0 and "SETUP\t(vault)\tno settings file in _meta/" in out
 
 
 # ---- the yes-words (#374) -------------------------------------------------
