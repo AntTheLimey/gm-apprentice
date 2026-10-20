@@ -35,6 +35,19 @@ describe('build --only sheets', () => {
     } finally { s.cleanup(); }
   });
 
+  it('copies js/nav.js, so a page with no inline menu handlers finds the script that binds them (#439)', () => {
+    const s = buildBoth(NOTES, { sites: ['player'] });
+    try {
+      const navPath = path.join(s.player.dir, 'js', 'nav.js');
+      fs.writeFileSync(navPath, '// an older nav.js');
+      const ann = path.join(s.root, 'vault', 'PCs', 'Ann.md');
+      fs.writeFileSync(ann, fs.readFileSync(ann, 'utf8').replace('Clerk', 'Archivist'));
+      quiet(() => build({ configPath: s.configPath, site: 'player', only: 'sheets' }));
+      assert.equal(fs.readFileSync(navPath, 'utf8'), fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'nav.js'), 'utf8'));
+      assert.match(s.player.read('pcs', 'ann.html'), /<header class="top-nav" data-nav="js">/);
+    } finally { s.cleanup(); }
+  });
+
   it('the PC page it writes is the page a full build writes', () => {
     const s = buildBoth(NOTES, { sites: ['player'] });
     try {

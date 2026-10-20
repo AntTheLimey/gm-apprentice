@@ -148,7 +148,7 @@ ${linksHtml}
     : '';
   const mobileLinksHtml = [standaloneStory ? standaloneMobile : '', mobileGroupsHtml, aloneMobile].filter(Boolean).join('\n');
 
-  return `<header class="top-nav">
+  return `<header class="top-nav" data-nav="js">
   <a href="${rootHref}" class="nav-brand">${escapeHtml(config.siteTitle)}</a>
   <nav class="nav-groups">
 ${groupsHtml}

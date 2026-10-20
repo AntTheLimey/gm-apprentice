@@ -455,6 +455,9 @@ function buildSite(options) {
     console.log(`  wrote js/${file}`);
   }
   function copyJS() {
+    // A sheets-only build writes pages whose header leaves its menu clicks to js/nav.js, so it
+    // refreshes that one script: the site may still hold the older one (#439).
+    if (writes === 'sheets') { copyOneJS('nav.js'); return; }
     if (writes !== 'all') return;
     const jsDir = path.join(__dirname, '../js');
     if (!fs.existsSync(jsDir)) return;

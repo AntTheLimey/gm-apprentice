@@ -26,7 +26,13 @@
     });
   }
 
-  document.querySelectorAll('.nav-group-toggle').forEach(function(btn) {
+  // Only a header marked data-nav="js" leaves its menu clicks to this script. A page an older
+  // build wrote has them inline (a sheets-only build leaves such pages alone), and binding
+  // them here too would toggle each menu twice.
+  var topNav = document.querySelector('.top-nav');
+  var marked = !!topNav && topNav.getAttribute('data-nav') === 'js';
+
+  if (marked) document.querySelectorAll('.nav-group-toggle').forEach(function(btn) {
     btn.addEventListener('click', function() {
       var group = btn.parentElement;
       var wasOpen = group.classList.contains('open');
@@ -37,12 +43,12 @@
       }
     });
   });
-  document.addEventListener('click', function(e) {
+  if (marked) document.addEventListener('click', function(e) {
     if (!e.target.closest('.nav-group')) closeGroups();
   });
 
-  if (menuButton) menuButton.addEventListener('click', function() { setMobileOpen(true); });
-  if (mobileNav) {
+  if (marked && menuButton) menuButton.addEventListener('click', function() { setMobileOpen(true); });
+  if (marked && mobileNav) {
     // Close mobile nav on link click
     mobileNav.querySelectorAll('a').forEach(function(a) {
       a.addEventListener('click', function() { setMobileOpen(false); });

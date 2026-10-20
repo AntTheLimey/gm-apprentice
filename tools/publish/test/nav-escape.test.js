@@ -36,7 +36,7 @@ function el(doc, classes, children = []) {
   return node;
 }
 
-function page() {
+function page(marked = true) {
   const doc = { activeElement: null, listeners: [] };
   const group = (open) => {
     const toggle = el(doc, ['nav-group-toggle']);
@@ -51,7 +51,9 @@ function page() {
   const mobileLink = el(doc, ['mobile-link']);
   const mobileClose = el(doc, ['mobile-nav-close']);
   const mobileNav = el(doc, ['mobile-nav-overlay', 'open'], [mobileClose, mobileLink]);
-  const body = el(doc, ['body'], [story.node, world.node, mobileToggle, mobileNav]);
+  const topNav = el(doc, ['top-nav']);
+  if (marked) topNav.attrs['data-nav'] = 'js';
+  const body = el(doc, ['body'], [topNav, story.node, world.node, mobileToggle, mobileNav]);
   doc.body = body;
   doc.getElementById = (id) => (id === 'mobile-nav' ? mobileNav : null);
   doc.querySelector = (sel) => body.find(sel.slice(1))[0] || null;
@@ -167,4 +169,35 @@ test('the menu markup starts every menu button closed (#439)', () => {
   const html = renderTopNav(pages, 'index.html', { siteTitle: 'S' }, {});
   assert.match(html, /<button class="nav-group-toggle" aria-expanded="false">/);
   assert.match(html, /class="nav-mobile-toggle"[^>]*aria-expanded="false"[^>]*aria-controls="mobile-nav"|class="nav-mobile-toggle"[^>]*aria-controls="mobile-nav"[^>]*aria-expanded="false"/);
+});
+
+// A page an older build wrote has its menu clicks inline; nav.js leaves those alone (#439).
+test('on a header without data-nav, nav.js binds no menu clicks, so an inline handler never toggles twice (#439)', () => {
+  const p = page(false);
+  p.world.toggle.click();
+  assert.ok(!p.world.node.classList.contains('open'));
+  p.mobileNav.classList.remove('open');
+  p.mobileToggle.click();
+  assert.ok(!p.mobileNav.classList.contains('open'));
+  assert.strictEqual(p.doc.clickers.length, 0);
+  p.mobileNav.classList.add('open');
+  p.mobileClose.click();
+  p.mobileLink.click();
+  assert.ok(p.mobileNav.classList.contains('open'));
+});
+
+test('on a header marked data-nav="js", nav.js binds the group and phone menu clicks (#439)', () => {
+  const p = page(true);
+  p.world.toggle.click();
+  assert.ok(p.world.node.classList.contains('open'));
+  assert.strictEqual(p.doc.clickers.length, 1);
+  p.mobileNav.classList.remove('open');
+  p.mobileToggle.click();
+  assert.ok(p.mobileNav.classList.contains('open'));
+});
+
+test('the menu markup carries data-nav="js" (#439)', () => {
+  const { renderTopNav } = require('../lib/templates/nav');
+  const pages = [{ outputDir: 'sessions', outputPath: 'sessions/a.html', frontmatter: {} }];
+  assert.match(renderTopNav(pages, 'index.html', { siteTitle: 'S' }, {}), /<header class="top-nav" data-nav="js">/);
 });
