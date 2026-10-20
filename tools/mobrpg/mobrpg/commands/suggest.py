@@ -618,8 +618,13 @@ def linked_aliases(vault) -> dict:
             fm, _ = _read(p)
             nd = node.read_node(open(p, encoding="utf-8").read())
             if nd and nd.get("element_id"):
+                stem = _stem(os.path.splitext(os.path.basename(p))[0])
                 for al in _aliases(fm):
-                    out.setdefault(_stem(al), _stem(os.path.splitext(os.path.basename(p))[0]))
+                    first = out.setdefault(_stem(al), stem)
+                    # Two notes list one alias: the note holding it back names both
+                    # (the entity is held either way; it is never created twice).
+                    if stem not in first.split(" or "):
+                        out[_stem(al)] = f"{first} or {stem}"
     return out
 
 
@@ -770,11 +775,17 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
     items, skipped = [], []
     subj_key = _key(entity["name"])
     n = 0
-    first_stem: dict = {}            # (predicate, folded target) -> first-listed target name
+    # (predicate, folded target) -> the target name that keeps the bare event ref: the one
+    # that sorts first, not the first listed, so reordering lines never swaps refs.
+    first_stem: dict = {}
+    for rel in entity.get("relationships", []):
+        k = (rel["predicate"], _key(rel["target"]))
+        stem = _target_stem(rel["target"])
+        first_stem[k] = min(first_stem.get(k, stem), stem)
     for rel in entity.get("relationships", []):
         pred, tgt_raw = rel["predicate"], rel["target"]
         tgt_key = _key(tgt_raw)
-        first = first_stem.setdefault((pred, tgt_key), _target_stem(tgt_raw))
+        first = first_stem[(pred, tgt_key)]
         is_linked, old_note = _edge_linked(linked_triples, ambiguous, entity["name"], pred, tgt_raw)
         if is_linked:
             skipped.append(f"{entity['name']} --{pred}--> {tgt_raw} (already linked)")
