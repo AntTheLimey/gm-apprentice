@@ -1118,11 +1118,22 @@ def _indented_after(lines: list[str], i: int, end: int) -> bool:
     return k < end and lines[k][:1].isspace()
 
 
+def holds_list(first: str, rest: list[str]) -> bool:
+    """Whether an unbulleted field (its first line `first`, then `rest`)
+    is a list field: its label stands alone on its line, or a plain list
+    item already sits under it. Only under such a field is a `- **Label:**`
+    line a list item; under `**HP:** 12/12` it is the next field."""
+    m = FIELD_RE.match(first)
+    if m and not first[m.end():].strip():
+        return True
+    return any(LIST_RE.match(ln) and not FIELD_RE.match(ln) for ln in rest)
+
+
 def read_fields(lines: list[str], rows: list[int]) -> list[Field]:
     """The labelled fields among `lines[i]` for i in `rows` (consecutive
     runs; a gap ends a field). A field is a `**Label:**` line at the
-    margin, or a `- **Label:**` one where no unbulleted field's list is
-    open (there it is a thread item). An unbulleted field keeps the list
+    margin, or a `- **Label:**` one unless a list field above it is open
+    (there it is a thread item). An unbulleted field keeps the list
     items and indented lines under it; a bulleted one keeps its indented
     lines. A blank line ends a field unless an indented line follows it;
     a plain line (a lede) ends it."""
@@ -1144,8 +1155,12 @@ def read_fields(lines: list[str], rows: list[int]) -> list[Field]:
                 if not _indented_after(lines, i, stop):
                     cur = None
                 continue
-            # An unbulleted field holds the margin list under it.
-            if line[:1].isspace() or (not cur.bullet and LIST_RE.match(line)):
+            # An unbulleted field holds the margin list under it; a
+            # bulleted label there is an item only under a list field.
+            item = (not cur.bullet and LIST_RE.match(line)
+                    and not (m and m.group("bullet") and not holds_list(
+                        lines[cur.start], lines[cur.start + 1:i])))
+            if line[:1].isspace() or item:
                 cur.end = i + 1
                 continue
             cur = None
@@ -1185,8 +1200,12 @@ def stdin_fields(text: str) -> list[Field]:
     fields: list[Field] = []
     for i, line in enumerate(lines):
         m = FIELD_RE.match(line)
+        # A bulleted label is a list item only straight under (no blank
+        # line between) an unbulleted list field.
         bulleted_item = (m and m.group("bullet") and fields
-                         and not fields[-1].bullet)
+                         and not fields[-1].bullet and lines[i - 1].strip()
+                         and holds_list(fields[-1].lines[0],
+                                        fields[-1].lines[1:]))
         if m and not line[:1].isspace() and not bulleted_item:
             fields.append(Field(m.group("label").strip(),
                                 m.group("bullet") or "", i, i + 1, [line]))
@@ -1245,7 +1264,12 @@ def show_status(batch: Batch, raw: str) -> str:
     subs = [f"{'#' * h.level} {h.title}" for h in doc.heads
             if head.idx < h.idx < section_end(doc, head)]
     out = [f"# {rel} §{CURRENT_STATUS}"]
-    out += [line for f in fields for line in f.lines]
+    # A blank line between fields marks where each run ends, so the text
+    # fed back to `--write` splits the way the note does.
+    for n, f in enumerate(fields):
+        if n:
+            out.append("")
+        out += f.lines
     out.append(f"# left alone: {other} other lines"
                + "".join(f"; {s}" for s in subs))
     return "\n".join(out) + "\n"

@@ -314,5 +314,47 @@ class StatusShowTests(unittest.TestCase):
         self.assertIn("no ## Current Status", out)
 
 
+def show_fields(vault, rel):
+    """What `--show` prints, less its two `# ` comment lines: the text a
+    model sends back to `--write`."""
+    _code, out = run(vault, "status", rel, "--show")
+    return "".join(ln + "\n" for ln in out.splitlines()
+                   if not ln.startswith("# "))
+
+
+class StatusRoundTripTests(unittest.TestCase):
+    def test_show_fed_back_to_write_changes_nothing(self):
+        for name, note in (("spec", SPEC), ("drifted", DRIFTED),
+                           ("journal", JOURNAL)):
+            with self.subTest(name):
+                vault = make_vault(self, {PC: note})
+                code, out = run(vault, "status", PC, "--write",
+                                stdin=show_fields(vault, PC))
+                self.assertEqual(code, 0, out)
+                self.assertEqual(read(vault, PC), note)
+                self.assertNotIn("replaced", out)
+
+    def test_bulleted_labels_after_unbulleted_vitals_are_fields(self):
+        fields = vw.stdin_fields("**HP:** 10/10\n**FP:** 11/11\n\n"
+                                 "- **Location:** aboard.\n"
+                                 "- **Condition:** Alive.\n")
+        self.assertEqual([f.label for f in fields],
+                         ["HP", "FP", "Location", "Condition"])
+
+    def test_a_bulleted_label_straight_under_vitals_is_a_field(self):
+        fields = vw.stdin_fields("**FP:** 11/11\n- **Location:** aboard.\n")
+        self.assertEqual([f.label for f in fields], ["FP", "Location"])
+
+    def test_a_bulleted_label_under_a_bare_list_field_is_an_item(self):
+        fields = vw.stdin_fields("**Open threads:**\n- **Session 5:** fled.\n"
+                                 "- the tell.\n")
+        self.assertEqual([f.label for f in fields], ["Open threads"])
+
+    def test_show_marks_each_run_with_a_blank_line(self):
+        vault = make_vault(self, {PC: DRIFTED})
+        text = show_fields(vault, PC)
+        self.assertIn("**FP:** 12/12\n\n- **Location:**", text)
+
+
 if __name__ == "__main__":
     unittest.main()
