@@ -727,10 +727,10 @@ h3 {
 }
 /* A wide table written straight into a tab (the PF2e Strikes table, five no-wrap headers) is wider than a phone and
    made the whole page scroll sideways. On a phone its headers and cells may wrap, so it shrinks to the panel and keeps
-   being a table; one that already fits is unchanged. A header of one unbreakable word wider than 45% of the screen is
-   the one thing that could still push the table past the panel: its cell is capped there and only such a word breaks. */
+   being a table; one that already fits is unchanged. A header word may break too, but only where the table would
+   otherwise run past the panel (a 360px phone, or wider system fonts), and no header is wider than 45% of the screen. */
 @media (max-width: 600px) {
-  .tab-panel > table th { white-space: normal; max-width: 45vw; overflow-wrap: break-word; }
+  .tab-panel > table th { white-space: normal; max-width: 45vw; overflow-wrap: anywhere; }
   .tab-panel > table td { overflow-wrap: anywhere; }
 }
 .tab-panel {

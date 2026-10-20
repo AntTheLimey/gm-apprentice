@@ -45,13 +45,13 @@ describe('sheet tables on a phone, in a browser', { skip }, () => {
       }
       done({ found: !!cell, pageScrollWidth: doc.scrollWidth, pageClientWidth: doc.clientWidth, scrolls: !!scroller });
     });
-    pf2eR = measure(path.join(pf2e.out, 'characters', 'pcs', 'test-hero.html'), 390, function (done) {
+    pf2eR = [360, 390].map((width) => ({ width, ...measure(path.join(pf2e.out, 'characters', 'pcs', 'test-hero.html'), width, function (done) {
       var doc = document.documentElement;
       var table = Array.prototype.find.call(document.querySelectorAll('.tab-panel > table'), function (t) { return /Atk Bonus/.test(t.textContent); });
       var panel = table && table.parentElement;
       if (panel) { Array.prototype.forEach.call(document.querySelectorAll('.tab-panel'), function (p) { p.classList.remove('active'); }); panel.classList.add('active'); }
       done({ found: !!table, pageScrollWidth: doc.scrollWidth, pageClientWidth: doc.clientWidth, tableRight: table ? Math.round(table.getBoundingClientRect().right) : null, panelRight: panel ? Math.round(panel.getBoundingClientRect().right) : null });
-    });
+    }) }));
   });
   after(() => { for (const b of [coc, pf2e]) if (b) fs.rmSync(b.root, { recursive: true, force: true }); });
 
@@ -61,9 +61,11 @@ describe('sheet tables on a phone, in a browser', { skip }, () => {
     assert.equal(cocR.scrolls, true, 'an ancestor of the table scrolls it sideways inside itself');
   });
 
-  it('the Strikes table written straight into a PF2e tab shrinks to its panel, and the page does not scroll sideways', () => {
-    assert.equal(pf2eR.found, true, 'the Strikes table is directly in a tab');
-    assert.ok(pf2eR.pageScrollWidth <= pf2eR.pageClientWidth, `the page scrolls sideways (${pf2eR.pageScrollWidth} > ${pf2eR.pageClientWidth})`);
-    assert.ok(pf2eR.tableRight <= pf2eR.panelRight + 1, `the table runs past its panel (${pf2eR.tableRight} > ${pf2eR.panelRight})`);
+  it('the Strikes table written straight into a PF2e tab shrinks to its panel at 360px and 390px, and the page does not scroll sideways', () => {
+    for (const r of pf2eR) {
+      assert.equal(r.found, true, 'the Strikes table is directly in a tab');
+      assert.ok(r.pageScrollWidth <= r.pageClientWidth, `at ${r.width}px the page scrolls sideways (${r.pageScrollWidth} > ${r.pageClientWidth})`);
+      assert.ok(r.tableRight <= r.panelRight + 1, `at ${r.width}px the table runs past its panel (${r.tableRight} > ${r.panelRight})`);
+    }
   });
 });

@@ -10,7 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.10.91] — 2026-10-20
 
 Test trim, publish tool side: the Node tests run faster and repeat
-themselves less. No change to the publish tool itself.
+themselves less. Publish tool 1.45.1.
+
+### Fixed
+
+- On a narrow phone (360px) or with wider system fonts, the PF2e
+  Strikes table no longer runs past the edge of its tab: a header word
+  may break where the table would otherwise overflow (#481).
 
 ### Changed
 
