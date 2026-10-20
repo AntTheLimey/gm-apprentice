@@ -11,7 +11,7 @@ const { kindLabel } = require('./kind-label');
 const { orderedSessions } = require('./story-spine');
 const { WRAP_UP_TYPES } = require('./session-hub');
 const { portraitBasename } = require('./processor');
-const { toneFamily, groupLabel } = require('./ontology');
+const { toneFamily, groupLabel, PEOPLE } = require('./ontology');
 const { createRenderer } = require('./markdown');
 // The build's own reading of a link's address and title (balanced parentheses, `<..>`, a quoted title).
 const { parseLinkDestination, parseLinkTitle } = createRenderer().helpers;
@@ -224,14 +224,20 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
     file(from, { target: to.name, type, tone: undefined, line: text ? printedProse(text) : '' }, to);
     return true;
   };
-  // The note a participant entry starts with, and what follows it, bare of one pair of brackets.
-  const participantOf = (entry) => {
-    if (typeof entry !== 'string') return null;
+  // The notes a participant entry starts with, and the line that follows them. A run of links
+  // joined by a comma, slash, & or "and" names one participant each, all with the one line; the
+  // line is bare of one pair of brackets and of a dash, colon or comma left at its start.
+  const JOIN = /^\s*(?:,|\/|&|and)\s*$/i;
+  const participantsOf = (entry) => {
+    if (typeof entry !== 'string') return [];
     const text = entry.trim();
-    const [span] = wikilinkSpans(text, false, 1);
-    if (!span || span.index !== 0) return null;
-    const rest = text.slice(span.end).trim();
-    return { link: text.slice(0, span.end), line: /^\(([\s\S]*)\)$/.test(rest) ? rest.slice(1, -1).trim() : rest };
+    const spans = wikilinkSpans(text);
+    if (!spans.length || spans[0].index !== 0) return [];
+    let run = 1;
+    while (run < spans.length && JOIN.test(text.slice(spans[run - 1].end, spans[run].index))) run++;
+    const rest = text.slice(spans[run - 1].end).trim();
+    const line = (/^\(([\s\S]*)\)$/.test(rest) ? rest.slice(1, -1) : rest).replace(/^[\s\u2014\u2013:,-]+/, '').trim();
+    return spans.slice(0, run).map((span) => ({ link: text.slice(span.index, span.end), line }));
   };
   for (const event of pages) {
     if (isIndex(event) || typeOf(event) !== 'event') continue;
@@ -240,11 +246,14 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
     if (place) derive(event, 'located_at', place, '');
     const guests = [];
     for (const entry of Array.isArray(fm.participants) ? fm.participants : []) {
-      const who = participantOf(entry);
-      const to = who && resolve(who.link);
-      if (to && derive(event, 'had_participant', to, who.line)) guests.push(to);
+      for (const who of participantsOf(entry)) {
+        const to = resolve(who.link);
+        derive(event, 'had_participant', to, who.line);
+        // A tie the GM wrote to the event does not stop its visit.
+        if (to.page && to.page !== event && !isIndex(to.page)) guests.push(to);
+      }
     }
-    if (place && place.page) for (const to of guests) derive(to.page, 'visited', place, '');
+    if (place && place.page) for (const to of guests) if (PEOPLE.has(typeOf(to.page))) derive(to.page, 'visited', place, '');
   }
 
   // The sessions whose published text links a page. A Wrap-Up stands for its hub, so the

@@ -482,3 +482,40 @@ test('located_at over a person reads "Located with", over a place stays "Located
   assert.deepStrictEqual(names(group(idx.for(kartik), 'places', 'Located at')), ['Godown']);
   assert.deepStrictEqual(names(group(idx.for(godown), 'people', 'Location of')), ['Kartik']);
 });
+
+// --- review of batch 6 ---
+test('a participant the GM also tied to the event still visits its place', () => {
+  const e = ev('Sale', { location: '[[Godown]]', participants: ['[[Emma]] (there)', '[[Hallam]] (there)'],
+    relationships: [{ target: 'Emma', type: 'rescued' }] });
+  const emma = page('Emma', 'pc', {}, [], 'pcs');
+  const hallam = page('Hallam', 'npc', { relationships: [{ target: 'Sale', type: 'witnessed' }] });
+  const godown = page('Godown', 'location', {}, [], 'locs');
+  const idx = buildConnections(ctx([e, emma, hallam, godown]));
+  assert.deepStrictEqual(names(group(idx.for(emma), 'places', 'Visited')), ['Godown']);
+  assert.deepStrictEqual(names(group(idx.for(hallam), 'places', 'Visited')), ['Godown']);
+});
+
+test('a leading run of links is one participant each, with the one line; a leading dash or comma is not part of it', () => {
+  const e = ev('Sale', { participants: [
+    '[[Emma]], [[Hallam]] / [[Vane]] & [[Rock]] and [[Six]] (all there)',
+    '[[Colonel]] — garrison commander, [[Fort]]',
+    '[[Pratrock]] — , [[Quill]], more'] });
+  const pages = ['Emma', 'Hallam', 'Vane', 'Rock', 'Six', 'Colonel', 'Pratrock', 'Quill'].map((n) => page(n, 'npc'));
+  const idx = buildConnections(ctx([e, ...pages]));
+  const who = group(idx.for(e), 'people', 'Had participant');
+  const line = (n) => who.items.find((i) => i.title === n).lines;
+  for (const n of ['Emma', 'Hallam', 'Vane', 'Rock', 'Six']) assert.deepStrictEqual(line(n), ['all there'], n);
+  assert.deepStrictEqual(line('Colonel'), ['garrison commander, Fort']);
+  assert.deepStrictEqual(line('Pratrock'), ['Quill, more']);
+  assert.ok(!who.items.some((i) => i.title === 'Quill'));
+});
+
+test('only people visit: a faction or an item at an event gets no derived visit', () => {
+  const e = ev('Sale', { location: '[[Godown]]', participants: ['[[Emma]]', '[[Guild]]', '[[Lantern]]'] });
+  const emma = page('Emma', 'pc'); const guild = page('Guild', 'faction'); const lamp = page('Lantern', 'item');
+  const godown = page('Godown', 'location', {}, [], 'locs');
+  const idx = buildConnections(ctx([e, emma, guild, lamp, godown]));
+  assert.deepStrictEqual(names(group(idx.for(godown), 'people', 'Visited by')), ['Emma']);
+  assert.ok(!tab(idx.for(guild), 'places') && !tab(idx.for(lamp), 'places'));
+  assert.deepStrictEqual(names(group(idx.for(guild), 'events', 'Participated in')), ['Sale']);
+});

@@ -63,4 +63,4 @@ function groupLabel(type, direction, ends) {
 }
 
 // The whole export, for the commands that print or check the vocabulary (lib/relationships).
-module.exports = { toneFamily, groupLabel, ontology: data };
+module.exports = { toneFamily, groupLabel, PEOPLE, ontology: data };
