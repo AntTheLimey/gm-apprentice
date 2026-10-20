@@ -405,4 +405,4 @@ function isEmpty(model) {
   return !model || (model.tabs.length === 0 && model.mentions.length === 0);
 }
 
-module.exports = { buildConnections, isEmpty, TABS, markdownLinkLabels, targetRef, eventTies };
+module.exports = { buildConnections, isEmpty, TABS, markdownLinkLabels, targetRef, eventTies, participantsOf };

@@ -2,6 +2,7 @@ const { escapeHtml, relativePath, wikiTargetLabel, encodeHref, renderMetaValue, 
 const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection, badgeSpan } = require('./base');
 const { WIKILINK_SOURCE, parseWikilink } = require('../wikilink');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
+const { participantsOf, targetRef } = require('../connections');
 
 function parseParticipant(raw) {
   const str = String(raw).trim();
@@ -60,9 +61,20 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
     outcomeHtml = `<div class="event-outcome"><strong>Outcome:</strong> ${renderMetaValue(fm.outcome, linkMap, page.outputPath)}</div>`;
   }
 
+  // A participant that is a note with no page is left off, name and line, as Connections leaves off such a tie
+  // (#476); a name with no note at all (a red link) still prints.
+  const hiddenNote = publishConfig._hiddenNote || (() => false);
+  const shownParticipants = (Array.isArray(fm.participants) ? fm.participants : []).map((raw) => {
+    const run = participantsOf(raw);
+    const shown = run.filter((who) => !hiddenNote(targetRef(who.link).name));
+    if (!run.length || shown.length === run.length) return raw;
+    if (!shown.length) return null;
+    return `${shown.map((who) => who.link).join(', ')}${run[0].line ? ` (${run[0].line})` : ''}`;
+  }).filter((raw) => raw !== null);
+
   let participantsHtml = '';
-  if (Array.isArray(fm.participants) && fm.participants.length > 0) {
-    const items = fm.participants.map(raw => {
+  if (shownParticipants.length > 0) {
+    const items = shownParticipants.map(raw => {
       const p = parseParticipant(raw);
       let nameHtml;
       if (p.isLink) {

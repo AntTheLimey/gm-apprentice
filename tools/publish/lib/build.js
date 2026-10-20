@@ -1060,10 +1060,13 @@ function buildSite(options) {
   // for hubs in `pages`), not the raw `hubPairs`, which also pairs unpublished hubs.
   const { buildConnections } = require('./connections');
   const connectionExtras = new Map();
+  // A name's page in any spelling, and whether a name is a note at all (published or not): a tie or a participant
+  // that names a note with no page is the Keeper's side of the story, and is left off the page (#476).
+  const pageFor = (name) => foldedPagePath(linkMap, name) || foldedPagePath(linkMap, path.posix.basename(name));
+  const noteExists = (name) => { const names = HIDDEN_NAMES.get(linkMap); const folded = (n) => foldName(canonicalNfc(n)); return names.has(folded(name)) || names.has(folded(path.posix.basename(name))); };
+  publishConfig._hiddenNote = (name) => !linkMap[name] && !pageFor(name) && noteExists(name);
   publishConfig._connections = publishConfig.connections === 'off' ? null
-    : buildConnections({ pages, linkMap, backlinks, hubPairs: hubWrapUps, imageMap, extras: connectionExtras,
-      pageFor: (name) => foldedPagePath(linkMap, name) || foldedPagePath(linkMap, path.posix.basename(name)),
-      noteExists: (name) => { const names = HIDDEN_NAMES.get(linkMap); const folded = (n) => foldName(canonicalNfc(n)); return names.has(folded(name)) || names.has(folded(path.posix.basename(name))); } });
+    : buildConnections({ pages, linkMap, backlinks, hubPairs: hubWrapUps, imageMap, extras: connectionExtras, pageFor, noteExists });
   // The lists a session or chapter page gathers (who appeared, what happened, which sessions
   // a chapter holds). `for(page)` reads `connectionExtras` lazily, so filling it after the
   // index is built is sound; nothing asks for a model until a page renders.

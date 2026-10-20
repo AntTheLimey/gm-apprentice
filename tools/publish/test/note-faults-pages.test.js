@@ -68,7 +68,7 @@ describe('NAMED_NO_PAGE is decided by the page as built', () => {
   it('counts a field on the type whose page prints it, and not on a type whose page does not', async () => {
     const found = await faults({
       'Hidden/Old_Tam.md': hidden(),
-      'Events/Masquerade.md': '---\ntype: event\nparticipants:\n  - "[[Old_Tam]] (host)"\n---\n\nA ball.\n',
+      'Events/Masquerade.md': '---\ntype: event\noutcome: "[[Old_Tam]] fled"\n---\n\nA ball.\n',
       'People/Bo_Pike.md': '---\ntype: npc\nparticipants:\n  - "[[Old_Tam]] (host)"\nsession: "[[Old_Tam]]"\n---\n\nA guest.\n',
     }, 'NAMED_NO_PAGE');
     assert.deepStrictEqual(pagesOf(found, 'Hidden/Old_Tam.md'), ['Events/Masquerade.md']);
