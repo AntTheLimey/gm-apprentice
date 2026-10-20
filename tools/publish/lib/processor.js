@@ -2103,12 +2103,17 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   // say so, once per table, so the GM can give the extra column a header.
   const env = {};
   const html = md.render(markdown, env);
+  // The same words go to the note-faults audit as TABLE_OVERWIDE rows (`overwide`: { detail, fix }).
+  const overwide = [];
   for (const t of env.widenedTables || []) {
     const first = String(t.first || '').replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').trim();
     const named = first ? ` (first: "${first.length > 40 ? first.slice(0, 39) + '…' : first}")` : '';
-    warnings.push(`a table has ${t.rows} ${t.rows === 1 ? 'row' : 'rows'} with more cells than its ${t.header}-column header${named}; the table was widened to ${t.cells} columns so no cell is lost. Add header cells for the extra columns.`);
+    const detail = `a table has ${t.rows} ${t.rows === 1 ? 'row' : 'rows'} with more cells than its ${t.header}-column header${named}; the table was widened to ${t.cells} columns so no cell is lost`;
+    const fix = 'Add header cells for the extra columns';
+    overwide.push({ code: 'TABLE_OVERWIDE', severity: 'info', detail, fix });
+    warnings.push(`${detail}. ${fix}.`);
   }
-  return { html, warnings };
+  return { html, warnings, overwide };
 }
 
 // Extract ## sections for accordion rendering (used by PC/NPC templates). The
@@ -2511,6 +2516,12 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
       if (bare && !bare.includes('[[') && hidden) {
         const name = marked('withheld_names', `players see: ${hidden}`, withheldName(bare));
         return `[[${bare}|${name === null ? hidden : name}]]`;
+      }
+      // A bare name with a note after it (`Zorn (the host)`, a participant's form): the name is read on its own.
+      const noted = /^([^[\]()]+?)\s*(\([^()]+\))$/.exec(bare);
+      if (noted) {
+        const name = nameIn(noted[1]);
+        if (name !== noted[1]) return `${name} ${noted[2]}`;
       }
       return links(v, false);
     }

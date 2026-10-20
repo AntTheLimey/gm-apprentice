@@ -121,7 +121,7 @@ export default function link (state, silent) {
 
     const token_o = state.push('link_open', 'a', 1)
     const attrs = [['href', href]]
-    token_o.attrs  = attrs
+    token_o.attrs = attrs
     if (title) {
       attrs.push(['title', title])
     }

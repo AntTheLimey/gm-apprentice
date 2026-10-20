@@ -1,7 +1,7 @@
 // Process autolinks '<protocol:...>'
 
 /* eslint max-len:0 */
-const EMAIL_RE    = /^([a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)$/
+const EMAIL_RE = /^([a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*)$/
 /* eslint-disable-next-line no-control-regex */
 const AUTOLINK_RE = /^([a-zA-Z][a-zA-Z0-9+.-]{1,31}):([^<>\x00-\x20]*)$/
 
@@ -29,17 +29,17 @@ export default function autolink (state, silent) {
     if (!state.md.validateLink(fullUrl)) { return false }
 
     if (!silent) {
-      const token_o   = state.push('link_open', 'a', 1)
-      token_o.attrs   = [['href', fullUrl]]
-      token_o.markup  = 'autolink'
-      token_o.info    = 'auto'
+      const token_o = state.push('link_open', 'a', 1)
+      token_o.attrs = [['href', fullUrl]]
+      token_o.markup = 'autolink'
+      token_o.info = 'auto'
 
-      const token_t   = state.push('text', '', 0)
+      const token_t = state.push('text', '', 0)
       token_t.content = state.md.normalizeLinkText(url)
 
-      const token_c   = state.push('link_close', 'a', -1)
-      token_c.markup  = 'autolink'
-      token_c.info    = 'auto'
+      const token_c = state.push('link_close', 'a', -1)
+      token_c.markup = 'autolink'
+      token_c.info = 'auto'
     }
 
     state.pos += url.length + 2
@@ -51,17 +51,17 @@ export default function autolink (state, silent) {
     if (!state.md.validateLink(fullUrl)) { return false }
 
     if (!silent) {
-      const token_o   = state.push('link_open', 'a', 1)
-      token_o.attrs   = [['href', fullUrl]]
-      token_o.markup  = 'autolink'
-      token_o.info    = 'auto'
+      const token_o = state.push('link_open', 'a', 1)
+      token_o.attrs = [['href', fullUrl]]
+      token_o.markup = 'autolink'
+      token_o.info = 'auto'
 
-      const token_t   = state.push('text', '', 0)
+      const token_t = state.push('text', '', 0)
       token_t.content = state.md.normalizeLinkText(url)
 
-      const token_c   = state.push('link_close', 'a', -1)
-      token_c.markup  = 'autolink'
-      token_c.info    = 'auto'
+      const token_c = state.push('link_close', 'a', -1)
+      token_c.markup = 'autolink'
+      token_c.info = 'auto'
     }
 
     state.pos += url.length + 2

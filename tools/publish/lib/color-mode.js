@@ -24,7 +24,9 @@
 // the wrong palette. With JavaScript off nothing sets it and the OS rule applies, as
 // before.
 
-const MODES = ['system', 'dark', 'light'];
+// The colour modes and their default are the settings list's; required at the call (the list requires skins, and skins
+// require this file).
+const modeEntry = () => require('./settings/registry').entry('player_site.theme.default_mode');
 const PREFIX = {
   notDark: { root: ':root:not(:where([data-theme="dark"]))', html: 'html:not(:where([data-theme="dark"]))',
              any: ':where(:root:not([data-theme="dark"]))' },
@@ -60,7 +62,8 @@ function mediaPrelude(type, features, extra) {
 
 function normalizeDefaultMode(value) {
   const mode = String(value == null ? '' : value).trim().toLowerCase();
-  return MODES.includes(mode) ? mode : 'system';
+  const { values, default: fallback } = modeEntry();
+  return values.includes(mode) ? mode : fallback;
 }
 
 // Past a comment or string starting at `i`, or `i` itself when neither starts there.
@@ -241,4 +244,4 @@ const TOGGLE_BUTTON = '<button class="nav-color-mode-btn" type="button" onclick=
 const MOBILE_TOGGLE = '<button class="mobile-color-mode-btn" type="button" onclick="window.gmToggleColorMode&&gmToggleColorMode()">'
   + '<span class="to-light">&#9728; Light mode</span><span class="to-dark">&#9790; Dark mode</span></button>';
 
-module.exports = { scopeColorScheme, statements, normalizeDefaultMode, headScript, storageKey, TOGGLE_BUTTON, MOBILE_TOGGLE, MODES };
+module.exports = { scopeColorScheme, statements, normalizeDefaultMode, headScript, storageKey, TOGGLE_BUTTON, MOBILE_TOGGLE };

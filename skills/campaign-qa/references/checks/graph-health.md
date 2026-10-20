@@ -93,8 +93,7 @@ content that would actually reach the site. A keyword heading the GM
 says is for players: run `vault_check.py <vault> gm-leak --settle
 "<note:line from the row>"`, and it is not flagged again.
 That settles every heading with the same text in that note.
-Severity: Critical if the vault has a site; Warning otherwise. With
-no site the script says so in one INFO row.
+Severity: Critical. With no site the script says so in one INFO row.
 
 ### Step 3: Schema Compliance
 

@@ -2,7 +2,7 @@
 // The one place a list of folders is tidied, for both layouts, on reading and on writing. The
 // scanner compares the entries with vault-relative POSIX paths, so an entry written another way
 // ("Secrets/", "./Private", "GM\Stuff", an absolute path inside the vault) would hide nothing.
-const fs = require('node:fs');
+const { readerFrom } = require('../vault-reader');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
 
@@ -47,13 +47,16 @@ function normalizeExcludeDirs(list, vaultPath, say = () => {}, label) {
 
 // The path with every link in it followed. A folder that does not exist yet is judged by its nearest folder that does,
 // with the rest of the path put back.
-function realPath(p) {
+function realPath(p, deps) {
+  const realpath = readerFrom(deps).realpath;
   const tail = [];
   let cur = p;
   for (;;) {
     try {
-      return path.join(fs.realpathSync.native(cur), ...tail);
-    } catch {
+      return path.join(realpath(cur), ...tail);
+    } catch (err) {
+      // Only a folder that is not there is walked past; a failure to look is an error (#424).
+      if (!['ENOENT', 'ENOTDIR', 'ELOOP'].includes(err.code)) throw err;
       const up = path.dirname(cur);
       if (up === cur) return p;
       tail.unshift(path.basename(cur));
@@ -64,7 +67,7 @@ function realPath(p) {
 
 // Why `value` cannot be the output folder of a site in `siteDir`, or null. It must be text, inside the site folder,
 // and not the site folder itself. Without a site folder only a relative path can be judged; an absolute one passes.
-function outputProblem(value, siteDir) {
+function outputProblem(value, siteDir, deps) {
   const rule = 'it must be a folder inside the site folder, not the site folder itself and not outside it';
   if (typeof value !== 'string' || value.trim() === '') return rule;
   const text = value.trim();
@@ -73,8 +76,8 @@ function outputProblem(value, siteDir) {
     const full = path.resolve(root, text);
     if (!(full !== root && full.startsWith(root + path.sep))) return rule;
     // A link inside the site folder that leads out of it (to the vault, say) is outside it, whatever it is called.
-    const realRoot = realPath(root);
-    const realFull = realPath(full);
+    const realRoot = realPath(root, deps);
+    const realFull = realPath(full, deps);
     return realFull !== realRoot && realFull.startsWith(realRoot + path.sep) ? null : rule;
   }
   if (path.isAbsolute(text) || /^[A-Za-z]:/.test(text)) return null;

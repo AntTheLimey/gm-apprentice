@@ -19,13 +19,13 @@ from migrate_vault import vault_system
 from vault_check import (ExplainAll, ask_publish_tool, check_frontmatter, check_gm_leak,
                          check_pc_body, check_sessions, configured_site,
                          _kept_by_player, vault_settings)
-from vaultlib import (LEGACY_SETTINGS_FILE, PublishToolUnavailable, SettingsUnavailable,
+from vaultlib import (LEGACY_SETTINGS_FILE, SETTINGS_FILE, PublishToolUnavailable, SettingsUnavailable,
                       forget_settings, google_fonts, set_key, setting_name, settings,
                       settings_default, settings_file, settings_raw, settings_remove, settings_set,
                       settings_unset, settings_written, site_switch_written, vault_layout, written_in_vault_file, yaml_scalar)
 
 INLINE_PUBLISH = (
-    "the publish: block in _meta/vault-config.md is written on one line "
+    f"the publish: block in {LEGACY_SETTINGS_FILE} is written on one line "
     "({…}); write it as a block so its settings can be read")  # old file only
 
 
@@ -843,14 +843,21 @@ def find_exclude_lists(vault: Path) -> list[Item]:
     # On the old file the same pass moves the settings first (the move is
     # held only for a site whose own tool is pinned elsewhere, and says so),
     # so the old file's name would be wrong by the time the lists are written.
-    where = ("_meta/vault-config.yaml" if vault_layout(vault) == "legacy"
+    where = (SETTINGS_FILE if vault_layout(vault) == "legacy"
              else settings_file(vault))
-    return [Item("exclude-lists", WILL,
-                 [f"write the built-in {setting_name(vault, name)} "
-                  f"({', '.join(default)}) "
-                  f"into {where} so you can see and edit it; "
-                  f"what publishes does not change"
-                  for name, default in lists], apply)]
+    # A value the GM wrote that is not a list: the build ignored it, so the built-in list
+    # has been what publishes; the line says what was typed before it is replaced.
+    typed = {f.get("setting"): f.get("message") for f in now.faults
+             if f.get("kind") == "not-allowed"}
+
+    def line(name: str, default: list) -> str:
+        replaced = f" (replacing: {typed[name]})" if name in typed else ""
+        return (f"{'replace' if name in typed else 'write'} the built-in "
+                f"{setting_name(vault, name)} ({', '.join(default)}) "
+                f"into {where} so you can see and edit it"
+                f"{replaced}; what publishes does not change")
+
+    return [Item("exclude-lists", WILL, [line(n, d) for n, d in lists], apply)]
 
 
 AFTER_BUILD = "player_site.after_build"

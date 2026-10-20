@@ -23,21 +23,27 @@ function el(doc, classes, children = []) {
       ...children.flatMap((c) => c.find(cls, open)),
     ],
     querySelector: (sel) => children.flatMap((c) => c.find(sel.slice(1)))[0] || null,
-    querySelectorAll: () => [],
+    querySelectorAll: (sel) => (sel === 'a' ? children.flatMap((c) => c.find('mobile-link')) : []),
+    attrs: {},
+    setAttribute: (name, value) => { node.attrs[name] = String(value); },
+    getAttribute: (name) => (name in node.attrs ? node.attrs[name] : null),
+    parentElement: null,
     clicks: [],
     addEventListener: (type, fn) => { if (type === 'click') node.clicks.push(fn); },
-    click: () => node.clicks.forEach((fn) => fn({})),
+    click: () => node.clicks.forEach((fn) => fn({ target: node })),
     focus: () => { doc.activeElement = node; },
   };
   return node;
 }
 
-function page() {
+function page(marked = true) {
   const doc = { activeElement: null, listeners: [] };
   const group = (open) => {
     const toggle = el(doc, ['nav-group-toggle']);
     const link = el(doc, ['nav-link']);
-    return { toggle, link, node: el(doc, open ? ['nav-group', 'open'] : ['nav-group'], [toggle, el(doc, ['nav-dropdown'], [link])]) };
+    const node = el(doc, open ? ['nav-group', 'open'] : ['nav-group'], [toggle, el(doc, ['nav-dropdown'], [link])]);
+    toggle.parentElement = node;
+    return { toggle, link, node };
   };
   const story = group(true);
   const world = group(false);
@@ -45,7 +51,9 @@ function page() {
   const mobileLink = el(doc, ['mobile-link']);
   const mobileClose = el(doc, ['mobile-nav-close']);
   const mobileNav = el(doc, ['mobile-nav-overlay', 'open'], [mobileClose, mobileLink]);
-  const body = el(doc, ['body'], [story.node, world.node, mobileToggle, mobileNav]);
+  const topNav = el(doc, ['top-nav']);
+  if (marked) topNav.attrs['data-nav'] = 'js';
+  const body = el(doc, ['body'], [topNav, story.node, world.node, mobileToggle, mobileNav]);
   doc.body = body;
   doc.getElementById = (id) => (id === 'mobile-nav' ? mobileNav : null);
   doc.querySelector = (sel) => body.find(sel.slice(1))[0] || null;
@@ -53,7 +61,12 @@ function page() {
     const [cls, open] = sel.slice(1).split('.');
     return body.find(cls, open === 'open');
   };
-  doc.addEventListener = (type, fn) => { if (type === 'keydown') doc.listeners.push(fn); };
+  doc.clickers = [];
+  doc.click = (event) => doc.clickers.forEach((fn) => fn(event));
+  doc.addEventListener = (type, fn) => {
+    if (type === 'keydown') doc.listeners.push(fn);
+    if (type === 'click') doc.clickers.push(fn);
+  };
   vm.runInNewContext(SOURCE, { document: doc });
   const press = (key) => doc.listeners.forEach((fn) => fn({ key, preventDefault() {} }));
   return { doc, story, world, mobileNav, mobileToggle, mobileLink, mobileClose, press };
@@ -104,4 +117,87 @@ test('the phone menu\'s close button hands the focus back to the menu button', (
   p.doc.activeElement = p.mobileClose;
   p.mobileClose.click();
   assert.strictEqual(p.doc.activeElement, p.mobileToggle);
+});
+
+// #439: a menu button says whether its menu is open, to a screen reader.
+test('a group button says aria-expanded as its menu opens and closes (#439)', () => {
+  const p = page();
+  p.world.toggle.click();
+  assert.ok(p.world.node.classList.contains('open'));
+  assert.ok(!p.story.node.classList.contains('open'));
+  assert.strictEqual(p.world.toggle.getAttribute('aria-expanded'), 'true');
+  assert.strictEqual(p.story.toggle.getAttribute('aria-expanded'), 'false');
+  p.world.toggle.click();
+  assert.strictEqual(p.world.toggle.getAttribute('aria-expanded'), 'false');
+});
+
+test('Escape sets aria-expanded back to false on the menus it closes (#439)', () => {
+  const p = page();
+  p.world.toggle.click();
+  p.press('Escape');
+  assert.strictEqual(p.world.toggle.getAttribute('aria-expanded'), 'false');
+});
+
+test('a click outside the menus closes them and says so (#439)', () => {
+  const p = page();
+  p.world.toggle.click();
+  p.doc.click({ target: { closest: () => null } });
+  assert.ok(!p.world.node.classList.contains('open'));
+  assert.strictEqual(p.world.toggle.getAttribute('aria-expanded'), 'false');
+});
+
+test('the phone menu button opens the menu and says aria-expanded; close and Escape undo it (#439)', () => {
+  const p = page();
+  p.mobileNav.classList.remove('open');
+  p.mobileToggle.click();
+  assert.ok(p.mobileNav.classList.contains('open'));
+  assert.strictEqual(p.mobileToggle.getAttribute('aria-expanded'), 'true');
+  p.mobileClose.click();
+  assert.ok(!p.mobileNav.classList.contains('open'));
+  assert.strictEqual(p.mobileToggle.getAttribute('aria-expanded'), 'false');
+  p.mobileToggle.click();
+  p.press('Escape');
+  assert.strictEqual(p.mobileToggle.getAttribute('aria-expanded'), 'false');
+  p.mobileToggle.click();
+  p.mobileLink.click();
+  assert.strictEqual(p.mobileToggle.getAttribute('aria-expanded'), 'false');
+});
+
+test('the menu markup starts every menu button closed (#439)', () => {
+  const { renderTopNav } = require('../lib/templates/nav');
+  const pages = [{ outputDir: 'sessions', outputPath: 'sessions/a.html', frontmatter: {} }];
+  const html = renderTopNav(pages, 'index.html', { siteTitle: 'S' }, {});
+  assert.match(html, /<button class="nav-group-toggle" aria-expanded="false">/);
+  assert.match(html, /class="nav-mobile-toggle"[^>]*aria-expanded="false"[^>]*aria-controls="mobile-nav"|class="nav-mobile-toggle"[^>]*aria-controls="mobile-nav"[^>]*aria-expanded="false"/);
+});
+
+// A page an older build wrote has its menu clicks inline; nav.js leaves those alone (#439).
+test('on a header without data-nav, nav.js binds no menu clicks, so an inline handler never toggles twice (#439)', () => {
+  const p = page(false);
+  p.world.toggle.click();
+  assert.ok(!p.world.node.classList.contains('open'));
+  p.mobileNav.classList.remove('open');
+  p.mobileToggle.click();
+  assert.ok(!p.mobileNav.classList.contains('open'));
+  assert.strictEqual(p.doc.clickers.length, 0);
+  p.mobileNav.classList.add('open');
+  p.mobileClose.click();
+  p.mobileLink.click();
+  assert.ok(p.mobileNav.classList.contains('open'));
+});
+
+test('on a header marked data-nav="js", nav.js binds the group and phone menu clicks (#439)', () => {
+  const p = page(true);
+  p.world.toggle.click();
+  assert.ok(p.world.node.classList.contains('open'));
+  assert.strictEqual(p.doc.clickers.length, 1);
+  p.mobileNav.classList.remove('open');
+  p.mobileToggle.click();
+  assert.ok(p.mobileNav.classList.contains('open'));
+});
+
+test('the menu markup carries data-nav="js" (#439)', () => {
+  const { renderTopNav } = require('../lib/templates/nav');
+  const pages = [{ outputDir: 'sessions', outputPath: 'sessions/a.html', frontmatter: {} }];
+  assert.match(renderTopNav(pages, 'index.html', { siteTitle: 'S' }, {}), /<header class="top-nav" data-nav="js">/);
 });

@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.86] — 2026-10-20
+
+Bug Bash batch 7: tests, tidying and the publish tool's library asks.
+Publish tool 1.44.0.
+
+### Added
+
+- `build()` returns its render errors and warnings, not only console
+  text (#426); config and theme helpers are exported for a downstream
+  predictor (#425); an offline build fetches no fonts and says how to
+  bring the font cache along (#449).
+- Metadata badges carry `data-field` naming their field (#427).
+- Built sites ship a `NOTICE.txt` with the generator's and lunr's MIT
+  licences (#428).
+- An over-wide table is a `TABLE_OVERWIDE` note fault, so campaign-qa's
+  Site Faults check lists it and asks what to call the extra columns
+  (#470).
+- A real-browser test for Connections, skipped where no Chrome is
+  installed (#342).
+- mobRPG: `whats-new` lists places with no parent place; a dry run of
+  `images` checks the picture's size before downloading it (#353).
+
+### Fixed
+
+- A withheld note named as an event participant with a note after it
+  ("Zorn (the host)") printed its name; it now prints "someone". Event
+  participants written as several links or "[[Name]] — note" render as
+  links, not brackets (#469).
+- Menu buttons carry `aria-expanded`; the menu code lives in
+  `js/nav.js`, which a sheets-only build also copies, so menus work on
+  pages written between full builds (#439).
+- A file or folder the build can't read stops the build with its name,
+  instead of being skipped as if absent (#424).
+- Bundled js-yaml, markdown-it and linkify-it are refreshed to patched
+  versions (#359).
+- Settings values and file names are stated once: colour modes come
+  from the settings list, and the scripts take the settings file names
+  from one place (#374, #382).
+- mobRPG: a name two notes share is held and named, not resolved to the
+  first; event refs no longer depend on line order; names match
+  regardless of case; notes in subfolders are warned about; an
+  unreadable note is skipped and named (#348, #353).
+- A GURPS PC with no sheet no longer gets an extra blank line in its Equipment tab
+  (#348).
+
 ## [1.10.85] — 2026-10-20
 
 Bug Bash batch 6: Connections and tones. Publish tool 1.43.0.

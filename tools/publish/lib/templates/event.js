@@ -1,5 +1,5 @@
 const { escapeHtml, relativePath, wikiTargetLabel, encodeHref, renderMetaValue, refMetaValue } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection, badgeSpan } = require('./base');
 const { WIKILINK_SOURCE, parseWikilink } = require('../wikilink');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
@@ -29,10 +29,10 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
   const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
 
   const badges = [];
-  if (fm.event_type) badges.push(headerValueText('event_type', fm.event_type));
+  if (fm.event_type) badges.push(['event_type', headerValueText('event_type', fm.event_type)]);
 
   const badgeHtml = badges.length > 0
-    ? `<div class="metadata-badges">${badges.map(b => `<span class="metadata-badge">${escapeHtml(b)}</span>`).join('\n')}</div>`
+    ? `<div class="metadata-badges">${badges.map(([f, b]) => badgeSpan(f, b)).join('\n')}</div>`
     : '';
 
   const metaItems = [];
@@ -74,10 +74,11 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
           nameHtml = escapeHtml(p.display);
         }
       } else {
-        nameHtml = escapeHtml(p.display);
+        // Running text with links in it (`[[Ilse]] — met at the quay`, `[[Otto]], [[Zorn]]`) is shown the way the body shows its links.
+        nameHtml = renderMetaValue(p.display, linkMap, page.outputPath);
       }
       if (p.annotation) {
-        return `<li>${nameHtml} — ${escapeHtml(p.annotation)}</li>`;
+        return `<li>${nameHtml} — ${renderMetaValue(p.annotation, linkMap, page.outputPath)}</li>`;
       }
       return `<li>${nameHtml}</li>`;
     }).join('\n');

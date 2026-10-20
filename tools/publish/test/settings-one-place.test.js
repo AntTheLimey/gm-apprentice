@@ -115,12 +115,38 @@ const built = () => {
   try { return loadPublishConfig(dir, {}, () => {}); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 };
 
+// A read of a name off an object, written four ways: `.x`, `?.x`, `['x']`, `?.['x']`. The pattern takes the name
+// in group 1 or 2.
+const access = (nameRe) => `(?:\\??\\.(${nameRe})\\b|(?:\\?\\.)?\\[\\s*['"](${nameRe})['"]\\s*\\])`;
+const NAME = '[a-z][a-z_0-9]*';
+const firstLevelReads = (src) => [...src.matchAll(new RegExp(`\\bpublishConfig${access(NAME)}`, 'g'))].map((m) => m[1] || m[2]);
+const groupReads = (src, groups) => [...src.matchAll(new RegExp(`\\bpublishConfig${access(groups.join('|'))}${access(NAME)}`, 'g'))]
+  .map((m) => `${m[1] || m[2]}.${m[3] || m[4]}`);
+
+test('the scan reads a name however the code spells the read', () => {
+  assert.deepEqual(firstLevelReads("publishConfig.a_b; publishConfig?.c; publishConfig['d']; publishConfig?.['e'];"), ['a_b', 'c', 'd', 'e']);
+  assert.deepEqual(groupReads("publishConfig.theme.a; publishConfig.theme?.['b']; publishConfig?.['theme'].c; publishConfig?.theme?.d;", ['theme']), ['theme.a', 'theme.b', 'theme.c', 'theme.d']);
+});
+
+// The resolved config carries `layout`, `withheld_words`, `statuses` and others as non-enumerable properties: a copy
+// of it (`{ ...publishConfig }`, `Object.assign({}, publishConfig)`) loses them, and a message would then name settings
+// by the new names on a vault still on the old file. Code passes the object itself, or reads what it needs off it.
+const copiesOf = (src) => [...src.matchAll(/\.\.\.\s*publishConfig\b(?!\s*\.)|Object\.assign\(\s*\{[^}]*\}\s*,\s*publishConfig\b|structuredClone\(\s*publishConfig\b|JSON\.parse\(JSON\.stringify\(\s*publishConfig\b/g)].map((m) => m[0]);
+
+test('nothing copies the resolved config and loses its hidden properties', () => {
+  assert.deepEqual(copiesOf('const c = { ...publishConfig, x: 1 }; Object.assign({}, publishConfig); structuredClone(publishConfig)').length, 3);
+  assert.deepEqual(copiesOf('f(publishConfig.theme, ...publishConfig.list)'), []);
+  assert.deepEqual(sources.flatMap((f) => copiesOf(code(f)).map((c) => `${rel(f)}: ${c}`)), []);
+  for (const key of ['layout', 'withheld_words', 'statuses']) {
+    assert.equal(Object.getOwnPropertyDescriptor(built(), key).enumerable, false, `${key} is meant to be hidden`);
+  }
+});
+
 test('every setting the code reads is in the list', () => {
   const known = new Set(Object.keys(built()));
   const derived = new Set(DERIVED);
   const read = new Set();
-  const first = /\bpublishConfig(?:\??\.([a-z][a-z_0-9]*)\b|\[\s*['"]([a-z][a-z_0-9]*)['"]\s*\])/g;
-  for (const f of sources) for (const m of code(f).matchAll(first)) read.add(m[1] || m[2]);
+  for (const f of sources) for (const name of firstLevelReads(code(f))) read.add(name);
   assert.ok(read.size >= 10, `the scan found only ${read.size} names; it has stopped working`);
   assert.deepEqual([...read].filter((n) => !known.has(n) && !derived.has(n)).sort(), []);
 });
@@ -134,8 +160,7 @@ test('every setting the code reads inside a group is in the list', () => {
     ...Object.keys(built().four_oh_four).map((k) => `four_oh_four.${k}`),
   ]);
   const read = new Set();
-  const second = new RegExp(`\\bpublishConfig\\??\\.(${groups.join('|')})(?:\\??\\.([a-z][a-z_0-9]*)\\b|\\[\\s*['"]([a-z][a-z_0-9]*)['"]\\s*\\])`, 'g');
-  for (const f of sources) for (const m of code(f).matchAll(second)) read.add(`${m[1]}.${m[2] || m[3]}`);
+  for (const f of sources) for (const name of groupReads(code(f), groups)) read.add(name);
   assert.ok(read.size >= 5, `the scan found only ${read.size} names; it has stopped working`);
   assert.deepEqual([...read].filter((n) => !known.has(n)).sort(), []);
 });
@@ -148,12 +173,18 @@ test('every landing setting the code reads is in the list', () => {
   assert.deepEqual([...read].filter((n) => !known.has(n)).sort(), []);
 });
 
-// Client-side strings and modules that cannot require the list state a few allowed values
-// themselves; they must not drift from it.
-test('the colour modes the page script knows are the list\'s', () => {
-  assert.deepEqual(require('../lib/color-mode').MODES, entry('player_site.theme.default_mode').values);
+// The colour modes are the list's: color-mode.js asks it (a require at the call, as skins/ does, because the list
+// requires skins and skins require color-mode) and keeps no copy.
+test('the colour modes are not restated', () => {
+  const found = sources.filter((f) => /['"`]system['"`]\s*,\s*['"`](?:dark|light)['"`]/.test(code(f))).map(rel);
+  assert.deepEqual(found, []);
+  const { normalizeDefaultMode } = require('../lib/color-mode');
+  for (const mode of entry('player_site.theme.default_mode').values) assert.equal(normalizeDefaultMode(` ${mode.toUpperCase()} `), mode);
+  assert.equal(normalizeDefaultMode('sepia'), entry('player_site.theme.default_mode').default);
 });
 
+// Client-side strings and modules that cannot require the list state a few allowed values
+// themselves; they must not drift from it.
 test('the connection and link-preview modes the templates use come from the list', () => {
   const base = fs.readFileSync(path.join(ROOT, 'lib', 'templates', 'base.js'), 'utf8');
   const conn = fs.readFileSync(path.join(ROOT, 'lib', 'templates', 'connections.js'), 'utf8');

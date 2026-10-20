@@ -106,10 +106,16 @@ def element_id_of(href: str) -> str | None:
 
 def rewrite_md_for_push(md_text: str, ent_id_by_key: dict,
                         world_id: str, url_fmt: str = URL_FMT,
-                        id_by_file: dict | None = None) -> str:
+                        id_by_file: dict | None = None,
+                        ambiguous: set | None = None,
+                        flattened: list | None = None) -> str:
     """Wikilinks -> element links (resolved via `ent_id_by_key`, keyed by
     `suggest._key`); unresolvable wikilinks and `.md` relative links -> bare
     display text; `http(s)` links untouched.
+
+    A wikilink that went to plain text because its folded key is in `ambiguous`
+    (two notes share it) has its name appended to `flattened`, so the caller can
+    say so; an ordinary unresolvable link (a PC, a session note) is not reported.
 
     `id_by_file` ({note file stem: element_id}) is consulted first. A wikilink
     names a file, and the folded key can merge two: "The Woodland Ghost" and
@@ -119,10 +125,14 @@ def rewrite_md_for_push(md_text: str, ent_id_by_key: dict,
     def _wl(m: re.Match) -> str:
         name = m.group(1).strip()
         display = (m.group(2) or m.group(1)).strip()   # [[Name|Alias]] shows Alias
-        eid = (files.get(unicodedata.normalize("NFC", name.split("#")[0]))
-               or ent_id_by_key.get(suggest._key(name)))   # ...but resolves by Name
+        key = suggest._key(name)
+        eid = files.get(unicodedata.normalize("NFC", name.split("#")[0]))
+        if not eid and key not in (ambiguous or ()):
+            eid = ent_id_by_key.get(key)   # ...but resolves by Name, unless two notes share it
         if eid:
             return f"[{display}]({url_fmt.format(world=world_id, eid=eid)})"
+        if flattened is not None and suggest._key(name) in (ambiguous or ()):
+            flattened.append(name.split("#")[0])
         return display
 
     text = _EMBED_LINE.sub("", md_text or "")

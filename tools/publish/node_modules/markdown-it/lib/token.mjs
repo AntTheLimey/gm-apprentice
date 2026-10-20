@@ -15,28 +15,28 @@ function Token (type, tag, nesting) {
    *
    * Type of the token (string, e.g. "paragraph_open")
    **/
-  this.type     = type
+  this.type = type
 
   /**
    * Token#tag -> String
    *
    * html tag name, e.g. "p"
    **/
-  this.tag      = tag
+  this.tag = tag
 
   /**
    * Token#attrs -> Array
    *
    * Html attributes. Format: `[ [ name1, value1 ], [ name2, value2 ] ]`
    **/
-  this.attrs    = null
+  this.attrs = null
 
   /**
    * Token#map -> Array
    *
    * Source map info. Format: `[ line_begin, line_end ]`
    **/
-  this.map      = null
+  this.map = null
 
   /**
    * Token#nesting -> Number
@@ -47,14 +47,14 @@ function Token (type, tag, nesting) {
    * -  `0` means the tag is self-closing
    * - `-1` means the tag is closing
    **/
-  this.nesting  = nesting
+  this.nesting = nesting
 
   /**
    * Token#level -> Number
    *
    * nesting level, the same as `state.level`
    **/
-  this.level    = 0
+  this.level = 0
 
   /**
    * Token#children -> Array
@@ -69,14 +69,14 @@ function Token (type, tag, nesting) {
    * In a case of self-closing tag (code, html, fence, etc.),
    * it has contents of this tag.
    **/
-  this.content  = ''
+  this.content = ''
 
   /**
    * Token#markup -> String
    *
    * '*' or '_' for emphasis, fence string for fence, etc.
    **/
-  this.markup   = ''
+  this.markup = ''
 
   /**
    * Token#info -> String
@@ -87,14 +87,14 @@ function Token (type, tag, nesting) {
    * - The value "auto" for autolink "link_open" and "link_close" tokens
    * - The string value of the item marker for ordered-list "list_item_open" tokens
    **/
-  this.info     = ''
+  this.info = ''
 
   /**
    * Token#meta -> Object
    *
    * A place for plugins to store an arbitrary data
    **/
-  this.meta     = null
+  this.meta = null
 
   /**
    * Token#block -> Boolean
@@ -102,7 +102,7 @@ function Token (type, tag, nesting) {
    * True for block-level tokens, false for inline tokens.
    * Used in renderer to calculate line breaks
    **/
-  this.block    = false
+  this.block = false
 
   /**
    * Token#hidden -> Boolean
@@ -110,7 +110,7 @@ function Token (type, tag, nesting) {
    * If it's true, ignore this element when rendering. Used for tight lists
    * to hide paragraphs.
    **/
-  this.hidden   = false
+  this.hidden = false
 }
 
 /**

@@ -2,7 +2,6 @@
 // Everything true only of the old layout (settings in the frontmatter of the old vault file, over
 // the site's vault.config.json): the moved-key table, the merge, and the reader that walks the old
 // file. Dated for removal two releases after 1b, when the site-file fallback ends.
-const fs = require('node:fs');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
 const { parseNote } = require('../frontmatter');
@@ -10,6 +9,7 @@ const { REGISTRY, entry: settingEntry, legacyNameOf, siteKeyOf } = require('./re
 const { TYPES, isMap } = require('./types');
 const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, HIDING_PREFIXES, startsLikeHide } = require('./faults');
 const { OLD_FILE, at } = require('./layout');
+const { readerFrom } = require('../vault-reader');
 const { normalizeExcludeDir, normalizeExcludeDirs } = require('./folders');
 
 // The folders list as the old file names it, for the notes the tidying makes.
@@ -231,16 +231,17 @@ function childSegs(parent) {
 
 // Reads the old file and the site's vault.config.json. `core` is read.js's shared pieces.
 // Returns { values, origins, faults, legacy, file } like readSettings (without `layout`).
-function readLegacy({ vaultPath, siteConfig, siteDir, skipOldFile = false }, core) {
+function readLegacy({ vaultPath, siteConfig, siteDir, skipOldFile = false, deps }, core) {
+  const rd = readerFrom(deps);
   const { settle, getPath, setIn, clone, emptyIsFault, MAP_ENTRY, siteValueOf } = core;
   const site = siteConfig || {};
   const faults = [];
   const fault = makeFault;
   const file = { path: at(vaultPath, OLD_FILE), exists: false, hasSiteBlock: false, inline: false, leftover: false };
   let data = {};
-  if (!skipOldFile && fs.existsSync(file.path)) {
+  if (!skipOldFile && rd.exists(file.path)) {
     file.exists = true;
-    const text = fs.readFileSync(file.path, 'utf-8');
+    const text = rd.readFile(file.path);
     try {
       ({ data } = parseNote(text));
     } catch (e) {
@@ -290,7 +291,7 @@ function readLegacy({ vaultPath, siteConfig, siteDir, skipOldFile = false }, cor
 
   const values = {};
   const origins = {};
-  const c = { values, origins, faults, fault, vaultPath, siteDir };
+  const c = { values, origins, faults, fault, vaultPath, siteDir, deps };
   const defaultOf = (e) => {
     if (e.name === SITE_SWITCH) { const dir = getPath(publish, sansBlock(SITE_FOLDER).split('.')); return typeof dir === 'string' && dir.trim() !== ''; }
     return e.default === undefined ? null : clone(e.default);

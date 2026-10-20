@@ -96,7 +96,7 @@ describe('generateNav', () => {
     const html = generateNav(pages, { hasStory: true })('index.html', { siteTitle: 'T' });
     const desktop = html.slice(html.indexOf('<nav class="nav-groups">'), html.indexOf('</nav>'));
     // A link here would load the landing on the click that opens the menu.
-    assert.match(desktop, /<button class="nav-group-toggle">Story<\/button>/);
+    assert.match(desktop, /<button class="nav-group-toggle" aria-expanded="false">Story<\/button>/);
     assert.doesNotMatch(desktop, /<a class="nav-group-toggle"/);
     assert.match(desktop, /<div class="nav-dropdown">\s*<a href="story\.html">Story so far<\/a>\s*<a href="chapters\/index\.html">Chapters<\/a>/);
     assert.strictEqual((desktop.match(/href="story\.html"/g) || []).length, 1);

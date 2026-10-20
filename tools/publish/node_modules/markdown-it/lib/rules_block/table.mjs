@@ -151,11 +151,11 @@ export default function table (state, startLine, endLine, silent) {
   for (let i = 0; i < columns.length; i++) {
     const token_ho = state.push('th_open', 'th', 1)
     if (aligns[i]) {
-      token_ho.attrs  = [['style', 'text-align:' + aligns[i]]]
+      token_ho.attrs = [['style', 'text-align:' + aligns[i]]]
     }
 
     const token_il = state.push('inline', '', 0)
-    token_il.content  = columns[i].trim()
+    token_il.content = columns[i].trim()
     token_il.children = []
 
     state.push('th_close', 'th', -1)
@@ -202,11 +202,11 @@ export default function table (state, startLine, endLine, silent) {
     for (let i = 0; i < columnCount; i++) {
       const token_tdo = state.push('td_open', 'td', 1)
       if (aligns[i]) {
-        token_tdo.attrs  = [['style', 'text-align:' + aligns[i]]]
+        token_tdo.attrs = [['style', 'text-align:' + aligns[i]]]
       }
 
       const token_il = state.push('inline', '', 0)
-      token_il.content  = columns[i] ? columns[i].trim() : ''
+      token_il.content = columns[i] ? columns[i].trim() : ''
       token_il.children = []
 
       state.push('td_close', 'td', -1)

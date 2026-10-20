@@ -55,8 +55,9 @@ to the new settings file (`settings-move`). Its rows under Needs a
 person:
 
 - The vault stays on the old file because its site's publish tool is
-  older than 1.23.0 and cannot read the new one. The row comes back on
-  every pass until that tool is updated; tell the GM once and carry on.
+  too old to read the new one (the row names the version it needs). The row
+  comes back on every pass until that tool is updated; tell the GM once and
+  carry on.
 - The settings cannot move yet. Each row says what blocks the move, and
   the vault is not stamped until it has moved. A row naming a setting:
   campaign-qa's Settings check. A site folder that belongs to another

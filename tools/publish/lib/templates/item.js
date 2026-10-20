@@ -1,5 +1,5 @@
 const { escapeHtml, refMetaValue } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection, badgeSpan } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
 function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap, context) {
@@ -23,11 +23,11 @@ function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap,
 
   // Metadata badges
   const badges = [];
-  if (fm.item_type) badges.push(headerValueText('item_type', fm.item_type));
-  if (fm.rarity) badges.push(headerValueText('rarity', fm.rarity));
+  if (fm.item_type) badges.push(['item_type', headerValueText('item_type', fm.item_type)]);
+  if (fm.rarity) badges.push(['rarity', headerValueText('rarity', fm.rarity)]);
 
   const badgeHtml = badges.length > 0
-    ? `<div class="metadata-badges">${badges.map(b => `<span class="metadata-badge">${escapeHtml(b)}</span>`).join('\n')}</div>`
+    ? `<div class="metadata-badges">${badges.map(([f, b]) => badgeSpan(f, b)).join('\n')}</div>`
     : '';
 
   // Holder and origin: a name links to its page when the site has one; running text shows

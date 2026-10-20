@@ -84,11 +84,11 @@ export default function fence (state, startLine, endLine, silent) {
 
   state.line = nextLine + (haveEndMarker ? 1 : 0)
 
-  const token   = state.push('fence', 'code', 0)
-  token.info    = params
+  const token = state.push('fence', 'code', 0)
+  token.info = params
   token.content = state.getLines(startLine + 1, nextLine, len, true)
-  token.markup  = markup
-  token.map     = [startLine, state.line]
+  token.markup = markup
+  token.map = [startLine, state.line]
 
   return true
 }

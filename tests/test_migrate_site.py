@@ -810,6 +810,15 @@ class ExcludeListTests(unittest.TestCase):
         self.assertEqual(len(item.lines), 1)
         self.assertIn("publish.exclude_sections", item.lines[0])
 
+    def test_the_line_quotes_what_the_replaced_value_said(self):
+        # The build already ignored the scalar, so nothing published changes; but the
+        # GM typed it, so the report says what it was before it goes.
+        vault = make_vault(self, extra="  exclude_sections: Mine\n"
+                                       "  exclude_fields: [mine]\n")
+        (item,) = ms.find_exclude_lists(vault)
+        self.assertIn('"Mine"', item.lines[0])
+        self.assertIn("replace", item.lines[0])
+
     def test_no_site_offers_nothing(self):
         self.assertEqual(ms.find_exclude_lists(make_vault(self, site=False)), [])
 

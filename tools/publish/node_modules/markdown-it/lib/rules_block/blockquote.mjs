@@ -18,10 +18,10 @@ export default function blockquote (state, startLine, endLine, silent) {
   // so no point trying to find the end of it in silent mode
   if (silent) { return true }
 
-  const oldBMarks  = []
+  const oldBMarks = []
   const oldBSCount = []
-  const oldSCount  = []
-  const oldTShift  = []
+  const oldSCount = []
+  const oldTShift = []
 
   const terminatorRules = state.md.block.ruler.getRules('blockquote')
 
@@ -181,14 +181,14 @@ export default function blockquote (state, startLine, endLine, silent) {
   const oldIndent = state.blkIndent
   state.blkIndent = 0
 
-  const token_o  = state.push('blockquote_open', 'blockquote', 1)
+  const token_o = state.push('blockquote_open', 'blockquote', 1)
   token_o.markup = '>'
   const lines = [startLine, 0]
-  token_o.map    = lines
+  token_o.map = lines
 
   state.md.block.tokenize(state, startLine, nextLine)
 
-  const token_c  = state.push('blockquote_close', 'blockquote', -1)
+  const token_c = state.push('blockquote_close', 'blockquote', -1)
   token_c.markup = '>'
 
   state.lineMax = oldLineMax

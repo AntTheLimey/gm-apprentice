@@ -11,7 +11,9 @@ attachments are never overwritten (a colliding name gets a " (mobRPG)" suffix)
 and a non-empty portrait field is left alone — both cases are reported instead.
 An upstream image whose bytes match a file the vault already holds for the note
 (the colliding name, its " (mobRPG)" copy, the current portrait) is not saved
-again; it is counted as unchanged. That check downloads the image, dry-run too.
+again; it is counted as unchanged. That check downloads the image, except in a
+dry run when a HEAD request gives a size none of those local files has: then the
+bytes cannot match and nothing is downloaded.
 
 The mobRPG element_id -> vault-file map comes from the vault's own `mobrpg:`
 nodes (the single source of truth); there is no sidecar crosswalk.
@@ -42,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import http.client
 import mimetypes
 import os
 import re
@@ -91,6 +94,20 @@ def _download(url: str) -> bytes:
     without ever hitting a live server."""
     with urllib.request.urlopen(_check_url(url), timeout=30) as resp:  # noqa: S310 - scheme checked
         return resp.read()
+
+
+def _remote_size(url: str) -> int | None:
+    """The image's size from a HEAD request, or None when the server does not say."""
+    req = urllib.request.Request(_check_url(url), method="HEAD")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:  # noqa: S310 - scheme checked
+            return int(resp.headers.get("Content-Length"))
+    except (OSError, ValueError, TypeError, http.client.HTTPException):
+        return None
+
+
+# What a failed fetch can raise: a refused URL, a socket or HTTP error, a cut-off body.
+_FETCH_ERRORS = (ValueError, OSError, http.client.HTTPException)
 
 
 _UNSAFE_NAME = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
@@ -299,7 +316,7 @@ def run_push(args, token: str) -> int:
             if f.get("type") == "Image" and f.get("url"):
                 try:
                     remote.add(_sha(_download(f["url"])))
-                except (ValueError, OSError) as e:
+                except _FETCH_ERRORS as e:
                     print(f"  could not read an existing image on {name} ({e}); "
                           "it can't be compared", file=sys.stderr)
         count = len(files)
@@ -332,7 +349,7 @@ def run_push(args, token: str) -> int:
                     failed += 1
                     print(f"  FAILED (HTTP {e.status}): {name} <- {rel}", file=sys.stderr)
                 continue
-            except (ValueError, OSError) as e:
+            except _FETCH_ERRORS as e:
                 failed += 1
                 print(f"  FAILED ({e}): {name} <- {rel}", file=sys.stderr)
                 continue
@@ -433,9 +450,14 @@ def run(argv: list[str]) -> int:
             try:
                 if os.path.exists(dest) or has_portrait:
                     comparing = True
-                    data = _download(img["url"])
                     portrait = _portrait_files(vault_dir, text, index) if has_portrait else []
                     readable = lambda h: os.path.isfile(h) and _within(vault_root, h)  # noqa: E731
+                    held = [h for h in (*portrait, dest, beside) if readable(h)]
+                    size = None if args.execute else _remote_size(img["url"])
+                    # A dry run writes nothing, so a picture whose size no local
+                    # file has needs no download: its bytes cannot match.
+                    if size is None or any(os.path.getsize(h) == size for h in held):
+                        data = _download(img["url"])
                     on_portrait = next((h for h in portrait if readable(h) and _read(h) == data), None)
                     match = on_portrait or next(
                         (h for h in (dest, beside) if readable(h) and _read(h) == data), None)
@@ -446,7 +468,7 @@ def run(argv: list[str]) -> int:
                         dest = beside
                 elif args.execute:
                     data = _download(img["url"])
-            except (ValueError, OSError) as e:
+            except _FETCH_ERRORS as e:
                 what = ("could not compare {} with the upstream image" if comparing
                         else "could not download the image for {}")
                 print(f"  {what.format(ent['name'])} ({e}); skipped", file=sys.stderr)

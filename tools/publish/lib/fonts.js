@@ -205,6 +205,7 @@ async function ensureFontCache(vaultPath, families, opts = {}) {
   const timeoutMs = opts.timeoutMs || FETCH_TIMEOUT_MS;
   const warn = opts.warn || console.warn;
   const log = opts.log || console.log;
+  if (opts.offline) return;   // a host with no network: the build words each miss (missAdvice)
   for (const family of families) {
     if (!isValidFamily(family)) continue; // build() reports the bad name
     if (readFamilyCache(vaultPath, family)) continue;
@@ -218,9 +219,17 @@ async function ensureFontCache(vaultPath, families, opts = {}) {
   }
 }
 
+// What the GM can do about a font missing from the cache. An offline host cannot fetch it, so it is
+// told to bring the cache from a build made where there is a network.
+function missAdvice(offline) {
+  return offline
+    ? `This build is offline: copy the ${CACHE_DIR} folder into the vault from a build run on a computer with internet.`
+    : 'Rebuild with network access.';
+}
+
 // Sync, cache-only. Returns { css, files } where files are the cached fonts to copy to the
 // output; families with no cache warn and contribute nothing.
-function selfHostedFontFaces(vaultPath, families, warn = console.warn) {
+function selfHostedFontFaces(vaultPath, families, warn = console.warn, opts = {}) {
   const rules = [];
   const files = [];
   for (const family of families) {
@@ -231,7 +240,7 @@ function selfHostedFontFaces(vaultPath, families, warn = console.warn) {
     const faces = readFamilyCache(vaultPath, family);
     if (!faces) {
       warn(`  WARNING: font "${family}" is not in the vault's font cache (${CACHE_DIR}/${slugFor(family)}) and could not be downloaded — `
-        + 'using the fallback font stack. Rebuild with network access. Google Fonts is NOT used in self-host mode.');
+        + `using the fallback font stack. ${missAdvice(opts.offline)} Google Fonts is NOT used in self-host mode.`);
       continue;
     }
     const slug = slugFor(family);
@@ -296,8 +305,10 @@ async function prefetchSkinFonts(config, vaultPath, publishConfig, opts) {
   if (families.length) await ensureFontCache(vaultPath, families, Object.assign({}, opts, { warn: () => {} }));
 }
 
+// `options.offline` (a host with no network): nothing is fetched, and a font missing from the cache is
+// worded as a step the GM can take (see missAdvice).
 async function buildWithFonts(options = {}, opts = {}) {
-  await prefetchForConfig(options.configPath, opts);
+  await prefetchForConfig(options.configPath, options.offline === true ? Object.assign({}, opts, { offline: true }) : opts);
   return require('./build').build(options);
 }
 
@@ -308,5 +319,5 @@ const GOOGLE_WARNING = (names) => `Custom fonts ${names} are loaded from Google 
 module.exports = {
   GENERIC_FAMILIES, CACHE_DIR, AXIS_CANDIDATES, GOOGLE_WARNING,
   isValidFamily, slugFor, selfHostFamilies, presetImportFamilies, parseFontFaces,
-  readFamilyCache, ensureFontCache, selfHostedFontFaces, prefetchForConfig, presetFamiliesFor, googleFontsFor, buildWithFonts,
+  readFamilyCache, ensureFontCache, missAdvice, selfHostedFontFaces, prefetchForConfig, presetFamiliesFor, googleFontsFor, buildWithFonts,
 };

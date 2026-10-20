@@ -270,6 +270,20 @@ class SiteFaultRowsTests(unittest.TestCase):
         self.assertIn("— move the heading out of the hidden block", rows[0])
         self.assertIn("HEADING_IN_HIDDEN_BLOCK", vc.NOTE_FAULT_CODES)
 
+    def test_a_table_wider_than_its_header_is_a_row(self):
+        # #470: the site widens the table; Python only carries the tool's words.
+        body = ("## Notes\n\n| Item | Value |\n| --- | --- |\n"
+                "| Sword | 5 | tacked-on remark |\n")
+        vault, _site = make(self, {MARA: npc(body)})
+        rows = [r for r in vc.check_site_faults(vault)
+                if "TABLE_OVERWIDE" in r]
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith(
+            f"INFO\t{MARA}\tTABLE_OVERWIDE: a table has 1 row with more "
+            "cells than its 2-column header"), rows)
+        self.assertIn("— Add header cells for the extra columns", rows[0])
+        self.assertIn("TABLE_OVERWIDE", vc.NOTE_FAULT_CODES)
+
     def test_a_withheld_name_printed_on_a_page_is_a_row(self):
         vault, _site = make(self, {
             MARA: npc("Lord Zorn rides at dawn."),

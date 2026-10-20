@@ -508,6 +508,8 @@ change what the site shows:
                   a withheld section's heading written inside a hidden block
                   (gm-only, a comment, a hidden callout), so the text after the
                   block is withheld with it (a note)
+  TABLE_OVERWIDE  a table with a row wider than its header, which the site
+                  widens so no cell is lost (a note)
 To find them the site is built in memory, every page rendered and nothing
 written, so the names are read off the pages as built and the list is the
 build's own. That is every page: a note's own, a PC's story, the section

@@ -13,7 +13,7 @@ const default_rules = {}
 default_rules.code_inline = function (tokens, idx, options, env, slf) {
   const token = tokens[idx]
 
-  return  '<code' + slf.renderAttrs(token) + '>' +
+  return '<code' + slf.renderAttrs(token) + '>' +
           escapeHtml(token.content) +
           '</code>'
 }
@@ -21,7 +21,7 @@ default_rules.code_inline = function (tokens, idx, options, env, slf) {
 default_rules.code_block = function (tokens, idx, options, env, slf) {
   const token = tokens[idx]
 
-  return  '<pre' + slf.renderAttrs(token) + '><code>' +
+  return '<pre' + slf.renderAttrs(token) + '><code>' +
           escapeHtml(tokens[idx].content) +
           '</code></pre>\n'
 }

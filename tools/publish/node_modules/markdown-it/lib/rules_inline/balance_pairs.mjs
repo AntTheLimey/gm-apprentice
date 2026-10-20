@@ -85,8 +85,8 @@ function processDelimiters (delimiters) {
           jumps[closerIdx] = closerIdx - openerIdx + lastJump
           jumps[openerIdx] = lastJump
 
-          closer.open  = false
-          opener.end   = closerIdx
+          closer.open = false
+          opener.end = closerIdx
           opener.close = false
           newMinOpenerIdx = -1
           // treat next token as start of run,

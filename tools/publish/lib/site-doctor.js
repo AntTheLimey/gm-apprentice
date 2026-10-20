@@ -232,7 +232,7 @@ async function runSiteDoctor(options, deps) {
   // `_Story.md` companion from the page list, and a manifest entry naming one is not
   // an orphan — the build folds its content into the PC page.
   const corpus = pages.slice();
-  pairStoryFiles(pages, vaultPath);
+  pairStoryFiles(pages, vaultPath, d);
   const verdicts = new Map(pages.map((page) => [page, decidePage(page, { rel: relOf(page), publishConfig, manifest })]));
   // A note the build writes no page for (a world-flags file) is not in its link map either.
   const published = pages.filter((page) => publishesPage(verdicts.get(page)) && !getsNoPage(page));
