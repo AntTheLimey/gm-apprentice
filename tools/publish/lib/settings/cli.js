@@ -29,6 +29,7 @@ const { OLD_BLOCK, SETUP_NOTE } = require('./legacy');
 const { normalizeExcludeDir, normalizeExcludeDirs } = require('./folders');
 const { readState, writeState } = require('./state');
 const { planMove, applyMove, siteFileNamedBy } = require('./move');
+const { readerFrom } = require('../vault-reader');
 
 const VERBS = ['get', 'set', 'add', 'remove', 'unset', 'describe', 'check', 'list', 'raw', 'setup-note', 'move', 'carry'];
 const LEAVES = () => REGISTRY.filter((e) => isLeaf(e, REGISTRY));
@@ -48,6 +49,7 @@ const reaches = (e, scope) => inScope(e.name, scope) || oldNamesOf(e).some((n) =
 // vault.config.json. With only --config, the vault is the one that file names.
 function target(options) {
   const { loadVaultConfig } = require('../config');
+  const rd = readerFrom(options.deps);
   if (options.vault) {
     const vaultPath = path.resolve(options.vault);
     // With no --config, the site folder is the one the vault names, as the move finds it; --no-site-file reads none
@@ -55,25 +57,26 @@ function target(options) {
     const named = options.config || options.noSiteFile ? null : siteFileNamedBy(vaultPath);
     const config = options.config ? path.resolve(options.config) : (named && named.exists ? named.file : null);
     let siteConfig = {};
-    if (options.config && !fs.existsSync(config)) throw new Error(`--config ${config} does not exist`);
-    if (config && fs.existsSync(config)) {
-      try { siteConfig = loadVaultConfig(config); } catch (e) { if (options.config) throw e; }
+    if (options.config && !rd.exists(config)) throw new Error(`--config ${config} does not exist`);
+    if (config && rd.exists(config)) {
+      try { siteConfig = loadVaultConfig(config, rd); } catch (e) { if (options.config) throw e; }
     }
     return { vaultPath, siteConfig };
   }
   const config = path.resolve(options.config || './vault.config.json');
-  const siteConfig = loadVaultConfig(config);
+  const siteConfig = loadVaultConfig(config, rd);
   if (!siteConfig.vaultPath) throw new Error(`${config} has no "vaultPath"`);
   return { vaultPath: path.resolve(path.dirname(config), siteConfig.vaultPath), siteConfig };
 }
 
 // The settings file as written: the whole new file, or the frontmatter of the old one; {} with no file.
-function rawData(vaultPath) {
-  if (layoutOf(vaultPath) === 'new') return parseNewFile(vaultPath);
+function rawData(vaultPath, deps) {
+  if (layoutOf(vaultPath, deps) === 'new') return parseNewFile(vaultPath, deps);
+  const rd = readerFrom(deps);
   const file = fileAt(vaultPath, OLD_FILE);
-  if (!fs.existsSync(file)) return {};
+  if (!rd.exists(file)) return {};
   try {
-    return parseNote(fs.readFileSync(file, 'utf8')).data || {};
+    return parseNote(rd.readFile(file)).data || {};
   } catch (e) {
     throw new Error(`${OLD_FILE} frontmatter is not valid YAML: ${String(e.message).split('\n')[0].trim().replace(/:$/, '')}`);
   }
@@ -129,7 +132,7 @@ function get(options, names) {
   // A retired name can still be asked for by its name: it answers what the file holds (the update reads it to decide).
   const retiredAsked = names.map((n) => resolve(n)).filter((r) => r && r.entry.retired && !r.entry.legacyOnly).map((r) => r.entry);
   for (const name of names) if (!leaves.some((e) => reaches(e, name)) && !retiredAsked.some((e) => e.name === (resolve(name) || {}).entry?.name)) throw new Error(notASetting(name));
-  const read = readSettings({ vaultPath, siteConfig });
+  const read = readSettings({ vaultPath, siteConfig, deps: options.deps });
   // --site gm: the values the GM site builds with, and for each whether the GM wrote it for that site or it is the player site's.
   const gmSite = options.site === 'gm';
   if (options.site && !gmSite && options.site !== 'player') throw new Error(`settings get --site takes player or gm, not "${options.site}".`);
@@ -138,7 +141,7 @@ function get(options, names) {
   const now = {};
   for (const e of shown) now[e.name] = { value: getPath(view.values, e.name.split('.')) ?? null, origin: gmSite ? gmOrigin(read, e.name) : read.origins[e.name] };
   if (retiredAsked.length) {
-    const data = rawData(vaultPath);
+    const data = rawData(vaultPath, options.deps);
     const where = (e) => (read.layout === 'new' ? e.name : legacyNameOf(e)).split('.');
     // (Listed in the order asked, after the live settings.)
     for (const name of names) {
@@ -164,7 +167,7 @@ function get(options, names) {
 
 function check(options) {
   const { vaultPath, siteConfig } = target(options);
-  const faults = sortedFaults(readSettings({ vaultPath, siteConfig }).faults);
+  const faults = sortedFaults(readSettings({ vaultPath, siteConfig, deps: options.deps }).faults);
   return {
     result: { faults: faults.map(faultJson) },
     lines: faults.length ? faults.map(faultLine) : ['Every setting in the file reads cleanly.'],
@@ -186,9 +189,9 @@ function groupPathOf(name, newLayout) {
 
 function raw(options, name) {
   const { vaultPath } = target(options);
-  const data = rawData(vaultPath);
+  const data = rawData(vaultPath, options.deps);
   const r = name ? resolve(name) : null;
-  const newLayout = layoutOf(vaultPath) === 'new';
+  const newLayout = layoutOf(vaultPath, options.deps) === 'new';
   const at = r ? (newLayout ? r.entry.name.split('.') : (oldOf(r.entry) ? filePathOf(name, r) : null)) : (name ? groupPathOf(name, newLayout) : null);
   const value = name ? (at ? getPath(data, at) : undefined) : data;
   const result = value === undefined ? null : value;
@@ -379,8 +382,8 @@ function plan(options, pairs) {
 const emptyNote = (name, noun = ((resolve(name) || {}).entry || {}).of || 'entries') => `${name} is empty: nothing from the built-in list is hidden. Add the ${noun} you want hidden, or remove the key to use the built-in list again.`;
 
 // Whether anything is at the path, a link that leads nowhere included.
-function pathExists(p) {
-  try { fs.lstatSync(p); return true; } catch { return false; }
+function pathExists(p, deps) {
+  return readerFrom(deps).lstatExists(p);
 }
 
 // Turning the GM site on: the folder it is built into is the one named, or one beside the player site's, and it must
@@ -391,8 +394,8 @@ function turningOnGmSite(options, planned) {
   if (!on || readSwitch(on.value) !== true) return {};
   const { vaultPath, siteConfig } = target(options);
   // An old-layout vault is refused by the writer, as every new-only setting is.
-  if (layoutOf(vaultPath) !== 'new') return {};
-  const { values } = readSettings({ vaultPath, siteConfig });
+  if (layoutOf(vaultPath, options.deps) !== 'new') return {};
+  const { values } = readSettings({ vaultPath, siteConfig, deps: options.deps });
   const value = (name) => getPath(values, name.split('.'));
   const namedNow = planned.changes.find((c) => c.name === 'gm_site.folder');
   const keptBy = (planned.changes.find((c) => c.name === 'vault.kept_by') || {}).value ?? value('vault.kept_by');
@@ -405,10 +408,10 @@ function turningOnGmSite(options, planned) {
   const none = ['There is no player_site.folder to put the GM site beside. Name its folder too: settings set gm_site.publish=on gm_site.folder=/path/to/folder'];
   if (!named && !playerDir) return { errors: none };
   const folder = named ? resolveGmFolder(written, playerDir || vaultPath) : defaultGmFolder(playerDir);
-  const problem = gmFolderProblem(folder, { playerSiteDir: playerDir, vaultPath });
+  const problem = gmFolderProblem(folder, { playerSiteDir: playerDir, vaultPath, deps: options.deps });
   if (problem) return { errors: [problem] };
   // The folder is made inside a folder that is there; one level at most.
-  if (!pathExists(folder) && !fs.existsSync(path.dirname(folder))) {
+  if (!pathExists(folder, options.deps) && !readerFrom(options.deps).exists(path.dirname(folder))) {
     return { errors: named ? [`The folder above ${folder} does not exist; make it first, or name a folder inside one that does.`] : none };
   }
   if (!named) planned.changes.push({ op: 'set', name: 'gm_site.folder', label: 'gm_site.folder', value: folder });
@@ -424,7 +427,7 @@ function set(options, pairs) {
   // The folder is made before the settings are written, so a folder that cannot be made writes nothing.
   // Its parent was checked above; a folder already there (a link included) is left as it is.
   let made = false;
-  if (gm.folder && !pathExists(gm.folder)) {
+  if (gm.folder && !pathExists(gm.folder, options.deps)) {
     try {
       fs.mkdirSync(gm.folder, { recursive: false });
       made = true;
@@ -488,7 +491,7 @@ function sameRule(e, vaultPath) {
 // `same` field (the label) of each entry to take out.
 function changeMaps(options, verb, name, e, words) {
   const { vaultPath, siteConfig } = target(options);
-  const shownAs = layoutOf(vaultPath) === 'legacy' ? name : e.name;
+  const shownAs = layoutOf(vaultPath, options.deps) === 'legacy' ? name : e.name;
   const isSame = sameRule(e, vaultPath);
   let entries;
   if (verb === 'add') {
@@ -509,7 +512,7 @@ function changeMaps(options, verb, name, e, words) {
     if (words.some((w) => w.trim() === '')) return { errors: [`${name} has a blank entry; remove it.`] };
     entries = words.map((w) => ({ [e.same]: w.trim() }));
   }
-  const read = readSettings({ vaultPath, siteConfig });
+  const read = readSettings({ vaultPath, siteConfig, deps: options.deps });
   if (read.origins[e.name] === 'fault') return { errors: [`${name} in the file cannot be read; fix it with settings set first.`] };
   const current = getPath(read.values, e.name.split('.')) || [];
   const unique = entries.filter((x, i) => entries.findIndex((y) => isSame(x, y)) === i);
@@ -550,7 +553,7 @@ function changeList(options, verb, args) {
   if (e.type === 'listOfMaps') return changeMaps(options, verb, name, e, items);
   const { vaultPath, siteConfig } = target(options);
   // The lines name the setting as the vault's file writes it.
-  const shownAs = layoutOf(vaultPath) === 'legacy' ? name : e.name;
+  const shownAs = layoutOf(vaultPath, options.deps) === 'legacy' ? name : e.name;
   const isSame = sameRule(e, vaultPath);
   const texts = [];
   for (const item of items) {
@@ -572,13 +575,13 @@ function changeList(options, verb, args) {
     if (v.trim() === '') return { errors: [`${name} has a blank entry; remove it.`] };
     entries.push(v);
   }
-  const read = readSettings({ vaultPath, siteConfig });
+  const read = readSettings({ vaultPath, siteConfig, deps: options.deps });
   let current = getPath(read.values, e.name.split('.'));
   const isList = e.type === 'list' || (e.type === 'switchOrList' && (Array.isArray(current) || current === false || current === true));
   if (!isList) return { errors: [`${name} is not a list, so entries cannot be ${verb === 'add' ? 'added to' : 'removed from'} it.`] };
   if (read.origins[e.name] === 'fault') {
     // A bad value that is already in the file can always be taken out, entry by entry: it is the list as written that is removed from.
-    const written = verb === 'remove' && e.check && layoutOf(vaultPath) === 'new' ? getPath(rawData(vaultPath), e.name.split('.')) : null;
+    const written = verb === 'remove' && e.check && layoutOf(vaultPath, options.deps) === 'new' ? getPath(rawData(vaultPath, options.deps), e.name.split('.')) : null;
     if (Array.isArray(written) && written.every((x) => typeof x === 'string')) current = written;
     else return { errors: [`${name} in the file cannot be read; fix it with settings set first.`] };
   }
@@ -603,7 +606,7 @@ function changeList(options, verb, args) {
     if (done.errors) return done;
     result.written = [shownAs];
     if (verb === 'remove') {
-      const after = getPath(readSettings({ vaultPath, siteConfig }).values, e.name.split('.')) || [];
+      const after = getPath(readSettings({ vaultPath, siteConfig, deps: options.deps }).values, e.name.split('.')) || [];
       for (const x of result.removed) {
         if (Array.isArray(after) && after.some((a) => isSame(a, x))) result.notes.push(`${JSON.stringify(x)} still applies, because vault.config.json also lists it; remove it there too.`);
         else if (e.guards && Array.isArray(e.default) && e.default.some((d) => isSame(d, x))) {
@@ -632,7 +635,7 @@ function changeList(options, verb, args) {
 function unset(options, names) {
   if (!names.length) throw new Error('settings unset needs at least one name.');
   const { vaultPath } = target(options);
-  const legacy = layoutOf(vaultPath) === 'legacy';
+  const legacy = layoutOf(vaultPath, options.deps) === 'legacy';
   const shownAs = (n) => (legacy ? n : given.get(n));
   const errors = [];
   const changes = [];
@@ -644,7 +647,7 @@ function unset(options, names) {
     if (r && !r.entry.legacyOnly && !r.entry.container) { changes.push({ op: 'unset', name: r.entry.name, label: name, ...(r.old && legacy ? { spelling: name } : {}) }); given.set(name, r.entry.name); }
     else if (holds.length) errors.push(`${name} holds other settings; unset each setting in it: ${holds.join(', ')}.`);
     // A key the list does not know is taken out as written, so a stray key can still be removed.
-    else if (!legacy && layoutOf(vaultPath) === 'new') { changes.push({ op: 'unset-raw', path: name.split('.') }); given.set(name, name); }
+    else if (!legacy && layoutOf(vaultPath, options.deps) === 'new') { changes.push({ op: 'unset-raw', path: name.split('.') }); given.set(name, name); }
     else if (legacy && name.startsWith(`${OLD_BLOCK}.`)) { changes.push({ op: 'unset-raw', path: name.split('.') }); given.set(name, name); }
     else errors.push(notASetting(name));
   }
@@ -670,7 +673,7 @@ function carry(options, args) {
   if (why) return { errors: [why] };
   const e = resolve(to).entry;
   const { vaultPath } = target(options);
-  if (layoutOf(vaultPath) !== 'new') return { errors: ['settings carry works on the new settings file; run the update first.'] };
+  if (layoutOf(vaultPath, options.deps) !== 'new') return { errors: ['settings carry works on the new settings file; run the update first.'] };
   const done = write(options, [{ op: 'carry', from: from.split('.'), name: e.name, label: to }]);
   if (done.errors) return done;
   return { result: { carried: from, into: e.name }, lines: [`Moved ${from} to ${e.name}.`], notices: noticesFor([to]) };
@@ -684,13 +687,13 @@ function carry(options, args) {
 const NOTE_NAME = SETUP_NOTE;
 const NOTE_PATH = NOTE_NAME.split('.');
 
-function readNote(vaultPath) {
-  const note = layoutOf(vaultPath) === 'legacy' ? getPath(rawData(vaultPath), NOTE_PATH) : readState(vaultPath).setup;
+function readNote(vaultPath, deps) {
+  const note = layoutOf(vaultPath, deps) === 'legacy' ? getPath(rawData(vaultPath, deps), NOTE_PATH) : readState(vaultPath).setup;
   return isMap(note) ? note : null;
 }
 
-function writeNote(vaultPath, note) {
-  if (layoutOf(vaultPath) !== 'legacy') {
+function writeNote(vaultPath, note, deps) {
+  if (layoutOf(vaultPath, deps) !== 'legacy') {
     writeState(vaultPath, { setup: note });
     return;
   }
@@ -707,7 +710,7 @@ function setupNote(options, args) {
   const [sub, ...rest] = args;
   if (!['get', 'set', 'clear'].includes(sub)) throw new Error('settings setup-note needs get, set or clear.');
   const { vaultPath } = target(options);
-  const note = readNote(vaultPath);
+  const note = readNote(vaultPath, options.deps);
   if (sub === 'get') {
     if (rest.length > 1) throw new Error('settings setup-note get takes at most one key.');
     if (rest.length) {
@@ -719,7 +722,7 @@ function setupNote(options, args) {
   }
   if (sub === 'clear') {
     if (rest.length) throw new Error('settings setup-note clear takes no keys.');
-    if (note) writeNote(vaultPath, null);
+    if (note) writeNote(vaultPath, null, options.deps);
     return { result: {}, lines: [note ? 'Cleared the set-up note.' : 'No set-up note.'] };
   }
   if (!rest.length) throw new Error('settings setup-note set needs at least one key=value.');
@@ -732,7 +735,7 @@ function setupNote(options, args) {
     else merged[name] = valueOf(given);
   }
   if (errors.length) return { errors };
-  writeNote(vaultPath, merged);
+  writeNote(vaultPath, merged, options.deps);
   return { result: merged, lines: rest.map((p) => `Noted ${splitPair(p).name}.`) };
 }
 
@@ -758,7 +761,7 @@ function move(options) {
   } else {
     let site;
     try {
-      site = JSON.parse(fs.readFileSync(siteConfigPath, 'utf8'));
+      site = JSON.parse(readerFrom(options.deps).readFile(siteConfigPath));
     } catch (e) {
       return stopped([e.code === 'ENOENT' ? `${siteConfigPath} does not exist.` : `${siteConfigPath} could not be read as JSON: ${firstLine(e)}`]);
     }
@@ -769,7 +772,7 @@ function move(options) {
   if (!siteConfigPath) {
     const named = siteFileNamedBy(vaultPath);
     // A vault already moved may have lost its site folder; there is then nothing in it to mend.
-    if (named && !named.exists && layoutOf(vaultPath) === 'legacy') return stopped([`the vault names a site folder at ${named.dir} that cannot be read; give --config or fix the path`]);
+    if (named && !named.exists && layoutOf(vaultPath, options.deps) === 'legacy') return stopped([`the vault names a site folder at ${named.dir} that cannot be read; give --config or fix the path`]);
     if (named && named.exists) siteConfigPath = named.file;
   }
   const only = Array.isArray(options.only) && options.only.length ? options.only : null;
@@ -797,6 +800,7 @@ function runSettings(options, deps = {}) {
   const out = deps.out || console.log;
   const err = deps.err || console.error;
   try {
+    options = { ...options, deps };
     const args = options.args || [];
     if (!VERBS.includes(options.verb)) throw new Error(`settings needs one of ${VERBS.join(', ')}.`);
     let done;

@@ -39,7 +39,7 @@ function unsetIn(obj, name) {
 // `c` is { values, origins, faults, fault } where `fault` makes a fault; `defaultOf(e)` is the
 // value the entry takes when unset.
 // The rules a value must meet beyond its type (an entry's `check`); each returns why it cannot be used, or null.
-const CHECKS = { output: (value, c) => outputProblem(value, c.siteDir), keep: (value) => keepProblem(value) };
+const CHECKS = { output: (value, c) => outputProblem(value, c.siteDir, c.deps), keep: (value) => keepProblem(value) };
 
 function settle(c, e, { written, setting }, first, defaultOf) {
   const { values, origins, faults, fault } = c;
@@ -184,7 +184,7 @@ function readNew({ vaultPath, siteConfig, siteDir, deps }) {
   const values = {};
   const origins = {};
   const fault = makeFault;
-  const c = { values, origins, faults, fault, vaultPath, siteDir };
+  const c = { values, origins, faults, fault, vaultPath, siteDir, deps };
 
   if (file.leftover) {
     faults.push(makeFault({ name: OLD_FILE, setting: null, kind: 'dropped', level: 'warn', message: `${OLD_FILE} is left over from before the update and is not read` }));
@@ -350,7 +350,7 @@ function readSettings({ vaultPath, siteConfig = {}, siteDir, deps }) {
   const site = siteConfig || {};
   const layout = layoutOf(vaultPath, deps);
   const read = layout === 'new' ? readNew({ vaultPath, siteConfig: site, siteDir, deps }) : { ...legacy.readLegacy({ vaultPath, siteConfig: site, siteDir, deps }, core), layout };
-  read.faults.push(...entryFaults(vaultPath, read.values, read.origins));
+  read.faults.push(...entryFaults(vaultPath, read.values, read.origins, deps));
   return read;
 }
 

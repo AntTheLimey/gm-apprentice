@@ -16,8 +16,8 @@ const menuKey = (item) => `${canonicalNfc(String(item.label).trim())}\n${String(
 
 const words = (list) => new Set((list || []).map((w) => String(w).trim().toLowerCase()).filter(Boolean));
 
-// `values` and `origins` are the reader's, under the list's names. Returns the faults, all warnings but one: a GM site on a vault kept by a player.
-function entryFaults(vaultPath, values, origins) {
+// `values` and `origins` are the reader's, `deps` the reader's own file access (the folder checks look through it), under the list's names. Returns the faults, all warnings but one: a GM site on a vault kept by a player.
+function entryFaults(vaultPath, values, origins, deps) {
   const faults = [];
   const add = (setting, message) => {
     const name = nameIn(vaultPath, setting);
@@ -63,7 +63,7 @@ function entryFaults(vaultPath, values, origins) {
   const playerFolder = get('player_site.folder');
   if (typeof gmFolder === 'string' && gmFolder.trim() && typeof playerFolder === 'string' && playerFolder.trim()) {
     const playerDir = resolveGmFolder(playerFolder, vaultPath);
-    const problem = gmFolderProblem(resolveGmFolder(gmFolder, playerDir), { playerSiteDir: playerDir, vaultPath });
+    const problem = gmFolderProblem(resolveGmFolder(gmFolder, playerDir), { playerSiteDir: playerDir, vaultPath, deps });
     if (problem) add('gm_site.folder', () => problem);
   }
   return faults;

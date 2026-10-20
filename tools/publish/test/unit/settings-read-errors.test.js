@@ -81,4 +81,37 @@ describe('the settings readers read through deps, and a read error stops them (#
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  // The folder checks and the entry faults read through the same reader (#424 completeness).
+  const GM = 'player_site:\n  title: T\n  folder: /site\ngm_site:\n  publish: true\n  folder: /site-gm\n';
+  it('readSettings hands its reader to the GM folder check, so a folder that cannot be probed stops it', () => {
+    const seen = [];
+    const deps = { ...reader({ [NEW]: GM }), realpath: (p) => { seen.push(p); throw eio(); } };
+    assert.throws(() => readSettings({ vaultPath: '/v', deps }), /EIO/);
+    assert.ok(seen.length > 0);
+  });
+
+  it('readSettings hands its reader to the output folder check', () => {
+    const seen = [];
+    const files = { [NEW]: 'player_site:\n  output: docs\n' };
+    const deps = { ...reader(files), realpath: (p) => { seen.push(p); throw eio(); } };
+    assert.throws(() => readSettings({ vaultPath: '/v', siteDir: '/site', deps }), /EIO/);
+  });
+
+  it('a folder that does not exist is still judged by its nearest folder that does', () => {
+    const deps = { ...reader({ [NEW]: GM }), realpath: (p) => { throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' }); } };
+    assert.doesNotThrow(() => readSettings({ vaultPath: '/v', deps }));
+  });
+
+  it('the settings command reads through the reader too, and says a failed read', () => {
+    const { runSettings } = require('../../lib/settings/cli');
+    const errs = [];
+    const deps = { ...reader({ [NEW]: 'player_site:\n  title: T\n' }), exists: () => { throw eio(); }, out: () => {}, err: (m) => errs.push(m) };
+    assert.strictEqual(runSettings({ verb: 'check', vault: '/v', noSiteFile: true }, deps), 1);
+    assert.match(errs.join('\n'), /EIO/);
+    const good = [];
+    const ok = { ...reader({ [NEW]: 'player_site:\n  title: Via Reader\n' }), out: (m) => good.push(m), err: () => {} };
+    assert.strictEqual(runSettings({ verb: 'get', vault: '/v', noSiteFile: true, args: ['player_site.title'] }, ok), 0);
+    assert.match(good.join('\n'), /Via Reader/);
+  });
 });

@@ -2,6 +2,7 @@
 // The GM site's folder and the rules it keeps. The GM site is built into its own folder, which the build empties first,
 // so that folder must be one the GM site owns: never the player site's, never the vault, never a folder of the GM's own files.
 const fs = require('node:fs');
+const { readerFrom } = require('./vault-reader');
 const os = require('node:os');
 const path = require('node:path');
 
@@ -12,12 +13,18 @@ const GM_META_TAG = '<meta name="gm-apprentice-build" content="gm">';
 
 // The real path of a path that may not exist yet: its nearest existing folder's real path with the rest put back.
 // A link in the folder that leads somewhere is compared by where it leads, even when what it leads to is not made yet.
-function real(p) {
+// A path that is not there (or runs through a file, or through a ring of links) is judged by its nearest folder that is;
+// any other failure to look is an error, never a quiet answer (#424).
+const NOT_THERE = new Set(['ENOENT', 'ENOTDIR', 'ELOOP']);
+
+function real(p, deps) {
+  const realpath = readerFrom(deps).realpath;
   const tail = [];
   let cur = path.resolve(p);
   const MAX_LINK_HOPS = 40;   // a ring of links ends here, and the path is read as written
   for (let hops = 0; ;) {
-    try { return path.join(fs.realpathSync.native(cur), ...tail); } catch {
+    try { return path.join(realpath(cur), ...tail); } catch (err) {
+      if (!NOT_THERE.has(err.code)) throw err;
       let target = null;
       try {
         // The link the path stops at, when there are hops left to follow it.
@@ -97,24 +104,24 @@ function isGmOutput(dir) {
 }
 
 // null when `gmFolder` can be the GM site's folder, otherwise the one reason it cannot, as a line for the GM.
-function gmFolderProblem(gmFolder, { playerSiteDir, playerOutputDir, vaultPath }) {
+function gmFolderProblem(gmFolder, { playerSiteDir, playerOutputDir, vaultPath, deps }) {
   const shown = `gm_site.folder (${gmFolder})`;
-  const gm = real(gmFolder);
+  const gm = real(gmFolder, deps);
   if (gm === path.parse(gm).root) return `${shown} is the filesystem root; the GM site cannot be built there`;
   if (playerSiteDir) {
-    const player = real(playerSiteDir);
+    const player = real(playerSiteDir, deps);
     if (gm === player) return `${shown} is the player site's folder; the GM site needs a folder of its own`;
     if (inside(gm, player)) return `${shown} is inside the player site's folder; the GM site needs a folder of its own`;
     if (inside(player, gm)) return `${shown} holds the player site's folder; the GM site needs a folder of its own`;
   }
   if (playerOutputDir) {
-    const out = real(playerOutputDir);
+    const out = real(playerOutputDir, deps);
     if (gm === out) return `${shown} is the player site's output folder; the GM site needs a folder of its own`;
     if (inside(gm, out)) return `${shown} is inside the player site's output folder; the GM site needs a folder of its own`;
     if (inside(out, gm)) return `${shown} holds the player site's output folder; the GM site needs a folder of its own`;
   }
   if (vaultPath) {
-    const vault = real(vaultPath);
+    const vault = real(vaultPath, deps);
     if (gm === vault || inside(gm, vault)) return `${shown} is the vault or inside it; the GM site is built outside the vault`;
     if (inside(vault, gm)) return `${shown} holds the vault; the GM site is built outside the vault`;
   }

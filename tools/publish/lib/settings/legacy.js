@@ -291,7 +291,7 @@ function readLegacy({ vaultPath, siteConfig, siteDir, skipOldFile = false, deps 
 
   const values = {};
   const origins = {};
-  const c = { values, origins, faults, fault, vaultPath, siteDir };
+  const c = { values, origins, faults, fault, vaultPath, siteDir, deps };
   const defaultOf = (e) => {
     if (e.name === SITE_SWITCH) { const dir = getPath(publish, sansBlock(SITE_FOLDER).split('.')); return typeof dir === 'string' && dir.trim() !== ''; }
     return e.default === undefined ? null : clone(e.default);

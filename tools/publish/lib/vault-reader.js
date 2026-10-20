@@ -23,11 +23,24 @@ function exists(p) {
   }
 }
 
+// Whether anything is at the path, a link that leads nowhere included.
+function lstatExists(p) {
+  try {
+    fs.lstatSync(p);
+    return true;
+  } catch (err) {
+    if (ABSENT.has(err.code)) return false;
+    throw err;
+  }
+}
+
 function readerFrom(deps = {}) {
   return {
     readFile: deps.readFile || ((p) => fs.readFileSync(p, 'utf8')),
     readdir: deps.readdir || ((p) => fs.readdirSync(p, { withFileTypes: true })),
     exists: deps.exists || exists,
+    lstatExists: deps.lstatExists || lstatExists,
+    realpath: deps.realpath || ((p) => fs.realpathSync.native(p)),
   };
 }
 
