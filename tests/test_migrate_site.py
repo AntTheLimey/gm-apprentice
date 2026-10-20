@@ -793,6 +793,16 @@ class ExcludeListTests(unittest.TestCase):
         self.assertEqual(len(item.lines), 1)
         self.assertIn("publish.exclude_fields", item.lines[0])
 
+    def test_the_plan_does_not_name_the_old_file_the_move_removes(self):
+        # #388: on the old settings file the same pass moves the settings, so
+        # the lists land in the new file; the line must not say otherwise.
+        vault = make_vault(self)
+        self.assertEqual(ms.vault_layout(vault), "legacy")
+        (item,) = ms.find_exclude_lists(vault)
+        for line in item.lines:
+            self.assertNotIn("vault-config.md", line)
+            self.assertIn("the vault's settings file", line)
+
     def test_a_list_the_tool_could_not_read_is_replaced(self):
         vault = make_vault(self, extra="  exclude_sections: Mine\n"
                                        "  exclude_fields: [mine]\n")

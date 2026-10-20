@@ -840,10 +840,14 @@ def find_exclude_lists(vault: Path) -> list[Item]:
         return [f"wrote {setting_name(vault, name)}: {len(default)} entries"
                 for name, default in lists]
 
+    # On the old file the same pass moves the settings first, so the old
+    # file's name would be wrong by the time the lists are written.
+    where = ("the vault's settings file" if vault_layout(vault) == "legacy"
+             else settings_file(vault))
     return [Item("exclude-lists", WILL,
                  [f"write the built-in {setting_name(vault, name)} "
                   f"({', '.join(default)}) "
-                  f"into {settings_file(vault)} so you can see and edit it; "
+                  f"into {where} so you can see and edit it; "
                   f"what publishes does not change"
                   for name, default in lists], apply)]
 
