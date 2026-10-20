@@ -192,9 +192,30 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {
 //   options.rawConfig   the site file already parsed
 //   options.shownFor    in memory: a vault-relative note path; the result's `shown` is what
 //                       the site holds of it, built as if it published
-// Returns { noteFaults, shown }.
+// Returns { noteFaults, shown, renderErrors, warnings }: renderErrors are what failed to render (a build that
+// has any also throws, with the same list on the error as `renderErrors`), warnings the text of every warning the
+// build printed, without its "WARNING:" prefix. Both are still printed.
 function build(options = {}) {
-  return options.inMemory ? quietly(() => buildSite(options)) : buildSite(options);
+  const warnings = [];
+  const run = () => {
+    try {
+      return { ...collectingWarnings(warnings, () => buildSite(options)), warnings };
+    } catch (err) {
+      if (err && typeof err === 'object') err.warnings = warnings;
+      throw err;
+    }
+  };
+  return options.inMemory ? quietly(run) : run();
+}
+
+// Run `fn`, copying each console.warn into `warnings` (and still passing it on).
+function collectingWarnings(warnings, fn) {
+  const passOn = console.warn;
+  console.warn = (...args) => {
+    warnings.push(args.join(' ').replace(/^\s*WARNING:\s*/, '').trim());
+    passOn.apply(console, args);
+  };
+  try { return fn(); } finally { console.warn = passOn; }
 }
 
 function buildSite(options) {
@@ -2149,6 +2170,7 @@ function buildSite(options) {
     console.log(`Done with ${errorCount} error(s).`);
     const err = new Error(`Build completed with ${errorCount} render error(s)`);
     err.errorCount = errorCount;
+    err.renderErrors = renderErrors;
     throw err;
   }
   // Last of all, the marker again, with the time the GM build finished (one that stopped before here left `built: null`).
@@ -2158,11 +2180,11 @@ function buildSite(options) {
     console.log(`Updated ${n} character page${n === 1 ? '' : 's'}${m ? ` and ${m} story page${m === 1 ? '' : 's'}` : ''}; nothing else was rewritten.`);
     const fresh = sheetsWritten.filter((w) => w.isNew).length;
     if (fresh > 0) console.log(`${fresh} character page${fresh === 1 ? ' is' : 's are'} new; a full build updates the menu and the lists that link ${fresh === 1 ? 'it' : 'them'}.`);
-    return { noteFaults, shown: null, faults: publishConfig.faults };
+    return { noteFaults, shown: null, renderErrors, faults: publishConfig.faults };
   }
   if (gm) writeMarker(outputDir, { version: TOOL_VERSION });
   console.log('Done!');
-  return { noteFaults, shown: null, faults: publishConfig.faults };
+  return { noteFaults, shown: null, renderErrors, faults: publishConfig.faults };
 }
 
 module.exports = { build, resolveSiteLink, rememberHiddenNames };
