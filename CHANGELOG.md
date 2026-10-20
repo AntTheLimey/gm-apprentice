@@ -21,24 +21,32 @@ index. Publish tool 1.46.0.
   that copies the session's link (#465).
 - The Story page lists NPCs whose page is a session-by-session story
   under "NPC stories". The update offers to retire a site's own
-  `add-crew-stories` step, which this replaces (#465).
+  `add-crew-stories` step, which this replaces, once the site's tool
+  is 1.46.0 or later (#465).
 - `manifest never-publish` marks notes `publish: false`, adding a
   small frontmatter block where a note has none; `--untyped` marks
-  every note with no `type:`. Preview first, `--write` to apply
-  (#390).
+  every note with no `type:`. Preview first, `--write` to apply. It
+  uses the vault's own spelling of a path and refuses frontmatter it
+  cannot safely add a line to (#390).
 - The leak gate reads the text the search index is built from, so a
   hidden sentence that reaches only the site's search is found, named
-  as `search-index.json#<page>` (#408).
-- The relationships check asks about a tie written on both notes of a
-  pair, each pointing the other way (`member_of` from both ends), and
-  offers to remove a hand-written `visited` or `visited_by` tie that
-  an event already gives and that adds nothing to it (#335, #474).
+  as `search-index.json#<page>`. A sentence already accepted on a page
+  also covers its copy in that page's search entry, so an existing
+  accept list does not newly stop a deploy (#408).
+- The relationships check asks about a one-way tie (membership,
+  kinship, ownership, command, containment) written on both notes of
+  a pair, each pointing the other way (`member_of` from both ends),
+  and offers to remove a hand-written `visited` or `visited_by` tie
+  that a published event already gives and that adds nothing to it;
+  a visit with more to say is left alone (#335, #474).
 
 ### Changed
 
 - A tie to a note that exists but does not publish no longer prints
-  in Connections; a tie to a name with no note still prints as plain
-  text (#476).
+  in Connections or in an event's Participants list; a tie to a name
+  with no note still prints as plain text. A tie that spells a
+  published note's name in another case or with underscores links to
+  its page (#476).
 - When the two notes of a pair say different things (a member on one,
   an ally on the other), Connections shows both instead of one.
 - A faction page no longer has a separate Members list: its members
@@ -57,6 +65,8 @@ index. Publish tool 1.46.0.
   `[[Sona_Mia]]` is found by "sona" and "mia".
 - The tone tidy no longer turns `dangerous` into `hostile` or
   `mysterious` into `unknown`; it asks (#340).
+- The update offers to retire a site's own build step only once the
+  site's tool does that step's work.
 - Real-browser layout tests skip on the Windows CI runner: the layout
   engine is the same there, and a Chrome start on that runner slowed
   every test beside it.
