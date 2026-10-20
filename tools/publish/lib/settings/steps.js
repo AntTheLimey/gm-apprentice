@@ -31,7 +31,8 @@ function runSteps(commands, { cwd, label, log = console.log, timeoutMs = TEN_MIN
     else if (res.error) why = String(res.error.message || res.error);
     else if (res.signal) why = `it was stopped by ${res.signal}`;
     else if (res.status !== 0) why = `exit ${res.status}`;
-    if (why) throw new Error(`The ${label} step "${command}" failed (${why}). Nothing was published.`);
+    // A before step fails before anything is written; an after step fails once the pages are in the output folder.
+    if (why) throw new Error(`The ${label} step "${command}" failed (${why}). ${label === 'after_build' ? 'The pages were built but not published.' : 'Nothing was published.'}`);
   });
 }
 
@@ -59,7 +60,7 @@ function splitScript(text) {
   if (/["'`|;()<>\n\r]/.test(text) || text.replace(/&&/g, '').includes('&')) return whole;
   const parts = text.split('&&').map((x) => x.trim());
   // Each step is its own shell, so a part that sets shell state for the next (a folder, a variable) cannot be split off.
-  const setsState = (x) => /^(cd|pushd|popd|export|set|source)(\s|$)/.test(x) || /^\.(\s|$)/.test(x) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(x);
+  const setsState = (x) => /^(cd|pushd|popd|export|set|unset|umask|trap|alias|unalias|ulimit|shopt|source|eval|exec)(\s|$)/.test(x) || /^\.(\s|$)/.test(x) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(x);
   return parts.some((x) => x === '' || setsState(x)) ? whole : parts;
 }
 

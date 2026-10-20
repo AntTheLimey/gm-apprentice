@@ -105,6 +105,16 @@ class GateTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("first-time setup", err)
 
+    def test_meta_with_no_settings_file_is_setup_not_migration(self):
+        # #381: not "migrate it with 1.10.25 first"
+        vault = Path(tempfile.mkdtemp(prefix="mig-"))
+        self.addCleanup(shutil.rmtree, vault, ignore_errors=True)
+        (vault / "_meta").mkdir()
+        code, _, err = call([str(vault), "plan"], [])
+        self.assertEqual(code, 2)
+        self.assertIn("first-time setup", err)
+        self.assertNotIn("1.10.25", err)
+
     def test_bad_arguments_exit_2(self):
         vault = make_vault(self)
         self.assertEqual(call([str(vault / "nope"), "plan"], [])[0], 2)
@@ -1078,6 +1088,39 @@ class WriteAllOrNoneTests(unittest.TestCase):
         self.assertEqual(done, [("a.md", "new a\n"), ("a.md", "old a.md\n")])
         self.assertEqual(self.read(self.vault, "a.md"), "old a.md\n")
         self.assertEqual(self.read(self.vault, "b.md"), "old b.md\n")
+
+
+class SchemaMirrorChooseTests(unittest.TestCase):
+    """#405: `--choose schema-mirror=leave` leaves the mirror alone."""
+
+    STALE = "# T\n\n## Type-Specific Fields\n\n**Event:** `old`\n"
+
+    def run_choose(self, *choose):
+        import migrate_vault
+        vault = make_vault(self)
+        path = vault / "_meta" / "entity-types.md"
+        path.write_text(self.STALE, encoding="utf-8")
+        checks = [c for c in migrate_vault.VAULT_CHECKS
+                  if c.name == "schema-mirror"]
+        code, out, err = call([str(vault), "apply", *choose], checks)
+        return code, out, err, path.read_text(encoding="utf-8")
+
+    def test_leave_leaves_the_mirror(self):
+        code, out, _, text = self.run_choose("--choose", "schema-mirror=leave")
+        self.assertEqual(code, 0)
+        self.assertEqual(text, self.STALE)
+        self.assertIn("left as it is", out)
+
+    def test_another_value_is_refused(self):
+        code, _, err, text = self.run_choose("--choose", "schema-mirror=yes")
+        self.assertEqual(code, 2)
+        self.assertEqual(text, self.STALE)
+        self.assertIn("takes no value", err)
+
+    def test_naming_it_alone_applies_it(self):
+        code, _, _, text = self.run_choose("--choose", "schema-mirror")
+        self.assertEqual(code, 0)
+        self.assertNotEqual(text, self.STALE)
 
 
 if __name__ == "__main__":

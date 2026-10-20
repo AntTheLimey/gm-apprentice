@@ -467,3 +467,15 @@ test('housekeeping: a templates folder inside another folder holds the plugin\'s
     { files: { 'Characters/_Templates/Index.md': '---\ntype: template\n---\n' } });
   assert.match(menus(s.read('index.html')).desktop, /href="gazetteer\/index\.html">Gazetteer</);
 });
+
+test('a [[wikilink]] in a label prints as its name, as page text does (#388)', () => {
+  const s = site([{ label: 'The [[Harbour|Docks]]', link: 'Harbour' }]);
+  const root = menus(s.read('index.html')).desktop;
+  assert.match(root, /<a class="nav-group-toggle" href="locations\/harbour\.html">The Docks<\/a>/);
+  assert.doesNotMatch(root, /\[\[/);
+});
+
+test('rule 6: the menu with no extra entries is the text a build made before there were extra entries (frozen from main)', () => {
+  const out = generateNav([{ outputDir: 'world', outputPath: 'world/a.html', title: 'A', frontmatter: {} }], {})('index.html', { siteTitle: 'T' });
+  assert.equal(require('node:crypto').createHash('sha256').update(out).digest('hex'), '72871f55df99a92f3166a5764d789ce2b921644390c0f31ce58260ca97311eca');
+});

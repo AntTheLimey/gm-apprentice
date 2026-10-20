@@ -251,8 +251,13 @@ function readNew({ vaultPath, siteConfig, siteDir }) {
     // A twin that cannot be read takes the player site's value, as one that is not set does.
     if (e.twinOf && origins[e.name] === 'fault') unsetIn(values, e.name);
     if (fromSite && !sameChecked(e.check, fromSite.raw, raw, c.siteDir)) {
-      faults.push(makeFault({ name: fromSite.key, setting: e.name, kind: 'dropped', level: 'warn', value: fromSite.raw, use: e.name, source: 'site', siteDiffers: true, ...(e.check ? { checks: e.check } : {}),
-        message: `\`${fromSite.key}\` in the site folder's vault.config.json (${show(fromSite.raw)}) differs from \`${e.name}\` in the vault's settings (${show(raw)}); the vault's is used` }));
+      // Folders the site file keeps and the vault's list leaves out would be emptied by the next build: a stop, naming them.
+      const lost = e.check === 'keep' && Array.isArray(fromSite.raw) && Array.isArray(raw)
+        ? fromSite.raw.filter((d) => typeof d === 'string' && !raw.some((r) => String(r).trim().toLowerCase() === d.trim().toLowerCase())) : [];
+      faults.push(makeFault({ name: fromSite.key, setting: e.name, kind: 'dropped', level: lost.length ? 'stop' : 'warn', value: fromSite.raw, use: e.name, source: 'site', siteDiffers: true, ...(e.check ? { checks: e.check } : {}),
+        message: lost.length
+          ? `\`${fromSite.key}\` in the site folder's vault.config.json keeps ${lost.map((d) => JSON.stringify(d)).join(', ')}, which \`${e.name}\` in the vault's settings leaves out, so the next build would empty ${lost.length === 1 ? 'it' : 'them'}; add ${lost.length === 1 ? 'it' : 'them'} to \`${e.name}\`, or take ${lost.length === 1 ? 'it' : 'them'} out of the site file`
+          : `\`${fromSite.key}\` in the site folder's vault.config.json (${show(fromSite.raw)}) differs from \`${e.name}\` in the vault's settings (${show(raw)}); the vault's is used` }));
     }
   }
 
@@ -282,6 +287,12 @@ function readNew({ vaultPath, siteConfig, siteDir }) {
     let suggest = level === 'stop' && !strict ? hidingNear : near;
     if (startsLikeHide(key) && !strict) suggest = null;
     faults.push(makeFault({ name: full, setting: null, kind: 'unknown-name', level, value, suggest: suggest ? `${parent}.${suggest}` : null }));
+    // A group in the wrong place: each setting inside it that has one right place, for the Settings check to carry.
+    if (isMap(value)) {
+      for (const s of strayLeaves(value, full, false)) {
+        faults.push(makeFault({ name: s.written, setting: s.entry.name, kind: 'unknown-name', level: s.entry.guards && !gm ? 'stop' : level, value: s.value, suggest: s.entry.name }));
+      }
+    }
     if (!STRICT_PARENTS.has(parent)) setIn(values, full, clone(value));
   }
   function walk(parent, map) {

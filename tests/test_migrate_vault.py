@@ -19,6 +19,8 @@ from migrate_core import CHOICE, PERSON, WILL, StepFailed  # noqa: E402
 
 sys.path.insert(0, str(SCRIPTS.parent.parent.parent / "scripts"))
 import template_history as th  # noqa: E402
+from migrate import FLOOR  # noqa: E402
+from vaultlib import parse_version  # noqa: E402
 
 SHARED = SCRIPTS.parent
 
@@ -667,28 +669,48 @@ class TemplateTests(unittest.TestCase):
                     f"{name} ({system}) is not in template-history.json; "
                     f"regenerate it: python3 scripts/template_history.py")
 
-    def test_the_history_only_grows(self):
-        # A hash once recorded is kept: one from a working tree that no tag
-        # holds (a draft of a template, recorded when the script ran) is not
-        # fatal and is not dropped, and a new hash is added.
-        old = {"generic": {"a.md": ["h1", "h2"]}, "gurps-4e": {"b.md": ["g1"]}}
-        new = {"generic": {"a.md": ["h1", "h3"]}}
-        self.assertEqual(th.merge(old, new), {
-            "generic": {"a.md": ["h1", "h2", "h3"]},
-            "gurps-4e": {"b.md": ["g1"]}})
-        self.assertEqual(th.merge({}, new), new)
-        # Merging again changes nothing: the file is something the script
-        # can regenerate.
-        self.assertEqual(th.merge(th.merge(old, new), new), th.merge(old, new))
+    def test_hashes_expire_by_the_release_that_last_wrote_them(self):
+        # #455: a hash whose last release is older than the floor is dropped;
+        # one the working tree still writes (None) and one at the floor stay.
+        history = {
+            "generic": {"a.md": {"h1": None, "h2": "1.10.11", "h3": "1.10.12",
+                                 "h4": "1.9.30"}},
+            "gurps-4e": {"b.md": {"g1": "1.9.0"}}}
+        self.assertEqual(th.expire(history, "1.10.12"), {
+            "generic": {"a.md": {"h1": None, "h3": "1.10.12"}},
+            # emptied, not removed: a system the file does not name reads as
+            # generic
+            "gurps-4e": {"b.md": {}}})
+        self.assertEqual(th.expire(th.expire(history, "1.10.12"), "1.10.12"),
+                         th.expire(history, "1.10.12"))
         self.assertIsNone(th.refusal(["v1"]))
         self.assertIn("no release tags", th.refusal([]))
+
+    def test_a_released_hash_is_matched_whether_the_history_lists_or_maps_it(self):
+        vault = self.older(lambda old: {"coc-7e": {
+            "_Template_Document.md": {mv.text_hash(old): "1.10.20"}}})
+        self.assertEqual(self.doc(vault).group, WILL)
 
     def test_the_checked_in_history_is_what_the_script_would_write(self):
         history = json.loads(mv.HISTORY.read_text(encoding="utf-8"))
         tags = th.release_tags()
         if not tags:
             self.skipTest("no release tags in this checkout")
-        self.assertEqual(th.merge(history, th.build(tags)), history)
+        self.assertEqual(th.expire(th.build(tags), FLOOR), history)
+
+    def test_every_recorded_release_is_a_tag_at_or_above_the_floor(self):
+        history = json.loads(mv.HISTORY.read_text(encoding="utf-8"))
+        tags = {t.removeprefix("v") for t in th.release_tags()}
+        if not tags:
+            self.skipTest("no release tags in this checkout")
+        for system, names in history.items():
+            for name, hashes in names.items():
+                self.assertIsInstance(hashes, dict, f"{system}/{name}")
+                for h, last in hashes.items():
+                    if last is not None:
+                        self.assertIn(last, tags, f"{system}/{name} {h}")
+                        self.assertGreaterEqual(parse_version(last),
+                                                parse_version(FLOOR))
 
     def test_an_unreadable_template_is_a_failed_step(self):
         vault = make_vault(self)

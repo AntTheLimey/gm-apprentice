@@ -22,8 +22,8 @@ function formatDate(dateStr) {
 }
 
 
-// Label for an In Memoriam card. Every status on the default out-of-play list gets one, so a
-// fallen PC is never labelled "Active"; a status the GM added is shown as written.
+// Label for an In Memoriam card, or null. Every status on the default out-of-play list gets one; for a status the
+// GM added the card shows it as written.
 function statusLabel(status) {
   const s = String(status || '').trim().toLowerCase();
   if (s === 'dead' || s === 'deceased' || s === 'kia') return 'KIA';
@@ -34,7 +34,7 @@ function statusLabel(status) {
   if (s === 'npc') return 'Now an NPC';
   if (s === 'destroyed') return 'Destroyed';
   if (s === 'dissolved') return 'Dissolved';
-  return 'Active';
+  return null;
 }
 
 // Resolve a wiki-link such as "[[Session 03 - Give Rest]]" to its session page by matching the
@@ -162,7 +162,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
     const entries = fallenPCs.map(pc => {
       // A status the GM added to the out-of-play list has no label of its own: it is shown as written.
       const label = statusLabel(pc.frontmatter.status);
-      const status = label === 'Active' ? String(pc.frontmatter.status || '').trim() || 'Out of play' : label;
+      const status = label || String(pc.frontmatter.status || '').trim() || 'Out of play';
       const context = pc.frontmatter.death_context || pc.frontmatter.retirement_context || '';
       const contextHtml = context ? ` <span class="memorial-context">${escapeHtml(context)}</span>` : '';
       return `<a href="${escapeHtml(encodeHref(pc.outputPath))}">${escapeHtml(pc.displayTitle)} (${escapeHtml(status)})</a>${contextHtml}`;

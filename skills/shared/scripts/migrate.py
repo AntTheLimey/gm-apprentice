@@ -63,6 +63,9 @@ def gate(vault: Path) -> tuple[str, str] | str:
         shown = read_stamp(vault)
     except StateUnreadable as e:
         return str(e)
+    if shown is None and vault_layout(vault) == "none":
+        return (f"{vault} has a _meta/ folder but no settings file: that is "
+                f"first-time setup (vault_scaffold.py), not a migration")
     if shown is None or parse_version(shown) < parse_version(FLOOR):
         return (f"this vault is at {shown or 'no recorded version'}, below "
                 f"{FLOOR}, the oldest this script migrates from; migrate it "

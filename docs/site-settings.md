@@ -206,6 +206,8 @@ player_site:
 ```
 
 - The tool prints each command before it runs it.
+- Steps run as plain shell commands, without npm's variables (such as
+  `npm_package_version`).
 - A step that fails stops the build, and nothing is published.
 - The steps run when you build the site or deploy it. They do not run for a
   dry run, the preview, the sheet view, a check of the site, or a deploy

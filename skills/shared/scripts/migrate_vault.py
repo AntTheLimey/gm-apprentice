@@ -199,9 +199,10 @@ def _differs(current: str, expected: str, shown: int = 4) -> str:
 GENERIC = "generic"   # the history's key for a vault with no known system
 
 
-def _released_hashes(system: str | None) -> dict[str, list[str]]:
-    """template-history.json: system -> vault filename -> hashes of what
-    releases wrote for that system. A system the history does not know gets
+def _released_hashes(system: str | None) -> dict[str, dict[str, str | None]]:
+    """template-history.json: system -> vault filename -> {hash: the last
+    release that wrote it, or null}, for what releases wrote for that
+    system (scripts/template_history.py drops the old ones). A system the history does not know gets
     the generic templates, so it is read as generic. Missing or unreadable,
     no template counts as released (all are choices)."""
     try:

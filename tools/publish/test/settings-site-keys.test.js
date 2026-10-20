@@ -136,9 +136,10 @@ test('new layout, the vault sets it: the vault wins, and a different value in th
     assert.equal(r.origins[name], 'file', name);
     const f = r.faults.filter((x) => x.name === key);
     assert.equal(f.length, 1, key);
-    assert.equal(f[0].level, 'warn');
+    // Folders the site file keeps and the vault leaves out would be emptied: that one is a stop, naming the folder.
+    assert.equal(f[0].level, key === 'preserveDirs' ? 'stop' : 'warn');
     assert.ok(f[0].message.includes(key) && f[0].message.includes(name), f[0].message);
-    assert.ok(f[0].message.includes(JSON.stringify(s.siteConfig[key])), f[0].message);
+    assert.ok(f[0].message.includes(key === 'preserveDirs' ? JSON.stringify('old') : JSON.stringify(s.siteConfig[key])), f[0].message);
   }
 });
 

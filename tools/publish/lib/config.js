@@ -251,7 +251,10 @@ function assertNoStops(publishConfig, what) {
   const heading = folderOnly
     ? 'the settings have a fault in where the site is built or what it keeps, so nothing was cleaned or built.'
     : 'the settings have a fault that could show players more than you meant.';
-  throw new Error(`${what} stopped: ${heading}\n${found.map((f) => `  ${formatFault(f)}`).join('\n')}\nFix it, or ask the apprentice to run the Settings check.`);
+  // The warnings beside the stop are said now too, so the GM fixes everything in one pass.
+  const warned = (publishConfig.faults || []).filter((f) => f.level === 'warn');
+  const also = warned.length ? `\nAlso:\n${warned.map((f) => `  ${formatFault(f)}`).join('\n')}` : '';
+  throw new Error(`${what} stopped: ${heading}\n${found.map((f) => `  ${formatFault(f)}`).join('\n')}${also}\nFix it, or ask the apprentice to run the Settings check.`);
 }
 
 // assertNoStops for a command that has only the site's vault.config.json path (deploy).
