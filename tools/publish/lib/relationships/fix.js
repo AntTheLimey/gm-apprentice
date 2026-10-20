@@ -238,6 +238,10 @@ function planFix(model, findings, { vaultPath, kinds, ontology = defaultOntology
   };
 
   const keep = (f, why) => kept.push({ rel: f.rel, line: f.line, why });
+  // A hand-written visit that says more than its event is named, not removed (#474).
+  for (const f of findings) {
+    if (f.kind === 'visit-duplicate' && f.fix && f.fix.certain === false && !f.mobrpg && (!kinds || kinds.includes(f.kind))) keep(f, f.fix.why);
+  }
 
   for (const f of ordered) {
     const note = byRel.get(f.rel);
@@ -346,6 +350,17 @@ function planFix(model, findings, { vaultPath, kinds, ontology = defaultOntology
           unit.change = { before: `${edge.type} [[${edge.target}]]`, after: `${use} [[${note.name}]] on ${nameOf(edge.targetRel)}` };
         }
       }
+    } else if (f.kind === 'visit-duplicate') {
+      const edge = edgeOf(note, f);
+      if (!edge) { fail('the tie is no longer where it was; run the check again'); continue; }
+      const hit = locateEdge(src, edge);
+      if (hit.why) { fail(hit.why); continue; }
+      if (!claim(f.rel, edge.index)) { fail('another change already edits this tie'); continue; }
+      const r = removeItemEdit(src, hit, edge.index);
+      if (r.why) { fail(r.why); continue; }
+      unit.ops.push({ rel: f.rel, ...r });
+      unit.remove = `${f.rel}\u0000${edge.index}`;
+      unit.change = { before: `${edge.type} [[${edge.target}]]`, after: 'removed (the event supplies the visit)' };
     } else if (f.kind === 'place-missing-tie') {
       const pf = ontology.place_fields.find((p) => note.fields[p.field] && note.fields[p.field].line === f.line);
       const field = pf && note.fields[pf.field];

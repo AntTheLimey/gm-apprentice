@@ -202,7 +202,7 @@ vocabulary are listed on one line.
                              --write it makes them in every note at once or in none (CHANGED rows). A tie it cannot move
                              or edit safely is a KEEP row with the reason.
   --kind <kind>              fix: only this kind (off-vocabulary, mirrored, bidirectional, place-missing-tie,
-                             place-missing-field); repeatable
+                             place-missing-field, visit-duplicate); repeatable
   --kind tone                fix: rewrite tone words instead; alone, with one or more --set. It keeps quotes, spacing, comments and
                              line endings, and a tone it cannot edit in place (a block scalar, a tag) is a KEEP row
   --set <OLD=NEW>            fix --kind tone: rewrite a tone written exactly OLD to the listed tone NEW (repeatable)
