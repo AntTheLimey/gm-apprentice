@@ -218,6 +218,12 @@ class MigrationTests(unittest.TestCase):
             f"{SHACK}: Sessions 6, 7",
             f"{SIX}: Session 6"])
 
+    def test_archived_pc_copies_are_not_offered_or_rewritten(self):
+        copy = "_archive/Characters/PCs/Shack.md"
+        vault = make_vault(self, {copy: UNBULLETED})
+        self.assertEqual(mv.find_open_threads_fold(vault), [])
+        self.assertEqual(read(vault, copy), UNBULLETED)
+
     def test_nothing_to_fold_offers_nothing(self):
         vault = make_vault(self, {"Characters/PCs/Emma.md": CLEAN})
         self.assertEqual(mv.find_open_threads_fold(vault), [])

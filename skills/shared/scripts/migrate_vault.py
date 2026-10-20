@@ -1314,6 +1314,7 @@ def find_open_threads_fold(vault: Path) -> list[Item]:
     found: list[tuple[str, list[int]]] = []
     for rel, text in vault_files(vault):
         if (rel.endswith("_Story.md") or rel.startswith("_Templates/")
+                or vw.is_record(rel)
                 or entity_type(extract_frontmatter(text) or {}) != "pc"):
             continue
         numbers = [n for n, _f in vw.session_threads(text)]
