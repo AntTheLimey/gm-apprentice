@@ -55,6 +55,7 @@ function target(options) {
     const named = options.config || options.noSiteFile ? null : siteFileNamedBy(vaultPath);
     const config = options.config ? path.resolve(options.config) : (named && named.exists ? named.file : null);
     let siteConfig = {};
+    if (options.config && !fs.existsSync(config)) throw new Error(`--config ${config} does not exist`);
     if (config && fs.existsSync(config)) {
       try { siteConfig = loadVaultConfig(config); } catch (e) { if (options.config) throw e; }
     }

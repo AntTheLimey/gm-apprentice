@@ -165,3 +165,12 @@ test('--vault alone reads the site folder file the vault names; --no-site-file l
   const blind = check({ noSiteFile: true });
   assert.deepEqual(blind.faults, []);
 });
+
+test('--vault with an explicit --config that does not exist is an error naming the path (CodeRabbit on #468)', () => {
+  const s = scratch('version: 1\n');
+  const missing = path.join(s.root, 'nowhere', 'vault.config.json');
+  const bad = run(s, 'get', ['player_site.title'], { config: missing });
+  assert.equal(bad.rc, 1);
+  assert.ok(bad.err.some((l) => l.includes(missing)), bad.err.join('\n'));
+  assert.equal(run(s, 'get', ['player_site.title'], { config: undefined }).rc, 0);
+});
