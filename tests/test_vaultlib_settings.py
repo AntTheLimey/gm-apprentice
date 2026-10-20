@@ -460,3 +460,21 @@ def test_python_and_the_build_agree_on_who_is_out_of_play(tmp_path):
     assert "pc-%02d" % len(words) in kept  # the one who is "alive"
     assert "pc-%02d" % (len(words) - 1) not in kept  # "KIA"
     assert "pc-%02d" % (len(words) - 2) not in kept  # "Dead "
+
+
+def test_setting_or_builtin_says_when_a_bad_value_fell_back_to_the_default(
+        tmp_path, monkeypatch, capsys):
+    # #388: the scripts used the default without a word; the line is the
+    # tool's own message, given once per setting.
+    vault = new_layout_vault(tmp_path, "vault:\n  stale_after_sessions: lots\n")
+    monkeypatch.setattr(vaultlib, "_FELL_BACK_SAID", set())
+    default = vaultlib.settings_default("vault.stale_after_sessions")
+    assert vaultlib.setting_or_builtin(vault, "vault.stale_after_sessions") == default
+    err = capsys.readouterr().err
+    assert 'vault.stale_after_sessions is "lots"; it takes a whole number' in err
+    assert "the default was used" in err
+    assert vaultlib.setting_or_builtin(vault, "vault.stale_after_sessions") == default
+    assert capsys.readouterr().err == ""
+    assert vaultlib.setting_or_builtin(vault, "vault.name_match") == \
+        vaultlib.settings_default("vault.name_match")
+    assert capsys.readouterr().err == ""
