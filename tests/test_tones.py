@@ -845,38 +845,36 @@ class ShownTests(VaultCase):
     CAMPAIGN = ("---\npublish:\n  exclude_fields:\n    - secrets\n"
                 "    - relationships\n%s---\n")
 
-    def test_a_campaign_that_excludes_relationships_lists_nothing(self):
-        _, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE,
-                                     "_meta/vault-config.md":
-                                     self.CAMPAIGN % ""}, {"NPCs/Emma.md"})
-        self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes"])
+    def test_the_campaigns_skip_of_relationships(self):
+        """What the campaign file's exclude list and a note's overrides do to
+        whether a note's ties are listed: nothing is listed when the campaign
+        excludes the field, unless that note's override includes it."""
+        nothing = ["# 0 hostile ties shown on 0 notes"]
+        two = "# 2 hostile ties shown on 1 note"
 
-    def test_campaign_exclude_only_counts_as_a_list_spelled_exactly(self):
-        for cfg in ("---\npublish:\n  exclude_fields: relationships\n---\n",
-                    "---\npublish:\n  exclude_fields: [Relationships]\n---\n"):
-            with self.subTest(cfg=cfg):
+        def override(field):
+            return self.CAMPAIGN % ("  overrides:\n    fields:\n"
+                                    '      "NPCs/Emma.md":\n'
+                                    f"        include: [{field}]\n")
+
+        for case, cfg, want in (
+                ("a campaign that excludes relationships lists nothing",
+                 self.CAMPAIGN % "", nothing),
+                ("only a list spelled exactly counts (scalar)",
+                 "---\npublish:\n  exclude_fields: relationships\n---\n", two),
+                ("only a list spelled exactly counts (capitalised)",
+                 "---\npublish:\n  exclude_fields: [Relationships]\n---\n", two),
+                ("an override naming relationships lifts the skip",
+                 override("relationships"), two),
+                ("an override for another field keeps the skip",
+                 override("secrets"), nothing)):
+            with self.subTest(case):
+                self.tmp.cleanup()
+                self.setUp()
                 _, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE,
                                              "_meta/vault-config.md": cfg},
                                             {"NPCs/Emma.md"})
-                self.assertEqual(rows[-1], "# 2 hostile ties shown on 1 note")
-
-    def test_an_override_naming_relationships_lifts_the_campaign_skip(self):
-        cfg = self.CAMPAIGN % ("  overrides:\n    fields:\n"
-                               '      "NPCs/Emma.md":\n'
-                               "        include: [relationships]\n")
-        _, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE,
-                                     "_meta/vault-config.md": cfg},
-                                    {"NPCs/Emma.md"})
-        self.assertEqual(rows[-1], "# 2 hostile ties shown on 1 note")
-
-    def test_an_override_for_another_field_keeps_the_campaign_skip(self):
-        cfg = self.CAMPAIGN % ("  overrides:\n    fields:\n"
-                               '      "NPCs/Emma.md":\n'
-                               "        include: [secrets]\n")
-        _, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE,
-                                     "_meta/vault-config.md": cfg},
-                                    {"NPCs/Emma.md"})
-        self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes"])
+                self.assertEqual(rows if want == nothing else rows[-1], want)
 
     def test_a_note_the_site_does_not_publish_is_left_out(self):
         code, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE}, set())
