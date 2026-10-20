@@ -12,11 +12,11 @@ const { publishesPage } = require('./publish-decision');
 const { writeAtomic } = require('./settings/write');
 const { publishMode } = require('./processor');
 const { parseNote } = require('./frontmatter');
+const { vaultSpelling } = require('./vault-reader');
 
 // The frontmatter block at the top of a note: the `---` line, whatever follows up to the closing
 // `---` line. A note whose `---` never closes has none (it is a rule line, not frontmatter).
 const BLOCK = /^---[ \t]*\r?\n(?:[\s\S]*?\r?\n)?---[ \t]*(?:\r?\n|$)/;
-const PUBLISH_LINE = /^publish[ \t]*:/m;
 
 // The root files that tell an agent how to work in the vault. Adding frontmatter to them
 // would change a file another tool reads, so `--untyped` leaves them be.
@@ -29,16 +29,32 @@ function markNeverPublish(text) {
   const eol = body.includes('\r\n') ? '\r\n' : '\n';
   const block = BLOCK.exec(body);
   if (!block) return { text: `${bom}---${eol}publish: false${eol}---${eol}${body}` };
-  if (PUBLISH_LINE.test(block[0])) {
-    return { skip: publishMode(parseNote(body).data) === 'none' ? 'already marked' : 'it has a publish: line already; change it by hand' };
+  // The frontmatter is read by the YAML reader the build uses, so a quoted `"publish":` key is the same key.
+  const read = (text) => { try { return parseNote(text).data; } catch { return null; } };
+  const data = read(body);
+  if (!data) return { skip: 'its frontmatter cannot be read; fix that first' };
+  if (Object.prototype.hasOwnProperty.call(data, 'publish')) {
+    return { skip: publishMode(data) === 'none' ? 'already marked' : 'it has a publish: line already; change it by hand' };
   }
   const opener = /^---[ \t]*\r?\n/.exec(body)[0];
-  return { text: `${bom}${opener}publish: false${eol}${body.slice(opener.length)}` };
+  const made = `${opener}publish: false${eol}${body.slice(opener.length)}`;
+  // The note read back must be the note as it was plus `publish: false`. Frontmatter written as one `{ ... }`
+  // value, say, does not take a line of its own.
+  const back = read(made);
+  const rest = back && Object.fromEntries(Object.entries(back).filter(([k]) => k !== 'publish'));
+  if (!back || back.publish !== false || JSON.stringify(rest) !== JSON.stringify(data)) {
+    return { skip: 'its frontmatter is not written one field to a line, so the line cannot be added safely; add publish: false by hand' };
+  }
+  return { text: `${bom}${made}` };
 }
 
+// The path as the vault spells it on disk (a disk that ignores case finds `npcs/bob.md` for `NPCs/Bob.md`, and the
+// verdicts are keyed by the vault's own spelling), or null when no note is there.
 function inVault(vaultPath, rel) {
   const full = path.resolve(vaultPath, rel);
-  return full.startsWith(path.resolve(vaultPath) + path.sep) && /\.md$/i.test(rel) && fs.existsSync(full);
+  if (!full.startsWith(path.resolve(vaultPath) + path.sep) || !/\.md$/i.test(rel)) return null;
+  const spelt = vaultSpelling(vaultPath, rel);
+  return spelt ? canonicalPath(spelt) : null;
 }
 
 async function runNeverPublish(options, deps, survey) {
@@ -47,12 +63,13 @@ async function runNeverPublish(options, deps, survey) {
   const writeFile = deps.writeFile || ((p, c) => writeAtomic(p, c));
   const { vaultPath, verdicts, report } = survey;
 
-  const named = (options.paths || []).map((p) => canonicalPath(String(p).trim().replace(/^\.\//, '')));
-  if (named.length === 0 && !options.untyped) {
+  const given = (options.paths || []).map((p) => canonicalPath(String(p).trim().replace(/^\.\//, '')));
+  if (given.length === 0 && !options.untyped) {
     out('manifest never-publish needs --path <note> (repeatable) or --untyped');
     return 1;
   }
-  const missing = named.filter((rel) => !inVault(vaultPath, rel));
+  const missing = given.filter((rel) => !inVault(vaultPath, rel));
+  const named = given.map((rel) => inVault(vaultPath, rel)).filter(Boolean);
   if (missing.length > 0) {
     for (const rel of missing) out(`no such file in the vault: ${rel}`);
     out('Nothing was written. Run `gm-publish manifest diff` for the paths the vault actually has.');
@@ -66,7 +83,9 @@ async function runNeverPublish(options, deps, survey) {
   const skipped = [];
   for (const rel of [...new Set([...named, ...untyped])]) {
     const verdict = verdicts.get(rel);
-    if (verdict && publishesPage(verdict)) { skipped.push({ path: rel, reason: 'it publishes now; this command never touches a note that does' }); continue; }
+    // A note the site's survey does not hold (an excluded folder, say) has no verdict to go by: left alone.
+    if (!verdict) { skipped.push({ path: rel, reason: 'the site does not read it, so there is no publish verdict to go by; nothing to mark' }); continue; }
+    if (publishesPage(verdict)) { skipped.push({ path: rel, reason: 'it publishes now; this command never touches a note that does' }); continue; }
     if (verdict && verdict.code === 'FILE_UNPARSEABLE') { skipped.push({ path: rel, reason: 'its frontmatter cannot be read; fix that first' }); continue; }
     const made = markNeverPublish(readFile(path.join(vaultPath, rel)));
     if (made.skip) skipped.push({ path: rel, reason: made.skip });

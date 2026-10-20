@@ -10,6 +10,7 @@ const { siteToolOlderThan } = require('./settings/move');
 const { runLeakGate, formatFindings, gateSummary, isPage } = require('./leak-gate');
 const { wordsOf } = require('./leak-gate/text');
 const { HEADING_NOTE, settledHeadingGone } = require('./settled-headings');
+const { vaultSpelling } = require('./vault-reader');
 
 // The folder deploy uploads: the one wrangler.toml names, when the site has one, else the output folder.
 function gateFolderFor(configPath) {
@@ -58,22 +59,6 @@ function tooOldFor(configPath, { from, words: [done, doing, verb], why } = ACCEP
     shown: old.shown,
     needs: from,
   };
-}
-
-// A note path as the vault spells it: `./` and `a/../` dropped, and each part's case as it is on disk (a disk that
-// ignores case finds `npcs/a.md` for `NPCs/A.md`). Null when no note is there or the path leaves the vault.
-function vaultSpelling(vaultPath, page) {
-  const rel = path.posix.normalize(page);
-  if (rel.startsWith('../') || rel === '..' || path.posix.isAbsolute(rel) || !fs.existsSync(path.join(vaultPath, rel))) return null;
-  const parts = [];
-  for (const part of rel.split('/')) {
-    let names;
-    try { names = fs.readdirSync(path.join(vaultPath, ...parts)); } catch { return null; }
-    const nfc = part.normalize('NFC');
-    const same = (n) => n.normalize('NFC') === nfc;
-    parts.push(names.find(same) || names.find((n) => n.normalize('NFC').toLowerCase() === nfc.toLowerCase()) || part);
-  }
-  return parts.join('/');
 }
 
 // `leaks settle <note> <heading>`: a Keeper-looking heading gm-leak flagged, which the GM means for players (#453).

@@ -74,6 +74,12 @@ describe('markNeverPublish', () => {
     assert.deepStrictEqual(markNeverPublish('---\npublish: false\n---\n'), { skip: 'already marked' });
     assert.match(markNeverPublish('---\npublish: stub\n---\n').skip, /by hand/);
   });
+  it('reads a quoted "publish": key as the same key, and refuses frontmatter it cannot add a line to', () => {
+    assert.deepStrictEqual(markNeverPublish('---\n"publish": false\n---\n'), { skip: 'already marked' });
+    assert.match(markNeverPublish("---\n'publish': stub\n---\n").skip, /by hand/);
+    assert.match(markNeverPublish('---\n{status: draft, title: Plan}\n---\nbody\n').skip, /one field to a line[^]*by hand/);
+    assert.match(markNeverPublish('---\nstatus: [draft\n---\nbody\n').skip, /cannot be read/);
+  });
 });
 
 describe('manifest never-publish', () => {
@@ -119,6 +125,23 @@ describe('manifest never-publish', () => {
     const { vault, configPath } = setup(FILES);
     await run(configPath, { paths: ['AGENTS.md'], write: true });
     assert.strictEqual(fs.readFileSync(path.join(vault, 'AGENTS.md'), 'utf8'), '---\npublish: false\n---\nagent notes\n');
+  });
+
+  it('reads a --path as the vault spells it, so a note that publishes is never marked whatever the case typed', async () => {
+    const { vault, configPath } = setup(FILES);
+    const r = await run(configPath, { paths: ['characters/npcs/bob.md', 'sessions/plan.md'], write: true });
+    assert.strictEqual(r.rc, 0, r.text);
+    assert.match(r.text, /Characters\/NPCs\/Bob\.md — it publishes now/);
+    assert.match(r.text, /marked 1 note[^]*Sessions\/Plan\.md/);
+    assert.strictEqual(fs.readFileSync(path.join(vault, 'Characters/NPCs/Bob.md'), 'utf8'), FILES['Characters/NPCs/Bob.md']);
+  });
+
+  it('leaves alone a note the site does not read, which has no verdict', async () => {
+    const { vault, configPath } = setup({ ...FILES, '_meta/Scratch.md': 'scratch\n' });
+    const r = await run(configPath, { paths: ['_meta/Scratch.md'], write: true });
+    assert.match(r.text, /marked 0 note/);
+    assert.match(r.text, /_meta\/Scratch\.md — the site does not read it/);
+    assert.strictEqual(fs.readFileSync(path.join(vault, '_meta/Scratch.md'), 'utf8'), 'scratch\n');
   });
 
   it('asks for --path or --untyped', async () => {
