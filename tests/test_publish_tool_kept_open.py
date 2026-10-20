@@ -129,6 +129,29 @@ def test_a_tool_without_the_command_op_is_run_on_its_own(tmp_path):
     lines.close()
 
 
+def test_a_failed_process_reruns_a_read_but_never_a_write(tmp_path):
+    # The process dies on the question: a read is asked again of a run of
+    # its own; a write may have happened, so it is not done twice.
+    tool = tmp_path / "t" / "gm-publish.js"
+    tool.parent.mkdir()
+    ran = tmp_path / "ran"
+    tool.write_text(textwrap.dedent(f"""\
+        if (process.argv[2] === 'lines') {{
+          process.stdin.once('data', () => process.exit(1));
+        }} else {{
+          require('fs').appendFileSync({json.dumps(str(ran))}, process.argv[3] + '\\n');
+          process.stdout.write('{{}}');
+        }}
+        """), encoding="utf-8")
+    kw = dict(capture_output=True, text=True, timeout=60)
+    read = vaultlib.run_tool([NODE, str(tool), "settings", "get", "--json"], **kw)
+    assert read.returncode == 0 and read.stdout == "{}"
+    write = vaultlib.run_tool([NODE, str(tool), "settings", "set", "a=1"], **kw)
+    assert write.returncode == 1 and "exited without answering" in write.stderr
+    assert ran.read_text(encoding="utf-8") == "get\n"
+    vaultlib.lines_for(tool).close()
+
+
 def test_a_replaced_tool_gets_a_new_process(tmp_path):
     tool = fake_tool(tmp_path / "t", json.dumps({"dates": []}))
     lines = vaultlib.PublishLines(tool)

@@ -1128,10 +1128,11 @@ class PublishLines:
                 ) -> tuple[int, str, str] | None:
         """`gm-publish <args>` (`settings ...` or `explain --all ...`) run
         inside this process, from this folder with this environment: (exit
-        code, stdout, stderr), as a run of its own would give them. None when
-        this process cannot run it (a tool older than the `command` op, or
-        one that will not start): run the command on its own then, and its
-        own failure is the one to report. Raises PublishToolTimedOut."""
+        code, stdout, stderr), as a run of its own would give them. None for
+        a tool older than the `command` op: run the command on its own then.
+        Raises PublishToolUnavailable when the process failed (it may have
+        stopped part way through the command), PublishToolTimedOut when it
+        was late."""
         if self._no_command:
             return None
         request = {"op": "command", "text": "", "args": args,
@@ -1145,12 +1146,14 @@ class PublishLines:
             # string" when it reads `text` first.
             if "unknown op" in str(e) or "text must be a string" in str(e):
                 self._no_command = True
-            return None
+                return None
+            raise
         rc, out, err = (answer.get("rc"), answer.get("stdout"),
                         answer.get("stderr"))
         if not (isinstance(rc, int) and isinstance(out, str)
                 and isinstance(err, str)):
-            return None
+            raise PublishToolUnavailable(
+                "the publish tool's answer was not understood")
         return rc, out, err
 
     def close(self) -> None:
@@ -1166,8 +1169,11 @@ def run_tool(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
     `[node, tool, *args]`, run with `text=True`. `settings` and
     `explain --all` are answered by the tool's kept-open `lines` process
     (`PublishLines.command`): Node starts once a run, not once a question.
-    A tool that cannot answer there is run on its own, as before. A late
-    answer raises subprocess.TimeoutExpired, as `subprocess.run` does."""
+    A tool older than that is run on its own, as before; so is a question
+    that writes nothing, when the process fails. One that writes is not
+    run twice: the process's failure is its answer (exit 1, the reason on
+    stderr). A late answer raises subprocess.TimeoutExpired, as
+    `subprocess.run` does."""
     args = [str(a) for a in cmd[2:]]
     if args[:1] == ["settings"] or args[:2] == ["explain", "--all"]:
         timeout = kwargs.get("timeout") or PUBLISH_LINES_TIMEOUT
@@ -1175,6 +1181,14 @@ def run_tool(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
             ran = lines_for(Path(cmd[1])).command(args, timeout)
         except PublishToolTimedOut as e:
             raise subprocess.TimeoutExpired(cmd, timeout) from e
+        except PublishToolUnavailable as e:
+            writes = args[0] == "settings" and not (
+                args[1:2] in (["get"], ["raw"], ["describe"], ["list"],
+                              ["check"])
+                or (args[1:2] == ["move"] and "--check" in args))
+            if writes:
+                return subprocess.CompletedProcess(cmd, 1, "", f"{e}\n")
+            ran = None
         if ran is not None:
             return subprocess.CompletedProcess(cmd, *ran)
     stdin = kwargs.pop("stdin", subprocess.DEVNULL)
