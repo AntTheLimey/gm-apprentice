@@ -22,9 +22,9 @@ export default function code (state, startLine, endLine/*, silent */) {
 
   state.line = last
 
-  const token   = state.push('code_block', 'code', 0)
+  const token = state.push('code_block', 'code', 0)
   token.content = state.getLines(startLine, last, 4 + state.blkIndent, false) + '\n'
-  token.map     = [startLine, state.line]
+  token.map = [startLine, state.line]
 
   return true
 }

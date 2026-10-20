@@ -80,18 +80,18 @@ function postProcess (state, delimiters) {
 
     const ch = String.fromCharCode(startDelim.marker)
 
-    const token_o   = state.tokens[startDelim.token]
-    token_o.type    = isStrong ? 'strong_open' : 'em_open'
-    token_o.tag     = isStrong ? 'strong' : 'em'
+    const token_o = state.tokens[startDelim.token]
+    token_o.type = isStrong ? 'strong_open' : 'em_open'
+    token_o.tag = isStrong ? 'strong' : 'em'
     token_o.nesting = 1
-    token_o.markup  = isStrong ? ch + ch : ch
+    token_o.markup = isStrong ? ch + ch : ch
     token_o.content = ''
 
-    const token_c   = state.tokens[endDelim.token]
-    token_c.type    = isStrong ? 'strong_close' : 'em_close'
-    token_c.tag     = isStrong ? 'strong' : 'em'
+    const token_c = state.tokens[endDelim.token]
+    token_c.type = isStrong ? 'strong_close' : 'em_close'
+    token_c.tag = isStrong ? 'strong' : 'em'
     token_c.nesting = -1
-    token_c.markup  = isStrong ? ch + ch : ch
+    token_c.markup = isStrong ? ch + ch : ch
     token_c.content = ''
 
     if (isStrong) {

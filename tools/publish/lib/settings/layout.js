@@ -5,6 +5,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { entry, legacyNameOf } = require('./registry');
+const { readerFrom } = require('../vault-reader');
 
 const NEW_FILE = '_meta/vault-config.yaml';
 const OLD_FILE = '_meta/vault-config.md';
@@ -57,9 +58,10 @@ const at = (vaultPath, rel) => path.join(vaultPath, ...rel.split('/'));
 
 // 'new' whenever the new file exists (the old file, if it is still there, is not read), 'legacy'
 // when only the old file exists, 'none' when neither does.
-function layoutOf(vaultPath) {
-  if (fs.existsSync(at(vaultPath, NEW_FILE))) return 'new';
-  return fs.existsSync(at(vaultPath, OLD_FILE)) ? 'legacy' : 'none';
+function layoutOf(vaultPath, deps) {
+  const rd = readerFrom(deps);
+  if (rd.exists(at(vaultPath, NEW_FILE))) return 'new';
+  return rd.exists(at(vaultPath, OLD_FILE)) ? 'legacy' : 'none';
 }
 
 // What a message to the GM calls the settings file of a layout, and a setting as that file writes it:

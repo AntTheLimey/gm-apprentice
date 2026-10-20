@@ -1,5 +1,5 @@
 const { escapeHtml } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, connectionsSection } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, connectionsSection, badgeSpan } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
 function heritageTemplate(page, processedContent, navFor, config, imageMap, context) {
@@ -9,10 +9,10 @@ function heritageTemplate(page, processedContent, navFor, config, imageMap, cont
 
   const badges = [];
   if (fm.notable_traits && Array.isArray(fm.notable_traits)) {
-    fm.notable_traits.forEach(t => badges.push(t.replace(/_/g, ' ')));
+    fm.notable_traits.forEach(t => badges.push(['notable_traits', t.replace(/_/g, ' ')]));
   }
   const badgeHtml = badges.length > 0
-    ? `<div class="metadata-badges">${badges.map(b => `<span class="metadata-badge">${escapeHtml(b)}</span>`).join('\n')}</div>`
+    ? `<div class="metadata-badges">${badges.map(([f, b]) => badgeSpan(f, b)).join('\n')}</div>`
     : '';
 
   const statItems = [];

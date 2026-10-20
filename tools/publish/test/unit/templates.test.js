@@ -91,6 +91,20 @@ describe('metadataBadgesFor', () => {
     assert.ok(!result.includes('[['));
   });
 
+  it('names each badge by its field, so a missing one leaves the others identifiable (#427)', () => {
+    const fm = { type: 'session', session_number: 3, status: 'played', stage: 'complete' };
+    const result = metadataBadgesFor(fm);
+    assert.ok(result.includes('<span class="metadata-badge" data-field="session_number">3</span>'));
+    assert.ok(result.includes('data-field="status">played<'));
+    assert.ok(result.includes('data-field="stage">complete<'));
+    assert.ok(!result.includes('data-field="play_date"'));
+  });
+
+  it('a fallback badge carries the field it stands for, not the fallback key (#427)', () => {
+    const result = metadataBadgesFor({ type: 'event', date: '1943-05-01' });
+    assert.ok(result.includes('data-field="in_game_date">1943-05-01<'));
+  });
+
   it('returns empty for unknown type', () => {
     const fm = { type: 'unknown' };
     assert.strictEqual(metadataBadgesFor(fm), '');

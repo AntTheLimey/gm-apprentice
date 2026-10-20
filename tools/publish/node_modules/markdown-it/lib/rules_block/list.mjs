@@ -156,16 +156,16 @@ export default function list (state, startLine, endLine, silent) {
   const listTokIdx = state.tokens.length
 
   if (isOrdered) {
-    token       = state.push('ordered_list_open', 'ol', 1)
+    token = state.push('ordered_list_open', 'ol', 1)
     if (markerValue !== 1) {
       token.attrs = [['start', markerValue]]
     }
   } else {
-    token       = state.push('bullet_list_open', 'ul', 1)
+    token = state.push('bullet_list_open', 'ul', 1)
   }
 
   const listLines = [nextLine, 0]
-  token.map    = listLines
+  token.map = listLines
   token.markup = String.fromCharCode(markerCharCode)
 
   //
@@ -218,10 +218,10 @@ export default function list (state, startLine, endLine, silent) {
     const indent = initial + indentAfterMarker
 
     // Run subparser & write tokens
-    token        = state.push('list_item_open', 'li', 1)
+    token = state.push('list_item_open', 'li', 1)
     token.markup = String.fromCharCode(markerCharCode)
     const itemLines = [nextLine, 0]
-    token.map    = itemLines
+    token.map = itemLines
     if (isOrdered) {
       token.info = state.src.slice(start, posAfterMarker - 1)
     }
@@ -270,7 +270,7 @@ export default function list (state, startLine, endLine, silent) {
     state.sCount[nextLine] = oldSCount
     state.tight = oldTight
 
-    token        = state.push('list_item_close', 'li', -1)
+    token = state.push('list_item_close', 'li', -1)
     token.markup = String.fromCharCode(markerCharCode)
 
     nextLine = state.line

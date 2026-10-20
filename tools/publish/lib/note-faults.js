@@ -25,6 +25,8 @@
 //                     from the characteristics (information; the sheet shows the number written)
 //   HEADING_IN_HIDDEN_BLOCK  a withheld section's heading written inside a hidden block, so the text
 //                     after the block is withheld with it (information; the build says so per page)
+//   TABLE_OVERWIDE  a table with a row wider than its header, which the renderer widens so no cell
+//                     is lost (information; the build says so per page)
 //
 // Nothing here reads a page a second way, and nothing here knows which field a template
 // prints. The names are decided by the page as the build makes it: every link to a note
@@ -49,7 +51,7 @@ const { kindOfType } = require('./kind-label');
 const { STORY_SUFFIX } = require('./scanner');
 const { decodeEntities } = require('./templates/gurps/tables');
 
-const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK'];
+const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE'];
 const WORST = 3;
 // The human report names this many of the pages that link a note with no page.
 const PAGES_SHOWN = 3;
@@ -1060,7 +1062,7 @@ function summaryLines(findings) {
       lines.push(`${m} ${plural(m, 'row of a PC sheet is', 'rows of PC sheets are')} not fully read by the to-hit calculator (${worst.join(', ')}) — ${where} ${plural(m, 'it', 'these')}.`);
     } else if (code === 'SKILL_BELOW_BASE') {
       continue;   // information for campaign-qa; the build has nothing to say about it
-    } else if (code === 'HEADING_IN_HIDDEN_BLOCK') {
+    } else if (code === 'HEADING_IN_HIDDEN_BLOCK' || code === 'TABLE_OVERWIDE') {
       continue;   // information for campaign-qa; the build said it per page as it went
     } else if (code === 'WITHHELD_NAME_PUBLIC') {
       const names = [...new Set(rows.map((f) => f.name))];

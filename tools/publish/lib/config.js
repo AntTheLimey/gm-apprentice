@@ -89,8 +89,8 @@ function setOnly(map, prefix, origins) {
 // `siteDir` is the site folder (where vault.config.json is): the output folder is judged against it.
 // `site` is 'player' or 'gm': forSite decides that site's values (and which names the GM wrote for it);
 // everything below reshapes them as it always has. The GM site's faults are warnings except a GM site kept by a player vault.
-function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn, { quietStops = false, siteDir, site = 'player' } = {}) {
-  const read = readSettings({ vaultPath, siteConfig: jsonConfigFallback, siteDir });
+function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn, { quietStops = false, siteDir, site = 'player', deps } = {}) {
+  const read = readSettings({ vaultPath, siteConfig: jsonConfigFallback, siteDir, deps });
   const { legacy = [], layout } = read;
   const resolved = forSite(read, site);
   const { origins } = resolved;
@@ -386,4 +386,4 @@ function gmSiteOnFor(configPath) {
   return loadPublishConfig(vaultPath, raw, () => {}, { quietStops: true, siteDir, site: 'gm' }).gm.publish === true;
 }
 
-module.exports = { siteOffFor, gmSiteOnFor, siteOff, siteOffText, siteConfigFor, outputFolderOf, tomlOutputFolder, loadPublishConfig, assertNoStops, assertNoStopsFor, resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig };
+module.exports = { overrideEntryProblem, canonicalizeOverrideFieldKeys, siteOffFor, gmSiteOnFor, siteOff, siteOffText, siteConfigFor, outputFolderOf, tomlOutputFolder, loadPublishConfig, assertNoStops, assertNoStopsFor, resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig };

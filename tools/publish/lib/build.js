@@ -12,6 +12,7 @@ const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, kept
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
+const { noticeText } = require('./notice');
 const { getsNoPage } = require('./previews');
 const { runSteps, packageScripts, packageNotes } = require('./settings/steps');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
@@ -192,9 +193,30 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {
 //   options.rawConfig   the site file already parsed
 //   options.shownFor    in memory: a vault-relative note path; the result's `shown` is what
 //                       the site holds of it, built as if it published
-// Returns { noteFaults, shown }.
+// Returns { noteFaults, shown, renderErrors, warnings }: renderErrors are what failed to render (a build that
+// has any also throws, with the same list on the error as `renderErrors`), warnings the text of every warning the
+// build printed, without its "WARNING:" prefix. Both are still printed.
 function build(options = {}) {
-  return options.inMemory ? quietly(() => buildSite(options)) : buildSite(options);
+  const warnings = [];
+  const run = () => {
+    try {
+      return { ...collectingWarnings(warnings, () => buildSite(options)), warnings };
+    } catch (err) {
+      if (err && typeof err === 'object') err.warnings = warnings;
+      throw err;
+    }
+  };
+  return options.inMemory ? quietly(run) : run();
+}
+
+// Run `fn`, copying each console.warn into `warnings` (and still passing it on).
+function collectingWarnings(warnings, fn) {
+  const passOn = console.warn;
+  console.warn = (...args) => {
+    warnings.push(args.join(' ').replace(/^\s*WARNING:\s*/, '').trim());
+    passOn.apply(console, args);
+  };
+  try { return fn(); } finally { console.warn = passOn; }
 }
 
 function buildSite(options) {
@@ -459,7 +481,7 @@ function buildSite(options) {
     selfHosted = { css: '', files: [] };
     if (fonts.source === 'self-host') {
       const families = fontsLib.selfHostFamilies(fonts, fontsLib.presetFamiliesFor(publishConfig.theme));
-      selfHosted = fontsLib.selfHostedFontFaces(config.vaultPath, families);
+      selfHosted = fontsLib.selfHostedFontFaces(config.vaultPath, families, console.warn, { offline: options.offline === true });
     }
     return selfHosted;
   }
@@ -1183,6 +1205,12 @@ function buildSite(options) {
 
   writeNoJekyll();
 
+  // The licence notices for what the site ships (#428).
+  if (writes === 'all') {
+    fs.writeFileSync(path.join(outputDir, 'NOTICE.txt'), noticeText({ lunr: !!searchData }));
+    console.log('  wrote NOTICE.txt');
+  }
+
   // Write search index (only if search is enabled)
   if (writes !== 'all') {
     // nothing is written
@@ -1239,6 +1267,8 @@ function buildSite(options) {
   const retiredFieldPcs = [];
   // Rows of PC sheets the to-hit calculator cannot fully read: { rel, rows }, for the audit.
   const tohitRows = [];
+  // Notes with a table wider than its header: { rel, rows } (TABLE_OVERWIDE), for the audit.
+  const tableRows = [];
   const SHEETLESS_NAMED = 8;   // names printed before "and N more"
   const partyCampaignId = require('./scanner').slugify(config.siteTitle || 'campaign');
   const deferredRosters = [];
@@ -1270,6 +1300,7 @@ function buildSite(options) {
     }
     const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts, pcKeepSections, ...markOpt });
     fx.warn(page.outputPath, processed.warnings);
+    if (processed.overwide.length) fx.tableRows.push({ rel: vaultRelPathOf(page), rows: processed.overwide });
     let html;
 
     if (isRoster(page)) return { roster: processed };
@@ -1449,13 +1480,13 @@ function buildSite(options) {
   }
 
   const liveFx = {
-    usedImages, warn: logWarnings, partyEntries, sheetlessPcs, retiredFieldPcs, tohitRows,
+    usedImages, warn: logWarnings, partyEntries, sheetlessPcs, retiredFieldPcs, tohitRows, tableRows,
     onLook: (look, p) => {
       for (const n of look.notes) console.warn(`  WARNING: ${p.vaultPath ? p.vaultPath + '.md' : p.title}: ${n.key} ${JSON.stringify(clipValue(n.value))} ${n.problem}; ignored`);
       if (isDressed(look)) { anyDressed = true; dressedSkins.add(look.skin); }
     },
   };
-  const scratchFx = () => ({ usedImages: new Set(), warn: () => {}, partyEntries: [], sheetlessPcs: [], retiredFieldPcs: [], tohitRows: [], onLook: () => {} });
+  const scratchFx = () => ({ usedImages: new Set(), warn: () => {}, partyEntries: [], sheetlessPcs: [], retiredFieldPcs: [], tohitRows: [], tableRows: [], onLook: () => {} });
 
   // The note-faults audit reads each page as it is written (`seen`), and at the end renders
   // again the pages that link a note with no page (`namedOnPages`). The GM build has none: on the GM site every
@@ -1628,8 +1659,8 @@ function buildSite(options) {
     const faces = fontsLib.selfHostedFontFaces(config.vaultPath, fontFamiliesFor([...dressedSkins]), () => {
       if (warned) return;
       warned = true;
-      console.warn("  WARNING: the typefaces for the sheet skins are not in the vault's font cache and could not be downloaded; the skins use fallback type. Rebuild with network access.");
-    });
+      console.warn(`  WARNING: the typefaces for the sheet skins are not in the vault's font cache and could not be downloaded; the skins use fallback type. ${fontsLib.missAdvice(options.offline === true)}`);
+    }, { offline: options.offline === true });
     fs.writeFileSync(dest, faces.css + scopeColorScheme(skinsCss([...dressedSkins])));
     console.log('  wrote css/skins.css');
     copyFontFiles(faces.files);
@@ -1913,6 +1944,7 @@ function buildSite(options) {
     const storyObj = { markdown: pc.storyMarkdown, frontmatter: {}, outputPath };
     const processed = processContent(storyObj, linkMap, excludeSections, imageMap, { usedImages: fx.usedImages, excludeCallouts, ...markOpt });
     fx.warn(outputPath, processed.warnings);
+    if (processed.overwide.length) fx.tableRows.push({ rel: audit.storyRelOf(pc), rows: processed.overwide });
     const story = {
       title: pc.displayTitle, outputPath, html: processed.html,
       sheetOutputPath: pc.outputPath, group: characterStoryGroup(pc.frontmatter, publishConfig.statuses.fallen),
@@ -2130,6 +2162,7 @@ function buildSite(options) {
   // Every file is written: the after steps run, then the check of the notes and "Done!".
   if (runningSteps && errorCount === 0 && publishConfig.steps.after.length) runSteps(publishConfig.steps.after, { cwd: configDir, label: 'after_build', log: options.stepsLog, stdio: options.stepsStdio, extraEnv: stepEnv });
   if (!gm) for (const pc of tohitRows) audit.calculator(pc.rel, pc.rows);
+  if (!gm) for (const t of tableRows) audit.calculator(t.rel, t.rows);
   // A withheld heading inside a hidden block (#447): the text after it is withheld; campaign-qa offers to move it.
   if (!gm) {
     for (const [page, facts] of stripFacts) {
@@ -2152,6 +2185,7 @@ function buildSite(options) {
     console.log(`Done with ${errorCount} error(s).`);
     const err = new Error(`Build completed with ${errorCount} render error(s)`);
     err.errorCount = errorCount;
+    err.renderErrors = renderErrors;
     throw err;
   }
   // Last of all, the marker again, with the time the GM build finished (one that stopped before here left `built: null`).
@@ -2161,11 +2195,11 @@ function buildSite(options) {
     console.log(`Updated ${n} character page${n === 1 ? '' : 's'}${m ? ` and ${m} story page${m === 1 ? '' : 's'}` : ''}; nothing else was rewritten.`);
     const fresh = sheetsWritten.filter((w) => w.isNew).length;
     if (fresh > 0) console.log(`${fresh} character page${fresh === 1 ? ' is' : 's are'} new; a full build updates the menu and the lists that link ${fresh === 1 ? 'it' : 'them'}.`);
-    return { noteFaults, shown: null, faults: publishConfig.faults };
+    return { noteFaults, shown: null, renderErrors, faults: publishConfig.faults };
   }
   if (gm) writeMarker(outputDir, { version: TOOL_VERSION });
   console.log('Done!');
-  return { noteFaults, shown: null, faults: publishConfig.faults };
+  return { noteFaults, shown: null, renderErrors, faults: publishConfig.faults };
 }
 
 module.exports = { build, resolveSiteLink, rememberHiddenNames };

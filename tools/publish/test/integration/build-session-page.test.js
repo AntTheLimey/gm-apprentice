@@ -48,7 +48,7 @@ describe('session pages and the hub body (#276)', () => {
     return fs.readFileSync(hit, 'utf8');
   };
   const badges = (...values) => '<div class="metadata-badges">'
-    + values.map(v => `<span class="metadata-badge">${v}</span>`).join('\n') + '</div>';
+    + values.map(([f, v]) => `<span class="metadata-badge" data-field="${f}">${v}</span>`).join('\n') + '</div>';
 
   before(() => {
     work = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-session-page-'));
@@ -139,7 +139,7 @@ The coach left before dawn with [[Mrs Hale]] waving from the INNYARDWAVE porch.
       const html = find('session-01-arrival.html');
       assert.match(html, /<main class="content"(?: data-previews="[a-z]+")?>/);
       assert.match(html, /<h1 class="page-title">Session 01 - Arrival<\/h1>/);
-      assert.ok(html.includes(badges('1', '2026-01-17', 'reviewed')), 'badge block changed');
+      assert.ok(html.includes(badges(['session_number', '1'], ['play_date', '2026-01-17'], ['status', 'reviewed'])), 'badge block changed');
     });
 
     it('shows the linked chapter and the in-game date', () => {
@@ -198,7 +198,7 @@ The coach left before dawn with [[Mrs Hale]] waving from the INNYARDWAVE porch.
     });
 
     it('keeps the badge block byte-identical', () => {
-      assert.ok(find('session-02-departure.html').includes(badges('2', '2026-01-10', 'played')));
+      assert.ok(find('session-02-departure.html').includes(badges(['session_number', '2'], ['play_date', '2026-01-10'], ['status', 'played'])));
     });
 
     it('stays in search and still creates backlinks', () => {
