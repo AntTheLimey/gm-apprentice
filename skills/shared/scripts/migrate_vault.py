@@ -21,7 +21,7 @@ from schema_rules import TEMPLATE_NAMES
 from schema_rules import tone_families, without_generated_markers
 from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
                          player_section_key, wrapup_filename_findings)
-from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter,
+from vaultlib import (LEGACY_SETTINGS_FILE, SettingsUnavailable, entity_type, extract_frontmatter,
                       frontmatter_span, parse_version, plugin_version,
                       read_stamp, settings, settings_file, settings_raw,
                       settings_unset, vault_files, vault_layout,
@@ -30,7 +30,7 @@ from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter,
 SHARED = Path(__file__).resolve().parent.parent
 TEMPLATES = SHARED / "templates"
 HISTORY = SHARED / "template-history.json"
-CONFIG = "_meta/vault-config.md"
+CONFIG = LEGACY_SETTINGS_FILE
 
 STAT_BLOCK_RE = re.compile(r"^\{STAT BLOCK:.*?\}[ \t]*$", re.M | re.S)
 GENERIC_BLOCK = "### Stats\n\n{System stat block.}"
@@ -358,7 +358,7 @@ def _game_system_row_regency(vault: Path) -> bool:
     """Does a `Game System | ... Regency ...` row of the old settings
     table say Regency Cthulhu?"""
     try:
-        text = (vault / "_meta" / "vault-config.md").read_text(
+        text = (vault / CONFIG).read_text(
             encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return False

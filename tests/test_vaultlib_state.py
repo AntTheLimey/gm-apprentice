@@ -252,3 +252,39 @@ def test_no_script_reads_a_yes_no_flag_a_second_way():
         text = script.read_text(encoding="utf-8")
         for name in ("gm_only_hides", "GM_ONLY_YES_WORDS", "is_withheld"):
             assert name not in text, f"{script.name} reads a flag itself ({name})"
+
+
+# ---- the settings files' names are written once (#382) --------------------
+
+def _code_strings(path: Path):
+    """The string constants of a script, docstrings left out."""
+    import ast
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    docs = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef,
+                             ast.AsyncFunctionDef)):
+            body = node.body
+            if (body and isinstance(body[0], ast.Expr)
+                    and isinstance(body[0].value, ast.Constant)
+                    and isinstance(body[0].value.value, str)):
+                docs.add(id(body[0].value))
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                and id(node) not in docs):
+            yield node.value
+
+
+def test_no_script_writes_a_settings_file_name_but_vaultlib():
+    """`vaultlib` holds the names of the vault's settings and state files; a
+    script that needs one imports it, so a rename is one edit."""
+    found = []
+    for script in sorted(SCRIPTS.glob("*.py")):
+        if script.name == "vaultlib.py":
+            continue
+        for text in _code_strings(script):
+            for name in ("vault-config.md", "vault-config.yaml",
+                         "vault-state.json"):
+                if name in text:
+                    found.append(f"{script.name}: {text[:60]!r}")
+    assert found == []

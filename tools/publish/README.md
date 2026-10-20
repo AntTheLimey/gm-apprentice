@@ -458,10 +458,10 @@ setting would resolve to what it resolved to before, then writes
 `_meta/vault-state.json` and your own notes into `_meta/vault-notes.md`,
 and removes the old file. It does all of it or none of it; `--check` shows
 what it would do. The plugin's update normally runs it for you. Running
-it by hand is safe: when the tool installed in the vault's site is older
-than 1.23.0, whoever pinned it, that tool could not read the new file,
-so the move leaves the vault on the old file and says so in one line.
-The vault moves once that tool is 1.23.0 or later. `--discard-old-file`
+it by hand is safe: when the tool installed in the vault's site is
+too old to read the new file, whoever pinned it, the move leaves the vault
+on the old file and says so in one line, naming the version it needs.
+The vault moves once that tool is that new. `--discard-old-file`
 removes a left-over old file that holds more than the new one;
 `--site-tool-updated` is for a caller that has just repinned the site.
 `--fold-site-file` is for a vault that has already moved while its site

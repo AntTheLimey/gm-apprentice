@@ -243,9 +243,10 @@ than 1.24.0 keeps its keys and steps where they are, because that tool
 cannot run steps from the vault.
 
 The move holds back when the publish tool installed in the vault's site
-is older than 1.23.0, whoever pinned it: that tool would read the moved
-vault as having no settings. The vault stays on the old file and the
-update says so on every pass, until the tool is 1.23.0 or later. That
+is too old to read the new file, whoever pinned it: that tool would read the
+moved vault as having no settings. The vault stays on the old file and the
+update says so on every pass, naming the version it needs, until the tool is
+that new. That
 makes `settings move` safe to run by hand too; `--check` shows what it
 would do.
 
