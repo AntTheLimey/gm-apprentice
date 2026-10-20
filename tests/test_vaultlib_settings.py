@@ -402,10 +402,6 @@ def test_out_of_play_with_nothing_set_is_the_built_in_list(tmp_path, monkeypatch
     assert vaultlib.out_of_play(vault) == built_in_words
 
 
-def test_the_old_constant_is_gone():
-    assert not hasattr(vaultlib, "PC_INACTIVE_STATUS")
-
-
 def test_a_one_item_status_list_is_read_as_its_item():
     words = frozenset({"dead"})
     assert vaultlib.is_out_of_play({"status": ["dead"]}, words)

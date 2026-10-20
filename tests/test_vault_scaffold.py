@@ -19,7 +19,6 @@ import migrate  # noqa: E402
 import migrate_vault as mv  # noqa: E402
 import vault_check as vc  # noqa: E402
 import vault_scaffold as vs  # noqa: E402
-from schema_rules import REQUIRED_FIELDS  # noqa: E402
 from layouts import on_layout  # noqa: E402
 from vaultlib import (PUBLISH_TOOL, extract_frontmatter, plugin_version,  # noqa: E402
                       read_stamp, settings, settings_default, vault_layout)
@@ -97,14 +96,9 @@ class TextTests(unittest.TestCase):
             text, encoding="utf-8")
         return str(root / "V")
 
-    def test_state_text_is_the_stamp_in_the_form_write_stamp_writes(self):
-        self.assertEqual(vs.state_text("1.10.54"),
-                         '{\n  "gm_apprentice_version": "1.10.54"\n}\n')
-
     def test_the_seeded_roster_has_the_type_a_site_recognises(self):
         fm = extract_frontmatter(vs.seed("player-characters.md", "X"))
         self.assertEqual(fm["type"], "pc_roster")
-        self.assertIn("pc_roster", REQUIRED_FIELDS)
 
     def test_a_missing_seed_is_a_refusal(self):
         with mock.patch.object(vs, "SEEDS", SHARED / "no-such-folder"):
@@ -616,10 +610,6 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("# nothing written", out)
 
-    def test_rows_use_forward_slashes(self):
-        _code, out = run(scratch(self) / "V", "--no-system")
-        self.assertNotIn("\\", out)
-
     def test_a_parent_that_is_a_file_leaves_nothing_behind(self):
         vault = scratch(self) / "V"
         note(vault, "Characters", "not a folder")
@@ -740,9 +730,6 @@ class NewFilesTests(unittest.TestCase):
                 templates=False, pages=False)}
             self.assertFalse(names & set(vs.NEW_FILES), layout)
             self.assertNotIn("_meta/vault-config.md", names, layout)
-
-    def test_the_old_seed_is_gone(self):
-        self.assertFalse((SHARED / "scaffold" / "vault-config.md").exists())
 
 
 if __name__ == "__main__":

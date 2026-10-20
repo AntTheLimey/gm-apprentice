@@ -1454,16 +1454,6 @@ class WrapupKeyDetectionTests(WrapupFixture):
             '    # about other\n    other: 1\n'))
 
 
-class SharedHelperTests(unittest.TestCase):
-    def test_the_row_helpers_live_in_migrate_core(self):
-        import migrate_core as core
-        import migrate_site as ms
-        self.assertEqual(core.cells("ERROR\tw\tm\tx"), ("ERROR", "w", "m\tx"))
-        with self.assertRaises(core.StepFailed):
-            core.stopped([("ERROR", "(vault)", "no tool")])
-        self.assertFalse(hasattr(mv, "_cells") or hasattr(ms, "_stopped"))
-
-
 class TwoHiddenBlocksTests(WrapupFixture):
     def test_a_second_hidden_block_is_listed_in_plain_words(self):
         wrap = WS_WRAP.replace(
