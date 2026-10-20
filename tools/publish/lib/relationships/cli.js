@@ -14,7 +14,7 @@ const { listTones, planTones, parseSets, skipped } = require('./tones');
 const { loadPublishList, writeAccepted } = require('../manifest');
 const { acceptedTieKeys, tieText, TIE_NOTE, keyOf } = require('../accepted-ties');
 const { TIE_FROM } = require('../settings/layout');
-const { siteToolOlderThan } = require('../settings/move');
+const { siteToolOlderThan, siteFileNamedBy } = require('../settings/move');
 
 const VERBS = ['words', 'check', 'list', 'fix', 'accept'];
 
@@ -33,10 +33,13 @@ function acceptTies(root, { at, write, config }) {
     if (!row) throw new Error(`${where} is not a relationship's tone line; relationships list shows the ties`);
     picked.push(row);
   }
-  if (write && config) {
-    const old = siteToolOlderThan(path.dirname(path.resolve(config)), TIE_FROM);
+  // The site whose tool must read the record: --config's, else the one the vault's settings name.
+  const named = config ? null : siteFileNamedBy(root);
+  const siteDir = config ? path.dirname(path.resolve(config)) : (named && named.exists ? named.dir : null);
+  if (write && siteDir) {
+    const old = siteToolOlderThan(siteDir, TIE_FROM);
     if (old) {
-      throw new Error(`this site's publish tool is ${old.shown}, and accepting a tie needs ${TIE_FROM} or later (an older tool reads the record as an accepted leak finding no longer needed, and prune deletes it). Update the site first (gm-apprentice-publish update-pin --site ${path.dirname(path.resolve(config))}), then accept again.`);
+      throw new Error(`this site's publish tool is ${old.shown}, and accepting a tie needs ${TIE_FROM} or later (an older tool reads the record as an accepted leak finding no longer needed, and prune deletes it). Update the site first (gm-apprentice-publish update-pin --site ${siteDir}), then accept again.`);
     }
   }
   const list = publishList(root);

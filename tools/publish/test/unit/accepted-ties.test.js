@@ -121,6 +121,22 @@ test('a tie with no description is accepted too (the list reader trims a record)
   assert.deepStrictEqual(listing(dir).map((r) => r.accepted), [false, true]);
 });
 
+test('accept --write with --vault and no --config asks the vault\'s own site, not a site in the current folder (CodeRabbit on #471)', () => {
+  const old = '{"version":"1.42.0"}';
+  const here = vault({ 'vault.config.json': '{}', 'node_modules/gm-apprentice-publish/package.json': old });
+  const dir = vault({ 'NPCs/E.md': NOTE });
+  const run = (...args) => spawnSync(process.execPath, [BIN, 'relationships', ...args, '--vault', dir], { encoding: 'utf8', cwd: here });
+  const ok = run('accept', '--at', 'NPCs/E.md:6', '--write');
+  assert.strictEqual(ok.status, 0, ok.stderr);
+  assert.strictEqual(fs.existsSync(listFile(dir)), true);
+  // A vault whose settings name an older site is still refused.
+  const site = vault({ 'vault.config.json': '{}', 'node_modules/gm-apprentice-publish/package.json': old });
+  const named = vault({ 'NPCs/E.md': NOTE, '_meta/vault-config.yaml': `version: 1\nplayer_site:\n  folder: ${JSON.stringify(site)}\n` });
+  const r = spawnSync(process.execPath, [BIN, 'relationships', 'accept', '--at', 'NPCs/E.md:6', '--write', '--vault', named], { encoding: 'utf8', cwd: here });
+  assert.notStrictEqual(r.status, 0);
+  assert.match(r.stderr, /1\.42\.0.*needs 1\.43\.0/);
+});
+
 test('accept --write refuses a site whose tool is older than the one that reads the record, and writes nothing', () => {
   const dir = vault({ 'NPCs/E.md': NOTE });
   const site = vault({ 'vault.config.json': '{}', 'node_modules/gm-apprentice-publish/package.json': '{"version":"1.42.0"}' });
