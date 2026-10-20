@@ -1304,7 +1304,7 @@ def _sessions(numbers: list[int]) -> str:
 
 
 def find_open_threads_fold(vault: Path) -> list[Item]:
-    """1.10.82: Current Status holds one cumulative Open threads list
+    """1.10.83: Current Status holds one cumulative Open threads list
     (`shared/pc-body-structure.md`). Wrap-ups once appended a
     `**New open threads (Session N):**` bullet each session instead; the
     GM may fold them into the list, each as `**Session N:**` and its text
