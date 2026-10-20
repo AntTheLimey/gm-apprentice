@@ -91,3 +91,13 @@ test('a script is not split where a part sets shell state (#386)', () => {
   assert.deepEqual(splitScript('alias ll=ls && node a.js'), ['alias ll=ls && node a.js']);
   assert.deepEqual(splitScript('node a.js && node b.js'), ['node a.js', 'node b.js']);
 });
+
+test('the address of a published page stands even when a part of it is a hidden note\'s name (#386)', () => {
+  const { resolveSiteLink, rememberHiddenNames } = require('../lib/build');
+  const linkMap = Object.create(null);
+  linkMap['Real Page'] = 'maps/real-page.html';
+  rememberHiddenNames(linkMap, [{ vaultPath: 'Secret/Maps.md', frontmatter: {}, displayTitle: 'Maps' }]);
+  assert.deepEqual(resolveSiteLink('maps/real-page.html', { linkMap, pages: [] }), { kind: 'site', href: 'maps/real-page.html' });
+  // An address that is no page stays dropped.
+  assert.deepEqual(resolveSiteLink('maps/other.html', { linkMap, pages: [] }), { kind: 'none', href: null });
+});
