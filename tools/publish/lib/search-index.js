@@ -11,7 +11,9 @@ function stripMarkdown(md) {
     .replace(wikilinkRe(), (_, body) => { const w = parseWikilink(body); return w.display || w.raw; })
     .replace(/!\[.*?\]\(.*?\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-    .replace(/[*_~`#>]/g, '')
+    .replace(/[*~`#>]/g, '')
+    // An underscore is a space: a page's words part at one, and a link to Sona_Mia prints two words (#408).
+    .replace(/_/g, ' ')
     .replace(/\n+/g, ' ')
     .trim();
 }

@@ -19,7 +19,8 @@ the findings one at a time. `node "$TOOL" leaks list --json --config
 Show the sentence (`shown`), the page it is on (`page`), the note it comes from
 (`note`) and the rule that hides it (`reason`). The same sentence from the same
 note on a page and in the site's data files (`previews.json`,
-`search-index.json`) is one leak: take it once. Offer three choices.
+`search-index.json#<page>`, the search entry for that page) is one leak: take
+it once. Offer three choices.
 
 - **Fix the note.** Open the note at the section or field `reason` names. If the
   sentence is meant to be public, move it into a published section. If it is
