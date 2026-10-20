@@ -24,7 +24,7 @@ const ACCEPTED_FROM = '1.30.0';
 const SETTLE_FROM = '1.39.0';
 // The first publish tool version that reads an accepted hostile tie (`relationships accept`) in the accepted list; an older
 // one reads it as an accepted leak finding no longer needed, and `leaks prune` deletes it.
-const TIE_FROM = '1.41.0';
+const TIE_FROM = '1.43.0';
 
 // The new file's top level: `version`, then the groups, in the order they are written. `gm_site` is read like the others, but a name or value under it that cannot be read warns and never stops the player build (it is not in STRICT_PARENTS).
 const SETTING_GROUPS = ['vault', 'player_site'];
