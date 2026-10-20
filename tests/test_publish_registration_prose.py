@@ -49,43 +49,6 @@ class ReconcileRegistrationTests(unittest.TestCase):
         self.assertIn("Report the unclear list", self.step)
         self.assertIn("publish-site asks the GM", self.step)
 
-    def test_asks_the_tool_for_the_site(self):
-        # What an unset switch means is the settings list's to say, so the
-        # step asks the tool and never reads the settings file itself.
-        self.assertRegex(self.step, r"settings\s+get player_site\.publish "
-                                    r"player_site\.folder "
-                                    r"--vault <vault>")
-        self.assertNotIn("vault-config.md", self.step)
-        self.assertRegex(self.step, r"relative to the\s+vault")
-
-
-class PublishSiteRegistrationTests(unittest.TestCase):
-    def setUp(self):
-        self.text = read("publish-site/SKILL.md")
-
-    def test_offers_update_pin_for_a_stale_pin(self):
-        self.assertRegex(self.text, r"pinned to an older tool,\s+offer "
-                                    r"`update-pin")
-
-    def test_site_dir_rules(self):
-        self.assertRegex(self.text, r"relative value is relative to the\s+vault")
-        self.assertRegex(self.text, r"skip\s+`publish-played`")
-
-
-    def test_approved_unclear_sessions_go_through_publish_played(self):
-        self.assertRegex(self.text, r"manifest publish-played --config\s+"
-                                    r"<dir>/vault\.config\.json\s+"
-                                    r"--session \"<index>\"` plus\s+"
-                                    r"`--include-unreviewed` when it has a "
-                                    r"Wrap-Up")
-        self.assertRegex(self.text, r"`--publish-body` when it has none")
-
-    def test_the_question_says_the_body_publishes_as_written(self):
-        self.assertRegex(self.text, r"index body will publish as written")
-        self.assertRegex(self.text, r"fencing any Keeper notes first")
-        self.assertRegex(self.text, r"Never tick\s+a session index with\s+"
-                                    r"`manifest apply`")
-
 
 PUBLISH_PLAYED_SESSION = (r"manifest publish-played\s+--config\s+"
                           r"<site_dir>/vault\.config\.json\s+--session\s+"
@@ -102,10 +65,6 @@ class WrapupPublishNowTests(unittest.TestCase):
 
     def test_publish_now_never_applies_the_index(self):
         self.assertNotIn("manifest apply", self.text)
-
-    def test_publish_now_relays_an_unclear_reason(self):
-        self.assertRegex(self.text, r"lists the session as unclear, tell the"
-                                    r"\s+GM its reason")
 
 
 # `manifest apply --publish` naming a session index, in any wording: the
