@@ -1267,6 +1267,8 @@ function buildSite(options) {
   const retiredFieldPcs = [];
   // Rows of PC sheets the to-hit calculator cannot fully read: { rel, rows }, for the audit.
   const tohitRows = [];
+  // Notes with a table wider than its header: { rel, rows } (TABLE_OVERWIDE), for the audit.
+  const tableRows = [];
   const SHEETLESS_NAMED = 8;   // names printed before "and N more"
   const partyCampaignId = require('./scanner').slugify(config.siteTitle || 'campaign');
   const deferredRosters = [];
@@ -1298,6 +1300,7 @@ function buildSite(options) {
     }
     const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts, pcKeepSections, ...markOpt });
     fx.warn(page.outputPath, processed.warnings);
+    if (processed.overwide.length) fx.tableRows.push({ rel: vaultRelPathOf(page), rows: processed.overwide });
     let html;
 
     if (isRoster(page)) return { roster: processed };
@@ -1477,13 +1480,13 @@ function buildSite(options) {
   }
 
   const liveFx = {
-    usedImages, warn: logWarnings, partyEntries, sheetlessPcs, retiredFieldPcs, tohitRows,
+    usedImages, warn: logWarnings, partyEntries, sheetlessPcs, retiredFieldPcs, tohitRows, tableRows,
     onLook: (look, p) => {
       for (const n of look.notes) console.warn(`  WARNING: ${p.vaultPath ? p.vaultPath + '.md' : p.title}: ${n.key} ${JSON.stringify(clipValue(n.value))} ${n.problem}; ignored`);
       if (isDressed(look)) { anyDressed = true; dressedSkins.add(look.skin); }
     },
   };
-  const scratchFx = () => ({ usedImages: new Set(), warn: () => {}, partyEntries: [], sheetlessPcs: [], retiredFieldPcs: [], tohitRows: [], onLook: () => {} });
+  const scratchFx = () => ({ usedImages: new Set(), warn: () => {}, partyEntries: [], sheetlessPcs: [], retiredFieldPcs: [], tohitRows: [], tableRows: [], onLook: () => {} });
 
   // The note-faults audit reads each page as it is written (`seen`), and at the end renders
   // again the pages that link a note with no page (`namedOnPages`). The GM build has none: on the GM site every
@@ -1938,6 +1941,7 @@ function buildSite(options) {
     const storyObj = { markdown: pc.storyMarkdown, frontmatter: {}, outputPath };
     const processed = processContent(storyObj, linkMap, excludeSections, imageMap, { usedImages: fx.usedImages, excludeCallouts, ...markOpt });
     fx.warn(outputPath, processed.warnings);
+    if (processed.overwide.length) fx.tableRows.push({ rel: audit.storyRelOf(pc), rows: processed.overwide });
     const story = {
       title: pc.displayTitle, outputPath, html: processed.html,
       sheetOutputPath: pc.outputPath, group: characterStoryGroup(pc.frontmatter, publishConfig.statuses.fallen),
@@ -2155,6 +2159,7 @@ function buildSite(options) {
   // Every file is written: the after steps run, then the check of the notes and "Done!".
   if (runningSteps && errorCount === 0 && publishConfig.steps.after.length) runSteps(publishConfig.steps.after, { cwd: configDir, label: 'after_build', log: options.stepsLog, stdio: options.stepsStdio, extraEnv: stepEnv });
   if (!gm) for (const pc of tohitRows) audit.calculator(pc.rel, pc.rows);
+  if (!gm) for (const t of tableRows) audit.calculator(t.rel, t.rows);
   // A withheld heading inside a hidden block (#447): the text after it is withheld; campaign-qa offers to move it.
   if (!gm) {
     for (const [page, facts] of stripFacts) {

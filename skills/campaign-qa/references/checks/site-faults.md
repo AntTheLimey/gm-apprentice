@@ -75,6 +75,7 @@ every page that names it. Use it to confirm each fix.
 | `TOHIT_UNREAD` (`INFO`) | Info | A row's numbers do not add up, or it is written another way |
 | `SKILL_BELOW_BASE` (`INFO`) | Info | A CoC skill is written below the base its characteristics give |
 | `HEADING_IN_HIDDEN_BLOCK` (`INFO`) | Info | A hidden heading sits inside a hidden block, so the text after it is withheld |
+| `TABLE_OVERWIDE` (`INFO`) | Info | A table row has more cells than its header, so the site widened the table |
 
 A row is raised only where the site shows the fault. A stray `%%` or
 an open fence that lies wholly under `## GM Notes` changes nothing a
@@ -449,6 +450,14 @@ block too, to the next heading of the same or higher level. Show the
 GM that text and ask: should it stay hidden? On yes, move the heading
 out of the block, just above it. On no, move that text above the
 block or under a heading the site shows. Edit only on an answer.
+
+## TABLE_OVERWIDE
+
+A table has a row with more cells than its header. The site widened
+the table so no cell is lost; the extra columns have blank headings.
+Per table, ask the GM what to call each extra column, then add those
+header cells (and the matching `---` cells) in the note. Edit only on
+an answer.
 
 ## Reporting
 
