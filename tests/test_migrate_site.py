@@ -358,13 +358,6 @@ class LeakTests(unittest.TestCase):
                     item.apply(None)
             self.assertIn("stopped", str(caught.exception))
 
-    def test_a_tool_that_cannot_be_asked_stops(self):
-        rows = ["ERROR\t(vault)\tgm-leak cannot ask the site's publish tool"]
-        with mock.patch.object(ms, "check_gm_leak", return_value=rows):
-            with self.assertRaises(StepFailed) as caught:
-                ms.find_gm_leak(make_vault(self))
-        self.assertIn("cannot ask", str(caught.exception))
-
     def test_no_site_is_nothing(self):
         rows = ["INFO\t(vault)\tgm-leak has no site to check: player_site.publish is not on"]
         with mock.patch.object(ms, "check_gm_leak", return_value=rows):
@@ -437,11 +430,6 @@ class PlayedTests(unittest.TestCase):
                                    return_value=answer):
                 self.assertEqual(ms.find_publish_played(vault), [])
 
-    def test_a_tool_that_cannot_answer_stops(self):
-        with mock.patch.object(ms, "ask_publish_tool",
-                               return_value=vc.ToolAnswer(why="node is not on PATH")):
-            with self.assertRaises(StepFailed):
-                ms.find_publish_played(make_vault(self))
 
 
 class PersonRowTests(unittest.TestCase):
@@ -631,18 +619,6 @@ class SheetSourceTests(unittest.TestCase):
             self.assertIn("sheet_source", str(caught.exception))
             self.assertEqual(pc.read_bytes(), before, written)
 
-    def test_a_tool_that_cannot_be_asked_stops(self):
-        vault, _pc = self.make_pc()
-        rows = ["ERROR\t(vault)\tpc-body stopped: the publish tool stopped "
-                "answering (x)"]
-        with mock.patch.object(ms, "check_pc_body", return_value=rows):
-            with self.assertRaises(StepFailed):
-                ms.find_sheet_source(vault)
-
-    def test_the_check_asks_for_a_value(self):
-        (check,) = [c for c in ms.SITE_CHECKS if c.name == "sheet-source"]
-        self.assertEqual(check.choices, ("sheet-source:=",))
-
     @unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
                          or (shutil.which("node") and (
                              vc.PUBLISH_TOOL.parent.parent / "node_modules").is_dir()),
@@ -724,12 +700,6 @@ class ThemeChoiceTests(unittest.TestCase):
             "      source: self-host\n      heading: Cinzel\n")), [])
         self.assertEqual(ms.find_fonts(make_vault(self, site=False)), [])
         self.assertEqual(ms.find_default_mode(make_vault(self, site=False)), [])
-
-    def test_a_tool_that_cannot_answer_stops(self):
-        gone = vc.PublishToolUnavailable("the publish tool exited without answering")
-        with mock.patch.object(ms, "google_fonts", side_effect=gone):
-            with self.assertRaises(StepFailed):
-                ms.find_fonts(self.google_vault())
 
     def test_the_default_mode_choice_needs_a_value(self):
         check = next(c for c in ms.SITE_CHECKS if c.name == "default-mode")
@@ -1019,6 +989,49 @@ class LeakEndToEndTests(unittest.TestCase):
         text = note.read_text(encoding="utf-8")
         self.assertIn("## GM Notes", text)
         self.assertEqual(ms.find_gm_leak(vault), [])
+
+
+class ToolCannotAnswerTests(unittest.TestCase):
+    """A step that needs the site's publish tool stops, and says so, when
+    the tool cannot be asked or cannot answer; it never plans on a guess."""
+
+    def gm_leak(self):
+        rows = ["ERROR\t(vault)\tgm-leak cannot ask the site's publish tool"]
+        with mock.patch.object(ms, "check_gm_leak", return_value=rows):
+            ms.find_gm_leak(make_vault(self))
+
+    def publish_played(self):
+        answer = vc.ToolAnswer(why="node is not on PATH")
+        with mock.patch.object(ms, "ask_publish_tool", return_value=answer):
+            ms.find_publish_played(make_vault(self))
+
+    def sheet_source(self):
+        vault = make_vault(self)
+        (vault / "PCs").mkdir()
+        (vault / "PCs" / "Ada.md").write_text(SheetSourceTests.PC,
+                                              encoding="utf-8")
+        rows = ["ERROR\t(vault)\tpc-body stopped: the publish tool stopped "
+                "answering (x)"]
+        with mock.patch.object(ms, "check_pc_body", return_value=rows):
+            ms.find_sheet_source(vault)
+
+    def fonts(self):
+        gone = vc.PublishToolUnavailable("the publish tool exited without answering")
+        vault = make_vault(
+            self, extra="  theme:\n    fonts:\n      heading: Cinzel\n"
+                        "      body: Lora\n")
+        with mock.patch.object(ms, "google_fonts", side_effect=gone):
+            ms.find_fonts(vault)
+
+    def test_each_step_stops(self):
+        for step, said in ((self.gm_leak, "cannot ask"),
+                           (self.publish_played, "node is not on PATH"),
+                           (self.sheet_source, "stopped answering"),
+                           (self.fonts, "exited without answering")):
+            with self.subTest(step.__name__):
+                with self.assertRaises(StepFailed) as caught:
+                    step()
+                self.assertIn(said, str(caught.exception))
 
 
 if __name__ == "__main__":

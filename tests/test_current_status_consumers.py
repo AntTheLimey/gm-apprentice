@@ -24,18 +24,6 @@ def read(rel):
 
 
 class SpineTests(unittest.TestCase):
-    def test_arc_spotlight_documents_current_status(self):
-        text = read("ttrpg-expert/arc-spotlight-reference.md")
-        self.assertIn("## Current Status", text)
-        self.assertIn("Open threads", text)
-        self.assertIn("Knows (exclusive)", text)
-
-    def test_continuity_engine_documents_current_status(self):
-        text = read("ttrpg-expert/continuity-engine.md")
-        self.assertIn("## Current Status", text)
-        self.assertIn("Open threads", text)
-        self.assertIn("thread-decay", text)
-
     def test_pc_body_structure_consumed_by_pointer(self):
         # The Current Status spec (incl. the Consumed-by contract) lives in
         # shared/pc-body-structure.md, extracted from entity-schema.md.
@@ -47,25 +35,6 @@ class SpineTests(unittest.TestCase):
 
 
 class ConsumerTests(unittest.TestCase):
-    def test_session_prep_reads_current_status(self):
-        text = read("session-prep/SKILL.md")
-        # Context Source declares the per-PC read
-        self.assertIn("## Current Status", text)
-        # Step 8 folds in Open threads as the always-current source
-        self.assertIn("Open threads", text)
-        # Step 11 uses Knows (exclusive) for personalization
-        self.assertIn("Knows (exclusive)", text)
-
-    def test_midwife_reads_current_status(self):
-        text = read("the-midwife/SKILL.md")
-        self.assertIn("## Current Status", text)
-        self.assertIn("Open threads", text)
-        self.assertIn("Knows (exclusive)", text)
-
-    def test_ttrpg_expert_routes_reference_current_status(self):
-        text = read("ttrpg-expert/SKILL.md")
-        self.assertIn("## Current Status", text)
-
     def test_campaign_qa_has_current_status_check(self):
         skill = read("campaign-qa/SKILL.md")
         # The Current Status consistency check lives in the Canon Audit

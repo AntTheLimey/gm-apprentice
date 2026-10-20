@@ -9,8 +9,9 @@ accepts valid/absent forms and rejects malformed ones.
 import importlib.util
 import os
 import pathlib
-import sys
 import tempfile
+
+import pytest
 
 SPEC = importlib.util.spec_from_file_location(
     "validate_schema",
@@ -18,8 +19,6 @@ SPEC = importlib.util.spec_from_file_location(
 )
 vs = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(vs)
-
-FAILURES = []
 
 
 def leads_to_errors(fragment: str) -> list[str]:
@@ -37,28 +36,15 @@ def leads_to_errors(fragment: str) -> list[str]:
         path.unlink(missing_ok=True)
 
 
-def check(name: str, errors: list[str], want_error: bool):
-    got_error = len(errors) > 0
-    if got_error != want_error:
-        FAILURES.append(f"{name}: expected {'an error' if want_error else 'no error'}, got {errors!r}")
-
-
-check("valid array of wiki-links", leads_to_errors('leads_to:\n  - "[[Plan B]]"\n  - "[[Plan C]]"'), False)
-check("single-target array", leads_to_errors('leads_to:\n  - "[[Plan B]]"'), False)
-check("absent field", leads_to_errors(""), False)
-check("empty array", leads_to_errors("leads_to: []"), False)
-check("non-wiki-link entry rejected", leads_to_errors("leads_to:\n  - Plan B"), True)
-check("scalar (non-array) rejected", leads_to_errors("leads_to: 7"), True)
-
-def test_no_failures():
-    """pytest entry point: the checks above ran when this module loaded."""
-    assert not FAILURES, "\n".join(FAILURES)
-
-
-if __name__ == "__main__":
-    if FAILURES:
-        print(f"{len(FAILURES)} FAILURE(S):", file=sys.stderr)
-        for f in FAILURES:
-            print(f"  {f}", file=sys.stderr)
-        sys.exit(1)
-    print("All plan leads_to validation tests passed.")
+@pytest.mark.parametrize("fragment, want_error", [
+    pytest.param('leads_to:\n  - "[[Plan B]]"\n  - "[[Plan C]]"', False,
+                 id="valid array of wiki-links"),
+    pytest.param('leads_to:\n  - "[[Plan B]]"', False, id="single-target array"),
+    pytest.param("", False, id="absent field"),
+    pytest.param("leads_to: []", False, id="empty array"),
+    pytest.param("leads_to:\n  - Plan B", True, id="non-wiki-link entry rejected"),
+    pytest.param("leads_to: 7", True, id="scalar (non-array) rejected"),
+])
+def test_leads_to(fragment, want_error):
+    errors = leads_to_errors(fragment)
+    assert (len(errors) > 0) == want_error, errors

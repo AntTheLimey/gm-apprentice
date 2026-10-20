@@ -167,6 +167,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Sequence
 
 import qa_checks
+import vaultlib
 from schema_rules import (
     SESSION_PLAYED,
     extract_frontmatter,
@@ -1518,7 +1519,7 @@ def ask_publish_tool(vault: Path, args: list[str],
         return ToolAnswer(why="node is not on PATH", used=label)
     name = " ".join(args[:2])
     try:
-        proc = subprocess.run(
+        proc = vaultlib.run_tool(
             [node, str(tool), *args, "--json", *site_args,
              "--vault", str(vault.resolve())],
             capture_output=True, text=True, encoding="utf-8",

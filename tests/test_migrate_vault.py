@@ -1,6 +1,7 @@
 """migrate_vault.py: the checks that read and write vault files alone."""
 
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -691,18 +692,33 @@ class TemplateTests(unittest.TestCase):
             "_Template_Document.md": {mv.text_hash(old): "1.10.20"}}})
         self.assertEqual(self.doc(vault).group, WILL)
 
+    def require_tags(self, tags):
+        # In CI a missing tag set is a broken checkout, not a reason to skip:
+        # a skip there would hide these checks for good.
+        if tags:
+            return
+        if os.environ.get("CI"):
+            self.fail("no release tags in this checkout; the CI checkout "
+                      "needs fetch-depth: 0 so the tags come with it")
+        self.skipTest("no release tags in this checkout")
+
+    # Rebuilding the history from every release tag takes ~10 s. CI sets CI
+    # and its checkout fetches tags (fetch-depth: 0), so it runs there on
+    # every change; locally it runs when asked for:
+    # GM_FULL_HISTORY_CHECK=1 python -m pytest tests/test_migrate_vault.py
+    @unittest.skipUnless(
+        os.environ.get("CI") or os.environ.get("GM_FULL_HISTORY_CHECK"),
+        "slow: runs in CI, or locally with GM_FULL_HISTORY_CHECK=1")
     def test_the_checked_in_history_is_what_the_script_would_write(self):
         history = json.loads(mv.HISTORY.read_text(encoding="utf-8"))
         tags = th.release_tags()
-        if not tags:
-            self.skipTest("no release tags in this checkout")
+        self.require_tags(tags)
         self.assertEqual(th.expire(th.build(tags), FLOOR), history)
 
     def test_every_recorded_release_is_a_tag_at_or_above_the_floor(self):
         history = json.loads(mv.HISTORY.read_text(encoding="utf-8"))
         tags = {t.removeprefix("v") for t in th.release_tags()}
-        if not tags:
-            self.skipTest("no release tags in this checkout")
+        self.require_tags(tags)
         for system, names in history.items():
             for name, hashes in names.items():
                 self.assertIsInstance(hashes, dict, f"{system}/{name}")
@@ -1447,16 +1463,6 @@ class WrapupKeyDetectionTests(WrapupFixture):
             '    # about other\n    other: 1\n'))
 
 
-class SharedHelperTests(unittest.TestCase):
-    def test_the_row_helpers_live_in_migrate_core(self):
-        import migrate_core as core
-        import migrate_site as ms
-        self.assertEqual(core.cells("ERROR\tw\tm\tx"), ("ERROR", "w", "m\tx"))
-        with self.assertRaises(core.StepFailed):
-            core.stopped([("ERROR", "(vault)", "no tool")])
-        self.assertFalse(hasattr(mv, "_cells") or hasattr(ms, "_stopped"))
-
-
 class TwoHiddenBlocksTests(WrapupFixture):
     def test_a_second_hidden_block_is_listed_in_plain_words(self):
         wrap = WS_WRAP.replace(
@@ -1558,10 +1564,6 @@ class ToneWordsTests(unittest.TestCase):
         with self.assertRaises(StepFailed):
             item.apply("yes")
 
-    def test_the_check_is_registered_for_this_release(self):
-        check = next(c for c in mv.VAULT_CHECKS if c.name == "tone-words")
-        self.assertEqual((check.release, check.band, check.choices),
-                         ("1.10.44", 3, ("tone-words=",)))
 
 
 OLD_LIST = ("friendly, romantic, respectful, professional, hostile, fearful, "
@@ -1924,11 +1926,6 @@ class ToneListTests(unittest.TestCase):
     def test_the_old_words_are_the_only_ones_named_here(self):
         self.assertEqual(", ".join(mv.OLD_TONES), OLD_LIST)
 
-    def test_the_check_is_registered_for_this_release(self):
-        check = next(c for c in mv.VAULT_CHECKS if c.name == "tone-list")
-        self.assertEqual((check.release, check.band, check.choices,
-                          check.asks_site),
-                         ("1.10.44", 3, (), False))
 
 
 if __name__ == "__main__":

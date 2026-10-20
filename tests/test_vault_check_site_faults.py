@@ -19,6 +19,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -418,12 +419,21 @@ class SiteFaultRowsTests(unittest.TestCase):
         files[MARA] = npc(" ".join(f"[[{n}]]" for n in names))
         vault, site = make(self, files,
                            excluded=[f"Characters/{n}.md" for n in names])
-        raw = subprocess.run(
-            ["node", str(TOOL_DIR / "bin" / "gm-publish.js"), "doctor",
-             "--site", "--json", "--config", str(site / "vault.config.json"),
-             "--vault", str(vault)], capture_output=True, check=False).stdout
-        self.assertGreater(len(raw), 2 * 65536)
-        self.assertEqual(len(findings(vc.check_site_faults(vault))), 400)
+        # One doctor run: the check's own, watched for how much it printed.
+        sizes = []
+        real = subprocess.run
+
+        def watch(cmd, *args, **kwargs):
+            done = real(cmd, *args, **kwargs)
+            if "doctor" in cmd:
+                sizes.append(len(done.stdout or ""))
+            return done
+
+        with mock.patch.object(vc.subprocess, "run", watch):
+            rows = findings(vc.check_site_faults(vault))
+        self.assertEqual(len(sizes), 1, sizes)
+        self.assertGreater(sizes[0], 2 * 65536)
+        self.assertEqual(len(rows), 400)
 
 
 class SiteFaultsUnansweredTests(unittest.TestCase):

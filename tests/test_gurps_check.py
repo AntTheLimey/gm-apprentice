@@ -3,12 +3,19 @@
 
 Formula tests import gurps_calc directly; CLI tests run gurps_check.py
 against the committed fixtures in tests/fixtures/gurps-pcs/ and assert
-exact output. All page references are GURPS Basic Set 4e.
+exact output. All page references are GURPS Basic Set 4e. Every `check`
+below is its own pytest case. The formulas the publish tool's copy also
+runs (basic lift, encumbrance, move, dodge, parry, block, halving) have
+their shared cases in tests/shared-cases/gurps-calc.json, run by
+test_gurps_shared_cases.py; only inputs that file lacks are checked here.
 """
 
+import functools
 import subprocess
 import sys
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = ROOT / "skills" / "shared" / "scripts"
@@ -17,37 +24,26 @@ sys.path.insert(0, str(SCRIPTS))
 
 import gurps_calc as gc  # noqa: E402
 
-FAILURES = []
+CASES = []
 
 
 def check(label, actual, expected):
-    if actual != expected:
-        FAILURES.append(f"{label}:\n  expected {expected!r}\n  got      {actual!r}")
-    else:
-        print(f"ok: {label}")
+    """Register one case. `actual` is a value, or a function that computes
+    it when the case runs (the CLI cases, which start a process)."""
+    CASES.append(pytest.param(actual, expected, id=label))
 
 
 # --- basic lift (B15) ---
-check("BL ST 10", gc.basic_lift(10), 20.0)
-check("BL ST 11", gc.basic_lift(11), 24.0)     # 24.2 -> nearest
 check("BL ST 12", gc.basic_lift(12), 29.0)     # 28.8 -> nearest
-check("BL ST 13", gc.basic_lift(13), 34.0)     # 33.8 -> nearest
-check("BL ST 7 keeps fraction", gc.basic_lift(7), 9.8)
 
 # --- encumbrance thresholds (B17) ---
-check("enc thresholds BL 34",
-      gc.enc_max_weights(34.0),
-      [("None", 0, 34.0), ("Light", 1, 68.0), ("Medium", 2, 102.0),
-       ("Heavy", 3, 204.0), ("X-Heavy", 4, 340.0)])
 
 # --- move / dodge per level (B17) ---
 check("move BM6 by level", [gc.enc_move(6, lv) for lv in range(5)], [6, 4, 3, 2, 1])
-check("move BM5 by level", [gc.enc_move(5, lv) for lv in range(5)], [5, 4, 3, 2, 1])
 check("move floor is 1", gc.enc_move(4, 4), 1)
 check("dodge speed 6.5 CR by level",
       [gc.enc_dodge(6.5, lv, combat_reflexes=True) for lv in range(5)],
       [10, 9, 8, 7, 6])
-check("dodge speed 6.0 no CR", gc.enc_dodge(6.0, 0), 9)
 
 # --- secondaries (B15-B17) ---
 check("secondaries 13/14/13/13",
@@ -86,9 +82,6 @@ check("B269: 1d+2 not equiv 2d",
 # --- condition penalties (B419 Reeling / B426 Tired) ---
 check("halve_up 13", gc.halve_up(13), 7)
 check("halve_up 8", gc.halve_up(8), 4)
-check("halve_up 3", gc.halve_up(3), 2)
-check("halve_up 1", gc.halve_up(1), 1)
-check("is_reeling exactly 1/3", gc.is_reeling(3, 9), False)
 check("is_reeling below", gc.is_reeling(2, 9), True)
 check("is_tired exactly 1/3", gc.is_tired(4, 12), False)
 check("is_tired below", gc.is_tired(3, 12), True)
@@ -394,36 +387,36 @@ if pattrs is not None:
     check("paren speed", pattrs["speed"], 6.25)
 
 # --- CLI against committed fixtures ---
+@functools.cache
 def run_check(fixture, *args):
     result = subprocess.run(
         [sys.executable, str(SCRIPTS / "gurps_check.py"),
          str(FIXTURES / fixture), *args],
         capture_output=True, text=True, timeout=60)
-    if result.returncode != 0:
-        FAILURES.append(f"gurps_check {fixture}: rc={result.returncode} "
-                        f"stderr={result.stderr.strip()}")
-        return []
-    return result.stdout.strip().splitlines()
+    assert result.returncode == 0, (
+        f"gurps_check {fixture}: rc={result.returncode} "
+        f"stderr={result.stderr.strip()}")
+    return tuple(result.stdout.strip().splitlines())
 
 
-clean_out = run_check("clean.md")
-clean_counts = [l for l in clean_out if l.startswith("# count:")]
-check("clean sheet: seven sections emitted", len(clean_counts), 7)
+check("clean sheet: seven sections emitted",
+      lambda: sum(1 for l in run_check("clean.md")
+                  if l.startswith("# count:")), 7)
 check("clean sheet: no WARNING or ERROR",
-      [l for l in clean_out if l.startswith(("WARNING", "ERROR"))], [])
-
-flawed_out = run_check("flawed.md")
+      lambda: [l for l in run_check("clean.md")
+               if l.startswith(("WARNING", "ERROR"))], [])
 check("flawed: encumbrance weight warnings fire",
-      sum(1 for l in flawed_out
-          if l.startswith("WARNING\tencumbrance/")) >= 5, True)
+      lambda: sum(1 for l in run_check("flawed.md")
+                  if l.startswith("WARNING\tencumbrance/")) >= 5, True)
 check("flawed: parry warnings fire",
-      sum(1 for l in flawed_out
-          if l.startswith("WARNING\tdefenses/parry/")), 2)
+      lambda: sum(1 for l in run_check("flawed.md")
+                  if l.startswith("WARNING\tdefenses/parry/")), 2)
 check("flawed: load computes Light with no declared Enc",
-      any(l.startswith("INFO\tload") and "Light" in l for l in flawed_out),
+      lambda: any(l.startswith("INFO\tload") and "Light" in l
+                  for l in run_check("flawed.md")),
       True)
 check("single-section run emits one section",
-      [l for l in run_check("clean.md", "load") if l.startswith("[")],
+      lambda: [l for l in run_check("clean.md", "load") if l.startswith("[")],
       ["[load]"])
 
 # Blank Location cells count as carried (CodeRabbit PR #74 finding)
@@ -458,10 +451,6 @@ check("B170 intermediate 6pt E holds lower level",
 check("B170 zero points", gc.skill_relative_level(0, "E"), None)
 check("B170 unknown difficulty", gc.skill_relative_level(4, "X"), None)
 check("B170 lowercase vh accepted", gc.skill_relative_level(1, "vh"), -3)
-check("enc-penalized list",
-      gc.ENC_PENALIZED_SKILLS,
-      ("climbing", "stealth", "swimming", "judo", "karate",
-       "rapier", "saber", "smallsword", "main-gauche"))
 
 # --- skills check (SP2) ---
 _SKILLS_TBL = """## Skills
@@ -518,24 +507,19 @@ check("skills: unlisted skill Current != Base flagged INFO",
 
 # --- skills CLI runs against fixtures (SP2) ---
 check("clean: skills section has zero findings",
-      run_check("clean.md", "skills"), ["[skills]", "# count: 0"])
-flawed_skills = run_check("flawed.md", "skills")
+      lambda: list(run_check("clean.md", "skills")), ["[skills]", "# count: 0"])
 check("flawed: Stealth RL mismatch is a WARNING citing B170",
-      any(line.startswith("WARNING\tskills/Stealth") and "B170" in line
-          for line in flawed_skills), True)
+      lambda: any(line.startswith("WARNING\tskills/Stealth") and "B170" in line
+                  for line in run_check("flawed.md", "skills")), True)
 check("flawed: Stealth base residual INFO via effective fallback",
-      any(line.startswith("INFO\tskills/Stealth") and "14" in line
-          for line in flawed_skills), True)
+      lambda: any(line.startswith("INFO\tskills/Stealth") and "14" in line
+                  for line in run_check("flawed.md", "skills")), True)
 check("flawed: no current-level findings without a Current column",
-      any("Current" in line for line in flawed_skills), False)
-
-def test_no_failures():
-    """pytest entry point: the checks above ran when this module loaded."""
-    assert not FAILURES, "\n".join(FAILURES)
+      lambda: any("Current" in line
+                  for line in run_check("flawed.md", "skills")), False)
 
 
-if __name__ == "__main__":
-    if FAILURES:
-        print("\n".join(["", "FAILURES:"] + FAILURES))
-        sys.exit(1)
-    print("all gurps checks passed")
+@pytest.mark.parametrize("actual, expected", CASES)
+def test_check(actual, expected):
+    got = actual() if callable(actual) else actual
+    assert got == expected

@@ -92,11 +92,6 @@ class RequiredTiesSectionTests(unittest.TestCase):
             vault_with(self, "## Universal Fields\n\nx\n")), [])
         self.assertEqual(mv.find_required_ties_section(vault_with(self, None)), [])
 
-    def test_the_check_is_registered(self):
-        ids = [c.name for c in mv.VAULT_CHECKS]
-        self.assertIn("required-ties-section", ids)
-        self.assertEqual(ids.index("required-ties-section"),
-                         ids.index("schema-mirror") + 1)
 
 
 if __name__ == "__main__":

@@ -64,6 +64,13 @@
 //                            (`parseDate`); `day` is false when no day of the month was named, so the
 //                            date is a placed guess. vault_check's timeline --order asks this.
 //
+//   {"op":"command","args":["settings",…]|["explain","--all",…],"cwd":…,"env":{…}}
+//       -> {"rc":…,"stdout":…,"stderr":…}  the command run as `gm-publish <args>` runs it, from the
+//                            same option reader and the same function, in `cwd` with `env` (both
+//                            optional), with what it printed and its exit code. Every file is read
+//                            again for each question: nothing is kept between them. Python's settings
+//                            reads and its `explain --all` ask this, so a run starts Node once.
+//
 // A request that cannot be answered gets {"error":…}; the process carries on.
 const { StringDecoder } = require('string_decoder');
 const fs = require('fs');
@@ -191,6 +198,88 @@ function answerLine(line) {
   }
 }
 
+// The commands the `command` op runs: each reads its words as bin/gm-publish.js does, then runs.
+// A parse error is { error }; otherwise { run } returns the exit code (or a promise of it).
+const COMMANDS = {
+  settings(args) {
+    const { settingsOptions, runSettings } = require('./settings/cli');
+    const parsed = settingsOptions(args.slice(1));
+    return parsed.error ? parsed : { run: () => runSettings(parsed.options) };
+  },
+  explain(args) {
+    if (args[1] !== '--all') return null;
+    const { explainAllOptions, runExplainAll } = require('./explain-cli');
+    const parsed = explainAllOptions(args.slice(2));
+    return parsed.error ? parsed : { run: () => runExplainAll(parsed.options) };
+  },
+};
+
+// Put `env` in place of process.env (the same object, so os.homedir() and children see it);
+// returns what to put back.
+function swapEnv(env) {
+  const before = { ...process.env };
+  for (const key of Object.keys(process.env)) if (!Object.prototype.hasOwnProperty.call(env, key)) delete process.env[key];
+  for (const [key, value] of Object.entries(env)) process.env[key] = String(value);
+  return before;
+}
+
+// Runs one command as a fresh `gm-publish <args>` would: in its folder, with its environment, the
+// once-per-process notices forgotten, stdout and stderr caught. A throw is what bin's catch prints.
+async function runCommand(request) {
+  const args = list(request, 'args');
+  const pick = Object.prototype.hasOwnProperty.call(COMMANDS, args[0]) ? COMMANDS[args[0]](args) : null;
+  if (!pick) throw new Error('command runs settings or explain --all');
+  if (pick.error) return { rc: 1, stdout: '', stderr: `Error: ${pick.error}\n` };
+  if (request.cwd !== undefined && typeof request.cwd !== 'string') throw new Error('cwd must be a path');
+  if (request.env !== undefined && (!request.env || typeof request.env !== 'object' || Array.isArray(request.env))) throw new Error('env must be an object');
+  const caught = { stdout: '', stderr: '' };
+  const writes = { stdout: process.stdout.write, stderr: process.stderr.write };
+  const catcher = (name) => (chunk, encoding, done) => {
+    caught[name] += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString(typeof encoding === 'string' ? encoding : 'utf8');
+    const callback = typeof encoding === 'function' ? encoding : done;
+    if (typeof callback === 'function') process.nextTick(callback);
+    return true;
+  };
+  const cwd = process.cwd();
+  let env = null;
+  try {
+    if (request.cwd) process.chdir(request.cwd);
+    if (request.env) env = swapEnv(request.env);
+    require('./manifest').resetNotices();
+    process.stdout.write = catcher('stdout');
+    process.stderr.write = catcher('stderr');
+    let rc;
+    try {
+      rc = await pick.run();
+    } catch (err) {
+      console.error(err.message);
+      rc = 1;
+    }
+    return { rc: typeof rc === 'number' ? rc : 0, ...caught };
+  } finally {
+    process.stdout.write = writes.stdout;
+    process.stderr.write = writes.stderr;
+    if (env) swapEnv(env);
+    process.chdir(cwd);
+  }
+}
+
+// One answer line for one request line; a `command` is awaited, the rest answer at once.
+async function answerLineAsync(line) {
+  let request;
+  try {
+    request = JSON.parse(line);
+  } catch (err) {
+    return JSON.stringify({ error: err.message });
+  }
+  if (!request || typeof request !== 'object' || request.op !== 'command') return answerLine(line);
+  try {
+    return JSON.stringify(await runCommand(request));
+  } catch (err) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
 // Resolves 0 when stdin closes. `deps.input` / `deps.write` are test seams.
 // Requests are split on `\n` alone: readline also breaks at U+2028 and U+2029, which
 // are legal inside a JSON string, and one split request would put every later answer
@@ -202,9 +291,12 @@ function runLines(deps) {
   return new Promise((resolve) => {
     const decoder = new StringDecoder('utf8');
     let pending = '';
+    // Answers go out in the order asked: a `command` that awaits holds back the ones after it.
+    let queue = Promise.resolve();
     const take = (line) => {
       const request = line.replace(/\r$/, '');
-      if (request.trim() !== '') write(`${answerLine(request)}\n`);
+      if (request.trim() === '') return;
+      queue = queue.then(() => answerLineAsync(request)).then((said) => write(`${said}\n`));
     };
     input.on('data', (chunk) => {
       pending += typeof chunk === 'string' ? chunk : decoder.write(chunk);
@@ -216,7 +308,7 @@ function runLines(deps) {
     });
     input.on('end', () => {
       take(pending + decoder.end());
-      resolve(0);
+      queue.then(() => resolve(0));
     });
   });
 }

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+import vaultlib
 from vaultlib import (LEGACY_SETTINGS_FILE, PUBLISH_TOOL, SETTINGS_FILE, STATE_FILE,
                       forget_settings, frontmatter_span)
 
@@ -185,7 +186,8 @@ def edit_frontmatter(path: Path,
 
 
 def plugin_tool(args: list[str]) -> tuple[int, str, str]:
-    """Run the plugin's own publish tool: (exit code, stdout, stderr)."""
+    """Run the plugin's own publish tool: (exit code, stdout, stderr). Its
+    `settings` questions go to the kept-open process (`vaultlib.run_tool`)."""
     node = shutil.which("node")
     if not node:
         raise StepFailed("node is not on PATH; install Node.js, then run "
@@ -193,7 +195,7 @@ def plugin_tool(args: list[str]) -> tuple[int, str, str]:
     if not PUBLISH_TOOL.is_file():
         raise StepFailed(f"the publish tool is not at {PUBLISH_TOOL}")
     try:
-        proc = subprocess.run(
+        proc = vaultlib.run_tool(
             [node, str(PUBLISH_TOOL), *args], capture_output=True, text=True,
             encoding="utf-8", errors="replace", timeout=TOOL_TIMEOUT,
             check=False)
