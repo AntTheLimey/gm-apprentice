@@ -81,13 +81,13 @@ describe('NAMED_NO_PAGE is decided by the page as built', () => {
     assert.deepStrictEqual(pagesOf(found, 'Hidden/Old_Tam.md'), ['Creatures/Mire_Hound.md', 'People/Cy_Dunn.md']);
   });
 
-  it('counts a relationship target written without brackets, and not one marked gm_only', async () => {
+  it('a relationship to a hidden note, written without brackets or marked gm_only, prints nowhere and is no finding (#476)', async () => {
     const found = await faults({
       'Hidden/Old_Tam.md': hidden(),
       'Hidden/Ada_Moor.md': hidden(),
       'People/Bo_Pike.md': '---\ntype: npc\nrelationships:\n  - target: Old_Tam\n    type: knows\n  - target: Ada_Moor\n    type: serves\n    gm_only: true\n---\n\nA guest.\n',
     }, 'NAMED_NO_PAGE');
-    assert.deepStrictEqual(found.map((f) => [f.path, f.pages, f.printed]), [['Hidden/Old_Tam.md', ['People/Bo_Pike.md'], ['Old Tam']]]);
+    assert.deepStrictEqual(found, []);
   });
 
   it('on a PC page, counts a link in a section the page prints and not in one it leaves out', async () => {
@@ -387,18 +387,16 @@ describe('a name only an index or listing page prints', () => {
 describe('a page\'s Connections', () => {
   const rel = (target, extra = '') => `relationships:\n  - target: "${target}"\n    type: knows\n${extra}`;
 
-  it('a name Connections prints on a page is counted on that page, and only the pages that print it', async () => {
+  it('a tie to a hidden note is left off the page, so the note is named on no page (#476)', async () => {
     const found = await faults({
       'Hidden/Old_Tam.md': hidden(),
       'People/Bo_Pike.md': npcNote('Bo.', rel('[[Cy_Dunn]]')),
       'People/Cy_Dunn.md': npcNote('Cy.', rel('[[Old_Tam]]')),
     }, 'NAMED_NO_PAGE');
-    // Cy's page prints the relationship. Connections lists one step only, so Bo's page, two
-    // links away, no longer prints the name (the old ring graph did) and is not counted.
-    assert.deepStrictEqual(found.map((f) => [f.path, f.pages]), [['Hidden/Old_Tam.md', ['People/Cy_Dunn.md']]]);
+    assert.deepStrictEqual(found, []);
   });
 
-  it('holds only the label of a labelled target that has no page: the note\'s own name is on no page', async () => {
+  it('a labelled tie to a hidden note prints neither the label nor the note\'s name', async () => {
     const { configPath, root } = site({
       'Hidden/Vesper_Hale.md': hidden('portrait: secret.png\noccupation: Spy\naliases: [The Shade]\n'),
       'People/Bo_Pike.md': npcNote('Bo.', rel('[[Vesper_Hale|the stranger]]', '    description: "owes him money"\n  - target: "[[Cy_Dunn]]"\n    type: knows\n')),
@@ -408,11 +406,9 @@ describe('a page\'s Connections', () => {
     assert.deepStrictEqual(await fromDoctor(configPath), found);
     for (const page of ['bo-pike.html', 'cy-dunn.html']) {
       const html = fs.readFileSync(path.join(root, 'docs', 'people', page), 'utf8');
-      // Only Bo declares the relationship; Connections lists one step, so Cy's page has no label.
-      assert.strictEqual(/the stranger/.test(html), page === 'bo-pike.html', `${page}: the label`);
-      for (const secret of ['Vesper', 'Spy', 'Shade', 'secret.png']) assert.ok(!html.includes(secret), `${page} prints ${secret}`);
+      for (const secret of ['the stranger', 'owes him money', 'Vesper', 'Spy', 'Shade', 'secret.png']) assert.ok(!html.includes(secret), `${page} prints ${secret}`);
     }
-    assert.deepStrictEqual(found.map((f) => [f.path, f.pages, f.printed]), [['Hidden/Vesper_Hale.md', ['People/Bo_Pike.md'], ['the stranger']]]);
+    assert.deepStrictEqual(found.filter((f) => f.code === 'NAMED_NO_PAGE'), []);
   });
 
   it('a labelled target that has a page is that page: linked, and shown under its own title', () => {
@@ -454,39 +450,15 @@ describe('a page\'s Connections', () => {
     assert.ok(!renderConnections(model, { mode: 'tree', currentOutputPath: 'A.html' }).includes('Gone'));
   });
 
-  it('a no-page note named only in Connections is reported on that page', async () => {
-    // A PC page: the map form of `relationships` is not a list of rows, so its body
-    // Relationships list prints nothing, and a PC page has no relationship cards and no
-    // context sidebar. Connections is the only part of the page that prints the label, and
-    // the test checks that: it holds as the body list, cards and sidebar of other pages go.
+  it('a PC\'s relationship map naming a hidden note prints it nowhere', async () => {
     const files = {
       'Hidden/Vesper_Hale.md': hidden(),
       'People/Bo_Pike.md': `---\ntype: pc\nrelationships:\n  knows:\n    - "[[Vesper_Hale|the stranger]]"\n---\n\nBo.\n`,
     };
     const { configPath, root } = site(files);
-    const found = fromBuild(configPath).filter((f) => f.code === 'NAMED_NO_PAGE');
-    assert.deepStrictEqual(found.map((f) => [f.path, f.pages, f.printed]), [['Hidden/Vesper_Hale.md', ['People/Bo_Pike.md'], ['the stranger']]]);
+    assert.deepStrictEqual(fromBuild(configPath).filter((f) => f.code === 'NAMED_NO_PAGE'), []);
     const html = fs.readFileSync(path.join(root, 'docs', 'people', 'bo-pike.html'), 'utf8');
-    const block = /<section class="cx"[^]*?<\/section>/.exec(html)[0];
-    assert.ok(block.includes('the stranger'));
-    assert.ok(!html.replace(block, '').includes('the stranger'), 'another part of the page prints the label: ' + html.replace(block, '').split('\n').filter((l) => l.includes('the stranger')).join(' // '));
-    assert.ok(!html.includes('Vesper'));
-  });
-
-  it('startNoteAudit.connections counts a key-only item against the page that holds it', () => {
-    const { startNoteAudit } = require('../lib/note-faults');
-    const page = { title: 'Bo', displayTitle: 'Bo', outputPath: 'people/bo.html', frontmatter: { type: 'npc' } };
-    const audit = startNoteAudit({
-      vaultPath: '/v', notes: [{ vaultPath: 'Hidden/Old_Tam', frontmatter: { type: 'npc' }, displayTitle: 'Old Tam' }],
-      corpus: [page], verdicts: new Map(), report: { malformed: [], untyped: [], unmapped: [] }, published: [page], linkMap: {},
-      publishConfig: {}, manifest: null, relOf: (p) => `People/${p.title}.md`, getsNoPage: () => false, printsField: () => true, readFile: () => '',
-    });
-    const item = (extra) => ({ title: 'the old one', kind: '', tone: null, lines: [], own: 0, sessions: null, image: null, ...extra });
-    audit.connections(page, { tabs: [{ groups: [{ items: [item({ outputPath: 'people/x.html', key: 'Old_Tam' }), item({ outputPath: null })] }] }] });
-    assert.deepStrictEqual(audit.findings(() => ({})).filter((f) => f.code === 'NAMED_NO_PAGE'), [], 'an item with a page, or no key, is not counted');
-    audit.connections(page, { tabs: [{ groups: [{ items: [item({ outputPath: null, key: 'Old_Tam' })] }] }] });
-    const found = audit.findings(() => ({})).filter((f) => f.code === 'NAMED_NO_PAGE');
-    assert.deepStrictEqual(found.map((f) => [f.path, f.pages, f.printed]), [['Hidden/Old_Tam.md', ['People/Bo.md'], ['the old one']]]);
+    assert.ok(!html.includes('the stranger') && !html.includes('Vesper'));
   });
 });
 
@@ -530,15 +502,16 @@ describe('a labelled link never prints its target, whatever prints the field', (
       else if (list) lines.push(`${field}:\n  - "${link}"`);
       else lines.push(`${field}: "${link}"`);
       files[`${folder}/Case${n}.md`] = `---\n${lines.join('\n')}\n---\n\nOpen body.\n`;
-      wanted.push({ name, label, what: `${type}.${field}` });
+      wanted.push({ name, label, what: `${type}.${field}`, printsLabel: field !== 'relationships' });
     });
     const { configPath, root } = site(files);
     fromBuild(configPath);
     const built = walk(path.join(root, 'docs')).map((f) => [path.relative(path.join(root, 'docs'), f), fs.readFileSync(f, 'utf8')]);
-    for (const { name, label, what } of wanted) {
+    for (const { name, label, what, printsLabel } of wanted) {
       const named = built.filter(([, text]) => text.includes(name)).map(([f]) => f);
       assert.deepStrictEqual(named, [], `${what}: the hidden note's name is in ${named.join(', ')}`);
-      assert.ok(built.some(([, text]) => text.includes(label)), `${what}: the label is printed nowhere`);
+      // A relationship to a note that exists but has no page is left off the page altogether (#476), label and all.
+      if (printsLabel) assert.ok(built.some(([, text]) => text.includes(label)), `${what}: the label is printed nowhere`);
     }
   });
 

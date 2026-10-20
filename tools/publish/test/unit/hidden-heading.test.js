@@ -197,3 +197,17 @@ test('strippedLines with no section rules leaves the lines as they were (the `cu
   const { lines } = strippedLines(PCT, false);
   assert.deepEqual(lines, ['## Appearance', 'Tall, grey coat.', 'She is the informant.', '']);
 });
+
+// #477: a Wrap-Up fences its whole GM Notes section to the end of the file, sub-headings and all. Nothing follows the
+// fence, so nothing is withheld and the build stays quiet; real text after the fence still warns.
+test('a fenced GM Notes section with only blank lines after the fence draws no warning', () => {
+  const ex = ['GM Notes', 'Reconciliation Context'];
+  const fenced = '## Recap\nShown.\n<!-- gm-only -->\n## GM Notes\nKeeper text.\n### Reconciliation Context\nMore.\n<!-- /gm-only -->\n';
+  for (const tail of ['', '\n', '\n  \n']) {
+    const { warnings } = playerSafeMarkdown(fenced + tail, { excludeSections: ex });
+    assert.deepEqual(warnings, [], JSON.stringify(tail));
+  }
+  const after = playerSafeMarkdown(`${fenced}Real text after the fence.\n`, { excludeSections: ex });
+  assert.ok(after.warnings.some((w) => /"GM Notes"/.test(w) && /hidden block/.test(w)), JSON.stringify(after.warnings));
+  assert.doesNotMatch(after.text, /Real text/);
+});

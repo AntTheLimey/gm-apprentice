@@ -519,3 +519,20 @@ test('only people visit: a faction or an item at an event gets no derived visit'
   assert.ok(!tab(idx.for(guild), 'places') && !tab(idx.for(lamp), 'places'));
   assert.deepStrictEqual(names(group(idx.for(guild), 'events', 'Participated in')), ['Sale']);
 });
+
+// #476: a tie to a note that exists but has no page is the Keeper's side, so the page does not print it. A name with no
+// note at all (a red link) still prints as plain text, as nothing hid it.
+test('a tie to a note that exists with no page is not printed; a name with no note is', () => {
+  const a = page('A', 'npc', { relationships: [
+    { target: '[[Kept_Back]]', type: 'participated_in', description: 'Used as a door only.' },
+    { target: '[[Red_Name]]', type: 'knows', description: 'Seen once.' },
+  ], parent_location: '[[Kept_Back]]' });
+  const noteExists = (name) => name === 'Kept_Back';
+  const shown = buildConnections(ctx([a], { noteExists })).for(a);
+  const all = shown.tabs.flatMap((t) => t.groups.flatMap((g) => g.items));
+  assert.deepStrictEqual(all.map((i) => i.title), ['Red Name']);
+  assert.strictEqual(all[0].outputPath, null);
+  // Without the lookup (as before) both print.
+  const before = buildConnections(ctx([a])).for(a).tabs.flatMap((t) => t.groups.flatMap((g) => g.items));
+  assert.deepStrictEqual(before.map((i) => i.title).sort(), ['Kept Back', 'Red Name']);
+});

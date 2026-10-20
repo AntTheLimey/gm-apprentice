@@ -186,14 +186,18 @@ function targetRef(value) {
   return { name, links: links.length, words: ref.words.trim() };
 }
 
-function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extras }) {
+// `noteExists(name)`: whether the vault holds a note of that name (published or not). A tie to a note that exists but
+// has no page is the Keeper's side of the story, so it is left off the page. A tie to a name with no note at all (a red
+// link) is still printed as plain text: nothing hid it.
+function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extras, noteExists }) {
   const byPath = new Map(pages.map((p) => [p.outputPath, p]));
   // What a target names: its page when it has one, else the words to call it by (its
   // label, or its name with underscores read as spaces: wikilink.js linkText).
   const resolve = (value) => {
     const { name, words } = targetRef(value);
     const out = name ? linkMap[name] : undefined;
-    return { page: (typeof out === 'string' && byPath.get(out)) || null, name, words };
+    const page = (typeof out === 'string' && byPath.get(out)) || null;
+    return { page, name, words, hidden: !page && !!name && !!noteExists && noteExists(name) };
   };
 
   // Every relationship, once, filed under the page it points at.
@@ -318,7 +322,7 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
     };
 
     for (const { edge, to } of outgoing.get(page) || []) {
-      if (to.page === page || (!to.page && !to.name) || (to.page && isIndex(to.page))) continue;
+      if (to.page === page || (!to.page && !to.name) || to.hidden || (to.page && isIndex(to.page))) continue;
       note(add(to.page, to, tabOf(to.page), groupLabel(edge.type, 'out', { from: typeOf(page), to: typeOf(to.page) })), edge, true);
     }
     for (const { edge, from } of incoming.get(page) || []) {
@@ -327,7 +331,7 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
     // A parent with no page stays in Places, as a name with no link.
     if (typeOf(page) === 'location' && typeof page.frontmatter.parent_location === 'string') {
       const parent = resolve(page.frontmatter.parent_location);
-      if (parent.page !== page && (parent.page || parent.name)) add(parent.page, parent, 'places', 'Part of');
+      if (parent.page !== page && !parent.hidden && (parent.page || parent.name)) add(parent.page, parent, 'places', 'Part of');
     }
     for (const extra of (extras && extras.get(page)) || []) {
       if (extra.page && extra.page !== page) add(extra.page, null, tabOf(extra.page), printed(extra.group));
