@@ -104,7 +104,6 @@ Non-exhaustive — extend by category, never by inventing a new `type:`.
 | raided, assaulted, attacked, besieged | `at_war_with` / `conquered` |
 | deceives, misled, tricked, lied to | `deceived` |
 | has intelligence on, spies on, watches | `infiltrates` / `studies` |
-| visited by | `located_at` *(on the other note)* / `participated_in` *(on the other note)* |
 | affiliated with | `member_of` / `allied_with` |
 | investigated by, questioned, interrogated, appears in | *not an edge, see below* |
 <!-- /generated:verbs -->
