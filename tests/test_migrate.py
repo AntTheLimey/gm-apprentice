@@ -105,6 +105,16 @@ class GateTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("first-time setup", err)
 
+    def test_meta_with_no_settings_file_is_setup_not_migration(self):
+        # #381: not "migrate it with 1.10.25 first"
+        vault = Path(tempfile.mkdtemp(prefix="mig-"))
+        self.addCleanup(shutil.rmtree, vault, ignore_errors=True)
+        (vault / "_meta").mkdir()
+        code, _, err = call([str(vault), "plan"], [])
+        self.assertEqual(code, 2)
+        self.assertIn("first-time setup", err)
+        self.assertNotIn("1.10.25", err)
+
     def test_bad_arguments_exit_2(self):
         vault = make_vault(self)
         self.assertEqual(call([str(vault / "nope"), "plan"], [])[0], 2)

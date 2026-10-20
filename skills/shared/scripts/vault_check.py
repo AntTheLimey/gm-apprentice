@@ -878,6 +878,10 @@ def check_version(vault: Path) -> tuple[list[str], int]:
         return ([f"ERROR\t(vault)\t{e}"], 1)
     # A `_meta/` with no readable settings file is the same situation as one
     # with no version recorded: the vault never recorded one.
+    if not current and vault_layout(vault) == "none":
+        return (["SETUP\t(vault)\tno settings file in _meta/ — first-time "
+                 "setup, not migration (campaign-organizer's "
+                 "references/vault-setup.md)"], 0)
     if not current:
         return ([f"MISMATCH\t{rel}\tgm_apprentice_version absent — "
                  f"{MIGRATION_HINT}"], 1)
