@@ -7,7 +7,7 @@
 // comment, other lines and line endings are never touched) and writes all notes or none, through
 // the same applyFix the other repairs use.
 //
-//   listTones(model, { skip })        -> [{ rel, line, tone, target, description, gmOnly, hidesRelationships, siteFamily }]
+//   listTones(model, { skip })        -> [{ rel, line, tone, target, description, gmOnly, hidesRelationships, siteFamily, accepted }]
 //   planTones(model, { vaultPath, sets, skip, readBack? })
 //        -> { changes: [{ kind: 'tone', rel, line, before, after }],
 //             kept: [{ rel, line, tone, why }], texts, originals }
@@ -25,6 +25,7 @@ const YAML = require('yaml');
 const { applyEdits } = require('../settings/write');
 const { ontology, toneFamily } = require('../ontology');
 const { openText } = require('./fix');
+const { isAccepted } = require('../accepted-ties');
 
 const keyName = (p) => String(YAML.isScalar(p.key) ? p.key.value : p.key);
 const pairOf = (map, name) => (YAML.isMap(map) ? map.items.find((p) => keyName(p) === name) || null : null);
@@ -47,7 +48,7 @@ function toneEdges(model, skip) {
   return out.sort((a, b) => (a.note.rel < b.note.rel ? -1 : a.note.rel > b.note.rel ? 1 : 0) || a.edge.toneLine - b.edge.toneLine);
 }
 
-function listTones(model, { skip } = {}) {
+function listTones(model, { skip, accepted = new Set() } = {}) {
   return toneEdges(model, skip).map(({ note, edge }) => ({
     rel: note.rel,
     line: edge.toneLine,
@@ -57,6 +58,7 @@ function listTones(model, { skip } = {}) {
     gmOnly: !!edge.gmOnly,
     hidesRelationships: !!note.hidesRelationships,
     siteFamily: LISTED.has(edge.tone.trim().toLowerCase()) ? toneFamily(edge.tone) : null,
+    accepted: isAccepted(accepted, { rel: note.rel, tone: edge.tone, target: edge.rawTarget, description: edge.description }),
   }));
 }
 

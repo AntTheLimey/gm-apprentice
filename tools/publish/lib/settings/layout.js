@@ -22,6 +22,9 @@ const ACCEPTED_FROM = '1.30.0';
 // The first publish tool version that reads a settled heading (`leaks settle`) in the accepted list; an older one from
 // ACCEPTED_FROM on reads it as an accepted leak finding no longer needed, and `leaks prune` deletes it.
 const SETTLE_FROM = '1.39.0';
+// The first publish tool version that reads an accepted hostile tie (`relationships accept`) in the accepted list; an older
+// one reads it as an accepted leak finding no longer needed, and `leaks prune` deletes it.
+const TIE_FROM = '1.41.0';
 
 // The new file's top level: `version`, then the groups, in the order they are written. `gm_site` is read like the others, but a name or value under it that cannot be read warns and never stops the player build (it is not in STRICT_PARENTS).
 const SETTING_GROUPS = ['vault', 'player_site'];
@@ -71,4 +74,4 @@ const layoutOrNone = (vaultPath) => (typeof vaultPath === 'string' && vaultPath 
 const fileLabel = (vaultPath) => fileLabelFor(layoutOrNone(vaultPath));
 const nameIn = (vaultPath, name) => nameInFor(layoutOrNone(vaultPath), name);
 
-module.exports = { FIRST_TOOL_READING_NEW_FILE, STEPS_FROM, siteToolVersion, SETTING_GROUPS, GM_GROUP, GROUPS, HIDE_GROUP, STRICT_PARENTS, stopsUnknown, NEW_FILE, OLD_FILE, STATE_FILE, NOTES_FILE, PUBLISH_LIST_FILE, OLD_LIST_FILE, PUBLISH_LIST_FROM, ACCEPTED_FROM, SETTLE_FROM, layoutOf, at, fileLabel, nameIn, fileLabelFor, nameInFor };
+module.exports = { FIRST_TOOL_READING_NEW_FILE, STEPS_FROM, siteToolVersion, SETTING_GROUPS, GM_GROUP, GROUPS, HIDE_GROUP, STRICT_PARENTS, stopsUnknown, NEW_FILE, OLD_FILE, STATE_FILE, NOTES_FILE, PUBLISH_LIST_FILE, OLD_LIST_FILE, PUBLISH_LIST_FROM, ACCEPTED_FROM, SETTLE_FROM, TIE_FROM, layoutOf, at, fileLabel, nameIn, fileLabelFor, nameInFor };

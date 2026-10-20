@@ -279,6 +279,20 @@ describe('leaks', () => {
     } finally { site.cleanup(); }
   });
 
+  it('an accepted hostile tie (#367) is no finding of the leak gate: check does not call it no longer needed and prune keeps it', async () => {
+    const site = leakSite(TACTICS, SETTINGS);
+    try {
+      const listFile = path.join(vaultOf(site), '_meta', 'publish-list.yaml');
+      fs.mkdirSync(path.dirname(listFile), { recursive: true });
+      fs.writeFileSync(listFile, 'accepted:\n  - page: NPCs/A.md\n    text: hostile | [[Hallam]] | Wants his chair.\n    note: tone.tie\n');
+      const check = await run(site, 'check');
+      assert.equal(check.rc, 0, check.text);
+      assert.doesNotMatch(check.text, /no longer needed/);
+      assert.match((await run(site, 'prune')).text, /Nothing to prune/);
+      assert.equal(loadPublishList(vaultOf(site), { warn: () => {} }).accepted.length, 1);
+    } finally { site.cleanup(); }
+  });
+
   it('settle refuses while the site\'s installed publish tool is older than 1.39.0, and names the update', async () => {
     const site = leakSite(TACTICS, SETTINGS);
     try {
