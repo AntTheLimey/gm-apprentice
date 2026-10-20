@@ -1450,3 +1450,13 @@ test('a retired publish.mode is carried as written, comment and all, so the upda
   assert.match(text, /# was a private copy\n\s+mode: full # kept/);
   assert.match(text, /hide:\n\s+# was a private copy\n\s+mode: full/);
 });
+
+test('an empty after_build written in the vault is replaced by the site\'s postbuild, and the report says so (#386)', () => {
+  const s = STEP_LAYOUTS.new();
+  writeNewConfig(s.vault, { version: 1, player_site: { after_build: [] } });
+  writePackage(s, { postbuild: 'node a.js' });
+  const r = cliMove({ vault: s.vault, config: s.config });
+  assert.equal(r.rc, 0, r.err.join('\n'));
+  assert.deepEqual(readSettings({ vaultPath: s.vault }).values.player_site.after_build, ['node a.js']);
+  assert.ok(r.data.lines.includes('Your empty after_build was replaced by the site\'s postbuild: node a.js'), r.data.lines.join('\n'));
+});

@@ -357,6 +357,11 @@ function planSteps(siteDir, held, { siteToolUpdated = false, pinCheck: ask = pin
       const some = `${commands.length} ${script} step${commands.length === 1 ? '' : 's'}`;
       const them = commands.length === 1 ? 'it' : 'them';
       say(out, `The site's ${some} moved to \`${e.name}\`; the tool now runs ${them}.`, `The site's ${some} ${commands.length === 1 ? 'moves' : 'move'} to \`${e.name}\`; the tool will run ${them}.`);
+      // The vault wrote an empty list on purpose; the site's script replaces it, and the report says so.
+      if (mine.set && Array.isArray(mine.value)) {
+        const was = `Your empty ${e.name.split('.').pop()} was replaced by the site's ${script}: ${commands.join(' && ')}`;
+        say(out, was, was.replace('was replaced', 'will be replaced'));
+      }
     } else if (isDeepStrictEqual(commands, mine.value)) {
       out.removed.push(script);
       const same = `The site's ${script} in package.json holds the same steps as \`${e.name}\`, so it was removed from package.json; the tool runs the vault's.`;
