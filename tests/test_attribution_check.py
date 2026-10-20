@@ -69,21 +69,41 @@ def git(repo: Path, *args: str) -> None:
     )
 
 
+def _write(root: Path, rel: str, text: str) -> None:
+    p = root / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text, encoding="utf-8")
+
+
+_BASE: tempfile.TemporaryDirectory[str] | None = None
+
+
+def _base_repo() -> Path:
+    """The valid repo, built with real git once per process; each test gets
+    a copy of it (the .git folder comes along), not its own `git init`."""
+    global _BASE
+    if _BASE is None:
+        _BASE = tempfile.TemporaryDirectory()
+        root = Path(_BASE.name)
+        git(root, "init", "-q", "-b", "main")
+        _write(root, "ATTRIBUTION.md", ATTRIBUTION)
+        _write(root, ".gitignore", GITIGNORE)
+        for system, notice in NOTICES.items():
+            _write(root, f"{SYSTEMS}/{system}/NOTICE.md", notice)
+            _write(root, f"{SYSTEMS}/{system}/mechanics.md", "# Mechanics\n")
+        _write(root, f"{SYSTEMS}/generic/mechanics.md", "# Generic\n")
+        git(root, "add", "-A")
+        git(root, "commit", "-q", "-m", "base")
+    return Path(_BASE.name)
+
+
 class Fixture:
     """A valid repo: every system has its NOTICE.md and one content file."""
 
     def __init__(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self.tmp.name)
-        git(self.root, "init", "-q", "-b", "main")
-        self.write("ATTRIBUTION.md", ATTRIBUTION)
-        self.write(".gitignore", GITIGNORE)
-        for system, notice in NOTICES.items():
-            self.write(f"{SYSTEMS}/{system}/NOTICE.md", notice)
-            self.write(f"{SYSTEMS}/{system}/mechanics.md", "# Mechanics\n")
-        self.write(f"{SYSTEMS}/generic/mechanics.md", "# Generic\n")
-        git(self.root, "add", "-A")
-        git(self.root, "commit", "-q", "-m", "base")
+        self.root = Path(self.tmp.name) / "repo"
+        shutil.copytree(_base_repo(), self.root, symlinks=True)
 
     def write(self, rel: str, text: str) -> Path:
         p = self.root / rel
