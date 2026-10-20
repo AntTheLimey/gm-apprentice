@@ -173,8 +173,17 @@ test('a one-way tie written on both notes is a question, not a fix; a tie and it
     'D.md': note('faction', rels(edge('has_member', 'C'))),
     'E.md': note('npc', rels(edge('member_of', 'F'))),
     'F.md': note('faction', rels(edge('allied_with', 'E', ['bidirectional: true']))),
+    // Ties two people can each hold of the other are never asked about.
+    'G.md': note('npc', rels(edge('courts', 'H'), edge('trusts', 'H'), edge('rescued', 'H'), edge('supplies', 'H'), edge('infiltrates', 'H'))),
+    'H.md': note('npc', rels(edge('courts', 'G'), edge('trusts', 'G'), edge('rescued', 'G'), edge('supplies', 'G'), edge('infiltrates', 'G'))),
   });
   assert.deepStrictEqual(ofKind(fine, 'opposed'), []);
+  // Ownership, command and containment cannot run both ways.
+  const backwards = vault({
+    'I.md': note('npc', rels(edge('owns', 'J'), edge('commands', 'J'), edge('part_of', 'J'))),
+    'J.md': note('npc', rels(edge('owns', 'I'), edge('commands', 'I'), edge('part_of', 'I'))),
+  });
+  assert.deepStrictEqual(ofKind(backwards, 'opposed').length, 3);
 });
 
 test('a mirrored edge whose other half is outside the folder is still found and reported on the in-scope note', () => {

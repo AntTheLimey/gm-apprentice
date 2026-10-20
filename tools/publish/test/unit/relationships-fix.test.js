@@ -27,10 +27,10 @@ const rels = (...edges) => ['relationships:', ...edges.flat()];
 
 function plan(dir, opts = {}) {
   const model = readVault(dir);
-  const findings = check(model, ontology, { vaultPath: dir });
+  const findings = check(model, ontology, { vaultPath: dir, publishes: () => true });
   return planFix(model, findings, { vaultPath: dir, ...opts });
 }
-const checkKinds = (dir) => check(readVault(dir), ontology, { vaultPath: dir }).map((f) => f.kind);
+const checkKinds = (dir) => check(readVault(dir), ontology, { vaultPath: dir, publishes: () => true }).map((f) => f.kind);
 
 test('an inverse edge moves to the other note, carrying tone and description as written', () => {
   const dir = vault({
@@ -308,7 +308,7 @@ test('a note edited after it was read: the tie is not where the finding says, so
     'Dad.md': note('npc'),
   });
   const model = readVault(dir);
-  const findings = check(model, ontology, { vaultPath: dir });
+  const findings = check(model, ontology, { vaultPath: dir, publishes: () => true });
   fs.writeFileSync(path.join(dir, 'Kid.md'), note('npc', rels(edge('knows', 'Dad', ['bidirectional: true']), edge('child_of', 'Mum'))));
   const p = planFix(model, findings, { vaultPath: dir });
   assert.strictEqual(p.texts.size, 0);
@@ -410,13 +410,14 @@ const visitVault = (extra = {}) => vault({
   ...extra,
 });
 
-test('a visited_by the event already supplies is removed; one that says more is kept and named', () => {
+test('a visited_by the event already supplies is removed; one that says more is left alone with no row', () => {
   const dir = visitVault();
-  const f = check(readVault(dir), ontology, { vaultPath: dir }).filter((x) => x.kind === 'visit-duplicate');
-  assert.deepStrictEqual(f.map((x) => [x.level, x.fix.certain]), [['WARNING', true], ['INFO', false], ['INFO', false]]);
+  const f = check(readVault(dir), ontology, { vaultPath: dir, publishes: () => true }).filter((x) => x.kind === 'visit-duplicate');
+  assert.deepStrictEqual(f.map((x) => [x.level, x.fix.certain]), [['WARNING', true], ['INFO', false]]);
+  assert.ok(f.every((x) => !/Hid the ledger|says more/.test(x.message)), f.map((x) => x.message).join('\n'));
   const p = plan(dir);
   assert.deepStrictEqual(p.changes.map((c) => c.before), ['visited_by [[Ada]]']);
-  assert.deepStrictEqual(p.kept.map((k) => k.why.replace(/\(.*\)/, '()')), ['says more than Dinner does ()', 'is hidden from players on purpose']);
+  assert.deepStrictEqual(p.kept.map((k) => k.why), ['is hidden from players on purpose']);
   assert.strictEqual(p.texts.get('Hall.md'), note('location', rels(
     edge('visited_by', 'Bea', ['description: "Hid the ledger under the stairs"']),
     edge('visited_by', 'Cy', ['gm_only: true']),
@@ -446,6 +447,26 @@ test('a visited on the person is a copy too, a non-neutral tone is kept, and --w
   assert.strictEqual(read(dir, 'Ada.md'), note('npc', ['relationships:']));
   assert.match(read(dir, 'Bea.md'), /tone: tense/);
   assert.deepStrictEqual(checkKinds(dir).filter((k) => k === 'visit-duplicate'), ['visit-duplicate']);
+});
+
+test('an event, person or place with no page supplies no visit, by the build\'s own verdict', async () => {
+  const visits = (event, extra = {}) => vault({
+    ...event,
+    'People/Ada.md': note('npc', rels(edge('visited', 'Hall'))),
+    'Places/Hall.md': note('location'),
+    '_meta/vault-config.md': '---\npublish:\n  exclude_dirs:\n    - Drafts\n  folder_map:\n    Events: events\n    People: people\n    Places: places\n    Drafts: drafts\n---\n',
+    ...extra,
+  });
+  const dinner = (more = []) => note('event', ['location: "[[Hall]]"', 'participants:', '  - "[[Ada]]"', ...more]);
+  const kinds = async (dir) => JSON.parse((await relCli(dir, 'check', '--json')).stdout).map((f) => f.kind);
+  // The vault as the build reads it: the event publishes, so the hand-written visit is a copy.
+  assert.deepStrictEqual(await kinds(visits({ 'Events/Dinner.md': dinner() })), ['visit-duplicate']);
+  assert.deepStrictEqual(await kinds(visits({ 'Events/Dinner.md': dinner(['publish: false']) })), []);
+  assert.deepStrictEqual(await kinds(visits({ 'Drafts/Dinner.md': dinner() })), []);
+  assert.deepStrictEqual(await kinds(visits({ 'Events/Dinner.md': dinner() }, { 'Places/Hall.md': note('location', ['publish: false']) })), []);
+  // Without a verdict, nothing counts.
+  const dir = visits({ 'Events/Dinner.md': dinner() });
+  assert.deepStrictEqual(check(readVault(dir), ontology, { vaultPath: dir }).map((f) => f.kind), []);
 });
 
 test('no event, or a place that is not one link, means no visit to repeat', () => {
