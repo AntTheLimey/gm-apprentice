@@ -801,7 +801,7 @@ class ExcludeListTests(unittest.TestCase):
         (item,) = ms.find_exclude_lists(vault)
         for line in item.lines:
             self.assertNotIn("vault-config.md", line)
-            self.assertIn("the vault's settings file", line)
+            self.assertIn("into _meta/vault-config.yaml", line)
 
     def test_a_list_the_tool_could_not_read_is_replaced(self):
         vault = make_vault(self, extra="  exclude_sections: Mine\n"
