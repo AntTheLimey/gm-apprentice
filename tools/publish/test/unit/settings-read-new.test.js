@@ -260,17 +260,25 @@ test('an empty key on the four switches is off, with a fault', () => {
 });
 
 // 11
-test('every switch reads all six words, quoted and not', () => {
+// How a switch reads its six words (any case, quoted or not) is the switch type's, tested here on one switch and in
+// settings-types; every other switch is shown to be a switch by one word each way and by refusing a stray word.
+test('every switch reads the six words, quoted and not', () => {
   const words = { true: true, yes: true, on: true, false: false, no: false, off: false };
   const switches = REGISTRY.filter((e) => e.type === 'switch');
   assert.ok(switches.length >= 7);
+  const valueOf = (e, text) => { const r = read(nested(e.name, text)); return [e.name.split('.').reduce((o, k) => o[k], r.values), r.faults]; };
+  for (const [word, want] of Object.entries(words)) {
+    for (const text of [word, `"${word}"`, `"${word.toUpperCase()}"`]) {
+      const [got, faults] = valueOf(switches[0], text);
+      assert.equal(got, want, `${switches[0].name}: ${text}`);
+      assert.deepEqual(faults, [], `${switches[0].name}: ${text}`);
+    }
+  }
   for (const e of switches) {
-    for (const [word, want] of Object.entries(words)) {
-      for (const text of [word, `"${word}"`, `"${word.toUpperCase()}"`]) {
-        const r = read(nested(e.name, text));
-        assert.equal(e.name.split('.').reduce((o, k) => o[k], r.values), want, `${e.name}: ${text}`);
-        assert.deepEqual(r.faults, [], `${e.name}: ${text}`);
-      }
+    for (const [text, want] of [['yes', true], ['"OFF"', false]]) {
+      const [got, faults] = valueOf(e, text);
+      assert.equal(got, want, `${e.name}: ${text}`);
+      assert.deepEqual(faults, [], `${e.name}: ${text}`);
     }
     const bad = read(nested(e.name, 'sideways'));
     assert.equal(fault(bad, e.name).kind, 'not-allowed', e.name);
