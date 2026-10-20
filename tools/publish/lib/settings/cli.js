@@ -551,6 +551,7 @@ function changeList(options, verb, args) {
       return { errors: [`${item.length > 60 ? `${item.slice(0, 60)}…` : item} is not an entry; write each entry as plain text or in quotes, or give a list of text like '["A","B"]'.`] };
     } else texts.push(typeof v === 'string' ? v : item.trim());
   }
+  if (!texts.length) return { errors: [`${name}: there are no entries to ${verb}; give each entry as plain text or in quotes.`] };
   const entries = [];
   for (let v of texts) {
     if (e.same === 'folder') v = normalizeExcludeDir(v, vaultPath) ?? '';
@@ -591,7 +592,11 @@ function changeList(options, verb, args) {
       const after = getPath(readSettings({ vaultPath, siteConfig }).values, e.name.split('.')) || [];
       for (const x of result.removed) {
         if (Array.isArray(after) && after.some((a) => isSame(a, x))) result.notes.push(`${JSON.stringify(x)} still applies, because vault.config.json also lists it; remove it there too.`);
-        else if (e.guards && Array.isArray(e.default) && e.default.some((d) => isSame(d, x))) result.notes.push(`${JSON.stringify(x)} was built in to ${shownAs} and is no longer hidden.`);
+        else if (e.guards && Array.isArray(e.default) && e.default.some((d) => isSame(d, x))) {
+          // One note for each built-in entry, however many spellings of it were taken out.
+          const note = `${JSON.stringify(e.default.find((d) => isSame(d, x)))} was built in to ${shownAs} and is no longer hidden.`;
+          if (!result.notes.includes(note)) result.notes.push(note);
+        }
       }
     }
     // Not said when the site file's own entries still hide something.
