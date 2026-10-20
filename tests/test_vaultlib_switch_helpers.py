@@ -58,6 +58,17 @@ def test_a_switch_from_the_site_file_is_not_the_vault_files(tmp_path):
         vaultlib.settings(vault), "player_site.features.connections")
 
 
+@pytest.mark.parametrize("publish, want", [
+    (None, False),  # no vault-config file at all
+    ("  site_dir: /some/site\n", True),  # a site folder that does not exist
+])
+def test_a_site_without_a_switch_word_or_a_tool(tmp_path, publish, want):
+    # The rest of the table is in test_layouts_both.py, on both layouts;
+    # these two are the ones its vaults cannot be.
+    s = vaultlib.settings(make(tmp_path, publish))
+    assert vaultlib.site_without_tool(s) is want
+
+
 def test_a_site_switch_that_is_no_switch_word_is_off_without_the_tool(tmp_path):
     # The other cases of this table are in test_layouts_both.py, on both
     # layouts. A word that is no switch is refused when the file moves to
