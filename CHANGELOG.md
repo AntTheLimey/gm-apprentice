@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.83] — 2026-10-20
+
+Bug Bash batch 4: wrap-up and QA chores the model did by hand become
+scripts. Publish tool 1.41.0.
+
+### Added
+
+- `session_context.py --carry` prints what the last Wrap-Up carried
+  forward (handoff, unresolved threads, stated intentions, pending
+  consequences, open checklist items), about a tenth of a full read
+  (#313).
+- `vault_write.py status` rewrites a PC's labelled Current Status fields
+  in place, keeping the note's shape; `--show` prints them, and its
+  output writes back unchanged unless a label appears twice, which is
+  refused (#315).
+- An update step offers to fold a PC's per-session "New open threads
+  (Session N)" bullets into its one Open threads list, text unchanged
+  (#315).
+- `vault_write.py session-new` writes a new session's index and Play
+  Notes beside the previous session; `resolve --export` matches the
+  names in an export against the vault (#312).
+- `vault_write.py promote-plan` turns a Midwife draft into a plan from
+  the template with its body copied unchanged; the Midwife still fills
+  participants and locations (#464).
+- campaign-qa checks story files that fall behind the Wrap-Ups (#461),
+  creates the QA report and tallies its counts (`report-new`,
+  `report-stats`, which writes only QA reports, never lowers a count
+  without `--force` and leaves a count that isn't a number as written,
+  and has `--dry-run`) (#462), and checks session
+  date order through the publish tool's new `dates` op (#463). The new
+  checks live in `qa_checks.py`.
+
+### Fixed
+
+- `vault_write.py log` files a Campaign Log row under an existing
+  Appearances or Encounters section, above a trailing dataview block
+  (#314).
+- `timeline --under` a Chapter files the entry after the Session
+  headings that follow it (#314).
+
 ## [1.10.82] — 2026-10-18
 
 Bug Bash batch 3.5: the GURPS to-hit calculator on the PC sheet.

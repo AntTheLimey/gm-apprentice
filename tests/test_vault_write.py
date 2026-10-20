@@ -1092,6 +1092,51 @@ class LogTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertEqual(out.count("ADDED\t"), 3)
 
+    # #314: a row that says Campaign Log finds the log the note has
+    def test_campaign_log_row_finds_an_appearances_section(self):
+        note = ("---\ntype: npc\n---\n\n# Kartik\n\n## Appearances\n\n"
+                "- **[[Session 01 - Start]]** — met.\n\n## Next\n\ntext\n")
+        vault = make_vault(self, {NPC_REL: note})
+        code, out = log(vault, f"{NPC_REL}\tCampaign Log\t{S2}again.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"ADDED\t{NPC_REL}\t§Appearances\tresolved", out)
+        text = read(vault, NPC_REL)
+        self.assertNotIn("## Campaign Log", text)
+        self.assertIn("met.\n" + S2 + "again.\n\n## Next", text)
+
+    def test_campaign_log_row_finds_encounters_on_a_creature(self):
+        rel = "Creatures/Thing.md"
+        note = ("---\ntype: creature\n---\n\n# Thing\n\n## Encounters\n\n"
+                "- old\n")
+        vault = make_vault(self, {rel: note})
+        code, out = log(vault, f"{rel}\tCampaign Log\t{S2}new\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("§Encounters\tresolved", out)
+        self.assertNotIn("## Campaign Log", read(vault, rel))
+
+    def test_campaign_log_wins_when_the_note_has_it(self):
+        note = NPC.replace("# Hallam\n", "# Hallam\n\n## Appearances\n\n- a\n")
+        vault = make_vault(self, {NPC_REL: note})
+        _, out = log(vault, f"{NPC_REL}\tCampaign Log\t{S2}b\n")
+        self.assertIn("§Campaign Log\t", out)
+        self.assertNotIn("resolved", out)
+
+    def test_campaign_log_row_still_creates_when_no_equivalent(self):
+        note = "---\ntype: npc\n---\n\n# Hallam\n\n## Notes\n\ntext\n"
+        vault = make_vault(self, {NPC_REL: note})
+        code, out = log(vault, f"{NPC_REL}\tCampaign Log\t{S2}b\n")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("resolved", out)
+        self.assertIn("## Campaign Log", read(vault, NPC_REL))
+
+    def test_a_hidden_appearances_is_not_the_log(self):
+        note = ("---\ntype: npc\n---\n\n# Hallam\n\n<!-- gm-only -->\n\n"
+                "## GM Notes\n\n### Appearances\n\n- secret\n\n"
+                "<!-- /gm-only -->\n")
+        vault = make_vault(self, {NPC_REL: note})
+        _, out = log(vault, f"{NPC_REL}\tCampaign Log\t{S2}b\n")
+        self.assertNotIn("resolved", out)
+
 
 class GuardTests(unittest.TestCase):
     def test_a_path_that_is_not_a_note_is_refused(self):
@@ -1362,6 +1407,83 @@ class TimelineTests(unittest.TestCase):
         self.assertEqual(out.count("SKIP\t"), 1, out)
         self.assertEqual(read(vault, TL_REL).count("- **1814** — x"), 1)
 
+    # #314: --under a heading that is not the last one holding entries
+    def test_a_chapter_target_takes_entries_after_its_legacy_sessions(self):
+        legacy = TL.replace("<!-- gm-only -->",
+                            "## Session 5 — Hostile Takeover\n\n"
+                            "- **(date TBD)** — [[Raid]] — Boom.\n\n"
+                            "## Chapter 2\n\n- **1815** — later.\n\n"
+                            "<!-- gm-only -->")
+        vault = make_vault(self, {TL_REL: legacy})
+        code, out = tl(vault, "- **1814** — x\n",
+                       "--under", "## Chapter 1")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("WARNING", out)
+        text = read(vault, TL_REL)
+        self.assertIn("Boom.\n- **1814** — x\n\n## Chapter 2", text)
+
+    def test_a_chapter_target_with_no_later_chapter_runs_to_the_end(self):
+        legacy = TL.replace("<!-- gm-only -->",
+                            "## Session 5 — Hostile Takeover\n\n"
+                            "- **(date TBD)** — [[Raid]] — Boom.\n\n"
+                            "<!-- gm-only -->")
+        vault = make_vault(self, {TL_REL: legacy})
+        tl(vault, "- **1814** — x\n", "--under", "## Chapter 1")
+        self.assertIn("Boom.\n- **1814** — x\n\n<!-- gm-only",
+                      read(vault, TL_REL))
+
+    def test_a_session_target_keeps_its_own_section(self):
+        two = TL.replace("<!-- gm-only -->",
+                         "### Session 2 — Next\n\n- **5 August 1814** — b.\n\n"
+                         "<!-- gm-only -->")
+        vault = make_vault(self, {TL_REL: two})
+        _, out = tl(vault, "- **4 August 1814** — x\n",
+                    "--under", "### Session 1 — Arrival (3 August)")
+        self.assertNotIn("WARNING", out)
+        self.assertIn("They came.\n- **4 August 1814** — x\n\n### Session 2",
+                      read(vault, TL_REL))
+
+    def test_an_ambiguous_target_still_warns(self):
+        odd = TL.replace("<!-- gm-only -->",
+                         "## Session 5 — Hostile Takeover\n\n"
+                         "- **(date TBD)** — [[Raid]] — Boom.\n\n"
+                         "<!-- gm-only -->").replace(
+                             "## Chapter 1", "## Notes from the road")
+        vault = make_vault(self, {TL_REL: odd})
+        _, out = tl(vault, "- **1814** — x\n",
+                    "--under", "## Notes from the road")
+        self.assertIn("WARNING", out)
+        self.assertIn("## Session 5 — Hostile Takeover", out)
+
+    def test_the_last_entry_heading_draws_no_placement_warning(self):
+        legacy = TL.replace("<!-- gm-only -->",
+                            "## Session 5 — Hostile Takeover\n\n"
+                            "- **(date TBD)** — [[Raid]] — Boom.\n\n"
+                            "<!-- gm-only -->")
+        vault = make_vault(self, {TL_REL: legacy})
+        _, out = tl(vault, "- **1814** — x\n",
+                    "--under", "## Session 5 — Hostile Takeover")
+        self.assertNotIn("WARNING", out)
+
+    def test_later_headings_with_no_entries_draw_no_warning(self):
+        # TL's "Future Events" is hidden and holds entries, but a heading
+        # with no list under it is not a place entries went
+        bare = TL.replace("- **12 August 1814** — the ritual.\n", "")
+        vault = make_vault(self, {TL_REL: bare})
+        _, out = tl(vault, "- **1814** — x\n", "--under", "## Chapter 1")
+        self.assertNotIn("WARNING", out)
+
+    def test_entries_land_after_child_headings_inside_the_section(self):
+        vault = make_vault(self, {TL_REL: TL})
+        code, out = tl(vault, "- **4 August 1814** — Next.\n",
+                       "--under", "## Chapter 1")
+        self.assertEqual(code, 0, out)
+        text = read(vault, TL_REL)
+        self.assertLess(text.index("They came."),
+                        text.index("- **4 August 1814** — Next."))
+        self.assertLess(text.index("- **4 August 1814** — Next."),
+                        text.index("<!-- gm-only -->"))
+
 
 class Group1Tests(unittest.TestCase):
     def _subprocess_log(self, rel):
@@ -1606,6 +1728,28 @@ class Group2Tests(unittest.TestCase):
             code, out = log(vault, f"{NPC_REL}\tLog\t- new\n")
             self.assertEqual(code, 0, out)
             self.assertIn("- a\n- b\n- new\n\n", read(vault, NPC_REL))
+
+    def test_a_log_line_goes_above_a_dataview_block_when_there_are_no_rows(self):
+        # Canticle's NPCs: `## Appearances` holds only a dataview query.
+        tail = "```dataview\nTABLE x\nWHERE y\n```\n"
+        for before, after in (("## Appearances\n\n", "\n## Source\n"),
+                              ("## Appearances\n\nSeen twice.\n\n", ""),
+                              ("## Appearances\n\n", "")):
+            note = f"---\ntype: zzz\n---\n\n# H\n\n{before}{tail}{after}"
+            vault = make_vault(self, {NPC_REL: note})
+            code, out = log(vault, f"{NPC_REL}\tAppearances\t- new\n")
+            self.assertEqual(code, 0, out)
+            self.assertIn(f"{before}- new\n\n{tail}{after}",
+                          read(vault, NPC_REL))
+
+    def test_a_second_log_line_joins_the_first_above_the_dataview(self):
+        note = ("---\ntype: zzz\n---\n\n# H\n\n## Appearances\n\n"
+                "```dataview\nTABLE x\n```\n")
+        vault = make_vault(self, {NPC_REL: note})
+        log(vault, f"{NPC_REL}\tAppearances\t- one\n")
+        log(vault, f"{NPC_REL}\tAppearances\t- two\n")
+        self.assertIn("## Appearances\n\n- one\n- two\n\n```dataview",
+                      read(vault, NPC_REL))
 
     def test_a_log_line_keeps_a_nested_continuation_with_its_item(self):
         note = ("---\ntype: zzz\n---\n\n# H\n\n## Log\n\n- a\n  - sub\n"

@@ -68,11 +68,17 @@ flush` in the site directory and report its per-PC summary
 (publish-site `references/live-state-flush.md`). No Tier-2 site →
 skip.
 
-Read the session's Play Notes (`type: session-play-notes`); if
-none exists, ask the GM for notes (paste, path, or dictation).
+Read the session's Play Notes (`type: session-play-notes`). A
+session with no index or Play Notes: `vw session-new --number N
+--title "T" --play-date D [--export PATH]` files both; without an
+export, ask the GM for notes (paste, path, or dictation) for them.
 Read the PC roster and the session's Plan for planned-vs-actual.
 `plan_check.py <plan> --inventory` gives per-section status and
 word counts but not scene titles — open the plan body for those.
+What the last session left open (for What Carries Forward and the
+Keeper Checklist) comes from `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py"
+<vault> --carry --before "<session index>"`; don't read that Wrap-Up.
 
 **gmassistant.app export:** if the Play Notes contain a
 `## Memorable Moments` heading, they are a gmassistant.app
@@ -128,14 +134,14 @@ the narrative.
    `--session` is written verbatim: match the vault's existing
    shape (`"Chapter 4, Session 9"` or `9`). On a shape `ERROR`,
    re-run with the matching form, not `--force-shape`.
-2. Reconcile `## Current Status` against the prior block, Step 3
-   and the recap: carry unresolved `Open threads` unchanged, add
-   new threads and exclusive knowledge, remove resolved threads,
-   refresh `Location`/`Condition`/`Carrying`. Labelled fields,
-   present tense, player-facing — not Story-file narrative. Create
-   it if absent. Field spec, placement and protected sections:
-   `shared/pc-body-structure.md`. Leave `## Notes`, `## GM Notes`
-   and all gm-only/spoiler content untouched.
+2. `vw status <PC> --show` prints the prior fields. Reconcile them
+   against Step 3 and the recap: carry unresolved `Open threads`
+   unchanged, add new threads and exclusive knowledge, remove
+   resolved threads, refresh `Location`/`Condition`/`Carrying`.
+   Present tense, player-facing — not Story-file narrative. Send
+   the changed fields to `vw status <PC> --write`; it rewrites
+   them in place (fields: `shared/pc-body-structure.md`). Don't
+   read or hand-edit the sheet.
 3. Write an advancement change (XP, points) to a sheet only when
    the Play Notes or the GM give the amount; a missing award goes
    in the Keeper Checklist.

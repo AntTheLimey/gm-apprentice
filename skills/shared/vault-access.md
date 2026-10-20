@@ -20,6 +20,7 @@ being open.
 | Session document chain status | `vault_check.py sessions` |
 | Publish-safety scan (unfenced Keeper content, fence balance; + `--fix` re-nest) | `vault_check.py gm-leak` |
 | PC body skeleton / Current Status placement / missing or unfilled Stat Sheet | `vault_check.py pc-body` |
+| A PC's Current Status fields: print them, or rewrite the ones sent in place | `vault_write.py status PC --show` / `--write` |
 | Wrap-Up conformance (+ `--fix` re-nest) | `vault_check.py wrapup` |
 | Faults in the notes that change what the site shows (a named note with no page, a stray `%%`, an unclosed fence, a secret name in prose) | `vault_check.py site-faults` |
 | Active PC roster | `vault_check.py active-pcs` |
@@ -28,6 +29,7 @@ being open.
 | Thread ages / decay | `session_context.py --threads` |
 | Prep bundle, brief form (Step 5 default) | `session_context.py --brief` |
 | PC arc slice (Step 12) — replaces per-PC sheet reads | `session_context.py --arcs` |
+| What the last Wrap-Up carries forward — replaces reading it | `session_context.py --carry --before INDEX` |
 | Rebuild `_meta/index.md` | `index_build.py` |
 | Session Plan conformance | `plan_check.py` |
 | Narrative-plan discovery (`Planning/` + `_midwife/`) | `plans_index.py` |

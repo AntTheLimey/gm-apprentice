@@ -121,24 +121,12 @@ and interpret its findings against it:
 
 ### Step 4: Character Story Validation
 
-**Story file existence:** For every PC entity where `status`
-is not `dead` or `retired`, verify that a companion story file
-exists at `Characters/PCs/{Name}_Story.md`.
-
-- Severity: **Warning**
-- Proposed fix: "Create story file from template for
-  [[{Name}]]" — use `shared/templates/character-story.md`
-
-**Story file recency:** For every story file that exists,
-read its `asOfSession` frontmatter field. Compare to the
-latest wrap-up's session number (from the session index or
-most recent `type: session_wrap` file).
-
-- If the story file is more than 1 session behind, flag it
-- Severity: **Warning**
-- Proposed fix: "Story file for [[{Name}]] is current to
-  session {X} but latest wrap-up is session {Y} — run
-  vault-ingest on the intervening wrap-ups to catch up"
+Run `vault_check.py <vault-path> stories`. Each WARNING row is a
+living PC with no story file (create it from
+`shared/templates/character-story.md`), or a story file more than
+one Wrap-Up behind (the row names the fix). A story whose
+`asOfSession` names no session is also a WARNING: ask the GM which
+session it is current to.
 
 ### Step 5: Relationship Quality
 

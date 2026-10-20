@@ -950,6 +950,10 @@ class PublishToolUnavailable(Exception):
 CUT_SINCE = "1.17.0"
 
 
+# The first publish tool with the `lines` op `dates` (`timeline --order`).
+DATES_SINCE = "1.41.0"
+
+
 class PublishToolTooOld(PublishToolUnavailable):
     """The tool answers, but predates a question asked of it. The message
     is the first version that has it."""
@@ -2523,6 +2527,8 @@ def active_pcs(vault: Path) -> list[tuple[str, dict[str, Any]]]:
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
             continue
+        if rel.split("/")[0] in UNCHECKED_DIRS:
+            continue  # an archived copy of a sheet or template plays nobody
         if is_out_of_play(fm, gone):
             continue
         out.append((rel, fm))
