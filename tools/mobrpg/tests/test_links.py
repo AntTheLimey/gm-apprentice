@@ -205,3 +205,15 @@ def test_push_resolves_the_exact_file_before_the_folded_key():
     assert out == f"at [The Woodland Ghost]({FMT.format(world='w', eid='PLACE')})."
     out = links.rewrite_md_for_push("a [[Woodland Ghost|ghost]].", idx, "w", FMT, files)
     assert f"({FMT.format(world='w', eid='CREATURE')})" in out
+
+
+def test_push_ambiguous_folded_name_does_not_fall_back_to_the_key_index():
+    # Two notes fold to "marshhag": the unlinked one must stay plain text, not take the linked one's id.
+    flattened: list = []
+    out = links.rewrite_md_for_push("See [[Marsh Hag]].", IDX, "w1", FMT,
+                                    id_by_file={}, ambiguous={"marshhag"}, flattened=flattened)
+    assert out == "See Marsh Hag." and flattened == ["Marsh Hag"]
+    # An exact file match still resolves.
+    out = links.rewrite_md_for_push("See [[Marsh Hag]].", IDX, "w1", FMT,
+                                    id_by_file={"Marsh Hag": "e-5"}, ambiguous={"marshhag"})
+    assert FMT.format(world="w1", eid="e-5") in out

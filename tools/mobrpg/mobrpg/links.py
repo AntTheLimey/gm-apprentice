@@ -125,8 +125,10 @@ def rewrite_md_for_push(md_text: str, ent_id_by_key: dict,
     def _wl(m: re.Match) -> str:
         name = m.group(1).strip()
         display = (m.group(2) or m.group(1)).strip()   # [[Name|Alias]] shows Alias
-        eid = (files.get(unicodedata.normalize("NFC", name.split("#")[0]))
-               or ent_id_by_key.get(suggest._key(name)))   # ...but resolves by Name
+        key = suggest._key(name)
+        eid = files.get(unicodedata.normalize("NFC", name.split("#")[0]))
+        if not eid and key not in (ambiguous or ()):
+            eid = ent_id_by_key.get(key)   # ...but resolves by Name, unless two notes share it
         if eid:
             return f"[{display}]({url_fmt.format(world=world_id, eid=eid)})"
         if flattened is not None and suggest._key(name) in (ambiguous or ()):
