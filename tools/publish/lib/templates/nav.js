@@ -109,7 +109,7 @@ function renderTopNav(pages, currentOutputPath, config, options = {}) {
     const linksHtml = links.map(link => navLink(link, currentDir, '        ')).join('\n');
 
     return `      <div class="nav-group">
-        <button class="nav-group-toggle">${escapeHtml(group.name)}</button>
+        <button class="nav-group-toggle" aria-expanded="false">${escapeHtml(group.name)}</button>
         <div class="nav-dropdown">
 ${linksHtml}
         </div>
@@ -156,10 +156,10 @@ ${groupsHtml}
   <button class="nav-search-btn" onclick="openSearch()" aria-label="Search" aria-haspopup="dialog" aria-expanded="false">Search <kbd class="search-kbd">⌘K</kbd></button>
   ${colorModeEnabled() ? TOGGLE_BUTTON : ''}
   <button class="nav-search-icon-btn" onclick="openSearch()" aria-label="Search" aria-haspopup="dialog" aria-expanded="false"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L21 21"/></svg></button>
-  <button class="nav-mobile-toggle" onclick="document.getElementById('mobile-nav').classList.add('open')" aria-label="Menu">&#9776;</button>
+  <button class="nav-mobile-toggle" aria-label="Menu" aria-expanded="false" aria-controls="mobile-nav">&#9776;</button>
 </header>
 <div id="mobile-nav" class="mobile-nav-overlay">
-  <button class="mobile-nav-close" onclick="document.getElementById('mobile-nav').classList.remove('open')" aria-label="Close">&times;</button>
+  <button class="mobile-nav-close" aria-label="Close">&times;</button>
 ${mobileLinksHtml}
   ${colorModeEnabled() ? MOBILE_TOGGLE : ''}
 </div>`;

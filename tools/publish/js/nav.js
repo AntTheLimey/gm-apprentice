@@ -7,18 +7,50 @@
     }
   });
 
-  // Close mobile nav on link click
+  // The menu buttons say aria-expanded, so a screen reader knows whether their menu is open.
   var mobileNav = document.getElementById('mobile-nav');
+  var menuButton = document.querySelector('.nav-mobile-toggle');
+  // A link standing in for a menu button (the lone Story entry) opens nothing, so it says nothing.
+  function sayExpanded(btn, open) {
+    if (btn && btn.tagName !== 'A') btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  function setMobileOpen(open) {
+    if (!mobileNav) return;
+    if (open) mobileNav.classList.add('open'); else mobileNav.classList.remove('open');
+    if (menuButton) menuButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  function closeGroups() {
+    document.querySelectorAll('.nav-group').forEach(function(g) {
+      g.classList.remove('open');
+      sayExpanded(g.querySelector('.nav-group-toggle'), false);
+    });
+  }
+
+  document.querySelectorAll('.nav-group-toggle').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var group = btn.parentElement;
+      var wasOpen = group.classList.contains('open');
+      closeGroups();
+      if (!wasOpen) {
+        group.classList.add('open');
+        sayExpanded(btn, true);
+      }
+    });
+  });
+  document.addEventListener('click', function(e) {
+    if (!e.target.closest('.nav-group')) closeGroups();
+  });
+
+  if (menuButton) menuButton.addEventListener('click', function() { setMobileOpen(true); });
   if (mobileNav) {
+    // Close mobile nav on link click
     mobileNav.querySelectorAll('a').forEach(function(a) {
-      a.addEventListener('click', function() {
-        mobileNav.classList.remove('open');
-      });
+      a.addEventListener('click', function() { setMobileOpen(false); });
     });
     // The close button hides the menu, itself included, so it hands the focus back too.
     var closeButton = mobileNav.querySelector('.mobile-nav-close');
     if (closeButton) closeButton.addEventListener('click', function() {
-      var menuButton = document.querySelector('.nav-mobile-toggle');
+      setMobileOpen(false);
       if (menuButton) menuButton.focus();
     });
   }
@@ -29,13 +61,13 @@
     if (e.key !== 'Escape') return;
     var focused = document.activeElement;
     if (mobileNav && mobileNav.classList.contains('open')) {
-      mobileNav.classList.remove('open');
-      var menuButton = document.querySelector('.nav-mobile-toggle');
+      setMobileOpen(false);
       if (menuButton && mobileNav.contains(focused)) menuButton.focus();
     }
     document.querySelectorAll('.nav-group.open').forEach(function(g) {
       g.classList.remove('open');
       var toggle = g.querySelector('.nav-group-toggle');
+      sayExpanded(toggle, false);
       if (toggle && g.contains(focused)) toggle.focus();
     });
   });

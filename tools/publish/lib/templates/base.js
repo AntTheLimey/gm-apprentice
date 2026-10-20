@@ -129,19 +129,6 @@ ${scriptTags}
     btn.classList.toggle('visible', window.scrollY > 400);
   }, { passive: true });
 })();
-document.querySelectorAll('.nav-group-toggle').forEach(function(btn) {
-  btn.addEventListener('click', function() {
-    var group = btn.parentElement;
-    var isOpen = group.classList.contains('open');
-    document.querySelectorAll('.nav-group').forEach(function(g) { g.classList.remove('open'); });
-    if (!isOpen) group.classList.add('open');
-  });
-});
-document.addEventListener('click', function(e) {
-  if (!e.target.closest('.nav-group')) {
-    document.querySelectorAll('.nav-group').forEach(function(g) { g.classList.remove('open'); });
-  }
-});
 </script>
 
 </body>
