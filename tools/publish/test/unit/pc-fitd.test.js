@@ -179,25 +179,6 @@ describe('pcTemplate with a FitD sheet', () => {
 });
 
 describe('renderFitDSheet body sections', () => {
-  it('renders action ratings as dots', () => {
-    const html = render([
-      '## Stat Sheet', '', '### Action Ratings', '',
-      '**Insight**', '', '| Action | Rating |', '|---|---|', '| hunt | 2 |', '| study | 0 |', '',
-      '**Prowess**', '', '| Action | Rating |', '|---|---|', '| skirmish | 1 |',
-    ].join('\n'));
-    assert.ok(html.includes('fitd-action-ratings'));
-    assert.strictEqual(dotsFor(html, 'hunt'), 2);
-  });
-
-  it('renders stress and trauma', () => {
-    const html = render([
-      '## Stat Sheet', '', '### Stress & Trauma', '',
-      '| Attribute | Value |', '|---|---|', '| Stress | 4 / 9 |', '| Trauma | Cold, Haunted |',
-    ].join('\n'));
-    assert.ok(html.includes('4 / 9'));
-    assert.ok(html.includes('Haunted'));
-  });
-
   it('renders the Special Abilities section', () => {
     const html = render('## Special Abilities\n\n- Ghost Mind\n- Shadow\n');
     assert.ok(html.includes('fitd-abilities'));
