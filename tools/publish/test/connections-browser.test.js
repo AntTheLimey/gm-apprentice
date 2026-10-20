@@ -20,9 +20,11 @@ const skip = findChrome() ? false : 'no Chrome or Chromium found';
 describe('Connections in a browser at phone width', { skip }, () => {
   let site;
   let page;
+  let r;
   before(() => {
     site = buildBoth(FILES, { sites: ['player'], player: { folder_map: { Characters: 'characters', Places: 'places' } } });
     page = path.join(site.player.dir, 'characters', 'subject.html');
+    r = measure(page, 390, script);   // one launch of the browser serves the three tests
   });
   after(() => site && site.cleanup());
 
@@ -45,21 +47,18 @@ describe('Connections in a browser at phone width', { skip }, () => {
   };
 
   it('a long word wraps inside the page, with no sideways scroll', () => {
-    const r = measure(page, 390, script);
     assert.equal(r.live, true, 'the page script drew the section');
     assert.equal(r.nameOverflow, 0);
     assert.ok(r.scrollWidth <= r.clientWidth, `the page scrolls sideways (${r.scrollWidth} > ${r.clientWidth})`);
   });
 
   it('the tree is measured and its lines drawn, including in a tab that was hidden', () => {
-    const r = measure(page, 390, script);
     assert.ok(r.tabs >= 2, `tabs: ${r.tabs}`);
     assert.ok(r.firstLines > 0, 'lines in the first tab');
     assert.ok(r.secondLines > 0, 'lines in the tab opened after load');
   });
 
   it('opening a hidden tab raises no page error', () => {
-    const r = measure(page, 390, script);
     assert.deepEqual(r.errors, []);
   });
 });
