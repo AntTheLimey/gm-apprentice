@@ -6,6 +6,7 @@ const os = require('os');
 const path = require('path');
 const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, slugify } = require('./scanner');
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit } = require('./image-optimize');
+const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
@@ -1219,8 +1220,15 @@ function buildSite(options) {
     // nothing is written
   } else if (searchData) {
     const searchDest = path.join(outputDir, 'search-index.json');
-    fs.writeFileSync(searchDest, jsonText(searchData));
+    const searchJson = jsonText(searchData);
+    fs.writeFileSync(searchDest, searchJson);
     console.log('  wrote search-index.json');
+    // The text the player index is made from, kept beside the site for the leak gate (index-text.js). Not for a
+    // preview's folder: the site's own index is the one deploy checks.
+    if (!gm && !options.outputDirOverride && imageCacheDir(configDir, { outputDirs: [outputDir], vaultPath: config.vaultPath })) {
+      writeIndexText(indexTextPath(configDir), searchJson, searchData.records);
+      ignoreCacheInGit(configDir);
+    }
 
     // Copy lunr.js client library
     const lunrSrc = require.resolve('lunr');

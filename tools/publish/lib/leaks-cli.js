@@ -7,7 +7,7 @@ const { loadVaultConfig, siteConfigFor, outputFolderOf, tomlOutputFolder } = req
 const { loadPublishList, writeAccepted } = require('./manifest');
 const { ACCEPTED_FROM, SETTLE_FROM } = require('./settings/layout');
 const { siteToolOlderThan } = require('./settings/move');
-const { runLeakGate, formatFindings, gateSummary } = require('./leak-gate');
+const { runLeakGate, formatFindings, gateSummary, isPage } = require('./leak-gate');
 const { wordsOf } = require('./leak-gate/text');
 const { HEADING_NOTE, settledHeadingGone } = require('./settled-headings');
 
@@ -21,7 +21,6 @@ function gateFolderFor(configPath) {
   return named || path.resolve(siteRoot, outputFolderOf(config));
 }
 
-const isPage = (rel) => /\.html?$/i.test(rel);
 const sameLeak = (a, b) => a.note === b.note && a.text === b.text;
 
 // The findings one accept covers: every one on a page (`allOnPage`), every one from a note (`note`), or the one named by

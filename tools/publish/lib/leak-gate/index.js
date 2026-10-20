@@ -11,9 +11,13 @@ const { nameFindings, neverShowFindings } = require('./names');
 const { wordsOf, nameSet, onlyNames } = require('./text');
 const { isSettledHeading, settledHeadingGone } = require('../settled-headings');
 const { isAcceptedTie } = require('../accepted-ties');
+const { indexTexts } = require('./index-text');
 
 const findingId = (page, text) => crypto.createHash('sha1').update(`${page}\n${text}`).digest('hex').slice(0, 6);
 const keyOf = (page, text) => `${page}\n${text}`;
+// A file a visitor opens as a page. A search index entry is named after its index file and its page's address
+// ("search-index.json#npcs/ada.html"): a data file, as the index is.
+const isPage = (rel) => /\.html?$/i.test(rel) && !rel.includes('#');
 // A never-show word is its own rule: a finding of it, and an acceptance of it, never stand for another rule's on the
 // same page and text (an older accepted withheld name must not let a newly listed word through).
 const NEVER_NOTE = 'player_site.never_show';
@@ -49,6 +53,21 @@ function runLeakGate({ configPath, outputDir }) {
       raw.set(key, { id: findingId(file.rel, piece.text), kind: 'text', code: 'HIDDEN_TEXT', page: file.rel, text: piece.text, shown: piece.shown, note: piece.note, reason: piece.reason });
     }
   }
+  // The search index holds its entries' text as single terms, in no order: read as the build kept it, sentence by sentence,
+  // entry by entry, each text of an entry on its own (index-text.js).
+  const warnings = [...(hidden.warnings || [])];
+  for (const { file, entries } of indexTexts({ files, siteDir: hidden.siteDir, warnings })) {
+    for (const { href, texts } of entries) {
+      const page = `${file.rel}#${href}`;
+      for (const text of texts) {
+        for (const { piece } of matcher.scan(wordsOf(text))) {
+          const key = keyOf(page, piece.text);
+          if (raw.has(key)) continue;
+          raw.set(key, { id: findingId(page, piece.text), kind: 'text', code: 'HIDDEN_TEXT', page, text: piece.text, shown: piece.shown, note: piece.note, reason: piece.reason });
+        }
+      }
+    }
+  }
   // The name checks add theirs here, before the accepted list is applied.
   for (const f of nameFindings({ files, allFiles: listFiles(outputDir), hidden, findingId })) {
     const key = keyOf(f.page, f.text);
@@ -70,7 +89,7 @@ function runLeakGate({ configPath, outputDir }) {
   const findings = [...raw.values()].filter((f) => !acceptedKeys.has(findingKey(f))).sort(byPageText);
   const unneeded = [...accepted.filter((a) => !raw.has(acceptedKey(a))),
     ...everyAccepted.filter((a) => isSettledHeading(a) && settledHeadingGone(hidden.vaultPath, a))];
-  return done({ findings, unneeded, warnings: hidden.warnings || [], files: files.length });
+  return done({ findings, unneeded, warnings, files: files.length });
 }
 
 // The lines a person reads: one block per leak (a sentence from one note), its first page, the sentence, the other files
@@ -78,7 +97,7 @@ function runLeakGate({ configPath, outputDir }) {
 function formatFindings(result) {
   const lines = [];
   const groups = new Map();
-  const pageFirst = (a, b) => Number(!/\.html?$/i.test(a.page)) - Number(!/\.html?$/i.test(b.page));
+  const pageFirst = (a, b) => Number(!isPage(a.page)) - Number(!isPage(b.page));
   for (const f of [...result.findings].sort(pageFirst)) {
     // A never-show word has no note of its own, and is accepted page by page: one block per page.
     const key = f.code === 'NEVER_SHOW' ? `${f.note}\n${f.text}\n${f.page}` : `${f.note}\n${f.text}`;
@@ -105,4 +124,4 @@ function gateSummary(result) {
   };
 }
 
-module.exports = { runLeakGate, findingId, formatFindings, gateSummary };
+module.exports = { runLeakGate, findingId, formatFindings, gateSummary, isPage };
