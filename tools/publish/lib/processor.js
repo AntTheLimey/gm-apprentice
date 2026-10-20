@@ -2517,6 +2517,12 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
         const name = marked('withheld_names', `players see: ${hidden}`, withheldName(bare));
         return `[[${bare}|${name === null ? hidden : name}]]`;
       }
+      // A bare name with a note after it (`Zorn (the host)`, a participant's form): the name is read on its own.
+      const noted = /^([^[\]()]+?)\s*(\([^()]+\))$/.exec(bare);
+      if (noted) {
+        const name = nameIn(noted[1]);
+        if (name !== noted[1]) return `${name} ${noted[2]}`;
+      }
       return links(v, false);
     }
     if (Array.isArray(v)) return v.map(nameIn);
