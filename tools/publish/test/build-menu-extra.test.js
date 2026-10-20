@@ -467,3 +467,10 @@ test('housekeeping: a templates folder inside another folder holds the plugin\'s
     { files: { 'Characters/_Templates/Index.md': '---\ntype: template\n---\n' } });
   assert.match(menus(s.read('index.html')).desktop, /href="gazetteer\/index\.html">Gazetteer</);
 });
+
+test('a [[wikilink]] in a label prints as its name, as page text does (#388)', () => {
+  const s = site([{ label: 'The [[Harbour|Docks]]', link: 'Harbour' }]);
+  const root = menus(s.read('index.html')).desktop;
+  assert.match(root, /<a class="nav-group-toggle" href="locations\/harbour\.html">The Docks<\/a>/);
+  assert.doesNotMatch(root, /\[\[/);
+});
