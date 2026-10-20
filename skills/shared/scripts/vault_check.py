@@ -5974,6 +5974,12 @@ def main() -> int:
                          "--file list")
     ap.add_argument("--json", action="store_true",
                     help="settings only: print the rows as JSON")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="report-stats only: print each count's old and new "
+                         "value and write nothing")
+    ap.add_argument("--force", action="store_true",
+                    help="report-stats only: allow a count to drop below a "
+                         "non-zero one already in the report")
     ap.add_argument("--apply", nargs="+", default=[], metavar="NAME",
                     help="settings only: apply the fix for each named fault "
                          "(a proposed fix needs the GM's yes by name)")
@@ -6069,7 +6075,8 @@ def main() -> int:
                 if not args.file or len(args.file) != 1:
                     raise ValueError("report-stats needs one --file REPORT")
                 out = qa_checks.report_stats(args.vault, args.file[0],
-                                             args.folder)
+                                             args.folder, args.dry_run,
+                                             args.force)
         except ValueError as e:
             print(f"error: {e}", file=sys.stderr)
             return 2

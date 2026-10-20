@@ -315,24 +315,20 @@ def tally_findings(body: str) -> dict[str, int]:
     return counts
 
 
-def report_stats(vault: Path, rel: str, folder: str | None = None
-                 ) -> list[str]:
-    """Rewrite the report's `vault_stats` with the nine counts and return
-    them as `key: value` lines. The finding counts come from the report;
-    `entities_scanned` and `files_read` are the typed notes and the notes
-    in the report's scope (a `chapter_N` scope is that chapter; `folder`
-    overrides it), the QA reports themselves left out."""
-    path = vault / rel
-    text = path.read_text(encoding="utf-8")
-    lines = text.splitlines(keepends=True)
-    end, err = frontmatter_span(lines)
-    if err:
-        raise ValueError(f"{rel}: {err}")
-    fm = extract_frontmatter(text) or {}
+def _count(value: Any) -> int:
+    """A stored count as a number; 0 when it is not one."""
+    try:
+        return int(str(value).strip())
+    except ValueError:
+        return 0
+
+
+def _scan_counts(vault: Path, fm: dict[str, Any], folder: str | None
+                 ) -> tuple[int, int]:
+    """(typed notes, notes) in the report's scope, QA reports left out."""
     chapter = re.fullmatch(r"chapter_(\d+(?:\.\d+)?)", str(fm.get("scope")))
     prefix = folder.strip("/") if folder else None
-    notes = 0
-    entities = 0
+    notes = entities = 0
     for nrel, ntext in vault_files(vault):
         nfm = extract_frontmatter(ntext) or {}
         if nfm.get("type") == "qa_report":
@@ -345,20 +341,83 @@ def report_stats(vault: Path, rel: str, folder: str | None = None
             continue
         notes += 1
         entities += 1 if nfm.get("type") else 0
-    counts = tally_findings("".join(lines[end + 1:]))
-    values = {"entities_scanned": entities, "files_read": notes, **counts}
-    block = ["vault_stats:\n"] + [f"  {k}: {values[k]}\n" for k in STAT_KEYS]
+    return entities, notes
+
+
+def report_stats(vault: Path, rel: str, folder: str | None = None,
+                 dry_run: bool = False, force: bool = False) -> list[str]:
+    """Update the QA report's `vault_stats` with the nine counts and return
+    them as `key: value` lines (`key: old -> new` on a dry run, which
+    writes nothing). Only a `type: qa_report` note is touched, and every
+    other key in its `vault_stats` stays. The finding counts come from the
+    report; `entities_scanned` and `files_read` are the typed notes and
+    the notes in the report's scope (a `chapter_N` scope is that chapter;
+    `folder` overrides it), the QA reports themselves left out, and are
+    taken from today's vault only while the report holds 0 and is dated
+    today: a scan count already there, or on an older report, is the vault
+    as it was. A count that would drop below a
+    non-zero one is refused unless `force`."""
+    path = vault / rel
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines(keepends=True)
+    end, err = frontmatter_span(lines)
+    if err:
+        raise ValueError(f"{rel}: {err}")
+    fm = extract_frontmatter(text) or {}
+    if fm.get("type") != "qa_report":
+        raise ValueError(f"{rel}: not a QA report (type: {fm.get('type')}); "
+                         f"report-stats writes only `type: qa_report` notes")
     head = lines[1:end]
     at = next((i for i, ln in enumerate(head)
                if re.match(r"vault_stats\s*:", ln)), None)
-    if at is None:
-        head += block
-    else:
+    stop = 0
+    if at is not None:
         stop = at + 1
         while stop < len(head) and (head[stop].startswith((" ", "\t"))
                                     or not head[stop].strip()):
             stop += 1
-        head[at:stop] = block
+    old: dict[str, int] = {}
+    for ln in head[(at or 0) + 1:stop]:
+        m = re.match(r"\s+([A-Za-z_]+)\s*:\s*(\S+)\s*$", ln)
+        if m:
+            old[m.group(1)] = _count(m.group(2))
+    counts = tally_findings("".join(lines[end + 1:]))
+    values = dict(counts)
+    values["entities_scanned"] = old.get("entities_scanned", 0)
+    values["files_read"] = old.get("files_read", 0)
+    # Today's vault describes only a report written today.
+    if (not values["entities_scanned"] or not values["files_read"]) and (
+            str(fm.get("date")) == datetime.date.today().isoformat()):
+        entities, notes = _scan_counts(vault, fm, folder)
+        values["entities_scanned"] = values["entities_scanned"] or entities
+        values["files_read"] = values["files_read"] or notes
+    lower = [k for k in STAT_KEYS if values[k] < old.get(k, 0)]
+    if dry_run:
+        return [f"{k}: {old.get(k, '-')} -> {values[k]}"
+                + ("  (refused: lower; needs --force)"
+                   if k in lower and not force else "")
+                for k in STAT_KEYS]
+    if lower and not force:
+        raise ValueError(
+            f"{rel}: would lower " + ", ".join(
+                f"{k} {old[k]} -> {values[k]}" for k in lower)
+            + "; nothing written (--force to lower them)")
+    if at is None:
+        head += ["vault_stats:\n"] + [f"  {k}: {values[k]}\n"
+                                      for k in STAT_KEYS]
+    else:
+        todo = dict(values)
+        for j in range(at + 1, stop):
+            m = re.match(r"(\s+)([A-Za-z_]+)\s*:", head[j])
+            if m and m.group(2) in todo:
+                head[j] = f"{m.group(1)}{m.group(2)}: {todo.pop(m.group(2))}\n"
+        indent = next((m.group(1) for ln in head[at + 1:stop]
+                       if (m := re.match(r"(\s+)\S", ln))), "  ")
+        extra = [f"{indent}{k}: {todo[k]}\n" for k in STAT_KEYS if k in todo]
+        # New keys go after the last key line, not after trailing blanks.
+        last = max((j for j in range(at, stop) if head[j].strip()),
+                   default=at)
+        head[last + 1:last + 1] = extra
     path.write_text("".join([lines[0], *head, *lines[end:]]),
                     encoding="utf-8")
     return [f"{k}: {values[k]}" for k in STAT_KEYS]

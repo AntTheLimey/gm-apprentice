@@ -5,6 +5,7 @@
 Run: python3 tests/test_qa_checks.py
 """
 
+import datetime
 import re
 import shutil
 import subprocess
@@ -236,10 +237,10 @@ REPORT = """---
 type: qa_report
 mode: full_audit
 scope: full_vault
-date: 2026-10-04
+date: {today}
 vault_stats:
-  entities_scanned: 999
-  findings_total: 999
+  entities_scanned: 0
+  findings_total: 0
 tags: [qa]
 ---
 
@@ -286,6 +287,7 @@ tags: [qa]
 |---------|--------|-------|
 | four | fine | [[z]] |
 """
+REPORT = REPORT.replace("{today}", datetime.date.today().isoformat())
 
 
 class ReportStatsTests(unittest.TestCase):
@@ -314,7 +316,6 @@ class ReportStatsTests(unittest.TestCase):
             encoding="utf-8")
         fm = vaultlib.extract_frontmatter(text) or {}
         self.assertEqual(text.count("vault_stats:"), 1)
-        self.assertNotIn("999", text)
         for key in qa.STAT_KEYS:
             self.assertRegex(text, rf"\n  {key}: {got[key]}\n")
         self.assertEqual(fm["tags"], ["qa"])
@@ -322,7 +323,7 @@ class ReportStatsTests(unittest.TestCase):
 
     def test_a_report_with_no_vault_stats_gets_the_block(self):
         text = REPORT.replace(
-            "vault_stats:\n  entities_scanned: 999\n  findings_total: 999\n",
+            "vault_stats:\n  entities_scanned: 0\n  findings_total: 0\n",
             "")
         v, got = self.stats(text)
         self.assertEqual(got["findings_total"], "7")
@@ -363,6 +364,89 @@ class ReportStatsTests(unittest.TestCase):
                 '---\ntype: session\nchapter: "[[Chapter 3 - Z]]"\n---\n'})
         self.assertEqual((got["entities_scanned"], got["files_read"]),
                          ("1", "1"))
+
+    PATH = "_QA/QA_full_audit_2026-10-04.md"
+
+    def old_report(self, stats, extra=None, **kw):
+        """A report whose vault_stats is `stats` (key: value lines), in a
+        vault with 2 typed notes and 1 plain one."""
+        text = REPORT.replace(
+            "vault_stats:\n  entities_scanned: 0\n  findings_total: 0\n",
+            "vault_stats:\n" + stats)
+        files = {self.PATH: text,
+                 "Characters/Ada.md": "---\ntype: npc\n---\n",
+                 "Characters/Bo.md": "---\ntype: npc\n---\n",
+                 "Notes/plain.md": "no frontmatter\n"}
+        files.update(extra or {})
+        return make(self, files)
+
+    def test_other_vault_stats_keys_stay(self):
+        v = self.old_report("  entities_scanned: 0\n  site_faults: 86\n"
+                            "  checks_run: [a, b]\n")
+        qa.report_stats(v, self.PATH)
+        text = (v / self.PATH).read_text(encoding="utf-8")
+        self.assertIn("\n  site_faults: 86\n", text)
+        self.assertIn("\n  checks_run: [a, b]\n", text)
+        self.assertIn("\n  findings_total: 7\n", text)
+        self.assertEqual(text.count("site_faults"), 1)
+
+    def test_scan_counts_already_in_the_report_are_kept(self):
+        v = self.old_report("  entities_scanned: 400\n  files_read: 520\n"
+                            "  findings_total: 0\n")
+        lines = dict(ln.split(": ") for ln in qa.report_stats(v, self.PATH))
+        self.assertEqual((lines["entities_scanned"], lines["files_read"]),
+                         ("400", "520"))
+
+    def test_an_older_reports_scan_counts_are_not_taken_from_todays_vault(self):
+        v = self.old_report("  entities_scanned: 0\n  files_read: 0\n")
+        path = v / self.PATH
+        path.write_text(path.read_text(encoding="utf-8").replace(
+            f"date: {datetime.date.today().isoformat()}", "date: 2026-05-08"),
+            encoding="utf-8")
+        lines = dict(ln.split(": ") for ln in qa.report_stats(v, self.PATH))
+        self.assertEqual((lines["entities_scanned"], lines["files_read"],
+                          lines["findings_total"]), ("0", "0", "7"))
+
+    def test_only_a_qa_report_is_written(self):
+        v = make(self, {"CONTINUE_HERE.md": "---\ntype: note\n---\n\nx\n",
+                        "plain.md": "no frontmatter\n"})
+        for rel in ("CONTINUE_HERE.md", "plain.md"):
+            with self.assertRaises(ValueError):
+                qa.report_stats(v, rel)
+        with self.assertRaisesRegex(ValueError, "not a QA report"):
+            qa.report_stats(v, "CONTINUE_HERE.md")
+        self.assertEqual((v / "CONTINUE_HERE.md").read_text(encoding="utf-8"),
+                         "---\ntype: note\n---\n\nx\n")
+
+    def test_a_count_that_would_drop_is_refused_unless_forced(self):
+        v = self.old_report("  findings_total: 86\n  findings_fixed: 52\n")
+        before = (v / self.PATH).read_text(encoding="utf-8")
+        with self.assertRaisesRegex(ValueError, "findings_total 86 -> 7"):
+            qa.report_stats(v, self.PATH)
+        self.assertEqual((v / self.PATH).read_text(encoding="utf-8"), before)
+        lines = dict(ln.split(": ") for ln in
+                     qa.report_stats(v, self.PATH, force=True))
+        self.assertEqual(lines["findings_total"], "7")
+
+    def test_a_dry_run_prints_old_and_new_and_writes_nothing(self):
+        v = self.old_report("  findings_total: 86\n  files_read: 5\n")
+        before = (v / self.PATH).read_text(encoding="utf-8")
+        out = qa.report_stats(v, self.PATH, dry_run=True)
+        self.assertEqual((v / self.PATH).read_text(encoding="utf-8"), before)
+        self.assertIn("findings_total: 86 -> 7  (refused: lower; needs "
+                      "--force)", out)
+        self.assertIn("files_read: 5 -> 5", out)
+        self.assertIn("findings_critical: - -> 2", out)
+
+    def test_cli_dry_run_and_force(self):
+        v = self.old_report("  findings_total: 86\n")
+        proc = run_cli(v, "report-stats", "--file", self.PATH)
+        self.assertEqual(proc.returncode, 2)
+        proc = run_cli(v, "report-stats", "--file", self.PATH, "--dry-run")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertIn("findings_total: 86 -> 7", proc.stdout)
+        proc = run_cli(v, "report-stats", "--file", self.PATH, "--force")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
 
     def test_cli_needs_one_file_and_prints_the_counts(self):
         v = make(self, {"_QA/r.md": REPORT})
