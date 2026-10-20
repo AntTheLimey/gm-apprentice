@@ -460,3 +460,15 @@ def test_python_and_the_build_agree_on_who_is_out_of_play(tmp_path):
     assert "pc-%02d" % len(words) in kept  # the one who is "alive"
     assert "pc-%02d" % (len(words) - 1) not in kept  # "KIA"
     assert "pc-%02d" % (len(words) - 2) not in kept  # "Dead "
+
+
+def test_crash_names_a_typeerror_not_the_file_path(tmp_path, monkeypatch):
+    vault = make_vault(tmp_path, "publish:\n  site: true")
+    trace = (b"/Users/gm/tool/lib/settings/read.js:212\n  x.y.z;\n    ^\n\n"
+             b"TypeError: Cannot read properties of undefined\n    at readNew\n"
+             b"\nNode.js v25.5.0\n")
+    monkeypatch.setattr(vaultlib.subprocess, "run", stub_run(trace))
+    with pytest.raises(vaultlib.SettingsUnavailable) as e:
+        vaultlib.settings(vault)
+    assert "TypeError: Cannot read properties" in str(e.value)
+    assert "read.js" not in str(e.value)
