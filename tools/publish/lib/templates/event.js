@@ -15,9 +15,6 @@ function parseParticipant(raw) {
     const annotation = wikiMatch[2] ? wikiMatch[2].trim() : '';
     return { target, display, annotation, isLink: true };
   }
-  // Running text with links in it (`[[Ilse]] — met at the quay`, `[[Otto]], [[Zorn]]`) is not one
-  // name: it is shown the way the body shows its links.
-  if (str.includes('[[')) return { target: '', display: str, annotation: '', isLink: false, running: true };
   const plainMatch = str.match(/^(.+?)\s*\((.+)\)$/);
   if (plainMatch) {
     return { target: '', display: plainMatch[1].trim(), annotation: plainMatch[2].trim(), isLink: false };
@@ -68,9 +65,7 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
     const items = fm.participants.map(raw => {
       const p = parseParticipant(raw);
       let nameHtml;
-      if (p.running) {
-        return `<li>${renderMetaValue(p.display, linkMap, page.outputPath)}</li>`;
-      } else if (p.isLink) {
+      if (p.isLink) {
         const resolved = linkMap?.[p.target];
         if (resolved) {
           const href = encodeHref(relativePath(currentDir, resolved));
@@ -79,7 +74,8 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
           nameHtml = escapeHtml(p.display);
         }
       } else {
-        nameHtml = escapeHtml(p.display);
+        // Running text with links in it (`[[Ilse]] — met at the quay`, `[[Otto]], [[Zorn]]`) is shown the way the body shows its links.
+        nameHtml = renderMetaValue(p.display, linkMap, page.outputPath);
       }
       if (p.annotation) {
         return `<li>${nameHtml} — ${renderMetaValue(p.annotation, linkMap, page.outputPath)}</li>`;
