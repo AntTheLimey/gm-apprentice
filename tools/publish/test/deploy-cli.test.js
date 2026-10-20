@@ -322,65 +322,41 @@ describe('deploy: github-pages', () => {
     assert.match(h.text(), /rejected: fetch first/);
   });
 
-  it('pushes bare when the current branch already has an upstream', async () => {
-    const h = harness({
-      config: ghConfig,
-      command: (cmd, args) => {
-        if (args[0] === 'status') return { code: 0, stdout: ' M docs/index.html\n' };
-        if (args[0] === 'rev-parse') return { code: 0, stdout: 'origin/main\n' };
-        return { code: 0, stdout: '' };
-      },
+  // The push depends on whether the current branch has an upstream: bare when it does, `-u origin HEAD` when it does not.
+  const PUSH_CASES = [
+    ['has an upstream', { code: 0, stdout: 'origin/main\n' }, ['push'], /git push$/m, /git push -u origin HEAD/],
+    ['has no upstream yet', { code: 1, stderr: "fatal: no upstream configured for branch 'main'" }, ['push', '-u', 'origin', 'HEAD'], /git push -u origin HEAD/, null],
+  ];
+  for (const [when, revParse, push, dryWant, dryNot] of PUSH_CASES) {
+    it(`pushes ${push.length === 1 ? 'bare' : 'with -u origin HEAD'} when the current branch ${when}`, async () => {
+      const h = harness({
+        config: ghConfig,
+        command: (cmd, args) => {
+          if (args[0] === 'status') return { code: 0, stdout: ' M docs/index.html\n' };
+          if (args[0] === 'rev-parse') return revParse;
+          return { code: 0, stdout: '' };
+        },
+      });
+      const rc = await runDeploy({ configPath: CONFIG }, h.deps);
+      assert.strictEqual(rc, 0);
+      assert.deepStrictEqual(h.commands.map(c => c.args), [
+        ['add', 'docs/'],
+        ['status', '--porcelain', 'docs/'],
+        ['commit', '-m', 'Rebuild site', '--only', '--', 'docs/'],
+        ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
+        push,
+      ]);
+      if (push.length > 1) assert.match(h.text(), /no upstream branch yet — pushing with -u origin HEAD/);
     });
-    const rc = await runDeploy({ configPath: CONFIG }, h.deps);
-    assert.strictEqual(rc, 0);
-    assert.deepStrictEqual(h.commands.map(c => c.args), [
-      ['add', 'docs/'],
-      ['status', '--porcelain', 'docs/'],
-      ['commit', '-m', 'Rebuild site', '--only', '--', 'docs/'],
-      ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
-      ['push'],
-    ]);
-  });
 
-  it('pushes with -u origin HEAD when the current branch has no upstream yet', async () => {
-    const h = harness({
-      config: ghConfig,
-      command: (cmd, args) => {
-        if (args[0] === 'status') return { code: 0, stdout: ' M docs/index.html\n' };
-        if (args[0] === 'rev-parse') return { code: 1, stderr: "fatal: no upstream configured for branch 'main'" };
-        return { code: 0, stdout: '' };
-      },
+    it(`--dry-run reflects ${push.length === 1 ? 'a bare' : 'a -u'} push when the branch ${when}`, async () => {
+      const h = harness({ config: ghConfig, command: (cmd, args) => (args[0] === 'rev-parse' ? revParse : { code: 0, stdout: '' }) });
+      const rc = await runDeploy({ configPath: CONFIG, dryRun: true }, h.deps);
+      assert.strictEqual(rc, 0);
+      assert.match(h.text(), dryWant);
+      if (dryNot) assert.doesNotMatch(h.text(), dryNot);
     });
-    const rc = await runDeploy({ configPath: CONFIG }, h.deps);
-    assert.strictEqual(rc, 0);
-    assert.deepStrictEqual(h.commands.map(c => c.args), [
-      ['add', 'docs/'],
-      ['status', '--porcelain', 'docs/'],
-      ['commit', '-m', 'Rebuild site', '--only', '--', 'docs/'],
-      ['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}'],
-      ['push', '-u', 'origin', 'HEAD'],
-    ]);
-    assert.match(h.text(), /no upstream branch yet — pushing with -u origin HEAD/);
-  });
-
-  it('--dry-run reflects a bare push when the branch already has an upstream', async () => {
-    const h = harness({ config: ghConfig, command: () => ({ code: 0, stdout: '' }) });
-    const rc = await runDeploy({ configPath: CONFIG, dryRun: true }, h.deps);
-    assert.strictEqual(rc, 0);
-    const text = h.text();
-    assert.match(text, /git push$/m);
-    assert.doesNotMatch(text, /git push -u origin HEAD/);
-  });
-
-  it('--dry-run reflects a -u push when the branch has no upstream yet', async () => {
-    const h = harness({
-      config: ghConfig,
-      command: (cmd, args) => (args[0] === 'rev-parse' ? { code: 1, stderr: 'no upstream' } : { code: 0, stdout: '' }),
-    });
-    const rc = await runDeploy({ configPath: CONFIG, dryRun: true }, h.deps);
-    assert.strictEqual(rc, 0);
-    assert.match(h.text(), /git push -u origin HEAD/);
-  });
+  }
 });
 
 describe('deploy --verify', () => {

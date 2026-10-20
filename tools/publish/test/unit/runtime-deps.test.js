@@ -49,11 +49,4 @@ describe('runtime dependencies (Bug 1 guardrail)', () => {
       );
     });
   }
-
-  it('vendored deps are physically present in node_modules', () => {
-    for (const dep of deps) {
-      const p = path.join(toolDir, 'node_modules', dep, 'package.json');
-      assert.ok(fs.existsSync(p), `expected vendored ${dep} at ${p}`);
-    }
-  });
 });

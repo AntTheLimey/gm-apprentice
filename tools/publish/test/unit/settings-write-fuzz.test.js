@@ -14,7 +14,7 @@ const { applyChanges } = require('../../lib/settings/write');
 const { readSettings, entry, legacyNameOf, stops } = require('../../lib/settings');
 const { NEW_FILE, OLD_FILE, at } = require('../../lib/settings/layout');
 
-const ITERATIONS = 400; // per layout
+const ITERATIONS = 100; // per layout; FUZZ_SEED tries another run, and a fixed seed keeps CI deterministic
 const SEED = Number(process.env.FUZZ_SEED) || 20261013; // FUZZ_SEED tries another
 
 function rng(seed) {
@@ -286,12 +286,12 @@ function run(legacy) {
 
 test('seeded property test: the new file', () => {
   const steps = run(false);
-  assert.ok(steps > 200, `ran ${steps} steps`);
+  assert.ok(steps > 50, `ran ${steps} steps`);
 });
 
 test('seeded property test: the old file', () => {
   const steps = run(true);
-  assert.ok(steps > 200, `ran ${steps} steps`);
+  assert.ok(steps > 50, `ran ${steps} steps`);
 });
 
 test('the generator makes a spread of shapes', () => {

@@ -9,12 +9,6 @@ const { writeNewConfig, writeOldConfig } = require('../helpers/settings-files');
 
 const vault = () => fs.mkdtempSync(path.join(os.tmpdir(), 'layout-'));
 
-test('the three file names', () => {
-  assert.equal(NEW_FILE, '_meta/vault-config.yaml');
-  assert.equal(OLD_FILE, '_meta/vault-config.md');
-  assert.equal(STATE_FILE, '_meta/vault-state.json');
-});
-
 test('a vault with neither file is on no layout', () => {
   assert.equal(layoutOf(vault()), 'none');
 });

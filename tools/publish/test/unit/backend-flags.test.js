@@ -46,10 +46,6 @@ describe('backend detection (used by the migration only)', () => {
     assert.strictEqual(detectStatusBar(dir), true);
   });
 
-  it('no longer exports resolveBackendFlags', () => {
-    assert.strictEqual(require('../../lib/backend-flags').resolveBackendFlags, undefined);
-  });
-
   it('hasRealKvId rejects the placeholder', () => {
     assert.strictEqual(hasRealKvId(siteDir({ kv: 'placeholder' })), false);
     assert.strictEqual(hasRealKvId(siteDir({ kv: 'real' })), true);

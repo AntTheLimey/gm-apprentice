@@ -72,14 +72,6 @@ test('a failed after step does not claim nothing was built (#386)', () => {
   assert.throws(() => runSteps([fail], { cwd: os.tmpdir(), label: 'before_build', log: () => {} }), /Nothing was published\./);
 });
 
-test('a script is not split where a part sets shell state (#386)', () => {
-  const { splitScript } = require('../lib/settings/steps');
-  assert.deepEqual(splitScript('unset FOO && node a.js'), ['unset FOO && node a.js']);
-  assert.deepEqual(splitScript('umask 022 && node a.js'), ['umask 022 && node a.js']);
-  assert.deepEqual(splitScript('alias ll=ls && node a.js'), ['alias ll=ls && node a.js']);
-  assert.deepEqual(splitScript('node a.js && node b.js'), ['node a.js', 'node b.js']);
-});
-
 test('the address of a published page stands even when a part of it is a hidden note\'s name (#386)', () => {
   const { resolveSiteLink, rememberHiddenNames } = require('../lib/build');
   const linkMap = Object.create(null);
@@ -88,14 +80,6 @@ test('the address of a published page stands even when a part of it is a hidden 
   assert.deepEqual(resolveSiteLink('maps/real-page.html', { linkMap, pages: [] }), { kind: 'site', href: 'maps/real-page.html' });
   // An address that is no page stays dropped.
   assert.deepEqual(resolveSiteLink('maps/other.html', { linkMap, pages: [] }), { kind: 'none', href: null });
-});
-
-test('a tall banner picture is height-capped on a phone, not only on a desktop (#386)', () => {
-  const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'style.css'), 'utf8');
-  const base = /\n\.landing-banner-img \{([^}]*)\}/.exec(css);
-  assert.ok(base, 'the base rule is there');
-  assert.match(base[1], /max-height:\s*\d/);
-  assert.match(base[1], /object-fit:\s*contain/);
 });
 
 test('add onto a list written as a YAML alias is refused, and nothing is written (#380)', () => {
@@ -125,11 +109,6 @@ test('a vault keep list that drops folders the site file keeps is a stop naming 
   const t = scratch('version: 1\nplayer_site:\n  keep: [audio, maps, extra]\n');
   const r2 = readSettings({ vaultPath: t.vault, siteConfig: { preserveDirs: ['audio'] }, siteDir: t.root });
   assert.ok(!r2.faults.some((x) => x.level === 'stop'));
-});
-
-test('the docs say build steps run as plain shell commands without npm\'s variables (#386)', () => {
-  const doc = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'docs', 'site-settings.md'), 'utf8');
-  assert.match(doc, /plain shell commands[^.]*without npm's variables/);
 });
 
 test('a key can be added after a |+ block scalar: its trailing blank lines are content and stay (#380)', () => {

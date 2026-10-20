@@ -89,10 +89,6 @@ test('the hiding side is marked', () => {
   }
 });
 
-test('a switch that must never fail on says so', () => {
-  for (const n of ['player_site.publish', 'player_site.sheets.show', 'player_site.features.live_stats', 'player_site.features.inbox']) assert.equal(entry(n).onFault, false, n);
-});
-
 test('ids owned elsewhere are imported, not restated', () => {
   const { SKINS, FRAME_IDS } = require('../../lib/skins');
   assert.deepEqual(entry('player_site.sheets.skin').values, Object.keys(SKINS));

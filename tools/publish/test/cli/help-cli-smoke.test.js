@@ -37,26 +37,31 @@ const CASES = {
 };
 
 describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {
-  for (const [cmd, patterns] of Object.entries(CASES)) {
-    it(`${cmd} --help prints ${cmd} usage and exits 0`, async () => {
-      const r = await runIn([cmd, '--help']);
+  // Every subcommand in parallel: one test, a spawn each. `-h` is the same flag in the same place in bin/gm-publish.js,
+  // so it is run for one command only.
+  it('every subcommand\'s --help prints its own usage and exits 0, and -h does the same', async () => {
+    const entries = Object.entries(CASES);
+    const runs = await Promise.all([...entries.map(([cmd]) => runIn([cmd, '--help'])), runIn([entries[0][0], '-h'])]);
+    entries.forEach(([cmd, patterns], i) => {
+      const r = runs[i];
       assert.strictEqual(r.code, 0, `${cmd} --help exits 0`);
-      for (const p of patterns) assert.match(r.stdout, p);
+      for (const p of patterns) assert.match(r.stdout, p, cmd);
       // The top-level banner must NOT be what came back.
-      assert.doesNotMatch(r.stdout, /Static site generator for gm-apprentice campaign vaults/);
+      assert.doesNotMatch(r.stdout, /Static site generator for gm-apprentice campaign vaults/, cmd);
+      // --help prints the usage and runs nothing: flush must not go looking for live state.
+      if (cmd === 'flush') assert.doesNotMatch(r.stderr, /Could not read live state/, cmd);
     });
-    it(`${cmd} -h behaves the same`, async () => {
-      const r = await runIn([cmd, '-h']);
-      assert.strictEqual(r.code, 0);
-      assert.match(r.stdout, patterns[0]);
-    });
-  }
+    const short = runs[entries.length];
+    assert.strictEqual(short.code, 0);
+    assert.match(short.stdout, entries[0][1][0]);
+  });
 
   it('top-level --help still prints the command list', async () => {
     const r = await runIn(['--help']);
     assert.strictEqual(r.code, 0);
     assert.match(r.stdout, /Usage:/);
     assert.match(r.stdout, /setup-inbox/);
+    assert.match(r.stdout, /doctor/);
   });
 
   it('sheet show --help prints the sheet usage and exits 0', async () => {

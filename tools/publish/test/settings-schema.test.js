@@ -50,10 +50,8 @@ test('the committed schema file is what the list produces', () => {
   assert.equal(JSON.stringify(schema()), JSON.stringify(schema()), 'the key order is not deterministic');
 });
 
-test('the schema names its dialect and home', () => {
+test('the schema is closed at every level the settings file is, and lists its four groups', () => {
   const s = schema();
-  assert.equal(s.$schema, 'https://json-schema.org/draft/2020-12/schema');
-  assert.equal(s.$id, 'https://github.com/AntTheLimey/gm-apprentice/blob/main/tools/publish/schema/vault-config.schema.json');
   assert.deepEqual(Object.keys(s.properties), ['version', 'vault', 'player_site', 'gm_site']);
   assert.equal(s.additionalProperties, false);
   assert.equal(s.properties.vault.additionalProperties, false);

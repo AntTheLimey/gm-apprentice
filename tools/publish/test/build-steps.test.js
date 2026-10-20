@@ -51,6 +51,18 @@ function scratch({ settings = {}, layout = 'new', package: pkg = null } = {}) {
   return { root, vault, site, configPath };
 }
 const cli = (s, ...args) => spawnSync(process.execPath, [BIN, ...args, '--config', s.configPath], { encoding: 'utf8', cwd: s.site });
+// The same build and doctor, in this process, their printed lines caught (the first notice test below runs the real command).
+async function inProcess(fn) {
+  const saved = { log: console.log, warn: console.warn, error: console.error };
+  const out = []; const err = [];
+  console.log = (...a) => out.push(a.join(' ')); console.warn = (...a) => err.push(a.join(' ')); console.error = (...a) => err.push(a.join(' '));
+  let status = 0;
+  try { status = (await fn()) || 0; } catch (e) { err.push(`Build failed: ${e.message}`); status = 1; } finally { Object.assign(console, saved); }
+  const text = (l) => l.map((x) => `${x}\n`).join('');
+  return { status, stdout: text(out), stderr: text(err) };
+}
+const buildIn = (s) => inProcess(() => { build({ configPath: s.configPath, runSteps: true, site: 'player' }); });
+const doctorIn = (s, ...flags) => inProcess(() => require('../lib/doctor-cli').runDoctor(['--site', '--config', s.configPath, ...flags]));
 const lines = (file) => fs.readFileSync(file, 'utf8').split(/\r?\n/).filter(Boolean);
 
 test('runSteps runs each command in order, says each, and stops at the first that fails', () => {
@@ -215,27 +227,27 @@ test('a package.json that holds the same step as the vault: the build warns it r
   assert.match(doctor.stdout + doctor.stderr, /BUILD_STEPS_TWICE/);
 });
 
-test('a package.json step that differs from the vault\'s: the build and doctor say both run and the update leaves it, with what to do', () => {
+test('a package.json step that differs from the vault\'s: the build and doctor say both run and the update leaves it, with what to do', async () => {
   const s = scratch({ settings: { after_build: [append('own', 'own.txt')] }, package: { scripts: { postbuild: append('npm', 'npm.txt') } } });
-  const r = cli(s, 'build');
+  const r = await buildIn(s);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stderr, /`postbuild` in the site folder's package\.json differs from the vault's after_build steps\. Both run under `npm run build`/);
   assert.match(r.stderr, /next update leaves it where it is: .*make them the same, or take the script out of package\.json/);
   assert.doesNotMatch(r.stderr, /run twice|moves it|removes it/);
   assert.equal(fs.existsSync(path.join(s.site, 'npm.txt')), false, 'the tool ran nothing from package.json');
-  const doctor = cli(s, 'doctor', '--site');
+  const doctor = await doctorIn(s);
   assert.match(doctor.stdout + doctor.stderr, /BUILD_STEPS_TWICE/);
   assert.match(doctor.stdout + doctor.stderr, /make the package\.json script the same as the vault's steps, or take it out/);
 });
 
-test('a package.json step with no steps in the vault for that slot is not a double run: one plain line, no warning, not in doctor', () => {
+test('a package.json step with no steps in the vault for that slot is not a double run: one plain line, no warning, not in doctor', async () => {
   for (const settings of [{}, { before_build: [append('own', 'own.txt')] }]) {
     const s = scratch({ settings, package: { scripts: { postbuild: append('npm', 'npm.txt') } } });
-    const r = cli(s, 'build');
+    const r = await buildIn(s);
     assert.equal(r.status, 0, r.stderr);
     assert.doesNotMatch(r.stderr, /twice|WARNING.*postbuild/);
     assert.match(r.stdout, /`postbuild` in the site folder's package\.json still runs under `npm run build` and `deploy`, and moves into the vault at the next update/);
-    const doctor = cli(s, 'doctor', '--site', '--json');
+    const doctor = await doctorIn(s, '--json');
     assert.doesNotMatch(doctor.stdout, /BUILD_STEPS_TWICE|run twice|runs? under `npm run build`, after the tool/);
   }
 });
@@ -248,11 +260,11 @@ test('deploy says so when it skips a package.json hook because the vault holds d
   assert.ok(!h.out.some((l) => /`prebuild` in package\.json is not run/.test(l)));
 });
 
-test('a package.json with no steps, or on the old layout, gives no such warning', () => {
+test('a package.json with no steps, or on the old layout, gives no such warning', async () => {
   const none = scratch({ package: { scripts: { start: 'x' } } });
-  assert.doesNotMatch(cli(none, 'build').stderr, /npm run build/);
+  assert.doesNotMatch((await buildIn(none)).stderr, /npm run build/);
   const legacy = scratch({ layout: 'legacy', package: HOOKS });
-  assert.doesNotMatch(cli(legacy, 'build').stderr, /npm run build/);
+  assert.doesNotMatch((await buildIn(legacy)).stderr, /npm run build/);
   assert.deepEqual(packageScripts(legacy.site), { prebuild: 'node pre.js', postbuild: 'node post.js' });
 });
 

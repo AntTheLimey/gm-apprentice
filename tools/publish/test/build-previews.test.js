@@ -1,4 +1,4 @@
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 require('./helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const { build } = require('../lib/build');
 const { pageText, cardProblems } = require('./helpers/card-subset');
-const { fixtureNames, prepareFixture } = require('./helpers/fixture-build');
+const { prepareFixture } = require('./helpers/fixture-build');
 const { insideNoPreview } = require('./helpers/no-preview');
 const { buildVault: buildSmallVault } = require('./helpers/build-vault');
 
@@ -41,8 +41,13 @@ const FILES = (extra) => ({
   'Locations/Hidden.md': '---\ntype: location\npublish: false\n---\nNobody knows.\n',
 });
 
+// The default build, made once for the tests that only read it.
+let defaultSite = null;
+const defaultBuild = () => defaultSite || (defaultSite = buildVault(FILES('')));
+after(() => { if (defaultSite) fs.rmSync(defaultSite.root, { recursive: true, force: true }); });
+
 test('the build writes one card per published page and marks every page', () => {
-  const { read, root } = buildVault(FILES(''));
+  const { read, root } = defaultBuild();
   const cards = JSON.parse(read('previews.json'));
   assert.deepStrictEqual(Object.keys(cards).sort(), ['characters/npcs/hallam.html', 'locations/north-gate.html']);
   assert.deepStrictEqual(cards['characters/npcs/hallam.html'], { t: 'Hallam', k: 'NPC', f: [['Role', 'Warden']], x: 'Keeper of the gate.' });
@@ -50,22 +55,19 @@ test('the build writes one card per published page and marks every page', () => 
   assert.match(html, /<main class="content"[^>]* data-previews="on">/);
   assert.match(html, /<script src="\.\.\/js\/previews\.js"><\/script>/);
   assert.ok(fs.existsSync(path.join(root, 'docs', 'js', 'previews.js')));
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 test('the 404 page carries the attribute and the script like every other page', () => {
-  const { read, root } = buildVault(FILES(''));
+  const { read } = defaultBuild();
   const html = read('404.html');
   assert.match(html, /<main class="content" data-previews="on">/);
   assert.match(html, /<script src="\/js\/previews\.js"><\/script>/);
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 test('nothing hidden reaches the cards', () => {
-  const { read, root } = buildVault(FILES(''));
+  const { read } = defaultBuild();
   const text = read('previews.json');
   for (const hidden of ['killer', 'He did it', 'Nobody knows', 'Hidden']) assert.ok(!text.includes(hidden), hidden);
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 test('desktop marks the pages desktop', () => {
@@ -109,38 +111,7 @@ test('a build with previews off after one with them on keeps nothing from the fi
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-// The fixture vaults, each built as a site. A fixture that cannot build is listed
-// here by name with a reason (none today: every one builds).
-const UNBUILDABLE = {};
-
-// The card is a subset of the page: every string on a card occurs in that page's own text.
-test('every card string occurs in its own built page, on every fixture vault that builds', () => {
-  const failures = [];
-  let checked = 0;
-  for (const name of fixtureNames()) {
-    if (UNBUILDABLE[name]) continue;
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'previews-fixture-'));
-    try {
-      try { quietBuild(prepareFixture(name, root)); } catch (e) {
-        assert.fail(`fixture ${name} no longer builds (${e.message}); list it in UNBUILDABLE with a reason`);
-      }
-      const cards = JSON.parse(fs.readFileSync(path.join(root, 'docs', 'previews.json'), 'utf8'));
-      for (const [rel, card] of Object.entries(cards)) {
-        // Every key names a file the build wrote.
-        if (!fs.existsSync(path.join(root, 'docs', ...rel.split('/')))) failures.push(`${name}/${rel}: a card with no page`);
-        const html = fs.readFileSync(path.join(root, 'docs', ...rel.split('/')), 'utf8');
-        const { problems } = cardProblems(card, pageText(html));
-        for (const pr of problems) failures.push(`${name}/${rel}: ${pr}`);
-        checked++;
-      }
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  }
-  assert.deepStrictEqual(failures, []);
-  assert.ok(checked > 60, `checked ${checked} cards`);
-
-});
+// (The card-subset sweep over every fixture vault is in integration/fixture-sweep.test.js.)
 
 // Listing containers (each row already a summary) opt out of cards; running prose does not.
 test('listing containers carry data-no-preview, and only when previews are on', () => {

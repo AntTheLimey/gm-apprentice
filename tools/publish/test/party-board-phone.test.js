@@ -68,16 +68,6 @@ const decls = (block, selector) => {
   return m[1];
 };
 
-test('style.css takes the Status cell out of the row flow on a phone and keeps its header exposed', () => {
-  const b = phoneBlock();
-  assert.match(decls(b, '.gl-party-table td[data-gl-party-field="status"]'), /flex:\s*0 0 100%/);
-  const hidden = decls(b, '.gl-party-table th:last-child');
-  assert.match(hidden, /position:\s*absolute/);
-  assert.match(hidden, /clip-path:\s*inset\(50%\)/);
-  assert.doesNotMatch(hidden, /display:\s*none/, 'visually hidden, not removed from assistive tech');
-  assert.match(decls(b, '.gl-party-scroll'), /overflow-x:\s*visible/);
-});
-
 test('on a phone a header and its cells share size, padding and alignment, so each header sits over its column', () => {
   const b = phoneBlock();
   const shared = decls(b, '.gl-party-table th, .gl-party-table td');

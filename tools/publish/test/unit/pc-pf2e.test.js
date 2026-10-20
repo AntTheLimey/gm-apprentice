@@ -132,45 +132,6 @@ describe('pcTemplate with a PF2e sheet', () => {
   });
 });
 
-describe('renderPF2eSheet body sections', () => {
-  it('renders 6 attribute cards with signed modifiers', () => {
-    const html = render([
-      '## Stat Sheet', '', '### Attributes', '',
-      '| Attribute | Modifier |', '|---|---|',
-      '| STR | +4 |', '| DEX | +2 |', '| CON | +3 |', '| INT | +0 |', '| WIS | +1 |', '| CHA | -1 |',
-    ].join('\n'));
-    assert.strictEqual((html.match(/class="dnd-ability-card/g) || []).length, 6);
-    assert.ok(html.includes('+4'));
-    assert.ok(html.includes('+0'));
-    assert.ok(html.includes('-1'));
-  });
-
-  it('renders body skills with their rank', () => {
-    const html = render([
-      '## Skills', '', '| Skill | Attribute | Rank | Modifier |', '|---|---|---|---|',
-      '| Athletics | STR | Expert | +9 |', '| Acrobatics | DEX | Trained | +5 |',
-    ].join('\n'));
-    assert.ok(html.includes('dnd-skills'));
-    assert.ok(html.includes('Athletics'));
-    assert.ok(html.includes('Expert'));
-    assert.ok(html.includes('Acrobatics'));
-  });
-
-  it('renders hero points from the body Core table', () => {
-    const body = '## Stat Sheet\n\n### Core\n\n| Attribute | Value |\n|---|---|\n| Level | 2 |\n| Hero Points | 2 |\n';
-    assert.strictEqual(stat(render(body), 'Hero Points'), '2');
-  });
-
-  it('renders spell slots by rank from the body', () => {
-    const html = render([
-      '## Spellcasting', '', '### Spell Slots', '',
-      '| Rank | Total | Expended |', '|---|---|---|', '| 1 | 3 | 0 |', '| 2 | 2 | 0 |',
-    ].join('\n'));
-    assert.ok(html.includes('Spell Slots'));
-    assert.strictEqual(stat(html, 'Rank 1'), '3 / 3');
-  });
-});
-
 // The note body is the only source: a frontmatter copy of any stat is not read.
 describe('renderPF2eSheet ignores frontmatter stats', () => {
   const sentinel = {

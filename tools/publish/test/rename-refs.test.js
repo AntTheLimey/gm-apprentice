@@ -5,6 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
+const { runRename } = require('../lib/rename-refs');
 
 const { pcLiveKey, slugify } = require('../lib/scanner');
 const { build } = require('../lib/build');
@@ -23,8 +24,17 @@ function vaultWith(files) {
   return dir;
 }
 
+// In-process: the same function the command calls. One test below runs the real command, for the wiring.
 function rename(vault, from = FROM, to = TO, extra = []) {
-  const out = execFileSync('node', [BIN, 'manifest', 'rename', '--vault', vault, '--from', from, '--to', to, '--json', ...extra], { encoding: 'utf8' });
+  const names = [];
+  let configPath = null;
+  for (let i = 0; i < extra.length; i += 2) {
+    if (extra[i] === '--name') names.push(extra[i + 1]);
+    else if (extra[i] === '--config') configPath = extra[i + 1];
+  }
+  let out;
+  const rc = runRename({ vaultPath: vault, from, to, configPath, names: names.length ? names : undefined }, { out: (s) => { out = s; } });
+  assert.strictEqual(rc, 0);
   return JSON.parse(out);
 }
 
@@ -140,14 +150,24 @@ describe('manifest rename', () => {
     assert.deepStrictEqual(rename(vault).files, {});
   });
 
-  it('exits non-zero with one stderr line on bad arguments', () => {
+  it('the command itself prints the same answer as --json, and a missing --to or --vault is one stderr line', () => {
+    const vault = vaultWith({ '_meta/publish-list.yaml': LIST() });
+    const out = execFileSync('node', [BIN, 'manifest', 'rename', '--vault', vault, '--from', FROM, '--to', TO, '--json'], { encoding: 'utf8' });
+    assert.deepStrictEqual(JSON.parse(out), rename(vault));
     const r = spawnSync('node', [BIN, 'manifest', 'rename', '--vault', os.tmpdir(), '--from', FROM], { encoding: 'utf8' });
     assert.notStrictEqual(r.status, 0);
     assert.strictEqual(r.stderr.trim().split('\n').length, 1);
     assert.match(r.stderr, /--to/);
-    const bad = spawnSync('node', [BIN, 'manifest', 'rename', '--vault', '/no/such/dir', '--from', FROM, '--to', TO], { encoding: 'utf8' });
-    assert.notStrictEqual(bad.status, 0);
-    assert.strictEqual(bad.stderr.trim().split('\n').length, 1);
+  });
+
+  it('a vault that is not a folder is one stderr line and a non-zero return', () => {
+    const real = console.error;
+    const said = [];
+    console.error = (...a) => said.push(a.join(' '));
+    try {
+      assert.notStrictEqual(runRename({ vaultPath: '/no/such/dir', from: FROM, to: TO }, { out: () => {} }), 0);
+    } finally { console.error = real; }
+    assert.strictEqual(said.length, 1);
   });
 });
 

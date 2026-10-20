@@ -3,21 +3,10 @@ const assert = require('node:assert');
 const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, publishMode, keepOnlySections, keptSectionFlags, publishedFrontmatter, playerSafeMarkdown, isGmOnlyEdge } = require('../../lib/processor');
 
 describe('escapeHtml', () => {
-  it('escapes angle brackets', () => {
-    assert.strictEqual(escapeHtml('<script>'), '&lt;script&gt;');
-  });
-
-  it('escapes ampersand', () => {
-    assert.strictEqual(escapeHtml('A & B'), 'A &amp; B');
-  });
-
-  it('escapes quotes', () => {
-    assert.strictEqual(escapeHtml('"test"'), '&quot;test&quot;');
-  });
-
-  it('handles null/undefined', () => {
-    assert.strictEqual(escapeHtml(null), '');
-    assert.strictEqual(escapeHtml(undefined), '');
+  it('escapes angle brackets, ampersands and quotes, and reads null and undefined as empty', () => {
+    for (const [input, want] of [['<script>', '&lt;script&gt;'], ['A & B', 'A &amp; B'], ['"test"', '&quot;test&quot;'], [null, ''], [undefined, '']]) {
+      assert.strictEqual(escapeHtml(input), want, String(input));
+    }
   });
 
   it('leaves no target of a labelled link, however deep one is nested in another\'s label', () => {
@@ -305,60 +294,14 @@ describe('stripGmOnly', () => {
   // or an indented fence was obeyed — ending the real block early and
   // publishing everything after it. This repo's own docs demonstrate the
   // markers inside fenced examples, so it is a live shape.
-  it('ignores markers inside a ~~~ fence', () => {
-    const md = [
-      '<!-- gm-only -->',
-      'secret one',
-      '~~~markdown',
-      '<!-- /gm-only -->',
-      '~~~',
-      'secret two',
-      '<!-- /gm-only -->',
-      'public',
-    ].join('\n');
-    assert.strictEqual(stripGmOnly(md), '\npublic');
-  });
-
-  it('ignores markers inside a fence longer than three backticks', () => {
-    const md = [
-      '<!-- gm-only -->',
-      '````',
-      '```',
-      '<!-- /gm-only -->',
-      '```',
-      '````',
-      'secret tail',
-      '<!-- /gm-only -->',
-      'public',
-    ].join('\n');
-    assert.strictEqual(stripGmOnly(md), '\npublic');
-  });
-
-  it('ignores markers inside a fence indented up to three spaces', () => {
-    const md = [
-      '<!-- gm-only -->',
-      '   ```',
-      '<!-- /gm-only -->',
-      '   ```',
-      'secret tail',
-      '<!-- /gm-only -->',
-      'public',
-    ].join('\n');
-    assert.strictEqual(stripGmOnly(md), '\npublic');
-  });
-
-  it('a ``` line does not close a ~~~ fence', () => {
-    const md = [
-      '<!-- gm-only -->',
-      '~~~',
-      '```',
-      '<!-- /gm-only -->',
-      '~~~',
-      'secret tail',
-      '<!-- /gm-only -->',
-      'public',
-    ].join('\n');
-    assert.strictEqual(stripGmOnly(md), '\npublic');
+  it('ignores markers inside a fence of any shape: ~~~, longer than three backticks, indented up to three spaces, or a ``` line inside a ~~~ one', () => {
+    const cases = {
+      '~~~ fence': ['<!-- gm-only -->', 'secret one', '~~~markdown', '<!-- /gm-only -->', '~~~', 'secret two', '<!-- /gm-only -->', 'public'],
+      'a fence longer than three backticks': ['<!-- gm-only -->', '````', '```', '<!-- /gm-only -->', '```', '````', 'secret tail', '<!-- /gm-only -->', 'public'],
+      'a fence indented up to three spaces': ['<!-- gm-only -->', '   ```', '<!-- /gm-only -->', '   ```', 'secret tail', '<!-- /gm-only -->', 'public'],
+      'a ``` line does not close a ~~~ fence': ['<!-- gm-only -->', '~~~', '```', '<!-- /gm-only -->', '~~~', 'secret tail', '<!-- /gm-only -->', 'public'],
+    };
+    for (const [name, lines] of Object.entries(cases)) assert.strictEqual(stripGmOnly(lines.join('\n')), '\npublic', name);
   });
 
   it('still publishes a fenced code example that sits outside any block', () => {
@@ -416,24 +359,17 @@ describe('stripCallouts (issue #137)', () => {
     assert.strictEqual(stripCallouts(md, undefined), md);
   });
 
-  it('strips a whole callout blockquote when exclude is true', () => {
-    const md = 'Intro.\n\n> [!info] Keeper Only\n> The name is a cover.\n> More secret.\n\nOutro.';
-    assert.strictEqual(stripCallouts(md, true), 'Intro.\n\nOutro.');
-  });
-
   it('leaves ordinary blockquotes untouched', () => {
     const md = '> "An ordinary in-world quote."\n\nBody.';
     assert.strictEqual(stripCallouts(md, true), md);
   });
 
-  it('strips multiple callouts of different types', () => {
-    const md = '> [!warning] Campaign Design Decision\n> A.\n\nKeep.\n\n> [!danger] Alert Level\n> B.';
-    assert.strictEqual(stripCallouts(md, true), 'Keep.\n');
-  });
-
-  it('handles the fold marker and a title-less callout', () => {
-    const md = '> [!note]- Folded\n> hidden\n\n> [!tip]\n> also hidden\n\nEnd.';
-    assert.strictEqual(stripCallouts(md, true), 'End.');
+  it('strips a whole callout blockquote when exclude is true: one, several of different types, a folded one and one with no title', () => {
+    for (const [md, want] of [
+      ['Intro.\n\n> [!info] Keeper Only\n> The name is a cover.\n> More secret.\n\nOutro.', 'Intro.\n\nOutro.'],
+      ['> [!warning] Campaign Design Decision\n> A.\n\nKeep.\n\n> [!danger] Alert Level\n> B.', 'Keep.\n'],
+      ['> [!note]- Folded\n> hidden\n\n> [!tip]\n> also hidden\n\nEnd.', 'End.'],
+    ]) assert.strictEqual(stripCallouts(md, true), want, md);
   });
 
   it('strips only the listed types when given an array', () => {

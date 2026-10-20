@@ -40,25 +40,18 @@ after(async () => {
   fs.rmSync(work, { recursive: true, force: true });
 });
 
-test('it refuses a site that could be deployed', () => {
+test('it refuses a site that could be deployed (a wrangler.toml, or a host), and createPreview builds nothing for it', async () => {
   const { dir, p } = scratch();
   try {
     assert.equal(refusal(p), null);
     fs.writeFileSync(path.join(dir, 'wrangler.toml'), 'name = "x"\n');
     assert.match(refusal(p), /wrangler\.toml/);
+    await assert.rejects(createPreview({ configPath: p }), /wrangler\.toml/);
+    assert.equal(fs.existsSync(path.join(dir, 'docs')), false);
     fs.rmSync(path.join(dir, 'wrangler.toml'));
     const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
     fs.writeFileSync(p, JSON.stringify(Object.assign(cfg, { host: 'cloudflare-pages' })));
     assert.match(refusal(p), /host/);
-  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-});
-
-test('createPreview throws on a deployable site and builds nothing', async () => {
-  const { dir, p } = scratch();
-  try {
-    fs.writeFileSync(path.join(dir, 'wrangler.toml'), 'name = "x"\n');
-    await assert.rejects(createPreview({ configPath: p }), /wrangler\.toml/);
-    assert.equal(fs.existsSync(path.join(dir, 'docs')), false);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   const h = scratch('with-dnd-pc', { host: 'cloudflare-pages' });
   try {
@@ -100,12 +93,6 @@ test('a failure after the build removes the temp site', async () => {
 
 test('a malformed percent-encoding in the path is a 400', async () => {
   assert.equal((await fetch(base + '/%E0%A4%A')).status, 400);
-});
-
-test('the script never reads wrangler.toml or runs wrangler', () => {
-  const src = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'live-preview.js'), 'utf8');
-  assert.equal(/readFileSync\([^)]*wrangler/.test(src), false);
-  assert.equal(/child_process|spawn|exec|npx/.test(src), false);
 });
 
 test('it serves a GURPS site too, with nothing live in the pages', async () => {
@@ -230,4 +217,11 @@ test('the token is in no served file', async () => {
 
 test('the change-request inbox is not there', async () => {
   assert.equal((await fetch(base + '/api/request', { method: 'POST' })).status, 404);
+});
+
+// The preview never deploys: its script reads no wrangler.toml and runs no command (wrangler, npx or anything else).
+test('the preview script never reads wrangler.toml or runs a command', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'live-preview.js'), 'utf8');
+  assert.doesNotMatch(src, /readFileSync\([^)]*wrangler/);
+  assert.doesNotMatch(src, /child_process|spawn|exec|npx/);
 });

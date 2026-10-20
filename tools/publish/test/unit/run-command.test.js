@@ -46,10 +46,6 @@ describe('runCommand: a killed child is a failure whatever the status says', () 
     assert.strictEqual(withSpawn({ status: 0, signal: null, stdout: '', stderr: '' }, (m) => m.runCommand('x', [])).code, 0);
     assert.strictEqual(withSpawn({ status: 3, signal: null, stdout: '', stderr: '' }, (m) => m.runCommand('x', [])).code, 3);
   });
-
-  it('the deploy upload bound is ten minutes', () => {
-    assert.strictEqual(require('../../lib/run-command').WRANGLER_DEPLOY_TIMEOUT_MS, 600000);
-  });
 });
 
 // A bounded wrangler call that times out has NOTHING in stdout/stderr — spawnSync

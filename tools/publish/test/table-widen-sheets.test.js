@@ -20,8 +20,7 @@ const NOTES_COC = /<h2 class="section">Notes on rows <span class="rule"><\/span>
 // Every table in the template, in turn. Its first body row is filled with numbers (so a reader
 // has a value to keep), then given one extra cell. GURPS and CoC read columns by position:
 // the sheet, less its "Notes on rows", must equal the sheet of the same row without the extra
-// cell. D&D, PF2e and FitD pass an over-wide row through as written: every value and the extra
-// cell are on the page.
+// cell. (D&D, PF2e and FitD are tried row by row further down.)
 for (const [system, template] of Object.entries(SYSTEMS)) {
   const lines = templateBody(template).split('\n');
   const tables = [];
@@ -29,25 +28,27 @@ for (const [system, template] of Object.entries(SYSTEMS)) {
     if (/^\|/.test(lines[i]) && /^\|[-| :]+\|$/.test(lines[i + 1]) && /^\|/.test(lines[i + 2])) tables.push(i + 2);
   }
   test(`${system}: the template has tables to test`, () => assert.ok(tables.length >= 5));
+  // D&D, PF2e and FitD are covered by the every-row test below, which is stricter; only the two that read by column
+  // position are tried table by table here.
+  if (system !== 'gurps-4e' && system !== 'coc-7e') continue;
+  // The first body row of every table filled at once, so the sheet is built once and each wide row is compared to it.
+  const filled = lines.slice();
+  for (const [n, at] of tables.entries()) {
+    filled[at] = filled[at].split('|').map((c, j, all) => (j >= 2 && j < all.length - 1 && c.trim() === '' ? ` ${n + 1}${j} ` : c)).join('|');
+  }
+  let base = null;
   for (const [n, at] of tables.entries()) {
     const label = `${system}: table ${n + 1} (${lines[at - 2].slice(0, 30)})`;
-    const filled = lines.slice();
-    filled[at] = filled[at].split('|').map((c, j, all) => (j >= 2 && j < all.length - 1 && c.trim() === '' ? ` ${n + 1}${j} ` : c)).join('|');
     const wide = filled.slice();
     wide[at] = wide[at].replace(/\|\s*$/, `| ZZEXTRA${n} |`);
     test(`${label} keeps its values and shows a cell beyond its header`, () => {
-      const base = quiet(() => buildPc(system, filled.join('\n'))).html;
+      if (base === null) base = quiet(() => buildPc(system, filled.join('\n'))).html;
       const { html } = quiet(() => buildPc(system, wide.join('\n')));
       assert.ok(html.includes(`ZZEXTRA${n}`), `${label} lost its extra cell`);
-      if (system === 'gurps-4e' || system === 'coc-7e') {
-        assert.strictEqual(html.split(`ZZEXTRA${n}`).length - 1, 1, `${label} shows the extra cell more than once`);
-        const stripped = html.replace(system === 'gurps-4e' ? NOTES_GURPS : NOTES_COC, '');
-        assert.ok(!stripped.includes(`ZZEXTRA${n}`));
-        assert.strictEqual(stripped, base, `${label}: a value on the sheet changed`);
-      } else {
-        const values = filled[at].split('|').map(c => c.trim()).filter(c => new RegExp(`^${n + 1}\\d+$`).test(c));
-        for (const v of values) assert.ok(html.includes(v), `${label} lost ${v}`);
-      }
+      assert.strictEqual(html.split(`ZZEXTRA${n}`).length - 1, 1, `${label} shows the extra cell more than once`);
+      const stripped = html.replace(system === 'gurps-4e' ? NOTES_GURPS : NOTES_COC, '');
+      assert.ok(!stripped.includes(`ZZEXTRA${n}`));
+      assert.strictEqual(stripped, base, `${label}: a value on the sheet changed`);
     });
   }
 }
@@ -95,12 +96,21 @@ for (const system of ['dnd-5e-2024', 'pf2e', 'fitd']) {
   const lines = templateBody(SYSTEMS[system]).split('\n');
   // Every body row of every table, with its blank cells filled so each reader has a value to keep.
   const rows = [];
+  const fills = {};   // the values each row was filled with
   let n = 0;
   for (let i = 0; i < lines.length - 2; i++) {
     if (!(/^\|/.test(lines[i]) && /^\|[-| :]+\|$/.test(lines[i + 1]))) continue;
     n++;
     for (let r = i + 2; r < lines.length && /^\|/.test(lines[r]); r++) {
-      lines[r] = lines[r].split('|').map((c, j, all) => (j >= 2 && j < all.length - 1 && c.trim() === '' ? ` ${n}${r % 7 + 1} ` : c)).join('|');
+      const filled = [];
+      lines[r] = lines[r].split('|').map((c, j, all) => {
+        if (!(j >= 2 && j < all.length - 1 && c.trim() === '')) return c;
+        // A number no template prints by itself, so finding it on the page means this row's value is there.
+        const v = `7${String(n).padStart(2, '0')}${String(r).padStart(3, '0')}${j}`;
+        filled.push(v);
+        return ` ${v} `;
+      }).join('|');
+      fills[r] = filled;
       rows.push(r);
     }
   }
@@ -109,8 +119,10 @@ for (const system of ['dnd-5e-2024', 'pf2e', 'fitd']) {
   const build = (body) => quiet(() => buildPc(system, body, live ? ['live_stats: true'] : [], live ? { assumeKv: true } : {})).html.replace(/"buildVersion":"[^"]*"/g, '');
   test(`${system}: an extra cell on any table row leaves the sheet's own numbers and trackers as they were`, () => {
     assert.ok(rows.length >= 20);
+    assert.ok(rows.reduce((k, r) => k + fills[r].length, 0) >= 5, 'filled values to look for');
     const base = build(lines.join('\n'));
     const differ = [];
+    const lost = [];
     for (const r of rows) {
       const wide = lines.slice();
       wide[r] = wide[r].replace(/\|\s*$/, '| ZZROWNOTE |');
@@ -123,8 +135,11 @@ for (const system of ['dnd-5e-2024', 'pf2e', 'fitd']) {
       const section = lines.slice(0, r).reverse().find(l => /^## /.test(l)).slice(3);
       const ok = once && noted === consumed(section) && (noted ? html.replace(NOTES_D20, '') === base : islands(html) === islands(base));
       if (!ok) differ.push(lines[r].slice(0, 40));
+      // The row's own values are on the page too, whichever way the section is shown.
+      for (const v of fills[r]) if (!new RegExp(`(?<!\\d)${v}(?!\\d)`).test(html)) lost.push(`${lines[r].slice(0, 40)}: ${v}`);
     }
     assert.deepStrictEqual(differ, []);
+    assert.deepStrictEqual(lost, [], 'a widened row lost a value of its own');
   });
 }
 
