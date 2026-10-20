@@ -58,18 +58,12 @@ def test_a_switch_from_the_site_file_is_not_the_vault_files(tmp_path):
         vaultlib.settings(vault), "player_site.features.connections")
 
 
-@pytest.mark.parametrize("publish, want", [
-    (None, False),
-    ("  connections: web\n", False),
-    ("  site_dir: /some/site\n", True),
-    ("  site: true\n", True),
-    ("  site: false\n  site_dir: /some/site\n", False),
-    ("  site: maybe\n  site_dir: /some/site\n", False),
-    ("  site: true\n", True),
-])
-def test_a_site_when_the_lines_tool_cannot_say(tmp_path, publish, want):
-    s = vaultlib.settings(make(tmp_path, publish))
-    assert vaultlib.site_without_tool(s) is want
+def test_a_site_switch_that_is_no_switch_word_is_off_without_the_tool(tmp_path):
+    # The other cases of this table are in test_layouts_both.py, on both
+    # layouts. A word that is no switch is refused when the file moves to
+    # the new layout, so this one stays here, on the layout that can hold it.
+    s = vaultlib.settings(make(tmp_path, "  site: maybe\n  site_dir: /some/site\n"))
+    assert vaultlib.site_without_tool(s) is False
 
 
 def test_writing_a_settings_file_atomically_forgets_what_was_read(tmp_path):

@@ -141,6 +141,7 @@ def test_a_refused_value_says_why_on_both(tmp_path, layout):
     ("  site_dir: /some/site\n", None, True),
     ("  site: true\n", True, True),
     ("  site: false\n  site_dir: /some/site\n", False, False),
+    ("  connections: web\n", None, False),
 ])
 def test_the_site_switch_helpers_agree(tmp_path, layout, publish, switch, no_tool):
     site = tmp_path / "site"
