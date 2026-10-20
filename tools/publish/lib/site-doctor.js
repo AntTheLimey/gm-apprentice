@@ -367,14 +367,14 @@ async function runSiteDoctor(options, deps) {
     findings.push(finding(
       'FILE_UNTYPED', 'warning', rel,
       'no `type:` in frontmatter, so it never publishes',
-      'add `type:` to the frontmatter',
+      'add `type:` to the frontmatter, or mark it `publish: false` (manifest never-publish)',
     ));
   }
   if (report.untyped.length > shownUntyped.length) {
     findings.push(finding(
       'FILE_UNTYPED', 'warning', `+${report.untyped.length - shownUntyped.length} more`,
       'also carry no `type:`',
-      'add `type:` to the frontmatter',
+      'add `type:` to the frontmatter, or mark it `publish: false` (manifest never-publish)',
     ));
   }
   // A value of the wrong type, which the build read as best it could or left unread.

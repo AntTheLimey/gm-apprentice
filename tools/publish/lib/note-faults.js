@@ -206,6 +206,7 @@ function noPageReason(rel, page, input, skipped) {
   if (always.code === 'DIR_ALWAYS_EXCLUDED') return always.code;
   if (skipped.malformed.has(rel)) return 'FILE_UNPARSEABLE';
   if (skipped.untyped.has(rel)) return 'NO_TYPE';
+  if (skipped.neverPublish.has(rel)) return 'PUBLISH_FALSE';
   if (skipped.unmapped.has(dir)) return 'DIR_UNMAPPED';
   return 'DIR_EXCLUDED';
 }
@@ -455,6 +456,7 @@ function startNoteAudit(input) {
   const skipped = {
     malformed: new Set(input.report.malformed.map((m) => canonicalNfc(m.rel))),
     untyped: new Set(input.report.untyped.map(canonicalNfc)),
+    neverPublish: new Set((input.report.neverPublish || []).map(canonicalNfc)),
     unmapped: new Set(input.report.unmapped.map((u) => canonicalNfc(u.dir))),
   };
   const secrets = secretNamesOf({ notes: input.notes, publishedRels, outOf: (rel) => (scanned.get(rel) || {}).outputPath, linkMap: input.linkMap, neverShow: input.publishConfig.never_show });
