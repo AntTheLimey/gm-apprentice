@@ -29,7 +29,12 @@ The generated site has one page per entity in your vault:
   mention the subject sit in a last Mentions tab. It is drawn as a
   tree, a web or cards (`player_site.features.connections`; see
   [site-settings.md](site-settings.md)). It shows only what a published
-  page shows: a `gm_only` relationship is gone at both ends.
+  page shows: a `gm_only` relationship is gone at both ends. An event's own
+  `participants` and `location` count as ties too (so a PC's page lists its
+  events, and where they went), unless you wrote a relationship between the
+  same two notes. Only the list form of `relationships` carries per-tie
+  fields such as `gm_only`; the map form (`ally: [A, B]`) is the short way to
+  write plain ties.
 - **Events, clues, documents, and more** — A smart fallback template
   displays any other entity type with its frontmatter fields as badges
   followed by the body content.

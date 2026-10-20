@@ -147,7 +147,7 @@ function frontmatterEquipmentHtml(frontmatter) {
     if (typeof item === 'string') return `<div class="entity-card"><h4>${escapeHtml(item)}</h4></div>`;
     const name = item.name || 'Unknown';
     const desc = item.description || item.notes || '';
-    const weight = item.weight ? ` <span class="sidebar-badge">${escapeHtml(String(item.weight))}</span>` : '';
+    const weight = item.weight ? ` ${escapeHtml(String(item.weight))}` : '';
     return `<div class="entity-card"><h4>${escapeHtml(name)}${weight}</h4>${desc ? `<div class="card-excerpt">${escapeHtml(desc)}</div>` : ''}</div>`;
   });
   return `<div class="card-grid">${items.join('\n')}</div>`;
