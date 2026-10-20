@@ -1442,6 +1442,22 @@ def split_section(section: str) -> tuple[bool, str]:
     return False, plain
 
 
+def _before_dataview(doc: Doc, head: Head, end: int) -> int:
+    """Where a line goes in a section with no list: `end`, or the opener of
+    a ```dataview block that closes the section (a log is the rows above
+    its query)."""
+    last = end - 1
+    while last > head.idx and not doc.lines[last].strip():
+        last -= 1
+    if last <= head.idx or not doc.lines[last].lstrip().startswith("```"):
+        return end
+    for i in range(last - 1, head.idx, -1):
+        fence = doc.lines[i].lstrip()
+        if fence.startswith("```"):
+            return i if fence.lower().startswith("```dataview") else end
+    return end
+
+
 def add_line(text: str, rel: str, section: str, line: str,
              tmap: TemplateMap | None, fenced: bool, note_type: str = ""
              ) -> tuple[str | None, str]:
@@ -1512,7 +1528,8 @@ def add_line(text: str, rel: str, section: str, line: str,
     if any(doc.lines[i].strip() == line.strip()
            for i in own_lines(doc, head, end)):
         return None, "already there"
-    at, glue = list_end(doc, head, end, line) or (end, False)
+    at, glue = list_end(doc, head, end, line) or (
+        _before_dataview(doc, head, end), False)
     return place(doc, at, [line], tight=_listy(line), glue=glue), ""
 
 

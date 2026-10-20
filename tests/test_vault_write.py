@@ -1729,6 +1729,28 @@ class Group2Tests(unittest.TestCase):
             self.assertEqual(code, 0, out)
             self.assertIn("- a\n- b\n- new\n\n", read(vault, NPC_REL))
 
+    def test_a_log_line_goes_above_a_dataview_block_when_there_are_no_rows(self):
+        # Canticle's NPCs: `## Appearances` holds only a dataview query.
+        tail = "```dataview\nTABLE x\nWHERE y\n```\n"
+        for before, after in (("## Appearances\n\n", "\n## Source\n"),
+                              ("## Appearances\n\nSeen twice.\n\n", ""),
+                              ("## Appearances\n\n", "")):
+            note = f"---\ntype: zzz\n---\n\n# H\n\n{before}{tail}{after}"
+            vault = make_vault(self, {NPC_REL: note})
+            code, out = log(vault, f"{NPC_REL}\tAppearances\t- new\n")
+            self.assertEqual(code, 0, out)
+            self.assertIn(f"{before}- new\n\n{tail}{after}",
+                          read(vault, NPC_REL))
+
+    def test_a_second_log_line_joins_the_first_above_the_dataview(self):
+        note = ("---\ntype: zzz\n---\n\n# H\n\n## Appearances\n\n"
+                "```dataview\nTABLE x\n```\n")
+        vault = make_vault(self, {NPC_REL: note})
+        log(vault, f"{NPC_REL}\tAppearances\t- one\n")
+        log(vault, f"{NPC_REL}\tAppearances\t- two\n")
+        self.assertIn("## Appearances\n\n- one\n- two\n\n```dataview",
+                      read(vault, NPC_REL))
+
     def test_a_log_line_keeps_a_nested_continuation_with_its_item(self):
         note = ("---\ntype: zzz\n---\n\n# H\n\n## Log\n\n- a\n  - sub\n"
                 "  more\n\n> [!note]\n> hi\n")
