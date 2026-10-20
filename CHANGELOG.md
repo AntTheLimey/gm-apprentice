@@ -20,7 +20,8 @@ scripts. Publish tool 1.41.0.
   (#313).
 - `vault_write.py status` rewrites a PC's labelled Current Status fields
   in place, keeping the note's shape; `--show` prints them, and its
-  output writes back unchanged (#315).
+  output writes back unchanged unless a label appears twice, which is
+  refused (#315).
 - An update step offers to fold a PC's per-session "New open threads
   (Session N)" bullets into its one Open threads list, text unchanged
   (#315).
@@ -33,7 +34,8 @@ scripts. Publish tool 1.41.0.
 - campaign-qa checks story files that fall behind the Wrap-Ups (#461),
   creates the QA report and tallies its counts (`report-new`,
   `report-stats`, which writes only QA reports, never lowers a count
-  without `--force`, and has `--dry-run`) (#462), and checks session
+  without `--force` and leaves a count that isn't a number as written,
+  and has `--dry-run`) (#462), and checks session
   date order through the publish tool's new `dates` op (#463). The new
   checks live in `qa_checks.py`.
 
