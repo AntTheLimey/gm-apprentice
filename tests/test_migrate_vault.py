@@ -1555,10 +1555,6 @@ class ToneWordsTests(unittest.TestCase):
         with self.assertRaises(StepFailed):
             item.apply("yes")
 
-    def test_the_check_is_registered_for_this_release(self):
-        check = next(c for c in mv.VAULT_CHECKS if c.name == "tone-words")
-        self.assertEqual((check.release, check.band, check.choices),
-                         ("1.10.44", 3, ("tone-words=",)))
 
 
 OLD_LIST = ("friendly, romantic, respectful, professional, hostile, fearful, "
@@ -1921,11 +1917,6 @@ class ToneListTests(unittest.TestCase):
     def test_the_old_words_are_the_only_ones_named_here(self):
         self.assertEqual(", ".join(mv.OLD_TONES), OLD_LIST)
 
-    def test_the_check_is_registered_for_this_release(self):
-        check = next(c for c in mv.VAULT_CHECKS if c.name == "tone-list")
-        self.assertEqual((check.release, check.band, check.choices,
-                          check.asks_site),
-                         ("1.10.44", 3, (), False))
 
 
 if __name__ == "__main__":

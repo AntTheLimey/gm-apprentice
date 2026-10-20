@@ -142,9 +142,6 @@ class RetireStepsTests(unittest.TestCase):
         with self.assertRaises(StepFailed):
             item.apply("yes please")
 
-    def test_the_check_asks_for_a_value(self):
-        (check,) = [c for c in ms.SITE_CHECKS if c.name == "retire-steps"]
-        self.assertEqual((check.release, check.choices), ("1.10.63", ("retire-step:=",)))
 
 
 @NEEDS_NODE

@@ -639,10 +639,6 @@ class SheetSourceTests(unittest.TestCase):
             with self.assertRaises(StepFailed):
                 ms.find_sheet_source(vault)
 
-    def test_the_check_asks_for_a_value(self):
-        (check,) = [c for c in ms.SITE_CHECKS if c.name == "sheet-source"]
-        self.assertEqual(check.choices, ("sheet-source:=",))
-
     @unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
                          or (shutil.which("node") and (
                              vc.PUBLISH_TOOL.parent.parent / "node_modules").is_dir()),

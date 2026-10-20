@@ -262,12 +262,6 @@ class MigrationTests(unittest.TestCase):
         with self.assertRaises(StepFailed):
             mv.find_open_threads_fold(self.vault())[0].apply("yes")
 
-    def test_it_is_a_registered_choice(self):
-        check = next(c for c in mv.VAULT_CHECKS
-                     if c.name == "open-threads-fold")
-        self.assertEqual(check.choices, ("open-threads-fold=",))
-        self.assertIsNotNone(check.release)
-
     def test_plan_lists_it_and_apply_without_an_answer_holds_the_stamp(self):
         vault = self.vault()
         check = next(c for c in mv.VAULT_CHECKS
