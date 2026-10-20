@@ -1947,7 +1947,7 @@ function buildSite(options) {
     const storyObj = { markdown: pc.storyMarkdown, frontmatter: {}, outputPath };
     const processed = processContent(storyObj, linkMap, excludeSections, imageMap, { usedImages: fx.usedImages, excludeCallouts, ...markOpt });
     fx.warn(outputPath, processed.warnings);
-    if (processed.overwide.length) fx.tableRows.push({ rel: audit.storyRelOf(pc), rows: processed.overwide });
+    if (processed.overwide.length && audit) fx.tableRows.push({ rel: audit.storyRelOf(pc), rows: processed.overwide });
     const story = {
       title: pc.displayTitle, outputPath, html: processed.html,
       sheetOutputPath: pc.outputPath, group: characterStoryGroup(pc.frontmatter, publishConfig.statuses.fallen),
