@@ -4,7 +4,6 @@
 // returns values and origins under the list's names, the faults, each with `name` (as written in
 // the file) and `setting` (the list's name, or null), `layout`, and `file`. It prints nothing and
 // throws only for a file that is not valid YAML or was written by a newer gm-apprentice.
-const fs = require('node:fs');
 const path = require('node:path');
 const { parseDocument } = require('yaml');
 const { REGISTRY, NOT_PER_SITE, legacyNameOf, siteKeyOf } = require('./registry');
@@ -12,6 +11,7 @@ const { TYPES, isMap, getPath, setIn, emptyIsFault } = require('./types');
 const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, startsLikeHide, show } = require('./faults');
 const { NEW_FILE, OLD_FILE, layoutOf, at, GROUPS, GM_GROUP, STRICT_PARENTS, stopsUnknown } = require('./layout');
 const legacy = require('./legacy');
+const { readerFrom } = require('../vault-reader');
 const { entryFaults } = require('./entry-faults');
 const { normalizeExcludeDirs, outputProblem, keepProblem, tidyChecked, sameChecked } = require('./folders');
 
@@ -166,8 +166,8 @@ function strayLeaves(block, prefix, byOldName) {
 }
 
 // The new file as written, as plain data. {} for an empty file; throws for one that is not valid YAML.
-function parseNewFile(vaultPath) {
-  const doc = parseDocument(fs.readFileSync(at(vaultPath, NEW_FILE), 'utf-8'));
+function parseNewFile(vaultPath, deps) {
+  const doc = parseDocument(readerFrom(deps).readFile(at(vaultPath, NEW_FILE)));
   if (doc.errors.length) {
     throw new Error(`${NEW_FILE} is not valid YAML: ${String(doc.errors[0].message).split('\n')[0].trim().replace(/:$/, '')}`);
   }
@@ -176,10 +176,10 @@ function parseNewFile(vaultPath) {
   return parsed || {};
 }
 
-function readNew({ vaultPath, siteConfig, siteDir }) {
+function readNew({ vaultPath, siteConfig, siteDir, deps }) {
   const faults = [];
-  const file = { path: at(vaultPath, NEW_FILE), exists: true, hasSiteBlock: false, leftover: fs.existsSync(at(vaultPath, OLD_FILE)) };
-  const tree = parseNewFile(vaultPath);
+  const file = { path: at(vaultPath, NEW_FILE), exists: true, hasSiteBlock: false, leftover: readerFrom(deps).exists(at(vaultPath, OLD_FILE)) };
+  const tree = parseNewFile(vaultPath, deps);
   file.hasSiteBlock = isMap(tree.player_site);
   const values = {};
   const origins = {};
@@ -346,10 +346,10 @@ function readNew({ vaultPath, siteConfig, siteDir }) {
 
 // ---- The entry point ----------------------------------------------------------------------
 
-function readSettings({ vaultPath, siteConfig = {}, siteDir }) {
+function readSettings({ vaultPath, siteConfig = {}, siteDir, deps }) {
   const site = siteConfig || {};
-  const layout = layoutOf(vaultPath);
-  const read = layout === 'new' ? readNew({ vaultPath, siteConfig: site, siteDir }) : { ...legacy.readLegacy({ vaultPath, siteConfig: site, siteDir }, core), layout };
+  const layout = layoutOf(vaultPath, deps);
+  const read = layout === 'new' ? readNew({ vaultPath, siteConfig: site, siteDir, deps }) : { ...legacy.readLegacy({ vaultPath, siteConfig: site, siteDir, deps }, core), layout };
   read.faults.push(...entryFaults(vaultPath, read.values, read.origins));
   return read;
 }
