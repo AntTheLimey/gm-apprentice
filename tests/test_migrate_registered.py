@@ -16,7 +16,9 @@ import migrate_vault as mv  # noqa: E402
 # (registry, name, the fields of the registered check that are pinned)
 REGISTERED = [
     (mv.VAULT_CHECKS, "open-threads-fold", {"choices": ("open-threads-fold=",)}),
-    (mv.VAULT_CHECKS, "required-ties-section", {}),
+    (mv.VAULT_CHECKS, "required-ties-section",
+     {"release": "1.10.65", "band": 3,
+      "choices": ("required-ties-section",)}),
     (mv.VAULT_CHECKS, "tone-words",
      {"release": "1.10.44", "band": 3, "choices": ("tone-words=",)}),
     (mv.VAULT_CHECKS, "tone-list",

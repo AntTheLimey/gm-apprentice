@@ -304,6 +304,13 @@ class PathNormalizationTests(unittest.TestCase):
                 self.assertEqual(vc._resolve_vault_paths(vault, [raw]),
                                  ([], [raw]))
 
+    def test_the_cli_refuses_a_real_path_the_resolver_rejects(self):
+        parent, vault = make_scoped_vault(self)
+        proc = run_cli(vault, "tables", "--file", "../Outside.md")
+        self.assertEqual(proc.returncode, 2, proc.stderr)
+        self.assertIn("../Outside.md", proc.stderr)
+        self.assertEqual(proc.stdout, "")
+
     def test_an_empty_file_scope_scans_nothing(self):
         parent, vault = make_scoped_vault(self)
         (vault / "Dirty.md").write_text(DIRTY_TABLE, encoding="utf-8")

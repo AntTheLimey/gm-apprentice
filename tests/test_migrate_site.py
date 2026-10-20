@@ -1025,9 +1025,9 @@ class ToolCannotAnswerTests(unittest.TestCase):
 
     def test_each_step_stops(self):
         for step, said in ((self.gm_leak, "cannot ask"),
-                           (self.publish_played, ""),
-                           (self.sheet_source, ""),
-                           (self.fonts, "")):
+                           (self.publish_played, "node is not on PATH"),
+                           (self.sheet_source, "stopped answering"),
+                           (self.fonts, "exited without answering")):
             with self.subTest(step.__name__):
                 with self.assertRaises(StepFailed) as caught:
                     step()

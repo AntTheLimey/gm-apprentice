@@ -1663,7 +1663,9 @@ class GmLeakCommandTests(unittest.TestCase):
         self.assertIn(f"# count: {len(self.rows)}", proc.stdout)
         # `all` is run once, here, for the four checks that share a section
         # heading with their own command.
-        everything = run_cli(LEAK, "all").stdout
+        proc = run_cli(LEAK, "all")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        everything = proc.stdout
         for section in ("sessions", "gm-leak", "pc-body", "wrapup"):
             self.assertIn(f"## {section}", everything)
 
