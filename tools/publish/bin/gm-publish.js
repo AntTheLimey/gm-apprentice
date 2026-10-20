@@ -580,13 +580,14 @@ function printSubcommandHelp(cmd) {
 // flag never appears.
 function parseSubcommandArgs(rest, allowedFlags, valueFlags = {}, repeatedFlags = {}) {
   let configPath = './vault.config.json';
+  let configGiven = false;
   const flags = {};
   for (const key of Object.values(repeatedFlags)) flags[key] = [];
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     if (a === '--config') {
       if (!rest[i + 1] || rest[i + 1].startsWith('-')) return { error: '--config needs a path' };
-      configPath = rest[i + 1]; i++;
+      configPath = rest[i + 1]; configGiven = true; i++;
     } else if (Object.prototype.hasOwnProperty.call(repeatedFlags, a)) {
       // A `--set` pair may start with a dash: the word before the `=` is a tone as written.
       if (!rest[i + 1] || (rest[i + 1].startsWith('-') && a !== '--set')) return { error: `${a} needs a value` };
@@ -600,7 +601,7 @@ function parseSubcommandArgs(rest, allowedFlags, valueFlags = {}, repeatedFlags 
       return { error: `Unknown argument: ${a}` };
     }
   }
-  return { configPath, flags };
+  return { configPath, configGiven, flags };
 }
 
 function printVersion() {
@@ -1140,7 +1141,8 @@ if (command === 'relationships') {
     }
   }
   const { vault, json, folder, files, newerThan, kinds, write, sets, skip, at } = parsed.flags;
-  const config = parsed.configPath;
+  // With --vault and no --config, the site is the one the vault names, never one that happens to be in this folder.
+  const config = vault && !parsed.configGiven ? undefined : parsed.configPath;
   runRelationships({ verb, vault, json: !!json, folder, files, newerThan, kinds, write: !!write, sets, skip, at, config })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
