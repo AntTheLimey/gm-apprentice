@@ -72,6 +72,27 @@ describe('leak gate: the search index', () => {
     } finally { s.cleanup(); }
   });
 
+  it('a sentence accepted on a page, before the index was read, also covers its copy in that page\'s index entry', () => {
+    const { leakInto } = require('../helpers/leak-site');
+    const { writeAccepted } = require('../../lib/manifest');
+    const s = leakSite(NOTES, SETTINGS);
+    try {
+      const sentence = 'The baker poisoned the mayor last winter.';
+      leakInto(s.outputDir, 'npcs/fisher.html', sentence);
+      leakIntoIndex(s, 'npcs/fisher.html', sentence);
+      leakIntoIndex(s, 'npcs/sections.html', sentence);
+      // The accept as the tool wrote it before this release: the page and the sentence, nothing for the index.
+      writeAccepted(path.join(s.root, 'vault'), [{ page: 'npcs/fisher.html', text: 'the baker poisoned the mayor last winter', note: 'NPCs/Sections.md' }]);
+      const r = gate(s);
+      // Only the copy in another page's entry is new; the accept is still needed.
+      assert.deepEqual(r.findings.map((f) => f.page), ['search-index.json#npcs/sections.html']);
+      assert.deepEqual(r.unneeded, []);
+      // With the page's own copy gone, the index copy still needs the accept: prune must not remove it.
+      fs.writeFileSync(path.join(s.outputDir, 'npcs', 'fisher.html'), fs.readFileSync(path.join(s.outputDir, 'npcs', 'fisher.html'), 'utf8').replace(`<p>${sentence}</p>`, ''));
+      assert.deepEqual(gate(s).unneeded, []);
+    } finally { s.cleanup(); }
+  });
+
   it('public text in the index that no page prints is no finding, a copy of it in a draft included', () => {
     const s = leakSite({ ...NOTES, 'Prep/Draft.md': '---\ntype: npc\npublish: false\n---\nThe baker is a kind man.\n' }, SETTINGS);
     try {

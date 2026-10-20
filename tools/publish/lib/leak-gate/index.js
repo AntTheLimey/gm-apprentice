@@ -86,8 +86,13 @@ function runLeakGate({ configPath, outputDir }) {
   // A hostile tie the GM left (accepted-ties.js) is no finding of this gate either, and is never pruned here.
   const accepted = everyAccepted.filter((a) => !isSettledHeading(a) && !isAcceptedTie(a));
   const acceptedKeys = new Set(accepted.map(acceptedKey));
-  const findings = [...raw.values()].filter((f) => !acceptedKeys.has(findingKey(f))).sort(byPageText);
-  const unneeded = [...accepted.filter((a) => !raw.has(acceptedKey(a))),
+  // A sentence accepted on a page also covers its copy in that page's search index entry
+  // ("search-index.json#npcs/ada.html"), so an accept written before the index was read still stands.
+  const entryPage = (f) => (f.code !== 'NEVER_SHOW' && f.page.includes('#') ? f.page.slice(f.page.indexOf('#') + 1) : null);
+  const coveredByPage = (f) => entryPage(f) !== null && acceptedKeys.has(keyOf(entryPage(f), f.text));
+  const inEntries = new Set([...raw.values()].filter((f) => entryPage(f) !== null).map((f) => keyOf(entryPage(f), f.text)));
+  const findings = [...raw.values()].filter((f) => !acceptedKeys.has(findingKey(f)) && !coveredByPage(f)).sort(byPageText);
+  const unneeded = [...accepted.filter((a) => !raw.has(acceptedKey(a)) && !(a.note !== NEVER_NOTE && inEntries.has(keyOf(a.page, a.text)))),
     ...everyAccepted.filter((a) => isSettledHeading(a) && settledHeadingGone(hidden.vaultPath, a))];
   return done({ findings, unneeded, warnings, files: files.length });
 }
