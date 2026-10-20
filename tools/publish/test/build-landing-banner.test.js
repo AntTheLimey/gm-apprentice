@@ -249,3 +249,10 @@ test('housekeeping: a hidden campaign note called Index still drops a banner lin
   assert.doesNotMatch(s.read('index.html'), /<a class="landing-banner"/);
   assert.ok(s.warnings.some((w) => /banner/.test(w)));
 });
+
+test('a [[wikilink]] in the title or text prints as its name, as page text does (#388)', () => {
+  const html = site({ title: 'The [[Harbour]] burns', text: 'See [[Mara Quill|Mara]] at the [[Harbour]].' }).read('index.html');
+  assert.match(html, /<h2 class="landing-banner-title">The Harbour burns<\/h2>/);
+  assert.match(html, /<p class="landing-banner-text">See Mara at the Harbour\.<\/p>/);
+  assert.doesNotMatch(html, /\[\[/);
+});

@@ -282,6 +282,12 @@ function readNew({ vaultPath, siteConfig, siteDir }) {
     let suggest = level === 'stop' && !strict ? hidingNear : near;
     if (startsLikeHide(key) && !strict) suggest = null;
     faults.push(makeFault({ name: full, setting: null, kind: 'unknown-name', level, value, suggest: suggest ? `${parent}.${suggest}` : null }));
+    // A group in the wrong place: each setting inside it that has one right place, for the Settings check to carry.
+    if (isMap(value)) {
+      for (const s of strayLeaves(value, full, false)) {
+        faults.push(makeFault({ name: s.written, setting: s.entry.name, kind: 'unknown-name', level: s.entry.guards && !gm ? 'stop' : level, value: s.value, suggest: s.entry.name }));
+      }
+    }
     if (!STRICT_PARENTS.has(parent)) setIn(values, full, clone(value));
   }
   function walk(parent, map) {

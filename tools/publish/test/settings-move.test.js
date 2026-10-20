@@ -860,6 +860,9 @@ test('the four cases: ours or not, able to read the new file or not', () => {
     ['not ours, nothing installed, spec asks for 1.2.0', { ok: true, ours: false, spec: '^1.2.0', installedBefore: null }, false, 'site-tool'],
     ['not ours, nothing installed, spec says nothing of a version', { ok: true, ours: false, spec: 'github:someone/fork', installedBefore: null }, false, 'site-tool'],
     ['no tool pinned or installed', { ok: true, ours: false, spec: null, installedBefore: null }, false, undefined],
+    // #381: the numbers in a url are not a version
+    ['not ours, nothing installed, spec is an address with numbers in it', { ok: true, ours: false, spec: 'http://10.0.0.1/x.tgz', installedBefore: null }, false, 'site-tool'],
+    ['not ours, nothing installed, a vendored release tarball', { ok: true, ours: false, spec: 'file:vendor/gm-apprentice-publish-1.30.0.tgz', installedBefore: null }, false, undefined],
   ];
   for (const [label, pin, updated, held] of cases) {
     const s = siteWithPin(null);
@@ -1441,4 +1444,44 @@ test('a retired publish.mode is carried as written, comment and all, so the upda
   const text = fs.readFileSync(at(s.vault, NEW_FILE), 'utf8');
   assert.match(text, /# was a private copy\n\s+mode: full # kept/);
   assert.match(text, /hide:\n\s+# was a private copy\n\s+mode: full/);
+});
+
+// ---- How the vault is named (#381) ----
+
+function moveNamedBy(name) {
+  const s = scratch(old('  mode: player\n  exclude_sections: [A]\n'), { site: { vaultPath: './Vault', siteTitle: 'From the site' } });
+  const vaultArg = name(s);
+  const plan = planMove({ vaultPath: vaultArg, siteConfigPath: s.config });
+  assert.equal(plan.ok, true, JSON.stringify(plan.blockers));
+  applyMove(plan);
+  return s;
+}
+
+test('a vault named through a symlink moves, and its site file is recognised as the vault\'s', () => {
+  const s = moveNamedBy((x) => {
+    const link = path.join(x.root, 'Link');
+    fs.symlinkSync(x.vault, link);
+    return link;
+  });
+  assert.equal(layoutOf(s.vault), 'new');
+  assert.equal(readSettings({ vaultPath: s.vault }).values.player_site.title, 'From the site');
+  assert.deepEqual(JSON.parse(fs.readFileSync(s.config, 'utf8')), { vaultPath: './Vault' });
+});
+
+test('a vault named by a relative path moves, and its site file is recognised as the vault\'s', () => {
+  const s = moveNamedBy((x) => path.relative(process.cwd(), x.vault));
+  assert.equal(layoutOf(s.vault), 'new');
+  assert.equal(readSettings({ vaultPath: s.vault }).values.player_site.title, 'From the site');
+  assert.deepEqual(JSON.parse(fs.readFileSync(s.config, 'utf8')), { vaultPath: './Vault' });
+});
+
+test('a moved vault named through a symlink still takes its site file\'s settings out', () => {
+  const s = scratch(old('  mode: player\n'), { site: { vaultPath: './Vault', siteTitle: 'From the site' } });
+  applyMove(planMove({ vaultPath: s.vault, siteConfigPath: s.config }));
+  fs.writeFileSync(s.config, JSON.stringify({ vaultPath: './Vault', siteTitle: 'From the site' }));
+  const link = path.join(s.root, 'Link');
+  fs.symlinkSync(s.vault, link);
+  const plan = planMove({ vaultPath: link, siteConfigPath: s.config });
+  assert.equal(plan.ok, true);
+  assert.ok(plan.files.write.includes(s.config) || plan.files.write.some((f) => fs.realpathSync(f) === fs.realpathSync(s.config)), 'the site file is mended');
 });

@@ -1688,6 +1688,7 @@ SETTINGS_SCHEMA = (Path(__file__).resolve().parents[3] / "tools" / "publish"
 _NO_NODE_NOTICE = ("Node was not found, so this vault's own settings were not "
                    "read; the built-in values were used.")
 _NO_NODE_NOTICE_GIVEN = False
+_FELL_BACK_SAID: set[tuple[Path, str]] = set()   # bad values already said
 
 
 def _schema_default(name: str) -> Any:
@@ -1716,7 +1717,16 @@ def setting_or_builtin(vault: Path, name: str) -> Any:
     other failure of the tool is raised, never hidden."""
     global _NO_NODE_NOTICE_GIVEN
     try:
-        return settings(vault).get(name)
+        found = settings(vault)
+        if found.origins.get(name) == "fault" and (vault, name) not in _FELL_BACK_SAID:
+            # A value the tool could not accept: it gave the default. Say so
+            # once, in the tool's own words.
+            _FELL_BACK_SAID.add((vault, name))
+            why = next((f.get("message") for f in found.faults
+                        if f.get("setting") == name), None)
+            print(f"{why or f'{name} could not be read'}; the default was used.",
+                  file=sys.stderr)
+        return found.get(name)
     except SettingsUnavailable:
         if shutil.which("node"):
             raise
