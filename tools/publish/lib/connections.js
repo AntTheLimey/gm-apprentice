@@ -225,14 +225,15 @@ function eventTies(fm, resolve, { self, typeOf, isIndex }) {
 
 // `noteExists(name)`: whether the vault holds a note of that name (published or not). A tie to a note that exists but
 // has no page is the Keeper's side of the story, so it is left off the page. A tie to a name with no note at all (a red
-// link) is still printed as plain text: nothing hid it.
-function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extras, noteExists }) {
+// link) is still printed as plain text: nothing hid it. `pageFor(name)`: the output path of the page a name spelled in
+// another letter case, or with underscores, belongs to (build.js foldedPagePath), so such a tie is that page's.
+function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extras, noteExists, pageFor }) {
   const byPath = new Map(pages.map((p) => [p.outputPath, p]));
   // What a target names: its page when it has one, else the words to call it by (its
   // label, or its name with underscores read as spaces: wikilink.js linkText).
   const resolve = (value) => {
     const { name, words } = targetRef(value);
-    const out = name ? linkMap[name] : undefined;
+    const out = name ? (linkMap[name] || (pageFor && pageFor(name))) : undefined;
     const page = (typeof out === 'string' && byPath.get(out)) || null;
     return { page, name, words, hidden: !page && !!name && !!noteExists && noteExists(name) };
   };

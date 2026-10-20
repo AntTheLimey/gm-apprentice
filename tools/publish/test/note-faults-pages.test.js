@@ -411,6 +411,21 @@ describe('a page\'s Connections', () => {
     assert.deepStrictEqual(found.filter((f) => f.code === 'NAMED_NO_PAGE'), []);
   });
 
+  it('a tie that spells a published note in another case, or with underscores, is that page and not hidden', () => {
+    const { configPath, root } = site({
+      'People/Bo_Pike.md': npcNote('Bo.', rel('[[cy dunn]]')),
+      'People/Ed_Roe.md': npcNote('Ed.', rel('CY_DUNN')),
+      'People/Cy_Dunn.md': npcNote('Cy.'),
+    });
+    fromBuild(configPath);
+    for (const page of ['bo-pike.html', 'ed-roe.html']) {
+      const html = fs.readFileSync(path.join(root, 'docs', 'people', page), 'utf8');
+      const block = /<section class="cx"[^]*?<\/section>/.exec(html);
+      assert.ok(block, `${page} has no Connections`);
+      assert.match(block[0], /<a href="[^"]*cy-dunn\.html">Cy Dunn<\/a>/, page);
+    }
+  });
+
   it('a labelled target that has a page is that page: linked, and shown under its own title', () => {
     const { configPath, root } = site({
       'People/Bo_Pike.md': npcNote('Bo.', rel('[[Cy_Dunn|the baker]]')),

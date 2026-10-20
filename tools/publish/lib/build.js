@@ -144,6 +144,17 @@ const pathParts = (text) => path.posix.normalize(`/${text.replace(/\\/g, '/')}`)
 const PASS_SCHEME_RE = /^(?:mailto|tel):/i;
 const ANY_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 
+// The page of a note named in another letter case, or with underscores for spaces (the names of notes with pages
+// are in the link map); undefined when no page has that name.
+function foldedPagePath(linkMap, name) {
+  if (!LOWER_KEYS.has(linkMap)) {
+    const keys = new Map();
+    for (const key of Object.keys(linkMap)) if (!keys.has(foldName(key))) keys.set(foldName(key), linkMap[key]);
+    LOWER_KEYS.set(linkMap, keys);
+  }
+  return LOWER_KEYS.get(linkMap).get(foldName(name));
+}
+
 function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {}) {
   const text = String(link == null ? '' : link).trim();
   if (/^https?:\/\//i.test(text)) return { kind: 'outside', href: text };
@@ -163,16 +174,10 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {
     const candidates = [name];
     const last = parts[parts.length - 1];
     if (last !== name) candidates.push(last);
-    if (!LOWER_KEYS.has(linkMap)) {
-      const keys = new Map();
-      for (const key of Object.keys(linkMap)) if (!keys.has(foldName(key))) keys.set(foldName(key), linkMap[key]);
-      LOWER_KEYS.set(linkMap, keys);
-    }
     for (const candidate of candidates) {
       const exact = linkMap[candidate] || (pages.find(p => canonicalNfc(p.title) === candidate) || {}).outputPath;
       if (exact) return { kind: 'page', href: exact };
-      // The same name in another letter case is that page (the names of notes with pages are in the link map).
-      const loose = LOWER_KEYS.get(linkMap).get(foldName(candidate));
+      const loose = foldedPagePath(linkMap, candidate);
       if (loose) return { kind: 'page', href: loose };
     }
   }
@@ -1057,6 +1062,7 @@ function buildSite(options) {
   const connectionExtras = new Map();
   publishConfig._connections = publishConfig.connections === 'off' ? null
     : buildConnections({ pages, linkMap, backlinks, hubPairs: hubWrapUps, imageMap, extras: connectionExtras,
+      pageFor: (name) => foldedPagePath(linkMap, name) || foldedPagePath(linkMap, path.posix.basename(name)),
       noteExists: (name) => { const names = HIDDEN_NAMES.get(linkMap); const folded = (n) => foldName(canonicalNfc(n)); return names.has(folded(name)) || names.has(folded(path.posix.basename(name))); } });
   // The lists a session or chapter page gathers (who appeared, what happened, which sessions
   // a chapter holds). `for(page)` reads `connectionExtras` lazily, so filling it after the
