@@ -22,13 +22,15 @@
     var a = e.target.closest ? e.target.closest('.story-anchor') : null;
     if (!a) return;
     var url = location.href.split('#')[0] + a.getAttribute('href');
+    // The icon's own label, kept the first time: a second click inside the moment must not keep "Link copied".
+    if (!a.hasAttribute('data-label')) a.setAttribute('data-label', a.getAttribute('aria-label') || '');
     copy(url).then(function () {
-      var label = a.getAttribute('aria-label');
       a.classList.add('copied');
       a.setAttribute('aria-label', 'Link copied');
-      setTimeout(function () {
+      clearTimeout(a._copiedTimer);
+      a._copiedTimer = setTimeout(function () {
         a.classList.remove('copied');
-        a.setAttribute('aria-label', label);
+        a.setAttribute('aria-label', a.getAttribute('data-label'));
       }, 1500);
     }, function () { /* the address bar still holds the link */ });
   });

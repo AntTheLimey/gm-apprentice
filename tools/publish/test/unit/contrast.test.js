@@ -372,4 +372,24 @@ describe('header text is readable on the header in both schemes (#259)', () => {
     }
   }
 });
+
+// A story page's copy-link icon says "Copied" in text: its colour is read on the page and on a card, in every look.
+describe('the story page\'s "Copied" can be read in both schemes', () => {
+  const css = fs.readFileSync(path.join(CSS, 'style.css'), 'utf8');
+  const m = css.match(/\.story-anchor\.copied\s*{[^}]*?color:\s*var\(--([a-z-]+)\)/);
+  it('takes a colour name', () => assert.ok(m, 'style.css .story-anchor.copied sets color: var(--…)'));
+  const looks = [['style.css', 'dark', base]];
+  for (const file of fs.readdirSync(path.join(CSS, 'themes')).filter(f => f.endsWith('.css'))) {
+    const p = palettes(fs.readFileSync(path.join(CSS, 'themes', file), 'utf8'));
+    for (const scheme of ['dark', 'light']) looks.push([file, scheme, Object.assign({}, base, p[scheme])]);
+  }
+  for (const [file, scheme, p] of looks) {
+    it(`${file} (${scheme})`, () => {
+      const colour = p[m[1]];
+      for (const bg of ['bg', 'bg-card']) {
+        assert.ok(contrast(colour, p[bg]) >= 4.5, `${file} ${scheme}: "Copied" ${colour} on ${bg} ${p[bg]} is ${contrast(colour, p[bg]).toFixed(2)}:1`);
+      }
+    });
+  }
+});
 }
