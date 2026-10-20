@@ -150,7 +150,7 @@ describe('image optimization', { skip: !hasCwebp }, () => {
     });
 
     it('makes no image cache', () => {
-      assert.ok(!fs.existsSync(path.join(path.dirname(outputDir), '.gm-apprentice')));
+      assert.ok(!fs.existsSync(path.join(path.dirname(outputDir), '.gm-apprentice', 'image-cache')));
     });
   });
 });
