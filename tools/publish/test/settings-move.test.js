@@ -1445,3 +1445,43 @@ test('a retired publish.mode is carried as written, comment and all, so the upda
   assert.match(text, /# was a private copy\n\s+mode: full # kept/);
   assert.match(text, /hide:\n\s+# was a private copy\n\s+mode: full/);
 });
+
+// ---- How the vault is named (#381) ----
+
+function moveNamedBy(name) {
+  const s = scratch(old('  mode: player\n  exclude_sections: [A]\n'), { site: { vaultPath: './Vault', siteTitle: 'From the site' } });
+  const vaultArg = name(s);
+  const plan = planMove({ vaultPath: vaultArg, siteConfigPath: s.config });
+  assert.equal(plan.ok, true, JSON.stringify(plan.blockers));
+  applyMove(plan);
+  return s;
+}
+
+test('a vault named through a symlink moves, and its site file is recognised as the vault\'s', () => {
+  const s = moveNamedBy((x) => {
+    const link = path.join(x.root, 'Link');
+    fs.symlinkSync(x.vault, link);
+    return link;
+  });
+  assert.equal(layoutOf(s.vault), 'new');
+  assert.equal(readSettings({ vaultPath: s.vault }).values.player_site.title, 'From the site');
+  assert.deepEqual(JSON.parse(fs.readFileSync(s.config, 'utf8')), { vaultPath: './Vault' });
+});
+
+test('a vault named by a relative path moves, and its site file is recognised as the vault\'s', () => {
+  const s = moveNamedBy((x) => path.relative(process.cwd(), x.vault));
+  assert.equal(layoutOf(s.vault), 'new');
+  assert.equal(readSettings({ vaultPath: s.vault }).values.player_site.title, 'From the site');
+  assert.deepEqual(JSON.parse(fs.readFileSync(s.config, 'utf8')), { vaultPath: './Vault' });
+});
+
+test('a moved vault named through a symlink still takes its site file\'s settings out', () => {
+  const s = scratch(old('  mode: player\n'), { site: { vaultPath: './Vault', siteTitle: 'From the site' } });
+  applyMove(planMove({ vaultPath: s.vault, siteConfigPath: s.config }));
+  fs.writeFileSync(s.config, JSON.stringify({ vaultPath: './Vault', siteTitle: 'From the site' }));
+  const link = path.join(s.root, 'Link');
+  fs.symlinkSync(s.vault, link);
+  const plan = planMove({ vaultPath: link, siteConfigPath: s.config });
+  assert.equal(plan.ok, true);
+  assert.ok(plan.files.write.includes(s.config) || plan.files.write.some((f) => fs.realpathSync(f) === fs.realpathSync(s.config)), 'the site file is mended');
+});
