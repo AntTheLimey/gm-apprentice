@@ -41,11 +41,9 @@ class SessionContextKeptByTests(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertEqual(r.stdout.strip(), LINE)
 
-    def test_the_other_modes_say_the_same(self):
-        # The gate sits before every mode's own work; the default and
-        # `--play` are the two ends of it, `--brief` is above.
+    def test_every_mode_says_the_same(self):
         vault = make(self, "player")
-        for args in ((), ("--play",)):
+        for args in ((), ("--play",), ("--threads",), ("--arcs",)):
             with self.subTest(args=args):
                 r = run(vault, *args)
                 self.assertEqual(r.returncode, 0, r.stderr)
