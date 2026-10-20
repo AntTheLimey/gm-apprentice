@@ -104,7 +104,7 @@ function renderLocationTreeHTML(nodes, depth, indexDir) {
       : '';
     return `<div class="location-tree-item" style="padding-left:${depth * 1.5}rem">
   <a href="${escapeHtml(relHref(p, indexDir))}">${escapeHtml(p.displayTitle)}</a>
-  ${p.frontmatter.location_type ? `<span class="sidebar-badge">${escapeHtml(p.frontmatter.location_type)}</span>` : ''}
+  ${p.frontmatter.location_type ? `${escapeHtml(p.frontmatter.location_type)}` : ''}
 </div>${childrenHtml}`;
   }).join('\n');
   return items;
@@ -939,7 +939,7 @@ function renderNPCTable(pages, dir, imageMap = {}, linkMap = {}) {
   <td><span class="status-badge status-${escapeHtml(status.replace(/\s+/g, '-').toLowerCase())}">${escapeHtml(status ? status.charAt(0).toUpperCase() + status.slice(1) : '')}</span></td>
   <td>${escapeHtml(firstApp)}</td>
   <td data-sort="${sessionSortKey(lastSession)}">${escapeHtml(lastSession)}</td>
-  <td><span class="sidebar-badge">${escapeHtml(canonStatus)}</span></td>
+  <td>${escapeHtml(canonStatus)}</td>
 </tr>`;
   }).join('\n');
 

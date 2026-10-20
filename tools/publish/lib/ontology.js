@@ -30,6 +30,7 @@ function toneFamily(raw) {
 
 const PEOPLE = new Set(['pc', 'npc', 'creature']);
 
+// A type name read as words: underscores become spaces and the first letter is capitalised.
 function words(type) {
   const text = String(type == null ? '' : type).replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
   return text ? text[0].toUpperCase() + text.slice(1) : '';
