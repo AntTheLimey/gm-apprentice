@@ -703,32 +703,34 @@ test('a move killed at any point in its commit is finished by running it again',
   const s0 = killable();
   const original = strip(loadPublishConfig(s0.vault, JSON.parse(fs.readFileSync(s0.config, 'utf8')), quiet));
   const expectedSite = { vaultPath: './Vault' };
+  const finishes = (n, when) => {
+    const s = killable();
+    const run = require('node:child_process').spawnSync(process.execPath, [KILL, s.vault, s.config, String(n), when], { encoding: 'utf8' });
+    if (run.status === 0) return Number(run.stdout.trim());
+    assert.equal(run.status, 9, `kill ${when} op ${n}: ${run.stderr}`);
+    const again = planMove({ vaultPath: s.vault, siteConfigPath: s.config });
+    assert.equal(again.ok, true, `kill ${when} op ${n}: ${again.blockers.join(' | ')}`);
+    applyMove(again);
+    const label = `killed ${when} operation ${n}`;
+    assert.equal(layoutOf(s.vault), 'new', label);
+    assert.equal(fs.existsSync(at(s.vault, OLD_FILE)), false, label);
+    assert.deepEqual(JSON.parse(fs.readFileSync(s.config, 'utf8')), expectedSite, label);
+    assert.deepEqual(strip(loadPublishConfig(s.vault, expectedSite, quiet)), original, label);
+    assert.deepEqual(hiddenLeft(s.root), [], label);
+    assert.equal(matter(fs.readFileSync(at(s.vault, NOTES_FILE), 'utf8'), {}).content, 'My own notes.\n', label);
+    assert.equal(readState(s.vault).other, 1, label);
+    assert.equal(readState(s.vault).gm_apprentice_version, '1.10.1', label);
+    // And a third run finds nothing.
+    const third = planMove({ vaultPath: s.vault, siteConfigPath: s.config });
+    assert.deepEqual(third.files, { write: [], remove: [] }, label);
+    return 0;
+  };
+  // A kill just after operation n leaves what a kill just before operation n + 1 leaves, so killing before every
+  // operation covers every point; only the last operation needs a kill after it as well.
   let total = 0;
-  for (let n = 1; n < 40; n += 1) {
-    for (const when of ['before', 'after']) {
-      const s = killable();
-      const run = require('node:child_process').spawnSync(process.execPath, [KILL, s.vault, s.config, String(n), when], { encoding: 'utf8' });
-      if (run.status === 0) { total = Number(run.stdout.trim()); break; }
-      assert.equal(run.status, 9, `kill ${when} op ${n}: ${run.stderr}`);
-      const again = planMove({ vaultPath: s.vault, siteConfigPath: s.config });
-      assert.equal(again.ok, true, `kill ${when} op ${n}: ${again.blockers.join(' | ')}`);
-      applyMove(again);
-      const label = `killed ${when} operation ${n}`;
-      assert.equal(layoutOf(s.vault), 'new', label);
-      assert.equal(fs.existsSync(at(s.vault, OLD_FILE)), false, label);
-      assert.deepEqual(JSON.parse(fs.readFileSync(s.config, 'utf8')), expectedSite, label);
-      assert.deepEqual(strip(loadPublishConfig(s.vault, expectedSite, quiet)), original, label);
-      assert.deepEqual(hiddenLeft(s.root), [], label);
-      assert.equal(matter(fs.readFileSync(at(s.vault, NOTES_FILE), 'utf8'), {}).content, 'My own notes.\n', label);
-      assert.equal(readState(s.vault).other, 1, label);
-      assert.equal(readState(s.vault).gm_apprentice_version, '1.10.1', label);
-      // And a third run finds nothing.
-      const third = planMove({ vaultPath: s.vault, siteConfigPath: s.config });
-      assert.deepEqual(third.files, { write: [], remove: [] }, label);
-    }
-    if (total) break;
-  }
+  for (let n = 1; n < 40 && !total; n += 1) total = finishes(n, 'before');
   assert.ok(total >= 5, `the move made ${total} renames and removals`);
+  assert.equal(finishes(total, 'after'), 0);
 });
 
 test('the notes file a stopped move wrote is accepted when it is what this move would write; another is a blocker', () => {
@@ -1214,6 +1216,7 @@ for (const [layout, make] of Object.entries(STEP_LAYOUTS)) {
 }
 
 test('a script is split on && only when it holds nothing a shell would read differently', () => {
+  const { splitScript } = require('../lib/settings/steps');
   const cases = [
     ['node a.js && echo "x && y"', ['node a.js && echo "x && y"']],
     ["node a.js && echo 'x'", ["node a.js && echo 'x'"]],
@@ -1227,6 +1230,10 @@ test('a script is split on && only when it holds nothing a shell would read diff
     ['node a.js &&  node b.js&&node c.js', ['node a.js', 'node b.js', 'node c.js']],
     ['node a.js && && node b.js', ['node a.js && && node b.js']],
     ['node only.js', ['node only.js']],
+    ['unset FOO && node a.js', ['unset FOO && node a.js']],
+    ['umask 022 && node a.js', ['umask 022 && node a.js']],
+    ['alias ll=ls && node a.js', ['alias ll=ls && node a.js']],
+    ['node a.js && node b.js', ['node a.js', 'node b.js']],
     ['cd scripts && node x.mjs', ['cd scripts && node x.mjs']],
     ['node a.js && cd scripts && node x.mjs', ['node a.js && cd scripts && node x.mjs']],
     ['FOO=1 && node x.js', ['FOO=1 && node x.js']],
@@ -1239,14 +1246,20 @@ test('a script is split on && only when it holds nothing a shell would read diff
     ['node setup.js && node settle.js', ['node setup.js', 'node settle.js']],
     ['node a.js && node scripts/x=y.mjs', ['node a.js', 'node scripts/x=y.mjs']],
   ];
-  for (const [script, want] of cases) {
-    const s = STEP_LAYOUTS.new();
-    writePackage(s, { prebuild: script });
-    const r = cliMove({ vault: s.vault, config: s.config });
-    assert.equal(r.rc, 0, r.err.join('\n'));
-    assert.deepEqual(readSettings({ vaultPath: s.vault }).values.player_site.before_build, want, JSON.stringify(script));
-    assert.equal(readPackage(s).scripts.prebuild, undefined);
-  }
+  for (const [script, want] of cases) assert.deepEqual(splitScript(script), want, JSON.stringify(script));
+});
+
+test('the move splits a prebuild script with splitScript and takes it out of package.json', () => {
+  const s = STEP_LAYOUTS.new();
+  writePackage(s, { prebuild: 'node a.js &&  node b.js&&node c.js' });
+  const r = cliMove({ vault: s.vault, config: s.config });
+  assert.equal(r.rc, 0, r.err.join('\n'));
+  assert.deepEqual(readSettings({ vaultPath: s.vault }).values.player_site.before_build, ['node a.js', 'node b.js', 'node c.js']);
+  assert.equal(readPackage(s).scripts.prebuild, undefined);
+  const k = STEP_LAYOUTS.new();
+  writePackage(k, { prebuild: 'cd scripts && node x.mjs' });
+  assert.equal(cliMove({ vault: k.vault, config: k.config }).rc, 0);
+  assert.deepEqual(readSettings({ vaultPath: k.vault }).values.player_site.before_build, ['cd scripts && node x.mjs'], 'a script that sets shell state moves whole');
 });
 
 test('a site whose installed tool is older than 1.24.0 keeps its steps in package.json, and the rest of the move goes ahead', () => {

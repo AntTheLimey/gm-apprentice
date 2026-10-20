@@ -72,14 +72,6 @@ test('a failed after step does not claim nothing was built (#386)', () => {
   assert.throws(() => runSteps([fail], { cwd: os.tmpdir(), label: 'before_build', log: () => {} }), /Nothing was published\./);
 });
 
-test('a script is not split where a part sets shell state (#386)', () => {
-  const { splitScript } = require('../lib/settings/steps');
-  assert.deepEqual(splitScript('unset FOO && node a.js'), ['unset FOO && node a.js']);
-  assert.deepEqual(splitScript('umask 022 && node a.js'), ['umask 022 && node a.js']);
-  assert.deepEqual(splitScript('alias ll=ls && node a.js'), ['alias ll=ls && node a.js']);
-  assert.deepEqual(splitScript('node a.js && node b.js'), ['node a.js', 'node b.js']);
-});
-
 test('the address of a published page stands even when a part of it is a hidden note\'s name (#386)', () => {
   const { resolveSiteLink, rememberHiddenNames } = require('../lib/build');
   const linkMap = Object.create(null);
