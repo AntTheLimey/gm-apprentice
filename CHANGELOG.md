@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.88] — 2026-10-20
+
+Test trim, Python side: the suite runs faster and repeats itself less.
+
+### Changed
+
+- Slow Python tests share their fixture vaults per class, call the
+  path resolver in-process, and build the attribution git repo once;
+  three module-load check scripts are now parametrised tests.
+- Near-duplicate tests are merged into tables with every case kept,
+  and tests already covered elsewhere are cut.
+- The template-history check runs in CI, which now fetches the
+  release tags, and fails there instead of skipping when tags are
+  missing; locally it runs with `GM_FULL_HISTORY_CHECK=1`.
+- The mobRPG packaging test builds from a temporary copy and no
+  longer deletes `build/` in the working tree.
+
 ## [1.10.87] — 2026-10-20
 
 ### Changed
