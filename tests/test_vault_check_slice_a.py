@@ -834,7 +834,6 @@ class SessionsCommandTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("## sessions", proc.stdout)
         self.assertIn(f"# count: {len(self.rows)}", proc.stdout)
-        self.assertIn("## sessions", run_cli(FIXTURES / "sessions", "all").stdout)
 
 
 class SessionsManifestTests(unittest.TestCase):
@@ -1648,7 +1647,11 @@ class GmLeakCommandTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("## gm-leak", proc.stdout)
         self.assertIn(f"# count: {len(self.rows)}", proc.stdout)
-        self.assertIn("## gm-leak", run_cli(LEAK, "all").stdout)
+        # `all` is run once, here, for the four checks that share a section
+        # heading with their own command.
+        everything = run_cli(LEAK, "all").stdout
+        for section in ("sessions", "gm-leak", "pc-body", "wrapup"):
+            self.assertIn(f"## {section}", everything)
 
 
 FIX_CONFIG = ('---\ntype: meta\npublish:\n'
@@ -3739,7 +3742,6 @@ class PcBodyCommandTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("## pc-body", proc.stdout)
         self.assertIn(f"# count: {len(self.rows)}", proc.stdout)
-        self.assertIn("## pc-body", run_cli(LEAK, "all").stdout)
 
 
 WRAPUP = site_copy(FIXTURES / "wrapup")
@@ -4543,7 +4545,6 @@ class WrapupCommandTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("## wrapup", proc.stdout)
         self.assertIn(f"# count: {len(self.rows)}", proc.stdout)
-        self.assertIn("## wrapup", run_cli(WRAPUP, "all").stdout)
 
     def test_all_never_applies_the_fix(self):
         vault = copy_fixture(self, "wrapup")
