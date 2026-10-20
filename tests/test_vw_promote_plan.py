@@ -95,6 +95,17 @@ class PromotePlanTests(unittest.TestCase):
     def written(self):
         return (self.vault / TARGET).read_bytes().decode("utf-8")
 
+    def test_a_quote_or_line_break_in_a_link_is_refused_and_nothing_written(self):
+        for flag, value in (("--chapter", 'Chapter 1 - "X"'),
+                            ("--chapter", "Chapter 1\nplan_type: x"),
+                            ("--leads-to", 'A" \nkey: v'),
+                            ("--leads-to", "")):
+            with self.subTest(flag=flag, value=value):
+                code, out = promote(self.vault, "--write", flag, value)
+                self.assertEqual(code, 1, out)
+                self.assertIn(flag, out)
+                self.assertFalse((self.vault / TARGET).exists())
+
     def test_dry_run_writes_nothing(self):
         code, out = promote(self.vault)
         self.assertEqual(code, 0, out)

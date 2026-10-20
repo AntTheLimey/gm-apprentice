@@ -2171,7 +2171,14 @@ def cmd_promote_plan(batch: Batch, args: argparse.Namespace,
     target = vl.normalize_file_arg(args.to)
     if not re.fullmatch(r"[\w-]+", args.plan_type):
         raise WriteError(f"--plan-type {args.plan_type!r} is not one word")
-    chapter = (bare_link(args.chapter) if args.chapter
+    def link_arg(raw: str, flag: str) -> str:
+        value = bare_link(raw)
+        if not value or re.search(r'["\r\n]', value):
+            raise WriteError(f"{flag} {raw!r} cannot be a link "
+                             f"(no quote or line break)")
+        return value
+
+    chapter = (link_arg(args.chapter, "--chapter") if args.chapter
                else vl.chapter_of(target, {}))
     if not chapter:
         raise WriteError(f"{target} is not in a chapter folder: pass "
@@ -2184,7 +2191,7 @@ def cmd_promote_plan(batch: Batch, args: argparse.Namespace,
     set_block(fm, "plan_type", args.plan_type)
     set_block(fm, "chapter", f'"[[{chapter}]]"')
     set_block(fm, "leads_to", *link_list(
-        [bare_link(x) for x in args.leads_to or []]))
+        [link_arg(x, "--leads-to") for x in args.leads_to or []]))
     set_block(fm, "relationships", "[]")
     new = "---" + eol + eol.join(fm) + eol + "---" + eol + body
     batch.create(target, new)
