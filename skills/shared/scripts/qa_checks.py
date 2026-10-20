@@ -84,7 +84,8 @@ def check_stories(vault: Path) -> list[str]:
             continue
         if latest is None:
             continue
-        fm = extract_frontmatter(story.read_text(encoding="utf-8")) or {}
+        fm = extract_frontmatter(
+            story.read_text(encoding="utf-8", errors="replace")) or {}
         raw = fm.get("asOfSession")
         chapter, session = _as_of(raw)
         if session is None:

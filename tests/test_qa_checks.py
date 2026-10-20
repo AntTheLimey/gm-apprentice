@@ -102,6 +102,13 @@ class StoriesTests(unittest.TestCase):
         self.assertEqual(len(rows), 1, rows)
         self.assertIn("names no session", rows[0])
 
+    def test_a_story_file_that_is_not_utf8_does_not_stop_the_walk(self):
+        v = make(self, {"W1.md": wrap(1, 1), "PCs/Ada.md": pc(),
+                        "PCs/Bo.md": pc(), "PCs/Bo_Story.md": story("1")})
+        (v / "PCs/Ada_Story.md").write_bytes(
+            story("1").encode("utf-8") + b"\xff\xfe broken\n")
+        self.assertEqual(qa.check_stories(v), [])
+
     def test_cli_emits_the_section(self):
         v = make(self, {"PCs/Ada.md": pc()})
         proc = run_cli(v, "stories")
