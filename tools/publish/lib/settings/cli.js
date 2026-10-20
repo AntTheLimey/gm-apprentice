@@ -610,6 +610,8 @@ function changeList(options, verb, args) {
         }
       }
     }
+    // Adding to a list the file holds empty (`[]`) starts from nothing: the built-in entries are not in it.
+    if (verb === 'add' && e.guards && Array.isArray(e.default) && e.default.length > 0 && current.length === 0 && read.origins[e.name] === 'file') result.notes.push(`${shownAs} was empty, so the built-in ${e.of || 'entries'} are not in it; add any you still want hidden.`);
     // Not said when the site file's own entries still hide something.
     const stillApplies = verb === 'remove' && result.notes.some((n) => n.includes(' still applies,'));
     if (!stillApplies && list.length === 0 && Array.isArray(e.default) && e.default.length > 0) result.notes.push(emptyNote(shownAs));

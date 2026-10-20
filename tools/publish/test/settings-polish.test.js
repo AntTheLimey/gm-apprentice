@@ -109,3 +109,18 @@ test('a tall banner picture is height-capped on a phone, not only on a desktop (
   assert.match(base[1], /max-height:\s*\d/);
   assert.match(base[1], /object-fit:\s*contain/);
 });
+
+test('add onto a list written as a YAML alias is refused, and nothing is written (#380)', () => {
+  const { applyChanges } = require('../lib/settings/write');
+  const body = 'version: 1\nplayer_site:\n  hide:\n    fields: &a [x, y]\n    sections: *a\n';
+  const s = scratch(body);
+  assert.throws(() => applyChanges(s.vault, [{ op: 'add', name: 'player_site.hide.sections', entries: ['Z'], same: (a, b) => a === b }]), /alias/);
+  assert.equal(fs.readFileSync(s.yaml, 'utf8'), body);
+});
+
+test('add onto an explicitly empty hiding list says the built-in entries are not in it (#380)', () => {
+  const s = scratch('version: 1\nplayer_site:\n  hide:\n    sections: []\n');
+  const { rc, out } = run(s, 'add', ['player_site.hide.sections', 'Rumours']);
+  assert.equal(rc, 0, out);
+  assert.match(out, /built-in/);
+});

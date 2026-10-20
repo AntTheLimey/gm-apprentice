@@ -617,6 +617,8 @@ function runStep(text, step, label, eol, keepBlock) {
     return { text: cur, expected, wrote, removed, notes };
   }
   // list
+  // A list written as an alias (`sections: *a`) is not read here as a list, so a change would start from the built-in entries and lose its own.
+  if (YAML.isAlias(doc.getIn(step.keys, true))) throw plain(`${step.setting} is written as a YAML alias (a * reference); write the list out in full there first, then change it.`);
   const held = getPath(before, step.keys);
   if (held === true || held === false) {
     if (step.entry.type === 'switchOrList' && held === true) throw plain(`${step.setting} is on, which hides every one of its kind, so a list cannot be changed; use settings set ${step.setting} to give a list or turn it off.`);
