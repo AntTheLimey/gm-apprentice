@@ -198,6 +198,25 @@ class CarryTests(unittest.TestCase):
         out = run(campaign(self), "--carry").stdout
         self.assertIn("Ch2_S02_Wrap_Up.md", out)
 
+    def test_chapters_with_no_number_are_not_mixed(self):
+        lyon, vienna = "Chapters/Lyon", "Chapters/The Vienna Affair"
+        vault = make(self, {
+            f"{lyon}/Session 04/Lyon_S04_Wrap_Up.md": wrap(lyon, 4, FULL),
+            f"{vienna}/Session 03/Vienna_S03_Wrap_Up.md": wrap(vienna, 3, FULL),
+            f"{vienna}/Session 05/Session 05.md": index(vienna, 5)})
+        out = run(vault, "--carry", "--before",
+                  f"{vienna}/Session 05/Session 05.md").stdout
+        self.assertIn("Vienna_S03_Wrap_Up.md", out)
+        self.assertNotIn("Lyon_S04_Wrap_Up.md", out)
+
+    def test_without_before_unnumbered_chapters_are_flagged_as_a_guess(self):
+        lyon, vienna = "Chapters/Lyon", "Chapters/The Vienna Affair"
+        vault = make(self, {
+            f"{lyon}/Session 08/Lyon_S08_Wrap_Up.md": wrap(lyon, 8, FULL),
+            f"{vienna}/Session 03/Vienna_S03_Wrap_Up.md": wrap(vienna, 3, FULL)})
+        out = run(vault, "--carry").stdout
+        self.assertIn("Note: chapters have no number", out)
+
     def test_an_unreviewed_wrap_up_says_so(self):
         out = run(campaign(self), "--carry").stdout
         self.assertIn("Note: this Wrap-Up is not reviewed yet "

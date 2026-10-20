@@ -787,6 +787,7 @@ def carry_report(files, before: str | None) -> tuple[str | None, str]:
     Pending Consequences and open Keeper Checklist items. With no
     `before`, the latest Wrap-Up's."""
     limit = (float("inf"), float("inf"))
+    target_ck = None
     if before:
         want = before.strip().removesuffix(".md").casefold()
         hits = [(rel, fm) for rel, _t, fm in files
@@ -800,17 +801,27 @@ def carry_report(files, before: str | None) -> tuple[str | None, str]:
                 rel for rel, _fm in hits)
             return f"--before {before}: {why}", ""
         limit = campaign_order(*hits[0])
+        target_ck = chapter_key(*hits[0])
     wraps = sorted(((campaign_order(rel, fm), rel, text, fm)
                     for rel, text, fm in files
                     if entity_type(fm) in WRAP_UP_TYPES
                     and not rel.startswith("_Templates/")),
                    key=lambda w: (w[0], w[1]))
     wraps = [w for w in wraps if w[0] < limit]
+    # A chapter with no number cannot be ranked: stay inside the target's
+    # own chapter, and say so when the choice is a guess across chapters.
+    if limit[0] < 0 and target_ck is not None:
+        wraps = [w for w in wraps
+                 if chapter_key(w[1], w[3]) in (None, target_ck)]
     if not wraps:
         return None, "===== Carry =====\n(no earlier Wrap-Up)"
     _order, rel, text, fm = wraps[-1]
     canon = str(fm.get("canon_status") or "?")
     out = [f"===== Carry =====\n(source: {rel}, canon_status: {canon})"]
+    if (before is None and wraps[-1][0][0] < 0
+            and len({chapter_key(w[1], w[3]) for w in wraps}) > 1):
+        out.append("Note: chapters have no number, so the latest Wrap-Up "
+                   "is a guess by session number across chapters")
     if canon.upper() != "AUTHORITATIVE":
         out.append(f"Note: this Wrap-Up is not reviewed yet "
                    f"(canon_status: {canon})")
