@@ -141,3 +141,10 @@ test('a key can be added after a |+ block scalar: its trailing blank lines are c
   assert.equal(back.player_site.footer, 'hello\n\n');
   assert.equal(back.player_site.host, 'github-pages');
 });
+
+test('removing the last menu entry leaves its comments at the key\'s level, not indented under `menu_extra: []` (#386)', () => {
+  const { applyChanges } = require('../lib/settings/write');
+  const s = scratch('version: 1\nplayer_site:\n  menu_extra:\n    # my links\n    - label: A\n      link: x\n    # trailing note\n  title: T\n');
+  applyChanges(s.vault, [{ op: 'remove', name: 'player_site.menu_extra', entries: [{ label: 'A' }], same: (a, b) => a.label === b.label }]);
+  assert.equal(fs.readFileSync(s.yaml, 'utf8'), 'version: 1\nplayer_site:\n  menu_extra: []\n  # my links\n  # trailing note\n  title: T\n');
+});

@@ -217,7 +217,24 @@ function replaceValue(text, pair, value, ctx) {
   if (!isFilled(value)) {
     const text1 = ` ${inline(value, v, ctx)}`;
     if (sameLine) return [{ from: cEnd, to: empty ? cEnd : endOf(v, text), text: text1 }];
-    return [{ from: cEnd, to: cEnd, text: text1 }, dropLines(text, v.range[0], endOf(v, text), eol)];
+    // Comment lines the list had between its entries stay, at the key's level: left indented they would read as part of `[]`.
+    const dropped = dropLines(text, v.range[0], endOf(v, text), eol);
+    const kept = [];
+    const reindent = (from, to) => {
+      for (const m of text.slice(from, to).matchAll(/^([ \t]+)#[^\n]*$/gm)) kept.push({ from: from + m.index, to: from + m.index + m[1].length, text: ' '.repeat(keyCol) });
+    };
+    reindent(lineFullEnd(text, cEnd), dropped.from);
+    // After the list: the comment lines indented deeper than the key, up to the next line that is neither.
+    let end = dropped.to;
+    for (let at = dropped.to; at < text.length;) {
+      const line = text.slice(at, lineFullEnd(text, at));
+      const indent = /^[ \t]*/.exec(line)[0].length;
+      if (!(line.trim() === '' || (line.trim().startsWith('#') && indent > keyCol))) break;
+      at += line.length;
+      end = at;
+    }
+    reindent(dropped.to, end);
+    return [{ from: cEnd, to: cEnd, text: text1 }, dropped, ...kept];
   }
   const block = entryLines('k', value, ctx, keyCol).slice(1);
   if (empty) return [addLines(text, cEnd, block, eol)];
