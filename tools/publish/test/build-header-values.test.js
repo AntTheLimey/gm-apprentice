@@ -163,8 +163,7 @@ test('B-M1: a location prints its parent whole under Part of in Connections, and
   const v = buildVault({
     'Locations/Quay.md': '---\ntype: location\nparent_location: "Met [[Xylo]] at / the docks (twice)"\n---\nBody.\n',
     'Locations/Quay Two.md': '---\ntype: location\nparent_location: "[[Xylo|LABEL]] shown at night"\n---\nBody.\n',
-    'Locations/Xylo.md': '---\ntype: location\npublish: false\n---\nBody.\n',
-  }, {});
+  }, {});   // Xylo has no note: a parent with no note at all prints as plain text (a note that exists but is unpublished does not, #476)
   try {
     const cards = JSON.parse(v.read('previews.json'));
     for (const [file, want] of [['quay', 'Met Xylo at / the docks (twice)'], ['quay-two', 'LABEL shown at night']]) {

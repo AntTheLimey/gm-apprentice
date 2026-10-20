@@ -1051,10 +1051,11 @@ function buildSite(options) {
   // What each page's subject is connected to (lib/connections.js), built once from the
   // published list. The pairs handed over are `hubWrapUps` (hub page -> its Wrap-Up, only
   // for hubs in `pages`), not the raw `hubPairs`, which also pairs unpublished hubs.
-  const { buildConnections, isEmpty: noConnections } = require('./connections');
+  const { buildConnections } = require('./connections');
   const connectionExtras = new Map();
   publishConfig._connections = publishConfig.connections === 'off' ? null
-    : buildConnections({ pages, linkMap, backlinks, hubPairs: hubWrapUps, imageMap, extras: connectionExtras });
+    : buildConnections({ pages, linkMap, backlinks, hubPairs: hubWrapUps, imageMap, extras: connectionExtras,
+      noteExists: (name) => { const names = HIDDEN_NAMES.get(linkMap); const folded = (n) => foldName(canonicalNfc(n)); return names.has(folded(name)) || names.has(folded(path.posix.basename(name))); } });
   // The lists a session or chapter page gathers (who appeared, what happened, which sessions
   // a chapter holds). `for(page)` reads `connectionExtras` lazily, so filling it after the
   // index is built is sound; nothing asks for a model until a page renders.
@@ -1522,10 +1523,6 @@ function buildSite(options) {
     audit.read(rel, html);
     audit.readAddresses(rel, html);
     if (page === shownPage) shown[isStory ? 'story' : 'page'] = html;
-    // The names in a page's Connections are names the page prints: one with no page behind
-    // it is looked up in the note index and counted against this page.
-    const model = !isStory && publishConfig._connections && html.includes('class="cx"') ? publishConfig._connections.for(page) : null;
-    if (model && !noConnections(model)) audit.connections(page, model);
     if (toRender.has(page)) return;
     if (!markedOf.has(page)) markedOf.set(page, audit.mark(page));
     const marked = markedOf.get(page);
@@ -1551,7 +1548,12 @@ function buildSite(options) {
       card = cardFor(shownPage, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff), limits: publishConfig.limits, headerFacts: publishConfig.header_facts });
     }
     const { subtitleOf } = require('./search-index');
+    // The Connections the page prints, as its own island holds them: the same data, so a tie to a name with no
+    // page counts too.
+    const cx = publishConfig._connections && shown.page && shown.page.includes('class="cx"')
+      ? require('./templates/connections').islandOf(publishConfig._connections.for(shownPage), shownPage.outputPath) : null;
     return {
+      connections: cx && (cx.t.length > 0 || cx.m.length > 0) ? cx : null,
       // A story companion asked about by its own path shows the story page alone.
       page: vaultRelPathOf(shownPage) === shownRel ? text(shown.page) : null,
       story: text(shown.story),

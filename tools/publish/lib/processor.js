@@ -1921,12 +1921,15 @@ function restoreHiddenHeadings(text, lines, from, notCode, withholds) {
     read.forEach((r) => { if (r.at > b.at) r.at -= 1; });
   }
   if (read.length < back.length) parsed = headingsOf();
+  // Put-back headings are the block's own lines: only text the block left behind counts as hidden text.
+  const putBack = new Set(read.map((r) => r.at));
   return read.map((b) => {
     let hides = false;
     for (let i = b.at + 1; i < lines.length; i++) {
       const p = parsed.get(i);
       const m = marginHeading(lines[i]);
       if ((p && p.level <= b.level) || (m && m.level <= b.level)) break;
+      if (putBack.has(i)) continue;
       if (lines[i].trim() !== '') { hides = true; break; }
     }
     return { ...b, hides };
