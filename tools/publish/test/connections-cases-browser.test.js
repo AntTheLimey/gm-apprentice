@@ -51,7 +51,19 @@ const script = function (done) {
       return m && Math.abs(Number(m[1]) - rx) < 0.2 && Math.abs(Number(m[2]) - ry) < 0.2;
     }).length;
     r.labelLines = [].map.call(document.querySelectorAll('.cx-group .cx-label'), lines);
-    r.nameLines = [].map.call(document.querySelectorAll('.cx-row .cx-name'), function (n) { return [n.textContent, lines(n)]; });
+    // each name's width on one line, and the room its row leaves it beside the mark (fonts differ by system, so
+    // whether a name fits is measured, not assumed)
+    r.nameFit = [].map.call(document.querySelectorAll('.cx-row .cx-name'), function (n) {
+      var row = n.closest('.cx-row');
+      var rs = getComputedStyle(row);
+      var room = row.getBoundingClientRect().right - parseFloat(rs.borderRightWidth) - parseFloat(rs.paddingRight) - n.getBoundingClientRect().left;
+      var probe = n.cloneNode(true);
+      probe.style.cssText = 'position:absolute;visibility:hidden;white-space:nowrap;max-width:none;width:auto';
+      row.appendChild(probe);
+      var one = probe.getBoundingClientRect().width;
+      row.removeChild(probe);
+      return { text: n.textContent, lines: lines(n), one: round(one), room: round(room) };
+    });
   }
   r.scrollWidth = document.documentElement.scrollWidth;
   r.clientWidth = document.documentElement.clientWidth;
@@ -166,9 +178,12 @@ for (const [mode, widths] of [['web', [1200, 360]], ['tree', [1200, 640, 360]]])
         for (const w of widths) assert.deepEqual(at[w].named.labelLines, [1], `at ${w}`);
       });
 
-      it('a long name does not wrap where the row has room for it', () => {
-        const long = (w) => at[w].wide.nameLines.find(([t]) => t === LONG_NAME)[1];
-        assert.equal(long(1200), 1);
+      it('a long name wraps only where the row has no room for it on one line', () => {
+        for (const w of widths) {
+          const n = at[w].wide.nameFit.find((x) => x.text === LONG_NAME);
+          const fits = n.one <= n.room + 0.5;
+          assert.equal(n.lines === 1, fits, `at ${w} the name is ${n.one}px on one line, the row has ${n.room}px for it, and it takes ${n.lines} line(s)`);
+        }
       });
 
       it('in a tall drawing the card never covers the chosen name, and the names it covers can still be chosen', () => {
