@@ -924,6 +924,114 @@ class ShownTests(VaultCase):
         self.assertEqual((code, rows), (0, ["# 0 hostile ties shown on 0 notes"]))
 
 
+class AcceptTests(VaultCase):
+    """A hostile tie the GM reviewed and left (#367): `shown --accept` records
+    it in the publish list, `shown` stops listing it, and it counts again if
+    the tie changes."""
+
+    NOTE = ShownTests.NOTE
+    HALLAM = "NPCs/Emma.md:6"
+    TOM = "NPCs/Emma.md:17"
+
+    def tones(self, *args, published=("NPCs/Emma.md",)):
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(tones, "published_notes",
+                               return_value=set(published)), \
+                contextlib.redirect_stdout(out), \
+                contextlib.redirect_stderr(err):
+            code = tones.main([str(self.vault), *args])
+        return code, out.getvalue().splitlines(), err.getvalue()
+
+    def setUp(self):
+        super().setUp()
+        self.put("NPCs/Emma.md", self.NOTE)
+
+    def publish_list(self):
+        return (self.vault / "_meta" / "publish-list.yaml")
+
+    def test_a_preview_names_the_ties_and_writes_nothing(self):
+        code, rows, _ = self.tones("shown", "--accept")
+        self.assertEqual(code, 0)
+        self.assertEqual([r.split("\t")[:2] for r in rows[:-1]],
+                         [["WOULD-ACCEPT", self.HALLAM],
+                          ["WOULD-ACCEPT", self.TOM]])
+        self.assertEqual(rows[-1], "# 2 hostile tie(s) would be accepted")
+        self.assertFalse(self.publish_list().exists())
+
+    def test_accepting_all_empties_the_list_and_counts_what_was_accepted(self):
+        code, rows, _ = self.tones("shown", "--accept", "--write")
+        self.assertEqual(code, 0)
+        self.assertEqual(rows[0].split("\t")[0], "ACCEPTED")
+        self.assertEqual(rows[-1], "# 2 hostile tie(s) accepted")
+        code, rows, _ = self.tones("shown")
+        self.assertEqual((code, rows),
+                         (0, ["# 0 hostile ties shown on 0 notes "
+                              "(2 accepted)"]))
+
+    def test_one_tie_can_be_accepted_by_its_place(self):
+        code, rows, _ = self.tones("shown", "--accept", self.HALLAM,
+                                   "--write")
+        self.assertEqual((code, rows[-1]),
+                         (0, "# 1 hostile tie(s) accepted"))
+        _, rows, _ = self.tones("shown")
+        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows[0].split("\t")[:2], [self.TOM, "Cold"])
+        self.assertEqual(rows[-1],
+                         "# 1 hostile tie shown on 1 note (1 accepted)")
+
+    def test_an_edited_tie_is_raised_again(self):
+        self.tones("shown", "--accept", "--write")
+        self.put("NPCs/Emma.md", self.NOTE.replace(
+            "Wants his chair.", "Wants his chair and his name."))
+        _, rows, _ = self.tones("shown")
+        self.assertEqual(rows[0].split("\t")[:2], [self.HALLAM, "hostile"])
+        self.assertEqual(rows[-1],
+                         "# 1 hostile tie shown on 1 note (1 accepted)")
+
+    def test_a_tie_that_moved_down_the_note_stays_accepted(self):
+        self.tones("shown", "--accept", "--write")
+        self.put("NPCs/Emma.md", self.NOTE.replace(
+            "type: npc\n", "type: npc\naliases: [Em]\n"))
+        _, rows, _ = self.tones("shown")
+        self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes "
+                                "(2 accepted)"])
+
+    def test_a_place_that_is_not_a_shown_hostile_tie_is_refused(self):
+        for place in ("NPCs/Emma.md:10", "NPCs/Emma.md:13", "NPCs/Emma.md:99",
+                      "NPCs/Nobody.md:6", "nonsense"):
+            with self.subTest(place=place):
+                code, rows, err = self.tones("shown", "--accept", place,
+                                             "--write")
+                self.assertEqual((code, rows), (1, []))
+                self.assertIn(place, err)
+        self.assertFalse(self.publish_list().exists())
+
+    def test_nothing_to_accept_is_a_clean_zero(self):
+        code, rows, _ = self.tones("shown", "--accept", published=())
+        self.assertEqual((code, rows),
+                         (0, ["# 0 hostile tie(s) would be accepted"]))
+
+    def test_the_flags_go_with_shown(self):
+        for args in (["--accept"], ["uses", "--accept"],
+                     ["shown", "--write"]):
+            with self.subTest(args=args):
+                code, _, err = self.tones(*args)
+                self.assertEqual(code, 2, err)
+        code, _, err = self.tones("fix", "--near", "--accept")
+        self.assertEqual(code, 2, err)
+
+    def test_a_published_list_and_its_other_records_are_kept(self):
+        self.put("_meta/publish-list.yaml",
+                 "publishing:\n  - NPCs/Emma.md\nexcluded: []\n"
+                 "needs_decision: []\naccepted:\n  - page: x.html\n"
+                 "    text: a sentence\n    note: Secret\n")
+        self.tones("shown", "--accept", "--write")
+        text = self.get("_meta/publish-list.yaml")
+        self.assertIn("a sentence", text)
+        self.assertIn("NPCs/Emma.md", text)
+        self.assertEqual(text.count("note: tone.tie"), 2)
+
+
 import vault_check as vc  # noqa: E402
 
 

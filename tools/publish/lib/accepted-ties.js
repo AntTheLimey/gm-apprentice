@@ -13,7 +13,8 @@ const squash = (s) => String(s || '').normalize('NFC').split(/\s+/).filter(Boole
 // The tie as the record holds it: the tone as the site reads it (trimmed, lower case), the target and the description
 // with their whitespace folded.
 function tieText({ tone, target, description }) {
-  return `${squash(tone).toLowerCase()} | ${squash(target)} | ${squash(description)}`;
+  // Trimmed: the publish list reader trims every record, so an empty description must not leave a trailing space.
+  return `${squash(tone).toLowerCase()} | ${squash(target)} | ${squash(description)}`.trim();
 }
 
 const keyOf = (page, text) => `${String(page).normalize('NFC')}\n${text}`;

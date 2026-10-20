@@ -4,7 +4,7 @@ tidy them.
 
     tones.py VAULT
     tones.py VAULT uses [WORD ...]
-    tones.py VAULT shown
+    tones.py VAULT shown [--accept [NOTE:LINE ...] [--write]]
     tones.py VAULT fix [--near [--except WORD ...]] [--set OLD=NEW ...]
                        [--write]
 
@@ -42,6 +42,13 @@ publish tool is asked which notes publish):
 
     note:line, the tone word, the target as written, and the description
     on one line (cut at 300 characters, as `uses` cuts)
+
+A tie the GM has accepted is not listed while its note, tone, target and
+description stay the same (the last line then ends "(N accepted)"). `--accept`
+records ties as accepted: with NOTE:LINE places from the rows, those; with
+none, every tie `shown` lists. It prints WOULD-ACCEPT rows and writes
+nothing without --write, then ACCEPTED rows; the publish tool writes the
+record, in the publish list's `accepted` list.
 
 A last `#` line counts the ties and the notes. If the publish tool cannot
 be asked, or the vault has no site, it prints one line why and exits 1.
@@ -263,8 +270,10 @@ def shown_lines(vault: Path, published: set[str]) -> list[str]:
     """One row per hostile tie a published note shows, then a count."""
     rows: list[str] = []
     notes: set[str] = set()
-    for edge in shown_edges(vault, published):
-        if edge["siteFamily"] != "hostile":
+    settled = 0
+    for edge in hostile_edges(vault, published):
+        if edge.get("accepted"):
+            settled += 1
             continue
         rows.append("\t".join([
             f"{edge['rel']}:{edge['line']}", edge["tone"],
@@ -273,8 +282,60 @@ def shown_lines(vault: Path, published: set[str]) -> list[str]:
         notes.add(edge["rel"])
     n, m = len(rows), len(notes)
     rows.append(f"# {n} hostile tie{'' if n == 1 else 's'} shown on "
-                f"{m} note{'' if m == 1 else 's'}")
+                f"{m} note{'' if m == 1 else 's'}"
+                + (f" ({settled} accepted)" if settled else ""))
     return rows
+
+
+def hostile_edges(vault: Path, published: set[str]
+                  ) -> Iterator[dict[str, Any]]:
+    """The hostile ties a published note shows, accepted ones included."""
+    for edge in shown_edges(vault, published):
+        if edge["siteFamily"] == "hostile":
+            yield edge
+
+
+def accept_lines(vault: Path, published: set[str], places: list[str],
+                 write: bool) -> list[str]:
+    """`shown --accept [NOTE:LINE ...] [--write]` (#367): record the hostile
+    ties the GM reviewed and left, so `shown` stops listing them until the
+    tie changes. The record is written by the publish tool (`relationships
+    accept`) into the publish list's `accepted` list; nothing here writes
+    it. No place means every tie `shown` lists."""
+    open_ties = [e for e in hostile_edges(vault, published)
+                 if not e.get("accepted")]
+    where = {f"{e['rel']}:{e['line']}": e for e in open_ties}
+    if places:
+        for place in places:
+            if place not in where:
+                raise TonesError(f"{place} is not a hostile tie the site "
+                                 f"shows that is still to review; `shown` "
+                                 f"lists them")
+        chosen = list(dict.fromkeys(places))
+    else:
+        chosen = list(where)
+    rows: list[str] = []
+    if chosen:
+        args = ["accept"]
+        for place in chosen:
+            args += ["--at", place]
+        if write:
+            args.append("--write")
+        import vault_check
+        config, _ = vault_check._site_config(vault)
+        if config is not None:
+            args += ["--config", str(config)]
+        try:
+            run_relationships(vault, args)
+        except PublishToolUnavailable as e:
+            raise TonesError(str(e)) from e
+    verb = "ACCEPTED" if write else "WOULD-ACCEPT"
+    for place in chosen:
+        e = where[place]
+        rows.append("\t".join([verb, place, e["tone"],
+                               _one_line(e["target"])]))
+    n = len(chosen)
+    return rows + [f"# {n} hostile tie(s) {'accepted' if write else 'would be accepted'}"]
 
 
 @dataclass
@@ -399,6 +460,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--except", dest="excepts", action="append",
                     metavar="WORD")
     ap.add_argument("--set", dest="sets", action="append", metavar="OLD=NEW")
+    ap.add_argument("--accept", action="store_true")
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
@@ -406,10 +468,13 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
         return 2
     usage = None
-    if args.command != "fix" and (args.near or args.excepts or args.sets
-                                 or args.write):
+    if args.accept and args.command != "shown":
+        usage = "--accept goes with shown"
+    elif args.command != "fix" and (args.near or args.excepts or args.sets):
         usage = "--near, --except, --set and --write go with fix"
-    elif args.command == "shown" and args.words:
+    elif args.command != "fix" and args.write and not args.accept:
+        usage = "--near, --except, --set and --write go with fix"
+    elif args.command == "shown" and args.words and not args.accept:
         usage = "only uses takes words"
     elif args.command == "fix" and args.words:
         usage = "only uses takes words; fix takes --set OLD=NEW"
@@ -444,6 +509,10 @@ def main(argv: list[str] | None = None) -> int:
                 print("tones.py: the site's publish tool could not be asked "
                       "which notes publish", file=sys.stderr)
                 return 1
+            if args.accept:
+                print("\n".join(accept_lines(args.vault, published, args.words,
+                                             args.write)))
+                return 0
             print("\n".join(shown_lines(args.vault, published)))
             return 0
         p = plan_fix(args.vault, args.near, sets, args.excepts or ())

@@ -114,3 +114,9 @@ test('only a record marked tone.tie is a tie record', () => {
   assert.strictEqual(isAcceptedTie({ page: 'A.md', text: 'x', note: 'gm-leak.heading' }), false);
   assert.strictEqual(isAcceptedTie({ page: 'A.md', text: 'x', note: '' }), false);
 });
+
+test('a tie with no description is accepted too (the list reader trims a record)', () => {
+  const dir = vault({ 'NPCs/E.md': NOTE.replace('tone: warm', 'tone: cold') });
+  cli(dir, 'accept', '--at', 'NPCs/E.md:10', '--write');
+  assert.deepStrictEqual(listing(dir).map((r) => r.accepted), [false, true]);
+});
