@@ -41,7 +41,8 @@ function measure(pagePath, width, script, { height = 900, wait = 6000 } = {}) {
   const dir = path.dirname(pagePath);
   const probed = path.join(dir, '__probe.html');
   let html = fs.readFileSync(pagePath, 'utf8');
-  const head = '<script>window.__errors=[];window.addEventListener("error",function(e){window.__errors.push(String(e.message))});</script>';
+  // A phone's scrollbars overlay the page; a desktop Chrome's (Linux, Windows) take 15px of the width.
+  const head = '<style>::-webkit-scrollbar{width:0;height:0}</style><script>window.__errors=[];window.addEventListener("error",function(e){window.__errors.push(String(e.message))});</script>';
   const tail = `<script>window.addEventListener('load',function(){var finish=function(r){r=r||{};r.errors=window.__errors;`
     + `var p=document.createElement('pre');p.id='probe';p.textContent=JSON.stringify(r);document.body.appendChild(p);};`
     + `setTimeout(function(){(${script})(finish);},600);});</script>`;
