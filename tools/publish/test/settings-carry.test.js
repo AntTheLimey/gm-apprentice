@@ -52,3 +52,19 @@ test('carry sets a plain value, and refuses (changing nothing) a value the setti
   assert.equal(text(v), before);
   assert.equal(run(v, 'carry', ['player_site.nothing_here', 'player_site.title']).rc, 1);
 });
+
+// #381: a hiding group written under the wrong group (`features:` under player_site) is one fault per setting inside
+// it that has one right place, so the Settings check can carry each across.
+test('a misplaced group inside a known group names the setting each leaf belongs to, and carry moves it', () => {
+  const v = vaultWith('version: 1\nplayer_site:\n  features:\n    hide:\n      drafts: true\n');
+  const faults = readSettings({ vaultPath: v }).faults;
+  const leaf = faults.find((f) => f.name === 'player_site.features.hide.drafts');
+  assert.ok(leaf, JSON.stringify(faults.map((f) => f.name)));
+  assert.equal(leaf.setting, 'player_site.hide.drafts');
+  assert.equal(leaf.level, 'stop');
+  const r = run(v, 'carry', ['player_site.features.hide.drafts', 'player_site.hide.drafts']);
+  assert.equal(r.rc, 0, r.err);
+  const now = readSettings({ vaultPath: v });
+  assert.equal(now.values.player_site.hide.drafts, true);
+  assert.ok(!now.faults.some((f) => f.name.startsWith('player_site.features.hide.drafts')));
+});
