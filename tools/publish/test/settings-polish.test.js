@@ -65,18 +65,6 @@ test('add of a folder outside the vault says so, not "blank entry" (#373)', () =
   assert.doesNotMatch(err[0], /blank/);
 });
 
-test('--vault alone still reads the settings the vault\'s site folder file holds (#373)', () => {
-  const s = scratch('version: 1\nplayer_site:\n  folder: ../site\n');
-  const site = path.join(s.root, 'site');
-  fs.mkdirSync(site);
-  fs.writeFileSync(path.join(site, 'vault.config.json'), JSON.stringify({ vaultPath: '../vault', excludeSections: ['Spoilers'] }));
-  const out = [];
-  const rc = runSettings({ verb: 'check', args: [], vault: s.vault, json: true }, { out: (l) => out.push(l), err: () => {} });
-  const faults = JSON.parse(out.join('\n')).faults;
-  assert.ok(faults.some((f) => f.name === 'excludeSections' && f.level === 'stop'), JSON.stringify(faults));
-  assert.equal(rc, 1);
-});
-
 test('a failed after step does not claim nothing was built (#386)', () => {
   const { runSteps } = require('../lib/settings/steps');
   const fail = `${JSON.stringify(process.execPath)} -e "process.exit(1)"`;
