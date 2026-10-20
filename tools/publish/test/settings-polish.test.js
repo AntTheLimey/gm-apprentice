@@ -126,3 +126,8 @@ test('a vault keep list that drops folders the site file keeps is a stop naming 
   const r2 = readSettings({ vaultPath: t.vault, siteConfig: { preserveDirs: ['audio'] }, siteDir: t.root });
   assert.ok(!r2.faults.some((x) => x.level === 'stop'));
 });
+
+test('the docs say build steps run as plain shell commands without npm\'s variables (#386)', () => {
+  const doc = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'docs', 'site-settings.md'), 'utf8');
+  assert.match(doc, /plain shell commands[^.]*without npm's variables/);
+});
