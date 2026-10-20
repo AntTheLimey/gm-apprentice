@@ -12,18 +12,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 const matter = require('gray-matter');
 const { buildPc } = require('./helpers/pc-vault');
-
-function findChrome() {
-  const candidates = [process.env.CHROME_PATH,
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'].filter(Boolean);
-  for (const c of candidates) if (fs.existsSync(c)) return c;
-  for (const name of ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser']) {
-    try { return execFileSync(process.platform === 'win32' ? 'where' : 'which', [name], { encoding: 'utf8' }).split(/\r?\n/)[0].trim() || null; } catch (e) { /* not this one */ }
-  }
-  return null;
-}
+const { findChrome } = require('./helpers/browser');
 
 // Runs in the outer page: opens the Combat tab in each frame and measures.
 const PROBE = `
@@ -61,7 +50,7 @@ test('the to-hit calculator on a phone, in a real browser', (t) => {
   const chrome = findChrome();
   if (!chrome) {
     if (process.env.CI) assert.fail('no Chrome found on CI: set CHROME_PATH');
-    t.skip('no Chrome found (set CHROME_PATH to run it)');
+    t.skip('no Chrome found (set CHROME_PATH or GM_TEST_CHROME to run it)');
     return;
   }
   const ronnie = matter(fs.readFileSync(path.join(__dirname, 'fixtures', 'gurps', 'gurps-ronnie.md'), 'utf8')).content;
