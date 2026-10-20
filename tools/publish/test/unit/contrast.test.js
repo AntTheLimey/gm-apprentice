@@ -1,3 +1,84 @@
+'use strict';
+// Colour contrast: the GM site's CSS, the skins, the themes and the theme headers.
+// Each block below was a test file of its own; the blocks keep their own imports and helpers.
+
+// ---- gm-css-contrast.test.js -----------------------------------------------------------------------------
+{
+// The GM site's marks can be read in every preset, dark and light: each coloured text in css/gm.css meets 4.5:1
+// on what it sits on. Colours are read from style.css (the plain look) and each preset in css/themes, the colour
+// names from gm.css itself, so a changed rule or preset fails here by name.
+const { describe, it } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const CSS = path.join(__dirname, '..', '..', 'css');
+const read = (...p) => fs.readFileSync(path.join(CSS, ...p), 'utf8').replace(/\r\n/g, '\n').replace(/\/\*[\s\S]*?\*\//g, '');
+const LIGHT = '@media (prefers-color-scheme: light)';
+
+const hex = (h) => { const s = h.slice(1); const f = s.length === 3 ? s.replace(/./g, '$&$&') : s; return [0, 2, 4].map((i) => parseInt(f.slice(i, i + 2), 16)); };
+const lum = (c) => c.map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; })
+  .reduce((a, x, i) => a + x * [0.2126, 0.7152, 0.0722][i], 0);
+const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+const mix = (a, b, pa) => a.map((v, i) => Math.round(v * pa + b[i] * (1 - pa)));
+const tokens = (block) => Object.fromEntries([...block.matchAll(/(--[a-z0-9-]+)\s*:\s*(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3}))\s*;/g)]
+  .map((m) => [m[1], hex(m[2])]));
+
+// The first :root block of a file (the dark look) and its light block.
+function looks(css) {
+  const at = css.indexOf(LIGHT);
+  const base = css.slice(0, at < 0 ? css.length : at);
+  const root = base.slice(base.indexOf(':root'), base.indexOf('}', base.indexOf(':root')));
+  return { dark: tokens(root), light: at < 0 ? null : tokens(css.slice(at, css.indexOf('}', css.indexOf('}', at) + 1))) };
+}
+const plain = looks(read('style.css'));
+const MODES = [['plain', 'dark', plain.dark]];
+for (const f of fs.readdirSync(path.join(CSS, 'themes')).filter((n) => n.endsWith('.css')).sort()) {
+  const t = looks(read('themes', f));
+  const dark = { ...plain.dark, ...t.dark };
+  MODES.push([f.replace(/\.css$/, ''), 'dark', dark]);
+  if (t.light) MODES.push([f.replace(/\.css$/, ''), 'light', { ...dark, ...t.light }]);
+}
+
+// What gm.css paints: the colour name of a rule's `color`, and a mark's tint of --warning over the card.
+const gm = read('gm.css');
+const rule = (sel) => {
+  const m = gm.match(new RegExp(`(?:^|\\n)${sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\{([^}]*)\\}`));
+  assert.ok(m, `gm.css has a rule for ${sel}`);
+  return m[1];
+};
+const colourOf = (sel) => { const m = rule(sel).match(/(?:^|[;\s])color:\s*var\((--[a-z-]+)\)/); assert.ok(m, `${sel} takes a colour name`); return m[1]; };
+const TINT = (() => { const m = rule('.gm-mark').match(/color-mix\(in srgb, var\(--warning\) (\d+)%, var\(--bg-card\)\)/); assert.ok(m, 'the mark tint'); return +m[1] / 100; })();
+
+describe('gm.css: the marks can be read in every look', () => {
+  it('reads every preset, dark and light', () => {
+    assert.ok(MODES.length >= 11, MODES.map((m) => m.slice(0, 2).join(' ')).join(', '));
+  });
+  for (const [look, mode, t] of MODES) {
+    it(`${look} ${mode}`, () => {
+      const card = t['--bg-card'];
+      const tinted = mix(t['--warning'], card, TINT);
+      const pairs = [
+        ['a mark\'s label', t[colourOf('.gm-mark__label')], tinted],
+        ['a mark\'s text', t[colourOf('.gm-mark')], tinted],
+        ['the panel title', t[colourOf('.gm-hidden__title')], card],
+        // an inline mark sits in running text: its tint is over the page, not a card
+        ['an inline mark\'s text', t[colourOf('.gm-mark')], mix(t['--warning'], t['--bg'], TINT)],
+        ['an inline mark\'s reason', t[colourOf('span.gm-mark::after')], mix(t['--warning'], t['--bg'], TINT)],
+        ['the band', hex(rule('.gm-band').match(/color:\s*(#[0-9a-fA-F]{3,6})/)[1]), t['--warning']],
+      ];
+      for (const [what, fg, bg] of pairs) {
+        assert.ok(fg && bg, `${what}: colours found`);
+        const r = ratio(fg, bg);
+        assert.ok(r >= 4.5, `${look} ${mode}: ${what} is ${r.toFixed(2)}:1, under 4.5:1`);
+      }
+    });
+  }
+});
+}
+
+// ---- skins-contrast.test.js ------------------------------------------------------------------------------
+{
 // Every skin's text and marks meet contrast, in dark and in light, measured from the skin files themselves.
 // Thresholds: 4.5:1 for text, 3:1 for marks (WCAG 2.x). Colours are read as hex from each skin file's base
 // rule (dark) and its trailing light block; a token that is missing or not hex fails the pair loudly.
@@ -173,3 +254,122 @@ describe('skins: contrast', () => {
     }
   }
 });
+}
+
+// ---- theme-contrast.test.js ------------------------------------------------------------------------------
+{
+// Every theme preset's muted text and accent (links) can be read on its page and its cards, and
+// the header's own muted text and accent on the header and hero (which stay dark in the light
+// palette): at least 4.5:1 (WCAG AA for body text), in the dark palette and the light.
+const { describe, it } = require('node:test');
+const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+
+const DIR = path.join(__dirname, '..', '..', 'css', 'themes');
+const AA = 4.5;
+
+const channel = (v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
+function luminance(hex) {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  const [r, g, b] = [0, 2, 4].map((i) => channel(parseInt(h.slice(i, i + 2), 16) / 255));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function contrast(a, b) {
+  const [x, y] = [luminance(a), luminance(b)];
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+const TOKENS = { bg: 'bg', card: 'bg-card', header: 'bg-header', hero: 'bg-hero', muted: 'text-muted', accent: 'accent',
+  headerMuted: 'text-muted-on-header', headerAccent: 'accent-on-header' };
+// Each innermost `{ … }` block that sets a background: its colour tokens. A later palette (the
+// light one) keeps what it does not set from the first.
+function palettes(css) {
+  const out = [];
+  for (const m of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const p = {};
+    for (const [key, name] of Object.entries(TOKENS)) {
+      const hit = new RegExp(`--${name}\\s*:\\s*(#[0-9a-fA-F]{3,6})\\b`).exec(m[2]);
+      if (hit) p[key] = hit[1];
+    }
+    if (p.bg || p.card) out.push(out.length ? { ...out[0], ...p } : p);
+  }
+  return out;
+}
+const PAIRS = [['muted', 'bg'], ['muted', 'card'], ['accent', 'bg'], ['accent', 'card'],
+  ['headerMuted', 'header'], ['headerMuted', 'hero'], ['headerAccent', 'header'], ['headerAccent', 'hero']];
+
+describe('theme presets: readable muted text and links', () => {
+  const files = fs.readdirSync(DIR).filter((f) => f.endsWith('.css'));
+  it('finds the presets and both palettes of each', () => {
+    assert.ok(files.length >= 5);
+    for (const f of files) assert.strictEqual(palettes(fs.readFileSync(path.join(DIR, f), 'utf8')).length, 2, f);
+  });
+  for (const f of files) {
+    it(f, () => {
+      palettes(fs.readFileSync(path.join(DIR, f), 'utf8')).forEach((p, i) => {
+        for (const [ink, ground] of PAIRS) {
+          assert.ok(p[ink] && p[ground], `${f} palette ${i + 1} sets ${TOKENS[ink]} and ${TOKENS[ground]}`);
+          const r = contrast(p[ink], p[ground]);
+          assert.ok(r >= AA, `${f} palette ${i + 1}: ${TOKENS[ink]} ${p[ink]} on ${TOKENS[ground]} ${p[ground]} is ${r.toFixed(2)}:1`);
+        }
+      });
+    });
+  }
+});
+}
+
+// ---- theme-header-contrast.test.js -----------------------------------------------------------------------
+{
+const { describe, it } = require('node:test');
+const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+
+// #259: every preset keeps a dark header and hero in light mode, but switched
+// --text to dark ink, and header text fell back to --text: dark on dark. Check
+// the header text contrast of every preset in both schemes.
+const CSS = path.join(__dirname, '..', '..', 'css');
+
+function vars(block) {
+  const out = {};
+  for (const m of block.matchAll(/--([\w-]+)\s*:\s*([^;]+);/g)) out[m[1]] = m[2].trim();
+  return out;
+}
+
+function palettes(css) {
+  const light = css.match(/@media\s*\(prefers-color-scheme:\s*light\)\s*{\s*:root\s*{([^}]*)}/);
+  const base = css.replace(/@media[^{]*{\s*:root\s*{[^}]*}\s*}/g, '').match(/:root\s*{([^}]*)}/);
+  const dark = vars(base ? base[1] : '');
+  return { dark, light: Object.assign({}, dark, light ? vars(light[1]) : {}) };
+}
+
+function lum(hex) {
+  const h = hex.replace('#', '');
+  const full = h.length === 3 ? h.split('').map(c => c + c).join('') : h;
+  const [r, g, b] = [0, 2, 4].map(i => parseInt(full.slice(i, i + 2), 16) / 255)
+    .map(c => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+const contrast = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+
+const base = vars(fs.readFileSync(path.join(CSS, 'style.css'), 'utf8').match(/:root\s*{([^}]*)}/)[1]);
+
+describe('header text is readable on the header in both schemes (#259)', () => {
+  for (const file of fs.readdirSync(path.join(CSS, 'themes')).filter(f => f.endsWith('.css'))) {
+    for (const scheme of ['dark', 'light']) {
+      it(`${file} (${scheme})`, () => {
+        const p = Object.assign({}, base, palettes(fs.readFileSync(path.join(CSS, 'themes', file), 'utf8'))[scheme]);
+        const text = p['text-on-header'] || p.text;
+        for (const bg of ['bg-header', 'bg-hero']) {
+          assert.ok(contrast(text, p[bg]) >= 4.5,
+            `${file} ${scheme}: header text ${text} on ${bg} ${p[bg]} is ${contrast(text, p[bg]).toFixed(2)}:1`);
+        }
+        const muted = p['text-muted-on-header'] || p['text-muted'];
+        assert.ok(contrast(muted, p['bg-header']) >= 3,
+          `${file} ${scheme}: muted header text ${muted} is ${contrast(muted, p['bg-header']).toFixed(2)}:1`);
+      });
+    }
+  }
+});
+}
