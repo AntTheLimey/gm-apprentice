@@ -148,12 +148,18 @@ test('every landing setting the code reads is in the list', () => {
   assert.deepEqual([...read].filter((n) => !known.has(n)).sort(), []);
 });
 
-// Client-side strings and modules that cannot require the list state a few allowed values
-// themselves; they must not drift from it.
-test('the colour modes the page script knows are the list\'s', () => {
-  assert.deepEqual(require('../lib/color-mode').MODES, entry('player_site.theme.default_mode').values);
+// The colour modes are the list's: color-mode.js asks it (a require at the call, as skins/ does, because the list
+// requires skins and skins require color-mode) and keeps no copy.
+test('the colour modes are not restated', () => {
+  const found = sources.filter((f) => /['"`]system['"`]\s*,\s*['"`](?:dark|light)['"`]/.test(code(f))).map(rel);
+  assert.deepEqual(found, []);
+  const { normalizeDefaultMode } = require('../lib/color-mode');
+  for (const mode of entry('player_site.theme.default_mode').values) assert.equal(normalizeDefaultMode(` ${mode.toUpperCase()} `), mode);
+  assert.equal(normalizeDefaultMode('sepia'), entry('player_site.theme.default_mode').default);
 });
 
+// Client-side strings and modules that cannot require the list state a few allowed values
+// themselves; they must not drift from it.
 test('the connection and link-preview modes the templates use come from the list', () => {
   const base = fs.readFileSync(path.join(ROOT, 'lib', 'templates', 'base.js'), 'utf8');
   const conn = fs.readFileSync(path.join(ROOT, 'lib', 'templates', 'connections.js'), 'utf8');
