@@ -116,6 +116,7 @@ reconstructed by vault-ingest, or entered manually.
 ---
 type: session-play-notes
 session: "[[Session NN - Title]]"
+session_number: N
 chapter: "[[Chapter N - Title]]"
 campaign: ""
 canon_status: AUTHORITATIVE

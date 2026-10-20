@@ -2112,7 +2112,7 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
     batch.create(index_rel, index_text)
     schema_check(batch, index_rel, index_text)
     note_fm = ["type: session-play-notes", f'session: "[[{stem}]]"',
-               f"chapter: {chapter_raw}", f"campaign: {campaign_raw or chr(34) * 2}",
+               f"session_number: {n}", f"chapter: {chapter_raw}", f"campaign: {campaign_raw or chr(34) * 2}",
                "canon_status: AUTHORITATIVE", "created_by: manual"]
     if args.play_date:
         note_fm.append(f'play_date: "{args.play_date}"')

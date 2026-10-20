@@ -148,6 +148,13 @@ class SessionNewTests(unittest.TestCase):
         self.assertFalse((self.vault / INDEX).exists())
         self.assertFalse((self.vault / NOTES).exists())
 
+    def test_play_notes_carry_the_session_number(self):
+        code, out = self.new("--write")
+        self.assertEqual(code, 0, out)
+        fm = vl.extract_frontmatter(self.read(NOTES))
+        self.assertEqual(fm["type"], "session-play-notes")
+        self.assertEqual(fm["session_number"], "13")
+
     def test_index_is_the_template_filled_from_the_previous_session(self):
         code, out = self.new("--write")
         self.assertEqual(code, 0, out)
