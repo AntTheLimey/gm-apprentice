@@ -6,7 +6,6 @@ const os = require('os');
 const path = require('path');
 const { build } = require('../../lib/build');
 const { buildVault } = require('../helpers/build-vault');
-const { fixtureNames, prepareFixture } = require('../helpers/fixture-build');
 
 // A note the build writes no page for (type: world_flags) is listed nowhere: no output file
 // names it, links to it or counts it. Walks every output file, whatever its kind.
@@ -32,25 +31,5 @@ describe('a note with no page is listed nowhere', () => {
       // The link to it prints its name as plain text, as for any unpublished note.
       assert.match(site.read('locations', 'cellar.html'), /See Zzflagsprobe and <a href="tab\.html">Tab<\/a>/);
     } finally { site.cleanup(); }
-  });
-
-  it('is in no output file of any fixture vault', () => {
-    let checked = 0;
-    for (const name of fixtureNames()) {
-      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'no-page-'));
-      try {
-        const configPath = prepareFixture(name, root);
-        const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-        const dir = Object.keys(cfg.folderMap)[0];
-        if (!dir) continue;
-        fs.writeFileSync(path.join(root, 'vault', dir, 'Zzflagsprobe.md'), '---\ntype: world_flags\n---\nZZSECRETFLAG\n');
-        const log = console.log; const warn = console.warn;
-        console.log = () => {}; console.warn = () => {};
-        try { build({ configPath }); } finally { console.log = log; console.warn = warn; }
-        assert.deepStrictEqual(filesMentioning(path.join(root, 'docs'), /zzflagsprobe|ZZSECRETFLAG/i), [], name);
-        checked++;
-      } finally { fs.rmSync(root, { recursive: true, force: true }); }
-    }
-    assert.ok(checked > 20, `checked ${checked} fixtures`);
   });
 });

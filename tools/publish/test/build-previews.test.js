@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const { build } = require('../lib/build');
 const { pageText, cardProblems } = require('./helpers/card-subset');
-const { fixtureNames, prepareFixture } = require('./helpers/fixture-build');
+const { prepareFixture } = require('./helpers/fixture-build');
 const { insideNoPreview } = require('./helpers/no-preview');
 const { buildVault: buildSmallVault } = require('./helpers/build-vault');
 
@@ -109,38 +109,7 @@ test('a build with previews off after one with them on keeps nothing from the fi
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-// The fixture vaults, each built as a site. A fixture that cannot build is listed
-// here by name with a reason (none today: every one builds).
-const UNBUILDABLE = {};
-
-// The card is a subset of the page: every string on a card occurs in that page's own text.
-test('every card string occurs in its own built page, on every fixture vault that builds', () => {
-  const failures = [];
-  let checked = 0;
-  for (const name of fixtureNames()) {
-    if (UNBUILDABLE[name]) continue;
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'previews-fixture-'));
-    try {
-      try { quietBuild(prepareFixture(name, root)); } catch (e) {
-        assert.fail(`fixture ${name} no longer builds (${e.message}); list it in UNBUILDABLE with a reason`);
-      }
-      const cards = JSON.parse(fs.readFileSync(path.join(root, 'docs', 'previews.json'), 'utf8'));
-      for (const [rel, card] of Object.entries(cards)) {
-        // Every key names a file the build wrote.
-        if (!fs.existsSync(path.join(root, 'docs', ...rel.split('/')))) failures.push(`${name}/${rel}: a card with no page`);
-        const html = fs.readFileSync(path.join(root, 'docs', ...rel.split('/')), 'utf8');
-        const { problems } = cardProblems(card, pageText(html));
-        for (const pr of problems) failures.push(`${name}/${rel}: ${pr}`);
-        checked++;
-      }
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  }
-  assert.deepStrictEqual(failures, []);
-  assert.ok(checked > 60, `checked ${checked} cards`);
-
-});
+// (The card-subset sweep over every fixture vault is in integration/fixture-sweep.test.js.)
 
 // Listing containers (each row already a summary) opt out of cards; running prose does not.
 test('listing containers carry data-no-preview, and only when previews are on', () => {

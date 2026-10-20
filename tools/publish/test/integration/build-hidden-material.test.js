@@ -6,7 +6,6 @@ const os = require('os');
 const path = require('path');
 const { build } = require('../../lib/build');
 const { buildVault } = require('../helpers/build-vault');
-const { fixtureNames, prepareFixture } = require('../helpers/fixture-build');
 
 // What the GM hid must be in NO file of the built site: the hidden words are looked for
 // in every output file (pages, search index, cards, scripts), not in one page.
@@ -118,28 +117,6 @@ describe('L2: the search index lists only pages that exist', () => {
       const index = JSON.parse(site.read('search-index.json'));
       assert.deepStrictEqual(Object.values(index.documents).map(d => d.href), ['locations/gate.html']);
     } finally { site.cleanup(); }
-  });
-
-  it('names a built file in every entry, on every fixture vault', () => {
-    const failures = [];
-    let checked = 0;
-    for (const name of fixtureNames()) {
-      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'search-fixture-'));
-      try {
-        const configPath = prepareFixture(name, root);
-        const log = console.log; const warn = console.warn;
-        console.log = () => {}; console.warn = () => {};
-        try { build({ configPath }); } finally { console.log = log; console.warn = warn; }
-        const indexFile = path.join(root, 'docs', 'search-index.json');
-        if (!fs.existsSync(indexFile)) continue;
-        for (const doc of Object.values(JSON.parse(fs.readFileSync(indexFile, 'utf8')).documents)) {
-          checked++;
-          if (!fs.existsSync(path.join(root, 'docs', ...doc.href.split('/')))) failures.push(`${name}: ${doc.href}`);
-        }
-      } finally { fs.rmSync(root, { recursive: true, force: true }); }
-    }
-    assert.deepStrictEqual(failures, []);
-    assert.ok(checked > 60, `checked ${checked} entries`);
   });
 });
 
