@@ -860,6 +860,9 @@ test('the four cases: ours or not, able to read the new file or not', () => {
     ['not ours, nothing installed, spec asks for 1.2.0', { ok: true, ours: false, spec: '^1.2.0', installedBefore: null }, false, 'site-tool'],
     ['not ours, nothing installed, spec says nothing of a version', { ok: true, ours: false, spec: 'github:someone/fork', installedBefore: null }, false, 'site-tool'],
     ['no tool pinned or installed', { ok: true, ours: false, spec: null, installedBefore: null }, false, undefined],
+    // #381: the numbers in a url are not a version
+    ['not ours, nothing installed, spec is an address with numbers in it', { ok: true, ours: false, spec: 'http://10.0.0.1/x.tgz', installedBefore: null }, false, 'site-tool'],
+    ['not ours, nothing installed, a vendored release tarball', { ok: true, ours: false, spec: 'file:vendor/gm-apprentice-publish-1.30.0.tgz', installedBefore: null }, false, undefined],
   ];
   for (const [label, pin, updated, held] of cases) {
     const s = siteWithPin(null);

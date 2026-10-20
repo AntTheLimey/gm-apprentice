@@ -406,7 +406,10 @@ const atLeast = (have, want) => {
 function oldTool(pin, from, updated) {
   if (!pin || (!pin.spec && !pin.installedBefore)) return null;
   // (A plugin path's number is the plugin's, not the tool's, so only a pin that is not ours is read for one.)
-  const installed = versionIn(pin.installedBefore) || (pin.ours ? null : versionIn(pin.spec));
+  // A spec is read by the build's own rule (site-pin.js), not by the first three numbers in its text: an address
+  // such as http://10.0.0.1/x.tgz is no version.
+  const fromSpec = pin.ours ? null : versionIn(require('../site-pin').specVersion(pin.spec || ''));
+  const installed = versionIn(pin.installedBefore) || fromSpec;
   if (installed && atLeast(installed, versionIn(from))) return null;
   if (pin.ours && updated) return null;
   return { shown: pin.installedBefore || pin.spec, ours: !!pin.ours };
