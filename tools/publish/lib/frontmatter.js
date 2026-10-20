@@ -159,4 +159,4 @@ function commentFields(data, prefix = '') {
   return out;
 }
 
-module.exports = { ENGINES, parseNote, cutValueComments, gluedBefore, valueStrays, commentFields };
+module.exports = { ENGINES, parseNote, uncycle, cutValueComments, gluedBefore, valueStrays, commentFields };

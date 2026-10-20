@@ -121,6 +121,14 @@ function luminance(hex) {
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
 }
 
+const isLightBackground = (bg) => luminance(bg) > 0.5;
+
+// 'light' or 'dark': the colour scheme generateThemeCSS gives a custom palette (the default background is dark).
+// A tool that predicts the build's look calls this rather than keeping its own copy of the rule.
+function paletteScheme(palette) {
+  return isLightBackground((palette && palette.background) || '#1a1f25') ? 'light' : 'dark';
+}
+
 function mixColors(hex1, hex2, weight) {
   const c1 = parseHex(hex1);
   const c2 = parseHex(hex2);
@@ -179,7 +187,7 @@ function generateThemeCSS(config, opts = {}) {
   vars.push(`  --bg-header: ${primary};`);
   vars.push(`  --bg-hero: ${primary};`);
 
-  const isLight = luminance(bg) > 0.5;
+  const isLight = isLightBackground(bg);
 
   if (isLight) {
     vars.push(`  --bg-card: ${mixColors(bg, '#ffffff', 0.6)};`);
@@ -194,7 +202,7 @@ function generateThemeCSS(config, opts = {}) {
   vars.push(`  --accent-dim: ${hexToRgba(accent, isLight ? 0.08 : 0.15)};`);
   // Browser scrollbars and form controls match a custom palette's own lightness;
   // style.css's dark-first default would give a light palette dark controls.
-  vars.push(`  color-scheme: ${isLight ? 'light' : 'dark'};`);
+  vars.push(`  color-scheme: ${paletteScheme(pal)};`);
 
   const headerIsLight = luminance(primary) > 0.5;
   vars.push(`  --text-on-header: ${headerIsLight ? '#1a1a1a' : '#e0e4e8'};`);
@@ -208,4 +216,4 @@ function generateThemeCSS(config, opts = {}) {
   return `${fontsImport}:root {\n${vars.join('\n')}\n}\n`;
 }
 
-module.exports = { generateThemeCSS, googleFontNames, GENRE_ALIASES, VALID_PRESETS, FONT_FORMATS, fontOutputPath };
+module.exports = { generateThemeCSS, paletteScheme, googleFontNames, GENRE_ALIASES, VALID_PRESETS, FONT_FORMATS, fontOutputPath };

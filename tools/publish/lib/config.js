@@ -383,4 +383,4 @@ function gmSiteOnFor(configPath) {
   return loadPublishConfig(vaultPath, raw, () => {}, { quietStops: true, siteDir, site: 'gm' }).gm.publish === true;
 }
 
-module.exports = { siteOffFor, gmSiteOnFor, siteOff, siteOffText, siteConfigFor, outputFolderOf, tomlOutputFolder, loadPublishConfig, assertNoStops, assertNoStopsFor, resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig };
+module.exports = { overrideEntryProblem, canonicalizeOverrideFieldKeys, siteOffFor, gmSiteOnFor, siteOff, siteOffText, siteConfigFor, outputFolderOf, tomlOutputFolder, loadPublishConfig, assertNoStops, assertNoStopsFor, resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig };
