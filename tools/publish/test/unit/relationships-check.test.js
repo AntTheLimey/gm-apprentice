@@ -59,6 +59,10 @@ test('an inverse name is the old inverse row, byte for byte, and its fix is cert
 });
 
 test('visited_by stands as written: no finding, no flip (#368)', () => {
+  for (const spelling of ['Visited_By', 'visited by', 'visited-by']) {
+    const d = vault({ 'A.md': note('location', rels(edge(spelling, 'B'))), ...Object.fromEntries([target('B')]) });
+    assert.deepStrictEqual(findings(d), [], spelling);
+  }
   const dir = vault({ 'A.md': note('location', rels(edge('visited_by', 'B'))), ...Object.fromEntries([target('B')]) });
   assert.deepStrictEqual(findings(dir), []);
 });

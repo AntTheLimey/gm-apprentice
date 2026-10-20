@@ -206,9 +206,9 @@ vocabulary are listed on one line.
   --kind tone                fix: rewrite tone words instead; alone, with one or more --set. It keeps quotes, spacing, comments and
                              line endings, and a tone it cannot edit in place (a block scalar, a tag) is a KEEP row
   --set <OLD=NEW>            fix --kind tone: rewrite a tone written exactly OLD to the listed tone NEW (repeatable)
-  --at <note:line>          accept: the tie whose tone key is on that line (repeatable)
+  --at <note:line>           accept: the tie whose tone key is on that line (repeatable)
   --skip <folder>            list, fix --kind tone: leave out the notes under this top-level folder (repeatable)
-  --write                    fix: make the changes
+  --write                    fix, accept: make the changes
   --vault <path>             The vault folder (reads _meta/relationship-types.md; default: .)
   --folder <sub>             check, fix: only notes under this folder
   --file <rel>               check, fix: only this note (repeatable)

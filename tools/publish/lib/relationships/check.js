@@ -129,7 +129,7 @@ function check(model, ontology, { vaultPath } = {}) {
     for (const e of note.edges) {
       if (!note.inScope) continue;
       const key = e.mobrpg ? 'predicate' : 'type';
-      if (!vocab.has(e.type) && !WRITTEN_AS_IS.has(e.type)) {
+      if (!vocab.has(e.type) && !WRITTEN_AS_IS.has(typeKey(e.type))) {
         offVocabulary(note, e, key);
       }
       if (e.mobrpg) continue;

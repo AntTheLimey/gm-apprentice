@@ -120,3 +120,16 @@ test('a tie with no description is accepted too (the list reader trims a record)
   cli(dir, 'accept', '--at', 'NPCs/E.md:10', '--write');
   assert.deepStrictEqual(listing(dir).map((r) => r.accepted), [false, true]);
 });
+
+test('accept --write refuses a site whose tool is older than the one that reads the record, and writes nothing', () => {
+  const dir = vault({ 'NPCs/E.md': NOTE });
+  const site = vault({ 'vault.config.json': '{}', 'node_modules/gm-apprentice-publish/package.json': '{"version":"1.42.0"}' });
+  const r = cli(dir, 'accept', '--at', 'NPCs/E.md:6', '--write', '--config', path.join(site, 'vault.config.json'));
+  assert.notStrictEqual(r.status, 0);
+  assert.match(r.stderr, /1\.42\.0.*needs 1\.43\.0/);
+  assert.strictEqual(fs.existsSync(listFile(dir)), false);
+  fs.writeFileSync(path.join(site, 'node_modules', 'gm-apprentice-publish', 'package.json'), '{"version":"1.43.0"}');
+  const ok = cli(dir, 'accept', '--at', 'NPCs/E.md:6', '--write', '--config', path.join(site, 'vault.config.json'));
+  assert.strictEqual(ok.status, 0, ok.stderr);
+  assert.strictEqual(fs.existsSync(listFile(dir)), true);
+});
