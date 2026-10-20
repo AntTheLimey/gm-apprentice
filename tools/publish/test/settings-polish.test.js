@@ -76,3 +76,18 @@ test('--vault alone still reads the settings the vault\'s site folder file holds
   assert.ok(faults.some((f) => f.name === 'excludeSections' && f.level === 'stop'), JSON.stringify(faults));
   assert.equal(rc, 1);
 });
+
+test('a failed after step does not claim nothing was built (#386)', () => {
+  const { runSteps } = require('../lib/settings/steps');
+  const fail = `${JSON.stringify(process.execPath)} -e "process.exit(1)"`;
+  assert.throws(() => runSteps([fail], { cwd: os.tmpdir(), label: 'after_build', log: () => {} }), /The pages were built but not published\./);
+  assert.throws(() => runSteps([fail], { cwd: os.tmpdir(), label: 'before_build', log: () => {} }), /Nothing was published\./);
+});
+
+test('a script is not split where a part sets shell state (#386)', () => {
+  const { splitScript } = require('../lib/settings/steps');
+  assert.deepEqual(splitScript('unset FOO && node a.js'), ['unset FOO && node a.js']);
+  assert.deepEqual(splitScript('umask 022 && node a.js'), ['umask 022 && node a.js']);
+  assert.deepEqual(splitScript('alias ll=ls && node a.js'), ['alias ll=ls && node a.js']);
+  assert.deepEqual(splitScript('node a.js && node b.js'), ['node a.js', 'node b.js']);
+});
