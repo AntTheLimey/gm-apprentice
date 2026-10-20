@@ -3213,99 +3213,65 @@ class PcBodyCommandTests(unittest.TestCase):
         rows = self._template_pc("pc-dnd-5e-2024.md", edit=fill)
         self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
 
-    def test_a_pointer_or_tbd_where_the_stats_should_be_warns(self):
-        bodies = ("TBD", "See D&D Beyond: https://example.com/c/12345",
-                     "[[Hero Sheet 2.pdf]]")
-        cases = self._pc_cases(
-            [f"---\ntype: pc\n---\n\n## Stat Sheet\n\n{body}\n"
-             for body in bodies])
+    STAT_SHEET = "---\ntype: pc\n---\n\n## Stat Sheet\n\n{}\n"
+
+    def test_a_pointer_tbd_or_bare_skeleton_where_the_stats_should_be_warns(self):
+        # Every body here is one PC note in one vault, checked once.
+        bodies = (
+            # a pointer or TBD
+            "TBD", "See D&D Beyond: https://example.com/c/12345",
+            "[[Hero Sheet 2.pdf]]",
+            # longer pointers, TBDs and a bare skeleton
+            "See D&D Beyond.\n\nLink in Discord.\n\nAsk Bob.",
+            "TBD\n\nTBD\n\nTBD",
+            "### Attributes\n\n### Skills\n\n### Equipment",
+            "See D&D Beyond (2024).",
+            "Sheet is on page 12 of the group PDF.",
+            "See Bryn_2.pdf in the drive",
+            # digits that are not stats
+            "1. Open Roll20\n2. Find Bryn",
+            "[Sheet 2](https://example.com/z)",
+            "www.dndbeyond.com/characters/12345678",
+            "dndbeyond.com/characters/12345678",
+            "Bryn_2.gcs", "Bryn_2.odt in the drive",
+            "See pp. 3 of the PDF", "pg. 12", "pages 12 and 14")
+        cases = self._pc_cases([self.STAT_SHEET.format(b) for b in bodies])
         for body, rows in zip(bodies, cases):
             with self.subTest(body=body):
                 self.assertTrue(rows_for(rows, "## Stat Sheet holds no stats;"),
                                 rows)
 
-    def test_a_sheet_in_words_dots_or_an_image_is_a_sheet(self):
-        bodies = ("**High Concept:** Disgraced Knight\n\n**Trouble:** Owes "
-                     "the Guild\n\nGreat Fight, Good Athletics, Fair Will",
-                     "- Skirmish ●●○○\n- Command ●○○○",
-                     "![[Bryn_sheet_p1.png]]")
-        cases = self._pc_cases(
-            [f"---\ntype: pc\n---\n\n## Stat Sheet\n\n{body}\n"
-             for body in bodies])
+    def test_a_sheet_in_words_dots_a_table_an_image_or_a_lone_stat_is_a_sheet(self):
+        bodies = (
+            # words, dots or an image
+            "**High Concept:** Disgraced Knight\n\n**Trouble:** Owes "
+            "the Guild\n\nGreat Fight, Good Athletics, Fair Will",
+            "- Skirmish ●●○○\n- Command ●○○○",
+            "![[Bryn_sheet_p1.png]]",
+            # A lone stat that looks like a pointer is still a stat: a
+            # warning the GM cannot clear by filling in the sheet is the
+            # worse error, so each strip needs a mark a stat line lacks.
+            "PP 5", "Psi P 12", "Pg 12", "Armor p 3",
+            "Speed 6.md", "Move 5.csv", "Hit Points 4.txt",
+            "Move 6.5/turn", "Ver 2.0/ x",
+            # a sheet in words takes several shapes
+            "Fight: Great\nShoot: Good\nWill: Fair",
+            "Fight — Great\nShoot — Good\nWill — Fair",
+            "*Fight* Great\n*Shoot* Good\n*Will* Fair",
+            "__Fight__ Great\n__Shoot__ Good\n__Will__ Fair",
+            "- Fight, Great\n- Shoot, Good\n- Will, Fair",
+            "1. Fight, Great\n2. Shoot, Good\n3. Will, Fair",
+            "### Fight\n\nGreat\n\n### Shoot\n\nGood\n\n"
+            "### Will\n\nFair",
+            # The build takes any table as a sheet (Odd_Table in
+            # build-sheetless-pc.test.js); the two must not disagree on it.
+            "| Thing | Amount |\n|---|---|\n| Grit | high |",
+            # a free-form stat line
+            "ST 12, DX 13, IQ 11, HT 12.")
+        cases = self._pc_cases([self.STAT_SHEET.format(b) for b in bodies])
         for body, rows in zip(bodies, cases):
             with self.subTest(body=body):
                 self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
-
-    def test_a_longer_pointer_tbd_or_bare_skeleton_warns(self):
-        bodies = ("See D&D Beyond.\n\nLink in Discord.\n\nAsk Bob.",
-                     "TBD\n\nTBD\n\nTBD",
-                     "### Attributes\n\n### Skills\n\n### Equipment",
-                     "See D&D Beyond (2024).",
-                     "Sheet is on page 12 of the group PDF.",
-                     "See Bryn_2.pdf in the drive")
-        cases = self._pc_cases(
-            [f"---\ntype: pc\n---\n\n## Stat Sheet\n\n{body}\n"
-             for body in bodies])
-        for body, rows in zip(bodies, cases):
-            with self.subTest(body=body):
-                self.assertTrue(rows_for(rows, "## Stat Sheet holds no stats;"),
-                                rows)
-
-    def test_digits_that_are_not_stats_do_not_make_a_sheet(self):
-        bodies = ("1. Open Roll20\n2. Find Bryn",
-                     "[Sheet 2](https://example.com/z)",
-                     "www.dndbeyond.com/characters/12345678",
-                     "dndbeyond.com/characters/12345678",
-                     "Bryn_2.gcs", "Bryn_2.odt in the drive",
-                     "See pp. 3 of the PDF", "pg. 12", "pages 12 and 14")
-        cases = self._pc_cases(
-            [f"---\ntype: pc\n---\n\n## Stat Sheet\n\n{body}\n"
-             for body in bodies])
-        for body, rows in zip(bodies, cases):
-            with self.subTest(body=body):
-                self.assertTrue(rows_for(rows, "## Stat Sheet holds no stats;"),
-                                rows)
-
-    def test_a_lone_stat_that_looks_like_a_pointer_is_still_a_stat(self):
-        # A warning the GM cannot clear by filling in the sheet is the
-        # worse error, so each strip needs a mark a stat line lacks.
-        bodies = ("PP 5", "Psi P 12", "Pg 12", "Armor p 3",
-                     "Speed 6.md", "Move 5.csv", "Hit Points 4.txt",
-                     "Move 6.5/turn", "Ver 2.0/ x")
-        cases = self._pc_cases(
-            [f"---\ntype: pc\n---\n\n## Stat Sheet\n\n{body}\n"
-             for body in bodies])
-        for body, rows in zip(bodies, cases):
-            with self.subTest(body=body):
-                self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
-
-    def test_a_sheet_in_words_takes_several_shapes(self):
-        bodies = ("Fight: Great\nShoot: Good\nWill: Fair",
-                     "Fight — Great\nShoot — Good\nWill — Fair",
-                     "*Fight* Great\n*Shoot* Good\n*Will* Fair",
-                     "__Fight__ Great\n__Shoot__ Good\n__Will__ Fair",
-                     "- Fight, Great\n- Shoot, Good\n- Will, Fair",
-                     "1. Fight, Great\n2. Shoot, Good\n3. Will, Fair",
-                     "### Fight\n\nGreat\n\n### Shoot\n\nGood\n\n"
-                     "### Will\n\nFair")
-        cases = self._pc_cases(
-            [f"---\ntype: pc\n---\n\n## Stat Sheet\n\n{body}\n"
-             for body in bodies])
-        for body, rows in zip(bodies, cases):
-            with self.subTest(body=body):
-                self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
-
-    def test_a_small_table_in_words_is_a_sheet(self):
-        # The build takes any table as a sheet (Odd_Table in
-        # build-sheetless-pc.test.js); the two must not disagree on it.
-        rows = self._pc("---\ntype: pc\n---\n\n## Stat Sheet\n\n"
-                        "| Thing | Amount |\n|---|---|\n| Grit | high |\n")
-        self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
-
-    def test_a_free_form_stat_line_is_a_sheet(self):
-        rows = self._pc("---\ntype: pc\n---\n\n## Stat Sheet\n\n"
-                        "ST 12, DX 13, IQ 11, HT 12.\n")
-        self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
 
     def test_an_excluded_stat_sheet_is_no_stat_sheet(self):
         vault = make_vault(self, config="---\npublish:\n  exclude_sections: "
