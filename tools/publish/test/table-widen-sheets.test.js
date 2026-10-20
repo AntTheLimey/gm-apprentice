@@ -20,8 +20,7 @@ const NOTES_COC = /<h2 class="section">Notes on rows <span class="rule"><\/span>
 // Every table in the template, in turn. Its first body row is filled with numbers (so a reader
 // has a value to keep), then given one extra cell. GURPS and CoC read columns by position:
 // the sheet, less its "Notes on rows", must equal the sheet of the same row without the extra
-// cell. D&D, PF2e and FitD pass an over-wide row through as written: every value and the extra
-// cell are on the page.
+// cell. (D&D, PF2e and FitD are tried row by row further down.)
 for (const [system, template] of Object.entries(SYSTEMS)) {
   const lines = templateBody(template).split('\n');
   const tables = [];
@@ -29,25 +28,27 @@ for (const [system, template] of Object.entries(SYSTEMS)) {
     if (/^\|/.test(lines[i]) && /^\|[-| :]+\|$/.test(lines[i + 1]) && /^\|/.test(lines[i + 2])) tables.push(i + 2);
   }
   test(`${system}: the template has tables to test`, () => assert.ok(tables.length >= 5));
+  // D&D, PF2e and FitD are covered by the every-row test below, which is stricter; only the two that read by column
+  // position are tried table by table here.
+  if (system !== 'gurps-4e' && system !== 'coc-7e') continue;
+  // The first body row of every table filled at once, so the sheet is built once and each wide row is compared to it.
+  const filled = lines.slice();
+  for (const [n, at] of tables.entries()) {
+    filled[at] = filled[at].split('|').map((c, j, all) => (j >= 2 && j < all.length - 1 && c.trim() === '' ? ` ${n + 1}${j} ` : c)).join('|');
+  }
+  let base = null;
   for (const [n, at] of tables.entries()) {
     const label = `${system}: table ${n + 1} (${lines[at - 2].slice(0, 30)})`;
-    const filled = lines.slice();
-    filled[at] = filled[at].split('|').map((c, j, all) => (j >= 2 && j < all.length - 1 && c.trim() === '' ? ` ${n + 1}${j} ` : c)).join('|');
     const wide = filled.slice();
     wide[at] = wide[at].replace(/\|\s*$/, `| ZZEXTRA${n} |`);
     test(`${label} keeps its values and shows a cell beyond its header`, () => {
-      const base = quiet(() => buildPc(system, filled.join('\n'))).html;
+      if (base === null) base = quiet(() => buildPc(system, filled.join('\n'))).html;
       const { html } = quiet(() => buildPc(system, wide.join('\n')));
       assert.ok(html.includes(`ZZEXTRA${n}`), `${label} lost its extra cell`);
-      if (system === 'gurps-4e' || system === 'coc-7e') {
-        assert.strictEqual(html.split(`ZZEXTRA${n}`).length - 1, 1, `${label} shows the extra cell more than once`);
-        const stripped = html.replace(system === 'gurps-4e' ? NOTES_GURPS : NOTES_COC, '');
-        assert.ok(!stripped.includes(`ZZEXTRA${n}`));
-        assert.strictEqual(stripped, base, `${label}: a value on the sheet changed`);
-      } else {
-        const values = filled[at].split('|').map(c => c.trim()).filter(c => new RegExp(`^${n + 1}\\d+$`).test(c));
-        for (const v of values) assert.ok(html.includes(v), `${label} lost ${v}`);
-      }
+      assert.strictEqual(html.split(`ZZEXTRA${n}`).length - 1, 1, `${label} shows the extra cell more than once`);
+      const stripped = html.replace(system === 'gurps-4e' ? NOTES_GURPS : NOTES_COC, '');
+      assert.ok(!stripped.includes(`ZZEXTRA${n}`));
+      assert.strictEqual(stripped, base, `${label}: a value on the sheet changed`);
     });
   }
 }
