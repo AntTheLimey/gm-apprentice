@@ -766,6 +766,50 @@ h3 {
 .story-prose a:hover {
   border-bottom-style: solid;
 }
+/* ===== STORY SESSION LINKS (#465) =====
+   Session headings carry an id (#session-N), a copy-link icon, and a "Sessions" row of number
+   chips sits above the first. scroll-margin-top clears the sticky .top-nav (3.5rem). */
+.story-session, .story-entry { scroll-margin-top: 5rem; }
+.story-session {
+  margin: 3rem 0 1.25rem; padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+  font-size: 1.5rem; line-height: 1.2; text-wrap: balance;
+}
+.story-jump + .story-session { margin-top: 1.5rem; }
+.story-session-n {
+  display: block; margin-bottom: 0.4rem;
+  font-size: 0.78rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--accent);
+}
+.story-anchor {
+  display: inline-flex; align-items: center; vertical-align: -0.2em; margin-left: 0.5rem; padding: 0.15rem;
+  color: var(--accent); opacity: 0.35; border-radius: 3px; text-decoration: none;
+  font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: none;
+}
+.story-prose .story-anchor { border-bottom: 0; }
+.story-session:hover .story-anchor, .story-entry:hover .story-anchor,
+.story-anchor:hover, .story-anchor:focus-visible { opacity: 1; }
+.story-anchor:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.story-anchor.copied { opacity: 1; color: var(--success); }
+.story-anchor.copied::after { content: "Copied"; margin-left: 0.35rem; }
+@media (hover: none) { .story-anchor { opacity: 0.7; } }
+.story-jump { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 1rem 0 0; }
+.story-jump-label {
+  font-size: 0.7rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.story-jump ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.story-jump li { margin: 0; }
+.story-prose .story-jump a, .story-jump a {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 2rem; height: 1.75rem; padding: 0 0.45rem; border: 1px solid var(--border); border-radius: 999px;
+  font-size: 0.8rem; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--accent); text-decoration: none; transition: background-color .15s, color .15s, border-color .15s;
+}
+.story-jump a:hover, .story-jump a:focus-visible { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.story-jump a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .story-jump a { transition: none; } }
+
 /* Standalone Story pages: label/cross-link chrome (the centred reading column is
    handled by the .story-prose rule above). */
 .story-eyebrow {
