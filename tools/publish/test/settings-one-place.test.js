@@ -115,12 +115,24 @@ const built = () => {
   try { return loadPublishConfig(dir, {}, () => {}); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 };
 
+// A read of a name off an object, written four ways: `.x`, `?.x`, `['x']`, `?.['x']`. The pattern takes the name
+// in group 1 or 2.
+const access = (nameRe) => `(?:\\??\\.(${nameRe})\\b|(?:\\?\\.)?\\[\\s*['"](${nameRe})['"]\\s*\\])`;
+const NAME = '[a-z][a-z_0-9]*';
+const firstLevelReads = (src) => [...src.matchAll(new RegExp(`\\bpublishConfig${access(NAME)}`, 'g'))].map((m) => m[1] || m[2]);
+const groupReads = (src, groups) => [...src.matchAll(new RegExp(`\\bpublishConfig${access(groups.join('|'))}${access(NAME)}`, 'g'))]
+  .map((m) => `${m[1] || m[2]}.${m[3] || m[4]}`);
+
+test('the scan reads a name however the code spells the read', () => {
+  assert.deepEqual(firstLevelReads("publishConfig.a_b; publishConfig?.c; publishConfig['d']; publishConfig?.['e'];"), ['a_b', 'c', 'd', 'e']);
+  assert.deepEqual(groupReads("publishConfig.theme.a; publishConfig.theme?.['b']; publishConfig?.['theme'].c; publishConfig?.theme?.d;", ['theme']), ['theme.a', 'theme.b', 'theme.c', 'theme.d']);
+});
+
 test('every setting the code reads is in the list', () => {
   const known = new Set(Object.keys(built()));
   const derived = new Set(DERIVED);
   const read = new Set();
-  const first = /\bpublishConfig(?:\??\.([a-z][a-z_0-9]*)\b|\[\s*['"]([a-z][a-z_0-9]*)['"]\s*\])/g;
-  for (const f of sources) for (const m of code(f).matchAll(first)) read.add(m[1] || m[2]);
+  for (const f of sources) for (const name of firstLevelReads(code(f))) read.add(name);
   assert.ok(read.size >= 10, `the scan found only ${read.size} names; it has stopped working`);
   assert.deepEqual([...read].filter((n) => !known.has(n) && !derived.has(n)).sort(), []);
 });
@@ -134,8 +146,7 @@ test('every setting the code reads inside a group is in the list', () => {
     ...Object.keys(built().four_oh_four).map((k) => `four_oh_four.${k}`),
   ]);
   const read = new Set();
-  const second = new RegExp(`\\bpublishConfig\\??\\.(${groups.join('|')})(?:\\??\\.([a-z][a-z_0-9]*)\\b|\\[\\s*['"]([a-z][a-z_0-9]*)['"]\\s*\\])`, 'g');
-  for (const f of sources) for (const m of code(f).matchAll(second)) read.add(`${m[1]}.${m[2] || m[3]}`);
+  for (const f of sources) for (const name of groupReads(code(f), groups)) read.add(name);
   assert.ok(read.size >= 5, `the scan found only ${read.size} names; it has stopped working`);
   assert.deepEqual([...read].filter((n) => !known.has(n)).sort(), []);
 });
