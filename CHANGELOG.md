@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.10.88] — 2026-10-20
+## [1.10.90] — 2026-10-20
 
 Test trim, Python side: the suite runs faster and repeats itself less.
 
@@ -23,6 +23,29 @@ Test trim, Python side: the suite runs faster and repeats itself less.
   missing; locally it runs with `GM_FULL_HISTORY_CHECK=1`.
 - The mobRPG packaging test builds from a temporary copy and no
   longer deletes `build/` in the working tree.
+
+## [1.10.89] — 2026-10-20
+
+Settings questions stop starting Node each time. Publish tool 1.45.0.
+
+### Changed
+
+- `settings` and `explain --all` are answered by the publish tool's
+  kept-open `lines` process (a new `command` question) instead of a
+  fresh Node run each; the settings files are read again on every
+  question, so a hand edit between two questions is always seen. An
+  older tool without the question is asked the old way.
+- A settings write is never run twice: if the kept-open process stops
+  mid-write, the error says the change may have been made and to read
+  the settings file before trying again.
+- A replaced publish tool (after `update-pin`) gets a new process.
+- The CI job that runs the Python tests is named
+  `python-tests-and-schema`.
+
+### Fixed
+
+- Every kept-open `lines` process closes when the run ends, so test
+  runs no longer hang on left-over processes (#473).
 
 ## [1.10.87] — 2026-10-20
 

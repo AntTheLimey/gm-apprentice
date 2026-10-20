@@ -38,13 +38,13 @@ def file_text(vault: Path) -> str:
 
 def count_runs(monkeypatch):
     calls: list[list[str]] = []
-    real = subprocess.run
+    real = vaultlib.run_tool
 
     def wrapper(*args, **kwargs):
         calls.append(list(args[0]))
         return real(*args, **kwargs)
 
-    monkeypatch.setattr(vaultlib.subprocess, "run", wrapper)
+    monkeypatch.setattr(vaultlib, "run_tool", wrapper)
     return calls
 
 
@@ -187,7 +187,7 @@ def test_timeout(tmp_path, monkeypatch):
     def slow(*args, **kwargs):
         raise subprocess.TimeoutExpired(args[0], 1)
 
-    monkeypatch.setattr(vaultlib.subprocess, "run", slow)
+    monkeypatch.setattr(vaultlib, "run_tool", slow)
     with pytest.raises(vaultlib.SettingsUnavailable, match="did not answer"):
         vaultlib.settings(vault)
 
@@ -196,9 +196,9 @@ def test_output_not_json(tmp_path, monkeypatch):
     vault = make_vault(tmp_path, "publish: {}")
 
     def junk(*args, **kwargs):
-        return subprocess.CompletedProcess(args[0], 0, b"not json", b"")
+        return subprocess.CompletedProcess(args[0], 0, "not json", "")
 
-    monkeypatch.setattr(vaultlib.subprocess, "run", junk)
+    monkeypatch.setattr(vaultlib, "run_tool", junk)
     with pytest.raises(vaultlib.SettingsUnavailable, match="JSON"):
         vaultlib.settings(vault)
 
@@ -255,20 +255,20 @@ def test_hand_edit_is_not_seen_until_forgotten(tmp_path):
     assert vaultlib.settings(vault).get("player_site.features.connections") == "tree"
 
 
-def stub_run(stderr: bytes, code: int = 1):
+def stub_run(stderr: str, code: int = 1):
     def run(*args, **kwargs):
-        return subprocess.CompletedProcess(args[0], code, b"", stderr)
+        return subprocess.CompletedProcess(args[0], code, "", stderr)
     return run
 
 
-TRACE = (b"node:internal/modules/cjs/loader:1386\n  throw err;\n  ^\n\n"
-         b"Error: Cannot find module 'yaml'\n    at Function._resolveFilename\n"
-         b"\nNode.js v25.5.0\n")
+TRACE = ("node:internal/modules/cjs/loader:1386\n  throw err;\n  ^\n\n"
+         "Error: Cannot find module 'yaml'\n    at Function._resolveFilename\n"
+         "\nNode.js v25.5.0\n")
 
 
 def test_tool_crash_names_a_failure_to_start(tmp_path, monkeypatch):
     vault = make_vault(tmp_path, "publish:\n  site: true")
-    monkeypatch.setattr(vaultlib.subprocess, "run", stub_run(TRACE))
+    monkeypatch.setattr(vaultlib, "run_tool", stub_run(TRACE))
     with pytest.raises(vaultlib.SettingsUnavailable) as e:
         vaultlib.settings(vault)
     message = str(e.value)
@@ -281,16 +281,16 @@ def test_tool_crash_names_a_failure_to_start(tmp_path, monkeypatch):
 
 def test_crash_without_error_line_uses_first_line(tmp_path, monkeypatch):
     vault = make_vault(tmp_path, "publish:\n  site: true")
-    monkeypatch.setattr(vaultlib.subprocess, "run",
-                        stub_run(b"boom\n\nNode.js v25.5.0\n"))
+    monkeypatch.setattr(vaultlib, "run_tool",
+                        stub_run("boom\n\nNode.js v25.5.0\n"))
     with pytest.raises(vaultlib.SettingsUnavailable, match=r"start \(boom\)"):
         vaultlib.settings(vault)
 
 
 def test_long_crash_line_is_cut(tmp_path, monkeypatch):
     vault = make_vault(tmp_path, "publish:\n  site: true")
-    monkeypatch.setattr(vaultlib.subprocess, "run",
-                        stub_run(b"Error: " + b"x" * 5000 + b"\nmore\n"))
+    monkeypatch.setattr(vaultlib, "run_tool",
+                        stub_run("Error: " + "x" * 5000 + "\nmore\n"))
     with pytest.raises(vaultlib.SettingsUnavailable) as e:
         vaultlib.settings(vault)
     assert len(str(e.value)) < 400
@@ -478,10 +478,10 @@ def test_setting_or_builtin_says_when_a_bad_value_fell_back_to_the_default(
 
 def test_crash_names_a_typeerror_not_the_file_path(tmp_path, monkeypatch):
     vault = make_vault(tmp_path, "publish:\n  site: true")
-    trace = (b"/opt/gm/tool/lib/settings/read.js:212\n  x.y.z;\n    ^\n\n"
-             b"TypeError: Cannot read properties of undefined\n    at readNew\n"
-             b"\nNode.js v25.5.0\n")
-    monkeypatch.setattr(vaultlib.subprocess, "run", stub_run(trace))
+    trace = ("/opt/gm/tool/lib/settings/read.js:212\n  x.y.z;\n    ^\n\n"
+             "TypeError: Cannot read properties of undefined\n    at readNew\n"
+             "\nNode.js v25.5.0\n")
+    monkeypatch.setattr(vaultlib, "run_tool", stub_run(trace))
     with pytest.raises(vaultlib.SettingsUnavailable) as e:
         vaultlib.settings(vault)
     assert "TypeError: Cannot read properties" in str(e.value)
