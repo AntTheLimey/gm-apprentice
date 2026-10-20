@@ -840,12 +840,19 @@ def find_exclude_lists(vault: Path) -> list[Item]:
         return [f"wrote {setting_name(vault, name)}: {len(default)} entries"
                 for name, default in lists]
 
-    return [Item("exclude-lists", WILL,
-                 [f"write the built-in {setting_name(vault, name)} "
-                  f"({', '.join(default)}) "
-                  f"into {settings_file(vault)} so you can see and edit it; "
-                  f"what publishes does not change"
-                  for name, default in lists], apply)]
+    # A value the GM wrote that is not a list: the build ignored it, so the built-in list
+    # has been what publishes; the line says what was typed before it is replaced.
+    typed = {f.get("setting"): f.get("message") for f in now.faults
+             if f.get("kind") == "not-allowed"}
+
+    def line(name: str, default: list) -> str:
+        replaced = f" (replacing: {typed[name]})" if name in typed else ""
+        return (f"{'replace' if name in typed else 'write'} the built-in "
+                f"{setting_name(vault, name)} ({', '.join(default)}) "
+                f"into {settings_file(vault)} so you can see and edit it"
+                f"{replaced}; what publishes does not change")
+
+    return [Item("exclude-lists", WILL, [line(n, d) for n, d in lists], apply)]
 
 
 AFTER_BUILD = "player_site.after_build"
