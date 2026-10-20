@@ -39,3 +39,28 @@ describe('an event page and a withheld note named in its own fields (#469)', () 
     } finally { s.cleanup(); }
   });
 });
+
+describe('an event participant written as running text (#469 follow-up)', () => {
+  const NOTES2 = {
+    'NPCs/Ilse.md': '---\ntype: npc\n---\nIlse.\n',
+    'NPCs/Otto.md': '---\ntype: npc\n---\nOtto.\n',
+    'NPCs/Petra.md': '---\ntype: npc\n---\nPetra.\n',
+    'NPCs/Zorn.md': '---\ntype: npc\nwithheld: true\npublish: false\n---\nA man.\n',
+    'Events/Meet.md': [
+      '---', 'type: event', 'participants:',
+      '  - "[[Ilse]] — met at the quay"', '  - "[[Otto]], [[Zorn]]"', '  - "[[Petra]]: the host"', '  - "[[Petra|P.]] (with [[Zorn]])"',
+      '---', '', 'They met.', ''].join('\n'),
+  };
+  it('prints each link as a link, never literal brackets, and keeps a withheld name off the page', () => {
+    const s = leakSite(NOTES2, SETTINGS);
+    try {
+      const html = s.player.read('events', 'meet.html');
+      const start = html.indexOf('<div class="event-participants"');
+      const list = html.slice(start, html.indexOf('</ul>', start));
+      assert.doesNotMatch(list, /\[\[|\]\]/);
+      for (const n of ['ilse', 'otto', 'petra']) assert.match(list, new RegExp(`<a href="[^"]*${n}\\.html"`));
+      assert.match(list, /met at the quay/);
+      assert.deepEqual(hitsIn(html), []);
+    } finally { s.cleanup(); }
+  });
+});
