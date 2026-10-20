@@ -1,5 +1,5 @@
 const { escapeHtml, relativePath } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection, badgeSpan } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
 function creatureTemplate(page, processedContent, navFor, config, imageMap, context) {
@@ -35,11 +35,11 @@ function creatureTemplate(page, processedContent, navFor, config, imageMap, cont
 
   // Metadata badges
   const badges = [];
-  if (fm.creature_type) badges.push(headerValueText('creature_type', fm.creature_type));
-  if (fm.threat_level) badges.push(`Threat: ${headerValueText('threat_level', fm.threat_level)}`);
+  if (fm.creature_type) badges.push(['creature_type', headerValueText('creature_type', fm.creature_type)]);
+  if (fm.threat_level) badges.push(['threat_level', `Threat: ${headerValueText('threat_level', fm.threat_level)}`]);
 
   const badgeHtml = badges.length > 0
-    ? `<div class="metadata-badges">${badges.map(b => `<span class="metadata-badge">${escapeHtml(b)}</span>`).join('\n')}</div>`
+    ? `<div class="metadata-badges">${badges.map(([f, b]) => badgeSpan(f, b)).join('\n')}</div>`
     : '';
 
   const headerCard = `

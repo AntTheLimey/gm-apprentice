@@ -1,6 +1,6 @@
 const { refTarget } = require('../wikilink');
 const { escapeHtml, relativeHref, publishedSource, encodeHref, plainRefValue, referenceOf } = require('../processor');
-const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts, headerValueText, connectionsSection } = require('./base');
+const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts, headerValueText, connectionsSection, badgeSpan } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
 const { excerptFromMarkdown } = require('../excerpt');
@@ -35,9 +35,9 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   // --- Zone 1: Hero Banner ---
   const hasPortrait = fm.portrait && imageMap && imageMap[String(fm.portrait).split('/').pop()];
   const badges = [];
-  if (fm.location_type) badges.push(headerValueText('location_type', fm.location_type));
-  if (fm.atmosphere) badges.push(headerValueText('atmosphere', fm.atmosphere));
-  const badgeHtml = badges.map(b => `<span class="metadata-badge">${escapeHtml(b)}</span>`).join('');
+  if (fm.location_type) badges.push(['location_type', headerValueText('location_type', fm.location_type)]);
+  if (fm.atmosphere) badges.push(['atmosphere', headerValueText('atmosphere', fm.atmosphere)]);
+  const badgeHtml = badges.map(([f, b]) => badgeSpan(f, b)).join('');
 
   let heroBanner;
   if (hasPortrait) {

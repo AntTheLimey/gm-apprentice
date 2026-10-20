@@ -1,5 +1,5 @@
 const { escapeHtml, relativePath, encodeHref, refMetaValue } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection, badgeSpan } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { canonicalNfc } = require('../unicode');
 const { linkText } = require('../wikilink');
@@ -11,11 +11,11 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
 
   // Metadata badges
   const badges = [];
-  if (fm.faction_type) badges.push(headerValueText('faction_type', fm.faction_type));
-  if (fm.alignment) badges.push(headerValueText('alignment', fm.alignment));
+  if (fm.faction_type) badges.push(['faction_type', headerValueText('faction_type', fm.faction_type)]);
+  if (fm.alignment) badges.push(['alignment', headerValueText('alignment', fm.alignment)]);
 
   const badgeHtml = badges.length > 0
-    ? `<div class="metadata-badges">${badges.map(b => `<span class="metadata-badge">${escapeHtml(b)}</span>`).join('\n')}</div>`
+    ? `<div class="metadata-badges">${badges.map(([f, b]) => badgeSpan(f, b)).join('\n')}</div>`
     : '';
 
   // Goals list

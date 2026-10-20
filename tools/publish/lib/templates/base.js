@@ -183,6 +183,11 @@ function headerValueText(field, raw) {
   return /(?:^|_)type$/.test(String(field)) ? typeLabelText(text) : text;
 }
 
+// One header badge; `data-field` names the field, so a missing neighbour never leaves the rest unidentifiable.
+function badgeSpan(field, text) {
+  return `<span class="metadata-badge" data-field="${field}">${escapeHtml(text)}</span>`;
+}
+
 function metadataBadgesFor(frontmatter) {
   const fields = Object.prototype.hasOwnProperty.call(TYPE_BADGE_FIELDS, frontmatter.type) ? TYPE_BADGE_FIELDS[frontmatter.type] : null;
   if (!fields) return '';
@@ -196,7 +201,7 @@ function metadataBadgesFor(frontmatter) {
     if (raw === undefined || raw === null || raw === '') continue;
     const value = headerValueText(field, raw);
     if (!value) continue;
-    badges.push(`<span class="metadata-badge">${escapeHtml(value)}</span>`);
+    badges.push(badgeSpan(field, value));
   }
 
   if (badges.length === 0) return '';
@@ -246,6 +251,7 @@ module.exports = {
   TYPE_BADGE_FIELDS,
   headerValueText,
   metadataBadgesFor,
+  badgeSpan,
   portraitImg,
   configureColorMode,
   colorModeHeadHtml,
