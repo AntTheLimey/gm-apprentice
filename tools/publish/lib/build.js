@@ -480,7 +480,7 @@ function buildSite(options) {
     selfHosted = { css: '', files: [] };
     if (fonts.source === 'self-host') {
       const families = fontsLib.selfHostFamilies(fonts, fontsLib.presetFamiliesFor(publishConfig.theme));
-      selfHosted = fontsLib.selfHostedFontFaces(config.vaultPath, families);
+      selfHosted = fontsLib.selfHostedFontFaces(config.vaultPath, families, console.warn, { offline: options.offline === true });
     }
     return selfHosted;
   }
@@ -1649,8 +1649,8 @@ function buildSite(options) {
     const faces = fontsLib.selfHostedFontFaces(config.vaultPath, fontFamiliesFor([...dressedSkins]), () => {
       if (warned) return;
       warned = true;
-      console.warn("  WARNING: the typefaces for the sheet skins are not in the vault's font cache and could not be downloaded; the skins use fallback type. Rebuild with network access.");
-    });
+      console.warn(`  WARNING: the typefaces for the sheet skins are not in the vault's font cache and could not be downloaded; the skins use fallback type. ${fontsLib.missAdvice(options.offline === true)}`);
+    }, { offline: options.offline === true });
     fs.writeFileSync(dest, faces.css + scopeColorScheme(skinsCss([...dressedSkins])));
     console.log('  wrote css/skins.css');
     copyFontFiles(faces.files);

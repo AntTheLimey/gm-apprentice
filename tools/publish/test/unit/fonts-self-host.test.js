@@ -252,3 +252,32 @@ describe('build with source: self-host', () => {
     fs.rmSync(s.work, { recursive: true, force: true });
   });
 });
+
+describe('a font missing from the cache (#449)', () => {
+  it('online, the miss says to rebuild with network access', () => {
+    const vault = tmp();
+    const warnings = [];
+    fonts.selfHostedFontFaces(vault, ['Cinzel'], (m) => warnings.push(m));
+    assert.match(warnings.join('\n'), /Rebuild with network access/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('offline, the miss names the folder to fill instead of asking for a network', () => {
+    const vault = tmp();
+    const warnings = [];
+    fonts.selfHostedFontFaces(vault, ['Cinzel'], (m) => warnings.push(m), { offline: true });
+    assert.strictEqual(warnings.length, 1);
+    assert.doesNotMatch(warnings[0], /network access/);
+    assert.match(warnings[0], /_meta\/font-cache/);
+    assert.match(warnings[0], /Google Fonts is NOT used/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('an offline prefetch downloads nothing', async () => {
+    const vault = tmp();
+    const calls = [];
+    await fonts.ensureFontCache(vault, ['Cinzel'], { offline: true, fetch: mockFetch(calls), warn: () => {}, log: () => {} });
+    assert.deepStrictEqual(calls, []);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+});

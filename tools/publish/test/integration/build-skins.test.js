@@ -45,7 +45,7 @@ function buildFixture(fixture, edit) {
 }
 
 // The same build with the typeface prefetch the CLI runs first, on a stubbed network.
-async function buildFixtureWithFonts(fixture, edit, fetchImpl) {
+async function buildFixtureWithFonts(fixture, edit, fetchImpl, buildOptions = {}) {
   const site = setUpFixture(fixture, edit);
   const warnings = [];
   const realWarn = console.warn;
@@ -53,7 +53,7 @@ async function buildFixtureWithFonts(fixture, edit, fetchImpl) {
   console.warn = (...a) => { warnings.push(a.join(' ')); };
   console.log = () => {};
   try {
-    await buildWithFonts({ configPath: site.configPath }, { fetch: fetchImpl, log: () => {}, warn: (m) => warnings.push(m) });
+    await buildWithFonts({ configPath: site.configPath, ...buildOptions }, { fetch: fetchImpl, log: () => {}, warn: (m) => warnings.push(m) });
   } finally { console.warn = realWarn; console.log = realLog; }
   return Object.assign(site, { warnings });
 }
@@ -281,6 +281,22 @@ describe('build integration: sheet skins and frames', () => {
     assert.deepStrictEqual(siteTouches(out), []);
     assert.strictEqual(warnings.filter((w) => /typefaces for the sheet skins/.test(w)).length, 1);
     assert.strictEqual(warnings.filter((w) => /could not download font/.test(w)).length, 0);
+  });
+
+  it('an offline build tries no network and words the miss as a step the GM can take (#449)', async () => {
+    const calls = [];
+    const { warnings } = await buildFixtureWithFonts('with-dnd-pc', skinned(), stubFetch(calls), { offline: true });
+    assert.deepStrictEqual(calls, []);
+    const said = warnings.filter((w) => /typefaces for the sheet skins/.test(w));
+    assert.strictEqual(said.length, 1);
+    assert.doesNotMatch(said[0], /network access/);
+    assert.match(said[0], /_meta\/font-cache/);
+  });
+
+  it('an online build still tells the GM to rebuild with network access', async () => {
+    const offline = async () => { throw new Error('offline'); };
+    const { warnings } = await buildFixtureWithFonts('with-dnd-pc', skinned(), offline);
+    assert.match(warnings.find((w) => /typefaces for the sheet skins/.test(w)), /Rebuild with network access/);
   });
 
   it('fetches no skin typeface for a site with no skin', async () => {
