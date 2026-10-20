@@ -59,6 +59,7 @@ describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {
     assert.strictEqual(r.code, 0);
     assert.match(r.stdout, /Usage:/);
     assert.match(r.stdout, /setup-inbox/);
+    assert.match(r.stdout, /doctor/);
   });
 
   it('sheet show --help prints the sheet usage and exits 0', async () => {

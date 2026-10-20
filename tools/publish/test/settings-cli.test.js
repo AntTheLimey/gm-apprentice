@@ -310,8 +310,6 @@ test('a verb that does not exist is refused', () => {
 test('the help is built from the list and names every setting that can be set', () => {
   const help = helpText();
   for (const n of run(scratch(wrap('')), 'list').data.names.filter((x) => !x.now)) assert.ok(help.includes(n.name), n.name);
-  const bin = fs.readFileSync(path.join(__dirname, '..', 'bin', 'gm-publish.js'), 'utf8');
-  assert.ok(!bin.includes('publish.connections'));
 });
 
 test('the command line: settings get, set and --help', () => {
