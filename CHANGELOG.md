@@ -37,8 +37,9 @@ Publish tool 1.42.0.
 - `manifest apply` on a vault still on the old publish manifest kept an
   unticked entry unticked; it used to write it back ticked, so the note
   would publish (#403).
-- A vault `keep: []` that leaves out folders the site file keeps is a
-  stop naming them; the build would have emptied them (#386).
+- A vault `player_site.keep` that leaves out folders the site file
+  keeps is a stop naming them; the build would have emptied them
+  (#386).
 - The settings move refuses an absolute output folder outside the site
   folder, and reports an empty `after_build` it replaced with the
   site's `postbuild` (#386).
