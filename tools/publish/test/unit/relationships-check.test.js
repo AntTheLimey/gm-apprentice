@@ -5,6 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { relCli } = require('../helpers/relationships-cli');
 const { readVault } = require('../../lib/relationships/read');
 const { check, render } = require('../../lib/relationships/check');
 const ontology = require('../../lib/ontology.json');
@@ -375,22 +376,22 @@ test('rows are sorted by rel then line, and each finding carries the edge it is 
   assert.strictEqual(render(findings(empty)), '# count: 0');
 });
 
-test('the command prints the TSV under a count header, and --json carries edgeIndex, form and mobrpg', () => {
+test('the command prints the TSV under a count header, and --json carries edgeIndex, form and mobrpg', async () => {
   const dir = vault({ 'A.md': note('npc', rels(edge('employed_by', 'B'))), 'B.md': note('npc') });
   const r = spawnSync(process.execPath, [BIN, 'relationships', 'check', '--vault', dir], { encoding: 'utf8' });
   assert.strictEqual(r.status, 0, r.stderr);
   const lines = r.stdout.replace(/\r\n/g, '\n').trimEnd().split('\n');
   assert.strictEqual(lines[0], '# count: 1');
   assert.match(lines[1], /^ERROR\tA\.md:5\toff-vocabulary relationship type 'employed_by'/);
-  const j = spawnSync(process.execPath, [BIN, 'relationships', 'check', '--vault', dir, '--json', '--file', 'A.md'], { encoding: 'utf8' });
+  const j = await relCli(dir, 'check', '--json', '--file', 'A.md');
   const data = JSON.parse(j.stdout);
   assert.deepStrictEqual(Object.keys(data[0]).sort(), ['edgeIndex', 'fix', 'form', 'kind', 'level', 'line', 'message', 'mobrpg', 'rel']);
   assert.strictEqual(data[0].edgeIndex, 0);
-  const none = spawnSync(process.execPath, [BIN, 'relationships', 'check', '--vault', dir, '--folder', 'Nowhere'], { encoding: 'utf8' });
+  const none = await relCli(dir, 'check', '--folder', 'Nowhere');
   assert.strictEqual(none.stdout.trim(), '# count: 0');
 });
 
-test('a note whose frontmatter does not read is one ERROR row, in text and --json, and the others are still checked', () => {
+test('a note whose frontmatter does not read is one ERROR row, in text and --json, and the others are still checked', async () => {
   const dir = vault({
     'Broken.md': '---\ntype: npc\nrelationships:\n  - target: "[[X]]\n    type: employed_by\n---\n',
     'A.md': note('npc', rels(edge('employed_by', 'B'))),
@@ -400,9 +401,9 @@ test('a note whose frontmatter does not read is one ERROR row, in text and --jso
   assert.strictEqual(rows.filter((r) => r.includes('Broken.md')).length, 1);
   assert.match(rows.find((r) => r.includes('Broken.md')), /^ERROR\tBroken\.md:1\tits frontmatter does not read \(.+\); its relationships were not checked$/);
   assert.ok(rows.some((r) => r.startsWith('ERROR\tA.md:5\toff-vocabulary')));
-  const text = spawnSync(process.execPath, [BIN, 'relationships', 'check', '--vault', dir], { encoding: 'utf8' });
+  const text = await relCli(dir, 'check');
   assert.match(text.stdout, /# count: 2/);
-  const j = JSON.parse(spawnSync(process.execPath, [BIN, 'relationships', 'check', '--vault', dir, '--json'], { encoding: 'utf8' }).stdout);
+  const j = JSON.parse((await relCli(dir, 'check', '--json')).stdout);
   assert.deepStrictEqual(j.filter((f) => f.kind === 'unreadable').map((f) => f.rel), ['Broken.md']);
   // scope: reported when in scope, silent when not
   assert.strictEqual(rowsOf(dir, { files: ['Broken.md'] }).length, 1);

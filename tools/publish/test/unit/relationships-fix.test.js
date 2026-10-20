@@ -4,13 +4,12 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { relCli } = require('../helpers/relationships-cli');
 const { readVault } = require('../../lib/relationships/read');
 const { check } = require('../../lib/relationships/check');
 const { planFix, applyFix, renderPlan, removeLeftovers } = require('../../lib/relationships/fix');
 const ontology = require('../../lib/ontology.json');
 
-const BIN = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
 
 function vault(files) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'rel-fix-'));
@@ -282,22 +281,22 @@ test('running fix twice changes nothing the second time, and check shows none of
   assert.deepStrictEqual(left, []);
 });
 
-test('the CLI: preview prints WOULD-CHANGE and KEEP rows and writes nothing; --write prints CHANGED', () => {
+test('the CLI: preview prints WOULD-CHANGE and KEEP rows and writes nothing; --write prints CHANGED', async () => {
   const dir = vault({
     'Kid.md': note('npc', rels(edge('child_of', 'Dad'), edge('child_of', 'Nobody'))),
     'Dad.md': note('npc'),
   });
   const before = read(dir, 'Kid.md');
-  const run = (...args) => spawnSync(process.execPath, [BIN, 'relationships', 'fix', '--vault', dir, ...args], { encoding: 'utf8' });
-  const preview = run();
+  const run = (...args) => relCli(dir, 'fix', ...args);
+  const preview = (await run());
   assert.strictEqual(preview.status, 0, preview.stderr);
   assert.match(preview.stdout, /WOULD-CHANGE\tKid\.md:\d+\t/);
   assert.match(preview.stdout, /KEEP\tKid\.md:\d+\tthe other note does not exist/);
   assert.strictEqual(read(dir, 'Kid.md'), before);
-  const json = JSON.parse(run('--json').stdout);
+  const json = JSON.parse((await run('--json')).stdout);
   assert.strictEqual(json.changes.length, 1);
   assert.strictEqual(json.written, false);
-  const done = run('--write');
+  const done = (await run('--write'));
   assert.match(done.stdout, /CHANGED\tKid\.md:\d+\t/);
   assert.match(read(dir, 'Dad.md'), /parent_of/);
   assert.match(renderPlan(plan(dir), false), /KEEP/);
@@ -326,9 +325,9 @@ test('a tie with a field the move would lose is KEEP', () => {
   assert.match(p.kept[0].why, /carries a field the move does not carry: since/);
 });
 
-test('an unknown --kind is refused', () => {
+test('an unknown --kind is refused', async () => {
   const dir = vault({ 'A.md': note('npc') });
-  const r = spawnSync(process.execPath, [BIN, 'relationships', 'fix', '--vault', dir, '--kind', 'hub'], { encoding: 'utf8' });
+  const r = await relCli(dir, 'fix', '--kind', 'hub');
   assert.notStrictEqual(r.status, 0);
   assert.match(r.stderr, /no certain repair/);
 });
