@@ -154,17 +154,49 @@ test('rule 3: a link to a note with no page is dropped, with a warning; the bann
   assert.ok(s.warnings.some((w) => /banner/.test(w) && /Old Tam/.test(w)), s.warnings.join('\n'));
 });
 
-test('fix round 1: a link to a hidden note, by name, alias, withheld name or excluded folder, is no link and warns', () => {
-  const files = {
-    'Hidden/Old_Tam.md': npc('publish: false\naliases:\n  - The Pale King\n'),
-    'Gm_Only/Secret_Person.md': npc(),
-  };
-  for (const link of ['Old Tam', 'The Pale King', 'Lord Zorn', 'Secret Person']) {
-    const s = site({ title: 'T', link }, { files, hide: ['_meta', 'Gm_Only'] });
-    const html = s.read('index.html');
-    assert.doesNotMatch(html, /<a class="landing-banner"/, link);
-    assert.doesNotMatch(html, /Pale(%20| )King|Old(%20| |_)Tam|Zorn|Secret(%20| |_)Person/, link);
-    assert.ok(s.warnings.some((w) => /banner/.test(w) && w.includes(link)), `${link}: ${s.warnings.join('\n')}`);
+// A link that names a hidden note, in any spelling, is no link: the banner stays, the note's name is nowhere on the
+// page, and the build warns. Each group has its own hidden notes and the words that must not appear.
+const HIDDEN_LINK_GROUPS = [
+  { what: 'by name, alias, withheld name or excluded folder',
+    files: { 'Hidden/Old_Tam.md': npc('publish: false\naliases:\n  - The Pale King\n'), 'Gm_Only/Secret_Person.md': npc() },
+    hide: ['_meta', 'Gm_Only'], title: 'T',
+    links: ['Old Tam', 'The Pale King', 'Lord Zorn', 'Secret Person'],
+    leaks: /Pale(%20| )King|Old(%20| |_)Tam|Zorn|Secret(%20| |_)Person/ },
+  { what: 'in any spelling (heading, path, .md, brackets, case)',
+    files: { 'Hidden/Lord_Vex.md': npc('publish: false\ngm_aliases:\n  - Traitor Bob\n'), 'Hidden/Lady_Wren.md': npc('publish: false\nwithheld: true\n') },
+    title: 'Read this',
+    links: ['Lady Wren#Secrets', 'Hidden/Lady Wren', '[[Hidden/Lord Vex]]', 'Lady Wren.md', 'Traitor Bob#Plans', 'LADY WREN.md', 'hidden/lady-wren.html', '[[Lady Wren#S|x]]'],
+    leaks: /Lady(%20| |_|-)Wren|Lord(%20| |_|-)Vex|Traitor(%20| )Bob/i },
+  { what: 'however it is spelled (slashes, percent-encoding, dot segments, the page name, the title)',
+    files: { 'Hidden/Lord_Hush.md': npc('publish: false\ntitle: The Whispering Man\n'), 'Gm_Only/Secret_Person.md': npc() },
+    hide: ['_meta', 'Gm_Only'], title: 'T',
+    links: ['Lord Hush/', 'Lord%20Hush', 'hidden/lord-hush.html/', 'hidden//lord-hush.html', 'foo/../hidden/lord-hush.html',
+      'lord-hush.html', 'hidden/lord-hush', 'hidden/lord-hush.htm', 'secret-person.html', 'The Whispering Man', 'Lord%2'],
+    leaks: /Hush|hush|Whisper|whisper|secret-person|Secret(%20| )Person/ },
+];
+
+test('a banner link to a hidden note is no link, in every spelling: the banner stays, the name is nowhere, the build warns', () => {
+  for (const g of HIDDEN_LINK_GROUPS) {
+    for (const link of g.links) {
+      const s = site({ title: g.title, link }, g.hide ? { files: g.files, hide: g.hide } : { files: g.files });
+      const html = s.read('index.html');
+      const label = `${g.what}: ${link}`;
+      assert.match(html, /landing-banner/, label);
+      assert.doesNotMatch(html, /<a class="landing-banner"/, label);
+      assert.doesNotMatch(html, g.leaks, label);
+      assert.ok(s.warnings.some((w) => /banner/.test(w) && w.includes(link)), `${label}: ${s.warnings.join('\n')}`);
+    }
+  }
+});
+
+test('ordinary and published banner links stand beside hidden ones', () => {
+  const g = HIDDEN_LINK_GROUPS[2];
+  const opts = { files: g.files, hide: g.hide };
+  for (const link of ['gazetteer/index.html', 'maps/north.html#key', 'map.html?layer=2']) {
+    assert.ok(site({ title: 'T', link }, opts).read('index.html').includes(`<a class="landing-banner" href="${link.replace('&', '&amp;')}"`), link);
+  }
+  for (const link of ['Harbour/', 'Harbour%20', 'Harbour.html', 'locations/harbour.html']) {
+    assert.match(site({ title: 'T', link }, opts).read('index.html'), /<a class="landing-banner" href="locations\/harbour\.html"/, link);
   }
 });
 
@@ -172,41 +204,6 @@ test('fix round 1: a link differing in case from a note with a page is that page
   assert.match(site({ title: 'T', link: 'harbour' }).read('index.html'), /<a class="landing-banner" href="locations\/harbour\.html"/);
   assert.match(site({ title: 'T', link: 'gazetteer/index.html#north' }).read('index.html'), /<a class="landing-banner" href="gazetteer\/index\.html#north"/);
   assert.match(site({ title: 'T', link: 'map.html?layer=2' }).read('index.html'), /<a class="landing-banner" href="map\.html\?layer=2"/);
-});
-
-test('final wave: a banner link to a hidden note is no link in any spelling (heading, path, .md, brackets, case)', () => {
-  const files = {
-    'Hidden/Lord_Vex.md': npc('publish: false\ngm_aliases:\n  - Traitor Bob\n'),
-    'Hidden/Lady_Wren.md': npc('publish: false\nwithheld: true\n'),
-  };
-  for (const link of ['Lady Wren#Secrets', 'Hidden/Lady Wren', '[[Hidden/Lord Vex]]', 'Lady Wren.md', 'Traitor Bob#Plans', 'LADY WREN.md', 'hidden/lady-wren.html', '[[Lady Wren#S|x]]']) {
-    const s = site({ title: 'Read this', link }, { files });
-    const html = s.read('index.html');
-    assert.match(html, /landing-banner/, link);
-    assert.doesNotMatch(html, /<a class="landing-banner"/, link);
-    assert.doesNotMatch(html, /Lady(%20| |_|-)Wren|Lord(%20| |_|-)Vex|Traitor(%20| )Bob/i, link);
-    assert.ok(s.warnings.some((w) => /banner/.test(w) && w.includes(link)), `${link}: ${s.warnings.join('\n')}`);
-  }
-});
-
-test('residual: a banner link to a hidden note is no link however it is spelled; ordinary and published links stand', () => {
-  const files = { 'Hidden/Lord_Hush.md': npc('publish: false\ntitle: The Whispering Man\n'), 'Gm_Only/Secret_Person.md': npc() };
-  const leaky = ['Lord Hush/', 'Lord%20Hush', 'hidden/lord-hush.html/', 'hidden//lord-hush.html', 'foo/../hidden/lord-hush.html',
-    'lord-hush.html', 'hidden/lord-hush', 'hidden/lord-hush.htm', 'secret-person.html', 'The Whispering Man', 'Lord%2'];
-  for (const link of leaky) {
-    const s = site({ title: 'T', link }, { files, hide: ['_meta', 'Gm_Only'] });
-    const html = s.read('index.html');
-    assert.match(html, /landing-banner/, link);
-    assert.doesNotMatch(html, /<a class="landing-banner"/, link);
-    assert.doesNotMatch(html, /Hush|hush|Whisper|whisper|secret-person|Secret(%20| )Person/, link);
-    assert.ok(s.warnings.some((w) => /banner/.test(w) && w.includes(link)), `${link}: ${s.warnings.join('\n')}`);
-  }
-  for (const link of ['gazetteer/index.html', 'maps/north.html#key', 'map.html?layer=2']) {
-    assert.ok(site({ title: 'T', link }, { files, hide: ['_meta', 'Gm_Only'] }).read('index.html').includes(`<a class="landing-banner" href="${link.replace('&', '&amp;')}"`), link);
-  }
-  for (const link of ['Harbour/', 'Harbour%20', 'Harbour.html', 'locations/harbour.html']) {
-    assert.match(site({ title: 'T', link }, { files, hide: ['_meta', 'Gm_Only'] }).read('index.html'), /<a class="landing-banner" href="locations\/harbour\.html"/, link);
-  }
 });
 
 test('final wave: a banner link with a heading to a note with a page is that page', () => {
