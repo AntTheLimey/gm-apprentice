@@ -1098,6 +1098,19 @@ describe('a vault still on the old Markdown list stays on it', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  it('apply writes an unticked Publishing entry back unticked: the page does not start to publish (#403)', async () => {
+    const vault = copyVault('auto-exclude');
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    fs.writeFileSync(oldFile(vault), '---\nmode: player\n---\n\n## Publishing (2 files)\n\n- [x] Notes/Kept.md\n- [ ] Notes/Held Back.md — not yet\n\n## Needs Decision (1 files)\n\n- [ ] Sessions/Planned Session.md\n');
+    const { configPath } = heldSite(vault);
+    const c = capture();
+    assert.strictEqual(await runManifest({ verb: 'apply', configPath, exclude: ['Sessions/Planned Session.md=prep'] }, c.deps), 0, c.text());
+    const written = fs.readFileSync(oldFile(vault), 'utf8');
+    assert.match(written, /- \[x\] Notes\/Kept\.md\n/);
+    assert.match(written, /- \[ \] Notes\/Held Back\.md — not yet\n/, 'still unticked, so still not published');
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('publish-played ticks in the old file and leaves the vault on it', async () => {
     const vault = copyVault('auto-exclude');
     fs.writeFileSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'),

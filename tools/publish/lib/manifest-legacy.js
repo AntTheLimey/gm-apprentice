@@ -125,8 +125,9 @@ function parseAnnotatedManifest(markdown) {
     if (reason) { groupReason = reason[1].trim(); continue; }
 
     let raw = null;
+    let unticked = false;
     const checkbox = ENTRY.exec(line);
-    if (checkbox) raw = checkbox[2].trim();
+    if (checkbox) { raw = checkbox[2].trim(); unticked = checkbox[1] === ' '; }
     else {
       const grouped = GROUPED.exec(line);
       if (grouped && !/^reason:/i.test(grouped[1].trim())) raw = grouped[1].trim();
@@ -138,7 +139,8 @@ function parseAnnotatedManifest(markdown) {
     const rel = canonicalPath(split ? split[1] : raw);
     const annotation = (split && split[2] ? split[2].trim() : null) || groupReason || null;
     // The writer drops a Needs Decision reason, as it always has; readers that list the file still see it.
-    entries.set(rel, { section, annotation: section === 'needsDecision' ? null : annotation, decisionNote: section === 'needsDecision' ? annotation : null });
+    // An unticked Publishing entry is not published (parseManifest skips it); the writer keeps it unticked (#403).
+    entries.set(rel, { section, annotation: section === 'needsDecision' ? null : annotation, decisionNote: section === 'needsDecision' ? annotation : null, ...(section === 'publishing' && unticked ? { unticked: true } : {}) });
   }
   return entries;
 }
@@ -152,7 +154,7 @@ const SECTIONS = [
 // The old file's text for an entries map (parseAnnotatedManifest's shape), in the documented layout.
 function renderManifest({ entries, generated, vault, totalFiles }) {
   const bySection = { publishing: [], excluded: [], needsDecision: [] };
-  for (const [rel, entry] of entries) bySection[entry.section].push({ rel, annotation: entry.annotation });
+  for (const [rel, entry] of entries) bySection[entry.section].push({ rel, annotation: entry.annotation, unticked: !!entry.unticked });
   for (const key of Object.keys(bySection)) bySection[key].sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
 
   const lines = [
@@ -172,7 +174,7 @@ function renderManifest({ entries, generated, vault, totalFiles }) {
     const rows = bySection[section.key];
     lines.push(`## ${section.title} (${rows.length} files)`, '');
     for (const row of rows) {
-      const box = section.checked ? '- [x]' : '- [ ]';
+      const box = section.checked && !row.unticked ? '- [x]' : '- [ ]';
       lines.push(row.annotation ? `${box} ${row.rel} — ${row.annotation}` : `${box} ${row.rel}`);
     }
     lines.push('');
