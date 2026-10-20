@@ -14,11 +14,14 @@ const eio = () => Object.assign(new Error('EIO: i/o error'), { code: 'EIO' });
 const NEW = '/v/_meta/vault-config.yaml';
 const OLD = '/v/_meta/vault-config.md';
 
-// A reader holding these files only.
-const reader = (files) => ({
-  exists: (p) => p in files,
-  readFile: (p) => { if (!(p in files)) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' }); return files[p]; },
-});
+// A reader holding these files only. Paths are compared resolved, so '/v/...' matches on Windows too.
+const reader = (files) => {
+  const held = new Map(Object.entries(files).map(([k, v]) => [path.resolve(k), v]));
+  return {
+    exists: (p) => held.has(path.resolve(p)),
+    readFile: (p) => { if (!held.has(path.resolve(p))) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' }); return held.get(path.resolve(p)); },
+  };
+};
 
 describe('the settings readers read through deps, and a read error stops them (#424)', () => {
   it('layoutOf asks the reader which file exists', () => {
@@ -70,6 +73,7 @@ describe('the settings readers read through deps, and a read error stops them (#
 
   it('a folder that cannot be searched is an error, not "none"', (t) => {
     if (process.getuid && process.getuid() === 0) return t.skip('root can search any folder');
+    if (process.platform === 'win32') return t.skip('Windows ignores chmod 000 on a folder');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'settings-eacces-'));
     try {
       fs.mkdirSync(path.join(dir, '_meta'));
