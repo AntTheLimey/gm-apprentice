@@ -7,6 +7,9 @@ a hand-rolled script. Reports, per category:
   new    — entities in mobRPG with no linked vault node (pull candidates)
   gone   — vault nodes whose element_id is absent from mobRPG (deleted upstream /
            zombie notes to reconcile)
+  loose  — vault locations with no parent_location, when the vault has a star
+           system (the site files them loose; a city or station no naming rule
+           could parent shows up here)
   types  — classifier types in mobRPG not represented in the vault map (needs
            `map` to bind/create) — surfaced via pull's `types` section
 
