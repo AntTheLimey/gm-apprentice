@@ -98,7 +98,7 @@ async function runRelationships({ verb, vault, json, folder, files, newerThan, k
     if (verb === 'fix' && skip && skip.length) throw new Error('--skip goes with list and fix --kind tone');
     const findings = check(model, ontology, { vaultPath: root });
     if (verb === 'fix') {
-      const FIXABLE = ['off-vocabulary', 'mirrored', 'bidirectional', 'place-missing-tie', 'place-missing-field'];
+      const FIXABLE = ['off-vocabulary', 'mirrored', 'bidirectional', 'place-missing-tie', 'place-missing-field', 'visit-duplicate'];
       for (const k of kinds || []) if (!FIXABLE.includes(k)) throw new Error(`--kind ${k} has no certain repair; the kinds are ${FIXABLE.join(', ')}`);
       if (write) for (const left of removeLeftovers(root)) console.error(`removed a leftover temp file: ${left}`);
       const plan = planFix(model, findings, { vaultPath: root, kinds: kinds && kinds.length ? kinds : undefined, ontology });

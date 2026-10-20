@@ -186,6 +186,43 @@ function targetRef(value) {
   return { name, links: links.length, words: ref.words.trim() };
 }
 
+// The notes a participant entry starts with, and the line that follows them. A run of links
+// joined by a comma, slash, & or "and" names one participant each, all with the one line; the
+// line is bare of one pair of brackets and of a dash, colon or comma left at its start.
+const JOIN = /^\s*(?:,|\/|&|and)\s*$/i;
+const participantsOf = (entry) => {
+  if (typeof entry !== 'string') return [];
+  const text = entry.trim();
+  const spans = wikilinkSpans(text);
+  if (!spans.length || spans[0].index !== 0) return [];
+  let run = 1;
+  while (run < spans.length && JOIN.test(text.slice(spans[run - 1].end, spans[run].index))) run++;
+  const rest = text.slice(spans[run - 1].end).trim();
+  const line = (/^\(([\s\S]*)\)$/.test(rest) ? rest.slice(1, -1) : rest).replace(/^[\s\u2014\u2013:,-]+/, '').trim();
+  return spans.slice(0, run).map((span) => ({ link: text.slice(span.index, span.end), line }));
+};
+
+// What an event's own fields tie (#368), read once for the build and for the relationships check, so
+// the two never disagree. `resolve(value)` says what a link names ({ page, name, words }; `page` is
+// null when it names no note); `self`, `typeOf` and `isIndex` tell the event, a page's type and
+// the index page. Returns the `place` the event was held at (or null), each of its `participants`
+// ({ to, line }), and the `visitors`: the participants who are people, each of whom visited
+// the place. A name with no page is a participant but never a visitor.
+function eventTies(fm, resolve, { self, typeOf, isIndex }) {
+  const place = typeof fm.location === 'string' && wikilinkSpans(fm.location).length === 1 ? resolve(fm.location) : null;
+  const participants = [];
+  const visitors = [];
+  for (const entry of Array.isArray(fm.participants) ? fm.participants : []) {
+    for (const who of participantsOf(entry)) {
+      const to = resolve(who.link);
+      participants.push({ to, line: who.line });
+      // A tie the GM wrote to the event does not stop its visit.
+      if (to.page && to.page !== self && !isIndex(to.page) && PEOPLE.has(typeOf(to.page))) visitors.push(to);
+    }
+  }
+  return { place, participants, visitors };
+}
+
 function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extras }) {
   const byPath = new Map(pages.map((p) => [p.outputPath, p]));
   // What a target names: its page when it has one, else the words to call it by (its
@@ -224,36 +261,12 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
     file(from, { target: to.name, type, tone: undefined, line: text ? printedProse(text) : '' }, to);
     return true;
   };
-  // The notes a participant entry starts with, and the line that follows them. A run of links
-  // joined by a comma, slash, & or "and" names one participant each, all with the one line; the
-  // line is bare of one pair of brackets and of a dash, colon or comma left at its start.
-  const JOIN = /^\s*(?:,|\/|&|and)\s*$/i;
-  const participantsOf = (entry) => {
-    if (typeof entry !== 'string') return [];
-    const text = entry.trim();
-    const spans = wikilinkSpans(text);
-    if (!spans.length || spans[0].index !== 0) return [];
-    let run = 1;
-    while (run < spans.length && JOIN.test(text.slice(spans[run - 1].end, spans[run].index))) run++;
-    const rest = text.slice(spans[run - 1].end).trim();
-    const line = (/^\(([\s\S]*)\)$/.test(rest) ? rest.slice(1, -1) : rest).replace(/^[\s\u2014\u2013:,-]+/, '').trim();
-    return spans.slice(0, run).map((span) => ({ link: text.slice(span.index, span.end), line }));
-  };
   for (const event of pages) {
     if (isIndex(event) || typeOf(event) !== 'event') continue;
-    const fm = event.frontmatter;
-    const place = typeof fm.location === 'string' && wikilinkSpans(fm.location).length === 1 ? resolve(fm.location) : null;
+    const { place, participants, visitors } = eventTies(event.frontmatter, resolve, { self: event, typeOf, isIndex });
     if (place) derive(event, 'located_at', place, '');
-    const guests = [];
-    for (const entry of Array.isArray(fm.participants) ? fm.participants : []) {
-      for (const who of participantsOf(entry)) {
-        const to = resolve(who.link);
-        derive(event, 'had_participant', to, who.line);
-        // A tie the GM wrote to the event does not stop its visit.
-        if (to.page && to.page !== event && !isIndex(to.page)) guests.push(to);
-      }
-    }
-    if (place && place.page) for (const to of guests) if (PEOPLE.has(typeOf(to.page))) derive(to.page, 'visited', place, '');
+    for (const { to, line } of participants) derive(event, 'had_participant', to, line);
+    if (place && place.page) for (const to of visitors) derive(to.page, 'visited', place, '');
   }
 
   // The sessions whose published text links a page. A Wrap-Up stands for its hub, so the
@@ -379,4 +392,4 @@ function isEmpty(model) {
   return !model || (model.tabs.length === 0 && model.mentions.length === 0);
 }
 
-module.exports = { buildConnections, isEmpty, TABS, markdownLinkLabels, targetRef };
+module.exports = { buildConnections, isEmpty, TABS, markdownLinkLabels, targetRef, eventTies };

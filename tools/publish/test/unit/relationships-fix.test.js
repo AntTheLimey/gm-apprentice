@@ -395,3 +395,64 @@ test('a change row that rides on a removal goes when the removing unit is droppe
   assert.strictEqual(p.kept.length, 2);
   assert.strictEqual(p.texts.size, 0);
 });
+
+// ---- a hand-written visit an event already supplies (#474) ----
+const visitVault = (extra = {}) => vault({
+  'Dinner.md': note('event', ['location: "[[Hall]]"', 'participants:', '  - "[[Ada]] (hosted)"', '  - "[[Bea]]"', '  - "[[Cy]]"']),
+  'Ada.md': note('npc'),
+  'Bea.md': note('npc'),
+  'Cy.md': note('npc'),
+  'Hall.md': note('location', rels(
+    edge('visited_by', 'Ada', ['tone: neutral', 'strength: 5', 'description: "Visited Hall for the dinner"']),
+    edge('visited_by', 'Bea', ['description: "Hid the ledger under the stairs"']),
+    edge('visited_by', 'Cy', ['gm_only: true']),
+  )),
+  ...extra,
+});
+
+test('a visited_by the event already supplies is removed; one that says more is kept and named', () => {
+  const dir = visitVault();
+  const f = check(readVault(dir), ontology, { vaultPath: dir }).filter((x) => x.kind === 'visit-duplicate');
+  assert.deepStrictEqual(f.map((x) => [x.level, x.fix.certain]), [['WARNING', true], ['INFO', false], ['INFO', false]]);
+  const p = plan(dir);
+  assert.deepStrictEqual(p.changes.map((c) => c.before), ['visited_by [[Ada]]']);
+  assert.deepStrictEqual(p.kept.map((k) => k.why.replace(/\(.*\)/, '()')), ['says more than Dinner does ()', 'is hidden from players on purpose']);
+  assert.strictEqual(p.texts.get('Hall.md'), note('location', rels(
+    edge('visited_by', 'Bea', ['description: "Hid the ledger under the stairs"']),
+    edge('visited_by', 'Cy', ['gm_only: true']),
+  )));
+});
+
+test('a visit is not removed while another tie between the two would hide the event\'s', () => {
+  const dir = vault({
+    'Dinner.md': note('event', ['location: "[[Hall]]"', 'participants:', '  - "[[Ada]]"']),
+    'Ada.md': note('npc', rels(edge('located_at', 'Hall'))),
+    'Hall.md': note('location', rels(edge('visited_by', 'Ada'))),
+  });
+  const p = plan(dir);
+  assert.deepStrictEqual(p.changes, []);
+  assert.match(p.kept[0].why, /located_at tie between the two would hide/);
+});
+
+test('a visited on the person is a copy too, a non-neutral tone is kept, and --write then leaves nothing to find', async () => {
+  const dir = vault({
+    'Dinner.md': note('event', ['location: "[[Hall]]"', 'participants:', '  - "[[Ada]]"', '  - "[[Bea]]"']),
+    'Ada.md': note('npc', rels(edge('visited', 'Hall'))),
+    'Bea.md': note('npc', rels(edge('visited', 'Hall', ['tone: tense']))),
+    'Hall.md': note('location'),
+  });
+  const r = await relCli(dir, 'fix', '--kind', 'visit-duplicate', '--write');
+  assert.strictEqual(r.status, 0);
+  assert.strictEqual(read(dir, 'Ada.md'), note('npc', ['relationships:']));
+  assert.match(read(dir, 'Bea.md'), /tone: tense/);
+  assert.deepStrictEqual(checkKinds(dir).filter((k) => k === 'visit-duplicate'), ['visit-duplicate']);
+});
+
+test('no event, or a place that is not one link, means no visit to repeat', () => {
+  const dir = vault({
+    'Dinner.md': note('event', ['location: "somewhere grand"', 'participants:', '  - "[[Ada]]"']),
+    'Ada.md': note('npc'),
+    'Hall.md': note('location', rels(edge('visited_by', 'Ada'))),
+  });
+  assert.deepStrictEqual(checkKinds(dir), []);
+});

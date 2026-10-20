@@ -141,8 +141,10 @@ Each row is `LEVEL  note:line  message`. The rows cover types off
 the vocabulary (inverses, verbs and near misses included), ties
 stored on both notes, one fact written from both sides, the
 two-way flag, strength, ties to session notes, the two containment
-fields, containers whose points of interest were never re-pointed,
-types the vault's own `_meta/relationship-types.md` leaves out, and
+fields, a `visited` or `visited_by` an event already supplies (the
+fix removes it; one with more to say is kept and named),
+containers whose points of interest were never re-pointed, types the
+vault's own `_meta/relationship-types.md` leaves out, and
 hubs. One `ERROR  (vault)  could not check the relationships` row
 means the tool did not run: say why (the row names it) and skip
 this step. Tone WARNING rows belong to the Tone Words check
