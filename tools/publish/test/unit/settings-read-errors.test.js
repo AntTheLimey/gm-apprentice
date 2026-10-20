@@ -14,6 +14,8 @@ const eio = () => Object.assign(new Error('EIO: i/o error'), { code: 'EIO' });
 const NEW = '/v/_meta/vault-config.yaml';
 const OLD = '/v/_meta/vault-config.md';
 
+const same = (a, b) => path.resolve(a) === path.resolve(b);
+
 // A reader holding these files only. Paths are compared resolved, so '/v/...' matches on Windows too.
 const reader = (files) => {
   const held = new Map(Object.entries(files).map(([k, v]) => [path.resolve(k), v]));
@@ -46,12 +48,12 @@ describe('the settings readers read through deps, and a read error stops them (#
   });
 
   it('readSettings throws when the old settings file cannot be read', () => {
-    const deps = { exists: (p) => p === OLD, readFile: () => { throw eio(); } };
+    const deps = { exists: (p) => same(p, OLD), readFile: () => { throw eio(); } };
     assert.throws(() => readSettings({ vaultPath: '/v', deps }), /EIO/);
   });
 
   it('readSettings throws when the left-over old file cannot be looked for', () => {
-    const deps = { exists: (p) => { if (p === OLD) throw eio(); return p === NEW; }, readFile: () => 'player_site:\n  title: T\n' };
+    const deps = { exists: (p) => { if (same(p, OLD)) throw eio(); return same(p, NEW); }, readFile: () => 'player_site:\n  title: T\n' };
     assert.throws(() => readSettings({ vaultPath: '/v', deps }), /EIO/);
   });
 
