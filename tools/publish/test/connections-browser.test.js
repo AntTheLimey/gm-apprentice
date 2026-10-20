@@ -24,7 +24,7 @@ describe('Connections in a browser at phone width', { skip }, () => {
   before(() => {
     site = buildBoth(FILES, { sites: ['player'], player: { folder_map: { Characters: 'characters', Places: 'places' } } });
     page = path.join(site.player.dir, 'characters', 'subject.html');
-    r = measure(page, 390, script);   // one launch of the browser serves the three tests
+    r = measure(page, 390, script);   // one launch of the browser serves every test
   });
   after(() => site && site.cleanup());
 
@@ -32,16 +32,22 @@ describe('Connections in a browser at phone width', { skip }, () => {
     var doc = document.documentElement;
     var tabs = document.querySelectorAll('.cx-tab');
     var names = [].slice.call(document.querySelectorAll('.cx-name'));
+    // Every panel with the hidden attribute, and whether the page displays it anyway.
+    var hiddenPanels = function () {
+      return [].map.call(document.querySelectorAll('.cx-panel[hidden]'), function (p) { return getComputedStyle(p).display; });
+    };
     var result = {
       live: !!document.querySelector('.cx-app'), tabs: tabs.length,
       scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth,
       nameOverflow: names.filter(function (n) { return n.getBoundingClientRect().right > doc.clientWidth + 1; }).length,
-      firstLines: document.querySelectorAll('.cx-panel:not([hidden]) svg.cx-lines path').length
+      firstLines: document.querySelectorAll('.cx-panel:not([hidden]) svg.cx-lines path').length,
+      hiddenFirst: hiddenPanels()
     };
     if (tabs.length < 2) { done(result); return; }
     tabs[1].click();
     setTimeout(function () {
       result.secondLines = document.querySelectorAll('.cx-panel:not([hidden]) svg.cx-lines path').length;
+      result.hiddenSecond = hiddenPanels();
       done(result);
     }, 600);
   };
@@ -56,6 +62,13 @@ describe('Connections in a browser at phone width', { skip }, () => {
     assert.ok(r.tabs >= 2, `tabs: ${r.tabs}`);
     assert.ok(r.firstLines > 0, 'lines in the first tab');
     assert.ok(r.secondLines > 0, 'lines in the tab opened after load');
+  });
+
+  it('a panel with the hidden attribute is not displayed, before and after a tab is opened', () => {
+    for (const [when, displays] of [['at load', r.hiddenFirst], ['after a tab is opened', r.hiddenSecond]]) {
+      assert.ok(displays && displays.length > 0, `a hidden panel ${when}`);
+      assert.deepEqual(displays.filter((d) => d !== 'none'), [], `a hidden panel is displayed ${when}`);
+    }
   });
 
   it('opening a hidden tab raises no page error', () => {

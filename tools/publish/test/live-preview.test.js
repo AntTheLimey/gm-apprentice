@@ -218,3 +218,10 @@ test('the token is in no served file', async () => {
 test('the change-request inbox is not there', async () => {
   assert.equal((await fetch(base + '/api/request', { method: 'POST' })).status, 404);
 });
+
+// The preview never deploys: its script reads no wrangler.toml and runs no command (wrangler, npx or anything else).
+test('the preview script never reads wrangler.toml or runs a command', () => {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'live-preview.js'), 'utf8');
+  assert.doesNotMatch(src, /readFileSync\([^)]*wrangler/);
+  assert.doesNotMatch(src, /child_process|spawn|exec|npx/);
+});

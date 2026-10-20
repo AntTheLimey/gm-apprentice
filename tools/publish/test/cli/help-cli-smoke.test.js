@@ -48,6 +48,8 @@ describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {
       for (const p of patterns) assert.match(r.stdout, p, cmd);
       // The top-level banner must NOT be what came back.
       assert.doesNotMatch(r.stdout, /Static site generator for gm-apprentice campaign vaults/, cmd);
+      // --help prints the usage and runs nothing: flush must not go looking for live state.
+      if (cmd === 'flush') assert.doesNotMatch(r.stderr, /Could not read live state/, cmd);
     });
     const short = runs[entries.length];
     assert.strictEqual(short.code, 0);

@@ -96,12 +96,21 @@ for (const system of ['dnd-5e-2024', 'pf2e', 'fitd']) {
   const lines = templateBody(SYSTEMS[system]).split('\n');
   // Every body row of every table, with its blank cells filled so each reader has a value to keep.
   const rows = [];
+  const fills = {};   // the values each row was filled with
   let n = 0;
   for (let i = 0; i < lines.length - 2; i++) {
     if (!(/^\|/.test(lines[i]) && /^\|[-| :]+\|$/.test(lines[i + 1]))) continue;
     n++;
     for (let r = i + 2; r < lines.length && /^\|/.test(lines[r]); r++) {
-      lines[r] = lines[r].split('|').map((c, j, all) => (j >= 2 && j < all.length - 1 && c.trim() === '' ? ` ${n}${r % 7 + 1} ` : c)).join('|');
+      const filled = [];
+      lines[r] = lines[r].split('|').map((c, j, all) => {
+        if (!(j >= 2 && j < all.length - 1 && c.trim() === '')) return c;
+        // A number no template prints by itself, so finding it on the page means this row's value is there.
+        const v = `7${String(n).padStart(2, '0')}${String(r).padStart(3, '0')}${j}`;
+        filled.push(v);
+        return ` ${v} `;
+      }).join('|');
+      fills[r] = filled;
       rows.push(r);
     }
   }
@@ -110,8 +119,10 @@ for (const system of ['dnd-5e-2024', 'pf2e', 'fitd']) {
   const build = (body) => quiet(() => buildPc(system, body, live ? ['live_stats: true'] : [], live ? { assumeKv: true } : {})).html.replace(/"buildVersion":"[^"]*"/g, '');
   test(`${system}: an extra cell on any table row leaves the sheet's own numbers and trackers as they were`, () => {
     assert.ok(rows.length >= 20);
+    assert.ok(rows.reduce((k, r) => k + fills[r].length, 0) >= 5, 'filled values to look for');
     const base = build(lines.join('\n'));
     const differ = [];
+    const lost = [];
     for (const r of rows) {
       const wide = lines.slice();
       wide[r] = wide[r].replace(/\|\s*$/, '| ZZROWNOTE |');
@@ -124,8 +135,11 @@ for (const system of ['dnd-5e-2024', 'pf2e', 'fitd']) {
       const section = lines.slice(0, r).reverse().find(l => /^## /.test(l)).slice(3);
       const ok = once && noted === consumed(section) && (noted ? html.replace(NOTES_D20, '') === base : islands(html) === islands(base));
       if (!ok) differ.push(lines[r].slice(0, 40));
+      // The row's own values are on the page too, whichever way the section is shown.
+      for (const v of fills[r]) if (!new RegExp(`(?<!\\d)${v}(?!\\d)`).test(html)) lost.push(`${lines[r].slice(0, 40)}: ${v}`);
     }
     assert.deepStrictEqual(differ, []);
+    assert.deepStrictEqual(lost, [], 'a widened row lost a value of its own');
   });
 }
 
