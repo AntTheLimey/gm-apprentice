@@ -460,30 +460,16 @@ test('a few well-formed unknown keys are all named, with no count entries', () =
   assert.deepEqual(r.skipped.slice().sort(), ['class:old feature', 'slot:9th']);
 });
 
-test('a slot total written with a reason is a live row the flush can write (#444)', () => {
-  const md = note('Brannoch_Vale.md').replace(/^\| 1st \| (\d+) \|/m, '| 1st | $1 (Ring of Spell Storing) |');
-  assert.match(md, /\| 1st \| \d+ \(Ring of Spell Storing\) \|/);
-  const r = applyDnDFlush(md, blob({ used: { 'slot:1st': 1 } }));
-  assert.match(row(r.markdown, /^\| 1st \|/), /^\| 1st \| \d+ \(Ring of Spell Storing\) \| 1 \|/);
-  assert.deepEqual(r.skipped, []);
-});
-
-test('a slot total whose reason is a link is a live row the flush writes (#444)', () => {
-  const md = note('Brannoch_Vale.md').replace(/^\| 1st \| (\d+) \|/m, '| 1st | $1 ([[Ring of Spell Storing]]) |');
-  assert.match(md, /\| 1st \| \d+ \(\[\[Ring of Spell Storing\]\]\) \|/);
-  const r = applyDnDFlush(md, blob({ used: { 'slot:1st': 1 } }));
-  assert.match(row(r.markdown, /^\| 1st \|/), /^\| 1st \| \d+ \(\[\[Ring of Spell Storing\]\]\) \| 1 \|/);
-  assert.deepEqual(r.skipped, []);
-});
-
-test('a slot total whose reason is a markdown link is a live row the flush writes', () => {
-  const md = note('Brannoch_Vale.md').replace(/^\| 1st \| (\d+) \|/m, '| 1st | $1 ([Ring](Ring.md)) |');
-  assert.match(md, /\| 1st \| \d+ \(\[Ring\]\(Ring\.md\)\) \|/);
-  const r = applyDnDFlush(md, blob({ used: { 'slot:1st': 1 } }));
-  assert.match(row(r.markdown, /^\| 1st \|/), /^\| 1st \| \d+ \(\[Ring\]\(Ring\.md\)\) \| 1 \|/);
-  assert.deepEqual(r.skipped, []);
-  // The page reads it as a live slot row too.
-  assert.ok(buildDndLiveData(parseDnd({ type: 'pc' }, sectionsFromMarkdown(md)), { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' }).tracks.some(t => t.key === 'slot:1st'));
+test('a slot total written with a reason (plain, a wikilink, a markdown link) is a live row the flush writes (#444)', () => {
+  for (const [what, reason, island] of [['plain', '(Ring of Spell Storing)', false], ['wikilink', '([[Ring of Spell Storing]])', false], ['markdown link', '([Ring](Ring.md))', true]]) {
+    const md = note('Brannoch_Vale.md').replace(/^\| 1st \| (\d+) \|/m, (_, n) => `| 1st | ${n} ${reason} |`);
+    assert.ok(md.includes(` ${reason} |`), what);
+    const r = applyDnDFlush(md, blob({ used: { 'slot:1st': 1 } }));
+    assert.ok(row(r.markdown, /^\| 1st \|/).includes(` ${reason} | 1 |`), `${what}: ${row(r.markdown, /^\| 1st \|/)}`);
+    assert.deepEqual(r.skipped, [], what);
+    // The page reads it as a live slot row too.
+    if (island) assert.ok(buildDndLiveData(parseDnd({ type: 'pc' }, sectionsFromMarkdown(md)), { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' }).tracks.some(t => t.key === 'slot:1st'));
+  }
 });
 
 test('an Attribute value whose reason is a markdown link is written the same way', () => {
