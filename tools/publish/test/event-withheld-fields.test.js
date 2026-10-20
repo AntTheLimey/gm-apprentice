@@ -12,7 +12,7 @@ const NOTES = {
   'NPCs/Mara.md': '---\ntype: npc\n---\nA friend.\n',
   'Events/Raid.md': [
     '---', 'type: event', 'location: Black Quay',
-    'participants:', '  - "[[Mara]]"', '  - "[[Zorn]]"', '  - "Zorn (the host)"', '  - "[[Zorn]] (the host)"', '  - Zorn',
+    'participants:', '  - "[[Mara]]"', '  - "[[Zorn]]"', '  - "Zorn (the host)"', '  - "[[Zorn]] (the host)"', '  - Zorn', '  - "[[Mara]] (with [[Zorn]])"',
     '---', '', 'They met.', ''].join('\n'),
   'Events/Ball.md': '---\ntype: event\nlocation: "[[Black Quay]]"\n---\nA ball.\n',
   'Events/Dock.md': '---\ntype: event\nlocation: "Docks near the Black Quay"\n---\nA dock.\n',
