@@ -129,10 +129,19 @@ describe('manifest never-publish', () => {
 
   it('reads a --path as the vault spells it, so a note that publishes is never marked whatever the case typed', async () => {
     const { vault, configPath } = setup(FILES);
+    // On a case-sensitive disk (Linux) the lower-case paths name no file, so nothing is marked at all.
+    const caseBlind = fs.existsSync(path.join(vault, 'sessions/plan.md'));
     const r = await run(configPath, { paths: ['characters/npcs/bob.md', 'sessions/plan.md'], write: true });
-    assert.strictEqual(r.rc, 0, r.text);
-    assert.match(r.text, /Characters\/NPCs\/Bob\.md — it publishes now/);
-    assert.match(r.text, /marked 1 note[^]*Sessions\/Plan\.md/);
+    if (caseBlind) {
+      assert.strictEqual(r.rc, 0, r.text);
+      assert.match(r.text, /Characters\/NPCs\/Bob\.md — it publishes now/);
+      assert.match(r.text, /marked 1 note[^]*Sessions\/Plan\.md/);
+    } else {
+      assert.strictEqual(r.rc, 1, r.text);
+      assert.match(r.text, /no such file in the vault: characters\/npcs\/bob\.md/);
+      assert.match(r.text, /Nothing was written/);
+      assert.strictEqual(fs.readFileSync(path.join(vault, 'Sessions/Plan.md'), 'utf8'), FILES['Sessions/Plan.md']);
+    }
     assert.strictEqual(fs.readFileSync(path.join(vault, 'Characters/NPCs/Bob.md'), 'utf8'), FILES['Characters/NPCs/Bob.md']);
   });
 
