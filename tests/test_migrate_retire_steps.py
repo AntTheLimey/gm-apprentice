@@ -64,6 +64,18 @@ class RetireStepsTests(unittest.TestCase):
         for line in text.values():
             self.assertIn("leave: keep the step", line)
 
+    def test_add_crew_stories_is_offered_and_the_text_names_the_new_heading(self):
+        vault = vault_with_steps(self, [
+            "node scripts/add-star-map.mjs", "node scripts/add-crew-stories.mjs",
+            "node scripts/add-temporary-alert.mjs"])
+        (item,) = ms.find_retire_steps(vault)
+        self.assertEqual(item.id, "retire-step:add-crew-stories")
+        self.assertIn("1.46.0", item.lines[0])
+        self.assertIn('"Crew" to "NPC stories"', item.lines[0])
+        item.apply("retire")
+        self.assertEqual(steps_of(vault), ["node scripts/add-star-map.mjs",
+                                           "node scripts/add-temporary-alert.mjs"])
+
     def test_path_spellings_the_step_runner_accepts_are_recognised(self):
         vault = vault_with_steps(self, [
             "node ./scripts/add-theme-toggle.mjs", "node scripts\\add-tohit-calc.mjs",
