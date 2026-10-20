@@ -482,7 +482,7 @@ def test_setting_or_builtin_says_when_a_bad_value_fell_back_to_the_default(
 
 def test_crash_names_a_typeerror_not_the_file_path(tmp_path, monkeypatch):
     vault = make_vault(tmp_path, "publish:\n  site: true")
-    trace = (b"/Users/gm/tool/lib/settings/read.js:212\n  x.y.z;\n    ^\n\n"
+    trace = (b"/opt/gm/tool/lib/settings/read.js:212\n  x.y.z;\n    ^\n\n"
              b"TypeError: Cannot read properties of undefined\n    at readNew\n"
              b"\nNode.js v25.5.0\n")
     monkeypatch.setattr(vaultlib.subprocess, "run", stub_run(trace))
