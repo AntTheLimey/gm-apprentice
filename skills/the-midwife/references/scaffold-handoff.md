@@ -78,11 +78,11 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" \
   --plan-type <type> [--leads-to "<Plan_Name>"]...
 ```
 
-It fills the template, copies the body unchanged and lists
-the people and places the body names (PARTICIPANT and
-LOCATION rows). A WARNING is a name several notes share, left
-out: ask the GM which. `--leads-to` (a branch when repeated)
-records sequencing, never a `relationships:` edge.
+It fills the template and copies the body unchanged.
+`--leads-to` (a branch when repeated) records sequencing,
+never a `relationships:` edge. Then fill `participants` and
+`locations` in the written plan with wiki-links to the NPCs,
+factions, creatures and locations it names.
 
 **2c. World fact flush** — Write the world facts accumulated
 through Woven Worldbuilding (Phases 1-3) to their `_World/`

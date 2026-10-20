@@ -1783,9 +1783,6 @@ TOP_KEY_RE = re.compile(r"^([A-Za-z_][\w.-]*):(.*)$")
 ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 EXPORT_SECTIONS = ("NPCs", "Locations", "Items")
 NAME_VERBS = ("EXACT", "ALIAS", "NEAR", "NONE")
-PLAN_LISTS = {"npc": "participants", "faction": "participants",
-              "organization": "participants", "creature": "participants",
-              "location": "locations"}
 
 
 def is_record(rel: str) -> bool:
@@ -2127,52 +2124,6 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
         resolve_export(batch, export_entries(export))
 
 
-def entity_names(vault: Path) -> tuple[dict[str, set[str]],
-                                        dict[str, set[str]],
-                                        dict[str, str]]:
-    """(name -> notes, link name -> notes, note -> which plan list) for
-    every NPC, faction, organization, creature and location outside the
-    archive and the Midwife's drafts. A name is the file name with and
-    without its underscores, an alias, or an NPC's surname (the last word
-    of a name of two or more, four letters or longer, capitalised): prose
-    says "Ashworth" more than "Charles Ashworth". A link resolves by file
-    name and alias only, as Obsidian does."""
-    names: dict[str, set[str]] = {}
-    linked: dict[str, set[str]] = {}
-    lists: dict[str, str] = {}
-    for rel, text in vl.vault_files(vault):
-        if is_record(rel):
-            continue
-        fm = vl.extract_frontmatter(text) or {}
-        etype = vl.entity_type(fm)
-        which = PLAN_LISTS.get(etype)
-        if which is None:
-            continue
-        lists[rel] = which
-        stem = Path(rel).stem
-        own = {" ".join(n.split()) for n in
-               (stem, stem.replace("_", " "), *vl.link_aliases(fm))}
-        for name in own:
-            linked.setdefault(vl.normalize(name), set()).add(rel)
-        words = stem.replace("_", " ").split()
-        if (etype == "npc" and len(words) > 1 and len(words[-1]) >= 4
-                and words[-1][:1].isupper()):
-            own.add(words[-1])
-        for name in own:
-            if len(name) >= 3:
-                names.setdefault(name, set()).add(rel)
-    return names, linked, lists
-
-
-def name_pattern(name: str) -> re.Pattern[str]:
-    """`name` as a whole word, case and all, except that a leading "The"
-    may be written "the"."""
-    rest = name[4:] if name.startswith("The ") else None
-    body = (r"[Tt]he\s+" + re.escape(rest).replace(r"\ ", r"\s+")
-            if rest else re.escape(name).replace(r"\ ", r"\s+"))
-    return re.compile(rf"(?<!\w){body}(?!\w)")
-
-
 def cmd_promote_plan(batch: Batch, args: argparse.Namespace,
                      _text: str) -> None:
     draft = batch.resolve(args.draft)
@@ -2194,44 +2145,12 @@ def cmd_promote_plan(batch: Batch, args: argparse.Namespace,
         raise WriteError(f"{target} is not in a chapter folder: pass "
                          f"--chapter \"Chapter N - Title\"")
 
-    names, linked, lists = entity_names(batch.vault)
-    first: dict[str, tuple[int, str]] = {}
-
-    def seen(rel: str, at: int, said: str) -> None:
-        if rel not in first or at < first[rel][0]:
-            first[rel] = (at, said)
-
-    shared: dict[str, set[str]] = {}
-    for m in vl.LINK_RE.finditer(body):
-        rels = linked.get(vl.link_target(m.group(1)), set())
-        if len(rels) == 1:
-            seen(next(iter(rels)), m.start(), m.group(0))
-        elif rels:
-            shared[vl.link_name(m.group(1))] = rels
-    for name, rels in names.items():
-        hit = name_pattern(name).search(body)
-        if not hit:
-            continue
-        if len(rels) == 1:
-            seen(next(iter(rels)), hit.start(), hit.group(0))
-        else:
-            shared[name] = rels
-    for name, rels in sorted(shared.items()):
-        if rels & first.keys():
-            continue    # one of them is named outright: no news
-        batch.row("WARNING", target, "", f'"{name}" names {len(rels)} '
-                  f"notes ({', '.join(sorted(rels))}): left out")
-    found = sorted(first, key=lambda rel: first[rel][0])
-
     eol = "\r\n" if "\r\n" in body else "\n"
     fm = template_frontmatter(
         template_text(batch.vault, PLAN_TEMPLATES, "plan.md"))
     set_block(fm, "name", f'"{Path(target).stem.replace("_", " ")}"')
     set_block(fm, "plan_type", args.plan_type)
     set_block(fm, "chapter", f'"[[{chapter}]]"')
-    for field in ("participants", "locations"):
-        set_block(fm, field, *link_list(
-            [Path(rel).stem for rel in found if lists[rel] == field]))
     set_block(fm, "leads_to", *link_list(
         [bare_link(x) for x in args.leads_to or []]))
     set_block(fm, "relationships", "[]")
@@ -2241,9 +2160,6 @@ def cmd_promote_plan(batch: Batch, args: argparse.Namespace,
     batch.row("WOULD-CREATE", target, "",
               f"from {draft}: body copied as written ({len(body.encode())} "
               f"bytes)")
-    for rel in found:
-        batch.row("PARTICIPANT" if lists[rel] == "participants"
-                  else "LOCATION", rel, "", f'"{first[rel][1]}"')
 
 
 # --- CLI ---------------------------------------------------------------------
@@ -2347,8 +2263,8 @@ def build_parser() -> argparse.ArgumentParser:
         "promote-plan", help="file a Midwife draft as a vault plan",
         formatter_class=raw, description=(
             "Scaffolds from the plan template, copies the draft's body\n"
-            "exactly, fills participants and locations from the entity\n"
-            "names and aliases it mentions, and runs the schema check."))
+            "exactly and runs the schema check. participants and locations\n"
+            "are left for the caller to fill."))
     pp.add_argument("draft", help="the draft, vault-relative")
     pp.add_argument("--to", required=True, help="the plan, vault-relative")
     pp.add_argument("--plan-type", dest="plan_type", required=True)

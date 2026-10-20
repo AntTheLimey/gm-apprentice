@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """vault_write.py promote-plan: a Midwife draft filed as a vault plan (#464).
 
-The plan's text is never changed: only the frontmatter is written, and the
-people and places in it come from the entity names and aliases the body
-mentions."""
+The plan's text is never changed: only the frontmatter is written. Who is in
+the plan (participants, locations) is left for the caller to fill."""
 
 import io
 import shutil
@@ -126,30 +125,21 @@ class PromotePlanTests(unittest.TestCase):
         self.assertTrue(text.endswith("---\n" + body), text)
         self.assertNotIn("topic: arc", text)
 
-    def test_participants_and_locations_from_names_and_aliases(self):
+    def test_participants_and_locations_are_left_for_the_caller(self):
+        # Who is in a plan is the caller's judgment, not a name match:
+        # "Dean", "King" and "Crow" are English words as well as surnames.
+        (self.vault / "Characters/NPCs/Captain_King.md").write_text(
+            entity("npc"), encoding="utf-8")
+        (self.vault / DRAFT).write_text(
+            "Charles Ashworth meets the King's German Legion at the "
+            "Temple of Mahakali.\n", encoding="utf-8")
         code, out = promote(self.vault, "--write")
         self.assertEqual(code, 0, out)
         fm = vl.extract_frontmatter(self.written())
-        # First mention order; "the Magistrate" is Ashworth again, "meg" in
-        # lower case is not Margaret, an item is neither list, a Midwife
-        # sketch and an archived note are not vault entities.
-        self.assertEqual(fm["participants"],
-                         ["[[Charles_Ashworth]]", "[[Thuggee]]"])
-        self.assertEqual(fm["locations"],
-                         ["[[Baranagar]]", "[[Mandir_Mahakali]]"])
-        self.assertIn("PARTICIPANT\tCharacters/NPCs/Charles_Ashworth.md",
-                      out)
-        self.assertIn("LOCATION\tLocations/Mandir_Mahakali.md", out)
-
-    def test_a_name_two_notes_share_is_a_warning_and_left_out(self):
-        code, out = promote(self.vault)
-        self.assertEqual(code, 0, out)
-        warning = [r for r in out.splitlines()
-                   if r.startswith("WARNING") and "The Colonel" in r]
-        self.assertEqual(len(warning), 1, out)
-        self.assertIn("Colonel Hart", warning[0])
-        self.assertIn("Colonel Pyke", warning[0])
-        self.assertNotIn("Colonel Hart.md\t", out.replace("WARNING", ""))
+        self.assertEqual((fm["participants"], fm["locations"]), ([], []))
+        self.assertNotIn("PARTICIPANT", out)
+        self.assertNotIn("LOCATION", out)
+        self.assertNotIn("WARNING", out)
 
     def test_frontmatter_is_the_template_filled_and_passes_the_schema(self):
         code, out = promote(self.vault, "--write", "--leads-to",
@@ -172,37 +162,6 @@ class PromotePlanTests(unittest.TestCase):
         errors = [m for level, m in schema_rules.frontmatter_findings(
             fm, None, vl.raw_frontmatter(text)) if level == "ERROR"]
         self.assertEqual(errors, [])
-
-    def test_an_npc_named_by_surname_alone_is_found(self):
-        # Canticle's Ashworth Confrontation says "Ashworth" 39 times and
-        # never "Charles Ashworth"; Ghosh is "Ghosh" throughout.
-        (self.vault / DRAFT).write_text(
-            "Ashworth waits. Cavendish is out. Renwick hums.\n",
-            encoding="utf-8")
-        (self.vault / "Characters/NPCs/Hugh_Cavendish.md").write_text(
-            entity("npc"), encoding="utf-8")
-        (self.vault / "Locations/Old Renwick.md").write_text(
-            entity("location"), encoding="utf-8")
-        code, out = promote(self.vault, "--write")
-        self.assertEqual(code, 0, out)
-        fm = vl.extract_frontmatter(self.written())
-        self.assertEqual(fm["participants"], ["[[Charles_Ashworth]]"])
-        # A surname two NPCs share is a warning, never a guess; a
-        # location's last word is not a surname.
-        self.assertIn('"Cavendish" names 2 notes', out)
-        self.assertEqual(fm["locations"], [])
-
-    def test_a_shared_surname_is_quiet_once_one_of_them_is_named(self):
-        (self.vault / DRAFT).write_text(
-            "Hugh Cavendish rides. Later Cavendish sleeps.\n",
-            encoding="utf-8")
-        (self.vault / "Characters/NPCs/Hugh_Cavendish.md").write_text(
-            entity("npc"), encoding="utf-8")
-        code, out = promote(self.vault, "--write")
-        self.assertEqual(code, 0, out)
-        self.assertNotIn("WARNING", out)
-        fm = vl.extract_frontmatter(self.written())
-        self.assertEqual(fm["participants"], ["[[Hugh_Cavendish]]"])
 
     def test_a_bad_plan_type_is_refused_and_nothing_written(self):
         code, out = promote(self.vault, "--write", plan_type="chase")
