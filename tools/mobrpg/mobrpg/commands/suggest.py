@@ -571,6 +571,13 @@ def kind_of(kind_by_key, name, ambiguous=None):
     hit = kind_by_key.get(_exact(name))
     if hit:
         return hit
+    # Another case of an exact name, as the edge resolver allows (`_by_name_ci`); two
+    # notes whose names differ only in case, with different kinds, give no guess.
+    stem = _target_stem(name).casefold()
+    kinds = {v for k, v in kind_by_key.items()
+             if isinstance(k, tuple) and k[0] == "=" and k[1].casefold() == stem}
+    if len(kinds) == 1:
+        return kinds.pop()
     k = _key(name)
     return None if not k or k in (ambiguous or ()) else kind_by_key.get(k)
 
@@ -966,7 +973,8 @@ def partition_entities(entities, ent_id_by_key,
 
 
 def held_relationship_count(linked, ent_id_by_key, ref_by_key, linked_triples,
-                            id_by_file=None, ambiguous=None, ref_by_file=None, notes=None) -> int:
+                            id_by_file=None, ambiguous=None, ref_by_file=None, notes=None,
+                            held_names=None) -> int:
     """How many relationships hang off already-linked entities and *would* be
     genuine new edges (target resolves, not already linked) — i.e. the deltas the
     baseline pass will carry. Reported so a skipped-linked push never silently
@@ -978,6 +986,14 @@ def held_relationship_count(linked, ent_id_by_key, ref_by_key, linked_triples,
             tgt_key = _key(rel["target"])
             if _edge_linked(linked_triples, ambiguous, ent["name"], rel["predicate"],
                             rel["target"])[0]:
+                continue
+            held_hit = _by_name_ci(held_names, _target_stem(rel["target"]))
+            if held_hit is not None:      # the target note is held, which is why the edge is not sent
+                if notes is not None:
+                    notes.append(f"{ent['name']} --{rel['predicate']}--> {_target_stem(rel['target'])} "
+                                 f"(held: that note is not created, its name matches the live "
+                                 f"element {held_names[held_hit]} only once articles and titles are "
+                                 f"ignored; see the [held] line, then re-run suggest)")
                 continue
             tid, tref, amb = _resolve_edge(rel["target"], tgt_key, ent_id_by_key, id_by_file,
                                            ref_by_key, ref_by_file, ambiguous)
@@ -1475,9 +1491,9 @@ def run(argv: list[str]) -> int:
     if linked_ents:
         held_notes: list[str] = []
         held = held_relationship_count(linked_ents, ent_id_by_key, ref_by_key, linked,
-                                       id_by_file, ambiguous, ref_by_file, held_notes)
+                                       id_by_file, ambiguous, ref_by_file, held_notes, held_names)
         for note in held_notes:
-            print(f"  [ambiguous] {note}")
+            print(f"  [{'held' if '(held:' in note else 'ambiguous'}] {note}")
         # Be precise about what "held" means: this run emits NO edges for linked
         # entities. `pull-canon --baseline` reconciles the ones that already exist
         # upstream (stamping event_ids); the remainder are genuinely-new edges on
