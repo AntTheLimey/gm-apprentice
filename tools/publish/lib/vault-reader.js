@@ -10,6 +10,7 @@
 // file or folder that does not exist (ENOENT, or ENOTDIR for a path through a file) is absent.
 
 const fs = require('fs');
+const path = require('path');
 
 const ABSENT = new Set(['ENOENT', 'ENOTDIR']);
 
@@ -52,4 +53,20 @@ function readError(what, err) {
   return wrapped;
 }
 
-module.exports = { readerFrom, readError, exists };
+// A note path as the vault spells it: `./` and `a/../` dropped, and each part's case as it is on disk (a disk that
+// ignores case finds `npcs/a.md` for `NPCs/A.md`). Null when no note is there or the path leaves the vault.
+function vaultSpelling(vaultPath, page) {
+  const rel = path.posix.normalize(page);
+  if (rel.startsWith('../') || rel === '..' || path.posix.isAbsolute(rel) || !fs.existsSync(path.join(vaultPath, rel))) return null;
+  const parts = [];
+  for (const part of rel.split('/')) {
+    let names;
+    try { names = fs.readdirSync(path.join(vaultPath, ...parts)); } catch { return null; }
+    const nfc = part.normalize('NFC');
+    const same = (n) => n.normalize('NFC') === nfc;
+    parts.push(names.find(same) || names.find((n) => n.normalize('NFC').toLowerCase() === nfc.toLowerCase()) || part);
+  }
+  return parts.join('/');
+}
+
+module.exports = { readerFrom, readError, exists, vaultSpelling };

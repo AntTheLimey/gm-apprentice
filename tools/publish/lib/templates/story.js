@@ -1,5 +1,6 @@
 const { escapeHtml, relativeHref, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts } = require('./base');
+const { linkSessions } = require('../story-sessions');
 
 function storyNav(unit) {
   const prev = unit.prevHref
@@ -36,13 +37,14 @@ function storyPage(unit, config, publishConfig, navFor) {
 }
 
 function characterStoryPage(story, config, publishConfig, navFor) {
+  const body = linkSessions(story.html);
   const sheetLink = story.sheetOutputPath
     ? `<p class="story-sheet-link"><a href="${encodeHref(relativeHref(story.outputPath, story.sheetOutputPath))}">View character sheet &rarr;</a></p>` : '';
   const content = `
     <article class="story-prose">
       <h1 class="page-title">${escapeHtml(story.title)}</h1>
       ${sheetLink}
-      ${story.html}
+      ${body}
     </article>`;
   return baseShell({
     title: story.title, siteTitle: config.siteTitle,
@@ -50,7 +52,7 @@ function characterStoryPage(story, config, publishConfig, navFor) {
     rootHref: rootPath(story.outputPath), content, footer: config.footer,
     genrePreset: (publishConfig || {})._genrePreset,
     overridesCss: (publishConfig || {})._overridesCss,
-    scripts: clientScripts(story.outputPath),
+    scripts: [...clientScripts(story.outputPath), ...(body !== story.html ? [rootPath(story.outputPath) + 'js/story-links.js'] : [])],
   });
 }
 

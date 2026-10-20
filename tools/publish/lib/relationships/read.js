@@ -10,14 +10,15 @@
 // a hidden folder, not under a top-level `_Templates`, `_templates` or `_inbox`. `_meta` is a
 // note like any other.
 //
-//   Note  { rel, name, aliases, type, fields, edges, links, poiLinks, inScope, hidesRelationships }   (poiLinks: the names in points_of_interest alone)
+//   Note  { rel, name, aliases, type, fields, edges, links, poiLinks, inScope, hidesRelationships, event }   (poiLinks: the names in points_of_interest alone; event: { location, participants } of an event note)
 //   Field { raw, target, line }      parent_location / current_holder. `target` is the rel of the
 //                                    note it names when the value is exactly one wiki-link to a
 //                                    note that exists, else null.
 //   Edge  { index, line, typeLine, type, target, targetRel, bidirectional, strength, tone,
-//           toneLine, strengthLine, description, gmOnly, mobrpg, form, rawTarget }
+//           toneLine, strengthLine, description, gmOnly, mobrpg, form, rawTarget, extraKeys }
 //         (`description` is the value as the YAML reader gives it, '' when none; `gmOnly` is whether
-//         the site drops the edge, read by the site's own rule, processor.js isGmOnlyEdge)
+//         the site drops the edge, read by the site's own rule, processor.js isGmOnlyEdge;
+//         `extraKeys` the list item's keys beyond those named here, such as a GM's own `since:`)
 //
 // `target` is read by the site's rule (connections.js targetRef); where that names no note
 // it is '' (and `targetRel` null), and `rawTarget` keeps the text as written.
@@ -47,6 +48,7 @@ const { targetRef } = require('../connections');
 
 const SKIP_DIRS = new Set(['_Templates', '_templates', '_inbox']);
 const FIELDS = ['parent_location', 'current_holder'];
+const EDGE_KEYS = new Set(['type', 'target', 'bidirectional', 'strength', 'tone', 'description', 'gm_only']);
 
 // vaultlib.normalize_file_arg: slashes forward, any leading "./" off, trailing "/" off.
 function normalizeFileArg(raw) {
@@ -119,6 +121,15 @@ function bodyLinks(content, frontmatter) {
   const poi = frontmatter.points_of_interest;
   for (const item of Array.isArray(poi) ? poi : [poi]) if (typeof item === 'string') take(item);
   return [...names];
+}
+
+function eventFields(data) {
+  if (data.type !== 'event') return null;
+  const hidden = Array.isArray(data.publish_exclude_fields) ? data.publish_exclude_fields : [];
+  return {
+    location: hidden.includes('location') ? undefined : data.location,
+    participants: hidden.includes('participants') ? undefined : data.participants,
+  };
 }
 
 function readVault(vaultPath, { files, folder, newerThan } = {}) {
@@ -200,6 +211,7 @@ function readVault(vaultPath, { files, folder, newerThan } = {}) {
         targetRel: target ? resolve(target) : null,
         rawTarget,
         mobrpg: !!fieldsOf.mobrpg,
+        extraKeys: fieldsOf.extraKeys || [],
       });
     };
 
@@ -231,6 +243,7 @@ function readVault(vaultPath, { files, folder, newerThan } = {}) {
           description: description ? textOf(description.value) : '',
           gmOnly: gmOnly ? require('../processor').isGmOnlyEdge({ gm_only: scalarOf(gmOnly.value) }) : false,
           form: 'list',
+          extraKeys: item.items.map((pair) => textOf(pair.key)).filter((k) => !EDGE_KEYS.has(k)),
         });
       });
     } else if (YAML.isMap(rels)) {
@@ -288,6 +301,9 @@ function readVault(vaultPath, { files, folder, newerThan } = {}) {
       links: bodyLinks(p.content, p.data),
       poiLinks: poiLinks(p.data),
       inScope: inScope(p),
+      // An event's own place and participants, which the site turns into ties (connections.js eventTies);
+      // null when it is no event or the note keeps those fields off the site.
+      event: eventFields(p.data),
       // The site strips `relationships` from a page whose own `publish_exclude_fields` lists it (processor.js publishedFrontmatter).
       hidesRelationships: Array.isArray(p.data.publish_exclude_fields) && p.data.publish_exclude_fields.includes('relationships'),
     };

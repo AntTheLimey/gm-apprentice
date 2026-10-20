@@ -154,9 +154,9 @@ Both factions and organizations use the same template.
 | `resources` | Optional | Brief description of faction resources |
 | `portrait` | Optional | Path relative to vault root (faction banner or insignia) |
 
-The faction page also performs a reverse lookup: any entity in
-the vault with a `member_of` or `assigned_to` relationship
-pointing to this faction will be listed in a **Members** section.
+Any entity in the vault with a `member_of` relationship pointing to
+this faction is listed under **Has member** in the faction page's
+Connections section.
 
 ---
 

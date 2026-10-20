@@ -20,6 +20,29 @@ const VERBS = ['words', 'check', 'list', 'fix', 'accept'];
 
 const publishList = (root) => loadPublishList(root, { warn: () => {} });
 
+// Whether a note gets a page on the player site, by the build's own verdict (manifest-cli surveyVault, the one
+// publish decision): through --config's site, else the site the vault's settings name, else the vault's own settings.
+// A vault whose verdicts cannot be read gives null, and nothing is counted as published.
+function publishedRels(root, config) {
+  const { surveyVault } = require('../manifest-cli');
+  const { publishesPage } = require('../publish-decision');
+  const { canonicalPath } = require('../manifest');
+  const named = config ? null : siteFileNamedBy(root);
+  const configPath = config ? path.resolve(config) : (named && named.exists ? named.file : null);
+  const saved = console.warn;
+  console.warn = () => {};
+  try {
+    const survey = configPath ? surveyVault({ configPath, vaultPath: root }, {}) : surveyVault({ vaultPath: root }, { config: { vaultPath: root } });
+    const rels = new Set([...survey.verdicts].filter(([, v]) => publishesPage(v)).map(([rel]) => rel));
+    return (rel) => rels.has(canonicalPath(rel));
+  } catch (e) {
+    console.error(`which notes publish could not be read (${String(e.message).split('\n')[0]}), so no visit is counted as repeated`);
+    return null;
+  } finally {
+    console.warn = saved;
+  }
+}
+
 // `accept --at NOTE:LINE ...`: record each tie the GM reviewed and left. Without --write it says what it would record.
 function acceptTies(root, { at, write, config }) {
   if (!at || !at.length) throw new Error('accept needs --at NOTE:LINE (a row of tones.py shown)');
@@ -96,9 +119,9 @@ async function runRelationships({ verb, vault, json, folder, files, newerThan, k
     }
     if (sets && sets.length) throw new Error('--set goes with fix --kind tone');
     if (verb === 'fix' && skip && skip.length) throw new Error('--skip goes with list and fix --kind tone');
-    const findings = check(model, ontology, { vaultPath: root });
+    const findings = check(model, ontology, { vaultPath: root, publishes: publishedRels(root, config) });
     if (verb === 'fix') {
-      const FIXABLE = ['off-vocabulary', 'mirrored', 'bidirectional', 'place-missing-tie', 'place-missing-field'];
+      const FIXABLE = ['off-vocabulary', 'mirrored', 'bidirectional', 'place-missing-tie', 'place-missing-field', 'visit-duplicate'];
       for (const k of kinds || []) if (!FIXABLE.includes(k)) throw new Error(`--kind ${k} has no certain repair; the kinds are ${FIXABLE.join(', ')}`);
       if (write) for (const left of removeLeftovers(root)) console.error(`removed a leftover temp file: ${left}`);
       const plan = planFix(model, findings, { vaultPath: root, kinds: kinds && kinds.length ? kinds : undefined, ontology });

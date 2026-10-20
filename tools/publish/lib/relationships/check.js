@@ -16,15 +16,29 @@
 // Edges in a `mobrpg:` node are machine-managed: they are checked for vocabulary and nothing else,
 // and never get a fix.
 const { vaultVocabulary } = require('./words');
+const { eventTies, targetRef } = require('../connections');
 
 const KIND_ORDER = [
-  'off-vocabulary', 'tone', 'mirrored', 'same-fact', 'bidirectional', 'strength', 'place-missing-tie',
-  'place-missing-field', 'place-disagrees', 'not-an-edge', 'genre-subset', 'childless-container', 'hub', 'unreadable',
+  'off-vocabulary', 'tone', 'mirrored', 'opposed', 'same-fact', 'bidirectional', 'strength', 'place-missing-tie',
+  'place-missing-field', 'place-disagrees', 'visit-duplicate', 'not-an-edge', 'genre-subset', 'childless-container', 'hub',
+  'unreadable',
 ];
 const MAP_HINT = ' (map it via shared/relationship-normalization.md)';
 // Inverse names the check lets stand as written: Ant's vaults use `visited_by` on place notes by the hundred,
 // and the site reads it as the inverse of `visited` (lib/ontology.js), so no finding and no flip.
 const WRITTEN_AS_IS = new Set(['visited_by']);
+// Words that do not make a description say more than the names do (visit-duplicate).
+const FILLER = new Set(['a', 'an', 'the', 'of', 'at', 'in', 'on', 'to', 'by', 'for', 'and', 'with', 'here', 'there', 'was', 'were', 'is',
+  'visited', 'visit', 'visits', 'went', 'came', 'stayed', 's', 'he', 'she', 'they', 'his', 'her', 'their', 'who', 'that', 'this']);
+const wordsOf = (text) => (String(text || '').replace(/\[\[([^\]|]*)(?:\|([^\]]*))?\]\]/g, (m, name, label) => label || name)
+  .normalize('NFC').toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
+// The ties that cannot hold both ways round, so the same one written on both notes has one backwards (opposed). By
+// the ontology's categories: kinship's parentage, affiliation's membership, founding and leadership, possession's
+// ownership, power's rule, employment, command and service, and spatial location and containment. Not the social,
+// conflict, event, horror, romance or economic ties (trusts, fears, courts, rescued, deceived, blackmails, supplies,
+// infiltrates ...): two people can each do those to the other.
+const ONE_WAY = new Set(['parent_of', 'ancestor_of', 'member_of', 'founded', 'leads', 'owns', 'wields', 'rules', 'employs',
+  'commands', 'serves', 'vassal_of', 'located_at', 'headquartered_at', 'part_of']);
 const HUB_MIN_NOTES = 5;
 // A note with fewer ties than this is no hub, however empty its type is (one tie among notes with none is not a crowd).
 const HUB_MIN_TIES = 5;
@@ -84,7 +98,9 @@ function closeMatches(word, possibilities, n = 3, cutoff = 0.6) {
 const typeKey = (raw) => String(raw).trim().toLowerCase().replace(/[\s-]+/g, '_');
 const toneKey = (raw) => String(raw).split(/\s+/).filter(Boolean).join(' ').toLowerCase();
 
-function check(model, ontology, { vaultPath } = {}) {
+// `publishes(rel)`: whether the note gets a page on the player site (the build's verdict, relationships/cli.js). An
+// event, person or place that does not publish supplies no visit; without it, no visit is counted as repeated.
+function check(model, ontology, { vaultPath, publishes } = {}) {
   const { notes } = model;
   const out = [];
   const byRel = new Map(notes.map((n) => [n.rel, n]));
@@ -201,6 +217,27 @@ function check(model, ontology, { vaultPath } = {}) {
       }
     }
   }
+  // A one-way tie written on both notes says each is the other's `member_of`, `serves`, ...: one note has it
+  // backwards. Which one is the GM's to say, so it is a question, never a fix. Reported as `mirrored` is.
+  const opposed = new Set();
+  for (const note of notes) {
+    for (const e of own(note)) {
+      if (!e.targetRel || e.targetRel === note.rel || !ONE_WAY.has(e.type)) continue;
+      const other = byRel.get(e.targetRel);
+      if (!tiesOf(other.rel, e.type, note.rel).length) continue;
+      const [a, b] = note.rel < other.rel ? [note, other] : [other, note];
+      const id = `${a.rel}\u0000${b.rel}\u0000${e.type}`;
+      if (opposed.has(id)) continue;
+      opposed.add(id);
+      const reportOn = b.inScope ? b : a.inScope ? a : null;
+      if (!reportOn) continue;
+      const elsewhere = reportOn === a ? b : a;
+      for (const m of tiesOf(reportOn.rel, e.type, elsewhere.rel)) {
+        add(reportOn, m, 'WARNING', 'opposed', m.line,
+          `'${e.type}' with ${elsewhere.name} is written on both notes, each saying the other way round: which one is right?`, { certain: false });
+      }
+    }
+  }
   for (const [x, y] of ontology.same_fact) {
     const done = new Set();
     for (const note of notes) {
@@ -282,6 +319,65 @@ function check(model, ontology, { vaultPath } = {}) {
             `${pf.field} names [[${holder.name}]] but [[${holder.name}]] has no ${pf.predicate} tie to this note`, { certain: true, choices: [holder.name] });
         }
       }
+    }
+  }
+
+  // --- a hand-written visit an event already supplies (#474) -------------------------------------
+  // An event ties each person who took part to the event's place as a "Visited" (connections.js eventTies,
+  // the one reading of the event's fields). A `visited` on the person or a `visited_by` on the place that
+  // says the same is a copy, unless it says more: it keeps a description with a word the names do not
+  // already supply, a tone other than neutral, or a GM-only mark; and it keeps standing in when another
+  // tie between the two notes would hide the event's visit (the site shows one tie per pair of notes).
+  const isIndexNote = (n) => n.name.toLowerCase() === 'index';
+  // Only notes with a page count, as on the site, where the ties are drawn from the published pages alone.
+  const onSite = (n) => !!n && !!publishes && publishes(n.rel);
+  const resolveValue = (value) => {
+    const { name, words } = targetRef(value);
+    const rel = name ? model.resolve(name) : null;
+    const page = rel ? byRel.get(rel) || null : null;
+    return { page: onSite(page) ? page : null, name, words };
+  };
+  const visits = new Map();
+  for (const ev of notes) {
+    if (!ev.event || isIndexNote(ev) || !onSite(ev)) continue;
+    const { place, visitors } = eventTies(ev.event, resolveValue, { self: ev, typeOf: (n) => n.type, isIndex: isIndexNote });
+    if (!place || !place.page || isIndexNote(place.page)) continue;
+    for (const who of visitors) {
+      if (who.page === place.page) continue;
+      const key = tieKey(who.page.rel, '', place.page.rel);
+      if (!visits.has(key)) visits.set(key, { person: who.page, place: place.page, events: [] });
+      visits.get(key).events.push(ev);
+    }
+  }
+  const shown = (n) => !n.hidesRelationships;
+  const copies = (person, place) => [
+    ...(shown(person) ? own(person).filter((e) => e.type === 'visited' && e.targetRel === place.rel).map((e) => ({ note: person, e, other: place })) : []),
+    ...(shown(place) ? own(place).filter((e) => e.type === 'visited_by' && e.targetRel === person.rel).map((e) => ({ note: place, e, other: person })) : []),
+  ];
+  const standIns = (person, place, mine) => [person, place]
+    .filter(shown)
+    .flatMap((n) => own(n).filter((e) => e.targetRel === (n === person ? place : person).rel && !e.gmOnly && !mine.some((m) => m.e === e)));
+  for (const { person, place, events } of visits.values()) {
+    const mine = copies(person, place);
+    if (!mine.length) continue;
+    const blockers = standIns(person, place, mine);
+    const names = new Set([person, place, ...events].flatMap((n) => [n.name, ...n.aliases]).flatMap(wordsOf));
+    const said = events.length === 1 ? events[0].name : `${events[0].name} and ${events.length - 1} more`;
+    for (const { note, e, other } of mine) {
+      if (!note.inScope) continue;
+      const head = `'${e.type}' ${other.name} here`;
+      const extra = wordsOf(e.description).filter((w) => !names.has(w) && !FILLER.has(w));
+      // One that says more is the GM's own words about the visit: left alone, with no row (a vault has them by the
+      // hundred, and none needs an answer).
+      if (extra.length && !e.gmOnly) continue;
+      let why = null;
+      if (e.gmOnly) why = 'is hidden from players on purpose';
+      else if (e.tone && toneKey(e.tone) !== 'neutral') why = `carries the tone '${e.tone}'`;
+      else if (e.strength !== undefined) why = `carries the strength ${JSON.stringify(e.strength)}`;
+      else if (e.extraKeys.length) why = `carries ${e.extraKeys.map((k) => `'${k}'`).join(', ')}, which the event does not`;
+      else if (blockers.length) why = `stands in for the visit because the ${[...new Set(blockers.map((b) => b.type))].join(', ')} tie between the two would hide the event's`;
+      if (why) add(note, e, 'INFO', 'visit-duplicate', e.line, `${head} repeats the visit ${said} already supplies, but ${why}; kept`, { certain: false, why: `${why}` });
+      else add(note, e, 'WARNING', 'visit-duplicate', e.line, `${head} repeats the visit ${said} already supplies; remove it`, { certain: true });
     }
   }
 

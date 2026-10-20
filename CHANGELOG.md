@@ -7,6 +7,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.92] — 2026-10-20
+
+Batch 8: Connections drawing and data, story-page session links,
+`publish: false` on untyped notes, the leak gate reads the search
+index. Publish tool 1.46.0.
+
+### Added
+
+- Story pages (a PC's Story page, and an NPC page written session by
+  session) give each session heading a link of its own
+  (`#session-13`), a row of session numbers to jump by, and a button
+  that copies the session's link (#465).
+- The Story page lists NPCs whose page is a session-by-session story
+  under "NPC stories". The update offers to retire a site's own
+  `add-crew-stories` step, which this replaces, once the site's tool
+  is 1.46.0 or later (#465).
+- `manifest never-publish` marks notes `publish: false`, adding a
+  small frontmatter block where a note has none; `--untyped` marks
+  every note with no `type:`. Preview first, `--write` to apply. It
+  uses the vault's own spelling of a path and refuses frontmatter it
+  cannot safely add a line to (#390).
+- The leak gate reads the text the search index is built from, so a
+  hidden sentence that reaches only the site's search is found, named
+  as `search-index.json#<page>`. A sentence already accepted on a page
+  also covers its copy in that page's search entry, so an existing
+  accept list does not newly stop a deploy (#408).
+- The relationships check asks about a one-way tie (membership,
+  kinship, ownership, command, containment) written on both notes of
+  a pair, each pointing the other way (`member_of` from both ends),
+  and offers to remove a hand-written `visited` or `visited_by` tie
+  that a published event already gives and that adds nothing to it;
+  a visit with more to say is left alone (#335, #474).
+
+### Changed
+
+- A tie to a note that exists but does not publish no longer prints
+  in Connections or in an event's Participants list; a tie to a name
+  with no note still prints as plain text. A tie that spells a
+  published note's name in another case or with underscores links to
+  its page (#476).
+- When the two notes of a pair say different things (a member on one,
+  an ally on the other), Connections shows both instead of one.
+- A faction page no longer has a separate Members list: its members
+  show under Connections' "Has member" (#335).
+- The Connections web: a cut-off name, label or subject shows its
+  full name on hover; a lone name sits level under its label; small
+  groups no longer leave wide empty arcs; a very long subject is cut
+  in the centre disc; a crowded tab draws one shared line (tree) or a
+  ring (web); the chosen name's card sits under a tall drawing; group
+  labels and long names stay on one line where there is room (#343).
+- `explain --shown` lists the Connections entries the page prints
+  (#476).
+- A note with no `type:` and `publish: false` is left out quietly; the
+  "no `type:`" warning names `publish: false` (#390).
+- The search index reads `_` in a link as a space, as the page does:
+  `[[Sona_Mia]]` is found by "sona" and "mia".
+- The tone tidy no longer turns `dangerous` into `hostile` or
+  `mysterious` into `unknown`; it asks (#340).
+- The update offers to retire a site's own build step only once the
+  site's tool does that step's work.
+- Real-browser layout tests skip on the Windows CI runner: the layout
+  engine is the same there, and a Chrome start on that runner slowed
+  every test beside it.
+
+### Fixed
+
+- The build no longer warns about the GM Notes heading on every
+  session Wrap-Up when nothing follows its hidden block (#477).
+
 ## [1.10.91] — 2026-10-20
 
 Test trim, publish tool side: the Node tests run faster and repeat

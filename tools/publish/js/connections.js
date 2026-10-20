@@ -69,8 +69,12 @@
     rootLine: 18,
     minRadius: 118,
     fullRadius: 150,
-    pad: 8
+    pad: 8,
+    subject: 40,      // the longest subject drawn in the disc, in characters (the full name is its tooltip)
+    under: 14,        // a lone name's group label sits this far under the name
+    hub: 10           // past FAN groups, their lines start from a ring this far out from the disc
   };
+  var FAN = 6;        // past this many groups, the lines to them leave from one shared line (a ring in the web)
 
   // A width for a text when nothing can be measured: on the generous side, so a layout made
   // from it has room to spare.
@@ -83,9 +87,14 @@
 
   // The subject's name in the fewest balanced lines that keep its disc small: every line
   // lies inside the disc of radius r.
+  // A line may also break after a hyphen (a double-barrelled name), which keeps its hyphen.
   function rootBlock(subject, measure) {
-    var words = String(subject).split(/\s+/).filter(Boolean);
-    if (!words.length) words = ['?'];
+    var words = [];
+    var joins = [];
+    String(subject).split(/\s+/).filter(Boolean).forEach(function (word) {
+      word.replace(/([^-]-)(?=[^-])/g, '$1\u0000').split('\u0000').forEach(function (piece, k) { words.push(piece); joins.push(k ? '' : ' '); });
+    });
+    if (!words.length) { words = ['?']; joins = [' ']; }
     var widths = words.map(function (w) { return measure(w, 'root'); });
     var space = measure('n', 'root') * 0.55;
     var all = 0;
@@ -97,7 +106,8 @@
       var lines = [];
       var line = null;
       words.forEach(function (word, i) {
-        if (line && line.w + space + widths[i] <= limit) { line.text += ' ' + word; line.w += space + widths[i]; }
+        var gap = joins[i] ? space : 0;
+        if (line && line.w + gap + widths[i] <= limit) { line.text += joins[i] + word; line.w += gap + widths[i]; }
         else { line = { text: word, w: widths[i] }; lines.push(line); }
       });
       var r = 0;
@@ -113,9 +123,11 @@
   // The subject in the middle, a line out to each group, the group's arc, and its names on
   // one ring with each name set outward. A group takes the arc its names need or its label
   // needs, whichever is longer, so a label is never longer than its arc; the ring grows
-  // until every group fits, and the names then spread to fill it. The box is what was drawn
-  // and no more, so a tab with one name is a short strip, not an empty ring.
-  //   opts.subject  the name in the middle
+  // until every group fits, and the names then spread to fill it. A group of one name has no
+  // arc: its label is set under the name, so the group takes two rows' room, not its label's.
+  // The box is what was drawn and no more, so a tab with one name is a short strip, not an
+  // empty ring. A cut name, label or subject keeps its whole text as `full`.
+  //   opts.subject  the name in the middle (cut past WEB.subject characters)
   //   opts.measure  (text, 'name' | 'band' | 'root') -> width; an estimate when not given
   //   opts.clip     the longest name drawn, in characters (opts.clipLabel for a group's label)
   //   opts.compact  keep the ring as small as the names and labels allow (a narrow screen
@@ -125,23 +137,28 @@
     var measure = opts.measure || estimate;
     var clipAt = opts.clip || 26;
     var FULL = 2 * Math.PI;
-    var root = rootBlock(opts.subject || '', measure);
+    var subject = String(opts.subject || '');
+    var root = rootBlock(clip(subject, WEB.subject), measure);
+    root.text = clip(subject, WEB.subject);
+    root.full = subject;
     var total = 0;
     var sets = groups.map(function (group) {
-      var label = clip(group.n, opts.clipLabel || 60);
+      var single = group.d.length === 1;
+      var label = clip(group.n, single ? clipAt : opts.clipLabel || 60);
       total += group.d.length;
       return {
-        label: label, w: measure(label, 'band') + 4,
-        names: group.d.map(function (item) { var t = clip(item.t, clipAt); return { text: t, w: measure(t, 'name') }; })
+        label: label, full: group.n, w: measure(label, 'band') + 4, single: single,
+        names: group.d.map(function (item) { var t = clip(item.t, clipAt); return { text: t, full: item.t, w: measure(t, 'name') }; })
       };
     });
-    var empty = { box: { x: -root.r - WEB.pad, y: -root.r - WEB.pad, w: 2 * (root.r + WEB.pad), h: 2 * (root.r + WEB.pad) }, radius: 0, spine: 0, labelRadius: 0, root: root, nodes: [], bands: [], step: 0 };
+    var empty = { box: { x: -root.r - WEB.pad, y: -root.r - WEB.pad, w: 2 * (root.r + WEB.pad), h: 2 * (root.r + WEB.pad) }, radius: 0, spine: 0, labelRadius: 0, root: root, nodes: [], bands: [], step: 0, hub: 0 };
     if (!total) return empty;
 
     // A handful of names keep a small ring; more than that and the ring is the full size.
     var R = Math.max(total > 4 && !opts.compact ? WEB.fullRadius : WEB.minRadius, root.r + WEB.labelIn + 16);
     function gapFor(R, s) { return Math.max(s, WEB.bandGap / (R - WEB.labelIn)); }
     function spanFor(R, s, set) {
+      if (set.single) return 2 * s;      // its name in the middle, with a row's room each side for the label under it
       var rl = R - WEB.labelIn;
       return Math.max((set.names.length - 1) * s, (WEB.labelClear + set.w) / rl);
     }
@@ -170,34 +187,51 @@
     function at(r, a) { return [r * Math.sin(a), -r * Math.cos(a)]; }
     function seen(p) { xs.push(p[0]); ys.push(p[1]); }
 
+    // A name's box, turned with it: from its first letter (`start`) out `w`, half a row each side.
+    function turned(start, a, w) {
+      var along = [Math.sin(a), -Math.cos(a)];
+      var across = [Math.cos(a), Math.sin(a)];
+      return [[0, -1], [0, 1], [1, -1], [1, 1]].map(function (c) {
+        return [start[0] + along[0] * w * c[0] + across[0] * (WEB.row / 2) * c[1], start[1] + along[1] * w * c[0] + across[1] * (WEB.row / 2) * c[1]];
+      });
+    }
+
     var nodes = [];
     var bands = [];
     // One or two names sit at the sides, where a name set outward reads level.
-    var angle = total <= 2 ? Math.PI / 2 : 0;
+    var angle = total <= 2 ? Math.PI / 2 - (sets[0].single ? step : 0) : 0;
     sets.forEach(function (set, g) {
       var from = angle;
       var span = spanFor(R, step, set);
       set.names.forEach(function (name, index) {
-        var a = from + index * step;
+        var a = set.single ? from + step : from + index * step;
         var p = at(R, a);
         var deg = ((a * 180) / Math.PI) % 360;
         var right = deg < 180;
         var start = at(R + WEB.nameGap, a);
-        // the name's own box, turned: from its first letter out to its last, half a row each side
-        var along = [Math.sin(a), -Math.cos(a)];
-        var across = [Math.cos(a), Math.sin(a)];
-        var corners = [[0, -1], [0, 1], [1, -1], [1, 1]].map(function (c) {
-          return [start[0] + along[0] * name.w * c[0] + across[0] * (WEB.row / 2) * c[1], start[1] + along[1] * name.w * c[0] + across[1] * (WEB.row / 2) * c[1]];
-        });
+        var corners = turned(start, a, name.w);
         corners.forEach(seen);
         [[-16, 0], [16, 0], [0, -16], [0, 16]].forEach(function (d) { seen([p[0] + d[0], p[1] + d[1]]); });
-        nodes.push({ group: g, index: index, angle: a, x: p[0], y: p[1], text: name.text, w: name.w, tx: start[0], ty: start[1], right: right, turn: right ? deg - 90 : deg + 90, corners: corners });
+        var node = { group: g, index: index, angle: a, x: p[0], y: p[1], text: name.text, full: name.full, w: name.w, tx: start[0], ty: start[1], right: right, turn: right ? deg - 90 : deg + 90, corners: corners };
+        nodes.push(node);
+        if (set.single) {
+          // the label under the name, read the same way: under is clockwise on the right, the other way on the left
+          var side = right ? WEB.under : -WEB.under;
+          node.labelCorners = turned([start[0] + Math.cos(a) * side, start[1] + Math.sin(a) * side], a, set.w);
+          node.labelCorners.forEach(seen);
+        }
       });
+      if (set.single) {
+        var only = nodes[nodes.length - 1];
+        bands.push({ label: set.label, full: set.full, w: set.w, single: true, from: only.angle, to: only.angle, labelFrom: only.angle, labelTo: only.angle, flip: false });
+        angle += span + gap;
+        return;
+      }
       var to = from + (set.names.length - 1) * step;
       var labelFrom = from + WEB.labelClear / rl;
       var labelTo = from + span;
       var middle = (labelFrom + labelTo) / 2;
-      bands.push({ label: set.label, w: set.w, from: from, to: to, labelFrom: labelFrom, labelTo: labelTo, flip: Math.cos(middle) < -0.2 });
+      bands.push({ label: set.label, full: set.full, w: set.w, single: false, from: from, to: to, labelFrom: labelFrom, labelTo: labelTo, flip: Math.cos(middle) < -0.2 });
       for (var a = from; a <= labelTo + 1e-9; a += Math.min(0.08, Math.max(1e-3, labelTo - from))) { seen(at(rl - 2, a)); seen(at(R - WEB.spineIn + 2, a)); }
       seen(at(rl - 2, labelTo)); seen(at(R - WEB.spineIn + 2, labelTo));
       angle += span + gap;
@@ -206,7 +240,8 @@
     var minY = Math.min.apply(null, ys) - WEB.pad;
     return {
       box: { x: Math.floor(minX), y: Math.floor(minY), w: Math.ceil(Math.max.apply(null, xs) + WEB.pad - Math.floor(minX)), h: Math.ceil(Math.max.apply(null, ys) + WEB.pad - Math.floor(minY)) },
-      radius: R, spine: R - WEB.spineIn, labelRadius: rl, root: root, nodes: nodes, bands: bands, step: step
+      radius: R, spine: R - WEB.spineIn, labelRadius: rl, root: root, nodes: nodes, bands: bands, step: step,
+      hub: bands.length > FAN ? root.r + WEB.hub : 0
     };
   }
 
@@ -333,8 +368,16 @@
     var rootY = mid(subject);
     var column = Infinity;
     heads.forEach(function (h) { column = Math.min(column, h.left); });
+    // Wide, past FAN groups: one line from the subject to an upright bus between the columns,
+    // and a level arm from it to each group, rather than a sheaf of curves from one dot.
+    var bus = !narrow && heads.length > FAN ? (rootX + column - 6) / 2 : null;
     if (narrow && heads.length) {
       paths.push({ d: 'M' + f(rootX) + ' ' + f(rootY) + 'V' + f(mid(heads[heads.length - 1])), tone: null, kind: 'trunk' });
+    }
+    if (bus !== null) {
+      var ends = [rootY, mid(heads[0]), mid(heads[heads.length - 1])];
+      paths.push({ d: 'M' + f(rootX) + ' ' + f(rootY) + 'H' + f(bus), tone: null, kind: 'trunk' });
+      paths.push({ d: 'M' + f(bus) + ' ' + f(Math.min.apply(null, ends)) + 'V' + f(Math.max.apply(null, ends)), tone: null, kind: 'trunk' });
     }
     heads.forEach(function (h) {
       var y = mid(h);
@@ -342,6 +385,8 @@
       if (narrow) {
         paths.push({ d: 'M' + f(rootX) + ' ' + f(y) + 'H' + f(x), tone: null, kind: 'trunk' });
         if (h.count) paths.push({ d: 'M' + f(x) + ' ' + f(y) + 'V' + f(mid(marks[first + h.count - 1])), tone: null, kind: 'trunk' });
+      } else if (bus !== null) {
+        paths.push({ d: 'M' + f(bus) + ' ' + f(y) + 'H' + f(x), tone: null, kind: 'trunk' });
       } else {
         var end = column - 6;
         var bend = (rootX + end) / 2;
@@ -650,7 +695,17 @@
         el.classList.add('cx-sel');
         entry.selected = Number(el.getAttribute('data-cx-i'));
         fillStrip(strip, entry.flat[entry.selected]);
+        place();
       }
+      // The line keeps to the window's bottom only while the chosen name is clear above it.
+      function place() {
+        var room = typeof win.innerHeight === 'number' && chosen && chosen.getBoundingClientRect;
+        strip.classList.remove('cx-float');
+        if (!room) return;
+        var high = strip.getBoundingClientRect().height;
+        if (chosen.getBoundingClientRect().bottom + 8 <= win.innerHeight - high) strip.classList.add('cx-float');
+      }
+      entry.place = place;
       function rowOf(target) { return target && target.closest ? target.closest('[data-cx-i]') : null; }
       picture.addEventListener('pointerover', function (e) {
         if (e.pointerType === 'touch') return;
@@ -846,12 +901,21 @@
         return 'M' + a[0] + ' ' + a[1] + 'A' + r + ' ' + r + ' 0 ' + (to - from > Math.PI ? 1 : 0) + ' ' + (back ? 0 : 1) + ' ' + b[0] + ' ' + b[1];
       }
 
+      // A text cut short shows its whole self on hover (an SVG title is the browser's own tooltip).
+      function tip(el, text, full) {
+        if (full && full !== text) el.appendChild(make('title', null, full, true));
+        return el;
+      }
+      // Past FAN groups their lines leave from a ring round the disc, not all from its edge.
+      if (lay.hub) edges.appendChild(svg('circle', 'cx-edge cx-trunk cx-hub', { cx: 0, cy: 0, r: lay.hub }));
       lay.bands.forEach(function (band, g) {
-        var inner = pt(lay.root.r, band.from);
+        var inner = pt(lay.hub || lay.root.r, band.from);
         var outer = pt(lay.spine, band.from);
         edges.appendChild(svg('line', 'cx-edge cx-trunk', { x1: inner[0], y1: inner[1], x2: outer[0], y2: outer[1] }));
         if (band.to > band.from) edges.appendChild(svg('path', 'cx-edge cx-trunk', { d: arc(lay.spine, band.from, band.to, false) }));
         edges.appendChild(svg('circle', 'cx-dot cx-branch-dot', { cx: outer[0], cy: outer[1], r: 3 }));
+        // A lone name's label is set under the name, with it (in the nodes below).
+        if (band.single) return;
         // The label runs along its own arc; under the middle it is turned to read the right way up.
         var id = 'cx-' + n + '-' + entry.id + '-band' + g;
         var r = lay.labelRadius + (band.flip ? WEB.labelHigh : 0);
@@ -860,7 +924,7 @@
         var along = svg('textPath', null, { href: '#' + id, startOffset: '50%', 'text-anchor': 'middle' });
         along.textContent = band.label;
         text.appendChild(along);
-        bandLayer.appendChild(text);
+        bandLayer.appendChild(tip(text, band.label, band.full));
       });
 
       lay.nodes.forEach(function (node, i) {
@@ -874,24 +938,33 @@
         g.setAttribute('data-cx-i', i);
         g.setAttribute('data-no-preview', '');
         g.setAttribute('aria-label', item.t + ', ' + flat.group + (item.o ? ', ' + TONE_WORD[item.o] : ''));
+        tip(g, node.text, node.full);
         g.appendChild(svg('circle', 'cx-hit', { cx: x, cy: y, r: 14 }));
         g.appendChild(svg('circle', 'cx-ring', { cx: x, cy: y, r: 11.5 * k }));
         g.appendChild(webMark(item, x, y, k));
-        var label = svg('text', 'cx-name', { x: f(node.tx), y: f(node.ty), dy: 4.5, 'text-anchor': node.right ? 'start' : 'end',
-          transform: 'rotate(' + f(node.turn) + ' ' + f(node.tx) + ' ' + f(node.ty) + ')' });
-        label.textContent = node.text;
-        g.appendChild(label);
+        var spun = function (cls, dy, text) {
+          var t = svg('text', cls, { x: f(node.tx), y: f(node.ty), dy: dy, 'text-anchor': node.right ? 'start' : 'end',
+            transform: 'rotate(' + f(node.turn) + ' ' + f(node.tx) + ' ' + f(node.ty) + ')' });
+          t.textContent = text;
+          g.appendChild(t);
+          return t;
+        };
+        spun('cx-name', 4.5, node.text);
+        var band = lay.bands[node.group];
+        if (band.single) tip(spun('cx-band', 4.5 + WEB.under, band.label), band.label, band.full).setAttribute('aria-hidden', 'true');
         nodes.appendChild(g);
       });
 
       root.appendChild(edges);
       root.appendChild(bandLayer);
-      root.appendChild(svg('circle', 'cx-dot cx-root-dot', { cx: 0, cy: 0, r: lay.root.r }));
+      var disc = svg('g', 'cx-disc');
+      disc.appendChild(svg('circle', 'cx-dot cx-root-dot', { cx: 0, cy: 0, r: lay.root.r }));
       lay.root.lines.forEach(function (line) {
         var centre = svg('text', 'cx-root', { x: 0, y: f(line.y), dy: 5, 'text-anchor': 'middle' });
         centre.textContent = line.text;
-        root.appendChild(centre);
+        disc.appendChild(centre);
       });
+      root.appendChild(tip(disc, lay.root.text, lay.root.full));
       root.appendChild(nodes);
       return root;
     }
@@ -1093,6 +1166,19 @@
         clearTimeout(timer);
         timer = setTimeout(refresh, 120);
       });
+    }
+    // Scrolling moves the chosen name against the window's bottom, where the line may float.
+    var placing = false;
+    if (typeof win.addEventListener === 'function') {
+      win.addEventListener('scroll', function () {
+        if (placing || typeof win.requestAnimationFrame !== 'function') return;
+        placing = true;
+        win.requestAnimationFrame(function () {
+          placing = false;
+          var entry = entries[current];
+          if (entry && entry.place) entry.place();
+        });
+      }, { passive: true });
     }
     show(0, false);
   }

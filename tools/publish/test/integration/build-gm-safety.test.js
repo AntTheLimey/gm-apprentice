@@ -441,3 +441,39 @@ describe('the GM build beside the player site', () => {
     } finally { s.cleanup(); }
   });
 });
+
+describe('an event\'s Participants list and a participant with no page', () => {
+  const site = buildBoth({
+    'NPCs/Old_Tam.md': '---\ntype: npc\npublish: false\n---\nThe poisoner.\n',
+    'NPCs/Bo_Pike.md': '---\ntype: npc\n---\nA guest.\n',
+    'Events/Ball.md': '---\ntype: event\nparticipants:\n  - "[[Old_Tam]] (host, poured the wine)"\n  - "[[Bo_Pike]] (guest)"\n'
+      + '  - "[[Nobody_Here]] (a stranger)"\n  - "[[Old_Tam]], [[Bo_Pike]] — the first dance"\n'
+      + '  - "host: [[Old_Tam]]"\n  - "[[Bo_Pike]] (danced with [[Old_Tam]])"\n'
+      + '  - "[[Bo_Pike]] (waltzed with [[Nobody_Here]])"\n  - "a toast by [[Bo_Pike]]"\n---\nA ball.\n',
+  });
+  after(() => site.cleanup());
+  const list = (html) => /<div class="event-participants">[^]*?<\/div>/.exec(html)[0];
+
+  it('the player page leaves out a note with no page, name and line; a red link and a published note still print', () => {
+    const block = list(site.player.read('events', 'ball.html'));
+    assert.doesNotMatch(block, /Old[ _]Tam|poured the wine/);
+    assert.match(block, /bo-pike\.html">Bo Pike<\/a> — guest/);
+    assert.match(block, /Nobody Here — a stranger/);
+    assert.match(block, /bo-pike\.html">Bo Pike<\/a> — the first dance/);
+  });
+
+  it('the player page leaves out a whole entry that names such a note in its line or after a word', () => {
+    const block = list(site.player.read('events', 'ball.html'));
+    assert.doesNotMatch(block, /host:|danced with/);
+    assert.match(block, /bo-pike\.html">Bo Pike<\/a> — waltzed with Nobody Here/);
+    assert.match(block, /a toast by <a href="[^"]*bo-pike\.html"[^>]*>Bo Pike<\/a>/);
+  });
+
+  it('the GM page, which has the note, prints it', () => {
+    const block = list(site.gm.read('events', 'ball.html'));
+    assert.match(block, /Old Tam/);
+    assert.match(block, /poured the wine/);
+    assert.match(block, /host:/);
+    assert.match(block, /danced with/);
+  });
+});

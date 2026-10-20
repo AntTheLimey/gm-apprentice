@@ -206,6 +206,7 @@ function noPageReason(rel, page, input, skipped) {
   if (always.code === 'DIR_ALWAYS_EXCLUDED') return always.code;
   if (skipped.malformed.has(rel)) return 'FILE_UNPARSEABLE';
   if (skipped.untyped.has(rel)) return 'NO_TYPE';
+  if (skipped.neverPublish.has(rel)) return 'PUBLISH_FALSE';
   if (skipped.unmapped.has(dir)) return 'DIR_UNMAPPED';
   return 'DIR_EXCLUDED';
 }
@@ -444,7 +445,6 @@ function findSecretNames(html, names, { publicWords, listing = false, only = nul
  *   mayPrint(marked, html)            false only when the built page cannot be printing any of them
  *   printed(page, marked, html, storyHtml)  the marked page as rendered: which marks came out
  *   listing(out, html)                a page built from many notes, rendered with every note marked
- *   connections(page, model)          the names a page's Connections prints
  *   findings(facts)                   every finding; facts(page) -> { source, strays, openFence }
  */
 function startNoteAudit(input) {
@@ -455,6 +455,7 @@ function startNoteAudit(input) {
   const skipped = {
     malformed: new Set(input.report.malformed.map((m) => canonicalNfc(m.rel))),
     untyped: new Set(input.report.untyped.map(canonicalNfc)),
+    neverPublish: new Set((input.report.neverPublish || []).map(canonicalNfc)),
     unmapped: new Set(input.report.unmapped.map((u) => canonicalNfc(u.dir))),
   };
   const secrets = secretNamesOf({ notes: input.notes, publishedRels, outOf: (rel) => (scanned.get(rel) || {}).outputPath, linkMap: input.linkMap, neverShow: input.publishConfig.never_show });
@@ -630,24 +631,6 @@ function startNoteAudit(input) {
       if (!entry.via.has(m.source)) entry.via.set(m.source, new Set());
       entry.via.get(m.source).add(out);
       sawWords(entry, m.words);
-    }
-  }
-
-  // A name a page's Connections prints: a relationship's target that has no page is an
-  // item called by its label or its name, on the page of the note that declares it.
-  function connections(page, model) {
-    if (index.size === 0) return;
-    for (const tab of model.tabs) {
-      for (const group of tab.groups) {
-        for (const item of group.items) {
-          if (item.outputPath || !item.key) continue;
-          const hit = lookup(parseWikilink(String(item.key)));
-          if (!hit) continue;
-          const entry = entryOf(hit.record);
-          entry.pages.add(input.relOf(page));
-          sawWords(entry, item.title);
-        }
-      }
     }
   }
 
@@ -976,7 +959,7 @@ function startNoteAudit(input) {
     for (const r of rows || []) if (r && r.detail) calcRows.push({ rel, code: r.code, severity: r.severity, detail: r.detail, fix: r.fix || '' });
   }
 
-  return { read, readAddresses, readFileName, mark, mayPrint, printed, listing, connections, calculator, findings, storyRelOf };
+  return { read, readAddresses, readFileName, mark, mayPrint, printed, listing, calculator, findings, storyRelOf };
 }
 
 // A no-page note's `type`: from its scanned page, else from its file (the scan never read a

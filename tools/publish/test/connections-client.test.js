@@ -41,11 +41,13 @@ test('the web puts every name on one ring, in order, inside the drawing', () => 
     const lay = api.webLayout(webGroups(sizes), { subject: 'Emma Wentworth', measure: measured });
     const total = sizes.reduce((a, b) => a + b, 0);
     assert.strictEqual(lay.nodes.length, total, String(sizes));
-    assert.deepStrictEqual(lay.bands.map((b) => b.label), webGroups(sizes).map((g) => g.n), 'every label whole');
+    // every label whole, but a lone name's, which is cut as a name is; its whole text is kept for the tooltip
+    assert.deepStrictEqual(lay.bands.map((b) => b.full), webGroups(sizes).map((g) => g.n));
+    for (const b of lay.bands) assert.strictEqual(b.label, b.single && b.full.length > 26 ? `${b.full.slice(0, 25)}…` : b.full);
     const { x, y, w, h } = lay.box;
     for (const n of lay.nodes) {
       assert.ok(Math.abs(Math.hypot(n.x, n.y) - lay.radius) < 1e-6, 'on the ring');
-      for (const [cx, cy] of [[n.x, n.y], ...n.corners]) assert.ok(cx >= x && cx <= x + w && cy >= y && cy <= y + h, `${sizes}: a name or its mark lies outside the drawing`);
+      for (const [cx, cy] of [[n.x, n.y], ...n.corners, ...(n.labelCorners || [])]) assert.ok(cx >= x && cx <= x + w && cy >= y && cy <= y + h, `${sizes}: a name, its mark or its label lies outside the drawing`);
     }
     assert.ok(x <= -lay.root.r && y <= -lay.root.r && x + w >= lay.root.r && y + h >= lay.root.r, 'the subject is inside');
   }
@@ -68,6 +70,7 @@ test('every group label of a web has an arc as long as its words, and no two arc
   for (const sizes of SHAPES) {
     const lay = api.webLayout(webGroups(sizes), { subject: 'Emma', measure: measured });
     lay.bands.forEach((band, g) => {
+      if (band.single) return;   // a lone name's label is set under the name (the next test)
       const room = (band.labelTo - band.labelFrom) * lay.labelRadius;
       assert.ok(room >= measured(band.label, 'band'), `${sizes}: "${band.label}" needs ${measured(band.label, 'band')} and has ${room.toFixed(1)}`);
       assert.ok(band.labelFrom > band.from, 'the label starts clear of its own line');
@@ -90,27 +93,69 @@ test('a web of one name is a short strip, not an empty ring', () => {
   assert.ok(Math.abs(lay.nodes[0].y) < 1e-6 && lay.nodes[0].x > 0, 'the name is set level, to the right');
   const two = api.webLayout(webGroups([2]), { subject: 'Emma', measure: measured });
   assert.ok(two.nodes.every((n) => Math.abs(n.y) < 1e-6), 'two names sit level, one each side');
+  const pair = api.webLayout(webGroups([1, 1]), { subject: 'Emma', measure: measured });
+  assert.ok(pair.nodes.every((n) => Math.abs(n.y) < 1e-6) && pair.nodes[0].x > 0 && pair.nodes[1].x < 0, 'two lone names sit level too');
 });
 
-test('the subject of a web is whole, in lines that fit its disc, however long the name', () => {
-  for (const subject of ['Emma', 'Emma Wentworth', 'Mr Bartholomew Fitzwilliam-Throckmorton of the Upper Hawthorne Grange Estate and Surrounds', 'Supercalifragilisticexpialidocious']) {
+test('a lone name carries its group label under it, clear of the subject, where it reads level', () => {
+  for (const sizes of [[1], [1, 1], [1, 1, 1, 6], [1, 1, 1, 1, 1, 1, 1, 1, 1]]) {
+    const lay = api.webLayout(webGroups(sizes), { subject: 'Emma Wentworth', measure: measured });
+    lay.nodes.forEach((n) => {
+      if (!lay.bands[n.group].single) return;
+      assert.ok(n.labelCorners, `${sizes}: a lone name's label is placed`);
+      // the label starts where the name starts, a row further round: never inside the ring, so never under the disc
+      for (const [cx, cy] of n.labelCorners) assert.ok(Math.hypot(cx, cy) > lay.radius, `${sizes}: the label of ${n.text} reaches in to ${Math.hypot(cx, cy).toFixed(0)}`);
+    });
+  }
+  const one = api.webLayout(webGroups([1]), { subject: 'Emma', measure: measured });
+  assert.ok(one.nodes[0].labelCorners.every(([, cy]) => cy > 0), 'one name: its label is under it');
+});
+
+test('groups of one name take two rows each, so a web of small groups stays round', () => {
+  const wordy = ['Was once the sworn rival of', 'Member of the household of', 'Keeper of the keys of', 'Knows'];
+  const g = [...wordy.slice(0, 3).map((n, i) => ({ n, d: [{ t: `Lone ${i}` }] })), { n: 'Knows', d: Array.from({ length: 6 }, (_, i) => ({ t: `Staff ${i}` })) }];
+  const lay = api.webLayout(g, { subject: 'Emma', measure: measured });
+  // the turn from each name to the next round the ring: no lone name sits in a wide empty arc of its own
+  const turns = lay.nodes.map((n, i) => within(lay.nodes[(i + 1) % lay.nodes.length].angle - n.angle));
+  assert.ok(Math.max(...turns) <= 3 * Math.min(...turns) + 1e-6, `turns between names run from ${Math.min(...turns).toFixed(2)} to ${Math.max(...turns).toFixed(2)}`);
+});
+
+test('the subject of a web is whole up to 40 characters, cut past that with the whole name kept, in lines that fit its disc', () => {
+  const long = 'Mr Bartholomew Fitzwilliam-Throckmorton of the Upper Hawthorne Grange Estate and Surrounds';
+  const radii = [];
+  for (const subject of ['Emma', 'Emma Wentworth', 'Supercalifragilisticexpialidocious', long, `${long} ${long} ${long} the Third, Keeper of the Keys`]) {
     const lay = api.webLayout(webGroups([3, 4]), { subject, measure: measured });
-    assert.strictEqual(lay.root.lines.map((l) => l.text).join(' '), subject);
+    // a line may break after a hyphen, which it keeps
+    const drawn = lay.root.lines.map((l) => l.text).join(' ').replace(/- /g, '-');
+    assert.strictEqual(drawn, subject.length > 40 ? `${subject.slice(0, 39)}…` : subject);
+    assert.strictEqual(lay.root.full, subject);
+    if (subject.length > 40) assert.ok(lay.root.r <= 80, `a disc of radius ${lay.root.r} for "${drawn}"`);
     for (const line of lay.root.lines) {
       const half = measured(line.text, 'root') / 2;
       assert.ok(Math.hypot(half, Math.abs(line.y) + 9) <= lay.root.r, `"${line.text}" is inside the disc`);
     }
     assert.ok(lay.labelRadius > lay.root.r + 8);
+    radii.push(lay.root.r);
   }
+  assert.strictEqual(radii[3], radii[4], 'a 315-character subject draws no bigger a disc than a 90-character one');
 });
 
-test('a group label is whole on a wide web, however long, and cut only when asked', () => {
+test('a group label is whole on a wide web, however long, and cut only when asked; a lone name’s is cut as a name is', () => {
   const long = 'Was once the reluctant keeper of the keys of';
-  const g = [{ n: long, d: [{ t: 'Ann' }] }, { n: 'Knows', d: [{ t: 'Bo' }, { t: 'Cy' }, { t: 'Di' }, { t: 'Ed' }] }];
+  const g = [{ n: long, d: [{ t: 'Ann' }, { t: 'Al' }] }, { n: 'Knows', d: [{ t: 'Bo' }, { t: 'Cy' }, { t: 'Di' }, { t: 'Ed' }] }];
   const lay = api.webLayout(g, { measure: measured });
   assert.strictEqual(lay.bands[0].label, long);
   assert.ok((lay.bands[0].labelTo - lay.bands[0].labelFrom) * lay.labelRadius >= measured(long, 'band'));
   assert.strictEqual(api.webLayout(g, { measure: measured, clipLabel: 14 }).bands[0].label.length, 14);
+  const lone = api.webLayout([{ n: long, d: [{ t: 'Ann' }] }, g[1]], { measure: measured }).bands[0];
+  assert.deepStrictEqual([lone.single, lone.label, lone.full], [true, `${long.slice(0, 25)}…`, long]);
+});
+
+test('past six groups, the web’s lines leave from a ring round the disc', () => {
+  assert.strictEqual(api.webLayout(webGroups([3, 4]), { subject: 'Emma', measure: measured }).hub, 0);
+  assert.strictEqual(api.webLayout(webGroups([1, 1, 1, 1, 1, 1]), { subject: 'Emma', measure: measured }).hub, 0);
+  const crowd = api.webLayout(webGroups(Array(25).fill(1)), { subject: 'Emma', measure: measured });
+  assert.ok(crowd.hub > crowd.root.r && crowd.hub < crowd.labelRadius, `hub ${crowd.hub}, disc ${crowd.root.r}, labels ${crowd.labelRadius}`);
 });
 
 test('a long name on the ring is cut to the length asked for', () => {
@@ -698,6 +743,18 @@ test('a name’s own line carries its tone; every line a group shares carries no
   for (const leaf of paths.filter((x) => x.kind === 'leaf')) assert.match(leaf.d, /^M[-\d.]+ [-\d.]+H[-\d.]+$/);
   const spine = paths.filter((x) => x.kind === 'trunk' && /V/.test(x.d));
   assert.ok(spine.length >= 2 && spine.every((x) => x.tone === null));
+});
+
+test('a wide tree of many groups leaves its subject by one line, not a sheaf from one dot', () => {
+  const fromRoot = (sizes) => {
+    const t = layTree(sizes, { narrow: false, width: 1000 });
+    const { paths, dots } = api.treeLines(t.subject, t.heads, t.marks, false);
+    const root = dots.find((d) => d.kind === 'root');
+    return paths.filter((p) => { const [x, y] = pointsOf(p.d)[0]; return Math.abs(x - root.x) < 0.1 && Math.abs(y - root.y) < 0.1; }).length;
+  };
+  assert.strictEqual(fromRoot([2, 3, 1]), 3, 'a few groups keep their curves');
+  assert.strictEqual(fromRoot(Array(25).fill(1)), 1);
+  assert.strictEqual(fromRoot(Array(7).fill(2)), 1);
 });
 
 // ---- colours ----

@@ -186,14 +186,56 @@ function targetRef(value) {
   return { name, links: links.length, words: ref.words.trim() };
 }
 
-function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extras }) {
+// The notes a participant entry starts with, and the line that follows them. A run of links
+// joined by a comma, slash, & or "and" names one participant each, all with the one line; the
+// line is bare of one pair of brackets and of a dash, colon or comma left at its start.
+const JOIN = /^\s*(?:,|\/|&|and)\s*$/i;
+const participantsOf = (entry) => {
+  if (typeof entry !== 'string') return [];
+  const text = entry.trim();
+  const spans = wikilinkSpans(text);
+  if (!spans.length || spans[0].index !== 0) return [];
+  let run = 1;
+  while (run < spans.length && JOIN.test(text.slice(spans[run - 1].end, spans[run].index))) run++;
+  const rest = text.slice(spans[run - 1].end).trim();
+  const line = (/^\(([\s\S]*)\)$/.test(rest) ? rest.slice(1, -1) : rest).replace(/^[\s\u2014\u2013:,-]+/, '').trim();
+  return spans.slice(0, run).map((span) => ({ link: text.slice(span.index, span.end), line }));
+};
+
+// What an event's own fields tie (#368), read once for the build and for the relationships check, so
+// the two never disagree. `resolve(value)` says what a link names ({ page, name, words }; `page` is
+// null when it names no note); `self`, `typeOf` and `isIndex` tell the event, a page's type and
+// the index page. Returns the `place` the event was held at (or null), each of its `participants`
+// ({ to, line }), and the `visitors`: the participants who are people, each of whom visited
+// the place. A name with no page is a participant but never a visitor.
+function eventTies(fm, resolve, { self, typeOf, isIndex }) {
+  const place = typeof fm.location === 'string' && wikilinkSpans(fm.location).length === 1 ? resolve(fm.location) : null;
+  const participants = [];
+  const visitors = [];
+  for (const entry of Array.isArray(fm.participants) ? fm.participants : []) {
+    for (const who of participantsOf(entry)) {
+      const to = resolve(who.link);
+      participants.push({ to, line: who.line });
+      // A tie the GM wrote to the event does not stop its visit.
+      if (to.page && to.page !== self && !isIndex(to.page) && PEOPLE.has(typeOf(to.page))) visitors.push(to);
+    }
+  }
+  return { place, participants, visitors };
+}
+
+// `noteExists(name)`: whether the vault holds a note of that name (published or not). A tie to a note that exists but
+// has no page is the Keeper's side of the story, so it is left off the page. A tie to a name with no note at all (a red
+// link) is still printed as plain text: nothing hid it. `pageFor(name)`: the output path of the page a name spelled in
+// another letter case, or with underscores, belongs to (build.js foldedPagePath), so such a tie is that page's.
+function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extras, noteExists, pageFor }) {
   const byPath = new Map(pages.map((p) => [p.outputPath, p]));
   // What a target names: its page when it has one, else the words to call it by (its
   // label, or its name with underscores read as spaces: wikilink.js linkText).
   const resolve = (value) => {
     const { name, words } = targetRef(value);
-    const out = name ? linkMap[name] : undefined;
-    return { page: (typeof out === 'string' && byPath.get(out)) || null, name, words };
+    const out = name ? (linkMap[name] || (pageFor && pageFor(name))) : undefined;
+    const page = (typeof out === 'string' && byPath.get(out)) || null;
+    return { page, name, words, hidden: !page && !!name && !!noteExists && noteExists(name) };
   };
 
   // Every relationship, once, filed under the page it points at.
@@ -224,36 +266,12 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
     file(from, { target: to.name, type, tone: undefined, line: text ? printedProse(text) : '' }, to);
     return true;
   };
-  // The notes a participant entry starts with, and the line that follows them. A run of links
-  // joined by a comma, slash, & or "and" names one participant each, all with the one line; the
-  // line is bare of one pair of brackets and of a dash, colon or comma left at its start.
-  const JOIN = /^\s*(?:,|\/|&|and)\s*$/i;
-  const participantsOf = (entry) => {
-    if (typeof entry !== 'string') return [];
-    const text = entry.trim();
-    const spans = wikilinkSpans(text);
-    if (!spans.length || spans[0].index !== 0) return [];
-    let run = 1;
-    while (run < spans.length && JOIN.test(text.slice(spans[run - 1].end, spans[run].index))) run++;
-    const rest = text.slice(spans[run - 1].end).trim();
-    const line = (/^\(([\s\S]*)\)$/.test(rest) ? rest.slice(1, -1) : rest).replace(/^[\s\u2014\u2013:,-]+/, '').trim();
-    return spans.slice(0, run).map((span) => ({ link: text.slice(span.index, span.end), line }));
-  };
   for (const event of pages) {
     if (isIndex(event) || typeOf(event) !== 'event') continue;
-    const fm = event.frontmatter;
-    const place = typeof fm.location === 'string' && wikilinkSpans(fm.location).length === 1 ? resolve(fm.location) : null;
+    const { place, participants, visitors } = eventTies(event.frontmatter, resolve, { self: event, typeOf, isIndex });
     if (place) derive(event, 'located_at', place, '');
-    const guests = [];
-    for (const entry of Array.isArray(fm.participants) ? fm.participants : []) {
-      for (const who of participantsOf(entry)) {
-        const to = resolve(who.link);
-        derive(event, 'had_participant', to, who.line);
-        // A tie the GM wrote to the event does not stop its visit.
-        if (to.page && to.page !== event && !isIndex(to.page)) guests.push(to);
-      }
-    }
-    if (place && place.page) for (const to of guests) if (PEOPLE.has(typeOf(to.page))) derive(to.page, 'visited', place, '');
+    for (const { to, line } of participants) derive(event, 'had_participant', to, line);
+    if (place && place.page) for (const to of visitors) derive(to.page, 'visited', place, '');
   }
 
   // The sessions whose published text links a page. A Wrap-Up stands for its hub, so the
@@ -296,18 +314,26 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
   function modelFor(page) {
     const model = { subject: { title: page.displayTitle || page.title, outputPath: page.outputPath }, tabs: [], mentions: [] };
     if (isIndex(page)) return model;
-    const items = new Map();   // the other page's output path, or '\0' + a name with no page
-    const add = (other, noPage, tab, group) => {
+    const items = new Map();   // the other page's output path, or '\0' + a name with no page, then the group
+    const firstKey = new Map();   // the other page's id -> the key of the first item filed for it
+    // A relationship the GM wrote is kept under its own heading: two notes of a pair that say
+    // different things (`member_of` here, `allied_with` there) both show. The same tie written at
+    // both ends, or a tie and its proper inverse, files under one heading and so shows once.
+    // A type the vocabulary does not know has no inverse, so its two ends are one statement.
+    // Anything else (a parent, an extra) joins the item the pair already has.
+    const add = (other, noPage, tab, group, written = false) => {
       const id = other ? other.outputPath : '\u0000' + noPage.name;
-      if (!items.has(id)) {
-        items.set(id, {
+      const key = !written && firstKey.has(id) ? firstKey.get(id) : id + '\u0001' + group.replace(/ \(named by\)$/, '');
+      if (!firstKey.has(id)) firstKey.set(id, key);
+      if (!items.has(key)) {
+        items.set(key, {
           tab, group,
           item: other
             ? { title: other.displayTitle || other.title, outputPath: other.outputPath, kind: kindLabel(typeOf(other)), tone: null, lines: [], own: 0, sessions: shared(page, other), image: imageOf(other) }
             : { title: printed(noPage.words) || noPage.name.replace(/_/g, ' '), outputPath: null, kind: '', tone: null, lines: [], own: 0, sessions: null, image: null, key: noPage.name },
         });
       }
-      return items.get(id).item;
+      return items.get(key).item;
     };
     // Outgoing relationships are noted first, so an item's own lines lead its list.
     const note = (item, edge, mine) => {
@@ -318,16 +344,16 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
     };
 
     for (const { edge, to } of outgoing.get(page) || []) {
-      if (to.page === page || (!to.page && !to.name) || (to.page && isIndex(to.page))) continue;
-      note(add(to.page, to, tabOf(to.page), groupLabel(edge.type, 'out', { from: typeOf(page), to: typeOf(to.page) })), edge, true);
+      if (to.page === page || (!to.page && !to.name) || to.hidden || (to.page && isIndex(to.page))) continue;
+      note(add(to.page, to, tabOf(to.page), groupLabel(edge.type, 'out', { from: typeOf(page), to: typeOf(to.page) }), true), edge, true);
     }
     for (const { edge, from } of incoming.get(page) || []) {
-      note(add(from, null, tabOf(from), groupLabel(edge.type, 'in', { from: typeOf(from), to: typeOf(page) })), edge, false);
+      note(add(from, null, tabOf(from), groupLabel(edge.type, 'in', { from: typeOf(from), to: typeOf(page) }), true), edge, false);
     }
     // A parent with no page stays in Places, as a name with no link.
     if (typeOf(page) === 'location' && typeof page.frontmatter.parent_location === 'string') {
       const parent = resolve(page.frontmatter.parent_location);
-      if (parent.page !== page && (parent.page || parent.name)) add(parent.page, parent, 'places', 'Part of');
+      if (parent.page !== page && !parent.hidden && (parent.page || parent.name)) add(parent.page, parent, 'places', 'Part of');
     }
     for (const extra of (extras && extras.get(page)) || []) {
       if (extra.page && extra.page !== page) add(extra.page, null, tabOf(extra.page), printed(extra.group));
@@ -355,7 +381,7 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
       const groups = new Map();
       for (const b of backlinksOf(backlinks, page)) {
         const from = byPath.get(b.outputPath);
-        if (!from || from === page || isIndex(from) || items.has(from.outputPath)) continue;
+        if (!from || from === page || isIndex(from) || firstKey.has(from.outputPath)) continue;
         const id = tabOf(from);
         if (!groups.has(id)) groups.set(id, []);
         groups.get(id).push(from);
@@ -379,4 +405,4 @@ function isEmpty(model) {
   return !model || (model.tabs.length === 0 && model.mentions.length === 0);
 }
 
-module.exports = { buildConnections, isEmpty, TABS, markdownLinkLabels, targetRef };
+module.exports = { buildConnections, isEmpty, TABS, markdownLinkLabels, targetRef, eventTies, participantsOf };

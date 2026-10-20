@@ -7,6 +7,7 @@ const { linkText, labelsForLinks } = require('./wikilink');
 const { entry, nameIn, fileLabel } = require('./settings');
 const { WRAP_UP_TYPES } = require('./shared-lists');
 const { readerFrom, readError } = require('./vault-reader');
+const { publishMode } = require('./processor');
 
 // A listing or a read through `rd`, with a failure named by its vault-relative path.
 function listing(rd, vaultPath, dir) {
@@ -95,6 +96,9 @@ function scanVaultReport(config, { quiet = false, deps } = {}) {
   // and skipping them in silence is how a GM ends up hunting for a note that
   // was never going to appear.
   const untyped = [];
+  // Vault-relative paths of .md files with no `type:` that say `publish: false` (or `none`).
+  // The GM already answered for them, so they are counted, not reported as a fault.
+  const neverPublish = [];
   // Directories holding typed pages that no folderMap entry covers, in first-seen
   // order, each with the number of pages it silently swallowed.
   const unmapped = [];
@@ -143,7 +147,10 @@ function scanVaultReport(config, { quiet = false, deps } = {}) {
         for (const { field, problem } of shaped.wrong) {
           if (frontmatter.type || field === 'type') mistyped.push({ rel: relPath, field, problem });
         }
-        if (!frontmatter.type) { untyped.push(relPath); continue; } // skip files without typed frontmatter
+        if (!frontmatter.type) { // skip files without typed frontmatter
+          (publishMode(frontmatter) === 'none' ? neverPublish : untyped).push(relPath);
+          continue;
+        }
 
         const dirRel = path.relative(vaultPath, dir);
         const outputDir = mapFolder(dirRel, folderMap);
@@ -198,7 +205,7 @@ function scanVaultReport(config, { quiet = false, deps } = {}) {
   }
 
   walk(vaultPath);
-  return { pages, untyped, unmapped, malformed, mistyped, vaultPath };
+  return { pages, untyped, neverPublish, unmapped, malformed, mistyped, vaultPath };
 }
 
 // The build's entry point: the pages, with the three "could not publish this"
@@ -212,7 +219,7 @@ const MISTYPED_SHOWN = 10;
 // Prints what the walk could not publish and hands back the pages. The build keeps
 // the report too, to repeat the unparseable files where the GM reads (#287).
 function warnScanReport(report) {
-  const { pages, untyped, unmapped, malformed, mistyped = [], vaultPath } = report;
+  const { pages, untyped, neverPublish = [], unmapped, malformed, mistyped = [], vaultPath } = report;
   // The messages name a setting, and the file, as this vault's file writes them.
   const folderMapName = nameIn(vaultPath, 'player_site.folder_map');
   const hideFoldersName = nameIn(vaultPath, 'player_site.hide.folders');
@@ -233,9 +240,13 @@ function warnScanReport(report) {
     const more = untyped.length > 5 ? ` (+${untyped.length - 5} more)` : '';
     console.warn(
       `scanner: skipped ${untyped.length} file(s) with no \`type:\` in frontmatter — ` +
-      `they will not publish: ${shown}${more}. Add \`type:\` to publish them, or list ` +
+      `they will not publish: ${shown}${more}. Add \`type:\` to publish them, mark a note ` +
+      `\`publish: false\` (\`manifest never-publish --untyped\` marks them all), or list ` +
       `their folder in ${hideFoldersName} (${fileLabel(vaultPath)}) to silence this.`
     );
+  }
+  if (neverPublish.length > 0) {
+    console.log(`scanner: ${neverPublish.length} note(s) with no \`type:\` marked publish: false, left out.`);
   }
   return pages;
 }

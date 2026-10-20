@@ -4,7 +4,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { leakSite, leakInto } = require('./helpers/leak-site');
+const { leakSite, leakInto, leakIntoIndex } = require('./helpers/leak-site');
 const { runLeaks, gateFolderFor } = require('../lib/leaks-cli');
 const { loadManifest, loadPublishList } = require('../lib/manifest');
 
@@ -349,6 +349,34 @@ describe('leaks', () => {
       doc.player_site.never_show = 'Kestrel';
       fs.writeFileSync(file, YAML.stringify(doc));
       await assert.rejects(run(site, 'check'), /never_show/);
+    } finally { site.cleanup(); }
+  });
+
+  // #408: a sentence in the text the search index is made from is listed and accepted as any other finding is.
+  it('a hidden sentence in the search index entry is listed by its entry, and accepted by page and id', async () => {
+    const site = leakSite(NOTES, SETTINGS);
+    try {
+      leakIntoIndex(site, 'npcs/b.html', 'The baker poisoned the mayor last winter.');
+      const r = await run(site, 'check');
+      assert.equal(r.rc, 1);
+      assert.match(r.text, /\[[0-9a-f]{6}\] search-index\.json#npcs\/b\.html: "The baker poisoned the mayor last winter\."/);
+      const id = JSON.parse((await run(site, 'list', { json: true })).out.join('')).findings[0].id;
+      assert.equal((await run(site, 'accept', { page: 'search-index.json#npcs/b.html', text: id })).rc, 0);
+      assert.deepEqual(loadManifest(vaultOf(site), { warn: () => {} }).accepted.map((a) => a.page), ['search-index.json#npcs/b.html']);
+      assert.equal((await run(site, 'check')).rc, 0);
+    } finally { site.cleanup(); }
+  });
+
+  it('accepting a sentence on its page takes its copy in the search index entry too', async () => {
+    const site = leakSite(NOTES, SETTINGS);
+    try {
+      leakInto(site.outputDir, 'npcs/b.html', 'The baker poisoned the mayor last winter.');
+      leakIntoIndex(site, 'npcs/b.html', 'The baker poisoned the mayor last winter.');
+      const r = await run(site, 'check');
+      assert.match(r.text, /\] npcs\/b\.html: .*\n\s+also in search-index\.json#npcs\/b\.html \[/);
+      assert.equal((await run(site, 'accept', { page: 'npcs/b.html', text: 'The baker poisoned the mayor last winter.' })).rc, 0);
+      assert.equal(loadManifest(vaultOf(site), { warn: () => {} }).accepted.length, 2);
+      assert.equal((await run(site, 'check')).rc, 0);
     } finally { site.cleanup(); }
   });
 });

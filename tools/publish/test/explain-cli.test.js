@@ -121,6 +121,27 @@ describe('explain', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  // #476: --shown lists the Connections the page prints, from the page's own data. A name with no note at all prints as
+  // plain text; a tie to a note that exists but has no page is left off the page, so it is not listed either.
+  it('--shown lists the Connections: a name with no note is there as plain text, a tie to an unpublished note is not', async () => {
+    const vault = makeVault();
+    write(vault, 'People/Vesper.md', [
+      '---', 'type: npc', 'relationships:',
+      '  - target: "[[Red_Name]]"', '    type: knows', '    description: Seen at the quay.',
+      '  - target: "[[Keeper_Only]]"', '    type: participated_in', '    description: Used as a door only.', '---', '',
+      '## Overview', '', 'A ferryman.', '',
+    ].join('\n'));
+    write(vault, 'People/Keeper_Only.md', '---\ntype: npc\npublish: false\n---\n\n## Overview\n\nSecret.\n');
+    const c = capture();
+    const rc = await runExplain({ configPath: npcSite(vault), target: 'People/Vesper.md', shown: true }, c.deps);
+    assert.strictEqual(rc, 0);
+    const text = c.text();
+    const view = text.slice(text.indexOf('its Connections'));
+    assert.match(view, /^ {4}.*Red Name \(no page\) — Seen at the quay\.$/m);
+    assert.doesNotMatch(text, /Keeper Only|Keeper_Only|Used as a door/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('--shown --json adds shown: { from, page, story, card, search }, and plain --json has no such key', async () => {
     const vault = makeVault();
     write(vault, 'People/Vesper.md', hiddenNote);

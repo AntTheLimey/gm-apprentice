@@ -48,6 +48,15 @@ describe('storyLanding', () => {
     assert.match(html, /Varrio/);
     assert.match(html, /Fallen/);
   });
+  it('lists story NPCs in an "NPC stories" group, with or without PC stories', () => {
+    const npcs = [{ outputPath: 'npcs/marlo.html', title: 'Marlo Petrak' }];
+    const html = storyLanding([], chars, cfg, pub, () => '', npcs);
+    assert.match(html, /<h3>NPC stories<\/h3><ul><li><a href="npcs\/marlo\.html">Marlo Petrak<\/a><\/li><\/ul>/);
+    assert.match(html, /<!-- crew-stories -->/, 'the marker the old add-crew-stories step looks for');
+    const alone = storyLanding([], [], cfg, pub, () => '', npcs);
+    assert.match(alone, /Character Stories<\/h2>.*NPC stories/);
+    assert.ok(!/NPC stories/.test(storyLanding(spine, chars, cfg, pub, () => '')));
+  });
   it('omits a branch that is empty', () => {
     const html = storyLanding(spine, [], cfg, pub, () => '');
     assert.ok(!/Character Stories/.test(html));

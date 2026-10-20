@@ -142,13 +142,19 @@ describe('NAMED_NO_PAGE', () => {
     assert.deepStrictEqual(f.pages, ['Items/Brass_Key.md']);
   });
 
-  it('counts the target of a relationship', async () => {
+  it('does not count the target of a relationship: a tie to a hidden note is left off the page (#476)', async () => {
     const files = {
       'Characters/Mara_Quill.md': '---\ntype: npc\nrelationships:\n  - target: "[[Vesper_Hale]]"\n    type: ally\n---\n\nx\n',
       'Characters/Vesper_Hale.md': npc('V', 'x'),
     };
-    const [f] = await faults(files, { excluded: ['Characters/Vesper_Hale.md'] }, 'NAMED_NO_PAGE');
-    assert.deepStrictEqual(f.pages, ['Characters/Mara_Quill.md']);
+    assert.deepStrictEqual(await faults(files, { excluded: ['Characters/Vesper_Hale.md'] }, 'NAMED_NO_PAGE'), []);
+    // And the page itself does not print the name: no finding because there is nothing to find.
+    const { configPath, root } = site(files, { excluded: ['Characters/Vesper_Hale.md'] });
+    const saved = { log: console.log, warn: console.warn, error: console.error };
+    console.log = console.warn = console.error = () => {};
+    try { build({ configPath }); } finally { Object.assign(console, saved); }
+    const html = fs.readFileSync(path.join(root, 'docs', 'characters', 'mara-quill.html'), 'utf8');
+    assert.ok(!/Vesper/.test(html), 'the page prints the hidden name');
   });
 
   it('does not count a note whose name is also a published page', async () => {

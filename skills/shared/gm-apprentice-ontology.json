@@ -39,7 +39,7 @@
     "dedicated": "loyal", "dutiful": "loyal", "obedient": "loyal",
     "fanatical": "devoted", "zealous": "devoted", "idolatrous": "devoted",
     "deferential": "respectful", "reverent": "respectful", "admiring": "respectful",
-    "adversarial": "hostile", "violent": "hostile", "dangerous": "hostile",
+    "adversarial": "hostile", "violent": "hostile",
     "terrified": "fearful", "anxious": "fearful", "horrified": "fearful", "uneasy": "fearful", "unsettled": "fearful", "traumatised": "fearful", "traumatized": "fearful",
     "suspicious": "distrustful",
     "dismissive": "contemptuous", "condescending": "contemptuous", "disapproving": "contemptuous",
@@ -51,7 +51,7 @@
     "mercenary": "transactional", "utilitarian": "transactional", "instrumental": "transactional", "strategic": "transactional",
     "businesslike": "professional", "clinical": "professional",
     "complex": "complicated", "conflicted": "complicated", "unresolved": "complicated",
-    "mysterious": "unknown", "uncertain": "unknown"
+    "uncertain": "unknown"
   },
   "verbs": {
     "works_for": [{"use": "employs", "flip": true}],

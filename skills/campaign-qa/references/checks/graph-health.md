@@ -139,9 +139,12 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
 
 Each row is `LEVEL  note:line  message`. The rows cover types off
 the vocabulary (inverses, verbs and near misses included), ties
-stored on both notes, one fact written from both sides, the
-two-way flag, strength, ties to session notes, the two containment
-fields, containers whose points of interest were never re-pointed,
+stored on both notes, a one-way tie written each way round on the
+two notes (`opposed`: ask which is right), one fact written from
+both sides, the two-way flag, strength, ties to session notes, the
+two containment fields, a `visited` or `visited_by` an event
+already supplies (the fix removes it; one with more to say gets no
+row), containers whose points of interest were never re-pointed,
 types the vault's own `_meta/relationship-types.md` leaves out, and
 hubs. One `ERROR  (vault)  could not check the relationships` row
 means the tool did not run: say why (the row names it) and skip

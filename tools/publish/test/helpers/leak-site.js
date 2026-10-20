@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { buildBoth, allFiles } = require('./gm-build');
+const { indexTextPath } = require('../../lib/leak-gate/index-text');
 
 function leakSite(files, settings = {}) {
   const site = buildBoth(files, { ...settings, sites: ['player'] });
@@ -19,6 +20,17 @@ function leakInto(dir, page, sentence) {
   fs.writeFileSync(file, `${html.slice(0, at)}<p>${sentence}</p>${html.slice(at)}`);
 }
 
+// What a hiding rule broken for the search index alone would do: the sentence in the text the build kept for the entry
+// of `href` (index-text.js), which its page does not print.
+function leakIntoIndex(site, href, sentence) {
+  const file = indexTextPath(path.dirname(site.configPath));
+  const kept = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const entry = kept.entries.find((e) => e.href === href);
+  if (!entry) throw new Error(`no index entry for ${href}`);
+  entry.texts.push(sentence);
+  fs.writeFileSync(file, JSON.stringify(kept));
+}
+
 // One hash over every file's path and bytes: the gate must leave it as it was.
 function hashTree(dir) {
   const h = crypto.createHash('sha256');
@@ -26,4 +38,4 @@ function hashTree(dir) {
   return h.digest('hex');
 }
 
-module.exports = { leakSite, leakInto, hashTree };
+module.exports = { leakSite, leakInto, leakIntoIndex, hashTree };

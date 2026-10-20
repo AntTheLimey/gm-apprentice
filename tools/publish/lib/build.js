@@ -6,6 +6,7 @@ const os = require('os');
 const path = require('path');
 const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, slugify } = require('./scanner');
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit } = require('./image-optimize');
+const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
@@ -30,6 +31,7 @@ const fontsLib = require('./fonts');
 const { buildStorySpine, chapterOfSession, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
+const { isSessionStory } = require('./story-sessions');
 const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
 const { hasRealKvId, detectInbox, detectStatusBar } = require('./backend-flags');
@@ -142,6 +144,17 @@ const pathParts = (text) => path.posix.normalize(`/${text.replace(/\\/g, '/')}`)
 const PASS_SCHEME_RE = /^(?:mailto|tel):/i;
 const ANY_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 
+// The page of a note named in another letter case, or with underscores for spaces (the names of notes with pages
+// are in the link map); undefined when no page has that name.
+function foldedPagePath(linkMap, name) {
+  if (!LOWER_KEYS.has(linkMap)) {
+    const keys = new Map();
+    for (const key of Object.keys(linkMap)) if (!keys.has(foldName(key))) keys.set(foldName(key), linkMap[key]);
+    LOWER_KEYS.set(linkMap, keys);
+  }
+  return LOWER_KEYS.get(linkMap).get(foldName(name));
+}
+
 function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {}) {
   const text = String(link == null ? '' : link).trim();
   if (/^https?:\/\//i.test(text)) return { kind: 'outside', href: text };
@@ -161,16 +174,10 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {
     const candidates = [name];
     const last = parts[parts.length - 1];
     if (last !== name) candidates.push(last);
-    if (!LOWER_KEYS.has(linkMap)) {
-      const keys = new Map();
-      for (const key of Object.keys(linkMap)) if (!keys.has(foldName(key))) keys.set(foldName(key), linkMap[key]);
-      LOWER_KEYS.set(linkMap, keys);
-    }
     for (const candidate of candidates) {
       const exact = linkMap[candidate] || (pages.find(p => canonicalNfc(p.title) === candidate) || {}).outputPath;
       if (exact) return { kind: 'page', href: exact };
-      // The same name in another letter case is that page (the names of notes with pages are in the link map).
-      const loose = LOWER_KEYS.get(linkMap).get(foldName(candidate));
+      const loose = foldedPagePath(linkMap, candidate);
       if (loose) return { kind: 'page', href: loose };
     }
   }
@@ -1051,10 +1058,15 @@ function buildSite(options) {
   // What each page's subject is connected to (lib/connections.js), built once from the
   // published list. The pairs handed over are `hubWrapUps` (hub page -> its Wrap-Up, only
   // for hubs in `pages`), not the raw `hubPairs`, which also pairs unpublished hubs.
-  const { buildConnections, isEmpty: noConnections } = require('./connections');
+  const { buildConnections } = require('./connections');
   const connectionExtras = new Map();
+  // A name's page in any spelling, and whether a name is a note at all (published or not): a tie or a participant
+  // that names a note with no page is the Keeper's side of the story, and is left off the page (#476).
+  const pageFor = (name) => foldedPagePath(linkMap, name) || foldedPagePath(linkMap, path.posix.basename(name));
+  const noteExists = (name) => { const names = HIDDEN_NAMES.get(linkMap); const folded = (n) => foldName(canonicalNfc(n)); return names.has(folded(name)) || names.has(folded(path.posix.basename(name))); };
+  publishConfig._hiddenNote = (name) => !linkMap[name] && !pageFor(name) && noteExists(name);
   publishConfig._connections = publishConfig.connections === 'off' ? null
-    : buildConnections({ pages, linkMap, backlinks, hubPairs: hubWrapUps, imageMap, extras: connectionExtras });
+    : buildConnections({ pages, linkMap, backlinks, hubPairs: hubWrapUps, imageMap, extras: connectionExtras, pageFor, noteExists });
   // The lists a session or chapter page gathers (who appeared, what happened, which sessions
   // a chapter holds). `for(page)` reads `connectionExtras` lazily, so filling it after the
   // index is built is sound; nothing asks for a model until a page renders.
@@ -1219,8 +1231,15 @@ function buildSite(options) {
     // nothing is written
   } else if (searchData) {
     const searchDest = path.join(outputDir, 'search-index.json');
-    fs.writeFileSync(searchDest, jsonText(searchData));
+    const searchJson = jsonText(searchData);
+    fs.writeFileSync(searchDest, searchJson);
     console.log('  wrote search-index.json');
+    // The text the player index is made from, kept beside the site for the leak gate (index-text.js). Not for a
+    // preview's folder: the site's own index is the one deploy checks.
+    if (!gm && !options.outputDirOverride && imageCacheDir(configDir, { outputDirs: [outputDir], vaultPath: config.vaultPath })) {
+      writeIndexText(indexTextPath(configDir), searchJson, searchData.records);
+      ignoreCacheInGit(configDir);
+    }
 
     // Copy lunr.js client library
     const lunrSrc = require.resolve('lunr');
@@ -1425,6 +1444,7 @@ function buildSite(options) {
         break;
       }
       case 'npc':
+        if (fx === liveFx && isSessionStory(processed.html)) npcStories.push({ title: page.displayTitle, outputPath: page.outputPath });
         html = npcTemplate(page, processed, navFor, config, imageMap, {
           pages, linkMap, publishConfig,
         });
@@ -1522,10 +1542,6 @@ function buildSite(options) {
     audit.read(rel, html);
     audit.readAddresses(rel, html);
     if (page === shownPage) shown[isStory ? 'story' : 'page'] = html;
-    // The names in a page's Connections are names the page prints: one with no page behind
-    // it is looked up in the note index and counted against this page.
-    const model = !isStory && publishConfig._connections && html.includes('class="cx"') ? publishConfig._connections.for(page) : null;
-    if (model && !noConnections(model)) audit.connections(page, model);
     if (toRender.has(page)) return;
     if (!markedOf.has(page)) markedOf.set(page, audit.mark(page));
     const marked = markedOf.get(page);
@@ -1551,7 +1567,12 @@ function buildSite(options) {
       card = cardFor(shownPage, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff), limits: publishConfig.limits, headerFacts: publishConfig.header_facts });
     }
     const { subtitleOf } = require('./search-index');
+    // The Connections the page prints, as its own island holds them: the same data, so a tie to a name with no
+    // page counts too.
+    const cx = publishConfig._connections && shown.page && shown.page.includes('class="cx"')
+      ? require('./templates/connections').islandOf(publishConfig._connections.for(shownPage), shownPage.outputPath) : null;
     return {
+      connections: cx && (cx.t.length > 0 || cx.m.length > 0) ? cx : null,
       // A story companion asked about by its own path shows the story page alone.
       page: vaultRelPathOf(shownPage) === shownRel ? text(shown.page) : null,
       story: text(shown.story),
@@ -1591,6 +1612,8 @@ function buildSite(options) {
     if (stale.length) throw new Error(`${stale.join(', ')} ${stale.length === 1 ? 'is' : 'are'} on the site but a full build would no longer write ${stale.length === 1 ? 'it' : 'them'}. Run a full build (gm-apprentice-publish build --site ${gm ? 'gm' : 'player'}); a sheets-only build deletes nothing. Nothing was written.`);
   }
 
+  // Published NPC pages whose body runs session by session (story-sessions.js), in page order.
+  const npcStories = [];
   for (const page of pages) {
     try {
       if (getsNoPage(page)) continue;
@@ -1914,8 +1937,8 @@ function buildSite(options) {
       emit(unit.outputPath, renderStoryUnit(unit, config, publishConfig, navFor), `  wrote ${unit.outputPath}`);
     }
     if (live) characterStories = buildCharacterStories();
-    if (spine.length || characterStories.length) {
-      emit('story.html', storyLanding(spine, characterStories, config, publishConfig, navFor), '  wrote story.html');
+    if (spine.length || characterStories.length || npcStories.length) {
+      emit('story.html', storyLanding(spine, characterStories, config, publishConfig, navFor, npcStories), '  wrote story.html');
     }
 
     // Landing page

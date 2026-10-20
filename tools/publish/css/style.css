@@ -766,6 +766,50 @@ h3 {
 .story-prose a:hover {
   border-bottom-style: solid;
 }
+/* ===== STORY SESSION LINKS (#465) =====
+   Session headings carry an id (#session-N), a copy-link icon, and a "Sessions" row of number
+   chips sits above the first. scroll-margin-top clears the sticky .top-nav (3.5rem). */
+.story-session, .story-entry { scroll-margin-top: 5rem; }
+.story-session {
+  margin: 3rem 0 1.25rem; padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+  font-size: 1.5rem; line-height: 1.2; text-wrap: balance;
+}
+.story-jump + .story-session { margin-top: 1.5rem; }
+.story-session-n {
+  display: block; margin-bottom: 0.4rem;
+  font-size: 0.78rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--accent);
+}
+.story-anchor {
+  display: inline-flex; align-items: center; vertical-align: -0.2em; margin-left: 0.5rem; padding: 0.15rem;
+  color: var(--accent); opacity: 0.35; border-radius: 3px; text-decoration: none;
+  font-size: 0.75rem; font-weight: 600; letter-spacing: 0.04em; text-transform: none;
+}
+.story-prose .story-anchor { border-bottom: 0; }
+.story-session:hover .story-anchor, .story-entry:hover .story-anchor,
+.story-anchor:hover, .story-anchor:focus-visible { opacity: 1; }
+.story-anchor:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.story-anchor.copied { opacity: 1; color: var(--text); }
+.story-anchor.copied::after { content: "Copied"; margin-left: 0.35rem; }
+@media (hover: none) { .story-anchor { opacity: 0.7; } }
+.story-jump { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 1rem 0 0; }
+.story-jump-label {
+  font-size: 0.7rem; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.story-jump ol { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem; }
+.story-jump li { margin: 0; }
+.story-prose .story-jump a, .story-jump a {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 2rem; height: 1.75rem; padding: 0 0.45rem; border: 1px solid var(--border); border-radius: 999px;
+  font-size: 0.8rem; font-weight: 600; font-variant-numeric: tabular-nums;
+  color: var(--accent); text-decoration: none; transition: background-color .15s, color .15s, border-color .15s;
+}
+.story-jump a:hover, .story-jump a:focus-visible { background: var(--accent); border-color: var(--accent); color: var(--bg); }
+.story-jump a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .story-jump a { transition: none; } }
+
 /* Standalone Story pages: label/cross-link chrome (the centred reading column is
    handled by the .story-prose rule above). */
 .story-eyebrow {
@@ -2894,8 +2938,8 @@ a.landing-banner:focus-visible {
 .abilities, .weaknesses { margin-bottom: 1rem; }
 .abilities h3, .weaknesses h3 { margin-top: 0; margin-bottom: 0.5rem; }
 
-.members, .goals { margin-bottom: 1rem; }
-.members h3, .goals h3 { margin-top: 0; margin-bottom: 0.5rem; }
+.goals { margin-bottom: 1rem; }
+.goals h3 { margin-top: 0; margin-bottom: 0.5rem; }
 
 .entity-link {
   color: var(--accent);
@@ -4361,15 +4405,16 @@ a.cx-row .cx-name { color: var(--text); }
 /* In a column that is only just roomy the meta may not fit beside a long name, and the name would
    be broken inside a word to make room: the meta goes under the name instead. */
 .cx-roomy a.cx-row, .cx-roomy span.cx-row { flex-wrap: wrap; }
-.cx-roomy .cx-row .cx-name { flex: 1 1 8rem; }
+/* its own width, so a name that fits the row on its own line is not broken; never wider than the row beside its mark */
+.cx-roomy .cx-row .cx-name { flex: 1 1 auto; max-width: calc(100% - 21px); }
 .cx-row.cx-stacked .cx-meta { margin-left: 0; padding-left: 0; text-align: left; }
 /* wide: the subject, then the groups' headings, then the names, in three columns. The gaps between
    the columns are where the curves run, so no curve meets a word. A heading is set in the top half of
    its cell; the line to the group's dot runs level through the middle of the cell, under the heading. */
 .cx-wide.cx-tree-wrap { display: grid; grid-template-columns: fit-content(26%) minmax(0, 1fr); column-gap: clamp(48px, 9%, 96px); align-items: center; }
 .cx-wide .cx-subject { margin: 0; padding: 0; text-align: right; font-size: 1.3rem; }
-.cx-wide .cx-tree { display: grid; grid-template-columns: fit-content(30%) minmax(0, 1fr); column-gap: 56px; row-gap: 14px; }
-.cx-wide .cx-branch { display: grid; grid-column: 1 / -1; grid-template-columns: 30% minmax(0, 1fr); column-gap: 56px; align-items: center; margin: 0; }
+.cx-wide .cx-tree { display: grid; grid-template-columns: fit-content(max(30%, 12rem)) minmax(0, 1fr); column-gap: 56px; row-gap: 14px; }
+.cx-wide .cx-branch { display: grid; grid-column: 1 / -1; grid-template-columns: max(30%, 12rem) minmax(0, 1fr); column-gap: 56px; align-items: center; margin: 0; }
 @supports (grid-template-columns: subgrid) {
   .cx-wide .cx-branch { grid-template-columns: subgrid; }
 }
@@ -4378,7 +4423,7 @@ a.cx-row .cx-name { color: var(--text); }
 /* narrow: an indented tree */
 .cx-narrow .cx-group { margin: 0 0 2px 34px; padding: 6px 0; }
 .cx-narrow .cx-leaves { margin-left: 42px; }
-path.cx-edge, line.cx-edge { fill: none; stroke: var(--cx-neutral); stroke-width: 1.4; }
+path.cx-edge, line.cx-edge, circle.cx-edge { fill: none; stroke: var(--cx-neutral); stroke-width: 1.4; }
 .cx-edge.cx-warm { stroke: var(--cx-warm); }
 .cx-edge.cx-hostile { stroke: var(--cx-hostile); stroke-dasharray: 5 3; }
 .cx-edge.cx-trunk { stroke: var(--cx-trunk); }
@@ -4408,9 +4453,13 @@ svg.cx-web .cx-node.cx-sel text, svg.cx-web .cx-node:focus-visible text { fill: 
 /* keyboard focus: a ring round the mark as well as the underlined name */
 .cx-node:focus-visible .cx-ring { stroke: var(--cx-accent); }
 
-/* the line under a tree or a web. It keeps to the bottom of the window while its drawing is taller than
-   the window, so the line for a name chosen near the top can be read without scrolling to the end. */
-.cx-strip { position: sticky; bottom: 0; z-index: 2; max-height: 50vh; overflow-y: auto; margin-top: 14px; padding: 12px 14px; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 4px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; align-items: center; }
+/* the line under a tree or a web. The page script lets it keep to the bottom of the window (cx-float) only
+   while the chosen name is clear above it, so the line for a name chosen near the top of a tall drawing can
+   be read without scrolling to the end. While it floats, the pointer passes through it to the names it
+   covers (choosing one of them puts it back under the drawing); its own link still takes a click. */
+.cx-strip.cx-float { position: sticky; bottom: 0; pointer-events: none; }
+.cx-strip.cx-float a { pointer-events: auto; }
+.cx-strip { position: relative; z-index: 2; max-height: 50vh; overflow-y: auto; margin-top: 14px; padding: 12px 14px; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 4px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; align-items: center; }
 .cx-strip:empty { display: none; }
 .cx-strip p { margin: 0; }
 .cx-avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--bg); border: 1px solid var(--border); display: grid; place-items: center; font: 600 1rem var(--font-heading); color: var(--cx-muted); grid-row: span 2; object-fit: cover; }

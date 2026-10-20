@@ -4,7 +4,7 @@ const { baseShell, cssPath, rootPath, clientScripts, noPreviewAttr } = require('
 const OUT = 'story.html';
 const GROUP_LABELS = { current: 'Current', retired: 'Retired', fallen: 'Fallen' };
 
-function storyLanding(spine, characterStories, config, publishConfig, navFor) {
+function storyLanding(spine, characterStories, config, publishConfig, navFor, npcStories = []) {
   let saga = '';
   if (spine.length) {
     const begin = encodeHref(relativeHref(OUT, spine[0].outputPath));
@@ -13,14 +13,19 @@ function storyLanding(spine, characterStories, config, publishConfig, navFor) {
       <p><a class="story-begin" href="${begin}">Begin reading &rarr;</a></p><ol class="story-toc">${items}</ol></section>`;
   }
   let chars = '';
-  if (characterStories.length) {
+  if (characterStories.length || npcStories.length) {
     const groups = ['current', 'retired', 'fallen'].map(g => {
       const inG = characterStories.filter(c => c.group === g);
       if (!inG.length) return '';
       const links = inG.map(c => `<li><a href="${encodeHref(relativeHref(OUT, c.outputPath))}">${escapeHtml(c.title)}</a></li>`).join('');
       return `<h3>${GROUP_LABELS[g]}</h3><ul>${links}</ul>`;
     }).join('');
-    chars = `<section class="story-branch"${noPreviewAttr()}><h2>Character Stories</h2>${groups}</section>`;
+    // The marker is the one Dead End's old add-crew-stories step looks for, so that step, if
+    // left in place, finds the list already there and adds none.
+    const npcs = npcStories.length
+      ? `<!-- crew-stories --><h3>NPC stories</h3><ul>${npcStories.map(c => `<li><a href="${encodeHref(relativeHref(OUT, c.outputPath))}">${escapeHtml(c.title)}</a></li>`).join('')}</ul>`
+      : '';
+    chars = `<section class="story-branch"${noPreviewAttr()}><h2>Character Stories</h2>${groups}${npcs}</section>`;
   }
   const content = `<h1 class="page-title">Story</h1>${saga}${chars}`;
   return baseShell({

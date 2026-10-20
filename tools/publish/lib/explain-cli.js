@@ -299,6 +299,18 @@ async function runExplain(options, deps) {
       out('  image files that publish with it:');
       block(shown.images.join('\n'));
     }
+    if (shown.connections) {
+      out('');
+      out('  its Connections (a name with no page prints as plain text with its lines):');
+      const rows = [];
+      for (const tab of shown.connections.t) {
+        for (const group of tab.g) {
+          for (const it of group.d) rows.push(`${tab.n} / ${group.n}: ${it.t}${it.h ? '' : ' (no page)'}${it.l.map((line) => ` — ${line}`).join('')}`);
+        }
+      }
+      for (const group of shown.connections.m) for (const [title] of group.d) rows.push(`Mentions / ${group.n}: ${title}`);
+      block(rows.join('\n'));
+    }
     if (shown.card) {
       out('');
       out('  its link-preview card:');

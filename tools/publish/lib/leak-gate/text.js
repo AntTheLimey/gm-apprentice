@@ -73,7 +73,7 @@ const PICTURE_EMBED = /!\[\[[^\]|]+\.(?:png|jpe?g|gif|webp|svg|avif|bmp)(?:\|[^\
 // link to Edmund_Courtney prints two words). Hidden pieces and the published text they are compared with are made here.
 function textsOfMarkdown(markdown, options) {
   return blocksOf(markdown, options).map((block) => {
-    const text = stripMarkdown(block.replace(PICTURE_EMBED, ' ').replace(/_/g, ' '));
+    const text = stripMarkdown(block.replace(PICTURE_EMBED, ' '));
     return /[&<]/.test(text) ? pageText(text) : text;
   });
 }

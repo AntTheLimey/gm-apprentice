@@ -309,8 +309,8 @@ describe('build with NFD refs against NFC filenames (#139)', () => {
     assert.match(read('locations/cafe-ubiquito.html'), /What Happened Here/);
   });
 
-  it('rolls up faction members from relationship targets', () => {
-    assert.match(read('factions/sociedad-iberica.html'), /<h3>Members<\/h3>/);
+  it('lists faction members from relationship targets, under Connections', () => {
+    assert.match(read('factions/sociedad-iberica.html'), /<h4>Has member<\/h4>/);
   });
 
   it('nests a child location under its parent in the locations index', () => {

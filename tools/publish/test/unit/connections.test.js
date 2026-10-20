@@ -40,7 +40,7 @@ test('the other end sees it too, worded by the inverse', () => {
 
 test('a pair written from both ends is one item: own line first, the other second, own tone', () => {
   const a = page('A', 'npc', { relationships: [{ target: 'B', type: 'knows', tone: 'warm', description: 'Old friends.' }] });
-  const b = page('B', 'npc', { relationships: [{ target: 'A', type: 'rival_of', tone: 'hostile', description: 'Owes me.' }, { target: 'A', type: 'knows', description: 'Old friends.' }] });
+  const b = page('B', 'npc', { relationships: [{ target: 'A', type: 'knows', tone: 'hostile', description: 'Owes me.' }, { target: 'A', type: 'knows', description: 'Old friends.' }] });
   const m = buildConnections(ctx([a, b])).for(a);
   assert.strictEqual(m.tabs.length, 1);
   assert.strictEqual(tab(m, 'people').groups.length, 1);
@@ -48,6 +48,33 @@ test('a pair written from both ends is one item: own line first, the other secon
   assert.deepStrictEqual(item.lines, ['Old friends.', 'Owes me.']);
   assert.strictEqual(item.own, 1);
   assert.strictEqual(item.tone, 'warm');
+});
+
+test('two notes of a pair that say different things both show, each under its own heading (#335)', () => {
+  const vogel = page('Vogel', 'npc', { relationships: [{ target: 'Brotherhood', type: 'member_of', description: 'True believer.' }] });
+  const brotherhood = page('Brotherhood', 'faction', { relationships: [{ target: 'Vogel', type: 'allied_with', description: 'Liaison.' }] });
+  const idx = buildConnections(ctx([vogel, brotherhood]));
+  const m = idx.for(brotherhood);
+  assert.deepStrictEqual(names(group(m, 'people', 'Has member')), ['Vogel']);
+  assert.deepStrictEqual(group(m, 'people', 'Has member').items[0].lines, ['True believer.']);
+  assert.deepStrictEqual(names(group(m, 'people', 'Allied with')), ['Vogel']);
+  assert.deepStrictEqual(group(m, 'people', 'Allied with').items[0].lines, ['Liaison.']);
+  const v = idx.for(vogel);
+  assert.deepStrictEqual(names(group(v, 'orgs', 'Member of')), ['Brotherhood']);
+  assert.deepStrictEqual(names(group(v, 'orgs', 'Allied with')), ['Brotherhood']);
+});
+
+test('the same type written both ways shows both directions, and a tie with its proper inverse shows once', () => {
+  const choir = page('Choir', 'faction', { relationships: [{ target: 'Cell', type: 'member_of' }] });
+  const cell = page('Cell', 'faction', { relationships: [{ target: 'Choir', type: 'member_of' }] });
+  const m = buildConnections(ctx([choir, cell])).for(choir);
+  assert.deepStrictEqual(names(group(m, 'orgs', 'Member of')), ['Cell']);
+  assert.deepStrictEqual(names(group(m, 'orgs', 'Has member')), ['Cell']);
+  const boss = page('Boss', 'faction', { relationships: [{ target: 'Crew', type: 'has_member' }] });
+  const crew = page('Crew', 'faction', { relationships: [{ target: 'Boss', type: 'member_of' }] });
+  const n = buildConnections(ctx([boss, crew])).for(boss);
+  assert.strictEqual(tab(n, 'orgs').groups.length, 1);
+  assert.deepStrictEqual(names(group(n, 'orgs', 'Has member')), ['Crew']);
 });
 
 test('a note related to itself is no item', () => {
@@ -284,7 +311,7 @@ test('a link nested in a label comes down to the label, so the model holds no ta
 test('own counts the lines kept: a blank line is neither kept nor counted', () => {
   const emma = page('Emma', 'npc', { relationships: [
     { target: 'Hallam', type: 'serves', description: '   ' },
-    { target: 'Hallam', type: 'knows', description: 'Old friends.' }] });
+    { target: 'Hallam', type: 'serves', description: 'Old friends.' }] });
   const item = group(buildConnections(ctx([emma, page('Hallam', 'npc')])).for(emma), 'people', 'Serves').items[0];
   assert.deepStrictEqual([item.lines, item.own], [['Old friends.'], 1]);
 });
@@ -518,4 +545,21 @@ test('only people visit: a faction or an item at an event gets no derived visit'
   assert.deepStrictEqual(names(group(idx.for(godown), 'people', 'Visited by')), ['Emma']);
   assert.ok(!tab(idx.for(guild), 'places') && !tab(idx.for(lamp), 'places'));
   assert.deepStrictEqual(names(group(idx.for(guild), 'events', 'Participated in')), ['Sale']);
+});
+
+// #476: a tie to a note that exists but has no page is the Keeper's side, so the page does not print it. A name with no
+// note at all (a red link) still prints as plain text, as nothing hid it.
+test('a tie to a note that exists with no page is not printed; a name with no note is', () => {
+  const a = page('A', 'npc', { relationships: [
+    { target: '[[Kept_Back]]', type: 'participated_in', description: 'Used as a door only.' },
+    { target: '[[Red_Name]]', type: 'knows', description: 'Seen once.' },
+  ], parent_location: '[[Kept_Back]]' });
+  const noteExists = (name) => name === 'Kept_Back';
+  const shown = buildConnections(ctx([a], { noteExists })).for(a);
+  const all = shown.tabs.flatMap((t) => t.groups.flatMap((g) => g.items));
+  assert.deepStrictEqual(all.map((i) => i.title), ['Red Name']);
+  assert.strictEqual(all[0].outputPath, null);
+  // Without the lookup (as before) both print.
+  const before = buildConnections(ctx([a])).for(a).tabs.flatMap((t) => t.groups.flatMap((g) => g.items));
+  assert.deepStrictEqual(before.map((i) => i.title).sort(), ['Kept Back', 'Red Name']);
 });

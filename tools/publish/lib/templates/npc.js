@@ -5,6 +5,7 @@ const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScrip
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
 const { excerptFromMarkdown } = require('../excerpt');
+const { linkSessions } = require('../story-sessions');
 
 function npcTemplate(page, processedContent, navFor, config, imageMap, context) {
   const { pages, linkMap, publishConfig } = context || {};
@@ -54,7 +55,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
   const pullQuote = quoteText ? `<div class="pull-quote">${escapeHtml(quoteText)}</div>` : '';
 
   // --- Zone 3: Body content ---
-  const bodyContent = processedContent.html || '';
+  const bodyContent = linkSessions(processedContent.html || '');
 
   // --- Zone 4: Where to find them (compact location card) ---
   let locationCardHtml = '';
@@ -113,7 +114,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
     genrePreset: (publishConfig || {})._genrePreset,
     overridesCss: (publishConfig || {})._overridesCss,
     breadcrumbsHtml,
-    scripts: clientScripts(page.outputPath),
+    scripts: [...clientScripts(page.outputPath), ...(bodyContent !== (processedContent.html || '') ? [rootPath(page.outputPath) + 'js/story-links.js'] : [])],
   });
 }
 
