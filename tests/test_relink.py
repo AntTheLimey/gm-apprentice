@@ -1387,7 +1387,9 @@ class SpellingOwnerTests(unittest.TestCase):
             NPC: typed("npc"), PCN: typed("pc"),
             "Sessions/S1.md": "---\ntype: session\n---\n[[Charlotte_Thorne]]\n",
             "_meta/publish-list.yaml": "publishing: []\n"})
-        p = relink.plan(vault, NPC, NPC_NEW)
+        with mock.patch.object(relink, "publish_rename_refs") as spy:
+            p = relink.plan(vault, NPC, NPC_NEW)
+        spy.assert_not_called()  # no site: the tool is never asked
         self.assertEqual(len(p.unsure), 1)
         self.assertEqual(p.owners, {})
 
@@ -1539,13 +1541,6 @@ class SitePublishTests(unittest.TestCase):
 
 
 class FinalFixTests(unittest.TestCase):
-    def test_a_manifest_without_a_site_never_asks_the_tool(self):
-        vault = make_vault(self, {"A/Old.md": "x\n",
-                                  "_meta/publish-list.yaml": "publishing:\n  - A/Old.md\n"})
-        with mock.patch.object(relink, "publish_rename_refs") as spy:
-            relink.plan(vault, "A/Old.md", "A/New.md")
-        spy.assert_not_called()
-
     def test_an_absolute_new_is_refused_not_rerooted(self):
         vault = make_vault(self, {"A/Old.md": "x\n"})
         for new in ("/tmp/x.md", str(vault / "A" / "New.md")):
