@@ -6062,6 +6062,12 @@ def main() -> int:
         emit("stories", qa_checks.check_stories(args.vault))
         return 0
     if args.command == "timeline" and args.order:
+        # The dates are the tool the vault's site builds with (as for the
+        # other checks), so an old pin is named, not hidden by the plugin's.
+        why, gate = no_publish_tool(args.vault, "timeline --order")
+        if why is not None and gate and gate[0].startswith("ERROR"):
+            emit("timeline --order", gate)
+            return 0
         emit("timeline --order", qa_checks.check_session_order(args.vault))
         return 0
     if args.command in ("report-new", "report-stats"):

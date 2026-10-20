@@ -131,13 +131,16 @@ def check_session_order(vault: Path) -> list[str]:
     try:
         # Looked up now, not imported: use_publish_tool rebinds it.
         answer = vaultlib.PUBLISH_LINES.ask(
-            {"op": "dates", "values": [str(s[3]) for s in sessions]})
+            {"op": "dates", "text": "",
+             "values": [str(s[3]) for s in sessions]})
         dates = answer.get("dates")
         if not (isinstance(dates, list) and len(dates) == len(sessions)):
             raise PublishToolUnavailable("its answer about dates is not "
                                          "understood")
     except PublishToolUnavailable as e:
-        if "unknown op" in str(e):
+        # A tool that predates `dates` says "unknown op", or, when it
+        # checks `text` before the op, "text must be a string".
+        if "unknown op" in str(e) or "text must be a string" in str(e):
             # The wording of vault_check._tool_too_old_row.
             return [f"ERROR\t(vault)\ttimeline --order did not run: the "
                     f"site's publish tool predates {vaultlib.DATES_SINCE} "

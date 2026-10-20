@@ -186,6 +186,46 @@ class SessionOrderOldToolTests(unittest.TestCase):
             "update-pin, then run this again"])
 
 
+    OLD_TOOL = (Path.home() / ".claude/plugins/cache/gm-apprentice/"
+                "gm-apprentice/1.10.77/tools/publish/bin/gm-publish.js")
+
+    @unittest.skipUnless(OLD_TOOL.is_file(), "no installed 1.10.77 tool")
+    def test_a_real_tool_before_dates_is_named_with_its_fix(self):
+        # The installed tool 1.36.2 checks `text` before the op, so the
+        # question as first asked drew "text must be a string".
+        from unittest import mock
+        v = make(self, {"Chapters/Chapter 1 - X/S1.md":
+                        session(1, 1, '"May 5, 1814"')})
+        old = vaultlib.PublishLines(self.OLD_TOOL)
+        self.addCleanup(old.close)
+        with mock.patch.object(vaultlib, "PUBLISH_LINES", old):
+            rows = qa.check_session_order(v)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("predates 1.41.0 and is too old for this check — run "
+                      "update-pin", rows[0])
+
+    def test_text_must_be_a_string_also_means_too_old(self):
+        from unittest import mock
+        v = make(self, {"Chapters/Chapter 1 - X/S1.md":
+                        session(1, 1, '"May 5, 1814"')})
+        refuse = vaultlib.PublishToolUnavailable(
+            "the publish tool refused: text must be a string")
+        with mock.patch.object(vaultlib.PUBLISH_LINES, "ask",
+                               side_effect=refuse):
+            rows = qa.check_session_order(v)
+        self.assertIn("too old for this check", rows[0])
+
+    def test_the_question_carries_a_text(self):
+        from unittest import mock
+        v = make(self, {"Chapters/Chapter 1 - X/S1.md":
+                        session(1, 1, '"May 5, 1814"')})
+        with mock.patch.object(vaultlib.PUBLISH_LINES, "ask",
+                               return_value={"dates": [{"iso": "1814-05-05",
+                                                        "day": True}]}) as ask:
+            qa.check_session_order(v)
+        self.assertEqual(ask.call_args[0][0]["text"], "")
+
+
 class ActivePcsArchiveTests(unittest.TestCase):
     def test_an_archived_template_is_not_an_active_pc(self):
         v = make(self, {"_archive/t/_Template_PC.md": pc(),
