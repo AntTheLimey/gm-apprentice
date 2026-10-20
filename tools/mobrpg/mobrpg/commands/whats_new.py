@@ -101,10 +101,14 @@ def parentless_locations(vault: str) -> list[str]:
     out = []
     for p in sorted(glob.glob(os.path.join(vault, "Locations", "*.md"))):
         stem = os.path.splitext(os.path.basename(p))[0]
-        if stem.lower() in systems or stem.lower().removesuffix(" system") in systems:
-            continue
         with open(p, encoding="utf-8") as fh:
             fm = re.match(r"^---\r?\n(.*?)\r?\n---", fh.read(), flags=re.S)
+        # Only the system notes themselves are left out: "<X> System", or a star-system
+        # location_type. A place called just "Corwin" is not one.
+        if stem.lower().endswith(" system") and stem.lower().removesuffix(" system") in systems:
+            continue
+        if fm and link_orphans._STAR_SYSTEM.search(fm.group(1)):
+            continue
         m = re.search(r"^parent_location:(.*)$", fm.group(1), flags=re.M) if fm else None
         if m is None or m.group(1).strip() in ("", '""', "''", "null", "~"):
             out.append(stem)

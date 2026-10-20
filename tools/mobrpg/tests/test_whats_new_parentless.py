@@ -42,3 +42,10 @@ def test_the_report_and_json_carry_them(tmp_path, capsys):
     assert whats_new.run(["w1", "--vault", str(tmp_path), "--extract", str(ex), "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["parentless_locations"] == [
         "Gate Station", "Outpost 9", "Port Anselm"]
+
+
+def test_a_place_named_like_its_system_is_still_reported(tmp_path):
+    # Corwin (a planet) shares the bare name of Corwin System; only the system note is left out.
+    _loc(tmp_path, "Corwin System", '---\ntype: location\nlocation_type: star system\n---\n')
+    _loc(tmp_path, "Corwin", '---\ntype: location\nparent_location: ""\n---\n')
+    assert whats_new.parentless_locations(str(tmp_path)) == ["Corwin"]
