@@ -73,17 +73,17 @@ test('a verb with one meaning says what it means, and says when to store it on t
 
 test('a verb with several meanings lists them and asks; a log reference is dropped on a yes', () => {
   const dir = vault({
-    'A.md': note('npc', rels(edge('carries', 'B'), edge('visited_by', 'B'), edge('questioned', 'B'))),
+    'A.md': note('npc', rels(edge('carries', 'B'), edge('affiliated_with', 'B'), edge('questioned', 'B'))),
     ...Object.fromEntries([target('B')]),
   });
   assert.deepStrictEqual(rowsOf(dir), [
     "ERROR\tA.md:5\toff-vocabulary relationship type 'carries' — one of: owns, wields",
-    "ERROR\tA.md:7\toff-vocabulary relationship type 'visited_by' — one of: located_at (store on the other note), participated_in (store on the other note)",
+    "ERROR\tA.md:7\toff-vocabulary relationship type 'affiliated_with' — one of: member_of, allied_with",
     "ERROR\tA.md:9\toff-vocabulary relationship type 'questioned' — a log reference, not a graph edge; drop it",
   ]);
   assert.deepStrictEqual(findings(dir).map((f) => f.fix), [
     { certain: false, choices: ['owns', 'wields'] },
-    { certain: false, choices: ['located_at', 'participated_in'] },
+    { certain: false, choices: ['member_of', 'allied_with'] },
     { certain: false, choices: [] },
   ]);
 });
