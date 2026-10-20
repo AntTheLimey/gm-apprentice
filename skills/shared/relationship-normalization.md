@@ -105,7 +105,6 @@ Non-exhaustive — extend by category, never by inventing a new `type:`.
 | deceives, misled, tricked, lied to | `deceived` |
 | has intelligence on, spies on, watches | `infiltrates` / `studies` |
 | affiliated with | `member_of` / `allied_with` |
-| visited by | `located_at` *(on the other note)* / `participated_in` *(on the other note)* |
 | investigated by, questioned, interrogated, appears in | *not an edge, see below* |
 <!-- /generated:verbs -->
 
