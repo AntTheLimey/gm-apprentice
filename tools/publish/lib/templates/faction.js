@@ -1,8 +1,6 @@
-const { escapeHtml, relativePath, encodeHref, refMetaValue } = require('../processor');
+const { escapeHtml, refMetaValue } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection, badgeSpan } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
-const { canonicalNfc } = require('../unicode');
-const { linkText } = require('../wikilink');
 
 function factionTemplate(page, processedContent, navFor, config, imageMap, linkMap, allPages, context) {
   const fm = page.frontmatter;
@@ -31,29 +29,6 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
     ? `<p class="faction-territory"><strong>Territory:</strong> ${refMetaValue(fm.territory, linkMap, page.outputPath)}</p>`
     : '';
 
-  // Member rollup: find entities with member_of or assigned_to relationships pointing to this faction
-  // NFC on both sides (#139): the relationship target is author-typed, the faction title is
-  // the filename. A mismatch empties the members rollup on an accented faction page.
-  const factionTitle = canonicalNfc(page.title);
-  const members = (allPages || []).filter(p => {
-    const rels = p.frontmatter.relationships;
-    if (!rels || !Array.isArray(rels)) return false;
-    return rels.some(r => {
-      const target = canonicalNfc(linkText(r.target || '').key.trim());
-      return target === factionTitle && (r.type === 'member_of' || r.type === 'assigned_to');
-    });
-  });
-
-  let membersHtml = '';
-  if (members.length > 0) {
-    const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
-    const memberLinks = members.map(m => {
-      const href = encodeHref(relativePath(currentDir, m.outputPath));
-      return `<li><a href="${href}">${escapeHtml(m.displayTitle)}</a></li>`;
-    }).join('\n');
-    membersHtml = `<div class="members"><h3>Members</h3><ul>${memberLinks}</ul></div>`;
-  }
-
   const headerCard = `
 <div class="char-header">
   ${portrait}
@@ -65,7 +40,7 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
 
   const graphHtml = connectionsSection(page, publishConfig);
 
-  const mainContent = `${headerCard}\n${badgeHtml}\n${leadershipHtml}\n${territoryHtml}\n${goals}\n${membersHtml}\n${processedContent.html}\n${graphHtml}`;
+  const mainContent = `${headerCard}\n${badgeHtml}\n${leadershipHtml}\n${territoryHtml}\n${goals}\n${processedContent.html}\n${graphHtml}`;
   return baseShell({
     title: page.displayTitle,
     siteTitle: config.siteTitle,

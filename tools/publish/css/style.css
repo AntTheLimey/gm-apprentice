@@ -2894,8 +2894,8 @@ a.landing-banner:focus-visible {
 .abilities, .weaknesses { margin-bottom: 1rem; }
 .abilities h3, .weaknesses h3 { margin-top: 0; margin-bottom: 0.5rem; }
 
-.members, .goals { margin-bottom: 1rem; }
-.members h3, .goals h3 { margin-top: 0; margin-bottom: 0.5rem; }
+.goals { margin-bottom: 1rem; }
+.goals h3 { margin-top: 0; margin-bottom: 0.5rem; }
 
 .entity-link {
   color: var(--accent);
