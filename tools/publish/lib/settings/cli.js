@@ -554,7 +554,11 @@ function changeList(options, verb, args) {
   if (!texts.length) return { errors: [`${name}: there are no entries to ${verb}; give each entry as plain text or in quotes.`] };
   const entries = [];
   for (let v of texts) {
-    if (e.same === 'folder') v = normalizeExcludeDir(v, vaultPath) ?? '';
+    if (e.same === 'folder' && v.trim() !== '') {
+      const tidy = normalizeExcludeDir(v, vaultPath);
+      if (tidy === null) return { errors: [`${name} has an entry that is not a folder inside the vault: ${JSON.stringify(v)}; remove it.`] };
+      v = tidy;
+    }
     if (v.trim() === '') return { errors: [`${name} has a blank entry; remove it.`] };
     entries.push(v);
   }

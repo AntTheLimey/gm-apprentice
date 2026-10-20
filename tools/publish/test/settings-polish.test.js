@@ -56,3 +56,11 @@ test('get prints a setting nobody set as "not set", not null (#373)', () => {
   assert.equal(rc, 0);
   assert.equal(out, 'vault.setting_year: not set (default)');
 });
+
+test('add of a folder outside the vault says so, not "blank entry" (#373)', () => {
+  const s = scratch('version: 1\nplayer_site:\n  hide:\n    folders: [Secret]\n');
+  const { rc, err } = run(s, 'add', ['player_site.hide.folders', '/elsewhere/x']);
+  assert.equal(rc, 1);
+  assert.match(err[0], /not a folder inside the vault/);
+  assert.doesNotMatch(err[0], /blank/);
+});
