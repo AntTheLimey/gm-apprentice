@@ -106,10 +106,16 @@ def element_id_of(href: str) -> str | None:
 
 def rewrite_md_for_push(md_text: str, ent_id_by_key: dict,
                         world_id: str, url_fmt: str = URL_FMT,
-                        id_by_file: dict | None = None) -> str:
+                        id_by_file: dict | None = None,
+                        ambiguous: set | None = None,
+                        flattened: list | None = None) -> str:
     """Wikilinks -> element links (resolved via `ent_id_by_key`, keyed by
     `suggest._key`); unresolvable wikilinks and `.md` relative links -> bare
     display text; `http(s)` links untouched.
+
+    A wikilink that went to plain text because its folded key is in `ambiguous`
+    (two notes share it) has its name appended to `flattened`, so the caller can
+    say so; an ordinary unresolvable link (a PC, a session note) is not reported.
 
     `id_by_file` ({note file stem: element_id}) is consulted first. A wikilink
     names a file, and the folded key can merge two: "The Woodland Ghost" and
@@ -123,6 +129,8 @@ def rewrite_md_for_push(md_text: str, ent_id_by_key: dict,
                or ent_id_by_key.get(suggest._key(name)))   # ...but resolves by Name
         if eid:
             return f"[{display}]({url_fmt.format(world=world_id, eid=eid)})"
+        if flattened is not None and suggest._key(name) in (ambiguous or ()):
+            flattened.append(name.split("#")[0])
         return display
 
     text = _EMBED_LINE.sub("", md_text or "")

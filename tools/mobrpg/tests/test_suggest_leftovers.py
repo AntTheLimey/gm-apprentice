@@ -54,6 +54,32 @@ def test_reordering_two_look_alike_lines_does_not_swap_their_event_refs(tmp_path
     assert len(a) == 2 and a == b
 
 
+def test_a_link_to_a_name_two_notes_share_is_flattened_and_reported():
+    from mobrpg import links
+    flat: list = []
+    out = links.rewrite_md_for_push("At [[Woodland Ghost]] and [[Gone Place]].", {}, "w", links.URL_FMT,
+                                    {}, ambiguous={suggest._key("Woodland Ghost")}, flattened=flat)
+    assert out == "At Woodland Ghost and Gone Place."
+    assert flat == ["Woodland Ghost"]          # a plain unresolvable link is not news
+
+
+def test_sync_says_which_pushed_links_went_out_as_plain_text(tmp_path, monkeypatch, capsys):
+    import os
+    from mobrpg import client
+    from mobrpg.commands import sync_cmd, submit_batch
+    from tests.test_sync import NOTE, _vault, _wire
+    body = NOTE.replace("Old vault prose.", "Old vault prose near [[Woodland Ghost]].")
+    v = _vault(tmp_path, body)
+    for folder, stem in (("Locations", "The Woodland Ghost"), ("Creatures", "Woodland Ghost")):
+        (v / folder).mkdir(exist_ok=True)
+        (v / folder / f"{stem}.md").write_text("---\ntype: x\n---\nB\n", encoding="utf-8")
+    os.utime(v / "Creatures" / "marsh-hag.md", None)
+    _wire(monkeypatch, {"description": "<p>Stale.</p>", "lastModified": "2026-07-21T00:00:00Z"}, [])
+    sync_cmd.run(["w1", "--vault", str(v)])
+    out = capsys.readouterr().out
+    assert "Woodland Ghost" in out and "plain text" in out and "two notes share" in out
+
+
 def test_kind_of_matches_a_name_in_another_case_like_the_edge_resolver_does():
     # Obsidian resolves [[woodland ghost]] to the note "Woodland Ghost"; the edge resolves it,
     # so its kind must too, even when the folded key is shared by a look-alike.

@@ -78,6 +78,7 @@ class Action:
     new_text: str | None = None
     suggestion: dict | None = None
     delta: str = ""                     # decision-table suffix (pull cost line)
+    notes: tuple = ()                   # lines printed under the row (a push's flattened links)
 
 
 def link_targets(vault: str) -> dict:
@@ -119,7 +120,8 @@ def _pull_body(old_body: str, description: str | None, desc_type: str | None,
 
 def _push_candidate(old_body: str, idx: dict, world: str, url_fmt: str,
                     vault_only: tuple, gm_owners: dict | None = None,
-                    id_by_file: dict | None = None) -> str:
+                    id_by_file: dict | None = None, ambiguous: set | None = None,
+                    flattened: list | None = None) -> str:
     """The markdown mobRPG should hold as this note's description: authored canon
     prose and nothing else. Vault-only sections are sliced off first so they are
     neither rewritten nor pushed (#146/#147), then machine boilerplate is
@@ -131,7 +133,7 @@ def _push_candidate(old_body: str, idx: dict, world: str, url_fmt: str,
     main = _md.strip_boilerplate(main)
     main = section.drop_empty_sections(main)
     main = suggest.unmask_gm_aliases(main, gm_owners or {})
-    main = links.rewrite_md_for_push(main, idx, world, url_fmt, id_by_file)
+    main = links.rewrite_md_for_push(main, idx, world, url_fmt, id_by_file, ambiguous, flattened)
     return main.strip()
 
 
@@ -259,7 +261,8 @@ def plan(notes, fetch, now: str, skew: float, *,
          url_fmt: str = links.URL_FMT,
          name_by_eid: dict | None = None,
          vault_only: tuple = section.DEFAULT_VAULT_ONLY,
-         gm_owners: dict | None = None) -> list[Action]:
+         gm_owners: dict | None = None,
+         ambiguous: set | None = None) -> list[Action]:
     """Pure decision pass. `notes` yields (path, txt, nd, mtime); `fetch(nd)`
     returns (detail, status) with status in {ok, deleted, unknown}. `now` is the
     stamp to apply; no I/O happens here. `idx`/`world`/`url_fmt` drive the push
@@ -341,8 +344,9 @@ def plan(notes, fetch, now: str, skew: float, *,
             continue
 
         # Behavior 6: push / tie — compare authored prose to the live description.
+        flat: list = []
         cand_md = _push_candidate(old_body, idx, world, url_fmt, vault_only, gm_owners,
-                                     id_by_file)
+                                  id_by_file, ambiguous, flat)
         if _matches_server(cand_md, detail, url_fmt, known_ids):
             # Already in sync — stamp last_synced only (no suggestion).
             actions.append(_stamped(path, ref, "in-sync", txt, nd, old_body, now))
@@ -358,7 +362,11 @@ def plan(notes, fetch, now: str, skew: float, *,
         new_node["pending_ref"] = sug.get("externalRef", "")
         actions.append(Action(path, ref, "push",
                               new_text=_rebuild(txt, new_node, old_body),
-                              suggestion=sug))
+                              suggestion=sug,
+                              notes=tuple(
+                                  f"[[{n}]] goes out as plain text: two notes share that name "
+                                  f"once articles and titles are ignored; link the exact note name"
+                                  for n in dict.fromkeys(flat))))
     return actions
 
 
@@ -439,7 +447,8 @@ def run(argv: list[str]) -> int:
                        idx=idx, world=args.world, url_fmt=links.URL_FMT,
                        name_by_eid=name_by_eid,
                        vault_only=vault_only_sections(args.vault),
-                       gm_owners=gm_owners)
+                       gm_owners=gm_owners,
+                       ambiguous=suggest.node_files(args.vault)[1])
     except client.ApiError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 1
@@ -449,6 +458,8 @@ def run(argv: list[str]) -> int:
     for a in actions:
         counts[a.decision] = counts.get(a.decision, 0) + 1
         print(f"  {a.decision:8} {a.ref}{a.delta}")
+        for line in a.notes:
+            print(f"             {line}")
 
     # A push lands prose in someone ELSE's review queue, under this user's
     # name; --show-body prints exactly what will be sent, so the dry run can
