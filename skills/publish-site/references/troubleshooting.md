@@ -176,6 +176,9 @@ or move the entity to a different folder.
 **Missing type field:**
 Add `type: npc` (or the appropriate type) to the entity's
 frontmatter. See `schema-reference.md` for the list of known types.
+For a working note that should never publish, add `publish: false`
+instead; `manifest never-publish --untyped` previews every such note
+and `--write` marks them (a root `AGENTS.md`/`CLAUDE.md` is skipped).
 
 **Frontmatter that cannot be parsed:**
 Fix the YAML near the line the message names; for an unclosed quote

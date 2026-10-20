@@ -338,7 +338,7 @@ describe('doctor --site', () => {
     assert.match(text, new RegExp(`^Site audit \\(${vault.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\) — 0 errors, \\d+ warnings$`, 'm'));
     assert.match(text, /^FILE_UNTYPED \(1 warning\)$/m);
     assert.match(text, /^ {2}Characters\/NPCs\/Scratchpad\.md — /m);
-    assert.match(text, /^ {6}→ add `type:` to the frontmatter$/m);
+    assert.match(text, /^ {6}→ add `type:` to the frontmatter, or mark it `publish: false` \(manifest never-publish\)$/m);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 

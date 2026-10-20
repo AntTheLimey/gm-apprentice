@@ -126,6 +126,7 @@ function surveyVault(options, deps) {
   const report = scanVaultReport(scanConfig);
   const pagesByRel = new Map(report.pages.map((p) => [vaultRelPath(vaultPath, p.sourcePath), p]));
   const untyped = new Set(report.untyped.map(canonicalPath));
+  const neverPublish = new Set(report.neverPublish.map(canonicalPath));
   const unmappedDirs = new Set(report.unmapped.map((u) => canonicalPath(u.dir)));
   // A file gray-matter could not parse at all never produced a scanner page, and
   // decidePage would read that the same as "no `type:`" (NO_TYPE) — the wrong verdict,
@@ -141,7 +142,10 @@ function surveyVault(options, deps) {
     const parseError = malformedByRel.get(rel);
     verdicts.set(rel, parseError
       ? { bucket: 'exclude', code: 'FILE_UNPARSEABLE', reason: `frontmatter could not be parsed: ${parseError}`, outputPath: null }
-      : decidePage(page || { rel, frontmatter: null }, {
+      : neverPublish.has(rel)
+        // No `type:`, so no page; the note's own `publish: false` is still the answer.
+        ? { bucket: 'exclude', code: 'PUBLISH_FALSE', reason: 'publish: false', outputPath: null }
+        : decidePage(page || { rel, frontmatter: null }, {
         rel,
         publishConfig,
         manifest,
@@ -585,6 +589,7 @@ async function runManifest(options, deps) {
   if (opts.verb === 'diff') return runDiff(opts, d, survey);
   if (opts.verb === 'apply') return runApply(opts, d, survey);
   if (opts.verb === 'publish-played') return runPublishPlayed(opts, d, survey);
+  if (opts.verb === 'never-publish') return require('./never-publish').runNeverPublish(opts, d, survey);
   out(`Unknown manifest command: ${opts.verb}`);
   return 1;
 }
