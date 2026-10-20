@@ -56,8 +56,8 @@ test('a blank label or a missing link is a warning from the reader, naming the e
   const dir = vaultWith({ player_site: { menu_extra: [{ label: 'Fine', link: 'a/index.html' }, { label: 'No link' }, { link: 'b/index.html' }] } });
   const found = warnsOf(readSettings({ vaultPath: dir }).faults, 'player_site.menu_extra');
   assert.equal(found.length, 2);
-  assert.match(found[0], /"No link" has no `link`/);
-  assert.match(found[1], /entry 3 has no `label`/);
+  assert.match(found[0], /"No link" is missing its `link`/);
+  assert.match(found[1], /entry 3 is missing its `label`/);
 });
 
 test('a fallen word the GM wrote that is not out of play is a warning from the reader; a built-in one the GM narrowed away is not', () => {
