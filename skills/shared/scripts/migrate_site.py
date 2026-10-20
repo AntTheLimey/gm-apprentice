@@ -18,7 +18,7 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
 from migrate_vault import vault_system
 from vault_check import (ExplainAll, ask_publish_tool, check_frontmatter, check_gm_leak,
                          check_pc_body, check_sessions, configured_site,
-                         _kept_by_player, vault_settings)
+                         _kept_by_player, semver_below, site_pin, vault_settings)
 from vaultlib import (LEGACY_SETTINGS_FILE, SETTINGS_FILE, PublishToolUnavailable, SettingsUnavailable,
                       forget_settings, google_fonts, set_key, setting_name, settings,
                       settings_default, settings_file, settings_raw, settings_remove, settings_set,
@@ -893,6 +893,23 @@ RETIRED_STEPS = {
 }
 
 
+# The publish tool version that first does each step's work (git history of
+# tools/publish/package.json): a site whose tool is older keeps the step.
+RETIRED_FROM = {
+    "apply-overrides": "1.9.0",
+    "add-theme-toggle": "1.11.38",
+    "add-tohit-calc": "1.21.0",
+    "optimize-images": "1.29.1",
+    "add-crew-stories": "1.46.0",
+}
+# The steps each release offers to retire (a release gate offers a check once).
+RETIRED_IN = {
+    "1.10.63": ("apply-overrides", "add-tohit-calc", "add-theme-toggle",
+                "optimize-images"),
+    "1.10.92": ("add-crew-stories",),
+}
+
+
 def _retired_step(command: str) -> str | None:
     """The retired step a build step runs, or None: `node` and the script's
     path, written any way the step runner reads the same file (`./`, either
@@ -902,10 +919,12 @@ def _retired_step(command: str) -> str | None:
     return m.group(2) if m and m.group(2) in RETIRED_STEPS else None
 
 
-def find_retire_steps(vault: Path) -> list[Item]:
+def find_retire_steps(vault: Path, release: str = "1.10.63") -> list[Item]:
     """1.10.63: a build step the publish tool now does itself is offered for
-    retiring, one choice per step. Only steps the vault's own settings file
-    holds: steps still in the site folder move there first."""
+    retiring, one choice per step `release` added (RETIRED_IN). Only steps
+    the vault's own settings file holds: steps still in the site folder move
+    there first. Only once the site's own tool does the step's work: until
+    then the GM is told, and the stamp waits."""
     try:
         s = settings(vault)
     except SettingsUnavailable:
@@ -913,13 +932,27 @@ def find_retire_steps(vault: Path) -> list[Item]:
     steps = s.get(AFTER_BUILD)
     if s.origins.get(AFTER_BUILD) != "file" or not isinstance(steps, list):
         return []
+    site, _has_config = configured_site(vault)
+    if site is None:
+        return []
+    tool = site_pin(site).version
     items: list[Item] = []
     seen: set[str] = set()
     for command in steps:
         name = _retired_step(str(command))
-        if name is None or name in seen:
+        if name is None or name in seen or name not in RETIRED_IN[release]:
             continue
         seen.add(name)
+        if tool is None or semver_below(tool, RETIRED_FROM[name]):
+            items.append(Item(
+                f"retire-step:{name}", PERSON,
+                [f"{setting_name(vault, AFTER_BUILD)}\t"
+                 f'build step "{command}": the site\'s publish tool is '
+                 f"{tool or 'not installed'}, and does this step's work from "
+                 f"{RETIRED_FROM[name]}; update it (update-pin --site {site}) "
+                 "and the update offers to retire the step"],
+                None, holds_stamp=True))
+            continue
         # Every spelling of the same step goes ("scripts/x.mjs", "./scripts/x.mjs").
         same = [str(c) for c in steps if _retired_step(str(c)) == name]
         had_optimize = (s.origins.get(OPTIMIZE) == "file", s.get(OPTIMIZE))
@@ -980,6 +1013,9 @@ SITE_CHECKS: list[Check] = [
           find_tone_shown),
     Check("retire-steps", "1.10.63", 3, "build steps the publish tool now "
           "does itself", find_retire_steps, choices=("retire-step:=",)),
+    Check("retire-steps-2", "1.10.92", 3, "build steps the publish tool now "
+          "does itself", lambda v: find_retire_steps(v, "1.10.92"),
+          choices=("retire-step:=",)),
     Check("publish-played", "1.10.18", 4, "played sessions are registered",
           find_publish_played, asks_site=True, choices=("played:",)),
     Check("session-recaps", "1.10.18", 4, "recaps kept in session indexes",

@@ -2,6 +2,7 @@
 now does itself (optimize-images, add-tohit-calc, add-theme-toggle,
 apply-overrides), one choice per step the vault has. Against the real tool."""
 
+import json
 import shutil
 import sys
 import tempfile
@@ -15,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import migrate  # noqa: E402
 import migrate_site as ms  # noqa: E402
-from migrate_core import CHOICE, StepFailed  # noqa: E402
+from migrate_core import CHOICE, PERSON, StepFailed  # noqa: E402
 from test_migrate_move import NEEDS_NODE, moved_vault_with_site  # noqa: E402
 from vaultlib import read_stamp, settings, write_stamp  # noqa: E402
 
@@ -27,12 +28,19 @@ DEAD_END = ["node scripts/apply-overrides.mjs", "node scripts/add-star-map.mjs",
             "node scripts/add-theme-toggle.mjs", "node scripts/optimize-images.mjs"]
 
 
-def vault_with_steps(case, steps):
+def vault_with_steps(case, steps, installed="1.46.0"):
+    """A vault whose settings hold `steps`, and a site whose installed publish
+    tool says it is `installed` (None: no tool installed)."""
     root = Path(tempfile.mkdtemp(prefix="mig-retire-"))
     case.addCleanup(shutil.rmtree, root, ignore_errors=True)
     vault, site = root / "Vault", root / "site"
     (vault / "_meta").mkdir(parents=True)
     site.mkdir()
+    if installed is not None:
+        pkg = site / "node_modules" / "gm-apprentice-publish"
+        pkg.mkdir(parents=True)
+        (pkg / "package.json").write_text(json.dumps(
+            {"name": "gm-apprentice-publish", "version": installed}), encoding="utf-8")
     listed = "".join(f"    - {s}\n" for s in steps)
     (vault / "_meta" / "vault-config.yaml").write_text(
         f"version: 1\nplayer_site:\n  folder: {site.as_posix()}\n"
@@ -68,13 +76,36 @@ class RetireStepsTests(unittest.TestCase):
         vault = vault_with_steps(self, [
             "node scripts/add-star-map.mjs", "node scripts/add-crew-stories.mjs",
             "node scripts/add-temporary-alert.mjs"])
-        (item,) = ms.find_retire_steps(vault)
+        (item,) = ms.find_retire_steps(vault, "1.10.92")
         self.assertEqual(item.id, "retire-step:add-crew-stories")
         self.assertIn("1.46.0", item.lines[0])
         self.assertIn('"Crew" to "NPC stories"', item.lines[0])
         item.apply("retire")
         self.assertEqual(steps_of(vault), ["node scripts/add-star-map.mjs",
                                            "node scripts/add-temporary-alert.mjs"])
+
+    def test_each_release_offers_only_its_own_steps(self):
+        vault = vault_with_steps(self, DEAD_END + ["node scripts/add-crew-stories.mjs"])
+        self.assertEqual([i.id for i in ms.find_retire_steps(vault)],
+                         [f"retire-step:{n}" for n in FOUR])
+        self.assertEqual([i.id for i in ms.find_retire_steps(vault, "1.10.92")],
+                         ["retire-step:add-crew-stories"])
+
+    def test_a_step_is_offered_only_once_the_sites_tool_does_its_work(self):
+        steps = DEAD_END + ["node scripts/add-crew-stories.mjs"]
+        vault = vault_with_steps(self, steps, installed="1.21.0")
+        items = ms.find_retire_steps(vault) + ms.find_retire_steps(vault, "1.10.92")
+        kinds = {i.id.split(":")[1]: i.group for i in items}
+        self.assertEqual(kinds, {"apply-overrides": CHOICE, "add-tohit-calc": CHOICE,
+                                 "add-theme-toggle": CHOICE, "optimize-images": PERSON,
+                                 "add-crew-stories": PERSON})
+        crew = next(i for i in items if i.id == "retire-step:add-crew-stories")
+        self.assertTrue(crew.holds_stamp)
+        self.assertIn("1.21.0", crew.lines[0])
+        self.assertIn("from 1.46.0", crew.lines[0])
+        self.assertIn("update-pin --site", crew.lines[0])
+        none = vault_with_steps(self, steps, installed=None)
+        self.assertTrue(all(i.group == PERSON for i in ms.find_retire_steps(none)))
 
     def test_path_spellings_the_step_runner_accepts_are_recognised(self):
         vault = vault_with_steps(self, [
@@ -160,11 +191,11 @@ class RetireStepsTests(unittest.TestCase):
 class RetireStepsUpdateTests(unittest.TestCase):
     """Through the update itself: the stamp waits for the answers, and a second pass asks nothing."""
 
-    def update(self, vault, *args):
+    def update(self, vault, *args, plugin="1.10.63"):
         import contextlib
         import io
         out, err = io.StringIO(), io.StringIO()
-        with mock.patch.object(migrate, "plugin_version", return_value=("1.10.63", "test")), \
+        with mock.patch.object(migrate, "plugin_version", return_value=(plugin, "test")), \
                 contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = migrate.main([str(vault), *args])
         return code, out.getvalue(), err.getvalue()
@@ -202,6 +233,16 @@ class RetireStepsUpdateTests(unittest.TestCase):
         self.assertTrue(settings(vault).get(OPTIMIZE))
         self.assertEqual(read_stamp(vault), "1.10.63")
         self.assertIn("up to date", self.update(vault, "plan")[1])
+
+    def test_a_vault_stamped_past_1_10_63_is_still_offered_add_crew_stories(self):
+        vault, _site = moved_vault_with_site(self)
+        file = vault / "_meta" / "vault-config.yaml"
+        file.write_text(file.read_text(encoding="utf-8")
+                        + "  after_build:\n    - node scripts/add-crew-stories.mjs\n", encoding="utf-8")
+        write_stamp(vault, "1.10.77")
+        code, plan, err = self.update(vault, "plan", plugin="1.10.92")
+        self.assertEqual(code, 0, err)
+        self.assertIn("retire-step:add-crew-stories=<retire or leave>\t", plan)
 
     def test_leave_all_then_a_second_pass_asks_nothing(self):
         vault = self.vault()

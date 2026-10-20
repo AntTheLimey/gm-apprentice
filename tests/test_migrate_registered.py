@@ -26,6 +26,8 @@ REGISTERED = [
     (ms.SITE_CHECKS, "sheet-source", {"choices": ("sheet-source:=",)}),
     (ms.SITE_CHECKS, "retire-steps",
      {"release": "1.10.63", "choices": ("retire-step:=",)}),
+    (ms.SITE_CHECKS, "retire-steps-2",
+     {"release": "1.10.92", "choices": ("retire-step:=",)}),
 ]
 
 
