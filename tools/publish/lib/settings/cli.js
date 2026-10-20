@@ -49,8 +49,15 @@ const reaches = (e, scope) => inScope(e.name, scope) || oldNamesOf(e).some((n) =
 function target(options) {
   const { loadVaultConfig } = require('../config');
   if (options.vault) {
-    const config = options.config ? path.resolve(options.config) : null;
-    return { vaultPath: path.resolve(options.vault), siteConfig: config && fs.existsSync(config) ? loadVaultConfig(config) : {} };
+    const vaultPath = path.resolve(options.vault);
+    // With no --config, the site folder is the one the vault names, as the move finds it.
+    const named = options.config ? null : siteFileNamedBy(vaultPath);
+    const config = options.config ? path.resolve(options.config) : (named && named.exists ? named.file : null);
+    let siteConfig = {};
+    if (config && fs.existsSync(config)) {
+      try { siteConfig = loadVaultConfig(config); } catch (e) { if (options.config) throw e; }
+    }
+    return { vaultPath, siteConfig };
   }
   const config = path.resolve(options.config || './vault.config.json');
   const siteConfig = loadVaultConfig(config);

@@ -64,3 +64,15 @@ test('add of a folder outside the vault says so, not "blank entry" (#373)', () =
   assert.match(err[0], /not a folder inside the vault/);
   assert.doesNotMatch(err[0], /blank/);
 });
+
+test('--vault alone still reads the settings the vault\'s site folder file holds (#373)', () => {
+  const s = scratch('version: 1\nplayer_site:\n  folder: ../site\n');
+  const site = path.join(s.root, 'site');
+  fs.mkdirSync(site);
+  fs.writeFileSync(path.join(site, 'vault.config.json'), JSON.stringify({ vaultPath: '../vault', excludeSections: ['Spoilers'] }));
+  const out = [];
+  const rc = runSettings({ verb: 'check', args: [], vault: s.vault, json: true }, { out: (l) => out.push(l), err: () => {} });
+  const faults = JSON.parse(out.join('\n')).faults;
+  assert.ok(faults.some((f) => f.name === 'excludeSections' && f.level === 'stop'), JSON.stringify(faults));
+  assert.equal(rc, 1);
+});
