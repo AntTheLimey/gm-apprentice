@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.91] — 2026-10-20
+
+Test trim, publish tool side: the Node tests run faster and repeat
+themselves less. No change to the publish tool itself.
+
+### Changed
+
+- Tests that started the command line once per case call the code
+  in-process, with one real command run kept for each; the help
+  smoke test runs its commands in parallel; the settings-write fuzz
+  runs 100 seeded iterations instead of 400; each fixture vault is
+  built once for the every-fixture sweeps.
+- Tests that read CSS text are replaced by real-browser checks of
+  what a reader sees: wide sheet tables scroll inside their panel on
+  a phone, the landing banner stays height-capped, and a hidden GURPS
+  status badge or Connections panel is not displayed.
+- Browser checks fail on CI instead of skipping when no browser is
+  found, and find Chrome on Windows again.
+- Near-duplicate tests are merged into tables with every case kept,
+  about 30 tiny test files are folded together, and tests already
+  covered elsewhere are cut (7,658 tests to 7,540).
+
 ## [1.10.90] — 2026-10-20
 
 Test trim, Python side: the suite runs faster and repeats itself less.
