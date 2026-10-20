@@ -24,7 +24,7 @@ from mobrpg import node
 from mobrpg import section
 from mobrpg.commands import map_cmd
 from mobrpg.commands import submit_batch
-from mobrpg.vault import vault_only_sections
+from mobrpg.vault import vault_only_sections, warn_subfolder_notes
 
 
 def _read(path: str) -> tuple[str, str]:
@@ -247,6 +247,7 @@ def collect_entities(vault, *, chapter="", kind="", only="", limit=0,
                      exclude_kinds=None, only_provenance=None,
                      exclude_provenance=None) -> list[dict]:
     vault = os.path.expanduser(vault)
+    warn_subfolder_notes(vault, map_cmd.FOLDERS)
     exclude_kinds = exclude_kinds or set()
     vault_only = vault_only_sections(vault)
     owners = gm_alias_owners(vault)
