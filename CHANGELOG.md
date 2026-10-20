@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.85] — 2026-10-20
+
+Bug Bash batch 6: Connections and tones. Publish tool 1.43.0.
+
+### Added
+
+- An event's participants and location become Connections: a person's
+  page lists "Participated in" the event, the event lists who took part,
+  its place is "Located at", and each person at the event "Visited" the
+  place. A tie the GM wrote between the same two notes wins. Only
+  published notes and published fields are read, and each link in a
+  run of names gets its own row (#368).
+- The ontology gains `visited` (inverse `visited_by`); `visited_by`
+  written in a note stands as written, with no finding (#368).
+- Tone Words can accept a hostile tie the GM reviewed:
+  `tones.py shown --accept` records it in the publish list, and `shown`
+  then lists only the ties still to review. A tie that changes is
+  listed again. Needs the site's publish tool at 1.43.0 or later
+  (#367).
+
+### Changed
+
+- `located_at` between a place and a person reads "Located with"
+  (#344).
+- The last `sidebar-badge` spans are gone; the publish guide says events
+  are ties and that the map form of `relationships` carries no per-tie
+  fields (#345).
+
 ## [1.10.84] — 2026-10-20
 
 Bug Bash batch 5: update, settings and migrate left-overs.
