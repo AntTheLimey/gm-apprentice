@@ -70,6 +70,9 @@ test('a built PC story page and a built story NPC page carry the links; a plain 
       assert.ok(!html.includes('story-anchor') && !html.includes('story-links.js'), `${name}: untouched`);
     }
     assert.ok(site.exists('js', 'story-links.js'));
+    const landing = site.read('story.html');
+    assert.match(landing, /<h3>NPC stories<\/h3><ul><li><a href="npcs\/marlo\.html">Marlo<\/a><\/li><\/ul>/, 'only the story NPC is listed');
+    assert.ok(!/lone\.html|plain\.html/.test(landing));
     assert.ok(!site.read('story', 'characters', 'ada-moor.html').includes('id="session-3"'));
   } finally { site.cleanup(); }
 });

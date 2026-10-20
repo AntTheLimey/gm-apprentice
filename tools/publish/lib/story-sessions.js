@@ -15,15 +15,23 @@ const anchorFor = (n) => `<a class="story-anchor" href="#session-${n}" aria-labe
 const ENTITIES = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'" };
 const plain = (html) => html.replace(/<[^>]*>/g, '').replace(/&(?:amp|lt|gt|quot|#39);/g, (e) => ENTITIES[e]).trim();
 
-// Returns the page's html with its session headings linked, or the html unchanged.
-function linkSessions(html) {
-  if (typeof html !== 'string' || !html) return html;
+// The session headings that make a page a story: at the first one's level, the first of each
+// number (an id is unique on a page). Fewer than two is not a story.
+function sessionHeadings(html) {
+  if (typeof html !== 'string' || !html) return [];
   const found = [...html.matchAll(HEADING)];
   const level = found.length ? found[0][1] : null;
   const seen = new Set();
-  // Same level as the first, and the first of a number: an id is unique on a page.
   const sessions = found.filter((m) => m[1] === level && !seen.has(m[2]) && seen.add(m[2]));
-  if (sessions.length < 2) return html;
+  return sessions.length < 2 ? [] : sessions;
+}
+
+const isSessionStory = (html) => sessionHeadings(html).length > 0;
+
+// Returns the page's html with its session headings linked, or the html unchanged.
+function linkSessions(html) {
+  const sessions = sessionHeadings(html);
+  if (!sessions.length) return html;
   const chosen = new Set(sessions.map((m) => m.index));
   let first = true;
   const nav = () => {
@@ -45,4 +53,4 @@ function linkSessions(html) {
   });
 }
 
-module.exports = { linkSessions };
+module.exports = { linkSessions, isSessionStory };

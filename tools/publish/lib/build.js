@@ -30,6 +30,7 @@ const fontsLib = require('./fonts');
 const { buildStorySpine, chapterOfSession, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
+const { isSessionStory } = require('./story-sessions');
 const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
 const { hasRealKvId, detectInbox, detectStatusBar } = require('./backend-flags');
@@ -1425,6 +1426,7 @@ function buildSite(options) {
         break;
       }
       case 'npc':
+        if (fx === liveFx && isSessionStory(processed.html)) npcStories.push({ title: page.displayTitle, outputPath: page.outputPath });
         html = npcTemplate(page, processed, navFor, config, imageMap, {
           pages, linkMap, publishConfig,
         });
@@ -1591,6 +1593,8 @@ function buildSite(options) {
     if (stale.length) throw new Error(`${stale.join(', ')} ${stale.length === 1 ? 'is' : 'are'} on the site but a full build would no longer write ${stale.length === 1 ? 'it' : 'them'}. Run a full build (gm-apprentice-publish build --site ${gm ? 'gm' : 'player'}); a sheets-only build deletes nothing. Nothing was written.`);
   }
 
+  // Published NPC pages whose body runs session by session (story-sessions.js), in page order.
+  const npcStories = [];
   for (const page of pages) {
     try {
       if (getsNoPage(page)) continue;
@@ -1914,8 +1918,8 @@ function buildSite(options) {
       emit(unit.outputPath, renderStoryUnit(unit, config, publishConfig, navFor), `  wrote ${unit.outputPath}`);
     }
     if (live) characterStories = buildCharacterStories();
-    if (spine.length || characterStories.length) {
-      emit('story.html', storyLanding(spine, characterStories, config, publishConfig, navFor), '  wrote story.html');
+    if (spine.length || characterStories.length || npcStories.length) {
+      emit('story.html', storyLanding(spine, characterStories, config, publishConfig, navFor, npcStories), '  wrote story.html');
     }
 
     // Landing page

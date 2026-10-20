@@ -879,6 +879,12 @@ RETIRED_STEPS = {
         "the publish tool already puts a light/dark button on every page, so "
         "each page has two. Retire it and the second button goes; a reader's "
         "saved light/dark choice may be forgotten once"),
+    "add-crew-stories": (
+        "the publish tool (1.46.0 on) already links every session on a story "
+        "page (an id, a Sessions bar and a copy-link icon) and lists every "
+        "NPC whose page runs session by session on the Story page. Retire it "
+        "and the list's heading changes from \"Crew\" to \"NPC stories\"; "
+        "the sessions look the same"),
     "optimize-images": (
         "the publish tool shrinks pictures to WebP itself, the same way, and "
         "keeps them between builds so a build only shrinks new pictures. "
