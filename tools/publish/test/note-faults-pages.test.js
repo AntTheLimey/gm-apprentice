@@ -526,7 +526,7 @@ describe('a labelled link never prints its target, whatever prints the field', (
     });
     fromBuild(configPath);
     const read = (...parts) => fs.readFileSync(path.join(root, 'docs', ...parts), 'utf8');
-    assert.match(read('factions', 'guild.html'), /<div class="members"><h3>Members<\/h3><ul><li><a href="[^"]*bo-pike\.html">Bo Pike<\/a><\/li>/);
+    assert.match(read('factions', 'guild.html'), /<h4>Has member<\/h4>\s*<ul>\s*<li><a href="[^"]*bo-pike\.html">Bo Pike<\/a>/);
     // The shed is filed under its parent on the places index, not as a place of its own region.
     assert.match(read('locations', 'index.html'), /loc-children[^]*shed\.html/);
     assert.match(read('chapters', 'chapter-1.html'), /session-1\.html/);

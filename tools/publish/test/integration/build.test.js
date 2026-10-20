@@ -590,10 +590,11 @@ describe('build integration', () => {
       assert.ok(html.includes('Guild Master'));
     });
 
-    it('renders member rollup with both Guild Master and Guild Member', () => {
+    it('lists both Guild Master and Guild Member under Connections, and has no Members block', () => {
       const factionPath = path.join(outputDir, 'docs', 'factions', 'test-guild.html');
       const html = fs.readFileSync(factionPath, 'utf-8');
-      assert.ok(html.includes('Members'));
+      assert.ok(html.includes('<h4>Has member</h4>'));
+      assert.ok(!html.includes('<h3>Members</h3>'));
       assert.ok(html.includes('Guild Master'));
       assert.ok(html.includes('Guild Member'));
     });

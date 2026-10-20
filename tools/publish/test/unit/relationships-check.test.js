@@ -160,6 +160,23 @@ test('a symmetric tie on both notes is reported on the second note by rel order'
   assert.deepStrictEqual([f.kind, f.fix, f.edgeIndex, f.form, f.mobrpg], ['mirrored', { certain: true }, 0, 'list', false]);
 });
 
+test('a one-way tie written on both notes is a question, not a fix; a tie and its inverse, or two different ties, are not', () => {
+  const dir = vault({
+    'A.md': note('faction', rels(edge('member_of', 'B'))),
+    'B.md': note('faction', rels(edge('member_of', 'A'))),
+  });
+  assert.deepStrictEqual(rowsOf(dir), ["WARNING\tB.md:4\t'member_of' with A is written on both notes, each saying the other way round: which one is right?"]);
+  const [f] = findings(dir);
+  assert.deepStrictEqual([f.kind, f.fix], ['opposed', { certain: false }]);
+  const fine = vault({
+    'C.md': note('npc', rels(edge('member_of', 'D'))),
+    'D.md': note('faction', rels(edge('has_member', 'C'))),
+    'E.md': note('npc', rels(edge('member_of', 'F'))),
+    'F.md': note('faction', rels(edge('allied_with', 'E', ['bidirectional: true']))),
+  });
+  assert.deepStrictEqual(ofKind(fine, 'opposed'), []);
+});
+
 test('a mirrored edge whose other half is outside the folder is still found and reported on the in-scope note', () => {
   const files = {
     'NPCs/A.md': note('npc', rels(edge('knows', 'B', ['bidirectional: true']))),

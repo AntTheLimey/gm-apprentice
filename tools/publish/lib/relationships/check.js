@@ -18,7 +18,7 @@
 const { vaultVocabulary } = require('./words');
 
 const KIND_ORDER = [
-  'off-vocabulary', 'tone', 'mirrored', 'same-fact', 'bidirectional', 'strength', 'place-missing-tie',
+  'off-vocabulary', 'tone', 'mirrored', 'opposed', 'same-fact', 'bidirectional', 'strength', 'place-missing-tie',
   'place-missing-field', 'place-disagrees', 'not-an-edge', 'genre-subset', 'childless-container', 'hub', 'unreadable',
 ];
 const MAP_HINT = ' (map it via shared/relationship-normalization.md)';
@@ -198,6 +198,27 @@ function check(model, ontology, { vaultPath } = {}) {
       const elsewhere = reportOn === a ? b : a;
       for (const m of tiesOf(reportOn.rel, e.type, elsewhere.rel)) {
         add(reportOn, m, 'WARNING', 'mirrored', m.line, `'${e.type}' with ${elsewhere.name} is stored on both notes; keep one`, { certain: true });
+      }
+    }
+  }
+  // A one-way tie written on both notes says each is the other's `member_of`, `serves`, ...: one note has it
+  // backwards. Which one is the GM's to say, so it is a question, never a fix. Reported as `mirrored` is.
+  const opposed = new Set();
+  for (const note of notes) {
+    for (const e of own(note)) {
+      if (!e.targetRel || e.targetRel === note.rel || !vocab.has(e.type) || symmetric.has(e.type)) continue;
+      const other = byRel.get(e.targetRel);
+      if (!tiesOf(other.rel, e.type, note.rel).length) continue;
+      const [a, b] = note.rel < other.rel ? [note, other] : [other, note];
+      const id = `${a.rel}\u0000${b.rel}\u0000${e.type}`;
+      if (opposed.has(id)) continue;
+      opposed.add(id);
+      const reportOn = b.inScope ? b : a.inScope ? a : null;
+      if (!reportOn) continue;
+      const elsewhere = reportOn === a ? b : a;
+      for (const m of tiesOf(reportOn.rel, e.type, elsewhere.rel)) {
+        add(reportOn, m, 'WARNING', 'opposed', m.line,
+          `'${e.type}' with ${elsewhere.name} is written on both notes, each saying the other way round: which one is right?`, { certain: false });
       }
     }
   }
