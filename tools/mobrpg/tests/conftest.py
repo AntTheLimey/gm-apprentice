@@ -37,6 +37,9 @@ def _blocked(*args, **kwargs):
 def _no_network(monkeypatch):
     monkeypatch.setattr(client, "_request", _blocked)
     monkeypatch.setattr(client, "get_access_token", _blocked)
+    # images' HEAD size probe would otherwise reach a real host; None = "size unknown".
+    from mobrpg.commands import images
+    monkeypatch.setattr(images, "_remote_size", lambda url: None)
 
 
 @pytest.fixture
