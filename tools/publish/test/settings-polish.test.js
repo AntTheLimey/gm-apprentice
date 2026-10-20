@@ -131,3 +131,13 @@ test('the docs say build steps run as plain shell commands without npm\'s variab
   const doc = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'docs', 'site-settings.md'), 'utf8');
   assert.match(doc, /plain shell commands[^.]*without npm's variables/);
 });
+
+test('a key can be added after a |+ block scalar: its trailing blank lines are content and stay (#380)', () => {
+  const { applyChanges } = require('../lib/settings/write');
+  const s = scratch('version: 1\nplayer_site:\n  title: T\n  footer: |+\n    hello\n\n');
+  applyChanges(s.vault, [{ op: 'set', name: 'player_site.host', value: 'github-pages' }]);
+  const YAML = require('yaml');
+  const back = YAML.parse(fs.readFileSync(s.yaml, 'utf8'));
+  assert.equal(back.player_site.footer, 'hello\n\n');
+  assert.equal(back.player_site.host, 'github-pages');
+});

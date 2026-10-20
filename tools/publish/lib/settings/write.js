@@ -81,6 +81,8 @@ function endOf(node, text) {
   // A block scalar's range runs through its last line break; the content ends before it.
   if (isScalar(node) && (node.type === 'BLOCK_LITERAL' || node.type === 'BLOCK_FOLDED')) {
     let end = node.range[1];
+    // A keep-chomped one (`|+`) holds its trailing blank lines as content: it ends at its last line break, not before them.
+    if (/^[|>][^\s#]*\+/.test(text.slice(node.range[0], node.range[0] + 6)) && end > node.range[0]) return end - 1;
     while (end > node.range[0] && (text[end - 1] === '\n' || text[end - 1] === '\r')) end--;
     return end;
   }
