@@ -177,7 +177,7 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {
   if (wiki) return { kind: 'none', href: null };
   // The address of a published page, spelled as the build writes it, stands.
   const address = parts.join('/').toLowerCase();
-  if (Object.values(linkMap).some((p) => String(p).toLowerCase() === address)) return { kind: 'site', href: text.replace(/^\.\//, '') };
+  if (Object.values(linkMap).some((p) => pathParts(String(p)).join('/').toLowerCase() === address)) return { kind: 'site', href: text.replace(/^\.\//, '') };
   // Anything else: if ANY part of the path is the name, file name, title, alias or slug of a hidden note, it is dropped.
   const hiddenNames = HIDDEN_NAMES.get(linkMap) || new Set();
   const hiddenSlugs = HIDDEN_SLUGS.get(linkMap) || new Set();

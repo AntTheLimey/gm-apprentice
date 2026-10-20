@@ -1162,6 +1162,14 @@ test('a folder setting that would stop the build blocks the move and writes noth
   assert.deepEqual(hashes(s.root), before);
 });
 
+test('an absolute output folder outside the site folder blocks the move too (#386)', () => {
+  const s = scratch(old('  mode: player\n'), { site: { vaultPath: './Vault', outputDir: path.join(os.tmpdir(), 'somewhere-else') } });
+  const before = hashes(s.root);
+  const r = cliMove({ vault: s.vault, config: s.config });
+  assert.equal(r.rc, 1);
+  assert.deepEqual(hashes(s.root), before);
+});
+
 // ---- The site's build steps: package.json's prebuild and postbuild become the vault's before_build and after_build ----
 
 const sitePackage = (s) => path.join(path.dirname(s.config), 'package.json');
@@ -1484,4 +1492,14 @@ test('a moved vault named through a symlink still takes its site file\'s setting
   const plan = planMove({ vaultPath: link, siteConfigPath: s.config });
   assert.equal(plan.ok, true);
   assert.ok(plan.files.write.includes(s.config) || plan.files.write.some((f) => fs.realpathSync(f) === fs.realpathSync(s.config)), 'the site file is mended');
+});
+
+test('an empty after_build written in the vault is replaced by the site\'s postbuild, and the report says so (#386)', () => {
+  const s = STEP_LAYOUTS.new();
+  writeNewConfig(s.vault, { version: 1, player_site: { after_build: [] } });
+  writePackage(s, { postbuild: 'node a.js' });
+  const r = cliMove({ vault: s.vault, config: s.config });
+  assert.equal(r.rc, 0, r.err.join('\n'));
+  assert.deepEqual(readSettings({ vaultPath: s.vault }).values.player_site.after_build, ['node a.js']);
+  assert.ok(r.data.lines.includes('Your empty after_build was replaced by the site\'s postbuild: node a.js'), r.data.lines.join('\n'));
 });

@@ -357,6 +357,11 @@ function planSteps(siteDir, held, { siteToolUpdated = false, pinCheck: ask = pin
       const some = `${commands.length} ${script} step${commands.length === 1 ? '' : 's'}`;
       const them = commands.length === 1 ? 'it' : 'them';
       say(out, `The site's ${some} moved to \`${e.name}\`; the tool now runs ${them}.`, `The site's ${some} ${commands.length === 1 ? 'moves' : 'move'} to \`${e.name}\`; the tool will run ${them}.`);
+      // The vault wrote an empty list on purpose; the site's script replaces it, and the report says so.
+      if (mine.set && Array.isArray(mine.value)) {
+        const was = `Your empty ${e.name.split('.').pop()} was replaced by the site's ${script}: ${commands.join(' && ')}`;
+        say(out, was, was.replace('was replaced', 'will be replaced'));
+      }
     } else if (isDeepStrictEqual(commands, mine.value)) {
       out.removed.push(script);
       const same = `The site's ${script} in package.json holds the same steps as \`${e.name}\`, so it was removed from package.json; the tool runs the vault's.`;
@@ -506,7 +511,7 @@ function planMove(options, deps = {}) {
   try {
     return planMoveNow(options, deps);
   } catch (e) {
-    if (/alias/i.test(String(e.message)) || String(e.name).startsWith('YAML')) {
+    if (String(e.name).startsWith('YAML')) {
       return { ok: false, lines: [], blockers: [`${OLD_FILE} frontmatter is not valid YAML: ${firstLine(e.message)}`], files: { write: [], remove: [] } };
     }
     throw e;
@@ -651,8 +656,10 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
     ? planCarry(site, (name) => {
       const origin = old.origins[name];
       return { set: origin !== undefined && origin !== 'default' && origin !== 'site-file', value: getPath(old.values, name.split('.')) };
-    }, undefined, { holdKeys: keysHeld })
+    }, path.dirname(siteFile), { holdKeys: keysHeld })
     : { carried: [], dropped: [], lines: [], values: {}, changes: [] };
+  // A folder value the build would stop on (an output folder outside the site folder) is a blocker here as on a moved vault.
+  if (carry.blockers) blockers.push(...carry.blockers);
   for (const [name, value] of Object.entries(carry.values)) if (!Object.prototype.hasOwnProperty.call(planned, name)) planned[name] = value;
   // The site's build steps, from its package.json (the same folder as the site file).
   const stepsPlan = siteFile

@@ -478,3 +478,22 @@ def test_setting_or_builtin_says_when_a_bad_value_fell_back_to_the_default(
     assert vaultlib.setting_or_builtin(vault, "vault.name_match") == \
         vaultlib.settings_default("vault.name_match")
     assert capsys.readouterr().err == ""
+
+
+def test_crash_names_a_typeerror_not_the_file_path(tmp_path, monkeypatch):
+    vault = make_vault(tmp_path, "publish:\n  site: true")
+    trace = (b"/Users/gm/tool/lib/settings/read.js:212\n  x.y.z;\n    ^\n\n"
+             b"TypeError: Cannot read properties of undefined\n    at readNew\n"
+             b"\nNode.js v25.5.0\n")
+    monkeypatch.setattr(vaultlib.subprocess, "run", stub_run(trace))
+    with pytest.raises(vaultlib.SettingsUnavailable) as e:
+        vaultlib.settings(vault)
+    assert "TypeError: Cannot read properties" in str(e.value)
+    assert "read.js" not in str(e.value)
+
+
+def test_target_args_keep_the_tool_from_reading_the_site_file_itself(tmp_path):
+    vault = tmp_path / "v"
+    assert "--no-site-file" in vaultlib._target_args(vault)
+    with_site = vaultlib._target_args(vault, tmp_path / "s" / "vault.config.json")
+    assert "--no-site-file" not in with_site and "--config" in with_site
