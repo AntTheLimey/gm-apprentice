@@ -1,4 +1,4 @@
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 require('./helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
@@ -41,8 +41,13 @@ const FILES = (extra) => ({
   'Locations/Hidden.md': '---\ntype: location\npublish: false\n---\nNobody knows.\n',
 });
 
+// The default build, made once for the tests that only read it.
+let defaultSite = null;
+const defaultBuild = () => defaultSite || (defaultSite = buildVault(FILES('')));
+after(() => { if (defaultSite) fs.rmSync(defaultSite.root, { recursive: true, force: true }); });
+
 test('the build writes one card per published page and marks every page', () => {
-  const { read, root } = buildVault(FILES(''));
+  const { read, root } = defaultBuild();
   const cards = JSON.parse(read('previews.json'));
   assert.deepStrictEqual(Object.keys(cards).sort(), ['characters/npcs/hallam.html', 'locations/north-gate.html']);
   assert.deepStrictEqual(cards['characters/npcs/hallam.html'], { t: 'Hallam', k: 'NPC', f: [['Role', 'Warden']], x: 'Keeper of the gate.' });
@@ -50,22 +55,19 @@ test('the build writes one card per published page and marks every page', () => 
   assert.match(html, /<main class="content"[^>]* data-previews="on">/);
   assert.match(html, /<script src="\.\.\/js\/previews\.js"><\/script>/);
   assert.ok(fs.existsSync(path.join(root, 'docs', 'js', 'previews.js')));
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 test('the 404 page carries the attribute and the script like every other page', () => {
-  const { read, root } = buildVault(FILES(''));
+  const { read } = defaultBuild();
   const html = read('404.html');
   assert.match(html, /<main class="content" data-previews="on">/);
   assert.match(html, /<script src="\/js\/previews\.js"><\/script>/);
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 test('nothing hidden reaches the cards', () => {
-  const { read, root } = buildVault(FILES(''));
+  const { read } = defaultBuild();
   const text = read('previews.json');
   for (const hidden of ['killer', 'He did it', 'Nobody knows', 'Hidden']) assert.ok(!text.includes(hidden), hidden);
-  fs.rmSync(root, { recursive: true, force: true });
 });
 
 test('desktop marks the pages desktop', () => {
