@@ -959,22 +959,71 @@ class PublishToolTooOld(PublishToolUnavailable):
     is the first version that has it."""
 
 
+class PublishToolTimedOut(PublishToolUnavailable):
+    """The tool did not answer in time, and was stopped."""
+
+
+# The `lines` processes left open at once. Each is a Node holding the
+# tool in memory; a run that meets many sites' tools (a test run) closes
+# the one asked least recently. Every open one is closed at exit, whoever
+# made it (#473: one left open outlived its run).
+MAX_OPEN_LINES = 4
+_OPEN_LINES: list["PublishLines"] = []
+
+
+def _stop_process(proc: subprocess.Popen[str]) -> None:
+    """End a `lines` process: its stdin closed, then killed if it has not
+    gone in two seconds (it ends at once on a closed stdin)."""
+    try:
+        if proc.stdin is not None:
+            proc.stdin.close()
+        proc.wait(timeout=2)
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        proc.kill()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
+    finally:
+        if proc.stdout is not None:
+            proc.stdout.close()
+
+
+def _tool_stamp(tool: Path) -> tuple[str, int, int] | None:
+    """Which tool file a path is now: a repin swaps it under the same path."""
+    try:
+        st = tool.stat()
+        return (str(tool.resolve()), st.st_mtime_ns, st.st_size)
+    except OSError:
+        return None
+
+
 class PublishLines:
     """A `gm-publish lines` process: one JSON question per line."""
 
     def __init__(self, tool: Path = PUBLISH_TOOL) -> None:
         self.tool = tool
         self._proc: subprocess.Popen[str] | None = None
+        self._stamp: tuple[str, int, int] | None = None
+        # Whether this tool answered that it has no `command` op.
+        self._no_command = False
 
     def _process(self) -> subprocess.Popen[str]:
         if self._proc is not None and self._proc.poll() is None:
-            return self._proc
+            if _tool_stamp(self.tool) == self._stamp:
+                if self in _OPEN_LINES and _OPEN_LINES[-1] is not self:
+                    _OPEN_LINES.remove(self)
+                    _OPEN_LINES.append(self)
+                return self._proc
+            # The tool was replaced (update-pin): the open one is the old.
+            self.close()
         node = shutil.which("node")
         if not node:
             raise PublishToolUnavailable("node is not on PATH")
         if not self.tool.is_file():
             raise PublishToolUnavailable(
                 f"the publish tool is not at {self.tool.as_posix()}")
+        stamp = _tool_stamp(self.tool)
         try:
             self._proc = subprocess.Popen(
                 [node, str(self.tool), "lines"], stdin=subprocess.PIPE,
@@ -983,6 +1032,14 @@ class PublishLines:
         except OSError as e:
             raise PublishToolUnavailable(
                 f"node could not run ({e.__class__.__name__})") from e
+        if stamp != self._stamp:
+            self._no_command = False
+        self._stamp = stamp
+        if self in _OPEN_LINES:
+            _OPEN_LINES.remove(self)
+        _OPEN_LINES.append(self)
+        while len(_OPEN_LINES) > MAX_OPEN_LINES:
+            _OPEN_LINES[0].close()
         return self._proc
 
     def run_once(self, args: list[str]) -> str:
@@ -1013,6 +1070,9 @@ class PublishLines:
         return done.stdout.decode("utf-8", "replace")
 
     def ask(self, request: dict[str, Any]) -> dict[str, Any]:
+        return self._ask(request, PUBLISH_LINES_TIMEOUT)
+
+    def _ask(self, request: dict[str, Any], timeout: float) -> dict[str, Any]:
         proc = self._process()
         assert proc.stdin is not None and proc.stdout is not None
         # A tool that hangs is killed, which ends the read below.
@@ -1022,7 +1082,8 @@ class PublishLines:
             timed_out.append(True)
             proc.kill()
 
-        watchdog = threading.Timer(PUBLISH_LINES_TIMEOUT, give_up)
+        late = f"the publish tool did not answer within {timeout:g}s"
+        watchdog = threading.Timer(timeout, give_up)
         watchdog.daemon = True
         watchdog.start()
         try:
@@ -1031,18 +1092,16 @@ class PublishLines:
             line = proc.stdout.readline()
         except (OSError, ValueError) as e:
             self.close()
+            if timed_out:
+                raise PublishToolTimedOut(late) from e
             raise PublishToolUnavailable(
-                f"the publish tool did not answer within "
-                f"{PUBLISH_LINES_TIMEOUT}s" if timed_out else
                 f"the publish tool stopped answering "
                 f"({e.__class__.__name__})") from e
         finally:
             watchdog.cancel()
-        if not line and timed_out:
+        if timed_out:
             self.close()
-            raise PublishToolUnavailable(
-                f"the publish tool did not answer within "
-                f"{PUBLISH_LINES_TIMEOUT}s")
+            raise PublishToolTimedOut(late)
         if not line:
             self.close()
             raise PublishToolUnavailable(
@@ -1053,8 +1112,6 @@ class PublishLines:
         except ValueError as e:
             self.close()
             raise PublishToolUnavailable(
-                f"the publish tool did not answer within "
-                f"{PUBLISH_LINES_TIMEOUT}s" if timed_out else
                 "the publish tool did not answer the question (a tool "
                 "older than 1.12.1 has no `lines` command)") from e
         if not isinstance(answer, dict) or "error" in answer:
@@ -1062,19 +1119,61 @@ class PublishLines:
             raise PublishToolUnavailable(f"the publish tool refused: {why}")
         return answer
 
+    def command(self, args: list[str], timeout: float = PUBLISH_LINES_TIMEOUT
+                ) -> tuple[int, str, str] | None:
+        """`gm-publish <args>` (`settings ...` or `explain --all ...`) run
+        inside this process, from this folder with this environment: (exit
+        code, stdout, stderr), as a run of its own would give them. None when
+        this process cannot run it (a tool older than the `command` op, or
+        one that will not start): run the command on its own then, and its
+        own failure is the one to report. Raises PublishToolTimedOut."""
+        if self._no_command:
+            return None
+        request = {"op": "command", "text": "", "args": args,
+                   "cwd": os.getcwd(), "env": dict(os.environ)}
+        try:
+            answer = self._ask(request, timeout)
+        except PublishToolTimedOut:
+            raise
+        except PublishToolUnavailable as e:
+            # A tool before the op says "unknown op", or "text must be a
+            # string" when it reads `text` first.
+            if "unknown op" in str(e) or "text must be a string" in str(e):
+                self._no_command = True
+            return None
+        rc, out, err = (answer.get("rc"), answer.get("stdout"),
+                        answer.get("stderr"))
+        if not (isinstance(rc, int) and isinstance(out, str)
+                and isinstance(err, str)):
+            return None
+        return rc, out, err
+
     def close(self) -> None:
         proc, self._proc = self._proc, None
-        if proc is None:
-            return
+        if self in _OPEN_LINES:
+            _OPEN_LINES.remove(self)
+        if proc is not None:
+            _stop_process(proc)
+
+
+def run_tool(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
+    """`subprocess.run(cmd, **kwargs)` for a publish tool command
+    `[node, tool, *args]`, run with `text=True`. `settings` and
+    `explain --all` are answered by the tool's kept-open `lines` process
+    (`PublishLines.command`): Node starts once a run, not once a question.
+    A tool that cannot answer there is run on its own, as before. A late
+    answer raises subprocess.TimeoutExpired, as `subprocess.run` does."""
+    args = [str(a) for a in cmd[2:]]
+    if args[:1] == ["settings"] or args[:2] == ["explain", "--all"]:
+        timeout = kwargs.get("timeout") or PUBLISH_LINES_TIMEOUT
         try:
-            if proc.stdin is not None:
-                proc.stdin.close()
-            proc.wait(timeout=5)
-        except (OSError, subprocess.TimeoutExpired):
-            proc.kill()
-        finally:
-            if proc.stdout is not None:
-                proc.stdout.close()
+            ran = lines_for(Path(cmd[1])).command(args, timeout)
+        except PublishToolTimedOut as e:
+            raise subprocess.TimeoutExpired(cmd, timeout) from e
+        if ran is not None:
+            return subprocess.CompletedProcess(cmd, *ran)
+    stdin = kwargs.pop("stdin", subprocess.DEVNULL)
+    return subprocess.run(cmd, stdin=stdin, **kwargs)
 
 
 # The process every question below goes to. The plugin's own tool until a
@@ -1088,13 +1187,19 @@ def use_publish_tool(tool: Path) -> None:
     """Ask `tool` from here on: the publish tool a vault's site builds
     with, whose answer is the one that counts for that vault."""
     global PUBLISH_LINES
+    PUBLISH_LINES = lines_for(tool)
+
+
+def lines_for(tool: Path) -> PublishLines:
+    """The one `lines` process of the run for `tool`."""
     if tool not in _LINES_BY_TOOL:
         _LINES_BY_TOOL[tool] = PublishLines(tool)
-    PUBLISH_LINES = _LINES_BY_TOOL[tool]
+    return _LINES_BY_TOOL[tool]
 
 
 def _close_publish_tools() -> None:
-    for lines in set(_LINES_BY_TOOL.values()) | {PUBLISH_LINES}:
+    for lines in set(_LINES_BY_TOOL.values()) | {PUBLISH_LINES} | set(
+            _OPEN_LINES):
         lines.close()
 
 
@@ -1315,13 +1420,13 @@ def _cut(text: str) -> str:
     return text if len(text) <= _REASON_LIMIT else text[:_REASON_LIMIT - 1] + "…"
 
 
-def _stderr_reason(raw: bytes) -> tuple[str, bool]:
+def _stderr_reason(raw: str) -> tuple[str, bool]:
     """(the reason, whether it is the command's own). The command's own
     complaint is made only of `Error: ...` lines, and its reason is the last
     one. Anything else (a Node stack trace, a missing module) is a tool that
     did not start: the first line that names an error (`Error`, `TypeError`, ...), else the first
     line."""
-    lines = [ln.strip() for ln in raw.decode("utf-8", "replace").splitlines()
+    lines = [ln.strip() for ln in raw.splitlines()
              if ln.strip()]
     if not lines:
         return "", False
@@ -1361,10 +1466,10 @@ def _run_settings(args: list[str], *, refusable: bool = False,
     if not PUBLISH_TOOL.is_file():
         raise fail(f"the publish tool is not at {PUBLISH_TOOL.as_posix()}")
     try:
-        done = subprocess.run(
+        done = run_tool(
             [node, str(PUBLISH_TOOL), "settings", *args, "--json"],
-            capture_output=True, stdin=subprocess.DEVNULL,
-            timeout=PUBLISH_LINES_TIMEOUT)
+            capture_output=True, stdin=subprocess.DEVNULL, text=True,
+            encoding="utf-8", errors="replace", timeout=PUBLISH_LINES_TIMEOUT)
     except subprocess.TimeoutExpired as e:
         raise fail(f"the publish tool did not answer within "
                    f"{PUBLISH_LINES_TIMEOUT}s") from e
@@ -1375,7 +1480,7 @@ def _run_settings(args: list[str], *, refusable: bool = False,
             # A blocked move exits 1 and still answers in JSON, with its
             # blockers; that answer is the reason.
             try:
-                blocked = json.loads(done.stdout.decode("utf-8", "replace"))
+                blocked = json.loads(done.stdout)
             except ValueError:
                 blocked = None
             if isinstance(blocked, dict) and blocked.get("ok") is False:
@@ -1391,7 +1496,7 @@ def _run_settings(args: list[str], *, refusable: bool = False,
             raise SettingsUnavailable(started)
         raise fail(started)
     try:
-        return json.loads(done.stdout.decode("utf-8", "replace"))
+        return json.loads(done.stdout)
     except ValueError as e:
         raise fail("the publish tool did not answer in JSON") from e
 
@@ -1424,7 +1529,7 @@ def run_relationships(vault: Path, args: list[str]) -> Any:
     except OSError as e:
         raise fail(f"node could not run ({e.__class__.__name__})") from e
     if done.returncode != 0:
-        reason, own = _stderr_reason(done.stderr)
+        reason, own = _stderr_reason(done.stderr.decode("utf-8", "replace"))
         if own:
             raise PublishToolUnavailable(reason)
         raise fail(reason or f"exit code {done.returncode}")

@@ -88,6 +88,7 @@ TOO_OLD_ROW = ("ERROR\t(vault)\t{check} did not run: the site's publish tool "
 # Found once, before any test patches `shutil.which` or `subprocess.run`.
 REAL_NODE = shutil.which("node")
 REAL_RUN = subprocess.run
+REAL_RUN_TOOL = vc.vaultlib.run_tool
 
 
 def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
@@ -204,8 +205,15 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
             return REAL_RUN(cmd, **kwargs)
         return stand_in(cmd, **kwargs)
 
+    def routed_tool(cmd, **kwargs):
+        # The same, for a question the kept-open process answers.
+        if len(cmd) > 2 and cmd[2] == "settings":
+            return REAL_RUN_TOOL(cmd, **kwargs)
+        return stand_in(cmd, **kwargs)
+
     patches = [mock.patch.object(vc.shutil, "which", return_value=node),
-               mock.patch.object(vc.subprocess, "run", routed)]
+               mock.patch.object(vc.subprocess, "run", routed),
+               mock.patch.object(vc.vaultlib, "run_tool", routed_tool)]
     for patch in patches:
         patch.start()
         case.addCleanup(patch.stop)
@@ -224,7 +232,13 @@ def no_other_tool_run():
         others.append(cmd)
         return subprocess.CompletedProcess(cmd, 1, "", "")
 
-    with mock.patch.object(vc.subprocess, "run", run):
+    def run_tool(cmd, **kwargs):
+        if len(cmd) > 2 and cmd[2] == "settings":
+            return REAL_RUN_TOOL(cmd, **kwargs)
+        return run(cmd, **kwargs)
+
+    with mock.patch.object(vc.subprocess, "run", run), \
+            mock.patch.object(vc.vaultlib, "run_tool", run_tool):
         yield others
 
 
@@ -4595,13 +4609,13 @@ class GmLeakSiteExcludeSectionsTests(unittest.TestCase):
         vault = self.vault(vault_list=["GM Notes"])
         calls = stub_publish_tool(self, vault, exclude_sections=["GM Notes"])
         runs = []
-        real = vaultlib.subprocess.run
+        real = vaultlib.run_tool
 
         def counting(cmd, **kw):
             runs.append(cmd)
             return real(cmd, **kw)
 
-        with mock.patch.object(vaultlib.subprocess, "run", counting):
+        with mock.patch.object(vaultlib, "run_tool", counting):
             explain = vc.ExplainAll(vault)
             vc.check_gm_leak(vault, None, explain=explain)
             vc.check_pc_body(vault, explain=explain)
@@ -5067,7 +5081,7 @@ class GmLeakExcludedFolderTests(unittest.TestCase):
         (vault / "Characters/NPCs").mkdir(parents=True)
         (vault / "Characters/NPCs/Hero.md").write_text(self.NOTE,
                                                        encoding="utf-8")
-        real = vc.subprocess.run
+        real = vc.vaultlib.run_tool
 
         def run(cmd, **kw):
             done = real(cmd, **kw)
@@ -5078,7 +5092,7 @@ class GmLeakExcludedFolderTests(unittest.TestCase):
             return subprocess.CompletedProcess(
                 cmd, done.returncode, json.dumps(answer), done.stderr)
 
-        with mock.patch.object(vc.subprocess, "run", run):
+        with mock.patch.object(vc.vaultlib, "run_tool", run):
             return vc.check_gm_leak(vault, None)
 
     def test_an_answer_without_pages_still_reports(self):
