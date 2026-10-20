@@ -503,7 +503,7 @@ function planMove(options, deps = {}) {
   try {
     return planMoveNow(options, deps);
   } catch (e) {
-    if (/alias/i.test(String(e.message)) || String(e.name).startsWith('YAML')) {
+    if (String(e.name).startsWith('YAML')) {
       return { ok: false, lines: [], blockers: [`${OLD_FILE} frontmatter is not valid YAML: ${firstLine(e.message)}`], files: { write: [], remove: [] } };
     }
     throw e;
