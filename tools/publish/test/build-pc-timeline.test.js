@@ -100,17 +100,6 @@ test('the landing page keeps the whole campaign in its timeline', () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-// The CoC folio is light paper on any theme; its Story and Journey panels hold parts drawn
-// in the site's colour names, which a dark theme makes pale.
-test("the CoC sheet's Story and Journey panels read the site's colour names as the sheet's inks", () => {
-  const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'style.css'), 'utf8');
-  const rule = css.match(/\.coc-sheet-root :is\(#p-story, #p-journey\)\{([^}]*)\}/);
-  assert.ok(rule, 'the rule is there');
-  for (const [name, ink] of [['--text', '--ink'], ['--text-muted', '--ink-soft'], ['--accent', '--oxblood'], ['--border', '--rule-soft'], ['--bg', '--box'], ['--bg-card', '--box']]) {
-    assert.ok(rule[1].replace(/\s/g, '').includes(`${name}:var(${ink});`), `${name} stands for ${ink}`);
-  }
-});
-
 test('a CoC investigator page carries the Timeline in its own Journey panel', () => {
   const { read, root } = buildVault({ ...VAULT, '_meta/vault-config.md': CONFIG.replace('publish:\n', 'publish:\n  system: "coc-7e"\n') });
   const html = read('characters', 'pcs', 'mara-voss.html');

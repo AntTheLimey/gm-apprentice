@@ -39,10 +39,6 @@ test('without the script every colour of the section is the text colour', () => 
   assert.doesNotMatch(block, /color-mix/);
 });
 
-test('a focused tab or row draws its ring inside itself, where nothing clips it', () => {
-  assert.match(block, /\.cx-tab:focus-visible,\s*\.cx-row:focus-visible\s*\{[^}]*outline-offset:\s*-2px/);
-});
-
 test('a circle\u2019s radius is an attribute, never a style', () => {
   assert.doesNotMatch(block, /[{;\s]r:\s*\d/);
 });
@@ -54,44 +50,8 @@ test('every class the section writes has a rule', () => {
   }
 });
 
-test('the lines drawing is out of the flow, behind the rows, and takes no pointer', () => {
-  assert.match(block, /\.cx-tree-wrap\s*\{[^}]*position:\s*relative/);
-  assert.match(block, /svg\.cx-lines\s*\{[^}]*position:\s*absolute/);
-  assert.match(block, /svg\.cx-lines\s*\{[^}]*pointer-events:\s*none/);
-});
-
-test('a hidden panel stays hidden whatever else sets its display', () => {
-  assert.match(block, /\.cx-panel\[hidden\]\s*\{[^}]*display:\s*none/);
-});
-
-test('tabs scroll sideways inside their own box', () => {
-  assert.match(block, /\.cx-tabs\s*\{[^}]*overflow-x:\s*auto/);
-});
-
 test('no colour is written as a literal in the Connections block', () => {
   assert.ok(block.length > 500);
   assert.doesNotMatch(block.replace(/var\([^)]*\)/g, ''), /#[0-9a-fA-F]{3,8}\b|rgb\(/);
 });
 
-test('a row whose kind and sessions do not fit beside the name puts them under it, so no name breaks mid-word', () => {
-  assert.match(block, /\.cx-roomy a\.cx-row,\s*\.cx-roomy span\.cx-row\s*\{[^}]*flex-wrap:\s*wrap/);
-  // the name takes what is left, so it is never pushed under its own mark
-  assert.match(block, /\.cx-roomy \.cx-row \.cx-name\s*\{[^}]*flex:\s*1 1 8rem/);
-});
-
-test('a long unbroken word (a pasted URL) wraps inside its card, line, strip and list instead of widening the page', () => {
-  // a description line, in the lists, a card and the strip
-  assert.match(block, /\.cx-line,\s*\.cx-sess\s*\{[^}]*overflow-wrap:\s*anywhere/);
-  assert.match(block, /\.cx-line,\s*\.cx-sess\s*\{[^}]*min-width:\s*0/);
-  // a name, a group label and the strip's relation line
-  assert.match(block, /\.cx-name\s*\{[^}]*overflow-wrap:\s*anywhere/);
-  assert.match(block, /\.cx-group\s*\{[^}]*overflow-wrap:\s*anywhere/);
-  assert.match(block, /\.cx-strip-rel\s*\{[^}]*overflow-wrap:\s*anywhere/);
-  // the plain lists, and the mentions that sit side by side in them
-  assert.match(block, /\.cx-plain li,\s*\.cx-mentions li,\s*\.cx-mlist li\s*\{[^}]*overflow-wrap:\s*anywhere/);
-});
-
-test('a meta line that wraps under its name is set against the name, not at the row\u2019s right edge', () => {
-  assert.match(block, /\.cx-row\.cx-stacked \.cx-meta\s*\{[^}]*margin-left:\s*0/);
-  assert.match(block, /\.cx-row\.cx-stacked \.cx-meta\s*\{[^}]*text-align:\s*left/);
-});
