@@ -128,6 +128,20 @@ test('the scan reads a name however the code spells the read', () => {
   assert.deepEqual(groupReads("publishConfig.theme.a; publishConfig.theme?.['b']; publishConfig?.['theme'].c; publishConfig?.theme?.d;", ['theme']), ['theme.a', 'theme.b', 'theme.c', 'theme.d']);
 });
 
+// The resolved config carries `layout`, `withheld_words`, `statuses` and others as non-enumerable properties: a copy
+// of it (`{ ...publishConfig }`, `Object.assign({}, publishConfig)`) loses them, and a message would then name settings
+// by the new names on a vault still on the old file. Code passes the object itself, or reads what it needs off it.
+const copiesOf = (src) => [...src.matchAll(/\.\.\.\s*publishConfig\b(?!\s*\.)|Object\.assign\(\s*\{[^}]*\}\s*,\s*publishConfig\b|structuredClone\(\s*publishConfig\b|JSON\.parse\(JSON\.stringify\(\s*publishConfig\b/g)].map((m) => m[0]);
+
+test('nothing copies the resolved config and loses its hidden properties', () => {
+  assert.deepEqual(copiesOf('const c = { ...publishConfig, x: 1 }; Object.assign({}, publishConfig); structuredClone(publishConfig)').length, 3);
+  assert.deepEqual(copiesOf('f(publishConfig.theme, ...publishConfig.list)'), []);
+  assert.deepEqual(sources.flatMap((f) => copiesOf(code(f)).map((c) => `${rel(f)}: ${c}`)), []);
+  for (const key of ['layout', 'withheld_words', 'statuses']) {
+    assert.equal(Object.getOwnPropertyDescriptor(built(), key).enumerable, false, `${key} is meant to be hidden`);
+  }
+});
+
 test('every setting the code reads is in the list', () => {
   const known = new Set(Object.keys(built()));
   const derived = new Set(DERIVED);
