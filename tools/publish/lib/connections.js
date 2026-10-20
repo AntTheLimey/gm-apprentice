@@ -296,18 +296,26 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
   function modelFor(page) {
     const model = { subject: { title: page.displayTitle || page.title, outputPath: page.outputPath }, tabs: [], mentions: [] };
     if (isIndex(page)) return model;
-    const items = new Map();   // the other page's output path, or '\0' + a name with no page
-    const add = (other, noPage, tab, group) => {
+    const items = new Map();   // the other page's output path, or '\0' + a name with no page, then the group
+    const firstKey = new Map();   // the other page's id -> the key of the first item filed for it
+    // A relationship the GM wrote is kept under its own heading: two notes of a pair that say
+    // different things (`member_of` here, `allied_with` there) both show. The same tie written at
+    // both ends, or a tie and its proper inverse, files under one heading and so shows once.
+    // A type the vocabulary does not know has no inverse, so its two ends are one statement.
+    // Anything else (a parent, an extra) joins the item the pair already has.
+    const add = (other, noPage, tab, group, written = false) => {
       const id = other ? other.outputPath : '\u0000' + noPage.name;
-      if (!items.has(id)) {
-        items.set(id, {
+      const key = !written && firstKey.has(id) ? firstKey.get(id) : id + '\u0001' + group.replace(/ \(named by\)$/, '');
+      if (!firstKey.has(id)) firstKey.set(id, key);
+      if (!items.has(key)) {
+        items.set(key, {
           tab, group,
           item: other
             ? { title: other.displayTitle || other.title, outputPath: other.outputPath, kind: kindLabel(typeOf(other)), tone: null, lines: [], own: 0, sessions: shared(page, other), image: imageOf(other) }
             : { title: printed(noPage.words) || noPage.name.replace(/_/g, ' '), outputPath: null, kind: '', tone: null, lines: [], own: 0, sessions: null, image: null, key: noPage.name },
         });
       }
-      return items.get(id).item;
+      return items.get(key).item;
     };
     // Outgoing relationships are noted first, so an item's own lines lead its list.
     const note = (item, edge, mine) => {
@@ -319,10 +327,10 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
 
     for (const { edge, to } of outgoing.get(page) || []) {
       if (to.page === page || (!to.page && !to.name) || (to.page && isIndex(to.page))) continue;
-      note(add(to.page, to, tabOf(to.page), groupLabel(edge.type, 'out', { from: typeOf(page), to: typeOf(to.page) })), edge, true);
+      note(add(to.page, to, tabOf(to.page), groupLabel(edge.type, 'out', { from: typeOf(page), to: typeOf(to.page) }), true), edge, true);
     }
     for (const { edge, from } of incoming.get(page) || []) {
-      note(add(from, null, tabOf(from), groupLabel(edge.type, 'in', { from: typeOf(from), to: typeOf(page) })), edge, false);
+      note(add(from, null, tabOf(from), groupLabel(edge.type, 'in', { from: typeOf(from), to: typeOf(page) }), true), edge, false);
     }
     // A parent with no page stays in Places, as a name with no link.
     if (typeOf(page) === 'location' && typeof page.frontmatter.parent_location === 'string') {
@@ -355,7 +363,7 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
       const groups = new Map();
       for (const b of backlinksOf(backlinks, page)) {
         const from = byPath.get(b.outputPath);
-        if (!from || from === page || isIndex(from) || items.has(from.outputPath)) continue;
+        if (!from || from === page || isIndex(from) || firstKey.has(from.outputPath)) continue;
         const id = tabOf(from);
         if (!groups.has(id)) groups.set(id, []);
         groups.get(id).push(from);
