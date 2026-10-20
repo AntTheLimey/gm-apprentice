@@ -331,11 +331,12 @@ def accept_lines(vault: Path, published: set[str], places: list[str],
             raise TonesError(str(e)) from e
     verb = "ACCEPTED" if write else "WOULD-ACCEPT"
     for place in chosen:
-        e = where[place]
-        rows.append("\t".join([verb, place, e["tone"],
-                               _one_line(e["target"])]))
+        tie = where[place]
+        rows.append("\t".join([verb, place, tie["tone"],
+                               _one_line(tie["target"])]))
     n = len(chosen)
-    return rows + [f"# {n} hostile tie(s) {'accepted' if write else 'would be accepted'}"]
+    done = "accepted" if write else "would be accepted"
+    return rows + [f"# {n} hostile tie(s) {done}"]
 
 
 @dataclass
