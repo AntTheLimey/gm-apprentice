@@ -11,6 +11,7 @@ import sys
 import textwrap
 import time
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -157,6 +158,23 @@ def test_no_more_than_a_few_processes_are_open_at_once(tmp_path):
     finally:
         for lines in made:
             lines.close()
+
+
+def test_a_tool_that_exits_before_reading_is_said_to_have_exited(tmp_path):
+    # It exits before the question is written: the broken pipe is the same
+    # answer as no answer, not "stopped answering (BrokenPipeError)".
+    tool = tmp_path / "gm-publish.js"
+    tool.write_text("process.exit(1);\n", encoding="utf-8")
+    lines = vaultlib.PublishLines(tool)
+    proc = lines._process()
+    proc.wait()
+    try:
+        with mock.patch.object(lines, "_process", return_value=proc):
+            with pytest.raises(vaultlib.PublishToolUnavailable) as raised:
+                lines.ask({"op": "stub", "text": "", "include": []})
+    finally:
+        lines.close()
+    assert "older than 1.12.1 has no `lines` command" in str(raised.value)
 
 
 def alive(pid: int) -> bool:

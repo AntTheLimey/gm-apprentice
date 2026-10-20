@@ -1091,12 +1091,17 @@ class PublishLines:
             proc.stdin.flush()
             line = proc.stdout.readline()
         except (OSError, ValueError) as e:
+            # A tool that exits before reading the question breaks the pipe:
+            # the same as exiting without answering, which is said below.
+            exited = isinstance(e, BrokenPipeError) and not timed_out
             self.close()
             if timed_out:
                 raise PublishToolTimedOut(late) from e
-            raise PublishToolUnavailable(
-                f"the publish tool stopped answering "
-                f"({e.__class__.__name__})") from e
+            if not exited:
+                raise PublishToolUnavailable(
+                    f"the publish tool stopped answering "
+                    f"({e.__class__.__name__})") from e
+            line = ""
         finally:
             watchdog.cancel()
         if timed_out:
