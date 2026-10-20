@@ -101,3 +101,11 @@ test('the address of a published page stands even when a part of it is a hidden 
   // An address that is no page stays dropped.
   assert.deepEqual(resolveSiteLink('maps/other.html', { linkMap, pages: [] }), { kind: 'none', href: null });
 });
+
+test('a tall banner picture is height-capped on a phone, not only on a desktop (#386)', () => {
+  const css = fs.readFileSync(path.join(__dirname, '..', 'css', 'style.css'), 'utf8');
+  const base = /\n\.landing-banner-img \{([^}]*)\}/.exec(css);
+  assert.ok(base, 'the base rule is there');
+  assert.match(base[1], /max-height:\s*\d/);
+  assert.match(base[1], /object-fit:\s*contain/);
+});
