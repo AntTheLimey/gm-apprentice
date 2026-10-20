@@ -32,8 +32,8 @@ export default function hr (state, startLine, endLine, silent) {
 
   state.line = startLine + 1
 
-  const token  = state.push('hr', 'hr', 0)
-  token.map    = [startLine, state.line]
+  const token = state.push('hr', 'hr', 0)
+  token.map = [startLine, state.line]
   token.markup = Array(cnt + 1).join(String.fromCharCode(marker))
 
   return true

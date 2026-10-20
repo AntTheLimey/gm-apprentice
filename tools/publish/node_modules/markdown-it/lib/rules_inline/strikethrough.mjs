@@ -20,13 +20,13 @@ function strikethrough_tokenize (state, silent) {
   let token
 
   if (len % 2) {
-    token         = state.push('text', '', 0)
+    token = state.push('text', '', 0)
     token.content = ch
     len--
   }
 
   for (let i = 0; i < len; i += 2) {
-    token         = state.push('text', '', 0)
+    token = state.push('text', '', 0)
     token.content = ch + ch
 
     state.delimiters.push({
@@ -62,18 +62,18 @@ function postProcess (state, delimiters) {
 
     const endDelim = delimiters[startDelim.end]
 
-    token         = state.tokens[startDelim.token]
-    token.type    = 's_open'
-    token.tag     = 's'
+    token = state.tokens[startDelim.token]
+    token.type = 's_open'
+    token.tag = 's'
     token.nesting = 1
-    token.markup  = '~~'
+    token.markup = '~~'
     token.content = ''
 
-    token         = state.tokens[endDelim.token]
-    token.type    = 's_close'
-    token.tag     = 's'
+    token = state.tokens[endDelim.token]
+    token.type = 's_close'
+    token.tag = 's'
     token.nesting = -1
-    token.markup  = '~~'
+    token.markup = '~~'
     token.content = ''
 
     if (state.tokens[endDelim.token - 1].type === 'text' &&

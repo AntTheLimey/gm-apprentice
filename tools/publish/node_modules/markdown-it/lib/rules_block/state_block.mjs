@@ -7,7 +7,7 @@ function StateBlock (src, md, env, tokens) {
   this.src = src
 
   // link to parser instance
-  this.md     = md
+  this.md = md
 
   this.env = env
 
@@ -38,11 +38,11 @@ function StateBlock (src, md, env, tokens) {
 
   // required block content indent (for example, if we are
   // inside a list, it would be positioned after list marker)
-  this.blkIndent  = 0
-  this.line       = 0 // line index in src
-  this.lineMax    = 0 // lines count
-  this.tight      = false  // loose/tight mode for lists
-  this.ddIndent   = -1 // indent of the current dd block (-1 if there isn't any)
+  this.blkIndent = 0
+  this.line = 0 // line index in src
+  this.lineMax = 0 // lines count
+  this.tight = false  // loose/tight mode for lists
+  this.ddIndent = -1 // indent of the current dd block (-1 if there isn't any)
   this.listIndent = -1 // indent of the current list block (-1 if there isn't any)
 
   // can be 'blockquote', 'list', 'root', 'paragraph' or 'reference'
