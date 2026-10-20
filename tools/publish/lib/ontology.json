@@ -60,7 +60,6 @@
     "admiring": "respectful",
     "adversarial": "hostile",
     "violent": "hostile",
-    "dangerous": "hostile",
     "terrified": "fearful",
     "anxious": "fearful",
     "horrified": "fearful",
@@ -94,7 +93,6 @@
     "complex": "complicated",
     "conflicted": "complicated",
     "unresolved": "complicated",
-    "mysterious": "unknown",
     "uncertain": "unknown"
   },
   "strength_scale": {
