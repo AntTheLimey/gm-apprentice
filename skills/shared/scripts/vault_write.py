@@ -1281,6 +1281,19 @@ def cmd_status(batch: Batch, args: argparse.Namespace, text: str) -> None:
     write_fields(batch, rel, note, stdin_fields(text))
 
 
+# A per-session journal entry that sits among the fields: `**Session 6 --
+# Title:**` or `**New open threads (Session 6):**`. It is never an anchor.
+SESSION_ENTRY_RE = re.compile(
+    r"(?:session\s*\d+|(?:new\s+)?open threads\s*\(\s*session\s*\d+)",
+    re.IGNORECASE)
+
+
+def _anchor(have: list[Field]) -> Field | None:
+    """The last real field, where a new one goes and whose shape it takes."""
+    real = [f for f in have if not SESSION_ENTRY_RE.match(f.label)]
+    return real[-1] if real else None
+
+
 def write_fields(batch: Batch, rel: str, note: str,
                  given: list[Field]) -> None:
     """Put `given` into the PC note's Current Status: each replaces the
@@ -1320,7 +1333,8 @@ def write_fields(batch: Batch, rel: str, note: str,
     for f in given:
         old = by_key.get(key(f.label))
         if old is None:
-            shape = have[-1].bullet if have else f.bullet
+            anchor = _anchor(have)
+            shape = anchor.bullet if anchor else f.bullet
             fresh += reshape(f, shape)
             batch.row("WOULD-ADD", rel, where + f.label, "new field")
             continue
@@ -1333,8 +1347,9 @@ def write_fields(batch: Batch, rel: str, note: str,
                   f"replaced ({old.end - old.start} lines)")
     lines = list(doc.lines)
     if fresh:
-        if have:
-            at = have[-1].end
+        anchor = _anchor(have)
+        if anchor is not None:
+            at = anchor.end
             if not lines[at - 1].endswith(("\n", "\r")):
                 lines[at - 1] += doc.eol
             edits.append((at, at, fresh))

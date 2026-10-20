@@ -278,6 +278,16 @@ class StatusWriteTests(unittest.TestCase):
             "  - **Session 5:** fled the system.\n",
             "**Knows (exclusive):** less.\n"))
 
+    def test_a_new_field_goes_after_the_last_real_field_not_a_journal_bullet(self):
+        vault = make_vault(self, {PC: JOURNAL})
+        code, out = run(vault, "status", PC, "--write",
+                        stdin="**Carrying:** a sword.\n")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, PC), JOURNAL.replace(
+            "  - **Session 5:** fled the system.\n",
+            "  - **Session 5:** fled the system.\n"
+            "**Carrying:** a sword.\n"))
+
     def test_a_label_twice_blocks_only_a_write_to_that_label(self):
         twice = SPEC.replace("**Carrying:** Tiger claws.",
                              "**Knows (exclusive):** Again.")

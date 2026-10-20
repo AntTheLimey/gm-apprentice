@@ -187,6 +187,16 @@ class FoldTests(unittest.TestCase):
                       "- **Session 3:** the debt.\n", text)
         self.assertNotIn("New open threads", text)
 
+    def test_a_new_open_threads_field_does_not_land_among_journal_bullets(self):
+        note = NO_LIST.replace(
+            "- **New open threads (Session 3):**",
+            "- **Session 3 — The Dock:** fought.\n"
+            "- **New open threads (Session 3):**")
+        _s, text = fold(self, note)
+        self.assertIn("**Location:** aboard.\n**Open threads:**\n"
+                      "- **Session 3:** the debt.\n", text)
+        self.assertNotIn("- **Open threads:**", text)
+
     def test_a_clean_pc_is_untouched(self):
         sessions, text = fold(self, CLEAN)
         self.assertEqual(sessions, [])
