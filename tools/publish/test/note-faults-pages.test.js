@@ -51,11 +51,13 @@ function fromBuild(configPath) {
 }
 
 // The doctor's findings, after checking the build returns the very same list.
-async function faults(files, code, extra) {
+// `checks.html(root)`, when given, reads the built pages.
+async function faults(files, code, extra, checks = {}) {
   const { configPath, root } = site(files, extra);
   const doctor = await fromDoctor(configPath);
   assert.ok(!fs.existsSync(path.join(root, 'docs')), 'the doctor wrote a site');
   assert.deepStrictEqual(fromBuild(configPath), doctor, 'the build and the doctor disagree');
+  if (checks.html) checks.html(root);
   return code ? doctor.filter((f) => f.code === code) : doctor;
 }
 
@@ -86,7 +88,10 @@ describe('NAMED_NO_PAGE is decided by the page as built', () => {
       'Hidden/Old_Tam.md': hidden(),
       'Hidden/Ada_Moor.md': hidden(),
       'People/Bo_Pike.md': '---\ntype: npc\nrelationships:\n  - target: Old_Tam\n    type: knows\n  - target: Ada_Moor\n    type: serves\n    gm_only: true\n---\n\nA guest.\n',
-    }, 'NAMED_NO_PAGE');
+    }, 'NAMED_NO_PAGE', undefined, { html: (root) => {
+      const html = fs.readFileSync(path.join(root, 'docs', 'people', 'bo-pike.html'), 'utf8');
+      for (const name of ['Old Tam', 'Old_Tam', 'Ada Moor', 'Ada_Moor']) assert.ok(!html.includes(name), `the page prints ${name}`);
+    } });
     assert.deepStrictEqual(found, []);
   });
 
@@ -392,7 +397,10 @@ describe('a page\'s Connections', () => {
       'Hidden/Old_Tam.md': hidden(),
       'People/Bo_Pike.md': npcNote('Bo.', rel('[[Cy_Dunn]]')),
       'People/Cy_Dunn.md': npcNote('Cy.', rel('[[Old_Tam]]')),
-    }, 'NAMED_NO_PAGE');
+    }, 'NAMED_NO_PAGE', undefined, { html: (root) => {
+      const html = fs.readFileSync(path.join(root, 'docs', 'people', 'cy-dunn.html'), 'utf8');
+      assert.ok(!/Old[ _]Tam/.test(html), 'the page prints the hidden name');
+    } });
     assert.deepStrictEqual(found, []);
   });
 
