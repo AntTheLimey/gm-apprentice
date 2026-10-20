@@ -347,6 +347,8 @@ vault_check uses it instead of keeping a copy of the build's filters.
       -> {"kept":[…]}          per line: whether a publish: stub page keeps it
   {"op":"site","vault":"/path/to/vault"}
       -> {"publishes":…,"site":…,"siteDir":…}  the vault's publish: block, whether its site is on, and the site folder
+  {"op":"command","args":["settings","get","--vault","…","--json"],"cwd":"…","env":{…}}
+      -> {"rc":…,"stdout":"…","stderr":"…"}  settings or explain --all, run as on its own
 
 A request that cannot be answered gets {"error":"…"}.
 `,
@@ -569,42 +571,7 @@ function printSubcommandHelp(cmd) {
   console.log(cmd === 'settings' ? require('../lib/settings/cli.js').helpText() : SUBCOMMAND_HELP[cmd]);
 }
 
-// Parse `--config <path>` plus an allowlist of flags, rejecting anything else.
-// A mutating command must never let an unrecognised argument fall through to
-// execution: `flush --help` used to perform the flush (#178). Returns
-// { configPath, flags } or { error }.
-// `valueFlags` maps a flag that takes a value (`--pc Jane`) to its key, the
-// same way `allowedFlags` maps a bare switch. Value flags reject a following
-// option token for the same reason `--config` does: `--pc --json` is a typo,
-// not a PC called "--json".
-// `repeatedFlags` are value flags a caller may give more than once
-// (`--publish A.md --publish B.md`); their key collects an array, empty when the
-// flag never appears.
-function parseSubcommandArgs(rest, allowedFlags, valueFlags = {}, repeatedFlags = {}) {
-  let configPath = './vault.config.json';
-  let configGiven = false;
-  const flags = {};
-  for (const key of Object.values(repeatedFlags)) flags[key] = [];
-  for (let i = 0; i < rest.length; i++) {
-    const a = rest[i];
-    if (a === '--config') {
-      if (!rest[i + 1] || rest[i + 1].startsWith('-')) return { error: '--config needs a path' };
-      configPath = rest[i + 1]; configGiven = true; i++;
-    } else if (Object.prototype.hasOwnProperty.call(repeatedFlags, a)) {
-      // A `--set` pair may start with a dash: the word before the `=` is a tone as written.
-      if (!rest[i + 1] || (rest[i + 1].startsWith('-') && a !== '--set')) return { error: `${a} needs a value` };
-      flags[repeatedFlags[a]].push(rest[i + 1]); i++;
-    } else if (Object.prototype.hasOwnProperty.call(valueFlags, a)) {
-      if (!rest[i + 1] || rest[i + 1].startsWith('-')) return { error: `${a} needs a value` };
-      flags[valueFlags[a]] = rest[i + 1]; i++;
-    } else if (Object.prototype.hasOwnProperty.call(allowedFlags, a)) {
-      flags[allowedFlags[a]] = true;
-    } else {
-      return { error: `Unknown argument: ${a}` };
-    }
-  }
-  return { configPath, configGiven, flags };
-}
+const { parseSubcommandArgs } = require('../lib/subcommand-args');
 
 function printVersion() {
   const pkg = require('../package.json');
@@ -934,44 +901,28 @@ if (command === 'lines') {
 }
 
 if (command === 'explain' && args[1] === '--all') {
-  const parsed = parseSubcommandArgs(args.slice(2), { '--json': 'json' }, { '--vault': 'vault' });
-  if (parsed.error || !parsed.flags.json) {
-    console.error(`Error: ${parsed.error || 'explain --all needs --json'}`);
+  const { runExplainAll, explainAllOptions } = require('../lib/explain-cli.js');
+  const parsed = explainAllOptions(args.slice(2));
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
     printSubcommandHelp('explain');
     process.exit(1);
   }
-  const { runExplainAll } = require('../lib/explain-cli.js');
-  runExplainAll({ configPath: parsed.configPath, vaultPath: parsed.flags.vault })
+  runExplainAll(parsed.options)
     .then(exitAfterFlush)
     .catch(failAfterFlush);
   return;
 }
 
-// --vault is the vault; --config is the site folder's vault.config.json. Neither given means the
-// config in the current folder.
-function settingsTarget(parsed, args) {
-  const vault = parsed.flags.vault;
-  return { vault, config: args.includes('--config') || !vault ? parsed.configPath : undefined };
-}
-
 if (command === 'settings') {
-  const positional = [];
-  const rest = [];
-  const tail = args.slice(2);
-  for (let i = 0; i < tail.length; i += 1) {
-    if (tail[i] === '--config' || tail[i] === '--vault' || tail[i] === '--fill' || tail[i] === '--only' || tail[i] === '--site') { rest.push(tail[i]); if (i + 1 < tail.length) rest.push(tail[++i]); }
-    else if (tail[i].startsWith('-')) rest.push(tail[i]);
-    else positional.push(tail[i]);
-  }
-  const parsed = parseSubcommandArgs(rest, { '--json': 'json', '--create': 'create', '--check': 'check', '--discard-old-file': 'discardOld', '--site-tool-updated': 'siteToolUpdated', '--fold-site-file': 'foldSiteFile', '--no-site-file': 'noSiteFile' }, { '--vault': 'vault', '--site': 'site' }, { '--fill': 'fill', '--only': 'only' });
+  const { runSettings, settingsOptions } = require('../lib/settings/cli.js');
+  const parsed = settingsOptions(args.slice(1));
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
     printSubcommandHelp('settings');
     process.exit(1);
   }
-  const { runSettings } = require('../lib/settings/cli.js');
-  const rc = runSettings({ verb: args[1], args: positional, ...settingsTarget(parsed, args), json: !!parsed.flags.json, create: !!parsed.flags.create, check: !!parsed.flags.check, discardOld: !!parsed.flags.discardOld, siteToolUpdated: !!parsed.flags.siteToolUpdated, foldSiteFile: !!parsed.flags.foldSiteFile, noSiteFile: !!parsed.flags.noSiteFile, fill: parsed.flags.fill, only: parsed.flags.only, site: parsed.flags.site });
-  exitAfterFlush(rc);
+  exitAfterFlush(runSettings(parsed.options));
   return;
 }
 

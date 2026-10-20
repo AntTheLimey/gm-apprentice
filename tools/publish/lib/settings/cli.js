@@ -30,6 +30,7 @@ const { normalizeExcludeDir, normalizeExcludeDirs } = require('./folders');
 const { readState, writeState } = require('./state');
 const { planMove, applyMove, siteFileNamedBy } = require('./move');
 const { readerFrom } = require('../vault-reader');
+const { parseSubcommandArgs } = require('../subcommand-args');
 
 const VERBS = ['get', 'set', 'add', 'remove', 'unset', 'describe', 'check', 'list', 'raw', 'setup-note', 'move', 'carry'];
 const LEAVES = () => REGISTRY.filter((e) => isLeaf(e, REGISTRY));
@@ -795,6 +796,25 @@ function move(options) {
 
 // ---- The command --------------------------------------------------------------------------
 
+// `settings <verb> ...` as typed (the words after `settings`): the options runSettings takes,
+// or { error }. --vault is the vault; --config is the site folder's vault.config.json. Neither
+// given means the config in the current folder.
+function settingsOptions(words) {
+  const positional = [];
+  const rest = [];
+  const tail = words.slice(1);
+  for (let i = 0; i < tail.length; i += 1) {
+    if (tail[i] === '--config' || tail[i] === '--vault' || tail[i] === '--fill' || tail[i] === '--only' || tail[i] === '--site') { rest.push(tail[i]); if (i + 1 < tail.length) rest.push(tail[++i]); }
+    else if (tail[i].startsWith('-')) rest.push(tail[i]);
+    else positional.push(tail[i]);
+  }
+  const parsed = parseSubcommandArgs(rest, { '--json': 'json', '--create': 'create', '--check': 'check', '--discard-old-file': 'discardOld', '--site-tool-updated': 'siteToolUpdated', '--fold-site-file': 'foldSiteFile', '--no-site-file': 'noSiteFile' }, { '--vault': 'vault', '--site': 'site' }, { '--fill': 'fill', '--only': 'only' });
+  if (parsed.error) return { error: parsed.error };
+  const vault = parsed.flags.vault;
+  const config = words.includes('--config') || !vault ? parsed.configPath : undefined;
+  return { options: { verb: words[0], args: positional, vault, config, json: !!parsed.flags.json, create: !!parsed.flags.create, check: !!parsed.flags.check, discardOld: !!parsed.flags.discardOld, siteToolUpdated: !!parsed.flags.siteToolUpdated, foldSiteFile: !!parsed.flags.foldSiteFile, noSiteFile: !!parsed.flags.noSiteFile, fill: parsed.flags.fill, only: parsed.flags.only, site: parsed.flags.site } };
+}
+
 // options: { verb, args, vault, config, json }. Returns the exit code.
 function runSettings(options, deps = {}) {
   const out = deps.out || console.log;
@@ -836,4 +856,4 @@ function runSettings(options, deps = {}) {
   }
 }
 
-module.exports = { runSettings, helpText };
+module.exports = { runSettings, settingsOptions, helpText };
