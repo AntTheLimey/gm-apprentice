@@ -12,6 +12,7 @@ const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, kept
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
+const { noticeText } = require('./notice');
 const { getsNoPage } = require('./previews');
 const { runSteps, packageScripts, packageNotes } = require('./settings/steps');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
@@ -1203,6 +1204,12 @@ function buildSite(options) {
   }
 
   writeNoJekyll();
+
+  // The licence notices for what the site ships (#428).
+  if (writes === 'all') {
+    fs.writeFileSync(path.join(outputDir, 'NOTICE.txt'), noticeText({ lunr: !!searchData }));
+    console.log('  wrote NOTICE.txt');
+  }
 
   // Write search index (only if search is enabled)
   if (writes !== 'all') {
