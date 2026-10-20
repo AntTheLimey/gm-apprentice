@@ -24,6 +24,9 @@ NEEDS_NODE = unittest.skipUnless(shutil.which("node"), "needs node")
 
 CHECKS = ("gm-leak", "stale-drafts", "read-aloud", "sessions", "wrapup")
 
+sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
+import vault_check  # noqa: E402
+
 
 def row(name):
     return (f"INFO\t(vault)\tthis vault is kept by a player (vault.kept_by: "
@@ -63,6 +66,10 @@ def section(out, label):
 
 @NEEDS_NODE
 class KeptByPlayerTests(unittest.TestCase):
+    def test_the_gate_covers_the_five_checks_the_command_line_takes(self):
+        # In process and cheap: a check that drops out of the gate fails here.
+        self.assertEqual(set(vault_check.GM_OWN_CHECKS), set(CHECKS))
+
     def test_a_check_run_alone_prints_exactly_the_one_row(self):
         # One check through the command line; `all` below covers the other
         # four, which share the same gate.
