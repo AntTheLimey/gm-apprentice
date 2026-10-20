@@ -148,3 +148,20 @@ test('removing the last menu entry leaves its comments at the key\'s level, not 
   applyChanges(s.vault, [{ op: 'remove', name: 'player_site.menu_extra', entries: [{ label: 'A' }], same: (a, b) => a.label === b.label }]);
   assert.equal(fs.readFileSync(s.yaml, 'utf8'), 'version: 1\nplayer_site:\n  menu_extra: []\n  # my links\n  # trailing note\n  title: T\n');
 });
+
+test('--vault alone reads the site folder file the vault names; --no-site-file leaves it unread (#373)', () => {
+  const s = scratch('version: 1\nplayer_site:\n  folder: ../site\n');
+  const site = path.join(s.root, 'site');
+  fs.mkdirSync(site);
+  fs.writeFileSync(path.join(site, 'vault.config.json'), JSON.stringify({ vaultPath: '../vault', excludeSections: ['Spoilers'] }));
+  const check = (extra) => {
+    const out = [];
+    const rc = runSettings({ verb: 'check', args: [], vault: s.vault, json: true, ...extra }, { out: (l) => out.push(l), err: () => {} });
+    return { rc, faults: JSON.parse(out.join('\n')).faults };
+  };
+  const seen = check({});
+  assert.ok(seen.faults.some((f) => f.name === 'excludeSections' && f.level === 'stop'), JSON.stringify(seen.faults));
+  assert.equal(seen.rc, 1);
+  const blind = check({ noSiteFile: true });
+  assert.deepEqual(blind.faults, []);
+});

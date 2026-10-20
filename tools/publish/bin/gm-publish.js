@@ -956,14 +956,14 @@ if (command === 'settings') {
     else if (tail[i].startsWith('-')) rest.push(tail[i]);
     else positional.push(tail[i]);
   }
-  const parsed = parseSubcommandArgs(rest, { '--json': 'json', '--create': 'create', '--check': 'check', '--discard-old-file': 'discardOld', '--site-tool-updated': 'siteToolUpdated', '--fold-site-file': 'foldSiteFile' }, { '--vault': 'vault', '--site': 'site' }, { '--fill': 'fill', '--only': 'only' });
+  const parsed = parseSubcommandArgs(rest, { '--json': 'json', '--create': 'create', '--check': 'check', '--discard-old-file': 'discardOld', '--site-tool-updated': 'siteToolUpdated', '--fold-site-file': 'foldSiteFile', '--no-site-file': 'noSiteFile' }, { '--vault': 'vault', '--site': 'site' }, { '--fill': 'fill', '--only': 'only' });
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
     printSubcommandHelp('settings');
     process.exit(1);
   }
   const { runSettings } = require('../lib/settings/cli.js');
-  const rc = runSettings({ verb: args[1], args: positional, ...settingsTarget(parsed, args), json: !!parsed.flags.json, create: !!parsed.flags.create, check: !!parsed.flags.check, discardOld: !!parsed.flags.discardOld, siteToolUpdated: !!parsed.flags.siteToolUpdated, foldSiteFile: !!parsed.flags.foldSiteFile, fill: parsed.flags.fill, only: parsed.flags.only, site: parsed.flags.site });
+  const rc = runSettings({ verb: args[1], args: positional, ...settingsTarget(parsed, args), json: !!parsed.flags.json, create: !!parsed.flags.create, check: !!parsed.flags.check, discardOld: !!parsed.flags.discardOld, siteToolUpdated: !!parsed.flags.siteToolUpdated, foldSiteFile: !!parsed.flags.foldSiteFile, noSiteFile: !!parsed.flags.noSiteFile, fill: parsed.flags.fill, only: parsed.flags.only, site: parsed.flags.site });
   exitAfterFlush(rc);
   return;
 }

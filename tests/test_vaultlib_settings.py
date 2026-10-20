@@ -472,3 +472,10 @@ def test_crash_names_a_typeerror_not_the_file_path(tmp_path, monkeypatch):
         vaultlib.settings(vault)
     assert "TypeError: Cannot read properties" in str(e.value)
     assert "read.js" not in str(e.value)
+
+
+def test_target_args_keep_the_tool_from_reading_the_site_file_itself(tmp_path):
+    vault = tmp_path / "v"
+    assert "--no-site-file" in vaultlib._target_args(vault)
+    with_site = vaultlib._target_args(vault, tmp_path / "s" / "vault.config.json")
+    assert "--no-site-file" not in with_site and "--config" in with_site

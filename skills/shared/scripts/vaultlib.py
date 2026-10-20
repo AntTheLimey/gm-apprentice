@@ -1434,6 +1434,10 @@ def _target_args(vault: Path, site_config: Path | None = None) -> list[str]:
     args = ["--vault", str(vault)]
     if site_config is not None:
         args += ["--config", str(site_config)]
+    else:
+        # The scripts read the site folder file themselves; the tool must not
+        # also read the one the vault names, or its rows would be said twice.
+        args.append("--no-site-file")
     return args
 
 

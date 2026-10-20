@@ -49,8 +49,16 @@ const reaches = (e, scope) => inScope(e.name, scope) || oldNamesOf(e).some((n) =
 function target(options) {
   const { loadVaultConfig } = require('../config');
   if (options.vault) {
-    const config = options.config ? path.resolve(options.config) : null;
-    return { vaultPath: path.resolve(options.vault), siteConfig: config && fs.existsSync(config) ? loadVaultConfig(config) : {} };
+    const vaultPath = path.resolve(options.vault);
+    // With no --config, the site folder is the one the vault names, as the move finds it; --no-site-file reads none
+    // (the vault scripts ask for it, and read the site file themselves).
+    const named = options.config || options.noSiteFile ? null : siteFileNamedBy(vaultPath);
+    const config = options.config ? path.resolve(options.config) : (named && named.exists ? named.file : null);
+    let siteConfig = {};
+    if (config && fs.existsSync(config)) {
+      try { siteConfig = loadVaultConfig(config); } catch (e) { if (options.config) throw e; }
+    }
+    return { vaultPath, siteConfig };
   }
   const config = path.resolve(options.config || './vault.config.json');
   const siteConfig = loadVaultConfig(config);
@@ -275,6 +283,7 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
 
   --vault <dir>    The vault (default: the vaultPath in the config)
   --config <path>  The site folder's vault.config.json (default: ./vault.config.json)
+  --no-site-file   With --vault and no --config: do not read the site folder file the vault names
   --create         With set: make the settings file when the vault has none yet
   --json           Print JSON
   --help, -h       Show this help
