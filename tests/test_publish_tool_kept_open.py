@@ -135,19 +135,28 @@ def test_a_failed_process_reruns_a_read_but_never_a_write(tmp_path):
     tool = tmp_path / "t" / "gm-publish.js"
     tool.parent.mkdir()
     ran = tmp_path / "ran"
+    asked = tmp_path / "asked"
+    # The first question of the run is answered, so the tool is known to
+    # have the op; every later one kills the process.
     tool.write_text(textwrap.dedent(f"""\
+        const fs = require('fs');
         if (process.argv[2] === 'lines') {{
-          process.stdin.once('data', () => process.exit(1));
+          process.stdin.on('data', () => {{
+            if (fs.existsSync({json.dumps(str(asked))})) process.exit(1);
+            fs.writeFileSync({json.dumps(str(asked))}, 'x');
+            process.stdout.write(JSON.stringify({{ rc: 0, stdout: '{{}}', stderr: '' }}) + '\\n');
+          }});
         }} else {{
-          require('fs').appendFileSync({json.dumps(str(ran))}, process.argv[3] + '\\n');
+          fs.appendFileSync({json.dumps(str(ran))}, process.argv[3] + '\\n');
           process.stdout.write('{{}}');
         }}
         """), encoding="utf-8")
     kw = dict(capture_output=True, text=True, timeout=60)
+    vaultlib.run_tool([NODE, str(tool), "settings", "get", "--json"], **kw)
     read = vaultlib.run_tool([NODE, str(tool), "settings", "get", "--json"], **kw)
     assert read.returncode == 0 and read.stdout == "{}"
     write = vaultlib.run_tool([NODE, str(tool), "settings", "set", "a=1"], **kw)
-    assert write.returncode == 1 and "exited without answering" in write.stderr
+    assert write.returncode == 1 and write.stderr.startswith("Error: ")
     assert ran.read_text(encoding="utf-8") == "get\n"
     vaultlib.lines_for(tool).close()
 
@@ -232,3 +241,74 @@ def test_a_process_never_closed_ends_with_the_run(tmp_path):
     if alive(pid):
         os.kill(pid, 9)
         pytest.fail("the lines process outlived the interpreter that started it")
+
+
+def test_a_write_cut_off_says_the_change_may_have_been_made(
+        tmp_path, monkeypatch):
+    # The process dies mid-question on a write: its reason is the command's
+    # own (not "failed to start ... older than 1.12.1"), and no run of its
+    # own follows.
+    tool = tmp_path / "t" / "gm-publish.js"
+    tool.parent.mkdir()
+    ran = tmp_path / "ran"
+    tool.write_text(textwrap.dedent(f"""\
+        if (process.argv[2] === 'lines') {{
+          process.stdin.once('data', () => process.exit(1));
+        }} else {{
+          require('fs').appendFileSync({json.dumps(str(ran))}, 'ran\\n');
+        }}
+        """), encoding="utf-8")
+    vault = new_vault(tmp_path, "One")
+    monkeypatch.setattr(vaultlib, "PUBLISH_TOOL", tool)
+    try:
+        with pytest.raises(vaultlib.SettingsUnavailable) as raised:
+            vaultlib.settings_set(vault, [("player_site.title", "Two")])
+    finally:
+        vaultlib.lines_for(tool).close()
+    msg = str(raised.value)
+    assert raised.value.refused
+    assert 'stopped during "settings set"' in msg
+    assert "the change may have been made" in msg
+    assert "older than 1.12.1" not in msg
+    assert not ran.exists()
+
+
+def test_a_tool_replaced_after_unknown_op_is_asked_again(tmp_path):
+    tool = fake_tool(tmp_path / "t",
+                     json.dumps({"error": 'unknown op: "command"'}))
+    lines = vaultlib.PublishLines(tool)
+    try:
+        assert lines.command(["settings", "get"]) is None
+        assert lines._no_command
+        tool.write_text(
+            "require('readline').createInterface({ input: process.stdin })"
+            ".on('line', () => process.stdout.write(JSON.stringify("
+            "{ rc: 0, stdout: '{}', stderr: '' }) + '\\n'));\n"
+            "// the next version\n", encoding="utf-8")
+        assert lines.command(["settings", "get"]) == (0, "{}", "")
+    finally:
+        lines.close()
+
+
+def test_a_tool_that_exits_unanswered_is_not_started_again(tmp_path):
+    # An older or broken tool: the first ask finds out, the second does
+    # not start `lines` to find out again.
+    tool = tmp_path / "gm-publish.js"
+    tool.write_text("if (process.argv[2] === 'lines') process.exit(1);\n"
+                    "else process.stdout.write('{}');\n", encoding="utf-8")
+    starts: list[list[str]] = []
+    real = subprocess.Popen
+
+    def counting(cmd, *a, **kw):
+        starts.append(cmd)
+        return real(cmd, *a, **kw)
+
+    lines = vaultlib.PublishLines(tool)
+    try:
+        with mock.patch.object(vaultlib.subprocess, "Popen", counting):
+            with pytest.raises(vaultlib.PublishToolUnavailable):
+                lines.command(["settings", "get"])
+            assert lines.command(["settings", "get"]) is None
+    finally:
+        lines.close()
+    assert len(starts) == 1

@@ -1007,6 +1007,8 @@ class PublishLines:
         self._stamp: tuple[str, int, int] | None = None
         # Whether this tool answered that it has no `command` op.
         self._no_command = False
+        # Whether the open process has answered a question yet.
+        self._answered = False
 
     def _process(self) -> subprocess.Popen[str]:
         if self._proc is not None and self._proc.poll() is None:
@@ -1035,6 +1037,7 @@ class PublishLines:
         if stamp != self._stamp:
             self._no_command = False
         self._stamp = stamp
+        self._answered = False
         if self in _OPEN_LINES:
             _OPEN_LINES.remove(self)
         _OPEN_LINES.append(self)
@@ -1108,6 +1111,10 @@ class PublishLines:
             self.close()
             raise PublishToolTimedOut(late)
         if not line:
+            if not self._answered and _tool_stamp(self.tool) == self._stamp:
+                # It never answered once: a tool older than 1.12.1 or a broken
+                # install. Do not start another to be told the same.
+                self._no_command = True
             self.close()
             raise PublishToolUnavailable(
                 "the publish tool exited without answering (it needs Node "
@@ -1119,6 +1126,7 @@ class PublishLines:
             raise PublishToolUnavailable(
                 "the publish tool did not answer the question (a tool "
                 "older than 1.12.1 has no `lines` command)") from e
+        self._answered = True
         if not isinstance(answer, dict) or "error" in answer:
             why = answer.get("error") if isinstance(answer, dict) else answer
             raise PublishToolUnavailable(f"the publish tool refused: {why}")
@@ -1134,7 +1142,10 @@ class PublishLines:
         stopped part way through the command), PublishToolTimedOut when it
         was late."""
         if self._no_command:
-            return None
+            # A tool replaced at this path (update-pin) is asked again.
+            if _tool_stamp(self.tool) == self._stamp:
+                return None
+            self._no_command = False
         request = {"op": "command", "text": "", "args": args,
                    "cwd": os.getcwd(), "env": dict(os.environ)}
         try:
@@ -1187,7 +1198,12 @@ def run_tool(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
                               ["check"])
                 or (args[1:2] == ["move"] and "--check" in args))
             if writes:
-                return subprocess.CompletedProcess(cmd, 1, "", f"{e}\n")
+                # The command's own kind of reason, so callers pass it on
+                # instead of reading it as a tool that would not start.
+                return subprocess.CompletedProcess(cmd, 1, "", (
+                    f'Error: the publish tool stopped during "settings '
+                    f'{args[1]}"; the change may have been made, so read '
+                    f'the settings file before trying again\n'))
             ran = None
         if ran is not None:
             return subprocess.CompletedProcess(cmd, *ran)
