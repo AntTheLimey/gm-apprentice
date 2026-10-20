@@ -692,8 +692,19 @@ class TemplateTests(unittest.TestCase):
             "_Template_Document.md": {mv.text_hash(old): "1.10.20"}}})
         self.assertEqual(self.doc(vault).group, WILL)
 
-    # Rebuilding the history from every release tag takes ~10 s. CI sets CI,
-    # so it runs there on every change; locally it runs when asked for:
+    def require_tags(self, tags):
+        # In CI a missing tag set is a broken checkout, not a reason to skip:
+        # a skip there would hide these checks for good.
+        if tags:
+            return
+        if os.environ.get("CI"):
+            self.fail("no release tags in this checkout; the CI checkout "
+                      "needs fetch-depth: 0 so the tags come with it")
+        self.skipTest("no release tags in this checkout")
+
+    # Rebuilding the history from every release tag takes ~10 s. CI sets CI
+    # and its checkout fetches tags (fetch-depth: 0), so it runs there on
+    # every change; locally it runs when asked for:
     # GM_FULL_HISTORY_CHECK=1 python -m pytest tests/test_migrate_vault.py
     @unittest.skipUnless(
         os.environ.get("CI") or os.environ.get("GM_FULL_HISTORY_CHECK"),
@@ -701,15 +712,13 @@ class TemplateTests(unittest.TestCase):
     def test_the_checked_in_history_is_what_the_script_would_write(self):
         history = json.loads(mv.HISTORY.read_text(encoding="utf-8"))
         tags = th.release_tags()
-        if not tags:
-            self.skipTest("no release tags in this checkout")
+        self.require_tags(tags)
         self.assertEqual(th.expire(th.build(tags), FLOOR), history)
 
     def test_every_recorded_release_is_a_tag_at_or_above_the_floor(self):
         history = json.loads(mv.HISTORY.read_text(encoding="utf-8"))
         tags = {t.removeprefix("v") for t in th.release_tags()}
-        if not tags:
-            self.skipTest("no release tags in this checkout")
+        self.require_tags(tags)
         for system, names in history.items():
             for name, hashes in names.items():
                 self.assertIsInstance(hashes, dict, f"{system}/{name}")
