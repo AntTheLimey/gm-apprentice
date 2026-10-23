@@ -25,7 +25,7 @@ const PC = [
   '## Notes', '', 'Owes the librarian a favour.', '',
 ].join('\n');
 
-const STORY = '---\ntype: character-story\n---\n\n### Session 1 — The Road\n\nIlse reads a card she never wrote.\n';
+const STORY = '---\ntype: character-story\n---\n\n### Session 1 — The Road\n\n*Ilse reads a card she never wrote.*\n\nLong prose.\n\n### Session 2 — The Gate\n\nShe is turned away. Later.\n';
 
 describe('story parts never carry gm-only text', () => {
   const site = buildBoth({
@@ -56,5 +56,22 @@ describe('story parts never carry gm-only text', () => {
     // The GM page shows the hidden line marked in the story, never unmarked as the pull quote.
     const quote = gm.split('class="pull-quote">')[1].split('</div>')[0];
     assert.equal(quote, 'For a hundred years Ilse kept the index.');
+  });
+
+  it('the story page opens with the prologue; the gm-only line stays off the player copy', () => {
+    const storyRel = ['story', 'characters', 'ilse-varn.html'];
+    const player = site.player.read(...storyRel);
+    assert.match(player, /class="pc-prologue"/);
+    assert.match(player, /For a hundred years Ilse kept the index/);
+    assert.ok(player.indexOf('pc-prologue') < player.indexOf('Session 1'));
+    assert.doesNotMatch(player, /BACKSTORY-GM-SECRET/);
+    assert.match(site.gm.read(...storyRel), /BACKSTORY-GM-SECRET/);
+  });
+
+  it('the PC page lists a line per session, linked to the story page', () => {
+    const player = site.player.read('characters', 'pcs', 'ilse-varn.html');
+    assert.match(player, /href="\.\.\/\.\.\/story\/characters\/ilse-varn\.html#session-1"/);
+    assert.match(player, /Ilse reads a card she never wrote\./);
+    assert.match(player, /She is turned away\./);
   });
 });

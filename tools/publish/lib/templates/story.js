@@ -1,6 +1,7 @@
 const { escapeHtml, relativeHref, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts } = require('./base');
 const { linkSessions } = require('../story-sessions');
+const { prologueHtml } = require('./prologue');
 
 function storyNav(unit) {
   const prev = unit.prevHref
@@ -44,6 +45,7 @@ function characterStoryPage(story, config, publishConfig, navFor) {
     <article class="story-prose">
       <h1 class="page-title">${escapeHtml(story.title)}</h1>
       ${sheetLink}
+      ${story.prologueHtml ? prologueHtml(story.title, story.prologueHtml) : ''}
       ${body}
     </article>`;
   return baseShell({

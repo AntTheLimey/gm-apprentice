@@ -9,6 +9,7 @@ const { liveDataScript } = require('./gurps/live-data');
 const { liveScriptHrefs, clientFor } = require('./live-mount');
 const { getConsumedTitleMatcher, getSheetFamily } = require('./pc-registry');
 const { storyParts, splitTitle } = require('../pc-story');
+const { prologueHtml, asBlock } = require('./prologue');
 const { aboveSubheadings, cellText, isPlaceholder, filled } = require('./sheet-parse');
 const { sheetSourceOf } = require('../sheet-source');
 const { resolveLook, isDressed } = require('../skins');
@@ -272,24 +273,13 @@ function hrefFrom(page, address) {
   return encodeHref(relativeHref(page.outputPath, target)) + (cut < 0 ? '' : escapeHtml(text.slice(cut)));
 }
 
-// An older one-line field's value is inline HTML: a paragraph of its own here.
-const asBlock = (html) => (/^\s*<(?:p|ul|ol|blockquote|h[1-6]|div|table|pre|hr)\b/i.test(html) ? html : `<p>${html}</p>`);
-
 // The Story tab: the backstory as a prologue, how they look, what drives them, the story so far.
 // `parts` is storyParts' answer (null: none); `lines` the story page's session lines.
 function storyTabHtml(page, parts, { portraitUrl, storyHref, storyLines, storyHtml }) {
   const name = escapeHtml(page.displayTitle);
   const blocks = [];
   if (parts && parts.backstoryHtml) {
-    const { titleHtml, proseHtml } = splitTitle(asBlock(parts.backstoryHtml));
-    blocks.push(`<article class="pc-prologue">
-  <p class="pc-prologue-eyebrow">Before the campaign</p>
-  <h2 class="pc-prologue-title">${titleHtml || `${name}'s story`}</h2>
-  <p class="pc-prologue-byline">as their player wrote it</p>
-  <div class="pc-prologue-prose">
-${proseHtml.trim()}
-  </div>
-</article>`);
+    blocks.push(prologueHtml(page.displayTitle, parts.backstoryHtml));
   }
   if (parts && (parts.appearanceHtml || parts.facts.length)) {
     const portrait = portraitUrl

@@ -10,6 +10,8 @@ createdSession: ""
 
 ## Session {N} — {Session Title}
 
+*{One line: this session, for this character.}*
+
 {2-4 paragraphs of narrative prose. Use the campaign's genre
 voice (see shared/character-story-format.md). Write in past
 tense for events, present for ongoing states. Wiki-link all
