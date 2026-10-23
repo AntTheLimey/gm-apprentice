@@ -233,3 +233,24 @@ test('card carries the hook', () => {
   // The CoC folio shows no hook, so its card carries none.
   assert.doesNotMatch(indexTemplate('characters/pcs', 'PCs', [ilse], navFor, config, {}, {}, { cocFolio: true }), /card-hook/);
 });
+
+test('hook prints the backstory as the prologue shows it: a typed [[ ]] stays, a GM link shows its label', () => {
+  const md = (line) => `## Background\n\n### Backstory\n\n${line}\n\nMore follows.\n`;
+  assert.equal(pcEpithetText(pcPage(md('She fled \\[\\[Waterdeep\\]\\] at dawn.'))), 'She fled [[Waterdeep]] at dawn.');
+  assert.equal(pcEpithetText(pcPage(md('She fled [[Waterdeep|the city]] at dawn.'))), 'She fled the city at dawn.');
+  assert.equal(pcEpithetText(pcPage(md('She fled \\[\\[Waterdeep|x\\]\\] at dawn.'))), 'She fled [[Waterdeep|x]] at dawn.');
+});
+
+test('facts line: a dot inside a value stays in that fact', () => {
+  const md = [
+    '## Background', '', '### Appearance', '', 'Tall.', '',
+    '**Age:** 31 · **Eyes:** grey · green flecks · **Faith:** the Lamp',
+  ].join('\n');
+  const { storyParts } = require('../../lib/pc-story');
+  const parts = storyParts(sectionsOf(md));
+  assert.deepEqual(parts.facts, [
+    { label: 'Age', value: '31' },
+    { label: 'Eyes', value: 'grey · green flecks' },
+    { label: 'Faith', value: 'the Lamp' },
+  ]);
+});

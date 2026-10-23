@@ -34,7 +34,7 @@ function splitFacts(blockHtml) {
   const prose = String(blockHtml || '').replace(PARAGRAPH_RE, (p) => {
     const first = factOf(p.slice(3, -4));
     if (!first || !FACT_LABELS.some(l => l.toLowerCase() === first.label.toLowerCase())) return p;
-    for (const chunk of p.slice(3, -4).split('·')) {
+    for (const chunk of p.slice(3, -4).split(/\s·\s+(?=<strong>)/i)) {
       const f = factOf(chunk);
       const value = f ? real(cellText(f.inner)) : '';
       if (value) facts.push({ label: f.label, value });

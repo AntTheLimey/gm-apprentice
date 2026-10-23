@@ -38,7 +38,8 @@ function headerMeta(fm, defaults) {
 // sentence of its backstory (`### Backstory`, or the older one-line field), its key_traits,
 // the first sentence of the published body with the sheet's own lines dropped. The one
 // definition: the page (templates/pc.js), the preview card (previews.js) and the Characters
-// index card all call it. Printed as it stands: a labelled link in it prints its label.
+// index card all call it. Printed as the prologue shows it: a labelled link the GM wrote prints its
+// label (read in the source), and a `[[ ]]` a player typed (escaped by the sync) stays as typed.
 function pcEpithetText(page) {
   const fm = page.frontmatter || {};
   const hook = labelsForLinks(typeof fm.hook === 'string' ? fm.hook : '').trim();
@@ -47,8 +48,8 @@ function pcEpithetText(page) {
   // build gave no published text) must not give it up unmarked.
   const source = stripGmOnly(publishedSource(page));
   // Any other comment is an authoring note, never story (the renderer would print it as text).
-  const parts = storyParts(extractSections(source.replace(/<!--[\s\S]*?(?:-->|$)/g, '')));
-  const opening = parts ? labelsForLinks(parts.firstSentence).trim() : '';
+  const parts = storyParts(extractSections(labelsForLinks(source.replace(/<!--[\s\S]*?(?:-->|$)/g, ''))));
+  const opening = parts ? parts.firstSentence.trim() : '';
   if (opening) return opening;
   const traits = Array.isArray(fm.key_traits)
     ? fm.key_traits.map(t => String(t == null ? '' : t).trim()).filter(Boolean).join(', ')
