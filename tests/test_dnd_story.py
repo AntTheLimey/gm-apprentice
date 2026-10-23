@@ -335,6 +335,15 @@ def test_first_sync_part_with_text_is_check_and_stays_the_gms():
     assert body(back.text, "backstory") == "Changed again."
 
 
+def test_first_sync_gm_text_with_empty_source_part_is_the_gms():
+    empty = Story(**{**STORY.__dict__, "appearance": ""})
+    plan = synced(note(APPEARANCE="Mine."), empty)
+    assert plan.remember["appearance"] == (fingerprint(""), ds.GM_TEXT)
+    later = plan_story(plan.text, STORY, plan.remember)
+    assert ("CHECK", "Background / Appearance") in rows_of(later)
+    assert body(later.text, "appearance") == "Mine."
+
+
 def test_first_sync_text_the_source_already_says_is_quiet():
     text = note(BACKSTORY="Born in a forge.\n\nLeft it.")
     plan = synced(text, STORY)
@@ -349,6 +358,9 @@ def test_lost_memory_writes_nothing_and_checks():
     assert [r for r in plan.rows if r[0] == "WRITE"] == []
     assert plan.text == first.text
     assert set(plan.remember) == set(ds.PARTS)
+    newer = Story(**{**STORY.__dict__, "backstory": "Newer still."})
+    later = plan_story(plan.text, newer, plan.remember)
+    assert rows_of(later) == [("CHECK", "Background / Backstory")] and later.text == plan.text
 
 
 def test_source_emptied_clears_part():

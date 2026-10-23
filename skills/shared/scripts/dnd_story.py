@@ -12,7 +12,9 @@ Owns every free-text part of the note that comes from a player. Three jobs, all 
   ownership   `plan_story` writes a part only when the source changed since the last sync
               and the note's copy did not; when both changed it says CHECK once for that player
               version and writes nothing (later, the GM's text is never overwritten).
-              A fingerprint of each side is remembered per part.
+              Text a first sync (or one with no memory) finds there that differs from the source
+              is the GM's too, until it matches the source. A fingerprint of each side is
+              remembered per part.
 
 Where the parts live:
 
