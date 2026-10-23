@@ -24,7 +24,7 @@ the site opens a character's Story tab on it. Publish tool 1.47.0.
   that the GM edits, stays the GM's: a player change to it is a CHECK,
   once per player version, and is never written until the part matches
   the player's text. `--story` prints the player's text for each story
-  CHECK in a form that can be pasted back.
+  part that differs from it, in a form that can be pasted back.
 - The vault upgrade `dnd-background-sections` moves the old one-line
   Backstory & Personality and Appearance fields, word for word, into
   `### Backstory` and `### Appearance`, adds `### Personality` and the
