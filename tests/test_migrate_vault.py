@@ -2071,7 +2071,8 @@ class DndBackgroundSectionsTests(unittest.TestCase):
         self.put("PCs/B.md", old)
         (item,) = mv.find_dnd_background_sections(self.vault)
         self.assertEqual(item.lines, [
-            "PCs/B.md: Backstory & Personality moves into ### Backstory; ### Personality is added",
+            "PCs/B.md: Backstory & Personality moves into ### Backstory; ### Personality is added; "
+            "### Appearance gets its facts line",
             "PCs/B.md: the old **Appearance:** line stays where it is: the note already has "
             "### Appearance"])
         item.apply(None)
@@ -2080,7 +2081,7 @@ class DndBackgroundSectionsTests(unittest.TestCase):
             "---\ntype: pc\nname: Brannoch\n---\n# Brannoch\n\n## Background\n\n"
             "**Species:** Dwarf\n\n**Alignment:** Lawful Good\n\n"
             "**Appearance:** Broad, soot-stained; a braided beard.\n\n"
-            "### Appearance\n\nThe GM's own look.\n\n"
+            "### Appearance\n\nThe GM's own look.\n\n" + self.FACTS + "\n\n"
             "### Backstory\n\nBorn in a forge. *Gruff*, loyal.\n\n"
             "### Personality\n\n- **Traits:** —\n- **Ideals:** —\n"
             "- **Bonds:** —\n- **Flaws:** —\n\n"
@@ -2099,6 +2100,53 @@ class DndBackgroundSectionsTests(unittest.TestCase):
         self.assertIn("### Backstory\n\nBorn in a forge.", text)
         self.assertIn("### Appearance\n\nBroad, soot-stained", text)
         self.assertNotIn("**Appearance:**", text)
+
+    PARTIAL = ("---\ntype: pc\n---\n## Background\n\n**Species:** Elf\n\n"
+               "### Backstory\n\nThe GM's tale.\n\n"
+               "### Appearance\n\nTall, *grey-eyed*.\n\n"
+               "### Personality\n\n- **Traits:** Wry\n- **Bonds:** The guild\n\n"
+               "GM aside.\n\n## Skills\n")
+
+    def test_background_sections_fills_in_missing_lines_without_touching_text(self):
+        import dnd_story
+        for eol in ("\n", "\r\n"):
+            with self.subTest(eol=eol):
+                self.put("PCs/B.md", self.PARTIAL, eol=eol)
+                (item,) = mv.find_dnd_background_sections(self.vault)
+                self.assertEqual(item.lines, [
+                    "PCs/B.md: ### Appearance gets its facts line; "
+                    "### Personality gets its Ideals and Flaws lines"])
+                item.apply(None)
+                text = self.get("PCs/B.md")
+                self.assertEqual(text.replace("\r\n", "\n"), (
+                    "---\ntype: pc\n---\n## Background\n\n**Species:** Elf\n\n"
+                    "### Backstory\n\nThe GM's tale.\n\n"
+                    "### Appearance\n\nTall, *grey-eyed*.\n\n" + self.FACTS + "\n\n"
+                    "### Personality\n\n- **Traits:** Wry\n- **Bonds:** The guild\n\n"
+                    "GM aside.\n\n- **Ideals:** —\n- **Flaws:** —\n\n## Skills\n"))
+                if eol == "\r\n":
+                    self.assertEqual(text.count("\n"), text.count("\r\n"))
+                parts = dnd_story.note_parts(text)
+                self.assertTrue(all(parts.values()))
+                self.assertEqual(parts["appearance"].body, "Tall, *grey-eyed*.")
+                self.assertEqual(mv.find_dnd_background_sections(self.vault), [])
+
+    def test_background_sections_puts_bullets_with_the_list_it_ends_on(self):
+        self.put("PCs/B.md", self.PARTIAL.replace("GM aside.\n\n", ""))
+        self.run_check()
+        self.assertIn("- **Traits:** Wry\n- **Bonds:** The guild\n- **Ideals:** —\n- **Flaws:** —\n\n## Skills",
+                      self.get("PCs/B.md"))
+
+    def test_background_sections_fills_an_empty_personality_at_the_end_of_the_note(self):
+        import dnd_story
+        self.put("PCs/B.md", self.PARTIAL.replace(
+            "- **Traits:** Wry\n- **Bonds:** The guild\n\nGM aside.\n\n## Skills\n", ""))
+        self.run_check()
+        text = self.get("PCs/B.md")
+        self.assertTrue(text.endswith("### Personality\n\n- **Traits:** —\n- **Ideals:** —\n"
+                                      "- **Bonds:** —\n- **Flaws:** —\n"))
+        self.assertTrue(all(dnd_story.note_parts(text).values()))
+        self.assertEqual(mv.find_dnd_background_sections(self.vault), [])
 
     def test_the_check_is_registered(self):
         (check,) = [c for c in mv.VAULT_CHECKS if c.name == "dnd-background-sections"]

@@ -1368,6 +1368,42 @@ SUBSECTIONS = ("backstory", "appearance", "personality")
 OLD_LABEL = {"backstory": "Backstory & Personality", "appearance": "Appearance"}
 
 
+def _fill_sections(text: str) -> tuple[str, list[str]]:
+    """The note with what sync needs inside the sub-sections it already
+    has: a facts line at the end of `### Appearance`, and the missing
+    `- **Traits:** —` / Ideals / Bonds / Flaws lines at the end of
+    `### Personality`. Existing text is never changed; also gives what was
+    done, one phrase each."""
+    import dnd_story
+
+    lines = text.splitlines(keepends=True)
+    eol = next((m.group(0) for raw in lines if (m := re.search(r"\r\n|\n|\r", raw))), "\n")
+    subs = dnd_story._subsections(lines)
+    parts = dnd_story.note_parts(text)
+    adds: list[tuple[str, list[str], str]] = []
+    if "appearance" in subs and parts["facts"] is None:
+        adds.append(("appearance", [FACTS_LINE], "### Appearance gets its facts line"))
+    missing = [b for b in dnd_story.BULLETS if parts[b] is None]
+    if "personality" in subs and missing:
+        names = [b.title() for b in missing]
+        listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+        adds.append(("personality", [f"- **{b}:** \u2014" for b in names],
+                     f"### Personality gets its {listed} line{'s' if len(names) > 1 else ''}"))
+    for name, new, _ in sorted(adds, key=lambda a: subs[a[0]][0], reverse=True):
+        head, end = subs[name]
+        last = end
+        while last > head + 1 and not lines[last - 1].strip():
+            last -= 1
+        body = lines[head:last]
+        if not body[-1].endswith(("\n", "\r")):
+            body[-1] += eol
+        joined = name == "personality" and last > head + 1 and dnd_story.BULLET.match(
+            lines[last - 1].rstrip("\r\n")) is not None
+        tail = [eol] if end < len(lines) else []
+        lines[head:end] = body + ([] if joined else [eol]) + [line + eol for line in new] + tail
+    return "".join(lines), [a[2] for a in adds]
+
+
 def _background_sections(text: str) -> tuple[str, list[str]] | None:
     """The note with the `### Backstory` / `### Appearance` / `### Personality`
     sub-sections it is missing added under `## Background`, the one-line
@@ -1378,9 +1414,10 @@ def _background_sections(text: str) -> tuple[str, list[str]] | None:
     kept."""
     import dnd_story
 
+    text, filled = _fill_sections(text)
     have = dnd_story.subsections(text)
     if all(name in have for name in SUBSECTIONS):
-        return None
+        return (text, filled) if filled else None
     lines = text.splitlines(keepends=True)
     start = end = -1
     fence: str | None = None
@@ -1458,7 +1495,7 @@ def _background_sections(text: str) -> tuple[str, list[str]] | None:
             else f"### {name.title()} is added" for name in added]
     said += [f"the old **{OLD_LABEL[name]}:** line stays where it is: the note "
              f"already has ### {name.title()}" for name in left]
-    return "".join(new), said
+    return "".join(new), said[:len(added)] + filled + said[len(added):]
 
 
 def find_dnd_background_sections(vault: Path) -> list[Item]:
@@ -1466,7 +1503,9 @@ def find_dnd_background_sections(vault: Path) -> list[Item]:
     and `### Personality` under `## Background` (`dnd_story.py`). The old
     one-line `**Backstory & Personality:**` and `**Appearance:**` values
     move there word for word; a `{placeholder}` counts as empty. Only the
-    sub-sections a note is missing are added. Frontmatter is not touched."""
+    sub-sections a note is missing are added, and an existing Appearance or
+    Personality gets the facts line or bullets it lacks. Frontmatter is not
+    touched."""
     if vault_system(vault) != "dnd-5e-2024":
         return []
     todo: list[str] = []
