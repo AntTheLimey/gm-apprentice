@@ -412,7 +412,8 @@ and a sync with `--write` inside a vault builds the file again.
 Sync never writes vault-owned state: `HP (Current)`, `Temp HP`, hit
 dice spent, death saves, exhaustion, conditions, Heroic Inspiration,
 any `Used` or `Expended` cell, a GM's own Bonuses row, Companions,
-Current Status, Notes, GM Notes or any free text.
+Current Status, Notes or GM Notes. `hook` and any free text outside
+the story parts are the GM's.
 
 ### Cells the live sheet writes back
 

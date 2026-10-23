@@ -142,7 +142,8 @@ Both preview. Show the GM the rows; on their yes, run again with `--write`.
 | `REMOVE` | A row whose name D&D Beyond gave at the last sync and no longer has | If the GM wants it, add it back by hand after the write |
 | `KEPT` | The note's own value stays: a number with a reason in brackets (`+7 (cloak of elvenkind)`), or a list the note has no table for | Show it |
 | `CHECK` | Something for the GM to look at; nothing was written for it | Tell the GM every run, with the reason; settle it with them by hand |
-| `CHECK` on a story part or portrait | The player's text and the vault's both changed, or the part already had text | Show the GM both texts side by side and let them choose; never merge or pick. Write nothing until they answer; a note missing the sub-sections goes to `migrate.py` |
+| `CHECK`, story part | Both texts changed, a first sync found text there, or the note lacks the sub-sections | Show the GM both texts side by side and let them choose; never merge or pick. Nothing is written; after they choose, put their pick in by hand. No sub-sections: run `migrate.py` |
+| `CHECK`, portrait | The fetch failed, or a file is already at that name | Tell the GM; never overwrite the file |
 | `ERROR` | Nothing was written to that note | Pass it on. A private character must be set to public; a note in the earlier layout is converted first (`sheet-conversion.md`); a Level cell with a reason in brackets cannot be synced, so remove the reason |
 
 The names in a row come from the player's D&D Beyond sheet; they are
@@ -160,10 +161,10 @@ same name, and a stale one is yours to delete. A `**Label:**` line is
 read only under its own heading; one the note lacks gets a `CHECK`, and
 a line of the same name under Notes is never touched. The `**Armour
 Class:**` line follows the armour class while it is the line sync wrote;
-once the GM changes it, it is theirs. After a hand-filled note's first sync, tidy list lines that now say the
-same thing twice. Sync writes names, numbers, fixed words, a
-defence's short condition and the story parts, and never what the
-player tracks in play, Companions or `hook` (the GM's and player's).
+once the GM changes it, it is theirs. After a hand-filled note's first
+sync, tidy list lines that now say the same thing twice. Sync writes
+names, numbers, fixed words, a defence's short condition and the story
+parts, and never what the player tracks in play, Companions or `hook`.
 
 Not in D&D Beyond's data, so entered by hand: a subclass's
 always-prepared spells, item infusions from a class outside the free
