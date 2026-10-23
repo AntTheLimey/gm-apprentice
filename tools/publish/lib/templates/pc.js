@@ -7,7 +7,9 @@ const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
 const { liveDataScript } = require('./gurps/live-data');
 const { liveScriptHrefs, clientFor } = require('./live-mount');
-const { getConsumedTitleMatcher } = require('./pc-registry');
+const { getConsumedTitleMatcher, getSheetFamily } = require('./pc-registry');
+const { storyParts, splitTitle } = require('../pc-story');
+const { aboveSubheadings, cellText, isPlaceholder, filled } = require('./sheet-parse');
 const { sheetSourceOf } = require('../sheet-source');
 const { resolveLook, isDressed } = require('../skins');
 const { framedPortrait } = require('../skins/portrait');
@@ -260,6 +262,115 @@ document.addEventListener('click', function(e) {
 </script>`;
 }
 
+// --- Story tab (not the CoC folio, #483) ---
+
+// A root-relative address (`story/characters/x.html#session-2`) as an href from this page.
+function hrefFrom(page, address) {
+  const text = String(address);
+  const cut = text.indexOf('#');
+  const target = cut < 0 ? text : text.slice(0, cut);
+  return encodeHref(relativeHref(page.outputPath, target)) + (cut < 0 ? '' : escapeHtml(text.slice(cut)));
+}
+
+// An older one-line field's value is inline HTML: a paragraph of its own here.
+const asBlock = (html) => (/^\s*<(?:p|ul|ol|blockquote|h[1-6]|div|table|pre|hr)\b/i.test(html) ? html : `<p>${html}</p>`);
+
+// The Story tab: the backstory as a prologue, how they look, what drives them, the story so far.
+// `parts` is storyParts' answer (null: none); `lines` the story page's session lines.
+function storyTabHtml(page, parts, { portraitUrl, storyHref, storyLines, storyHtml }) {
+  const name = escapeHtml(page.displayTitle);
+  const blocks = [];
+  if (parts && parts.backstoryHtml) {
+    const { titleHtml, proseHtml } = splitTitle(asBlock(parts.backstoryHtml));
+    blocks.push(`<article class="pc-prologue">
+  <p class="pc-prologue-eyebrow">Before the campaign</p>
+  <h2 class="pc-prologue-title">${titleHtml || `${name}'s story`}</h2>
+  <p class="pc-prologue-byline">as their player wrote it</p>
+  <div class="pc-prologue-prose">
+${proseHtml.trim()}
+  </div>
+</article>`);
+  }
+  if (parts && (parts.appearanceHtml || parts.facts.length)) {
+    const portrait = portraitUrl
+      ? `<img class="pc-look-portrait" src="${portraitUrl}" alt="${name}">`
+      : `<div class="pc-look-portrait pc-look-initials" aria-hidden="true">${escapeHtml(getInitials(page.displayTitle))}</div>`;
+    const facts = parts.facts.length
+      ? `\n    <ul class="pc-facts">${parts.facts.map(f => `<li><span class="label">${escapeHtml(f.label)}</span> ${escapeHtml(f.value)}</li>`).join('')}</ul>`
+      : '';
+    blocks.push(`<section class="pc-story-box pc-look">
+  <h3 class="pc-story-label">How they look</h3>
+  <div class="pc-look-grid">
+    ${portrait}
+    <div class="pc-look-text">
+${parts.appearanceHtml ? asBlock(parts.appearanceHtml) : ''}${facts}
+    </div>
+  </div>
+</section>`);
+  }
+  if (parts && parts.personality.length) {
+    blocks.push(`<section class="pc-story-box pc-drives">
+  <h3 class="pc-story-label">What drives them</h3>
+  <div class="pc-drives-grid">
+${parts.personality.map(p => `    <div class="pc-drive"><h4>${escapeHtml(p.label)}</h4><p>${p.html}</p></div>`).join('\n')}
+  </div>
+</section>`);
+  }
+  const lines = Array.isArray(storyLines) ? storyLines : [];
+  if (lines.length || storyHref) {
+    const list = lines.length ? `\n  <h3 class="pc-story-label">The story so far</h3>
+  <ol>
+${lines.map(l => `    <li><span class="pc-sofar-when">Session ${escapeHtml(String(l.n))}</span><a class="pc-sofar-what" href="${hrefFrom(page, l.href)}"><b>${escapeHtml(l.title || '')} &rarr;</b>${escapeHtml(l.line || '')}</a></li>`).join('\n')}
+  </ol>` : '';
+    const link = storyHref
+      ? `\n  <p class="pc-sofar-more"><a class="story-read-link" href="${hrefFrom(page, storyHref)}">Read ${name}'s full story &rarr;</a></p>`
+      : '';
+    blocks.push(`<section class="pc-story-box pc-sofar">${list}${link}
+</section>`);
+  } else if (storyHtml) {
+    // A caller with the story's text and no page of its own for it (the build always has a page).
+    blocks.push(`<div class="story-prose">\n${storyHtml}\n</div>`);
+  }
+  return blocks.length ? blocks.join('\n') : `<p class="text-muted pc-story-none">${name}'s story starts at the table.</p>`;
+}
+
+// The sheet tab's teaser: the backstory's first sentence, and a way to the Story tab.
+function storyTeaserHtml(parts) {
+  if (!parts || !parts.backstoryHtml || !parts.firstSentence) return '';
+  return `<section class="pc-story-teaser">
+  <div>
+    <p class="pc-story-teaser-label">From the backstory</p>
+    <p class="pc-story-teaser-text">${escapeHtml(parts.firstSentence)}</p>
+  </div>
+  <a href="#story" onclick="switchTab('story'); return false;">Read on &rarr;</a>
+</section>`;
+}
+
+// Bold-field labels a header already shows, per sheet family (the D&D and PF2e sheet headers).
+const HEADER_LABELS = {
+  dnd: [/^Class(?:es)?(?:\s*\/\s*Subclass(?:es)?)?$/i, /^(?:Species|Race)$/i, /^Background$/i],
+  pf2e: [/^Class(?:es)?(?:\s*\/\s*Subclass(?:es)?)?$/i, /^Ancestry$/i, /^Heritage$/i, /^Background$/i],
+};
+// The identity strip's labels (pc-identity.js), as the bold-field labels they read.
+const IDENTITY_LABELS = {
+  Class: HEADER_LABELS.dnd[0], Species: HEADER_LABELS.dnd[1], Background: /^Background$/i,
+  Ancestry: /^Ancestry$/i, Heritage: /^Heritage$/i, Vice: /^Vice(?:\/Purveyor)?$/i,
+};
+// The story's own fields, which the Story tab shows.
+const STORY_LABELS = [/^Backstory\s*&\s*Personality$/i, /^Appearance$/i];
+
+// What the Background section holds besides its story once it is no accordion: the lines
+// above its sub-headings that neither the Story tab nor the page header shows. '' when none.
+function backgroundRest(section, shown) {
+  const drop = [...STORY_LABELS, ...shown];
+  const rest = aboveSubheadings(section.html).replace(/<p>([\s\S]*?)<\/p>\s*/gi, (p, inner) => {
+    const m = inner.match(/^\s*<strong>\s*([^<:]+?)\s*(?::\s*<\/strong>|<\/strong>\s*:)([\s\S]*)$/i);
+    if (m && (drop.some(re => re.test(cellText(m[1]))) || !filled(cellText(m[2])) || /^\s*[–—-]\s*$/.test(cellText(m[2])))) return '';
+    return isPlaceholder(cellText(inner)) || !cellText(inner) ? '' : p;
+  }).trim();
+  return rest ? `<section class="pc-background-rest">\n${rest}\n</section>` : '';
+}
+
 function pcTemplate(page, processedContent, sections, navFor, config, imageMap, storyHtml, context) {
   const fm = page.frontmatter;
   const publishConfig = (context || {}).publishConfig || {};
@@ -375,7 +486,13 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   // D&D, PF2e and FitD: the sheet's own module says which sections it rendered
   // in full, so one matcher decides both what it reads and what leaves this list.
   const sheetConsumes = getConsumedTitleMatcher(publishConfig.system);
+  // The story parts (Background's Backstory, Appearance, Personality, or its older one-line
+  // fields) go to the Story tab, and Background is then no accordion (the CoC folio keeps its own).
+  const cocFolio = usesCocFolio(publishConfig, sheetsOff);
+  const parts = cocFolio ? null : storyParts(sections);
+  const backgroundSection = parts ? sections.find(s => s.id === 'background') : null;
   const sheetSections = sections.filter(s => {
+    if (s === backgroundSection) return false;
     const lower = s.title.toLowerCase();
     // With sheets off there is no Equipment tab to take these, and the keep-list already chose them.
     if (!sheetsOff && EQUIPMENT_SECTION_TITLES.has(lower)) return false;
@@ -391,6 +508,16 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const sectionNav = sheetSections.length > 0
     ? `<nav class="section-nav" aria-label="Sheet sections">${sheetSections.map(s => `<a href="#${s.id}">${escapeHtml(s.title)}</a>`).join('\n')}</nav>`
     : '';
+
+  // Background's other lines, less what the header shows: the sheet's header (sheets on) or the identity strip (off).
+  const family = getSheetFamily(publishConfig.system);
+  const shownLabels = sheetsOff
+    ? ((context || {}).identity || []).map(([label]) => IDENTITY_LABELS[label]).filter(Boolean)
+    : (systemHtml && HEADER_LABELS[family]) || [];
+  const restHtml = backgroundSection ? backgroundRest(backgroundSection, shownLabels) : '';
+  const teaser = storyTeaserHtml(parts);
+  const lead = teaser ? `${teaser}\n` : '';
+  const rest = restHtml ? `${restHtml}\n` : '';
 
   const accordions = sheetSections.map(s => `
 <div class="accordion" id="${s.id}">
@@ -419,13 +546,13 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     const metaFields = headerMetaFields(fm, publishConfig.header_facts);
     const kept = metaFields.includes('sheet_source') ? sheetSourceOf(fm) : '';
     const keptLine = kept ? ` This sheet is kept: ${escapeHtml(kept)}.` : '';
-    sheetContent = `${strip}<p class="sheet-withheld">Character sheets aren't published for this campaign.${keptLine}</p>\n${sectionNav}\n${accordions}`;
+    sheetContent = `${lead}${strip}<p class="sheet-withheld">Character sheets aren't published for this campaign.${keptLine}</p>\n${rest}${sectionNav}\n${accordions}`;
   } else if (systemHtml) {
     const liveClient = liveData ? clientFor(publishConfig.system) : null;
     const island = liveClient ? '\n' + liveDataScript(liveData, liveClient.domId) : '';
-    sheetContent = `${systemHtml}\n${sectionNav}\n${accordions}${island}`;
+    sheetContent = `${lead}${systemHtml}\n${rest}${sectionNav}\n${accordions}${island}`;
   } else {
-    sheetContent = `${sectionNav}\n${accordions}`;
+    sheetContent = `${lead}${rest}${sectionNav}\n${accordions}`;
   }
 
   // --- Equipment Tab ---
@@ -437,9 +564,13 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
 
   // --- Story Tab ---
   const opts = context || {};
-  const storyContent = opts.storyHref
+  // The CoC folio's Story tab (#483 brings it the prologue).
+  const cocStoryContent = opts.storyHref
     ? `<a class="story-read-link" href="${encodeHref(relativeHref(page.outputPath, opts.storyHref))}">Read ${escapeHtml(page.displayTitle)}'s story &rarr;</a>`
     : (storyHtml || '<p class="text-muted">No story content available.</p>');
+  const storyContent = cocFolio ? '' : storyTabHtml(page, parts, {
+    portraitUrl: hasPortrait ? imgUrl : '', storyHref: opts.storyHref, storyLines: opts.storyLines, storyHtml,
+  });
 
   // --- Journey Tab ---
   const routeMap = buildRouteMap(page, pages);
@@ -478,7 +609,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     : '';
 
   // --- CoC parchment folio (branch off the generic assembly) ---
-  if (usesCocFolio(publishConfig, sheetsOff)) {
+  if (cocFolio) {
     const portraitUrl = hasPortrait
       ? (((portraitImg(fm, page.outputPath, imageMap || {}) || '').match(/src="([^"]+)"/) || [])[1] || '')
       : '';
@@ -495,7 +626,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
       recordHtml: systemRecordHtml,
       statusBarHtml: statusBar,
       portraitUrl, sealUrl, crWidget, look,
-      equipmentContent, storyContent, journeyContent,
+      equipmentContent, storyContent: cocStoryContent, journeyContent,
       leftoverSections: sheetSections,
     }) + cocIsland;
     return baseShell({
@@ -531,9 +662,7 @@ ${statusPanel ? statusPanel + '\n' : ''}${systemVitalsHtml ? systemVitalsHtml + 
 ${sheetContent}
 </div>${combatPanel}${spellsPanel}${equipmentPanel}
 <div class="tab-panel" id="tab-story">
-  <div class="story-prose">
-    ${storyContent}
-  </div>
+${storyContent}
 </div>
 <div class="tab-panel" id="tab-journey">
 ${journeyContent}

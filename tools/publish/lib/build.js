@@ -1919,7 +1919,7 @@ function buildSite(options) {
         if (live) console.log(`  skipped ${dir}/index.html (authored index page)`);
         continue;
       }
-      emit(`${dir}/index.html`, indexTemplate(dir, label, dirPages, navFor, config, publishConfig, imageMap), `  wrote ${dir}/index.html`);
+      emit(`${dir}/index.html`, indexTemplate(dir, label, dirPages, navFor, config, publishConfig, imageMap, { cocFolio: require('./templates/pc').usesCocFolio(publishConfig, sheetsOff) }), `  wrote ${dir}/index.html`);
     }
 
     // Timeline page

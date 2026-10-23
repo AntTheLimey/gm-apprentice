@@ -20,6 +20,7 @@
   --warning: #d4a017;
   --success: #6b8f3c;
   --font-heading: "Georgia", "Times New Roman", serif;
+  --font-reading: var(--font-heading);
   --font-body: system-ui, -apple-system, sans-serif;
 }
 

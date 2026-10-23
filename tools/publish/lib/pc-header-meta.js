@@ -2,7 +2,8 @@
 // The badges a PC page's header shows after the player: the note's `display_meta` list,
 // else the site's `header_facts`. The one definition: the page header (templates/pc.js) and the link
 // preview card (previews.js) both read it, so they cannot disagree.
-const { publishedSource, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS } = require('./processor');
+const { publishedSource, plainMetaValue, plainRefValue, extractSections, NOTE_NAME_FIELDS } = require('./processor');
+const { storyParts } = require('./pc-story');
 const { excerptFromMarkdown } = require('./excerpt');
 const { labelsForLinks } = require('./wikilink');
 
@@ -33,16 +34,24 @@ function headerMeta(fm, defaults) {
     .map(field => [formatLabel(field), (namesNote(field, fm[field]) ? plainRefValue(fm[field]) : plainMetaValue(fm[field])).trim()]);
 }
 
-// The epithet a PC page opens with: key_traits when the PC has any, otherwise the first
-// sentence of the published body with the sheet's own lines dropped. The one definition:
-// the page (templates/pc.js) and the preview card (previews.js) both call it.
+// The hook a PC page opens with, first that says something: the note's `hook`, the first
+// sentence of its backstory (`### Backstory`, or the older one-line field), its key_traits,
+// the first sentence of the published body with the sheet's own lines dropped. The one
+// definition: the page (templates/pc.js), the preview card (previews.js) and the Characters
+// index card all call it. Printed as it stands: a labelled link in it prints its label.
 function pcEpithetText(page) {
   const fm = page.frontmatter || {};
+  const hook = labelsForLinks(typeof fm.hook === 'string' ? fm.hook : '').trim();
+  if (hook) return hook;
+  const source = publishedSource(page);
+  // A comment is an authoring note, never story (the renderer would print it as text).
+  const parts = storyParts(extractSections(source.replace(/<!--[\s\S]*?(?:-->|$)/g, '')));
+  const opening = parts ? labelsForLinks(parts.firstSentence).trim() : '';
+  if (opening) return opening;
   const traits = Array.isArray(fm.key_traits)
     ? fm.key_traits.map(t => String(t == null ? '' : t).trim()).filter(Boolean).join(', ')
     : String(fm.key_traits || '');
-  // Printed as it stands, on the page and on the card: a labelled link in it prints its label.
-  return labelsForLinks(traits).trim() || excerptFromMarkdown(publishedSource(page), { skipSheetLines: true });
+  return labelsForLinks(traits).trim() || excerptFromMarkdown(source, { skipSheetLines: true });
 }
 
 module.exports = { headerMetaFields, headerMeta, pcEpithetText };

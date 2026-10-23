@@ -85,6 +85,15 @@ function firstSentence(text, max = 200) {
   return `${(space > 0 ? room.slice(0, space) : room).replace(/[\s,;:.!?-]+$/, '')}…`;
 }
 
+// A backstory whose first paragraph is a single bold line has that line as its title:
+// -> { titleHtml, proseHtml } (titleHtml '' when there is none; proseHtml is the rest).
+function splitTitle(html) {
+  const text = String(html || '');
+  const m = text.match(/^\s*<p>\s*<strong>((?:(?!<\/?strong>|<br)[\s\S])*?)<\/strong>\s*<\/p>\s*/i);
+  if (!m || !cellText(m[1]).trim() || !text.slice(m[0].length).trim()) return { titleHtml: '', proseHtml: text };
+  return { titleHtml: m[1].trim(), proseHtml: text.slice(m[0].length) };
+}
+
 // -> { hasSections, backstoryHtml, appearanceHtml, facts, personality, firstSentence }, or null
 // when there is no Background section or nothing of a story in it. Fields may be empty
 // (a blank template note); hasSections says the note has the sub-section headings.
@@ -118,8 +127,9 @@ function storyParts(sections) {
     appearanceHtml,
     facts,
     personality: readPersonality(personality || ''),
-    firstSentence: firstSentence(cellText(backstoryHtml.replace(/<\/(p|li)>/gi, ' '))),
+    // The title line is not a sentence of the story.
+    firstSentence: firstSentence(cellText(splitTitle(backstoryHtml).proseHtml.replace(/<\/(p|li)>/gi, ' '))),
   };
 }
 
-module.exports = { storyParts, firstSentence };
+module.exports = { storyParts, firstSentence, splitTitle };

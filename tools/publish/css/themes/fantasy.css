@@ -20,6 +20,7 @@
   --warning: #f59e0b;
   --success: #22c55e;
   --font-heading: "Palatino", "Palatino Linotype", "Book Antiqua", serif;
+  --font-reading: var(--font-heading);
   --font-body: system-ui, -apple-system, sans-serif;
 }
 

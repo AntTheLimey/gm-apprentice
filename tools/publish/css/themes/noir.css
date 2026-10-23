@@ -20,6 +20,7 @@
   --warning: #eab308;
   --success: #22c55e;
   --font-heading: "Fira Code", ui-monospace, monospace;
+  --font-reading: var(--font-heading);
   --font-body: system-ui, -apple-system, sans-serif;
 }
 

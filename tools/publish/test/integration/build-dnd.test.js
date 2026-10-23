@@ -118,10 +118,12 @@ describe('build integration — D&D PC', () => {
     }
   });
 
-  it('Background and Notes stay; GM Notes are withheld', () => {
+  it('Notes stays; Background goes to the Story tab, its alignment to the sheet tab; GM Notes are withheld', () => {
     for (const [slug, html] of Object.entries(pages)) {
       const titles = accordionTitles(html);
-      assert.ok(titles.includes('Background') && titles.includes('Notes'), slug);
+      assert.ok(!titles.includes('Background') && titles.includes('Notes'), slug);
+      assert.match(html.split('id="tab-story"')[1], /class="pc-prologue"/, slug);
+      assert.match(html.split('id="tab-story"')[0], /<section class="pc-background-rest">\s*<p><strong>Alignment:<\/strong>/, slug);
       assert.ok(!html.includes('FIXTURE-GM-SECRET'), slug);
     }
   });

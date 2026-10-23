@@ -23,6 +23,7 @@
   --warning: #eab308;
   --success: #3fd0d8;
   --font-heading: "Rajdhani", "Avenir Next Condensed", "Arial Narrow", sans-serif;
+  --font-reading: var(--font-heading);
   --font-body: system-ui, -apple-system, sans-serif;
 }
 
