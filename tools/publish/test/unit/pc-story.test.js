@@ -93,3 +93,36 @@ test('returns null with no story', () => {
   assert.equal(storyParts(undefined), null);
   assert.equal(storyParts(sectionsOf('## Background\n**Species:** Elf\n')), null);
 });
+
+test('firstSentence skips abbreviations, initials and ellipses', () => {
+  assert.equal(firstSentence('Dr. Smith raised her. Then more.'), 'Dr. Smith raised her.');
+  assert.equal(firstSentence('St. Albans is home. Next.'), 'St. Albans is home.');
+  assert.equal(firstSentence('J. R. Tolkien wrote. More'), 'J. R. Tolkien wrote.');
+  assert.equal(firstSentence('He said... nothing. Then'), 'He said... nothing.');
+});
+
+test('a half-migrated note falls back to the old one-line field', () => {
+  const s = storyParts(sectionsOf([
+    '## Background', '**Backstory & Personality:** Old tale\nwrapped here.', '',
+    '### Backstory', '{Backstory}', '',
+    '### Appearance', 'New look.', '',
+  ].join('\n')));
+  assert.equal(s.hasSections, true);
+  assert.match(s.backstoryHtml, /Old tale[\s\S]*wrapped here\./);
+  assert.match(s.appearanceHtml, /New look/);
+});
+
+test('an old field keeps its hard-wrapped tail and stops at the next label', () => {
+  const s = storyParts(sectionsOf('## Background\n**Backstory & Personality:** Line one,\nline two.\n**Appearance:** Tall.\n'));
+  assert.match(s.backstoryHtml, /line two\./);
+  assert.doesNotMatch(s.backstoryHtml, /Tall/);
+  assert.match(s.appearanceHtml, /Tall/);
+});
+
+test('facts read a colon outside the bold and drop any lone dash', () => {
+  const s = storyParts(sectionsOf([
+    '## Background', '### Appearance', 'Hmm.', '',
+    '**Age**: 40 · **Height:** – · **Weight:** - · **Eyes:** &amp;co', '',
+  ].join('\n')));
+  assert.deepEqual(s.facts, [{ label: 'Age', value: '40' }, { label: 'Eyes', value: '&co' }]);
+});
