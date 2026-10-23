@@ -380,10 +380,11 @@ rows that the character's items and features give. It also writes the
 `### Backstory`, `### Appearance` and `### Personality` parts under
 Background, frontmatter `gender` and `portrait` when blank. A story
 part is rewritten only when the player changed it on D&D Beyond since
-the last sync and the vault copy was not edited since; if both changed,
-or a first sync finds text there, sync writes nothing and reports a
-`CHECK`, once for each new player version. A part the GM has edited is
-never overwritten; a later player change is a `CHECK` too. `hook` is never written by sync.
+the last sync and the vault copy was not edited since. A part that sync
+finds with text, or that was edited after a sync, stays the GM's: a
+player change to it is reported as a `CHECK` once for each new player
+version and never written. It goes back to sync when it matches the
+player's text. `hook` is never written by sync.
 
 - **A number with a reason in brackets is kept**: `15 (homebrew plate)`,
   `40 ft (boots of striding)`. A blank cell or a bare value is sync's.

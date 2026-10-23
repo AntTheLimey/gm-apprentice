@@ -294,6 +294,11 @@ def _replacement(part: str, span: Span, new: str, lines: list[str], eol: str) ->
     return [eol] + [line + eol for line in new.split("\n")] + gap
 
 
+# Remembered as a part's "note as last synced" when sync found text there it never wrote. No
+# fingerprint can equal it, so the part counts as edited by the GM until it matches the source.
+GM_TEXT = "gm-text"
+
+
 def plan_story(text: str, story: Story, last: dict[str, tuple[str, str]] | None) -> StoryPlan:
     """Bring the note's story parts up to date; see the module doc for who owns what.
 
@@ -331,9 +336,12 @@ def plan_story(text: str, story: Story, last: dict[str, tuple[str, str]] | None)
                 rows.append(("WRITE", locus, _wrote(part, want)))
                 edits.append((span.start, span.end, _replacement(part, span, want, lines, eol)))
             elif want and note_fp != source_fp:
-                rows.append(("CHECK", locus, "the note already has text here; nothing was written, "
-                                             "and the next change on D&D Beyond will be"))
-            fresh[part] = source_fp
+                rows.append(("CHECK", locus, "the note already has text here; nothing was written. "
+                                             "It stays the GM's until it matches the D&D Beyond text"))
+            if now and note_fp != source_fp:
+                keep[part] = (source_fp, GM_TEXT)   # the GM's own text: no later player change overwrites it
+            else:
+                fresh[part] = source_fp
         elif note_fp == source_fp:
             fresh[part] = source_fp                 # the note already says what the source says: settled
         elif entry[0] == source_fp:

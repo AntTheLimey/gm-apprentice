@@ -310,20 +310,29 @@ def test_both_changed_then_made_equal_settles():
     assert plan_story(plan.text, new, plan.remember).rows == []
 
 
-def test_first_sync_part_with_text_is_check_and_remembers():
+def test_first_sync_part_with_text_is_check_and_stays_the_gms():
     text = note(BACKSTORY="Mine, written by the GM.")
     plan = synced(text, STORY)
     assert ("CHECK", "Background / Backstory",
-            "the note already has text here; nothing was written, and the next change on D&D Beyond will be") in plan.rows
+            "the note already has text here; nothing was written. "
+            "It stays the GM's until it matches the D&D Beyond text") in plan.rows
     assert body(plan.text, "backstory") == "Mine, written by the GM."
-    assert plan.remember["backstory"] == (fingerprint(source_parts(STORY)["backstory"]),
-                                          fingerprint("Mine, written by the GM."))
+    assert plan.remember["backstory"] == (fingerprint(source_parts(STORY)["backstory"]), ds.GM_TEXT)
+    # the next player change is a CHECK, never a WRITE, and fires once per player version
     new = Story(**{**STORY.__dict__, "backstory": "Changed at the source."})
     later = plan_story(plan.text, new, plan.remember)
-    assert ("WRITE", "Background / Backstory") in rows_of(later)    # the next player change is seen
-    assert body(later.text, "backstory") == "Changed at the source."
-    edited = plan.text.replace("Mine, written by the GM.", "Mine, and then some.")
-    assert ("CHECK", "Background / Backstory") in rows_of(plan_story(edited, new, plan.remember))
+    assert rows_of(later) == [("CHECK", "Background / Backstory")] and later.text == plan.text
+    assert plan_story(later.text, new, later.remember).rows == []
+    # the GM pastes the player's exact text: settled silently
+    pasted = plan.text.replace("Mine, written by the GM.", "Changed at the source.")
+    settled = plan_story(pasted, new, later.remember)
+    assert settled.rows == [] and settled.text == pasted
+    assert settled.remember["backstory"] == (fingerprint("Changed at the source."),) * 2
+    # and after that the part is back with sync
+    newer = Story(**{**STORY.__dict__, "backstory": "Changed again."})
+    back = plan_story(pasted, newer, settled.remember)
+    assert ("WRITE", "Background / Backstory") in rows_of(back)
+    assert body(back.text, "backstory") == "Changed again."
 
 
 def test_first_sync_text_the_source_already_says_is_quiet():
