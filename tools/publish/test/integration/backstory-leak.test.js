@@ -75,3 +75,25 @@ describe('story parts never carry gm-only text', () => {
     assert.match(player, /She is turned away\./);
   });
 });
+
+describe('a hidden summary line never becomes the story-so-far line', () => {
+  const HIDDEN = 'SUMMARY-GM-SECRET Ilse already knows who forged the card.';
+  const story = '---\ntype: character-story\n---\n\n### Session 1 — The Road\n\n'
+    + `<!-- gm-only -->\n*${HIDDEN}*\n<!-- /gm-only -->\n\nIlse follows the road south. Rain comes.\n\n`
+    + '### Session 2 — The Gate\n\n*She is turned away.*\n\nProse.\n';
+  const site = buildBoth({
+    'Characters/PCs/Ilse_Varn.md': PC,
+    'Characters/PCs/Ilse_Varn_Story.md': story,
+  }, { vault: { system: 'dnd-5e-2024' } });
+  after(() => site.cleanup());
+
+  it('falls back to the next visible sentence and leaks nowhere', () => {
+    const page = site.player.read('characters', 'pcs', 'ilse-varn.html');
+    assert.match(page, /Ilse follows the road south\./);
+    assert.match(page, /She is turned away\./);
+    for (const file of site.player.files()) {
+      assert.doesNotMatch(fs.readFileSync(file, 'utf8'), /SUMMARY-GM-SECRET/, path.relative(site.player.dir, file));
+    }
+    assert.match(site.gm.read('story', 'characters', 'ilse-varn.html'), /SUMMARY-GM-SECRET/);
+  });
+});
