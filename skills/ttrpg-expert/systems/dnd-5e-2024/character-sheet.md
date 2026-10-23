@@ -124,7 +124,7 @@ scores, proficiencies, defences (with the short condition D&D Beyond
 gives one), Speed, features, feats, spells, slot totals, gear, magic
 items, coins, the `### Bonuses` rows its items and features give, then
 AC, the hit point maximum and the attack lines, then the fill. It also
-brings in the story (Backstory, Appearance and Personality under
+brings in the player's text (Backstory, Appearance and Personality under
 Background), gender when blank and, with `--write`, the portrait when
 `portrait` is blank. Run it when the GM says a character changed there.
 
@@ -142,7 +142,7 @@ Both preview. Show the GM the rows; on their yes, run again with `--write`.
 | `REMOVE` | A row whose name D&D Beyond gave at the last sync and no longer has | If the GM wants it, add it back by hand after the write |
 | `KEPT` | The note's own value stays: a number with a reason in brackets (`+7 (cloak of elvenkind)`), or a list the note has no table for | Show it |
 | `CHECK` | Something for the GM to look at; nothing was written for it | Tell the GM every run, with the reason; settle it with them by hand |
-| `CHECK`, story part | Both texts changed, a first sync found text there, or the note lacks the sub-sections | Re-run with `--story` for the player's text; show the GM both texts side by side, flag any clash with the note's GM-only text, and say which you'd keep (or a merged draft) and why; the GM decides. Nothing is written; after they choose, put their pick in by hand (the `--story` text, pasted as shown, hands it back to sync). No sub-sections: run `migrate.py` |
+| `CHECK`, Background part | Both texts changed, a first sync found text there, or the note lacks the sub-sections | Re-run with `--player-text` for the player's text; show the GM both texts side by side, flag any clash with the note's GM-only text, and say which you'd keep (or a merged draft) and why; the GM decides. Nothing is written; after they choose, put their pick in by hand (the `--player-text` text, pasted as shown, hands it back to sync). No sub-sections: run `migrate.py` |
 | `CHECK`, portrait | The fetch failed, or a file is already at that name | Tell the GM; never overwrite the file |
 | `ERROR` | Nothing was written to that note | Pass it on. A private character must be set to public; a note in the earlier layout is converted first (`sheet-conversion.md`); a Level cell with a reason in brackets cannot be synced, so remove the reason |
 

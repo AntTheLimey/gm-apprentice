@@ -8,7 +8,7 @@ const { getInitials } = require('./landing-data');
 const { liveDataScript } = require('./gurps/live-data');
 const { liveScriptHrefs, clientFor } = require('./live-mount');
 const { getConsumedTitleMatcher, getSheetFamily } = require('./pc-registry');
-const { storyParts, splitTitle } = require('../pc-story');
+const { backgroundParts, splitTitle } = require('../pc-background');
 const { prologueHtml, asBlock } = require('./prologue');
 const { aboveSubheadings, cellText, isPlaceholder, filled } = require('./sheet-parse');
 const { sheetSourceOf } = require('../sheet-source');
@@ -274,7 +274,7 @@ function hrefFrom(page, address) {
 }
 
 // The Story tab: the backstory as a prologue, how they look, what drives them, the story so far.
-// `parts` is storyParts' answer (null: none); `lines` the story page's session lines.
+// `parts` is backgroundParts' answer (null: none); `lines` the story page's session lines.
 function storyTabHtml(page, parts, { portraitUrl, storyHref, storyLines, storyHtml }) {
   const name = escapeHtml(page.displayTitle);
   const blocks = [];
@@ -313,7 +313,7 @@ ${parts.personality.map(p => `    <div class="pc-drive"><h4>${escapeHtml(p.label
 ${lines.map(l => `    <li><span class="pc-sofar-when">Session ${escapeHtml(String(l.n))}</span><a class="pc-sofar-what" href="${hrefFrom(page, l.href)}"><b>${escapeHtml(l.title || '')} &rarr;</b>${escapeHtml(l.line || '')}</a></li>`).join('\n')}
   </ol>` : '';
     const link = storyHref
-      ? `\n  <p class="pc-sofar-more"><a class="story-read-link" href="${hrefFrom(page, storyHref)}">Read ${name}'s full story &rarr;</a></p>`
+      ? `\n  <p class="pc-sofar-more"><a class="story-read-link" href="${hrefFrom(page, storyHref)}">Every session in full &rarr;</a></p>`
       : '';
     blocks.push(`<section class="pc-story-box pc-sofar">${list}${link}
 </section>`);
@@ -345,10 +345,10 @@ function storyTeaserHtml(parts, hasHook) {
       text = `${(space > 0 ? room.slice(0, space) : room).replace(/[\s,;:.!?-]+$/, '')}…`;
     }
   }
-  return `<section class="pc-story-teaser">
+  return `<section class="pc-backstory-teaser">
   <div>
-    <p class="pc-story-teaser-label">From the backstory</p>
-    <p class="pc-story-teaser-text">${escapeHtml(text)}</p>
+    <p class="pc-backstory-teaser-label">From the backstory</p>
+    <p class="pc-backstory-teaser-text">${escapeHtml(text)}</p>
   </div>
   <a href="#story" onclick="switchTab('story'); return false;">Read on &rarr;</a>
 </section>`;
@@ -506,10 +506,10 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   // D&D, PF2e and FitD: the sheet's own module says which sections it rendered
   // in full, so one matcher decides both what it reads and what leaves this list.
   const sheetConsumes = getConsumedTitleMatcher(publishConfig.system);
-  // The story parts (Background's Backstory, Appearance, Personality, or its older one-line
+  // The background parts (Background's Backstory, Appearance, Personality, or its older one-line
   // fields) go to the Story tab, and Background is then no accordion (the CoC folio keeps its own).
   const cocFolio = usesCocFolio(publishConfig, sheetsOff);
-  const parts = cocFolio ? null : storyParts(sections);
+  const parts = cocFolio ? null : backgroundParts(sections);
   const backgroundSection = parts ? sections.find(s => s.id === 'background') : null;
   const sheetSections = sections.filter(s => {
     if (s === backgroundSection) return false;

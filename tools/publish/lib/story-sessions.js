@@ -5,7 +5,7 @@
 // more at one level reading "Session N: Title" (or "Session N — Title"). A page with fewer is left
 // as written. The icon's click is js/story-links.js.
 const { escapeHtml } = require('./processor');
-const { firstSentence } = require('./pc-story');
+const { firstSentence } = require('./pc-background');
 
 const HEADING = /<h([2-6])>\s*Session (\d+)(\s*[:—–-]\s*)([\s\S]*?)<\/h\1>/g;
 const ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M7.8 4.4 9.2 3a3.1 3.1 0 0 1 4.4 4.4l-2.1 2.1a3.1 3.1 0 0 1-4.4 0l1-1a1.7 1.7 0 0 0 2.4 0l2.1-2.1a1.7 1.7 0 1 0-2.4-2.4L8.8 5.4zm.4 7.2L6.8 13a3.1 3.1 0 0 1-4.4-4.4l2.1-2.1a3.1 3.1 0 0 1 4.4 0l-1 1a1.7 1.7 0 0 0-2.4 0L3.4 9.6A1.7 1.7 0 1 0 5.8 12l1.4-1.4z"/></svg>';

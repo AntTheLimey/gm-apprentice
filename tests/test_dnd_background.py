@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for dnd_story: safe player text, the Background sub-sections, who owns the text."""
+"""Tests for dnd_background: safe player text, the Background sub-sections, who owns the text."""
 
 import re
 import shutil
@@ -13,9 +13,9 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
 
-import dnd_story as ds  # noqa: E402
-from dnd_story import (MEMORY, Story, fingerprint, from_plain, memory_entries, memory_from,  # noqa: E402
-                       note_parts, plan_story, source_parts)
+import dnd_background as ds  # noqa: E402
+from dnd_background import (MEMORY, PlayerText, fingerprint, from_plain, memory_entries, memory_from,  # noqa: E402
+                       note_parts, plan_background, source_parts)
 
 MARKDOWN_IT = ROOT / "tools" / "publish" / "node_modules" / "markdown-it"
 ALLOWED_TAGS = {"p", "ul", "li", "br"}
@@ -68,13 +68,13 @@ def body(text: str, part: str) -> str:
     return span.body
 
 
-def rows_of(plan: ds.StoryPlan) -> list[tuple[str, str]]:
+def rows_of(plan: ds.BackgroundPlan) -> list[tuple[str, str]]:
     return [(status, locus) for status, locus, _ in plan.rows]
 
 
-def synced(text: str, story: Story) -> ds.StoryPlan:
+def synced(text: str, player_text: PlayerText) -> ds.BackgroundPlan:
     """A first sync, then the memory it leaves."""
-    return plan_story(text, story, None)
+    return plan_background(text, player_text, None)
 
 
 # --- safe text -----------------------------------------------------------------------------
@@ -124,7 +124,7 @@ def test_every_syntax_character_prints_as_typed():
 
 
 def test_wording_of_write_messages():
-    plan = synced(note(), STORY)
+    plan = synced(note(), BACKGROUND)
     said = {locus: msg for _, locus, msg in plan.rows}
     assert said["Background / Appearance"] == "from D&D Beyond (1 paragraph)"
     assert said["Background / Appearance / Facts"] == "from D&D Beyond"
@@ -133,7 +133,7 @@ def test_wording_of_write_messages():
 
 def test_unreadable_frontmatter_is_check_for_gender():
     text = note().replace("gender:\n", "gender:\n  - [broken\n", 1).replace("---\n# Brannoch", "# Brannoch", 1)
-    plan = synced(text, STORY)
+    plan = synced(text, BACKGROUND)
     assert ("CHECK", "Frontmatter / gender",
             "the frontmatter could not be read; gender was not written") in plan.rows
     assert "Female" not in plan.text
@@ -192,24 +192,24 @@ def test_a_subsection_ends_at_a_heading_of_level_three_or_less():
 
 
 def test_source_parts():
-    parts = source_parts(Story(backstory="Hi *there*", facts={"Age": "60", "Faith": "Moradin"}, traits="Gruff\nand loud",
+    parts = source_parts(PlayerText(backstory="Hi *there*", facts={"Age": "60", "Faith": "Moradin"}, traits="Gruff\nand loud",
                                flaws="x"))
     assert parts["backstory"] == "Hi \\*there\\*"
     assert parts["appearance"] == ""
     assert parts["facts"] == ("**Age:** 60 · **Height:** — · **Weight:** — · **Eyes:** — · **Hair:** — · "
                               "**Skin:** — · **Faith:** Moradin")
     assert parts["traits"] == "Gruff and loud" and parts["ideals"] == "" and parts["flaws"] == "x"
-    assert source_parts(Story())["facts"] == ""
+    assert source_parts(PlayerText())["facts"] == ""
 
 
 # --- who owns the text ---------------------------------------------------------------------
 
-STORY = Story(backstory="Born in a forge.\n\nLeft it.", appearance="Short.", facts={"Age": "60"},
+BACKGROUND = PlayerText(backstory="Born in a forge.\n\nLeft it.", appearance="Short.", facts={"Age": "60"},
               gender="Female", traits="Gruff", ideals="Craft", bonds="Clan", flaws="Pride")
 
 
 def test_first_sync_empty_part_writes():
-    plan = synced(note(), STORY)
+    plan = synced(note(), BACKGROUND)
     assert ("WRITE", "Background / Backstory", "from D&D Beyond (2 paragraphs)") in plan.rows
     assert [r[1] for r in plan.rows] == [ds.LOCUS[p] for p in ds.PARTS] + ["Frontmatter / gender"]
     assert body(plan.text, "backstory") == "Born in a forge.\n\nLeft it."
@@ -223,33 +223,33 @@ def test_first_sync_empty_part_writes():
 
 
 def test_unchanged_source_does_nothing():
-    first = synced(note(), STORY)
-    again = plan_story(first.text, STORY, first.remember)
+    first = synced(note(), BACKGROUND)
+    again = plan_background(first.text, BACKGROUND, first.remember)
     assert again.rows == [] and again.text == first.text and again.remember == first.remember
 
 
 def test_second_sync_after_a_vault_edit_still_does_nothing():
-    first = synced(note(), STORY)
+    first = synced(note(), BACKGROUND)
     edited = first.text.replace("Short.", "Short, with a scar.")
-    again = plan_story(edited, STORY, first.remember)
+    again = plan_background(edited, BACKGROUND, first.remember)
     assert again.rows == [] and again.text == edited and again.remember == first.remember
 
 
 def test_changed_source_untouched_note_writes():
-    first = synced(note(), STORY)
-    new = Story(**{**STORY.__dict__, "backstory": "A new tale.", "bonds": "Anvil"})
-    plan = plan_story(first.text, new, first.remember)
+    first = synced(note(), BACKGROUND)
+    new = PlayerText(**{**BACKGROUND.__dict__, "backstory": "A new tale.", "bonds": "Anvil"})
+    plan = plan_background(first.text, new, first.remember)
     assert rows_of(plan) == [("WRITE", "Background / Backstory"), ("WRITE", "Background / Personality / Bonds")]
     assert body(plan.text, "backstory") == "A new tale." and body(plan.text, "bonds") == "Anvil"
     assert body(plan.text, "appearance") == "Short."
-    assert plan_story(plan.text, new, plan.remember).rows == []
+    assert plan_background(plan.text, new, plan.remember).rows == []
 
 
 def test_both_changed_is_check():
-    first = synced(note(), STORY)
+    first = synced(note(), BACKGROUND)
     edited = first.text.replace("Short.", "Short, with a scar.")
-    new = Story(**{**STORY.__dict__, "appearance": "Tall."})
-    plan = plan_story(edited, new, first.remember)
+    new = PlayerText(**{**BACKGROUND.__dict__, "appearance": "Tall."})
+    plan = plan_background(edited, new, first.remember)
     assert plan.rows == [("CHECK", "Background / Appearance",
                           "the player changed this on D&D Beyond and it was also edited in the vault; "
                           "compare them, nothing was written")]
@@ -259,126 +259,126 @@ def test_both_changed_is_check():
 
 
 def both_changed():
-    first = synced(note(), STORY)
+    first = synced(note(), BACKGROUND)
     edited = first.text.replace("Short.", "Short, with a scar.")
-    new = Story(**{**STORY.__dict__, "appearance": "Tall."})
-    return first, edited, new, plan_story(edited, new, first.remember)
+    new = PlayerText(**{**BACKGROUND.__dict__, "appearance": "Tall."})
+    return first, edited, new, plan_background(edited, new, first.remember)
 
 
 def test_check_fires_once_per_player_version():
     _, edited, new, plan = both_changed()
-    again = plan_story(edited, new, plan.remember)
+    again = plan_background(edited, new, plan.remember)
     assert again.rows == [] and again.text == edited and again.remember == plan.remember
 
 
 def test_later_player_change_checks_again_and_never_writes():
     _, edited, new, plan = both_changed()
-    newer = Story(**{**STORY.__dict__, "appearance": "Taller."})
-    third = plan_story(edited, newer, plan.remember)
+    newer = PlayerText(**{**BACKGROUND.__dict__, "appearance": "Taller."})
+    third = plan_background(edited, newer, plan.remember)
     assert rows_of(third) == [("CHECK", "Background / Appearance")] and third.text == edited
-    assert plan_story(edited, newer, third.remember).rows == []
-    newest = Story(**{**STORY.__dict__, "appearance": ""})
-    fourth = plan_story(edited, newest, third.remember)
+    assert plan_background(edited, newer, third.remember).rows == []
+    newest = PlayerText(**{**BACKGROUND.__dict__, "appearance": ""})
+    fourth = plan_background(edited, newest, third.remember)
     assert rows_of(fourth) == [("CHECK", "Background / Appearance")] and fourth.text == edited
 
 
 def test_gm_pastes_player_text_plus_aside_is_never_overwritten():
-    first = synced(note(), STORY)
-    new = Story(**{**STORY.__dict__, "appearance": "Tall."})
+    first = synced(note(), BACKGROUND)
+    new = PlayerText(**{**BACKGROUND.__dict__, "appearance": "Tall."})
     pasted = first.text.replace("Short.", "Tall.\n\nGM: she limps.")
-    plan = plan_story(pasted, new, first.remember)
+    plan = plan_background(pasted, new, first.remember)
     assert rows_of(plan) == [("CHECK", "Background / Appearance")]
-    assert plan_story(pasted, new, plan.remember).rows == []
-    newer = Story(**{**STORY.__dict__, "appearance": "Taller."})
-    again = plan_story(pasted, newer, plan.remember)
+    assert plan_background(pasted, new, plan.remember).rows == []
+    newer = PlayerText(**{**BACKGROUND.__dict__, "appearance": "Taller."})
+    again = plan_background(pasted, newer, plan.remember)
     assert rows_of(again) == [("CHECK", "Background / Appearance")] and again.text == pasted
 
 
 def test_gm_pastes_exactly_the_new_player_text_settles_silently():
     first, edited, new, plan = both_changed()
     pasted = edited.replace("Short, with a scar.", "Tall.")
-    settled = plan_story(pasted, new, plan.remember)
+    settled = plan_background(pasted, new, plan.remember)
     assert settled.rows == [] and settled.text == pasted
     assert settled.remember["appearance"] == (fingerprint("Tall."), fingerprint("Tall."))
 
 
 def test_both_changed_then_made_equal_settles():
-    first = synced(note(), STORY)
-    new = Story(**{**STORY.__dict__, "appearance": "Tall."})
-    plan = plan_story(first.text.replace("Short.", "Tall."), new, first.remember)
+    first = synced(note(), BACKGROUND)
+    new = PlayerText(**{**BACKGROUND.__dict__, "appearance": "Tall."})
+    plan = plan_background(first.text.replace("Short.", "Tall."), new, first.remember)
     assert plan.rows == [] and plan.remember["appearance"][0] == fingerprint("Tall.")
-    assert plan_story(plan.text, new, plan.remember).rows == []
+    assert plan_background(plan.text, new, plan.remember).rows == []
 
 
 def test_first_sync_part_with_text_is_check_and_stays_the_gms():
     text = note(BACKSTORY="Mine, written by the GM.")
-    plan = synced(text, STORY)
+    plan = synced(text, BACKGROUND)
     assert ("CHECK", "Background / Backstory",
             "the note already has text here; nothing was written. "
             "It stays the GM's until it matches the D&D Beyond text") in plan.rows
     assert body(plan.text, "backstory") == "Mine, written by the GM."
-    assert plan.remember["backstory"] == (fingerprint(source_parts(STORY)["backstory"]), ds.GM_TEXT)
+    assert plan.remember["backstory"] == (fingerprint(source_parts(BACKGROUND)["backstory"]), ds.GM_TEXT)
     # the next player change is a CHECK, never a WRITE, and fires once per player version
-    new = Story(**{**STORY.__dict__, "backstory": "Changed at the source."})
-    later = plan_story(plan.text, new, plan.remember)
+    new = PlayerText(**{**BACKGROUND.__dict__, "backstory": "Changed at the source."})
+    later = plan_background(plan.text, new, plan.remember)
     assert rows_of(later) == [("CHECK", "Background / Backstory")] and later.text == plan.text
-    assert plan_story(later.text, new, later.remember).rows == []
+    assert plan_background(later.text, new, later.remember).rows == []
     # the GM pastes the player's exact text: settled silently
     pasted = plan.text.replace("Mine, written by the GM.", "Changed at the source.")
-    settled = plan_story(pasted, new, later.remember)
+    settled = plan_background(pasted, new, later.remember)
     assert settled.rows == [] and settled.text == pasted
     assert settled.remember["backstory"] == (fingerprint("Changed at the source."),) * 2
     # and after that the part is back with sync
-    newer = Story(**{**STORY.__dict__, "backstory": "Changed again."})
-    back = plan_story(pasted, newer, settled.remember)
+    newer = PlayerText(**{**BACKGROUND.__dict__, "backstory": "Changed again."})
+    back = plan_background(pasted, newer, settled.remember)
     assert ("WRITE", "Background / Backstory") in rows_of(back)
     assert body(back.text, "backstory") == "Changed again."
 
 
 def test_first_sync_gm_text_with_empty_source_part_is_the_gms():
-    empty = Story(**{**STORY.__dict__, "appearance": ""})
+    empty = PlayerText(**{**BACKGROUND.__dict__, "appearance": ""})
     plan = synced(note(APPEARANCE="Mine."), empty)
     assert plan.remember["appearance"] == (fingerprint(""), ds.GM_TEXT)
-    later = plan_story(plan.text, STORY, plan.remember)
+    later = plan_background(plan.text, BACKGROUND, plan.remember)
     assert ("CHECK", "Background / Appearance") in rows_of(later)
     assert body(later.text, "appearance") == "Mine."
 
 
 def test_first_sync_text_the_source_already_says_is_quiet():
     text = note(BACKSTORY="Born in a forge.\n\nLeft it.")
-    plan = synced(text, STORY)
+    plan = synced(text, BACKGROUND)
     assert ("CHECK", "Background / Backstory") not in rows_of(plan)
 
 
 def test_lost_memory_writes_nothing_and_checks():
-    first = synced(note(), STORY)
-    new = Story(**{**STORY.__dict__, "backstory": "A new tale."})
-    plan = plan_story(first.text, new, None)
+    first = synced(note(), BACKGROUND)
+    new = PlayerText(**{**BACKGROUND.__dict__, "backstory": "A new tale."})
+    plan = plan_background(first.text, new, None)
     assert ("CHECK", "Background / Backstory") in rows_of(plan)
     assert [r for r in plan.rows if r[0] == "WRITE"] == []
     assert plan.text == first.text
     assert set(plan.remember) == set(ds.PARTS)
-    newer = Story(**{**STORY.__dict__, "backstory": "Newer still."})
-    later = plan_story(plan.text, newer, plan.remember)
+    newer = PlayerText(**{**BACKGROUND.__dict__, "backstory": "Newer still."})
+    later = plan_background(plan.text, newer, plan.remember)
     assert rows_of(later) == [("CHECK", "Background / Backstory")] and later.text == plan.text
 
 
 def test_source_emptied_clears_part():
-    first = synced(note(), STORY)
-    new = Story(**{**STORY.__dict__, "backstory": "", "facts": {}, "traits": ""})
-    plan = plan_story(first.text, new, first.remember)
+    first = synced(note(), BACKGROUND)
+    new = PlayerText(**{**BACKGROUND.__dict__, "backstory": "", "facts": {}, "traits": ""})
+    plan = plan_background(first.text, new, first.remember)
     assert rows_of(plan) == [("WRITE", "Background / Backstory"), ("WRITE", "Background / Appearance / Facts"),
                              ("WRITE", "Background / Personality / Traits")]
     assert body(plan.text, "backstory") == ""
     assert body(plan.text, "facts") == " · ".join(f"**{label}:** —" for label in ds.FACTS)
     assert body(plan.text, "traits") == "—"
     assert "### Backstory\n\n### Appearance\n" in plan.text
-    assert plan_story(plan.text, new, plan.remember).rows == []
+    assert plan_background(plan.text, new, plan.remember).rows == []
 
 
 def test_missing_subsection_is_check():
     text = "---\nname: X\ngender:\n---\n## Background\n\n**Backstory & Personality:** Old line.\n\n## Notes\n"
-    plan = synced(text, STORY)
+    plan = synced(text, BACKGROUND)
     assert plan.text == text.replace("gender:\n", 'gender: "Female"\n')
     checks = [r for r in plan.rows if r[0] == "CHECK"]
     assert len(checks) == len(ds.PARTS) and not any(r[0] == "ERROR" for r in plan.rows)
@@ -390,26 +390,26 @@ def test_missing_subsection_is_check():
 
 def test_missing_bullet_in_an_existing_section_is_check():
     text = note().replace("- **Flaws:** —\n", "")
-    plan = synced(text, STORY)
+    plan = synced(text, BACKGROUND)
     assert ("CHECK", "Background / Personality / Flaws") in rows_of(plan)
     assert "Flaws" not in plan.text.split("### Personality")[1].split("## Notes")[0]
 
 
 def test_nothing_to_say_about_a_missing_part_the_source_leaves_empty():
     text = "## Background\n\n### Backstory\n\n{x}\n"
-    assert synced(text, Story(backstory="Hello")).rows == [("WRITE", "Background / Backstory",
+    assert synced(text, PlayerText(backstory="Hello")).rows == [("WRITE", "Background / Backstory",
                                                            "from D&D Beyond (1 paragraph)")]
 
 
 def test_gender_only_fills_a_blank():
     text = note().replace("gender:\n", "gender: Male\n")
-    plan = synced(text, STORY)
+    plan = synced(text, BACKGROUND)
     assert "gender: Male\n" in plan.text and ("WRITE", "Frontmatter / gender") not in rows_of(plan)
-    assert "gender" not in " ".join(r[1] for r in synced(note().replace("gender:\n", ""), STORY).rows).lower()
+    assert "gender" not in " ".join(r[1] for r in synced(note().replace("gender:\n", ""), BACKGROUND).rows).lower()
 
 
 def test_hostile_text_does_not_change_the_notes_structure():
-    plan = synced(note(), Story(backstory=HOSTILE, traits="# x | y\n- z", gender="a\nb: c"))
+    plan = synced(note(), PlayerText(backstory=HOSTILE, traits="# x | y\n- z", gender="a\nb: c"))
     before, after = note_parts(note()), note_parts(plan.text)
     assert [l for l in plan.text.splitlines() if l.startswith("#")] == \
            [l for l in note().splitlines() if l.startswith("#")]
@@ -421,30 +421,30 @@ def test_hostile_text_does_not_change_the_notes_structure():
 
 def test_crlf_note_keeps_its_line_endings():
     text = note().replace("\n", "\r\n")
-    plan = synced(text, STORY)
+    plan = synced(text, BACKGROUND)
     assert plan.text.count("\n") == plan.text.count("\r\n")
     assert body(plan.text, "backstory").replace("\r\n", "\n") == "Born in a forge.\n\nLeft it."
-    assert plan_story(plan.text, STORY, plan.remember).rows == []
+    assert plan_background(plan.text, BACKGROUND, plan.remember).rows == []
 
 
 def test_long_crlf_backstory_is_stable():
     long = "\n\n".join(("Paragraph %d. " % n) + "word " * 100 for n in range(12))
-    story = Story(backstory=long)
-    plan = synced(note().replace("\n", "\r\n"), story)
+    player_text = PlayerText(backstory=long)
+    plan = synced(note().replace("\n", "\r\n"), player_text)
     assert len(long) > 6000 and ("WRITE", "Background / Backstory") in rows_of(plan)
-    again = plan_story(plan.text, story, plan.remember)
+    again = plan_background(plan.text, player_text, plan.remember)
     assert again.rows == [] and again.text == plan.text
 
 
 def test_placeholders_count_as_empty_for_every_part():
     text = note().replace("- **Traits:** —", "- **Traits:** {Two or three traits.}")
-    assert ("WRITE", "Background / Personality / Traits") in rows_of(synced(text, STORY))
+    assert ("WRITE", "Background / Personality / Traits") in rows_of(synced(text, BACKGROUND))
 
 
 # --- sync's memory -------------------------------------------------------------------------
 
 def test_memory_round_trip():
-    plan = synced(note(), STORY)
+    plan = synced(note(), BACKGROUND)
     entries = memory_entries(plan.remember)
     assert len(entries) == 7 and entries[0].startswith("backstory\t")
     assert memory_from({MEMORY: entries}) == plan.remember
@@ -455,9 +455,9 @@ def test_memory_round_trip():
 def test_the_shared_template_and_the_reader_agree():
     template = (ROOT / "skills" / "shared" / "templates" / "pc-dnd-5e-2024.md").read_text(encoding="utf-8")
     assert all(note_parts(template).values())
-    story = Story(backstory="Born in a forge.", appearance="Broad.", facts={"age": "41", "faith": "Moradin"},
+    player_text = PlayerText(backstory="Born in a forge.", appearance="Broad.", facts={"age": "41", "faith": "Moradin"},
                   traits="Gruff", ideals="Craft", bonds="Clan", flaws="Pride")
-    plan = plan_story(template, story, None)
+    plan = plan_background(template, player_text, None)
     assert [r for r in plan.rows if r[0] == "CHECK"] == []
     wrote = {r[1] for r in plan.rows if r[0] == "WRITE"}
     assert wrote == set(ds.LOCUS.values())
@@ -484,37 +484,37 @@ def test_reading_still_tells_different_words_apart():
 
 
 def test_first_sync_hand_copy_of_the_source_is_settled_not_checked():
-    story = Story(**{**STORY.__dict__, "backstory": HAND})
-    plan = synced(note(BACKSTORY=HAND), story)
+    player_text = PlayerText(**{**BACKGROUND.__dict__, "backstory": HAND})
+    plan = synced(note(BACKSTORY=HAND), player_text)
     assert ("CHECK", "Background / Backstory") not in rows_of(plan)
     assert body(plan.text, "backstory") == HAND
-    assert plan.remember["backstory"] == (fingerprint(source_parts(story)["backstory"]), fingerprint(HAND))
-    assert plan_story(plan.text, story, plan.remember).rows == []
-    newer = Story(**{**STORY.__dict__, "backstory": "Changed at the source."})
-    later = plan_story(plan.text, newer, plan.remember)
+    assert plan.remember["backstory"] == (fingerprint(source_parts(player_text)["backstory"]), fingerprint(HAND))
+    assert plan_background(plan.text, player_text, plan.remember).rows == []
+    newer = PlayerText(**{**BACKGROUND.__dict__, "backstory": "Changed at the source."})
+    later = plan_background(plan.text, newer, plan.remember)
     assert ("WRITE", "Background / Backstory") in rows_of(later)
     assert body(later.text, "backstory") == "Changed at the source."
 
 
 def test_gm_pastes_the_players_text_as_written_after_a_check_and_it_settles():
     first, edited, _, _ = both_changed()
-    new = Story(**{**STORY.__dict__, "appearance": HAND})
-    plan = plan_story(edited, new, first.remember)
+    new = PlayerText(**{**BACKGROUND.__dict__, "appearance": HAND})
+    plan = plan_background(edited, new, first.remember)
     assert rows_of(plan) == [("CHECK", "Background / Appearance")]
     pasted = edited.replace("Short, with a scar.", HAND)
-    settled = plan_story(pasted, new, plan.remember)
+    settled = plan_background(pasted, new, plan.remember)
     assert settled.rows == [] and settled.text == pasted
     assert settled.remember["appearance"] == (fingerprint(source_parts(new)["appearance"]), fingerprint(HAND))
-    newer = Story(**{**STORY.__dict__, "appearance": "Tall."})
-    back = plan_story(pasted, newer, settled.remember)
+    newer = PlayerText(**{**BACKGROUND.__dict__, "appearance": "Tall."})
+    back = plan_background(pasted, newer, settled.remember)
     assert rows_of(back) == [("WRITE", "Background / Appearance")]
     assert body(back.text, "appearance") == "Tall."
 
 
 def test_never_synced_text_check_says_the_note_keeps_its_own_text():
-    plan = synced(note(BACKSTORY="Mine, written by the GM."), STORY)
-    new = Story(**{**STORY.__dict__, "backstory": "Changed at the source."})
-    later = plan_story(plan.text, new, plan.remember)
+    plan = synced(note(BACKSTORY="Mine, written by the GM."), BACKGROUND)
+    new = PlayerText(**{**BACKGROUND.__dict__, "backstory": "Changed at the source."})
+    later = plan_background(plan.text, new, plan.remember)
     assert later.rows == [("CHECK", "Background / Backstory",
                            "the note keeps its own text here and the player changed theirs on D&D Beyond; "
                            "compare them, nothing was written")]
@@ -524,7 +524,7 @@ def test_missing_place_wording():
     no_facts = note().replace("**Age:** — · **Height:** — · **Weight:** — · **Eyes:** — · **Hair:** — · "
                               "**Skin:** — · **Faith:** —\n", "")
     no_bonds = no_facts.replace("- **Bonds:** —\n", "")
-    plan = synced(no_bonds, STORY)
+    plan = synced(no_bonds, BACKGROUND)
     assert ("CHECK", "Background / Appearance / Facts", "the note has no facts line under Appearance; "
             "run the vault upgrade (migrate.py), nothing was written") in plan.rows
     assert ("CHECK", "Background / Personality / Bonds", "the note has no **Bonds:** bullet under Personality; "

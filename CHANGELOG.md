@@ -9,22 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.10.93] — 2026-10-23
 
-Backstories: a D&D Beyond character's story comes into the vault, and
+Backstories: a D&D Beyond character's backstory comes into the vault, and
 the site opens a character's Story tab on it. Publish tool 1.47.0.
 
 ### Added
 
-- D&D Beyond sync brings in the player's story as safe text:
+- D&D Beyond sync brings in the player's own text as safe text:
   backstory, appearance, personality (traits, ideals, bonds, flaws),
   physical facts, gender (when blank) and the portrait. The portrait
   is downloaded into `_attachments/characters/`, and only into a
   blank `portrait`.
-- A story part is rewritten only when the player changed it and the
+- A background part is rewritten only when the player changed it and the
   vault copy was not edited. Text the sync finds already there, or
   that the GM edits, stays the GM's: a player change to it is a CHECK,
   once per player version, and is never written until the part matches
-  the player's text. `--story` prints the player's text for each story
-  part that differs from it, in a form that can be pasted back.
+  the player's text. `--player-text` prints the player's text for
+  each background part that differs from it, in a form that can be
+  pasted back.
 - The vault upgrade `dnd-background-sections` moves the old one-line
   Backstory & Personality and Appearance fields, word for word, into
   `### Backstory` and `### Appearance`, adds `### Personality` and the

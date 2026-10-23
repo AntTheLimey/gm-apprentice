@@ -3,7 +3,7 @@
 // else the site's `header_facts`. The one definition: the page header (templates/pc.js) and the link
 // preview card (previews.js) both read it, so they cannot disagree.
 const { publishedSource, plainMetaValue, plainRefValue, extractSections, stripGmOnly, NOTE_NAME_FIELDS } = require('./processor');
-const { storyParts } = require('./pc-story');
+const { backgroundParts } = require('./pc-background');
 const { excerptFromMarkdown } = require('./excerpt');
 const { labelsForLinks } = require('./wikilink');
 
@@ -48,7 +48,7 @@ function pcEpithetText(page) {
   // build gave no published text) must not give it up unmarked.
   const source = stripGmOnly(publishedSource(page));
   // Any other comment is an authoring note, never story (the renderer would print it as text).
-  const parts = storyParts(extractSections(labelsForLinks(source.replace(/<!--[\s\S]*?(?:-->|$)/g, ''))));
+  const parts = backgroundParts(extractSections(labelsForLinks(source.replace(/<!--[\s\S]*?(?:-->|$)/g, ''))));
   const opening = parts ? parts.firstSentence.trim() : '';
   if (opening) return opening;
   const traits = Array.isArray(fm.key_traits)

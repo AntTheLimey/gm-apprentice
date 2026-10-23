@@ -1280,7 +1280,7 @@ describe('build integration', () => {
       const pcHtml = fs.readFileSync(pcPath, 'utf-8');
       assert.ok(pcHtml.includes('story-read-link'), 'Should have a link to the dedicated story page');
       assert.ok(pcHtml.includes('story/characters/lord-blackwood.html'), 'Should reference the story page path');
-      assert.ok(pcHtml.includes("Read Lord Blackwood's full story &rarr;"), 'Should name the full story');
+      assert.ok(pcHtml.includes("Every session in full &rarr;"), 'Should link every session in full');
       const storyPath = path.join(outputDir, 'docs', 'story', 'characters', 'lord-blackwood.html');
       assert.ok(fs.existsSync(storyPath), 'Dedicated story page should exist');
       const storyHtml = fs.readFileSync(storyPath, 'utf-8');

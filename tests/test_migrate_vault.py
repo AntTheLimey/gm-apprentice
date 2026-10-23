@@ -1971,10 +1971,10 @@ class DndBackgroundSectionsTests(unittest.TestCase):
         self.assertEqual(mv.find_dnd_background_sections(self.vault), [])
 
     def test_the_reader_finds_every_part_after_the_move(self):
-        import dnd_story
+        import dnd_background
         self.put("PCs/B.md", self.OLD)
         self.run_check()
-        parts = dnd_story.note_parts(self.get("PCs/B.md"))
+        parts = dnd_background.note_parts(self.get("PCs/B.md"))
         self.assertTrue(all(parts.values()))
         self.assertEqual(parts["backstory"].body, "Born in a forge. *Gruff*, loyal.")
         self.assertEqual(parts["appearance"].body, "Broad, soot-stained; a braided beard.")
@@ -2005,18 +2005,18 @@ class DndBackgroundSectionsTests(unittest.TestCase):
                                ).replace("Broad, soot-stained; a braided beard.", "—")
         self.put("PCs/B.md", old)
         self.run_check()
-        import dnd_story
+        import dnd_background
         text = self.get("PCs/B.md")
-        parts = dnd_story.note_parts(text)
-        self.assertEqual(dnd_story.held("backstory", parts["backstory"]), "")
-        self.assertEqual(dnd_story.held("appearance", parts["appearance"]), "")
+        parts = dnd_background.note_parts(text)
+        self.assertEqual(dnd_background.held("backstory", parts["backstory"]), "")
+        self.assertEqual(dnd_background.held("appearance", parts["appearance"]), "")
         self.assertNotIn("Character history", text)
 
     def test_background_sections_with_neither_old_line_gets_empty_sections(self):
         self.put("PCs/B.md", "---\ntype: pc\n---\n## Background\n\n**Species:** Elf\n")
         self.run_check()
-        import dnd_story
-        parts = dnd_story.note_parts(self.get("PCs/B.md"))
+        import dnd_background
+        parts = dnd_background.note_parts(self.get("PCs/B.md"))
         self.assertTrue(all(parts.values()))
         self.assertTrue(self.get("PCs/B.md").endswith("- **Flaws:** —\n"))
 
@@ -2036,14 +2036,14 @@ class DndBackgroundSectionsTests(unittest.TestCase):
     MULTI_APPEARANCE = "Broad.\nA braided beard."
 
     def test_background_sections_keeps_continuation_paragraphs(self):
-        import dnd_story
+        import dnd_background
         for eol in ("\n", "\r\n"):
             with self.subTest(eol=eol):
                 self.put("PCs/B.md", self.MULTI, eol=eol)
                 self.run_check()
                 text = self.get("PCs/B.md")
                 self.assertEqual(text.count("\r\n"), text.count("\n") if eol == "\r\n" else 0)
-                parts = dnd_story.note_parts(text)
+                parts = dnd_background.note_parts(text)
                 self.assertEqual(parts["backstory"].body.replace("\r\n", "\n"), self.MULTI_BACKSTORY)
                 self.assertEqual(parts["appearance"].body.replace("\r\n", "\n"), self.MULTI_APPEARANCE)
                 self.assertNotIn("Left it at nineteen.", text.split("### Backstory")[0])
@@ -2066,7 +2066,7 @@ class DndBackgroundSectionsTests(unittest.TestCase):
             "- **Bonds:** —\n- **Flaws:** —\n\n## Skills\n"))
 
     def test_background_sections_adds_only_the_missing_subsections(self):
-        import dnd_story
+        import dnd_background
         old = self.OLD.replace("## Skills", "### Appearance\n\nThe GM's own look.\n\n## Skills")
         self.put("PCs/B.md", old)
         (item,) = mv.find_dnd_background_sections(self.vault)
@@ -2087,7 +2087,7 @@ class DndBackgroundSectionsTests(unittest.TestCase):
             "- **Bonds:** —\n- **Flaws:** —\n\n"
             "## Skills\n\n| a |\n"))
         self.assertEqual(text.count("### Appearance"), 1)
-        self.assertEqual(dnd_story.note_parts(text)["appearance"].body, "The GM's own look.")
+        self.assertEqual(dnd_background.note_parts(text)["appearance"].body, "The GM's own look.")
         self.assertEqual(mv.find_dnd_background_sections(self.vault), [])
 
     def test_background_sections_keeps_an_existing_personality(self):
@@ -2108,7 +2108,7 @@ class DndBackgroundSectionsTests(unittest.TestCase):
                "GM aside.\n\n## Skills\n")
 
     def test_background_sections_fills_in_missing_lines_without_touching_text(self):
-        import dnd_story
+        import dnd_background
         for eol in ("\n", "\r\n"):
             with self.subTest(eol=eol):
                 self.put("PCs/B.md", self.PARTIAL, eol=eol)
@@ -2126,7 +2126,7 @@ class DndBackgroundSectionsTests(unittest.TestCase):
                     "GM aside.\n\n- **Ideals:** —\n- **Flaws:** —\n\n## Skills\n"))
                 if eol == "\r\n":
                     self.assertEqual(text.count("\n"), text.count("\r\n"))
-                parts = dnd_story.note_parts(text)
+                parts = dnd_background.note_parts(text)
                 self.assertTrue(all(parts.values()))
                 self.assertEqual(parts["appearance"].body, "Tall, *grey-eyed*.")
                 self.assertEqual(mv.find_dnd_background_sections(self.vault), [])
@@ -2138,14 +2138,14 @@ class DndBackgroundSectionsTests(unittest.TestCase):
                       self.get("PCs/B.md"))
 
     def test_background_sections_fills_an_empty_personality_at_the_end_of_the_note(self):
-        import dnd_story
+        import dnd_background
         self.put("PCs/B.md", self.PARTIAL.replace(
             "- **Traits:** Wry\n- **Bonds:** The guild\n\nGM aside.\n\n## Skills\n", ""))
         self.run_check()
         text = self.get("PCs/B.md")
         self.assertTrue(text.endswith("### Personality\n\n- **Traits:** —\n- **Ideals:** —\n"
                                       "- **Bonds:** —\n- **Flaws:** —\n"))
-        self.assertTrue(all(dnd_story.note_parts(text).values()))
+        self.assertTrue(all(dnd_background.note_parts(text).values()))
         self.assertEqual(mv.find_dnd_background_sections(self.vault), [])
 
     def test_the_check_is_registered(self):

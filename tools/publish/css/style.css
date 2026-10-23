@@ -771,7 +771,7 @@ h3 {
 /* ===== PC STORY TAB =====
    The backstory as a prologue (eyebrow, title, byline, reading face, drop capital), then
    how they look, what drives them and the story so far. The sheet tab opens on a teaser. */
-.pc-prologue, .pc-story-box, .pc-story-teaser {
+.pc-prologue, .pc-story-box, .pc-backstory-teaser {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 0.5rem;
@@ -856,18 +856,18 @@ h3 {
 .pc-sofar-more .story-read-link { margin: 0; font-weight: 600; }
 .pc-sofar ol + .pc-sofar-more { padding-top: 0.6rem; border-top: 1px solid var(--border); }
 .pc-story-none { margin: 1rem 0; }
-.pc-story-teaser {
+.pc-backstory-teaser {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.9rem; align-items: end;
   padding: 1rem 1.15rem;
 }
-.pc-story-teaser-label {
+.pc-backstory-teaser-label {
   margin: 0 0 0.4rem;
   font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
   color: var(--text-muted);
 }
-.pc-story-teaser-text { margin: 0; font-family: var(--font-reading); font-size: 1rem; line-height: 1.55; }
-.pc-story-teaser a { font-weight: 600; font-size: 0.9rem; white-space: nowrap; }
-@media (max-width: 420px) { .pc-story-teaser { grid-template-columns: minmax(0, 1fr); } }
+.pc-backstory-teaser-text { margin: 0; font-family: var(--font-reading); font-size: 1rem; line-height: 1.55; }
+.pc-backstory-teaser a { font-weight: 600; font-size: 0.9rem; white-space: nowrap; }
+@media (max-width: 420px) { .pc-backstory-teaser { grid-template-columns: minmax(0, 1fr); } }
 .pc-background-rest { margin: 0.75rem 0; }
 .pc-background-rest p { margin: 0 0 0.4rem; }
 /* A PC's hook on a Characters index card. */

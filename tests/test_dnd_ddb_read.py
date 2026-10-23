@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from ddb_builder import character  # noqa: E402
-from dnd_story import Story  # noqa: E402
+from dnd_background import PlayerText  # noqa: E402
 from dnd_ddb_read import Bonus, Character, Unreadable, Worked, read, safe_name  # noqa: E402
 
 
@@ -697,7 +697,7 @@ def test_an_adjustment_that_is_zero_not_a_number_or_beside_an_override_is_left_o
     assert bonuses(character_values=((24, 2, "99", SKILL), (24, 2, "9", stat), (39, 2, "9", stat))) == []
 
 
-# --- the story --------------------------------------------------------------
+# --- the player's text --------------------------------------------------------------
 
 def test_story_fields_read():
     c = got(notes={"backstory": "  Raised in a lighthouse.\n"},
@@ -705,7 +705,7 @@ def test_story_fields_read():
                     "flaws": "Counts stairs.", "appearance": " Salt-bleached. "},
             details={"age": 31, "height": "5' 4\"", "weight": 140, "eyes": "Grey", "hair": "Black",
                      "skin": "Tan", "faith": "Tide-mother", "gender": "Female"})
-    s = c.story
+    s = c.player_text
     assert (s.backstory, s.appearance, s.traits, s.ideals, s.bonds, s.flaws) == (
         "Raised in a lighthouse.", "Salt-bleached.", "Hums.", "Light.", "The keeper.", "Counts stairs.")
     assert s.facts == {"Age": "31", "Height": "5' 4\"", "Weight": "140 lb", "Eyes": "Grey", "Hair": "Black",
@@ -715,17 +715,17 @@ def test_story_fields_read():
 
 def test_story_blanks_are_left_out():
     c = got(details={"age": None, "height": "  ", "weight": 0, "eyes": "Green", "hair": None})
-    assert c.story.facts == {"Eyes": "Green"}
-    assert got().story == Story()
+    assert c.player_text.facts == {"Eyes": "Green"}
+    assert got().player_text == PlayerText()
 
 
 def test_story_missing_or_wrong_shaped_is_empty():
     for notes, traits in [([], []), ({"backstory": 12}, {"ideals": None, "flaws": ["x"]}), ("text", 5)]:
         c = got(notes=notes, traits=traits, details={"age": "old", "weight": True, "eyes": 3, "gender": None})
-        assert c.story == Story()
+        assert c.player_text == PlayerText()
     data = character()
     data["notes"] = None
-    assert read(data).story == Story()
+    assert read(data).player_text == PlayerText()
 
 
 def test_portrait_url_only_from_avatars():
@@ -745,6 +745,6 @@ def test_portrait_url_only_from_avatars():
 
 
 def test_age_and_weight_must_be_whole_numbers():
-    assert got(details={"age": True, "weight": True}).story.facts == {}
-    assert got(details={"age": 60.0, "weight": 150.0}).story.facts == {"Age": "60", "Weight": "150 lb"}
-    assert got(details={"age": 60.5, "weight": 150.5}).story.facts == {}
+    assert got(details={"age": True, "weight": True}).player_text.facts == {}
+    assert got(details={"age": 60.0, "weight": 150.0}).player_text.facts == {"Age": "60", "Weight": "150 lb"}
+    assert got(details={"age": 60.5, "weight": 150.5}).player_text.facts == {}

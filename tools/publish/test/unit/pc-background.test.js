@@ -1,9 +1,9 @@
 'use strict';
-// tools/publish/test/unit/pc-story.test.js
+// tools/publish/test/unit/pc-background.test.js
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { playerSafeMarkdown, extractSections } = require('../../lib/processor');
-const { storyParts, firstSentence } = require('../../lib/pc-story');
+const { backgroundParts, firstSentence } = require('../../lib/pc-background');
 
 // A note's markdown as the build hands it to the page: GM text stripped, then split into sections.
 const sectionsOf = (md) => extractSections(playerSafeMarkdown(md).text);
@@ -24,7 +24,7 @@ const THREE = [
 ].join('\n');
 
 test('reads the three sub-sections', () => {
-  const s = storyParts(sectionsOf(THREE));
+  const s = backgroundParts(sectionsOf(THREE));
   assert.equal(s.hasSections, true);
   assert.match(s.backstoryHtml, /Mira grew up/);
   assert.match(s.backstoryHtml, /Second paragraph/);
@@ -41,7 +41,7 @@ test('reads the three sub-sections', () => {
 });
 
 test('reads the old one-line fields', () => {
-  const s = storyParts(sectionsOf([
+  const s = backgroundParts(sectionsOf([
     '## Background', '**Species:** Elf', '',
     '**Backstory & Personality:** Raised by *wolves*. Dislikes rain.', '',
     '**Appearance:** Scarred.', '',
@@ -62,7 +62,7 @@ test('placeholders and dashes are empty', () => {
     '**Age:** — · **Height:** — · **Weight:** — · **Eyes:** — · **Hair:** — · **Skin:** — · **Faith:** —', '',
     '### Personality', '- **Traits:** —', '- **Ideals:** {ideals}', '- **Bonds:** —', '- **Flaws:** —', '',
   ].join('\n');
-  const s = storyParts(sectionsOf(blank));
+  const s = backgroundParts(sectionsOf(blank));
   assert.equal(s.hasSections, true);
   assert.equal(s.backstoryHtml, '');
   assert.equal(s.appearanceHtml, '');
@@ -70,7 +70,7 @@ test('placeholders and dashes are empty', () => {
   assert.deepEqual(s.personality, []);
   assert.equal(s.firstSentence, '');
   // An old note whose one-line fields are only placeholders has no story at all.
-  assert.equal(storyParts(sectionsOf('## Background\n**Backstory & Personality:** {text}\n**Appearance:** —\n')), null);
+  assert.equal(backgroundParts(sectionsOf('## Background\n**Backstory & Personality:** {text}\n**Appearance:** —\n')), null);
 });
 
 test('firstSentence cuts at the sentence and at 200', () => {
@@ -88,10 +88,10 @@ test('firstSentence cuts at the sentence and at 200', () => {
 });
 
 test('returns null with no story', () => {
-  assert.equal(storyParts(sectionsOf('## Notes\nx\n')), null);
-  assert.equal(storyParts([]), null);
-  assert.equal(storyParts(undefined), null);
-  assert.equal(storyParts(sectionsOf('## Background\n**Species:** Elf\n')), null);
+  assert.equal(backgroundParts(sectionsOf('## Notes\nx\n')), null);
+  assert.equal(backgroundParts([]), null);
+  assert.equal(backgroundParts(undefined), null);
+  assert.equal(backgroundParts(sectionsOf('## Background\n**Species:** Elf\n')), null);
 });
 
 test('firstSentence skips abbreviations, initials and ellipses', () => {
@@ -102,7 +102,7 @@ test('firstSentence skips abbreviations, initials and ellipses', () => {
 });
 
 test('a half-migrated note falls back to the old one-line field', () => {
-  const s = storyParts(sectionsOf([
+  const s = backgroundParts(sectionsOf([
     '## Background', '**Backstory & Personality:** Old tale\nwrapped here.', '',
     '### Backstory', '{Backstory}', '',
     '### Appearance', 'New look.', '',
@@ -113,14 +113,14 @@ test('a half-migrated note falls back to the old one-line field', () => {
 });
 
 test('an old field keeps its hard-wrapped tail and stops at the next label', () => {
-  const s = storyParts(sectionsOf('## Background\n**Backstory & Personality:** Line one,\nline two.\n**Appearance:** Tall.\n'));
+  const s = backgroundParts(sectionsOf('## Background\n**Backstory & Personality:** Line one,\nline two.\n**Appearance:** Tall.\n'));
   assert.match(s.backstoryHtml, /line two\./);
   assert.doesNotMatch(s.backstoryHtml, /Tall/);
   assert.match(s.appearanceHtml, /Tall/);
 });
 
 test('facts read a colon outside the bold and drop any lone dash', () => {
-  const s = storyParts(sectionsOf([
+  const s = backgroundParts(sectionsOf([
     '## Background', '### Appearance', 'Hmm.', '',
     '**Age**: 40 · **Height:** – · **Weight:** - · **Eyes:** &amp;co', '',
   ].join('\n')));

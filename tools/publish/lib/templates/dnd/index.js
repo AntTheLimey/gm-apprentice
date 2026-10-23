@@ -5,7 +5,7 @@ const { consumedTitleMatcher, splitWidened, withRowNotes } = require('../sheet-p
 
 // `## ` sections the sheet takes over from the accordion list. Each is on the
 // page in full once the sheet renders (sheet-parse.js). Background is read for
-// the header; its story parts go to the Story tab and it is no accordion (templates/pc.js).
+// the header; its background parts go to the Story tab and it is no accordion (templates/pc.js).
 const CONSUMED_TITLES = ['stat sheet', 'skills', 'spellcasting', 'proficiencies', 'class features', 'species traits', 'feats', 'equipment', 'companions'];
 const isDndConsumedTitle = consumedTitleMatcher(CONSUMED_TITLES);
 

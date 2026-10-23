@@ -32,7 +32,7 @@ const { buildStorySpine, chapterOfSession, unitRefs, characterStoryGroup } = req
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
 const { isSessionStory, sessionLines } = require('./story-sessions');
-const { storyParts } = require('./pc-story');
+const { backgroundParts } = require('./pc-background');
 const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
 const { hasRealKvId, detectInbox, detectStatusBar } = require('./backend-flags');
@@ -1359,7 +1359,7 @@ function buildSite(options) {
           storyHtml = storyProcessed.html && storyProcessed.html.trim() ? storyProcessed.html : undefined;
           storyLines = sessionLines(storyHtml).map((l) => ({ ...l, href: storyPath + l.href }));
         }
-        const ownParts = storyParts(sections);
+        const ownParts = backgroundParts(sections);
         backstoryOf.set(page, ownParts && ownParts.backstoryHtml ? ownParts.backstoryHtml : '');
 
         const system = publishConfig.system;

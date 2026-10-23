@@ -9,7 +9,7 @@ with a bracketed reason (`18 (tome)`) is the GM's and is kept. Stdlib only.
 Usage:
   dnd_ddb.py SHEET.md [--write]               preview (or write) one note
   dnd_ddb.py --party VAULT [--write] [--on-build]   every PC note with a D&D Beyond link
-  --story   after a note's rows, the player's D&D Beyond text for each story part the note does
+  --player-text   after a note's rows, the player's D&D Beyond text for each background part the note does
             not match, each line indented four spaces (not report rows; pasted as shown, it hands
             the part back)
 The only requests ever made are to character-service.dndbeyond.com, with a path of digits,
@@ -32,7 +32,7 @@ Damage Cantrips`, a list like the others, Notes never written). When the calcula
 unsure nothing is written and a CHECK row says why. Never written here: Weapon Mastery,
 HP (Current) and anything a player tracks in play.
 
-The player's own words (dnd_story.py) are written too: backstory, appearance and its facts
+The player's own words (dnd_background.py) are written too: backstory, appearance and its facts
 line, and the four personality bullets, each only while the source changed and the note's copy
 did not; Notes, GM Notes and Current Status are never written. With --write, a blank `portrait`
 field gets D&D Beyond's portrait, saved to `_attachments/characters/`; a field that is set, or
@@ -82,7 +82,7 @@ from dnd_ddb_read import ABILITIES, Character, Unreadable, read, safe_name  # no
 from dnd_note import (BARE, HALF, HEADING, PLACEHOLDER, REASONED, SEPARATOR, YES,  # noqa: E402
                       Cell, Note, clean, column, number, split_cells, to_int)
 from dnd_sheet import to_weight  # noqa: E402
-from dnd_story import MEMORY, clean_text, memory_entries, memory_from, plan_story  # noqa: E402
+from dnd_background import MEMORY, clean_text, memory_entries, memory_from, plan_background  # noqa: E402
 from migrate_core import StepFailed, write_text_atomic  # noqa: E402
 from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter, fence_step,  # noqa: E402
                       frontmatter_span, is_unchecked_source, set_key, settings, settings_file,
@@ -1159,7 +1159,7 @@ class Report:
     seen: Seen | None = None             # what to remember after this sync; None when the sync was an ERROR
     portrait_url: str = ""               # the safe avatar link D&D Beyond gave, "" when there is none
     placed: Path | None = None           # the portrait file this run created; to be removed if the note then fails
-    said: dict[str, str] = field(default_factory=dict)   # a story part that differs -> the player's text
+    said: dict[str, str] = field(default_factory=dict)   # a background part that differs -> the player's text
 
 
 def character_id(link: object) -> str | None:
@@ -1477,10 +1477,10 @@ def shown(edits: list[Edit] | list[RowEdit]) -> list[tuple[str, str, str]]:
 
 
 def given_now(c: Character, before: Seen | None, gave: Gave | None = None,
-              story: dict[str, tuple[str, str]] | None = None) -> Seen:
+              player_text: dict[str, tuple[str, str]] | None = None) -> Seen:
     """The keys of what D&D Beyond gave this run for each list. The attacks are carried forward
-    from `before` when the calculator was unsure of them. `story` is what the story parts
-    were last written as (see dnd_story)."""
+    from `before` when the calculator was unsure of them. `player_text` is what the background parts
+    were last written as (see dnd_background)."""
     out: Seen = {}
     for name, spec in SPECS.items():
         out[spec.list_id] = sorted({k for e in entries_for(name, c) if (k := norm(e.name))})
@@ -1492,8 +1492,8 @@ def given_now(c: Character, before: Seen | None, gave: Gave | None = None,
     for group in (DEFENCES, PROFICIENCIES):
         for label, field in group:
             out[label.lower()] = sorted(norm(n) for n in line_names(getattr(c, field)))
-    if story is not None:
-        out[MEMORY] = memory_entries(story)
+    if player_text is not None:
+        out[MEMORY] = memory_entries(player_text)
     if gave is not None:
         kept = dict(gave.now)
         for locus, value in gave.last.items():      # a cell not judged this run keeps its entry
@@ -1560,7 +1560,7 @@ def sync_parts(text: str, data: object, seen: Seen | None) -> Report:
     attacks = plan_attacks(t, c, seen, gave)
     rows += shown(attacks)
     t = write_rows(t, attacks)
-    told = plan_story(t, c.story, memory_from(seen))
+    told = plan_background(t, c.player_text, memory_from(seen))
     rows += told.rows
     t = told.text
     rows += shown(checks(t, c))
@@ -1687,7 +1687,7 @@ def emit(status: str, locus: str, message: str) -> None:
 
 
 def emit_said(report: Report, prefix: str = "") -> None:
-    """With --story, after a note's rows: for each story part whose note text differs from the player's
+    """With --player-text, after a note's rows: for each background part whose note text differs from the player's
     (CHECK this run or not), a header naming it and the player's text, every line indented four spaces.
     Never a row: tabs and control characters are gone from the copy, so no line of it can pass for one."""
     for locus, text in report.said.items():
@@ -1705,7 +1705,7 @@ def guarded_sync(text: str, vault: Path | None = None) -> Report:
         return Report([("ERROR", "sync", f"could not be synced ({e.__class__.__name__}); nothing was written")], text)
 
 
-def one_sheet(path: Path, write_it: bool, story: bool = False) -> int:
+def one_sheet(path: Path, write_it: bool, player_text: bool = False) -> int:
     try:
         with path.open("r", encoding="utf-8", newline="") as f:
             text = f.read()
@@ -1720,7 +1720,7 @@ def one_sheet(path: Path, write_it: bool, story: bool = False) -> int:
         emit(*row)
     if any(r[0] == "ERROR" for r in report.rows):
         return 0
-    if story:
+    if player_text:
         emit_said(report)
     print(count_line(report.rows))
     if write_it and report.text != text:
@@ -1735,7 +1735,7 @@ def one_sheet(path: Path, write_it: bool, story: bool = False) -> int:
     return 0
 
 
-def party(vault: Path, write_it: bool, on_build: bool, story: bool = False) -> int:
+def party(vault: Path, write_it: bool, on_build: bool, player_text: bool = False) -> int:
     from migrate_vault import vault_system
 
     if not vault.is_dir():
@@ -1796,7 +1796,7 @@ def party(vault: Path, write_it: bool, on_build: bool, story: bool = False) -> i
             row = (status, f"{Path(rel).stem}: {locus}", message)
             rows.append(row)
             emit(*row)
-        if story and not failed_here(found):
+        if player_text and not failed_here(found):
             emit_said(report, f"{Path(rel).stem}: ")
     print(count_line(rows, sheets))
     return 2 if failed else 0
@@ -1813,8 +1813,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--party", metavar="VAULT", help="every PC note in a vault that has a D&D Beyond link")
     ap.add_argument("--on-build", action="store_true",
                     help="with --party: run only when vault.dndbeyond_sync is build")
-    ap.add_argument("--story", action="store_true",
-                    help="the player's D&D Beyond text for each story part the note does not match (not report rows)")
+    ap.add_argument("--player-text", action="store_true",
+                    help="the player's D&D Beyond text for each background part the note does not match (not report rows)")
     args = ap.parse_args(argv)
     if bool(args.sheet) == bool(args.party):
         ap.error("give one sheet, or --party VAULT")
@@ -1822,11 +1822,11 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--on-build goes with --party VAULT")
     if args.party:
         try:
-            return party(Path(args.party), args.write, args.on_build, args.story)
+            return party(Path(args.party), args.write, args.on_build, args.player_text)
         except SettingsUnavailable as e:
             print(f"dnd_ddb: {e}", file=sys.stderr)
             return 2
-    return one_sheet(Path(args.sheet), args.write, args.story)
+    return one_sheet(Path(args.sheet), args.write, args.player_text)
 
 
 if __name__ == "__main__":

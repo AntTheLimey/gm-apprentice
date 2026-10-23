@@ -1374,16 +1374,16 @@ def _fill_sections(text: str) -> tuple[str, list[str]]:
     `- **Traits:** —` / Ideals / Bonds / Flaws lines at the end of
     `### Personality`. Existing text is never changed; also gives what was
     done, one phrase each."""
-    import dnd_story
+    import dnd_background
 
     lines = text.splitlines(keepends=True)
     eol = next((m.group(0) for raw in lines if (m := re.search(r"\r\n|\n|\r", raw))), "\n")
-    subs = dnd_story._subsections(lines)
-    parts = dnd_story.note_parts(text)
+    subs = dnd_background._subsections(lines)
+    parts = dnd_background.note_parts(text)
     adds: list[tuple[str, list[str], str]] = []
     if "appearance" in subs and parts["facts"] is None:
         adds.append(("appearance", [FACTS_LINE], "### Appearance gets its facts line"))
-    missing = [b for b in dnd_story.BULLETS if parts[b] is None]
+    missing = [b for b in dnd_background.BULLETS if parts[b] is None]
     if "personality" in subs and missing:
         names = [b.title() for b in missing]
         listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
@@ -1397,7 +1397,7 @@ def _fill_sections(text: str) -> tuple[str, list[str]]:
         body = lines[head:last]
         if not body[-1].endswith(("\n", "\r")):
             body[-1] += eol
-        joined = name == "personality" and last > head + 1 and dnd_story.BULLET.match(
+        joined = name == "personality" and last > head + 1 and dnd_background.BULLET.match(
             lines[last - 1].rstrip("\r\n")) is not None
         tail = [eol] if end < len(lines) else []
         lines[head:end] = body + ([] if joined else [eol]) + [line + eol for line in new] + tail
@@ -1412,10 +1412,10 @@ def _background_sections(text: str) -> tuple[str, list[str]] | None:
     the note already has is kept as it is, and an old line for it stays where
     it is. Also gives what was done, one phrase each. Line endings are
     kept."""
-    import dnd_story
+    import dnd_background
 
     text, filled = _fill_sections(text)
-    have = dnd_story.subsections(text)
+    have = dnd_background.subsections(text)
     if all(name in have for name in SUBSECTIONS):
         return (text, filled) if filled else None
     lines = text.splitlines(keepends=True)
@@ -1499,8 +1499,8 @@ def _background_sections(text: str) -> tuple[str, list[str]] | None:
 
 
 def find_dnd_background_sections(vault: Path) -> list[Item]:
-    """1.10.93: a D&D PC's story lives in `### Backstory`, `### Appearance`
-    and `### Personality` under `## Background` (`dnd_story.py`). The old
+    """1.10.93: a D&D PC's background lives in `### Backstory`, `### Appearance`
+    and `### Personality` under `## Background` (`dnd_background.py`). The old
     one-line `**Backstory & Personality:**` and `**Appearance:**` values
     move there word for word; a `{placeholder}` counts as empty. Only the
     sub-sections a note is missing are added, and an existing Appearance or

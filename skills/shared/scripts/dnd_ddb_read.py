@@ -25,7 +25,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from urllib.parse import urlsplit
 
-from dnd_story import FACTS, Story
+from dnd_background import FACTS, PlayerText
 
 ABILITIES = ("STR", "DEX", "CON", "INT", "WIS", "CHA")   # stat ids 1..6 in this order
 ABILITY_WORDS = ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma")
@@ -176,7 +176,7 @@ class Character:
     attacks: Worked = field(default_factory=_not_worked)
     bonuses: list[Bonus] = field(default_factory=list)
     nameless: dict[str, int] = field(default_factory=dict)    # list name -> entries skipped for having no usable name
-    story: Story = field(default_factory=Story)
+    player_text: PlayerText = field(default_factory=PlayerText)
     portrait_url: str = ""              # only ever a www.dndbeyond.com/avatars/ link
 
 
@@ -214,7 +214,7 @@ def _text(x: object) -> str:
     return x if isinstance(x, str) else ""
 
 
-def _story(d: dict) -> Story:
+def _player_text(d: dict) -> PlayerText:
     """The player's own words and physical facts, raw but for surrounding whitespace."""
     notes, traits = _dict(d.get("notes")), _dict(d.get("traits"))
 
@@ -231,7 +231,7 @@ def _story(d: dict) -> Story:
             shown = _text(raw).strip()
         if shown:
             facts[label] = shown
-    return Story(backstory=words(notes, "backstory"), appearance=words(traits, "appearance"), facts=facts,
+    return PlayerText(backstory=words(notes, "backstory"), appearance=words(traits, "appearance"), facts=facts,
                  gender=words(d, "gender"), traits=words(traits, "personalityTraits"),
                  ideals=words(traits, "ideals"), bonds=words(traits, "bonds"), flaws=words(traits, "flaws"))
 
@@ -888,7 +888,7 @@ def read(data: object) -> Character:
         gear=gear, magic_items=magic,
         coins=_coins(d),
         speed=_walking_speed(d, everything, scores, rows),
-        story=_story(d), portrait_url=_portrait(d),
+        player_text=_player_text(d), portrait_url=_portrait(d),
     )
     unnamed = [sum(1 for fd in defs if not LEVEL_PREFIX.sub("", safe_name(fd.get("name")))) for defs in (class_defs, traits, feat_defs)]
     character.nameless = {k: n for k, n in (

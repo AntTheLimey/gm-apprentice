@@ -93,20 +93,20 @@ test('story tab opens on the backstory', () => {
   assert.match(sofar, /Session 1/);
   assert.match(sofar, /The Road to Ashfall/);
   assert.match(sofar, /href="\.\.\/\.\.\/story\/characters\/ilse-varn\.html#session-1"/);
-  assert.match(sofar, /Read Ilse Varn's full story &rarr;<\/a>\s*<\/p>\s*$/);
+  assert.match(sofar, /Every session in full &rarr;<\/a>\s*<\/p>\s*$/);
   assert.ok(story.indexOf('pc-prologue') < story.indexOf('pc-look'));
   assert.ok(story.indexOf('pc-look') < story.indexOf('pc-drives'));
   assert.ok(story.indexOf('pc-drives') < story.indexOf('pc-sofar'));
   assert.doesNotMatch(html, /No story content available/);
 });
 
-test('story tab: no bold title line gives "{Name}\'s story"; no lines but a story page gives the link alone', () => {
+test('story tab: no bold title line gives "{Name}\'s backstory"; no lines but a story page gives the link alone', () => {
   const md = NEW_LAYOUT.replace('**The Archivist of Seven Lamps**\n\n', '');
   const story = panel(render(md, { storyHref: 'story/characters/ilse-varn.html' }), 'story');
-  assert.match(story, /class="pc-prologue-title">Ilse Varn's story</);
+  assert.match(story, /class="pc-prologue-title">Ilse Varn's backstory</);
   const sofar = story.split('class="pc-story-box pc-sofar"')[1].split('</section>')[0];
   assert.doesNotMatch(sofar, /The story so far|<ol/);
-  assert.match(sofar, /Read Ilse Varn's full story &rarr;/);
+  assert.match(sofar, /Every session in full &rarr;/);
 });
 
 test('story tab: no parts and no story is one muted line; a blank template note is not content', () => {
@@ -122,7 +122,7 @@ test('story tab: no parts and no story is one muted line; a blank template note 
     const story = panel(html, 'story');
     assert.match(story, /<p class="text-muted pc-story-none">Ilse Varn's story starts at the table\.<\/p>/);
     assert.doesNotMatch(story, /pc-prologue|pc-look|pc-drives|pc-sofar|\{|—/);
-    assert.doesNotMatch(html, /No story content available|pc-story-teaser/);
+    assert.doesNotMatch(html, /No story content available|pc-backstory-teaser/);
   }
   // A blank note with the sub-sections still never shows Background as an accordion.
   assert.doesNotMatch(render(blank), /id="background"/);
@@ -131,11 +131,11 @@ test('story tab: no parts and no story is one muted line; a blank template note 
 test('sheet tab teaser and no Background accordion', () => {
   const html = render(NEW_LAYOUT, { systemSheetHtml: '<div class="dnd5e-sheet">SHEET</div>' });
   const sheet = panel(html, 'sheet');
-  const teaser = sheet.split('<section class="pc-story-teaser"')[1].split('</section>')[0];
-  assert.ok(sheet.indexOf('pc-story-teaser') < sheet.indexOf('SHEET'), 'the teaser comes first');
+  const teaser = sheet.split('<section class="pc-backstory-teaser"')[1].split('</section>')[0];
+  assert.ok(sheet.indexOf('pc-backstory-teaser') < sheet.indexOf('SHEET'), 'the teaser comes first');
   assert.match(teaser, /From the backstory/);
   // No hook: the pull quote is the first sentence, so the teaser goes on from it.
-  assert.match(teaser, /<p class="pc-story-teaser-text">Nobody asked what she thought\. She thought a great deal\.<\/p>/);
+  assert.match(teaser, /<p class="pc-backstory-teaser-text">Nobody asked what she thought\. She thought a great deal\.<\/p>/);
   assert.doesNotMatch(teaser, /For a hundred years|Archivist/);
   assert.match(teaser, /onclick="switchTab\('story'\);\s*return false;?"[^>]*>Read on &rarr;<\/a>/);
   assert.doesNotMatch(html, /id="background"/);
@@ -148,7 +148,7 @@ test('sheet tab teaser and no Background accordion', () => {
 });
 
 test('teaser: with a hook it opens the backstory; a long one is cut near 280 at a word; one sentence has none', () => {
-  const teaserOf = (html) => (panel(html, 'sheet').split('pc-story-teaser-text">')[1] || '').split('</p>')[0];
+  const teaserOf = (html) => (panel(html, 'sheet').split('pc-backstory-teaser-text">')[1] || '').split('</p>')[0];
   // A hook: the pull quote says something else, so the teaser is the first sentence.
   assert.equal(teaserOf(render(NEW_LAYOUT, {}, { hook: 'She would like a discovery of her own.' })), 'For a hundred years Ilse kept the index.');
   // No hook, a long backstory: the text after the first sentence, cut at a word with an ellipsis.
@@ -159,8 +159,8 @@ test('teaser: with a hook it opens the backstory; a long one is cut near 280 at 
   assert.match(long, / word\d+…$/);
   // No hook, a one-sentence backstory: no teaser.
   const one = NEW_LAYOUT.replace(' Nobody asked what she thought.', '').replace('She thought a great deal.\n\n', '');
-  assert.doesNotMatch(render(one), /pc-story-teaser/);
-  assert.match(render(one, {}, { hook: 'A hook.' }), /pc-story-teaser-text">For a hundred years Ilse kept the index\.</);
+  assert.doesNotMatch(render(one), /pc-backstory-teaser/);
+  assert.match(render(one, {}, { hook: 'A hook.' }), /pc-backstory-teaser-text">For a hundred years Ilse kept the index\.</);
 });
 
 test('other Background sub-sections stay on the page', () => {
@@ -176,12 +176,12 @@ test('other Background sub-sections stay on the page', () => {
 test('old layout note shows its backstory on the Story tab', () => {
   const html = render(OLD_LAYOUT, { systemSheetHtml: '<div class="dnd5e-sheet">SHEET</div>' });
   const story = panel(html, 'story');
-  assert.match(story, /pc-prologue-title">Ilse Varn's story</);
+  assert.match(story, /pc-prologue-title">Ilse Varn's backstory</);
   assert.match(story, /Ilse catalogued other people’s discoveries for a century\. Then she left\./);
   assert.match(story, /class="pc-story-box pc-look"[\s\S]*Ink-stained cuffs/);
   assert.doesNotMatch(story, /pc-drives/);
   const sheet = panel(html, 'sheet');
-  assert.match(sheet, /pc-story-teaser-text">Then she left\.</);
+  assert.match(sheet, /pc-backstory-teaser-text">Then she left\.</);
   assert.doesNotMatch(html, /id="background"/);
   assert.match(sheet, /<strong>Alignment:<\/strong> Lawful Neutral/);
   assert.doesNotMatch(sheet, /Backstory &amp; Personality|<strong>Appearance:/);
@@ -196,7 +196,7 @@ test('sheets off still shows the story', () => {
   assert.match(story, /For a hundred years Ilse kept the index/);
   assert.match(story, /pc-drives/);
   const sheet = panel(html, 'sheet');
-  assert.match(sheet, /pc-story-teaser/);
+  assert.match(sheet, /pc-backstory-teaser/);
   assert.match(sheet, /<strong>Alignment:<\/strong> Lawful Neutral/);
   assert.doesNotMatch(sheet, /<strong>Species:<\/strong>/);
   assert.doesNotMatch(html, /id="background"/);
@@ -246,8 +246,8 @@ test('facts line: a dot inside a value stays in that fact', () => {
     '## Background', '', '### Appearance', '', 'Tall.', '',
     '**Age:** 31 · **Eyes:** grey · green flecks · **Faith:** the Lamp · **Hair:** red · **very** dark',
   ].join('\n');
-  const { storyParts } = require('../../lib/pc-story');
-  const parts = storyParts(sectionsOf(md));
+  const { backgroundParts } = require('../../lib/pc-background');
+  const parts = backgroundParts(sectionsOf(md));
   assert.deepEqual(parts.facts, [
     { label: 'Age', value: '31' },
     { label: 'Eyes', value: 'grey · green flecks' },

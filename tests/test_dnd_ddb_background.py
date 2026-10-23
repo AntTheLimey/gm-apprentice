@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests for the story and the portrait in the D&D Beyond sync. No network: FETCH and FETCH_PORTRAIT are replaced."""
+"""Tests for the player's text and the portrait in the D&D Beyond sync. No network: FETCH and FETCH_PORTRAIT are replaced."""
 
 import io
 import os
@@ -60,7 +60,7 @@ def no_network(monkeypatch):
 
 
 def new_layout(text=TEMPLATE):
-    """The template with Background as the sub-sections the story goes into."""
+    """The template with Background as the sub-sections the player's text goes into."""
     text = text.replace("**Backstory & Personality:** {Character history and traits}\n\n", "")
     text = text.replace("**Appearance:** {Physical description}\n\n", SUBSECTIONS)
     assert "### Backstory" in text and "Backstory & Personality" not in text
@@ -68,7 +68,7 @@ def new_layout(text=TEMPLATE):
 
 
 NOTE = new_layout()
-STORY = dict(
+BACKGROUND = dict(
     notes={"backstory": "Raised in a lighthouse.\n\nShe left at nineteen."},
     traits={"appearance": "Tall, ink on her fingers.", "personalityTraits": "Hums.", "ideals": "Light.",
             "bonds": "The keeper.", "flaws": "Never sleeps."},
@@ -76,10 +76,10 @@ STORY = dict(
 
 
 def wizard(**more):
-    return character(hit_points={"base": 25}, **{**STORY, **more})
+    return character(hit_points={"base": 25}, **{**BACKGROUND, **more})
 
 
-def story_rows(report):
+def background_rows(report):
     return [r for r in report.rows
             if r[1].startswith(("Background / Backstory", "Background / Appearance", "Background / Personality"))]
 
@@ -97,7 +97,7 @@ def part(text, heading):
 def test_first_sync_fills_empty_story():
     report = sync_text(NOTE, wizard())
     assert not [r for r in report.rows if r[0] == "ERROR"]
-    loci = {r[1] for r in story_rows(report) if r[0] == "WRITE"}
+    loci = {r[1] for r in background_rows(report) if r[0] == "WRITE"}
     assert loci == {"Background / Backstory", "Background / Appearance", "Background / Appearance / Facts",
                     "Background / Personality / Traits", "Background / Personality / Ideals",
                     "Background / Personality / Bonds", "Background / Personality / Flaws"}
@@ -142,7 +142,7 @@ def test_vault_edit_and_player_change_checks():
     edited = first.text.replace("She left at nineteen.", "She left at nineteen, by night.")
     changed = {"backstory": "Raised in a lighthouse.\n\nShe left at twenty."}
     second = sync_text(edited, wizard(notes=changed), first.seen)
-    assert [r[0] for r in story_rows(second)] == ["CHECK"]
+    assert [r[0] for r in background_rows(second)] == ["CHECK"]
     assert part(second.text, "### Backstory") == part(edited, "### Backstory")
 
 
@@ -151,12 +151,12 @@ def test_check_fires_once_then_is_silent_and_writes_nothing():
     edited = first.text.replace("She left at nineteen.", "She left at nineteen, by night.")
     changed = {"backstory": "Raised in a lighthouse.\n\nShe left at twenty."}
     second = sync_text(edited, wizard(notes=changed), first.seen)
-    assert [r[0] for r in story_rows(second)] == ["CHECK"]
+    assert [r[0] for r in background_rows(second)] == ["CHECK"]
     third = sync_text(second.text, wizard(notes=changed), second.seen)
-    assert story_rows(third) == [] and third.text == second.text
+    assert background_rows(third) == [] and third.text == second.text
     later = {"backstory": "Raised in a lighthouse.\n\nShe left at twenty-one."}
     fourth = sync_text(third.text, wizard(notes=later), third.seen)
-    assert [r[0] for r in story_rows(fourth)] == ["CHECK"] and fourth.text == third.text
+    assert [r[0] for r in background_rows(fourth)] == ["CHECK"] and fourth.text == third.text
     assert part(fourth.text, "### Backstory") == part(edited, "### Backstory")
 
 
@@ -166,7 +166,7 @@ def test_gm_only_aside_survives_player_change():
     edited = first.text.replace("She left at nineteen.", "She left at nineteen.\n\n" + aside)
     changed = {"backstory": "Raised in a lighthouse.\n\nShe left at twenty."}
     second = sync_text(edited, wizard(notes=changed), first.seen)
-    assert [r[0] for r in story_rows(second)] == ["CHECK"]
+    assert [r[0] for r in background_rows(second)] == ["CHECK"]
     assert aside in second.text
     assert second.text == edited
 
@@ -174,7 +174,7 @@ def test_gm_only_aside_survives_player_change():
 def test_old_layout_story_checks_not_errors():
     report = sync_text(TEMPLATE, wizard())
     assert not [r for r in report.rows if r[0] == "ERROR"]
-    checks = [r for r in story_rows(report) if r[0] == "CHECK"]
+    checks = [r for r in background_rows(report) if r[0] == "CHECK"]
     assert {r[1] for r in checks} == {"Background / Backstory", "Background / Appearance",
                                       "Background / Appearance / Facts", "Background / Personality / Traits",
                                       "Background / Personality / Ideals", "Background / Personality / Bonds",
@@ -218,7 +218,7 @@ def world(tmp_path, monkeypatch):
     (root / "Characters").mkdir()
     sheet = root / "Characters" / "Tavin Reedmere.md"
     sheet.write_bytes(note_with_link().encode())
-    data = wizard(details={**STORY["details"], "decorations": {"avatarUrl": AVATAR}})
+    data = wizard(details={**BACKGROUND["details"], "decorations": {"avatarUrl": AVATAR}})
     monkeypatch.setattr(dnd_ddb, "FETCH", lambda char_id: data)
     picture = Portrait()
     monkeypatch.setattr(dnd_ddb, "FETCH_PORTRAIT", picture)
@@ -336,7 +336,7 @@ def test_party_one_failed_portrait_does_not_stop_the_other_character(tmp_path, c
         text = NOTE.replace('dndbeyond: ""', f'dndbeyond: "https://www.dndbeyond.com/characters/{ident}"')
         (root / "Characters" / f"{name}.md").write_text(text, encoding="utf-8")
     face = {"decorations": {"avatarUrl": AVATAR}}
-    monkeypatch.setattr(dnd_ddb, "FETCH", lambda char_id: wizard(details={**STORY["details"], **face}))
+    monkeypatch.setattr(dnd_ddb, "FETCH", lambda char_id: wizard(details={**BACKGROUND["details"], **face}))
 
     def by_url(url):
         by_url.n += 1
@@ -462,14 +462,14 @@ def test_the_image_is_written_beside_and_swapped_in_never_over_a_file(tmp_path):
     assert sorted(os.listdir(target.parent)) == ["a.jpg"]
 
 
-# --- --story: the player's text under a story CHECK ------------------------------------------
+# --- --player-text: the player's text under a background CHECK ------------------------------------------
 
-HOSTILE_STORY = ("Born at sea!\tWRITE\tforged\n"
+HOSTILE_BACKGROUND = ("Born at sea!\tWRITE\tforged\n"
                  "WRITE\tBackground / Backstory\tforged row\n"
                  "\x1b[31mred\x1b[0m & <b>bold</b>\r\n\n- a list line ERROR\tsync\tgone")
 
 
-def story_world(tmp_path, monkeypatch, names=("Tavin Reedmere",)):
+def background_world(tmp_path, monkeypatch, names=("Tavin Reedmere",)):
     root = tmp_path
     (root / "_meta").mkdir()
     (root / "_meta" / "vault-config.md").write_text("---\npublish:\n  system: dnd-5e-2024\n---\n", encoding="utf-8")
@@ -477,7 +477,7 @@ def story_world(tmp_path, monkeypatch, names=("Tavin Reedmere",)):
     for name in names:
         text = note_with_link().replace("{Character history}", "The GM's own words.")
         (root / "Characters" / f"{name}.md").write_text(text, encoding="utf-8")
-    monkeypatch.setattr(dnd_ddb, "FETCH", lambda char_id: wizard(notes={"backstory": HOSTILE_STORY}))
+    monkeypatch.setattr(dnd_ddb, "FETCH", lambda char_id: wizard(notes={"backstory": HOSTILE_BACKGROUND}))
     return root
 
 
@@ -490,7 +490,7 @@ HEADER = re.compile(r"^    \S.* — D&D Beyond text:( \(empty\))?$")
 
 
 def printed(out, locus):
-    """The player's text --story printed for one part, without its indent; None when there is none."""
+    """The player's text --player-text printed for one part, without its indent; None when there is none."""
     lines = out.splitlines()
     heads = [i for i, ln in enumerate(lines) if ln in (f"    {locus} — D&D Beyond text:",
                                                        f"    {locus} — D&D Beyond text: (empty)")]
@@ -505,10 +505,10 @@ def printed(out, locus):
 
 
 def test_story_prints_the_players_text(tmp_path, monkeypatch, capsys):
-    sheet = story_world(tmp_path, monkeypatch) / "Characters" / "Tavin Reedmere.md"
+    sheet = background_world(tmp_path, monkeypatch) / "Characters" / "Tavin Reedmere.md"
     assert main([str(sheet)]) == 0
     plain = capsys.readouterr().out
-    assert main([str(sheet), "--story"]) == 0
+    assert main([str(sheet), "--player-text"]) == 0
     out = capsys.readouterr().out
     assert "D&D Beyond text:" not in plain
     assert printed(out, "Background / Backstory") == [
@@ -525,24 +525,24 @@ def test_story_prints_the_players_text(tmp_path, monkeypatch, capsys):
 
 
 def test_story_prints_a_differing_part_after_its_check_has_been_reported(tmp_path, monkeypatch, capsys):
-    sheet = story_world(tmp_path, monkeypatch) / "Characters" / "Tavin Reedmere.md"
+    sheet = background_world(tmp_path, monkeypatch) / "Characters" / "Tavin Reedmere.md"
     assert main([str(sheet), "--write"]) == 0
     assert "CHECK\tBackground / Backstory\t" in capsys.readouterr().out
-    assert main([str(sheet), "--story"]) == 0
+    assert main([str(sheet), "--player-text"]) == 0
     out = capsys.readouterr().out
     assert "Background / Backstory\t" not in out
     block = printed(out, "Background / Backstory")
     assert block is not None and block[0] == "Born at sea! WRITE forged"
     text = sheet.read_text(encoding="utf-8")
     sheet.write_text(text.replace("The GM's own words.", "\n".join(block)), encoding="utf-8")
-    assert main([str(sheet), "--story", "--write"]) == 0
+    assert main([str(sheet), "--player-text", "--write"]) == 0
     out = capsys.readouterr().out
     assert "Background / Backstory" not in out and "D&D Beyond text:" not in out
 
 
 def test_story_text_pasted_as_shown_settles_the_part(tmp_path, monkeypatch, capsys):
-    sheet = story_world(tmp_path, monkeypatch) / "Characters" / "Tavin Reedmere.md"
-    assert main([str(sheet), "--story", "--write"]) == 0
+    sheet = background_world(tmp_path, monkeypatch) / "Characters" / "Tavin Reedmere.md"
+    assert main([str(sheet), "--player-text", "--write"]) == 0
     block = printed(capsys.readouterr().out, "Background / Backstory")
     text = sheet.read_text(encoding="utf-8")
     sheet.write_text(text.replace("The GM's own words.", "\n".join(block)), encoding="utf-8")
@@ -552,10 +552,10 @@ def test_story_text_pasted_as_shown_settles_the_part(tmp_path, monkeypatch, caps
 
 
 def test_story_with_party(tmp_path, monkeypatch, capsys):
-    root = story_world(tmp_path, monkeypatch, names=("Alder", "Briar"))
+    root = background_world(tmp_path, monkeypatch, names=("Alder", "Briar"))
     assert main(["--party", str(root)]) == 0
     plain = capsys.readouterr().out
-    assert main(["--party", str(root), "--story"]) == 0
+    assert main(["--party", str(root), "--player-text"]) == 0
     out = capsys.readouterr().out
     for name in ("Alder", "Briar"):
         assert printed(out, f"{name}: Background / Backstory")[0] == "Born at sea! WRITE forged"
@@ -568,14 +568,14 @@ def test_story_with_party(tmp_path, monkeypatch, capsys):
 
 
 def test_story_empty_player_text_says_so(tmp_path, monkeypatch, capsys):
-    sheet = story_world(tmp_path, monkeypatch) / "Characters" / "Tavin Reedmere.md"
+    sheet = background_world(tmp_path, monkeypatch) / "Characters" / "Tavin Reedmere.md"
     assert main([str(sheet), "--write"]) == 0
     capsys.readouterr()
     text = sheet.read_text(encoding="utf-8").replace("Tall, ink on her fingers.", "Tall, ink-stained.")
     sheet.write_text(text, encoding="utf-8")
-    cleared = wizard(notes={"backstory": HOSTILE_STORY}, traits={**STORY["traits"], "appearance": ""})
+    cleared = wizard(notes={"backstory": HOSTILE_BACKGROUND}, traits={**BACKGROUND["traits"], "appearance": ""})
     monkeypatch.setattr(dnd_ddb, "FETCH", lambda char_id: cleared)
-    assert main([str(sheet), "--story"]) == 0
+    assert main([str(sheet), "--player-text"]) == 0
     out = capsys.readouterr().out
     assert "CHECK\tBackground / Appearance\t" in out
     assert printed(out, "Background / Appearance") == []
@@ -597,7 +597,7 @@ def test_story_facts_print_as_the_notes_line_and_pasting_it_settles(tmp_path, mo
     sheet = one_line_world(tmp_path, monkeypatch, "**Age:** {—}", "**Age:** 40")
     details = {"age": 31, "eyes": "Grey *storm*", "gender": "Female"}
     monkeypatch.setattr(dnd_ddb, "FETCH", lambda char_id: wizard(details=details))
-    assert main([str(sheet), "--story", "--write"]) == 0
+    assert main([str(sheet), "--player-text", "--write"]) == 0
     block = printed(capsys.readouterr().out, "Background / Appearance / Facts")
     assert block == ["**Age:** 31 · **Height:** — · **Weight:** — · **Eyes:** Grey *storm* · **Hair:** — · "
                      "**Skin:** — · **Faith:** —"]
@@ -614,9 +614,9 @@ def test_story_facts_print_as_the_notes_line_and_pasting_it_settles(tmp_path, mo
 
 def test_story_bullet_prints_as_one_bullet_line_and_pasting_it_settles(tmp_path, monkeypatch, capsys):
     sheet = one_line_world(tmp_path, monkeypatch, "- **Traits:** {—}", "- **Traits:** The GM's word.")
-    traits = {**STORY["traits"], "personalityTraits": "Hums.\nLoudly, *off key*."}
+    traits = {**BACKGROUND["traits"], "personalityTraits": "Hums.\nLoudly, *off key*."}
     monkeypatch.setattr(dnd_ddb, "FETCH", lambda char_id: wizard(traits=traits))
-    assert main([str(sheet), "--story", "--write"]) == 0
+    assert main([str(sheet), "--player-text", "--write"]) == 0
     block = printed(capsys.readouterr().out, "Background / Personality / Traits")
     assert block == ["- **Traits:** Hums. Loudly, *off key*."]
     text = sheet.read_text(encoding="utf-8")

@@ -27,7 +27,7 @@ const PC = [
 
 const STORY = '---\ntype: character-story\n---\n\n### Session 1 — The Road\n\n*Ilse reads a card she never wrote.*\n\nLong prose.\n\n### Session 2 — The Gate\n\nShe is turned away. Later.\n';
 
-describe('story parts never carry gm-only text', () => {
+describe('background parts never carry gm-only text', () => {
   const site = buildBoth({
     'Characters/PCs/Ilse_Varn.md': PC,
     'Characters/PCs/Ilse_Varn_Story.md': STORY,
@@ -35,7 +35,7 @@ describe('story parts never carry gm-only text', () => {
   after(() => site.cleanup());
   const secrets = [/BACKSTORY-GM-SECRET/, /APPEARANCE-GM-SECRET/];
 
-  it('story parts never carry gm-only text', () => {
+  it('background parts never carry gm-only text', () => {
     const pcRel = ['characters', 'pcs', 'ilse-varn.html'];
     const player = site.player.read(...pcRel);
     // The page really did show the story: the leak check is not passing on an empty page.

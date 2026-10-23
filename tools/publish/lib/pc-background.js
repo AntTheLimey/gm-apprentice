@@ -1,6 +1,6 @@
 'use strict';
-// tools/publish/lib/pc-story.js
-// A PC's story parts, read from the processed Background section (GM-only text is already
+// tools/publish/lib/pc-background.js
+// A PC's background parts (the player's own text), read from the processed Background section (GM-only text is already
 // gone from it): the Backstory, Appearance and Personality sub-sections, or the older
 // one-line `**Backstory & Personality:**` and `**Appearance:**` fields. System-neutral.
 // Plain text (the consumer escapes it): facts[].label and .value, personality[].label,
@@ -97,7 +97,7 @@ function splitTitle(html) {
 // -> { hasSections, backstoryHtml, appearanceHtml, facts, personality, firstSentence }, or null
 // when there is no Background section or nothing of a story in it. Fields may be empty
 // (a blank template note); hasSections says the note has the sub-section headings.
-function storyParts(sections) {
+function backgroundParts(sections) {
   const background = (sections || []).find(s => s.id === 'background');
   if (!background) return null;
   const block = (title) => {
@@ -132,4 +132,4 @@ function storyParts(sections) {
   };
 }
 
-module.exports = { storyParts, firstSentence, splitTitle };
+module.exports = { backgroundParts, firstSentence, splitTitle };

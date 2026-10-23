@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A D&D 5e (2024) PC's story text: backstory, appearance, facts and personality.
+"""A D&D 5e (2024) PC's own text: backstory, appearance, facts and personality.
 
 Owns every free-text part of the note that comes from a player. Three jobs, all pure
 (text in, text out, nothing read or written on disk):
@@ -9,7 +9,7 @@ Owns every free-text part of the note that comes from a player. Three jobs, all 
               comment, or hide text from the player site.
   the parts   `note_parts` finds where each part lives in the note (the sub-sections of
               `## Background`), `source_parts` says what sync would write there.
-  ownership   `plan_story` writes a part only when the source changed since the last sync
+  ownership   `plan_background` writes a part only when the source changed since the last sync
               and the note's copy did not; when both changed it says CHECK once for that player
               version and writes nothing (later, the GM's text is never overwritten).
               Text a first sync (or one with no memory) finds there that differs from the source
@@ -43,7 +43,7 @@ from vaultlib import fence_step, frontmatter_span, get_key, set_key, yaml_scalar
 PARTS = ("backstory", "appearance", "facts", "traits", "ideals", "bonds", "flaws")
 FACTS = ("Age", "Height", "Weight", "Eyes", "Hair", "Skin", "Faith")
 BULLETS = ("traits", "ideals", "bonds", "flaws")
-MEMORY = "story"        # the list id in sync's memory: entries are `part<TAB>source_fp<TAB>note_fp`
+MEMORY = "background"        # the list id in sync's memory: entries are `part<TAB>source_fp<TAB>note_fp`
 DASH = "—"
 
 LOCUS = {
@@ -76,7 +76,7 @@ BLANK_VALUES = ("", '""', "''", "null", "~")
 
 
 @dataclass
-class Story:
+class PlayerText:
     """What the player wrote at the source, unconverted."""
     backstory: str = ""
     appearance: str = ""
@@ -96,7 +96,7 @@ class Span:
 
 
 @dataclass
-class StoryPlan:
+class BackgroundPlan:
     text: str
     rows: list[tuple[str, str, str]]            # (STATUS, locus, message)
     remember: dict[str, tuple[str, str]]        # part -> (source_fp, note_fp) after this run
@@ -263,28 +263,28 @@ def held(part: str, span: Span | None) -> str:
 
 # --- what sync would write -----------------------------------------------------------------
 
-def source_parts(story: Story) -> dict[str, str]:
+def source_parts(player_text: PlayerText) -> dict[str, str]:
     """Each part as the markdown sync would write it; "" for a part the source leaves empty."""
-    shown = {k.title(): one_line(v) for k, v in story.facts.items()}
+    shown = {k.title(): one_line(v) for k, v in player_text.facts.items()}
     facts = ""
     if any(shown.get(label) for label in FACTS):
         facts = " · ".join(f"**{label}:** {shown.get(label) or DASH}" for label in FACTS)
-    out = {"backstory": from_plain(story.backstory), "appearance": from_plain(story.appearance), "facts": facts}
+    out = {"backstory": from_plain(player_text.backstory), "appearance": from_plain(player_text.appearance), "facts": facts}
     for p in BULLETS:
-        out[p] = one_line(getattr(story, p))
+        out[p] = one_line(getattr(player_text, p))
     return out
 
 
-def source_raw(story: Story) -> dict[str, str]:
+def source_raw(player_text: PlayerText) -> dict[str, str]:
     """Each part as the player wrote it, unescaped, in the note's own form: the prose as written,
     the facts as the whole facts line and each bullet as its whole line, so a paste of it settles."""
     def flat(text: str) -> str:
         return " ".join(clean_text(text).split())
 
-    given = {k.title(): flat(v) for k, v in story.facts.items()}
+    given = {k.title(): flat(v) for k, v in player_text.facts.items()}
     facts = " · ".join(f"**{label}:** {given.get(label) or DASH}" for label in FACTS)
-    out = {"backstory": story.backstory, "appearance": story.appearance, "facts": facts}
-    out.update({p: f"- **{p.title()}:** {flat(getattr(story, p)) or DASH}" for p in BULLETS})
+    out = {"backstory": player_text.backstory, "appearance": player_text.appearance, "facts": facts}
+    out.update({p: f"- **{p.title()}:** {flat(getattr(player_text, p)) or DASH}" for p in BULLETS})
     return out
 
 
@@ -334,8 +334,8 @@ def _replacement(part: str, span: Span, new: str, lines: list[str], eol: str) ->
 GM_TEXT = "gm-text"
 
 
-def plan_story(text: str, story: Story, last: dict[str, tuple[str, str]] | None) -> StoryPlan:
-    """Bring the note's story parts up to date; see the module doc for who owns what.
+def plan_background(text: str, player_text: PlayerText, last: dict[str, tuple[str, str]] | None) -> BackgroundPlan:
+    """Bring the note's background parts up to date; see the module doc for who owns what.
 
     `last` is the memory from the last sync (None when there is none, as on a first sync or
     after the file was lost; either way the note's own text is never overwritten)."""
@@ -343,7 +343,7 @@ def plan_story(text: str, story: Story, last: dict[str, tuple[str, str]] | None)
     eol = _eol(lines)
     parts = note_parts(text)
     subs = _subsections(lines)
-    source = source_parts(story)
+    source = source_parts(player_text)
     rows: list[tuple[str, str, str]] = []
     edits: list[tuple[int, int, list[str]]] = []
     fresh: dict[str, str] = {}                      # part -> the source fingerprint to record
@@ -399,7 +399,7 @@ def plan_story(text: str, story: Story, last: dict[str, tuple[str, str]] | None)
     for start, end, new in sorted(edits, key=lambda e: e[0], reverse=True):
         lines[start:end] = new
 
-    gender = story.gender
+    gender = player_text.gender
     if gender.strip():
         close, err = frontmatter_span(lines)
         if err is None:
@@ -413,12 +413,12 @@ def plan_story(text: str, story: Story, last: dict[str, tuple[str, str]] | None)
 
     new_text = "".join(lines)
     after = note_parts(new_text)
-    raw = source_raw(story)
+    raw = source_raw(player_text)
     said = {LOCUS[p]: raw[p] for p in PARTS if reading(held(p, after[p])) != reading(source[p])}
     remember = dict(keep)
     for part, source_fp in fresh.items():
         remember[part] = (source_fp, fingerprint(held(part, after[part])))
-    return StoryPlan(new_text, rows, remember, said)
+    return BackgroundPlan(new_text, rows, remember, said)
 
 
 # --- sync's memory -------------------------------------------------------------------------
@@ -429,7 +429,7 @@ def memory_entries(remember: dict[str, tuple[str, str]]) -> list[str]:
 
 
 def memory_from(seen: dict[str, list[str]] | None) -> dict[str, tuple[str, str]] | None:
-    """The memory as `plan_story` takes it; None when there is none (or it lacks this list)."""
+    """The memory as `plan_background` takes it; None when there is none (or it lacks this list)."""
     if seen is None or MEMORY not in seen:
         return None
     out: dict[str, tuple[str, str]] = {}
