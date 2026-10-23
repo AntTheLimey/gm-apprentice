@@ -254,7 +254,52 @@ def test_both_changed_is_check():
                           "the player changed this on D&D Beyond and it was also edited in the vault; "
                           "compare them, nothing was written")]
     assert plan.text == edited
-    assert plan.remember["appearance"] == first.remember["appearance"]      # still flagged next time
+    # this player version is now seen; the note fingerprint stays as last synced
+    assert plan.remember["appearance"] == (fingerprint("Tall."), first.remember["appearance"][1])
+
+
+def both_changed():
+    first = synced(note(), STORY)
+    edited = first.text.replace("Short.", "Short, with a scar.")
+    new = Story(**{**STORY.__dict__, "appearance": "Tall."})
+    return first, edited, new, plan_story(edited, new, first.remember)
+
+
+def test_check_fires_once_per_player_version():
+    _, edited, new, plan = both_changed()
+    again = plan_story(edited, new, plan.remember)
+    assert again.rows == [] and again.text == edited and again.remember == plan.remember
+
+
+def test_later_player_change_checks_again_and_never_writes():
+    _, edited, new, plan = both_changed()
+    newer = Story(**{**STORY.__dict__, "appearance": "Taller."})
+    third = plan_story(edited, newer, plan.remember)
+    assert rows_of(third) == [("CHECK", "Background / Appearance")] and third.text == edited
+    assert plan_story(edited, newer, third.remember).rows == []
+    newest = Story(**{**STORY.__dict__, "appearance": ""})
+    fourth = plan_story(edited, newest, third.remember)
+    assert rows_of(fourth) == [("CHECK", "Background / Appearance")] and fourth.text == edited
+
+
+def test_gm_pastes_player_text_plus_aside_is_never_overwritten():
+    first = synced(note(), STORY)
+    new = Story(**{**STORY.__dict__, "appearance": "Tall."})
+    pasted = first.text.replace("Short.", "Tall.\n\nGM: she limps.")
+    plan = plan_story(pasted, new, first.remember)
+    assert rows_of(plan) == [("CHECK", "Background / Appearance")]
+    assert plan_story(pasted, new, plan.remember).rows == []
+    newer = Story(**{**STORY.__dict__, "appearance": "Taller."})
+    again = plan_story(pasted, newer, plan.remember)
+    assert rows_of(again) == [("CHECK", "Background / Appearance")] and again.text == pasted
+
+
+def test_gm_pastes_exactly_the_new_player_text_settles_silently():
+    first, edited, new, plan = both_changed()
+    pasted = edited.replace("Short, with a scar.", "Tall.")
+    settled = plan_story(pasted, new, plan.remember)
+    assert settled.rows == [] and settled.text == pasted
+    assert settled.remember["appearance"] == (fingerprint("Tall."), fingerprint("Tall."))
 
 
 def test_both_changed_then_made_equal_settles():

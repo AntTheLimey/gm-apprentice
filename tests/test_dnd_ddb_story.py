@@ -146,6 +146,20 @@ def test_vault_edit_and_player_change_checks():
     assert part(second.text, "### Backstory") == part(edited, "### Backstory")
 
 
+def test_check_fires_once_then_is_silent_and_writes_nothing():
+    first = sync_text(NOTE, wizard())
+    edited = first.text.replace("She left at nineteen.", "She left at nineteen, by night.")
+    changed = {"backstory": "Raised in a lighthouse.\n\nShe left at twenty."}
+    second = sync_text(edited, wizard(notes=changed), first.seen)
+    assert [r[0] for r in story_rows(second)] == ["CHECK"]
+    third = sync_text(second.text, wizard(notes=changed), second.seen)
+    assert story_rows(third) == [] and third.text == second.text
+    later = {"backstory": "Raised in a lighthouse.\n\nShe left at twenty-one."}
+    fourth = sync_text(third.text, wizard(notes=later), third.seen)
+    assert [r[0] for r in story_rows(fourth)] == ["CHECK"] and fourth.text == third.text
+    assert part(fourth.text, "### Backstory") == part(edited, "### Backstory")
+
+
 def test_gm_only_aside_survives_player_change():
     first = sync_text(NOTE, wizard())
     aside = "<!-- gm-only -->\nThe keeper was her father.\n<!-- /gm-only -->"

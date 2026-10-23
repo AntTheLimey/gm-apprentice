@@ -10,8 +10,9 @@ Owns every free-text part of the note that comes from a player. Three jobs, all 
   the parts   `note_parts` finds where each part lives in the note (the sub-sections of
               `## Background`), `source_parts` says what sync would write there.
   ownership   `plan_story` writes a part only when the source changed since the last sync
-              and the note's copy did not; when both changed it says CHECK and writes
-              nothing. A fingerprint of each side is remembered per part.
+              and the note's copy did not; when both changed it says CHECK once for that player
+              version and writes nothing (later, the GM's text is never overwritten).
+              A fingerprint of each side is remembered per part.
 
 Where the parts live:
 
@@ -333,10 +334,10 @@ def plan_story(text: str, story: Story, last: dict[str, tuple[str, str]] | None)
                 rows.append(("CHECK", locus, "the note already has text here; nothing was written, "
                                              "and the next change on D&D Beyond will be"))
             fresh[part] = source_fp
+        elif note_fp == source_fp:
+            fresh[part] = source_fp                 # the note already says what the source says: settled
         elif entry[0] == source_fp:
             keep[part] = entry                      # nothing new at the source; the note is the GM's
-        elif note_fp == source_fp:
-            fresh[part] = source_fp                 # the note already says what the source now says
         elif entry[1] == note_fp:
             if want:
                 rows.append(("WRITE", locus, _wrote(part, want)))
@@ -347,7 +348,7 @@ def plan_story(text: str, story: Story, last: dict[str, tuple[str, str]] | None)
         else:
             rows.append(("CHECK", locus, "the player changed this on D&D Beyond and it was also edited in the "
                                          "vault; compare them, nothing was written"))
-            keep[part] = entry
+            keep[part] = (source_fp, entry[1])      # this player version is seen; the note stays "as last synced"
 
     for start, end, new in sorted(edits, key=lambda e: e[0], reverse=True):
         lines[start:end] = new
