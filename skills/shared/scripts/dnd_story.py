@@ -100,7 +100,7 @@ class StoryPlan:
     text: str
     rows: list[tuple[str, str, str]]            # (STATUS, locus, message)
     remember: dict[str, tuple[str, str]]        # part -> (source_fp, note_fp) after this run
-    said: dict[str, str] = field(default_factory=dict)  # locus of a part's CHECK -> the player's raw text
+    said: dict[str, str] = field(default_factory=dict)  # a part's CHECK locus -> source_raw's text for it
 
 
 # --- safe text -----------------------------------------------------------------------------
@@ -276,11 +276,15 @@ def source_parts(story: Story) -> dict[str, str]:
 
 
 def source_raw(story: Story) -> dict[str, str]:
-    """Each part as the player wrote it, unescaped (the facts as `Age: 31 · Eyes: Grey`)."""
-    given = {k.title(): v for k, v in story.facts.items()}
-    facts = " · ".join(f"{label}: {given[label]}" for label in FACTS if given.get(label))
+    """Each part as the player wrote it, unescaped, in the note's own form: the prose as written,
+    the facts as the whole facts line and each bullet as its whole line, so a paste of it settles."""
+    def flat(text: str) -> str:
+        return " ".join(clean_text(text).split())
+
+    given = {k.title(): flat(v) for k, v in story.facts.items()}
+    facts = " · ".join(f"**{label}:** {given.get(label) or DASH}" for label in FACTS)
     out = {"backstory": story.backstory, "appearance": story.appearance, "facts": facts}
-    out.update({p: getattr(story, p) for p in BULLETS})
+    out.update({p: f"- **{p.title()}:** {flat(getattr(story, p)) or DASH}" for p in BULLETS})
     return out
 
 
@@ -353,7 +357,7 @@ def plan_story(text: str, story: Story, last: dict[str, tuple[str, str]] | None)
                 keep[part] = memory[part]
             if want:
                 if SECTION[part].lower() in subs:
-                    label = {"facts": "a facts line"}.get(part, f"a **{part.title()}:** bullet")
+                    label = {"facts": "facts line"}.get(part, f"**{part.title()}:** bullet")
                     gap = f"the note has no {label} under {SECTION[part]}"
                 else:
                     gap = f"the note has no ### {SECTION[part]} under Background"

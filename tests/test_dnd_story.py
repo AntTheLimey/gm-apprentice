@@ -518,3 +518,14 @@ def test_never_synced_text_check_says_the_note_keeps_its_own_text():
     assert later.rows == [("CHECK", "Background / Backstory",
                            "the note keeps its own text here and the player changed theirs on D&D Beyond; "
                            "compare them, nothing was written")]
+
+
+def test_missing_place_wording():
+    no_facts = note().replace("**Age:** — · **Height:** — · **Weight:** — · **Eyes:** — · **Hair:** — · "
+                              "**Skin:** — · **Faith:** —\n", "")
+    no_bonds = no_facts.replace("- **Bonds:** —\n", "")
+    plan = synced(no_bonds, STORY)
+    assert ("CHECK", "Background / Appearance / Facts", "the note has no facts line under Appearance; "
+            "run the vault upgrade (migrate.py), nothing was written") in plan.rows
+    assert ("CHECK", "Background / Personality / Bonds", "the note has no **Bonds:** bullet under Personality; "
+            "run the vault upgrade (migrate.py), nothing was written") in plan.rows

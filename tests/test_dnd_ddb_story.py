@@ -555,3 +555,62 @@ def test_story_empty_player_text_says_so(tmp_path, monkeypatch, capsys):
     at = next(i for i, ln in enumerate(lines) if ln.startswith("CHECK\tBackground / Appearance\t"))
     assert lines[at + 1] == "    D&D Beyond text: (empty)"
     assert not lines[at + 2].startswith("    ")
+
+
+def one_line_world(tmp_path, monkeypatch, note_from, to):
+    """A note whose one-line part holds the GM's own text, and a player with `traits`/`details` of their own."""
+    root = tmp_path
+    (root / "_meta").mkdir()
+    (root / "_meta" / "vault-config.md").write_text("---\npublish:\n  system: dnd-5e-2024\n---\n", encoding="utf-8")
+    (root / "Characters").mkdir()
+    sheet = root / "Characters" / "Tavin Reedmere.md"
+    sheet.write_text(note_with_link().replace(note_from, to), encoding="utf-8")
+    return sheet
+
+
+def printed(out, locus):
+    lines = out.splitlines()
+    at = next(i for i, ln in enumerate(lines) if ln.startswith(f"CHECK\t{locus}\t"))
+    assert lines[at + 1] == "    D&D Beyond text:"
+    block = []
+    for line in lines[at + 2:]:
+        if not line.startswith("    "):
+            break
+        block.append(line[4:])
+    return block
+
+
+def test_story_facts_print_as_the_notes_line_and_pasting_it_settles(tmp_path, monkeypatch, capsys):
+    sheet = one_line_world(tmp_path, monkeypatch, "**Age:** {—}", "**Age:** 40")
+    details = {"age": 31, "eyes": "Grey *storm*", "gender": "Female"}
+    monkeypatch.setattr(dnd_ddb, "FETCH", lambda char_id: wizard(details=details))
+    assert main([str(sheet), "--story", "--write"]) == 0
+    block = printed(capsys.readouterr().out, "Background / Appearance / Facts")
+    assert block == ["**Age:** 31 · **Height:** — · **Weight:** — · **Eyes:** Grey *storm* · **Hair:** — · "
+                     "**Skin:** — · **Faith:** —"]
+    text = sheet.read_text(encoding="utf-8")
+    old = next(ln for ln in text.splitlines() if ln.startswith("**Age:**"))
+    sheet.write_text(text.replace(old, block[0]), encoding="utf-8")
+    assert main([str(sheet), "--write"]) == 0
+    assert "Facts" not in capsys.readouterr().out
+    monkeypatch.setattr(dnd_ddb, "FETCH", lambda char_id: wizard(details={**details, "age": 32}))
+    assert main([str(sheet), "--write"]) == 0
+    assert "WRITE\tBackground / Appearance / Facts\t" in capsys.readouterr().out
+    assert "**Age:** 32" in sheet.read_text(encoding="utf-8")
+
+
+def test_story_bullet_prints_as_one_bullet_line_and_pasting_it_settles(tmp_path, monkeypatch, capsys):
+    sheet = one_line_world(tmp_path, monkeypatch, "- **Traits:** {—}", "- **Traits:** The GM's word.")
+    traits = {**STORY["traits"], "personalityTraits": "Hums.\nLoudly, *off key*."}
+    monkeypatch.setattr(dnd_ddb, "FETCH", lambda char_id: wizard(traits=traits))
+    assert main([str(sheet), "--story", "--write"]) == 0
+    block = printed(capsys.readouterr().out, "Background / Personality / Traits")
+    assert block == ["- **Traits:** Hums. Loudly, *off key*."]
+    text = sheet.read_text(encoding="utf-8")
+    sheet.write_text(text.replace("- **Traits:** The GM's word.", block[0]), encoding="utf-8")
+    assert main([str(sheet), "--write"]) == 0
+    assert "Traits" not in capsys.readouterr().out
+    monkeypatch.setattr(dnd_ddb, "FETCH", lambda char_id: wizard(traits={**traits, "personalityTraits": "Sings."}))
+    assert main([str(sheet), "--write"]) == 0
+    assert "WRITE\tBackground / Personality / Traits\t" in capsys.readouterr().out
+    assert "- **Traits:** Sings." in sheet.read_text(encoding="utf-8")
