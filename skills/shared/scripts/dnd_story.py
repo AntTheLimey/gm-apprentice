@@ -60,9 +60,9 @@ FACT_ITEM = re.compile(r"\*\*(" + "|".join(FACTS) + r"):\*\*\s*(.*?)\s*(?=\s·\s
                        + r"):\*\*|$)", re.I)
 BULLET = re.compile(r"^\s*[-*+]\s+\*\*(Traits|Ideals|Bonds|Flaws):\*\*\s*(.*?)\s*$", re.I)
 LIST_ITEM = re.compile(r"^\s*[-*]\s+(\S.*)$")
-SYNTAX = re.compile(r"([\\`*_\[\]#|!~{}&%])")
+SYNTAX = re.compile(r"([\\`*_\[\]#|!~{}&%=$^])")
 ANGLES = {"<": "&lt;", ">": "&gt;"}      # an entity, not a backslash: `\<` would still spell `<`
-LEAD_MARK = re.compile(r"^([+\-=])")
+LEAD_MARK = re.compile(r"^([+\-])")
 LEAD_NUMBER = re.compile(r"^(\d+)([.)])")
 EOL = re.compile(r"\r\n|\n|\r")
 BLANK_VALUES = ("", '""', "''", "null", "~")
@@ -256,6 +256,14 @@ def _paragraphs(markdown: str) -> int:
     return len([b for b in re.split(r"\n\s*\n", markdown) if b.strip()])
 
 
+def _wrote(part: str, markdown: str) -> str:
+    """The WRITE row's message: a paragraph count for prose, nothing more for a one-line part."""
+    if part in ("facts",) + BULLETS:
+        return "from D&D Beyond"
+    n = _paragraphs(markdown)
+    return f"from D&D Beyond ({n} paragraph{'' if n == 1 else 's'})"
+
+
 def _cleared(part: str) -> str:
     """What an emptied part is written as."""
     if part == "facts":
@@ -319,7 +327,7 @@ def plan_story(text: str, story: Story, last: dict[str, tuple[str, str]] | None)
         if entry is None:
             # First sync of this part: an empty place is ours to fill, text there is not.
             if want and not now:
-                rows.append(("WRITE", locus, f"from D&D Beyond ({_paragraphs(want)} paragraphs)"))
+                rows.append(("WRITE", locus, _wrote(part, want)))
                 edits.append((span.start, span.end, _replacement(part, span, want, lines, eol)))
             elif want and note_fp != source_fp:
                 rows.append(("CHECK", locus, "the note already has text here; nothing was written, "
@@ -331,7 +339,7 @@ def plan_story(text: str, story: Story, last: dict[str, tuple[str, str]] | None)
             fresh[part] = source_fp                 # the note already says what the source now says
         elif entry[1] == note_fp:
             if want:
-                rows.append(("WRITE", locus, f"from D&D Beyond ({_paragraphs(want)} paragraphs)"))
+                rows.append(("WRITE", locus, _wrote(part, want)))
             else:
                 rows.append(("WRITE", locus, "cleared; it is empty on D&D Beyond"))
             edits.append((span.start, span.end, _replacement(part, span, want or _cleared(part), lines, eol)))
@@ -353,6 +361,8 @@ def plan_story(text: str, story: Story, last: dict[str, tuple[str, str]] | None)
                 set_key(fm, "gender", yaml_scalar(" ".join(clean_text(gender).split())), eol)
                 lines[1:close] = fm
                 rows.append(("WRITE", "Frontmatter / gender", "from D&D Beyond"))
+        else:
+            rows.append(("CHECK", "Frontmatter / gender", "the frontmatter could not be read; gender was not written"))
 
     new_text = "".join(lines)
     after = note_parts(new_text)

@@ -113,7 +113,7 @@ def test_markup_prints_as_typed():
 
 
 def test_every_syntax_character_prints_as_typed():
-    src = "1. one\n+ plus\n= eq\n== h ==\n\\*not bold\\* *x* _y_ ~~z~~ & &amp; 2) two\n>quote\n    indented\n%%c%%"
+    src = "a ==b== c\n$x$ and $5\n$$\nE=mc^2\n$$\nend ^abc\n1. one\n+ plus\n= eq\n== h ==\n\\*not bold\\* *x* _y_ ~~z~~ & &amp; 2) two\n>quote\n    indented\n%%c%%"
     out = from_plain(src)
     if shutil.which("node") is None or not MARKDOWN_IT.is_dir():
         pytest.skip("node or the publish tool's markdown-it is not available")
@@ -121,6 +121,22 @@ def test_every_syntax_character_prints_as_typed():
     tags.feed(render(out))
     assert tags.tags <= ALLOWED_TAGS
     assert " ".join("".join(tags.text).split()) == " ".join(src.split())
+
+
+def test_wording_of_write_messages():
+    plan = synced(note(), STORY)
+    said = {locus: msg for _, locus, msg in plan.rows}
+    assert said["Background / Appearance"] == "from D&D Beyond (1 paragraph)"
+    assert said["Background / Appearance / Facts"] == "from D&D Beyond"
+    assert said["Background / Personality / Flaws"] == "from D&D Beyond"
+
+
+def test_unreadable_frontmatter_is_check_for_gender():
+    text = note().replace("gender:\n", "gender:\n  - [broken\n", 1).replace("---\n# Brannoch", "# Brannoch", 1)
+    plan = synced(text, STORY)
+    assert ("CHECK", "Frontmatter / gender",
+            "the frontmatter could not be read; gender was not written") in plan.rows
+    assert "Female" not in plan.text
 
 
 def test_paragraphs_and_dash_lists():
@@ -316,7 +332,7 @@ def test_missing_bullet_in_an_existing_section_is_check():
 def test_nothing_to_say_about_a_missing_part_the_source_leaves_empty():
     text = "## Background\n\n### Backstory\n\n{x}\n"
     assert synced(text, Story(backstory="Hello")).rows == [("WRITE", "Background / Backstory",
-                                                           "from D&D Beyond (1 paragraphs)")]
+                                                           "from D&D Beyond (1 paragraph)")]
 
 
 def test_gender_only_fills_a_blank():
