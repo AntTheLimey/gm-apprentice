@@ -418,7 +418,7 @@ async function runExplainAll(options, deps) {
 
 // The `field: value` that autoExcludeCode matched on, for the report line.
 function autoExcludeLabel(frontmatter, code) {
-  const field = { AUTO_EXCLUDED_STATUS: 'status', AUTO_EXCLUDED_STAGE: 'stage', AUTO_EXCLUDED_SOURCE: 'source' }[code];
+  const field = { AUTO_EXCLUDED_STATUS: 'status', AUTO_EXCLUDED_SOURCE: 'source' }[code];
   return `${field}: ${String(frontmatter[field]).toLowerCase()}`;
 }
 

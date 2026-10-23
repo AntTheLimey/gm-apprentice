@@ -10,8 +10,6 @@ const data = require('./ontology.json');
 // and the review counts, so a freshly wrapped session counts before it is reviewed).
 const SESSION_NOT_YET_RUN = new Set(data.session_status.not_yet_run);
 const SESSION_PLAYED = new Set(data.session_status.played);
-// A session's `stage` while it is still being written.
-const SESSION_STAGE_IN_PREP = new Set(data.session_stage.in_prep);
 
 // Every `type:` spelling a Session Wrap-Up is written with; the first is the one the
 // templates write.
@@ -35,7 +33,7 @@ function systemId(raw) {
 const VAULT_FOLDERS = data.vault_folders.map((f) => ({ folder: f.folder, types: [...f.types], site: f.site }));
 
 module.exports = {
-  SESSION_NOT_YET_RUN, SESSION_PLAYED, SESSION_STAGE_IN_PREP,
+  SESSION_NOT_YET_RUN, SESSION_PLAYED,
   WRAP_UP_TYPE, WRAP_UP_TYPES,
   SYSTEM_IDS, SYSTEM_NAMES, SYSTEM_ALIASES, systemId,
   VAULT_FOLDERS,

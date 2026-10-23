@@ -36,7 +36,7 @@ const { getCanonStatus } = require('./templates/base');
 const { entry, nameInFor } = require('./settings');
 
 // The values that keep a note off a player site are listed once, in excluding-values.js.
-const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, SCENE_SKIP_STATUS, DRAFT, ruleValue } = require('./excluding-values');
+const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_SOURCE, SCENE_SKIP_STATUS, DRAFT, ruleValue } = require('./excluding-values');
 
 // Directories that never publish, whatever the config says. `_templates` is the
 // lowercase spelling some vaults use; `personal` holds the GM's own licensed
@@ -89,13 +89,12 @@ function autoExcludeCode(frontmatter) {
   const fm = frontmatter || {};
   // ruleValue: a list typed where one value belongs is read as the item that excludes.
   if (AUTO_EXCLUDE_STATUS.has(lower(ruleValue('status', fm.status)))) return 'AUTO_EXCLUDED_STATUS';
-  if (AUTO_EXCLUDE_STAGE.has(lower(ruleValue('stage', fm.stage)))) return 'AUTO_EXCLUDED_STAGE';
   if (AUTO_EXCLUDE_SOURCE.has(lower(ruleValue('source', fm.source)))) return 'AUTO_EXCLUDED_SOURCE';
   return null;
 }
 
 function autoExcludeReason(code, frontmatter) {
-  const field = { AUTO_EXCLUDED_STATUS: 'status', AUTO_EXCLUDED_STAGE: 'stage', AUTO_EXCLUDED_SOURCE: 'source' }[code];
+  const field = { AUTO_EXCLUDED_STATUS: 'status', AUTO_EXCLUDED_SOURCE: 'source' }[code];
   return `${field}: ${lower(ruleValue(field, frontmatter[field]))}`;
 }
 
@@ -246,7 +245,7 @@ function publishesPage(verdict) {
 
 // The codes for a whole note the player site holds back and the GM site can show (the `notes` switch).
 const NOTE_CODES = new Set([
-  'DRAFT_EXCLUDED', 'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_SOURCE',
+  'DRAFT_EXCLUDED', 'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_SOURCE',
   'SCENE_CUT_SKIPPED', 'MANIFEST_EXCLUDED', 'MANIFEST_NEEDS_DECISION', 'MANIFEST_UNLISTED',
   'PUBLISH_FALSE', 'PUBLISH_NONE',
 ]);
@@ -299,7 +298,6 @@ module.exports = {
   HOUSEKEEPING_DIRS,
   isHousekeepingNote,
   AUTO_EXCLUDE_STATUS,
-  AUTO_EXCLUDE_STAGE,
   AUTO_EXCLUDE_SOURCE,
   SCENE_SKIP_STATUS,
 };

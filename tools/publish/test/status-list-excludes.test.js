@@ -71,7 +71,6 @@ describe('a list in a field that can keep a note off the site', () => {
     const { configPath, root } = site({
       'People/Listed_Status.md': npc('status: [planned, alive]'),
       'People/Listed_Canon.md': npc('canon_status: [AUTHORITATIVE, DRAFT]'),
-      'People/Listed_Stage.md': npc('stage: [final, draft]'),
       'People/Listed_Source.md': npc('source: [table, prep]'),
       'People/Listed_Flags.md': '---\ntype: [npc, world_flags]\n---\n\nBody.\n',
       'Scenes/Listed_Cut.md': '---\ntype: scene\nstatus: [played, cut]\n---\n\nBody.\n',
@@ -80,7 +79,7 @@ describe('a list in a field that can keep a note off the site', () => {
     }, { extra: '  exclude_drafts: true\n' });
     const { said } = quietBuild(configPath);
     const built = (dir, name) => fs.existsSync(path.join(root, 'docs', dir, name));
-    for (const name of ['listed-status.html', 'listed-canon.html', 'listed-stage.html', 'listed-source.html', 'listed-flags.html']) {
+    for (const name of ['listed-status.html', 'listed-canon.html', 'listed-source.html', 'listed-flags.html']) {
       assert.ok(!built('people', name), `${name} was published`);
     }
     assert.ok(!built('scenes', 'listed-cut.html'), 'the cut scene was published');

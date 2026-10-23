@@ -62,7 +62,7 @@ describe('manifest diff', () => {
 
     assert.strictEqual(rc, 0);
     const text = c.text();
-    assert.match(text, /^manifest: no manifest — 2 publishing, 3 excluded, 0 needs decision$/m);
+    assert.match(text, /^manifest: no manifest — 3 publishing, 2 excluded, 0 needs decision$/m);
     // Every file is New, with its bucket, code and reason on one tab-separated row.
     assert.match(text, /^ {2}Sessions\/Planned Session\.md\texclude\tAUTO_EXCLUDED_STATUS\tstatus: planned$/m);
     assert.match(text, /^ {2}Characters\/NPCs\/Prep Source\.md\texclude\tAUTO_EXCLUDED_SOURCE\tsource: prep$/m);
@@ -82,8 +82,8 @@ describe('manifest diff', () => {
     assert.strictEqual(payload.mode, undefined);
     assert.strictEqual(payload.new.length, 5);
     assert.deepStrictEqual(payload.removed, []);
-    assert.deepStrictEqual(payload.counts.publishing, 2);
-    assert.deepStrictEqual(payload.counts.excluded, 3);
+    assert.deepStrictEqual(payload.counts.publishing, 3);
+    assert.deepStrictEqual(payload.counts.excluded, 2);
     const planned = payload.new.find(e => e.path === 'Sessions/Planned Session.md');
     assert.deepStrictEqual(planned, {
       path: 'Sessions/Planned Session.md',

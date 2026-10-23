@@ -7,7 +7,6 @@ const {
   autoExcludeCode,
   ALWAYS_EXCLUDE_DIRS,
   AUTO_EXCLUDE_STATUS,
-  AUTO_EXCLUDE_STAGE,
   AUTO_EXCLUDE_SOURCE,
 } = require('../lib/publish-decision');
 
@@ -36,13 +35,12 @@ describe('publish-decision: constants', () => {
 
   it('keeps the auto-exclude vocabularies build.js used', () => {
     assert.deepStrictEqual([...AUTO_EXCLUDE_STATUS].sort(), ['planned', 'prepped']);
-    assert.deepStrictEqual([...AUTO_EXCLUDE_STAGE].sort(), ['draft', 'outline', 'ready']);
     assert.deepStrictEqual([...AUTO_EXCLUDE_SOURCE].sort(), ['prep']);
   });
 
   it('autoExcludeCode names which field triggered, or null', () => {
     assert.strictEqual(autoExcludeCode({ status: 'Planned' }), 'AUTO_EXCLUDED_STATUS');
-    assert.strictEqual(autoExcludeCode({ stage: 'outline' }), 'AUTO_EXCLUDED_STAGE');
+    assert.strictEqual(autoExcludeCode({ stage: 'outline' }), null);
     assert.strictEqual(autoExcludeCode({ source: 'prep' }), 'AUTO_EXCLUDED_SOURCE');
     assert.strictEqual(autoExcludeCode({ status: 'played' }), null);
     assert.strictEqual(autoExcludeCode({ status: { hp: 11 } }), null);
@@ -113,8 +111,10 @@ describe('publish-decision: one case per code', () => {
     assert.match(v.reason, /status: planned/);
   });
 
-  it('AUTO_EXCLUDED_STAGE for stage: draft', () => {
-    assert.strictEqual(decide({ type: 'npc', stage: 'draft' }).code, 'AUTO_EXCLUDED_STAGE');
+  it('a stage key no longer excludes a page', () => {
+    const v = decide({ type: 'npc', stage: 'draft' });
+    assert.strictEqual(v.bucket, 'publish');
+    assert.strictEqual(v.code, 'OK');
   });
 
   it('AUTO_EXCLUDED_SOURCE for source: prep', () => {
@@ -239,7 +239,7 @@ describe('publish-decision: over the fixture vaults', () => {
     assert.strictEqual(verdicts['Sessions/Played Session.md'].bucket, 'publish');
     assert.strictEqual(verdicts['Characters/NPCs/Published NPC.md'].bucket, 'publish');
     assert.strictEqual(verdicts['Sessions/Planned Session.md'].code, 'AUTO_EXCLUDED_STATUS');
-    assert.strictEqual(verdicts['Characters/NPCs/Draft NPC.md'].code, 'AUTO_EXCLUDED_STAGE');
+    assert.strictEqual(verdicts['Characters/NPCs/Draft NPC.md'].bucket, 'publish');
     assert.strictEqual(verdicts['Characters/NPCs/Prep Source.md'].code, 'AUTO_EXCLUDED_SOURCE');
   });
 

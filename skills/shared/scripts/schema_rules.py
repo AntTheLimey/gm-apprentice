@@ -48,10 +48,6 @@ from vaultlib import ontology as _ontology  # noqa: E402
 # played (the `wrap-up` state between the wrap-up and the review counts).
 SESSION_NOT_YET_RUN: frozenset[str] = frozenset(_ontology()["session_status"]["not_yet_run"])
 SESSION_PLAYED: frozenset[str] = frozenset(_ontology()["session_status"]["played"])
-# A session's `stage`: still being written (kept off a player site), or in play.
-SESSION_STAGE_IN_PREP: frozenset[str] = frozenset(_ontology()["session_stage"]["in_prep"])
-SESSION_STAGE: frozenset[str] = (
-    SESSION_STAGE_IN_PREP | frozenset(_ontology()["session_stage"]["in_play"]))
 
 # Game systems: canonical id -> its name, and every alias -> its canonical id.
 SYSTEMS: tuple[str, ...] = tuple(s["id"] for s in _ontology()["game_systems"])
@@ -142,7 +138,6 @@ SETTING_VALUES: dict[str, dict[str, str]] = {
 }
 LISTED_VALUES: dict[str, dict[str, frozenset[str]]] = {
     "*": {"source": SOURCE_VALUES},
-    "session": {"stage": SESSION_STAGE},
     "faction": {"status": FACTION_STATUS},
     "organization": {"status": FACTION_STATUS},
 }

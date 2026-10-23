@@ -40,17 +40,13 @@ def _words(text: str) -> set[str]:
 
 # (file under skills/, a pattern whose group 1 is the list, the values it must name)
 PROSE: list[tuple[str, str, frozenset[str] | set[str]]] = [
-    # Session status and stage
+    # Session status
     ("publish-site/references/content-filtering.md",
      r"`status: (planned[^`]+)`", sr.SESSION_NOT_YET_RUN),
     ("publish-site/references/content-filtering.md",
      r"`status: (played \|[^`]+)`", sr.SESSION_PLAYED),
-    ("publish-site/references/content-filtering.md",
-     r"`stage: ([^`]+)`", sr.SESSION_STAGE_IN_PREP),
     ("publish-site/references/setup-wizard.md",
      r"`status: ([^`]+)`", sr.SESSION_NOT_YET_RUN),
-    ("publish-site/references/setup-wizard.md",
-     r"`stage: ([^`]+)`", sr.SESSION_STAGE_IN_PREP),
     # canon_status
     ("shared/entity-schema.md", r"Canon status: ([A-Z /]+) \|", sr.CANON_STATUS_VALUES),
     ("shared/canon-status.md", r"^canon_status: (DRAFT +# .+)$", sr.CANON_STATUS_VALUES),

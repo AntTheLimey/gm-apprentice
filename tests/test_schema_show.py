@@ -146,7 +146,7 @@ class ShowReadsTheTemplates(unittest.TestCase):
         self.assertIn("dndbeyond", pc["optional"])
 
     def test_listed_values_name_fields_the_type_takes(self):
-        self.assertIn("stage", shown("session")["optional"].split(", "))
+        self.assertNotIn("stage", shown("session")["optional"].split(", "))
         self.assertEqual(shown_values("faction", "values (unchecked)")["status"],
                          set(sr.FACTION_STATUS))
 

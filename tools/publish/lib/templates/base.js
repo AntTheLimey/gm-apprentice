@@ -166,7 +166,7 @@ const TYPE_BADGE_FIELDS = {
   // Not `reliability`: a planted false clue would publish as "misleading".
   clue: ['clue_type', 'found_by'],
   document: ['document_type', 'author', 'classification', 'date_written'],
-  session: ['session_number', 'play_date', 'status', 'stage'],
+  session: ['session_number', 'play_date', 'status'],
   scene: ['scene_type', 'status'],
   chapter: ['sort_order'],
 };

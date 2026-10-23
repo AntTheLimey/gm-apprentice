@@ -266,8 +266,7 @@ wrap-up (`type: session_wrap`) all publish.
 
 `type: session`
 
-Badges rendered: `session_number`, `play_date`, `status`,
-`stage`
+Badges rendered: `session_number`, `play_date`, `status`
 
 A published session page drives the landing "Latest Session" recap
 and the "NPCs/Locations in Play" widgets. The wrap-up

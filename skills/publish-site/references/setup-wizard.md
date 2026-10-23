@@ -480,8 +480,7 @@ unreadable YAML in a vault file, or a path with backslashes (Windows
 users should use forward slashes or double backslashes in the config).
 
 Note: the build tool automatically excludes prep files
-(`status: planned|prepped`, `stage: outline|draft|ready`,
-`source: "prep"`) even without a manifest. The page count shown here
+(`status: planned|prepped`, `source: "prep"`) even without a manifest. The page count shown here
 reflects only publishable content.
 
 ### Step 18: Review the initial build
