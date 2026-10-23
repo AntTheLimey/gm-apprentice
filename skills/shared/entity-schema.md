@@ -1,16 +1,15 @@
 # Entity Schema
 
-Entity type hierarchy, frontmatter schemas and per-type attributes
-for all campaign entities. For one type's fields and values, run
-`schema_rules.py show <type>` (§ Fields by Type) instead of reading
-this file. Otherwise read the section you need
-(`grep -n '^## ' shared/entity-schema.md`, then Read at that
-offset) unless you are seeding `_meta/`.
+Entity type hierarchy, frontmatter schemas and per-type attributes.
+For one type's fields and values, run `schema_rules.py show <type>`
+(§ Fields by Type) instead of reading this file. Otherwise read the
+section you need (`grep -n '^## ' shared/entity-schema.md`, then Read
+at that offset) unless you are seeding `_meta/`.
 
 ## System-Specific Guidance
 
-Schemas here are system-agnostic. For stat blocks and mechanical
-conventions also read, under `ttrpg-expert/`:
+Schemas here are system-agnostic. For stat blocks and mechanics
+also read, under `ttrpg-expert/`:
 `systems/coc-7e/occupations.md` (percentile stats),
 `systems/dnd-5e-2024/conditions-rules.md` (CR, proficiency),
 `systems/gurps-4e/character-generation.md` (point-buy),
@@ -27,14 +26,13 @@ On **every** entity type:
 | createdSession | string | Session when first introduced |
 | source | string | How it entered canon (`show` lists the words) |
 | canon_status | string | Canon status: DRAFT / AUTHORITATIVE / SUPERSEDED / STUB |
-| era | string | Optional: named era from `_World/history-timeline.md` (e.g., "Second Age"). Assumed campaign present if absent. |
+| era | string | Optional: named era from `_World/history-timeline.md` (e.g., "Second Age"); absent means the campaign present |
 
-Set `lastUpdated` and `asOfSession` to the current session when
-filing or updating.
+Set `lastUpdated` and `asOfSession` to the current session on every filing or update.
 
-**Dated GM rulings** in an entity body stay as history. When a
-ruling replaces an earlier one, strike the old one through and
-append `superseded YYYY-MM-DD` in the same edit:
+**Dated GM rulings** in an entity body stay as history. When one
+replaces an earlier ruling, strike the old one through and append
+`superseded YYYY-MM-DD` in the same edit:
 `~~stays in town (2026-08-30)~~ superseded 2026-09-03`.
 Cite only the latest ruling that is not struck through.
 
@@ -274,11 +272,12 @@ the mirror against these entries.
 usually found), `portrait` (optional)
 
 **PC:** `player_name`, `occupation`, `age`, `gender`, `nationality`,
-`status` (alive/dead/missing/retired/unknown), `key_traits`, `portrait` (optional),
-`display_meta` (optional array: ordered field names for published site meta row;
+`status` (alive/dead/missing/retired/unknown), `key_traits`, `hook` (optional string, any system: one line under the
+name and on cards; blank means the backstory's first sentence),
+`portrait` (optional), `display_meta` (optional array: ordered field names for the site meta row;
 when omitted, the setting `player_site.sheets.header_facts` decides), `sheet_source`
-(optional string: where the character sheet is kept when it is not in this
-file, e.g. `"D&D Beyond"` or `"paper, with the player"`; not shown on the site by default; see
+(optional string: where the sheet is kept when not in this file, e.g.
+`"D&D Beyond"` or `"paper, with the player"`; not shown by default; see
 `shared/pc-body-structure.md`), `dndbeyond` (optional string, D&D only: a
 D&D Beyond character link or id; `dnd_ddb.py` syncs the note from it)
 
@@ -289,19 +288,18 @@ and the Story Companion Convention now live in
 `shared/pc-body-structure.md`.
 
 **Character Story:** `character` (wiki-link to the PC), plus
-universal fields — no other type-specific attributes. Body is
-append-only session sections; see the Story Companion Convention in
+universal fields only. Body is append-only session sections; see the Story Companion Convention in
 `shared/pc-body-structure.md`.
 
 **Location:** `location_type`, `parent_location` (wiki-link),
-`atmosphere`, `portrait` (optional). `parent_location` groups the
-published Locations listing (fallback: `location_type`).
+`atmosphere`, `portrait` (optional). `parent_location` groups the published Locations
+listing (fallback `location_type`).
 
 **Faction/Organization:** `faction_type` (cult, guild, military,
 etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
 `status` (active/weakened/destroyed/allied/dormant),
 `part_of` (wiki-link to the parent body, optional), `portrait`
-(optional). `faction_type` groups the published Factions listing.
+(optional). `faction_type` groups the Factions listing.
 
 **Item:** `item_type` (weapon, armor, relic, etc.),
 `current_holder` (wiki-link), `origin`, `portrait` (optional)
@@ -315,8 +313,8 @@ etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
 
 **Document:** `doc_type` (letter, journal, map, etc.), `author`,
 `date` (when written), `condition`, `current_holder` (wiki-link).
-The text itself goes in the body under `## The Text`; an older
-`content` field moves there
+The text goes in the body under `## The Text`; an older `content`
+field moves there
 
 **Plan:** `plan_type` (arc/scene/investigation/timeline),
 `chapter` (wiki-link), `participants` (wiki-links),

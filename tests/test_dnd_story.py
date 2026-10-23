@@ -384,3 +384,15 @@ def test_memory_round_trip():
     assert memory_from({MEMORY: entries}) == plan.remember
     assert memory_from(None) is None and memory_from({"cells": []}) is None
     assert memory_from({MEMORY: ["nonsense", "x\ty\tz"]}) == {}
+
+
+def test_the_shared_template_and_the_reader_agree():
+    template = (ROOT / "skills" / "shared" / "templates" / "pc-dnd-5e-2024.md").read_text(encoding="utf-8")
+    assert all(note_parts(template).values())
+    story = Story(backstory="Born in a forge.", appearance="Broad.", facts={"age": "41", "faith": "Moradin"},
+                  traits="Gruff", ideals="Craft", bonds="Clan", flaws="Pride")
+    plan = plan_story(template, story, None)
+    assert [r for r in plan.rows if r[0] == "CHECK"] == []
+    wrote = {r[1] for r in plan.rows if r[0] == "WRITE"}
+    assert wrote == set(ds.LOCUS.values())
+    assert body(plan.text, "backstory") == "Born in a forge."

@@ -13,6 +13,7 @@ gender: ""
 nationality: ""
 status: alive
 key_traits: []
+hook: ""
 portrait: ""
 sheet_source: ""
 dndbeyond: ""
@@ -103,11 +104,24 @@ createdSession: ""
 
 **Background:** {Background name}
 
-**Backstory & Personality:** {Character history and traits}
-
 **Alignment:** {Alignment}
 
-**Appearance:** {Physical description}
+### Backstory
+
+{The character's story before the campaign, as the player tells it}
+
+### Appearance
+
+{How they look}
+
+**Age:** — · **Height:** — · **Weight:** — · **Eyes:** — · **Hair:** — · **Skin:** — · **Faith:** —
+
+### Personality
+
+- **Traits:** —
+- **Ideals:** —
+- **Bonds:** —
+- **Flaws:** —
 
 ## Skills
 

@@ -1928,5 +1928,109 @@ class ToneListTests(unittest.TestCase):
 
 
 
+class DndBackgroundSectionsTests(unittest.TestCase):
+    """1.10.93: the one-line Backstory and Appearance fields become sections."""
+
+    OLD = ("---\ntype: pc\nname: Brannoch\n---\n# Brannoch\n\n## Background\n\n"
+           "**Species:** Dwarf\n\n"
+           "**Backstory & Personality:** Born in a forge. *Gruff*, loyal.\n\n"
+           "**Alignment:** Lawful Good\n\n"
+           "**Appearance:** Broad, soot-stained; a braided beard.\n\n"
+           "## Skills\n\n| a |\n")
+    FACTS = ("**Age:** — · **Height:** — · **Weight:** — · **Eyes:** — · "
+             "**Hair:** — · **Skin:** — · **Faith:** —")
+
+    def setUp(self):
+        self.vault = make_vault(self, "dnd-5e")
+
+    def put(self, rel, text, eol="\n"):
+        path = self.vault / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(text.replace("\n", eol).encode("utf-8"))
+
+    def get(self, rel):
+        return (self.vault / rel).read_bytes().decode("utf-8")
+
+    def run_check(self):
+        (item,) = mv.find_dnd_background_sections(self.vault)
+        self.assertEqual((item.id, item.group), ("dnd-background-sections", WILL))
+        item.apply(None)
+
+    def test_background_sections_moves_lines_word_for_word(self):
+        self.put("PCs/B.md", self.OLD)
+        self.run_check()
+        self.assertEqual(self.get("PCs/B.md"), (
+            "---\ntype: pc\nname: Brannoch\n---\n# Brannoch\n\n## Background\n\n"
+            "**Species:** Dwarf\n\n**Alignment:** Lawful Good\n\n"
+            "### Backstory\n\nBorn in a forge. *Gruff*, loyal.\n\n"
+            "### Appearance\n\nBroad, soot-stained; a braided beard.\n\n"
+            + self.FACTS + "\n\n"
+            "### Personality\n\n- **Traits:** —\n- **Ideals:** —\n"
+            "- **Bonds:** —\n- **Flaws:** —\n\n"
+            "## Skills\n\n| a |\n"))
+        self.assertEqual(mv.find_dnd_background_sections(self.vault), [])
+
+    def test_the_reader_finds_every_part_after_the_move(self):
+        import dnd_story
+        self.put("PCs/B.md", self.OLD)
+        self.run_check()
+        parts = dnd_story.note_parts(self.get("PCs/B.md"))
+        self.assertTrue(all(parts.values()))
+        self.assertEqual(parts["backstory"].body, "Born in a forge. *Gruff*, loyal.")
+        self.assertEqual(parts["appearance"].body, "Broad, soot-stained; a braided beard.")
+
+    def test_background_sections_leaves_migrated_and_other_systems(self):
+        done = self.OLD.replace("**Backstory & Personality:**", "### Backstory\n\n")
+        self.put("PCs/Done.md", done)
+        self.put("NPCs/N.md", self.OLD.replace("type: pc", "type: npc"))
+        self.put("PCs/Brannoch.md", self.OLD)
+        self.put("PCs/_Story.md", self.OLD)
+        self.put("_Templates/pc-dnd-5e-2024.md", self.OLD)
+        self.put("PCs/NoBackground.md", "---\ntype: pc\n---\n## Skills\n")
+        self.assertEqual(len(mv.find_dnd_background_sections(self.vault)), 1)
+        for rel in ("PCs/Done.md", "NPCs/N.md", "PCs/_Story.md",
+                    "_Templates/pc-dnd-5e-2024.md"):
+            before = self.get(rel)
+            self.assertNotIn(rel, mv.find_dnd_background_sections(self.vault)[0].lines)
+            self.assertEqual(self.get(rel), before)
+        coc = make_vault(self, "coc-7e")
+        (coc / "B.md").write_text(self.OLD, encoding="utf-8")
+        self.assertEqual(mv.find_dnd_background_sections(coc), [])
+        self.assertEqual(mv.find_dnd_background_sections(make_vault(self, None)), [])
+
+    def test_background_sections_placeholder_is_empty(self):
+        old = self.OLD.replace("Born in a forge. *Gruff*, loyal.",
+                               "{Character history and traits}"
+                               ).replace("Broad, soot-stained; a braided beard.", "—")
+        self.put("PCs/B.md", old)
+        self.run_check()
+        import dnd_story
+        text = self.get("PCs/B.md")
+        parts = dnd_story.note_parts(text)
+        self.assertEqual(dnd_story.held("backstory", parts["backstory"]), "")
+        self.assertEqual(dnd_story.held("appearance", parts["appearance"]), "")
+        self.assertNotIn("Character history", text)
+
+    def test_background_sections_with_neither_old_line_gets_empty_sections(self):
+        self.put("PCs/B.md", "---\ntype: pc\n---\n## Background\n\n**Species:** Elf\n")
+        self.run_check()
+        import dnd_story
+        parts = dnd_story.note_parts(self.get("PCs/B.md"))
+        self.assertTrue(all(parts.values()))
+        self.assertTrue(self.get("PCs/B.md").endswith("- **Flaws:** —\n"))
+
+    def test_background_sections_crlf(self):
+        self.put("PCs/B.md", self.OLD, eol="\r\n")
+        self.run_check()
+        text = self.get("PCs/B.md")
+        self.assertEqual(text.count("\n"), text.count("\r\n"))
+        self.assertIn("### Backstory\r\n\r\nBorn in a forge. *Gruff*, loyal.\r\n", text)
+        self.assertEqual(mv.find_dnd_background_sections(self.vault), [])
+
+    def test_the_check_is_registered(self):
+        (check,) = [c for c in mv.VAULT_CHECKS if c.name == "dnd-background-sections"]
+        self.assertEqual((check.release, check.band), ("1.10.93", 3))
+
+
 if __name__ == "__main__":
     unittest.main()

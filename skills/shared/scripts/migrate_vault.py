@@ -16,12 +16,13 @@ import relink
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           cells, edit_frontmatter, plugin_tool, stopped,
                           write_text_atomic)
+from dnd_note import PLACEHOLDER
 from schema_rules import system_id as _system_id
 from schema_rules import TEMPLATE_NAMES
 from schema_rules import tone_families, without_generated_markers
 from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
                          player_section_key, wrapup_filename_findings)
-from vaultlib import (LEGACY_SETTINGS_FILE, SettingsUnavailable, entity_type, extract_frontmatter,
+from vaultlib import (LEGACY_SETTINGS_FILE, fence_step, SettingsUnavailable, entity_type, extract_frontmatter,
                       frontmatter_span, parse_version, plugin_version,
                       read_stamp, settings, settings_file, settings_raw,
                       settings_unset, vault_files, vault_layout,
@@ -1350,6 +1351,124 @@ def find_open_threads_fold(vault: Path) -> list[Item]:
                  apply, wants="fold or leave", holds_stamp=True)]
 
 
+# --- D&D PC Background sections -----------------------------------------------
+
+OLD_BACKSTORY = re.compile(r"^\*\*Backstory & Personality:\*\*[ \t]*(.*?)[ \t]*$")
+OLD_APPEARANCE = re.compile(r"^\*\*Appearance:\*\*[ \t]*(.*?)[ \t]*$")
+BACKSTORY_HINT = "{The character's story before the campaign, as the player tells it}"
+APPEARANCE_HINT = "{How they look}"
+FACTS_LINE = " \u00b7 ".join(f"**{label}:** \u2014" for label in (
+    "Age", "Height", "Weight", "Eyes", "Hair", "Skin", "Faith"))
+PERSONALITY = [f"- **{label}:** \u2014" for label in
+               ("Traits", "Ideals", "Bonds", "Flaws")]
+
+
+def _background_sections(text: str) -> str | None:
+    """The note with its one-line Backstory & Personality and Appearance
+    fields moved into `### Backstory` / `### Appearance` sub-sections (and
+    `### Personality` added), or None when it has no `## Background` or
+    already has the sub-sections. Line endings are kept."""
+    import dnd_story
+
+    if dnd_story.note_parts(text)["backstory"] is not None:
+        return None
+    lines = text.splitlines(keepends=True)
+    start = end = -1
+    fence: str | None = None
+    for i, raw in enumerate(lines):
+        fence, is_fence = fence_step(raw, fence)
+        if is_fence or fence is not None:
+            continue
+        title = raw.strip().lower()
+        if start < 0:
+            if title == "## background":
+                start = i
+        elif re.match(r"#{1,2}\s", raw):
+            end = i
+            break
+    if start < 0:
+        return None
+    if end < 0:
+        end = len(lines)
+    eol = next((m.group(0) for raw in lines if (m := re.search(r"\r\n|\n|\r", raw))), "\n")
+    found: dict[str, str] = {}
+    kept: list[str] = []
+    fence = None
+    skip_blank = False
+    for raw in lines[start + 1:end]:
+        fence, is_fence = fence_step(raw, fence)
+        bare = raw.rstrip("\r\n")
+        m = None
+        if not is_fence and fence is None:
+            for key, rx in (("backstory", OLD_BACKSTORY), ("appearance", OLD_APPEARANCE)):
+                m = rx.match(bare)
+                if m and key not in found:
+                    found[key] = m.group(1)
+                    break
+                m = None
+        if m:
+            skip_blank = True
+            continue
+        if skip_blank and not bare.strip():
+            skip_blank = False
+            continue
+        skip_blank = False
+        kept.append(raw)
+    while kept and not kept[-1].strip():
+        kept.pop()
+    if kept and not kept[-1].endswith(("\n", "\r")):
+        kept[-1] += eol
+
+    def value(key: str, hint: str) -> str:
+        got = found.get(key, "")
+        return hint if not got or PLACEHOLDER.match(got) else got
+
+    block = ["### Backstory", "", value("backstory", BACKSTORY_HINT), "",
+             "### Appearance", "", value("appearance", APPEARANCE_HINT), "",
+             FACTS_LINE, "", "### Personality", "", *PERSONALITY]
+    tail = [eol] if end < len(lines) else []
+    lead = [] if kept and not kept[0].strip() else [eol]
+    new = (lines[:start + 1] + lead + kept + ([eol] if kept else [])
+           + [line + eol for line in block] + tail + lines[end:])
+    return "".join(new)
+
+
+def find_dnd_background_sections(vault: Path) -> list[Item]:
+    """1.10.93: a D&D PC's story lives in `### Backstory`, `### Appearance`
+    and `### Personality` under `## Background` (`dnd_story.py`). The old
+    one-line `**Backstory & Personality:**` and `**Appearance:**` values
+    move there word for word; a `{placeholder}` counts as empty. Frontmatter
+    is not touched."""
+    if vault_system(vault) != "dnd-5e-2024":
+        return []
+    todo = []
+    for rel, text in vault_files(vault, newline=""):
+        if (rel.endswith("_Story.md") or rel.startswith("_Templates/")
+                or entity_type(extract_frontmatter(text) or {}) != "pc"
+                or _background_sections(text) is None):
+            continue
+        todo.append(rel)
+    if not todo:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        done = []
+        for rel in todo:
+            path = vault / rel
+            with path.open("r", encoding="utf-8", newline="") as f:
+                new = _background_sections(f.read())
+            if new is not None:
+                write_text_atomic(path, new)
+                done.append(f"{rel}: Backstory, Appearance and Personality "
+                            "sections under Background")
+        return done
+
+    return [Item("dnd-background-sections", WILL,
+                 [f"{rel}: Backstory & Personality and Appearance move into "
+                  "Backstory, Appearance and Personality sections"
+                  for rel in todo], apply)]
+
+
 VAULT_CHECKS: list[Check] = [
     Check("skeleton", None, 3, "the vault skeleton", find_skeleton),
     Check("templates", None, 3, "templates", find_templates,
@@ -1394,4 +1513,6 @@ VAULT_CHECKS: list[Check] = [
     Check("open-threads-fold", "1.10.83", 3,
           "per-session open threads in PC Current Status",
           find_open_threads_fold, choices=("open-threads-fold=",)),
+    Check("dnd-background-sections", "1.10.93", 3,
+          "backstory sections in D&D PC notes", find_dnd_background_sections),
 ]

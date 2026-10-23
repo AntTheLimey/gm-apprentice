@@ -3,6 +3,7 @@
 
 import io
 import os
+import re
 import socket
 import sys
 import urllib.error
@@ -20,7 +21,12 @@ from ddb_builder import character  # noqa: E402
 from dnd_ddb import main, sync_text  # noqa: E402
 from dnd_ddb_read import Unreadable  # noqa: E402
 
-TEMPLATE = (ROOT / "skills" / "shared" / "templates" / "pc-dnd-5e-2024.md").read_text(encoding="utf-8")
+# The note as it stood before the Background sub-sections: the shared template with them put back
+# as the two one-line fields, which is what a vault not yet upgraded still holds.
+TEMPLATE = re.sub(
+    r"(\*\*Alignment:\*\* \{Alignment\}\n\n)### Backstory.*?(?=## Skills)",
+    r"**Backstory & Personality:** {Character history and traits}\n\n\1**Appearance:** {Physical description}\n\n",
+    (ROOT / "skills" / "shared" / "templates" / "pc-dnd-5e-2024.md").read_text(encoding="utf-8"), flags=re.S)
 LINK = "https://www.dndbeyond.com/characters/424242"
 AVATAR = "https://www.dndbeyond.com/avatars/1/2/639.jpeg?width=150&height=150&fit=crop&quality=95"
 FULL_SIZE = "https://www.dndbeyond.com/avatars/1/2/639.jpeg?width=600&height=600&fit=bounds&quality=95"

@@ -194,6 +194,7 @@ real template, so a mismatch fails the suite.
 | | `### Bonuses` | `Applies To \| Bonus \| Source` |
 | | `### Defences` | the `**Resistances:**`, `**Immunities:**`, `**Vulnerabilities:**`, `**Condition Immunities:**`, `**Advantages:**` and `**Armour Class:**` lines |
 | `## Background` | — | the `**Species:**`, `**Class/Subclass:**` and `**Background:**` lines, for the header. The class line carries levels: `Paladin 5 (Oath of Devotion)`, a multiclass joined by `/` |
+| | `### Backstory`, `### Appearance`, `### Personality` | the story text (`dnd_story.py`): prose under Backstory; Appearance prose, then one facts line `**Age:** … · **Height:** … · **Weight:** … · **Eyes:** … · **Hair:** … · **Skin:** … · **Faith:** …`; Personality bullets `- **Traits:** …`, Ideals, Bonds, Flaws. A `{placeholder}` or `—` is empty |
 | `## Skills` | — | `Skill \| Ability \| Proficient \| Expertise \| Modifier`; `Proficient` is `Yes`, `No` or `Half` |
 | `## Class Features`, `## Species Traits`, `## Feats` | — | each `Name \| Action \| Uses \| Used \| Recovers \| Summary` |
 | `## Spellcasting` | — | `Attribute \| Value` (ability, attack modifier, save DC); a second casting class adds rows labelled with the class |

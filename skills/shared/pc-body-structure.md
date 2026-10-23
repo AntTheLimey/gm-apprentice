@@ -7,7 +7,7 @@ any skill creating or updating a PC file follows the same skeleton.
 
 ```text
 ## Stat Sheet          — system-specific stats (always first body section)
-## Background          — backstory, personality, description
+## Background          — ### Backstory, ### Appearance, ### Personality
 ## [System Sections]   — varies by system (see per-system template)
 ## Equipment           — gear, possessions, wealth/encumbrance
 ## Current Status      — player-facing present-state snapshot (maintained by session-wrapup)
@@ -42,9 +42,8 @@ session (Step 3c). It is distinct from the `_Story.md` companion
 (retrospective narrative) and the Wrap-Up's PC Carry-Forward (a
 per-session delta that feeds this block).
 
-It uses **stable labelled fields** so the block is both publishable
-and machine-readable; an optional one-line prose lede may precede the
-labels. Fields are omitted when empty:
+It uses **stable labelled fields**, publishable and machine-readable;
+an optional one-line prose lede may precede them. Fields are omitted when empty:
 
 ```markdown
 ## Current Status
