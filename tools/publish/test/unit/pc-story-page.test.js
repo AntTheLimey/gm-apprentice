@@ -244,7 +244,7 @@ test('hook prints the backstory as the prologue shows it: a typed [[ ]] stays, a
 test('facts line: a dot inside a value stays in that fact', () => {
   const md = [
     '## Background', '', '### Appearance', '', 'Tall.', '',
-    '**Age:** 31 · **Eyes:** grey · green flecks · **Faith:** the Lamp',
+    '**Age:** 31 · **Eyes:** grey · green flecks · **Faith:** the Lamp · **Hair:** red · **very** dark',
   ].join('\n');
   const { storyParts } = require('../../lib/pc-story');
   const parts = storyParts(sectionsOf(md));
@@ -252,5 +252,6 @@ test('facts line: a dot inside a value stays in that fact', () => {
     { label: 'Age', value: '31' },
     { label: 'Eyes', value: 'grey · green flecks' },
     { label: 'Faith', value: 'the Lamp' },
+    { label: 'Hair', value: 'red · very dark' },
   ]);
 });
