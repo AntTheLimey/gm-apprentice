@@ -356,30 +356,46 @@ def _pointer_target(title: str) -> str | None:
     return m.group(1).strip() if m else None
 
 
-def _scene_note_text(files, name: str) -> str:
+def _scene_note_text(files, name: str, chapter: str | None = None) -> str:
     """A scene note as the table needs it: `## Paused` first when there
-    is one, no frontmatter, no gm-only parts."""
-    want = normalize(name)
-    for rel, text, fm in files:
-        if (entity_type(fm) != "scene"
-                or normalize(Path(rel).stem) != want):
-            continue
-        kept: list[str] = []
-        hidden = 0
-        for line in body_of(text).splitlines():
-            m = GM_MARKER_RE.fullmatch(line.strip())
-            if m:
-                hidden = max(0, hidden + (-1 if m.group(1) else 1))
-            elif not hidden:
-                kept.append(line)
-        body = "\n".join(kept).strip()
-        paused = section(body, "Paused")
-        if paused:
-            body = re.sub(r"(?ms)^## Paused[ \t]*\n.*?(?=^## |\Z)", "",
-                          body).strip()
-            body = f"## Paused\n{paused.strip()}\n\n{body}".strip()
-        return body or f"(scene note {name} is empty)"
-    return f"(no scene note named {name})"
+    is one, no frontmatter, no `## GM Notes`, no gm-only parts. Of several
+    notes of the name, the one in `chapter` (a chapter key); a `name`
+    holding a path names its note. Still several: said, not guessed."""
+    if "/" in name:
+        want = normalize(name.removesuffix(".md"))
+        hits = [f for f in files if entity_type(f[2]) == "scene"
+                and normalize(f[0][:-3]) == want]
+    else:
+        want = normalize(name)
+        hits = [f for f in files if entity_type(f[2]) == "scene"
+                and normalize(Path(f[0]).stem) == want]
+    if len(hits) > 1:
+        hits = [f for f in hits
+                if chapter_key(f[0], f[2]) == chapter] or hits
+    if not hits:
+        return f"(no scene note named {name})"
+    if len(hits) > 1:
+        return (f"({len(hits)} scene notes named {name}: "
+                + ", ".join(f[0] for f in hits)
+                + "; write the pointer as the path of the one meant)")
+    _rel, text, _fm = hits[0]
+    kept: list[str] = []
+    hidden = 0
+    for line in body_of(text).splitlines():
+        m = GM_MARKER_RE.fullmatch(line.strip())
+        if m:
+            hidden = max(0, hidden + (-1 if m.group(1) else 1))
+        elif not hidden:
+            kept.append(line)
+    body = "\n".join(kept).strip()
+    body = re.sub(r"(?ms)^## GM Notes[ \t]*\n.*?(?=^## |\Z)", "",
+                  body).strip()
+    paused = section(body, "Paused")
+    if paused:
+        body = re.sub(r"(?ms)^## Paused[ \t]*\n.*?(?=^## |\Z)", "",
+                      body).strip()
+        body = f"## Paused\n{paused.strip()}\n\n{body}".strip()
+    return body or f"(scene note {name} is empty)"
 
 
 def play_brief(files, plan_rel: str, plan_text: str) -> str:
@@ -398,6 +414,7 @@ def play_brief(files, plan_rel: str, plan_text: str) -> str:
     """
     fm = extract_frontmatter(plan_text) or {}
     n = session_ref_number(fm)
+    chapter = chapter_key(plan_rel, fm)
     parts = [f"===== Play Brief — Session {n if n is not None else '?'} =====\n"
              f"(source: {plan_rel})"]
 
@@ -421,7 +438,7 @@ def play_brief(files, plan_rel: str, plan_text: str) -> str:
             piece = f"### {title}\n{reduced}" if reduced else f"### {title}"
             pointed = _pointer_target(title)
             if pointed:
-                piece += "\n\n" + _scene_note_text(files, pointed)
+                piece += "\n\n" + _scene_note_text(files, pointed, chapter)
             rendered.append(piece)
         return f"## {section_title}\n" + "\n\n".join(rendered)
 

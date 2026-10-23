@@ -23,6 +23,8 @@ off the player site. Publish tool 1.47.0.
   `in_progress` and `in-progress` are `active` (#433).
 - `vw scene-new`, `vw chapter-new` and `vw scene-played`: the model
   proposes, the GM confirms, `vw` writes the note or the status.
+  `scene-new` refuses a title another note already has, so a scene's
+  link names one note.
 - `scene_queue.py`: the prep queue, built from the scenes in each
   chapter that are not yet played or dropped.
 - A Plan may point at a scene file instead of writing the scene

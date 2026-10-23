@@ -2302,6 +2302,14 @@ def cmd_scene_new(batch: Batch, args: argparse.Namespace,
     base = f"{chapter_dir}{folder}/Scenes"
     rel = (f"{base}/{title}/{title}.md" if args.set_piece
            else f"{base}/{title}.md")
+    # `[[Title]]` must name one note, or the Plan's pointer and
+    # scene-played cannot tell which.
+    clash = [other for other in batch.with_stem(title)
+             if other.split("/", 1)[0] not in ("_Templates", "_meta")
+             and not other.startswith(".")]
+    if clash:
+        raise WriteError(f"a note named {title!r} already exists: "
+                         + ", ".join(clash) + "; choose another title")
     template = template_text(batch.vault, SCENE_TEMPLATES, "scene.md")
     fm = template_frontmatter(template)
     set_block(fm, "chapter", f'"[[{chapter_name}]]"')
@@ -2325,14 +2333,22 @@ def cmd_scene_played(batch: Batch, args: argparse.Namespace,
             f"no session note named {session!r}" if not sessions else
             f"{len(sessions)} session notes named {session!r}: "
             + ", ".join(sessions))
-    want = nfc(bare_link(args.scene)).casefold()
-    scenes = [rel for rel, _t in notes_of_type(batch.vault, "scene")
-              if nfc(Path(rel).stem).casefold() == want]
+    raw = bare_link(args.scene)
+    scene_notes = [rel for rel, _t in notes_of_type(batch.vault, "scene")]
+    if "/" in raw:
+        # A vault-relative path names one of several scenes of a name.
+        want = nfc(raw.removesuffix(".md")).casefold()
+        scenes = [rel for rel in scene_notes
+                  if nfc(rel[:-3]).casefold() == want]
+    else:
+        want = nfc(raw).casefold()
+        scenes = [rel for rel in scene_notes
+                  if nfc(Path(rel).stem).casefold() == want]
     if len(scenes) != 1:
         raise WriteError(
-            f"no scene note named {args.scene!r}" if not scenes else
+            f"no scene note at or named {args.scene!r}" if not scenes else
             f"{len(scenes)} scene notes named {args.scene!r}: "
-            + ", ".join(scenes))
+            + ", ".join(scenes) + "; pass its path as --scene")
     rel = scenes[0]
     text = batch.read(rel)
     lines = text.splitlines(keepends=True)
@@ -2350,6 +2366,11 @@ def cmd_scene_played(batch: Batch, args: argparse.Namespace,
     new_status = "paused" if args.paused else "played"
     added = nfc(session).casefold() not in {
         nfc(x).casefold() for x in links}
+    if not added and "played_in" in have \
+            and str(have.get("status") or "").strip() == new_status:
+        batch.row("SKIP", rel, "", f"already {new_status}; played_in "
+                  f"already lists [[{session}]]")
+        return
     if added:
         links.append(session)
     set_block(fm, "status", new_status)
@@ -2502,7 +2523,9 @@ def build_parser() -> argparse.ArgumentParser:
         "scene-played", help="mark a scene played and link its session",
         description="Sets status to played (or paused) and adds the "
                     "session to played_in once. No other field changes.")
-    sp.add_argument("--scene", required=True, help="the scene note's name")
+    sp.add_argument("--scene", required=True,
+                    help="the scene note's name, or its vault-relative "
+                         "path when several share the name")
     sp.add_argument("--session", required=True,
                     help="the session note's name")
     sp.add_argument("--paused", action="store_true")

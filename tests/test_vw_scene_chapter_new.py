@@ -140,6 +140,29 @@ class SceneNewTests(unittest.TestCase):
             self.assertIn("nothing written", out)
         self.assertFalse(any("Scenes/X" in k for k in snapshot(self.vault)))
 
+    def test_a_name_any_note_has_is_refused(self):
+        # An old session scene and an NPC: `[[Title]]` would be ambiguous.
+        npc = make_vault(self, {**FILES, "Characters/The Docks.md":
+                                "---\ntype: npc\n---\n"})
+        for vault, title, clash in (
+                (self.vault, "old scene",
+                 f"{LYON}/Sessions/Session 05/Scenes/Old Scene.md"),
+                (npc, "The Docks", "Characters/The Docks.md")):
+            before = snapshot(vault)
+            code, out = run(vault, "scene-new", "--chapter", "Paris",
+                            "--title", title, "--write")
+            self.assertEqual(code, 1, out)
+            self.assertIn(clash, out)
+            self.assertEqual(snapshot(vault), before)
+
+    def test_a_template_or_meta_note_is_no_clash(self):
+        vault = make_vault(self, {**FILES,
+                                  "_Templates/Quay.md": "x\n",
+                                  "_meta/Quay.md": "x\n"})
+        code, out = run(vault, "scene-new", "--chapter", "Paris",
+                        "--title", "Quay")
+        self.assertEqual(code, 0, out)
+
     def test_existing_scene_and_bad_folder_refused(self):
         run(self.vault, "scene-new", "--chapter", "Lyon", "--title", "A",
             "--write")
@@ -229,12 +252,47 @@ class ScenePlayedTests(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertEqual(snapshot(self.vault), before)
 
+    def twin(self):
+        # Written by hand: scene-new refuses a name already taken.
+        other = "Chapters/Chapter 1 - Paris/Scenes/The Docks.md"
+        (self.vault / other).parent.mkdir(parents=True)
+        (self.vault / other).write_bytes(
+            (self.vault / self.rel).read_bytes())
+        return other
+
     def test_several_scenes_of_one_name_refused(self):
-        run(self.vault, "scene-new", "--chapter", "Paris", "--title",
-            "The Docks", "--write")
+        self.twin()
         before = snapshot(self.vault)
         code, out = self.played("--write")
         self.assertEqual(code, 1, out)
+        self.assertIn("pass its path", out)
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_a_path_names_one_of_several(self):
+        other = self.twin()
+        for scene in (other, other[:-3]):
+            code, out = run(self.vault, "scene-played", "--scene", scene,
+                            "--session", "Session 05 - The Docks", "--write")
+            self.assertEqual(code, 0, out)
+        fm = vl.extract_frontmatter((self.vault / other).read_text("utf-8"))
+        self.assertEqual(fm["status"], "played")
+        self.assertEqual(self.fm()["status"], "planned")
+
+    def test_a_path_to_a_note_that_is_not_a_scene_is_refused(self):
+        code, out = run(self.vault, "scene-played", "--scene",
+                        f"{LYON}/Sessions/Session 05/Session 05 - The Docks",
+                        "--session", "Session 05 - The Docks", "--write")
+        self.assertEqual(code, 1, out)
+
+    def test_already_played_writes_nothing(self):
+        self.played("--write")
+        before = snapshot(self.vault)
+        for extra in ((), ("--write",)):
+            code, out = self.played(*extra)
+            self.assertEqual(code, 0, out)
+            self.assertNotIn("ADD", out)
+            self.assertIn(f"SKIP\t{self.rel}", out)
+            self.assertIn("already", out)
         self.assertEqual(snapshot(self.vault), before)
 
     def test_old_scene_keeps_its_other_fields_and_crlf(self):

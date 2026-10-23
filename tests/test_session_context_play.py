@@ -202,6 +202,58 @@ class PointerBlockBriefTests(unittest.TestCase):
                       self.brief)
 
 
+class PointerChoiceTests(unittest.TestCase):
+    """Two scene notes share a name: the one in the Plan's own chapter is
+    used; when that still leaves several, the brief says so."""
+
+    PLAN = ("---\ntype: session-plan\nchapter: \"[[Chapter 2 - B]]\"\n"
+            "session: 4\n---\n\n## Planned Scenes\n\n### [[Docks]]\n")
+
+    @staticmethod
+    def scene(body):
+        text = f"---\ntype: scene\nstatus: planned\n---\n\n{body}\n"
+        return text, sc.extract_frontmatter(text) or {}
+
+    def entry(self, rel, body):
+        return (rel, *self.scene(body))
+
+    def test_the_plans_own_chapter_wins(self):
+        files = [self.entry("Chapters/Chapter 1 - A/Scenes/Docks.md", "AAA"),
+                 self.entry("Chapters/Chapter 2 - B/Scenes/Docks.md", "BBB")]
+        brief = sc.play_brief(files, "Chapters/Chapter 2 - B/P.md", self.PLAN)
+        self.assertIn("BBB", brief)
+        self.assertNotIn("AAA", brief)
+
+    def test_still_ambiguous_is_said_not_guessed(self):
+        files = [self.entry("Chapters/Chapter 1 - A/Scenes/Docks.md", "AAA"),
+                 self.entry("Chapters/Chapter 3 - C/Scenes/Docks.md", "CCC")]
+        brief = sc.play_brief(files, "Chapters/Chapter 2 - B/P.md", self.PLAN)
+        self.assertNotIn("AAA", brief)
+        self.assertNotIn("CCC", brief)
+        self.assertIn("2 scene notes named Docks", brief)
+        self.assertIn("Chapters/Chapter 1 - A/Scenes/Docks.md", brief)
+
+    def test_a_path_pointer_names_its_note(self):
+        files = [self.entry("Chapters/Chapter 1 - A/Scenes/Docks.md", "AAA"),
+                 self.entry("Chapters/Chapter 3 - C/Scenes/Docks.md", "CCC")]
+        plan = self.PLAN.replace("[[Docks]]",
+                                 "[[Chapters/Chapter 3 - C/Scenes/Docks]]")
+        brief = sc.play_brief(files, "Chapters/Chapter 2 - B/P.md", plan)
+        self.assertIn("CCC", brief)
+        self.assertNotIn("AAA", brief)
+
+    def test_gm_notes_section_is_dropped_by_heading(self):
+        files = [self.entry("Chapters/Chapter 2 - B/Scenes/Docks.md",
+                            "**Situation:** Rain.\n\n## GM Notes\n\n"
+                            "The crate is empty.\n\n### Why\n\nA lie.\n\n"
+                            "## After\n\nThey sail.")]
+        brief = sc.play_brief(files, "Chapters/Chapter 2 - B/P.md", self.PLAN)
+        self.assertIn("Rain.", brief)
+        self.assertNotIn("crate", brief)
+        self.assertNotIn("A lie.", brief)
+        self.assertIn("They sail.", brief)
+
+
 class FindPlanFallbackTests(unittest.TestCase):
     """M15: `_find_plan`'s `documents.plan` fallback — when no
     `type: session-plan` file directly names the session, the session
