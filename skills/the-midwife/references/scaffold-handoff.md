@@ -58,9 +58,9 @@ Arc/structure:
 Investigation:
 - investigation-shape.md → Investigation_Design.md (plan_type: investigation)
 
-Scenes:
-- temple-approach.md → Temple_Approach.md (plan_type: scene)
-- recognition-scene.md → Recognition_Scene.md (plan_type: scene)
+Scenes (each a scene file in the chapter's Scenes/):
+- temple-approach.md → Temple Approach.md
+- recognition-scene.md → Recognition Scene.md
 [etc.]
 
 Timeline:
@@ -83,6 +83,11 @@ It fills the template and copies the body unchanged.
 never a `relationships:` edge. Then fill `participants` and
 `locations` in the written plan with wiki-links to the NPCs,
 factions, creatures and locations it names.
+
+A scene goes in with the same script's `scene-new --chapter
+"<chapter>" --title "<Title>"` (dry run first; no chapter note yet:
+`chapter-new --title "<chapter>"` before it), then its design text
+goes in the body unchanged.
 
 **2c. World fact flush** — Write the world facts accumulated
 through Woven Worldbuilding (Phases 1-3) to their `_World/`

@@ -40,5 +40,6 @@ Juggl reads these as graph edges. `vault_check.py frontmatter`
 **Body text:** `[[Entity Name]]` on first mention per section.
 Alias syntax: `[[Professor Albin Herzfeld|Herzfeld]]`.
 
-**Scene entities:** The `entities:` frontmatter list is the
-primary bridge between narrative and entity layers.
+**Scene entities:** A scene's `entities:` list is the primary
+bridge between narrative and entity layers. Its sessions go in
+`played_in`, never an edge.

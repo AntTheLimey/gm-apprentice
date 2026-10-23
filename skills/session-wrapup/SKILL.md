@@ -24,8 +24,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
 ```
 
 Use `play_date`/`in_game_date`, never `planned_date`/`actual_date`.
-The script sets scalars only: edit the index's `scenes:` list by hand
-to the scenes actually played; unplayed ones go under Skipped Prep.
+For each scene file the Plan points at that the GM confirms ran: `vw
+scene-played --scene "<scene>" --session "<session index>" --write`
+(`--paused` if it stopped mid-way). Unplayed ones go under Skipped Prep.
 Leave the index body alone: handoffs and notes for next session go in
 this Wrap-Up's GM Notes.
 

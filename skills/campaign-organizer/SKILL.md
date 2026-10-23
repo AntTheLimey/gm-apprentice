@@ -104,10 +104,11 @@ formats, body embeds). Entities without images are fine.
 
 ## The Two Layers
 
-- **Narrative (linear):** Campaign → Chapter → Session → Scene.
-  A chapter is a major arc or geographic segment; a session
-  belongs to one chapter; a scene is the atomic dramatic unit
-  with a type, objective and entity references.
+- **Narrative:** Campaign → Chapter → Session. A chapter is a
+  major arc or geographic segment; a session belongs to one
+  chapter. A scene is prep that belongs to its chapter
+  (`Scenes/` there); a session is where scenes played (the
+  scene's `played_in`).
 - **Entity (graph):** the persistent web of campaign elements,
   typed per `_meta/entity-types.md`, in type folders, linked by
   `[[wiki-links]]`.

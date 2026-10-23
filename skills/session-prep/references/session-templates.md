@@ -26,11 +26,6 @@ and `### World State` (all under the fenced `## GM Notes`). The
 `## Narrative Recap` is the player-facing record — use it, never
 regenerate it.
 
-## Scene notes
-
-For a standalone scene note in the chapter's `Scenes/` folder, use
-`_Templates/_Template_Scene.md`.
-
 ## Session Plan
 
 Archived after play — not deleted, and not updated except to append

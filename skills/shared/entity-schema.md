@@ -435,6 +435,7 @@ no `precedes` or `alternative_to`. A vault vocabulary with a
 | document (all subtypes) | Documents/ |
 | clue | Clues/ |
 | plan | `Chapters/{chapter}/Planning/` |
+| scene | `Chapters/{chapter}/Scenes/` |
 | adventure-brief | Adventures/{adventure-name}/ |
 | campaign_overview | _Campaign/ |
 | heritage | Heritages/ |
