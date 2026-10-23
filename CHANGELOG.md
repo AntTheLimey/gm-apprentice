@@ -40,6 +40,8 @@ the site opens a character's Story tab on it. Publish tool 1.47.0.
 - The Story tab opens on the backstory: the prologue, how they look,
   what drives them, and the story so far, one line per session.
 - The sheet gets a teaser of the backstory.
+- With no `hook`, the header's line is the backstory's first sentence;
+  it steps aside on the Story tab, which opens on that sentence.
 - The `hook` shows on the header and on the Player Characters cards.
 - The prologue shows on the character's story page.
 - Other Background sections are kept.
