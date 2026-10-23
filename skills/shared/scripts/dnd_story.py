@@ -13,8 +13,9 @@ Owns every free-text part of the note that comes from a player. Three jobs, all 
               and the note's copy did not; when both changed it says CHECK once for that player
               version and writes nothing (later, the GM's text is never overwritten).
               Text a first sync (or one with no memory) finds there that differs from the source
-              is the GM's too, until it matches the source. A fingerprint of each side is
-              remembered per part.
+              is the GM's too, until it matches the source. Matching compares what a reader
+              sees (`reading`), so a hand copy of the player's text counts; a fingerprint of
+              each side, remembered per part, tells what changed.
 
 Where the parts live:
 
@@ -68,6 +69,9 @@ ANGLES = {"<": "&lt;", ">": "&gt;"}      # an entity, not a backslash: `\<` woul
 LEAD_MARK = re.compile(r"^([+\-])")
 LEAD_NUMBER = re.compile(r"^(\d+)([.)])")
 EOL = re.compile(r"\r\n|\n|\r")
+UNESCAPE = re.compile(r"\\([!-/:-@\[-`{-~\n])|&(lt|gt|amp);")     # CommonMark's escapes, the 3 entities
+ENTITIES = {"lt": "<", "gt": ">", "amp": "&"}
+READ_ITEM = re.compile(r"^[-*+] ")
 BLANK_VALUES = ("", '""', "''", "null", "~")
 
 
@@ -96,6 +100,7 @@ class StoryPlan:
     text: str
     rows: list[tuple[str, str, str]]            # (STATUS, locus, message)
     remember: dict[str, tuple[str, str]]        # part -> (source_fp, note_fp) after this run
+    said: dict[str, str] = field(default_factory=dict)  # locus of a part's CHECK -> the player's raw text
 
 
 # --- safe text -----------------------------------------------------------------------------
@@ -152,6 +157,16 @@ def fingerprint(text: str) -> str:
     return hashlib.sha256(body.encode("utf-8")).hexdigest()[:16]
 
 
+def reading(text: str) -> str:
+    """The words a reader sees: from_plain's escapes and the `&lt;` `&gt;` `&amp;` entities undone,
+    a `\\`+newline hard break a newline, list markers as `- `, each whitespace run one space,
+    blank lines dropped. A GM's hand copy of the player's text reads the same as sync's copy."""
+    text = UNESCAPE.sub(lambda m: m.group(1) if m.group(1) is not None else ENTITIES[m.group(2)],
+                        EOL.sub("\n", text))
+    lines = (READ_ITEM.sub("- ", " ".join(raw.split())) for raw in text.split("\n"))
+    return "\n".join(line for line in lines if line)
+
+
 # --- where the parts live in the note ------------------------------------------------------
 
 def _subsections(lines: list[str]) -> dict[str, tuple[int, int]]:
@@ -180,6 +195,11 @@ def _subsections(lines: list[str]) -> dict[str, tuple[int, int]]:
         elif inside and name in ("backstory", "appearance", "personality") and name not in found:
             found[name] = (i, heads[n + 1][0] if n + 1 < len(heads) else len(lines))
     return found
+
+
+def subsections(text: str) -> set[str]:
+    """Which of `backstory`, `appearance`, `personality` the note has under `## Background`."""
+    return set(_subsections(text.splitlines(keepends=True)))
 
 
 def _facts_line(lines: list[str], start: int, end: int) -> int:
@@ -252,6 +272,15 @@ def source_parts(story: Story) -> dict[str, str]:
     out = {"backstory": from_plain(story.backstory), "appearance": from_plain(story.appearance), "facts": facts}
     for p in BULLETS:
         out[p] = one_line(getattr(story, p))
+    return out
+
+
+def source_raw(story: Story) -> dict[str, str]:
+    """Each part as the player wrote it, unescaped (the facts as `Age: 31 · Eyes: Grey`)."""
+    given = {k.title(): v for k, v in story.facts.items()}
+    facts = " · ".join(f"{label}: {given[label]}" for label in FACTS if given.get(label))
+    out = {"backstory": story.backstory, "appearance": story.appearance, "facts": facts}
+    out.update({p: getattr(story, p) for p in BULLETS})
     return out
 
 
@@ -331,20 +360,21 @@ def plan_story(text: str, story: Story, last: dict[str, tuple[str, str]] | None)
                 rows.append(("CHECK", locus, f"{gap}; run the vault upgrade (migrate.py), nothing was written"))
             continue
         now, source_fp, note_fp = held(part, span), fingerprint(want), fingerprint(held(part, span))
+        same = reading(now) == reading(want)        # the note says what the player wrote, escaped or not
         entry = memory.get(part)
         if entry is None:
             # First sync of this part: an empty place is ours to fill, text there is not.
             if want and not now:
                 rows.append(("WRITE", locus, _wrote(part, want)))
                 edits.append((span.start, span.end, _replacement(part, span, want, lines, eol)))
-            elif want and note_fp != source_fp:
+            elif want and not same:
                 rows.append(("CHECK", locus, "the note already has text here; nothing was written. "
                                              "It stays the GM's until it matches the D&D Beyond text"))
-            if now and note_fp != source_fp:
+            if now and not same:
                 keep[part] = (source_fp, GM_TEXT)   # the GM's own text: no later player change overwrites it
             else:
                 fresh[part] = source_fp
-        elif note_fp == source_fp:
+        elif same:
             fresh[part] = source_fp                 # the note already says what the source says: settled
         elif entry[0] == source_fp:
             keep[part] = entry                      # nothing new at the source; the note is the GM's
@@ -356,8 +386,10 @@ def plan_story(text: str, story: Story, last: dict[str, tuple[str, str]] | None)
             edits.append((span.start, span.end, _replacement(part, span, want or _cleared(part), lines, eol)))
             fresh[part] = source_fp
         else:
-            rows.append(("CHECK", locus, "the player changed this on D&D Beyond and it was also edited in the "
-                                         "vault; compare them, nothing was written"))
+            told = ("the note keeps its own text here and the player changed theirs on D&D Beyond"
+                    if entry[1] == GM_TEXT else
+                    "the player changed this on D&D Beyond and it was also edited in the vault")
+            rows.append(("CHECK", locus, f"{told}; compare them, nothing was written"))
             keep[part] = (source_fp, entry[1])      # this player version is seen; the note stays "as last synced"
 
     for start, end, new in sorted(edits, key=lambda e: e[0], reverse=True):
@@ -375,12 +407,14 @@ def plan_story(text: str, story: Story, last: dict[str, tuple[str, str]] | None)
         else:
             rows.append(("CHECK", "Frontmatter / gender", "the frontmatter could not be read; gender was not written"))
 
+    raw = source_raw(story)
+    said = {LOCUS[p]: raw[p] for p in PARTS if any(r[0] == "CHECK" and r[1] == LOCUS[p] for r in rows)}
     new_text = "".join(lines)
     after = note_parts(new_text)
     remember = dict(keep)
     for part, source_fp in fresh.items():
         remember[part] = (source_fp, fingerprint(held(part, after[part])))
-    return StoryPlan(new_text, rows, remember)
+    return StoryPlan(new_text, rows, remember, said)
 
 
 # --- sync's memory -------------------------------------------------------------------------

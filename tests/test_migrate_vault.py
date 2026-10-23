@@ -1980,7 +1980,8 @@ class DndBackgroundSectionsTests(unittest.TestCase):
         self.assertEqual(parts["appearance"].body, "Broad, soot-stained; a braided beard.")
 
     def test_background_sections_leaves_migrated_and_other_systems(self):
-        done = self.OLD.replace("**Backstory & Personality:**", "### Backstory\n\n")
+        done = self.OLD.replace("**Backstory & Personality:**", "### Backstory\n\n").replace(
+            "**Appearance:**", "### Appearance\n\n").replace("## Skills", "### Personality\n\n## Skills")
         self.put("PCs/Done.md", done)
         self.put("NPCs/N.md", self.OLD.replace("type: pc", "type: npc"))
         self.put("PCs/Brannoch.md", self.OLD)
@@ -2063,6 +2064,41 @@ class DndBackgroundSectionsTests(unittest.TestCase):
             "### Appearance\n\n{How they look}\n\n" + self.FACTS + "\n\n"
             "### Personality\n\n- **Traits:** —\n- **Ideals:** —\n"
             "- **Bonds:** —\n- **Flaws:** —\n\n## Skills\n"))
+
+    def test_background_sections_adds_only_the_missing_subsections(self):
+        import dnd_story
+        old = self.OLD.replace("## Skills", "### Appearance\n\nThe GM's own look.\n\n## Skills")
+        self.put("PCs/B.md", old)
+        (item,) = mv.find_dnd_background_sections(self.vault)
+        self.assertEqual(item.lines, [
+            "PCs/B.md: Backstory & Personality moves into ### Backstory; ### Personality is added",
+            "PCs/B.md: the old **Appearance:** line stays where it is: the note already has "
+            "### Appearance"])
+        item.apply(None)
+        text = self.get("PCs/B.md")
+        self.assertEqual(text, (
+            "---\ntype: pc\nname: Brannoch\n---\n# Brannoch\n\n## Background\n\n"
+            "**Species:** Dwarf\n\n**Alignment:** Lawful Good\n\n"
+            "**Appearance:** Broad, soot-stained; a braided beard.\n\n"
+            "### Appearance\n\nThe GM's own look.\n\n"
+            "### Backstory\n\nBorn in a forge. *Gruff*, loyal.\n\n"
+            "### Personality\n\n- **Traits:** —\n- **Ideals:** —\n"
+            "- **Bonds:** —\n- **Flaws:** —\n\n"
+            "## Skills\n\n| a |\n"))
+        self.assertEqual(text.count("### Appearance"), 1)
+        self.assertEqual(dnd_story.note_parts(text)["appearance"].body, "The GM's own look.")
+        self.assertEqual(mv.find_dnd_background_sections(self.vault), [])
+
+    def test_background_sections_keeps_an_existing_personality(self):
+        old = self.OLD.replace("## Skills", "### Personality\n\n- **Traits:** Gruff\n\n## Skills")
+        self.put("PCs/B.md", old)
+        self.run_check()
+        text = self.get("PCs/B.md")
+        self.assertEqual(text.count("### Personality"), 1)
+        self.assertIn("- **Traits:** Gruff", text)
+        self.assertIn("### Backstory\n\nBorn in a forge.", text)
+        self.assertIn("### Appearance\n\nBroad, soot-stained", text)
+        self.assertNotIn("**Appearance:**", text)
 
     def test_the_check_is_registered(self):
         (check,) = [c for c in mv.VAULT_CHECKS if c.name == "dnd-background-sections"]

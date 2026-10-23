@@ -9,6 +9,8 @@ with a bracketed reason (`18 (tome)`) is the GM's and is kept. Stdlib only.
 Usage:
   dnd_ddb.py SHEET.md [--write]               preview (or write) one note
   dnd_ddb.py --party VAULT [--write] [--on-build]   every PC note with a D&D Beyond link
+  --story   under each story CHECK row, the player's D&D Beyond text for that part, each line
+            indented four spaces (not report rows; pasted as shown, it hands the part back)
 The only requests ever made are to character-service.dndbeyond.com, with a path of digits,
 and, with --write, one to www.dndbeyond.com/avatars/ for the portrait (either may go through
 the user's own proxy).
@@ -67,7 +69,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable, Collection
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -79,7 +81,7 @@ from dnd_ddb_read import ABILITIES, Character, Unreadable, read, safe_name  # no
 from dnd_note import (BARE, HALF, HEADING, PLACEHOLDER, REASONED, SEPARATOR, YES,  # noqa: E402
                       Cell, Note, clean, column, number, split_cells, to_int)
 from dnd_sheet import to_weight  # noqa: E402
-from dnd_story import MEMORY, memory_entries, memory_from, plan_story  # noqa: E402
+from dnd_story import MEMORY, clean_text, memory_entries, memory_from, plan_story  # noqa: E402
 from migrate_core import StepFailed, write_text_atomic  # noqa: E402
 from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter, fence_step,  # noqa: E402
                       frontmatter_span, is_unchecked_source, set_key, settings, settings_file,
@@ -1156,6 +1158,7 @@ class Report:
     seen: Seen | None = None             # what to remember after this sync; None when the sync was an ERROR
     portrait_url: str = ""               # the safe avatar link D&D Beyond gave, "" when there is none
     placed: Path | None = None           # the portrait file this run created; to be removed if the note then fails
+    said: dict[str, str] = field(default_factory=dict)   # a story CHECK's locus -> the player's raw text
 
 
 def character_id(link: object) -> str | None:
@@ -1565,7 +1568,8 @@ def sync_parts(text: str, data: object, seen: Seen | None) -> Report:
     if errors:
         return Report([("ERROR", errors[0].locus, errors[0].message)], text)
     rows += [("FILL", r.locus, r.message) for r in fill if r.status == "FILL"]
-    return Report(rows, dnd_sheet.apply(t, fill), given_now(c, seen, gave, told.remember), c.portrait_url)
+    return Report(rows, dnd_sheet.apply(t, fill), given_now(c, seen, gave, told.remember), c.portrait_url,
+                  said=told.said)
 
 
 # --- the memory of what sync added -------------------------------------------------------
@@ -1681,6 +1685,17 @@ def emit(status: str, locus: str, message: str) -> None:
     print("\t".join(PLAIN.sub(" ", part) for part in (status, locus, message)))
 
 
+def emit_said(report: Report, status: str, locus: str) -> None:
+    """With --story, under a story CHECK: the player's text, each line indented four spaces. Never a
+    row: tabs and control characters are gone from the copy, so no line of it can pass for one."""
+    if status != "CHECK" or locus not in report.said:
+        return
+    said = clean_text(report.said[locus]).strip("\n")
+    print("    D&D Beyond text:" + ("" if said.strip() else " (empty)"))
+    for line in said.split("\n") if said.strip() else []:
+        print("    " + PLAIN.sub(" ", line).rstrip())
+
+
 def guarded_sync(text: str, vault: Path | None = None) -> Report:
     """sync_note, with any unexpected failure as one ERROR row and the text unchanged."""
     try:
@@ -1689,7 +1704,7 @@ def guarded_sync(text: str, vault: Path | None = None) -> Report:
         return Report([("ERROR", "sync", f"could not be synced ({e.__class__.__name__}); nothing was written")], text)
 
 
-def one_sheet(path: Path, write_it: bool) -> int:
+def one_sheet(path: Path, write_it: bool, story: bool = False) -> int:
     try:
         with path.open("r", encoding="utf-8", newline="") as f:
             text = f.read()
@@ -1702,6 +1717,8 @@ def one_sheet(path: Path, write_it: bool) -> int:
     report = with_portrait(guarded_sync(text, vault), path.stem, vault, write_it)
     for row in report.rows:
         emit(*row)
+        if story:
+            emit_said(report, row[0], row[1])
     if any(r[0] == "ERROR" for r in report.rows):
         return 0
     print(count_line(report.rows))
@@ -1717,7 +1734,7 @@ def one_sheet(path: Path, write_it: bool) -> int:
     return 0
 
 
-def party(vault: Path, write_it: bool, on_build: bool) -> int:
+def party(vault: Path, write_it: bool, on_build: bool, story: bool = False) -> int:
     from migrate_vault import vault_system
 
     if not vault.is_dir():
@@ -1778,6 +1795,8 @@ def party(vault: Path, write_it: bool, on_build: bool) -> int:
             row = (status, f"{Path(rel).stem}: {locus}", message)
             rows.append(row)
             emit(*row)
+            if story:
+                emit_said(report, status, locus)
     print(count_line(rows, sheets))
     return 2 if failed else 0
 
@@ -1793,6 +1812,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--party", metavar="VAULT", help="every PC note in a vault that has a D&D Beyond link")
     ap.add_argument("--on-build", action="store_true",
                     help="with --party: run only when vault.dndbeyond_sync is build")
+    ap.add_argument("--story", action="store_true",
+                    help="under each story CHECK, the player's text on D&D Beyond (not report rows)")
     args = ap.parse_args(argv)
     if bool(args.sheet) == bool(args.party):
         ap.error("give one sheet, or --party VAULT")
@@ -1800,11 +1821,11 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--on-build goes with --party VAULT")
     if args.party:
         try:
-            return party(Path(args.party), args.write, args.on_build)
+            return party(Path(args.party), args.write, args.on_build, args.story)
         except SettingsUnavailable as e:
             print(f"dnd_ddb: {e}", file=sys.stderr)
             return 2
-    return one_sheet(Path(args.sheet), args.write)
+    return one_sheet(Path(args.sheet), args.write, args.story)
 
 
 if __name__ == "__main__":

@@ -1364,14 +1364,22 @@ PERSONALITY = [f"- **{label}:** \u2014" for label in
                ("Traits", "Ideals", "Bonds", "Flaws")]
 
 
-def _background_sections(text: str) -> str | None:
-    """The note with its one-line Backstory & Personality and Appearance
-    fields moved into `### Backstory` / `### Appearance` sub-sections (and
-    `### Personality` added), or None when it has no `## Background` or
-    already has the sub-sections. Line endings are kept."""
+SUBSECTIONS = ("backstory", "appearance", "personality")
+OLD_LABEL = {"backstory": "Backstory & Personality", "appearance": "Appearance"}
+
+
+def _background_sections(text: str) -> tuple[str, list[str]] | None:
+    """The note with the `### Backstory` / `### Appearance` / `### Personality`
+    sub-sections it is missing added under `## Background`, the one-line
+    Backstory & Personality and Appearance values moved into theirs; None
+    when it has no `## Background` or already has all three. A sub-section
+    the note already has is kept as it is, and an old line for it stays where
+    it is. Also gives what was done, one phrase each. Line endings are
+    kept."""
     import dnd_story
 
-    if dnd_story.note_parts(text)["backstory"] is not None:
+    have = dnd_story.subsections(text)
+    if all(name in have for name in SUBSECTIONS):
         return None
     lines = text.splitlines(keepends=True)
     start = end = -1
@@ -1393,6 +1401,7 @@ def _background_sections(text: str) -> str | None:
         end = len(lines)
     eol = next((m.group(0) for raw in lines if (m := re.search(r"\r\n|\n|\r", raw))), "\n")
     found: dict[str, str] = {}
+    left: list[str] = []
     kept: list[str] = []
     body = lines[start + 1:end]
     fence = None
@@ -1406,7 +1415,10 @@ def _background_sections(text: str) -> str | None:
         if not is_fence and fence is None:
             for name, rx in (("backstory", OLD_BACKSTORY), ("appearance", OLD_APPEARANCE)):
                 m = rx.match(bare)
-                if m and name not in found:
+                if m and name in have:
+                    if name not in left:
+                        left.append(name)
+                elif m and name not in found:
                     key = name
                     break
                 m = None
@@ -1431,31 +1443,45 @@ def _background_sections(text: str) -> str | None:
         got = found.get(key, "")
         return hint if not got or PLACEHOLDER.match(got) else got
 
-    block = ["### Backstory", "", value("backstory", BACKSTORY_HINT), "",
-             "### Appearance", "", value("appearance", APPEARANCE_HINT), "",
-             FACTS_LINE, "", "### Personality", "", *PERSONALITY]
+    blocks = {"backstory": ["### Backstory", "", value("backstory", BACKSTORY_HINT)],
+              "appearance": ["### Appearance", "", value("appearance", APPEARANCE_HINT), "", FACTS_LINE],
+              "personality": ["### Personality", "", *PERSONALITY]}
+    added = [name for name in SUBSECTIONS if name not in have]
+    block: list[str] = []
+    for name in added:
+        block += ([""] if block else []) + blocks[name]
     tail = [eol] if end < len(lines) else []
     lead = [] if kept and not kept[0].strip() else [eol]
     new = (lines[:start + 1] + lead + kept + ([eol] if kept else [])
            + [line + eol for line in block] + tail + lines[end:])
-    return "".join(new)
+    said = [f"{OLD_LABEL[name]} moves into ### {name.title()}" if name in found
+            else f"### {name.title()} is added" for name in added]
+    said += [f"the old **{OLD_LABEL[name]}:** line stays where it is: the note "
+             f"already has ### {name.title()}" for name in left]
+    return "".join(new), said
 
 
 def find_dnd_background_sections(vault: Path) -> list[Item]:
     """1.10.93: a D&D PC's story lives in `### Backstory`, `### Appearance`
     and `### Personality` under `## Background` (`dnd_story.py`). The old
     one-line `**Backstory & Personality:**` and `**Appearance:**` values
-    move there word for word; a `{placeholder}` counts as empty. Frontmatter
-    is not touched."""
+    move there word for word; a `{placeholder}` counts as empty. Only the
+    sub-sections a note is missing are added. Frontmatter is not touched."""
     if vault_system(vault) != "dnd-5e-2024":
         return []
-    todo = []
+    todo: list[str] = []
+    lines: list[str] = []
     for rel, text in vault_files(vault, newline=""):
         if (rel.endswith("_Story.md") or rel.startswith("_Templates/")
-                or entity_type(extract_frontmatter(text) or {}) != "pc"
-                or _background_sections(text) is None):
+                or entity_type(extract_frontmatter(text) or {}) != "pc"):
+            continue
+        planned = _background_sections(text)
+        if planned is None:
             continue
         todo.append(rel)
+        moved = [p for p in planned[1] if not p.startswith("the old ")]
+        lines.append(f"{rel}: " + "; ".join(moved))
+        lines += [f"{rel}: {p}" for p in planned[1] if p.startswith("the old ")]
     if not todo:
         return []
 
@@ -1466,15 +1492,11 @@ def find_dnd_background_sections(vault: Path) -> list[Item]:
             with path.open("r", encoding="utf-8", newline="") as f:
                 new = _background_sections(f.read())
             if new is not None:
-                write_text_atomic(path, new)
-                done.append(f"{rel}: Backstory, Appearance and Personality "
-                            "sections under Background")
+                write_text_atomic(path, new[0])
+                done.append(f"{rel}: " + "; ".join(new[1]))
         return done
 
-    return [Item("dnd-background-sections", WILL,
-                 [f"{rel}: Backstory & Personality and Appearance move into "
-                  "Backstory, Appearance and Personality sections"
-                  for rel in todo], apply)]
+    return [Item("dnd-background-sections", WILL, lines, apply)]
 
 
 VAULT_CHECKS: list[Check] = [

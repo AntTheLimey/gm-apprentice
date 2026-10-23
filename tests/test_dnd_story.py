@@ -462,3 +462,59 @@ def test_the_shared_template_and_the_reader_agree():
     wrote = {r[1] for r in plan.rows if r[0] == "WRITE"}
     assert wrote == set(ds.LOCUS.values())
     assert body(plan.text, "backstory") == "Born in a forge."
+
+
+# --- the reading form: a hand copy of the player's text is the player's text ------------------
+
+HAND = "Born in a forge!\nRaised by smiths & wolves <mostly>.\n- hammers\n* tongs\n\nLeft it at 19."
+
+
+def test_reading_undoes_what_from_plain_does():
+    assert ds.reading(from_plain(HAND)) == ds.reading(HAND)
+    assert ds.reading("a\\\nb") == "a\nb"
+    assert ds.reading("x &lt;y&gt; &amp; z") == "x <y> & z"
+    assert ds.reading("*   one\n-  two") == "- one\n- two"
+    assert ds.reading("a   b\t c") == "a b c"
+    assert ds.reading("C:\\path") == "C:\\path"         # not an escape: the backslash stays
+
+
+def test_reading_still_tells_different_words_apart():
+    assert ds.reading("Born in a forge.") != ds.reading("Born in a forge, by night.")
+    assert ds.reading("a\\*b") != ds.reading("ab")
+
+
+def test_first_sync_hand_copy_of_the_source_is_settled_not_checked():
+    story = Story(**{**STORY.__dict__, "backstory": HAND})
+    plan = synced(note(BACKSTORY=HAND), story)
+    assert ("CHECK", "Background / Backstory") not in rows_of(plan)
+    assert body(plan.text, "backstory") == HAND
+    assert plan.remember["backstory"] == (fingerprint(source_parts(story)["backstory"]), fingerprint(HAND))
+    assert plan_story(plan.text, story, plan.remember).rows == []
+    newer = Story(**{**STORY.__dict__, "backstory": "Changed at the source."})
+    later = plan_story(plan.text, newer, plan.remember)
+    assert ("WRITE", "Background / Backstory") in rows_of(later)
+    assert body(later.text, "backstory") == "Changed at the source."
+
+
+def test_gm_pastes_the_players_text_as_written_after_a_check_and_it_settles():
+    first, edited, _, _ = both_changed()
+    new = Story(**{**STORY.__dict__, "appearance": HAND})
+    plan = plan_story(edited, new, first.remember)
+    assert rows_of(plan) == [("CHECK", "Background / Appearance")]
+    pasted = edited.replace("Short, with a scar.", HAND)
+    settled = plan_story(pasted, new, plan.remember)
+    assert settled.rows == [] and settled.text == pasted
+    assert settled.remember["appearance"] == (fingerprint(source_parts(new)["appearance"]), fingerprint(HAND))
+    newer = Story(**{**STORY.__dict__, "appearance": "Tall."})
+    back = plan_story(pasted, newer, settled.remember)
+    assert rows_of(back) == [("WRITE", "Background / Appearance")]
+    assert body(back.text, "appearance") == "Tall."
+
+
+def test_never_synced_text_check_says_the_note_keeps_its_own_text():
+    plan = synced(note(BACKSTORY="Mine, written by the GM."), STORY)
+    new = Story(**{**STORY.__dict__, "backstory": "Changed at the source."})
+    later = plan_story(plan.text, new, plan.remember)
+    assert later.rows == [("CHECK", "Background / Backstory",
+                           "the note keeps its own text here and the player changed theirs on D&D Beyond; "
+                           "compare them, nothing was written")]

@@ -385,7 +385,10 @@ sync (or a sync with no memory) finds with text different from D&D
 Beyond's, or that was edited after a sync, stays the GM's: a player
 change to it is reported as a `CHECK` once for each new player version
 and never written. It goes back to sync when it matches the player's
-text. `hook` is never written by sync.
+text: the words a reader sees are compared, so a hand copy counts even
+without sync's escapes. `dnd_ddb.py --story` prints the player's text
+under each story `CHECK` (indented, not a report row); pasted as shown,
+it hands the part back. `hook` is never written by sync.
 
 - **A number with a reason in brackets is kept**: `15 (homebrew plate)`,
   `40 ft (boots of striding)`. A blank cell or a bare value is sync's.
