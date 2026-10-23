@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.93] — 2026-10-23
+
+Backstories: a D&D Beyond character's story comes into the vault, and
+the site opens a character's Story tab on it. Publish tool 1.47.0.
+
+### Added
+
+- D&D Beyond sync brings in the player's story as safe text:
+  backstory, appearance, personality (traits, ideals, bonds, flaws),
+  physical facts, gender (when blank) and the portrait. The portrait
+  is downloaded into `_attachments/characters/`, and only into a
+  blank `portrait`.
+- A story part is rewritten only when the player changed it and the
+  vault copy was not edited. Text the sync finds already there, or
+  that the GM edits, stays the GM's: a player change to it is a CHECK,
+  once per player version, and is never written until the part matches
+  the player's text. `--story` prints the player's text for each story
+  CHECK in a form that can be pasted back.
+- The vault upgrade `dnd-background-sections` moves the old one-line
+  Backstory & Personality and Appearance fields, word for word, into
+  `### Backstory` and `### Appearance`, adds `### Personality` and the
+  facts line, and fills only what is missing.
+- `hook` (PC frontmatter): the line under the character's name and on
+  their cards.
+- Session wrap-up: each character story entry opens with a one-line
+  italic summary.
+
+### Publish tool 1.47.0
+
+- The Story tab opens on the backstory: the prologue, how they look,
+  what drives them, and the story so far, one line per session.
+- The sheet gets a teaser of the backstory.
+- The `hook` shows on the header and on the Player Characters cards.
+- The prologue shows on the character's story page.
+- Other Background sections are kept.
+- GM-only text never reaches the player site.
+
+### Testing
+
+- The skill-text benchmark was run per `docs/testing-methodology.md`:
+  rules followed 15/15; quality within the bar after one wording fix;
+  regression tokens +0.5%.
+
+### Follow-ups
+
+- A backstory showcase for GURPS and CoC (#483).
+- Dash runs in player text (#484).
+
 ## [1.10.92] — 2026-10-20
 
 Batch 8: Connections drawing and data, story-page session links,
