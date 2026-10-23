@@ -102,6 +102,18 @@ class StageKeyTests(unittest.TestCase):
         self.assertEqual(raw(v, "_Templates/session.md"), TEMPLATE)
         self.assertEqual(mv.find_stage_keys(v), [])
 
+    def test_other_types_keep_their_stage(self):
+        npc = "---\ntype: npc\nstage: rising\n---\n\n# Bob\n"
+        notes = "---\ntype: session-play-notes\nstage: draft\n---\n"
+        v = make_vault(self, {"N/Bob.md": npc, "P/Plan.md": PLAN,
+                              "S/Notes.md": notes})
+        (item,) = mv.find_stage_keys(v)
+        self.assertEqual(item.lines, ["remove stage: from P/Plan.md",
+                                      "remove stage: from S/Notes.md"])
+        run([item])
+        self.assertEqual(raw(v, "N/Bob.md"), npc)
+        self.assertEqual(mv.find_stage_keys(v), [])
+
     def test_block_form_stage_untouched(self):
         v = make_vault(self, {"S/Session 1.md": BLOCK})
         self.assertEqual(mv.find_stage_keys(v), [])

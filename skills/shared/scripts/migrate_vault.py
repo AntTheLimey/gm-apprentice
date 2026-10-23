@@ -1378,14 +1378,25 @@ def _notes_with(vault: Path, drop: Callable[[list[str], str], bool]
     return found
 
 
+# The session family: the index, its Plan, Play Notes and Wrap-Up. Only
+# these ever had a session `stage:`; any other type's is the GM's own.
+STAGE_TYPES = frozenset({"session", "session-plan", "session-play-notes",
+                         *WRAP_TYPES})
+
+
+def _fm_type(fm: list[str]) -> str:
+    return entity_type(extract_frontmatter("".join(["---\n", *fm, "---\n"]))
+                       or {})
+
+
 def _drop_stage(fm: list[str], _rel: str) -> bool:
     return (any(line.startswith("stage:") for line in fm)
-            and not opens_a_block(fm, "stage"))
+            and not opens_a_block(fm, "stage")
+            and _fm_type(fm) in STAGE_TYPES)
 
 
 def _drop_empty_scenes(fm: list[str], _rel: str) -> bool:
-    return (entity_type(extract_frontmatter("".join(["---\n", *fm, "---\n"]))
-                        or {}) == "session"
+    return (_fm_type(fm) == "session"
             and any(re.fullmatch(r"scenes:[ \t]*\[[ \t]*\][ \t]*", ln.rstrip("\r\n"))
                     for ln in fm))
 
@@ -1404,7 +1415,7 @@ def _remove_keys(vault: Path, rels: list[str], key: str,
 
 def find_stage_keys(vault: Path) -> list[Item]:
     """1.10.93: a session no longer has a `stage:`. The key goes from any
-    note that has it as a one-line value. An older publish tool still reads
+    session-family note (STAGE_TYPES) that has it as a one-line value. An older publish tool still reads
     `stage: draft` to hide a page, so while the site's tool is below 1.47.0
     (or not installed) the key stays and the GM is told."""
     found = _notes_with(vault, _drop_stage)
