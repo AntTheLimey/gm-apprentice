@@ -25,9 +25,9 @@ off the player site. Publish tool 1.47.0.
   proposes, the GM confirms, `vw` writes the note or the status.
 - `scene_queue.py`: the prep queue, built from the scenes in each
   chapter that are not yet played or dropped.
-- A Plan may point at a scene file (`### [[Scene Name]]`) instead of
-  writing the scene inline; a pointer needs no Situation or Starts it
-  lines.
+- A Plan may point at a scene file instead of writing the scene
+  inline: `### [[Scene Name]]` and a line each for purpose, who and
+  how it starts. Those lines are prompts; no check asks for them.
 - campaign-qa asks when a chapter has two chapter notes.
 - New vaults start with a Chapter 1 note.
 - Two update checks: `stage-keys` removes the retired `stage:` line

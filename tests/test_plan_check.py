@@ -857,6 +857,24 @@ class PointerBlockTests(unittest.TestCase):
         loci = {f.locus for f in found if f.id == "scene-labels"}
         self.assertEqual(loci, {"P.md:§Scene 2: The Docks"})
 
+    def test_pointer_prompt_lines_are_clean(self):
+        # Purpose, who and how it starts: prompts, never demanded.
+        text = ("## Planned Scenes\n\n### [[Ashworth Dinner]]\n"
+                "**Purpose:** Emma meets the viscount.\n"
+                "**Who:** [[Viscount Ashworth]], for Emma.\n"
+                "**Starts it:** The invitation arrives at breakfast.\n")
+        found = pc.check_scenes("P.md", pc._by_norm_title(text))
+        self.assertEqual([f for f in found if f.level == "ERROR"], [])
+
+    def test_contingency_pointer_still_needs_a_trigger(self):
+        text = ("## Planned Scenes\n\n### [[Ashworth Dinner]]\n\n"
+                "## Contingency Scenes\n\n### [[Fire at the Docks]]\n\n")
+        found = pc.check_scenes("P.md", pc._by_norm_title(text))
+        rows = [f.message for f in found if f.id == "scene-labels"]
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("[[Fire at the Docks]]", rows[0])
+        self.assertIn("**Trigger:**", rows[0])
+
 
 class MinimumSceneTests(unittest.TestCase):
     """One minimum for all types (2026-09-14, docs/scene-design-research.md):

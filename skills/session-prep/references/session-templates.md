@@ -156,8 +156,9 @@ from *this* PC. A scene that cannot answer this is not finished.
 [Same structure]
 
 ### [[Scene Note Title]]
-[A scene already written as a scene note: this heading alone, no labels.
-The play brief pulls the note in.]
+**Purpose:** A scene already written as a scene note: one line on why.
+**Who:** [[NPC]], and the PC it is for.
+**Starts it:** One line. The play brief pulls the note in.
 
 ## Contingency Scenes
 
@@ -228,6 +229,6 @@ Handouts go in Handouts & Props.]
 
 | Planned Scene | Status | Notes |
 |---------------|--------|-------|
-| [Scene Title] | Played / Modified / Skipped | Brief note |
+| [Scene Title] | Played / Paused / Dropped | Brief note |
 | [Unplanned] [Title] | Played | Origin and note |
 ```

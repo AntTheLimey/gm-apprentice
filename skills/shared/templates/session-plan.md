@@ -105,9 +105,12 @@ from *this* PC.
 <!-- Add Scene 2, Scene 3 ... with the same structure. A routing or hub
      scene (a menu of where the party is and what is available, not a
      scene) needs neither required label. Mark it with "(routing)" or
-     "(hub)" in its title, `Scene 0`, or `**Type:** transition`.
-     A scene already written as a scene note is a pointer: the heading
-     `### [[Scene Note Title]]` alone, no labels. -->
+     "(hub)" in its title, `Scene 0`, or `**Type:** transition`. -->
+
+### [[Scene Note Title]]
+**Purpose:** A scene already written as a scene note: one line on why.
+**Who:** [[NPC]], and the PC it is for.
+**Starts it:** One line. The note holds the rest.
 
 ## Contingency Scenes
 
@@ -172,5 +175,5 @@ Handouts & Props.]
 
 | Planned Scene | Status | Notes |
 |---------------|--------|-------|
-| [Scene Title] | Played / Modified / Skipped | Brief note |
+| [Scene Title] | Played / Paused / Dropped | Brief note |
 | [Unplanned] [Title] | Played | Origin and note |
