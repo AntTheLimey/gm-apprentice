@@ -228,38 +228,34 @@ vault's `_Templates/` file for that type. What some fields hold:
 
 ## Narrative Element Schemas
 
-**Chapter:**
+**Chapter:** (blank: `_Templates/_Template_Chapter.md`)
 ```yaml
 ---
 type: chapter
-sort_order: 1
 title: "Chapter Title"
-campaign: ""
+sort_order: 1              # decimals allowed
+status: planned            # planned | active | complete
+date_range:
+location:
 overview: ""
+campaign: ""
 tags: []
 ---
 ```
 
-**Scene:**
+**Scene:** (blank: `_Templates/_Template_Scene.md`; prep, never published)
 ```yaml
 ---
 type: scene
-session: "[[Session 01 - Title]]"
 chapter: "[[Chapter 1 - Title]]"
-campaign: ""
-scene_type: investigation  # investigation | social | combat | chase
+status: planned            # planned | paused
+                           # played | dropped
+played_in: []              # sessions, written by wrap-up
+scene_type:                # optional: investigation | social | combat | chase
                            # transition | horror | downtime | other
-status: planned            # planned | ready | played | cut
-                           # skipped | modified
-sort_order: 1
-objective: ""
-gm_notes: ""
-entities:                  # Entities that participate in this scene
-  - "[[NPC Name]]"
-  - "[[Location Name]]"
-  - "[[Item Name]]"
-connections: []            # Links to scenes this leads to/from
-canon_status: DRAFT
+entities: []
+locations: []
+maps: []
 tags: []
 ---
 ```

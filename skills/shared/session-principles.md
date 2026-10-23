@@ -76,7 +76,7 @@ promotion).
 
 Session status has no "half-played" value: a session that ended early
 is `played`, and unplayed content carries forward. Scene status:
-`planned | ready | played | skipped | modified | cut`.
+`planned | paused | played | dropped`.
 
 ## Play Notes
 

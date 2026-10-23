@@ -28,8 +28,8 @@ regenerate it.
 
 ## Scene notes
 
-For a standalone scene note in the chapter's `Scenes/` folder, read
-`references/scene-note-template.md`.
+For a standalone scene note in the chapter's `Scenes/` folder, use
+`_Templates/_Template_Scene.md`.
 
 ## Session Plan
 

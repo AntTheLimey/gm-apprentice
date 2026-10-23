@@ -3,6 +3,9 @@
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
   },
+  "_Template_Chapter.md": {
+   "d873d372d41d8d16f22233a807dea0c919f5b4d966340fd39bf3400fc2788a71": null
+  },
   "_Template_Clue.md": {
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
   },
@@ -42,6 +45,9 @@
   "_Template_Plan.md": {
    "0bcadfbfabab9ae2ead919acb6b5b27db54cebe65fcbfab5c68761712d9ba958": null
   },
+  "_Template_Scene.md": {
+   "9434058a8a6361b0ab1f80ba850252337c32b5c12e54d46d0ac1173011a17bc2": null
+  },
   "_Template_Session.md": {
    "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": null
   },
@@ -72,6 +78,9 @@
  "coc-7e-regency": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+  },
+  "_Template_Chapter.md": {
+   "d873d372d41d8d16f22233a807dea0c919f5b4d966340fd39bf3400fc2788a71": null
   },
   "_Template_Clue.md": {
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
@@ -112,6 +121,9 @@
   "_Template_Plan.md": {
    "0bcadfbfabab9ae2ead919acb6b5b27db54cebe65fcbfab5c68761712d9ba958": null
   },
+  "_Template_Scene.md": {
+   "9434058a8a6361b0ab1f80ba850252337c32b5c12e54d46d0ac1173011a17bc2": null
+  },
   "_Template_Session.md": {
    "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": null
   },
@@ -142,6 +154,9 @@
  "dnd-5e-2024": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+  },
+  "_Template_Chapter.md": {
+   "d873d372d41d8d16f22233a807dea0c919f5b4d966340fd39bf3400fc2788a71": null
   },
   "_Template_Clue.md": {
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
@@ -182,6 +197,9 @@
   "_Template_Plan.md": {
    "0bcadfbfabab9ae2ead919acb6b5b27db54cebe65fcbfab5c68761712d9ba958": null
   },
+  "_Template_Scene.md": {
+   "9434058a8a6361b0ab1f80ba850252337c32b5c12e54d46d0ac1173011a17bc2": null
+  },
   "_Template_Session.md": {
    "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": null
   },
@@ -213,6 +231,9 @@
  "fitd": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+  },
+  "_Template_Chapter.md": {
+   "d873d372d41d8d16f22233a807dea0c919f5b4d966340fd39bf3400fc2788a71": null
   },
   "_Template_Clue.md": {
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
@@ -253,6 +274,9 @@
   "_Template_Plan.md": {
    "0bcadfbfabab9ae2ead919acb6b5b27db54cebe65fcbfab5c68761712d9ba958": null
   },
+  "_Template_Scene.md": {
+   "9434058a8a6361b0ab1f80ba850252337c32b5c12e54d46d0ac1173011a17bc2": null
+  },
   "_Template_Session.md": {
    "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": null
   },
@@ -285,6 +309,9 @@
  "generic": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+  },
+  "_Template_Chapter.md": {
+   "d873d372d41d8d16f22233a807dea0c919f5b4d966340fd39bf3400fc2788a71": null
   },
   "_Template_Clue.md": {
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
@@ -325,6 +352,9 @@
   "_Template_Plan.md": {
    "0bcadfbfabab9ae2ead919acb6b5b27db54cebe65fcbfab5c68761712d9ba958": null
   },
+  "_Template_Scene.md": {
+   "9434058a8a6361b0ab1f80ba850252337c32b5c12e54d46d0ac1173011a17bc2": null
+  },
   "_Template_Session.md": {
    "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": null
   },
@@ -354,6 +384,9 @@
  "gurps-4e": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+  },
+  "_Template_Chapter.md": {
+   "d873d372d41d8d16f22233a807dea0c919f5b4d966340fd39bf3400fc2788a71": null
   },
   "_Template_Clue.md": {
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
@@ -394,6 +427,9 @@
   "_Template_Plan.md": {
    "0bcadfbfabab9ae2ead919acb6b5b27db54cebe65fcbfab5c68761712d9ba958": null
   },
+  "_Template_Scene.md": {
+   "9434058a8a6361b0ab1f80ba850252337c32b5c12e54d46d0ac1173011a17bc2": null
+  },
   "_Template_Session.md": {
    "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": null
   },
@@ -425,6 +461,9 @@
  "pf2e": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+  },
+  "_Template_Chapter.md": {
+   "d873d372d41d8d16f22233a807dea0c919f5b4d966340fd39bf3400fc2788a71": null
   },
   "_Template_Clue.md": {
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
@@ -464,6 +503,9 @@
   },
   "_Template_Plan.md": {
    "0bcadfbfabab9ae2ead919acb6b5b27db54cebe65fcbfab5c68761712d9ba958": null
+  },
+  "_Template_Scene.md": {
+   "9434058a8a6361b0ab1f80ba850252337c32b5c12e54d46d0ac1173011a17bc2": null
   },
   "_Template_Session.md": {
    "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": null

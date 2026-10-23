@@ -54,7 +54,7 @@ PROSE: list[tuple[str, str, frozenset[str] | set[str]]] = [
      r"\| `canon_status` \| ([A-Z /]+) —", sr.CANON_STATUS_VALUES),
     # Scenes
     ("shared/entity-schema.md",
-     r"^scene_type: investigation +# (.+\n +# .+)$", sr.SCENE_TYPES),
+     r"^scene_type: +# optional: (.+\n +# .+)$", sr.SCENE_TYPES),
     ("shared/templates/session-plan.md", r"^\*\*Type:\*\* (.+)$", sr.SCENE_TYPES),
     ("session-prep/references/session-templates.md",
      r"^\*\*Type:\*\* (.+)$", sr.SCENE_TYPES),
@@ -95,12 +95,12 @@ class ProseListsTest(unittest.TestCase):
                     self.assertEqual(_words(listed), set(expected), f"{rel}: {listed!r}")
 
     def test_scene_note_template_uses_listed_values(self):
-        text = (SKILLS / "session-prep" / "references" /
-                "scene-note-template.md").read_text(encoding="utf-8")
-        self.assertIn(re.search(r"^scene_type: (\S+)", text, re.M).group(1), sr.SCENE_TYPES)
+        text = (SKILLS / "shared" / "templates" / "scene.md").read_text(encoding="utf-8")
         self.assertIn(re.search(r"^status: (\S+)", text, re.M).group(1), sr.SCENE_STATUS)
-        self.assertIn(re.search(r"^canon_status: (\S+)", text, re.M).group(1),
-                      sr.CANON_STATUS_VALUES)
+        self.assertEqual(_words(re.search(r"^status: planned +# (.+)$", text, re.M).group(1)),
+                         set(sr.SCENE_STATUS))
+        self.assertEqual(_words(re.search(r"^scene_type: +# optional: (.+)$", text,
+                                          re.M).group(1)), set(sr.SCENE_TYPES))
 
 
 class OntologyListsTest(unittest.TestCase):

@@ -132,6 +132,8 @@ class PlanTests(unittest.TestCase):
                        "Factions & Organizations/", "Items & Artifacts/",
                        "Creatures/", "Heritages/", "Events/", "Documents/",
                        "Clues/", "_Templates/_Template_NPC.md",
+                       "_Templates/_Template_Scene.md",
+                       "_Templates/_Template_Chapter.md",
                        "_Templates/pc-coc-7e.md", "_World/world-index.md",
                        "_World/_flags.md", "_Campaign/Timeline.md",
                        "_Campaign/Player Characters.md",

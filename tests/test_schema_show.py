@@ -125,6 +125,36 @@ class ShowAgreesWithTheValidator(unittest.TestCase):
                 self.assertNotIn(field, fields, (etype, field))
 
 
+class SceneAndChapterWords(unittest.TestCase):
+    def test_scene_shows_played_in_not_session(self):
+        optional = shown("scene")["optional"].split(", ")
+        self.assertIn("played_in", optional)
+        self.assertNotIn("session", optional)
+        self.assertEqual(shown("scene")["required"], "type, status")
+
+    def test_chapter_requires_type_and_title(self):
+        self.assertEqual(sr.REQUIRED_FIELDS["chapter"], ["type", "title"])
+        self.assertEqual(shown("chapter")["required"], "type, title")
+
+    def test_old_scene_spellings_are_accepted(self):
+        base = {"type": "scene"}
+        for word in ("planned", "paused", "played", "dropped",
+                     "ready", "modified", "cut", "skipped"):
+            self.assertEqual(errors_for({**base, "status": word}), [], word)
+        self.assertEqual(len(errors_for({**base, "status": "banana"})), 1)
+
+    def test_chapter_status_words_and_aliases(self):
+        base = {"type": "chapter", "title": "One"}
+        for word in ("planned", "active", "complete", "in_progress", "in-progress"):
+            self.assertEqual(errors_for({**base, "status": word}), [], word)
+        self.assertEqual(len(errors_for({**base, "status": "banana"})), 1)
+
+    def test_an_old_scene_note_with_its_old_fields_is_clean(self):
+        old = {"type": "scene", "session": '"[[Plan]]"', "canon_status": "DRAFT",
+               "scene_type": "social", "status": "modified", "objective": "x"}
+        self.assertEqual(errors_for(old), [])
+
+
 class ShowReadsTheTemplates(unittest.TestCase):
     def test_every_template_name_is_a_template(self):
         for src in sr.TEMPLATE_NAMES:
@@ -155,7 +185,7 @@ class ShowReadsTheTemplates(unittest.TestCase):
         self.assertIn("the-midwife/references/scaffold-handoff.md", brief["template"])
         for field in ("system", "sessions_estimated", "continuation_type"):
             self.assertIn(field, brief["optional"].split(", "))
-        self.assertIn("objective", shown("scene")["optional"].split(", "))
+        self.assertIn("played_in", shown("scene")["optional"].split(", "))
         self.assertIn("sort_order", shown("chapter")["optional"].split(", "))
         self.assertEqual(shown("meta")["optional"], "none listed (no template or example)")
 
