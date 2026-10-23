@@ -291,6 +291,50 @@ def test_party_places_portraits_when_writing(world, capsys):
     assert picture.asked == [AVATAR]
 
 
+def test_a_note_write_that_fails_leaves_no_image_and_the_next_run_fetches_again(world, capsys, monkeypatch):
+    root, sheet, picture = world
+    real = dnd_ddb.write_text_atomic
+
+    def broken(path, text):
+        raise dnd_ddb.StepFailed("cannot be written")
+    monkeypatch.setattr(dnd_ddb, "write_text_atomic", broken)
+    assert main([str(sheet), "--write"]) == 2
+    assert not list((root / "_attachments").rglob("*.*")) and picture.asked == [AVATAR]
+    assert portrait_field(sheet) == 'portrait: ""'
+    monkeypatch.setattr(dnd_ddb, "write_text_atomic", real)
+    assert main([str(sheet), "--write"]) == 0
+    assert (root / "_attachments" / "characters" / "tavin-reedmere.jpg").is_file()
+    assert picture.asked == [AVATAR, AVATAR]
+
+
+def test_party_one_failed_portrait_does_not_stop_the_other_character(tmp_path, capsys, monkeypatch):
+    root = tmp_path
+    (root / "_meta").mkdir()
+    (root / "_meta" / "vault-config.md").write_text("---\npublish:\n  system: dnd-5e-2024\n---\n", encoding="utf-8")
+    (root / "Characters").mkdir()
+    for name, ident in (("Alder", 1), ("Briar", 2)):
+        text = NOTE.replace('dndbeyond: ""', f'dndbeyond: "https://www.dndbeyond.com/characters/{ident}"')
+        (root / "Characters" / f"{name}.md").write_text(text, encoding="utf-8")
+    face = {"decorations": {"avatarUrl": AVATAR}}
+    monkeypatch.setattr(dnd_ddb, "FETCH", lambda char_id: wizard(details={**STORY["details"], **face}))
+
+    def by_url(url):
+        by_url.n += 1
+        if by_url.n == 1:
+            raise Unreadable("D&D Beyond could not be read (HTTP 500)")
+        return JPEG, "jpg"
+    by_url.n = 0
+    monkeypatch.setattr(dnd_ddb, "FETCH_PORTRAIT", by_url)
+    assert main(["--party", str(root), "--write"]) == 0
+    out = capsys.readouterr().out
+    assert "Alder: Frontmatter / portrait" in out and out.count("CHECK\tAlder: Frontmatter / portrait") == 1
+    assert (root / "_attachments" / "characters" / "briar.jpg").is_file()
+    assert not (root / "_attachments" / "characters" / "alder.jpg").exists()
+    assert portrait_field(root / "Characters" / "Alder.md") == 'portrait: ""'
+    assert "briar.jpg" in portrait_field(root / "Characters" / "Briar.md")
+    assert "Raised in a lighthouse" in (root / "Characters" / "Alder.md").read_text(encoding="utf-8")
+
+
 # --- fetch_portrait -----------------------------------------------------------------------
 
 class Reply:

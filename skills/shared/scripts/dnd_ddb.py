@@ -60,9 +60,8 @@ import http.client
 import json
 import os
 import re
-import stat
+import secrets
 import sys
-import tempfile
 import time
 import urllib.error
 import urllib.parse
@@ -81,7 +80,6 @@ from dnd_note import (BARE, HALF, HEADING, PLACEHOLDER, REASONED, SEPARATOR, YES
                       Cell, Note, clean, column, number, split_cells, to_int)
 from dnd_sheet import to_weight  # noqa: E402
 from dnd_story import MEMORY, memory_entries, memory_from, plan_story  # noqa: E402
-from ingest_images import slugify  # noqa: E402
 from migrate_core import StepFailed, write_text_atomic  # noqa: E402
 from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter, fence_step,  # noqa: E402
                       frontmatter_span, is_unchecked_source, set_key, settings, settings_file,
@@ -1157,6 +1155,7 @@ class Report:
     text: str                            # the note after sync; equal to the input when nothing changed or on ERROR
     seen: Seen | None = None             # what to remember after this sync; None when the sync was an ERROR
     portrait_url: str = ""               # the safe avatar link D&D Beyond gave, "" when there is none
+    placed: Path | None = None           # the portrait file this run created; to be removed if the note then fails
 
 
 def character_id(link: object) -> str | None:
@@ -1342,15 +1341,13 @@ FETCH_PORTRAIT = fetch_portrait
 
 def write_new_bytes(path: Path, data: bytes) -> None:
     """Write a new file whole or not at all: beside it first, then linked into place, so an
-    existing file is never replaced (FileExistsError)."""
+    existing file is never replaced (FileExistsError). The mode is 0o666 less the umask."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    tmp = path.parent / f".{path.name}.{secrets.token_hex(6)}"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o666)
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(data)
-        umask = os.umask(0)
-        os.umask(umask)
-        os.chmod(tmp, stat.S_IMODE(0o666 & ~umask))
         try:
             os.link(tmp, path)
         except FileExistsError:
@@ -1377,6 +1374,8 @@ def portrait_wanted(text: str, url: str) -> bool:
 
 def portrait_blocked(vault: Path, stem: str, text: str) -> tuple[str, list[tuple[str, str, str]]]:
     """The file slug for this note, and the CHECK rows that stop the portrait ("" and a row if it cannot go)."""
+    from ingest_images import slugify      # loaded here: only a portrait needs it
+
     slug = slugify(stem)
     if not slug:
         return "", [("CHECK", PORTRAIT_LOCUS, "the note's name makes no file name; the portrait was left blank")]
@@ -1398,10 +1397,12 @@ def portrait_preview(vault: Path, stem: str, text: str, url: str) -> list[tuple[
     return stopped or [("WRITE", PORTRAIT_LOCUS, "would fetch the D&D Beyond portrait")]
 
 
-def place_portrait(vault: Path, stem: str, text: str, url: str) -> tuple[str, list[tuple[str, str, str]]]:
+def place_portrait(vault: Path, stem: str, text: str, url: str,
+                   created: list[Path] | None = None) -> tuple[str, list[tuple[str, str, str]]]:
     """Fetch the portrait into a blank `portrait` field: the note's new text and the rows. The image goes
     to `_attachments/characters/<slug>.<ext>`; a file already there, a field already set or a failed
-    fetch leaves the text as it was. Writes the image (the caller writes the note)."""
+    fetch leaves the text as it was. Writes the image (the caller writes the note); the path it
+    created is appended to `created`, so the caller can remove it if the note then fails."""
     if not portrait_wanted(text, url):
         return text, []
     slug, stopped = portrait_blocked(vault, stem, text)
@@ -1423,6 +1424,8 @@ def place_portrait(vault: Path, stem: str, text: str, url: str) -> tuple[str, li
     except OSError as e:
         return text, [("CHECK", PORTRAIT_LOCUS, f"{rel} could not be written ({e.__class__.__name__}); "
                                                 "the field was left blank")]
+    if created is not None:
+        created.append(vault / rel)
     lines = text.splitlines(keepends=True)
     close, _ = frontmatter_span(lines)
     fm = lines[1:close]
@@ -1436,15 +1439,26 @@ def with_portrait(report: Report, stem: str, vault: Path | None, write_it: bool)
     Never raises; a failure is a CHECK row."""
     if vault is None or not report.portrait_url or any(r[0] == "ERROR" for r in report.rows):
         return report
+    created: list[Path] = []
     try:
         if write_it:
-            text, rows = place_portrait(vault, stem, report.text, report.portrait_url)
+            text, rows = place_portrait(vault, stem, report.text, report.portrait_url, created)
         else:
             text, rows = report.text, portrait_preview(vault, stem, report.text, report.portrait_url)
-    except Exception as e:     # the portrait is an extra; the rest of the sync stands
+    except (OSError, ValueError, Unreadable, http.client.HTTPException) as e:     # the rest of the sync stands
+        unplace(created)
         return replace(report, rows=[*report.rows, ("CHECK", PORTRAIT_LOCUS,
                                                    f"the portrait could not be placed ({e.__class__.__name__})")])
-    return replace(report, rows=[*report.rows, *rows], text=text)
+    return replace(report, rows=[*report.rows, *rows], text=text, placed=created[0] if created else None)
+
+
+def unplace(created: list[Path]) -> None:
+    """Remove portrait files this run created (the note could not be written beside them)."""
+    for path in created:
+        try:
+            path.unlink()
+        except OSError:
+            pass
 
 
 def current_layout(text: str) -> bool:
@@ -1695,6 +1709,7 @@ def one_sheet(path: Path, write_it: bool) -> int:
         try:
             write_text_atomic(path, report.text)
         except StepFailed as e:
+            unplace([report.placed] if report.placed else [])
             print(f"dnd_ddb: {e}", file=sys.stderr)
             return 2
     if write_it:
@@ -1754,6 +1769,7 @@ def party(vault: Path, write_it: bool, on_build: bool) -> int:
             try:
                 write_text_atomic(path, report.text)
             except StepFailed as e:
+                unplace([report.placed] if report.placed else [])
                 found = [("ERROR", "write", str(e))]
                 failed = True
         if write_it and not failed_here(found):
