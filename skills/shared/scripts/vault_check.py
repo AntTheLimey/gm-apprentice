@@ -630,11 +630,12 @@ def check_stale_drafts(vault: Path) -> list[str]:
 def check_chapters(vault: Path) -> list[str]:
     """One chapter, one chapter note. Two or more `type: chapter` notes in
     the same chapter is an ASK: which to keep is the GM's call, so nothing
-    here merges or picks. `_meta/` holds the schema's own `type: chapter`
-    examples and is not a chapter."""
+    here merges or picks. A top-level `_` folder (`_meta/`'s schema
+    examples, `_archive/`, drafts) is not content, as index_build reads
+    it."""
     groups: dict[str, list[str]] = {}
     for rel, text in vault_files(vault):
-        if rel.startswith("_meta/"):
+        if rel.split("/", 1)[0].startswith("_"):
             continue
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "chapter":

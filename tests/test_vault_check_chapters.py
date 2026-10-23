@@ -61,6 +61,19 @@ class ChapterNotesTests(unittest.TestCase):
         })
         self.assertEqual(vc.check_chapters(v), [])
 
+    def test_any_underscore_top_folder_ignored(self):
+        # An archived or drafted copy of the chapter note, as index_build
+        # skips it.
+        old = ("---\ntype: chapter\nchapter: \"[[Chapter 1 - Far]]\"\n"
+               "---\n\n# Old\n")
+        v = make(self, {
+            "Chapters/Chapter 1 - Far/Chapter 1 - Far.md":
+                CH.format(status="active", title="Far"),
+            "_archive/Chapter 1 - Far.md": old,
+            "_midwife/Far draft.md": old,
+        })
+        self.assertEqual(vc.check_chapters(v), [])
+
     def test_cli_subcommand(self):
         v = make(self, {
             "Chapters/A/A.md": CH.format(status="active", title="A"),
