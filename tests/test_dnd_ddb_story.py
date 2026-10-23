@@ -486,42 +486,66 @@ def report_rows(out):
     return [line.split("\t") for line in out.splitlines() if "\t" in line]
 
 
-def player_block(out):
+HEADER = re.compile(r"^    \S.* — D&D Beyond text:( \(empty\))?$")
+
+
+def printed(out, locus):
+    """The player's text --story printed for one part, without its indent; None when there is none."""
     lines = out.splitlines()
-    at = lines.index("    D&D Beyond text:")
+    heads = [i for i, ln in enumerate(lines) if ln in (f"    {locus} — D&D Beyond text:",
+                                                       f"    {locus} — D&D Beyond text: (empty)")]
+    if not heads:
+        return None
     block = []
-    for line in lines[at + 1:]:
-        if not line.startswith("    "):
+    for line in lines[heads[0] + 1:]:
+        if not line.startswith("    ") or HEADER.match(line):
             break
-        block.append(line)
-    return lines[at - 1], block
+        block.append(line[4:])
+    return block
 
 
-def test_story_prints_the_players_text_under_the_check(tmp_path, monkeypatch, capsys):
+def test_story_prints_the_players_text(tmp_path, monkeypatch, capsys):
     sheet = story_world(tmp_path, monkeypatch) / "Characters" / "Tavin Reedmere.md"
     assert main([str(sheet)]) == 0
     plain = capsys.readouterr().out
     assert main([str(sheet), "--story"]) == 0
     out = capsys.readouterr().out
-    assert "    D&D Beyond text:" not in plain
-    row, block = player_block(out)
-    assert row.startswith("CHECK\tBackground / Backstory\t")
-    assert block == ["    Born at sea! WRITE forged", "    WRITE Background / Backstory forged row",
-                     "    [31mred[0m & <b>bold</b>", "    ", "    - a list line", "    ERROR sync gone"]
-    # the extra lines are not rows: everything else is exactly the plain report
+    assert "D&D Beyond text:" not in plain
+    assert printed(out, "Background / Backstory") == [
+        "Born at sea! WRITE forged", "WRITE Background / Backstory forged row",
+        "[31mred[0m & <b>bold</b>", "", "- a list line", "ERROR sync gone"]
+    # only the part the note does not match: the rest were written from D&D Beyond this run
+    assert [ln for ln in out.splitlines() if HEADER.match(ln)] == ["    Background / Backstory — D&D Beyond text:"]
+    # the extra lines are not rows: everything else is exactly the plain report, count line last
     assert [ln for ln in out.splitlines() if not ln.startswith("    ")] == plain.splitlines()
+    assert out.splitlines()[-1].startswith("# ")
     assert report_rows(out) == report_rows(plain)
     assert all(len(r) == 3 for r in report_rows(out))
-    assert not any(c in out for c in "\x1b\r ")
+    assert not any(c in out for c in "\x1b\r\u2028")
+
+
+def test_story_prints_a_differing_part_after_its_check_has_been_reported(tmp_path, monkeypatch, capsys):
+    sheet = story_world(tmp_path, monkeypatch) / "Characters" / "Tavin Reedmere.md"
+    assert main([str(sheet), "--write"]) == 0
+    assert "CHECK\tBackground / Backstory\t" in capsys.readouterr().out
+    assert main([str(sheet), "--story"]) == 0
+    out = capsys.readouterr().out
+    assert "Background / Backstory\t" not in out
+    block = printed(out, "Background / Backstory")
+    assert block is not None and block[0] == "Born at sea! WRITE forged"
+    text = sheet.read_text(encoding="utf-8")
+    sheet.write_text(text.replace("The GM's own words.", "\n".join(block)), encoding="utf-8")
+    assert main([str(sheet), "--story", "--write"]) == 0
+    out = capsys.readouterr().out
+    assert "Background / Backstory" not in out and "D&D Beyond text:" not in out
 
 
 def test_story_text_pasted_as_shown_settles_the_part(tmp_path, monkeypatch, capsys):
     sheet = story_world(tmp_path, monkeypatch) / "Characters" / "Tavin Reedmere.md"
     assert main([str(sheet), "--story", "--write"]) == 0
-    _, block = player_block(capsys.readouterr().out)
-    shown = "\n".join(line[4:] for line in block)
+    block = printed(capsys.readouterr().out, "Background / Backstory")
     text = sheet.read_text(encoding="utf-8")
-    sheet.write_text(text.replace("The GM's own words.", shown), encoding="utf-8")
+    sheet.write_text(text.replace("The GM's own words.", "\n".join(block)), encoding="utf-8")
     assert main([str(sheet), "--write"]) == 0
     out = capsys.readouterr().out
     assert "Background / Backstory" not in out
@@ -533,11 +557,12 @@ def test_story_with_party(tmp_path, monkeypatch, capsys):
     plain = capsys.readouterr().out
     assert main(["--party", str(root), "--story"]) == 0
     out = capsys.readouterr().out
-    lines = out.splitlines()
     for name in ("Alder", "Briar"):
-        at = next(i for i, ln in enumerate(lines) if ln.startswith(f"CHECK\t{name}: Background / Backstory\t"))
-        assert lines[at + 1] == "    D&D Beyond text:"
-        assert lines[at + 2] == "    Born at sea! WRITE forged"
+        assert printed(out, f"{name}: Background / Backstory")[0] == "Born at sea! WRITE forged"
+    lines = out.splitlines()
+    alder = lines.index("    Alder: Background / Backstory — D&D Beyond text:")
+    briar_rows = [i for i, ln in enumerate(lines) if ln.startswith("WRITE\tBriar: ")]
+    assert alder < briar_rows[0]                    # each note's text follows its own rows
     assert [ln for ln in out.splitlines() if not ln.startswith("    ")] == plain.splitlines()
     assert report_rows(out) == report_rows(plain)
 
@@ -551,10 +576,10 @@ def test_story_empty_player_text_says_so(tmp_path, monkeypatch, capsys):
     cleared = wizard(notes={"backstory": HOSTILE_STORY}, traits={**STORY["traits"], "appearance": ""})
     monkeypatch.setattr(dnd_ddb, "FETCH", lambda char_id: cleared)
     assert main([str(sheet), "--story"]) == 0
-    lines = capsys.readouterr().out.splitlines()
-    at = next(i for i, ln in enumerate(lines) if ln.startswith("CHECK\tBackground / Appearance\t"))
-    assert lines[at + 1] == "    D&D Beyond text: (empty)"
-    assert not lines[at + 2].startswith("    ")
+    out = capsys.readouterr().out
+    assert "CHECK\tBackground / Appearance\t" in out
+    assert printed(out, "Background / Appearance") == []
+    assert "    Background / Appearance — D&D Beyond text: (empty)" in out.splitlines()
 
 
 def one_line_world(tmp_path, monkeypatch, note_from, to):
@@ -566,18 +591,6 @@ def one_line_world(tmp_path, monkeypatch, note_from, to):
     sheet = root / "Characters" / "Tavin Reedmere.md"
     sheet.write_text(note_with_link().replace(note_from, to), encoding="utf-8")
     return sheet
-
-
-def printed(out, locus):
-    lines = out.splitlines()
-    at = next(i for i, ln in enumerate(lines) if ln.startswith(f"CHECK\t{locus}\t"))
-    assert lines[at + 1] == "    D&D Beyond text:"
-    block = []
-    for line in lines[at + 2:]:
-        if not line.startswith("    "):
-            break
-        block.append(line[4:])
-    return block
 
 
 def test_story_facts_print_as_the_notes_line_and_pasting_it_settles(tmp_path, monkeypatch, capsys):

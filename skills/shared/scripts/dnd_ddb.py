@@ -9,8 +9,9 @@ with a bracketed reason (`18 (tome)`) is the GM's and is kept. Stdlib only.
 Usage:
   dnd_ddb.py SHEET.md [--write]               preview (or write) one note
   dnd_ddb.py --party VAULT [--write] [--on-build]   every PC note with a D&D Beyond link
-  --story   under each story CHECK row, the player's D&D Beyond text for that part, each line
-            indented four spaces (not report rows; pasted as shown, it hands the part back)
+  --story   after a note's rows, the player's D&D Beyond text for each story part the note does
+            not match, each line indented four spaces (not report rows; pasted as shown, it hands
+            the part back)
 The only requests ever made are to character-service.dndbeyond.com, with a path of digits,
 and, with --write, one to www.dndbeyond.com/avatars/ for the portrait (either may go through
 the user's own proxy).
@@ -1158,7 +1159,7 @@ class Report:
     seen: Seen | None = None             # what to remember after this sync; None when the sync was an ERROR
     portrait_url: str = ""               # the safe avatar link D&D Beyond gave, "" when there is none
     placed: Path | None = None           # the portrait file this run created; to be removed if the note then fails
-    said: dict[str, str] = field(default_factory=dict)   # a story CHECK's locus -> the player's raw text
+    said: dict[str, str] = field(default_factory=dict)   # a story part that differs -> the player's text
 
 
 def character_id(link: object) -> str | None:
@@ -1685,15 +1686,15 @@ def emit(status: str, locus: str, message: str) -> None:
     print("\t".join(PLAIN.sub(" ", part) for part in (status, locus, message)))
 
 
-def emit_said(report: Report, status: str, locus: str) -> None:
-    """With --story, under a story CHECK: the player's text, each line indented four spaces. Never a
-    row: tabs and control characters are gone from the copy, so no line of it can pass for one."""
-    if status != "CHECK" or locus not in report.said:
-        return
-    said = clean_text(report.said[locus]).strip("\n")
-    print("    D&D Beyond text:" + ("" if said.strip() else " (empty)"))
-    for line in said.split("\n") if said.strip() else []:
-        print("    " + PLAIN.sub(" ", line).rstrip())
+def emit_said(report: Report, prefix: str = "") -> None:
+    """With --story, after a note's rows: for each story part whose note text differs from the player's
+    (CHECK this run or not), a header naming it and the player's text, every line indented four spaces.
+    Never a row: tabs and control characters are gone from the copy, so no line of it can pass for one."""
+    for locus, text in report.said.items():
+        said = clean_text(text).strip("\n")
+        print(PLAIN.sub(" ", f"    {prefix}{locus} — D&D Beyond text:" + ("" if said.strip() else " (empty)")))
+        for line in said.split("\n") if said.strip() else []:
+            print("    " + PLAIN.sub(" ", line).rstrip())
 
 
 def guarded_sync(text: str, vault: Path | None = None) -> Report:
@@ -1717,10 +1718,10 @@ def one_sheet(path: Path, write_it: bool, story: bool = False) -> int:
     report = with_portrait(guarded_sync(text, vault), path.stem, vault, write_it)
     for row in report.rows:
         emit(*row)
-        if story:
-            emit_said(report, row[0], row[1])
     if any(r[0] == "ERROR" for r in report.rows):
         return 0
+    if story:
+        emit_said(report)
     print(count_line(report.rows))
     if write_it and report.text != text:
         try:
@@ -1795,8 +1796,8 @@ def party(vault: Path, write_it: bool, on_build: bool, story: bool = False) -> i
             row = (status, f"{Path(rel).stem}: {locus}", message)
             rows.append(row)
             emit(*row)
-            if story:
-                emit_said(report, status, locus)
+        if story and not failed_here(found):
+            emit_said(report, f"{Path(rel).stem}: ")
     print(count_line(rows, sheets))
     return 2 if failed else 0
 
@@ -1813,7 +1814,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--on-build", action="store_true",
                     help="with --party: run only when vault.dndbeyond_sync is build")
     ap.add_argument("--story", action="store_true",
-                    help="under each story CHECK, the player's text on D&D Beyond (not report rows)")
+                    help="the player's D&D Beyond text for each story part the note does not match (not report rows)")
     args = ap.parse_args(argv)
     if bool(args.sheet) == bool(args.party):
         ap.error("give one sheet, or --party VAULT")

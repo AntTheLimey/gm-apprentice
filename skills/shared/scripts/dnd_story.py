@@ -100,7 +100,7 @@ class StoryPlan:
     text: str
     rows: list[tuple[str, str, str]]            # (STATUS, locus, message)
     remember: dict[str, tuple[str, str]]        # part -> (source_fp, note_fp) after this run
-    said: dict[str, str] = field(default_factory=dict)  # a part's CHECK locus -> source_raw's text for it
+    said: dict[str, str] = field(default_factory=dict)  # locus -> source_raw's text, for each part that differs
 
 
 # --- safe text -----------------------------------------------------------------------------
@@ -411,10 +411,10 @@ def plan_story(text: str, story: Story, last: dict[str, tuple[str, str]] | None)
         else:
             rows.append(("CHECK", "Frontmatter / gender", "the frontmatter could not be read; gender was not written"))
 
-    raw = source_raw(story)
-    said = {LOCUS[p]: raw[p] for p in PARTS if any(r[0] == "CHECK" and r[1] == LOCUS[p] for r in rows)}
     new_text = "".join(lines)
     after = note_parts(new_text)
+    raw = source_raw(story)
+    said = {LOCUS[p]: raw[p] for p in PARTS if reading(held(p, after[p])) != reading(source[p])}
     remember = dict(keep)
     for part, source_fp in fresh.items():
         remember[part] = (source_fp, fingerprint(held(part, after[part])))
