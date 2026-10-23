@@ -13,6 +13,7 @@ REPO = Path(__file__).resolve().parent.parent
 SCRIPTS = REPO / "skills" / "shared" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import index_build as ib  # noqa: E402
 import schema_rules  # noqa: E402
 import vault_write as vw  # noqa: E402
 import vaultlib as vl  # noqa: E402
@@ -78,11 +79,36 @@ class SceneNewTests(unittest.TestCase):
         fm = vl.extract_frontmatter(text)
         self.assertEqual(fm["type"], "scene")
         self.assertEqual(fm["status"], "planned")
-        self.assertEqual(vl.chapter_of(rel, fm), "Chapter_2_Overview")
+        # The folder, as every other note in the chapter links it, not
+        # the chapter note's own file name.
+        self.assertEqual(vl.chapter_of(rel, fm), "Chapter 2 - Lyon")
+        self.assertIn('chapter: "[[Chapter 2 - Lyon]]"', text)
         self.assertEqual(fm["played_in"], [])
         self.assertEqual(
             [m for lvl, m in schema_rules.frontmatter_findings(
                 fm, None, vl.raw_frontmatter(text)) if lvl == "ERROR"], [])
+
+    def test_index_build_sees_one_chapter_not_two(self):
+        before = {c["stem"] for c in ib.collect(self.vault)[1]}
+        run(self.vault, "scene-new", "--chapter", "Chapter_2_Overview",
+            "--title", "The Docks", "--write")
+        chapters = ib.collect(self.vault)[1]
+        self.assertEqual({c["stem"] for c in chapters}, before)
+        lyon = [c for c in chapters if c["stem"] == "Chapter_2_Overview"]
+        self.assertEqual(sorted(s for s, _ in lyon[0]["all_scenes"]),
+                         ["Old Scene", "The Docks"])
+
+    def test_title_tier_comes_before_folder_tier(self):
+        # "Chapter 2 - Lyon" is Lyon's folder and Rome's title: the title
+        # match wins, and the link is the found note's own folder.
+        vault = make_vault(self, {**FILES, "Chapters/Rome/Rome_Overview.md":
+                                  '---\ntype: chapter\n'
+                                  'title: "Chapter 2 - Lyon"\n---\n'})
+        code, out = run(vault, "scene-new", "--chapter", "Chapter 2 - Lyon",
+                        "--title", "Quay", "--write")
+        self.assertEqual(code, 0, out)
+        text = (vault / "Chapters/Rome/Scenes/Quay.md").read_text("utf-8")
+        self.assertIn('chapter: "[[Rome]]"', text)
 
     def test_set_piece_gets_its_own_folder(self):
         code, out = run(self.vault, "scene-new", "--chapter",

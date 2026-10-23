@@ -255,6 +255,7 @@ class SessionNewTests(unittest.TestCase):
 
     def test_a_scenes_list_never_comes_forward(self):
         block = 'scenes:\n  - "[[Ashworth Dinner]]"\n'
+        self.assertIn("scenes: []\n", PREV_TEXT)
         for old in ("scenes: []\n", block):
             (self.vault / PREV).write_text(
                 PREV_TEXT.replace("scenes: []\n", old), encoding="utf-8")
@@ -302,6 +303,30 @@ class SessionNewTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn("WOULD-CREATE\tChapters/Chapter 2 - Out/Sessions/"
                       "Session 13/Session 13 - The Long Way Round.md", out)
+
+    def test_first_session_finds_its_chapter_like_scene_new(self):
+        # Found by title; filed in the chapter folder and linked by it,
+        # as the chapter's other notes are.
+        rome = "Chapters/Chapter 3 - Rome"
+        (self.vault / rome).mkdir(parents=True)
+        (self.vault / rome / "Chapter_3_Overview.md").write_text(
+            '---\ntype: chapter\ntitle: "Rome"\n---\n', encoding="utf-8")
+        code, out = run(self.vault, "session-new", "--number", "1",
+                        "--title", "Arrival", "--chapter", "Rome", "--write")
+        self.assertEqual(code, 0, out)
+        index = f"{rome}/Sessions/Session 01/Session 01 - Arrival.md"
+        self.assertIn('chapter: "[[Chapter 3 - Rome]]"', self.read(index))
+
+    def test_first_session_with_an_ambiguous_chapter_is_refused(self):
+        for name in ("A", "B"):
+            path = self.vault / f"Chapters/{name}/{name}.md"
+            path.parent.mkdir(parents=True)
+            path.write_text('---\ntype: chapter\ntitle: "Rome"\n---\n',
+                            encoding="utf-8")
+        code, out = run(self.vault, "session-new", "--number", "1",
+                        "--title", "Arrival", "--chapter", "Rome")
+        self.assertEqual(code, 1, out)
+        self.assertIn("2 chapter notes match", out)
 
     def test_a_title_that_cannot_be_a_file_name_is_refused(self):
         code, out = run(self.vault, "session-new", "--number", "13",

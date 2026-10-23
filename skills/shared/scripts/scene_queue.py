@@ -4,13 +4,14 @@
 A scene is a `type: scene` note under a chapter's `Scenes/` folder (or a
 sub-folder of the chapter, such as a side adventure). The queue lists the
 ones whose status is `planned` or `paused`, paused first, then by folder,
-then title. A `paused` scene is listed wherever it sits. Scenes inside a
+then title. A `paused` scene is listed wherever it sits, whatever
+`--chapter` says (a scene paused at a chapter break is still to play). Scenes inside a
 session folder (`Sessions/`, or a folder named `Session NN`) are an older
 layout's history and are never queued unless paused.
 
 Read-only. Bookkeeping only: it reads `type` and `status`, never the body.
 
-Usage: scene_queue.py VAULT [--chapter NAME]
+Usage: scene_queue.py VAULT [--chapter NAME]   (NAME as scene-new takes it)
 Output: STATUS<TAB>folder<TAB>[[title]], one row per scene.
 """
 
@@ -43,11 +44,33 @@ def _status(fm: dict) -> str:
     return VALUE_ALIASES["scene"]["status"].get(raw, raw)
 
 
+def _chapter_names(chapters: list[tuple[str, dict]], raw: str) -> set[str]:
+    """Every name `raw`'s chapter goes by, normalized: its note found as
+    `vault_write scene-new --chapter` finds it, else `raw` itself."""
+    hits = vl.chapters_named(chapters, raw)
+    if len(hits) > 1:
+        raise ValueError(f"{len(hits)} chapter notes match {raw!r}: "
+                         + ", ".join(rel for rel, _fm in hits))
+    if not hits:
+        return {vl.normalize(raw.strip().removeprefix("[[")
+                             .removesuffix("]]"))}
+    rel, fm = hits[0]
+    return {vl.normalize(n) for n in (
+        vl.chapter_link_name(rel, fm), Path(rel).stem,
+        rel.rpartition("/")[0].rpartition("/")[2])}
+
+
 def queue(vault: Path, chapter: str | None = None) -> list[QueueRow]:
+    """The queue; `chapter` keeps planned scenes of that chapter only (a
+    paused scene is listed whatever its chapter). ValueError when
+    `chapter` names several chapter notes."""
     notes = [(rel, vl.extract_frontmatter(text) or {})
              for rel, text in vl.vault_files(vault)]
+    chapters = [(rel, fm) for rel, fm in notes
+                if vl.entity_type(fm) == "chapter"]
     chapter_dirs = {rel.rpartition("/")[0]: Path(rel).stem
-                    for rel, fm in notes if vl.entity_type(fm) == "chapter"}
+                    for rel, _fm in chapters}
+    wanted = _chapter_names(chapters, chapter) if chapter else None
     rows: list[QueueRow] = []
     for rel, fm in notes:
         if vl.entity_type(fm) != "scene":
@@ -70,7 +93,7 @@ def queue(vault: Path, chapter: str | None = None) -> list[QueueRow]:
         name = (vl.wikilink_target(fm.get("chapter"))
                 or (chapter_dirs.get("/".join(parts[:base]), "")
                     if base is not None else ""))
-        if chapter and vl.normalize(chapter) not in {
+        if wanted is not None and status != "paused" and not wanted & {
                 vl.normalize(name), vl.normalize(parts[base - 1])
                 if base else ""}:
             continue
@@ -88,7 +111,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("vault", type=Path)
     ap.add_argument("--chapter")
     args = ap.parse_args(argv)
-    for row in queue(args.vault, args.chapter):
+    try:
+        rows = queue(args.vault, args.chapter)
+    except ValueError as e:
+        print(f"scene_queue: {e}", file=sys.stderr)
+        return 1
+    for row in rows:
         print(f"{row.status}\t{row.folder}\t[[{row.title}]]")
     return 0
 

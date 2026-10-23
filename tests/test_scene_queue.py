@@ -75,7 +75,39 @@ class QueueTests(unittest.TestCase):
     def test_chapter_filter(self):
         self.assertEqual(self.titles(chapter="Chapter 1 - Vienna"),
                          ["Stalled", "Opera", "Waltz", "Cellar"])
-        self.assertEqual(self.titles(chapter="Nowhere"), [])
+        self.assertEqual(self.titles(chapter="Nowhere"), ["Stalled"])
+
+    def test_chapter_named_like_scene_new_names_it(self):
+        # Stem, title or folder; a paused scene from another chapter is
+        # still listed, a planned one is not.
+        lyon = "Chapters/Chapter 2 - Lyon"
+        self.put(f"{lyon}/Chapter_2_Overview.md",
+                 '---\ntype: chapter\ntitle: "Lyon"\n---\n')
+        self.put(f"{lyon}/Scenes/Docks.md", scene("planned",
+                                                  "Chapter 2 - Lyon"))
+        self.put(f"{lyon}/Scenes/Quay.md", scene("planned",
+                                                 "Chapter_2_Overview"))
+        for name in ("Lyon", "Chapter_2_Overview", "Chapter 2 - Lyon",
+                     "[[Lyon]]"):
+            self.assertEqual(self.titles(chapter=name),
+                             ["Stalled", "Docks", "Quay"], name)
+
+    def test_paused_scenes_queue_from_any_chapter(self):
+        self.put("Chapters/Chapter 2 - Lyon/Chapter 2 - Lyon.md",
+                 "---\ntype: chapter\n---\n")
+        self.put("Chapters/Chapter 2 - Lyon/Scenes/Break.md",
+                 scene("paused", "Chapter 2 - Lyon"))
+        self.assertEqual(self.titles(chapter="Chapter 1 - Vienna"),
+                         ["Break", "Stalled", "Opera", "Waltz", "Cellar"])
+        self.assertEqual(self.titles(chapter="Nowhere"),
+                         ["Break", "Stalled"])
+
+    def test_ambiguous_chapter_is_refused(self):
+        for name in ("A", "B"):
+            self.put(f"Chapters/{name}/{name}.md",
+                     '---\ntype: chapter\ntitle: "Rome"\n---\n')
+        with self.assertRaises(ValueError):
+            sq.queue(self.vault, chapter="Rome")
 
     def test_cli_rows(self):
         out = subprocess.run(

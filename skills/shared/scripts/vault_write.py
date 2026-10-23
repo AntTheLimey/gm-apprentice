@@ -2047,7 +2047,11 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
     if args.play_date and not ISO_DATE_RE.fullmatch(args.play_date):
         raise WriteError("--play-date must be YYYY-MM-DD")
     export = read_export(args.export) if args.export else ""
-    want =bare_link(args.chapter) if args.chapter else None
+    # A chapter with sessions but no chapter note is still named by them.
+    found = (find_chapter(batch.vault, args.chapter, missing_ok=True)
+             if args.chapter else None)
+    want = (found[2] if found else
+            bare_link(args.chapter) if args.chapter else None)
 
     def in_chapter(chapter: str | None) -> bool:
         return want is None or (chapter or "").casefold() == want.casefold()
@@ -2088,16 +2092,10 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
             base = f"{dir_m.group(1)}{n:0{width}d}"
             folder = f"{parent}/{base}" if parent else base
     else:
-        chapter_dir = next(
-            (rel.rpartition("/")[0] for rel, text in
-             vl.vault_files(batch.vault)
-             if Path(rel).stem.casefold() == (want or "").casefold()
-             and vl.entity_type(vl.extract_frontmatter(text)) == "chapter"),
-            None)
-        if chapter_dir is None:
-            raise WriteError(f"no chapter note named {want!r}, and no "
+        if found is None:
+            raise WriteError(f"no chapter named {args.chapter!r}, and no "
                              f"earlier session in it to file beside")
-        folder = f"{chapter_dir}/Sessions/Session {n:02d}".lstrip("/")
+        folder = f"{found[1]}/Sessions/Session {n:02d}".lstrip("/")
     stem = f"Session {n:02d} - {title}"
     index_rel, notes_rel = f"{folder}/{stem}.md", f"{folder}/{stem} - Play Notes.md"
 
@@ -2232,31 +2230,24 @@ def notes_of_type(vault: Path, etype: str) -> list[tuple[str, str]]:
             and vl.entity_type(vl.extract_frontmatter(text)) == etype]
 
 
-def find_chapter(vault: Path, raw: str) -> tuple[str, str]:
-    """(chapter note, its folder) for a chapter named by its note's file
-    name, else its `title`, else its folder. Zero or several matches are
-    refused."""
-    want = nfc(bare_link(raw)).casefold()
-    chapters = notes_of_type(vault, "chapter")
-
-    def by_stem(rel: str, _fm: dict) -> str:
-        return Path(rel).stem
-
-    def by_title(_rel: str, fm: dict) -> str:
-        return str(fm.get("title") or "")
-
-    def by_folder(rel: str, _fm: dict) -> str:
-        return rel.rpartition("/")[0].rpartition("/")[2]
-
-    for name_of in (by_stem, by_title, by_folder):
-        hits = [rel for rel, text in chapters
-                if nfc(name_of(rel, vl.extract_frontmatter(text) or {})
-                       ).strip().casefold() == want]
-        if len(hits) > 1:
-            raise WriteError(f"{len(hits)} chapter notes match {raw!r}: "
-                             + ", ".join(hits))
-        if hits:
-            return hits[0], hits[0].rpartition("/")[0]
+def find_chapter(vault: Path, raw: str, *, missing_ok: bool = False
+                 ) -> tuple[str, str, str] | None:
+    """(chapter note, its folder, the name its notes link it by) for a
+    chapter named as `vl.chapters_named` reads it. The link name is the
+    chapter's own key (its folder, as sessions and scenes write it), never
+    the note's file name. Zero matches are refused (or None with
+    `missing_ok`); several always are."""
+    hits = vl.chapters_named(
+        ((rel, vl.extract_frontmatter(text) or {})
+         for rel, text in notes_of_type(vault, "chapter")), raw)
+    if len(hits) > 1:
+        raise WriteError(f"{len(hits)} chapter notes match {raw!r}: "
+                         + ", ".join(rel for rel, _fm in hits))
+    if hits:
+        rel, fm = hits[0]
+        return rel, rel.rpartition("/")[0], vl.chapter_link_name(rel, fm)
+    if missing_ok:
+        return None
     raise WriteError(f"no chapter named {raw!r}")
 
 
@@ -2296,7 +2287,9 @@ def cmd_chapter_new(batch: Batch, args: argparse.Namespace,
 def cmd_scene_new(batch: Batch, args: argparse.Namespace,
                   _text: str) -> None:
     title = clean_name(args.title, "title")
-    chapter_rel, chapter_dir = find_chapter(batch.vault, args.chapter)
+    found = find_chapter(batch.vault, args.chapter)
+    assert found is not None
+    _chapter_rel, chapter_dir, chapter_name = found
     folder = ""
     if args.folder:
         parts = [p for p in args.folder.replace("\\", "/").split("/")
@@ -2311,12 +2304,12 @@ def cmd_scene_new(batch: Batch, args: argparse.Namespace,
            else f"{base}/{title}.md")
     template = template_text(batch.vault, SCENE_TEMPLATES, "scene.md")
     fm = template_frontmatter(template)
-    set_block(fm, "chapter", f'"[[{Path(chapter_rel).stem}]]"')
+    set_block(fm, "chapter", f'"[[{chapter_name}]]"')
     text = "---\n" + "\n".join(fm) + "\n---\n" + template_body(template)
     batch.create(rel, text)
     schema_check(batch, rel, text)
     batch.row("WOULD-CREATE", rel, "",
-              f"scene template, chapter {Path(chapter_rel).stem}"
+              f"scene template, chapter {chapter_name}"
               + (", set piece" if args.set_piece else ""))
 
 
