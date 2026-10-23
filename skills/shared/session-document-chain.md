@@ -23,8 +23,6 @@ documents:
   plan: "[[Session NN - Title - Plan]]"
   play_notes: "[[Session NN - Title - Play Notes]]"
   wrap_up: "[[Chapter_CC_Session_NN_Wrap_Up]]"
-scenes:
-  - "[[Scene Title]]"
 world_evolved: null
 tags: []
 ---
@@ -70,7 +68,7 @@ design. Once the session has a published Wrap-Up (linked by
 withholds the hub body — from the page, search, backlinks and the
 landing — and builds the session page from this frontmatter plus the
 Wrap-Up's recap opening, with a link to the Wrap-Up. It never lists
-`scenes:`: a prepped scene that never ran is a spoiler. Until then the
+scenes, since a prepped scene that never ran is a spoiler. Until then the
 body publishes as written, so a vault that keeps its recaps in the
 hub, with no Wrap-Ups, still has them on its site.
 
@@ -172,9 +170,9 @@ A reconstructed session (vault-ingest) opens with a
 
 | Skill | Reads | Writes | Status Transition |
 |---|---|---|---|
-| session-prep | Previous wrap-ups, vault | Plan file; index `status`, `documents.plan`; adds new scenes to `scenes:`, never removes | planned → prepped |
+| session-prep | Previous wrap-ups, vault | Plan file; index `status`, `documents.plan` | planned → prepped |
 | session-play | Plan file | Play Notes file, session index | prepped → played |
-| session-wrapup | Play Notes file | Wrap-Up file, entities, session index (`scenes:` set to the scenes played) | played → wrap-up |
+| session-wrapup | Play Notes file | Wrap-Up file, entities, session index | played → wrap-up |
 | reconcile | Wrap-Up file | Promotes canon status, session index | wrap-up → reviewed |
 | vault-ingest | Old source material | Play Notes (reconstructed), session index | Then chains to wrapup → reconcile |
 

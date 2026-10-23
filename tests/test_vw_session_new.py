@@ -253,6 +253,22 @@ class SessionNewTests(unittest.TestCase):
         fm = vl.extract_frontmatter(self.read(INDEX))
         self.assertEqual(fm["title"], "The Long Way Round")
 
+    def test_a_scenes_list_never_comes_forward(self):
+        block = 'scenes:\n  - "[[Ashworth Dinner]]"\n'
+        for old in ("scenes: []\n", block):
+            (self.vault / PREV).write_text(
+                PREV_TEXT.replace("scenes: []\n", old), encoding="utf-8")
+            idx = self.vault / INDEX
+            if idx.exists():
+                idx.unlink()
+                (self.vault / NOTES).unlink()
+            code, out = self.new("--write")
+            self.assertEqual(code, 0, out)
+            text = self.read(INDEX)
+            self.assertNotIn("scenes", vl.extract_frontmatter(text))
+            self.assertNotIn("scenes:", vl.raw_frontmatter(text))
+            self.assertIn("route: []\n", text)
+
     def other_chapter(self, play_date):
         other = "Chapters/Chapter 2 - Out/Sessions/Session 12/Session 12 - X.md"
         path = self.vault / other

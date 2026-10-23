@@ -10,8 +10,6 @@ documents:
   plan: "[[Session NN - Title - Plan]]"
   play_notes: "[[Session NN - Title - Play Notes]]"
   wrap_up: "[[Chapter_CC_Session_NN_Wrap_Up]]"
-scenes:
-  - "[[Scene Title]]"
 world_evolved: null
 tags: []
 ---

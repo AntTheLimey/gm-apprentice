@@ -1888,6 +1888,11 @@ def session_indexes(vault: Path) -> list[tuple[str, int, str | None, str]]:
     return out
 
 
+# Keys a new index never takes from the previous one: scenes live in their
+# own notes now, so the index keeps no `scenes:` list.
+NEVER_CARRIED = frozenset({"scenes"})
+
+
 def carried_keys(prev: str, have: set[str], title: str) -> list[str]:
     """The previous index's own top-level keys the template lacks, each
     with the comment lines above it, and empty: `title` gets the new
@@ -1905,7 +1910,7 @@ def carried_keys(prev: str, have: set[str], title: str) -> list[str]:
                 comments = []
             continue
         name, value = m.group(1), strip_comment(m.group(2)).strip()
-        if name not in have:
+        if name not in have and name not in NEVER_CARRIED:
             nxt = lines[i + 1] if i + 1 < len(lines) else ""
             if name == "title":
                 empty = f'"{title}"'
@@ -2097,7 +2102,7 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
     fm = template_frontmatter(template)
     have = {m.group(1) for line in fm if (m := TOP_KEY_RE.match(line))}
     values = {"session_number": str(n), "chapter": chapter_raw,
-              "status": "played", "scenes": "[]"}
+              "status": "played"}
     if campaign_raw:
         values["campaign"] = campaign_raw
     if args.play_date:
