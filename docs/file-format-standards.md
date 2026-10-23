@@ -376,7 +376,13 @@ level, XP, scores, save and skill proficiency, size, Speed, the hit dice
 maximum, the spellcasting ability and slot totals. The lines are those
 of Background, Defences and Proficiencies. The rows are features,
 feats, spells, gear, magic items, coins, attacks and the `### Bonuses`
-rows that the character's items and features give.
+rows that the character's items and features give. It also writes the
+`### Backstory`, `### Appearance` and `### Personality` parts under
+Background, frontmatter `gender` and `portrait` when blank. A story
+part is rewritten only when the player changed it on D&D Beyond since
+the last sync and the vault copy was not edited since; if both changed,
+or a first sync finds text there, sync writes nothing and reports a
+`CHECK`. `hook` is never written by sync.
 
 - **A number with a reason in brackets is kept**: `15 (homebrew plate)`,
   `40 ft (boots of striding)`. A blank cell or a bare value is sync's.
