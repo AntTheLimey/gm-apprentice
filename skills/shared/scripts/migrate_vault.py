@@ -10,6 +10,7 @@ import hashlib
 import json
 import posixpath
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 import relink
@@ -20,9 +21,11 @@ from schema_rules import system_id as _system_id
 from schema_rules import TEMPLATE_NAMES
 from schema_rules import tone_families, without_generated_markers
 from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
-                         player_section_key, wrapup_filename_findings)
+                         configured_site, player_section_key, semver_below,
+                         site_pin, wrapup_filename_findings)
 from vaultlib import (LEGACY_SETTINGS_FILE, SettingsUnavailable, entity_type, extract_frontmatter,
-                      frontmatter_span, parse_version, plugin_version,
+                      delete_key, frontmatter_span, opens_a_block,
+                      parse_version, plugin_version,
                       read_stamp, settings, settings_file, settings_raw,
                       settings_unset, vault_files, vault_layout,
                       wrapup_filename)
@@ -1350,6 +1353,99 @@ def find_open_threads_fold(vault: Path) -> list[Item]:
                  apply, wants="fold or leave", holds_stamp=True)]
 
 
+# --- retired scene/session keys -----------------------------------------------
+
+STAGE_GONE_FROM = "1.47.0"   # the publish tool that no longer reads `stage:`
+
+
+def _frontmatter_lines(text: str) -> list[str] | None:
+    """The frontmatter lines of a note read with its line endings, or None
+    when it has none that can be edited line by line."""
+    lines = text.removeprefix("\ufeff").splitlines(keepends=True)
+    end, error = frontmatter_span(lines)
+    return None if error else lines[1:end]
+
+
+def _notes_with(vault: Path, drop: Callable[[list[str], str], bool]
+                ) -> list[str]:
+    """The notes `drop(frontmatter, rel)` says hold something to remove.
+    `_Templates/` is never walked: the `templates` check refreshes it."""
+    found = []
+    for rel, text in vault_files(vault, newline=""):
+        fm = _frontmatter_lines(text)
+        if fm is not None and drop(fm, rel):
+            found.append(rel)
+    return found
+
+
+def _drop_stage(fm: list[str], _rel: str) -> bool:
+    return (any(line.startswith("stage:") for line in fm)
+            and not opens_a_block(fm, "stage"))
+
+
+def _drop_empty_scenes(fm: list[str], _rel: str) -> bool:
+    return (entity_type(extract_frontmatter("".join(["---\n", *fm, "---\n"]))
+                        or {}) == "session"
+            and any(re.fullmatch(r"scenes:[ \t]*\[[ \t]*\][ \t]*", ln.rstrip("\r\n"))
+                    for ln in fm))
+
+
+def _remove_keys(vault: Path, rels: list[str], key: str,
+                 only: Callable[[list[str]], bool]) -> list[str]:
+    done = []
+    for rel in rels:
+        def change(fm: list[str], _eol: str) -> None:
+            if only(fm):
+                delete_key(fm, key)
+        edit_frontmatter(vault / rel, change)
+        done.append(f"removed {key}: from {rel}")
+    return done
+
+
+def find_stage_keys(vault: Path) -> list[Item]:
+    """1.10.93: a session no longer has a `stage:`. The key goes from any
+    note that has it as a one-line value. An older publish tool still reads
+    `stage: draft` to hide a page, so while the site's tool is below 1.47.0
+    (or not installed) the key stays and the GM is told."""
+    found = _notes_with(vault, _drop_stage)
+    if not found:
+        return []
+    site, _has_config = configured_site(vault)
+    if site is not None:
+        tool = site_pin(site).version
+        if tool is None or semver_below(tool, STAGE_GONE_FROM):
+            return [Item(
+                "stage-keys", PERSON,
+                [f"{len(found)} note(s) still have a stage: key, and the "
+                 f"site's publish tool is {tool or 'not installed'}; it reads "
+                 f"stage: to hide a page until {STAGE_GONE_FROM}. Update it "
+                 f"(update-pin --site {site}) and the update removes the keys"],
+                None, holds_stamp=True)]
+
+    def apply(_value: str | None) -> list[str]:
+        return _remove_keys(vault, found, "stage",
+                            lambda fm: _drop_stage(fm, ""))
+
+    return [Item("stage-keys", WILL,
+                 [f"remove stage: from {rel}" for rel in found], apply)]
+
+
+def find_empty_scenes_lists(vault: Path) -> list[Item]:
+    """1.10.93: a session index no longer lists its scenes in frontmatter.
+    An empty one-line `scenes: []` goes from `type: session` notes; a list
+    with entries stays as the GM wrote it."""
+    found = _notes_with(vault, _drop_empty_scenes)
+    if not found:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        return _remove_keys(vault, found, "scenes",
+                            lambda fm: _drop_empty_scenes(fm, ""))
+
+    return [Item("empty-scenes-lists", WILL,
+                 [f"remove scenes: [] from {rel}" for rel in found], apply)]
+
+
 VAULT_CHECKS: list[Check] = [
     Check("skeleton", None, 3, "the vault skeleton", find_skeleton),
     Check("templates", None, 3, "templates", find_templates,
@@ -1394,4 +1490,8 @@ VAULT_CHECKS: list[Check] = [
     Check("open-threads-fold", "1.10.83", 3,
           "per-session open threads in PC Current Status",
           find_open_threads_fold, choices=("open-threads-fold=",)),
+    Check("stage-keys", "1.10.93", 4, "the retired stage: key",
+          find_stage_keys, asks_site=True),
+    Check("empty-scenes-lists", "1.10.93", 3, "empty scenes: lists",
+          find_empty_scenes_lists),
 ]
