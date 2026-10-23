@@ -284,6 +284,8 @@ def collect(vault: Path) -> tuple[list[Entry], list[ChapterRecord]]:
         if entity_type(fm) != "chapter":
             continue
         key = chapter_key(rel, fm) or stem.casefold()
+        if key in chapters:
+            continue  # a second note for one chapter: the first (by path) stands
         record = chapters.setdefault(key, _new_chapter_record())
         record["stem"] = stem
         status = fm.get("status")

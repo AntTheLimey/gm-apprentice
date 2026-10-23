@@ -18,6 +18,7 @@ Usage:
   vault_check.py VAULT report-stats --file _QA/REPORT.md
   vault_check.py VAULT read-aloud
   vault_check.py VAULT relationships [--folder SUB] [--file REL ...] [--newer-than REL]
+  vault_check.py VAULT chapters      (a chapter with two chapter notes: ASK)
   vault_check.py VAULT sessions      (also: played sessions/Wrap-Ups not under Publishing)
   vault_check.py VAULT gm-leak [--folder SUB] [--fix]
   vault_check.py VAULT gm-leak --renest-excludes [--fix]
@@ -624,6 +625,26 @@ def check_stale_drafts(vault: Path) -> list[str]:
                         f"{created}, now session {now}) — promote "
                         f"to AUTHORITATIVE or delete")
     return rows
+
+
+def check_chapters(vault: Path) -> list[str]:
+    """One chapter, one chapter note. Two or more `type: chapter` notes in
+    the same chapter is an ASK: which to keep is the GM's call, so nothing
+    here merges or picks. `_meta/` holds the schema's own `type: chapter`
+    examples and is not a chapter."""
+    groups: dict[str, list[str]] = {}
+    for rel, text in vault_files(vault):
+        if rel.startswith("_meta/"):
+            continue
+        fm = extract_frontmatter(text) or {}
+        if fm.get("type") != "chapter":
+            continue
+        key = chapter_key(rel, fm)
+        if key:
+            groups.setdefault(key, []).append(rel)
+    return [f"ASK\t{', '.join(sorted(rels))}\tone chapter, {len(rels)} "
+            f"chapter notes: keep one and merge"
+            for rels in groups.values() if len(rels) > 1]
 
 
 def check_changed(vault: Path, since: int) -> list[str]:
@@ -5950,7 +5971,7 @@ def main() -> int:
     ap.add_argument("command", choices=["frontmatter", "names", "index",
                                         "stale-drafts", "changed", "tables",
                                         "timeline", "read-aloud",
-                                        "relationships", "sessions",
+                                        "relationships", "chapters", "sessions",
                                         "gm-leak", "pc-body", "wrapup",
                                         "site-faults", "settings",
                                         "version", "active-pcs", "stories",
@@ -6136,6 +6157,8 @@ def main() -> int:
         emit_rows("relationships",
                   check_relationships(args.vault, args.folder, args.file,
                                       newer_than_rel))
+    if args.command in ("chapters", "all"):
+        emit_rows("chapters", check_chapters(args.vault))
     gm_own("sessions", lambda: check_sessions(args.vault))
     # `all` is a report, so gm-leak never writes — same reasoning as
     # `wrapup` below.
