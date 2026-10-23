@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.93] — 2026-10-22
+
+Scenes, sessions and chapters, part 1: a scene is its own note in its
+chapter, a session no longer lists scenes, and scenes and Plans stay
+off the player site. Publish tool 1.47.0.
+
+### Added
+
+- Scene and chapter templates (`templates/scene.md`,
+  `templates/chapter.md`). A scene has `status` `planned`, `paused`,
+  `played` or `dropped`; a chapter has `planned`, `active` or
+  `complete`. Older words are accepted: `ready` is `planned`,
+  `modified` is `played`, `cut` and `skipped` are `dropped`,
+  `in_progress` and `in-progress` are `active` (#433).
+- `vw scene-new`, `vw chapter-new` and `vw scene-played`: the model
+  proposes, the GM confirms, `vw` writes the note or the status.
+- `scene_queue.py`: the prep queue, built from the scenes in each
+  chapter that are not yet played or dropped.
+- A Plan may point at a scene file (`### [[Scene Name]]`) instead of
+  writing the scene inline; a pointer needs no Situation or Starts it
+  lines.
+- campaign-qa asks when a chapter has two chapter notes.
+- New vaults start with a Chapter 1 note.
+- Two update checks: `stage-keys` removes the retired `stage:` line
+  from sessions, and `empty-scenes-lists` removes an empty `scenes:`
+  list from a session index. A `scenes:` list with entries is left
+  alone.
+
+### Changed
+
+- Scenes (`type: scene`) and Plans (`type: session-plan`) never
+  publish to the player site, whatever the publish list says. The
+  build warns for each one a vault's publish list names.
+- Sessions drop `stage`, and `vw session-new` no longer writes a
+  `scenes:` list.
+- The skills write prepped scenes as scene files in the chapter and
+  mark played scenes with `vw scene-played`.
+
+### Removed
+
+- `session-prep/references/scene-note-template.md`, replaced by the
+  shared scene template.
+
 ## [1.10.92] — 2026-10-20
 
 Batch 8: Connections drawing and data, story-page session links,
