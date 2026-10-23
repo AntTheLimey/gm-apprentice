@@ -23,6 +23,9 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from fractions import Fraction
+from urllib.parse import urlsplit
+
+from dnd_story import FACTS, Story
 
 ABILITIES = ("STR", "DEX", "CON", "INT", "WIS", "CHA")   # stat ids 1..6 in this order
 ABILITY_WORDS = ("strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma")
@@ -173,6 +176,8 @@ class Character:
     attacks: Worked = field(default_factory=_not_worked)
     bonuses: list[Bonus] = field(default_factory=list)
     nameless: dict[str, int] = field(default_factory=dict)    # list name -> entries skipped for having no usable name
+    story: Story = field(default_factory=Story)
+    portrait_url: str = ""              # only ever a www.dndbeyond.com/avatars/ link
 
 
 # --- small accessors: nothing below indexes into something that may not be a dict ----------
@@ -207,6 +212,40 @@ def _int(x: object, default: int = 0) -> int:
 
 def _text(x: object) -> str:
     return x if isinstance(x, str) else ""
+
+
+def _story(d: dict) -> Story:
+    """The player's own words and physical facts, raw but for surrounding whitespace."""
+    notes, traits = _dict(d.get("notes")), _dict(d.get("traits"))
+
+    def words(source: dict, key: str) -> str:
+        return _text(source.get(key)).strip()
+
+    facts: dict[str, str] = {}
+    for label in FACTS:
+        raw = d.get(label.lower())
+        if label in ("Age", "Weight"):
+            n = _num(raw)
+            shown = "" if n is None or n <= 0 else str(n) + (" lb" if label == "Weight" else "")
+        else:
+            shown = _text(raw).strip()
+        if shown:
+            facts[label] = shown
+    return Story(backstory=words(notes, "backstory"), appearance=words(traits, "appearance"), facts=facts,
+                 gender=words(d, "gender"), traits=words(traits, "personalityTraits"),
+                 ideals=words(traits, "ideals"), bonds=words(traits, "bonds"), flaws=words(traits, "flaws"))
+
+
+def _portrait(d: dict) -> str:
+    """The avatar link, if it is a plain https link to D&D Beyond's own avatars."""
+    url = _text(_dict(d.get("decorations")).get("avatarUrl")).strip()
+    try:
+        parts = urlsplit(url)
+        ok = (parts.scheme == "https" and parts.hostname == "www.dndbeyond.com" and parts.netloc == "www.dndbeyond.com"
+              and parts.path.startswith("/avatars/"))
+    except ValueError:
+        ok = False
+    return url if ok else ""
 
 
 def safe_name(text: object) -> str:
@@ -847,6 +886,7 @@ def read(data: object) -> Character:
         gear=gear, magic_items=magic,
         coins=_coins(d),
         speed=_walking_speed(d, everything, scores, rows),
+        story=_story(d), portrait_url=_portrait(d),
     )
     unnamed = [sum(1 for fd in defs if not LEVEL_PREFIX.sub("", safe_name(fd.get("name")))) for defs in (class_defs, traits, feat_defs)]
     character.nameless = {k: n for k, n in (
