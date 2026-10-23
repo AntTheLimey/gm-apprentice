@@ -58,7 +58,7 @@ Arc/structure:
 Investigation:
 - investigation-shape.md → Investigation_Design.md (plan_type: investigation)
 
-Scenes (each a scene file in the chapter's Scenes/):
+Scenes (scene files):
 - temple-approach.md → Temple Approach.md
 - recognition-scene.md → Recognition Scene.md
 [etc.]
@@ -87,7 +87,8 @@ factions, creatures and locations it names.
 A scene goes in with the same script's `scene-new --chapter
 "<chapter>" --title "<Title>"` (dry run first; no chapter note yet:
 `chapter-new --title "<chapter>"` before it), then its design text
-goes in the body unchanged.
+goes in the body unchanged and its `entities`/`locations` get the
+wiki-links it names.
 
 **2c. World fact flush** — Write the world facts accumulated
 through Woven Worldbuilding (Phases 1-3) to their `_World/`

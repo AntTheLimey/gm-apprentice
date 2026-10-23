@@ -223,10 +223,9 @@ arc-spotlight-reference.md; a PC with none is a gap to fill:
 → `## Spotlight Forecast` and `## Touchpoint Plan`
 
 **14. Scenes** — Scenes emerge from the intent and spotlight. Run
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/scene_queue.py"
-<vault> --chapter "<chapter>"`: the chapter's scenes already written
-and not yet played, paused first. Offer them alongside new ideas. The
-propose-before-write gate is the **premise**. For each scene:
+`scene_queue.py <vault> --chapter "<chapter>"` and offer its scenes
+alongside new ideas. The propose-before-write gate is the
+**premise**. For each scene:
 
 1. Pitch the situation and whose want drives it — a lean or 2–3
    options:
@@ -234,12 +233,11 @@ propose-before-write gate is the **premise**. For each scene:
    > where the ledger is the trap? Either way it's Emma's want that
    > opens the door.
 2. The GM shapes it — yes / no / tweak / their own premise.
-3. Write it to its own file with `python3
-   "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" <vault>
-   scene-new --chapter "<chapter>" --title "<title>" --write`, then fill
-   the body; the Plan gets `### [[<title>]]` alone. A queued scene gets
-   only that line. A small beat may stay inline in the skeleton from
-   `references/session-templates.md`: **Situation** and **Starts it**
+3. Write it with `vault_write.py <vault> scene-new --chapter
+   "<chapter>" --title "<title>" --write`, then fill its body and its
+   `entities`/`locations` links; the Plan gets only `### [[<title>]]`,
+   as does a queued scene. A small beat may stay inline in the
+   skeleton from `references/session-templates.md`: **Situation** and **Starts it**
    are required; every other label is optional, and a two-line routing
    scene is finished.
 
