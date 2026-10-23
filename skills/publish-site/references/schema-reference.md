@@ -291,7 +291,7 @@ no published Wrap-Up the index body publishes as written.
 
 `type: scene`
 
-Badges rendered: `scene_type`, `status`
+Prep by type: never published to the player site. No badges.
 
 ---
 

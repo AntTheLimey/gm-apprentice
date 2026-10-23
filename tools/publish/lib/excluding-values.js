@@ -12,8 +12,8 @@ const { SESSION_NOT_YET_RUN } = require('./shared-lists');
 const AUTO_EXCLUDE_STATUS = SESSION_NOT_YET_RUN;
 // source: written as prep.
 const AUTO_EXCLUDE_SOURCE = new Set(['prep']);
-// status, on a scene: it was cut or skipped, so it did not happen.
-const SCENE_SKIP_STATUS = new Set(['cut', 'skipped']);
+// type: prep by kind. A scene and a session Plan never publish to the player site, whatever the publish list says.
+const PREP_TYPES = new Set(['scene', 'session-plan']);
 // canon_status (and its older names), as written: withheld while exclude_drafts is on.
 const DRAFT = 'DRAFT';
 // type: a note the build never writes a page for.
@@ -24,12 +24,12 @@ const lower = (value) => String(value == null ? '' : value).toLowerCase();
 // Per field, whether one value keeps a note off the site. Each is compared the way its rule
 // compares it: a status and a source in any capitals, a canon status as written.
 const EXCLUDES = {
-  status: (v) => AUTO_EXCLUDE_STATUS.has(lower(v)) || SCENE_SKIP_STATUS.has(lower(v)),
+  status: (v) => AUTO_EXCLUDE_STATUS.has(lower(v)),
   source: (v) => AUTO_EXCLUDE_SOURCE.has(lower(v)),
   canon_status: (v) => String(v) === DRAFT,
   source_confidence: (v) => String(v) === DRAFT,
   confidence: (v) => String(v) === DRAFT,
-  type: (v) => NO_PAGE_TYPES.has(String(v)),
+  type: (v) => NO_PAGE_TYPES.has(String(v)) || PREP_TYPES.has(lower(v)),
 };
 
 // The first of `values` that keeps a note off the site when it stands in `field`, as
@@ -50,6 +50,6 @@ function ruleValue(field, value) {
 }
 
 module.exports = {
-  AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_SOURCE, SCENE_SKIP_STATUS, DRAFT, NO_PAGE_TYPES,
+  AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_SOURCE, PREP_TYPES, DRAFT, NO_PAGE_TYPES,
   excludingValue, ruleValue,
 };

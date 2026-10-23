@@ -97,13 +97,12 @@ def relationship_rows(campaign_dir: Path) -> dict[str, list[str]]:
     return found
 
 
-# Content filtering rules — scenes that should be auto-excluded or auto-included
-FILTERING_EXCLUDE_STATUSES = {"cut", "skipped"}
-FILTERING_INCLUDE_STATUSES = {"played", "modified"}
+# Content filtering: a scene is prep by type. It never publishes to the player site,
+# whatever its status or the publish list says.
 
 
 def validate_filtering(campaign_dir: Path) -> int:
-    """Validate that scene statuses map to correct filtering decisions."""
+    """Report every scene as excluded from the player site; returns the error count (always 0)."""
     errors = 0
 
     for filepath in sorted(campaign_dir.rglob("*.md")):
@@ -116,22 +115,11 @@ def validate_filtering(campaign_dir: Path) -> int:
         if frontmatter is None:
             continue
 
-        entity_type = frontmatter.get("type", "")
-        if entity_type != "scene":
+        if frontmatter.get("type", "") != "scene":
             continue
 
-        status = frontmatter.get("status", "")
         rel_path = filepath.relative_to(campaign_dir)
-
-        if status in FILTERING_EXCLUDE_STATUSES:
-            print(f"  EXCLUDE {rel_path} (status: {status})")
-        elif status in FILTERING_INCLUDE_STATUSES:
-            print(f"  INCLUDE {rel_path} (status: {status})")
-        elif status == "planned" or status == "ready":
-            print(f"  EXCLUDE {rel_path} (prep status: {status})")
-        else:
-            print(f"  AMBIGUOUS {rel_path} (status: {status})")
-            errors += 1
+        print(f"  EXCLUDE {rel_path} (prep by type, status: {frontmatter.get('status', '')})")
 
     return errors
 
@@ -329,10 +317,10 @@ def main():
         print(f"Filtering validation: {campaign_dir}")
         errors = validate_filtering(campaign_dir)
         if errors:
-            print(f"\n{errors} ambiguous scene(s) found")
+            print(f"\n{errors} scene(s) with a filtering problem")
             sys.exit(1)
         else:
-            print("\nAll scenes have deterministic filtering rules")
+            print("\nAll scenes are prep by type and stay off the player site")
             sys.exit(0)
     elif mode == "freshness":
         print(f"PC freshness validation: {campaign_dir}")

@@ -48,7 +48,7 @@ describe('a list in a field that can keep a note off the site', () => {
     const got = shapeFrontmatter({ type: 'npc', status: ['alive', 'Planned'] });
     assert.strictEqual(got.frontmatter.status, 'Planned');
     assert.deepStrictEqual(got.wrong, [{ field: 'status', problem: 'is a list where one value is expected; it holds "Planned", which keeps a note off a player site, so it is read as "Planned"' }]);
-    assert.strictEqual(shapeFrontmatter({ status: ['x', 'cut'] }).frontmatter.status, 'cut');
+    assert.strictEqual(shapeFrontmatter({ status: ['x', 'planned'] }).frontmatter.status, 'planned');
     assert.strictEqual(shapeFrontmatter({ status: [['prepped'], 'alive'] }).frontmatter.status, 'prepped');
   });
   it('canon_status and its older names: DRAFT is taken alone', () => {
@@ -73,7 +73,7 @@ describe('a list in a field that can keep a note off the site', () => {
       'People/Listed_Canon.md': npc('canon_status: [AUTHORITATIVE, DRAFT]'),
       'People/Listed_Source.md': npc('source: [table, prep]'),
       'People/Listed_Flags.md': '---\ntype: [npc, world_flags]\n---\n\nBody.\n',
-      'Scenes/Listed_Cut.md': '---\ntype: scene\nstatus: [played, cut]\n---\n\nBody.\n',
+      'Scenes/Listed_Dropped.md': '---\ntype: scene\nstatus: [played, dropped]\n---\n\nBody.\n',
       'People/Plain_List.md': npc('status: [alive, well]'),
       'People/Fine.md': npc('status: alive'),
     }, { extra: '  exclude_drafts: true\n' });
@@ -82,7 +82,7 @@ describe('a list in a field that can keep a note off the site', () => {
     for (const name of ['listed-status.html', 'listed-canon.html', 'listed-source.html', 'listed-flags.html']) {
       assert.ok(!built('people', name), `${name} was published`);
     }
-    assert.ok(!built('scenes', 'listed-cut.html'), 'the cut scene was published');
+    assert.ok(!built('scenes', 'listed-dropped.html'), 'the dropped scene was published');
     assert.ok(built('people', 'plain-list.html') && built('people', 'fine.html'));
     assert.ok(said.some((l) => /Listed_Status\.md — status: is a list where one value is expected; it holds "planned", which keeps a note off a player site/.test(l)), said.join('\n'));
   });

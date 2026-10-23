@@ -97,16 +97,15 @@ campaign-qa's Tone Words check lists the hostile ties the site shows.
 ### Always included
 
 - Played sessions (`status: played | wrap-up | reviewed`)
-- Scenes with `status: played` or `status: modified` (they
-  happened — publish the reality, even if modified from plan)
 - Entity files in standard vault folders
 - `_Campaign/` overview files
 - `_attachments/` images referenced by included entities
 
-### Always excluded (scene-level)
+### Always excluded (by type)
 
-- Scenes with `status: cut` (removed from the session)
-- Scenes with `status: skipped` (didn't happen)
+- Scenes (`type: scene`) and session Plans (`type: session-plan`) are
+  prep, whatever their status. A publish list entry does not change it;
+  the build warns for each one listed. The GM site shows them with a mark.
 
 ### Ambiguous (ask the GM)
 
