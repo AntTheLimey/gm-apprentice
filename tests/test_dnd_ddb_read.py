@@ -735,6 +735,16 @@ def test_portrait_url_only_from_avatars():
     for bad in ("http://www.dndbeyond.com/avatars/1/2.jpg", "https://evil.example/avatars/1/2.jpg",
                 "https://www.dndbeyond.com.evil.example/avatars/1.jpg", "https://www.dndbeyond.com/other/1.jpg",
                 "https://user@www.dndbeyond.com/avatars/1.jpg", "https://www.dndbeyond.com:444/avatars/1.jpg",
-                "//www.dndbeyond.com/avatars/1.jpg", "", None, 5, ["x"]):
+                "//www.dndbeyond.com/avatars/1.jpg", "https://www.dndbeyond.com/avatars/a\nb",
+                "https://www.dndbeyond.com/avatars/a\tb", "https://www.dndbeyond.com/avatars/a b",
+                " https://www.dndbeyond.com/avatars/1.jpg", "https://www.dndbeyond.com/avatars/1.jpg\r",
+                "https://www.dndbeyond.com/avatars/a\x00b", "https://www.dndbeyond.com/avatars/../x.jpg",
+                "https://www.dndbeyond.com/avatars/1/../../x", "",  None, 5, ["x"]):
         assert got(details={"decorations": {"avatarUrl": bad}}).portrait_url == "", bad
     assert got(details={"decorations": []}).portrait_url == ""
+
+
+def test_age_and_weight_must_be_whole_numbers():
+    assert got(details={"age": True, "weight": True}).story.facts == {}
+    assert got(details={"age": 60.0, "weight": 150.0}).story.facts == {"Age": "60", "Weight": "150 lb"}
+    assert got(details={"age": 60.5, "weight": 150.5}).story.facts == {}

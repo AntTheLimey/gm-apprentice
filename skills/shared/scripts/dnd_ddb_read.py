@@ -238,11 +238,13 @@ def _story(d: dict) -> Story:
 
 def _portrait(d: dict) -> str:
     """The avatar link, if it is a plain https link to D&D Beyond's own avatars."""
-    url = _text(_dict(d.get("decorations")).get("avatarUrl")).strip()
+    url = _text(_dict(d.get("decorations")).get("avatarUrl"))
+    if any(ch.isspace() or not ch.isprintable() for ch in url):
+        return ""
     try:
         parts = urlsplit(url)
         ok = (parts.scheme == "https" and parts.hostname == "www.dndbeyond.com" and parts.netloc == "www.dndbeyond.com"
-              and parts.path.startswith("/avatars/"))
+              and parts.path.startswith("/avatars/") and ".." not in parts.path.split("/"))
     except ValueError:
         ok = False
     return url if ok else ""
