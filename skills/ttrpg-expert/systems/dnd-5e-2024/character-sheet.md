@@ -163,7 +163,7 @@ a line of the same name under Notes is never touched. The `**Armour
 Class:**` line follows the armour class while it is the line sync wrote;
 once the GM changes it, it is theirs. After a hand-filled note's first
 sync, tidy list lines that now repeat. Sync writes
-names, numbers, fixed words, a defence's short condition and the story
+names, numbers, fixed words, a defence's short condition and the Background
 parts, never what the player tracks in play, Companions or `hook`.
 
 Not in D&D Beyond's data, so enter by hand: a subclass's

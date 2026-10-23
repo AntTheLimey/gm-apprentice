@@ -112,7 +112,7 @@ test('story tab: no bold title line gives "{Name}\'s backstory"; no lines but a 
 test('story tab: no parts and no story is one muted line; a blank template note is not content', () => {
   const blank = [
     '## Background', '', '**Species:** {Species name}', '',
-    '### Backstory', '', '{The character\'s story before the campaign, as the player tells it}', '',
+    '### Backstory', '', '{The character\'s backstory, as the player tells it}', '',
     '### Appearance', '', '{How they look}', '',
     '**Age:** — · **Height:** — · **Weight:** — · **Eyes:** — · **Hair:** — · **Skin:** — · **Faith:** —', '',
     '### Personality', '', '- **Traits:** —', '- **Ideals:** —', '- **Bonds:** —', '- **Flaws:** —', '',

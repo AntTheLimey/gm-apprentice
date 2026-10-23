@@ -108,7 +108,7 @@ createdSession: ""
 
 ### Backstory
 
-{The character's story before the campaign, as the player tells it}
+{The character's backstory, as the player tells it}
 
 ### Appearance
 

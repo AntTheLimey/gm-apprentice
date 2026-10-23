@@ -1356,7 +1356,7 @@ def find_open_threads_fold(vault: Path) -> list[Item]:
 OLD_BACKSTORY = re.compile(r"^\*\*Backstory & Personality:\*\*[ \t]*(.*?)[ \t]*$")
 OLD_APPEARANCE = re.compile(r"^\*\*Appearance:\*\*[ \t]*(.*?)[ \t]*$")
 STOPS_VALUE = re.compile(r"\*\*[^*\n]+:\*\*|#{1,6}\s")
-BACKSTORY_HINT = "{The character's story before the campaign, as the player tells it}"
+BACKSTORY_HINT = "{The character's backstory, as the player tells it}"
 APPEARANCE_HINT = "{How they look}"
 FACTS_LINE = " \u00b7 ".join(f"**{label}:** \u2014" for label in (
     "Age", "Height", "Weight", "Eyes", "Hair", "Skin", "Faith"))
