@@ -15,6 +15,12 @@
     vault_write.py VAULT session-new --number N --title T [--play-date D]
                                [--chapter C] [--export PATH] [--write]
     vault_write.py VAULT resolve --export PATH                (read-only)
+    vault_write.py VAULT chapter-new --title T [--sort-order N]
+                               [--status S] [--write]
+    vault_write.py VAULT scene-new --chapter C --title T [--set-piece]
+                               [--folder SUB] [--write]
+    vault_write.py VAULT scene-played --scene T --session S [--paused]
+                               [--write]
     vault_write.py VAULT promote-plan DRAFT --to PLAN --plan-type T
                                [--chapter C] [--leads-to PLAN]... [--write]
 
@@ -2205,6 +2211,165 @@ def cmd_promote_plan(batch: Batch, args: argparse.Namespace,
               f"from {draft}: body copied as written ({len(body.encode())} "
               f"bytes)")
 
+# --- chapter-new, scene-new and scene-played ---------------------------------
+
+CHAPTER_TEMPLATES = ("_Template_Chapter.md",)
+SCENE_TEMPLATES = ("_Template_Scene.md",)
+
+
+def clean_name(raw: str, what: str) -> str:
+    name = " ".join(raw.split())
+    if not name or BAD_NAME_RE.search(name):
+        raise WriteError(f"{what} {raw!r} cannot be a file name "
+                         f"(none of \\ / : * ? \" < > | # ^ [ ])")
+    return name
+
+
+def notes_of_type(vault: Path, etype: str) -> list[tuple[str, str]]:
+    """(rel, text) of every live note whose type is `etype`."""
+    return [(rel, text) for rel, text in vl.vault_files(vault)
+            if not is_record(rel)
+            and vl.entity_type(vl.extract_frontmatter(text)) == etype]
+
+
+def find_chapter(vault: Path, raw: str) -> tuple[str, str]:
+    """(chapter note, its folder) for a chapter named by its note's file
+    name, else its `title`, else its folder. Zero or several matches are
+    refused."""
+    want = nfc(bare_link(raw)).casefold()
+    chapters = notes_of_type(vault, "chapter")
+
+    def by_stem(rel: str, _fm: dict) -> str:
+        return Path(rel).stem
+
+    def by_title(_rel: str, fm: dict) -> str:
+        return str(fm.get("title") or "")
+
+    def by_folder(rel: str, _fm: dict) -> str:
+        return rel.rpartition("/")[0].rpartition("/")[2]
+
+    for name_of in (by_stem, by_title, by_folder):
+        hits = [rel for rel, text in chapters
+                if nfc(name_of(rel, vl.extract_frontmatter(text) or {})
+                       ).strip().casefold() == want]
+        if len(hits) > 1:
+            raise WriteError(f"{len(hits)} chapter notes match {raw!r}: "
+                             + ", ".join(hits))
+        if hits:
+            return hits[0], hits[0].rpartition("/")[0]
+    raise WriteError(f"no chapter named {raw!r}")
+
+
+def cmd_chapter_new(batch: Batch, args: argparse.Namespace,
+                    _text: str) -> None:
+    title = clean_name(args.title, "title")
+    if args.status not in schema_rules.CHAPTER_STATUS:
+        raise WriteError(f"--status must be one of "
+                         f"{', '.join(schema_rules.CHAPTER_STATUS)}")
+    want = title.casefold()
+    orders: list[float] = []
+    for rel, text in notes_of_type(batch.vault, "chapter"):
+        old = vl.extract_frontmatter(text) or {}
+        if want in (Path(rel).stem.casefold(),
+                    str(old.get("title") or "").casefold()):
+            raise WriteError(f"chapter {title!r} already exists: {rel}")
+        try:
+            orders.append(float(str(old.get("sort_order"))))
+        except (TypeError, ValueError):
+            pass
+    order = (args.sort_order if args.sort_order is not None
+             else (max(orders) + 1 if orders else 1))
+    order_text = str(int(order)) if float(order).is_integer() else str(order)
+    rel = f"Chapters/{title}/{title}.md"
+    template = template_text(batch.vault, CHAPTER_TEMPLATES, "chapter.md")
+    fm = template_frontmatter(template)
+    set_block(fm, "title", f'"{title}"')
+    set_block(fm, "sort_order", order_text)
+    set_block(fm, "status", args.status)
+    text = "---\n" + "\n".join(fm) + "\n---\n" + template_body(template)
+    batch.create(rel, text)
+    schema_check(batch, rel, text)
+    batch.row("WOULD-CREATE", rel, "",
+              f"chapter template, sort_order {order_text}")
+
+
+def cmd_scene_new(batch: Batch, args: argparse.Namespace,
+                  _text: str) -> None:
+    title = clean_name(args.title, "title")
+    chapter_rel, chapter_dir = find_chapter(batch.vault, args.chapter)
+    folder = ""
+    if args.folder:
+        parts = [p for p in args.folder.replace("\\", "/").split("/")
+                 if p.strip()]
+        if not parts or any(p in (".", "..") for p in parts) \
+                or args.folder.startswith(("/", "\\")):
+            raise WriteError(f"--folder {args.folder!r} must be a "
+                             f"sub-folder of the chapter")
+        folder = "/" + "/".join(parts)
+    base = f"{chapter_dir}{folder}/Scenes"
+    rel = (f"{base}/{title}/{title}.md" if args.set_piece
+           else f"{base}/{title}.md")
+    template = template_text(batch.vault, SCENE_TEMPLATES, "scene.md")
+    fm = template_frontmatter(template)
+    set_block(fm, "chapter", f'"[[{Path(chapter_rel).stem}]]"')
+    text = "---\n" + "\n".join(fm) + "\n---\n" + template_body(template)
+    batch.create(rel, text)
+    schema_check(batch, rel, text)
+    batch.row("WOULD-CREATE", rel, "",
+              f"scene template, chapter {Path(chapter_rel).stem}"
+              + (", set piece" if args.set_piece else ""))
+
+
+def cmd_scene_played(batch: Batch, args: argparse.Namespace,
+                     _text: str) -> None:
+    session = clean_name(bare_link(args.session), "--session")
+    sessions = [rel for rel in batch.with_stem(session)
+                if not is_record(rel)
+                and vl.entity_type(vl.extract_frontmatter(batch.read(rel))
+                                   ) == "session"]
+    if len(sessions) != 1:
+        raise WriteError(
+            f"no session note named {session!r}" if not sessions else
+            f"{len(sessions)} session notes named {session!r}: "
+            + ", ".join(sessions))
+    want = nfc(bare_link(args.scene)).casefold()
+    scenes = [rel for rel, _t in notes_of_type(batch.vault, "scene")
+              if nfc(Path(rel).stem).casefold() == want]
+    if len(scenes) != 1:
+        raise WriteError(
+            f"no scene note named {args.scene!r}" if not scenes else
+            f"{len(scenes)} scene notes named {args.scene!r}: "
+            + ", ".join(scenes))
+    rel = scenes[0]
+    text = batch.read(rel)
+    lines = text.splitlines(keepends=True)
+    end, error = vl.frontmatter_span(lines)
+    if error:
+        raise WriteError(f"{rel}: {error}")
+    eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
+    fm = [ln.rstrip("\r\n") for ln in lines[1:end]]
+    have = vl.extract_frontmatter(text) or {}
+    played = have.get("played_in") or []
+    if not isinstance(played, list):
+        played = [played]
+    links = [vl.wikilink_target(str(x)) or bare_link(str(x))
+             for x in played]
+    new_status = "paused" if args.paused else "played"
+    added = nfc(session).casefold() not in {
+        nfc(x).casefold() for x in links}
+    if added:
+        links.append(session)
+    set_block(fm, "status", new_status)
+    if added or "played_in" not in have:
+        set_block(fm, "played_in", *link_list(links))
+    new = ("---" + eol + eol.join(fm) + eol + "---" + eol
+           + "".join(lines[end + 1:]))
+    batch.put(rel, new)
+    batch.row("WOULD-ADD", rel, "",
+              f"status {new_status}; played_in "
+              + (f"+ [[{session}]]" if added else "already lists "
+                 f"[[{session}]]"))
+
 
 # --- CLI ---------------------------------------------------------------------
 
@@ -2316,6 +2481,39 @@ def build_parser() -> argparse.ArgumentParser:
     pp.add_argument("--leads-to", dest="leads_to", action="append",
                     help="a plan this one leads to (repeatable)")
     pp.add_argument("--write", action="store_true")
+    ch = sub.add_parser(
+        "chapter-new", help="file a new chapter note",
+        description="Creates Chapters/<title>/<title>.md from the chapter "
+                    "template. Refused when a chapter of that title exists.")
+    ch.add_argument("--title", required=True)
+    ch.add_argument("--sort-order", dest="sort_order", type=float,
+                    help="default: one after the highest chapter")
+    ch.add_argument("--status", default="planned",
+                    help="planned | active | complete (default planned)")
+    ch.add_argument("--write", action="store_true")
+    sc = sub.add_parser(
+        "scene-new", help="file a new scene under its chapter",
+        formatter_class=raw, description=(
+            "Creates <chapter folder>[/<folder>]/Scenes/<title>.md from the\n"
+            "scene template, or with --set-piece\n"
+            "Scenes/<title>/<title>.md. --chapter is the chapter note's\n"
+            "name, its title or its folder; none or several: refused."))
+    sc.add_argument("--chapter", required=True)
+    sc.add_argument("--title", required=True)
+    sc.add_argument("--set-piece", dest="set_piece", action="store_true",
+                    help="give the scene a folder of its own")
+    sc.add_argument("--folder", help="a sub-folder of the chapter, e.g. "
+                    "Side_Adventures/The Audition")
+    sc.add_argument("--write", action="store_true")
+    sp = sub.add_parser(
+        "scene-played", help="mark a scene played and link its session",
+        description="Sets status to played (or paused) and adds the "
+                    "session to played_in once. No other field changes.")
+    sp.add_argument("--scene", required=True, help="the scene note's name")
+    sp.add_argument("--session", required=True,
+                    help="the session note's name")
+    sp.add_argument("--paused", action="store_true")
+    sp.add_argument("--write", action="store_true")
     return ap
 
 
@@ -2328,9 +2526,13 @@ COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "timeline": cmd_timeline,
                                 "session-new": cmd_session_new,
                                 "resolve": cmd_resolve,
-                                "promote-plan": cmd_promote_plan}
+                                "promote-plan": cmd_promote_plan,
+                                "chapter-new": cmd_chapter_new,
+                                "scene-new": cmd_scene_new,
+                                "scene-played": cmd_scene_played}
 NO_STDIN = frozenset({"wrapup-new", "session-new", "resolve",
-                      "promote-plan"})
+                      "promote-plan", "chapter-new", "scene-new",
+                      "scene-played"})
 
 
 def read_stdin() -> str:
