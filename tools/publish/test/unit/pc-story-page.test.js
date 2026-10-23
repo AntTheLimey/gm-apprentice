@@ -134,8 +134,9 @@ test('sheet tab teaser and no Background accordion', () => {
   const teaser = sheet.split('<section class="pc-story-teaser"')[1].split('</section>')[0];
   assert.ok(sheet.indexOf('pc-story-teaser') < sheet.indexOf('SHEET'), 'the teaser comes first');
   assert.match(teaser, /From the backstory/);
-  assert.match(teaser, /For a hundred years Ilse kept the index\./);
-  assert.doesNotMatch(teaser, /Nobody asked|Archivist/);
+  // No hook: the pull quote is the first sentence, so the teaser goes on from it.
+  assert.match(teaser, /<p class="pc-story-teaser-text">Nobody asked what she thought\. She thought a great deal\.<\/p>/);
+  assert.doesNotMatch(teaser, /For a hundred years|Archivist/);
   assert.match(teaser, /onclick="switchTab\('story'\);\s*return false;?"[^>]*>Read on &rarr;<\/a>/);
   assert.doesNotMatch(html, /id="background"/);
   assert.doesNotMatch(html, /accordion-header[^>]*>Background</);
@@ -146,6 +147,32 @@ test('sheet tab teaser and no Background accordion', () => {
   assert.match(html, /id="notes"/);
 });
 
+test('teaser: with a hook it opens the backstory; a long one is cut near 280 at a word; one sentence has none', () => {
+  const teaserOf = (html) => (panel(html, 'sheet').split('pc-story-teaser-text">')[1] || '').split('</p>')[0];
+  // A hook: the pull quote says something else, so the teaser is the first sentence.
+  assert.equal(teaserOf(render(NEW_LAYOUT, {}, { hook: 'She would like a discovery of her own.' })), 'For a hundred years Ilse kept the index.');
+  // No hook, a long backstory: the text after the first sentence, cut at a word with an ellipsis.
+  const words = Array.from({ length: 80 }, (_, i) => `word${i}`).join(' ');
+  const long = teaserOf(render(NEW_LAYOUT.replace('Nobody asked what she thought.', `Then ${words}.`)));
+  assert.ok(long.startsWith('Then word0 word1'), long);
+  assert.ok(long.endsWith('…') && long.length <= 280 && long.length > 250, `${long.length}: ${long}`);
+  assert.match(long, / word\d+…$/);
+  // No hook, a one-sentence backstory: no teaser.
+  const one = NEW_LAYOUT.replace(' Nobody asked what she thought.', '').replace('She thought a great deal.\n\n', '');
+  assert.doesNotMatch(render(one), /pc-story-teaser/);
+  assert.match(render(one, {}, { hook: 'A hook.' }), /pc-story-teaser-text">For a hundred years Ilse kept the index\.</);
+});
+
+test('other Background sub-sections stay on the page', () => {
+  const md = NEW_LAYOUT.replace('### Personality', '### Allies\n\nALLIES-UNIQUE the ferryman at Low Crossing.\n\n### Personality');
+  const html = render(md, { systemSheetHtml: '<div class="dnd5e-sheet">SHEET</div>' });
+  const rest = panel(html, 'sheet').split('<section class="pc-background-rest">')[1].split('</section>')[0];
+  assert.match(rest, /<h3[^>]*>Allies<\/h3>\s*<p>ALLIES-UNIQUE the ferryman at Low Crossing\.<\/p>/);
+  assert.match(rest, /<strong>Alignment:<\/strong> Lawful Neutral/);
+  assert.doesNotMatch(rest, /Backstory|Appearance|Personality|Tall and narrow|Corrects dates/);
+  assert.doesNotMatch(panel(html, 'story'), /ALLIES-UNIQUE/);
+});
+
 test('old layout note shows its backstory on the Story tab', () => {
   const html = render(OLD_LAYOUT, { systemSheetHtml: '<div class="dnd5e-sheet">SHEET</div>' });
   const story = panel(html, 'story');
@@ -154,7 +181,7 @@ test('old layout note shows its backstory on the Story tab', () => {
   assert.match(story, /class="pc-story-box pc-look"[\s\S]*Ink-stained cuffs/);
   assert.doesNotMatch(story, /pc-drives/);
   const sheet = panel(html, 'sheet');
-  assert.match(sheet, /pc-story-teaser[\s\S]*Ilse catalogued other people’s discoveries for a century\.</);
+  assert.match(sheet, /pc-story-teaser-text">Then she left\.</);
   assert.doesNotMatch(html, /id="background"/);
   assert.match(sheet, /<strong>Alignment:<\/strong> Lawful Neutral/);
   assert.doesNotMatch(sheet, /Backstory &amp; Personality|<strong>Appearance:/);
@@ -188,6 +215,10 @@ test('hook order', () => {
   assert.equal(pcEpithetText(pcPage('## Background\n\n**Species:** Elf\n', traits)), 'meticulous, impatient');
   // 4. the body's first sentence.
   assert.equal(pcEpithetText(pcPage('A quiet man from the coast.\n\n## Notes\n\nx\n')), 'A quiet man from the coast.');
+  // A source that still holds a gm-only block (no published text) never gives it up as the hook.
+  const raw = '## Background\n\n### Backstory\n\n<!-- gm-only -->\nGM-HOOK-SECRET is the heir.\n<!-- /gm-only -->\n\nBorn at sea.\n';
+  assert.equal(pcEpithetText(pcPage(raw)), 'Born at sea.');
+  assert.equal(pcEpithetText(pcPage('<!-- gm-only -->\nGM-HOOK-SECRET opens the body.\n<!-- /gm-only -->\n\nA quiet man.\n')), 'A quiet man.');
   // A comment in the backstory is never the hook.
   assert.equal(pcEpithetText(pcPage('## Background\n\n### Backstory\n\n<!-- a note to self -->\n\nBorn at sea.\n')), 'Born at sea.');
 });

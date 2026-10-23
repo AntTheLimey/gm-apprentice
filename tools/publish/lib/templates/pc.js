@@ -334,19 +334,38 @@ ${lines.map(l => `    <li><span class="pc-sofar-when">Session ${escapeHtml(Strin
   return blocks.length ? blocks.join('\n') : `<p class="text-muted pc-story-none">${name}'s story starts at the table.</p>`;
 }
 
-// The sheet tab's teaser: the backstory's first sentence, and a way to the Story tab.
-function storyTeaserHtml(parts) {
+const TEASER_CHARS = 280;
+
+// The sheet tab's teaser, and a way to the Story tab. With a `hook` the pull quote says
+// something else, so the teaser opens the backstory (its first sentence). Without one the
+// pull quote is that first sentence: the teaser goes on from it, cut at a word near
+// TEASER_CHARS, and a one-sentence backstory has no teaser.
+function storyTeaserHtml(parts, hasHook) {
   if (!parts || !parts.backstoryHtml || !parts.firstSentence) return '';
+  let text = parts.firstSentence;
+  if (!hasHook) {
+    const flat = cellText(splitTitle(asBlock(parts.backstoryHtml)).proseHtml.replace(/<\/(p|li|blockquote)>/gi, ' ')).replace(/\s+/g, ' ').trim();
+    const said = parts.firstSentence.replace(/…$/, '');
+    const after = flat.startsWith(said) ? flat.slice(said.length).trim() : '';
+    if (!after) return '';
+    if (after.length <= TEASER_CHARS) text = after;
+    else {
+      const room = after.slice(0, TEASER_CHARS - 1);
+      const space = room.lastIndexOf(' ');
+      text = `${(space > 0 ? room.slice(0, space) : room).replace(/[\s,;:.!?-]+$/, '')}…`;
+    }
+  }
   return `<section class="pc-story-teaser">
   <div>
     <p class="pc-story-teaser-label">From the backstory</p>
-    <p class="pc-story-teaser-text">${escapeHtml(parts.firstSentence)}</p>
+    <p class="pc-story-teaser-text">${escapeHtml(text)}</p>
   </div>
   <a href="#story" onclick="switchTab('story'); return false;">Read on &rarr;</a>
 </section>`;
 }
 
 // Bold-field labels a header already shows, per sheet family (the D&D and PF2e sheet headers).
+// Any other family's header shows none of them: all its Background lines go to the rest block.
 const HEADER_LABELS = {
   dnd: [/^Class(?:es)?(?:\s*\/\s*Subclass(?:es)?)?$/i, /^(?:Species|Race)$/i, /^Background$/i],
   pf2e: [/^Class(?:es)?(?:\s*\/\s*Subclass(?:es)?)?$/i, /^Ancestry$/i, /^Heritage$/i, /^Background$/i],
@@ -359,8 +378,12 @@ const IDENTITY_LABELS = {
 // The story's own fields, which the Story tab shows.
 const STORY_LABELS = [/^Backstory\s*&\s*Personality$/i, /^Appearance$/i];
 
+// The Background sub-sections the Story tab reads.
+const STORY_SUBSECTIONS = new Set(['backstory', 'appearance', 'personality']);
+
 // What the Background section holds besides its story once it is no accordion: the lines
-// above its sub-headings that neither the Story tab nor the page header shows. '' when none.
+// above its sub-headings that neither the Story tab nor the page header shows, and every
+// sub-section the Story tab does not read (`### Allies`), heading and all. '' when none.
 function backgroundRest(section, shown) {
   const drop = [...STORY_LABELS, ...shown];
   const rest = aboveSubheadings(section.html).replace(/<p>([\s\S]*?)<\/p>\s*/gi, (p, inner) => {
@@ -368,7 +391,14 @@ function backgroundRest(section, shown) {
     if (m && (drop.some(re => re.test(cellText(m[1]))) || !filled(cellText(m[2])) || /^\s*[–—-]\s*$/.test(cellText(m[2])))) return '';
     return isPlaceholder(cellText(inner)) || !cellText(inner) ? '' : p;
   }).trim();
-  return rest ? `<section class="pc-background-rest">\n${rest}\n</section>` : '';
+  const others = [];
+  const re = /(<h3[^>]*>([\s\S]*?)<\/h3>)([\s\S]*?)(?=<h3[ >]|$)/gi;
+  let m;
+  while ((m = re.exec(section.html || '')) !== null) {
+    if (!STORY_SUBSECTIONS.has(cellText(m[2]).toLowerCase())) others.push(`${m[1]}${m[3]}`.trim());
+  }
+  const all = [rest, ...others].filter(Boolean).join('\n');
+  return all ? `<section class="pc-background-rest">\n${all}\n</section>` : '';
 }
 
 function pcTemplate(page, processedContent, sections, navFor, config, imageMap, storyHtml, context) {
@@ -515,7 +545,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     ? ((context || {}).identity || []).map(([label]) => IDENTITY_LABELS[label]).filter(Boolean)
     : (systemHtml && HEADER_LABELS[family]) || [];
   const restHtml = backgroundSection ? backgroundRest(backgroundSection, shownLabels) : '';
-  const teaser = storyTeaserHtml(parts);
+  const teaser = storyTeaserHtml(parts, typeof fm.hook === 'string' && fm.hook.trim() !== '');
   const lead = teaser ? `${teaser}\n` : '';
   const rest = restHtml ? `${restHtml}\n` : '';
 

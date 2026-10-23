@@ -53,5 +53,8 @@ describe('story parts never carry gm-only text', () => {
     }
     const gm = site.gm.read(...pcRel);
     for (const secret of secrets) assert.match(gm, secret);
+    // The GM page shows the hidden line marked in the story, never unmarked as the pull quote.
+    const quote = gm.split('class="pull-quote">')[1].split('</div>')[0];
+    assert.equal(quote, 'For a hundred years Ilse kept the index.');
   });
 });

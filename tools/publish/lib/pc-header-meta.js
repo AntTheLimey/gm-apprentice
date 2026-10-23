@@ -2,7 +2,7 @@
 // The badges a PC page's header shows after the player: the note's `display_meta` list,
 // else the site's `header_facts`. The one definition: the page header (templates/pc.js) and the link
 // preview card (previews.js) both read it, so they cannot disagree.
-const { publishedSource, plainMetaValue, plainRefValue, extractSections, NOTE_NAME_FIELDS } = require('./processor');
+const { publishedSource, plainMetaValue, plainRefValue, extractSections, stripGmOnly, NOTE_NAME_FIELDS } = require('./processor');
 const { storyParts } = require('./pc-story');
 const { excerptFromMarkdown } = require('./excerpt');
 const { labelsForLinks } = require('./wikilink');
@@ -43,8 +43,10 @@ function pcEpithetText(page) {
   const fm = page.frontmatter || {};
   const hook = labelsForLinks(typeof fm.hook === 'string' ? fm.hook : '').trim();
   if (hook) return hook;
-  const source = publishedSource(page);
-  // A comment is an authoring note, never story (the renderer would print it as text).
+  // A gm-only block goes whole: a source that still holds one (the note itself, when the
+  // build gave no published text) must not give it up unmarked.
+  const source = stripGmOnly(publishedSource(page));
+  // Any other comment is an authoring note, never story (the renderer would print it as text).
   const parts = storyParts(extractSections(source.replace(/<!--[\s\S]*?(?:-->|$)/g, '')));
   const opening = parts ? labelsForLinks(parts.firstSentence).trim() : '';
   if (opening) return opening;
