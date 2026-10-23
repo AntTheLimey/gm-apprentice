@@ -159,6 +159,49 @@ class PlayBriefFunctionTests(unittest.TestCase):
         self.assertIn("(no ## Session End Objectives)", brief)
 
 
+class PointerBlockBriefTests(unittest.TestCase):
+    """A `### [[Scene]]` block in the Plan is followed by that scene
+    note's body: Paused section first, GM-only parts left out."""
+
+    PLAN = ("---\ntype: session-plan\nsession: 4\n---\n\n"
+            "## Session Intent\n\nA dinner.\n\n## Planned Scenes\n\n"
+            "### [[Ashworth Dinner]]\n\n### [[Missing Scene]]\n\n"
+            "### Scene 3: The Docks\n**Situation:** Rain.\n")
+    SCENE = ("---\ntype: scene\nstatus: paused\n---\n\n"
+             "## Paused\n\nThey left at the soup course.\n\n"
+             "**Situation:** The table is laid for eleven.\n\n"
+             "**Starts it:** Lady Ashworth taps her glass.\n\n"
+             "<!-- gm-only -->\n\n## GM Notes\n\nThe soup is poisoned.\n\n"
+             "<!-- /gm-only -->\n")
+
+    def setUp(self):
+        self.files = [
+            ("Chapters/C/Scenes/Ashworth Dinner.md", self.SCENE,
+             sc.extract_frontmatter(self.SCENE) or {})]
+        self.brief = sc.play_brief(self.files, "P.md", self.PLAN)
+
+    def test_scene_body_follows_its_pointer(self):
+        self.assertIn("### [[Ashworth Dinner]]", self.brief)
+        self.assertIn("The table is laid for eleven.", self.brief)
+        self.assertIn("Lady Ashworth taps her glass.", self.brief)
+
+    def test_paused_section_comes_first(self):
+        self.assertLess(self.brief.index("They left at the soup course."),
+                        self.brief.index("The table is laid for eleven."))
+
+    def test_gm_only_notes_are_left_out(self):
+        self.assertNotIn("poisoned", self.brief)
+        self.assertNotIn("type: scene", self.brief)
+
+    def test_unresolved_pointer_is_named_not_dropped(self):
+        self.assertIn("### [[Missing Scene]]", self.brief)
+        self.assertIn("(no scene note named Missing Scene)", self.brief)
+
+    def test_inline_scene_is_unchanged(self):
+        self.assertIn("### Scene 3: The Docks\n**Situation:** Rain.",
+                      self.brief)
+
+
 class FindPlanFallbackTests(unittest.TestCase):
     """M15: `_find_plan`'s `documents.plan` fallback — when no
     `type: session-plan` file directly names the session, the session

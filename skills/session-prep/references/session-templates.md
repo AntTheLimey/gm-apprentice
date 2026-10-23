@@ -160,6 +160,10 @@ from *this* PC. A scene that cannot answer this is not finished.
 ### Scene 2: [Title]
 [Same structure]
 
+### [[Scene Note Title]]
+[A scene already written as a scene note: this heading alone, no labels.
+The play brief pulls the note in.]
+
 ## Contingency Scenes
 
 Scenes that trigger on a player choice or a clock. Trigger and

@@ -80,7 +80,7 @@ from vaultlib import (GM_MARKER_RE, is_out_of_play, out_of_play,  # noqa: F401
                       report_unreadable_settings, setting_or_builtin,
                       SKIP_DIRS, WRAP_UP_TYPES, body_of, entity_type,
                       fenced_headings, h3_blocks, nested_mapping,
-                      raw_frontmatter, section,
+                      normalize, raw_frontmatter, section,
                       session_ref_number, word_count)
 from vaultlib import vault_files as _vault_files
 
@@ -347,6 +347,41 @@ def _norm_thread(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().casefold()
 
 
+_POINTER_RE = re.compile(r"\[\[([^\[\]|#]+)(?:[#|][^\[\]]*)?\]\]")
+
+
+def _pointer_target(title: str) -> str | None:
+    """The note a `### [[Note]]` Plan heading points at, else None."""
+    m = _POINTER_RE.fullmatch(title.strip())
+    return m.group(1).strip() if m else None
+
+
+def _scene_note_text(files, name: str) -> str:
+    """A scene note as the table needs it: `## Paused` first when there
+    is one, no frontmatter, no gm-only parts."""
+    want = normalize(name)
+    for rel, text, fm in files:
+        if (entity_type(fm) != "scene"
+                or normalize(Path(rel).stem) != want):
+            continue
+        kept: list[str] = []
+        hidden = 0
+        for line in body_of(text).splitlines():
+            m = GM_MARKER_RE.fullmatch(line.strip())
+            if m:
+                hidden = max(0, hidden + (-1 if m.group(1) else 1))
+            elif not hidden:
+                kept.append(line)
+        body = "\n".join(kept).strip()
+        paused = section(body, "Paused")
+        if paused:
+            body = re.sub(r"(?ms)^## Paused[ \t]*\n.*?(?=^## |\Z)", "",
+                          body).strip()
+            body = f"## Paused\n{paused.strip()}\n\n{body}".strip()
+        return body or f"(scene note {name} is empty)"
+    return f"(no scene note named {name})"
+
+
 def play_brief(files, plan_rel: str, plan_text: str) -> str:
     """The Play Brief for one Session Plan: scene titles, their full
     bodies minus the Entities link list — the enumerated skeleton is
@@ -356,11 +391,11 @@ def play_brief(files, plan_rel: str, plan_text: str) -> str:
     need them and the Keeper is already holding the full Plan if they
     do.
 
-    `files` is accepted for interface symmetry with `thread_report` but
-    unused: a Session Plan's own `session:` frontmatter is always enough
-    to name it.
+    A block titled by one wikilink (`### [[Ashworth Dinner]]`) points at a
+    scene note: its body follows, `## Paused` first, GM-only parts left
+    out. `files` is where those notes are found; the Plan's own `session:`
+    frontmatter is always enough to name it.
     """
-    del files
     fm = extract_frontmatter(plan_text) or {}
     n = session_ref_number(fm)
     parts = [f"===== Play Brief — Session {n if n is not None else '?'} =====\n"
@@ -384,6 +419,9 @@ def play_brief(files, plan_rel: str, plan_text: str) -> str:
                 reduced = _remove_inline_label_line(
                     scene_body, "Entities").strip()
             piece = f"### {title}\n{reduced}" if reduced else f"### {title}"
+            pointed = _pointer_target(title)
+            if pointed:
+                piece += "\n\n" + _scene_note_text(files, pointed)
             rendered.append(piece)
         return f"## {section_title}\n" + "\n\n".join(rendered)
 

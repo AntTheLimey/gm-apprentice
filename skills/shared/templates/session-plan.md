@@ -105,7 +105,9 @@ from *this* PC.
 <!-- Add Scene 2, Scene 3 ... with the same structure. A routing or hub
      scene (a menu of where the party is and what is available, not a
      scene) needs neither required label. Mark it with "(routing)" or
-     "(hub)" in its title, `Scene 0`, or `**Type:** transition`. -->
+     "(hub)" in its title, `Scene 0`, or `**Type:** transition`.
+     A scene already written as a scene note is a pointer: the heading
+     `### [[Scene Note Title]]` alone, no labels. -->
 
 ## Contingency Scenes
 

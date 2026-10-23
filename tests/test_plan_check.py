@@ -832,6 +832,32 @@ def scene_rows(scene_body: str, title: str = "Scene 1: T") -> list[pc.Finding]:
                                           pc.SCENE_LABELS) if f.id == "scene-labels"]
 
 
+class PointerBlockTests(unittest.TestCase):
+    """A Plan block whose title is one wikilink points at a scene note;
+    the labels live in that note, so none are demanded here."""
+
+    def test_pointer_block_with_no_labels_is_clean(self):
+        self.assertEqual(scene_rows("", "[[Ashworth Dinner]]"), [])
+
+    def test_aliased_pointer_is_clean(self):
+        self.assertEqual(scene_rows("", "[[Ashworth Dinner|The Dinner]]"), [])
+
+    def test_ordinary_block_without_labels_still_errors(self):
+        rows = scene_rows("Some prose, no labels.", "Scene 2: The Docks")
+        self.assertEqual(len(rows), 2, rows)
+
+    def test_wikilink_inside_a_longer_title_is_not_a_pointer(self):
+        rows = scene_rows("", "Scene 3: [[The Docks]]")
+        self.assertEqual(len(rows), 2, rows)
+
+    def test_pointer_block_clean_through_check_scenes(self):
+        text = ("## Planned Scenes\n\n### [[Ashworth Dinner]]\n\n"
+                "### Scene 2: The Docks\nNothing.\n")
+        found = pc.check_scenes("P.md", pc._by_norm_title(text))
+        loci = {f.locus for f in found if f.id == "scene-labels"}
+        self.assertEqual(loci, {"P.md:§Scene 2: The Docks"})
+
+
 class MinimumSceneTests(unittest.TestCase):
     """One minimum for all types (2026-09-14, docs/scene-design-research.md):
     only `**Situation:**` and `**Starts it:**` are required. Every other
