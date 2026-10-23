@@ -38,7 +38,8 @@ import migrate_vault as mv
 from schema_rules import (SYSTEMS, TYPE_FOLDERS, WORLD_STUBS, system_id,
                           without_generated_markers)
 from migrate_core import StepFailed, write_text_atomic
-from vault_write import utf8_output
+from vault_write import (set_block, template_body, template_frontmatter,
+                         template_text, utf8_output)
 from vaultlib import (PUBLISH_TOOL, SETTINGS_FILE, STAMP_KEY, STATE_FILE,
                       SettingsUnavailable, StateUnreadable, _read_state, entity_type,
                       extract_frontmatter, forget_settings, parse_version,
@@ -52,6 +53,7 @@ ONTOLOGY = SHARED / "gm-apprentice-ontology.json"
 # What a new vault gets, besides folders and schema files. An existing vault, on either layout, never gets them.
 NEW_FILES = (SETTINGS_FILE, STATE_FILE)
 TIMELINE = "_Campaign/Timeline.md"
+FIRST_CHAPTER = "Chapters/Chapter 1/Chapter 1.md"
 
 # The sections of entity-schema.md a vault's `_meta/entity-types.md` starts
 # with, in this order.
@@ -131,6 +133,16 @@ def seed(name: str, campaign: str) -> str:
     return _plugin_text(SEEDS / name).replace("{CAMPAIGN}", campaign)
 
 
+def first_chapter_text() -> str:
+    """Chapter 1, built from the shared chapter template the way
+    `vault_write.py chapter-new` builds a chapter."""
+    template = template_text(Path(), (), "chapter.md")
+    fm = template_frontmatter(template)
+    set_block(fm, "title", '"Chapter 1"')
+    set_block(fm, "status", "active")
+    return "---\n" + "\n".join(fm) + "\n---\n" + template_body(template)
+
+
 def settings_text(system: str | None, campaign: str) -> str:
     """A new vault's `_meta/vault-config.yaml`, written by the publish tool
     (`settings set --create`) into a scratch folder and read back, so the
@@ -189,20 +201,24 @@ def shown(piece: Piece) -> str:
     return piece.rel if piece.text is not None else f"{piece.rel}/"
 
 
-def _types_in(vault: Path) -> tuple[set[str], bool]:
-    """One walk of the vault: the note types it keeps, and whether one of
-    them is a world index (`type: world_domain`, `domain: index`)."""
+def _types_in(vault: Path) -> tuple[set[str], bool, bool]:
+    """One walk of the vault: the note types it keeps, whether one of them
+    is a world index (`type: world_domain`, `domain: index`), and whether a
+    chapter note exists outside `_meta/` (`_Templates/` is never walked)."""
     types: set[str] = set()
     world_index = False
+    chapter = False
     if vault.is_dir():
-        for _rel, text in vault_files(vault):
+        for rel, text in vault_files(vault):
             front = extract_frontmatter(text) or {}
             kind = entity_type(front).strip().lower()
             types.add(kind)
+            if kind == "chapter" and not rel.startswith("_meta/"):
+                chapter = True
             if kind == "world_domain" and (
                     str(front.get("domain", "")).strip().lower() == "index"):
                 world_index = True
-    return types - {""}, world_index
+    return types - {""}, world_index, chapter
 
 
 def _attachments(vault: Path) -> str | None:
@@ -230,7 +246,7 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
     that exists is listed. `templates=False` leaves `_Templates/` files to
     the update tool's own check; `pages=False` leaves out the four one-off
     pages (world index, world flags, Timeline, Player Characters)."""
-    types, has_world_index = _types_in(vault)
+    types, has_world_index, has_chapter = _types_in(vault)
     day = today or datetime.date.today().isoformat()
     out: list[Piece] = []
 
@@ -277,6 +293,7 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
         file("_Campaign/Player Characters.md",
              lambda: seed("player-characters.md", campaign),
              present=bool(ROSTER_TYPES & types))
+        file(FIRST_CHAPTER, first_chapter_text, present=has_chapter)
     file("_meta/entity-types.md", entity_types_text)
     file("_meta/relationship-types.md", relationship_types_text)
     # The index is rendered when it is written, after the files above exist.
