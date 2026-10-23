@@ -358,7 +358,9 @@ def _pointer_target(title: str) -> str | None:
 
 def _scene_note_text(files, name: str, chapter: str | None = None) -> str:
     """A scene note as the table needs it: `## Paused` first when there
-    is one, no frontmatter, no `## GM Notes`, no gm-only parts. Of several
+    is one, no frontmatter. GM-only parts and `## GM Notes` stay (the
+    brief is the GM's own sheet; nothing publishes from it); only the
+    gm-only marker lines go. Of several
     notes of the name, the one in `chapter` (a chapter key); a `name`
     holding a path names its note. Still several: said, not guessed."""
     if "/" in name:
@@ -379,17 +381,9 @@ def _scene_note_text(files, name: str, chapter: str | None = None) -> str:
                 + ", ".join(f[0] for f in hits)
                 + "; write the pointer as the path of the one meant)")
     _rel, text, _fm = hits[0]
-    kept: list[str] = []
-    hidden = 0
-    for line in body_of(text).splitlines():
-        m = GM_MARKER_RE.fullmatch(line.strip())
-        if m:
-            hidden = max(0, hidden + (-1 if m.group(1) else 1))
-        elif not hidden:
-            kept.append(line)
-    body = "\n".join(kept).strip()
-    body = re.sub(r"(?ms)^## GM Notes[ \t]*\n.*?(?=^## |\Z)", "",
-                  body).strip()
+    body = "\n".join(line for line in body_of(text).splitlines()
+                     if not GM_MARKER_RE.fullmatch(line.strip()))
+    body = re.sub(r"\n{3,}", "\n\n", body).strip()
     paused = section(body, "Paused")
     if paused:
         body = re.sub(r"(?ms)^## Paused[ \t]*\n.*?(?=^## |\Z)", "",
@@ -403,13 +397,14 @@ def play_brief(files, plan_rel: str, plan_text: str) -> str:
     bodies minus the Entities link list — the enumerated skeleton is
     already table-shaped, so nothing else needs trimming — the NPC
     table, World State, Contingency scenes in full, and End Objectives.
-    Active Threads and GM Notes are dropped, because the table doesn't
-    need them and the Keeper is already holding the full Plan if they
-    do.
+    The Plan's Active Threads and GM Notes are dropped, because the
+    table doesn't need them and the Keeper is already holding the full
+    Plan if they do.
 
     A block titled by one wikilink (`### [[Ashworth Dinner]]`) points at a
-    scene note: its body follows, `## Paused` first, GM-only parts left
-    out. `files` is where those notes are found; the Plan's own `session:`
+    scene note: its body follows, `## Paused` first, GM-only parts and
+    `## GM Notes` kept (the scene's secrets are what the table needs).
+    `files` is where those notes are found; the Plan's own `session:`
     frontmatter is always enough to name it.
     """
     fm = extract_frontmatter(plan_text) or {}

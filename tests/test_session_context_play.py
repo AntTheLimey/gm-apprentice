@@ -161,7 +161,8 @@ class PlayBriefFunctionTests(unittest.TestCase):
 
 class PointerBlockBriefTests(unittest.TestCase):
     """A `### [[Scene]]` block in the Plan is followed by that scene
-    note's body: Paused section first, GM-only parts left out."""
+    note's body: Paused section first, GM-only parts kept (the brief is
+    the GM's own sheet), the marker lines themselves dropped."""
 
     PLAN = ("---\ntype: session-plan\nsession: 4\n---\n\n"
             "## Session Intent\n\nA dinner.\n\n## Planned Scenes\n\n"
@@ -189,8 +190,9 @@ class PointerBlockBriefTests(unittest.TestCase):
         self.assertLess(self.brief.index("They left at the soup course."),
                         self.brief.index("The table is laid for eleven."))
 
-    def test_gm_only_notes_are_left_out(self):
-        self.assertNotIn("poisoned", self.brief)
+    def test_gm_only_notes_are_kept_without_markers(self):
+        self.assertIn("## GM Notes\n\nThe soup is poisoned.", self.brief)
+        self.assertNotIn("gm-only", self.brief)
         self.assertNotIn("type: scene", self.brief)
 
     def test_unresolved_pointer_is_named_not_dropped(self):
@@ -242,15 +244,15 @@ class PointerChoiceTests(unittest.TestCase):
         self.assertIn("CCC", brief)
         self.assertNotIn("AAA", brief)
 
-    def test_gm_notes_section_is_dropped_by_heading(self):
+    def test_gm_notes_section_is_kept(self):
         files = [self.entry("Chapters/Chapter 2 - B/Scenes/Docks.md",
                             "**Situation:** Rain.\n\n## GM Notes\n\n"
                             "The crate is empty.\n\n### Why\n\nA lie.\n\n"
                             "## After\n\nThey sail.")]
         brief = sc.play_brief(files, "Chapters/Chapter 2 - B/P.md", self.PLAN)
         self.assertIn("Rain.", brief)
-        self.assertNotIn("crate", brief)
-        self.assertNotIn("A lie.", brief)
+        self.assertIn("The crate is empty.", brief)
+        self.assertIn("A lie.", brief)
         self.assertIn("They sail.", brief)
 
 
