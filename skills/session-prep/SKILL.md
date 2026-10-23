@@ -236,8 +236,10 @@ alongside new ideas. The propose-before-write gate is the
 3. Write it with `vault_write.py <vault> scene-new --chapter
    "<chapter>" --title "<title>" --write`, then fill its body and its
    `entities`/`locations` links. In the Plan it, or a queued scene, is
-   `### [[<title>]]` and a line each: purpose, who, how it starts. A small beat may stay inline in the
-   skeleton from `references/session-templates.md`: **Situation** and **Starts it**
+   `### [[<title>]]` and a line each: purpose, who, how it starts;
+   prep it needs (paused: where it picks up, what may come next) is
+   an edit to its note, for the GM's yes. A small beat may stay inline
+   in the skeleton from `references/session-templates.md`: **Situation** and **Starts it**
    are required; every other label is optional, and a two-line routing
    scene is finished.
 
