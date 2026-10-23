@@ -255,3 +255,13 @@ test('facts line: a dot inside a value stays in that fact', () => {
     { label: 'Hair', value: 'red · very dark' },
   ]);
 });
+
+test('a hook taken from the backstory steps aside on the Story tab', () => {
+  const fromBackstory = render(NEW_LAYOUT);
+  assert.match(fromBackstory, /<div class="pull-quote pull-quote-backstory">For a hundred years Ilse kept the index\.<\/div>/);
+  // A hook the GM wrote, or one from key_traits, says something the Story tab does not: it stays.
+  assert.match(render(NEW_LAYOUT, {}, { hook: 'A century of discoveries.' }), /<div class="pull-quote">A century of discoveries\.<\/div>/);
+  assert.match(render('## Background\n\n**Species:** Elf\n', {}, { key_traits: ['meticulous'] }), /<div class="pull-quote">meticulous<\/div>/);
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../css/style.css'), 'utf8');
+  assert.match(css, /body:has\(#tab-story\.active\) \.pull-quote-backstory \{\s*display: none;/);
+});

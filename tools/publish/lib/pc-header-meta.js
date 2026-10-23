@@ -40,21 +40,29 @@ function headerMeta(fm, defaults) {
 // definition: the page (templates/pc.js), the preview card (previews.js) and the Characters
 // index card all call it. Printed as the prologue shows it: a labelled link the GM wrote prints its
 // label (read in the source), and a `[[ ]]` a player typed (escaped by the sync) stays as typed.
-function pcEpithetText(page) {
+// `from` says which: 'hook', 'backstory', 'traits' or 'excerpt' ('' with no text).
+function pcEpithet(page) {
   const fm = page.frontmatter || {};
   const hook = labelsForLinks(typeof fm.hook === 'string' ? fm.hook : '').trim();
-  if (hook) return hook;
+  if (hook) return { text: hook, from: 'hook' };
   // A gm-only block goes whole: a source that still holds one (the note itself, when the
   // build gave no published text) must not give it up unmarked.
   const source = stripGmOnly(publishedSource(page));
   // Any other comment is an authoring note, never story (the renderer would print it as text).
   const parts = backgroundParts(extractSections(labelsForLinks(source.replace(/<!--[\s\S]*?(?:-->|$)/g, ''))));
   const opening = parts ? parts.firstSentence.trim() : '';
-  if (opening) return opening;
+  if (opening) return { text: opening, from: 'backstory' };
   const traits = Array.isArray(fm.key_traits)
     ? fm.key_traits.map(t => String(t == null ? '' : t).trim()).filter(Boolean).join(', ')
     : String(fm.key_traits || '');
-  return labelsForLinks(traits).trim() || excerptFromMarkdown(source, { skipSheetLines: true });
+  const traitText = labelsForLinks(traits).trim();
+  if (traitText) return { text: traitText, from: 'traits' };
+  const excerpt = excerptFromMarkdown(source, { skipSheetLines: true });
+  return { text: excerpt, from: excerpt ? 'excerpt' : '' };
 }
 
-module.exports = { headerMetaFields, headerMeta, pcEpithetText };
+function pcEpithetText(page) {
+  return pcEpithet(page).text;
+}
+
+module.exports = { headerMetaFields, headerMeta, pcEpithet, pcEpithetText };

@@ -1,7 +1,7 @@
 const { refTarget } = require('../wikilink');
 const { escapeHtml, relativePath, relativeHref, publishedSource, encodeHref } = require('../processor');
 const { canonicalNfc } = require('../unicode');
-const { headerMeta, headerMetaFields, pcEpithetText } = require('../pc-header-meta');
+const { headerMeta, headerMetaFields, pcEpithet } = require('../pc-header-meta');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg, connectionsSection } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
@@ -480,9 +480,13 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   // key_traits when the PC has any, otherwise the first sentence of the body's
   // prose. A sheet's body opens with stat tables, label lines and tick-boxes; the
   // excerpt drops them, so the quote is never "Playbook: Cutter Insight Prowess Resolve…".
+  // One taken from the backstory steps aside on the Story tab, which opens on that sentence.
   let epithet = '';
-  const quoteText = pcEpithetText(page);
-  if (quoteText) epithet = `<div class="pull-quote">${escapeHtml(quoteText)}</div>`;
+  const quote = pcEpithet(page);
+  if (quote.text) {
+    const cls = quote.from === 'backstory' ? 'pull-quote pull-quote-backstory' : 'pull-quote';
+    epithet = `<div class="${cls}">${escapeHtml(quote.text)}</div>`;
+  }
 
   // Status-bar tier off ⇒ no live vitals UI anywhere. Null out every live input
   // so the existing null-guards below omit the panel, island, and client scripts.

@@ -497,6 +497,10 @@ h3 {
   padding: 0.75rem 0 0.75rem 1.25rem;
   margin: 0 0 1.5rem;
 }
+/* A quote taken from the backstory steps aside while the Story tab, which opens on it, is open */
+body:has(#tab-story.active) .pull-quote-backstory {
+  display: none;
+}
 
 /* ===== PC PAGE WITHOUT A SHEET ===== */
 .pc-identity {
