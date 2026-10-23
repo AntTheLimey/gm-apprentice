@@ -13,17 +13,17 @@ import re
 from pathlib import Path
 
 import relink
+from dnd_note import PLACEHOLDER
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           cells, edit_frontmatter, plugin_tool, stopped,
                           write_text_atomic)
-from dnd_note import PLACEHOLDER
 from schema_rules import system_id as _system_id
 from schema_rules import TEMPLATE_NAMES
 from schema_rules import tone_families, without_generated_markers
 from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
                          player_section_key, wrapup_filename_findings)
-from vaultlib import (LEGACY_SETTINGS_FILE, fence_step, SettingsUnavailable, entity_type, extract_frontmatter,
-                      frontmatter_span, parse_version, plugin_version,
+from vaultlib import (LEGACY_SETTINGS_FILE, SettingsUnavailable, entity_type, extract_frontmatter,
+                      fence_step, frontmatter_span, parse_version, plugin_version,
                       read_stamp, settings, settings_file, settings_raw,
                       settings_unset, vault_files, vault_layout,
                       wrapup_filename)
@@ -1355,6 +1355,7 @@ def find_open_threads_fold(vault: Path) -> list[Item]:
 
 OLD_BACKSTORY = re.compile(r"^\*\*Backstory & Personality:\*\*[ \t]*(.*?)[ \t]*$")
 OLD_APPEARANCE = re.compile(r"^\*\*Appearance:\*\*[ \t]*(.*?)[ \t]*$")
+STOPS_VALUE = re.compile(r"\*\*[^*\n]+:\*\*|#{1,6}\s")
 BACKSTORY_HINT = "{The character's story before the campaign, as the player tells it}"
 APPEARANCE_HINT = "{How they look}"
 FACTS_LINE = " \u00b7 ".join(f"**{label}:** \u2014" for label in (
@@ -1393,27 +1394,34 @@ def _background_sections(text: str) -> str | None:
     eol = next((m.group(0) for raw in lines if (m := re.search(r"\r\n|\n|\r", raw))), "\n")
     found: dict[str, str] = {}
     kept: list[str] = []
+    body = lines[start + 1:end]
     fence = None
-    skip_blank = False
-    for raw in lines[start + 1:end]:
+    n = 0
+    while n < len(body):
+        raw = body[n]
+        n += 1
         fence, is_fence = fence_step(raw, fence)
         bare = raw.rstrip("\r\n")
-        m = None
+        key, m = None, None
         if not is_fence and fence is None:
-            for key, rx in (("backstory", OLD_BACKSTORY), ("appearance", OLD_APPEARANCE)):
+            for name, rx in (("backstory", OLD_BACKSTORY), ("appearance", OLD_APPEARANCE)):
                 m = rx.match(bare)
-                if m and key not in found:
-                    found[key] = m.group(1)
+                if m and name not in found:
+                    key = name
                     break
                 m = None
-        if m:
-            skip_blank = True
+        if key is None or m is None:
+            kept.append(raw)
             continue
-        if skip_blank and not bare.strip():
-            skip_blank = False
-            continue
-        skip_blank = False
-        kept.append(raw)
+        # The value runs on over the lines and paragraphs after it, up to the
+        # next labelled line, heading or the end of Background.
+        value_lines = [m.group(1)]
+        while n < len(body) and not STOPS_VALUE.match(body[n]):
+            value_lines.append(body[n].rstrip("\r\n"))
+            n += 1
+        while value_lines and not value_lines[-1].strip():
+            value_lines.pop()
+        found[key] = eol.join(value_lines)
     while kept and not kept[-1].strip():
         kept.pop()
     if kept and not kept[-1].endswith(("\n", "\r")):

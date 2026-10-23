@@ -28,8 +28,9 @@ const BLOCK_BOUNDARY_RE = /<\/?(p|div|li|ul|ol|blockquote|h[1-6]|tr|td|th|sectio
 // ("**Playbook:** Cutter", "**Stress**: 3", "**ST** 12", a bare "**Insight**"), a
 // tick-box ("- [ ] Major Wound"), and a list marker left with nothing after it. A
 // template placeholder nobody filled in ("{Appearance and manner}") goes too, wherever
-// it sits and however many lines it runs to.
-const SHEET_LINE_RE = /^\*\*[^*]+\*\*:?$|^\*\*[^*]+:\*\*|^\*\*[^*]+\*\*:|^\*\*[^*]+\*\*\s+[-+]?\d[\d.,/+-]*%?$|^[-*+] \[[ xX]\]|^[-*+]$/;
+// it sits and however many lines it runs to. So does a bullet label left at "—"
+// ("- **Traits:** —"); a facts line is a label line already.
+const SHEET_LINE_RE = /^\*\*[^*]+\*\*:?$|^\*\*[^*]+:\*\*|^\*\*[^*]+\*\*:|^\*\*[^*]+\*\*\s+[-+]?\d[\d.,/+-]*%?$|^[-*+] \[[ xX]\]|^[-*+]$|^[-*+]\s+\*\*[^*]+:\*\*\s*—$/;
 const PLACEHOLDER_RE = /(?:^[ \t]*[-*+][ \t]+)?\{[^{}]{0,400}\}/gm;
 
 // A full stop after one of these is not the end of a sentence.

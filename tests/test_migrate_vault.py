@@ -2027,6 +2027,43 @@ class DndBackgroundSectionsTests(unittest.TestCase):
         self.assertIn("### Backstory\r\n\r\nBorn in a forge. *Gruff*, loyal.\r\n", text)
         self.assertEqual(mv.find_dnd_background_sections(self.vault), [])
 
+    MULTI = ("---\ntype: pc\n---\n## Background\n\n**Species:** Dwarf\n\n"
+             "**Backstory & Personality:** Born in a forge.\n\nLeft it at nineteen.\n"
+             "Never went back.\n\n**Alignment:** Lawful Good\n\n"
+             "**Appearance:** Broad.\nA braided beard.\n\n## Skills\n")
+    MULTI_BACKSTORY = "Born in a forge.\n\nLeft it at nineteen.\nNever went back."
+    MULTI_APPEARANCE = "Broad.\nA braided beard."
+
+    def test_background_sections_keeps_continuation_paragraphs(self):
+        import dnd_story
+        for eol in ("\n", "\r\n"):
+            with self.subTest(eol=eol):
+                self.put("PCs/B.md", self.MULTI, eol=eol)
+                self.run_check()
+                text = self.get("PCs/B.md")
+                self.assertEqual(text.count("\r\n"), text.count("\n") if eol == "\r\n" else 0)
+                parts = dnd_story.note_parts(text)
+                self.assertEqual(parts["backstory"].body.replace("\r\n", "\n"), self.MULTI_BACKSTORY)
+                self.assertEqual(parts["appearance"].body.replace("\r\n", "\n"), self.MULTI_APPEARANCE)
+                self.assertNotIn("Left it at nineteen.", text.split("### Backstory")[0])
+                self.assertIn("**Alignment:** Lawful Good", text.split("### Backstory")[0])
+
+    def test_background_sections_keeps_gm_prose_and_notes_heading(self):
+        old = ("---\ntype: pc\n---\n## Background\n\n**Species:** Dwarf\n\n"
+               "**Backstory & Personality:** Born in a forge.\n\n"
+               "**Alignment:** Lawful Good\n\nGM aside about the clan.\n\n"
+               "### Notes\n\nRemember the anvil.\n\n## Skills\n")
+        self.put("PCs/B.md", old)
+        self.run_check()
+        self.assertEqual(self.get("PCs/B.md"), (
+            "---\ntype: pc\n---\n## Background\n\n**Species:** Dwarf\n\n"
+            "**Alignment:** Lawful Good\n\nGM aside about the clan.\n\n"
+            "### Notes\n\nRemember the anvil.\n\n"
+            "### Backstory\n\nBorn in a forge.\n\n"
+            "### Appearance\n\n{How they look}\n\n" + self.FACTS + "\n\n"
+            "### Personality\n\n- **Traits:** —\n- **Ideals:** —\n"
+            "- **Bonds:** —\n- **Flaws:** —\n\n## Skills\n"))
+
     def test_the_check_is_registered(self):
         (check,) = [c for c in mv.VAULT_CHECKS if c.name == "dnd-background-sections"]
         self.assertEqual((check.release, check.band), ("1.10.93", 3))
