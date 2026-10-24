@@ -99,13 +99,17 @@ const WITH_REASON = /^(.*?\.\w+)(?:\s+(?:—|–|--)\s+(.*))?$/;
 // check below sees what they miss): { rel, section, reason }. An entry line is a checkbox line, an indented bullet
 // (a `- Reason:` group's paths), or a plain bullet that ends in a file name. A `- Reason:` line names the reason
 // of the entries after it in its section, as the old annotated reader read it. A line a `%%` or `<!-- -->` comment
-// hides is no entry, as the readers have it (#498); `commented: true` reads those too, the comment marks taken out.
+// hides is no entry, as the readers have it (#498); `commented: true` reads a line the comments hide whole as well,
+// its comment marks taken out (a comment beside an entry leaves the entry, so that is no commented-out one).
 function entryLines(oldText, { commented = false } = {}) {
   const body = String(oldText).replace(/\r/g, '').replace(/^---\n[\s\S]*?\n---\n?/, '');
+  const shown = uncommentedLines(body);
+  const keptAt = new Map(shown.from.map((n, i) => [n, shown.lines[i]]));
+  const read = commented ? body.split('\n').map((l, n) => (keptAt.has(n) ? keptAt.get(n) : l.replace(/%%|<!--|-->/g, ''))) : shown.lines;
   const found = [];
   let section = null;
   let groupReason = null;
-  for (const line of commented ? body.replace(/%%|<!--|-->/g, '').split('\n') : uncommentedLines(body).lines) {
+  for (const line of read) {
     const heading = /^## (.+)/.exec(line);
     if (heading) {
       const title = heading[1].trim();

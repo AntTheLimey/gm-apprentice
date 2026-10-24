@@ -336,14 +336,16 @@ test('a read-back that loses a path line refuses, and the old file stays', () =>
 test('a commented-out entry is left out of the new list, and the report says so (#498)', () => {
   const text = [
     '---', 'type: meta', '---', '',
-    '## Publishing (3 files)', '', '- [x] NPCs/Vex.md', '%%', '- [x] NPCs/Hidden.md', '%%', '<!-- - [x] NPCs/Old.md -->', '',
+    '## Publishing (3 files)', '', '- [x] NPCs/Vex.md', '%%', '- [x] NPCs/Hidden.md', '%%', '<!-- - [x] NPCs/Old.md -->',
+    '- [x] NPCs/Noted.md <!-- player favourite -->', '- [x] NPCs/Too.md %% note %%', '',
     '## Excluded (0 files)', '',
   ].join('\n');
   const v = vaultWith(text);
   const r = convertPublishList(v);
   assert.equal(r.ok, true, r.blockers.join('\n'));
   const list = loadManifest(v);
-  assert.deepEqual(list.publishing, ['NPCs/Vex.md']);
+  // A comment beside an entry leaves it: published, and not counted as left out.
+  assert.deepEqual(list.publishing, ['NPCs/Noted.md', 'NPCs/Too.md', 'NPCs/Vex.md']);
   assert.deepEqual(list.needsDecision, []);
   assert.ok(!fs.readFileSync(file(v, 'publish-list.yaml'), 'utf8').includes('Hidden'));
   assert.ok(r.lines.includes('2 entries commented out with %% or <!-- --> are left out: they were hidden in Obsidian and are not published.'), r.lines.join('\n'));
