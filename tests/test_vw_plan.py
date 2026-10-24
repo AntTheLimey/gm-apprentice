@@ -232,6 +232,36 @@ class PlanTests(unittest.TestCase):
         self.assertIn("## Session Overview\n\nThe quay.", text)
         self.assertFalse((self.vault / PLAN).exists())
 
+    def test_an_unlinked_plan_for_the_session_is_found_not_duplicated(self):
+        own = f"{SESSIONS}/Session 02 Plan.md"
+        (self.vault / own).write_text(
+            '---\ntype: session-plan\nsession: "[[Session 02 - The Quay]]"\n'
+            "---\n\n## Session Intent\n\nMine.\n")
+        code, out = run(self.vault, "--number", "2", "--write")
+        self.assertEqual(code, 1)
+        self.assertIn(own, out)
+        self.assertFalse((self.vault / PLAN).exists())
+        code, out = run(self.vault, "--number", "2", "--section", "--write",
+                        stdin="## Session Overview\n\nThe quay.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("The quay.", self.read(own))
+        self.assertIn('plan: "[[Session 02 Plan]]"', self.read(INDEX))
+
+    def test_two_unlinked_plans_are_refused(self):
+        for name in ("A", "B"):
+            (self.vault / f"{SESSIONS}/{name}.md").write_text(
+                '---\ntype: session-plan\nsession: "[[Session 02 - The '
+                'Quay]]"\n---\n\nx\n')
+        code, out = run(self.vault, "--number", "2", "--write")
+        self.assertEqual(code, 1)
+        self.assertIn("2 Plans name", out)
+
+    def test_a_comment_on_the_status_line_is_kept(self):
+        (self.vault / INDEX).write_text(INDEX_TEXT.replace(
+            "status: planned", 'status: "planned"  # by hand'))
+        run(self.vault, "--number", "2", "--write")
+        self.assertIn("status: prepped  # by hand\n", self.read(INDEX))
+
     def test_section_without_a_plan_is_refused(self):
         code, out = run(self.vault, "--number", "2", "--section")
         self.assertEqual(code, 1)

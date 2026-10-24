@@ -2278,7 +2278,9 @@ def stamp_index(batch: Batch, rel: str, plan_stem: str) -> None:
         if at is None:
             fm.append(f"status: prepped{eol}")
         else:
-            fm[at] = f"status: prepped{eol}"
+            # The value alone: a trailing comment stays.
+            fm[at] = re.sub(r"""^status:[ \t]*("[^"]*"|'[^']*'|[^\s#]*)""",
+                            "status: prepped", fm[at])
     try:
         vl.set_nested_key(fm, "documents", "plan", f'"[[{plan_stem}]]"', eol)
     except ValueError as e:
@@ -2340,6 +2342,17 @@ def put_sections(batch: Batch, rel: str, text: str, template: str) -> None:
     batch.put(rel, note)
 
 
+def plans_naming(batch: Batch, stem: str) -> list[str]:
+    """The session Plans whose `session:` link names the index `stem`."""
+    want = vl.normalize(stem)
+    return sorted(
+        rel for rel, text in vl.vault_files(batch.vault)
+        if not is_record(rel)
+        and vl.entity_type(fm := vl.extract_frontmatter(text) or {})
+        == "session-plan"
+        and vl.normalize(vl.wikilink_target(fm.get("session"))) == want)
+
+
 def cmd_plan(batch: Batch, args: argparse.Namespace, text: str) -> None:
     if args.gm_input is not None and not args.headless:
         raise WriteError("--gm-input only changes what --headless checks: "
@@ -2361,7 +2374,14 @@ def cmd_plan(batch: Batch, args: argparse.Namespace, text: str) -> None:
         vl.nested_mapping(index_text, "documents").get("plan"))
     stem = Path(index).stem
     have = batch.with_stem(linked) if linked else []
-    rel = have[0] if len(have) == 1 else (
+    if len(have) != 1:
+        # A Plan filed for the session but never linked from its index.
+        have = plans_naming(batch, stem)
+        if len(have) > 1:
+            raise WriteError(f"{len(have)} Plans name {stem}: "
+                             f"{', '.join(have)}: link one from the index's "
+                             f"documents.plan")
+    rel = have[0] if have else (
         f"{index.rpartition('/')[0]}/{stem} - Plan.md".lstrip("/"))
     if args.section:
         if not batch.exists(rel):

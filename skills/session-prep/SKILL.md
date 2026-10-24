@@ -45,7 +45,7 @@ exception).
   says so and gathers nothing: session prep is the GM's job, so tell the
   player and stop.
 - Read `shared/session-principles.md`; its Version Gate verdict opens
-  the `--prep` output (step 5).
+  the `--prep` output (step 5). After a migration, run `--prep` again.
 - Read `shared/session-document-chain.md`. You write Plan files, only
   with `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py"
   <vault> plan --number N --chapter "<chapter>" --title "<title>" --write
