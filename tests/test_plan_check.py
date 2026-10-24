@@ -594,6 +594,29 @@ class HeadlessTests(unittest.TestCase):
         self.assertIn("--gm-input", rows[0])
         self.assertEqual(proc.returncode, 0, proc.stdout)
 
+    def test_gm_input_scenes_settles_only_the_scenes(self):
+        # The GM's request named the scenes but no intent or spotlight:
+        # Planned Scenes may be settled, the other two still guard.
+        proc = run_cli(GOOD, "--headless", "--gm-input", "scenes")
+        rows = [line for line in proc.stdout.splitlines()
+                if line.startswith("ERROR\t") and "hard-guard" in line]
+        self.assertEqual(len(rows), 2, proc.stdout)
+        self.assertFalse(any("Planned Scenes" in r for r in rows), rows)
+        self.assertTrue(any("Session Intent" in r for r in rows), rows)
+        self.assertTrue(any("Spotlight Forecast" in r for r in rows), rows)
+        self.assertEqual(proc.returncode, 1, proc.stdout)
+
+    def test_gm_input_naming_every_part_is_the_whole_spine(self):
+        proc = run_cli(GOOD, "--headless", "--gm-input", "intent", "scenes",
+                       "spotlight")
+        self.assertEqual(proc.returncode, 0, proc.stdout)
+        self.assertIn("INFO\t", proc.stdout)
+
+    def test_gm_input_rejects_an_unknown_part(self):
+        proc = run_cli(GOOD, "--headless", "--gm-input", "plot")
+        self.assertEqual(proc.returncode, 2, proc.stdout + proc.stderr)
+        self.assertIn("scenes", proc.stderr)
+
     def test_gm_input_drops_only_the_hard_guard_errors(self):
         findings = pc.run_checks(
             str(HEADLESS), HEADLESS.read_text(encoding="utf-8"),

@@ -25,9 +25,13 @@ the full command where a model used to look it up.
   or repeated, and heads the Overlap section with the names it read.
   A comma list used to be read as one name and report no overlap.
 - The Plan check's hard-guard rows say how to pass: leave the heading
-  empty or one bracketed line, put each guess under Open Questions
-  with the guess marker, and use `--gm-input` only when the GM supplied
-  the spine.
+  empty or one bracketed line, and put each guess under Open Questions
+  with the guess marker.
+- A prep run without the GM counts what the GM's request itself
+  settles as the GM's: scenes it names are planned in place, and only
+  the rest waits under Open Questions. `plan_check.py --gm-input` takes
+  the parts the GM supplied (`scenes`, `intent`, `spotlight`); bare
+  `--gm-input` still means all three.
 - A chapter name no note answers to is refused with the chapters
   there are.
 - Skills run a command line the skill spells out as given, and use

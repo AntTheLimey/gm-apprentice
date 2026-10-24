@@ -329,9 +329,10 @@ run headless (e.g. as a sub-agent with no GM):
   Verify may still run.
 
 A headless run must pass `plan_check.py <plan> --headless` before
-handoff. When the GM supplied intent, scenes and spotlight up front (a
-scripted or batch prep), add `--gm-input`: the spine is theirs, so the
-guard is skipped. A sub-agent may gather and draft from the GM's
+handoff. What the GM's request itself settles (scenes it names, an
+intent, a spotlight) is GM input: write it in place, park only the
+rest, and add `--gm-input` with those parts (`scenes`, `intent`,
+`spotlight`; bare `--gm-input` when the GM supplied all three). A sub-agent may gather and draft from the GM's
 decisions but never resolves intent, spotlight or scenes.
 
 ## Resumable prep
