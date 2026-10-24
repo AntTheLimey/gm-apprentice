@@ -1217,6 +1217,15 @@ function obsidianComments(markdown, mark) {
   return { text: result.join('\n'), warnings, lines: result, from, strays: read.strays };
 }
 
+// The lines of `text` once its `<!-- -->` and `%%` comments are gone, by the page strips' rule (the HTML strip, then
+// the `%%` strip reading each comment both ways and hiding what either hides), and `from`: the line of `text` each came
+// from. For a file read line by line that is no page, such as the old publish list (#498).
+function uncommentedLines(text) {
+  const html = htmlComments(String(text == null ? '' : text).replace(/\r/g, ''));
+  const obsidian = obsidianComments(html.lines.join('\n'));
+  return { lines: obsidian.lines, from: obsidian.from.map((n) => html.from[n]) };
+}
+
 // Where each line's `%%` comments are, read twice: as the build read them before the strips met (a STAND_IN is
 // nothing), and as Obsidian reads them (a STAND_IN is a `%%`). `shown[n][i]`: character i of line n is outside a
 // comment in both readings, and is no marker. `startedIn[n]`: line n starts inside a comment in either. `open`: a
@@ -2613,4 +2622,4 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
   };
 }
 
-module.exports = { unstableBodyMarked, unstableSectionsMarked, markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, cutLines, sectionWithholder, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, campaignImageSrc, isWebImageAddress, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };
+module.exports = { unstableBodyMarked, unstableSectionsMarked, markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, cutLines, sectionWithholder, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, uncommentedLines, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, campaignImageSrc, isWebImageAddress, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };

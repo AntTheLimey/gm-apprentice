@@ -332,3 +332,19 @@ test('a read-back that loses a path line refuses, and the old file stays', () =>
   assert.equal(fs.readFileSync(file(v, 'publish-manifest.md'), 'utf8'), WRITTEN);
   assert.equal(fs.existsSync(file(v, 'publish-list.yaml')), false);
 });
+
+test('a commented-out entry is left out of the new list, and the report says so (#498)', () => {
+  const text = [
+    '---', 'type: meta', '---', '',
+    '## Publishing (3 files)', '', '- [x] NPCs/Vex.md', '%%', '- [x] NPCs/Hidden.md', '%%', '<!-- - [x] NPCs/Old.md -->', '',
+    '## Excluded (0 files)', '',
+  ].join('\n');
+  const v = vaultWith(text);
+  const r = convertPublishList(v);
+  assert.equal(r.ok, true, r.blockers.join('\n'));
+  const list = loadManifest(v);
+  assert.deepEqual(list.publishing, ['NPCs/Vex.md']);
+  assert.deepEqual(list.needsDecision, []);
+  assert.ok(!fs.readFileSync(file(v, 'publish-list.yaml'), 'utf8').includes('Hidden'));
+  assert.ok(r.lines.includes('2 entries commented out with %% or <!-- --> are left out: they were hidden in Obsidian and are not published.'), r.lines.join('\n'));
+});
