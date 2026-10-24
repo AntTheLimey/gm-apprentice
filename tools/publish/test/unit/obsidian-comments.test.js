@@ -43,8 +43,11 @@ describe('%% comments (Obsidian), #305', () => {
     // heading (#447).
     assert.strictEqual(safe('x\n%%\n## GM Notes\n%%\nunder it').text, 'x');
   });
-  it('a %% inside an HTML comment is part of that comment', () => {
-    assert.strictEqual(safe('a <!-- 50%% off --> b %%gone%% c').text, 'a  b  c');
+  it('a %% inside an HTML comment still opens a comment for Obsidian: what either reading hides is cut', () => {
+    // Obsidian reads "%% off --> b %%" as a comment, and then "%% c" to the end; the build reads the HTML comment
+    // first. The page hides what either does.
+    assert.strictEqual(safe('a <!-- 50%% off --> b %%gone%% c').text, 'a ');
+    assert.strictEqual(safe('a <!-- 50%% off %% --> b %%gone%% c').text, 'a  b  c');
   });
   it('keeps the line map: each line left names the line it came from', () => {
     const text = 'a\n%%\nx\ny\n%%\nb %%z%% c\n\nend';

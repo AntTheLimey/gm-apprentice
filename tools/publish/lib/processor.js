@@ -707,6 +707,19 @@ function stubCut(markdown, includeSections = [], withhold = {}) {
 
 const DATAVIEW_RE = /```dataview[\s\S]*?```/g;
 
+// A %% comment and a hidden block can cross: Obsidian reads the %% first, so a %% opened inside a gm-only block runs
+// past its closer, while the build reads the block first. The page hides what either reading hides. A strip that
+// cuts text holding an odd count of %% leaves STAND_IN where the text was: the comment strip reads it as a %% for
+// Obsidian's reading and as nothing for the build's, and cuts what either reading puts in a comment. A noncharacter,
+// never written in a note (one that is only ever hides more).
+const STAND_IN = '\uFDD0';
+const commentMarkers = (text) => text.split('%%').length - 1 + text.split(STAND_IN).length - 1;
+const leftOpen = (text) => (commentMarkers(text) % 2 === 1 ? STAND_IN : '');
+// The GM site's mark tokens (gm-marks.js), which a comment strip that cuts on the GM site never cuts: a mark opened
+// before a comment and closed inside it would otherwise leave its text unmarked.
+const MARK_TOKEN_RE = /\uE000[0-9a-z]*\uE001|\uE002/g;
+const markTokens = (text) => (String(text).match(MARK_TOKEN_RE) || []).join('');
+
 function stripDataview(markdown) {
   return markdown.replace(DATAVIEW_RE, '');
 }
@@ -738,6 +751,8 @@ function dataviewLines(markdown) {
     take(markdown.slice(last, m.index));
     n += m[0].split('\n').length - 1;
     last = m.index + m[0].length;
+    // A query opened mid-line is no fence: Obsidian reads a %% in it as a comment marker.
+    if (!/(^|\n) {0,3}$/.test(markdown.slice(0, m.index))) take(leftOpen(m[0].slice(3, -3)));
   }
   if (last === 0) {
     const whole = markdown.split('\n');
@@ -917,6 +932,7 @@ function markedBlocks(markdown, markerName, mark) {
   const keep = (text, i) => { result.push(text); from.push(i); };
   let depth = 0;
   let orphanClosers = 0;
+  let cut = '';   // the text the open block cuts, outside code: its %% count decides the stand-in
   // The open fence's delimiter, or null outside a fence. Tracking the actual
   // delimiter — not a boolean — is what makes ``` inside a ~~~ block (and vice
   // versa) inert, per CommonMark: a fence closes only on the same character,
@@ -949,6 +965,7 @@ function markedBlocks(markdown, markerName, mark) {
     // and blank leftovers collapses (one blank stands in for a whole block).
     if (!markerRe.test(line)) {
       if (depth === 0) keep(line, i);
+      else cut += `${line}\n`;
       continue;
     }
     markerRe.lastIndex = 0;
@@ -958,6 +975,8 @@ function markedBlocks(markdown, markerName, mark) {
     let m;
     while ((m = markerRe.exec(line)) !== null) {
       if (depth === 0) kept += line.slice(last, m.index);
+      else cut += line.slice(last, m.index);
+      const was = depth;
       last = m.index + m[0].length;
       const inline = line.slice(0, m.index).trim() !== '';
       if (m[1] === '') {
@@ -977,8 +996,10 @@ function markedBlocks(markdown, markerName, mark) {
         if (!inline || top.inline || top.line === i) stack.pop();
       }
       depth = stack.length;
+      if (was > 0 && depth === 0) { kept += leftOpen(cut); cut = ''; }
     }
     if (depth === 0) kept += line.slice(last);
+    else cut += `${line.slice(last)}\n`;
     markerRe.lastIndex = 0;
     if (kept.trim() !== '') keep(kept, i);
     else if (opened) keep('', i);
@@ -1107,6 +1128,7 @@ function htmlComments(markdown, mark) {
   // close, and must not toggle the fence off and expose the rest of the block to stripping.
   let fenceMarker = null;
   let inComment = false;
+  let content = '';   // the open comment's text so far: its %% count decides the stand-in
 
   for (let n = 0; n < lines.length; n++) {
     const line = lines[n];
@@ -1127,7 +1149,11 @@ function htmlComments(markdown, mark) {
     while (i < line.length) {
       if (inComment) {
         const end = line.indexOf('-->', i);
-        if (end === -1) { i = line.length; break; }
+        const inside = line.slice(i, end === -1 ? line.length : end);
+        if (mark) kept += markTokens(inside);
+        if (end === -1) { content += `${inside}\n`; i = line.length; break; }
+        kept += leftOpen(content + inside);
+        content = '';
         inComment = false;
         i = end + 3;
       } else {
@@ -1164,82 +1190,122 @@ function obsidianComments(markdown, mark) {
   if (mark && mark.show.has('comments')) return obsidianCommentsMarking(markdown, mark);
   const lines = String(markdown || '').split('\n');
   // No `%%` anywhere: nothing to cut, and no need to ask the parser where the fences are.
-  if (!String(markdown || '').includes('%%')) {
+  if (!/%%|\uFDD0/.test(String(markdown || ''))) {
     return { text: lines.join('\n'), warnings: [], lines, from: lines.map((_, i) => i), strays: [] };
   }
   const result = [];
   const from = [];
   const warnings = [];
-  let inComment = false;
+  const read = commentReadings(lines);
+  for (let n = 0; n < lines.length; n++) {
+    const line = lines[n];
+    const shown = read.shown[n];
+    // On the GM site a mark token stays, whatever the comment holds.
+    const keepMark = new Set();
+    if (mark) for (const m of line.matchAll(MARK_TOKEN_RE)) for (let k = m.index; k < m.index + m[0].length; k++) keepMark.add(k);
+    let kept = '';
+    for (let i = 0; i < line.length; i++) if (shown[i] || keepMark.has(i)) kept += line[i];
+    // A line that was only comment goes whole; one with text around a comment keeps it.
+    if (kept.trim() === '' && (line.trim() !== '' || read.startedIn[n])) continue;
+    result.push(kept);
+    from.push(n);
+  }
+  if (read.open) {
+    warnings.push('unclosed %% comment: content stripped to end of file');
+  }
+  if (read.crossed) warnings.push(CROSSED_WARNING);
+  return { text: result.join('\n'), warnings, lines: result, from, strays: read.strays };
+}
+
+// Where each line's `%%` comments are, read twice: as the build read them before the strips met (a STAND_IN is
+// nothing), and as Obsidian reads them (a STAND_IN is a `%%`). `shown[n][i]`: character i of line n is outside a
+// comment in both readings, and is no marker. `startedIn[n]`: line n starts inside a comment in either. `open`: a
+// comment is still open at the end in either. `strays` and `kinds` are the build's reading's (note faults).
+// `kind[n][i]`: 0 shown, 1 comment text, 2 a marker.
+const CROSSED_WARNING = 'a %% comment crosses the edge of a gm-only, spoiler or HTML-comment block (Obsidian reads the '
+  + '%% first): content stripped from there to end of file. Close the comment on the same side of the block.';
+
+function commentReadings(lines) {
   // Fenced code is whatever the renderer's parser calls a fence (any length, tilde, in a quote
   // or a list item), the same reading findHeadings gives the section filter. A parser that
   // fails reads no fence: nothing is then literal, which cannot leak.
   let inFence = new Set();
   try { ({ inFence } = findHeadings(lines.join('\n'))); } catch (err) { /* no fence is trusted */ }
+  const build = commentReading(lines, inFence, false);
+  const obsidian = lines.some((l) => l.includes(STAND_IN)) ? commentReading(lines, inFence, true) : build;
+  const kind = lines.map((line, n) => Array.from(line, (_, i) => Math.max(build.kind[n][i], obsidian.kind[n][i])));
+  return {
+    kind,
+    shown: kind.map((k) => k.map((c) => c === 0)),
+    startedIn: lines.map((_, n) => build.startedIn[n] || obsidian.startedIn[n]),
+    open: build.open || obsidian.open,
+    // The two readings part at a block's edge: from there one or the other has a comment open.
+    crossed: build.open !== obsidian.open,
+    strays: build.openers.filter(o => o.end === null || o.glued)
+      .map(o => ({ line: o.line, end: o.end, kind: o.end === null ? 'UNCLOSED' : 'GLUED' })),
+  };
+}
+
+// One reading of the `%%` comments (commentReadings). A `%%` opens a comment and the next `%%` closes it, wherever
+// each sits on a line. A `%%` never closed hides everything to the end of the note: that is what Obsidian shows, and
+// the reading that cannot leak. `%%` in a fenced code block or an inline code span is literal text; in indented
+// (four-space or tab) code it is a comment and is cut, as an HTML comment there is. `standIn`: a STAND_IN is a `%%`.
+function commentReading(lines, inFence, standIn) {
+  const kind = [];
+  const startedIn = [];
+  let inComment = false;
   // Every opener, for the note-faults audit: where it sat, where it closed (null when it never
   // did), and whether it was glued to the number before it ("100%% done").
   const openers = [];
-
+  const markerAt = (line, i) => (line[i] === '%' && line[i + 1] === '%' ? 2 : line[i] === STAND_IN ? (standIn ? 1 : 0) : 0);
   for (let n = 0; n < lines.length; n++) {
     const line = lines[n];
-    const startedInComment = inComment;
+    const k = new Array(line.length).fill(0);
+    kind.push(k);
+    startedIn.push(inComment);
     // A comment already open runs on through "code" until its closing %%.
     if (!inComment && inFence.has(n)) {
-      result.push(line);
-      from.push(n);
+      for (let i = 0; i < line.length; i++) if (line[i] === STAND_IN) k[i] = 2;
       continue;
     }
-
-    let kept = '';
     let i = 0;
     while (i < line.length) {
+      const size = markerAt(line, i);
+      if (line[i] === STAND_IN && !standIn) { k[i] = 2; i++; continue; }
       if (inComment) {
-        const end = line.indexOf('%%', i);
-        if (end === -1) { i = line.length; break; }
-        inComment = false;
-        openers[openers.length - 1].end = n;
-        i = end + 2;
+        if (size > 0) {
+          for (let j = i; j < i + size; j++) k[j] = 2;
+          inComment = false;
+          openers[openers.length - 1].end = n;
+          i += size;
+          continue;
+        }
+        k[i] = 1;
+        i++;
         continue;
       }
-      const ch = line[i];
-      if (ch === '`') {
+      if (line[i] === '`') {
         // An inline code span: a run of backticks to the next run of the same length on
         // the line. One that never closes is no span, so a `%%` after it still counts.
         let run = 1;
         while (line[i + run] === '`') run++;
         const close = new RegExp('(?<!`)`{' + run + '}(?!`)').exec(line.slice(i + run));
-        if (close) {
-          const stop = i + run + close.index + run;
-          kept += line.slice(i, stop);
-          i = stop;
-        } else {
-          kept += line.slice(i, i + run);
-          i += run;
-        }
+        const stop = close ? i + run + close.index + run : i + run;
+        for (let j = i; j < stop; j++) if (line[j] === STAND_IN) k[j] = 2;
+        i = stop;
         continue;
       }
-      if (ch === '%' && line[i + 1] === '%') {
+      if (size > 0) {
+        for (let j = i; j < i + size; j++) k[j] = 2;
         inComment = true;
-        openers.push({ line: n, end: null, glued: gluedBefore(line, i) });
-        i += 2;
+        openers.push({ line: n, end: null, glued: size === 2 && gluedBefore(line, i) });
+        i += size;
         continue;
       }
-      kept += ch;
       i++;
     }
-
-    // A line that was only comment goes whole; one with text around a comment keeps it.
-    if (kept.trim() === '' && (line.trim() !== '' || startedInComment)) continue;
-    result.push(kept);
-    from.push(n);
   }
-
-  if (inComment) {
-    warnings.push('unclosed %% comment: content stripped to end of file');
-  }
-  const strays = openers.filter(o => o.end === null || o.glued)
-    .map(o => ({ line: o.line, end: o.end, kind: o.end === null ? 'UNCLOSED' : 'GLUED' }));
-  return { text: result.join('\n'), warnings, lines: result, from, strays };
+  return { kind, startedIn, open: inComment, openers };
 }
 
 // The GM site's comment strips: every comment is kept, its delimiters become a mark (kind `comments`). `scan` reads
@@ -1256,7 +1322,7 @@ function markComments(markdown, mark, scan, skip, unclosedWarning) {
   for (let n = 0; n < lines.length; n++) {
     const line = lines[n];
     if (!inComment && skip(line, n)) { out.push(line); continue; }
-    const scanned = scan(line, inComment);
+    const scanned = scan(line, inComment, n);
     const pieces = scanned.pieces;
     inComment = scanned.inComment;
     if (!pieces.some((p) => p.open || p.close)) { out.push(line); continue; }
@@ -1315,53 +1381,38 @@ function htmlCommentsMarking(markdown, mark) {
 
 function obsidianCommentsMarking(markdown, mark) {
   const text = String(markdown || '');
-  if (!text.includes('%%')) {
+  if (!/%%|\uFDD0/.test(text)) {
     const lines = text.split('\n');
     return { text, warnings: [], lines, from: null, strays: [] };
   }
-  let inFence = new Set();
-  try { ({ inFence } = findHeadings(text)); } catch (err) { /* no fence is trusted */ }
-  const skip = (line, n) => inFence.has(n);
-  const scan = (line, inComment) => {
+  const all = text.split('\n');
+  const read = commentReadings(all);
+  const openAfter = (n) => (n + 1 < all.length ? read.startedIn[n + 1] : read.open);
+  const skip = (line, n) => !read.startedIn[n] && read.kind[n].every((c) => c === 0);
+  // A line as pieces: shown text, comment text (`content`), and an open where the comment (with its markers) starts
+  // and a close where it ends. The markers themselves are dropped.
+  const scan = (line, _inComment, n) => {
     const pieces = [];
+    let hidden = read.startedIn[n];
     let buf = '';
-    const emitText = () => { pieces.push({ text: buf, content: inComment }); buf = ''; };
-    let i = 0;
-    while (i < line.length) {
-      if (inComment) {
-        const end = line.indexOf('%%', i);
-        if (end === -1) { buf += line.slice(i); i = line.length; break; }
-        buf += line.slice(i, end);
+    const emitText = () => { if (buf !== '') pieces.push({ text: buf, content: hidden }); buf = ''; };
+    if (hidden && line === '') pieces.push({ text: '', content: true });
+    read.kind[n].forEach((c, i) => {
+      if ((c === 0) === hidden) {
         emitText();
-        pieces.push({ close: true });
-        inComment = false;
-        i = end + 2;
-        continue;
+        pieces.push(hidden ? { close: true } : { open: true });
+        hidden = !hidden;
       }
-      const ch = line[i];
-      if (ch === '`') {
-        let run = 1;
-        while (line[i + run] === '`') run++;
-        const close = new RegExp('(?<!`)`{' + run + '}(?!`)').exec(line.slice(i + run));
-        const stop = close ? i + run + close.index + run : i + run;
-        buf += line.slice(i, stop);
-        i = stop;
-        continue;
-      }
-      if (ch === '%' && line[i + 1] === '%') {
-        emitText();
-        pieces.push({ open: true });
-        inComment = true;
-        i += 2;
-        continue;
-      }
-      buf += ch;
-      i++;
-    }
+      if (c !== 2) buf += line[i];
+    });
     emitText();
-    return { pieces, inComment };
+    // A comment that ends with this line's marker closes here.
+    if (hidden && !openAfter(n)) { pieces.push({ close: true }); hidden = false; }
+    return { pieces, inComment: hidden };
   };
-  return markComments(text, mark, scan, skip, 'unclosed %% comment: content kept to end of file');
+  const result = markComments(text, mark, scan, skip, 'unclosed %% comment: content kept to end of file');
+  if (read.crossed) result.warnings.push(CROSSED_WARNING.replace('stripped', 'marked hidden'));
+  return result;
 }
 
 // The hidden markers still in `lines` once the strip chain has run, outside a code block
@@ -1828,7 +1879,7 @@ function strippedLines(text, excludeCallouts, mark, withholds) {
     if (result.warnings) warnings.push(...result.warnings);
     if (result.strays && result.strays.length > 0) {
       strays = result.strays.map(s => ({ line: before[s.line], kind: s.kind }));
-      pre = { lines: given, from: before, spans: result.strays.map(s => [s.line, s.end]) };
+      pre = { lines: given.map((l) => l.split(STAND_IN).join('')), from: before, spans: result.strays.map(s => [s.line, s.end]) };
     }
     if (result.unbalanced) unbalanced.push(...result.unbalanced.map(u => ({ ...u, line: before === null ? u.line : before[u.line] })));
   }
