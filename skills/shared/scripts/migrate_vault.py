@@ -1636,8 +1636,7 @@ def find_dnd_background_sections(vault: Path) -> list[Item]:
         done = []
         for rel in todo:
             path = vault / rel
-            with path.open("r", encoding="utf-8", newline="") as f:
-                new = _background_sections(f.read())
+            new = _background_sections(_read(path))
             if new is not None:
                 write_text_atomic(path, new[0])
                 done.append(f"{rel}: " + "; ".join(new[1]))

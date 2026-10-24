@@ -1956,6 +1956,14 @@ class DndBackgroundSectionsTests(unittest.TestCase):
         self.assertEqual((item.id, item.group), ("dnd-background-sections", WILL))
         item.apply(None)
 
+    def test_background_sections_unreadable_note_is_a_step_failure(self):
+        path = self.vault / "PCs/B.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(self.OLD.encode("utf-8").replace(b"Born", b"B\xffrn"))
+        (item,) = mv.find_dnd_background_sections(self.vault)
+        with self.assertRaisesRegex(StepFailed, "B.md cannot be read"):
+            item.apply(None)
+
     def test_background_sections_moves_lines_word_for_word(self):
         self.put("PCs/B.md", self.OLD)
         self.run_check()
