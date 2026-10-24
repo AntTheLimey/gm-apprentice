@@ -324,14 +324,14 @@ Never emit a settled `## Session Intent`, spotlight or
 `## Planned Scenes` without GM input. If pushed to "just do it", or
 run headless (e.g. as a sub-agent with no GM):
 - Stop and ask if a GM is reachable — intent gates the rest.
-- Otherwise leave those three headings empty and write each guess
-  under `## Open Questions`, labelled **(apprentice guess — confirm)**.
-  Gather and Verify may still run.
+- Otherwise write those sections **entirely under `## Open Questions`**,
+  each line labelled **(apprentice guess — confirm)**. Gather and
+  Verify may still run.
 
 A headless run must pass `plan_check.py <plan> --headless` before
 handoff. When the GM supplied intent, scenes and spotlight up front (a
 scripted or batch prep), add `--gm-input`: the spine is theirs, so the
-guard is skipped. Never add it to silence the guard. A sub-agent may gather and draft from the GM's
+guard is skipped. A sub-agent may gather and draft from the GM's
 decisions but never resolves intent, spotlight or scenes.
 
 ## Resumable prep
