@@ -221,6 +221,9 @@ test('hook order', () => {
   assert.equal(pcEpithetText(pcPage('<!-- gm-only -->\nGM-HOOK-SECRET opens the body.\n<!-- /gm-only -->\n\nA quiet man.\n')), 'A quiet man.');
   // A comment in the backstory is never the hook.
   assert.equal(pcEpithetText(pcPage('## Background\n\n### Backstory\n\n<!-- a note to self -->\n\nBorn at sea.\n')), 'Born at sea.');
+  // Nor is a %% comment, even one that crosses a gm-only block's edge.
+  assert.equal(pcEpithetText(pcPage('## Background\n\n### Backstory\n\n%%HOOK-SECRET is the heir.%%\n\nBorn at sea.\n')), 'Born at sea.');
+  assert.doesNotMatch(pcEpithetText(pcPage('<!-- gm-only -->\nx %% opens\n<!-- /gm-only -->HOOK-SECRET %% shown\n')), /HOOK-SECRET/);
 });
 
 test('card carries the hook', () => {
