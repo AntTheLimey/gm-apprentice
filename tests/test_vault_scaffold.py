@@ -144,6 +144,12 @@ class FirstChapterTests(unittest.TestCase):
              "---\ntype: chapter\ntitle: The Docks\n---\n")
         self.assertNotIn(self.CH, paths(plan(vault)))
 
+    def test_an_adopted_vault_with_chapter_folders_gets_no_chapter_1(self):
+        vault = scratch(self) / "V"
+        note(vault, "Chapters/Chapter 4 - Calcutta/Sessions/Session 01.md",
+             "---\ntype: session\n---\n")
+        self.assertNotIn(self.CH, paths(plan(vault)))
+
     def test_templates_and_meta_chapter_notes_do_not_count(self):
         vault = scratch(self) / "V"
         note(vault, "_Templates/_Template_Chapter.md", "---\ntype: chapter\n---\n")

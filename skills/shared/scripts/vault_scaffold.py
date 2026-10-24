@@ -204,10 +204,12 @@ def shown(piece: Piece) -> str:
 def _types_in(vault: Path) -> tuple[set[str], bool, bool]:
     """One walk of the vault: the note types it keeps, whether one of them
     is a world index (`type: world_domain`, `domain: index`), and whether a
-    chapter note exists outside `_meta/` (`_Templates/` is never walked)."""
+    chapter note exists outside `_meta/` (`_Templates/` is never walked) or
+    `Chapters/` already holds a chapter folder (an adopted vault)."""
     types: set[str] = set()
     world_index = False
-    chapter = False
+    chapters = vault / "Chapters"
+    chapter = chapters.is_dir() and any(c.is_dir() for c in chapters.iterdir())
     if vault.is_dir():
         for rel, text in vault_files(vault):
             front = extract_frontmatter(text) or {}

@@ -34,6 +34,18 @@ def make(case, notes):
 
 
 class ChapterNotesTests(unittest.TestCase):
+    def test_a_root_note_and_a_folder_note_by_one_name_are_asked(self):
+        # The index keys a note with no chapter key by its stem, so these
+        # two collide there; the check names both.
+        v = make(self, {
+            "Chapter 1 - Far.md": CH.format(status="active", title="Root"),
+            "Chapters/Chapter 1 - Far/Chapter 1 - Far.md":
+                CH.format(status="planned", title="Far"),
+        })
+        rows = vc.check_chapters(v)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("Chapter 1 - Far.md, Chapters/", rows[0])
+
     def test_two_notes_one_ask_row(self):
         v = make(self, {
             "Chapters/Chapter 1 - Far/Chapter 1 Overview.md":

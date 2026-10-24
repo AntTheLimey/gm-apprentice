@@ -126,6 +126,12 @@ class SceneNewTests(unittest.TestCase):
         self.assertIn(f"{LYON}/Side_Adventures/The Audition/Scenes/Tryout/"
                       "Tryout.md", out)
 
+    def test_a_folder_part_that_cannot_be_a_file_name_is_refused(self):
+        code, out = run(self.vault, "scene-new", "--chapter", "Lyon",
+                        "--title", "Tryout", "--folder", "Side:Adventures")
+        self.assertEqual(code, 1, out)
+        self.assertIn("must be a sub-folder of the chapter", out)
+
     def test_chapter_by_folder_name(self):
         code, out = run(self.vault, "scene-new", "--chapter",
                         "Chapter 1 - Paris", "--title", "Louvre")

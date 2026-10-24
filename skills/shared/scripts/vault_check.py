@@ -640,9 +640,9 @@ def check_chapters(vault: Path) -> list[str]:
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "chapter":
             continue
-        key = chapter_key(rel, fm)
-        if key:
-            groups.setdefault(key, []).append(rel)
+        # The index's own key: a note with no chapter key goes by its stem.
+        key = chapter_key(rel, fm) or Path(rel).stem.casefold()
+        groups.setdefault(key, []).append(rel)
     return [f"ASK\t{', '.join(sorted(rels))}\tone chapter, {len(rels)} "
             f"chapter notes: keep one and merge"
             for rels in groups.values() if len(rels) > 1]

@@ -2294,7 +2294,8 @@ def cmd_scene_new(batch: Batch, args: argparse.Namespace,
     if args.folder:
         parts = [p for p in args.folder.replace("\\", "/").split("/")
                  if p.strip()]
-        if not parts or any(p in (".", "..") for p in parts) \
+        if not parts or any(p in (".", "..") or BAD_NAME_RE.search(p)
+                            for p in parts) \
                 or args.folder.startswith(("/", "\\")):
             raise WriteError(f"--folder {args.folder!r} must be a "
                              f"sub-folder of the chapter")
