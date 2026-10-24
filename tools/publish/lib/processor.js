@@ -1233,7 +1233,8 @@ function commentReadings(lines) {
   try { ({ inFence } = findHeadings(lines.join('\n'))); } catch (err) { /* no fence is trusted */ }
   const build = commentReading(lines, inFence, false);
   const obsidian = lines.some((l) => l.includes(STAND_IN)) ? commentReading(lines, inFence, true) : build;
-  const kind = lines.map((line, n) => Array.from(line, (_, i) => Math.max(build.kind[n][i], obsidian.kind[n][i])));
+  // By UTF-16 unit, as the readings are: one entry per unit of the line, an emoji's two included.
+  const kind = lines.map((_, n) => build.kind[n].map((c, i) => Math.max(c, obsidian.kind[n][i])));
   return {
     kind,
     shown: kind.map((k) => k.map((c) => c === 0)),

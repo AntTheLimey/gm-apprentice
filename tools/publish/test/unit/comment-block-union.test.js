@@ -96,3 +96,10 @@ describe('the GM site marks text a crossing %% comment hides', () => {
     }
   }
 });
+
+it('a line with an emoji keeps every character when the note has a %% comment', () => {
+  const md = '%%note%%\n😀 hello\nA 🐉 dragon 🐉 sleeps.\n';
+  const lines = strippedLines(md, [], null).lines;
+  assert.ok(lines.includes('😀 hello'), JSON.stringify(lines));
+  assert.ok(lines.includes('A 🐉 dragon 🐉 sleeps.'), JSON.stringify(lines));
+});
