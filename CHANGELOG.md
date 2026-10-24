@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.97] — 2026-10-24
+
+A `%%` comment can no longer uncover text a gm-only block hides.
+Publish tool 1.48.1.
+
+### Fixed
+
+- The strip chains now hide what either a `%%` comment or a gm-only,
+  spoiler or HTML-comment block hides. Obsidian reads a `%%` comment
+  first, so a `%%` opened inside a block and closed after its closer
+  hides the text up to that `%%`; the build read the block first,
+  dropped the opening `%%`, and published that text (found by the
+  GM-Scriptorium author). A cut block that held an open comment now
+  leaves a stand-in the comment strip reads both ways, and a line
+  publishes only when neither reading hides it, so nothing hidden
+  before is shown now. The same holds for a `%%` just after a dataview
+  query opened mid-line, and on the GM site, where that text is marked
+  hidden. When the two readings part, the rest of the note is cut and
+  the build says a `%%` comment crosses a block's edge.
+- On the GM site with comments not shown (the default), a `%%`
+  comment opened before a gm-only block and closed inside it no
+  longer cuts the block's opening mark, which left the block's text
+  unmarked in what players would see.
+
 ## [1.10.95] — 2026-10-24
 
 Fewer wasted steps in prep: scripts accept the forms a model tries
