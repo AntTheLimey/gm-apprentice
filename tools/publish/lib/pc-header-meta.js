@@ -2,7 +2,7 @@
 // The badges a PC page's header shows after the player: the note's `display_meta` list,
 // else the site's `header_facts`. The one definition: the page header (templates/pc.js) and the link
 // preview card (previews.js) both read it, so they cannot disagree.
-const { publishedSource, plainMetaValue, plainRefValue, extractSections, stripGmOnly, NOTE_NAME_FIELDS } = require('./processor');
+const { plainMetaValue, plainRefValue, extractSections, stripGmOnly, playerSafeMarkdown, NOTE_NAME_FIELDS } = require('./processor');
 const { backgroundParts } = require('./pc-background');
 const { excerptFromMarkdown } = require('./excerpt');
 const { labelsForLinks } = require('./wikilink');
@@ -45,9 +45,10 @@ function pcEpithet(page) {
   const fm = page.frontmatter || {};
   const hook = labelsForLinks(typeof fm.hook === 'string' ? fm.hook : '').trim();
   if (hook) return { text: hook, from: 'hook' };
-  // A gm-only block goes whole: a source that still holds one (the note itself, when the
-  // build gave no published text) must not give it up unmarked.
-  const source = stripGmOnly(publishedSource(page));
+  // With no published text the note itself is read through the player strip chain, so a
+  // gm-only block, a %% comment and the two crossed never give anything up.
+  const source = stripGmOnly(page && page.publishedMarkdown != null ? page.publishedMarkdown
+    : playerSafeMarkdown((page && page.markdown) || '').text);
   // Any other comment is an authoring note, never story (the renderer would print it as text).
   const parts = backgroundParts(extractSections(labelsForLinks(source.replace(/<!--[\s\S]*?(?:-->|$)/g, ''))));
   const opening = parts ? parts.firstSentence.trim() : '';
