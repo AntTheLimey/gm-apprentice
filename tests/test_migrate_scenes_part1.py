@@ -104,7 +104,8 @@ class StageKeyTests(unittest.TestCase):
     def test_a_stage_that_hides_the_note_stays(self):
         # stage: draft still keeps a note off the player site; removing it
         # would publish the note.
-        for stage in ("draft", "Outline", "'ready'"):
+        for stage in ("draft", "Outline", "'ready'", "&held draft",
+                      "draft   # still writing", "*held"):
             note = f"---\ntype: session-wrapup\nstage: {stage}\n---\n\n# W\n"
             v = make_vault(self, {"W/Wrap.md": note, "P/Plan.md": PLAN})
             self.assertEqual(mv.find_stage_keys(v), [], stage)

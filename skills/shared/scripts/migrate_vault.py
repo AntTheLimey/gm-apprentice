@@ -1393,11 +1393,17 @@ def _drop_stage(fm: list[str], _rel: str) -> bool:
     nothing. A stage that keeps the note off a player site (STAGE_HIDES)
     stays: every publish tool still reads it, so removing it would
     publish the note."""
-    line = next((ln for ln in fm if ln.startswith("stage:")), None)
-    if line is None or opens_a_block(fm, "stage") \
-            or _fm_type(fm) not in STAGE_TYPES:
+    if not any(ln.startswith("stage:") for ln in fm) \
+            or opens_a_block(fm, "stage") or _fm_type(fm) not in STAGE_TYPES:
         return False
-    value = line.split(":", 1)[1].split("#", 1)[0].strip().strip("'\"")
+    # The value as the publish tool's YAML reads it: quotes and comments
+    # go, an anchor (`&held draft`) names the value after it, and an alias
+    # (`*held`) is a value set elsewhere, so it stays.
+    parsed = extract_frontmatter("".join(["---\n", *fm, "---\n"])) or {}
+    value = str(parsed.get("stage") or "").strip()
+    if value.startswith("*"):
+        return False
+    value = re.sub(r"^&\S+\s*", "", value)
     return value.casefold() not in STAGE_HIDES
 
 
