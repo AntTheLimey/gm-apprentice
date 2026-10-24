@@ -30,6 +30,9 @@ Publish tool 1.48.1.
   comment opened before a gm-only block and closed inside it no
   longer cuts the block's opening mark, which left the block's text
   unmarked in what players would see.
+- A PC's hook on its page and card, when read from the note itself,
+  goes through the player strip chain: a `%%` comment at the start of
+  a backstory no longer prints as the hook.
 
 ## [1.10.95] — 2026-10-24
 
