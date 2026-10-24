@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.99] — 2026-10-24
+
+The old publish list no longer publishes a line you commented out.
+Publish tool 1.48.2.
+
+### Fixed
+
+- A line of `_meta/publish-manifest.md` hidden by a `%%` or `<!-- -->`
+  comment is no longer read: a commented-out `- [x]` entry, or a
+  commented-out `## Publishing` heading, no longer publishes pages. The
+  comments are read by the page rule (#497): each `%%` comment both
+  ways, hiding what either hides. Commands that rewrite the old file
+  drop a commented-out entry rather than print it uncommented.
+  `manifest convert` and the update leave such entries out of
+  `_meta/publish-list.yaml` and say how many (#498).
+
 ## [1.10.98] — 2026-10-24
 
 Prep in fewer steps: one call gathers what prep reads first, and one

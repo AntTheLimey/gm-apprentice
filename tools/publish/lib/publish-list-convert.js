@@ -9,6 +9,7 @@ const fs = require('fs');
 const { listText, readPublishListFile, parseListText, counts } = require('./manifest');
 const { parseManifest, stripInlineComment } = require('./manifest-legacy');
 const { writeAtomic } = require('./settings/write');
+const { uncommentedLines } = require('./processor');
 const path = require('path');
 const { PUBLISH_LIST_FILE, OLD_LIST_FILE, PUBLISH_LIST_FROM, at } = require('./settings/layout');
 const { siteToolOlderThan, siteFileNamedBy } = require('./settings/move');
@@ -97,13 +98,19 @@ const WITH_REASON = /^(.*?\.\w+)(?:\s+(?:—|–|--)\s+(.*))?$/;
 // Every entry line in the old file's three sections, read line by line on its own (not through the readers, so the
 // check below sees what they miss): { rel, section, reason }. An entry line is a checkbox line, an indented bullet
 // (a `- Reason:` group's paths), or a plain bullet that ends in a file name. A `- Reason:` line names the reason
-// of the entries after it in its section, as the old annotated reader read it.
-function entryLines(oldText) {
+// of the entries after it in its section, as the old annotated reader read it. A line a `%%` or `<!-- -->` comment
+// hides is no entry, as the readers have it (#498); `commented: true` reads a line the comments hide whole as well,
+// its comment marks taken out, and marks each entry on such a line `hidden` (a comment beside an entry, or one around
+// only its section's heading, leaves the entry, so that is no commented-out one).
+function entryLines(oldText, { commented = false } = {}) {
   const body = String(oldText).replace(/\r/g, '').replace(/^---\n[\s\S]*?\n---\n?/, '');
+  const shown = uncommentedLines(body);
+  const keptAt = new Map(shown.from.map((n, i) => [n, shown.lines[i]]));
+  const read = commented ? body.split('\n').map((l, n) => (keptAt.has(n) ? keptAt.get(n) : l.replace(/%%|<!--|-->/g, ''))) : shown.lines;
   const found = [];
   let section = null;
   let groupReason = null;
-  for (const line of body.split('\n')) {
+  for (const [n, line] of read.entries()) {
     const heading = /^## (.+)/.exec(line);
     if (heading) {
       const title = heading[1].trim();
@@ -123,7 +130,7 @@ function entryLines(oldText) {
     if (!raw) continue;
     const split = WITH_REASON.exec(raw);
     const reason = (split && split[2] ? split[2].trim() : null) || groupReason;
-    found.push({ rel: stripInlineComment(raw), section, reason: reason || null });
+    found.push({ rel: stripInlineComment(raw), section, reason: reason || null, ...(commented && !keptAt.has(n) ? { hidden: true } : {}) });
   }
   return found;
 }
@@ -166,6 +173,7 @@ function expectedFrom(oldText) {
       ticked: once(built.resolved).filter((rel) => stays.has(rel) && !built.needsDecision.includes(rel)).length,
       unticked: once(lines.filter((l) => l.section === 'publishing' && !publishes.has(l.rel)).map((l) => l.rel)).filter((rel) => stays.has(rel)).length,
       excludedKept: once(underExcluded).filter((rel) => !builtExcluded.has(rel) && excluded.includes(rel)).length,
+      commented: once(entryLines(oldText, { commented: true }).filter((l) => l.hidden).map((l) => l.rel)).filter((rel) => !listOf.has(rel)).length,
     },
   };
 }
@@ -210,6 +218,9 @@ function foldLines(folded) {
   }
   if (folded.excludedKept > 0) {
     out.push(`${entries(folded.excludedKept)} unticked under Excluded ${folded.excludedKept === 1 ? 'is' : 'are'} now under excluded: ${folded.excludedKept === 1 ? 'it was' : 'they were'} not published before and still ${folded.excludedKept === 1 ? 'is' : 'are'} not.`);
+  }
+  if (folded.commented > 0) {
+    out.push(`${entries(folded.commented)} commented out with %% or <!-- --> ${folded.commented === 1 ? 'is' : 'are'} left out: ${folded.commented === 1 ? 'it was' : 'they were'} hidden in Obsidian and ${folded.commented === 1 ? 'is' : 'are'} not published.`);
   }
   return out;
 }

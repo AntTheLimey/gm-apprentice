@@ -11,6 +11,7 @@
 const { parseNote } = require('./frontmatter');
 const { canonicalNfc: canonicalPath } = require('./unicode');
 const { OLD_LIST_FILE } = require('./settings/layout');
+const { uncommentedLines } = require('./processor');
 
 // Manifest entries are vault-relative paths, optionally annotated with an inline
 // `— comment` (the Excluded section uses these throughout). Keep only the path, so an
@@ -48,7 +49,8 @@ function parseManifest(markdown) {
   const uncheckedPattern = /^- \[ \]\s+(.+)$/;
 
   let currentSection = null;
-  for (const line of content.replace(/\r/g, '').split('\n')) {
+  // A line a `%%` or `<!-- -->` comment hides is not read: in Obsidian it is gone (#498).
+  for (const line of uncommentedLines(content).lines) {
     const sectionMatch = line.match(/^## (.+)/);
     if (sectionMatch) {
       const title = sectionMatch[1].trim();
@@ -109,7 +111,8 @@ function parseAnnotatedManifest(markdown) {
 
   let section = null;
   let groupReason = null;
-  for (const line of body.split('\n')) {
+  // Nor here: the writer rewrites the file from these entries, and would print a commented-out line uncommented.
+  for (const line of uncommentedLines(body).lines) {
     const heading = /^## (.+)/.exec(line);
     if (heading) {
       const title = heading[1].trim();
