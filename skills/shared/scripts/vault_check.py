@@ -1491,6 +1491,7 @@ class ToolAnswer:
     data: Any = None
     why: str | None = None
     used: str | None = None
+    stdout: str = ""        # what the tool printed when it exited nonzero
 
 
 class ExplainAll:
@@ -1554,6 +1555,7 @@ def ask_publish_tool(vault: Path, args: list[str],
         return ToolAnswer(why=f"node could not run ({e.__class__.__name__})",
                           used=label)
     if proc.returncode != 0:
+        said = proc.stdout or ""
         detail = [ln.strip() for ln in (proc.stderr or "").splitlines()
                   if ln.strip()]
         stopped = next((i for i, ln in enumerate(detail)
@@ -1565,10 +1567,10 @@ def ask_publish_tool(vault: Path, args: list[str],
             return ToolAnswer(
                 why=(f"{name} exited {proc.returncode}: "
                      f"{' '.join(detail[stopped + 1:-1])} {detail[-1]}"),
-                used=label)
+                used=label, stdout=said)
         return ToolAnswer(why=(f"{name} exited {proc.returncode}"
                                + (f": {detail[-1]}" if detail else "")),
-                          used=label)
+                          used=label, stdout=said)
     try:
         data = json.loads(proc.stdout)
     except ValueError:

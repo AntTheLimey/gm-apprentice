@@ -9,6 +9,7 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import shutil
 import sys
 import tempfile
 import unittest
@@ -40,7 +41,7 @@ def make(root: Path, extra: dict[str, str] | None = None) -> None:
 
 
 def run(root: Path, *args: str, applied: tuple[list[str], str | None] | None = None,
-        site: bool = True) -> tuple[int, str, mock.Mock]:
+        site: bool = True, state: tuple[set[str] | None, str | None] = (set(), None)) -> tuple[int, str, mock.Mock]:
     buf = io.StringIO()
     config = (Path("/site/vault.config.json"), None) if site else (None, None)
 
@@ -48,6 +49,7 @@ def run(root: Path, *args: str, applied: tuple[list[str], str | None] | None = N
         return (list(paths), None) if applied is None else applied
 
     with mock.patch.object(reveal, "_site_config", return_value=config), \
+            mock.patch.object(reveal, "publish_state", return_value=state), \
             mock.patch.object(reveal, "apply_publish", side_effect=fake) as ap, \
             contextlib.redirect_stdout(buf):
         code = reveal.main([str(root), "--session", "Session 12", *args])
@@ -143,6 +145,105 @@ class RevealTests(unittest.TestCase):
     def test_bad_args_exit_2(self) -> None:
         code, _, _ = run(self.root, "--released", "no equals sign")
         self.assertEqual(code, 2)
+
+    def test_dry_run_warns_when_no_publish_list(self) -> None:
+        code, out, ap = run(self.root, "--publish", VEX,
+                            state=(None, "the vault has no publish list; set one up first"))
+        self.assertEqual(code, 1)
+        self.assertNotIn("WOULD-PUBLISH", out)
+        self.assertIn("no publish list", out)
+        ap.assert_not_called()
+
+    def test_already_published_is_skipped_not_logged(self) -> None:
+        code, out, ap = run(self.root, "--publish", VEX, "--publish", "Places/Mill.md",
+                            "--write", state=({VEX}, None))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(ap.call_args.args[1], ["Places/Mill.md"])
+        self.assertIn(f"SKIP\t{VEX}", out)
+        self.assertIn("withheld: false", (self.root / VEX).read_text(encoding="utf-8"))
+        self.assertEqual(log_of(self.root)["entries"][-1]["published"], ["Places/Mill.md"])
+
+    def test_tool_leaves_one_out(self) -> None:
+        code, out, _ = run(self.root, "--publish", VEX, "--publish", "Places/Mill.md",
+                           "--write", applied=(["Places/Mill.md"], None))
+        self.assertEqual(code, 1)
+        self.assertIn(f"ERROR\t{VEX}\tthe publish tool does not list it", out)
+        self.assertIn("withheld: true", (self.root / VEX).read_text(encoding="utf-8"))
+        self.assertEqual(log_of(self.root)["entries"][-1]["published"], ["Places/Mill.md"])
+
+    def test_failed_batch_has_one_error_row_per_path(self) -> None:
+        code, out, _ = run(self.root, "--publish", VEX, "--publish", "Places/Mill.md",
+                           "--write", applied=([], "no such file: X"))
+        self.assertEqual(code, 1)
+        errors = [ln for ln in out.splitlines() if ln.startswith("ERROR\t")]
+        self.assertEqual([ln.split("\t")[1] for ln in errors], [VEX, "Places/Mill.md"])
+
+    def test_malformed_frontmatter_reports_clear_failure(self) -> None:
+        (self.root / VEX).write_text("---\ntype: npc\nwithheld: true\n--- \nbody\n",
+                                     encoding="utf-8")
+        code, out, _ = run(self.root, "--publish", VEX, "--write")
+        self.assertEqual(code, 1)
+        self.assertIn(f"ERROR\t{VEX}\twithheld not cleared", out)
+
+    def test_hand_edited_log_entry_does_not_crash(self) -> None:
+        (self.root / "_meta").mkdir()
+        (self.root / "_meta" / "reveals.json").write_text(json.dumps({"entries": [
+            {"session": "Session 12", "date": "2026-01-01", "published": [],
+             "released": [{"page": "Places/Mill.md"}, "junk",
+                          {"page": "A.md", "what": "x"}]}]}), encoding="utf-8")
+        code, out, _ = run(self.root, "--released", "Places/Mill.md=the wheel", "--write")
+        self.assertEqual(code, 0, out)
+        released = log_of(self.root)["entries"][0]["released"]
+        self.assertIn({"page": "Places/Mill.md", "what": "the wheel"}, released)
+        self.assertIn({"page": "A.md", "what": "x"}, released)
+        self.assertIn("junk", released)
+
+
+@unittest.skipUnless(shutil.which("node"), "node is not installed")
+class ApplyPublishRealTool(unittest.TestCase):
+    """apply_publish against the repo's own publish tool: the list, apply,
+    list contract that every other test patches out."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        base = Path(self._tmp.name)
+        self.site = base / "site"
+        self.site.mkdir()
+        (self.site / "vault.config.json").write_text("{}", encoding="utf-8")
+        self.vault = base / "vault"
+        make(self.vault, {
+            "NPCs/Lady Anne.md": "---\ntype: npc\n---\n\nAnne.\n",
+            "Secret/Z.md": "---\ntype: npc\n---\n\nZ.\n",
+            "_meta/vault-config.md": f"---\npublish:\n  site: true\n  site_dir: {self.site}\n"
+                                     "  exclude_dirs:\n    - _meta\n    - Secret\n---\n",
+        })
+
+    def _list(self, text: str = "publishing: []\nexcluded: []\nneeds_decision: []\n") -> None:
+        (self.vault / "_meta" / "publish-list.yaml").write_text(text, encoding="utf-8")
+
+    def test_round_trip_with_spaced_name(self) -> None:
+        self._list()
+        done, why = reveal.apply_publish(self.vault, [VEX, "NPCs/Lady Anne.md"])
+        self.assertIsNone(why)
+        self.assertEqual(sorted(done), ["NPCs/Lady Anne.md", VEX])
+        state, _ = reveal.publish_state(self.vault)
+        self.assertEqual(state, {"NPCs/Lady Anne.md", VEX})
+
+    def test_no_publish_list_is_refused(self) -> None:
+        done, why = reveal.apply_publish(self.vault, [VEX])
+        self.assertEqual(done, [])
+        self.assertIn("no publish list", why or "")
+        self.assertFalse((self.vault / "_meta" / "publish-list.yaml").exists())
+
+    def test_refused_batch_shows_the_tools_reason(self) -> None:
+        self._list()
+        done, why = reveal.apply_publish(self.vault, [VEX, "Secret/Z.md"])
+        self.assertEqual(done, [])
+        self.assertIn("Secret/Z.md", why or "")
+        self.assertIn("leaves out", why or "")
+        state, _ = reveal.publish_state(self.vault)
+        self.assertEqual(state, set())
 
 
 if __name__ == "__main__":

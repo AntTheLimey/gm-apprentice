@@ -47,25 +47,41 @@ def _nfc(s: str) -> str:
     return unicodedata.normalize("NFC", s)
 
 
+def _tool_why(answer: Any) -> str:
+    """Why the tool failed, with the reason it printed on stdout when it
+    refused (the tool says which path and why there, not on stderr)."""
+    said = [ln.strip() for ln in (answer.stdout or "").splitlines()
+            if ln.strip() and not ln.strip().startswith("Nothing was written")]
+    return " ".join([answer.why or "the publish tool gave no answer", *said])
+
+
+def publish_state(vault: Path) -> tuple[set[str] | None, str | None]:
+    """(paths on the publish list now, why not). `None` with a reason when
+    the tool cannot be asked or the vault has no publish list."""
+    listing = ask_publish_tool(vault, ["manifest", "list"])
+    if listing.why or not isinstance(listing.data, dict):
+        return None, _tool_why(listing)
+    if not listing.data.get("listed"):
+        return None, "the vault has no publish list; set one up first"
+    return {_nfc(str(p)) for p in listing.data.get("publishing") or []}, None
+
+
 def apply_publish(vault: Path, paths: list[str]) -> tuple[list[str], str | None]:
     """(paths that now publish, why not). Puts `paths` on the publish list
     through the publish tool, then asks the tool what publishes."""
-    listing = ask_publish_tool(vault, ["manifest", "list"])
-    if listing.why or not isinstance(listing.data, dict):
-        return [], listing.why or "the publish tool gave no answer"
-    if not listing.data.get("listed"):
-        return [], "the vault has no publish list; set one up first"
+    before, why = publish_state(vault)
+    if before is None:
+        return [], why
     args = ["manifest", "apply"]
     for p in paths:
         args += ["--publish", p]
     done = ask_publish_tool(vault, args)
     if done.why or not isinstance(done.data, dict):
-        return [], done.why or "the publish tool gave no answer"
-    after = ask_publish_tool(vault, ["manifest", "list"])
-    if after.why or not isinstance(after.data, dict):
-        return [], after.why or "the publish tool gave no answer"
-    publishing = {_nfc(str(p)) for p in after.data.get("publishing") or []}
-    return [p for p in paths if _nfc(p) in publishing], None
+        return [], _tool_why(done)
+    after, why = publish_state(vault)
+    if after is None:
+        return [], why
+    return [p for p in paths if _nfc(p) in after], None
 
 
 def _refusal(vault: Path, rel: str) -> str | None:
@@ -86,20 +102,23 @@ def _refusal(vault: Path, rel: str) -> str | None:
     return None
 
 
-def _clear_withheld(vault: Path, rel: str) -> str | None:
-    """New text with `withheld: false`, or None when there is nothing to do."""
+def _clear_withheld(vault: Path, rel: str) -> tuple[str | None, str | None]:
+    """(new text with `withheld: false` or None when there is nothing to do,
+    why it could not be done)."""
     text = (vault / rel).read_text(encoding="utf-8")
     lines = text.splitlines(keepends=True)
     end, error = frontmatter_span(lines)
+    if error == "no frontmatter":
+        return None, None
     if error:
-        return None
+        return None, f"withheld not cleared: frontmatter {error}"
     eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
     fm = [ln.rstrip("\r\n") for ln in lines[1:end]]
     current = next((ln for ln in fm if ln.startswith("withheld:")), None)
     if current is None or current.split(":", 1)[1].strip().lower() == "false":
-        return None
+        return None, None
     set_block(fm, "withheld", "false")
-    return "---" + eol + eol.join(fm) + eol + "---" + eol + "".join(lines[end + 1:])
+    return "---" + eol + eol.join(fm) + eol + "---" + eol + "".join(lines[end + 1:]), None
 
 
 def _load_log(vault: Path) -> dict[str, Any]:
@@ -124,9 +143,19 @@ def _merge_entry(log: dict[str, Any], session: str, published: list[str],
         entry = {"session": session, "date": today, "published": [], "released": []}
         log["entries"].append(entry)
     entry["date"] = today
-    entry["published"] = sorted({*entry.get("published", []), *published})
-    seen = {(r["page"], r["what"]) for r in [*entry.get("released", []), *released]}
-    entry["released"] = [{"page": p, "what": w} for p, w in sorted(seen)]
+    old_pub = entry.get("published")
+    old = old_pub if isinstance(old_pub, list) else []
+    entry["published"] = sorted({*(x for x in old if isinstance(x, str)), *published})
+    old_rel = entry.get("released")
+    kept: list[Any] = []
+    seen = {(r["page"], r["what"]) for r in released}
+    for r in old_rel if isinstance(old_rel, list) else []:
+        if isinstance(r, dict) and isinstance(r.get("page"), str) \
+                and isinstance(r.get("what"), str):
+            seen.add((r["page"], r["what"]))
+        else:
+            kept.append(r)      # hand-edited: kept as written, not merged
+    entry["released"] = [{"page": p, "what": w} for p, w in sorted(seen)] + kept
 
 
 def _write_log(vault: Path, log: dict[str, Any]) -> None:
@@ -168,32 +197,43 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
         wanted = []
 
     published: list[str] = []
-    if wanted and not write:
-        for rel in wanted:
-            counts["publish"] += 1
-            row("WOULD-PUBLISH", rel)
-            if _clear_withheld(vault, rel) is not None:
-                counts["clear"] += 1
-                row("WOULD-CLEAR", rel, "withheld: false")
-        published = wanted
-    elif wanted:
-        done, why = apply_publish(vault, wanted)
-        if why:
-            error(", ".join(wanted), f"publish failed, nothing changed: {why}")
-        for rel in wanted:
-            if rel in done:
-                continue
-            if not why:
-                error(rel, "the publish tool does not list it as publishing; withheld kept")
-        for rel in done:
-            counts["publish"] += 1
-            row("PUBLISHED", rel)
-            new = _clear_withheld(vault, rel)
-            if new is not None:
-                (vault / rel).write_text(new, encoding="utf-8", newline="")
-                counts["clear"] += 1
-                row("CLEARED", rel, "withheld: false")
-        published = list(done)
+    if wanted:
+        before, why = publish_state(vault)
+        if before is None:
+            for rel in wanted:
+                error(rel, f"publish refused, nothing changed: {why}")
+            wanted = []
+        else:
+            already = [r for r in wanted if _nfc(r) in before]
+            fresh = [r for r in wanted if r not in already]
+            verb_pub, verb_clear = ("PUBLISHED", "CLEARED") if write else \
+                ("WOULD-PUBLISH", "WOULD-CLEAR")
+            done = list(fresh)
+            if write and fresh:
+                done, why = apply_publish(vault, fresh)
+                if why:
+                    for rel in fresh:
+                        error(rel, f"publish failed, nothing changed: {why}")
+                else:
+                    for rel in fresh:
+                        if rel not in done:
+                            error(rel, "the publish tool does not list it as "
+                                       "publishing; withheld kept")
+            for rel in already:
+                row("SKIP", rel, "already published; not logged for this session")
+            for rel in [*done, *already]:
+                if rel in done:
+                    counts["publish"] += 1
+                    row(verb_pub, rel)
+                    published.append(rel)
+                new, problem = _clear_withheld(vault, rel)
+                if problem:
+                    error(rel, problem)
+                elif new is not None:
+                    if write:
+                        (vault / rel).write_text(new, encoding="utf-8", newline="")
+                    counts["clear"] += 1
+                    row(verb_clear, rel, "withheld: false")
 
     items = [{"page": normalize_file_arg(p), "what": w} for p, w in released]
     if published or items:
