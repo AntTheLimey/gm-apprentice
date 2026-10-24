@@ -91,8 +91,8 @@ ask:
 > (y/n)"
 
 Yes → remove the `<!-- spoiler -->` / `<!-- /spoiler -->` markers,
-leaving the content as published prose. No → leave it; it is asked
-again next time the entity is touched, or caught by campaign-qa (see
+leaving the content as published prose. No → leave it for the next
+wrap-up's step 4d, or campaign-qa (see
 `publish-site/references/content-filtering.md`). None → skip
 silently.
 
