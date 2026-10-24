@@ -68,6 +68,12 @@ class WrapupStep4dTests(unittest.TestCase):
         self.assertLess(flat.index("what they kept hidden"),
                         flat.index("On none, skip the rest."))
 
+    def test_step_4_leaves_hiding_to_4d(self):
+        step4 = " ".join(section(self.text, "### 4. Update the World").split())
+        self.assertIn("Leave `withheld`, spoiler and gm-only blocks and GM "
+                      "Notes secrets as they are; step 4d releases them "
+                      "with the GM.", step4)
+
     def test_reads_wrapup_too_and_none_skips(self):
         self.assertIn("From the Play Notes, the Wrap-Up and the recap", self.step)
         self.assertIn("On none, skip the rest.", " ".join(self.step.split()))
