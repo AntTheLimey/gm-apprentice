@@ -38,7 +38,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from reveal_scan import NEVER_CANDIDATES  # noqa: E402
 from vault_check import _site_config, ask_publish_tool  # noqa: E402
 from vault_write import set_block  # noqa: E402
-from vaultlib import entity_type, extract_frontmatter, frontmatter_span, normalize_file_arg  # noqa: E402
+from vaultlib import (  # noqa: E402
+    WITHHELD_KEY_RE, entity_type, extract_frontmatter, frontmatter_span, normalize_file_arg)
 
 LOG = "_meta/reveals.json"
 
@@ -66,12 +67,15 @@ def publish_state(vault: Path) -> tuple[set[str] | None, str | None]:
     return {_nfc(str(p)) for p in listing.data.get("publishing") or []}, None
 
 
-def apply_publish(vault: Path, paths: list[str]) -> tuple[list[str], str | None]:
+def apply_publish(vault: Path, paths: list[str],
+                  before: set[str] | None = None) -> tuple[list[str], str | None]:
     """(paths that now publish, why not). Puts `paths` on the publish list
-    through the publish tool, then asks the tool what publishes."""
-    before, why = publish_state(vault)
+    through the publish tool, then asks the tool what publishes. `before` is
+    the state the caller already asked for; without it the tool is asked."""
     if before is None:
-        return [], why
+        before, why = publish_state(vault)
+        if before is None:
+            return [], why
     args = ["manifest", "apply"]
     for p in paths:
         args += ["--publish", p]
@@ -114,9 +118,10 @@ def _clear_withheld(vault: Path, rel: str) -> tuple[str | None, str | None]:
         return None, f"withheld not cleared: frontmatter {error}"
     eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
     fm = [ln.rstrip("\r\n") for ln in lines[1:end]]
-    current = next((ln for ln in fm if ln.startswith("withheld:")), None)
-    if current is None or current.split(":", 1)[1].strip().lower() == "false":
+    at = next((i for i, ln in enumerate(fm) if WITHHELD_KEY_RE.match(ln)), None)
+    if at is None or fm[at].split(":", 1)[1].strip().lower() == "false":
         return None, None
+    fm[at] = "withheld:"        # the spellings the build accepts, one spelling here
     set_block(fm, "withheld", "false")
     return "---" + eol + eol.join(fm) + eol + "---" + eol + "".join(lines[end + 1:]), None
 
@@ -208,9 +213,15 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
             fresh = [r for r in wanted if r not in already]
             verb_pub, verb_clear = ("PUBLISHED", "CLEARED") if write else \
                 ("WOULD-PUBLISH", "WOULD-CLEAR")
+            # Know the clear can be done before anything is published.
+            clears = {r: _clear_withheld(vault, r) for r in wanted}
+            for rel in list(fresh):
+                if clears[rel][1]:
+                    error(rel, f"not published, nothing changed: {clears[rel][1]}")
+                    fresh.remove(rel)
             done = list(fresh)
             if write and fresh:
-                done, why = apply_publish(vault, fresh)
+                done, why = apply_publish(vault, fresh, before)
                 if why:
                     for rel in fresh:
                         error(rel, f"publish failed, nothing changed: {why}")
@@ -226,12 +237,16 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                     counts["publish"] += 1
                     row(verb_pub, rel)
                     published.append(rel)
-                new, problem = _clear_withheld(vault, rel)
+                new, problem = clears[rel]
                 if problem:
                     error(rel, problem)
                 elif new is not None:
                     if write:
-                        (vault / rel).write_text(new, encoding="utf-8", newline="")
+                        try:
+                            (vault / rel).write_text(new, encoding="utf-8", newline="")
+                        except OSError as e:
+                            error(rel, f"withheld not cleared: {e}")
+                            continue
                     counts["clear"] += 1
                     row(verb_clear, rel, "withheld: false")
 

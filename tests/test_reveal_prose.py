@@ -4,9 +4,9 @@
 The step runs reveal_scan.py and reveal.py by full command line, so the
 model never reads their source; the GM confirms before `--write`; the
 Plan is never a source of what came out. Reconcile 3.5 no longer asks
-about spoilers itself: it points at 4d, and asks as before only for a
-wrap-up made before 4d existed. Structural, not behavioral: proves the
-wording, not a run.
+about spoilers itself: it points at 4d, and asks as before only when
+`_meta/reveals.json` has no entry for the session. Structural, not
+behavioral: proves the wording, not a run.
 
 Run: python tests/test_reveal_prose.py
 """

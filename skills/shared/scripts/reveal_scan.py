@@ -82,6 +82,9 @@ def _session_note(notes: list[Note], arg: str) -> Note:
         if n.rel in wanted:
             return n
     stems = [n for n in notes if Path(n.rel).stem == Path(rel).stem and n.type == "session"]
+    if len(stems) > 1:
+        raise LookupError(f"{rel} matches several session indexes, give the path: "
+                          + ", ".join(n.rel for n in stems))
     if stems:
         return stems[0]
     raise LookupError(f"no session index at {rel}")
@@ -143,10 +146,7 @@ def _stripped_by_path(vault: Path) -> tuple[dict[str, list[str]], str | None]:
 
 
 def scan(vault: Path, session: str) -> ScanResult:
-    notes = [Note(rel, text) for rel, text in vault_files(vault)]
-    index = _session_note(notes, session)
-    result = ScanResult(title=Path(index.rel).stem)
-
+    result = ScanResult()
     listing = ask_publish_tool(vault, ["manifest", "list"], site_optional=True)
     data = listing.data
     if not isinstance(data, dict) or not data.get("listed"):
@@ -156,6 +156,10 @@ def scan(vault: Path, session: str) -> ScanResult:
         result.why = None if isinstance(data, dict) else listing.why
         return result
     publishing = {unicodedata.normalize("NFC", str(p)) for p in data.get("publishing") or []}
+
+    notes = [Note(rel, text) for rel, text in vault_files(vault)]
+    index = _session_note(notes, session)
+    result.title = Path(index.rel).stem
 
     by_name = _index(notes)
     sources = _sources(index, notes, by_name)
@@ -187,7 +191,7 @@ def scan(vault: Path, session: str) -> ScanResult:
         except PublishToolUnavailable as e:
             withheld, warning = None, f"withheld unknown: {e}"
         hidden = _hidden_parts(note, stripped.get(unicodedata.normalize("NFC", note.rel), []))
-        if published and not hidden:
+        if published and not hidden and withheld is not True:
             continue
         if warning and warning not in result.warnings:
             result.warnings.append(warning)
@@ -202,8 +206,8 @@ def render(result: ScanResult) -> list[str]:
         return ["reveals: no publish list; nothing to unlock"]
     out = [f"reveals: {result.title} (sources: {', '.join(result.sources) or 'none'})"]
     for row in result.rows:
-        state = ("published" if row.published else "unpublished"
-                 + {True: " withheld", False: "", None: " withheld unknown"}[row.withheld])
+        state = ("published" if row.published else "unpublished") \
+            + {True: " withheld", False: "", None: " withheld unknown"}[row.withheld]
         out.append("\t".join([row.path, state, "; ".join(row.hidden)]))
     out.extend(f"# warning: {w}" for w in result.warnings)
     out.append(f"# notes: {len(result.rows)}")

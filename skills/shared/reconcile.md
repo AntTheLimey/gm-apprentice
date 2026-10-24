@@ -82,7 +82,7 @@ resolution, and **wait for the GM's decision** before the next.
 
 Spoilers are released at session-wrapup step 4d. Only when
 `_meta/reveals.json` has no entry whose `session` is this session
-index's file name, for each block under the scan's `open spoilers:`
+index's title (file name without `.md`), for each block under the scan's `open spoilers:`
 (and in any entity this run updated that the Wrap-Up does not link),
 ask:
 

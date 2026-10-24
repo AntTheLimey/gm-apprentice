@@ -21,6 +21,7 @@ SCRIPTS = ROOT / "skills" / "shared" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import reveal  # noqa: E402
+from vault_check import ToolAnswer  # noqa: E402
 
 VEX = "NPCs/Vex.md"
 SESSION = "Chapters/Chapter 1/Sessions/Session 12 - Mill.md"
@@ -45,7 +46,7 @@ def run(root: Path, *args: str, applied: tuple[list[str], str | None] | None = N
     buf = io.StringIO()
     config = (Path("/site/vault.config.json"), None) if site else (None, None)
 
-    def fake(_vault: Path, paths: list[str]) -> tuple[list[str], str | None]:
+    def fake(_vault: Path, paths: list[str], _before: object = None) -> tuple[list[str], str | None]:
         return (list(paths), None) if applied is None else applied
 
     with mock.patch.object(reveal, "_site_config", return_value=config), \
@@ -183,7 +184,62 @@ class RevealTests(unittest.TestCase):
                                      encoding="utf-8")
         code, out, _ = run(self.root, "--publish", VEX, "--write")
         self.assertEqual(code, 1)
+        self.assertIn(f"ERROR\t{VEX}\tnot published, nothing changed: withheld not cleared", out)
+
+    def test_unclearable_path_is_not_published(self) -> None:
+        (self.root / VEX).write_text("---\ntype: npc\nwithheld: true\n--- \nbody\n",
+                                     encoding="utf-8")
+        code, out, ap = run(self.root, "--publish", VEX, "--publish", "Places/Mill.md", "--write")
+        self.assertEqual(code, 1)
+        self.assertEqual(ap.call_args.args[1], ["Places/Mill.md"])
+        self.assertIn(f"ERROR\t{VEX}\tnot published", out)
+        self.assertNotIn(f"PUBLISHED\t{VEX}", out)
+        self.assertEqual(log_of(self.root)["entries"][-1]["published"], ["Places/Mill.md"])
+
+    def test_write_failure_is_an_error_row_not_a_traceback(self) -> None:
+        real = Path.write_text
+
+        def boom(self_: Path, *a: object, **kw: object) -> int:
+            if self_.name == "Vex.md":
+                raise PermissionError("read-only")
+            return real(self_, *a, **kw)  # type: ignore[arg-type]
+
+        with mock.patch.object(Path, "write_text", boom):
+            code, out, _ = run(self.root, "--publish", VEX, "--write")
+        self.assertEqual(code, 1)
         self.assertIn(f"ERROR\t{VEX}\twithheld not cleared", out)
+        self.assertIn("# publish: 1 clear: 0 log: 1 errors: 1", out)
+        self.assertEqual(log_of(self.root)["entries"][-1]["published"], [VEX])
+
+    def test_other_spellings_of_the_key_are_cleared(self) -> None:
+        for spelled in ('withheld:    True', 'withheld:true'):
+            (self.root / VEX).write_text(f"---\ntype: npc\n{spelled}\n---\n\nVex.\n",
+                                         encoding="utf-8")
+            code, out, _ = run(self.root, "--publish", VEX, "--write")
+            self.assertEqual(code, 0, out)
+            text = (self.root / VEX).read_text(encoding="utf-8")
+            self.assertEqual(text, "---\ntype: npc\nwithheld: false\n---\n\nVex.\n", spelled)
+
+    def test_spelling_the_helpers_refuse_is_not_published(self) -> None:
+        for spelled in ("withheld : true", '"withheld": true'):
+            (self.root / VEX).write_text(f"---\ntype: npc\n{spelled}\n---\n\nVex.\n",
+                                         encoding="utf-8")
+            code, out, ap = run(self.root, "--publish", VEX, "--write")
+            self.assertEqual(code, 1)
+            ap.assert_not_called()
+            self.assertIn("withheld not cleared", out)
+
+    def test_publish_state_asked_once_per_run(self) -> None:
+        with mock.patch.object(reveal, "ask_publish_tool") as ask, \
+                mock.patch.object(reveal, "_site_config",
+                                  return_value=(Path("/site/vault.config.json"), None)):
+            ask.side_effect = [
+                ToolAnswer(data={"listed": True, "publishing": []}),
+                ToolAnswer(data={}),
+                ToolAnswer(data={"listed": True, "publishing": [VEX]})]
+            reveal.run(self.root, "Session 12", [VEX], [], True)
+        lists = [c for c in ask.call_args_list if c.args[1] == ["manifest", "list"]]
+        self.assertEqual(len(lists), 2)     # before and after apply, no third
 
     def test_hand_edited_log_entry_does_not_crash(self) -> None:
         (self.root / "_meta").mkdir()

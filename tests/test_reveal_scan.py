@@ -209,6 +209,29 @@ class RevealScan(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("no session index", err.getvalue())
 
+    def test_published_but_withheld_is_listed(self) -> None:
+        res = run_scan({**base(), "NPCs/Vex.md": VEX}, publishing=["NPCs/Vex.md"])
+        self.assertEqual(rv.render(res)[1], "NPCs/Vex.md\tpublished withheld\t")
+
+    def test_bare_name_matching_several_indexes_is_an_error(self) -> None:
+        other = {"Other/Session 12 - Mill.md": "---\ntype: session\n---\n"}
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(rv, "ask_publish_tool", tool()):
+            vault = make_vault(tmp, {**base(), **other})
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                code = rv.main([str(vault), "Session 12 - Mill"])
+        self.assertEqual(code, 2)
+        self.assertIn(INDEX, err.getvalue())
+        self.assertIn("Other/Session 12 - Mill.md", err.getvalue())
+
+    def test_no_publish_list_reads_no_notes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(rv, "ask_publish_tool", tool(listed=False)), \
+                mock.patch.object(rv, "vault_files", side_effect=AssertionError("read")):
+            res = rv.scan(make_vault(tmp, base()), INDEX)
+        self.assertFalse(res.listed)
+
     def test_render_rows(self) -> None:
         res = run_scan({**base(), "NPCs/Vex.md": VEX})
         self.assertEqual(rv.render(res), [
