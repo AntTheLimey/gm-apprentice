@@ -34,7 +34,8 @@ this Wrap-Up's GM Notes.
 "<session index>" --source "<notes' origin>" --write` creates it.
 Sections, per `shared/templates/session-wrap.md` (vault copy
 `_Templates/_Template_Session_WrapUp.md` if present), go in with
-`vw wrapup-add "<wrap-up>" --write`, several per call. Those not
+`vw wrapup-add "<wrap-up>" --write <<'EOF'` … `EOF`, several per
+call (`--replace` rewrites a section already there). Those not
 marked optional/conditional are required. Add any section the GM
 or the story calls for. `##` is for players and keeps every deeper
 heading sent after it in that call, up to one the template names;

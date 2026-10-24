@@ -328,6 +328,51 @@ class SessionNewTests(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("2 chapter notes match", out)
 
+    def test_a_chapter_named_by_its_folder_finds_sessions_linked_by_another_name(self):
+        # Older sessions link "Chapter 4 - Ashford", a name the chapter note
+        # doesn't carry; naming the chapter by its folder still files the
+        # next session beside them.
+        ch = "Chapters/Chapter 4"
+        (self.vault / ch / "Sessions").mkdir(parents=True)
+        (self.vault / ch / "chapter-overview.md").write_text(
+            '---\ntype: chapter\ntitle: "Ashford"\n---\n', encoding="utf-8")
+        (self.vault / ch / "Sessions" / "Session 05 - Mill.md").write_text(
+            '---\ntype: session\nsession_number: 5\n'
+            'chapter: "[[Chapter 4 - Ashford]]"\n---\n', encoding="utf-8")
+        for name in ("Chapter 4", "Ashford"):
+            code, out = run(self.vault, "session-new", "--number", "6",
+                            "--title", "Fork", "--chapter", name)
+            self.assertEqual(code, 0, out)
+            self.assertIn(f"WOULD-CREATE\t{ch}/Sessions/Session 06 - Fork.md"
+                          f"\t\tsession template, after {ch}/Sessions/"
+                          "Session 05 - Mill.md", out)
+        code, out = run(self.vault, "session-new", "--number", "5",
+                        "--title", "Again", "--chapter", "Chapter 4")
+        self.assertEqual(code, 1, out)
+        self.assertIn("session 5 already has an index", out)
+
+    def test_an_unknown_chapter_is_refused_with_the_chapters_there_are(self):
+        code, out = run(self.vault, "session-new", "--number", "1",
+                        "--title", "Arrival", "--chapter", "Nowhere")
+        self.assertEqual(code, 1, out)
+        self.assertIn("no chapter named 'Nowhere': name one by its folder, "
+                      "file name or title (Chapter 1 - The Far Dark)", out)
+
+    def test_upcoming_writes_the_index_alone_as_planned(self):
+        code, out = run(self.vault, "session-new", "--number", "13",
+                        "--title", "The Long Way Round", "--upcoming",
+                        "--write")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("Play Notes", out)
+        self.assertFalse((self.vault / NOTES).exists())
+        text = self.read(INDEX)
+        self.assertIn("status: planned", text)
+        self.assertIn("  play_notes: null", text)
+        code, out = run(self.vault, "session-new", "--number", "14",
+                        "--title", "X", "--upcoming", "--export", "x.md")
+        self.assertEqual(code, 1, out)
+        self.assertIn("--upcoming has no Play Notes", out)
+
     def test_a_title_that_cannot_be_a_file_name_is_refused(self):
         code, out = run(self.vault, "session-new", "--number", "13",
                         "--title", "Who/What?")

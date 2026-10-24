@@ -46,9 +46,13 @@ exception).
   player and stop.
 - Read `shared/session-principles.md` and run its Version Gate on first
   invocation.
-- Read `shared/session-document-chain.md`. You write Plan files. On
-  an existing session index set only `status` and `documents.plan`
-  (`stamp_entities.py --set`). Never write to the index body: scene
+- Read `shared/session-document-chain.md`. You write Plan files. No
+  index yet: `python3
+  "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" <vault>
+  session-new --number N --title "<title>" --chapter "<chapter>"
+  --upcoming --write`. On the index set only `status` and
+  `documents.plan`: `stamp_entities.py <vault> "<index>" --set
+  status=prepped --set 'documents.plan=[[<plan>]]' --write`. Never write to the index body: scene
   states, key prep and image prompts go in the Plan. You read earlier Wrap-Ups for context, not
   other sessions' Play Notes or Plans (exception: raw Play Notes, to
   generate a recap when no Wrap-Up exists — step 7).
@@ -325,9 +329,10 @@ run headless (e.g. as a sub-agent with no GM):
   Verify may still run.
 
 A headless run must pass `plan_check.py <plan> --headless` before
-handoff. When the GM supplied intent, scenes and spotlight up front (a
-scripted or batch prep), add `--gm-input`: the spine is theirs, so the
-guard is skipped. A sub-agent may gather and draft from the GM's
+handoff. What the GM's request itself settles (scenes it names, an
+intent, a spotlight) is GM input: write it in place, park only the
+rest, and add `--gm-input` with those parts (`scenes`, `intent`,
+`spotlight`; bare `--gm-input` when the GM supplied all three). A sub-agent may gather and draft from the GM's
 decisions but never resolves intent, spotlight or scenes.
 
 ## Resumable prep

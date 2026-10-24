@@ -21,7 +21,8 @@ mentions that chapter or its bare "Chapter N" form. Omitted, section A
 covers every chapter and section B considers every adventure that is
 not Ingested or Complete.
 
---against NAME (repeatable) adds an Overlap section: Planning/ entries
+--against NAME ... (space- or comma-separated, repeatable) adds an
+Overlap section, headed by the names it read: Planning/ entries
 whose `participants`/`locations` name any of the given entities — the
 check for "does this new scene collide with a thread we're already
 tracking."
@@ -245,11 +246,13 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("vault", type=Path)
     ap.add_argument("--chapter", help="narrow to one chapter (casefold substring)")
-    ap.add_argument("--against", action="append", default=[],
-                    help="report Planning/ entries naming this participant "
-                         "or location (repeatable)")
+    ap.add_argument("--against", action="extend", nargs="+", default=[],
+                    help="report Planning/ entries naming these participants "
+                         "or locations (space- or comma-separated, repeatable)")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
+    args.against = [n.strip() for raw in args.against
+                    for n in raw.split(",") if n.strip()]
     if not args.vault.is_dir():
         print(f"error: not a directory: {args.vault}", file=sys.stderr)
         return 2
@@ -310,6 +313,7 @@ def main() -> int:
 
     if args.against:
         print("\n===== Overlap =====")
+        print("against: " + ", ".join(args.against))
         if not overlap:
             print("(no overlap)")
         for row in overlap:

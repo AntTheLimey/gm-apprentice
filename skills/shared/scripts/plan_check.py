@@ -7,7 +7,8 @@ Read-only companion to vault_check.py for a single Session Plan
 markdown file. Stdlib only.
 
 Usage:
-  plan_check.py PLAN.md [--headless [--gm-input]] [--inventory] [--state] [--json]
+  plan_check.py PLAN.md [--headless [--gm-input [intent] [scenes] [spotlight]]]
+                [--inventory] [--state] [--json]
 
 Default output: finding rows as `LEVEL<TAB>locus<TAB>message`, then a
 `# errors: N  warnings: N  info: N` summary line. `--inventory` prints
@@ -76,7 +77,10 @@ Checks, by id, level, and the rule they mechanise:
                          `--gm-input` says the GM supplied the spine (a
                          scripted or batch prep): the guard's job is to
                          stop an apprentice inventing it, so it is skipped
-                         and one INFO row says so
+                         and one INFO row says so. `--gm-input scenes`
+                         (or intent, spotlight) names only the parts the
+                         GM supplied: those sections may be settled, the
+                         rest of the guard still runs
                          (SKILL.md, Hard Guard)
   prep-state    INFO/    a resumable prep-state marker exists and parses
                 WARNING  (SKILL.md, Resumable prep)
@@ -252,6 +256,9 @@ MISSING_ITEM_RE = re.compile(
 GUARD_SECTIONS: tuple[str, ...] = (
     "Session Intent", PLANNED_SCENES_TITLE, "Spotlight Forecast",
 )
+# `--gm-input` names for the guard sections, in GUARD_SECTIONS order.
+GM_INPUT_PARTS: dict[str, str] = dict(zip(
+    ("intent", "scenes", "spotlight"), GUARD_SECTIONS))
 # A list item opener: `- `, `* `, or `1. `. A hard-wrapped continuation
 # line carries none of these and belongs to the item above it.
 LIST_MARKER_RE = re.compile(r"^(?:[-*]|\d+\.)\s+")
@@ -849,10 +856,15 @@ def _open_questions_items(states: list[vl.LineState]
 
 
 def check_hard_guard(rel: str, states: list[vl.LineState],
-                     by_norm: dict[str, tuple[int, str, str]]
+                     by_norm: dict[str, tuple[int, str, str]],
+                     supplied: frozenset[str] = frozenset()
                      ) -> list[Finding]:
+    """`supplied`: the guard sections the GM's request settled
+    (`--gm-input scenes`), which may hold settled content."""
     findings: list[Finding] = []
     for title in GUARD_SECTIONS:
+        if title in supplied:
+            continue
         entry = by_norm.get(_norm_title(title))
         if entry is None:
             continue
@@ -861,14 +873,20 @@ def check_hard_guard(rel: str, states: list[vl.LineState],
             findings.append(Finding(
                 "hard-guard", "ERROR", f"{rel}:§{raw_title}",
                 f"hard-guard: '## {raw_title}' has non-placeholder "
-                f"content while running headless — GM input required"))
+                f"content while running headless — GM input required: "
+                f"leave it empty or one [bracketed] line and put each "
+                f"guess under ## Open Questions marked '(apprentice guess "
+                f"— confirm)'; --gm-input intent|scenes|spotlight only "
+                f"for what the GM's request itself settled"))
     for start, joined in _open_questions_items(states):
         if GUARD_MARKER_RE.search(joined) or MISSING_ITEM_RE.match(joined):
             continue
         findings.append(Finding(
             "hard-guard", "ERROR", f"{rel}:{start}",
             f"hard-guard: Open Questions item lacks the "
-            f"'(apprentice guess — confirm)' marker: {joined!r}"))
+            f"'(apprentice guess — confirm)' marker (or, for a value "
+            f"the vault doesn't record, a '**Missing:**' start): "
+            f"{joined!r}"))
     return findings
 
 
@@ -894,7 +912,9 @@ def check_prep_state(rel: str, text: str) -> list[Finding]:
 
 
 def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool,
-               gm_input: bool = False) -> list[Finding]:
+               gm_input: bool | frozenset[str] = False) -> list[Finding]:
+    """`gm_input`: True when the GM supplied the whole spine, or the guard
+    sections the GM's request settled."""
     by_norm = _by_norm_title(text)
     states, _problems = vl.scan_body(text)
     findings: list[Finding] = []
@@ -914,13 +934,15 @@ def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool,
     findings.extend(check_table(rel, text))
     findings.extend(check_guess(rel, states))
     findings.extend(check_prep_state(rel, text))
-    if headless and gm_input:
+    supplied = (frozenset(GUARD_SECTIONS) if gm_input is True
+                 else gm_input or frozenset())
+    if headless and supplied == frozenset(GUARD_SECTIONS):
         findings.append(Finding(
             "hard-guard", "INFO", f"{rel}:1",
             "hard-guard: skipped — --gm-input says the GM supplied the "
             "creative spine"))
     elif headless:
-        findings.extend(check_hard_guard(rel, states, by_norm))
+        findings.extend(check_hard_guard(rel, states, by_norm, supplied))
     return findings
 
 
@@ -950,15 +972,17 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("plan", type=Path)
     ap.add_argument("--headless", action="store_true")
-    ap.add_argument("--gm-input", action="store_true",
-                    help="with --headless: the GM supplied the settled "
-                         "sections and Open Questions, so skip the guard")
+    ap.add_argument("--gm-input", nargs="*", choices=sorted(GM_INPUT_PARTS),
+                    metavar="PART",
+                    help="with --headless: the GM supplied the spine, so "
+                         "skip the guard; or name the parts the GM's "
+                         "request settled (intent, scenes, spotlight)")
     mode = ap.add_mutually_exclusive_group()
     mode.add_argument("--inventory", action="store_true")
     mode.add_argument("--state", action="store_true")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
-    if args.gm_input and not args.headless:
+    if args.gm_input is not None and not args.headless:
         ap.error("--gm-input only changes what --headless reports; "
                  "pass --headless too")
 
@@ -970,7 +994,10 @@ def main() -> int:
 
     rel = str(args.plan)
     fm = vl.extract_frontmatter(text) or {}
-    findings = run_checks(rel, text, fm, args.headless, args.gm_input)
+    gm_input: bool | frozenset[str] = (
+        False if args.gm_input is None else
+        frozenset(GM_INPUT_PARTS[p] for p in args.gm_input) or True)
+    findings = run_checks(rel, text, fm, args.headless, gm_input)
     has_error = any(f.level == "ERROR" for f in findings)
 
     if args.json:

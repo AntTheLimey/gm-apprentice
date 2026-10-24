@@ -150,6 +150,14 @@ class OverlapTests(unittest.TestCase):
         self.assertIn("Temple_Approach.md\tBram, Docks", result.stdout)
         self.assertNotIn("Arc_Shape.md\t", result.stdout.split("===== Overlap =====")[1])
 
+    def test_space_and_comma_lists_read_as_separate_names(self):
+        for args in (["--against", "Bram", "Docks"], ["--against", "Bram,Docks"],
+                     ["--against", "Bram, Docks"]):
+            result = run_cli(MIDWIFE_VAULT, *args)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("against: Bram, Docks", result.stdout)
+            self.assertIn("Temple_Approach.md\tBram, Docks", result.stdout)
+
 
 class JsonShapeTests(unittest.TestCase):
 

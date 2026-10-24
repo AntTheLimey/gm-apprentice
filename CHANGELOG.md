@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.95] — 2026-10-24
+
+Fewer wasted steps in prep: scripts accept the forms a model tries
+first and say what to do when they refuse, and the skill text gives
+the full command where a model used to look it up.
+
+### Added
+
+- `vw session-new --upcoming`: the index of a session not yet played,
+  status `planned`, with no Play Notes. Prep used to get a "played"
+  index and an empty Play Notes file, and had to undo both by hand.
+
+### Changed
+
+- `plans_index.py --against` takes names space- or comma-separated
+  or repeated, and heads the Overlap section with the names it read.
+  A comma list used to be read as one name and report no overlap.
+- The Plan check's hard-guard rows say how to pass: leave the heading
+  empty or one bracketed line, and put each guess under Open Questions
+  with the guess marker.
+- A prep run without the GM counts what the GM's request itself
+  settles as the GM's: scenes it names are planned in place, and only
+  the rest waits under Open Questions. `plan_check.py --gm-input` takes
+  the parts the GM supplied (`scenes`, `intent`, `spotlight`); bare
+  `--gm-input` still means all three.
+- A chapter name no note answers to is refused with the chapters
+  there are.
+- Skills run a command line the skill spells out as given, and use
+  `--help` only for one it doesn't. session-prep gives the full
+  `session-new` and index-stamp lines; session-wrapup shows
+  `wrapup-add` with its text block and `--replace`.
+
+### Fixed
+
+- `vw session-new --chapter` named by the chapter's folder or title
+  found no earlier session when those sessions link the chapter by
+  another name, and filed the new one in a folder of its own as the
+  chapter's first.
+
 ## [1.10.94] — 2026-10-23
 
 Backstories: a D&D Beyond character's backstory comes into the vault, and
