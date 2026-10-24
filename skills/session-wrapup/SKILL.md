@@ -277,6 +277,36 @@ If `_World/` exists or the notes hold likely world facts
 `### World Fact Findings`. Stage only — reconcile (step 2.5)
 presents the three-state prompts.
 
+### 4d. What came out tonight
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/reveal_scan.py" \
+  <vault> "<index>"
+```
+
+It lists the notes this session touched that the site still hides,
+with what each hides. On "no publish list", skip this step silently.
+From the Play Notes and recap only, propose one list of what came
+out: people, places and things met or learned of; secrets now known,
+by page, from the scan's hidden parts; clues found; props handed over
+or shown; places visited. Never propose from the Plan. The GM picks
+all, some or none; nothing changes until they confirm.
+
+For each picked secret, edit that page so the fact is hidden nowhere
+on it, in whatever way suits how it came out, and remove the spoiler
+markers around what it released. Then, with one `--publish` per note
+to publish and one `--released` per secret:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/reveal.py" \
+  <vault> --session "<index title>" \
+  --publish <path> --released "<path>=<what came out>"
+```
+
+Show the dry-run rows as-is. Yes → re-run with `--write`; it
+publishes, lifts `withheld` and logs the session. Tell the GM the
+reason on any ERROR row. Never publish a scene, Plan or session note.
+
 ### 5. Remaining GM Notes
 
 Fill What Carries Forward, World State, Keeper Checklist, Quality

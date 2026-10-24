@@ -80,8 +80,10 @@ resolution, and **wait for the GM's decision** before the next.
 
 ### 3.5. Spoiler reveal check
 
-For each block under the scan's `open spoilers:` (and in any entity
-this run updated that the Wrap-Up does not link), ask:
+Spoilers are released at session-wrapup step 4d. Only for a Wrap-Up
+made before plugin 1.10.100 (no 4d ran), for each block under the
+scan's `open spoilers:` (and in any entity this run updated that the
+Wrap-Up does not link), ask:
 
 > "[[{Entity}]] has a pending spoiler: '{first ~10 words of the
 > spoiler text}...' — was this revealed to the players this session?

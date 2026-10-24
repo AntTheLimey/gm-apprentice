@@ -23,6 +23,8 @@ being open.
 | A PC's Current Status fields: print them, or rewrite the ones sent in place | `vault_write.py status PC --show` / `--write` |
 | Wrap-Up conformance (+ `--fix` re-nest) | `vault_check.py wrapup` |
 | Faults in the notes that change what the site shows (a named note with no page, a stray `%%`, an unclosed fence, a secret name in prose) | `vault_check.py site-faults` |
+| What the site still hides in the notes a session touched | `reveal_scan.py VAULT INDEX` |
+| Publish what a session revealed, lift `withheld`, log it in `_meta/reveals.json` (dry run first; `--write`) | `reveal.py VAULT --session NAME` |
 | Active PC roster | `vault_check.py active-pcs` |
 | Session-prep context bundle (one call) | `session_context.py` |
 | At-table plan brief | `session_context.py --play` |
