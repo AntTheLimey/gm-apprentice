@@ -155,6 +155,10 @@ describe('pcTemplate pull quote', () => {
     const body = templateBody('pc-dnd-5e-2024.md');
     assert.strictEqual(quote(quoted({}, sheet, body + prose)), 'A sailor out of Brest.');
   });
+  it('falls through a blank new-layout template to later prose', () => {
+    const body = templateBody('pc-dnd-5e-2024.md');
+    assert.strictEqual(quote(quoted({}, sheet, body.replace('## Skills', 'A sailor out of Brest.\n\n## Skills'))), 'A sailor out of Brest.');
+  });
   it('keeps a bold phrase that opens a sentence', () => {
     assert.strictEqual(quote(quoted({}, sheet, '## Background\n\n**Jacob** was the coachman. He said little.\n')), 'Jacob was the coachman.');
   });

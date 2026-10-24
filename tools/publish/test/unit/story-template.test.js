@@ -62,3 +62,19 @@ describe('storyLanding', () => {
     assert.ok(!/Character Stories/.test(html));
   });
 });
+
+describe('characterStoryPage prologue', () => {
+  const base = { title: 'Ilse Varn', outputPath: 'story/characters/ilse.html', html: '<h2>Session 1 — Road</h2><p>Went.</p>', sheetOutputPath: 'characters/pcs/ilse.html' };
+  it('story page opens with the prologue', () => {
+    const html = characterStoryPage({ ...base, prologueHtml: '<p>For a hundred years she kept the index.</p>' }, cfg, pub, () => '');
+    assert.match(html, /class="pc-prologue"/);
+    assert.match(html, /Before the campaign/);
+    assert.match(html, /as their player wrote it/);
+    assert.ok(html.indexOf('pc-prologue') < html.indexOf('Session 1'), 'prologue above the first session');
+  });
+  it('story page without backstory is unchanged', () => {
+    const html = characterStoryPage(base, cfg, pub, () => '');
+    assert.doesNotMatch(html, /pc-prologue/);
+    assert.doesNotMatch(html, /Before the campaign/);
+  });
+});

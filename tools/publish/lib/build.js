@@ -31,7 +31,8 @@ const fontsLib = require('./fonts');
 const { buildStorySpine, chapterOfSession, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
-const { isSessionStory } = require('./story-sessions');
+const { isSessionStory, sessionLines } = require('./story-sessions');
+const { backgroundParts } = require('./pc-background');
 const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
 const { hasRealKvId, detectInbox, detectStatusBar } = require('./backend-flags');
@@ -1350,18 +1351,24 @@ function buildSite(options) {
         if (gm && page.headingsUnstable) sections = unstableSectionsMarked(sections, mark);
 
         let storyHtml;
-        // The page links to the story's own page (storyHref below) and prints none of it;
-        // rendering it here registers the images it uses. The audit's second render needs neither.
-        if (page.storyMarkdown && fx === liveFx) {
+        let storyLines;
+        // The page links to the story's own page (storyHref below) and lists a line per session;
+        // rendering it here registers the images it uses. Both renders read it, so the leak audit
+        // sees the same page; the warnings are the live render's alone.
+        const storyPath = page.storyMarkdown ? `story/characters/${require('./scanner').slugify(page.title)}.html` : null;
+        if (page.storyMarkdown) {
           const storyPage = {
             markdown: page.storyMarkdown,
             frontmatter: {},
             outputPath: page.outputPath,
           };
-          const storyProcessed = processContent(storyPage, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts, ...markOpt });
-          fx.warn(page.outputPath, storyProcessed.warnings);
+          const storyProcessed = processContent(storyPage, linkMap, excludeSections, imageMap, { usedImages: fx.usedImages, excludeCallouts, ...markOpt });
+          if (fx === liveFx) fx.warn(page.outputPath, storyProcessed.warnings);
           storyHtml = storyProcessed.html && storyProcessed.html.trim() ? storyProcessed.html : undefined;
+          storyLines = sessionLines(storyHtml).map((l) => ({ ...l, href: storyPath + l.href }));
         }
+        const ownParts = backgroundParts(sections);
+        backstoryOf.set(page, ownParts && ownParts.backstoryHtml ? ownParts.backstoryHtml : '');
 
         const system = publishConfig.system;
         // With sheets off the renderer is never called: no sheet, tab, panel, island or party entry exists to leak.
@@ -1447,7 +1454,8 @@ function buildSite(options) {
           // The PC's own events (#323), not the campaign's: the landing page has those.
           timelineStrip: renderTimelineStrip(eventsNaming(timelineData, page.outputPath, linkMap), { maxEvents: publishConfig.limits.timeline_events, from: page.outputPath }),
           onLook: fx.onLook,
-          storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,
+          storyHref: storyPath,
+          storyLines,
         });
         break;
       }
@@ -1622,6 +1630,8 @@ function buildSite(options) {
 
   // Published NPC pages whose body runs session by session (story-sessions.js), in page order.
   const npcStories = [];
+  // Each PC page's own backstory (processed, GM-only text already stripped or marked), kept for its story page's prologue.
+  const backstoryOf = new WeakMap();
   for (const page of pages) {
     try {
       if (getsNoPage(page)) continue;
@@ -1927,7 +1937,7 @@ function buildSite(options) {
         if (live) console.log(`  skipped ${dir}/index.html (authored index page)`);
         continue;
       }
-      emit(`${dir}/index.html`, indexTemplate(dir, label, dirPages, navFor, config, publishConfig, imageMap), `  wrote ${dir}/index.html`);
+      emit(`${dir}/index.html`, indexTemplate(dir, label, dirPages, navFor, config, publishConfig, imageMap, { cocFolio: require('./templates/pc').usesCocFolio(publishConfig, sheetsOff) }), `  wrote ${dir}/index.html`);
     }
 
     // Timeline page
@@ -1981,7 +1991,7 @@ function buildSite(options) {
     if (processed.overwide.length && audit) fx.tableRows.push({ rel: audit.storyRelOf(pc), rows: processed.overwide });
     const story = {
       title: pc.displayTitle, outputPath, html: processed.html,
-      sheetOutputPath: pc.outputPath, group: characterStoryGroup(pc.frontmatter, publishConfig.statuses.fallen),
+      sheetOutputPath: pc.outputPath, prologueHtml: backstoryOf.get(pc) || '', group: characterStoryGroup(pc.frontmatter, publishConfig.statuses.fallen),
     };
     const html = characterStoryPage(story, config, publishConfig, navFor);
     if (fx === liveFx && !gm) seen(audit.storyRelOf(pc), html, pc, true);

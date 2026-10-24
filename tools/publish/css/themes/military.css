@@ -20,6 +20,7 @@
   --warning: #eab308;
   --success: #4ade80;
   --font-heading: system-ui, -apple-system, sans-serif;
+  --font-reading: var(--font-heading);
   --font-body: system-ui, -apple-system, sans-serif;
   --font-heading-weight: 800;
 }

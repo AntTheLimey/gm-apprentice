@@ -30,6 +30,8 @@
   --font-body: system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, Monaco, Consolas, monospace;
   --font-serif: Georgia, "Times New Roman", serif;
+  /* The face a PC's backstory and hook are read in: a genre preset or a theme heading font sets its own. */
+  --font-reading: Georgia, 'Iowan Old Style', 'Times New Roman', serif;
 
   /* Scrollbars and form controls follow the palette (#260). */
   color-scheme: dark;
@@ -486,7 +488,7 @@ h3 {
 
 /* ===== PULL QUOTE ===== */
 .pull-quote {
-  font-family: var(--font-serif);
+  font-family: var(--font-reading);
   font-size: 1.15rem;
   font-style: italic;
   line-height: 1.6;
@@ -494,6 +496,10 @@ h3 {
   border-left: 3px solid var(--accent);
   padding: 0.75rem 0 0.75rem 1.25rem;
   margin: 0 0 1.5rem;
+}
+/* A quote taken from the backstory steps aside while the Story tab, which opens on it, is open */
+body:has(#tab-story.active) .pull-quote-backstory {
+  display: none;
 }
 
 /* ===== PC PAGE WITHOUT A SHEET ===== */
@@ -766,6 +772,116 @@ h3 {
 .story-prose a:hover {
   border-bottom-style: solid;
 }
+/* ===== PC STORY TAB =====
+   The backstory as a prologue (eyebrow, title, byline, reading face, drop capital), then
+   how they look, what drives them and the story so far. The sheet tab opens on a teaser. */
+.pc-prologue, .pc-story-box, .pc-backstory-teaser {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  margin: 0 0 1rem;
+}
+.pc-prologue { padding: clamp(1.25rem, 5vw, 3rem); }
+.pc-prologue-eyebrow {
+  margin: 0;
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--accent);
+}
+.pc-prologue-title {
+  margin: 0.4rem 0 0.25rem; padding: 0; border: 0;
+  font-family: var(--font-reading); font-weight: 600;
+  font-size: clamp(1.6rem, 4vw, 2.1rem); line-height: 1.2; text-wrap: balance;
+  color: var(--text);
+  overflow-wrap: anywhere;
+}
+.pc-prologue-byline { margin: 0 0 1.5rem; font-size: 0.85rem; color: var(--text-muted); }
+.pc-prologue-prose {
+  max-width: 64ch;
+  font-family: var(--font-reading); font-size: 1.125rem; line-height: 1.7;
+  overflow-wrap: break-word;
+}
+.pc-prologue-prose p, .pc-prologue-prose ul, .pc-prologue-prose ol { margin: 0 0 1em; }
+.pc-prologue-prose :is(ul, ol) { padding-left: 1.4em; }
+.pc-prologue-prose > p:first-child::first-letter {
+  float: left;
+  font-size: 3.6em; line-height: 0.85; font-weight: 600;
+  padding: 0.1em 0.12em 0 0;
+  color: var(--accent);
+}
+.pc-prologue-prose blockquote {
+  margin: 1.4em 0; padding: 0 0 0 1.25rem;
+  border-left: 3px solid var(--accent);
+  font-style: italic;
+}
+.pc-story-box { padding: 1rem 1.15rem; }
+.pc-story-label {
+  margin: 0 0 0.6rem;
+  font-family: var(--font-body);
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.pc-look-grid { display: grid; grid-template-columns: 7.5rem minmax(0, 1fr); gap: 1.25rem; align-items: start; }
+@media (max-width: 520px) { .pc-look-grid { grid-template-columns: minmax(0, 1fr); } }
+.pc-look-portrait {
+  width: 7.5rem; height: 7.5rem; border-radius: 0.6rem;
+  object-fit: cover; object-position: top;
+}
+.pc-look-initials {
+  display: grid; place-items: center;
+  background: var(--bg-hero); color: var(--accent-on-header);
+  font-family: var(--font-heading); font-size: 2.5rem; font-weight: 700;
+}
+.pc-look-text p { margin: 0 0 0.6rem; font-family: var(--font-reading); font-size: 1.05rem; line-height: 1.6; }
+.pc-facts { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.25rem 0 0; padding: 0; list-style: none; }
+.pc-facts li { font-size: 0.8rem; border: 1px solid var(--border); border-radius: 999px; padding: 0.1rem 0.65rem; }
+.pc-facts .label { color: var(--text-muted); margin-right: 0.25rem; }
+.pc-drives-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.75rem; }
+@media (max-width: 560px) { .pc-drives-grid { grid-template-columns: minmax(0, 1fr); } }
+.pc-drive { background: var(--bg); border-radius: 0.4rem; padding: 0.75rem 0.9rem; min-width: 0; }
+.pc-drive h4 {
+  margin: 0 0 0.25rem;
+  font-family: var(--font-body);
+  font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--accent);
+}
+.pc-drive p { margin: 0; font-family: var(--font-reading); font-size: 1rem; line-height: 1.5; overflow-wrap: break-word; }
+.pc-sofar ol { list-style: none; margin: 0; padding: 0; }
+.pc-sofar li {
+  display: grid; grid-template-columns: 5.5rem minmax(0, 1fr); gap: 0.9rem;
+  padding: 0.75rem 0; border-top: 1px solid var(--border);
+}
+.pc-sofar li:first-child { border-top: 0; padding-top: 0; }
+.pc-sofar-when { font-size: 0.75rem; color: var(--text-muted); font-variant-numeric: tabular-nums; padding-top: 0.2rem; }
+.pc-sofar-what { color: var(--text); font-family: var(--font-reading); font-size: 1rem; }
+.pc-sofar-what:hover { text-decoration: none; }
+.pc-sofar-what b { display: block; font-family: var(--font-body); font-size: 0.875rem; color: var(--accent); }
+.pc-sofar-what:hover b, .pc-sofar-what:focus-visible b { text-decoration: underline; }
+.pc-sofar-more { margin: 0.6rem 0 0; }
+.pc-sofar-more .story-read-link { margin: 0; font-weight: 600; }
+.pc-sofar ol + .pc-sofar-more { padding-top: 0.6rem; border-top: 1px solid var(--border); }
+.pc-story-none { margin: 1rem 0; }
+.pc-backstory-teaser {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.9rem; align-items: end;
+  padding: 1rem 1.15rem;
+}
+.pc-backstory-teaser-label {
+  margin: 0 0 0.4rem;
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--text-muted);
+}
+.pc-backstory-teaser-text { margin: 0; font-family: var(--font-reading); font-size: 1rem; line-height: 1.55; }
+.pc-backstory-teaser a { font-weight: 600; font-size: 0.9rem; white-space: nowrap; }
+@media (max-width: 420px) { .pc-backstory-teaser { grid-template-columns: minmax(0, 1fr); } }
+.pc-background-rest { margin: 0.75rem 0; }
+.pc-background-rest p { margin: 0 0 0.4rem; }
+/* A PC's hook on a Characters index card. */
+.entity-card .card-hook {
+  margin: 0.35rem 0 0;
+  font-family: var(--font-reading); font-style: italic; font-size: 0.875rem; line-height: 1.45;
+  color: var(--text);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+
 /* ===== STORY SESSION LINKS (#465) =====
    Session headings carry an id (#session-N), a copy-link icon, and a "Sessions" row of number
    chips sits above the first. scroll-margin-top clears the sticky .top-nav (3.5rem). */

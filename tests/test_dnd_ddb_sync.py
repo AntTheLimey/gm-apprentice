@@ -274,7 +274,7 @@ def test_the_spell_slot_expended_cells_keep_their_values_when_the_totals_change(
 
 LIST_IDS = {"class features", "species traits", "feats", "spells", "gear", "magic items", "attacks", "bonuses",
             "resistances", "immunities", "vulnerabilities", "condition immunities", "armor training",
-            "weapons", "tools", "languages", "cells"}
+            "weapons", "tools", "languages", "cells", "background"}
 GONE = ("REMOVE", "Equipment / Gear / Torch", "D&D Beyond no longer has it")
 
 

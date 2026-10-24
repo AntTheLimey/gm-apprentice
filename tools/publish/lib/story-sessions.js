@@ -5,6 +5,7 @@
 // more at one level reading "Session N: Title" (or "Session N — Title"). A page with fewer is left
 // as written. The icon's click is js/story-links.js.
 const { escapeHtml } = require('./processor');
+const { firstSentence } = require('./pc-background');
 
 const HEADING = /<h([2-6])>\s*Session (\d+)(\s*[:—–-]\s*)([\s\S]*?)<\/h\1>/g;
 const ICON = '<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M7.8 4.4 9.2 3a3.1 3.1 0 0 1 4.4 4.4l-2.1 2.1a3.1 3.1 0 0 1-4.4 0l1-1a1.7 1.7 0 0 0 2.4 0l2.1-2.1a1.7 1.7 0 1 0-2.4-2.4L8.8 5.4zm.4 7.2L6.8 13a3.1 3.1 0 0 1-4.4-4.4l2.1-2.1a3.1 3.1 0 0 1 4.4 0l-1 1a1.7 1.7 0 0 0-2.4 0L3.4 9.6A1.7 1.7 0 1 0 5.8 12l1.4-1.4z"/></svg>';
@@ -17,13 +18,13 @@ const plain = (html) => html.replace(/<[^>]*>/g, '').replace(/&(?:amp|lt|gt|quot
 
 // The session headings that make a page a story: at the first one's level, the first of each
 // number (an id is unique on a page). Fewer than two is not a story.
-function sessionHeadings(html) {
+function sessionHeadings(html, least = 2) {
   if (typeof html !== 'string' || !html) return [];
   const found = [...html.matchAll(HEADING)];
   const level = found.length ? found[0][1] : null;
   const seen = new Set();
   const sessions = found.filter((m) => m[1] === level && !seen.has(m[2]) && seen.add(m[2]));
-  return sessions.length < 2 ? [] : sessions;
+  return sessions.length < least ? [] : sessions;
 }
 
 const isSessionStory = (html) => sessionHeadings(html).length > 0;
@@ -53,4 +54,21 @@ function linkSessions(html) {
   });
 }
 
-module.exports = { linkSessions, isSessionStory };
+// One line per session for a PC page's "story so far": the entry's opening italic line, or the
+// first sentence of its first paragraph. `href` is `#session-N` only where linkSessions put an id.
+function sessionLines(html) {
+  const sessions = sessionHeadings(html, 1);
+  const linked = sessions.length > 1;
+  return sessions.map((m, i) => {
+    const from = m.index + m[0].length;
+    const to = i + 1 < sessions.length ? sessions[i + 1].index : html.length;
+    const body = html.slice(from, to);
+    const para = body.match(/<p>([\s\S]*?)<\/p>/);
+    const only = para && para[1].trim().match(/^<em>([\s\S]*?)<\/em>$/);
+    const text = para ? plain(only && !/<em>/.test(only[1]) ? only[1] : para[1]) : '';
+    const line = only && !/<em>/.test(only[1]) ? text : firstSentence(text);
+    return { n: m[2], title: plain(m[4]), line, href: linked ? `#session-${m[2]}` : '' };
+  });
+}
+
+module.exports = { linkSessions, isSessionStory, sessionLines };

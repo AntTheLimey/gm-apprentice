@@ -9,8 +9,12 @@ with a bracketed reason (`18 (tome)`) is the GM's and is kept. Stdlib only.
 Usage:
   dnd_ddb.py SHEET.md [--write]               preview (or write) one note
   dnd_ddb.py --party VAULT [--write] [--on-build]   every PC note with a D&D Beyond link
-The only request ever made is to character-service.dndbeyond.com, with a path of digits
-(it may go through the user's own proxy).
+  --player-text   after a note's rows, the player's D&D Beyond text for each background part the note does
+            not match, each line indented four spaces (not report rows; pasted as shown, it hands
+            the part back)
+The only requests ever made are to character-service.dndbeyond.com, with a path of digits,
+and, with --write, one to www.dndbeyond.com/avatars/ for the portrait (either may go through
+the user's own proxy).
 
 What it plans: the single cells (Level, XP, ability scores and save proficiency, Size,
 Speed, Hit Dice, skill proficiency, the spellcasting ability); the `**Label:** value`
@@ -27,6 +31,12 @@ line (while blank, or still the line sync wrote) and the attacks table (`### Wea
 Damage Cantrips`, a list like the others, Notes never written). When the calculator is
 unsure nothing is written and a CHECK row says why. Never written here: Weapon Mastery,
 HP (Current) and anything a player tracks in play.
+
+The player's own words (dnd_background.py) are written too: backstory, appearance and its facts
+line, and the four personality bullets, each only while the source changed and the note's copy
+did not; Notes, GM Notes and Current Status are never written. With --write, a blank `portrait`
+field gets D&D Beyond's portrait, saved to `_attachments/characters/`; a field that is set, or
+a file already there, is left alone.
 
 Edit statuses: WRITE (the note changes), KEPT (the note is the GM's), SAME,
 CHECK (something to look at; writes nothing). Row statuses: ADD, REMOVE, WRITE,
@@ -51,14 +61,16 @@ valid for the next. The fill (dnd_sheet.py) runs last, on the bonuses just writt
 import argparse
 import http.client
 import json
+import os
 import re
+import secrets
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable, Collection
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -70,9 +82,11 @@ from dnd_ddb_read import ABILITIES, Character, Unreadable, read, safe_name  # no
 from dnd_note import (BARE, HALF, HEADING, PLACEHOLDER, REASONED, SEPARATOR, YES,  # noqa: E402
                       Cell, Note, clean, column, number, split_cells, to_int)
 from dnd_sheet import to_weight  # noqa: E402
+from dnd_background import MEMORY, clean_text, memory_entries, memory_from, plan_background  # noqa: E402
 from migrate_core import StepFailed, write_text_atomic  # noqa: E402
 from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter, fence_step,  # noqa: E402
-                      is_unchecked_source, settings, settings_file, vault_files, vault_layout)
+                      frontmatter_span, is_unchecked_source, set_key, settings, settings_file,
+                      vault_files, vault_layout, yaml_scalar)
 
 REASON = re.compile(r"\(.+\)\s*$")
 HIT_DICE = re.compile(r"^(\d+)\s*/\s*(\d+)$")
@@ -1143,6 +1157,9 @@ class Report:
     rows: list[tuple[str, str, str]]     # (status, locus, message) in print order
     text: str                            # the note after sync; equal to the input when nothing changed or on ERROR
     seen: Seen | None = None             # what to remember after this sync; None when the sync was an ERROR
+    portrait_url: str = ""               # the safe avatar link D&D Beyond gave, "" when there is none
+    placed: Path | None = None           # the portrait file this run created; to be removed if the note then fails
+    said: dict[str, str] = field(default_factory=dict)   # a background part that differs -> the player's text
 
 
 def character_id(link: object) -> str | None:
@@ -1232,6 +1249,222 @@ def fetch(char_id: str) -> object:
 FETCH = fetch
 
 
+# --- the portrait ------------------------------------------------------------------------
+
+AVATAR_HOST = "www.dndbeyond.com"
+AVATAR_PATH = "/avatars/"
+AVATAR_QUERY = "width=600&height=600&fit=bounds&quality=95"      # the full-size picture, not the 150-pixel crop
+MAX_IMAGE = 5 * 1024 * 1024
+IMAGE_EXTS = ("jpg", "jpeg", "png", "webp", "gif")
+PORTRAIT_LOCUS = "Frontmatter / portrait"
+
+
+def avatar_address(url: str) -> bool:
+    """Is this an https link to D&D Beyond's own avatars, and nothing else?"""
+    if not url or any(ch.isspace() or not ch.isprintable() for ch in url):
+        return False
+    try:
+        parts = urllib.parse.urlsplit(url)
+        return (parts.scheme == "https" and parts.netloc == AVATAR_HOST and parts.path.startswith(AVATAR_PATH)
+                and ".." not in parts.path.split("/"))
+    except ValueError:
+        return False
+
+
+class OnlyAvatars(urllib.request.HTTPRedirectHandler):
+    """A redirect is followed only when it stays on D&D Beyond's avatars over https."""
+
+    def redirect_request(self, req: urllib.request.Request, fp: Any, code: int, msg: str,
+                         headers: Any, newurl: str) -> urllib.request.Request | None:
+        if not avatar_address(newurl):
+            raise urllib.error.URLError("it redirected to another address")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def avatar_opener() -> urllib.request.OpenerDirector:
+    return urllib.request.build_opener(OnlyAvatars)
+
+
+def image_type(head: bytes) -> str | None:
+    """jpg, png, webp or gif by the first bytes; None for anything else."""
+    if head.startswith(b"\xff\xd8\xff"):
+        return "jpg"
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if head[:6] in (b"GIF87a", b"GIF89a"):
+        return "gif"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "webp"
+    return None
+
+
+def cannot_picture(reason: str) -> Unreadable:
+    return Unreadable(f"the D&D Beyond portrait could not be read ({reason})")
+
+
+def fetch_portrait(url: str) -> tuple[bytes, str]:
+    """The portrait's bytes and extension. Raises Unreadable. The same time limit and User-Agent as
+    `fetch`; only D&D Beyond's avatars are asked for, at the full-size parameters."""
+    if not avatar_address(url):
+        raise cannot_picture("that is not a D&D Beyond avatar link")
+    parts = urllib.parse.urlsplit(url)
+    asked = urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path, AVATAR_QUERY, ""))
+    request = urllib.request.Request(asked, headers={"User-Agent": USER_AGENT, "Accept": "image/*"})
+    started = CLOCK()
+    chunks: list[bytes] = []
+    size = 0
+    try:
+        with avatar_opener().open(request, timeout=TIMEOUT) as response:
+            while True:
+                if CLOCK() - started > DEADLINE:
+                    raise cannot_picture("it took too long")
+                chunk = response.read1(min(CHUNK, MAX_IMAGE + 1 - size))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                size += len(chunk)
+                if size > MAX_IMAGE:
+                    raise cannot_picture("the picture is too large")
+    except urllib.error.HTTPError as e:
+        raise cannot_picture(f"HTTP {e.code}") from e
+    except urllib.error.URLError as e:
+        raise cannot_picture(str(e.reason)) from e
+    except TimeoutError as e:
+        raise cannot_picture("it timed out") from e
+    except (OSError, http.client.HTTPException) as e:
+        raise cannot_picture(e.__class__.__name__) from e
+    data = b"".join(chunks)
+    ext = image_type(data)
+    if ext is None:
+        raise cannot_picture("it is not a picture of a kind the vault takes")
+    return data, ext
+
+
+FETCH_PORTRAIT = fetch_portrait
+
+
+def write_new_bytes(path: Path, data: bytes) -> None:
+    """Write a new file whole or not at all: beside it first, then linked into place, so an
+    existing file is never replaced (FileExistsError). The mode is 0o666 less the umask."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.parent / f".{path.name}.{secrets.token_hex(6)}"
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0), 0o666)
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        try:
+            os.link(tmp, path)
+        except FileExistsError:
+            raise
+        except OSError:             # no hard links here: swap it in, having just checked
+            if os.path.lexists(path):
+                raise FileExistsError(path.name) from None
+            os.replace(tmp, path)
+    finally:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+
+
+def portrait_wanted(text: str, url: str) -> bool:
+    """Is there a link, and is the note's `portrait` field blank?"""
+    fm = extract_frontmatter(text)
+    if not url or fm is None:
+        return False
+    value = fm.get("portrait")
+    return value is None or value == [] or not str(value).strip()
+
+
+def portrait_blocked(vault: Path, stem: str, text: str) -> tuple[str, list[tuple[str, str, str]]]:
+    """The file slug for this note, and the CHECK rows that stop the portrait ("" and a row if it cannot go)."""
+    from ingest_images import slugify      # loaded here: only a portrait needs it
+
+    slug = slugify(stem)
+    if not slug:
+        return "", [("CHECK", PORTRAIT_LOCUS, "the note's name makes no file name; the portrait was left blank")]
+    folder = vault / "_attachments" / "characters"
+    for ext in IMAGE_EXTS:
+        if os.path.lexists(folder / f"{slug}.{ext}"):
+            return "", [("CHECK", PORTRAIT_LOCUS, f"_attachments/characters/{slug}.{ext} already exists; "
+                         "it was not overwritten, and the field was left blank")]
+    if frontmatter_span(text.splitlines(keepends=True))[1] is not None:
+        return "", [("CHECK", PORTRAIT_LOCUS, "the frontmatter could not be read; the portrait was left blank")]
+    return slug, []
+
+
+def portrait_preview(vault: Path, stem: str, text: str, url: str) -> list[tuple[str, str, str]]:
+    """What --write would do about the portrait, as rows. Nothing is fetched or written."""
+    if not portrait_wanted(text, url):
+        return []
+    slug, stopped = portrait_blocked(vault, stem, text)
+    return stopped or [("WRITE", PORTRAIT_LOCUS, "would fetch the D&D Beyond portrait")]
+
+
+def place_portrait(vault: Path, stem: str, text: str, url: str,
+                   created: list[Path] | None = None) -> tuple[str, list[tuple[str, str, str]]]:
+    """Fetch the portrait into a blank `portrait` field: the note's new text and the rows. The image goes
+    to `_attachments/characters/<slug>.<ext>`; a file already there, a field already set or a failed
+    fetch leaves the text as it was. Writes the image (the caller writes the note); the path it
+    created is appended to `created`, so the caller can remove it if the note then fails."""
+    if not portrait_wanted(text, url):
+        return text, []
+    slug, stopped = portrait_blocked(vault, stem, text)
+    if stopped:
+        return text, stopped
+    try:
+        data, ext = FETCH_PORTRAIT(url)
+    except Unreadable as e:
+        return text, [("CHECK", PORTRAIT_LOCUS, f"{e}; the field was left blank")]
+    if image_type(data) != ext or len(data) > MAX_IMAGE:
+        return text, [("CHECK", PORTRAIT_LOCUS, "what came back is not a picture the vault takes; "
+                                                "the field was left blank")]
+    rel = f"_attachments/characters/{slug}.{ext}"
+    try:
+        write_new_bytes(vault / rel, data)
+    except FileExistsError:
+        return text, [("CHECK", PORTRAIT_LOCUS, f"{rel} already exists; it was not overwritten, "
+                                                "and the field was left blank")]
+    except OSError as e:
+        return text, [("CHECK", PORTRAIT_LOCUS, f"{rel} could not be written ({e.__class__.__name__}); "
+                                                "the field was left blank")]
+    if created is not None:
+        created.append(vault / rel)
+    lines = text.splitlines(keepends=True)
+    close, _ = frontmatter_span(lines)
+    fm = lines[1:close]
+    set_key(fm, "portrait", yaml_scalar(rel), "\r\n" if lines[0].endswith("\r\n") else "\n")
+    lines[1:close] = fm
+    return "".join(lines), [("WRITE", PORTRAIT_LOCUS, f"from D&D Beyond, saved as {rel}")]
+
+
+def with_portrait(report: Report, stem: str, vault: Path | None, write_it: bool) -> Report:
+    """The report with the portrait step added: fetched and placed when writing, a preview row otherwise.
+    Never raises; a failure is a CHECK row."""
+    if vault is None or not report.portrait_url or any(r[0] == "ERROR" for r in report.rows):
+        return report
+    created: list[Path] = []
+    try:
+        if write_it:
+            text, rows = place_portrait(vault, stem, report.text, report.portrait_url, created)
+        else:
+            text, rows = report.text, portrait_preview(vault, stem, report.text, report.portrait_url)
+    except (OSError, ValueError, Unreadable, http.client.HTTPException) as e:     # the rest of the sync stands
+        unplace(created)
+        return replace(report, rows=[*report.rows, ("CHECK", PORTRAIT_LOCUS,
+                                                   f"the portrait could not be placed ({e.__class__.__name__})")])
+    return replace(report, rows=[*report.rows, *rows], text=text, placed=created[0] if created else None)
+
+
+def unplace(created: list[Path]) -> None:
+    """Remove portrait files this run created (the note could not be written beside them)."""
+    for path in created:
+        try:
+            path.unlink()
+        except OSError:
+            pass
+
+
 def current_layout(text: str) -> bool:
     note = Note(text)
     abilities = note.table("stat sheet", "ability scores")
@@ -1243,9 +1476,11 @@ def shown(edits: list[Edit] | list[RowEdit]) -> list[tuple[str, str, str]]:
             if e.status in PRINTED and not getattr(e, "silent", False)]
 
 
-def given_now(c: Character, before: Seen | None, gave: Gave | None = None) -> Seen:
+def given_now(c: Character, before: Seen | None, gave: Gave | None = None,
+              player_text: dict[str, tuple[str, str]] | None = None) -> Seen:
     """The keys of what D&D Beyond gave this run for each list. The attacks are carried forward
-    from `before` when the calculator was unsure of them."""
+    from `before` when the calculator was unsure of them. `player_text` is what the background parts
+    were last written as (see dnd_background)."""
     out: Seen = {}
     for name, spec in SPECS.items():
         out[spec.list_id] = sorted({k for e in entries_for(name, c) if (k := norm(e.name))})
@@ -1257,6 +1492,8 @@ def given_now(c: Character, before: Seen | None, gave: Gave | None = None) -> Se
     for group in (DEFENCES, PROFICIENCIES):
         for label, field in group:
             out[label.lower()] = sorted(norm(n) for n in line_names(getattr(c, field)))
+    if player_text is not None:
+        out[MEMORY] = memory_entries(player_text)
     if gave is not None:
         kept = dict(gave.now)
         for locus, value in gave.last.items():      # a cell not judged this run keeps its entry
@@ -1323,13 +1560,17 @@ def sync_parts(text: str, data: object, seen: Seen | None) -> Report:
     attacks = plan_attacks(t, c, seen, gave)
     rows += shown(attacks)
     t = write_rows(t, attacks)
+    told = plan_background(t, c.player_text, memory_from(seen))
+    rows += told.rows
+    t = told.text
     rows += shown(checks(t, c))
     fill = dnd_sheet.plan(t)
     errors = [r for r in fill if r.status == "ERROR"]
     if errors:
         return Report([("ERROR", errors[0].locus, errors[0].message)], text)
     rows += [("FILL", r.locus, r.message) for r in fill if r.status == "FILL"]
-    return Report(rows, dnd_sheet.apply(t, fill), given_now(c, seen, gave))
+    return Report(rows, dnd_sheet.apply(t, fill), given_now(c, seen, gave, told.remember), c.portrait_url,
+                  said=told.said)
 
 
 # --- the memory of what sync added -------------------------------------------------------
@@ -1445,6 +1686,17 @@ def emit(status: str, locus: str, message: str) -> None:
     print("\t".join(PLAIN.sub(" ", part) for part in (status, locus, message)))
 
 
+def emit_said(report: Report, prefix: str = "") -> None:
+    """With --player-text, after a note's rows: for each background part whose note text differs from the player's
+    (CHECK this run or not), a header naming it and the player's text, every line indented four spaces.
+    Never a row: tabs and control characters are gone from the copy, so no line of it can pass for one."""
+    for locus, text in report.said.items():
+        said = clean_text(text).strip("\n")
+        print(PLAIN.sub(" ", f"    {prefix}{locus} — D&D Beyond text:" + ("" if said.strip() else " (empty)")))
+        for line in said.split("\n") if said.strip() else []:
+            print("    " + PLAIN.sub(" ", line).rstrip())
+
+
 def guarded_sync(text: str, vault: Path | None = None) -> Report:
     """sync_note, with any unexpected failure as one ERROR row and the text unchanged."""
     try:
@@ -1453,7 +1705,7 @@ def guarded_sync(text: str, vault: Path | None = None) -> Report:
         return Report([("ERROR", "sync", f"could not be synced ({e.__class__.__name__}); nothing was written")], text)
 
 
-def one_sheet(path: Path, write_it: bool) -> int:
+def one_sheet(path: Path, write_it: bool, player_text: bool = False) -> int:
     try:
         with path.open("r", encoding="utf-8", newline="") as f:
             text = f.read()
@@ -1463,16 +1715,19 @@ def one_sheet(path: Path, write_it: bool) -> int:
     vault = find_vault(path)
     if vault is None:
         print(NOT_IN_A_VAULT, file=sys.stderr)
-    report = guarded_sync(text, vault)
+    report = with_portrait(guarded_sync(text, vault), path.stem, vault, write_it)
     for row in report.rows:
         emit(*row)
     if any(r[0] == "ERROR" for r in report.rows):
         return 0
+    if player_text:
+        emit_said(report)
     print(count_line(report.rows))
     if write_it and report.text != text:
         try:
             write_text_atomic(path, report.text)
         except StepFailed as e:
+            unplace([report.placed] if report.placed else [])
             print(f"dnd_ddb: {e}", file=sys.stderr)
             return 2
     if write_it:
@@ -1480,7 +1735,7 @@ def one_sheet(path: Path, write_it: bool) -> int:
     return 0
 
 
-def party(vault: Path, write_it: bool, on_build: bool) -> int:
+def party(vault: Path, write_it: bool, on_build: bool, player_text: bool = False) -> int:
     from migrate_vault import vault_system
 
     if not vault.is_dir():
@@ -1523,7 +1778,7 @@ def party(vault: Path, write_it: bool, on_build: bool) -> int:
         try:
             with path.open("r", encoding="utf-8", newline="") as f:
                 text = f.read()
-            report = guarded_sync(text, vault)
+            report = with_portrait(guarded_sync(text, vault), Path(rel).stem, vault, write_it)
         except (OSError, UnicodeDecodeError) as e:
             why = "is not valid UTF-8" if isinstance(e, UnicodeDecodeError) else "could not be read"
             text, report = "", Report([("ERROR", "note", f"the note {why}; nothing was written")], "")
@@ -1532,6 +1787,7 @@ def party(vault: Path, write_it: bool, on_build: bool) -> int:
             try:
                 write_text_atomic(path, report.text)
             except StepFailed as e:
+                unplace([report.placed] if report.placed else [])
                 found = [("ERROR", "write", str(e))]
                 failed = True
         if write_it and not failed_here(found):
@@ -1540,6 +1796,8 @@ def party(vault: Path, write_it: bool, on_build: bool) -> int:
             row = (status, f"{Path(rel).stem}: {locus}", message)
             rows.append(row)
             emit(*row)
+        if player_text and not failed_here(found):
+            emit_said(report, f"{Path(rel).stem}: ")
     print(count_line(rows, sheets))
     return 2 if failed else 0
 
@@ -1555,6 +1813,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--party", metavar="VAULT", help="every PC note in a vault that has a D&D Beyond link")
     ap.add_argument("--on-build", action="store_true",
                     help="with --party: run only when vault.dndbeyond_sync is build")
+    ap.add_argument("--player-text", action="store_true",
+                    help="the player's D&D Beyond text for each background part the note does not match (not report rows)")
     args = ap.parse_args(argv)
     if bool(args.sheet) == bool(args.party):
         ap.error("give one sheet, or --party VAULT")
@@ -1562,11 +1822,11 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--on-build goes with --party VAULT")
     if args.party:
         try:
-            return party(Path(args.party), args.write, args.on_build)
+            return party(Path(args.party), args.write, args.on_build, args.player_text)
         except SettingsUnavailable as e:
             print(f"dnd_ddb: {e}", file=sys.stderr)
             return 2
-    return one_sheet(Path(args.sheet), args.write)
+    return one_sheet(Path(args.sheet), args.write, args.player_text)
 
 
 if __name__ == "__main__":

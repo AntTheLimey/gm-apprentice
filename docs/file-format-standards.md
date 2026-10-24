@@ -194,6 +194,7 @@ real template, so a mismatch fails the suite.
 | | `### Bonuses` | `Applies To \| Bonus \| Source` |
 | | `### Defences` | the `**Resistances:**`, `**Immunities:**`, `**Vulnerabilities:**`, `**Condition Immunities:**`, `**Advantages:**` and `**Armour Class:**` lines |
 | `## Background` | — | the `**Species:**`, `**Class/Subclass:**` and `**Background:**` lines, for the header. The class line carries levels: `Paladin 5 (Oath of Devotion)`, a multiclass joined by `/` |
+| | `### Backstory`, `### Appearance`, `### Personality` | the player's text (`dnd_background.py`): prose under Backstory; Appearance prose, then one facts line `**Age:** … · **Height:** … · **Weight:** … · **Eyes:** … · **Hair:** … · **Skin:** … · **Faith:** …`; Personality bullets `- **Traits:** …`, Ideals, Bonds, Flaws. A `{placeholder}` or `—` is empty |
 | `## Skills` | — | `Skill \| Ability \| Proficient \| Expertise \| Modifier`; `Proficient` is `Yes`, `No` or `Half` |
 | `## Class Features`, `## Species Traits`, `## Feats` | — | each `Name \| Action \| Uses \| Used \| Recovers \| Summary` |
 | `## Spellcasting` | — | `Attribute \| Value` (ability, attack modifier, save DC); a second casting class adds rows labelled with the class |
@@ -375,7 +376,19 @@ level, XP, scores, save and skill proficiency, size, Speed, the hit dice
 maximum, the spellcasting ability and slot totals. The lines are those
 of Background, Defences and Proficiencies. The rows are features,
 feats, spells, gear, magic items, coins, attacks and the `### Bonuses`
-rows that the character's items and features give.
+rows that the character's items and features give. It also writes the
+`### Backstory`, `### Appearance` and `### Personality` parts under
+Background, frontmatter `gender` and `portrait` when blank. A story
+part is rewritten only when the player changed it on D&D Beyond since
+the last sync and the vault copy was not edited since. A part that a first
+sync (or a sync with no memory) finds with text different from D&D
+Beyond's, or that was edited after a sync, stays the GM's: a player
+change to it is reported as a `CHECK` once for each new player version
+and never written. It goes back to sync when it matches the player's
+text: the words a reader sees are compared, so a hand copy counts even
+without sync's escapes. `dnd_ddb.py --player-text` prints the player's text
+for each background part the note does not match, `CHECK` this run or not
+(indented, not a report row); pasted as shown, it hands the part back. `hook` is never written by sync.
 
 - **A number with a reason in brackets is kept**: `15 (homebrew plate)`,
   `40 ft (boots of striding)`. A blank cell or a bare value is sync's.
@@ -405,7 +418,8 @@ and a sync with `--write` inside a vault builds the file again.
 Sync never writes vault-owned state: `HP (Current)`, `Temp HP`, hit
 dice spent, death saves, exhaustion, conditions, Heroic Inspiration,
 any `Used` or `Expended` cell, a GM's own Bonuses row, Companions,
-Current Status, Notes, GM Notes or any free text.
+Current Status, Notes or GM Notes. `hook` and any free text outside
+the background parts are the GM's.
 
 ### Cells the live sheet writes back
 

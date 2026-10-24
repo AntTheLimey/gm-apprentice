@@ -154,7 +154,8 @@ function generateThemeCSS(config, opts = {}) {
   // fonts override the preset.
   if (!palette && config.genre) {
     const fontVars = [];
-    if (fonts.heading && !GENERIC_FAMILIES.has(fonts.heading)) fontVars.push(`  --font-heading: ${cssFontValue(fonts.heading, 'serif')};`);
+    // A PC's backstory and hook are read in the heading face (--font-reading, style.css).
+    if (fonts.heading && !GENERIC_FAMILIES.has(fonts.heading)) fontVars.push(`  --font-heading: ${cssFontValue(fonts.heading, 'serif')};`, `  --font-reading: ${cssFontValue(fonts.heading, 'serif')};`);
     if (fonts.body && !GENERIC_FAMILIES.has(fonts.body)) fontVars.push(`  --font-body: ${cssFontValue(fonts.body, 'sans-serif')};`);
     // Computed even when there are no --font-* overrides to emit: with source: local,
     // the GM may be self-hosting the preset's OWN font (e.g. scifi's Rajdhani) under
@@ -209,6 +210,9 @@ function generateThemeCSS(config, opts = {}) {
   vars.push(`  --text-muted-on-header: ${headerIsLight ? '#555' : '#9da5ae'};`);
 
   if (fonts.heading) vars.push(`  --font-heading: ${cssFontValue(fonts.heading, 'serif')};`);
+  // A PC's backstory and hook are read in a heading face the GM chose; a generic one (the
+  // default system-ui) leaves style.css's serif reading face.
+  if (fonts.heading && !GENERIC_FAMILIES.has(fonts.heading)) vars.push(`  --font-reading: ${cssFontValue(fonts.heading, 'serif')};`);
   if (fonts.body) vars.push(`  --font-body: ${cssFontValue(fonts.body, 'sans-serif')};`);
 
   const fontsImport = fontsPreamble(fonts, selfHostCss);

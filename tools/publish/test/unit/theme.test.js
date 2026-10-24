@@ -29,6 +29,18 @@ describe('generateThemeCSS', () => {
     assert.ok(css.includes("--font-heading: 'Cinzel', serif"));
   });
 
+  it('reads a PC\'s backstory in a chosen heading face; a generic one leaves the serif default', () => {
+    assert.ok(generateThemeCSS({ fonts: { heading: 'Cinzel' } }).includes("--font-reading: 'Cinzel', serif"));
+    assert.ok(generateThemeCSS({ fonts: { heading: 'Cinzel' }, genre: 'fantasy', palette: null }).includes("--font-reading: 'Cinzel', serif"));
+    assert.ok(!generateThemeCSS({ fonts: { heading: 'system-ui' } }).includes('--font-reading'));
+    const fs = require('fs');
+    const path = require('path');
+    assert.match(fs.readFileSync(path.join(__dirname, '../../css/style.css'), 'utf-8'), /--font-reading: Georgia, 'Iowan Old Style', 'Times New Roman', serif;/);
+    for (const preset of VALID_PRESETS) {
+      assert.ok(fs.readFileSync(path.join(__dirname, `../../css/themes/${preset}.css`), 'utf-8').includes('--font-reading: var(--font-heading);'), preset);
+    }
+  });
+
   it('adds Google Fonts import for non-system fonts', () => {
     const css = generateThemeCSS({ fonts: { heading: 'Cinzel' } });
     assert.ok(css.includes('fonts.googleapis.com'));

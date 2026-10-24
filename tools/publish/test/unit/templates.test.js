@@ -565,7 +565,7 @@ describe('PC template tabbed layout', () => {
     const html = pcTemplate(page, processed, sections, mockNavFor, mockConfig, {});
     assert.ok(html.includes('tab-bar'), 'Should have tab bar');
     assert.ok(html.includes('tab-story'), 'Should have story panel');
-    assert.ok(html.includes('No story content available'), 'Should show placeholder story text');
+    assert.ok(html.includes("Solo's story starts at the table."), 'Should say the story starts at the table');
     assert.ok(html.includes('accordion'), 'Should still have accordion sections');
   });
 

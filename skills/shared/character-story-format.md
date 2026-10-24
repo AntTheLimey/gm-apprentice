@@ -1,7 +1,7 @@
 # Character Story Format
 
-Each active PC has a story file that grows session by session — a
-rolling narrative of that character's journey.
+Each active PC has a story file that grows session by session, a
+rolling narrative of their journey.
 
 ## File Location
 
@@ -16,6 +16,8 @@ Each session adds one entry at the bottom of the file:
 ```markdown
 ## Session {N} — {Session Title}
 
+*{One line: this session, for this character.}*
+
 {2-4 paragraphs of narrative prose covering what this
 character did, decided, learned, and how they were changed.}
 ```
@@ -27,8 +29,7 @@ it.
 ## Narrative Voice by Campaign Genre
 
 Voice follows the campaign's genre/tone (campaign overview or world
-file), not the game system (a GURPS horror campaign uses horror
-voice).
+file), not the game system.
 
 | Genre | Voice |
 |-------|-------|
@@ -50,9 +51,9 @@ voice).
   party-wide narrative, mechanical changes and world state belong
   in the Wrap-Up and entity files
 - Include consequences: injuries, relationship shifts, new
-  knowledge, emotional impact
-- Narrative prose by default; a letter, a list or a `###` break is
-  fine when the story calls for it
+  knowledge, feelings
+- Prose by default; a letter, list or `###` break when the story
+  calls for it
 
 ## Appending
 

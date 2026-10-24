@@ -91,6 +91,11 @@ describe('a name in the first paragraph, which the page also prints as its pull-
     const html = page('<div class="pull-quote">Lord Zorn rides.</div><div class="content"><p>Nothing.</p></div>');
     assert.deepStrictEqual(hits(s, html).map((h) => [h.alias, h.count]), [['Lord Zorn', 1]]);
   });
+  it('a quote taken from a PC\'s backstory is counted once too', () => {
+    const s = secrets({ withheld: ['Lord Zorn'] });
+    const html = page('<div class="pull-quote pull-quote-backstory">Lord Zorn rides.</div><div class="content"><p>Lord Zorn rides.</p></div>');
+    assert.deepStrictEqual(hits(s, html).map((h) => h.count), [1]);
+  });
   it('two in the body are two', () => {
     const s = secrets({ withheld: ['Lord Zorn'] });
     const html = page('<div class="pull-quote">Lord Zorn rides.</div><div class="content"><p>Lord Zorn rides.</p><p>Lord Zorn again.</p></div>');

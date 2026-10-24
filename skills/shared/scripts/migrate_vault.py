@@ -14,6 +14,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import relink
+from dnd_note import PLACEHOLDER
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           cells, edit_frontmatter, plugin_tool, stopped,
                           write_text_atomic)
@@ -24,7 +25,7 @@ from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
                          configured_site, player_section_key, semver_below,
                          site_pin, wrapup_filename_findings)
 from vaultlib import (LEGACY_SETTINGS_FILE, SettingsUnavailable, entity_type, extract_frontmatter,
-                      delete_key, frontmatter_span, opens_a_block,
+                      delete_key, fence_step, frontmatter_span, opens_a_block,
                       parse_version, plugin_version,
                       read_stamp, settings, settings_file, settings_raw,
                       settings_unset, vault_files, vault_layout,
@@ -1458,6 +1459,192 @@ def find_empty_scenes_lists(vault: Path) -> list[Item]:
                  [f"remove scenes: [] from {rel}" for rel in found], apply)]
 
 
+# --- D&D PC Background sections -----------------------------------------------
+
+OLD_BACKSTORY = re.compile(r"^\*\*Backstory & Personality:\*\*[ \t]*(.*?)[ \t]*$")
+OLD_APPEARANCE = re.compile(r"^\*\*Appearance:\*\*[ \t]*(.*?)[ \t]*$")
+STOPS_VALUE = re.compile(r"\*\*[^*\n]+:\*\*|#{1,6}\s")
+BACKSTORY_HINT = "{The character's backstory, as the player tells it}"
+APPEARANCE_HINT = "{How they look}"
+FACTS_LINE = " \u00b7 ".join(f"**{label}:** \u2014" for label in (
+    "Age", "Height", "Weight", "Eyes", "Hair", "Skin", "Faith"))
+PERSONALITY = [f"- **{label}:** \u2014" for label in
+               ("Traits", "Ideals", "Bonds", "Flaws")]
+
+
+SUBSECTIONS = ("backstory", "appearance", "personality")
+OLD_LABEL = {"backstory": "Backstory & Personality", "appearance": "Appearance"}
+
+
+def _fill_sections(text: str) -> tuple[str, list[str]]:
+    """The note with what sync needs inside the sub-sections it already
+    has: a facts line at the end of `### Appearance`, and the missing
+    `- **Traits:** —` / Ideals / Bonds / Flaws lines at the end of
+    `### Personality`. Existing text is never changed; also gives what was
+    done, one phrase each."""
+    import dnd_background
+
+    lines = text.splitlines(keepends=True)
+    eol = next((m.group(0) for raw in lines if (m := re.search(r"\r\n|\n|\r", raw))), "\n")
+    subs = dnd_background._subsections(lines)
+    parts = dnd_background.note_parts(text)
+    adds: list[tuple[str, list[str], str]] = []
+    if "appearance" in subs and parts["facts"] is None:
+        adds.append(("appearance", [FACTS_LINE], "### Appearance gets its facts line"))
+    missing = [b for b in dnd_background.BULLETS if parts[b] is None]
+    if "personality" in subs and missing:
+        names = [b.title() for b in missing]
+        listed = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " and " + names[-1]
+        adds.append(("personality", [f"- **{b}:** \u2014" for b in names],
+                     f"### Personality gets its {listed} line{'s' if len(names) > 1 else ''}"))
+    for name, new, _ in sorted(adds, key=lambda a: subs[a[0]][0], reverse=True):
+        head, end = subs[name]
+        last = end
+        while last > head + 1 and not lines[last - 1].strip():
+            last -= 1
+        body = lines[head:last]
+        if not body[-1].endswith(("\n", "\r")):
+            body[-1] += eol
+        joined = name == "personality" and last > head + 1 and dnd_background.BULLET.match(
+            lines[last - 1].rstrip("\r\n")) is not None
+        tail = [eol] if end < len(lines) else []
+        lines[head:end] = body + ([] if joined else [eol]) + [line + eol for line in new] + tail
+    return "".join(lines), [a[2] for a in adds]
+
+
+def _background_sections(text: str) -> tuple[str, list[str]] | None:
+    """The note with the `### Backstory` / `### Appearance` / `### Personality`
+    sub-sections it is missing added under `## Background`, the one-line
+    Backstory & Personality and Appearance values moved into theirs; None
+    when it has no `## Background` or already has all three. A sub-section
+    the note already has is kept as it is, and an old line for it stays where
+    it is. Also gives what was done, one phrase each. Line endings are
+    kept."""
+    import dnd_background
+
+    text, filled = _fill_sections(text)
+    have = dnd_background.subsections(text)
+    if all(name in have for name in SUBSECTIONS):
+        return (text, filled) if filled else None
+    lines = text.splitlines(keepends=True)
+    start = end = -1
+    fence: str | None = None
+    for i, raw in enumerate(lines):
+        fence, is_fence = fence_step(raw, fence)
+        if is_fence or fence is not None:
+            continue
+        title = raw.strip().lower()
+        if start < 0:
+            if title == "## background":
+                start = i
+        elif re.match(r"#{1,2}\s", raw):
+            end = i
+            break
+    if start < 0:
+        return None
+    if end < 0:
+        end = len(lines)
+    eol = next((m.group(0) for raw in lines if (m := re.search(r"\r\n|\n|\r", raw))), "\n")
+    found: dict[str, str] = {}
+    left: list[str] = []
+    kept: list[str] = []
+    body = lines[start + 1:end]
+    fence = None
+    n = 0
+    while n < len(body):
+        raw = body[n]
+        n += 1
+        fence, is_fence = fence_step(raw, fence)
+        bare = raw.rstrip("\r\n")
+        key, m = None, None
+        if not is_fence and fence is None:
+            for name, rx in (("backstory", OLD_BACKSTORY), ("appearance", OLD_APPEARANCE)):
+                m = rx.match(bare)
+                if m and name in have:
+                    if name not in left:
+                        left.append(name)
+                elif m and name not in found:
+                    key = name
+                    break
+                m = None
+        if key is None or m is None:
+            kept.append(raw)
+            continue
+        # The value runs on over the lines and paragraphs after it, up to the
+        # next labelled line, heading or the end of Background.
+        value_lines = [m.group(1)]
+        while n < len(body) and not STOPS_VALUE.match(body[n]):
+            value_lines.append(body[n].rstrip("\r\n"))
+            n += 1
+        while value_lines and not value_lines[-1].strip():
+            value_lines.pop()
+        found[key] = eol.join(value_lines)
+    while kept and not kept[-1].strip():
+        kept.pop()
+    if kept and not kept[-1].endswith(("\n", "\r")):
+        kept[-1] += eol
+
+    def value(key: str, hint: str) -> str:
+        got = found.get(key, "")
+        return hint if not got or PLACEHOLDER.match(got) else got
+
+    blocks = {"backstory": ["### Backstory", "", value("backstory", BACKSTORY_HINT)],
+              "appearance": ["### Appearance", "", value("appearance", APPEARANCE_HINT), "", FACTS_LINE],
+              "personality": ["### Personality", "", *PERSONALITY]}
+    added = [name for name in SUBSECTIONS if name not in have]
+    block: list[str] = []
+    for name in added:
+        block += ([""] if block else []) + blocks[name]
+    tail = [eol] if end < len(lines) else []
+    lead = [] if kept and not kept[0].strip() else [eol]
+    new = (lines[:start + 1] + lead + kept + ([eol] if kept else [])
+           + [line + eol for line in block] + tail + lines[end:])
+    said = [f"{OLD_LABEL[name]} moves into ### {name.title()}" if name in found
+            else f"### {name.title()} is added" for name in added]
+    said += [f"the old **{OLD_LABEL[name]}:** line stays where it is: the note "
+             f"already has ### {name.title()}" for name in left]
+    return "".join(new), said[:len(added)] + filled + said[len(added):]
+
+
+def find_dnd_background_sections(vault: Path) -> list[Item]:
+    """1.10.94: a D&D PC's background lives in `### Backstory`, `### Appearance`
+    and `### Personality` under `## Background` (`dnd_background.py`). The old
+    one-line `**Backstory & Personality:**` and `**Appearance:**` values
+    move there word for word; a `{placeholder}` counts as empty. Only the
+    sub-sections a note is missing are added, and an existing Appearance or
+    Personality gets the facts line or bullets it lacks. Frontmatter is not
+    touched."""
+    if vault_system(vault) != "dnd-5e-2024":
+        return []
+    todo: list[str] = []
+    lines: list[str] = []
+    for rel, text in vault_files(vault, newline=""):
+        if (rel.endswith("_Story.md") or rel.startswith("_Templates/")
+                or entity_type(extract_frontmatter(text) or {}) != "pc"):
+            continue
+        planned = _background_sections(text)
+        if planned is None:
+            continue
+        todo.append(rel)
+        moved = [p for p in planned[1] if not p.startswith("the old ")]
+        lines.append(f"{rel}: " + "; ".join(moved))
+        lines += [f"{rel}: {p}" for p in planned[1] if p.startswith("the old ")]
+    if not todo:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        done = []
+        for rel in todo:
+            path = vault / rel
+            new = _background_sections(_read(path))
+            if new is not None:
+                write_text_atomic(path, new[0])
+                done.append(f"{rel}: " + "; ".join(new[1]))
+        return done
+
+    return [Item("dnd-background-sections", WILL, lines, apply)]
+
+
 VAULT_CHECKS: list[Check] = [
     Check("skeleton", None, 3, "the vault skeleton", find_skeleton),
     Check("templates", None, 3, "templates", find_templates,
@@ -1506,4 +1693,6 @@ VAULT_CHECKS: list[Check] = [
           find_stage_keys),
     Check("empty-scenes-lists", "1.10.93", 3, "empty scenes: lists",
           find_empty_scenes_lists),
+    Check("dnd-background-sections", "1.10.94", 3,
+          "backstory sections in D&D PC notes", find_dnd_background_sections),
 ]

@@ -137,7 +137,8 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
               spells=(), inventory=(), feats=(), class_features=(), racial_traits=(),
               currencies=None, xp=6500, size="Medium", speed=30,
               hit_points=None, hit_dice=None, item_details=None, spell_details=None,
-              actions=(), custom_actions=(), character_values=()):
+              actions=(), custom_actions=(), character_values=(),
+              notes=None, traits=None, details=None):
     """classes: (name, level, subclass or "", spellcasting ability stat id or None).
     modifiers: (group, type, subType, value[, extras]) with group one of race, class,
     background, item, feat; extras is a dict that overrides a modifier field, plus
@@ -161,7 +162,8 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
     race, class or feat (see `attack_action`). custom_actions: the player's own actions, as
     the data lists them. character_values: (type id, value, target[, target type id]) with
     target "item:<name>" for an inventory row, "unarmed" for the Unarmed Strike, None for a
-    character-wide value, or an id."""
+    character-wide value, or an id. notes and traits: dicts laid into the data's `notes` and
+    `traits` objects; details: fields laid over the top level (age, height, gender, decorations...)."""
     char_id = 4242
     class_rows, class_actions, feature_ids, named_features, ident = [], [], {}, {}, 1000
     for i, (cname, level, subclass, ability) in enumerate(classes):
@@ -230,11 +232,11 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
 
     for spec in inventory:
         add_item(*spec)
-    for iname, details in (item_details or {}).items():
+    for iname, fields in (item_details or {}).items():
         for row in items:
             if row["definition"]["name"] == iname:
-                row["definition"].update({k: v for k, v in details.items() if k != "row"})
-                row.update(details.get("row", {}))
+                row["definition"].update({k: v for k, v in fields.items() if k != "row"})
+                row.update(fields.get("row", {}))
 
     spell_rows = {"race": [], "class": [], "item": [], "feat": [], "background": None}
     class_spells = {c["definition"]["name"]: [] for c in class_rows}
@@ -245,9 +247,9 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
                 "range": {"origin": "Ranged", "rangeValue": 30, "aoeType": None, "aoeValue": None}}
         row = {"definition": defn, "prepared": prepared, "alwaysPrepared": always, "countsAsKnownSpell": True,
                "componentId": 0, "componentTypeId": 0}
-        details = (spell_details or {}).get(sname, {})
-        defn.update({k: v for k, v in details.items() if k != "row"})
-        row.update(details.get("row", {}))
+        fields = (spell_details or {}).get(sname, {})
+        defn.update({k: v for k, v in fields.items() if k != "row"})
+        row.update(fields.get("row", {}))
         if source.startswith("Item: "):
             if source[6:] not in item_ids:
                 add_item(source[6:], magic=True, attuned=True)
@@ -311,6 +313,11 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
         "classSpells": [{"characterClassId": 1000 + i, "spells": class_spells[c[0]]} for i, c in enumerate(classes)],
         "customActions": list(custom_actions), **hp_fields,
     }
+    if notes is not None:
+        built["notes"] = notes
+    if traits is not None:
+        built["traits"] = traits
+    built.update(details or {})
     if hit_points is not None:
         built["preferences"]["hitPointType"] = hit_points.get("type", 2)
     return built

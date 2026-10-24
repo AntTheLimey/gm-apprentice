@@ -5,6 +5,7 @@ const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
 const { canonicalNfc, nfcLookupTable } = require('../unicode');
 const { isPlayedStatus } = require('../session-hub');
+const { pcEpithetText } = require('../pc-header-meta');
 
 const GENRE_SECTION_TITLES = {
   military: {
@@ -963,7 +964,8 @@ ${rows}
 </div>`;
 }
 
-function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMap = {}) {
+// opts.cocFolio: PC pages are the CoC folio, which shows no hook, so its cards carry none.
+function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMap = {}, opts = {}) {
   const outputPath = dir + '/index.html';
   const crumbs = generateBreadcrumbs(outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
@@ -1028,13 +1030,15 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMa
       // Plain text, not renderMetaValue: this sits inside the enclosing <a class="entity-card">,
       // where a resolved wikilink would nest one anchor inside another.
       const subtitle = plainMetaValue(fm.occupation || fm.location_type || fm.faction_type || fm.factionType || '');
+      // A PC's hook, the line under its page's name (plain text: this sits inside the card's anchor).
+      const hook = isCharacters && fm.type === 'pc' && !opts.cocFolio ? pcEpithetText(p) : '';
       return `<a class="entity-card" href="${escapeHtml(relHref(p, dir))}"
   data-entity-type="${escapeHtml(entityType || '')}"
   data-entity-name="${escapeHtml(p.displayTitle)}"
   data-entity-status="${escapeHtml(fm.status || '')}">
   ${portraitHtml}
   <h4>${escapeHtml(p.displayTitle)}</h4>
-  ${subtitle ? `<div class="card-subtitle">${escapeHtml(subtitle)}</div>` : ''}
+  ${subtitle ? `<div class="card-subtitle">${escapeHtml(subtitle)}</div>` : ''}${hook ? `\n  <p class="card-hook">${escapeHtml(hook)}</p>` : ''}
 </a>`;
     }).join('\n');
     bodyContent = `<div class="card-grid"${noPreviewAttr()}>${cardItems}</div>`;

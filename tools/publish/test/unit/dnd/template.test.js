@@ -355,7 +355,9 @@ describe('pcTemplate with a D&D sheet', () => {
     for (const consumed of ['Stat Sheet', 'Skills', 'Spellcasting', 'Proficiencies', 'Class Features', 'Equipment']) {
       assert.ok(!titles.includes(consumed), `${consumed} must not repeat as an accordion`);
     }
-    for (const kept of ['Background', 'Notes']) assert.ok(titles.includes(kept), `${kept} must stay as an accordion`);
+    assert.ok(titles.includes('Notes'), 'Notes must stay as an accordion');
+    // Background's story is on the Story tab: it is no accordion.
+    assert.ok(!titles.includes('Background'), 'Background is no accordion');
     assert.ok(html.includes('dnd5e-tab-sheet'));
   });
 

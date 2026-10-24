@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from ddb_builder import character  # noqa: E402
+from dnd_background import PlayerText  # noqa: E402
 from dnd_ddb_read import Bonus, Character, Unreadable, Worked, read, safe_name  # noqa: E402
 
 
@@ -694,3 +695,56 @@ def test_an_adjustment_that_is_zero_not_a_number_or_beside_an_override_is_left_o
     assert bonuses(character_values=((24, 0, "9", SKILL), (24, "two", "6", SKILL), (24, None, "7", SKILL))) == []
     assert bonuses(character_values=((24, 2, "9", SKILL), (23, 7, "9", SKILL), (39, 2, "5", stat), (38, 4, "5", stat))) == []
     assert bonuses(character_values=((24, 2, "99", SKILL), (24, 2, "9", stat), (39, 2, "9", stat))) == []
+
+
+# --- the player's text --------------------------------------------------------------
+
+def test_story_fields_read():
+    c = got(notes={"backstory": "  Raised in a lighthouse.\n"},
+            traits={"personalityTraits": "Hums.", "ideals": "Light.", "bonds": "The keeper.",
+                    "flaws": "Counts stairs.", "appearance": " Salt-bleached. "},
+            details={"age": 31, "height": "5' 4\"", "weight": 140, "eyes": "Grey", "hair": "Black",
+                     "skin": "Tan", "faith": "Tide-mother", "gender": "Female"})
+    s = c.player_text
+    assert (s.backstory, s.appearance, s.traits, s.ideals, s.bonds, s.flaws) == (
+        "Raised in a lighthouse.", "Salt-bleached.", "Hums.", "Light.", "The keeper.", "Counts stairs.")
+    assert s.facts == {"Age": "31", "Height": "5' 4\"", "Weight": "140 lb", "Eyes": "Grey", "Hair": "Black",
+                       "Skin": "Tan", "Faith": "Tide-mother"}
+    assert s.gender == "Female"
+
+
+def test_story_blanks_are_left_out():
+    c = got(details={"age": None, "height": "  ", "weight": 0, "eyes": "Green", "hair": None})
+    assert c.player_text.facts == {"Eyes": "Green"}
+    assert got().player_text == PlayerText()
+
+
+def test_story_missing_or_wrong_shaped_is_empty():
+    for notes, traits in [([], []), ({"backstory": 12}, {"ideals": None, "flaws": ["x"]}), ("text", 5)]:
+        c = got(notes=notes, traits=traits, details={"age": "old", "weight": True, "eyes": 3, "gender": None})
+        assert c.player_text == PlayerText()
+    data = character()
+    data["notes"] = None
+    assert read(data).player_text == PlayerText()
+
+
+def test_portrait_url_only_from_avatars():
+    good = "https://www.dndbeyond.com/avatars/1/2/3-4.jpeg?width=150&height=150"
+    assert got(details={"decorations": {"avatarUrl": good}}).portrait_url == good
+    assert got().portrait_url == ""
+    for bad in ("http://www.dndbeyond.com/avatars/1/2.jpg", "https://evil.example/avatars/1/2.jpg",
+                "https://www.dndbeyond.com.evil.example/avatars/1.jpg", "https://www.dndbeyond.com/other/1.jpg",
+                "https://user@www.dndbeyond.com/avatars/1.jpg", "https://www.dndbeyond.com:444/avatars/1.jpg",
+                "//www.dndbeyond.com/avatars/1.jpg", "https://www.dndbeyond.com/avatars/a\nb",
+                "https://www.dndbeyond.com/avatars/a\tb", "https://www.dndbeyond.com/avatars/a b",
+                " https://www.dndbeyond.com/avatars/1.jpg", "https://www.dndbeyond.com/avatars/1.jpg\r",
+                "https://www.dndbeyond.com/avatars/a\x00b", "https://www.dndbeyond.com/avatars/../x.jpg",
+                "https://www.dndbeyond.com/avatars/1/../../x", "",  None, 5, ["x"]):
+        assert got(details={"decorations": {"avatarUrl": bad}}).portrait_url == "", bad
+    assert got(details={"decorations": []}).portrait_url == ""
+
+
+def test_age_and_weight_must_be_whole_numbers():
+    assert got(details={"age": True, "weight": True}).player_text.facts == {}
+    assert got(details={"age": 60.0, "weight": 150.0}).player_text.facts == {"Age": "60", "Weight": "150 lb"}
+    assert got(details={"age": 60.5, "weight": 150.5}).player_text.facts == {}
