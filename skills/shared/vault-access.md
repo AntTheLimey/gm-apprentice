@@ -54,9 +54,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/graph_check.py" \
   <vault-path> orphans --folder Characters
 ```
 
-Run each script (or `gm-publish <subcommand>`) with `--help` before
-its first use in a session; flags, output rows and exit codes live
-there. Findings are `LEVEL<TAB>path<TAB>message`: fix every ERROR,
+Run a command line a skill spells out as given. Use `--help` (or
+`gm-publish <subcommand> --help`) only for a flag or script the skill
+doesn't spell out; flags, output rows and exit codes live there. Findings are `LEVEL<TAB>path<TAB>message`: fix every ERROR,
 triage WARNINGs with the GM, treat INFO as context. Mutating scripts
 are dry-run by default; `--write` / `--fix` / `--execute` applies.
 
