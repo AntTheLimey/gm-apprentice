@@ -96,7 +96,7 @@ describe('metadataBadgesFor', () => {
     const result = metadataBadgesFor(fm);
     assert.ok(result.includes('<span class="metadata-badge" data-field="session_number">3</span>'));
     assert.ok(result.includes('data-field="status">played<'));
-    assert.ok(result.includes('data-field="stage">complete<'));
+    assert.ok(!result.includes('data-field="stage"'));
     assert.ok(!result.includes('data-field="play_date"'));
   });
 

@@ -832,6 +832,50 @@ def scene_rows(scene_body: str, title: str = "Scene 1: T") -> list[pc.Finding]:
                                           pc.SCENE_LABELS) if f.id == "scene-labels"]
 
 
+class PointerBlockTests(unittest.TestCase):
+    """A Plan block whose title is one wikilink points at a scene note;
+    the labels live in that note, so none are demanded here."""
+
+    def test_pointer_block_with_no_labels_is_clean(self):
+        self.assertEqual(scene_rows("", "[[Ashworth Dinner]]"), [])
+
+    def test_aliased_pointer_is_clean(self):
+        self.assertEqual(scene_rows("", "[[Ashworth Dinner|The Dinner]]"), [])
+
+    def test_ordinary_block_without_labels_still_errors(self):
+        rows = scene_rows("Some prose, no labels.", "Scene 2: The Docks")
+        self.assertEqual(len(rows), 2, rows)
+
+    def test_wikilink_inside_a_longer_title_is_not_a_pointer(self):
+        rows = scene_rows("", "Scene 3: [[The Docks]]")
+        self.assertEqual(len(rows), 2, rows)
+
+    def test_pointer_block_clean_through_check_scenes(self):
+        text = ("## Planned Scenes\n\n### [[Ashworth Dinner]]\n\n"
+                "### Scene 2: The Docks\nNothing.\n")
+        found = pc.check_scenes("P.md", pc._by_norm_title(text))
+        loci = {f.locus for f in found if f.id == "scene-labels"}
+        self.assertEqual(loci, {"P.md:§Scene 2: The Docks"})
+
+    def test_pointer_prompt_lines_are_clean(self):
+        # Purpose, who and how it starts: prompts, never demanded.
+        text = ("## Planned Scenes\n\n### [[Ashworth Dinner]]\n"
+                "**Purpose:** Emma meets the viscount.\n"
+                "**Who:** [[Viscount Ashworth]], for Emma.\n"
+                "**Starts it:** The invitation arrives at breakfast.\n")
+        found = pc.check_scenes("P.md", pc._by_norm_title(text))
+        self.assertEqual([f for f in found if f.level == "ERROR"], [])
+
+    def test_contingency_pointer_still_needs_a_trigger(self):
+        text = ("## Planned Scenes\n\n### [[Ashworth Dinner]]\n\n"
+                "## Contingency Scenes\n\n### [[Fire at the Docks]]\n\n")
+        found = pc.check_scenes("P.md", pc._by_norm_title(text))
+        rows = [f.message for f in found if f.id == "scene-labels"]
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("[[Fire at the Docks]]", rows[0])
+        self.assertIn("**Trigger:**", rows[0])
+
+
 class MinimumSceneTests(unittest.TestCase):
     """One minimum for all types (2026-09-14, docs/scene-design-research.md):
     only `**Situation:**` and `**Starts it:**` are required. Every other

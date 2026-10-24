@@ -10,6 +10,7 @@ import hashlib
 import json
 import posixpath
 import re
+from collections.abc import Callable
 from pathlib import Path
 
 import relink
@@ -18,12 +19,14 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           cells, edit_frontmatter, plugin_tool, stopped,
                           write_text_atomic)
 from schema_rules import system_id as _system_id
-from schema_rules import TEMPLATE_NAMES
+from schema_rules import STAGE_HIDES, TEMPLATE_NAMES
 from schema_rules import tone_families, without_generated_markers
 from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
-                         player_section_key, wrapup_filename_findings)
+                         configured_site, player_section_key, semver_below,
+                         site_pin, wrapup_filename_findings)
 from vaultlib import (LEGACY_SETTINGS_FILE, SettingsUnavailable, entity_type, extract_frontmatter,
-                      fence_step, frontmatter_span, parse_version, plugin_version,
+                      delete_key, fence_step, frontmatter_span, opens_a_block,
+                      parse_version, plugin_version,
                       read_stamp, settings, settings_file, settings_raw,
                       settings_unset, vault_files, vault_layout,
                       wrapup_filename)
@@ -1351,6 +1354,111 @@ def find_open_threads_fold(vault: Path) -> list[Item]:
                  apply, wants="fold or leave", holds_stamp=True)]
 
 
+# --- retired scene/session keys -----------------------------------------------
+
+
+
+def _frontmatter_lines(text: str) -> list[str] | None:
+    """The frontmatter lines of a note read with its line endings, or None
+    when it has none that can be edited line by line."""
+    lines = text.removeprefix("\ufeff").splitlines(keepends=True)
+    end, error = frontmatter_span(lines)
+    return None if error else lines[1:end]
+
+
+def _notes_with(vault: Path, drop: Callable[[list[str], str], bool]
+                ) -> list[str]:
+    """The notes `drop(frontmatter, rel)` says hold something to remove.
+    `_Templates/` is never walked: the `templates` check refreshes it."""
+    found = []
+    for rel, text in vault_files(vault, newline=""):
+        fm = _frontmatter_lines(text)
+        if fm is not None and drop(fm, rel):
+            found.append(rel)
+    return found
+
+
+# The session family: the index, its Plan, Play Notes and Wrap-Up. Only
+# these ever had a session `stage:`; any other type's is the GM's own.
+STAGE_TYPES = frozenset({"session", "session-plan", "session-play-notes",
+                         *WRAP_TYPES})
+
+
+def _fm_type(fm: list[str]) -> str:
+    return entity_type(extract_frontmatter("".join(["---\n", *fm, "---\n"]))
+                       or {})
+
+
+def _drop_stage(fm: list[str], _rel: str) -> bool:
+    """A one-line `stage:` on a session-family note whose value hides
+    nothing. A stage that keeps the note off a player site (STAGE_HIDES)
+    stays: every publish tool still reads it, so removing it would
+    publish the note."""
+    if not any(ln.startswith("stage:") for ln in fm) \
+            or opens_a_block(fm, "stage") or _fm_type(fm) not in STAGE_TYPES:
+        return False
+    # The value as the publish tool's YAML reads it: quotes and comments
+    # go, an anchor (`&held draft`) names the value after it, and an alias
+    # (`*held`) is a value set elsewhere, so it stays.
+    parsed = extract_frontmatter("".join(["---\n", *fm, "---\n"])) or {}
+    value = str(parsed.get("stage") or "").strip()
+    if value.startswith("*"):
+        return False
+    value = re.sub(r"^&\S+\s*", "", value)
+    return value.casefold() not in STAGE_HIDES
+
+
+def _drop_empty_scenes(fm: list[str], _rel: str) -> bool:
+    return (_fm_type(fm) == "session"
+            and any(re.fullmatch(r"scenes:[ \t]*\[[ \t]*\][ \t]*", ln.rstrip("\r\n"))
+                    for ln in fm))
+
+
+def _remove_keys(vault: Path, rels: list[str], key: str,
+                 only: Callable[[list[str]], bool]) -> list[str]:
+    done = []
+    for rel in rels:
+        def change(fm: list[str], _eol: str) -> None:
+            if only(fm):
+                delete_key(fm, key)
+        edit_frontmatter(vault / rel, change)
+        done.append(f"removed {key}: from {rel}")
+    return done
+
+
+def find_stage_keys(vault: Path) -> list[Item]:
+    """1.10.93: a session no longer has a `stage:`. The key goes from any
+    session-family note (STAGE_TYPES) that has it as a one-line value that
+    hides nothing; `stage: draft` and the other STAGE_HIDES words stay,
+    because they still keep the note off a player site."""
+    found = _notes_with(vault, _drop_stage)
+    if not found:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        return _remove_keys(vault, found, "stage",
+                            lambda fm: _drop_stage(fm, ""))
+
+    return [Item("stage-keys", WILL,
+                 [f"remove stage: from {rel}" for rel in found], apply)]
+
+
+def find_empty_scenes_lists(vault: Path) -> list[Item]:
+    """1.10.93: a session index no longer lists its scenes in frontmatter.
+    An empty one-line `scenes: []` goes from `type: session` notes; a list
+    with entries stays as the GM wrote it."""
+    found = _notes_with(vault, _drop_empty_scenes)
+    if not found:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        return _remove_keys(vault, found, "scenes",
+                            lambda fm: _drop_empty_scenes(fm, ""))
+
+    return [Item("empty-scenes-lists", WILL,
+                 [f"remove scenes: [] from {rel}" for rel in found], apply)]
+
+
 # --- D&D PC Background sections -----------------------------------------------
 
 OLD_BACKSTORY = re.compile(r"^\*\*Backstory & Personality:\*\*[ \t]*(.*?)[ \t]*$")
@@ -1499,7 +1607,7 @@ def _background_sections(text: str) -> tuple[str, list[str]] | None:
 
 
 def find_dnd_background_sections(vault: Path) -> list[Item]:
-    """1.10.93: a D&D PC's background lives in `### Backstory`, `### Appearance`
+    """1.10.94: a D&D PC's background lives in `### Backstory`, `### Appearance`
     and `### Personality` under `## Background` (`dnd_background.py`). The old
     one-line `**Backstory & Personality:**` and `**Appearance:**` values
     move there word for word; a `{placeholder}` counts as empty. Only the
@@ -1582,6 +1690,10 @@ VAULT_CHECKS: list[Check] = [
     Check("open-threads-fold", "1.10.83", 3,
           "per-session open threads in PC Current Status",
           find_open_threads_fold, choices=("open-threads-fold=",)),
-    Check("dnd-background-sections", "1.10.93", 3,
+    Check("stage-keys", "1.10.93", 3, "the retired stage: key",
+          find_stage_keys),
+    Check("empty-scenes-lists", "1.10.93", 3, "empty scenes: lists",
+          find_empty_scenes_lists),
+    Check("dnd-background-sections", "1.10.94", 3,
           "backstory sections in D&D PC notes", find_dnd_background_sections),
 ]

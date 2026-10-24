@@ -436,17 +436,11 @@
       "reviewed"
     ]
   },
-  "session_stage": {
-    "in_prep": [
-      "outline",
-      "draft",
-      "ready"
-    ],
-    "in_play": [
-      "in_play",
-      "wrap_up"
-    ]
-  },
+  "stage_hides": [
+    "outline",
+    "draft",
+    "ready"
+  ],
   "wrap_up_types": [
     "session_wrap",
     "session-wrap-up",

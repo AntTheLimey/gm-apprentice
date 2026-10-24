@@ -26,12 +26,21 @@ def test_copy_is_current():
         "python3 scripts/export_publish_ontology.py")
 
 
+def test_session_stage_is_gone():
+    full = json.loads((REPO / "skills" / "shared" /
+                       "gm-apprentice-ontology.json").read_text(encoding="utf-8"))
+    assert "session_stage" not in full
+    assert "session_stage" not in json.loads(COPY.read_text(encoding="utf-8"))
+    mobrpg = REPO / "tools" / "mobrpg" / "mobrpg" / "gm-apprentice-ontology.json"
+    assert "session_stage" not in json.loads(mobrpg.read_text(encoding="utf-8"))
+
+
 def test_copy_holds_every_tone_and_predicate():
     full = json.loads((REPO / "skills" / "shared" /
                        "gm-apprentice-ontology.json").read_text(encoding="utf-8"))
     copy = json.loads(COPY.read_text(encoding="utf-8"))
     for key in ("tones", "tone_near", "strength_scale", "storage_rule", "verbs", "same_fact",
-                "place_fields", "not_edge_target_types", "session_status", "session_stage",
+                "place_fields", "not_edge_target_types", "session_status",
                 "wrap_up_types", "game_systems", "vault_folders"):
         assert copy[key] == full[key], key
     assert [p["type"] for p in copy["predicates"]] == [p["type"] for p in full["predicates"]]

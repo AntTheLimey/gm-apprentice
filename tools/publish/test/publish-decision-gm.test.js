@@ -30,7 +30,7 @@ describe('NOTE_CODES', () => {
     assert.deepStrictEqual([...NOTE_CODES].sort(), [
       'AUTO_EXCLUDED_SOURCE', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_STATUS', 'DRAFT_EXCLUDED',
       'MANIFEST_EXCLUDED', 'MANIFEST_NEEDS_DECISION', 'MANIFEST_UNLISTED',
-      'PUBLISH_FALSE', 'PUBLISH_NONE', 'SCENE_CUT_SKIPPED',
+      'PREP_TYPE', 'PUBLISH_FALSE', 'PUBLISH_NONE',
     ]);
   });
 });
@@ -41,7 +41,8 @@ describe('decideGmPage: a note players do not see is shown, with the player reas
     ['AUTO_EXCLUDED_STATUS', { type: 'npc', status: 'planned' }, {}],
     ['AUTO_EXCLUDED_STAGE', { type: 'npc', stage: 'outline' }, {}],
     ['AUTO_EXCLUDED_SOURCE', { type: 'npc', source: 'prep' }, {}],
-    ['SCENE_CUT_SKIPPED', { type: 'scene', status: 'skipped' }, {}],
+    ['PREP_TYPE', { type: 'scene', status: 'played' }, {}],
+    ['PREP_TYPE', { type: 'session-plan' }, { manifest: manifestOf({ publishing: ['Characters/NPCs/Someone.md'] }) }],
     ['MANIFEST_EXCLUDED', { type: 'npc' }, { manifest: manifestOf({ excluded: ['Characters/NPCs/Someone.md'] }) }],
     ['MANIFEST_NEEDS_DECISION', { type: 'npc' }, { manifest: manifestOf({ needsDecision: ['Characters/NPCs/Someone.md'] }) }],
     ['MANIFEST_UNLISTED', { type: 'npc' }, { manifest: manifestOf({}) }],

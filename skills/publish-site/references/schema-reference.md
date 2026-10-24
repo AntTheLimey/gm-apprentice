@@ -266,8 +266,7 @@ wrap-up (`type: session_wrap`) all publish.
 
 `type: session`
 
-Badges rendered: `session_number`, `play_date`, `status`,
-`stage`
+Badges rendered: `session_number`, `play_date`, `status`
 
 A published session page drives the landing "Latest Session" recap
 and the "NPCs/Locations in Play" widgets. The wrap-up
@@ -284,7 +283,7 @@ and from search, backlinks and the landing. The page then shows, under the
 title and badges: the chapter (linked, if its page publishes), the
 `in_game_date`, the opening of the Wrap-Up's recap and a "Read the
 full session" link to the Wrap-Up. Its who-appeared and events
-lists, in its Connections, come from the Wrap-Up. It never lists `scenes:`. With
+lists, in its Connections, come from the Wrap-Up. It never lists scenes. With
 no published Wrap-Up the index body publishes as written.
 `explain <session index>` says which applies.
 
@@ -292,7 +291,7 @@ no published Wrap-Up the index body publishes as written.
 
 `type: scene`
 
-Badges rendered: `scene_type`, `status`
+Prep by type: never published to the player site. No badges.
 
 ---
 

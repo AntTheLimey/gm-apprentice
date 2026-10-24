@@ -7,10 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.10.93] — 2026-10-23
+## [1.10.94] — 2026-10-23
 
 Backstories: a D&D Beyond character's backstory comes into the vault, and
-the site opens a character's Story tab on it. Publish tool 1.47.0.
+the site opens a character's Story tab on it. Publish tool 1.48.0.
 
 ### Added
 
@@ -35,7 +35,7 @@ the site opens a character's Story tab on it. Publish tool 1.47.0.
 - Session wrap-up: each character story entry opens with a one-line
   italic summary.
 
-### Publish tool 1.47.0
+### Publish tool 1.48.0
 
 - The Story tab opens on the backstory: the prologue, how they look,
   what drives them, and the story so far, one line per session.
@@ -57,6 +57,59 @@ the site opens a character's Story tab on it. Publish tool 1.47.0.
 
 - A backstory showcase for GURPS and CoC (#483).
 - Dash runs in player text (#484).
+
+## [1.10.93] — 2026-10-22
+
+Scenes, sessions and chapters, part 1: a scene is its own note in its
+chapter, a session no longer lists scenes, and scenes and Plans stay
+off the player site. Publish tool 1.47.0.
+
+### Added
+
+- Scene and chapter templates (`templates/scene.md`,
+  `templates/chapter.md`). A scene has `status` `planned`, `paused`,
+  `played` or `dropped`; a chapter has `planned`, `active` or
+  `complete`. Older words are accepted: `ready` is `planned`,
+  `modified` is `played`, `cut` and `skipped` are `dropped`,
+  `in_progress` and `in-progress` are `active` (#433).
+- `vw scene-new`, `vw chapter-new` and `vw scene-played`: the model
+  proposes, the GM confirms, `vw` writes the note or the status.
+  `scene-new` refuses a title another note already has, so a scene's
+  link names one note.
+- `scene_queue.py`: the prep queue, built from the scenes in each
+  chapter that are not yet played or dropped.
+- A Plan may point at a scene file instead of writing the scene
+  inline: `### [[Scene Name]]` and a line each for purpose, who and
+  how it starts. Those lines are prompts; no check asks for them.
+- campaign-qa asks when a chapter has two chapter notes.
+- New vaults start with a Chapter 1 note.
+- Two update checks: `stage-keys` removes the retired `stage:` line
+  from session notes where its value hides nothing (`stage: outline`,
+  `draft` and `ready` stay, since they still keep a note off the player
+  site), and
+  `empty-scenes-lists` removes an empty `scenes:` list from a session
+  index. A `scenes:` list with entries is left alone.
+
+### Changed
+
+- Scenes (`type: scene`) and Plans (`type: session-plan`) never
+  publish to the player site, whatever the publish list says. The
+  build warns for each one a vault's publish list names.
+- Sessions drop `stage`, and `vw session-new` no longer writes a
+  `scenes:` list.
+- The publish tool no longer looks at a scene's status, since scenes
+  never publish. It still holds back any note with `stage: outline`,
+  `draft` or `ready`; those words now live in the ontology as
+  `stage_hides`.
+- The session-play brief includes the text of the scene files a Plan
+  points at.
+- The skills write prepped scenes as scene files in the chapter and
+  mark played scenes with `vw scene-played`.
+
+### Removed
+
+- `session-prep/references/scene-note-template.md`, replaced by the
+  shared scene template.
 
 ## [1.10.92] — 2026-10-20
 

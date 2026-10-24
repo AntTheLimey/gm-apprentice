@@ -107,6 +107,11 @@ from *this* PC.
      scene) needs neither required label. Mark it with "(routing)" or
      "(hub)" in its title, `Scene 0`, or `**Type:** transition`. -->
 
+### [[Scene Note Title]]
+**Purpose:** A scene already written as a scene note: one line on why.
+**Who:** [[NPC]], and the PC it is for.
+**Starts it:** One line. The note holds the rest.
+
 ## Contingency Scenes
 
 Scenes that fire on a player choice or a clock, not by default.
@@ -170,5 +175,5 @@ Handouts & Props.]
 
 | Planned Scene | Status | Notes |
 |---------------|--------|-------|
-| [Scene Title] | Played / Modified / Skipped | Brief note |
+| [Scene Title] | Played / Paused / Dropped | Brief note |
 | [Unplanned] [Title] | Played | Origin and note |

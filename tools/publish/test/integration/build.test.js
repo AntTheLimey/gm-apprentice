@@ -1021,7 +1021,7 @@ describe('build integration', () => {
       assert.ok(fs.existsSync(played));
     });
 
-    it('excludes files with stage: draft', () => {
+    it('excludes a note held back with stage: draft', () => {
       const draft = path.join(outputDir, 'docs', 'characters', 'npcs', 'draft-npc.html');
       assert.ok(!fs.existsSync(draft));
     });
@@ -1079,7 +1079,7 @@ describe('build integration', () => {
       assert.ok(!fs.existsSync(planned));
     });
 
-    it('leaves out draft files', () => {
+    it('leaves out a note held back with stage: draft', () => {
       const draft = path.join(outputDir, 'docs', 'characters', 'npcs', 'draft-npc.html');
       assert.ok(!fs.existsSync(draft));
     });

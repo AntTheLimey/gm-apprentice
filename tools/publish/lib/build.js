@@ -736,8 +736,16 @@ function buildSite(options) {
   if (!gm && draftExcluded.length > 0) console.log(`Excluded ${draftExcluded.length} DRAFT entity/entities`);
 
   const autoExcluded = withCode(
-    'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_SOURCE', 'SCENE_CUT_SKIPPED');
+    'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_SOURCE');
   if (!gm && autoExcluded.length > 0) console.log(`Auto-excluded ${autoExcluded.length} prep/draft file(s)`);
+
+  if (!gm && manifest) {
+    // A scene or Plan on the publish list is never published; say so for each, once.
+    const listed = new Set(manifest.publishing);
+    for (const p of withCode('PREP_TYPE')) {
+      if (listed.has(vaultRelPathOf(p))) printWarning(`prep note on the publish list: ${vaultRelPathOf(p)} never publishes`);
+    }
+  }
 
   if (!gm && manifest) {
     // A prep file the GM explicitly listed under Publishing: named here because a
@@ -761,7 +769,7 @@ function buildSite(options) {
     // codes count as having reached this stage.
     const beforeManifest = new Set([
       'DRAFT_EXCLUDED', 'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_SOURCE',
-      'SCENE_CUT_SKIPPED', 'DIR_ALWAYS_EXCLUDED', 'DIR_UNMAPPED', 'NO_TYPE',
+      'PREP_TYPE', 'DIR_ALWAYS_EXCLUDED', 'DIR_UNMAPPED', 'NO_TYPE',
     ]);
     const reachedManifest = pages.filter(p => !beforeManifest.has(verdicts.get(p).code));
     // Allowlist membership alone, exactly as the old pass counted it: `publish: false`

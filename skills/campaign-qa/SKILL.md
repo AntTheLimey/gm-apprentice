@@ -196,6 +196,11 @@ Also run when a build stopped with a settings fault.
 
 DRAFT entities left unreviewed too long.
 
+### Chapter Notes — `references/checks/chapter-notes.md`
+
+A chapter with two chapter notes, from `vault_check.py chapters`.
+The GM picks which to keep.
+
 ### Open Spoilers — `references/checks/open-spoilers.md`
 
 Every `<!-- spoiler -->` marker still in the vault, listed for
@@ -213,8 +218,8 @@ deferred-flag review.
 Run in order, reading each check file as you go: Canon Audit →
 Timeline Validation → Name Similarity → Clue Redundancy → Graph
 Health → Tone Words → D&D Sheets (D&D vaults only) → Legacy Canon
-Field Repair → Stale DRAFT Detection → Wrap-Up Conformance → Site
-Faults (vaults with a site only) → Settings → World Consistency (if
+Field Repair → Stale DRAFT Detection → Wrap-Up Conformance → Chapter Notes
+→ Site Faults (vaults with a site only) → Settings → World Consistency (if
 `_World/` exists) → Open Spoilers. Deduplicate across checks; present one report
 grouped by severity (Critical, Warning, Info), not by mode.
 

@@ -33,10 +33,10 @@ Folders may be added or renamed afterwards.
 │       └── {Adventure Name}.md
 ├── Chapters/
 │   └── Chapter N - {Title}/
-│       ├── Chapter N Overview.md
+│       ├── Chapter N - {Title}.md
 │       ├── Planning/
 │       ├── Sessions/
-│       └── Scenes/
+│       └── Scenes/      (chapter prep, never published)
 ├── Characters/ (PCs/, NPCs/)
 ├── Locations/
 ├── Factions & Organizations/

@@ -48,10 +48,8 @@ from vaultlib import ontology as _ontology  # noqa: E402
 # played (the `wrap-up` state between the wrap-up and the review counts).
 SESSION_NOT_YET_RUN: frozenset[str] = frozenset(_ontology()["session_status"]["not_yet_run"])
 SESSION_PLAYED: frozenset[str] = frozenset(_ontology()["session_status"]["played"])
-# A session's `stage`: still being written (kept off a player site), or in play.
-SESSION_STAGE_IN_PREP: frozenset[str] = frozenset(_ontology()["session_stage"]["in_prep"])
-SESSION_STAGE: frozenset[str] = (
-    SESSION_STAGE_IN_PREP | frozenset(_ontology()["session_stage"]["in_play"]))
+# The retired `stage:` words that still keep a note off a player site.
+STAGE_HIDES: frozenset[str] = frozenset(_ontology()["stage_hides"])
 
 # Game systems: canonical id -> its name, and every alias -> its canonical id.
 SYSTEMS: tuple[str, ...] = tuple(s["id"] for s in _ontology()["game_systems"])
@@ -87,7 +85,8 @@ TYPE_FOLDERS: dict[str, frozenset[str]] = {
 # Valid enum values
 CANON_STATUS_VALUES = {"DRAFT", "AUTHORITATIVE", "SUPERSEDED", "STUB"}
 SESSION_STATUS = set(SESSION_NOT_YET_RUN | SESSION_PLAYED)
-SCENE_STATUS = {"planned", "ready", "played", "cut", "skipped", "modified"}
+SCENE_STATUS = ("planned", "paused", "played", "dropped")
+CHAPTER_STATUS = ("planned", "active", "complete")
 SCENE_TYPES = {
     "investigation", "social", "combat", "chase",
     "transition", "horror", "downtime", "other"
@@ -120,6 +119,7 @@ CHECKED_VALUES: dict[str, dict[str, frozenset[str]]] = {
     "*": {"canon_status": frozenset(CANON_STATUS_VALUES)},
     "session": {"status": frozenset(SESSION_NOT_YET_RUN | SESSION_PLAYED)},
     "scene": {"status": frozenset(SCENE_STATUS), "scene_type": frozenset(SCENE_TYPES)},
+    "chapter": {"status": frozenset(CHAPTER_STATUS)},
     "npc": {"status": frozenset(NPC_STATUS)},
     "pc": {"status": PC_STATUS},
     "adventure-brief": {"scope": frozenset(ADVENTURE_BRIEF_SCOPE),
@@ -133,6 +133,9 @@ CHECKED_VALUES: dict[str, dict[str, frozenset[str]]] = {
 # Another spelling a checked field accepts: spelling -> the value it means.
 VALUE_ALIASES: dict[str, dict[str, dict[str, str]]] = {
     "campaign_overview": {"status": {"active": "in_progress"}},
+    "scene": {"status": {"ready": "planned", "modified": "played",
+                         "cut": "dropped", "skipped": "dropped"}},
+    "chapter": {"status": {"in_progress": "active", "in-progress": "active"}},
 }
 # A checked field that also takes the words of a site setting (compared
 # trimmed and lower-cased, as the publish tool does): a word the GM added
@@ -142,7 +145,6 @@ SETTING_VALUES: dict[str, dict[str, str]] = {
 }
 LISTED_VALUES: dict[str, dict[str, frozenset[str]]] = {
     "*": {"source": SOURCE_VALUES},
-    "session": {"stage": SESSION_STAGE},
     "faction": {"status": FACTION_STATUS},
     "organization": {"status": FACTION_STATUS},
 }
@@ -170,8 +172,8 @@ REQUIRED_FIELDS = {
     "session-plan": ["type", "canon_status", "session"],
     "session-play-notes": ["type", "canon_status", "session"],
     **{t: ["type", "canon_status", "session"] for t in sorted(WRAP_UP_TYPES)},
-    "scene": ["type", "canon_status", "scene_type", "status"],
-    "chapter": ["type"],
+    "scene": ["type", "status"],
+    "chapter": ["type", "title"],
     "meta": ["type"],
     "timeline": ["type"],
     "pc_roster": ["type"],
@@ -211,6 +213,8 @@ TEMPLATE_NAMES = {
     "campaign-overview.md": "_Template_Campaign_Overview.md",
     "session.md": "_Template_Session.md",
     "session-plan.md": "_Template_Session_Plan.md",
+    "scene.md": "_Template_Scene.md",
+    "chapter.md": "_Template_Chapter.md",
     "session-wrap.md": "_Template_Session_WrapUp.md",
     "character-story.md": "character-story.md",
 }
@@ -221,8 +225,6 @@ WORLD_STUBS = {"world-index.md": "_World/world-index.md", "world-flags.md": "_Wo
 # under skills/ (a skill zip holds only its own skill beside shared/).
 EXAMPLE_FILES = {
     "adventure-brief": "the-midwife/references/scaffold-handoff.md",
-    "scene": "session-prep/references/scene-note-template.md",
-    "chapter": "shared/entity-schema.md",
     "session-play-notes": "shared/session-document-chain.md",
 }
 SKILLS_DIR = TEMPLATES_DIR.parent.parent

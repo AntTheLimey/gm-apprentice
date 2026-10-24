@@ -18,6 +18,7 @@ sys.path.insert(0, str(SCRIPTS))
 import migrate  # noqa: E402
 import migrate_vault as mv  # noqa: E402
 import vault_check as vc  # noqa: E402
+import vaultlib as vl  # noqa: E402
 import vault_scaffold as vs  # noqa: E402
 from layouts import on_layout  # noqa: E402
 from vaultlib import (PUBLISH_TOOL, extract_frontmatter, plugin_version,  # noqa: E402
@@ -122,6 +123,54 @@ def note(vault, rel, text):
     path.write_text(text, encoding="utf-8")
 
 
+class FirstChapterTests(unittest.TestCase):
+    CH = "Chapters/Chapter 1/Chapter 1.md"
+
+    def test_a_new_vault_plans_chapter_1(self):
+        pieces = plan(scratch(self) / "V")
+        got = paths(pieces)
+        self.assertIn(self.CH, got)
+        self.assertLess(got.index(self.CH), got.index("_meta/index.md"))
+        text = next(p.text() for p in pieces if p.rel == self.CH)
+        fm = extract_frontmatter(text)
+        self.assertEqual(fm["type"], "chapter")
+        self.assertEqual(fm["title"], "Chapter 1")
+        self.assertEqual(fm["status"], "active")
+        self.assertEqual(fm["sort_order"], "1")
+
+    def test_any_chapter_note_means_no_chapter_1(self):
+        vault = scratch(self) / "V"
+        note(vault, "Chapters/The Docks/The Docks.md",
+             "---\ntype: chapter\ntitle: The Docks\n---\n")
+        self.assertNotIn(self.CH, paths(plan(vault)))
+
+    def test_an_adopted_vault_with_chapter_folders_gets_no_chapter_1(self):
+        vault = scratch(self) / "V"
+        note(vault, "Chapters/Chapter 4 - Calcutta/Sessions/Session 01.md",
+             "---\ntype: session\n---\n")
+        self.assertNotIn(self.CH, paths(plan(vault)))
+
+    def test_templates_and_meta_chapter_notes_do_not_count(self):
+        vault = scratch(self) / "V"
+        note(vault, "_Templates/_Template_Chapter.md", "---\ntype: chapter\n---\n")
+        note(vault, "_meta/example.md", "---\ntype: chapter\n---\n")
+        self.assertIn(self.CH, paths(plan(vault)))
+
+    def test_the_update_check_leaves_chapters_alone(self):
+        self.assertNotIn(self.CH, paths(plan(scratch(self) / "V",
+                                             templates=False, pages=False)))
+
+    def test_write_makes_one_chapter_and_a_rerun_adds_none(self):
+        vault = scratch(self) / "V"
+        for _ in range(2):
+            code, out = run(vault, "--system", "coc", "--write")
+            self.assertEqual(code, 0, out)
+        found = [rel for rel, text in vl.vault_files(vault)
+                 if (extract_frontmatter(text) or {}).get("type") == "chapter"]
+        self.assertEqual(found, [self.CH])
+        self.assertEqual(vc.check_chapters(vault), [])
+
+
 class PlanTests(unittest.TestCase):
     def test_a_new_vault_gets_the_whole_skeleton(self):
         got = paths(plan(scratch(self) / "V"))
@@ -132,6 +181,8 @@ class PlanTests(unittest.TestCase):
                        "Factions & Organizations/", "Items & Artifacts/",
                        "Creatures/", "Heritages/", "Events/", "Documents/",
                        "Clues/", "_Templates/_Template_NPC.md",
+                       "_Templates/_Template_Scene.md",
+                       "_Templates/_Template_Chapter.md",
                        "_Templates/pc-coc-7e.md", "_World/world-index.md",
                        "_World/_flags.md", "_Campaign/Timeline.md",
                        "_Campaign/Player Characters.md",

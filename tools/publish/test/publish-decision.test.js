@@ -113,7 +113,7 @@ describe('publish-decision: one case per code', () => {
     assert.match(v.reason, /status: planned/);
   });
 
-  it('AUTO_EXCLUDED_STAGE for stage: draft', () => {
+  it('AUTO_EXCLUDED_STAGE for stage: draft, on a note the update leaves its stage', () => {
     assert.strictEqual(decide({ type: 'npc', stage: 'draft' }).code, 'AUTO_EXCLUDED_STAGE');
   });
 
@@ -138,21 +138,33 @@ describe('publish-decision: one case per code', () => {
     assert.strictEqual(v.reason, 'publish list: publishing');
   });
 
-  it('SCENE_CUT_SKIPPED for a cut scene', () => {
-    const v = decide({ type: 'scene', status: 'cut' });
+  it('PREP_TYPE for a scene, whatever its status', () => {
+    for (const status of ['planned', 'paused', 'played', 'dropped', 'cut', 'skipped', undefined]) {
+      const v = decide({ type: 'scene', status });
+      assert.strictEqual(v.bucket, 'exclude', String(status));
+      assert.strictEqual(v.code, 'PREP_TYPE', String(status));
+      assert.strictEqual(v.reason, 'prep: scenes and Plans stay off the player site');
+    }
+  });
+
+  it('PREP_TYPE for a session Plan with no publish list', () => {
+    const v = decide({ type: 'session-plan', canon_status: 'DRAFT' });
     assert.strictEqual(v.bucket, 'exclude');
-    assert.strictEqual(v.code, 'SCENE_CUT_SKIPPED');
+    assert.strictEqual(v.code, 'PREP_TYPE');
   });
 
-  it('SCENE_CUT_SKIPPED for a skipped scene', () => {
-    assert.strictEqual(decide({ type: 'scene', status: 'skipped' }).code, 'SCENE_CUT_SKIPPED');
+  it('a scene on the publish list is still PREP_TYPE', () => {
+    const rel = 'Scenes/Docks.md';
+    const v = decide({ type: 'scene' }, { rel, manifest: manifestOf({ publishing: [rel] }) });
+    assert.strictEqual(v.code, 'PREP_TYPE');
+    assert.strictEqual(v.bucket, 'exclude');
   });
 
-  it('a played scene publishes', () => {
-    assert.strictEqual(decide({ type: 'scene', status: 'played' }).bucket, 'publish');
+  it('a typeless note is NO_TYPE before PREP_TYPE is asked', () => {
+    assert.strictEqual(decide({ status: 'played' }).code, 'NO_TYPE');
   });
 
-  it('only scenes are cut-filtered — a cut session is not', () => {
+  it('only scenes and Plans are prep by type - a cut session is not', () => {
     assert.strictEqual(decide({ type: 'session', status: 'cut' }).bucket, 'publish');
   });
 

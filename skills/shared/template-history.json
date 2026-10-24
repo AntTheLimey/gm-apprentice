@@ -3,6 +3,9 @@
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
   },
+  "_Template_Chapter.md": {
+   "d873d372d41d8d16f22233a807dea0c919f5b4d966340fd39bf3400fc2788a71": null
+  },
   "_Template_Clue.md": {
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
   },
@@ -42,11 +45,16 @@
   "_Template_Plan.md": {
    "0bcadfbfabab9ae2ead919acb6b5b27db54cebe65fcbfab5c68761712d9ba958": null
   },
+  "_Template_Scene.md": {
+   "9434058a8a6361b0ab1f80ba850252337c32b5c12e54d46d0ac1173011a17bc2": null
+  },
   "_Template_Session.md": {
-   "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": null
+   "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": "1.10.92",
+   "ebac23739e5fda65fc84c37c0948db352ee0af2af8b4d8ee71ca67b0b22b33f7": null
   },
   "_Template_Session_Plan.md": {
-   "579e06d0f6f0f130b6bc522ddd9c49b7c71454ac31fb3a1eae48674bdac4f598": null,
+   "555cd6c96a4b889e782a02bb7dac33829439d51619f8585654fc7d37c438edb5": null,
+   "579e06d0f6f0f130b6bc522ddd9c49b7c71454ac31fb3a1eae48674bdac4f598": "1.10.92",
    "648351bb72e6e86c159a032520faf191face1f30cd38123bfae8e02bdf66093b": "1.10.71"
   },
   "_Template_Session_WrapUp.md": {
@@ -62,7 +70,7 @@
   },
   "character-story.md": {
    "84efa29d464fa736e03341958b955fadda9fe2a843bec997db612e86b4da0f40": null,
-   "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.92"
+   "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.93"
   },
   "pc-coc-7e.md": {
    "64ba8c8ac0d5ac2f7e7e7d5e916d15bb74324c02fcac980d5786ce09dc3e97b6": "1.10.21",
@@ -73,6 +81,9 @@
  "coc-7e-regency": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+  },
+  "_Template_Chapter.md": {
+   "d873d372d41d8d16f22233a807dea0c919f5b4d966340fd39bf3400fc2788a71": null
   },
   "_Template_Clue.md": {
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
@@ -113,11 +124,16 @@
   "_Template_Plan.md": {
    "0bcadfbfabab9ae2ead919acb6b5b27db54cebe65fcbfab5c68761712d9ba958": null
   },
+  "_Template_Scene.md": {
+   "9434058a8a6361b0ab1f80ba850252337c32b5c12e54d46d0ac1173011a17bc2": null
+  },
   "_Template_Session.md": {
-   "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": null
+   "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": "1.10.92",
+   "ebac23739e5fda65fc84c37c0948db352ee0af2af8b4d8ee71ca67b0b22b33f7": null
   },
   "_Template_Session_Plan.md": {
-   "579e06d0f6f0f130b6bc522ddd9c49b7c71454ac31fb3a1eae48674bdac4f598": null,
+   "555cd6c96a4b889e782a02bb7dac33829439d51619f8585654fc7d37c438edb5": null,
+   "579e06d0f6f0f130b6bc522ddd9c49b7c71454ac31fb3a1eae48674bdac4f598": "1.10.92",
    "648351bb72e6e86c159a032520faf191face1f30cd38123bfae8e02bdf66093b": "1.10.71"
   },
   "_Template_Session_WrapUp.md": {
@@ -133,7 +149,7 @@
   },
   "character-story.md": {
    "84efa29d464fa736e03341958b955fadda9fe2a843bec997db612e86b4da0f40": null,
-   "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.92"
+   "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.93"
   },
   "pc-coc-7e-regency.md": {
    "7fabf9c73290ad4f4c1b3b62e03b8a0004689e371e713868155fc760e61983a3": "1.10.21",
@@ -144,6 +160,9 @@
  "dnd-5e-2024": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+  },
+  "_Template_Chapter.md": {
+   "d873d372d41d8d16f22233a807dea0c919f5b4d966340fd39bf3400fc2788a71": null
   },
   "_Template_Clue.md": {
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
@@ -184,11 +203,16 @@
   "_Template_Plan.md": {
    "0bcadfbfabab9ae2ead919acb6b5b27db54cebe65fcbfab5c68761712d9ba958": null
   },
+  "_Template_Scene.md": {
+   "9434058a8a6361b0ab1f80ba850252337c32b5c12e54d46d0ac1173011a17bc2": null
+  },
   "_Template_Session.md": {
-   "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": null
+   "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": "1.10.92",
+   "ebac23739e5fda65fc84c37c0948db352ee0af2af8b4d8ee71ca67b0b22b33f7": null
   },
   "_Template_Session_Plan.md": {
-   "579e06d0f6f0f130b6bc522ddd9c49b7c71454ac31fb3a1eae48674bdac4f598": null,
+   "555cd6c96a4b889e782a02bb7dac33829439d51619f8585654fc7d37c438edb5": null,
+   "579e06d0f6f0f130b6bc522ddd9c49b7c71454ac31fb3a1eae48674bdac4f598": "1.10.92",
    "648351bb72e6e86c159a032520faf191face1f30cd38123bfae8e02bdf66093b": "1.10.71"
   },
   "_Template_Session_WrapUp.md": {
@@ -204,19 +228,22 @@
   },
   "character-story.md": {
    "84efa29d464fa736e03341958b955fadda9fe2a843bec997db612e86b4da0f40": null,
-   "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.92"
+   "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.93"
   },
   "pc-dnd-5e-2024.md": {
-   "1e4774d82b692109b0f896c4e0fe26f75287d8471e16425ec2d1fe0840edf174": "1.10.92",
+   "1e4774d82b692109b0f896c4e0fe26f75287d8471e16425ec2d1fe0840edf174": "1.10.93",
    "49dc965d83634892e041ce7758742a9ade31c300cb1a87b02055d3e64fb9e0eb": "1.10.37",
-   "93e5af0b981de400b1c66357d3235993f760f5f3c3a9f991ac91632fc97eb00a": "1.10.21",
    "615af1fe8ccebe729809ffff44dfdafbc138bde9c8689d48ad1ee5f971ec7a37": null,
+   "93e5af0b981de400b1c66357d3235993f760f5f3c3a9f991ac91632fc97eb00a": "1.10.21",
    "bca466b45da09cf2daebbfd8cec81e0f02bb45b11cf345deb3525c7af1db95b5": "1.10.32"
   }
  },
  "fitd": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+  },
+  "_Template_Chapter.md": {
+   "d873d372d41d8d16f22233a807dea0c919f5b4d966340fd39bf3400fc2788a71": null
   },
   "_Template_Clue.md": {
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
@@ -257,11 +284,16 @@
   "_Template_Plan.md": {
    "0bcadfbfabab9ae2ead919acb6b5b27db54cebe65fcbfab5c68761712d9ba958": null
   },
+  "_Template_Scene.md": {
+   "9434058a8a6361b0ab1f80ba850252337c32b5c12e54d46d0ac1173011a17bc2": null
+  },
   "_Template_Session.md": {
-   "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": null
+   "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": "1.10.92",
+   "ebac23739e5fda65fc84c37c0948db352ee0af2af8b4d8ee71ca67b0b22b33f7": null
   },
   "_Template_Session_Plan.md": {
-   "579e06d0f6f0f130b6bc522ddd9c49b7c71454ac31fb3a1eae48674bdac4f598": null,
+   "555cd6c96a4b889e782a02bb7dac33829439d51619f8585654fc7d37c438edb5": null,
+   "579e06d0f6f0f130b6bc522ddd9c49b7c71454ac31fb3a1eae48674bdac4f598": "1.10.92",
    "648351bb72e6e86c159a032520faf191face1f30cd38123bfae8e02bdf66093b": "1.10.71"
   },
   "_Template_Session_WrapUp.md": {
@@ -277,7 +309,7 @@
   },
   "character-story.md": {
    "84efa29d464fa736e03341958b955fadda9fe2a843bec997db612e86b4da0f40": null,
-   "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.92"
+   "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.93"
   },
   "crew-fitd.md": {
    "66dc0d025c065878db64480e84d3ff675df3fa0082e35dcf33733db005e770b3": null
@@ -290,6 +322,9 @@
  "generic": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+  },
+  "_Template_Chapter.md": {
+   "d873d372d41d8d16f22233a807dea0c919f5b4d966340fd39bf3400fc2788a71": null
   },
   "_Template_Clue.md": {
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
@@ -330,11 +365,16 @@
   "_Template_Plan.md": {
    "0bcadfbfabab9ae2ead919acb6b5b27db54cebe65fcbfab5c68761712d9ba958": null
   },
+  "_Template_Scene.md": {
+   "9434058a8a6361b0ab1f80ba850252337c32b5c12e54d46d0ac1173011a17bc2": null
+  },
   "_Template_Session.md": {
-   "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": null
+   "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": "1.10.92",
+   "ebac23739e5fda65fc84c37c0948db352ee0af2af8b4d8ee71ca67b0b22b33f7": null
   },
   "_Template_Session_Plan.md": {
-   "579e06d0f6f0f130b6bc522ddd9c49b7c71454ac31fb3a1eae48674bdac4f598": null,
+   "555cd6c96a4b889e782a02bb7dac33829439d51619f8585654fc7d37c438edb5": null,
+   "579e06d0f6f0f130b6bc522ddd9c49b7c71454ac31fb3a1eae48674bdac4f598": "1.10.92",
    "648351bb72e6e86c159a032520faf191face1f30cd38123bfae8e02bdf66093b": "1.10.71"
   },
   "_Template_Session_WrapUp.md": {
@@ -350,7 +390,7 @@
   },
   "character-story.md": {
    "84efa29d464fa736e03341958b955fadda9fe2a843bec997db612e86b4da0f40": null,
-   "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.92"
+   "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.93"
   },
   "pc-generic.md": {
    "81924ae369f1b5ef7230b14ea2f5c8f8091656211935e356bbf65b10dc7931d9": null,
@@ -360,6 +400,9 @@
  "gurps-4e": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+  },
+  "_Template_Chapter.md": {
+   "d873d372d41d8d16f22233a807dea0c919f5b4d966340fd39bf3400fc2788a71": null
   },
   "_Template_Clue.md": {
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
@@ -400,11 +443,16 @@
   "_Template_Plan.md": {
    "0bcadfbfabab9ae2ead919acb6b5b27db54cebe65fcbfab5c68761712d9ba958": null
   },
+  "_Template_Scene.md": {
+   "9434058a8a6361b0ab1f80ba850252337c32b5c12e54d46d0ac1173011a17bc2": null
+  },
   "_Template_Session.md": {
-   "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": null
+   "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": "1.10.92",
+   "ebac23739e5fda65fc84c37c0948db352ee0af2af8b4d8ee71ca67b0b22b33f7": null
   },
   "_Template_Session_Plan.md": {
-   "579e06d0f6f0f130b6bc522ddd9c49b7c71454ac31fb3a1eae48674bdac4f598": null,
+   "555cd6c96a4b889e782a02bb7dac33829439d51619f8585654fc7d37c438edb5": null,
+   "579e06d0f6f0f130b6bc522ddd9c49b7c71454ac31fb3a1eae48674bdac4f598": "1.10.92",
    "648351bb72e6e86c159a032520faf191face1f30cd38123bfae8e02bdf66093b": "1.10.71"
   },
   "_Template_Session_WrapUp.md": {
@@ -420,7 +468,7 @@
   },
   "character-story.md": {
    "84efa29d464fa736e03341958b955fadda9fe2a843bec997db612e86b4da0f40": null,
-   "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.92"
+   "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.93"
   },
   "pc-gurps-4e.md": {
    "163c7bf0eefa2ab5a5313f2200b3298df3adea28d854c739c0ccfe1e5c7508fd": "1.10.21",
@@ -432,6 +480,9 @@
  "pf2e": {
   "_Template_Campaign_Overview.md": {
    "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+  },
+  "_Template_Chapter.md": {
+   "d873d372d41d8d16f22233a807dea0c919f5b4d966340fd39bf3400fc2788a71": null
   },
   "_Template_Clue.md": {
    "ea5221c5c4f6e3d89aaa6027c3802ea8d242b9f3862d4aaf1c495d2f4ea987df": null
@@ -472,11 +523,16 @@
   "_Template_Plan.md": {
    "0bcadfbfabab9ae2ead919acb6b5b27db54cebe65fcbfab5c68761712d9ba958": null
   },
+  "_Template_Scene.md": {
+   "9434058a8a6361b0ab1f80ba850252337c32b5c12e54d46d0ac1173011a17bc2": null
+  },
   "_Template_Session.md": {
-   "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": null
+   "23e447ba362a4f4a15309d4d856701d4d13fe30075808817898f3af69258fe27": "1.10.92",
+   "ebac23739e5fda65fc84c37c0948db352ee0af2af8b4d8ee71ca67b0b22b33f7": null
   },
   "_Template_Session_Plan.md": {
-   "579e06d0f6f0f130b6bc522ddd9c49b7c71454ac31fb3a1eae48674bdac4f598": null,
+   "555cd6c96a4b889e782a02bb7dac33829439d51619f8585654fc7d37c438edb5": null,
+   "579e06d0f6f0f130b6bc522ddd9c49b7c71454ac31fb3a1eae48674bdac4f598": "1.10.92",
    "648351bb72e6e86c159a032520faf191face1f30cd38123bfae8e02bdf66093b": "1.10.71"
   },
   "_Template_Session_WrapUp.md": {
@@ -492,7 +548,7 @@
   },
   "character-story.md": {
    "84efa29d464fa736e03341958b955fadda9fe2a843bec997db612e86b4da0f40": null,
-   "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.92"
+   "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.93"
   },
   "pc-pf2e.md": {
    "7e6044d78bbdca40942c944807a2192d177be34e944c8b3ac9da81c8ce8ed04e": "1.10.21",

@@ -695,6 +695,33 @@ def chapter_key(rel: str, fm: dict[str, Any]) -> str | None:
     return c.casefold() if c else None
 
 
+def chapters_named(chapters: Iterable[tuple[str, dict[str, Any]]],
+                   raw: str) -> list[tuple[str, dict[str, Any]]]:
+    """The chapter notes (rel, frontmatter) that `raw` names: by file
+    name, else by `title`, else by folder; the first of those that
+    matches any note decides. `raw` may be a wikilink."""
+    def key(text: str) -> str:
+        return unicodedata.normalize("NFC", text).strip().casefold()
+
+    want = key(raw.strip().removeprefix("[[").removesuffix("]]"))
+    notes = list(chapters)
+    for name_of in (lambda rel, _fm: Path(rel).stem,
+                    lambda _rel, fm: str(fm.get("title") or ""),
+                    lambda rel, _fm: rel.rpartition("/")[0]
+                    .rpartition("/")[2]):
+        hits = [(rel, fm) for rel, fm in notes
+                if key(name_of(rel, fm)) == want]
+        if hits:
+            return hits
+    return []
+
+
+def chapter_link_name(rel: str, fm: dict[str, Any]) -> str:
+    """The name a chapter note's notes link it by: its own chapter key
+    (the folder), else its file name."""
+    return chapter_of(rel, fm) or Path(rel).stem
+
+
 def wrapup_filename(rel: str, fm: dict[str, Any]) -> str | None:
     """`Chapter_CC_Session_NN_Wrap_Up.md` for the session a note at `rel`
     with frontmatter `fm` belongs to, or None when its chapter or session

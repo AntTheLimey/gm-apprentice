@@ -21,8 +21,8 @@
 // first. A page carrying both `publish: false` and `status: planned` was counted as
 // auto-excluded, and still is. The order is:
 //
-//   directory checks → NO_TYPE → STORY_COMPANION → DRAFT_EXCLUDED →
-//   AUTO_EXCLUDED_* → SCENE_CUT_SKIPPED → manifest codes → PUBLISH_FALSE/NONE →
+//   directory checks → NO_TYPE → PREP_TYPE → STORY_COMPANION → DRAFT_EXCLUDED →
+//   AUTO_EXCLUDED_* → manifest codes → PUBLISH_FALSE/NONE →
 //   SUPERSEDED_NO_TARGET → OK
 //
 // SUPERSEDED_NO_TARGET sits last, immediately before OK, and that placement is
@@ -36,7 +36,7 @@ const { getCanonStatus } = require('./templates/base');
 const { entry, nameInFor } = require('./settings');
 
 // The values that keep a note off a player site are listed once, in excluding-values.js.
-const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, SCENE_SKIP_STATUS, DRAFT, ruleValue } = require('./excluding-values');
+const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, PREP_TYPES, DRAFT, ruleValue } = require('./excluding-values');
 
 // Directories that never publish, whatever the config says. `_templates` is the
 // lowercase spelling some vaults use; `personal` holds the GM's own licensed
@@ -71,12 +71,6 @@ function isHousekeepingNote(vaultPath, frontmatter) {
   const typedMeta = fm.type == null || String(fm.type).trim().toLowerCase() === 'meta';
   return parts.length === 2 && parts[0].toLowerCase() === '_meta' && PLUGIN_META_NOTES.includes(parts[1]) && typedMeta;
 }
-
-// A scene that was cut or skipped did not happen. content-filtering.md has listed
-// these as always-excluded since the filtering model was written; they are gated
-// behind the same publish list check as the other prep-state heuristics, so an
-// explicit publish list entry still wins.
-// (SCENE_SKIP_STATUS, with the other excluding values.)
 
 function lower(value) {
   return String(value == null ? '' : value).toLowerCase();
@@ -173,6 +167,10 @@ function decidePage(page, options) {
   if (!frontmatter || !frontmatter.type) {
     return verdict('decide', 'NO_TYPE', 'no `type:` in frontmatter');
   }
+  // Scenes and session Plans are prep by type: no status, publish list entry or setting puts them on the player site.
+  if (PREP_TYPES.has(lower(ruleValue('type', frontmatter.type)))) {
+    return verdict('exclude', 'PREP_TYPE', 'prep: scenes and Plans stay off the player site');
+  }
 
   // A PC's story companion has no page of its own: the scanner folds it into the
   // PC (pairStoryFiles) and drops it from the page list, so the build never asks
@@ -203,9 +201,6 @@ function decidePage(page, options) {
   if (!listedForPublish) {
     const auto = autoExcludeCode(frontmatter);
     if (auto) return verdict('exclude', auto, autoExcludeReason(auto, frontmatter));
-    if (lower(frontmatter.type) === 'scene' && SCENE_SKIP_STATUS.has(lower(ruleValue('status', frontmatter.status)))) {
-      return verdict('exclude', 'SCENE_CUT_SKIPPED', `scene status: ${lower(frontmatter.status)} — it did not happen`);
-    }
   }
 
   // The publish list is an allowlist. A listed page falls through
@@ -247,7 +242,7 @@ function publishesPage(verdict) {
 // The codes for a whole note the player site holds back and the GM site can show (the `notes` switch).
 const NOTE_CODES = new Set([
   'DRAFT_EXCLUDED', 'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_SOURCE',
-  'SCENE_CUT_SKIPPED', 'MANIFEST_EXCLUDED', 'MANIFEST_NEEDS_DECISION', 'MANIFEST_UNLISTED',
+  'PREP_TYPE', 'MANIFEST_EXCLUDED', 'MANIFEST_NEEDS_DECISION', 'MANIFEST_UNLISTED',
   'PUBLISH_FALSE', 'PUBLISH_NONE',
 ]);
 
@@ -301,5 +296,5 @@ module.exports = {
   AUTO_EXCLUDE_STATUS,
   AUTO_EXCLUDE_STAGE,
   AUTO_EXCLUDE_SOURCE,
-  SCENE_SKIP_STATUS,
+  PREP_TYPES,
 };

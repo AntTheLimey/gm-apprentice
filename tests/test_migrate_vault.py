@@ -1929,7 +1929,7 @@ class ToneListTests(unittest.TestCase):
 
 
 class DndBackgroundSectionsTests(unittest.TestCase):
-    """1.10.93: the one-line Backstory and Appearance fields become sections."""
+    """1.10.94: the one-line Backstory and Appearance fields become sections."""
 
     OLD = ("---\ntype: pc\nname: Brannoch\n---\n# Brannoch\n\n## Background\n\n"
            "**Species:** Dwarf\n\n"
@@ -2150,7 +2150,7 @@ class DndBackgroundSectionsTests(unittest.TestCase):
 
     def test_the_check_is_registered(self):
         (check,) = [c for c in mv.VAULT_CHECKS if c.name == "dnd-background-sections"]
-        self.assertEqual((check.release, check.band), ("1.10.93", 3))
+        self.assertEqual((check.release, check.band), ("1.10.94", 3))
 
 
 if __name__ == "__main__":
