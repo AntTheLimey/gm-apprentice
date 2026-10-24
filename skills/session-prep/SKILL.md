@@ -50,8 +50,8 @@ exception).
   with `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py"
   <vault> plan --number N --chapter "<chapter>" --title "<title>" --write
   <<'EOF'` … `EOF`. It files the index as upcoming when there is none,
-  adds the template's missing sections, sets the index to prepped with
-  `documents.plan`, and prints the Plan check. `--section` replaces each
+  sets the index to prepped with `documents.plan`, and prints the Plan
+  check. `--section` replaces each
   section sent (by level and title) in an existing Plan. Never write to
   the index body: scene states, key prep and image prompts go in the
   Plan. You read earlier Wrap-Ups for context, not

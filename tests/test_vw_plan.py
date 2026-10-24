@@ -126,17 +126,22 @@ class PlanTests(unittest.TestCase):
                          "Chapter 1 - Harbour")
         self.assertEqual(fm["campaign"], "Harbour Lights")
 
-    def test_the_body_is_kept_and_missing_sections_added_in_order(self):
+    def test_the_body_is_kept_as_sent(self):
         run(self.vault, "--number", "2", "--write")
         text = self.read(PLAN)
-        self.assertIn("Ma Barker's debt comes due.", text)
-        self.assertIn("**Starts it:** A whistle", text)
-        heads = [t for _i, lvl, t in vl.fenced_headings(text) if lvl == 2]
-        template = (TEMPLATES / "session-plan.md").read_text(
-            encoding="utf-8")
-        want = [t for _i, lvl, t in vl.fenced_headings(template)
-                if lvl == 2]
-        self.assertEqual(heads, want)
+        self.assertTrue(text.endswith("\n---\n\n" + BODY), text)
+
+    def test_section_keeps_its_own_subsections(self):
+        run(self.vault, "--number", "2", "--write")
+        code, out = run(
+            self.vault, "--number", "2", "--section", "--write",
+            stdin="## GM Notes\n\n<!-- gm-only -->\n\n"
+                  "### Reconciliation Context\n\nNot run.\n\n"
+                  "<!-- /gm-only -->\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("## GM Notes\n\n<!-- gm-only -->\n\n### Reconciliation "
+                      "Context\n\nNot run.\n\n<!-- /gm-only -->\n",
+                      self.read(PLAN))
 
     def test_index_is_stamped_prepped_with_the_plan_link(self):
         run(self.vault, "--number", "2", "--write")

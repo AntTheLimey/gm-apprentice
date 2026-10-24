@@ -2313,30 +2313,14 @@ def h2_slot(doc: Doc, order: list[str], k: str) -> int:
                  if h.level == 2 and key(h.title) in later), len(doc.lines))
 
 
-def fill_sections(text: str, template: str) -> tuple[str, list[str]]:
-    """The Plan with every `##` of the template it lacks added empty, in
-    template order, and those headings' titles."""
-    heads = [h for h in parse(template).heads if h.level == 2]
-    order = [key(h.title) for h in heads]
-    added = []
-    for h in heads:
-        doc = parse(text)
-        if not any(x.level == 2 and key(x.title) == key(h.title)
-                   for x in doc.heads):
-            text = place(doc, h2_slot(doc, order, key(h.title)),
-                         [f"## {h.title}"])
-            added.append(h.title)
-    return text, added
-
-
 def put_sections(batch: Batch, rel: str, text: str, template: str) -> None:
     """Each section on stdin replaces the Plan's section of that level
     and title; a `##` the Plan lacks goes where the template has it."""
-    tdoc = parse(template)
-    order = [key(h.title) for h in tdoc.heads if h.level == 2]
-    known = {key(h.title) for h in tdoc.heads if h.level in (2, 3, 4)}
+    order = [key(h.title) for h in parse(template).heads if h.level == 2]
     note = batch.read(rel)
-    for level, title, unit in split_units(text, known):
+    # A section runs to the next heading no deeper than its own, so a ##
+    # sent whole keeps its ### parts.
+    for level, title, unit in split_units(text, set()):
         doc = parse(note)
         k = key(title)
         same = [h for h in doc.heads if h.level == level and key(h.title) == k]
@@ -2394,13 +2378,11 @@ def cmd_plan(batch: Batch, args: argparse.Namespace, text: str) -> None:
             value = raw_value(index_text, field)
             if value and not is_blank(value):
                 set_block(fm, field, value)
-        new, added = fill_sections("---\n" + "\n".join(fm) + "\n---\n"
-                                   + plan_body(text, batch, rel), template)
+        new = "---\n" + "\n".join(fm) + "\n---\n" + plan_body(
+            text, batch, rel)
         batch.create(rel, new)
         schema_check(batch, rel, new)
-        batch.row("WOULD-CREATE", rel, "", f"beside {index}" + (
-            f"; empty sections added from the template: {', '.join(added)}"
-            if added else ""))
+        batch.row("WOULD-CREATE", rel, "", f"beside {index}")
     stamp_index(batch, index, Path(rel).stem)
     plan = batch.texts[rel]
     gm_input: bool | frozenset[str] = (
