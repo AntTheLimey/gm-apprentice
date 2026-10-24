@@ -95,7 +95,7 @@ function splitTitle(html) {
 }
 
 // -> { hasSections, backstoryHtml, appearanceHtml, facts, personality, firstSentence }, or null
-// when there is no Background section or nothing of a story in it. Fields may be empty
+// when there is no Background section or no background in it. Fields may be empty
 // (a blank template note); hasSections says the note has the sub-section headings.
 function backgroundParts(sections) {
   const background = (sections || []).find(s => s.id === 'background');

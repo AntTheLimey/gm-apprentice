@@ -377,7 +377,7 @@ function findSecretNames(html, names, { publicWords, listing = false, only = nul
   let boxes = null;
   let rest = null;
   // A page's pull-quote is its first paragraph again: a name in both is written once, and counted once.
-  const quoted = /<div class="pull-quote">/.test(bodyHtml);
+  const quoted = /<div class="pull-quote(?:\s[^"]*)?">/.test(bodyHtml);
   let unquoted = null;
   for (const a of names) {
     if (only && a.kind !== only) continue;
@@ -387,7 +387,7 @@ function findSecretNames(html, names, { publicWords, listing = false, only = nul
     let matches = nameHits(a.re, a.kind === 'never_show' ? body : bodyOwn);
     let count = matches.length;
     if (count > 1 && quoted) {
-      if (unquoted === null) unquoted = foldQuotes(pageText(bodyHtml.replace(/<div class="pull-quote">[\s\S]*?<\/div>/g, ' '), { links: 'fence' }));
+      if (unquoted === null) unquoted = foldQuotes(pageText(bodyHtml.replace(/<div class="pull-quote(?:\s[^"]*)?">[\s\S]*?<\/div>/g, ' '), { links: 'fence' }));
       count = nameHits(a.re, own(unquoted)).length || count;
     }
     if (matches.length === 0) {

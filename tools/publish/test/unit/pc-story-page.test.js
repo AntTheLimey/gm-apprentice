@@ -122,7 +122,7 @@ test('story tab: no parts and no story is one muted line; a blank template note 
     const story = panel(html, 'story');
     assert.match(story, /<p class="text-muted pc-story-none">Ilse Varn's story starts at the table\.<\/p>/);
     assert.doesNotMatch(story, /pc-prologue|pc-look|pc-drives|pc-sofar|\{|—/);
-    assert.doesNotMatch(html, /No story content available|pc-backstory-teaser/);
+    assert.doesNotMatch(html, /No story content available|pc-[a-z]+-teaser/);
   }
   // A blank note with the sub-sections still never shows Background as an accordion.
   assert.doesNotMatch(render(blank), /id="background"/);
@@ -159,7 +159,7 @@ test('teaser: with a hook it opens the backstory; a long one is cut near 280 at 
   assert.match(long, / word\d+…$/);
   // No hook, a one-sentence backstory: no teaser.
   const one = NEW_LAYOUT.replace(' Nobody asked what she thought.', '').replace('She thought a great deal.\n\n', '');
-  assert.doesNotMatch(render(one), /pc-backstory-teaser/);
+  assert.doesNotMatch(render(one), /pc-[a-z]+-teaser/);
   assert.match(render(one, {}, { hook: 'A hook.' }), /pc-backstory-teaser-text">For a hundred years Ilse kept the index\.</);
 });
 
