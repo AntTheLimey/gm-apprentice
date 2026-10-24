@@ -21,7 +21,11 @@ The hidden parts, joined by `; `: each section title the site withholds
 unpublished note is always listed.
 
 Publish state comes from the publish tool (`manifest list`, `explain
---all`). With no publish list, the output is one line and the exit is 0.
+--all`). With no publish list, the output is one line and the exit is 0;
+when the tool cannot be asked, that one line gives the reason instead.
+A `withheld` the tool could not read shows as `withheld unknown`, and
+section titles `explain` could not give are left out; either way a
+`# warning:` line says why.
 
 Exit: 0 scanned; 2 no such session index.
 """
@@ -57,7 +61,7 @@ SOURCE_KEYS = (("play_notes", "Play Notes"), ("wrap_up", "Wrap-Up"), ("recap", "
 class Row:
     path: str
     published: bool
-    withheld: bool
+    withheld: bool | None  # None: the tool could not say
     hidden: list[str] = field(default_factory=list)
 
 
@@ -68,6 +72,7 @@ class ScanResult:
     title: str = ""
     sources: list[str] = field(default_factory=list)
     rows: list[Row] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 def _session_note(notes: list[Note], arg: str) -> Note:
@@ -119,10 +124,13 @@ def _hidden_parts(note: Note, stripped: list[str]) -> list[str]:
     return hidden
 
 
-def _stripped_by_path(vault: Path) -> dict[str, list[str]]:
-    """Per file, the section titles the site withholds. An `explain` that
-    cannot be had leaves the titles out; it never fails the scan."""
+def _stripped_by_path(vault: Path) -> tuple[dict[str, list[str]], str | None]:
+    """Per file, the section titles the site withholds, and why they could
+    not be had. A failed `explain` leaves the titles out; it never fails the
+    scan. No answer and no reason means no site to build, so nothing to say."""
     answer = ask_publish_tool(vault, ["explain", "--all"])
+    if answer.data is None:
+        return {}, answer.why
     out: dict[str, list[str]] = {}
     try:
         for page in answer.data["pages"]:
@@ -130,8 +138,8 @@ def _stripped_by_path(vault: Path) -> dict[str, list[str]]:
             if titles:
                 out[unicodedata.normalize("NFC", str(page["path"]))] = titles
     except (KeyError, TypeError, AttributeError):
-        return {}
-    return out
+        return {}, "the publish tool's explain answer is not understood"
+    return out, None
 
 
 def scan(vault: Path, session: str) -> ScanResult:
@@ -142,8 +150,10 @@ def scan(vault: Path, session: str) -> ScanResult:
     listing = ask_publish_tool(vault, ["manifest", "list"], site_optional=True)
     data = listing.data
     if not isinstance(data, dict) or not data.get("listed"):
+        # A dict saying "not listed", or no answer and no reason (no site),
+        # is no publish list; no answer with a reason is a failed tool.
         result.listed = False
-        result.why = listing.why
+        result.why = None if isinstance(data, dict) else listing.why
         return result
     publishing = {unicodedata.normalize("NFC", str(p)) for p in data.get("publishing") or []}
 
@@ -151,6 +161,7 @@ def scan(vault: Path, session: str) -> ScanResult:
     sources = _sources(index, notes, by_name)
     result.sources = [label for label, _ in sources]
     candidates: list[Note] = []
+    seen: set[str] = set()
     for _, doc in sources:
         for ll in link_lines(doc.text):
             if ll.in_code:
@@ -158,33 +169,43 @@ def scan(vault: Path, session: str) -> ScanResult:
             for m in live_wikilinks(ll.line, ll.spans):
                 note = _resolve(m.group(1), by_name, doc.rel)
                 if note is not None and note.type not in NEVER_CANDIDATES \
-                        and note is not index and note not in candidates:
+                        and note is not index and note.rel not in seen:
+                    seen.add(note.rel)
                     candidates.append(note)
     if not candidates:
         return result
 
-    stripped = _stripped_by_path(vault)
+    stripped, why = _stripped_by_path(vault)
+    if why:
+        result.warnings.append(f"section titles unknown: {why}")
     for note in candidates:
         published = unicodedata.normalize("NFC", note.rel) in publishing
+        withheld: bool | None
+        warning = None
         try:
             withheld = note_withheld(note.text)[0]
-        except PublishToolUnavailable:
-            withheld = False
+        except PublishToolUnavailable as e:
+            withheld, warning = None, f"withheld unknown: {e}"
         hidden = _hidden_parts(note, stripped.get(unicodedata.normalize("NFC", note.rel), []))
         if published and not hidden:
             continue
+        if warning and warning not in result.warnings:
+            result.warnings.append(warning)
         result.rows.append(Row(note.rel, published, withheld, hidden))
     return result
 
 
 def render(result: ScanResult) -> list[str]:
     if not result.listed:
+        if result.why:
+            return [f"reveals: could not ask the publish tool: {result.why}"]
         return ["reveals: no publish list; nothing to unlock"]
     out = [f"reveals: {result.title} (sources: {', '.join(result.sources) or 'none'})"]
     for row in result.rows:
         state = ("published" if row.published else "unpublished"
-                 + (" withheld" if row.withheld else ""))
+                 + {True: " withheld", False: "", None: " withheld unknown"}[row.withheld])
         out.append("\t".join([row.path, state, "; ".join(row.hidden)]))
+    out.extend(f"# warning: {w}" for w in result.warnings)
     out.append(f"# notes: {len(result.rows)}")
     return out
 

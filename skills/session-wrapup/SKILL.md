@@ -285,21 +285,24 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/reveal_scan.py" \
 ```
 
 It lists the notes this session touched that the site still hides,
-with what each hides. On "no publish list", skip this step silently.
-From the Play Notes and recap only, propose one list of what came
-out: people, places and things met or learned of; secrets now known,
-by page, from the scan's hidden parts; clues found; props handed over
-or shown; places visited. Never propose from the Plan. The GM picks
-all, some or none; nothing changes until they confirm.
+with what each hides. On "no publish list", skip this step silently;
+on "could not ask the publish tool", tell the GM the reason and skip.
+From the Play Notes, the Wrap-Up and the recap, propose one list of
+what came out: people, places and things met or learned of; secrets
+now known, by page, from the scan's hidden parts; clues found; props
+handed over or shown; places visited. Never propose from the Plan.
+The GM picks all, some or none; nothing changes until they confirm.
+On none, skip the rest.
 
 For each picked secret, edit that page so the fact is hidden nowhere
 on it, in whatever way suits how it came out, and remove the spoiler
-markers around what it released. Then, with one `--publish` per note
-to publish and one `--released` per secret:
+markers around what it released. Then run, with `<title>` from the
+scan's first line, one `--publish` per note to publish and one
+`--released` per secret, each `<path>` as the scan prints it:
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/reveal.py" \
-  <vault> --session "<index title>" \
+  <vault> --session "<title>" \
   --publish <path> --released "<path>=<what came out>"
 ```
 

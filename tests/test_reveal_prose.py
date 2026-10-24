@@ -52,6 +52,18 @@ class WrapupStep4dTests(unittest.TestCase):
     def test_no_publish_list_skips(self):
         self.assertIn("no publish list", self.step)
 
+    def test_tool_failure_told_to_the_gm(self):
+        self.assertRegex(self.step, r"could not ask the publish tool\", tell the GM")
+
+    def test_session_label_and_paths_come_from_the_scan(self):
+        self.assertIn("`<title>` from the\nscan's first line", self.step)
+        self.assertIn('--session "<title>"', self.step)
+        self.assertIn("as the scan prints it", self.step)
+
+    def test_reads_wrapup_too_and_none_skips(self):
+        self.assertIn("From the Play Notes, the Wrap-Up and the recap", self.step)
+        self.assertIn("On none, skip the rest.", self.step)
+
     def test_gm_confirms_before_write(self):
         self.assertRegex(self.step, r"all, some or none")
         confirm = self.step.index("confirm")
@@ -70,8 +82,9 @@ class ReconcileSpoilerPointerTests(unittest.TestCase):
     def test_points_at_wrapup_4d(self):
         self.assertIn("4d", self.step)
 
-    def test_keeps_the_fallback_for_older_wrapups(self):
-        self.assertIn("1.10.100", self.step)
+    def test_keeps_the_fallback_when_no_reveal_logged(self):
+        self.assertIn("`_meta/reveals.json` has no entry", self.step)
+        self.assertNotIn("1.10.100", self.step)
         self.assertIn("<!-- spoiler -->", self.step)
 
 

@@ -131,6 +131,84 @@ class RevealScan(unittest.TestCase):
         self.assertEqual(rv.render(res), [
             "reveals: Session 12 - Mill (sources: none)", "# notes: 0"])
 
+    def test_tool_failure_is_not_no_publish_list(self) -> None:
+        def ask(vault: Path, args: list[str], site_optional: bool = False) -> ToolAnswer:
+            return ToolAnswer(why="node is not on PATH")
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(rv, "ask_publish_tool", ask):
+            vault = make_vault(tmp, {**base(), "NPCs/Vex.md": VEX})
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = rv.main([str(vault), INDEX])
+        self.assertEqual(code, 0)
+        self.assertEqual(out.getvalue(),
+                         "reveals: could not ask the publish tool: node is not on PATH\n")
+
+    def test_no_site_quiet_answer_is_no_publish_list(self) -> None:
+        def ask(vault: Path, args: list[str], site_optional: bool = False) -> ToolAnswer:
+            return ToolAnswer()
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(rv, "ask_publish_tool", ask):
+            res = rv.scan(make_vault(tmp, base()), INDEX)
+        self.assertEqual(rv.render(res), ["reveals: no publish list; nothing to unlock"])
+
+    def test_withheld_unknown_is_said(self) -> None:
+        def boom(text: str) -> Any:
+            raise rv.PublishToolUnavailable("withheld answer not understood")
+        with mock.patch.object(rv, "note_withheld", boom):
+            res = run_scan({**base(), "NPCs/Vex.md": VEX})
+        self.assertEqual(rv.render(res), [
+            "reveals: Session 12 - Mill (sources: Play Notes, Wrap-Up)",
+            "NPCs/Vex.md\tunpublished withheld unknown\t",
+            "# warning: withheld unknown: withheld answer not understood",
+            "# notes: 1"])
+
+    def test_explain_failure_is_said(self) -> None:
+        listed = tool()
+        def ask(vault: Path, args: list[str], site_optional: bool = False) -> ToolAnswer:
+            if args[:1] == ["explain"]:
+                return ToolAnswer(why="explain --all timed out after 60s")
+            return listed(vault, args, site_optional)
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(rv, "ask_publish_tool", ask):
+            res = rv.scan(make_vault(tmp, {**base(), "NPCs/Vex.md": VEX}), INDEX)
+        self.assertIn("# warning: section titles unknown: explain --all timed out after 60s",
+                      rv.render(res))
+
+    def test_fallback_play_notes_beside_index(self) -> None:
+        files = {INDEX: "---\ntype: session\n---\n",
+                 NOTES: "---\ntype: session-play-notes\n---\n\nMet [[Vex]].\n",
+                 "NPCs/Vex.md": VEX}
+        res = run_scan(files)
+        self.assertEqual(res.sources, ["Play Notes"])
+        self.assertEqual([r.path for r in res.rows], ["NPCs/Vex.md"])
+
+    def test_recap_is_a_source(self) -> None:
+        files = base(play="Nothing.\n")
+        files[INDEX] = files[INDEX].replace(
+            "documents:\n", "documents:\n  recap: \"[[Session 12 - Mill - Recap]]\"\n")
+        files[f"{SESS}/Session 12 - Mill - Recap.md"] = "---\ntype: recap\n---\n\n[[Vex]] spoke.\n"
+        files["NPCs/Vex.md"] = VEX
+        res = run_scan(files)
+        self.assertEqual(res.sources, ["Play Notes", "Wrap-Up", "Recap"])
+        self.assertEqual([r.path for r in res.rows], ["NPCs/Vex.md"])
+
+    def test_gm_aliases_as_a_string(self) -> None:
+        mill = "---\ntype: location\ngm_aliases: The Widow\n---\n\n# Mill\n"
+        res = run_scan({**base(play="At [[Mill]].\n"), "Places/Mill.md": mill},
+                       publishing=["Places/Mill.md"])
+        self.assertEqual(res.rows[0].hidden, ["gm_aliases: The Widow"])
+
+    def test_cli_no_such_index_exits_2(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(rv, "ask_publish_tool", tool()):
+            vault = make_vault(tmp, base())
+            err = io.StringIO()
+            with contextlib.redirect_stderr(err):
+                code = rv.main([str(vault), "Session 99"])
+        self.assertEqual(code, 2)
+        self.assertIn("no session index", err.getvalue())
+
     def test_render_rows(self) -> None:
         res = run_scan({**base(), "NPCs/Vex.md": VEX})
         self.assertEqual(rv.render(res), [
