@@ -44,16 +44,17 @@ exception).
 - On a vault kept by a player (`vault.kept_by: player`) `session_context.py`
   says so and gathers nothing: session prep is the GM's job, so tell the
   player and stop.
-- Read `shared/session-principles.md` and run its Version Gate on first
-  invocation.
-- Read `shared/session-document-chain.md`. You write Plan files. No
-  index yet: `python3
-  "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" <vault>
-  session-new --number N --title "<title>" --chapter "<chapter>"
-  --upcoming --write`. On the index set only `status` and
-  `documents.plan`: `stamp_entities.py <vault> "<index>" --set
-  status=prepped --set 'documents.plan=[[<plan>]]' --write`. Never write to the index body: scene
-  states, key prep and image prompts go in the Plan. You read earlier Wrap-Ups for context, not
+- Read `shared/session-principles.md`; its Version Gate verdict opens
+  the `--prep` output (step 5).
+- Read `shared/session-document-chain.md`. You write Plan files, only
+  with `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py"
+  <vault> plan --number N --chapter "<chapter>" --title "<title>" --write
+  <<'EOF'` … `EOF`. It files the index as upcoming when there is none,
+  adds the template's missing sections, sets the index to prepped with
+  `documents.plan`, and prints the Plan check. `--section` replaces each
+  section sent (by level and title) in an existing Plan. Never write to
+  the index body: scene states, key prep and image prompts go in the
+  Plan. You read earlier Wrap-Ups for context, not
   other sessions' Play Notes or Plans (exception: raw Play Notes, to
   generate a recap when no Wrap-Up exists — step 7).
 - Read `references/session-templates.md` when creating or updating
@@ -78,13 +79,16 @@ document-chain status → `vault_check.py <vault> sessions`; thread ages
 Gather the standard read-set in ONE call before any individual reads:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault-path> --brief
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault-path> --prep
 ```
 
-It carries the last Wrap-Up (reconcile-provenance blocks stubbed to one
+It carries the version verdict, then the last Wrap-Up (reconcile-provenance blocks stubbed to one
 line with word counts), every active PC's `## Current Status` block,
 deferred world flags, and outlines (frontmatter, headings, word counts)
-of the campaign overview and the upcoming session's existing Plan. Read
+of the campaign overview and the upcoming session's existing Plan, then
+the reconcile scan, threads, PC arcs, the scene queue and the narrative
+plans: steps 8, 10c, 12 and 14 and Phase 1 read these, never rerun
+them. Read
 a stubbed or outlined section from its file only when a step needs it.
 After the bundle, vault dives are targeted reads, proportional to the
 upcoming session's complexity, not the campaign's size.
@@ -125,9 +129,7 @@ new or updated entities, timeline entries or carry-forward) and ask:
 full wrap-up first (recommended), or a quick recap from the raw Play
 Notes?
 
-**8. Threads** — `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault>
---threads` lists every PC's Open threads with first/last-seen session
+**8. Threads** — `--prep`'s Threads lists every PC's Open threads with first/last-seen session
 and age, the old ones marked `STALE`, plus wrap-up threads missing
 from every sheet.
 You judge whether two wordings are one thread and whether an old one
@@ -156,10 +158,10 @@ suggest a midwife worldbuilding conversation.
 
 **10c. Narrative plans** — Forward design lives in **two** places;
 check both: `Chapters/{chapter}/Planning/` (stamped plan entities) and
-`_midwife/` (often richer, often the only one populated). Run
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plans_index.py"
-<vault> --chapter "<chapter>" --against <NPC/location names from 8-10>`
-and present its Planning rows, manifest table, the RESOLVED
+`_midwife/` (often richer, often the only one populated). `--prep`'s
+Narrative Plans is `plans_index.py` against the Wrap-Up's NPCs and
+places (rerun it with `--against` only for other names). Present its
+Planning rows, manifest table, the RESOLVED
 adventure's file summaries and the Overlap section as "Narrative plans
 available", with "Most relevant for next session" from Overlap.
 `AMBIGUOUS` → ask the GM which adventure; never pick.
@@ -193,10 +195,8 @@ Don't move to spotlight until intent is set or deferred to
 `## Session Overview`
 
 **12. PC Roster + Arc Check** — Each PC's `## Current Status` is
-already in the bundle; don't re-read it. Run `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault>
---arcs` once for every active PC's `## Background` and `## GM Notes`
-plus spotlight history from earlier Plans' `## Spotlight Forecast`
+already in the bundle; don't re-read it. `--prep`'s PC Arcs gives every
+active PC's `## Background` and `## GM Notes` plus spotlight history from earlier Plans' `## Spotlight Forecast`
 (role, sessions since last B- and C-plot). Don't open full PC
 sheets. Judge arc stage (five-stage model) from that evidence. Per PC:
 - backstory hooks, stated goals, arc stage and theme, relationships
@@ -226,8 +226,8 @@ arc-spotlight-reference.md; a PC with none is a gap to fill:
 
 → `## Spotlight Forecast` and `## Touchpoint Plan`
 
-**14. Scenes** — Scenes emerge from the intent and spotlight. Run
-`scene_queue.py <vault> --chapter "<chapter>"` and offer its scenes
+**14. Scenes** — Scenes emerge from the intent and spotlight. Offer
+`--prep`'s Scene Queue
 alongside new ideas. The propose-before-write gate is the
 **premise**. For each scene:
 
@@ -253,10 +253,9 @@ scenes at any point — confirm understanding, then write. Check
 spotlight balance against the GM's choices and raise gaps as
 questions. → each scene to `## Planned Scenes`
 
-**Check the shape early.** As soon as the scenes agreed so far have
-their headings, **Situation** and **Starts it**, run
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plan_check.py" <plan>`
-and fix every ERROR and mechanical WARNING while a fix is one line.
+**Check the shape early.** Every `vault_write.py plan` call prints the
+check; fix each ERROR and mechanical WARNING with `--section` while a
+fix is one line.
 This is a check, not an order of work: write any scene out in full
 whenever the GM wants it.
 
@@ -267,11 +266,10 @@ ERROR/WARNING report. Fix objective breakage silently, offer to build
 artifacts, raise only genuine craft issues conversationally. Steps
 15–16 are independent — parallelize if sub-agents are available.
 
-**15. Checks** — Run
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plan_check.py" <plan>`
-(add `--headless` when run without a GM; `--gm-input` when the GM
+**15. Checks** — The check `vault_write.py plan` prints (add
+`--headless` there when run without a GM; `--gm-input` when the GM
 supplied intent, scenes and spotlight up front).
-- ERROR rows — fix and re-run until exit 0: `duration`, `table`,
+- ERROR rows — fix with `--section` until none is left: `duration`, `table`,
   `type`, `scene-labels` (every scene has **Situation** and
   **Starts it** — a Contingency scene **Trigger**, a routing or hub
   scene neither — with the exact punctuation the row names), and a
@@ -328,8 +326,7 @@ run headless (e.g. as a sub-agent with no GM):
   each line labelled **(apprentice guess — confirm)**. Gather and
   Verify may still run.
 
-A headless run must pass `plan_check.py <plan> --headless` before
-handoff. What the GM's request itself settles (scenes it names, an
+A headless run must pass the check with `--headless` before handoff. What the GM's request itself settles (scenes it names, an
 intent, a spotlight) is GM input: write it in place, park only the
 rest, and add `--gm-input` with those parts (`scenes`, `intent`,
 `spotlight`; bare `--gm-input` when the GM supplied all three). A sub-agent may gather and draft from the GM's
