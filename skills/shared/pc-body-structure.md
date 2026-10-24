@@ -32,7 +32,7 @@ heading-level-aware, so anything under an excluded `## GM Notes`
 stays excluded whatever its own name. For a single GM-only aside
 inside public prose, use a standalone `<!-- gm-only -->` block on
 its own lines. For content hidden only until revealed in play, use
-`<!-- spoiler -->` instead — see `shared/reconcile.md`.
+`<!-- spoiler -->` instead; wrap-up step 4d releases it.
 
 `## Current Status` is the inverse: a **skill-maintained**,
 player-facing block holding the PC's **cumulative living state** —

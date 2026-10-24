@@ -64,6 +64,9 @@ life of a TTRPG campaign.
    identify new entities (NPCs, locations, items) created
    during play. Accepts raw shorthand notes or a
    gmassistant.app session export (detected automatically).
+   Ends with "What came out tonight": you confirm which
+   secrets and hidden pages the players learned, and they
+   are released on the player site.
 
 9. **File new entities** — `/gm-apprentice:campaign-organizer`
    Organise newly created NPCs, locations, items, and

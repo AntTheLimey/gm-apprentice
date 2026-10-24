@@ -13,6 +13,7 @@ Reach for session-wrapup when you need to:
 - Add events to the campaign timeline
 - Identify what carries forward to the next session
 - Create vault files for NPCs, locations, or items that appeared during play
+- Release what came out tonight: you pick which secrets, hidden pages and clues the players learned, confirm, and they go on the player site (your publish list stays the one gate; `_meta/reveals.json` is just the history)
 
 ## What You Need
 
@@ -58,6 +59,7 @@ Everything else works as normal: new entities are created as DRAFT, templates ar
 - "Add tonight's events to the campaign timeline"
 - "Summarize each PC's arc progress this session"
 - "What clues did the players uncover tonight?"
+- "What did the players learn tonight?"
 
 ## What to Expect
 

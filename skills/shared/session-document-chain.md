@@ -53,7 +53,8 @@ Derive/verify with `vault_check.py sessions`; fix with
 In a player-mode vault with a publish list, it also
 warns on any played (`played`/`wrap-up`/`reviewed`) session index or
 its Wrap-Up that is not under Publishing, saying what happens next:
-`manifest publish-played` (run by reconcile step 6.1 and publish-site)
+`manifest publish-played` (run by reconcile step 6.1 and publish-site; wrap-up step 4d publishes
+what came out in play)
 registers a reviewed session with its linked Wrap-Up, and publish-site
 asks the GM about the rest.
 
