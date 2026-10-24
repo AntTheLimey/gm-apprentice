@@ -8,7 +8,8 @@ All campaign content falls into three categories:
 
 - The folders in `player_site.hide.folders` (the vault's own `_meta` and
   template folders among them), and `personal/` directories
-- All prep files: sessions/scenes with `status: planned | prepped`
+- All prep files: sessions/scenes with `status: planned | prepped`,
+  or any note with the retired `stage: outline | draft | ready`
 - Files with `source: "prep"` that have no played counterpart
 - Sections whose heading is listed in `player_site.hide.sections`
 - On a `type: document` page, a handout's own Keeper sections, whatever

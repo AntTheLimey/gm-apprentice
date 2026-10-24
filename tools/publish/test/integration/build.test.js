@@ -1021,9 +1021,9 @@ describe('build integration', () => {
       assert.ok(fs.existsSync(played));
     });
 
-    it('a stage: key no longer excludes a file', () => {
+    it('excludes a note held back with stage: draft', () => {
       const draft = path.join(outputDir, 'docs', 'characters', 'npcs', 'draft-npc.html');
-      assert.ok(fs.existsSync(draft));
+      assert.ok(!fs.existsSync(draft));
     });
 
     it('includes files with no auto-exclude markers', () => {
@@ -1079,9 +1079,9 @@ describe('build integration', () => {
       assert.ok(!fs.existsSync(planned));
     });
 
-    it('a stage: key no longer leaves a file out', () => {
+    it('leaves out a note held back with stage: draft', () => {
       const draft = path.join(outputDir, 'docs', 'characters', 'npcs', 'draft-npc.html');
-      assert.ok(fs.existsSync(draft));
+      assert.ok(!fs.existsSync(draft));
     });
 
     it('leaves out prep source files', () => {

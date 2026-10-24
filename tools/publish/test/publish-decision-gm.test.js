@@ -28,7 +28,7 @@ const manifestOf = (m) => Object.assign({ publishing: [], excluded: [], needsDec
 describe('NOTE_CODES', () => {
   it('lists the whole-note codes', () => {
     assert.deepStrictEqual([...NOTE_CODES].sort(), [
-      'AUTO_EXCLUDED_SOURCE', 'AUTO_EXCLUDED_STATUS', 'DRAFT_EXCLUDED',
+      'AUTO_EXCLUDED_SOURCE', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_STATUS', 'DRAFT_EXCLUDED',
       'MANIFEST_EXCLUDED', 'MANIFEST_NEEDS_DECISION', 'MANIFEST_UNLISTED',
       'PREP_TYPE', 'PUBLISH_FALSE', 'PUBLISH_NONE',
     ]);
@@ -39,6 +39,7 @@ describe('decideGmPage: a note players do not see is shown, with the player reas
   const cases = [
     ['DRAFT_EXCLUDED', { canon_status: 'DRAFT', type: 'npc' }, { publishConfig: { mode: 'player', exclude_drafts: true } }],
     ['AUTO_EXCLUDED_STATUS', { type: 'npc', status: 'planned' }, {}],
+    ['AUTO_EXCLUDED_STAGE', { type: 'npc', stage: 'outline' }, {}],
     ['AUTO_EXCLUDED_SOURCE', { type: 'npc', source: 'prep' }, {}],
     ['PREP_TYPE', { type: 'scene', status: 'played' }, {}],
     ['PREP_TYPE', { type: 'session-plan' }, { manifest: manifestOf({ publishing: ['Characters/NPCs/Someone.md'] }) }],

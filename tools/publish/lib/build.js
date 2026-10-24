@@ -735,7 +735,7 @@ function buildSite(options) {
   if (!gm && draftExcluded.length > 0) console.log(`Excluded ${draftExcluded.length} DRAFT entity/entities`);
 
   const autoExcluded = withCode(
-    'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_SOURCE');
+    'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_SOURCE');
   if (!gm && autoExcluded.length > 0) console.log(`Auto-excluded ${autoExcluded.length} prep/draft file(s)`);
 
   if (!gm && manifest) {
@@ -767,7 +767,7 @@ function buildSite(options) {
     // before `publish: false`, in the order build's own passes ran, so both those
     // codes count as having reached this stage.
     const beforeManifest = new Set([
-      'DRAFT_EXCLUDED', 'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_SOURCE',
+      'DRAFT_EXCLUDED', 'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_SOURCE',
       'PREP_TYPE', 'DIR_ALWAYS_EXCLUDED', 'DIR_UNMAPPED', 'NO_TYPE',
     ]);
     const reachedManifest = pages.filter(p => !beforeManifest.has(verdicts.get(p).code));

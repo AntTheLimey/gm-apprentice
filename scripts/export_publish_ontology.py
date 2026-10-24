@@ -29,7 +29,7 @@ KEYS = ("type", "inverse", "category", "symmetric", "genre")
 # share with the tool (lib/shared-lists.js reads them): session statuses, the
 # wrap-up type spellings, the game systems and their aliases, and the type folders.
 TOP_KEYS = ("tones", "tone_near", "strength_scale", "storage_rule", "verbs", "same_fact",
-            "place_fields", "not_edge_target_types", "session_status",
+            "place_fields", "not_edge_target_types", "session_status", "stage_hides",
             "wrap_up_types", "game_systems", "vault_folders")
 FAMILIES = ("positive", "negative", "neutral")
 

@@ -5,11 +5,14 @@
 // typed where one value belongs (`status: [planned, alive]`) with them, so that a list that
 // holds one of these is read as that value and not as a joined text no rule matches.
 // A leaf module: both of those sit on different sides of the scanner. The session status words
-// are a shared list (shared-lists.js, read from the ontology).
-const { SESSION_NOT_YET_RUN } = require('./shared-lists');
+// and the stage words that hide a note are shared lists (shared-lists.js, read from the ontology).
+const { SESSION_NOT_YET_RUN, STAGE_HIDES } = require('./shared-lists');
 
 // status: prep that has not been played.
 const AUTO_EXCLUDE_STATUS = SESSION_NOT_YET_RUN;
+// stage: the retired key for a plan still being written. Sessions lose it in the update;
+// on any other note it still holds that note back, as it did before the key was retired.
+const AUTO_EXCLUDE_STAGE = STAGE_HIDES;
 // source: written as prep.
 const AUTO_EXCLUDE_SOURCE = new Set(['prep']);
 // type: prep by kind. A scene and a session Plan never publish to the player site, whatever the publish list says.
@@ -22,9 +25,10 @@ const NO_PAGE_TYPES = new Set(['world_flags']);
 const lower = (value) => String(value == null ? '' : value).toLowerCase();
 
 // Per field, whether one value keeps a note off the site. Each is compared the way its rule
-// compares it: a status and a source in any capitals, a canon status as written.
+// compares it: a status, a stage and a source in any capitals, a canon status as written.
 const EXCLUDES = {
   status: (v) => AUTO_EXCLUDE_STATUS.has(lower(v)),
+  stage: (v) => AUTO_EXCLUDE_STAGE.has(lower(v)),
   source: (v) => AUTO_EXCLUDE_SOURCE.has(lower(v)),
   canon_status: (v) => String(v) === DRAFT,
   source_confidence: (v) => String(v) === DRAFT,
@@ -50,6 +54,6 @@ function ruleValue(field, value) {
 }
 
 module.exports = {
-  AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_SOURCE, PREP_TYPES, DRAFT, NO_PAGE_TYPES,
+  AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, PREP_TYPES, DRAFT, NO_PAGE_TYPES,
   excludingValue, ruleValue,
 };

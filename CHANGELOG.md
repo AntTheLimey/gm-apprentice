@@ -33,8 +33,9 @@ off the player site. Publish tool 1.47.0.
 - campaign-qa asks when a chapter has two chapter notes.
 - New vaults start with a Chapter 1 note.
 - Two update checks: `stage-keys` removes the retired `stage:` line
-  from sessions once the site's publish tool is 1.47.0 or later (before
-  that, the update asks the GM to update the site's tool first), and
+  from session notes where its value hides nothing (`stage: outline`,
+  `draft` and `ready` stay, since they still keep a note off the player
+  site), and
   `empty-scenes-lists` removes an empty `scenes:` list from a session
   index. A `scenes:` list with entries is left alone.
 
@@ -45,9 +46,10 @@ off the player site. Publish tool 1.47.0.
   build warns for each one a vault's publish list names.
 - Sessions drop `stage`, and `vw session-new` no longer writes a
   `scenes:` list.
-- The publish tool no longer reads `stage:`: a page carrying
-  `stage: draft` that is on the publish list now publishes. It no
-  longer looks at a scene's status, since scenes never publish.
+- The publish tool no longer looks at a scene's status, since scenes
+  never publish. It still holds back any note with `stage: outline`,
+  `draft` or `ready`; those words now live in the ontology as
+  `stage_hides`.
 - The session-play brief includes the text of the scene files a Plan
   points at.
 - The skills write prepped scenes as scene files in the chapter and

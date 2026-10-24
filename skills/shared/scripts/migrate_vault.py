@@ -18,7 +18,7 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           cells, edit_frontmatter, plugin_tool, stopped,
                           write_text_atomic)
 from schema_rules import system_id as _system_id
-from schema_rules import TEMPLATE_NAMES
+from schema_rules import STAGE_HIDES, TEMPLATE_NAMES
 from schema_rules import tone_families, without_generated_markers
 from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
                          configured_site, player_section_key, semver_below,
@@ -1355,7 +1355,6 @@ def find_open_threads_fold(vault: Path) -> list[Item]:
 
 # --- retired scene/session keys -----------------------------------------------
 
-STAGE_GONE_FROM = "1.47.0"   # the publish tool that no longer reads `stage:`
 
 
 def _frontmatter_lines(text: str) -> list[str] | None:
@@ -1390,9 +1389,16 @@ def _fm_type(fm: list[str]) -> str:
 
 
 def _drop_stage(fm: list[str], _rel: str) -> bool:
-    return (any(line.startswith("stage:") for line in fm)
-            and not opens_a_block(fm, "stage")
-            and _fm_type(fm) in STAGE_TYPES)
+    """A one-line `stage:` on a session-family note whose value hides
+    nothing. A stage that keeps the note off a player site (STAGE_HIDES)
+    stays: every publish tool still reads it, so removing it would
+    publish the note."""
+    line = next((ln for ln in fm if ln.startswith("stage:")), None)
+    if line is None or opens_a_block(fm, "stage") \
+            or _fm_type(fm) not in STAGE_TYPES:
+        return False
+    value = line.split(":", 1)[1].split("#", 1)[0].strip().strip("'\"")
+    return value.casefold() not in STAGE_HIDES
 
 
 def _drop_empty_scenes(fm: list[str], _rel: str) -> bool:
@@ -1415,23 +1421,12 @@ def _remove_keys(vault: Path, rels: list[str], key: str,
 
 def find_stage_keys(vault: Path) -> list[Item]:
     """1.10.93: a session no longer has a `stage:`. The key goes from any
-    session-family note (STAGE_TYPES) that has it as a one-line value. An older publish tool still reads
-    `stage: draft` to hide a page, so while the site's tool is below 1.47.0
-    (or not installed) the key stays and the GM is told."""
+    session-family note (STAGE_TYPES) that has it as a one-line value that
+    hides nothing; `stage: draft` and the other STAGE_HIDES words stay,
+    because they still keep the note off a player site."""
     found = _notes_with(vault, _drop_stage)
     if not found:
         return []
-    site, _has_config = configured_site(vault)
-    if site is not None:
-        tool = site_pin(site).version
-        if tool is None or semver_below(tool, STAGE_GONE_FROM):
-            return [Item(
-                "stage-keys", PERSON,
-                [f"{len(found)} note(s) still have a stage: key, and the "
-                 f"site's publish tool is {tool or 'not installed'}; it reads "
-                 f"stage: to hide a page until {STAGE_GONE_FROM}. Update it "
-                 f"(update-pin --site {site}) and the update removes the keys"],
-                None, holds_stamp=True)]
 
     def apply(_value: str | None) -> list[str]:
         return _remove_keys(vault, found, "stage",
@@ -1501,8 +1496,8 @@ VAULT_CHECKS: list[Check] = [
     Check("open-threads-fold", "1.10.83", 3,
           "per-session open threads in PC Current Status",
           find_open_threads_fold, choices=("open-threads-fold=",)),
-    Check("stage-keys", "1.10.93", 4, "the retired stage: key",
-          find_stage_keys, asks_site=True),
+    Check("stage-keys", "1.10.93", 3, "the retired stage: key",
+          find_stage_keys),
     Check("empty-scenes-lists", "1.10.93", 3, "empty scenes: lists",
           find_empty_scenes_lists),
 ]

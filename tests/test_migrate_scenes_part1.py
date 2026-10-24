@@ -1,5 +1,5 @@
-"""Scenes Part 1 update steps: `stage-keys` (gated on the site's publish tool
-being 1.47.0 or later) and `empty-scenes-lists`."""
+"""Scenes Part 1 update steps: `stage-keys` (a stage that hides a note
+stays) and `empty-scenes-lists`."""
 
 import json
 import shutil
@@ -13,10 +13,10 @@ sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import migrate_vault as mv  # noqa: E402
-from migrate_core import PERSON, WILL  # noqa: E402
-from test_migrate_move import NEEDS_NODE  # noqa: E402
+from migrate_core import WILL  # noqa: E402
 
 PLAN = "---\ntype: session-plan\nstage: draft\nstatus: planned\n---\n\n# Plan\n"
+PLAN_PLAYED = PLAN.replace("stage: draft", "stage: in_play")
 WRAP = ("---\ntype: session-wrapup\nstage: wrap_up     # outline | draft\n"
         "status: reviewed\n---\n\n# Wrap\n")
 BLOCK = "---\ntype: session\nstage:\n  name: x\nscenes: []\n---\n\n# S\n"
@@ -87,10 +87,9 @@ class EmptyScenesTests(unittest.TestCase):
         self.assertEqual(mv.find_empty_scenes_lists(v), [])
 
 
-@NEEDS_NODE
 class StageKeyTests(unittest.TestCase):
-    def test_removed_from_plan_and_wrapup_no_site(self):
-        v = make_vault(self, {"P/Plan.md": PLAN, "W/Wrap.md": WRAP,
+    def test_removed_where_it_hides_nothing(self):
+        v = make_vault(self, {"P/Plan.md": PLAN_PLAYED, "W/Wrap.md": WRAP,
                               "_Templates/session.md": TEMPLATE})
         (item,) = mv.find_stage_keys(v)
         self.assertEqual((item.id, item.group), ("stage-keys", WILL))
@@ -102,10 +101,19 @@ class StageKeyTests(unittest.TestCase):
         self.assertEqual(raw(v, "_Templates/session.md"), TEMPLATE)
         self.assertEqual(mv.find_stage_keys(v), [])
 
+    def test_a_stage_that_hides_the_note_stays(self):
+        # stage: draft still keeps a note off the player site; removing it
+        # would publish the note.
+        for stage in ("draft", "Outline", "'ready'"):
+            note = f"---\ntype: session-wrapup\nstage: {stage}\n---\n\n# W\n"
+            v = make_vault(self, {"W/Wrap.md": note, "P/Plan.md": PLAN})
+            self.assertEqual(mv.find_stage_keys(v), [], stage)
+            self.assertEqual(raw(v, "W/Wrap.md"), note)
+
     def test_other_types_keep_their_stage(self):
         npc = "---\ntype: npc\nstage: rising\n---\n\n# Bob\n"
-        notes = "---\ntype: session-play-notes\nstage: draft\n---\n"
-        v = make_vault(self, {"N/Bob.md": npc, "P/Plan.md": PLAN,
+        notes = "---\ntype: session-play-notes\nstage: in_play\n---\n"
+        v = make_vault(self, {"N/Bob.md": npc, "P/Plan.md": PLAN_PLAYED,
                               "S/Notes.md": notes})
         (item,) = mv.find_stage_keys(v)
         self.assertEqual(item.lines, ["remove stage: from P/Plan.md",
@@ -120,27 +128,15 @@ class StageKeyTests(unittest.TestCase):
         self.assertEqual(raw(v, "S/Session 1.md"), BLOCK)
 
     def test_crlf_kept(self):
-        v = make_vault(self, {"P/Plan.md": PLAN.replace("\n", "\r\n")})
+        v = make_vault(self, {"P/Plan.md": PLAN_PLAYED.replace("\n", "\r\n")})
         run(mv.find_stage_keys(v))
         self.assertEqual(
             raw(v, "P/Plan.md"),
             "---\r\ntype: session-plan\r\nstatus: planned\r\n---\r\n\r\n# Plan\r\n")
 
-    def test_old_tool_gives_person_item_holding_stamp(self):
-        v = make_vault(self, {"P/Plan.md": PLAN}, installed="1.46.0", with_site=True)
-        (item,) = mv.find_stage_keys(v)
-        self.assertEqual((item.id, item.group, item.holds_stamp),
-                         ("stage-keys", PERSON, True))
-        self.assertIn("1.46.0", item.lines[0])
-        self.assertIn("stage:", raw(v, "P/Plan.md"))
-
-    def test_tool_not_installed_gives_person_item(self):
-        v = make_vault(self, {"P/Plan.md": PLAN}, installed=None, with_site=True)
-        (item,) = mv.find_stage_keys(v)
-        self.assertEqual(item.group, PERSON)
-
-    def test_new_tool_gives_will_item(self):
-        v = make_vault(self, {"P/Plan.md": PLAN}, installed="1.47.0", with_site=True)
+    def test_no_site_tool_needed(self):
+        v = make_vault(self, {"P/Plan.md": PLAN_PLAYED}, installed="1.46.0",
+                       with_site=True)
         (item,) = mv.find_stage_keys(v)
         self.assertEqual(item.group, WILL)
 
@@ -149,7 +145,7 @@ class RegisteredTests(unittest.TestCase):
     def test_checks_registered(self):
         by = {c.name: c for c in mv.VAULT_CHECKS}
         s, e = by["stage-keys"], by["empty-scenes-lists"]
-        self.assertEqual((s.release, s.band, s.asks_site), ("1.10.93", 4, True))
+        self.assertEqual((s.release, s.band, s.asks_site), ("1.10.93", 3, False))
         self.assertEqual((e.release, e.band, e.asks_site), ("1.10.93", 3, False))
 
 
