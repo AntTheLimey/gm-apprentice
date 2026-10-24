@@ -43,8 +43,8 @@ Otherwise run the full procedure.
 
 ### 1. Load the target
 
-Read the Wrap-Up, related entity files, timeline entries and linked
-scene notes. Reads only — no writes yet.
+Read the Wrap-Up, related entity files, timeline entries and the
+scene files its Plan links. Reads only — no writes yet.
 
 ### 2. Highlight uncertain areas
 

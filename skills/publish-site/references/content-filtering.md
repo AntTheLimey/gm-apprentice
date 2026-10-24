@@ -9,7 +9,7 @@ All campaign content falls into three categories:
 - The folders in `player_site.hide.folders` (the vault's own `_meta` and
   template folders among them), and `personal/` directories
 - All prep files: sessions/scenes with `status: planned | prepped`,
-  `stage: outline | draft | ready`
+  or any note with the retired `stage: outline | draft | ready`
 - Files with `source: "prep"` that have no played counterpart
 - Sections whose heading is listed in `player_site.hide.sections`
 - On a `type: document` page, a handout's own Keeper sections, whatever
@@ -98,16 +98,15 @@ campaign-qa's Tone Words check lists the hostile ties the site shows.
 ### Always included
 
 - Played sessions (`status: played | wrap-up | reviewed`)
-- Scenes with `status: played` or `status: modified` (they
-  happened — publish the reality, even if modified from plan)
 - Entity files in standard vault folders
 - `_Campaign/` overview files
 - `_attachments/` images referenced by included entities
 
-### Always excluded (scene-level)
+### Always excluded (by type)
 
-- Scenes with `status: cut` (removed from the session)
-- Scenes with `status: skipped` (didn't happen)
+- Scenes (`type: scene`) and session Plans (`type: session-plan`) are
+  prep, whatever their status. A publish list entry does not change it;
+  the build warns for each one listed. The GM site shows them with a mark.
 
 ### Ambiguous (ask the GM)
 

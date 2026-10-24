@@ -145,10 +145,13 @@ Include a `> [!info] Reconstruction Note` (sources, limitations);
 mark uncertain items `<!-- UNVERIFIED (S{n}) -->`, tagged with
 the session ingested (`Ch{c} S{n}` if it has a chapter).
 
-**Planning documents** (scene designs, arc structures,
-investigation flows) become `type: plan` entities in
-`Chapters/{chapter}/Planning/` per `_Templates/_Template_Plan.md`,
-with `plan_type` `arc`, `scene`, `investigation` or `timeline`.
+**Planning documents** (arc structures, investigation flows)
+become `type: plan` entities in `Chapters/{chapter}/Planning/` per
+`_Templates/_Template_Plan.md`, with `plan_type` `arc`, `scene`,
+`investigation` or `timeline`. A design for one scene becomes a scene
+file instead: `vault_write.py <vault> scene-new --chapter
+"<chapter>" --title "<title>" --write`, then its text goes in the
+body and its `entities`/`locations` get the wiki-links it names.
 
 Entity files parallelize well across subagents; the Phase 4
 interview stays sequential.

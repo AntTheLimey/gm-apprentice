@@ -48,10 +48,8 @@ exception).
   invocation.
 - Read `shared/session-document-chain.md`. You write Plan files. On
   an existing session index set only `status` and `documents.plan`
-  (`stamp_entities.py --set`); when you create the index or a new
-  scene note, add it to `scenes:`; never remove entries — a narrowed
-  scope lives in the Plan's scene list. Never write to the index body:
-  scene states, key prep and image prompts go in the Plan. You read earlier Wrap-Ups for context, not
+  (`stamp_entities.py --set`). Never write to the index body: scene
+  states, key prep and image prompts go in the Plan. You read earlier Wrap-Ups for context, not
   other sessions' Play Notes or Plans (exception: raw Play Notes, to
   generate a recap when no Wrap-Up exists — step 7).
 - Read `references/session-templates.md` when creating or updating
@@ -224,8 +222,10 @@ arc-spotlight-reference.md; a PC with none is a gap to fill:
 
 → `## Spotlight Forecast` and `## Touchpoint Plan`
 
-**14. Scenes** — Scenes emerge from the intent and spotlight. The
-propose-before-write gate is the **premise**. For each scene:
+**14. Scenes** — Scenes emerge from the intent and spotlight. Run
+`scene_queue.py <vault> --chapter "<chapter>"` and offer its scenes
+alongside new ideas. The propose-before-write gate is the
+**premise**. For each scene:
 
 1. Pitch the situation and whose want drives it — a lean or 2–3
    options:
@@ -233,9 +233,15 @@ propose-before-write gate is the **premise**. For each scene:
    > where the ledger is the trap? Either way it's Emma's want that
    > opens the door.
 2. The GM shapes it — yes / no / tweak / their own premise.
-3. Write it in the skeleton from `references/session-templates.md`.
-   **Situation** and **Starts it** are required; every other label is
-   optional, and a two-line routing scene is finished.
+3. Write it with `vault_write.py <vault> scene-new --chapter
+   "<chapter>" --title "<title>" --write`, then fill its body and its
+   `entities`/`locations` links. In the Plan it, or a queued scene, is
+   `### [[<title>]]` and a line each: purpose, who, how it starts;
+   prep it needs (paused: where it picks up, what may come next) is
+   an edit to its note, for the GM's yes. A small beat may stay inline
+   in the skeleton from `references/session-templates.md`: **Situation** and **Starts it**
+   are required; every other label is optional, and a two-line routing
+   scene is finished.
 
 Prefer embedding personal content in group scenes over splitting the
 party, and leave open windows for PC initiative. The GM may propose

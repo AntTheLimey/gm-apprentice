@@ -10,9 +10,10 @@ usable immediately.
 run its Version Gate first. Then read
 `shared/session-document-chain.md` and run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py"
-<vault> --play` — the plan brief with every scene's full text, NPC
-table, world state, contingencies and end objectives. Open the Plan
-file only for a section the brief drops.
+<vault> --play` — the plan brief with every scene's full text (scene
+files the Plan links included), NPC table, world state, contingencies
+and end objectives. Open the Plan file only for a section the brief
+drops.
 
 ## Behavior
 

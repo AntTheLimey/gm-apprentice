@@ -26,10 +26,10 @@ KEYS = ("type", "inverse", "category", "symmetric", "genre")
 # Top-level keys copied whole: `relationships words` prints the tones and strength, and
 # `relationships check` (Task 7) reads the verbs, same-fact pairs, place fields and the
 # entity types an edge may not point at. The rest are the short lists the vault scripts
-# share with the tool (lib/shared-lists.js reads them): session statuses and stages, the
+# share with the tool (lib/shared-lists.js reads them): session statuses, the
 # wrap-up type spellings, the game systems and their aliases, and the type folders.
 TOP_KEYS = ("tones", "tone_near", "strength_scale", "storage_rule", "verbs", "same_fact",
-            "place_fields", "not_edge_target_types", "session_status", "session_stage",
+            "place_fields", "not_edge_target_types", "session_status", "stage_hides",
             "wrap_up_types", "game_systems", "vault_folders")
 FAMILIES = ("positive", "negative", "neutral")
 

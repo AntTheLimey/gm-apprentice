@@ -48,7 +48,7 @@ describe('a list in a field that can keep a note off the site', () => {
     const got = shapeFrontmatter({ type: 'npc', status: ['alive', 'Planned'] });
     assert.strictEqual(got.frontmatter.status, 'Planned');
     assert.deepStrictEqual(got.wrong, [{ field: 'status', problem: 'is a list where one value is expected; it holds "Planned", which keeps a note off a player site, so it is read as "Planned"' }]);
-    assert.strictEqual(shapeFrontmatter({ status: ['x', 'cut'] }).frontmatter.status, 'cut');
+    assert.strictEqual(shapeFrontmatter({ status: ['x', 'planned'] }).frontmatter.status, 'planned');
     assert.strictEqual(shapeFrontmatter({ status: [['prepped'], 'alive'] }).frontmatter.status, 'prepped');
   });
   it('canon_status and its older names: DRAFT is taken alone', () => {
@@ -58,6 +58,8 @@ describe('a list in a field that can keep a note off the site', () => {
   });
   it('type: a kind of note that gets no page is taken alone', () => {
     assert.strictEqual(shapeFrontmatter({ type: ['npc', 'world_flags'] }).frontmatter.type, 'world_flags');
+    // A prep type (scene, session-plan) never publishes, so it is taken alone too.
+    assert.strictEqual(shapeFrontmatter({ type: ['npc', 'scene'] }).frontmatter.type, 'scene');
   });
   it('a list with no such value reads joined, as before', () => {
     const got = shapeFrontmatter({ status: ['alive', 'well'], canon_status: ['STUB', 'draft-ish'] });
@@ -71,19 +73,19 @@ describe('a list in a field that can keep a note off the site', () => {
     const { configPath, root } = site({
       'People/Listed_Status.md': npc('status: [planned, alive]'),
       'People/Listed_Canon.md': npc('canon_status: [AUTHORITATIVE, DRAFT]'),
-      'People/Listed_Stage.md': npc('stage: [final, draft]'),
       'People/Listed_Source.md': npc('source: [table, prep]'),
       'People/Listed_Flags.md': '---\ntype: [npc, world_flags]\n---\n\nBody.\n',
-      'Scenes/Listed_Cut.md': '---\ntype: scene\nstatus: [played, cut]\n---\n\nBody.\n',
+      'People/Listed_Scene.md': '---\ntype: [npc, scene]\n---\n\nBody.\n',
+      'Scenes/Listed_Dropped.md': '---\ntype: scene\nstatus: [played, dropped]\n---\n\nBody.\n',
       'People/Plain_List.md': npc('status: [alive, well]'),
       'People/Fine.md': npc('status: alive'),
     }, { extra: '  exclude_drafts: true\n' });
     const { said } = quietBuild(configPath);
     const built = (dir, name) => fs.existsSync(path.join(root, 'docs', dir, name));
-    for (const name of ['listed-status.html', 'listed-canon.html', 'listed-stage.html', 'listed-source.html', 'listed-flags.html']) {
+    for (const name of ['listed-status.html', 'listed-canon.html', 'listed-source.html', 'listed-flags.html', 'listed-scene.html']) {
       assert.ok(!built('people', name), `${name} was published`);
     }
-    assert.ok(!built('scenes', 'listed-cut.html'), 'the cut scene was published');
+    assert.ok(!built('scenes', 'listed-dropped.html'), 'the dropped scene was published');
     assert.ok(built('people', 'plain-list.html') && built('people', 'fine.html'));
     assert.ok(said.some((l) => /Listed_Status\.md — status: is a list where one value is expected; it holds "planned", which keeps a note off a player site/.test(l)), said.join('\n'));
   });

@@ -138,7 +138,7 @@ class BothChecksAgree(unittest.TestCase):
                       sr.show("pc") or "")
 
     def test_missing_required_fields(self):
-        self.assertAgree("type: scene\ncanon_status: DRAFT", 2)
+        self.assertAgree("type: scene\ncanon_status: DRAFT", 1)
 
     def test_an_empty_required_field_is_missing_to_both(self):
         for empty in ('""', "", "[]", "'  '"):

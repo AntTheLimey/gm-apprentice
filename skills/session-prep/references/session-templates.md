@@ -26,11 +26,6 @@ and `### World State` (all under the fenced `## GM Notes`). The
 `## Narrative Recap` is the player-facing record — use it, never
 regenerate it.
 
-## Scene notes
-
-For a standalone scene note in the chapter's `Scenes/` folder, read
-`references/scene-note-template.md`.
-
 ## Session Plan
 
 Archived after play — not deleted, and not updated except to append
@@ -160,6 +155,11 @@ from *this* PC. A scene that cannot answer this is not finished.
 ### Scene 2: [Title]
 [Same structure]
 
+### [[Scene Note Title]]
+**Purpose:** A scene already written as a scene note: one line on why.
+**Who:** [[NPC]], and the PC it is for.
+**Starts it:** One line. The play brief pulls the note in.
+
 ## Contingency Scenes
 
 Scenes that trigger on a player choice or a clock. Trigger and
@@ -229,6 +229,6 @@ Handouts go in Handouts & Props.]
 
 | Planned Scene | Status | Notes |
 |---------------|--------|-------|
-| [Scene Title] | Played / Modified / Skipped | Brief note |
+| [Scene Title] | Played / Paused / Dropped | Brief note |
 | [Unplanned] [Title] | Played | Origin and note |
 ```

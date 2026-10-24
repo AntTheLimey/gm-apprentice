@@ -7,7 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const sess = (n, title, extra = '') => `---\ntype: session\nsession_number: ${n}\nplay_date: "2026-0${n}-01"\nstatus: played\nstage: complete\n${extra}---\n\n# ${title}\n\nThe party fought [[Ghoul King]] in the ruins. Full prose recap here.\n\n## What the Party Learned\n\n- The crater glows\n- The Queen lies\n`;
+const sess = (n, title, extra = '') => `---\ntype: session\nsession_number: ${n}\nplay_date: "2026-0${n}-01"\nstatus: played\n${extra}---\n\n# ${title}\n\nThe party fought [[Ghoul King]] in the ruins. Full prose recap here.\n\n## What the Party Learned\n\n- The crater glows\n- The Queen lies\n`;
 
 const VARIANTS = {
   flat: {

@@ -591,9 +591,21 @@ def _is_routing_scene(body: str, scene_title: str) -> bool:
         r"[.\n]", m.group(1).strip())[0].strip().casefold() == "transition"
 
 
+# A Planned Scenes block titled by one wikilink points at a scene note,
+# where the labels live: none are demanded here. A Contingency block keeps
+# its Trigger whatever its title.
+POINTER_TITLE_RE = re.compile(r"\[\[[^\[\]]+\]\]")
+
+
+def is_pointer_title(title: str) -> bool:
+    return POINTER_TITLE_RE.fullmatch(title.strip()) is not None
+
+
 def _scene_findings(rel: str, body: str, scene_title: str,
                     labels: tuple[str, ...]) -> list[Finding]:
     findings: list[Finding] = []
+    if labels == SCENE_LABELS and is_pointer_title(scene_title):
+        return findings
     routing = labels == SCENE_LABELS and _is_routing_scene(body, scene_title)
     locus = f"{rel}:§{scene_title}"
     legacy_found = _legacy_scene(body, labels)

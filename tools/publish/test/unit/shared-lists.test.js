@@ -10,7 +10,7 @@ const { clientFor } = require('../../lib/templates/live-mount');
 const { DIR_LABELS } = require('../../lib/templates/base');
 const { kindLabel } = require('../../lib/kind-label');
 const { REGISTRABLE_TYPES, isPlayedSession } = require('../../lib/session-hub');
-const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE } = require('../../lib/excluding-values');
+const { AUTO_EXCLUDE_STATUS } = require('../../lib/excluding-values');
 const { entry } = require('../../lib/settings/registry');
 const { TYPES } = require('../../lib/settings/types');
 
@@ -57,7 +57,6 @@ test('a session is played or not yet run, never both', () => {
     assert.ok(isPlayedSession({ type: 'session', status: s }), s);
   }
   for (const s of AUTO_EXCLUDE_STATUS) assert.ok(!isPlayedSession({ type: 'session', status: s }), s);
-  assert.ok(AUTO_EXCLUDE_STAGE.has('outline'));
 });
 
 test('a wrap-up session is played on the landing page, and no file types the played list out', () => {
