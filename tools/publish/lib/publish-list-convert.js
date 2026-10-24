@@ -100,7 +100,8 @@ const WITH_REASON = /^(.*?\.\w+)(?:\s+(?:—|–|--)\s+(.*))?$/;
 // (a `- Reason:` group's paths), or a plain bullet that ends in a file name. A `- Reason:` line names the reason
 // of the entries after it in its section, as the old annotated reader read it. A line a `%%` or `<!-- -->` comment
 // hides is no entry, as the readers have it (#498); `commented: true` reads a line the comments hide whole as well,
-// its comment marks taken out (a comment beside an entry leaves the entry, so that is no commented-out one).
+// its comment marks taken out, and marks each entry on such a line `hidden` (a comment beside an entry, or one around
+// only its section's heading, leaves the entry, so that is no commented-out one).
 function entryLines(oldText, { commented = false } = {}) {
   const body = String(oldText).replace(/\r/g, '').replace(/^---\n[\s\S]*?\n---\n?/, '');
   const shown = uncommentedLines(body);
@@ -109,7 +110,7 @@ function entryLines(oldText, { commented = false } = {}) {
   const found = [];
   let section = null;
   let groupReason = null;
-  for (const line of read) {
+  for (const [n, line] of read.entries()) {
     const heading = /^## (.+)/.exec(line);
     if (heading) {
       const title = heading[1].trim();
@@ -129,7 +130,7 @@ function entryLines(oldText, { commented = false } = {}) {
     if (!raw) continue;
     const split = WITH_REASON.exec(raw);
     const reason = (split && split[2] ? split[2].trim() : null) || groupReason;
-    found.push({ rel: stripInlineComment(raw), section, reason: reason || null });
+    found.push({ rel: stripInlineComment(raw), section, reason: reason || null, ...(commented && !keptAt.has(n) ? { hidden: true } : {}) });
   }
   return found;
 }
@@ -172,7 +173,7 @@ function expectedFrom(oldText) {
       ticked: once(built.resolved).filter((rel) => stays.has(rel) && !built.needsDecision.includes(rel)).length,
       unticked: once(lines.filter((l) => l.section === 'publishing' && !publishes.has(l.rel)).map((l) => l.rel)).filter((rel) => stays.has(rel)).length,
       excludedKept: once(underExcluded).filter((rel) => !builtExcluded.has(rel) && excluded.includes(rel)).length,
-      commented: once(entryLines(oldText, { commented: true }).map((l) => l.rel)).filter((rel) => !listOf.has(rel)).length,
+      commented: once(entryLines(oldText, { commented: true }).filter((l) => l.hidden).map((l) => l.rel)).filter((rel) => !listOf.has(rel)).length,
     },
   };
 }
