@@ -27,11 +27,13 @@ being open.
 | Session-prep context bundle (one call) | `session_context.py` |
 | At-table plan brief | `session_context.py --play` |
 | Thread ages / decay | `session_context.py --threads` |
-| Prep bundle, brief form (Step 5 default) | `session_context.py --brief` |
+| Prep bundle, brief form | `session_context.py --brief` |
+| A prep run's opening read: version, brief bundle, reconcile scan, threads, arcs, scene queue, plans (Step 5) | `session_context.py --prep` |
 | PC arc slice (Step 12) — replaces per-PC sheet reads | `session_context.py --arcs` |
 | What the last Wrap-Up carries forward — replaces reading it | `session_context.py --carry --before INDEX` |
 | Rebuild `_meta/index.md` | `index_build.py` |
 | Session Plan conformance | `plan_check.py` |
+| Write a session's Plan (or `--section`s of it), stamp its index, check it | `vault_write.py plan` |
 | Narrative-plan discovery (`Planning/` + `_midwife/`) | `plans_index.py` |
 | Frontmatter writes (set/increment/promote/supersede/reconciled), legacy canon-key repair | `stamp_entities.py` |
 | Ingest source classification manifest | `ingest_survey.py` |
