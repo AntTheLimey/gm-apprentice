@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.98] — 2026-10-24
+
+Prep in fewer steps: one call gathers what prep reads first, and one
+call writes the Plan, files its index and checks it.
+
+### Added
+
+- `session_context.py --prep`: a prep run's opening read in one call:
+  the version verdict, the brief bundle, the reconcile scan (when the
+  session waits at `wrap-up`), threads, PC arcs, the chapter's scene
+  queue and its narrative plans checked against the NPCs, places and
+  factions the Wrap-Up links. Each part is that script's own output
+  (#493).
+- `vault_write.py plan`: writes a session's Plan from stdin with the
+  template's frontmatter, files the index as
+  upcoming when there is none, sets the index to prepped with
+  `documents.plan`, and prints the Plan check. An existing Plan is never
+  overwritten: `--section` replaces the sections sent, by level and
+  title (#494).
+
+### Changed
+
+- session-prep opens with `--prep` and writes the Plan with
+  `vault_write.py plan`; steps that used to run the threads, arcs,
+  scene queue, plans index and reconcile scan read them from the
+  gather.
+
 ## [1.10.97] — 2026-10-24
 
 A `%%` comment can no longer uncover text a gm-only block hides.
