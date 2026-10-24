@@ -11,6 +11,7 @@ it needs to.
 Usage:
   session_context.py VAULT [--session N]
   session_context.py VAULT --brief
+  session_context.py VAULT --prep
   session_context.py VAULT --arcs
   session_context.py VAULT --carry [--before INDEX]
 
@@ -58,6 +59,14 @@ apart because they mean different things: absent, present but written
 as prose (listed for direct reading, never counted as evidence of a
 spotlight drought), and a real table.
 
+`--prep` is a prep run's opening read in one call: the version check's
+verdict, the `--brief` bundle, the reconcile scan of the Wrap-Up just
+written (when the session's status is `wrap-up`), the `--threads` and
+`--arcs` reports, the chapter's prep queue (`scene_queue.py`) and its
+narrative plans (`plans_index.py`, checked against the NPCs, locations
+and factions the Wrap-Up links). Each part is the named script's own
+output; nothing is worked out twice.
+
 `--carry` is session-wrapup's: from the Wrap-Up before session INDEX
 (chapter, then session order; the latest without --before) it prints
 only the Handoff, Unresolved Threads, Player-Stated Intentions,
@@ -68,6 +77,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from collections.abc import Callable
 from difflib import SequenceMatcher
@@ -82,6 +92,7 @@ from vaultlib import (GM_MARKER_RE, is_out_of_play, out_of_play,  # noqa: F401
                       fenced_headings, h3_blocks, nested_mapping,
                       normalize, raw_frontmatter, section,
                       session_ref_number, word_count)
+from vaultlib import link_name
 from vaultlib import vault_files as _vault_files
 
 
@@ -1061,6 +1072,58 @@ def _find_plan(files, chapter, target: int):
     return hits[0] if len(hits) == 1 else None
 
 
+SCRIPTS = Path(__file__).resolve().parent
+# The note types a narrative plan names as participants or locations.
+PLAN_NAME_TYPES = frozenset({"npc", "location", "faction", "creature"})
+
+
+def run_script(script: str, *argv, title: str) -> str:
+    """A sibling script's output under its own heading, stderr included
+    and a failure said in one line, so the gather never stops part-way."""
+    done = subprocess.run([sys.executable, str(SCRIPTS / script),
+                           *map(str, argv)],
+                          capture_output=True, text=True, check=False)
+    out = (done.stdout + done.stderr).rstrip()
+    if done.returncode:
+        out += f"\n({script} exited {done.returncode})"
+    return f"\n===== {title} =====\n{out or '(no output)'}"
+
+
+def wrapup_names(files, wrap_text: str) -> list[str]:
+    """The NPCs, locations, factions and creatures a Wrap-Up links, by
+    note name, in the order first linked."""
+    types = {normalize(rel.rsplit("/", 1)[-1][:-3]): entity_type(fm)
+             for rel, _text, fm in files}
+    names: list[str] = []
+    for raw in re.findall(r"\[\[([^\]]+)\]\]", wrap_text):
+        name = link_name(raw)
+        if (types.get(normalize(name)) in PLAN_NAME_TYPES
+                and name not in names):
+            names.append(name)
+    return names
+
+
+def print_prep_rest(vault: Path, files, chosen, wrap, current: int,
+                    chapter, upcoming: int) -> None:
+    """What `--prep` adds after the brief bundle."""
+    status = str((chosen or {}).get("fm", {}).get("status") or "")
+    if wrap and status == "wrap-up":
+        print(run_script("reconcile_scan.py", vault, wrap[0],
+                         title="Reconcile Scan"))
+    else:
+        print("\n===== Reconcile Scan =====\n(not run: the session's "
+              f"status is {status or 'unknown'}, not wrap-up)")
+    print(f"\n{thread_report(files, current, chapter, vault)}")
+    print(f"\n{arcs_report(files, chapter, upcoming, vault)}")
+    label = (chosen or {}).get("chapter_label")
+    where = ("--chapter", label) if label else ()
+    print(run_script("scene_queue.py", vault, *where, title="Scene Queue"))
+    names = wrapup_names(files, wrap[1]) if wrap else []
+    print(run_script("plans_index.py", vault, *where,
+                     *(("--against", *names) if names else ()),
+                     title="Narrative Plans"))
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("vault", type=Path)
@@ -1095,6 +1158,13 @@ def main() -> int:
              "denominator), or a table. Arc stage is not a field: judge "
              "it against the five-stage model from this evidence.")
     mode.add_argument(
+        "--prep", action="store_true",
+        help="a prep run's opening read in one call: the version verdict, "
+             "the --brief bundle, the reconcile scan (status wrap-up only), "
+             "--threads, --arcs, the chapter's scene queue and its "
+             "narrative plans checked against the NPCs, locations and "
+             "factions the Wrap-Up links")
+    mode.add_argument(
         "--carry", action="store_true",
         help="print only what the previous Wrap-Up carries forward: its "
              "Handoff to session-prep, Unresolved Threads, Player-Stated "
@@ -1118,13 +1188,18 @@ def main() -> int:
              "shows the need — for the Plan that means "
              "`plan_check.py --inventory/--state`, not a full read.")
     args = ap.parse_args()
-    if args.brief and (args.play or args.threads or args.arcs):
+    if args.brief and (args.play or args.threads or args.arcs
+                       or args.prep):
         print("error: --brief applies to the default bundle only",
               file=sys.stderr)
         return 2
     if args.before and not args.carry:
         print("error: --before applies to --carry only", file=sys.stderr)
         return 2
+    if args.prep:
+        args.brief = True
+        print(run_script("vault_check.py", args.vault, "version",
+                         title="Version"))
     if args.carry and (args.brief or args.session is not None):
         print("error: --carry takes --before, not --brief or --session",
               file=sys.stderr)
@@ -1292,6 +1367,9 @@ def main() -> int:
         emit("Campaign Overview",
              overview[0] if overview else None,
              body_of(overview[1]) if overview else None)
+    if args.prep:
+        print_prep_rest(args.vault, files, chosen, wrap, current, chapter,
+                        upcoming)
     return 0
 
 

@@ -23,6 +23,9 @@
                                [--write]
     vault_write.py VAULT promote-plan DRAFT --to PLAN --plan-type T
                                [--chapter C] [--leads-to PLAN]... [--write]
+    vault_write.py VAULT plan --number N [--chapter C] [--title T]
+                               [--section] [--headless [--gm-input [PART ...]]]
+                               [--write]                                < markdown
 
 Paths are vault-relative. Without --write every command prints its plan and
 writes nothing. The script never writes prose: it places the text on stdin.
@@ -51,6 +54,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
+import plan_check
 import schema_rules
 import vault_check as vc
 import vaultlib as vl
@@ -86,6 +90,7 @@ class Batch:
         self.originals: dict[str, str | None] = {}
         self.texts: dict[str, str] = {}
         self.rows: list[str] = []
+        self.after: list[str] = []      # printed below the totals line
         self._listing: dict[str, str] | None = None
 
     def guard(self, rel: str) -> None:
@@ -2229,6 +2234,196 @@ def cmd_promote_plan(batch: Batch, args: argparse.Namespace,
               f"from {draft}: body copied as written ({len(body.encode())} "
               f"bytes)")
 
+# --- plan ---------------------------------------------------------------------
+
+PLAN_SESSION_TEMPLATES = ("_Template_Session_Plan.md",)
+PLAN_SETTABLE = frozenset({"planned", "prepped", ""})
+
+
+def find_session(batch: Batch, n: int, chapter: str | None) -> str | None:
+    """The index of session `n`, in `chapter` when one is named (by its
+    link, by what that link names, or by its folder); None when there is
+    none. Several are refused."""
+    found = (find_chapter(batch.vault, chapter, missing_ok=True)
+             if chapter else None)
+    want = (found[2] if found else bare_link(chapter) if chapter else None)
+    hits = [rel for rel, number, ch, _date in session_indexes(batch.vault)
+            if number == n and (
+                want is None or (ch or "").casefold() == want.casefold()
+                or found is not None and rel.startswith(f"{found[1]}/"))]
+    if len(hits) > 1:
+        raise WriteError(f"{len(hits)} session {n} indexes: "
+                         f"{', '.join(hits)}: pass --chapter")
+    return hits[0] if hits else None
+
+
+def stamp_index(batch: Batch, rel: str, plan_stem: str) -> None:
+    """Set the index's status to prepped (from planned or empty) and its
+    documents.plan to the Plan, as stamp_entities does. Nothing else in it
+    changes."""
+    text = batch.read(rel)
+    lines = text.splitlines(keepends=True)
+    end, error = vl.frontmatter_span(lines)
+    if error:
+        raise WriteError(f"{rel}: {error}")
+    eol = "\r\n" if "\r\n" in text else "\n"
+    fm = lines[1:end]
+    status = (raw_value(text, "status") or "").strip("\"'").casefold()
+    if status not in PLAN_SETTABLE:
+        batch.row("WARNING", rel, "", f"status {status!r} left as it is "
+                  "(prepped is set only on a session not yet played)")
+    elif status != "prepped":
+        at = next((i for i, ln in enumerate(fm)
+                   if ln.startswith("status:")), None)
+        if at is None:
+            fm.append(f"status: prepped{eol}")
+        else:
+            fm[at] = f"status: prepped{eol}"
+    try:
+        vl.set_nested_key(fm, "documents", "plan", f'"[[{plan_stem}]]"', eol)
+    except ValueError as e:
+        raise WriteError(f"{rel}: {e}") from None
+    new = "".join([lines[0], *fm, *lines[end:]])
+    if new != text:
+        batch.put(rel, new)
+        batch.row("WOULD-ADD", rel, "", "status prepped, documents.plan "
+                  f"[[{plan_stem}]]")
+
+
+def plan_body(text: str, batch: Batch, rel: str) -> str:
+    """The Plan's body from stdin. Frontmatter sent with it is dropped:
+    the Plan's own comes from the template and the index."""
+    lines = text.splitlines(keepends=True)
+    end, error = vl.frontmatter_span(lines)
+    if error is None:
+        batch.row("WARNING", rel, "", "frontmatter on stdin dropped: the "
+                  "Plan's comes from the template and the index")
+        text = "".join(lines[end + 1:])
+    body = text.strip("\r\n")
+    if not body:
+        raise WriteError("nothing on stdin")
+    return "\n" + body + "\n"
+
+
+def h2_slot(doc: Doc, order: list[str], k: str) -> int:
+    """Where a `##` section the note lacks goes: before the first later
+    `##` of the template the note has, else at the end."""
+    later = order[order.index(k) + 1:] if k in order else []
+    return next((h.idx for h in doc.heads
+                 if h.level == 2 and key(h.title) in later), len(doc.lines))
+
+
+def fill_sections(text: str, template: str) -> tuple[str, list[str]]:
+    """The Plan with every `##` of the template it lacks added empty, in
+    template order, and those headings' titles."""
+    heads = [h for h in parse(template).heads if h.level == 2]
+    order = [key(h.title) for h in heads]
+    added = []
+    for h in heads:
+        doc = parse(text)
+        if not any(x.level == 2 and key(x.title) == key(h.title)
+                   for x in doc.heads):
+            text = place(doc, h2_slot(doc, order, key(h.title)),
+                         [f"## {h.title}"])
+            added.append(h.title)
+    return text, added
+
+
+def put_sections(batch: Batch, rel: str, text: str, template: str) -> None:
+    """Each section on stdin replaces the Plan's section of that level
+    and title; a `##` the Plan lacks goes where the template has it."""
+    tdoc = parse(template)
+    order = [key(h.title) for h in tdoc.heads if h.level == 2]
+    known = {key(h.title) for h in tdoc.heads if h.level in (2, 3, 4)}
+    note = batch.read(rel)
+    for level, title, unit in split_units(text, known):
+        doc = parse(note)
+        k = key(title)
+        same = [h for h in doc.heads if h.level == level and key(h.title) == k]
+        if len(same) > 1:
+            raise WriteError(f"{rel}: {len(same)} sections "
+                             f"'{'#' * level} {title}'")
+        if same:
+            note, old = _replace(doc, same[0], unit)
+            detail = f"replaced {old} line" + ("" if old == 1 else "s")
+        elif level == 2:
+            note = place(doc, h2_slot(doc, order, k), unit)
+            detail = "added"
+        else:
+            raise WriteError(f"{rel}: no '{'#' * level} {title}' to replace: "
+                             f"send it inside its ## section")
+        batch.row("WOULD-ADD", rel, f"\u00a7{title}", detail)
+    batch.put(rel, note)
+
+
+def cmd_plan(batch: Batch, args: argparse.Namespace, text: str) -> None:
+    if args.gm_input is not None and not args.headless:
+        raise WriteError("--gm-input only changes what --headless checks: "
+                         "pass --headless too")
+    index = find_session(batch, args.number, args.chapter)
+    if index is None:
+        if not args.title:
+            raise WriteError(f"no session {args.number} index: pass --title "
+                             f"(and --chapter) to file one as upcoming")
+        cmd_session_new(batch, argparse.Namespace(
+            number=args.number, title=args.title, play_date=None,
+            chapter=args.chapter, upcoming=True, export=None), "")
+        index = next(rel for rel, before in batch.originals.items()
+                     if before is None)
+    index_text = batch.read(index)
+    template = template_text(batch.vault, PLAN_SESSION_TEMPLATES,
+                             "session-plan.md")
+    linked = vl.wikilink_target(
+        vl.nested_mapping(index_text, "documents").get("plan"))
+    stem = Path(index).stem
+    have = batch.with_stem(linked) if linked else []
+    rel = have[0] if len(have) == 1 else (
+        f"{index.rpartition('/')[0]}/{stem} - Plan.md".lstrip("/"))
+    if args.section:
+        if not batch.exists(rel):
+            raise WriteError(f"{rel}: no Plan yet: send the whole Plan "
+                             f"without --section")
+        put_sections(batch, rel, text, template)
+    else:
+        if batch.exists(rel):
+            raise WriteError(f"{rel}: the Plan exists: pass --section to "
+                             f"replace or add sections")
+        fm = template_frontmatter(template)
+        set_block(fm, "session", f'"[[{stem}]]"')
+        for field in ("chapter", "campaign"):
+            value = raw_value(index_text, field)
+            if value and not is_blank(value):
+                set_block(fm, field, value)
+        new, added = fill_sections("---\n" + "\n".join(fm) + "\n---\n"
+                                   + plan_body(text, batch, rel), template)
+        batch.create(rel, new)
+        schema_check(batch, rel, new)
+        batch.row("WOULD-CREATE", rel, "", f"beside {index}" + (
+            f"; empty sections added from the template: {', '.join(added)}"
+            if added else ""))
+    stamp_index(batch, index, Path(rel).stem)
+    plan = batch.texts[rel]
+    gm_input: bool | frozenset[str] = (
+        False if args.gm_input is None else
+        frozenset(plan_check.GM_INPUT_PARTS[p] for p in args.gm_input)
+        or True)
+    findings = plan_check.run_checks(
+        rel, plan, vl.extract_frontmatter(plan) or {}, args.headless,
+        gm_input)
+    counts = {lv: sum(f.level == lv for f in findings)
+              for lv in ("ERROR", "WARNING", "INFO")}
+    # An empty section is allowed: its placeholder cues go on one line.
+    empty = [f.locus.rpartition("\u00a7")[2] for f in findings
+             if f.id == "placeholder"]
+    rows = [f.row for f in findings if f.id != "placeholder"]
+    if empty:
+        rows.append(f"INFO\t{rel}\tplaceholder: empty or template text: "
+                    + ", ".join(empty))
+    batch.after = rows + [
+        f"# plan_check: errors: {counts['ERROR']}  warnings: "
+        f"{counts['WARNING']}  info: {counts['INFO']}"]
+
+
 # --- chapter-new, scene-new and scene-played ---------------------------------
 
 CHAPTER_TEMPLATES = ("_Template_Chapter.md",)
@@ -2565,6 +2760,30 @@ def build_parser() -> argparse.ArgumentParser:
                     help="the session note's name")
     sp.add_argument("--paused", action="store_true")
     sp.add_argument("--write", action="store_true")
+    pl = sub.add_parser(
+        "plan", help="write a session's Plan and check it",
+        formatter_class=raw, description=(
+            "Writes the Plan on stdin beside session N's index, with the\n"
+            "template's frontmatter, sets the index to prepped with\n"
+            "documents.plan, and prints plan_check's rows. No index yet:\n"
+            "--title (and --chapter) files one as upcoming. An existing\n"
+            "Plan is never overwritten: --section replaces each section\n"
+            "on stdin by level and title, and adds a missing ## where the\n"
+            "template has it."))
+    pl.add_argument("--number", type=int, required=True)
+    pl.add_argument("--chapter", help="the chapter, when the number "
+                    "alone does not say which")
+    pl.add_argument("--title", help="the session's title, to file its "
+                    "index when it has none")
+    pl.add_argument("--section", action="store_true",
+                    help="replace or add sections of the existing Plan")
+    pl.add_argument("--headless", action="store_true",
+                    help="check as a run with no GM (plan_check --headless)")
+    pl.add_argument("--gm-input", dest="gm_input", nargs="*",
+                    choices=sorted(plan_check.GM_INPUT_PARTS),
+                    metavar="PART", help="with --headless: the parts the "
+                    "GM supplied (intent, scenes, spotlight; bare: all)")
+    pl.add_argument("--write", action="store_true")
     return ap
 
 
@@ -2578,6 +2797,7 @@ COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "session-new": cmd_session_new,
                                 "resolve": cmd_resolve,
                                 "promote-plan": cmd_promote_plan,
+                                "plan": cmd_plan,
                                 "chapter-new": cmd_chapter_new,
                                 "scene-new": cmd_scene_new,
                                 "scene-played": cmd_scene_played}
@@ -2647,6 +2867,8 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
         print("# nothing written")
         return 1
     sys.stdout.write(emit(batch, wrote))
+    if batch.after:
+        print("\n".join(batch.after))
     return 0
 
 
