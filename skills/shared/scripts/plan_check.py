@@ -861,14 +861,20 @@ def check_hard_guard(rel: str, states: list[vl.LineState],
             findings.append(Finding(
                 "hard-guard", "ERROR", f"{rel}:§{raw_title}",
                 f"hard-guard: '## {raw_title}' has non-placeholder "
-                f"content while running headless — GM input required"))
+                f"content while running headless — GM input required: "
+                f"leave it empty or one [bracketed] line and put each "
+                f"guess under ## Open Questions marked '(apprentice guess "
+                f"— confirm)'; --gm-input only when the GM supplied the "
+                f"intent, scenes and spotlight"))
     for start, joined in _open_questions_items(states):
         if GUARD_MARKER_RE.search(joined) or MISSING_ITEM_RE.match(joined):
             continue
         findings.append(Finding(
             "hard-guard", "ERROR", f"{rel}:{start}",
             f"hard-guard: Open Questions item lacks the "
-            f"'(apprentice guess — confirm)' marker: {joined!r}"))
+            f"'(apprentice guess — confirm)' marker (or, for a value "
+            f"the vault doesn't record, a '**Missing:**' start): "
+            f"{joined!r}"))
     return findings
 
 

@@ -626,8 +626,12 @@ class HeadlessTests(unittest.TestCase):
         self.assertIn("Session Intent", messages)
         self.assertIn("Planned Scenes", messages)
         self.assertIn("Spotlight Forecast", messages)
-        self.assertFalse(any("Open Questions" in f.message
+        self.assertFalse(any("Open Questions item" in f.message
                              for f in guard_rows), guard_rows)
+        # Each row says how to pass, so the guard needs no source reading.
+        self.assertTrue(all("(apprentice guess — confirm)" in f.message
+                            and "--gm-input" in f.message
+                            for f in guard_rows), guard_rows)
 
     def test_default_mode_never_runs_the_guard(self):
         self.assertEqual(rows_for(findings_for(HEADLESS), "hard-guard"), [])

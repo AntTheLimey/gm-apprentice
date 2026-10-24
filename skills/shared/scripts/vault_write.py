@@ -13,7 +13,7 @@
     vault_write.py VAULT timeline --under HEADING [--after HEADING]
                                [--file REL] [--write]                   < entries
     vault_write.py VAULT session-new --number N --title T [--play-date D]
-                               [--chapter C] [--export PATH] [--write]
+                               [--chapter C] [--export PATH | --upcoming] [--write]
     vault_write.py VAULT resolve --export PATH                (read-only)
     vault_write.py VAULT chapter-new --title T [--sort-order N]
                                [--status S] [--write]
@@ -49,6 +49,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 import schema_rules
 import vault_check as vc
@@ -2046,18 +2047,32 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
                          f"(none of \\ / : * ? \" < > | # ^ [ ])")
     if args.play_date and not ISO_DATE_RE.fullmatch(args.play_date):
         raise WriteError("--play-date must be YYYY-MM-DD")
+    upcoming = args.upcoming
+    if upcoming and args.export:
+        raise WriteError("--upcoming has no Play Notes to place an export in")
     export = read_export(args.export) if args.export else ""
     # A chapter with sessions but no chapter note is still named by them.
     found = (find_chapter(batch.vault, args.chapter, missing_ok=True)
              if args.chapter else None)
     want = (found[2] if found else
             bare_link(args.chapter) if args.chapter else None)
+    chapters = [(rel, vl.extract_frontmatter(text) or {})
+                for rel, text in notes_of_type(batch.vault, "chapter")]
 
-    def in_chapter(chapter: str | None) -> bool:
-        return want is None or (chapter or "").casefold() == want.casefold()
+    def in_chapter(rel: str, chapter: str | None) -> bool:
+        """A session is in the chapter by its link, by what that link
+        names, or by its folder: older sessions often link the chapter
+        by a name its note doesn't carry ("Chapter 1 - Title")."""
+        if want is None or (chapter or "").casefold() == want.casefold():
+            return True
+        if found is None:
+            return False
+        return (rel.startswith(f"{found[1]}/") or bool(chapter) and
+                [r for r, _fm in vl.chapters_named(chapters, chapter or "")]
+                == [found[0]])
 
     indexes = session_indexes(batch.vault)
-    earlier = [x for x in indexes if x[1] < n and in_chapter(x[2])]
+    earlier = [x for x in indexes if x[1] < n and in_chapter(x[0], x[2])]
     prev: tuple[str, int, str | None, str] | None
     chose = ""
     if want is None:
@@ -2078,8 +2093,9 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
         prev = max(earlier, key=lambda x: x[1]) if earlier else None
     chapter = (prev[2] if prev else None) or want
     taken = [rel for rel, number, ch, _date in indexes
-             if number == n and (ch or "").casefold()
-             == (chapter or "").casefold()]
+             if number == n and ((ch or "").casefold()
+                                 == (chapter or "").casefold()
+                                 or found is not None and in_chapter(rel, ch))]
     if taken:
         raise WriteError(f"session {n} already has an index: {taken[0]}")
     prev_text = batch.read(prev[0]) if prev else ""
@@ -2093,8 +2109,9 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
             folder = f"{parent}/{base}" if parent else base
     else:
         if found is None:
-            raise WriteError(f"no chapter named {args.chapter!r}, and no "
-                             f"earlier session in it to file beside")
+            raise WriteError(no_chapter(args.chapter, chapters)
+                             + ", and no earlier session in it to file "
+                             "beside")
         folder = f"{found[1]}/Sessions/Session {n:02d}".lstrip("/")
     stem = f"Session {n:02d} - {title}"
     index_rel, notes_rel = f"{folder}/{stem}.md", f"{folder}/{stem} - Play Notes.md"
@@ -2106,7 +2123,7 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
     fm = template_frontmatter(template)
     have = {m.group(1) for line in fm if (m := TOP_KEY_RE.match(line))}
     values = {"session_number": str(n), "chapter": chapter_raw,
-              "status": "played"}
+              "status": "planned" if upcoming else "played"}
     if campaign_raw:
         values["campaign"] = campaign_raw
     if args.play_date:
@@ -2123,8 +2140,8 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
             child = line.strip().split(":", 1)[0]
             children.append(f"  {child}: " + (f'"[[{stem} - Play Notes]]"'
                                               if child == "play_notes"
-                                              else "null"))
-    if "play_notes" not in "".join(children):
+                                              and not upcoming else "null"))
+    if "play_notes" not in "".join(children) and not upcoming:
         children.append(f'  play_notes: "[[{stem} - Play Notes]]"')
     set_block(fm, "documents", "", children)
     carried = carried_keys(prev_text, have, title) if prev else []
@@ -2147,17 +2164,20 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
         notes_text += (f"\n## Narrative Record\n\nExport "
                        f"`{Path(args.export).name}`, placed whole and "
                        f"unedited.\n\n" + export)
-    batch.create(notes_rel, notes_text)
-    schema_check(batch, notes_rel, notes_text)
+    if not upcoming:
+        batch.create(notes_rel, notes_text)
+        schema_check(batch, notes_rel, notes_text)
     source = (f"after {prev[0]}{chose}" if prev
               else "first session of the chapter")
     kept = [ln.split(":", 1)[0] for ln in carried if not ln.startswith("#")]
     batch.row("WOULD-CREATE", index_rel, "", f"session template, {source}"
               + (f"; its own keys carried: {', '.join(kept)}" if kept
                  else ""))
-    batch.row("WOULD-CREATE", notes_rel, "",
-              f"export {Path(args.export).name} under ## Narrative Record"
-              if args.export else "no export: the notes are empty")
+    if not upcoming:
+        batch.row("WOULD-CREATE", notes_rel, "",
+                  f"export {Path(args.export).name} under ## Narrative "
+                  f"Record" if args.export else "no export: the notes are "
+                  "empty")
     if not prev:
         batch.row("WARNING", index_rel, "", "no earlier session in this "
                   "chapter: campaign and the vault's own keys not carried")
@@ -2237,9 +2257,9 @@ def find_chapter(vault: Path, raw: str, *, missing_ok: bool = False
     chapter's own key (its folder, as sessions and scenes write it), never
     the note's file name. Zero matches are refused (or None with
     `missing_ok`); several always are."""
-    hits = vl.chapters_named(
-        ((rel, vl.extract_frontmatter(text) or {})
-         for rel, text in notes_of_type(vault, "chapter")), raw)
+    notes = [(rel, vl.extract_frontmatter(text) or {})
+             for rel, text in notes_of_type(vault, "chapter")]
+    hits = vl.chapters_named(notes, raw)
     if len(hits) > 1:
         raise WriteError(f"{len(hits)} chapter notes match {raw!r}: "
                          + ", ".join(rel for rel, _fm in hits))
@@ -2248,7 +2268,17 @@ def find_chapter(vault: Path, raw: str, *, missing_ok: bool = False
         return rel, rel.rpartition("/")[0], vl.chapter_link_name(rel, fm)
     if missing_ok:
         return None
-    raise WriteError(f"no chapter named {raw!r}")
+    raise WriteError(no_chapter(raw, notes))
+
+
+def no_chapter(raw: str, notes: list[tuple[str, dict[str, Any]]]) -> str:
+    """The refusal for a chapter name no note answers to, naming the
+    chapters there are, so the next try needs no lookup."""
+    known = "; ".join(vl.chapter_link_name(rel, fm)
+                      + (f" ({fm['title']})" if fm.get("title") else "")
+                      for rel, fm in sorted(notes))
+    return (f"no chapter named {raw!r}: name one by its folder, file name "
+            f"or title ({known or 'the vault has no chapter notes'})")
 
 
 def cmd_chapter_new(batch: Batch, args: argparse.Namespace,
@@ -2463,7 +2493,8 @@ def build_parser() -> argparse.ArgumentParser:
     tl.add_argument("--file", help=f"the timeline note (default {TIMELINE})")
     tl.add_argument("--write", action="store_true")
     sn = sub.add_parser(
-        "session-new", help="a cold session's index and Play Notes",
+        "session-new", help="a cold session's index and Play Notes, or "
+        "with --upcoming an unplayed session's index alone",
         formatter_class=raw, description=(
             "Files both beside the previous session, from the session\n"
             "template; the previous index's own keys come forward empty.\n"
@@ -2475,6 +2506,9 @@ def build_parser() -> argparse.ArgumentParser:
     sn.add_argument("--play-date", dest="play_date", help="YYYY-MM-DD")
     sn.add_argument("--chapter", help="the chapter, when the number "
                     "alone does not say which")
+    sn.add_argument("--upcoming", action="store_true",
+                    help="a session not yet played (prep): the index "
+                    "alone, status planned, no Play Notes")
     sn.add_argument("--export", help="the export file (any path)")
     sn.add_argument("--write", action="store_true")
     rs = sub.add_parser(
