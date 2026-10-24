@@ -60,9 +60,17 @@ class WrapupStep4dTests(unittest.TestCase):
         self.assertIn('--session "<title>"', self.step)
         self.assertIn("as the scan prints it", self.step)
 
+    def test_kept_secrets_leave_this_runs_player_text(self):
+        flat = " ".join(self.step.split())
+        self.assertIn("rewrite any Narrative Recap, Campaign Log or Timeline "
+                      "line this run wrote that states what they kept hidden",
+                      flat)
+        self.assertLess(flat.index("what they kept hidden"),
+                        flat.index("On none, skip the rest."))
+
     def test_reads_wrapup_too_and_none_skips(self):
         self.assertIn("From the Play Notes, the Wrap-Up and the recap", self.step)
-        self.assertIn("On none, skip the rest.", self.step)
+        self.assertIn("On none, skip the rest.", " ".join(self.step.split()))
 
     def test_gm_confirms_before_write(self):
         self.assertRegex(self.step, r"all, some or none")
