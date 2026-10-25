@@ -53,6 +53,28 @@ class PropSchemaTests(unittest.TestCase):
         self.assertIn("prop_kind", self._validate("scroll"))
         self.assertNotIn("prop_kind", self._validate("container"))
 
+    def test_show_sealed_values(self):
+        for value in ("titles", "none"):
+            self.assertNotIn("show_sealed", self._validate_text(f"show_sealed: {value}\n"))
+        self.assertIn("show_sealed", self._validate_text("show_sealed: all\n"))
+
+    def _validate_text(self, extra: str) -> str:
+        vault = vault_with(("Documents/Shelf.md",
+                            "---\nname: Shelf\ntype: prop\ncanon_status: DRAFT\n"
+                            f"prop_kind: container\n{extra}---\n\n# Shelf\n"))
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "scripts" / "validate_schema.py"), str(vault)],
+            capture_output=True, text=True)
+        return result.stdout + result.stderr
+
+    def test_template_lists_3b_fields(self):
+        text = (ROOT / "skills" / "shared" / "templates" / "prop.md").read_text(encoding="utf-8")
+        front = text.split("---")[1]
+        keys = [line.split(":")[0] for line in front.splitlines() if line and not line.startswith(" ")]
+        at = keys.index("prop_address")
+        self.assertEqual(keys[at + 1:at + 6],
+                         ["prop_style", "prop_line", "prop_group", "prop_container", "show_sealed"])
+
     def test_prop_template_named(self):
         self.assertEqual(sr.TEMPLATE_NAMES["prop.md"], "_Template_Prop.md")
         self.assertIn("_Template_Prop.md", migrate_vault.templates_for(None))

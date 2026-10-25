@@ -76,7 +76,7 @@ every page that names it. Use it to confirm each fix.
 | `SKILL_BELOW_BASE` (`INFO`) | Info | A CoC skill is written below the base its characteristics give |
 | `HEADING_IN_HIDDEN_BLOCK` (`INFO`) | Info | A hidden heading sits inside a hidden block, so the text after it is withheld |
 | `TABLE_OVERWIDE` (`INFO`) | Info | A table row has more cells than its header, so the site widened the table |
-| `PROP_NOT_COPIED` | Warning | A prop's file, address or a file it links to is not on the site |
+| `PROP_NOT_COPIED` | Warning | A prop's file, styled page, address or a file it links to is not on the site, or a prop sits outside its container |
 
 A row is raised only where the site shows the fault. A stray `%%` or
 an open fence that lies wholly under `## GM Notes` changes nothing a
@@ -462,11 +462,13 @@ an answer.
 
 ## PROP_NOT_COPIED
 
-A prop note's file, its address or a file its page links cannot go on
-the site. The note's own page still publishes, without the link to the
-prop. The row names the note and says what is wrong; after the `—` it
-says the fix. Work one note at a time: show the row's words, say what
-you would change, and edit on a yes.
+A prop note's file, its style, its address or a file its page links
+cannot go on the site, or its container cannot list it. The note's own
+page still publishes, without the link to the prop; a misplaced item is
+listed on its own. The row names the note and says what is wrong; after
+the `—` it says the fix. Work one note at a time: show the row's words,
+say what you would change, and edit on a yes. Styles and containers:
+publish-site's `references/prop-styles.md`.
 
 - **The prop file is not there, or is outside the note's folder:** look
   for a file of that name in the vault (`find "<vault>" -iname
@@ -505,10 +507,23 @@ you would change, and edit on a yes.
 - **Not really the kind its name says** (a `.png` that is a link to a
   note): offer to link the real file in its place.
 - **Could not be read:** give the GM the file and the reason.
-- **A link in the site folder:** a folder on the prop's address, in a
-  kept folder of the site, is a link, so nothing is written through it.
-  That is the site folder, not the vault. Tell the GM, and offer
-  another `prop_address`.
+- **The style is unknown or cannot be used** (not a style name, not
+  one there is, a file missing, outside its folder or refused, or a
+  container's style with no `{{{items}}}` place): the row names the
+  style and the file; offer one of the styles the row lists, or show
+  the line of the vault style it names and offer the fix; never edit a
+  plugin style.
+- **Both a prop_file and a prop_style:** ask which the GM wants; remove
+  the other on a yes.
+- **No ## The Text (or none players see), or a prop_container that is
+  not a container** (or names the prop itself): offer to add the section with the words from
+  the note (ask for any the GM has not written), or to correct
+  `prop_container` / make the named note a container.
+- **A link in the site folder:** a folder on the prop's address (or on
+  a style file's), in a kept folder of the site, is a link, so nothing
+  is written through it. That is the site folder, not the vault. Tell
+  the GM, and offer another `prop_address`, or for a style file to
+  replace the link with a real folder.
 
 Confirm each fix with `site-faults --file "<note>"`.
 

@@ -233,6 +233,8 @@ infra only; the at-table session is capability 7.
   portrait frame), for the campaign or one character.
 - `references/schema-reference.md` — which fields each entity type
   renders.
+- `references/prop-styles.md` — a prop's styled page, containers, the
+  props page, and a vault's own style.
 - `references/cloudflare-pages.md` — Cloudflare token, credentials
   (`doctor --set-cloudflare-creds`), first deploy, custom domains.
 - `references/github-pages.md` — GitHub Pages first deploy and

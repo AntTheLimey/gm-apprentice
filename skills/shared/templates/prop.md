@@ -5,6 +5,11 @@ canon_status: DRAFT
 prop_kind: document   # document, object, diagram, supplied or container
 prop_file: ""         # a hand-made page, PDF or image beside this note, e.g. "invitation.html"
 prop_address: ""      # where it lives on the site; leave empty for props/<this note's name>.html
+prop_style: ""        # a style the site builds the page in (terminal, form, hand, letter, clipping, ticket, passport, scroll, decree); leave empty with a prop_file
+prop_line: ""         # one line for the props page: how it reached the players
+prop_group: ""        # the heading it sits under on the props page; empty uses its chapter
+prop_container: ""    # the container prop it sits in, e.g. "[[The Bookshelf]]"
+show_sealed: none     # containers only: "titles" also lists items not yet found, by title alone
 source: ""
 createdSession: ""
 asOfSession: ""
@@ -17,8 +22,10 @@ relationships: []
 <!-- {braces} = replace with content. The prop publishes when this note
 does. Parts of a hand-made page inside a gm-only comment fence are cut
 from the published copy. Files the page links to are copied if they sit
-beside it. Everything above the gm-only fence is what players see on
-the site. Omit a section rather than leave its heading empty. -->
+beside it. With a prop_style, the words under ## The Text are the
+prop's words; a fenced block keeps its lines exactly. Everything above
+the gm-only fence is what players see on the site. Omit a section
+rather than leave its heading empty. -->
 
 ## Description
 

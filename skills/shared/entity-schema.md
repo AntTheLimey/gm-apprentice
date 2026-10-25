@@ -317,7 +317,15 @@ field moves there
 **Prop:** `prop_kind` (document, object, diagram, supplied,
 container), `prop_file` (a hand-made page, PDF or picture beside
 the note), `prop_address` (its address on the site; empty means
-`props/<note name>`). It publishes when the note does
+`props/<note name>`), `prop_style` (a style the site builds its page
+in from `## The Text`; not with a `prop_file`), `prop_line` (one line
+for the props page), `prop_group` (its heading there; empty uses its
+chapter), `prop_container` (wiki-link to the container prop it sits
+in), `show_sealed` (containers: `titles` or `none`), `revealed_in`
+(the session it arrived in; written at wrap-up). Style fields
+(`prop_title`, `prop_breaks`, `prop_shift`, `prop_font`, and each
+style's own) are listed in publish-site's prop-styles reference. It
+publishes when the note does
 
 **Plan:** `plan_type` (arc/scene/investigation/timeline),
 `chapter` (wiki-link), `participants` (wiki-links),
