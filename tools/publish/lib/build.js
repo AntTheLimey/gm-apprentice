@@ -804,7 +804,7 @@ function buildSite(options) {
     // The GM site shows every prop of every note it shows, uncut while Keeper blocks are on; it keeps no folder.
     ships: gm ? (p) => pages.includes(p) : (p) => pages.includes(p) && publishMode(p.sourceFrontmatter || p.frontmatter) !== 'stub',
     taken: takenAddresses({ pageOutputs: pages.map((p) => p.outputPath), keptDirs: gm ? [] : config.preserveDirs }),
-    site: gm ? 'gm' : 'player', cutKeeper: gm ? !show.has('gm_only_blocks') : true, cleanup: writes === 'all' && !gm,
+    cutKeeper: gm ? !show.has('gm_only_blocks') : true, cleanup: writes === 'all' && !gm,
   });
   publishConfig._props = propPlan;
   for (const r of propPlan ? propPlan.problems : []) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);

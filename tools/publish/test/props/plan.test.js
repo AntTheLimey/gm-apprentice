@@ -21,7 +21,7 @@ function vault(files) {
 const page = (root, rel, frontmatter) => ({ rel, sourcePath: path.join(root, rel), frontmatter });
 
 function plan(root, pages, { ships = () => true, taken = takenAddresses(), cutKeeper = true } = {}) {
-  return planProps({ vaultPath: root, pages, relOf: (p) => p.rel, ships, taken, site: 'player', cutKeeper });
+  return planProps({ vaultPath: root, pages, relOf: (p) => p.rel, ships, taken, cutKeeper });
 }
 
 const outs = (p) => p.files.map((f) => f.out);
