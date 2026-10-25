@@ -95,9 +95,10 @@ function bytesOf(entry) {
 // `styles` loads a style by name; `plan.styles` lists the files of each style a shipping made prop uses.
 //
 // `cleanup: true` also plans, for a prop that does not ship but names a prop_address inside a
-// kept folder, the files an earlier build would have written there (`keptCopies`; a made prop's
-// is its page, `{ source: null, out, made }`). Nothing
+// kept folder, the files an earlier build would have written there (`keptCopies`). Nothing
 // is claimed for them and they never ship: the build compares them with what is in the folder.
+// A made page is never planned here: the build does not make a held prop's page, and the leak
+// check names a stale one at its address.
 function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup = false, styles = styleLoader({ vaultPath }) }) {
   const problems = [];
   const vaultReal = realOrNull(path.resolve(vaultPath));
@@ -295,10 +296,7 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
   });
   if (cleanup) {
     for (const p of props) {
-      if (p.ships || !p._explicit || !keptReplaced(p.address)) continue;
-      // A made page is made by the build, which compares it with the copy in the folder.
-      if (p.made) { p.keptCopies = [{ source: null, out: p.address, made: p.made }]; continue; }
-      if (!p.source) continue;
+      if (p.ships || !p.source || !p._explicit || !keptReplaced(p.address)) continue;
       const files = [];
       planFiles(p, files, () => {}, new Map());
       p.keptCopies = files.filter((f) => keptReplaced(f.out));

@@ -28,9 +28,9 @@ const pluginDir = (extra = {}) => tree('props-plugin-', {
 
 const page = (root, rel, frontmatter) => ({ rel, sourcePath: path.join(root, rel), frontmatter });
 
-function plan(root, pages, { ships = () => true, taken = takenAddresses(), plugin = pluginDir(), cleanup = false } = {}) {
+function plan(root, pages, { ships = () => true, taken = takenAddresses(), plugin = pluginDir() } = {}) {
   return planProps({
-    vaultPath: root, pages, relOf: (p) => p.rel, ships, taken, cutKeeper: true, cleanup,
+    vaultPath: root, pages, relOf: (p) => p.rel, ships, taken, cutKeeper: true,
     styles: styleLoader({ vaultPath: root, pluginDir: plugin }),
   });
 }
@@ -170,27 +170,6 @@ test('a held styled prop raises nothing, claims nothing, keeps its address', () 
   assert.deepStrictEqual(held.problems, []);
   assert.deepStrictEqual(held.styles, []);
   assert.strictEqual(held.props[0].address, 'props/letter.html');
-});
-
-test('a held made prop at an explicit address in a kept folder plans its kept copy', () => {
-  const root = tree('props-vault-', { 'Props/Letter.md': '', 'Props/Shelf.md': '', 'Props/Other.md': '' });
-  const taken = takenAddresses({ keptDirs: ['gazetteer'] });
-  const pages = [
-    page(root, 'Props/Letter.md', styled({ prop_address: 'gazetteer/x.html' })),
-    page(root, 'Props/Shelf.md', { type: 'prop', prop_kind: 'container', prop_address: 'gazetteer/shelf.html' }),
-    page(root, 'Props/Other.md', styled({ prop_address: 'elsewhere/o.html' })),
-  ];
-  const { props } = plan(root, pages, { ships: () => false, taken, cleanup: true });
-  assert.deepStrictEqual(props.map((p) => p.keptCopies), [
-    [{ source: null, out: 'gazetteer/x.html', made: 'style' }],
-    [{ source: null, out: 'gazetteer/shelf.html', made: 'container' }],
-    undefined,
-  ]);
-  // Shipping, it replaces the kept file and plans no copy; without cleanup, none either.
-  const shipping = plan(root, pages, { taken, cleanup: true });
-  assert.strictEqual(shipping.props[0].replacesKept, true);
-  assert.strictEqual(shipping.props[0].keptCopies, undefined);
-  assert.strictEqual(plan(root, pages, { ships: () => false, taken }).props[0].keptCopies, undefined);
 });
 
 test('two props share one style\'s files once', () => {
