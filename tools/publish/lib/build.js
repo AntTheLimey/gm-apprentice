@@ -799,11 +799,12 @@ function buildSite(options) {
   // The props the player site ships: a prop note's own file, at its address, with the files
   // it links. A prop ships with its note's full page; a stub's prop does not. A fast build
   // plans none. The doctor reads the plan from publishConfig._props.
-  const propPlan = gm || onlySheets ? null : planProps({
+  const propPlan = onlySheets ? null : planProps({
     vaultPath: config.vaultPath, pages: corpus, relOf: vaultRelPathOf,
-    ships: (p) => pages.includes(p) && publishMode(p.sourceFrontmatter || p.frontmatter) !== 'stub',
-    taken: takenAddresses({ pageOutputs: pages.map((p) => p.outputPath), keptDirs: config.preserveDirs }),
-    site: 'player', cutKeeper: true, cleanup: writes === 'all',
+    // The GM site shows every prop of every note it shows, uncut while Keeper blocks are on; it keeps no folder.
+    ships: gm ? (p) => pages.includes(p) : (p) => pages.includes(p) && publishMode(p.sourceFrontmatter || p.frontmatter) !== 'stub',
+    taken: takenAddresses({ pageOutputs: pages.map((p) => p.outputPath), keptDirs: gm ? [] : config.preserveDirs }),
+    site: gm ? 'gm' : 'player', cutKeeper: gm ? !show.has('gm_only_blocks') : true, cleanup: writes === 'all' && !gm,
   });
   publishConfig._props = propPlan;
   for (const r of propPlan ? propPlan.problems : []) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);
