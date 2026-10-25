@@ -1,13 +1,13 @@
 'use strict';
 
 // What the build writes for each prop the plan ships: every planned file's content, made
-// once so the note-faults audit reads exactly what is written. A page or SVG is written as
-// cut (its Keeper parts and comments gone) when the plan says so, never as the vault holds
-// it; a link the plan respelled is respelled; the prop's own page gets the bar back to its
+// once from the bytes the plan read, so the note-faults audit reads exactly what is written.
+// A page or SVG is written as cut (its Keeper parts and comments gone) when the plan says
+// so, never as the vault holds it; a link the plan respelled is respelled; the prop's own page gets the bar back to its
 // note. Everything else is copied as it is.
-const fs = require('fs');
 const path = require('path');
 const { cutHtml } = require('./html-cut');
+const { bytesOf } = require('./plan');
 const { relativeHref, encodeHref } = require('../processor');
 const { propBar, withPropBar } = require('../templates/prop-bar');
 
@@ -19,9 +19,14 @@ function respelled(text, pairs) {
   return out;
 }
 
-// The props that ship, each with an address: the ones the site holds.
-function shippedProps(plan) {
+// The props the plan ships: each with an address and its files.
+function plannedProps(plan) {
   return plan ? plan.props.filter((p) => p.ships && p.address && p.files.length > 0) : [];
+}
+
+// The props the site holds: planned, with the prop file's own bytes in hand to write.
+function shippedProps(plan) {
+  return plannedProps(plan).filter((p) => bytesOf(p.files[0]) !== null);
 }
 
 // The site link from a note page to its prop: relative, encoded. null when its prop does not ship.
@@ -30,40 +35,58 @@ function propHrefFor(plan, page) {
   return prop ? encodeHref(relativeHref(page.outputPath, prop.address)) : null;
 }
 
-// [{ rel, out, isPage, text | bytes, replacesKept, warnings }], or a problem row in `failed` for a
-// file that can no longer be read.
-function propOutputs(plan) {
+// What the tool writes for `files` of prop `p`, from the bytes the plan read:
+// [{ rel, out, isPage, text | bytes, replacesKept, warnings }], and a problem row in `failed`
+// for a file whose bytes the plan does not hold (the prop file's own: nothing of it is written).
+function outputsOf(p, files) {
   const outputs = [];
   const failed = [];
-  for (const p of shippedProps(plan)) {
-    for (const [i, f] of p.files.entries()) {
-      let bytes;
-      try { bytes = fs.readFileSync(f.source); } catch (e) {
-        failed.push({ rel: p.rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: `${f.out} could not be read (${e.code || e.message})`, fix: 'make the file readable' });
-        continue;
-      }
-      const ext = path.extname(f.out).toLowerCase();
-      const entry = { rel: p.rel, out: f.out, isPage: PAGE_EXTS.has(ext), replacesKept: Boolean(i === 0 ? p.replacesKept : f.replacesKept), warnings: [] };
-      if (!f.cut && !f.rewrite && !(i === 0 && entry.isPage)) {
-        entry.bytes = bytes;
-        outputs.push(entry);
-        continue;
-      }
-      let text = bytes.toString('utf8');
-      if (f.cut) {
-        const cut = cutHtml(text);
-        text = cut.text;
-        entry.warnings = cut.warnings;
-      }
-      text = respelled(text, f.rewrite);
-      if (i === 0 && entry.isPage) {
-        text = withPropBar(text, propBar({ noteHref: encodeHref(relativeHref(p.address, p.page.outputPath)), noteTitle: p.page.displayTitle || p.page.title || '', collectionHref: null }));
-      }
-      entry.text = text;
-      outputs.push(entry);
+  for (const [i, f] of files.entries()) {
+    const bytes = bytesOf(f);
+    if (bytes === null) {
+      failed.push({ rel: p.rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: `${f.out} could not be read`, fix: 'make the file readable' });
+      if (i === 0) break;
+      continue;
     }
+    const ext = path.extname(f.out).toLowerCase();
+    const entry = { rel: p.rel, out: f.out, isPage: PAGE_EXTS.has(ext), replacesKept: Boolean(i === 0 ? p.replacesKept : f.replacesKept), warnings: [] };
+    if (!f.cut && !f.rewrite && !(i === 0 && entry.isPage)) {
+      entry.bytes = bytes;
+      outputs.push(entry);
+      continue;
+    }
+    let text = bytes.toString('utf8');
+    if (f.cut) {
+      const cut = cutHtml(text);
+      text = cut.text;
+      entry.warnings = cut.warnings;
+    }
+    text = respelled(text, f.rewrite);
+    if (i === 0 && entry.isPage) {
+      text = withPropBar(text, propBar({ noteHref: encodeHref(relativeHref(p.address, p.page.outputPath)), noteTitle: p.page.displayTitle || p.page.title || '', collectionHref: null }));
+    }
+    entry.text = text;
+    outputs.push(entry);
   }
   return { outputs, failed };
 }
 
-module.exports = { shippedProps, propHrefFor, propOutputs };
+function propOutputs(plan) {
+  const outputs = [];
+  const failed = [];
+  for (const p of plannedProps(plan)) {
+    const made = outputsOf(p, p.files);
+    outputs.push(...made.outputs);
+    failed.push(...made.failed);
+  }
+  return { outputs, failed };
+}
+
+// What an earlier build wrote into a kept folder for a prop that no longer ships
+// (the plan's `keptCopies`): the build removes each copy still holding exactly these bytes.
+function keptCopyOutputs(plan) {
+  if (!plan) return [];
+  return plan.props.filter((p) => p.keptCopies).flatMap((p) => outputsOf(p, p.keptCopies).outputs);
+}
+
+module.exports = { shippedProps, propHrefFor, propOutputs, keptCopyOutputs };

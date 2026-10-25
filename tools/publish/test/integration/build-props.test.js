@@ -11,6 +11,7 @@ const { buildBoth, allFiles } = require('../helpers/gm-build');
 const { listFileText } = require('../helpers/publish-list');
 const { takenAddresses } = require('../../lib/props/address');
 const { propBar, withPropBar, propLinkHtml } = require('../../lib/templates/prop-bar');
+const { propHrefFor, propOutputs } = require('../../lib/props/files');
 
 const PROP = (extra = '') => `---\ntype: prop\nprop_file: invitation.html\n${extra}---\nAn invitation to the ball.\n`;
 const PAGE = [
@@ -41,6 +42,7 @@ describe('the prop bar and link', () => {
     assert.equal(withPropBar('<html><body class="x">A</body></html>', 'BAR'), '<html><body class="x">BARA</body></html>');
     assert.equal(withPropBar('<head></head>A', 'BAR'), '<head></head>BARA');
     assert.equal(withPropBar('A', 'BAR'), 'BARA');
+    assert.equal(withPropBar('<body onload="a>b" class=\'c>d\'>A', 'BAR'), '<body onload="a>b" class=\'c>d\'>BARA');
   });
   it('links the note, hides when printed, and the note links the prop', () => {
     const bar = propBar({ noteHref: '../documents/invitation.html', noteTitle: 'The <Invitation>', collectionHref: null });
@@ -280,5 +282,107 @@ describe('every file a build writes is a taken address', () => {
     const checked = written.filter((f) => (!f.includes('/') && /\.(?:html|json)$/.test(f)) || /^(?:css|js|images|fonts|story)\//.test(f));
     assert.ok(checked.length > 10, checked.join(', '));
     for (const f of checked) assert.ok(taken.has(f), `${f} is written by the build but is not a taken address`);
+  });
+});
+
+describe('a prop file whose bytes the plan does not hold', () => {
+  it('is not linked from its note, and is a PROP_NOT_COPIED row', () => {
+    // A plan made without the bytes (the file could not be read when it was written): nothing of it is written.
+    const page = { outputPath: 'documents/invitation.html', displayTitle: 'Invitation' };
+    const plan = { props: [{ rel: 'Documents/Invitation.md', page, ships: true, address: 'props/invitation.html', files: [{ source: '/nowhere', out: 'props/invitation.html', cut: true }] }], problems: [] };
+    assert.equal(propHrefFor(plan, page), null);
+    const { outputs, failed } = propOutputs(plan);
+    assert.deepEqual(outputs, []);
+    assert.equal(failed.length, 1);
+    assert.equal(failed[0].code, 'PROP_NOT_COPIED');
+    assert.equal(failed[0].rel, 'Documents/Invitation.md');
+  });
+
+  it('the file is read once, by the plan: a change after planning is not what is written', () => {
+    // The bytes written are the bytes the plan read and cut, never a second read of the vault.
+    const s = buildBoth({ 'Documents/Invitation.md': PROP(), ...PROP_FILES }, { sites: [] });
+    try {
+      const { planProps } = require('../../lib/props/plan');
+      const vault = path.join(s.root, 'vault');
+      const note = { sourcePath: path.join(vault, 'Documents', 'Invitation.md'), outputPath: 'documents/invitation.html', displayTitle: 'Invitation', frontmatter: { type: 'prop', prop_file: 'invitation.html' } };
+      const plan = planProps({ vaultPath: vault, pages: [note], relOf: () => 'Documents/Invitation.md', ships: () => true, taken: takenAddresses(), cutKeeper: true });
+      fs.writeFileSync(path.join(vault, 'Documents', 'invitation.html'), '<body>CHANGED</body>');
+      const page = propOutputs(plan).outputs.find((o) => o.out === 'props/invitation.html');
+      assert.match(page.text, /You are invited/);
+      assert.doesNotMatch(page.text, /CHANGED/);
+    } finally { s.cleanup(); }
+  });
+});
+
+describe('an in-memory build', () => {
+  it('writes no props/', () => {
+    const s = buildBoth({ 'Documents/Invitation.md': PROP(), ...PROP_FILES }, { sites: [] });
+    try {
+      quiet(() => build({ configPath: s.configPath, site: 'player', inMemory: true }));
+      assert.ok(!s.player.exists('props'));
+      assert.ok(!s.player.exists('documents'));
+    } finally { s.cleanup(); }
+  });
+});
+
+describe('a kept-folder prop that stops shipping', () => {
+  const LIST = (publishing) => listFileText({ publishing });
+  const setup = (fm = '', listed = true) => buildBoth({
+    'Documents/Invitation.md': PROP(`prop_address: gazetteer/invitation.html\n${fm}`), ...PROP_FILES,
+    'Documents/Other.md': '---\ntype: document\n---\nOther.\n',
+    '_meta/publish-list.yaml': LIST(listed ? ['Documents/Invitation.md', 'Documents/Other.md'] : ['Documents/Other.md']),
+  }, { sites: ['player'], player: { keep: ['gazetteer'] } });
+  const unlist = (s) => fs.writeFileSync(path.join(s.root, 'vault', '_meta', 'publish-list.yaml'), LIST(['Documents/Other.md']));
+  const KEPT = ['gazetteer/invitation.html', 'gazetteer/props.css', 'gazetteer/assets/paper.jpg'];
+
+  it('a kept-folder prop unpublished later is removed on the next build', () => {
+    const s = setup();
+    try {
+      for (const f of KEPT) assert.ok(s.player.exists(...f.split('/')), f);
+      unlist(s);
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      for (const f of KEPT) {
+        assert.ok(!s.player.exists(...f.split('/')), f);
+        assert.ok(lines.includes(`  removed from kept folder: ${f} (its prop is not published)`), lines.join('\n'));
+      }
+      assert.ok(s.player.exists('gazetteer', 'assets'), 'a folder is never removed');
+    } finally { s.cleanup(); }
+  });
+
+  it("a GM's own file at that address is not deleted", () => {
+    const s = setup();
+    try {
+      fs.writeFileSync(path.join(s.player.dir, 'gazetteer', 'invitation.html'), 'MINE');
+      unlist(s);
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.equal(s.player.read('gazetteer', 'invitation.html'), 'MINE');
+      assert.ok(!lines.some((l) => /removed from kept folder: gazetteer\/invitation\.html/.test(l)), lines.join('\n'));
+      assert.ok(!s.player.exists('gazetteer', 'props.css'));
+    } finally { s.cleanup(); }
+  });
+
+  it("a stub note's kept-folder prop is removed too", () => {
+    const s = setup();
+    try {
+      const note = path.join(s.root, 'vault', 'Documents', 'Invitation.md');
+      fs.writeFileSync(note, fs.readFileSync(note, 'utf8').replace('---\nAn invitation', 'publish: stub\n---\nAn invitation'));
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      for (const f of KEPT) assert.ok(!s.player.exists(...f.split('/')), f);
+      assert.ok(lines.includes('  removed from kept folder: gazetteer/invitation.html (its prop is not published)'), lines.join('\n'));
+      assert.ok(s.player.exists('documents', 'invitation.html'));
+    } finally { s.cleanup(); }
+  });
+
+  it('a published prop leaves props/ when it is unpublished', () => {
+    const s = buildBoth({
+      'Documents/Invitation.md': PROP(), ...PROP_FILES, 'Documents/Other.md': '---\ntype: document\n---\nOther.\n',
+      '_meta/publish-list.yaml': LIST(['Documents/Invitation.md', 'Documents/Other.md']),
+    }, { sites: ['player'] });
+    try {
+      assert.ok(s.player.exists('props', 'invitation.html'));
+      unlist(s);
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(!s.player.exists('props'));
+    } finally { s.cleanup(); }
   });
 });

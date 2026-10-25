@@ -23,7 +23,8 @@ function withPropBar(html, bar) {
   const text = String(html);
   if (!bar) return text;
   const at = (m) => m.index + m[0].length;
-  const body = /<body\b[^>]*>/i.exec(text);
+  // A quoted attribute value may hold a '>' (the tag pattern of props/links.js).
+  const body = /<body\b(?:\s(?:"[^"]*"|'[^']*'|[^>"'])*)?>/i.exec(text);
   if (body) return text.slice(0, at(body)) + bar + text.slice(at(body));
   const head = /<\/head\s*>/i.exec(text);
   if (head) return text.slice(0, at(head)) + bar + text.slice(at(head));

@@ -95,7 +95,16 @@ function takerName(why) {
   return String(why).replace(/^inside /, '');
 }
 
-function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper }) {
+// The bytes the plan read for each planned file, so what is written is what was planned.
+const BYTES = new WeakMap();
+function bytesOf(entry) {
+  return BYTES.get(entry) || null;
+}
+
+// `cleanup: true` also plans, for a prop that does not ship but names a prop_address inside a
+// kept folder, the files an earlier build would have written there (`keptCopies`). Nothing
+// is claimed for them and they never ship: the build compares them with what is in the folder.
+function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup = false }) {
   const problems = [];
   const vaultReal = realOrNull(path.resolve(vaultPath));
   const problem = (rel, detail, fix) => problems.push({ rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail, fix });
@@ -170,13 +179,13 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper }) {
     if (p._explicit && keptReplaced(p.address)) p.replacesKept = true;
   }
 
-  // Each winner's own file, then (for a page or SVG) every file it reaches, each once.
-  for (const p of order) {
-    if (!p.address) continue;
-    const markup = (ext) => MARKUP_EXTS.has(ext);
+  // A prop's own file, then (for a page or SVG) every file it reaches, each once, into `files`.
+  const markup = (ext) => MARKUP_EXTS.has(ext);
+  function planFiles(p, files, problem, claimed) {
     const first = { source: p.source, out: p.address, cut: Boolean(cutKeeper) && markup(p._ext) };
-    p.files.push(first);
-    if (!markup(p._ext)) continue;
+    BYTES.set(first, p._bytes);
+    files.push(first);
+    if (!markup(p._ext)) return;
     const propDir = path.dirname(p._full);
     const propDirReal = realOrNull(propDir);
     const shownDir = path.posix.dirname(p._propFile.replace(/\\/g, '/'));
@@ -234,10 +243,20 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper }) {
         if (!firstOut.has(hit.real)) firstOut.set(hit.real, out);
         claimed.set(addressKey(out), { rel: p.rel, hash });
         const next = { source: hit.real, out, cut: Boolean(cutKeeper) && markup(lext) };
+        BYTES.set(next, read.bytes);
         if (p._explicit && keptReplaced(out)) next.replacesKept = true;
-        p.files.push(next);
+        files.push(next);
         if (follows) queue.push({ entry: next, full: hit.full, at: joined.slice(0, -1).join('/'), ext: lext, bytes: read.bytes });
       }
+    }
+  }
+  for (const p of order) if (p.address) planFiles(p, p.files, problem, claimed);
+  if (cleanup) {
+    for (const p of props) {
+      if (p.ships || !p.source || !p._explicit || !keptReplaced(p.address)) continue;
+      const files = [];
+      planFiles(p, files, () => {}, new Map());
+      p.keptCopies = files.filter((f) => keptReplaced(f.out));
     }
   }
 
@@ -247,4 +266,4 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper }) {
   return { props, problems };
 }
 
-module.exports = { planProps, LINKED_EXTS };
+module.exports = { planProps, bytesOf, LINKED_EXTS };

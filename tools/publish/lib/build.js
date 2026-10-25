@@ -44,7 +44,7 @@ const { sheetSourceOf } = require('./sheet-source');
 const { pcIdentity } = require('./templates/pc-identity');
 const { planProps } = require('./props/plan');
 const { takenAddresses } = require('./props/address');
-const { propHrefFor, propOutputs } = require('./props/files');
+const { propHrefFor, propOutputs, keptCopyOutputs } = require('./props/files');
 
 const TOOL_VERSION = require('../package.json').version;
 
@@ -803,7 +803,7 @@ function buildSite(options) {
     vaultPath: config.vaultPath, pages: corpus, relOf: vaultRelPathOf,
     ships: (p) => pages.includes(p) && publishMode(p.sourceFrontmatter || p.frontmatter) !== 'stub',
     taken: takenAddresses({ pageOutputs: pages.map((p) => p.outputPath), keptDirs: config.preserveDirs }),
-    site: 'player', cutKeeper: true,
+    site: 'player', cutKeeper: true, cleanup: writes === 'all',
   });
   publishConfig._props = propPlan;
   for (const r of propPlan ? propPlan.problems : []) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);
@@ -2095,6 +2095,25 @@ function buildSite(options) {
   if (propPlan) {
     const { outputs, failed } = propOutputs(propPlan);
     propPlan.problems.push(...failed);
+    // A kept folder is never cleaned, so a prop written into one by an earlier build would
+    // outlive its note: each file still holding exactly what the tool wrote there goes. A
+    // file with other bytes may be the GM's own and stays (the leak gate reads it).
+    if (writes === 'all') {
+      const writing = new Set(outputs.map((f) => f.out.toLowerCase()));
+      const kept = config.preserveDirs.map((d) => d.toLowerCase().replace(/\/+$/, ''));
+      for (const f of keptCopyOutputs(propPlan)) {
+        const key = f.out.toLowerCase();
+        if (writing.has(key) || !kept.some((d) => key.startsWith(`${d}/`))) continue;
+        const full = path.join(outputDir, ...f.out.split('/'));
+        let stat = null;
+        try { stat = fs.lstatSync(full); } catch (e) { continue; }
+        if (!stat.isFile()) continue;
+        const want = f.text !== undefined ? Buffer.from(f.text) : f.bytes;
+        if (!fs.readFileSync(full).equals(want)) continue;
+        fs.unlinkSync(full);
+        console.log(`  removed from kept folder: ${f.out} (its prop is not published)`);
+      }
+    }
     for (const r of failed) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);
     for (const f of outputs) {
       logWarnings(f.rel, f.warnings);
