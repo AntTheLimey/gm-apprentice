@@ -2,7 +2,7 @@
 
 // What makes a note a prop: `type: prop`, or a document/handout that names a `prop_file`.
 // The whole tool asks these functions, so the reading of the fields lives in one place.
-const { isDocumentPage, parseWikiRef } = require('../processor');
+const { isDocumentPage, parseWikiRef, valueText } = require('../processor');
 const { canonicalNfc } = require('../unicode');
 
 const PROP_KINDS = ['document', 'object', 'diagram', 'supplied', 'container'];
@@ -41,9 +41,10 @@ function propStyleOf(fm) {
   return text(fm && fm.prop_style).toLowerCase() || null;
 }
 
-// The note a prop sits in: the target of prop_container, bare or as a wikilink.
+// The note a prop sits in: the target of prop_container, bare or as a wikilink (quoted, or
+// unquoted, which YAML reads as [["Target"]]).
 function propContainerOf(fm) {
-  const raw = text(fm && fm.prop_container);
+  const raw = valueText(fm && fm.prop_container).trim();
   return raw ? canonicalNfc(parseWikiRef(raw).target) || null : null;
 }
 

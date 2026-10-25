@@ -95,7 +95,8 @@ function bytesOf(entry) {
 // `styles` loads a style by name; `plan.styles` lists the files of each style a shipping made prop uses.
 //
 // `cleanup: true` also plans, for a prop that does not ship but names a prop_address inside a
-// kept folder, the files an earlier build would have written there (`keptCopies`). Nothing
+// kept folder, the files an earlier build would have written there (`keptCopies`; a made prop's
+// is its page, `{ source: null, out, made }`). Nothing
 // is claimed for them and they never ship: the build compares them with what is in the folder.
 function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup = false, styles = styleLoader({ vaultPath }) }) {
   const problems = [];
@@ -132,7 +133,12 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
       if (plan.kind !== 'container' && !styleName) continue;
       if (styleName) {
         const loaded = styles(styleName);
-        if (loaded.problem) { say(rel, loaded.problem.detail, loaded.problem.fix); continue; }
+        if (loaded.problem) {
+          say(rel, loaded.problem.detail, loaded.problem.fix);
+          // A held prop keeps the address its page would have, so the leak gate can look there; made stays null.
+          if (!plan.ships) placeAt('.html');
+          continue;
+        }
         plan.style = loaded.style;
       }
       plan.made = plan.style ? 'style' : 'container';
@@ -289,7 +295,10 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
   });
   if (cleanup) {
     for (const p of props) {
-      if (p.ships || !p.source || !p._explicit || !keptReplaced(p.address)) continue;
+      if (p.ships || !p._explicit || !keptReplaced(p.address)) continue;
+      // A made page is made by the build, which compares it with the copy in the folder.
+      if (p.made) { p.keptCopies = [{ source: null, out: p.address, made: p.made }]; continue; }
+      if (!p.source) continue;
       const files = [];
       planFiles(p, files, () => {}, new Map());
       p.keptCopies = files.filter((f) => keptReplaced(f.out));
