@@ -117,7 +117,9 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
     const rel = canonicalNfc(relOf(page));
     const plan = {
       rel, page, ships: Boolean(ships(page)), kind: propKindOf(fm),
-      address: null, source: null, files: [], hash: null,
+      // `shared`: outputs another prop's files already put there, with the same bytes. Written once, under that
+      // prop; listed here so the leak gate counts the file as this prop's too.
+      address: null, source: null, files: [], shared: [], hash: null,
     };
     props.push(plan);
     const propFile = propFileOf(fm);
@@ -234,7 +236,12 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
         const hash = sha1(read.bytes);
         const why = taken.has(out, { explicit: p._explicit });
         const prior = claimed.get(addressKey(out));
-        if (!why && prior && prior.hash === hash) { planned.add(addressKey(out)); rewrite(); continue; } // the same bytes: one file serves both
+        if (!why && prior && prior.hash === hash) { // the same bytes: one file serves both
+          planned.add(addressKey(out));
+          rewrite();
+          if (prior.rel !== p.rel) p.shared.push(out);
+          continue;
+        }
         if (why || prior) {
           problem(p.rel, `${shown} links "${raw}", which would land on ${out}, taken by ${why ? takerName(why) : prior.rel}`, 'give it another prop_address');
           continue;

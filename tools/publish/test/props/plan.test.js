@@ -410,3 +410,19 @@ test('an unreadable prop file or linked file is a problem, not a crash', { skip:
     fs.chmodSync(path.join(root, 'B/p.png'), 0o644);
   }
 });
+
+test('a file two props share byte for byte is planned once, and is listed as shared on the second', () => {
+  const root = vault({
+    'Documents/Alpha.md': '', 'Documents/a.html': '<link rel="stylesheet" href="style.css">', 'Documents/style.css': 'a{}',
+    'Letters/Beta.md': '', 'Letters/b.html': '<link rel="stylesheet" href="style.css">', 'Letters/style.css': 'a{}',
+  });
+  const { props, problems } = plan(root, [
+    page(root, 'Documents/Alpha.md', { type: 'prop', prop_file: 'a.html' }),
+    page(root, 'Letters/Beta.md', { type: 'prop', prop_file: 'b.html' }),
+  ]);
+  assert.deepStrictEqual(problems, []);
+  assert.deepStrictEqual(outs(props[0]), ['props/alpha.html', 'props/style.css']);
+  assert.deepStrictEqual(outs(props[1]), ['props/beta.html']);
+  assert.deepStrictEqual(props[0].shared, []);
+  assert.deepStrictEqual(props[1].shared, ['props/style.css']);
+});

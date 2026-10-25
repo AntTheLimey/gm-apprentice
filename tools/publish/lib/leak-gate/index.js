@@ -91,9 +91,9 @@ function runLeakGate({ configPath, outputDir }) {
   for (const file of files) {
     // A shipping prop's own file is its note's published form: another note's hidden text there is the prop's (a letter
     // a scene quotes), its own note's hidden text is a leak as anywhere.
-    const owner = hidden.propOwner.get(canonicalNfc(file.rel));
+    const owners = hidden.propOwner.get(canonicalNfc(file.rel));
     for (const { piece } of matcher.scan(file.words)) {
-      if (owner !== undefined && piece.note !== owner) continue;
+      if (owners !== undefined && !owners.has(piece.note)) continue;
       const key = keyOf(file.rel, piece.text);
       if (raw.has(key)) continue;
       raw.set(key, { id: findingId(file.rel, piece.text), kind: 'text', code: 'HIDDEN_TEXT', page: file.rel, text: piece.text, shown: piece.shown, note: piece.note, reason: piece.reason });

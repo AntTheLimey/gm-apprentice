@@ -57,7 +57,7 @@ describe('leak gate: a prop page and its own note', () => {
 
   it('a gm-only part of a prop file is hidden text if it reaches the site', () => within((s) => {
     assert.deepEqual(gate(s).findings, []);
-    leakInto2(s, 'props/invitation.html', KEEPER);
+    leakBeforeBody(s, 'props/invitation.html', KEEPER);
     assert.deepEqual(gate(s).findings.map(pick),
       [{ code: 'HIDDEN_TEXT', page: 'props/invitation.html', note: 'Documents/Invitation.md', reason: 'a hidden part of its prop file (inv.html)' }]);
   }, { 'Documents/Invitation.md': PROP(), 'Documents/inv.html': PAGE(), 'Documents/props.css': CSS }));
@@ -73,12 +73,34 @@ describe('leak gate: a prop page and its own note', () => {
 });
 
 // A built page with a sentence added before </body> (a prop page has no <main>).
-function leakInto2(s, rel, sentence) {
+function leakBeforeBody(s, rel, sentence) {
   const file = path.join(s.outputDir, ...rel.split('/'));
   const html = fs.readFileSync(file, 'utf8');
   const at = html.lastIndexOf('</body>');
   fs.writeFileSync(file, `${html.slice(0, at)}<p>${sentence}</p>${html.slice(at)}`);
 }
+
+describe('leak gate: a file two props share', () => {
+  const SHARED = '<!doctype html><html><head><link rel="stylesheet" href="style.css"></head><body><h1>Card</h1></body></html>';
+  const BISHOP = 'The bishop hid the chalice under the altar stone.';
+  const GARDENER = 'The gardener saw the duke leave at dawn.';
+  const VAULT = (beta = '') => ({
+    'Documents/Alpha.md': '---\ntype: prop\nprop_file: a.html\n---\nAlpha.\n', 'Documents/a.html': SHARED, 'Documents/style.css': CSS,
+    'Letters/Beta.md': `---\ntype: prop\nprop_file: b.html\n${beta}---\nBeta.\n\n## GM Notes\n\n${BISHOP}\n`, 'Letters/b.html': SHARED, 'Letters/style.css': CSS,
+    'Scenes/C.md': `---\ntype: scene\n---\nIntro text here.\n\n${GARDENER}\n`,
+  });
+
+  it("belongs to both: the second prop's own hidden text there is a finding, another note's is not", () => within((s) => {
+    assert.deepEqual(gate(s).findings, []);
+    fs.appendFileSync(path.join(s.outputDir, 'props', 'style.css'), `/* ${BISHOP} */\n/* ${GARDENER} */\n`);
+    assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'props/style.css', note: 'Letters/Beta.md', reason: 'GM Notes section' }]);
+  }, VAULT()));
+
+  it('a withheld second prop is published on the shared file too', () => within((s) => {
+    const found = gate(s).findings.filter((f) => f.code === 'WITHHELD_PUBLISHED').map((f) => f.page).sort();
+    assert.deepEqual(found, ['letters/beta.html', 'props/beta.html', 'props/style.css']);
+  }, VAULT('withheld: true\n')));
+});
 
 describe('leak gate: a prop that does not ship', () => {
   const HELD_VAULT = (extra = '') => ({

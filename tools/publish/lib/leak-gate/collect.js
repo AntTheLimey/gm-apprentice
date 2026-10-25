@@ -167,10 +167,17 @@ function collectHidden({ configPath }) {
     taken,
     cutKeeper: true,
   });
-  // Each file a shipping prop puts on the site, and its note: there it is that note's published form. A file two props
-  // share byte for byte is planned under the first only.
+  // Each file a shipping prop puts on the site, and its notes: there it is their published form. A file two props share
+  // byte for byte is written once and belongs to both.
   const propOwner = new Map();
   const propOuts = new Map();
+  const own = (out, rel) => {
+    const key = canonicalNfc(out);
+    if (!propOwner.has(key)) propOwner.set(key, new Set());
+    propOwner.get(key).add(rel);
+    if (!propOuts.has(rel)) propOuts.set(rel, []);
+    propOuts.get(rel).push(out);
+  };
   const heldProps = [];
   const shownName = (p, source) => {
     try { return path.relative(fs.realpathSync(path.dirname(p.page.sourcePath)), source).split(path.sep).join('/'); } catch (e) { return path.basename(source); }
@@ -179,13 +186,12 @@ function collectHidden({ configPath }) {
     if (!p.source) continue;
     if (p.ships && p.address && p.files.length) {
       for (const f of p.files) {
-        propOwner.set(canonicalNfc(f.out), p.rel);
-        if (!propOuts.has(p.rel)) propOuts.set(p.rel, []);
-        propOuts.get(p.rel).push(f.out);
+        own(f.out, p.rel);
         // What the cut takes out of a page or SVG: hidden text of the note, if it reaches the site.
         if (!f.cut || !bytesOf(f)) continue;
         for (const run of cutHtml(bytesOf(f).toString('utf8')).cut) add(piecesOfHtml(run), p.rel, `a hidden part of its prop file (${shownName(p, f.source)})`);
       }
+      for (const out of p.shared) own(out, p.rel);
       continue;
     }
     // A prop that does not ship: its whole file is hidden, and so is any file at its address or with its bytes.
