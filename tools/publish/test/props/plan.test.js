@@ -325,3 +325,86 @@ test('a symlinked folder pointing out of the vault is never entered', () => {
   assert.deepStrictEqual(outs(props[0]), ['props/note.html']);
   assert.deepStrictEqual(problems.map((p) => p.detail), ['inv.html links "ext/p.png", which is outside its folder']);
 });
+
+// Fix round 1.
+test('audio, video and PDF links are not copied; a module script is', () => {
+  const root = vault({
+    'A/Note.md': '', 'A/inv.html': '<audio src="a.mp3"></audio><video src="v.mp4"></video><embed src="d.pdf"><script type="module" src="m.mjs"></script>',
+    'A/a.mp3': 'A', 'A/v.mp4': 'V', 'A/d.pdf': 'D', 'A/m.mjs': 'M',
+  });
+  const { props, problems } = plan(root, [page(root, 'A/Note.md', { type: 'prop', prop_file: 'inv.html' })]);
+  assert.deepStrictEqual(outs(props[0]), ['props/note.html', 'props/m.mjs']);
+  assert.deepStrictEqual(problems.map((p) => p.detail).sort(), [
+    'inv.html links "a.mp3", which is a kind of file a prop does not copy',
+    'inv.html links "d.pdf", which is a kind of file a prop does not copy',
+    'inv.html links "v.mp4", which is a kind of file a prop does not copy',
+  ]);
+});
+
+test('a picture name that is a symlink to a note is not copied', () => {
+  const root = vault({ 'A/Note.md': '', 'A/inv.html': '<img src="pic.png">', 'A/Secret.md': 'SECRET' });
+  fs.symlinkSync(path.join(root, 'A/Secret.md'), path.join(root, 'A/pic.png'));
+  const { props, problems } = plan(root, [page(root, 'A/Note.md', { type: 'prop', prop_file: 'inv.html' })]);
+  assert.deepStrictEqual(outs(props[0]), ['props/note.html']);
+  assert.deepStrictEqual(problems.map((p) => p.detail), ['inv.html links "pic.png", which is a kind of file a prop does not copy']);
+});
+
+test('a prop file name that is a symlink to a note is refused', () => {
+  const root = vault({ 'A/Note.md': '', 'A/Secret.md': 'SECRET' });
+  fs.symlinkSync(path.join(root, 'A/Secret.md'), path.join(root, 'A/inv.html'));
+  const { props, problems } = plan(root, [page(root, 'A/Note.md', { type: 'prop', prop_file: 'inv.html' })]);
+  assert.strictEqual(props[0].address, null);
+  assert.strictEqual(props[0].hash, null);
+  assert.deepStrictEqual(problems.map((p) => p.detail), ['the prop file "inv.html" is not a page, PDF or picture']);
+});
+
+test('one picture reached by two paths is planned at both', () => {
+  const root = vault({ 'A/Note.md': '', 'A/inv.html': '<img src="a/x.png"><img src="b/x.png">', 'A/a/x.png': 'X' });
+  fs.symlinkSync(path.join(root, 'A/a'), path.join(root, 'A/b'));
+  const { props, problems } = plan(root, [page(root, 'A/Note.md', { type: 'prop', prop_file: 'inv.html' })]);
+  assert.deepStrictEqual(problems, []);
+  assert.deepStrictEqual(outs(props[0]), ['props/note.html', 'props/a/x.png', 'props/b/x.png']);
+});
+
+test('one stylesheet reached by two paths is planned once, with a problem for the other', () => {
+  const root = vault({ 'A/Note.md': '', 'A/inv.html': '<link rel="stylesheet" href="a/s.css"><link rel="stylesheet" href="b/s.css">', 'A/a/s.css': 'a{background:url(b/s.css)}' });
+  fs.symlinkSync(path.join(root, 'A/a'), path.join(root, 'A/b'));
+  fs.symlinkSync(path.join(root, 'A/a'), path.join(root, 'A/a/b'));
+  const { props, problems } = plan(root, [page(root, 'A/Note.md', { type: 'prop', prop_file: 'inv.html' })]);
+  assert.deepStrictEqual(outs(props[0]), ['props/note.html', 'props/a/s.css']);
+  assert.deepStrictEqual(problems.map((p) => p.detail), [
+    'inv.html links "b/s.css", which is the same file as props/a/s.css, reached by another path',
+    'a/s.css links "b/s.css", which is the same file as props/a/s.css, reached by another path',
+  ]);
+});
+
+test('a percent-encoded NFD link is rewritten to the encoded NFC spelling', () => {
+  const nfd = 'café.png'.normalize('NFD');
+  const root = vault({ 'A/Note.md': '', 'A/inv.html': '<img src="cafe%CC%81.png?v=1">', [`A/${nfd}`]: 'PNG' });
+  const { props, problems } = plan(root, [page(root, 'A/Note.md', { type: 'prop', prop_file: 'inv.html' })]);
+  assert.deepStrictEqual(problems, []);
+  assert.deepStrictEqual(outs(props[0]), ['props/note.html', 'props/' + 'café.png'.normalize('NFC')]);
+  assert.deepStrictEqual(props[0].files[0].rewrite, [['cafe%CC%81.png?v=1', 'caf%C3%A9.png?v=1']]);
+});
+
+const asRoot = typeof process.getuid === 'function' && process.getuid() === 0;
+test('an unreadable prop file or linked file is a problem, not a crash', { skip: asRoot && 'root reads every file' }, () => {
+  const root = vault({ 'A/One.md': '', 'A/one.html': 'x', 'B/Two.md': '', 'B/two.html': '<img src="p.png">', 'B/p.png': 'P' });
+  fs.chmodSync(path.join(root, 'A/one.html'), 0o000);
+  fs.chmodSync(path.join(root, 'B/p.png'), 0o000);
+  try {
+    const { props, problems } = plan(root, [
+      page(root, 'A/One.md', { type: 'prop', prop_file: 'one.html' }),
+      page(root, 'B/Two.md', { type: 'prop', prop_file: 'two.html' }),
+    ]);
+    assert.strictEqual(props[0].address, null);
+    assert.deepStrictEqual(outs(props[1]), ['props/two.html']);
+    assert.deepStrictEqual(problems.map((p) => [p.rel, p.detail, p.fix]), [
+      ['A/One.md', 'the prop file "one.html" could not be read (EACCES)', 'make the file readable, or correct prop_file'],
+      ['B/Two.md', 'two.html links "p.png", which could not be read (EACCES)', 'make the file readable'],
+    ]);
+  } finally {
+    fs.chmodSync(path.join(root, 'A/one.html'), 0o644);
+    fs.chmodSync(path.join(root, 'B/p.png'), 0o644);
+  }
+});

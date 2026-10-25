@@ -18,11 +18,11 @@ const { cutHtml } = require('./html-cut');
 const { localRefs } = require('./links');
 
 const MARKUP_EXTS = new Set(['.html', '.htm', '.svg']);
-// What a prop page may pull in beside itself. HTML is not here: a linked page would be a
-// second hand-made page with Keeper parts of its own.
+// What a prop page may pull in beside itself: styles, scripts, pictures and fonts. Never a
+// page (a second hand-made page with Keeper parts of its own), a note, audio, video or PDF.
 const LINKED_EXTS = new Set([
-  '.css', '.js', '.svg', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif', '.ico',
-  '.woff', '.woff2', '.ttf', '.otf', '.mp3', '.ogg', '.wav', '.mp4', '.webm', '.pdf',
+  '.css', '.js', '.mjs', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif', '.ico',
+  '.woff2', '.woff', '.ttf', '.otf',
 ]);
 const LINK_FIX = 'put the file beside the prop file and link it by a relative path';
 
@@ -32,6 +32,21 @@ function sha1(buf) {
 
 function within(real, root) {
   return real === root || real.startsWith(root + path.sep);
+}
+
+function readOrError(p) {
+  try { return { bytes: fs.readFileSync(p) }; } catch (e) { return { error: e.code || e.message }; }
+}
+
+// The spelling a link should have on the site: NFC, kept percent-encoded if it was.
+function nfcSpelling(raw) {
+  const fixed = canonicalNfc(raw);
+  const cut = fixed.search(/[?#]/);
+  const base = cut === -1 ? fixed : fixed.slice(0, cut);
+  let plain;
+  try { plain = decodeURIComponent(base); } catch { return fixed; }
+  if (canonicalNfc(plain) === plain) return fixed;
+  return encodeURI(canonicalNfc(plain)) + (cut === -1 ? '' : fixed.slice(cut));
 }
 
 function realOrNull(p) {
@@ -100,10 +115,8 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper }) {
     const say = plan.ships ? problem : () => {};
 
     const ext = path.extname(propFile).toLowerCase();
-    if (!PROP_FILE_EXTS.has(ext)) {
-      say(rel, `the prop file "${propFile}" is not a page, PDF or picture`, 'use an .html, .pdf or picture file');
-      continue;
-    }
+    const wrongKind = () => say(rel, `the prop file "${propFile}" is not a page, PDF or picture`, 'use an .html, .pdf or picture file');
+    if (!PROP_FILE_EXTS.has(ext)) { wrongKind(); continue; }
     const outside = () => say(rel, `the prop file "${propFile}" is outside the note's folder`, "move the file into the note's folder (or a folder under it)");
     const segments = segmentsBelow(propFile);
     const noteDir = path.dirname(page.sourcePath);
@@ -116,11 +129,19 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper }) {
       say(rel, `the prop file "${propFile}" is not in ${folder === '.' ? "the vault's top folder" : folder}`, 'put the file beside the note, or correct prop_file');
       continue;
     }
+    // The real file is the one that ships, so its own name must be an allowed kind too.
+    if (!PROP_FILE_EXTS.has(path.extname(found.real).toLowerCase())) { wrongKind(); continue; }
+    const read = readOrError(found.real);
+    if (read.error) {
+      say(rel, `the prop file "${propFile}" could not be read (${read.error})`, 'make the file readable, or correct prop_file');
+      continue;
+    }
     plan.source = found.real;
     plan._full = found.full;
     plan._ext = ext;
     plan._propFile = propFile;
-    plan.hash = sha1(fs.readFileSync(found.real));
+    plan._bytes = read.bytes;
+    plan.hash = sha1(read.bytes);
 
     const def = defaultPropAddress(rel, ext);
     const asked = propAddressOf(fm);
@@ -159,11 +180,15 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper }) {
     const propDir = path.dirname(p._full);
     const propDirReal = realOrNull(propDir);
     const shownDir = path.posix.dirname(p._propFile.replace(/\\/g, '/'));
-    const seen = new Set([p.source]);
-    const queue = [{ entry: first, full: p._full, at: '', ext: p._ext }];
+    // Outputs planned for this prop, and the first output of each real file. A picture
+    // reached by two paths is planned at both (same bytes); a stylesheet or SVG is followed
+    // once, because its links read from where it sits and a symlink loop would never end.
+    const planned = new Set([addressKey(p.address)]);
+    const firstOut = new Map([[p.source, p.address]]);
+    const queue = [{ entry: first, full: p._full, at: '', ext: p._ext, bytes: p._bytes }];
     while (queue.length) {
-      const { entry, full, at, ext } = queue.shift();
-      let text = fs.readFileSync(entry.source, 'utf8');
+      const { entry, full, at, ext, bytes } = queue.shift();
+      let text = bytes.toString('utf8');
       if (entry.cut) text = cutHtml(text).text;
       const { refs, rooted } = localRefs(text, ext === '.css' ? '.css' : '.html');
       const shown = entry === first ? p._propFile : canonicalNfc(path.posix.join(shownDir, at, path.basename(full)));
@@ -173,35 +198,51 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper }) {
         const joined = segmentsBelow(path.posix.join(at || '.', ref));
         if (!joined) { linkProblem(raw, 'is outside its folder'); continue; }
         const lext = path.extname(ref).toLowerCase();
-        if (!LINKED_EXTS.has(lext)) { linkProblem(raw, 'is a kind of file a prop does not copy'); continue; }
+        const notCopied = () => linkProblem(raw, 'is a kind of file a prop does not copy');
+        if (!LINKED_EXTS.has(lext)) { notCopied(); continue; }
         const hit = findUnder(propDir, joined, [vaultReal, propDirReal]);
         if (hit.why === 'outside') { linkProblem(raw, 'is outside its folder'); continue; }
         if (hit.why === 'case') { linkProblem(raw, `differs in letter case from ${hit.name}`); continue; }
         if (!hit.full) { linkProblem(raw, 'is not there'); continue; }
-        const rewrite = () => { if (canonicalNfc(raw) !== raw) (entry.rewrite = entry.rewrite || []).push([raw, canonicalNfc(raw)]); };
-        if (seen.has(hit.real)) { rewrite(); continue; }
-        seen.add(hit.real);
+        if (!LINKED_EXTS.has(path.extname(hit.real).toLowerCase())) { notCopied(); continue; }
+        const rewrite = () => {
+          const spelled = nfcSpelling(raw);
+          if (spelled !== raw) (entry.rewrite = entry.rewrite || []).push([raw, spelled]);
+        };
         const out = canonicalNfc(path.posix.join(path.posix.dirname(p.address), ...joined));
-        const hash = sha1(fs.readFileSync(hit.real));
+        if (planned.has(addressKey(out))) { rewrite(); continue; }
+        const follows = lext === '.css' || lext === '.svg';
+        if (firstOut.has(hit.real) && (follows || hit.real === p.source)) {
+          linkProblem(raw, `is the same file as ${firstOut.get(hit.real)}, reached by another path`);
+          continue;
+        }
+        const read = readOrError(hit.real);
+        if (read.error) {
+          problem(p.rel, `${shown} links "${raw}", which could not be read (${read.error})`, 'make the file readable');
+          continue;
+        }
+        const hash = sha1(read.bytes);
         const why = taken.has(out, { explicit: p._explicit });
         const prior = claimed.get(addressKey(out));
-        if (!why && prior && prior.hash === hash) { rewrite(); continue; } // the same bytes: one file serves both
+        if (!why && prior && prior.hash === hash) { planned.add(addressKey(out)); rewrite(); continue; } // the same bytes: one file serves both
         if (why || prior) {
           problem(p.rel, `${shown} links "${raw}", which would land on ${out}, taken by ${why ? takerName(why) : prior.rel}`, 'give it another prop_address');
           continue;
         }
         rewrite();
+        planned.add(addressKey(out));
+        if (!firstOut.has(hit.real)) firstOut.set(hit.real, out);
         claimed.set(addressKey(out), { rel: p.rel, hash });
         const next = { source: hit.real, out, cut: Boolean(cutKeeper) && markup(lext) };
         if (p._explicit && keptReplaced(out)) next.replacesKept = true;
         p.files.push(next);
-        if (lext === '.css' || lext === '.svg') queue.push({ entry: next, full: hit.full, at: joined.slice(0, -1).join('/'), ext: lext });
+        if (follows) queue.push({ entry: next, full: hit.full, at: joined.slice(0, -1).join('/'), ext: lext, bytes: read.bytes });
       }
     }
   }
 
   for (const p of props) {
-    delete p._full; delete p._ext; delete p._propFile; delete p._explicit;
+    delete p._full; delete p._ext; delete p._propFile; delete p._explicit; delete p._bytes;
   }
   return { props, problems };
 }
