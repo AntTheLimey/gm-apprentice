@@ -76,13 +76,14 @@ artifact (abstract)
 │   ├── relic
 │   ├── tool
 │   └── consumable
-└── document
-    ├── spell
-    ├── map
-    ├── letter
-    ├── prophecy
-    ├── contract
-    └── journal
+├── document
+│   ├── spell
+│   ├── map
+│   ├── letter
+│   ├── prophecy
+│   ├── contract
+│   └── journal
+└── prop
 
 narrative (abstract)
 ├── event
@@ -432,6 +433,7 @@ no `precedes` or `alternative_to`. A vault vocabulary with a
 | creature (all subtypes) | Creatures/ |
 | event (all subtypes) | Events/ |
 | document (all subtypes) | Documents/ |
+| prop | beside its prop file, e.g. Chapters/{chapter}/Props/ or Documents/ |
 | clue | Clues/ |
 | plan | `Chapters/{chapter}/Planning/` |
 | scene | `Chapters/{chapter}/Scenes/` |

@@ -132,7 +132,7 @@ const DOCUMENT_KEEPER_SQUASHED_RE = /^(context|clues.*|(physical)?propnotes|deli
 // `handout` is the alias index_build.py accepts for `document`.
 function isDocumentPage(frontmatter) {
   const type = frontmatter ? String(frontmatter.type || '').trim().toLowerCase() : '';
-  return type === 'document' || type === 'handout';
+  return type === 'document' || type === 'handout' || type === 'prop';
 }
 
 // Why a heading is withheld: 'excluded' (on the exclude list at any level, or a

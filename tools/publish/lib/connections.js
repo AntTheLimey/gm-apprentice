@@ -23,7 +23,7 @@ const TABS = [
 ];
 const TAB_OF_TYPE = {
   pc: 'people', npc: 'people', location: 'places', faction: 'orgs', organization: 'orgs',
-  item: 'things', event: 'events', document: 'papers', clue: 'papers', handout: 'papers',
+  item: 'things', event: 'events', document: 'papers', clue: 'papers', handout: 'papers', prop: 'papers',
   creature: 'creatures', session: 'sessions',
 };
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);

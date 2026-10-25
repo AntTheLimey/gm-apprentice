@@ -11,7 +11,7 @@
       "creature": ["beast", "undead", "construct", "spirit", "deity", "aberration"],
       "organization": ["government", "corporation", "cult", "guild", "military", "criminal"],
       "place": ["location"],
-      "artifact": ["item", "document"],
+      "artifact": ["item", "document", "prop"],
       "item": ["weapon", "armor", "vehicle", "treasure", "relic", "tool", "consumable"],
       "document": ["spell", "map", "letter", "prophecy", "contract", "journal"],
       "narrative": ["event", "clue", "plan", "adventure-brief", "campaign_overview"],

@@ -2798,7 +2798,7 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
             tool_stripped = {rel: {v for t in titles
                                    for v in (t, _plain_title(t).casefold())}
                              - match for rel, titles in stripped.items()}
-        has_documents = any(entity_type(fm) in ("document", "handout")
+        has_documents = any(entity_type(fm) in ("document", "handout", "prop")
                             for _r, _t, fm in notes)
         if stripped is None and tool.data is not None:
             rows.append(f"WARNING\t(vault)\t{why}")
