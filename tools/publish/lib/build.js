@@ -1813,7 +1813,7 @@ function buildSite(options) {
   // from that filtered set regardless of whether a manifest exists, so gating this on
   // `manifest` just meant a manifest-less player build shipped every GM-only image.
   // A recap's picture counts as used: the story pages are rendered once here, for the set only.
-  buildStorySpine(pages, linkMap, hubWrapUps, { imageMap, usedImages });
+  if (!onlySheets) buildStorySpine(pages, linkMap, hubWrapUps, { imageMap, usedImages });
   const filteredMap = {};
   for (const [basename, entry] of Object.entries(imageMap)) {
     if (usedImages.has(basename)) filteredMap[basename] = entry;

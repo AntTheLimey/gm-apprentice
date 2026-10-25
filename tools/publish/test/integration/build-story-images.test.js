@@ -109,3 +109,84 @@ They sailed at dawn without a picture.
     assert.ok(!html.includes('<img'));
   });
 });
+
+// Builds a one-session vault whose Wrap-Up recap is `recap`; returns the paths and a rebuild.
+function recapVault(recap) {
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'story-images-'));
+  const vault = path.join(work, 'vault');
+  const docs = path.join(work, 'docs');
+  const ch = 'Chapters/Chapter 1 - Opening';
+  write(vault, `${ch}/Chapter 1 - Opening.md`, '---\ntype: chapter\nsort_order: 1\n---\n\n# Chapter 1 - Opening\n\nThe first chapter.\n');
+  write(vault, `${ch}/Sessions/Session 01/Session 01 - Arrival.md`, `---
+type: session
+session_number: 1
+chapter: "[[Chapter 1 - Opening]]"
+documents:
+  wrap_up: "[[Chapter_01_Session_01_Wrap_Up]]"
+---
+
+Hub body.
+`);
+  write(vault, `${ch}/Sessions/Session 01/Chapter_01_Session_01_Wrap_Up.md`, `---
+type: session_wrap
+session: "[[Session 01 - Arrival]]"
+session_number: 1
+chapter: "[[Chapter 1 - Opening]]"
+---
+
+# Session 01 Wrap-Up
+
+## Narrative Recap
+
+${recap}
+`);
+  fs.mkdirSync(path.join(vault, '_attachments'), { recursive: true });
+  for (const n of ['harbour.png', 'hidden.png', 'html.png']) fs.writeFileSync(path.join(vault, '_attachments', n), makePng(8, 8));
+  write(vault, '_meta/vault-config.md', '---\npublish:\n  folder_map:\n    Chapters: chapters\n---\n');
+  const configPath = path.join(work, 'config.json');
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: docs, attachmentsDir: '_attachments', siteTitle: 'T' }));
+  const run = (opts) => {
+    const warnings = [];
+    const log = console.log; const warn = console.warn;
+    console.log = () => {}; console.warn = (...a) => warnings.push(a.join(' '));
+    try { build({ configPath, ...opts }); } finally { console.log = log; console.warn = warn; }
+    return warnings;
+  };
+  return { work, docs, run };
+}
+
+describe('a recap picture inside a comment is not copied', () => {
+  let v;
+  before(() => {
+    v = recapVault('Shown.\n\n![[harbour.png]]\n\n%% ![[hidden.png]] %%\n\n<!-- ![[html.png]] -->');
+    v.run();
+  });
+  after(() => fs.rmSync(v.work, { recursive: true, force: true }));
+  it('copies the shown picture only', () => {
+    assert.ok(fs.existsSync(path.join(v.docs, 'images', 'harbour.png')));
+    assert.ok(!fs.existsSync(path.join(v.docs, 'images', 'hidden.png')));
+    assert.ok(!fs.existsSync(path.join(v.docs, 'images', 'html.png')));
+  });
+});
+
+describe('a recap picture that is missing', () => {
+  it('warns exactly once', () => {
+    const v = recapVault('Shown.\n\n![[nowhere.png]]');
+    try {
+      const warnings = v.run().filter(w => w.includes('nowhere.png'));
+      assert.strictEqual(warnings.length, 1, warnings.join('\n'));
+    } finally { fs.rmSync(v.work, { recursive: true, force: true }); }
+  });
+});
+
+describe('a sheets-only build', () => {
+  it('copies no recap picture', () => {
+    const v = recapVault('Shown.\n\n![[harbour.png]]');
+    try {
+      v.run({ site: 'player' });
+      fs.rmSync(path.join(v.docs, 'images'), { recursive: true, force: true });
+      v.run({ site: 'player', only: 'sheets' });
+      assert.ok(!fs.existsSync(path.join(v.docs, 'images', 'harbour.png')));
+    } finally { fs.rmSync(v.work, { recursive: true, force: true }); }
+  });
+});
