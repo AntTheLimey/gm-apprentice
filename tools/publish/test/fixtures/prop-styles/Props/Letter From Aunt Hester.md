@@ -1,7 +1,7 @@
 ---
 type: prop
 prop_style: letter
-prop_font: Pinyon Script
+prop_font: La Belle Aurore
 prop_plate: Found pressed inside the family Bible
 ---
 A letter in a careful old hand.

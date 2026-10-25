@@ -21,7 +21,8 @@ const STYLE_FILES = new Set(['layout.html', 'sheet.html', 'style.css', 'style.js
 
 const decode = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
   .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCodePoint(parseInt(n, 16))).replace(/&amp;/g, '&');
-const wordsOf = (html) => [...new Set(decode(String(html).replace(/<[^>]*>/g, ' ')).split(/[^\p{L}\p{N}]+/u).filter(Boolean))].sort();
+// Every word, as many times as it occurs: a dropped or doubled paragraph changes the list.
+const wordsOf = (html) => decode(String(html).replace(/<[^>]*>/g, ' ')).split(/[^\p{L}\p{N}]+/u).filter(Boolean).sort();
 
 function walk(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
@@ -36,15 +37,15 @@ function quietBuild(configPath) {
   return lines;
 }
 
-// The fixture's prop notes, by the style each names.
+// The fixture's published prop notes that name a style.
 function fixtureNotes() {
   const dir = path.join(FIXTURE, 'Props');
-  const out = {};
-  for (const name of fs.readdirSync(dir)) {
+  const out = [];
+  for (const name of fs.readdirSync(dir).sort()) {
     const text = fs.readFileSync(path.join(dir, name), 'utf8');
     const style = /^prop_style: (\S+)$/m.exec(text);
     if (!style || /^publish: false$/m.test(text)) continue;
-    out[style[1]] = { name, text, slug: name.replace(/\.md$/, '').replace(/['’]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') };
+    out.push({ style: style[1], name, text, slug: name.replace(/\.md$/, '').replace(/['’]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') });
   }
   return out;
 }
@@ -103,12 +104,13 @@ describe('the prop-styles fixture, built', () => {
   after(() => fs.rmSync(root, { recursive: true, force: true }));
   const read = (...p) => fs.readFileSync(path.join(docs, ...p), 'utf8');
 
-  it('the fixture has one published note per starter style', () => {
-    assert.deepEqual(Object.keys(notes).sort(), STARTERS);
+  it('the fixture has a published note for every starter style', () => {
+    assert.deepEqual([...new Set(notes.map((n) => n.style))].sort(), STARTERS);
   });
 
   it("every starter style's page says its note's words", () => {
-    for (const [style, note] of Object.entries(notes)) {
+    for (const note of notes) {
+      const { style } = note;
       // The notes sit in Props/, so each note page holds props/<slug>.html and its prop moves to -prop.
       const page = read('props', `${note.slug}-prop.html`);
       assert.match(read('props', `${note.slug}.html`), new RegExp(`<a class="prop-btn" href="${note.slug}-prop\\.html">See the prop</a>`), style);
@@ -144,7 +146,7 @@ describe('the prop-styles fixture, built', () => {
 
   it('a starter style\'s page links nothing outside the site', () => {
     const pages = walk(path.join(docs, 'props')).filter((f) => f.endsWith('-prop.html'));
-    assert.equal(pages.length, STARTERS.length);
+    assert.equal(pages.length, notes.length);
     for (const f of pages) {
       const page = fs.readFileSync(f, 'utf8');
       for (const [, url] of page.matchAll(/(?:href|src)="([^"]*)"/g)) assert.doesNotMatch(url, /^(?:[a-z][a-z0-9+.-]*:|\/)/i, `${f}: ${url}`);

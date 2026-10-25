@@ -1,6 +1,6 @@
 /* Letter: a period document in ink on laid paper, foxed and folded in three, on a
    candlelit desk. The paper is drawn with gradients alone. The hand is prop_font
-   (Tangerine by default); headings and anything set in type use IM Fell English. */
+   (Pinyon Script by default); headings and anything set in type use IM Fell English. */
 .prop-style-letter {
   --desk-1: #191108; --desk-2: #2a1c0e; --ink: #2a2118; --iron-gall: #3a2c1c; --gilt: #c9a75c;
   margin: 0; min-height: 100vh; color: var(--ink);
@@ -33,9 +33,9 @@
     transparent 66.4%, rgba(90, 70, 40, 0.2) 66.6%, rgba(255, 255, 255, 0.35) 66.75%, transparent 67%); }
 
 .letter .hand { position: relative; z-index: 1; color: var(--iron-gall);
-  font-family: var(--hand, 'Tangerine'), 'Tangerine', 'Apple Chancery', cursive; }
-/* font-size-adjust evens out the x-heights of the hands a GM may choose: Tangerine is small, Pinyon Script large. */
-.letter .prop-text { font-size: max(22px, 3.9cqw); font-size-adjust: 0.3; line-height: 1.42; }
+  font-family: var(--hand, 'Pinyon Script'), 'Pinyon Script', 'Apple Chancery', cursive; }
+/* font-size-adjust evens out the x-heights of the hands a GM may choose: Tangerine is small, Pinyon Script large, La Belle Aurore loose. */
+.letter .prop-text { font-size: max(22px, 3.9cqw); font-size-adjust: 0.33; line-height: 1.42; }
 .letter .prop-text p { margin: 0 0 0.7em; }
 .letter .prop-text h1, .letter .prop-text h2, .letter .prop-text h3, .letter .prop-text h4 {
   font-family: 'IM Fell English SC', Georgia, serif; font-weight: 400; letter-spacing: 0.12em; text-align: center; color: var(--ink);

@@ -15,8 +15,9 @@
 .mode-toggle:hover { background: rgba(168, 255, 191, 0.16); }
 .mode-toggle:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
 
-/* The sheet: letter-proportioned on screen, the page box in print. It grows with a long text. */
-.prop-style-terminal .sheet { position: relative; box-sizing: border-box; width: min(880px, 100%); aspect-ratio: 8.5 / 11;
+/* The sheet: at least letter-proportioned on screen, at least the page box in print; a long text
+   makes it taller (a minimum height, never a fixed ratio, so no line is cut off). */
+.prop-style-terminal .sheet { position: relative; box-sizing: border-box; width: min(880px, 100%); min-height: calc(min(880px, 100vw - 32px) * 11 / 8.5);
   margin: 0 auto 2.2rem; overflow: hidden; container-type: inline-size; }
 
 .term { display: flex; flex-direction: column; padding: 2.6cqw 3.2cqw 2.4cqw; color: var(--phos);
@@ -102,7 +103,7 @@
   .prop-style-terminal { background: none; min-height: 0; }
   .term-desk { padding: 0; }
   .term-desk .plate, .term-mode { display: none; }
-  .prop-style-terminal .sheet { width: 100%; min-height: 100vh; aspect-ratio: auto; margin: 0; border-radius: 0; box-shadow: none; }
+  .prop-style-terminal .sheet { width: 100%; min-height: 100vh; margin: 0; border-radius: 0; box-shadow: none; }
   .term::after { display: none; }
   .term .l-last::after { animation: none; }
 }

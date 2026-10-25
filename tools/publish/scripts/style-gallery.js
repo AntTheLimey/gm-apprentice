@@ -64,7 +64,7 @@ async function main() {
       const png = path.join(out, `${base}.png`);
       const pdf = path.join(out, `${base}.pdf`);
       chrome(binary, profile, [`--screenshot=${png}`, '--window-size=1000,1400', fileUrl(page)]);
-      chrome(binary, profile, [`--print-to-pdf=${pdf}`, '--no-pdf-header-footer', '--print-to-pdf-no-header', fileUrl(page)]);
+      chrome(binary, profile, [`--print-to-pdf=${pdf}`, '--no-pdf-header-footer', fileUrl(page)]);
       const entry = { style, page: `site/props/${name}`, png: path.basename(png), pdfPages: pdfPageCount(pdf) };
       gallery.push(entry);
       console.log(`  ${style}: ${entry.png}, ${entry.pdfPages} PDF page(s)`);
