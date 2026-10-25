@@ -317,7 +317,8 @@ field moves there
 **Prop:** `prop_kind` (document, object, diagram, supplied,
 container), `prop_file` (a hand-made page, PDF or picture beside
 the note), `prop_address` (its address on the site; empty means
-`props/<note name>`), `prop_style` (a style the site builds its page
+`props/<note name>`, or `props/<note name>-prop.html` when a page
+the site builds has that address), `prop_style` (a style the site builds its page
 in from `## The Text`; not with a `prop_file`), `prop_line` (one line
 for the props page), `prop_group` (its heading there; empty uses its
 chapter), `prop_container` (wiki-link to the container prop it sits

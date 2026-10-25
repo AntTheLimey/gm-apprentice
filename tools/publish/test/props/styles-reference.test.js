@@ -11,7 +11,12 @@ const REFERENCE = path.join(__dirname, '..', '..', '..', '..', 'skills', 'publis
 test('the reference names every starter style and every field it reads', () => {
   const text = fs.readFileSync(REFERENCE, 'utf8');
   const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'styles-ref-'));
-  const names = listStyles({ vaultPath: empty }).filter((s) => s.from === 'plugin').map((s) => s.name);
+  let names;
+  try {
+    names = listStyles({ vaultPath: empty }).filter((s) => s.from === 'plugin').map((s) => s.name);
+  } finally {
+    fs.rmSync(empty, { recursive: true, force: true });
+  }
   assert.ok(names.length >= 9, `expected the nine starter styles, found ${names.join(', ')}`);
   for (const name of names) {
     const json = JSON.parse(fs.readFileSync(path.join(PLUGIN_STYLES_DIR, name, 'style.json'), 'utf8'));

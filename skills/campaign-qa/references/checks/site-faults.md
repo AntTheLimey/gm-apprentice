@@ -511,14 +511,16 @@ publish-site's `references/prop-styles.md`.
   one there is, a file missing, outside its folder or refused, or a
   container's style with no `{{{items}}}` place): the row names the
   style and the file; offer one of the styles the row lists, or show
-  the line of the vault style it names and offer the fix; never edit a
-  plugin style.
+  the line of the vault style it names and offer the fix, or, for a
+  container, remove `prop_style`; never edit a plugin style.
 - **Both a prop_file and a prop_style:** ask which the GM wants; remove
   the other on a yes.
 - **No ## The Text (or none players see), or a prop_container that is
-  not a container** (or names the prop itself): offer to add the section with the words from
-  the note (ask for any the GM has not written), or to correct
+  not a container:** offer to add the section with the words from the
+  note (ask for any the GM has not written), or to correct
   `prop_container` / make the named note a container.
+- **A prop that names itself as its container:** offer to correct or
+  remove `prop_container`.
 - **A link in the site folder:** a folder on the prop's address (or on
   a style file's), in a kept folder of the site, is a link, so nothing
   is written through it. That is the site folder, not the vault. Tell

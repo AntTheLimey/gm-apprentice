@@ -10,8 +10,10 @@ warns.
 ## The words
 
 The styled page prints what the players read under `## The Text`, as
-the note page shows it (gm-only parts cut). Plain text is set as prose.
-A fenced block keeps its lines exactly: spacing, capitals, line breaks.
+the note page shows it (gm-only parts cut). Text is set as prose; a
+section written as one quote prints without the quote marks. When the
+whole section is one fenced block, it keeps its lines exactly: spacing,
+capitals, line breaks.
 
 ## Starter styles
 
@@ -40,7 +42,7 @@ reads:
 - `prop_title`: the title the page prints (the note's name if empty).
 - `prop_breaks`: a line start, or a list of them, that begins a new
   sheet.
-- `prop_shift`: in a fenced block, the line start from which the hand
+- `prop_shift`: in a fenced section, the line start from which the hand
   changes (the hand style presses harder).
 - `prop_font`: a Google Fonts family, where the style uses one.
 
@@ -79,8 +81,10 @@ The layout is a fragment of the page body:
   `{{{text}}}` one sheet's words, `{{{items}}}` a container's list.
   Other tool names: `title`, `note_title`, `sheet_number`,
   `sheet_count`, `first`, `last`.
+  Only `body`, `text` and `items` take three braces.
 - `{{#prop_x}}…{{/prop_x}}` shows its part only when the field is set
-  (false or empty skips it).
+  (false or empty skips it). Inside a tag, a section holds whole
+  attributes.
 - Filters: `{{prop_x|color}}` and `{{prop_x|font}}` only inside
   `style="…"`; `{{prop_x|class}}` only inside `class="…"`.
 - A field may never sit inside a tag outside a quoted value, in an HTML

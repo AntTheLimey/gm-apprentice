@@ -43,7 +43,9 @@ class PropSchemaTests(unittest.TestCase):
             self.assertIn(field, result.stdout)
 
     def _validate(self, kind: str) -> str:
-        vault = vault_with(prop_note(kind))
+        return self._validate_vault(vault_with(prop_note(kind)))
+
+    def _validate_vault(self, vault: Path) -> str:
         result = subprocess.run(
             [sys.executable, str(ROOT / "scripts" / "validate_schema.py"), str(vault)],
             capture_output=True, text=True)
@@ -62,10 +64,7 @@ class PropSchemaTests(unittest.TestCase):
         vault = vault_with(("Documents/Shelf.md",
                             "---\nname: Shelf\ntype: prop\ncanon_status: DRAFT\n"
                             f"prop_kind: container\n{extra}---\n\n# Shelf\n"))
-        result = subprocess.run(
-            [sys.executable, str(ROOT / "scripts" / "validate_schema.py"), str(vault)],
-            capture_output=True, text=True)
-        return result.stdout + result.stderr
+        return self._validate_vault(vault)
 
     def test_template_lists_3b_fields(self):
         text = (ROOT / "skills" / "shared" / "templates" / "prop.md").read_text(encoding="utf-8")
