@@ -27,6 +27,13 @@ function textProblem(markdown) {
   return state === 'none' ? NO_TEXT : state === 'empty' ? EMPTY_TEXT : null;
 }
 
+// Why the build does not make a planned prop's styled page from its note's player view (`body`), or
+// null when it does: a container's page is a listing, any other styled page needs words under
+// ## The Text. The build's make pass and the leak gate both ask this, so they agree on what is made.
+function styledPageProblem(p, body) {
+  return p.made === 'style' && p.kind !== 'container' ? textProblem(body) : null;
+}
+
 const textField = (fields, name) => {
   const v = fields && fields[name];
   return typeof v === 'string' && v.trim() ? v.trim() : '';
@@ -105,4 +112,4 @@ function styledPage({ prop, style, page, linkMap, imageMap, usedImages, collecti
   return { html };
 }
 
-module.exports = { styledPage, styleFontFamilies, textProblem, STYLES_DIR, FONTS_CSS, BASE_CSS, NO_TEXT, EMPTY_TEXT };
+module.exports = { styledPage, styleFontFamilies, textProblem, styledPageProblem, STYLES_DIR, FONTS_CSS, BASE_CSS, NO_TEXT, EMPTY_TEXT };

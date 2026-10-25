@@ -226,3 +226,43 @@ describe('leak gate: a sealed title on its listings', () => {
     ...LIST(['Documents/Bookshelf.md', 'Documents/Other.md', 'Documents/Shelf.md']),
   }, { player: { props: { address: 'props/shelf.html' } } }));
 });
+
+describe('leak gate: a short title of an unpublished prop in a kept folder (Ruling 34)', () => {
+  const SHELF = (fm = '') => ({
+    'Documents/Bookshelf.md': `---\ntype: prop\nprop_kind: container\nshow_sealed: titles\n${fm}---\nA tall shelf in the study.\n`,
+    'Documents/The Ledger.md': '---\ntype: prop\nprop_container: "[[Bookshelf]]"\n---\nA ledger.\n',
+    'Documents/Cipher.md': '---\ntype: prop\nprop_container: "[[Bookshelf]]"\n---\nA cipher wheel.\n',
+    ...OTHER,
+    ...LIST(['Documents/Bookshelf.md', 'Documents/Other.md']),
+  });
+  const OLD_LISTING = (title) => `<!doctype html><html><body><main><h1>Props</h1><ul class="prop-list"><li class="prop-item"><span class="prop-title">${title}</span></li></ul></main></body></html>`;
+
+  it('an old listing in a kept folder printing a two-word title, unlinked, is a finding', () => within((s) => {
+    assert.deepEqual(gate(s).findings, []);
+    write(s, 'gazetteer/props.html', OLD_LISTING('The Ledger'));
+    assert.deepEqual(gate(s).findings.map((f) => ({ ...pick(f), text: f.text })), [{ code: 'HIDDEN_TEXT', page: 'gazetteer/props.html', note: 'Documents/The Ledger.md', text: 'the ledger' }]);
+  }, SHELF(), { player: { keep: ['gazetteer'] } }));
+
+  it('the title is matched whole and as written: another case or a longer word is no finding', () => within((s) => {
+    write(s, 'gazetteer/props.html', OLD_LISTING('the ledger, and The Ledgers'));
+    assert.deepEqual(gate(s).findings, []);
+  }, SHELF(), { player: { keep: ['gazetteer'] } }));
+
+  it('the same page outside a kept folder gets no finding from this rule', () => within((s) => {
+    write(s, 'gazetteer/props.html', OLD_LISTING('The Ledger'));
+    assert.deepEqual(gate(s).findings, []);
+  }, SHELF()));
+
+  it("a current container page in a kept folder, listing the title sealed, is no finding", () => within((s) => {
+    assert.match(fs.readFileSync(path.join(s.outputDir, 'gazetteer', 'bookshelf.html'), 'utf8'), /<span class="prop-title">The Ledger<\/span>/);
+    assert.deepEqual(gate(s).findings, []);
+    // The same title elsewhere in the kept folder is still a finding.
+    write(s, 'gazetteer/old.html', OLD_LISTING('The Ledger'));
+    assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'gazetteer/old.html', note: 'Documents/The Ledger.md' }]);
+  }, SHELF('prop_address: gazetteer/bookshelf.html\n'), { player: { keep: ['gazetteer'] } }));
+
+  it('a one-word title is not looked for', () => within((s) => {
+    write(s, 'gazetteer/props.html', OLD_LISTING('Cipher'));
+    assert.deepEqual(gate(s).findings, []);
+  }, SHELF(), { player: { keep: ['gazetteer'] } }));
+});

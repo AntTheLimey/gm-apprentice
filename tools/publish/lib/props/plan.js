@@ -12,12 +12,12 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { canonicalNfc } = require('../unicode');
-const { isPropNote, propKindOf, propFileOf, propAddressOf, propStyleOf } = require('./note');
+const { PROP_KINDS, isPropNote, propKindOf, unknownKindOf, propFileOf, propAddressOf, propStyleOf } = require('./note');
 const { PROP_FILE_EXTS, PAGE_TAKER, addressKey, defaultPropAddress, fallbackPropAddress, addressShapeProblem } = require('./address');
 const { cutHtml } = require('./html-cut');
 const { within, realOrNull, findUnder } = require('./paths');
 const { localRefs } = require('./links');
-const { styleLoader } = require('./styles');
+const { styleLoader, STYLE_ASSET_EXTS } = require('./styles');
 
 const MARKUP_EXTS = new Set(['.html', '.htm', '.svg']);
 // What a prop page may pull in beside itself: styles, scripts, pictures and fonts. Never a
@@ -105,6 +105,7 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
   const problem = (rel, detail, fix) => problems.push({ rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail, fix });
 
   const props = [];
+  const skipSaid = new Set();
   for (const page of pages) {
     const fm = page.sourceFrontmatter || page.frontmatter;
     if (!isPropNote(fm)) continue;
@@ -119,6 +120,11 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
     const propFile = propFileOf(fm);
     const styleName = propStyleOf(fm);
     const say = plan.ships ? problem : () => {};
+    const kindAsked = unknownKindOf(fm);
+    if (kindAsked !== null) {
+      const shown = typeof kindAsked === 'string' ? `"${kindAsked}"` : JSON.stringify(kindAsked);
+      say(rel, `prop_kind ${shown} is not one of ${PROP_KINDS.join(', ')}; it is read as document`, `write one of ${PROP_KINDS.join(', ')}`);
+    }
     // Where a page the tool makes lands: as a prop file's would, with .html.
     const placeAt = (ext) => {
       const def = defaultPropAddress(rel, ext);
@@ -146,6 +152,11 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
           continue;
         }
         plan.style = loaded.style;
+        // What the style leaves out of assets/, said once per style, on the first shipping prop that uses it.
+        if (plan.ships && loaded.style.skipped.length && !skipSaid.has(loaded.style.name)) {
+          skipSaid.add(loaded.style.name);
+          say(rel, `the style "${loaded.style.name}" leaves out ${loaded.style.skipped.join(', ')}`, `put only pictures and fonts directly in the style's assets/ folder (${[...STYLE_ASSET_EXTS].map((x) => x.slice(1)).join(', ')})`);
+        }
       }
       plan.made = plan.style ? 'style' : 'container';
       placeAt('.html');

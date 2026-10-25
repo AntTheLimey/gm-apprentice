@@ -248,6 +248,23 @@ describe('style fonts', () => {
     } finally { s.cleanup(); }
   });
 
+  it('the prefetch also fetches the font of a styled prop only the GM site shows', async () => {
+    const files = { ...STYLE, 'Secrets/Letter.md': note('', fenced(FENCE)), '_meta/prop-styles/t/style.json': '{"fonts":["VT323"]}' };
+    const s = buildBoth(files, { sites: [], player: { hide: { folders: ['Secrets'] } } });
+    try {
+      const asked = [];
+      const fetch = async (url) => {
+        asked.push(String(url));
+        if (new URL(url).hostname === 'fonts.googleapis.com') {
+          return new Response("@font-face { font-family: 'VT323'; font-style: normal; font-weight: 400; src: url(https://fonts.gstatic.com/s/vt323/a.woff2) format('woff2'); }", { status: 200 });
+        }
+        return new Response(Buffer.from('wOF2fake'), { status: 200 });
+      };
+      await prefetchForConfig(s.configPath, { fetch, log: () => {}, warn: () => {} });
+      assert.ok(asked.some((u) => /family=VT323/.test(u)), asked.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
   it('with no cache, offline: one warning, no fonts.css, no link to it', () => {
     const s = buildBoth({ ...LETTER(), '_meta/prop-styles/t/style.json': '{"fonts":["VT323"]}' }, { sites: [] });
     try {

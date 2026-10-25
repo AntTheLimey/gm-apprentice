@@ -33,8 +33,13 @@ the words you write, and a campaign gets one page that lists them.
   allows a sealed title on its own listings only.
 - The leak check also blocks a page that links a held prop's address or
   an unrevealed prop's note page.
-- `PROP_NOT_COPIED` also covers an unusable style, a missing
-  `## The Text` and a `prop_container` that names no container.
+- `PROP_NOT_COPIED` also covers an unusable style (an unreadable or
+  non-UTF-8 style file, an unreadable `_meta/prop-styles/`), what a
+  style's `assets/` leaves out, a `prop_style` that is not a name, a
+  `prop_kind` the tool does not know, a missing `## The Text` and a
+  `prop_container` that names no container.
+- In a kept folder, the leak check also finds the title of an
+  unpublished prop, of two words or more, as written.
 - `NOTICE.txt` now lists every font the site serves from Google Fonts
   (theme fonts, sheet skins, prop styles) with its copyright and licence,
   and carries the OFL, Apache-2.0 and UFL licence texts it needs (the

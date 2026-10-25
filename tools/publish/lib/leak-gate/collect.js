@@ -17,7 +17,7 @@ const { pairHubs } = require('../session-hub');
 const { parseNote } = require('../frontmatter');
 const { canonicalNfc } = require('../unicode');
 const {
-  playerSafeMarkdown, stubMarked, stubCut, hiddenFieldsOf, publishedFrontmatter, pcHeadingsUnstable, publishMode,
+  playerSafeMarkdown, stubMarked, stubCut, hiddenFieldsOf, publishedFrontmatter, pcHeadingsUnstable, publishMode, isWithheld,
 } = require('../processor');
 const { createMarks, markKinds, sanitize, markedSpans } = require('../gm-marks');
 const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf } = require('./text');
@@ -25,7 +25,7 @@ const { TEXT_EXT } = require('./match');
 const { planProps, bytesOf, textOf } = require('../props/plan');
 const { placeCollection, propTaken, containerItems, propRow, sealedTitlesOn } = require('../props/collection');
 const { cutHtml } = require('../props/html-cut');
-const { textProblem } = require('../props/page');
+const { styledPageProblem } = require('../props/page');
 const { pathProblem } = require('../props/files');
 
 const NEVER_SHOWN = ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase());
@@ -38,6 +38,7 @@ const inWorkingDir = (rel) => WORKING_DIRS.includes(rel.split('/')[0].toLowerCas
 function printedRows(page) {
   try { return rowsFor(page, {}).filter(([, text]) => text).map(([label, text]) => `${label} ${text}`); } catch (e) { return []; }
 }
+const HELD_TITLE = 'the title of an unpublished prop';
 const clip = (s, max = 160) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
 
 // `outputDir`, when given, is the built site: a made page the build could not write there (a link on its path) is no
@@ -52,7 +53,7 @@ function collectHidden({ configPath, outputDir = null }) {
   const keptBy = player.vault.kept_by;
   // The GM's own words that must never reach players (player_site.never_show): looked for on every kind of vault.
   const neverShow = (player.site.never_show || []).filter((w) => typeof w === 'string' && w.trim());
-  const empty = { vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), heldProps: [], heldNotePages: [], sealedOn: new Map(), siteTakes: () => false };
+  const empty = { vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), heldProps: [], heldNotePages: [], heldTitles: [], sealedOn: new Map(), siteTakes: () => false, keeps: () => false };
   if (keptBy === 'player') return empty;
 
   const quiet = () => {};
@@ -199,19 +200,25 @@ function collectHidden({ configPath, outputDir = null }) {
   const shownName = (p, source) => {
     try { return path.relative(fs.realpathSync(path.dirname(p.page.sourcePath)), source).split(path.sep).join('/'); } catch (e) { return path.basename(source); }
   };
+  // The titles of 2 words or more of unpublished props that are not withheld (a withheld one is a secret name already):
+  // looked for whole, as written, in the kept folders (index.js), where an old listing can outlive the build.
+  const heldTitles = [];
   for (const p of props) {
     // A prop whose note the site does not publish: the title a listing would print for it is hidden text (an old props
     // page naming it). Allowed only where a container lists it sealed (sealedOn, below). Not one in the plugin's working
     // folders, whose notes are left out as above.
     if (!publishedSet.has(p.page) && !inWorkingDir(p.rel)) {
-      add([propRow(p, { isShown: () => false, excludeFields, fieldOverrides }).title], p.rel, 'the title of an unpublished prop');
+      const title = propRow(p, { isShown: () => false, excludeFields, fieldOverrides }).title;
+      add([title], p.rel, HELD_TITLE);
+      if (!isWithheld(p.page.sourceFrontmatter || p.page.frontmatter) && wordsOf(title).length >= 2) heldTitles.push({ title, note: p.rel });
     }
     if (!publishedSet.has(p.page) && p.page.outputPath && !taken.keeps(p.page.outputPath)) heldNotePages.push({ rel: p.rel, address: p.page.outputPath });
     if (!p.source) {
       // A page the build does not make is not on the site: its address is no shipping prop's. A styled page whose note
-      // shows no words under ## The Text (props/page.js), and a made page whose path in the site folder is not a plain
-      // folder or file (props/files.js), as the build blocks them.
-      const unmade = (p.made === 'style' && p.kind !== 'container' && textProblem(shownBodyOf.get(p.page) || '') !== null)
+      // shows no words under ## The Text (styledPageProblem, which the build's make pass asks of the same player view; a
+      // note with no body here is one its page withholds whole, '' to the build too), and a made page whose path in the
+      // site folder is not a plain folder or file (props/files.js), as the build blocks them.
+      const unmade = styledPageProblem(p, shownBodyOf.get(p.page) ?? '') !== null
         || Boolean(outputDir && p.address && pathProblem(outputDir, p.address));
       if (p.ships && p.address && p.made && !unmade) {
         madeFiles.add(canonicalNfc(p.address));
@@ -260,10 +267,11 @@ function collectHidden({ configPath, outputDir = null }) {
   const outOf = (rel) => [outputOf.get(rel), ...(propOuts.get(rel) || [])].filter(Boolean);
   return {
     vaultPath, siteDir, keptBy, neverShow, pieces, visible, warnings, notes, published, publishedRels, linkMap, outOf,
-    propOwner, propFiles: new Set(propOwner.keys()), madeFiles, heldProps, heldNotePages, sealedOn,
+    propOwner, propFiles: new Set(propOwner.keys()), madeFiles, heldProps, heldNotePages, heldTitles, sealedOn,
+    keeps: (rel) => taken.keeps(rel),
     // An address the site itself fills (a page, a file it needs, a tool folder): a held prop there is not what is there.
     siteTakes: (address) => Boolean(taken.has(address, { explicit: true })),
   };
 }
 
-module.exports = { collectHidden };
+module.exports = { collectHidden, HELD_TITLE };

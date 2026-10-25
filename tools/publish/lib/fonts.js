@@ -310,15 +310,16 @@ async function prefetchSkinFonts(config, vaultPath, publishConfig, opts) {
 }
 
 // A prop style's typefaces are served from the site too: every prop note that names a style, read
-// through the same scan the build uses. A superset of what ships (a held prop's style counts), as
-// for the skins: fetching one face too many is harmless. The build reports a miss once.
+// through the GM site's scan (the wider of the two sites'). A superset of what ships (a held prop's
+// style counts), as for the skins: fetching one face too many is harmless. The build reports a miss once.
 async function prefetchStyleFonts(config, vaultPath, publishConfig, opts) {
-  const { scanConfigFor } = require('./config');
   const { scanVaultReport } = require('./scanner');
+  const { ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
   const { isPropNote, propFileOf, propStyleOf } = require('./props/note');
   const { styleLoader } = require('./props/styles');
   const { styleFontFamilies } = require('./props/page');
-  const scanConfig = scanConfigFor(Object.assign({}, config, { vaultPath }), publishConfig);
+  // Every folder the GM site reads (build.js), so a styled prop only the GM site shows gets its typefaces too.
+  const scanConfig = Object.assign({}, config, { vaultPath, excludeDirs: ALWAYS_EXCLUDE_DIRS });
   const styles = styleLoader({ vaultPath });
   const families = [];
   for (const page of scanVaultReport(scanConfig, { quiet: true }).pages) {

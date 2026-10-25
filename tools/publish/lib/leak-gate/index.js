@@ -6,7 +6,8 @@ const path = require('path');
 const crypto = require('crypto');
 const { performance } = require('perf_hooks');
 const { loadPublishList } = require('../manifest');
-const { collectHidden } = require('./collect');
+const { collectHidden, HELD_TITLE } = require('./collect');
+const { foldQuotes } = require('../note-faults');
 const { createMatcher, readOutput, listFiles, TEXT_EXT } = require('./match');
 const { nameFindings, neverShowFindings } = require('./names');
 const { wordsOf, nameSet, onlyNames } = require('./text');
@@ -100,6 +101,34 @@ function propUnrevealed({ outputDir, hidden, files }) {
   return found;
 }
 
+// An unpublished prop's title in a kept folder (an old listing the build no longer cleans): looked for as a whole phrase,
+// as written, so a title of two or three words, too short to be hidden text, still counts there. One word is not looked
+// for (too common to tell). A listing's own sealed title stays allowed (sealedOn).
+const NOT_WORD = '(?<![\\p{L}\\p{N}])';
+const NOT_WORD_AFTER = '(?![\\p{L}\\p{N}])';
+const escapeRe = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function heldTitleFindings({ files, hidden }) {
+  const found = [];
+  if (!hidden.heldTitles.length) return found;
+  const titles = hidden.heldTitles.map((h) => ({
+    ...h,
+    text: wordsOf(h.title).join(' '),
+    re: new RegExp(NOT_WORD + foldQuotes(h.title).trim().split(/\s+/).map(escapeRe).join('\\s+') + NOT_WORD_AFTER, 'u'),
+  }));
+  for (const file of files) {
+    if (!hidden.keeps(file.rel)) continue;
+    const sealed = hidden.sealedOn.get(canonicalNfc(file.rel));
+    const text = foldQuotes(file.text || '');
+    for (const t of titles) {
+      if (sealed && sealed.has(t.text)) continue;
+      const m = t.re.exec(text);
+      if (!m) continue;
+      found.push({ id: findingId(file.rel, t.text), kind: 'text', code: 'HIDDEN_TEXT', page: file.rel, text: t.text, shown: m[0].replace(/\s+/g, ' '), note: t.note, reason: HELD_TITLE });
+    }
+  }
+  return found;
+}
+
 function runLeakGate({ configPath, outputDir }) {
   const start = performance.now();
   const done = (r) => ({ skipped: null, missing: false, findings: [], unneeded: [], warnings: [], files: 0, ...r, seconds: (performance.now() - start) / 1000 });
@@ -161,6 +190,12 @@ function runLeakGate({ configPath, outputDir }) {
   for (const f of propUnrevealed({ outputDir, hidden, files })) {
     const key = keyOf(f.page, f.text);
     if (!raw.has(key)) raw.set(key, f);
+  }
+  // A page already found for a prop (its link, or its title as hidden text) is told once.
+  const toldFor = new Set([...raw.values()].map((f) => `${f.page}\n${f.note}`));
+  for (const f of heldTitleFindings({ files, hidden })) {
+    const key = keyOf(f.page, f.text);
+    if (!raw.has(key) && !toldFor.has(`${f.page}\n${f.note}`)) raw.set(key, f);
   }
   for (const f of neverShowFindings({ files, allFiles: listFiles(outputDir), words: hidden.neverShow, findingId, published: hidden.published })) {
     const key = findingKey(f);

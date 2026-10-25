@@ -8,7 +8,8 @@
 //
 // The fixture is copied to a temporary folder first, and its typefaces are fetched from Google
 // Fonts into that copy's font cache, so nothing is written into the repository. Offline, the pages
-// fall back to their stacks and the build says so.
+// fall back to their stacks and the build says so. A plugin style that gives no styled page (one
+// that fails to load) fails the run, named.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -17,6 +18,8 @@ const { prepareFixture } = require('../test/helpers/fixture-build');
 const { findChrome } = require('../test/helpers/browser');
 const { prefetchForConfig } = require('../lib/fonts');
 const { build } = require('../lib/build');
+const { loadVaultConfig } = require('../lib/config');
+const { listStyles } = require('../lib/props/styles');
 
 const fileUrl = (p) => `file://${p.replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')}`;
 
@@ -29,6 +32,12 @@ function chrome(binary, profile, args) {
   const run = spawnSync(binary, ['--headless', '--disable-gpu', '--hide-scrollbars', '--no-first-run', '--no-default-browser-check',
     `--user-data-dir=${profile}`, '--virtual-time-budget=6000', ...args], { stdio: 'pipe', timeout: 60000 });
   if (run.status !== 0) throw new Error(`Chrome failed (${run.status}): ${String(run.stderr).slice(0, 400)}`);
+}
+
+// The plugin's styles that have no styled page in the gallery (a style that fails to load gives none).
+function missingStyles(gallery, vaultPath, pluginDir) {
+  const shown = new Set(gallery.map((g) => g.style));
+  return listStyles({ vaultPath, pluginDir }).filter((st) => st.from === 'plugin' && !shown.has(st.name)).map((st) => st.name);
 }
 
 async function main() {
@@ -71,12 +80,22 @@ async function main() {
     }
     fs.writeFileSync(path.join(out, 'gallery.json'), `${JSON.stringify(gallery, null, 2)}\n`);
     console.log(`gallery: ${gallery.length} styled pages in ${out}`);
+    const vaultPath = path.resolve(path.dirname(configPath), loadVaultConfig(configPath).vaultPath);
+    const missing = missingStyles(gallery, vaultPath);
+    if (missing.length) {
+      console.error(`no styled page for the plugin style${missing.length === 1 ? '' : 's'} ${missing.join(', ')}: see the build's PROP_NOT_COPIED warnings above`);
+      process.exitCode = 1;
+    }
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
 }
 
-main().catch((err) => {
-  console.error(err.stack || err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error(err.stack || err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { missingStyles };

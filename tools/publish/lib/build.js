@@ -45,7 +45,7 @@ const { sheetSourceOf } = require('./sheet-source');
 const { pcIdentity } = require('./templates/pc-identity');
 const { planProps } = require('./props/plan');
 const { propHrefFor, propOutputs, keptCopyOutputs, pathProblem } = require('./props/files');
-const { styledPage, styleFontFamilies, textProblem, FONTS_CSS, BASE_CSS } = require('./props/page');
+const { styledPage, styleFontFamilies, styledPageProblem, FONTS_CSS, BASE_CSS } = require('./props/page');
 const { containerItems, propRow, COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, placeCollection, propTaken, collectionModel, latestProps, shownRows } = require('./props/collection');
 const { layoutNames } = require('./props/layout');
 const { isWithheld, withheldPlaceholder, withheldNameMarked } = require('./processor');
@@ -1711,7 +1711,7 @@ function buildSite(options) {
     const styled = [];
     for (const p of propPlan.props) {
       if (!p.ships || !p.address || p.made !== 'style' || p.kind === 'container' || propBlocked.has(p.address)) continue;
-      const problem = textProblem(p.page.publishedMarkdown);
+      const problem = styledPageProblem(p, p.page.publishedMarkdown);
       if (problem) {
         noPage(p, problem);
         continue;
