@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const { cutHtml } = require('./html-cut');
-const { bytesOf } = require('./plan');
+const { bytesOf, textOf, bytesOfText } = require('./plan');
 const { relativeHref, encodeHref } = require('../processor');
 const { propBar, withPropBar } = require('../templates/prop-bar');
 
@@ -38,7 +38,7 @@ function propHrefFor(plan, page, blocked = new Set()) {
 }
 
 // What the tool writes for `files` of prop `p`, from the bytes the plan read:
-// [{ rel, out, isPage, text | bytes, replacesKept, warnings }], and a problem row in `failed`
+// [{ rel, out, isPage, text and encode | bytes, replacesKept, warnings }] (`encode` gives text's bytes in the file's own encoding), and a problem row in `failed`
 // for a file whose bytes the plan does not hold (the prop file's own: nothing of it is written).
 function outputsOf(p, files) {
   const outputs = [];
@@ -57,7 +57,7 @@ function outputsOf(p, files) {
       outputs.push(entry);
       continue;
     }
-    let text = bytes.toString('utf8');
+    let { text, encoding } = textOf(bytes);
     if (f.cut) {
       const cut = cutHtml(text);
       text = cut.text;
@@ -68,6 +68,7 @@ function outputsOf(p, files) {
       text = withPropBar(text, propBar({ noteHref: encodeHref(relativeHref(p.address, p.page.outputPath)), noteTitle: p.page.displayTitle || p.page.title || '', collectionHref: null }));
     }
     entry.text = text;
+    entry.encode = (t) => bytesOfText(t, encoding, ext);
     outputs.push(entry);
   }
   return { outputs, failed };

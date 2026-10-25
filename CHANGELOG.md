@@ -17,7 +17,9 @@ picture you made.
 - Prop notes: `type: prop` with `prop_kind`, `prop_file` and
   `prop_address`. A published prop's hand-made page, PDF or picture is
   on the site with what it links to, its Keeper parts cut, a "See the
-  prop" link on its note and a bar back. The GM site shows every prop.
+  prop" link on its note and a bar back. A page or stylesheet that is
+  not UTF-8 (an old Windows "Web page") keeps its own bytes. The GM site
+  shows every prop.
 - Story pages show the pictures a recap embeds.
 - Site Faults code `PROP_NOT_COPIED`, for a prop whose file the build
   could not copy.

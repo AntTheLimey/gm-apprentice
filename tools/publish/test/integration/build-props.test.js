@@ -90,6 +90,29 @@ describe('a published prop', () => {
   });
 });
 
+describe('a prop page that is not UTF-8', () => {
+  // A windows-1252 page (an old "save as Web page"): é is 0xE9, the curly quotes 0x93 and 0x94.
+  const head = Buffer.concat([Buffer.from('<html><body><p>Caf'), Buffer.from([0xe9, 0x20, 0x93]), Buffer.from('hush'), Buffer.from([0x94]), Buffer.from('</p>')]);
+  const block = Buffer.from('<!-- gm-only --><p>KEEPER ONLY</p><!-- /gm-only -->');
+  const tail = Buffer.from('</body></html>');
+  const s = buildBoth({
+    'Documents/Lettre – copie.md': '---\ntype: prop\nprop_file: lettre.html\n---\nA letter.\n',
+    'Documents/lettre.html': Buffer.concat([head, block, tail]),
+  }, { sites: ['player'] });
+  after(() => s.cleanup());
+
+  it('keeps its bytes: only the gm-only part goes, and the bar names the note in entities', () => {
+    const dir = path.join(s.player.dir, 'props');
+    const out = fs.readFileSync(path.join(dir, fs.readdirSync(dir)[0]));
+    const bar = /<nav class="gma-prop-bar"[\s\S]*?<\/nav>/.exec(out.toString('latin1'));
+    assert.ok(bar, out.toString('latin1'));
+    assert.match(bar[0], /&larr; Lettre &#x2013; copie<\/a>/);
+    const at = out.indexOf(Buffer.from(bar[0], 'latin1'));
+    const without = Buffer.concat([out.subarray(0, at), out.subarray(at + Buffer.byteLength(bar[0], 'latin1'))]);
+    assert.ok(without.equals(Buffer.concat([head, tail])), without.toString('latin1'));
+  });
+});
+
 describe('props that do not ship', () => {
   it('a prop whose note is not published ships nothing', () => {
     const s = buildBoth({

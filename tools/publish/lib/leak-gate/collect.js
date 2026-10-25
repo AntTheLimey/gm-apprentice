@@ -22,7 +22,7 @@ const {
 const { createMarks, markKinds, sanitize, markedSpans } = require('../gm-marks');
 const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf } = require('./text');
 const { TEXT_EXT } = require('./match');
-const { planProps, bytesOf } = require('../props/plan');
+const { planProps, bytesOf, textOf } = require('../props/plan');
 const { takenAddresses } = require('../props/address');
 const { cutHtml } = require('../props/html-cut');
 
@@ -189,7 +189,7 @@ function collectHidden({ configPath }) {
         own(f.out, p.rel);
         // What the cut takes out of a page or SVG: hidden text of the note, if it reaches the site.
         if (!f.cut || !bytesOf(f)) continue;
-        for (const run of cutHtml(bytesOf(f).toString('utf8')).cut) add(piecesOfHtml(run), p.rel, `a hidden part of its prop file (${shownName(p, f.source)})`);
+        for (const run of cutHtml(textOf(bytesOf(f)).text).cut) add(piecesOfHtml(run), p.rel, `a hidden part of its prop file (${shownName(p, f.source)})`);
       }
       for (const out of p.shared) own(out, p.rel);
       continue;
@@ -203,7 +203,7 @@ function collectHidden({ configPath }) {
     let bytes;
     // A prop file that cannot be read stops the check, as a note does: its text could be anywhere on the site.
     try { bytes = fs.readFileSync(p.source); } catch (e) { throw new Error(`Leak check: the prop file of ${p.rel} could not be read (${e.message}), so its text cannot be checked. Fix the file and deploy again.`); }
-    if (TEXT_EXT.has(path.extname(p.source).toLowerCase())) add(piecesOfHtml(bytes.toString('utf8')), p.rel, `unpublished prop: ${why}`);
+    if (TEXT_EXT.has(path.extname(p.source).toLowerCase())) add(piecesOfHtml(textOf(bytes).text), p.rel, `unpublished prop: ${why}`);
     heldProps.push({ rel: p.rel, address: p.address, hash: p.hash, size: bytes.length });
   }
 

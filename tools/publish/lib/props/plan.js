@@ -35,6 +35,23 @@ function within(real, root) {
   return real === root || real.startsWith(root + path.sep);
 }
 
+// A markup file's or stylesheet's text, and how to write it back: UTF-8 when its bytes are
+// valid UTF-8 (a byte-order mark kept), otherwise latin1, one character per byte, so a
+// windows-1252 page cut or respelled is written back byte for byte everywhere else.
+const UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+function textOf(bytes) {
+  try { return { text: UTF8.decode(bytes), encoding: 'utf8' }; } catch (e) { return { text: bytes.toString('latin1'), encoding: 'latin1' }; }
+}
+
+// The bytes of `text` in `encoding` (textOf's). A character latin1 cannot hold (the prop
+// bar's note title, say) goes as an escape: a numeric entity in a page, `\hex ` in a stylesheet.
+function bytesOfText(text, encoding, ext = '') {
+  if (encoding !== 'latin1') return Buffer.from(text, 'utf8');
+  const css = ext.toLowerCase() === '.css';
+  const safe = text.replace(/[^\x00-\xff]/gu, (c) => (css ? `\\${c.codePointAt(0).toString(16)} ` : `&#x${c.codePointAt(0).toString(16)};`));
+  return Buffer.from(safe, 'latin1');
+}
+
 function readOrError(p) {
   try { return { bytes: fs.readFileSync(p) }; } catch (e) { return { error: e.code || e.message }; }
 }
@@ -200,7 +217,7 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
     const queue = [{ entry: first, full: p._full, at: '', ext: p._ext, bytes: p._bytes }];
     while (queue.length) {
       const { entry, full, at, ext, bytes } = queue.shift();
-      let text = bytes.toString('utf8');
+      let { text } = textOf(bytes);
       if (entry.cut) text = cutHtml(text).text;
       const { refs, rooted } = localRefs(text, ext === '.css' ? '.css' : '.html');
       const shown = entry === first ? p._propFile : canonicalNfc(path.posix.join(shownDir, at, path.basename(full)));
@@ -280,4 +297,4 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
   return { props, problems };
 }
 
-module.exports = { planProps, bytesOf, LINKED_EXTS };
+module.exports = { planProps, bytesOf, textOf, bytesOfText, LINKED_EXTS };

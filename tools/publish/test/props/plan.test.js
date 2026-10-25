@@ -449,3 +449,17 @@ test('what a shared stylesheet reaches is shared too; a nested file with other b
   ]);
   assert.deepStrictEqual(differs.props[1].shared, ['props/props.css']);
 });
+
+test('a file\'s text goes back to the same bytes: UTF-8 with its byte-order mark, or latin1 when not UTF-8', () => {
+  const { textOf, bytesOfText } = require('../../lib/props/plan');
+  const bom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('Café “hush”')]);
+  const u = textOf(bom);
+  assert.strictEqual(u.encoding, 'utf8');
+  assert.ok(bytesOfText(u.text, u.encoding).equals(bom));
+  const cp1252 = Buffer.from([0x43, 0x61, 0x66, 0xe9, 0x20, 0x93, 0x68, 0x94]);
+  const l = textOf(cp1252);
+  assert.strictEqual(l.encoding, 'latin1');
+  assert.ok(bytesOfText(l.text, l.encoding).equals(cp1252));
+  assert.strictEqual(bytesOfText('a–b', 'latin1', '.html').toString('latin1'), 'a&#x2013;b');
+  assert.strictEqual(bytesOfText('a–b', 'latin1', '.css').toString('latin1'), 'a\\2013 b');
+});
