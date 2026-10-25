@@ -149,10 +149,12 @@ class Batch:
             return sorted(r for r in rels if not is_record(r)
                           and vl.entity_type(vl.extract_frontmatter(
                               self.read(r)) or {}) in types)
-        hits = typed(self.with_stem(name)) or typed(
+        # An exact name never hides another note one half of whose name
+        # matches: both count, and two hits are refused.
+        hits = typed(set(self.with_stem(name)) | {
             r for r in self._files().values()
             if name in (nfc(half).strip().casefold()
-                        for half in Path(r).stem.split(" - ", 1)))
+                        for half in Path(r).stem.split(" - ", 1))})
         if len(hits) != 1:
             raise WriteError(
                 f"{what}: no {' or '.join(sorted(types))} note at or named "

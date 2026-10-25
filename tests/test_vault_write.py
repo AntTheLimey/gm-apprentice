@@ -373,6 +373,14 @@ class WrapupNewTests(unittest.TestCase):
         self.assertIn(INDEX_REL, out)
         self.assertIn(other, out)
 
+    def test_an_exact_name_does_not_hide_a_half_name_match(self):
+        other = INDEX_REL.replace("Session 02/Session 02 - The Docks",
+                                  "The Docks/The Docks")
+        vault = make_vault(self, {INDEX_REL: INDEX, other: INDEX})
+        code, out = run(vault, "wrapup-new", "--session", "The Docks")
+        self.assertEqual(code, 1)
+        self.assertIn("2 notes named", out)
+
     def test_an_unknown_name_is_refused(self):
         vault = make_vault(self, {INDEX_REL: INDEX})
         code, out = run(vault, "wrapup-new", "--session", "The Mill")
