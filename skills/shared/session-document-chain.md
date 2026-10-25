@@ -55,7 +55,8 @@ warns on any played (`played`/`wrap-up`/`reviewed`) session index or
 its Wrap-Up that is not under Publishing, saying what happens next:
 `manifest publish-played` (run by reconcile step 6.1 and publish-site)
 registers a reviewed session with its linked Wrap-Up, and publish-site
-asks the GM about the rest.
+asks the GM about the rest. Entity notes that came out in play are
+published by wrap-up step 4d, never sessions or Wrap-Ups.
 
 **`world_evolved`:** the session reference (e.g. `"Session_07"`) set by
 reconcile step 6.5 once world evolution has run for it, so it is not

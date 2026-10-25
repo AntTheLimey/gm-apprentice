@@ -4,6 +4,8 @@
 the tree and the script in step. `_midwife/` and `_inbox/` are made on demand.
 `_meta/dndbeyond/` is made by the D&D Beyond sync: one file per synced
 character, holding the names D&D Beyond gave at the last sync. It is never published.
+`_meta/reveals.json` is the reveal log: history only, never read to
+decide what publishes.
 Folders may be added or renamed afterwards.
 
 ```text

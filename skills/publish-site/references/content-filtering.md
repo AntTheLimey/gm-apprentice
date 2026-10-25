@@ -180,17 +180,16 @@ story progress.
 
 **`<!-- spoiler -->` is lifecycle-managed.** There's no pre-declared
 reveal date — a GM doesn't know which session will reveal a given
-secret until play gets there. Instead, `reconcile` (run every session)
-checks entities the session actually touched for open `<!-- spoiler -->`
-blocks and asks the GM whether each was revealed in play. On yes, the
-fence markers are stripped — a plain text edit, so the content is
-permanently public prose from then on with no new state to track. See
-`shared/reconcile.md` for the exact step.
+secret until play gets there. Instead, session-wrapup's "What came out
+tonight" (step 4d) lists the secrets in the notes the session touched
+and the GM confirms which came out. The fence markers are stripped — a
+plain text edit, so the content is permanently public prose from then
+on; `_meta/reveals.json` only records it. The publish list stays the one
+gate. See `session-wrapup/SKILL.md`.
 
-Because a spoiler can be revealed in an entity that reconcile didn't
-happen to check that session (the reveal happened in dialogue that
-never made it into the wrap-up notes, or the entity wasn't obviously
-"touched"), campaign-qa also runs a full-vault open-spoilers audit on
+Because a spoiler can be revealed in an entity wrap-up didn't list
+(the reveal happened in dialogue that never made it into the notes),
+campaign-qa also runs a full-vault open-spoilers audit on
 demand — see `campaign-qa/references/checks/open-spoilers.md`.
 
 ## Excluding Callouts (opt-in)

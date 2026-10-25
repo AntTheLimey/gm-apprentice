@@ -218,8 +218,8 @@ source_document: ""
   heading in the brief, not its own top-level section (see
   `shared/pc-body-structure.md`).
 - **Spoiler** — Open Questions get resolved into canon as play
-  reaches them (`reconcile`'s spoiler-reveal step, see
-  `shared/reconcile.md`); wrap the whole section in
+  reaches them (wrap-up's "What came out tonight", step 4d;
+  `shared/reconcile.md` 3.5 is the fallback); wrap the whole section in
   `<!-- spoiler -->` / `<!-- /spoiler -->` rather than `## GM Notes`,
   since it's meant to eventually publish once resolved, not stay
   permanently hidden.

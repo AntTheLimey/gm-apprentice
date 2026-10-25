@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.100] — 2026-10-24
+
+What came out in play is released at wrap-up, on the GM's say.
+
+### Added
+
+- Wrap-up step 4d, "What came out tonight": `reveal_scan.py` lists
+  what the site still hides in the notes a session touched; the GM
+  picks what the players learned; `reveal.py` publishes those notes
+  through the publish list, lifts `withheld` and logs the session in
+  `_meta/reveals.json` (history only).
+
+### Changed
+
+- Reconcile step 3.5 asks about open spoilers only when
+  `_meta/reveals.json` has no entry for the session.
+
 ## [1.10.99] — 2026-10-24
 
 The old publish list no longer publishes a line you commented out.

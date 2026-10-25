@@ -166,7 +166,9 @@ creating entities.
 - **Updated entities:** edit the entity's own file — one file per
   entity, no separate update files. A GM ruling that replaces an
   earlier one: strike the old one through and append
-  `superseded YYYY-MM-DD` in the same edit.
+  `superseded YYYY-MM-DD` in the same edit. Leave `withheld`, spoiler
+  and gm-only blocks and GM Notes secrets as they are; step 4d
+  releases them with the GM.
 - **Cross-entity claims:** when a note asserts something about a
   *different* existing entity (e.g. an aside in a NEW-NPC line
   placing an established NPC somewhere new), never fold it silently
@@ -276,6 +278,43 @@ If `_World/` exists or the notes hold likely world facts
 `references/world-fact-detection.md` and stage findings as
 `### World Fact Findings`. Stage only — reconcile (step 2.5)
 presents the three-state prompts.
+
+### 4d. What came out tonight
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/reveal_scan.py" \
+  <vault> "<index>"
+```
+
+It lists the notes this session touched that the site still hides,
+with what each hides. On "no publish list", skip this step silently;
+on "could not ask the publish tool", tell the GM the reason and skip.
+From the Play Notes, the Wrap-Up and the recap, propose one list of
+what came out: people, places and things met or learned of; secrets
+now known, by page, from the scan's hidden parts; clues found; props
+handed over or shown; places visited. Never propose from the Plan.
+The GM picks all, some or none; nothing changes until they confirm.
+Then rewrite any Narrative Recap, Campaign Log or Timeline line this
+run wrote that states what they kept hidden, so it says only what came
+out (the truth can go in GM Notes `### Behind the Scenes`). On none,
+skip the rest.
+
+For each picked secret, edit that page so the fact is hidden nowhere
+on it, in whatever way suits how it came out, and remove the spoiler
+markers around what it released. Then run, with `<title>` from the
+scan's first line, one `--publish` per note to publish and one
+`--released` per secret, each `<path>` as the scan prints it:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/reveal.py" \
+  <vault> --session "<title>" \
+  --publish <path> --released "<path>=<what came out>"
+```
+
+Show the dry-run rows as-is. Yes → re-run with `--write`; it
+publishes, lifts `withheld` and logs the session. No, or an ERROR row, puts back that page's edits
+(or a later publish shows it unhidden). Tell the GM the reason on any
+ERROR row. Never publish a scene, Plan or session note.
 
 ### 5. Remaining GM Notes
 

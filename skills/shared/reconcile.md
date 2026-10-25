@@ -80,16 +80,19 @@ resolution, and **wait for the GM's decision** before the next.
 
 ### 3.5. Spoiler reveal check
 
-For each block under the scan's `open spoilers:` (and in any entity
-this run updated that the Wrap-Up does not link), ask:
+Spoilers are released at session-wrapup step 4d. Only when
+`_meta/reveals.json` has no entry whose `session` is this session
+index's title (file name without `.md`), for each block under the scan's `open spoilers:`
+(and in any entity this run updated that the Wrap-Up does not link),
+ask:
 
 > "[[{Entity}]] has a pending spoiler: '{first ~10 words of the
 > spoiler text}...' — was this revealed to the players this session?
 > (y/n)"
 
 Yes → remove the `<!-- spoiler -->` / `<!-- /spoiler -->` markers,
-leaving the content as published prose. No → leave it; it is asked
-again next time the entity is touched, or caught by campaign-qa (see
+leaving the content as published prose. No → leave it for the next
+wrap-up's step 4d, or campaign-qa (see
 `publish-site/references/content-filtering.md`). None → skip
 silently.
 
