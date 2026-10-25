@@ -62,6 +62,15 @@ describe('leak gate: a prop page and its own note', () => {
       [{ code: 'HIDDEN_TEXT', page: 'props/invitation.html', note: 'Documents/Invitation.md', reason: 'a hidden part of its prop file (inv.html)' }]);
   }, { 'Documents/Invitation.md': PROP(), 'Documents/inv.html': PAGE(), 'Documents/props.css': CSS }));
 
+  it("a gm-only part's tags and attributes are no hidden text, its shown words are", () => within((s) => {
+    assert.deepEqual(gate(s).findings, []);
+    leakBeforeBody(s, 'props/invitation.html', KEEPER);
+    assert.deepEqual(gate(s).findings.map((f) => f.page), ['props/invitation.html']);
+  }, {
+    'Documents/Invitation.md': PROP(), 'Documents/props.css': CSS,
+    'Documents/inv.html': PAGE().replace('<head>', '<head><!-- gm-only --><meta name="viewport" content="width=device-width, initial-scale=1"><!-- /gm-only -->'),
+  }));
+
   it("the search index and the prop's own note page are checked as before", () => within((s) => {
     leakInto(s.outputDir, 'documents/invitation.html', LETTER);
     leakIntoIndex(s, 'documents/invitation.html', LETTER);
@@ -139,6 +148,24 @@ describe('leak gate: a prop that does not ship', () => {
       ['x.pdf', 'Documents/Map.md', 'the prop file of a note the site does not publish', 'name'],
     ]);
   }, HELD_VAULT()));
+
+  it("a held prop page's head is no hidden text: only what its body shows", () => within((s) => {
+    leakInto(s.outputDir, 'documents/other.html', "The Lady Sophia's private glove note.");
+    assert.deepEqual(gate(s).findings, []);
+    leakInto(s.outputDir, 'documents/other.html', HELD);
+    assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'documents/other.html', note: 'Documents/Glove.md', reason: 'unpublished prop: not on the publish list' }]);
+  }, {
+    'Documents/Glove.md': '---\ntype: prop\nprop_file: glove.html\n---\nA note.\n',
+    'Documents/glove.html': [
+      '<!doctype html><html lang="en"><head><meta charset="utf-8">',
+      '<meta name="viewport" content="width=device-width, initial-scale=1">',
+      '<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English&display=swap" rel="stylesheet">',
+      "<title>The Lady Sophia's private glove note</title>",
+      '<style>body { font-family: "IM Fell English", serif; }</style></head>',
+      `<body><p>${HELD}</p><img src="x.png" alt="a small folded paper square"></body></html>`,
+    ].join('\n'),
+    ...OTHER, ...LIST(['Documents/Other.md']),
+  }));
 
   it("a stale copy that differs, at a held prop's kept-folder address, is caught", () => within((s) => {
     write(s, 'gazetteer/invitation.html', '<p>an older copy</p>');

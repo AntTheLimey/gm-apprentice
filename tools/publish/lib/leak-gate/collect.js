@@ -20,8 +20,8 @@ const {
   playerSafeMarkdown, stubMarked, stubCut, hiddenFieldsOf, publishedFrontmatter, pcHeadingsUnstable, publishMode,
 } = require('../processor');
 const { createMarks, markKinds, sanitize, markedSpans } = require('../gm-marks');
-const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, piecesOfText, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf } = require('./text');
-const { fileText, TEXT_EXT } = require('./match');
+const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf } = require('./text');
+const { TEXT_EXT } = require('./match');
 const { planProps, bytesOf } = require('../props/plan');
 const { takenAddresses } = require('../props/address');
 const { cutHtml } = require('../props/html-cut');
@@ -203,7 +203,7 @@ function collectHidden({ configPath }) {
     let bytes;
     // A prop file that cannot be read stops the check, as a note does: its text could be anywhere on the site.
     try { bytes = fs.readFileSync(p.source); } catch (e) { throw new Error(`Leak check: the prop file of ${p.rel} could not be read (${e.message}), so its text cannot be checked. Fix the file and deploy again.`); }
-    if (TEXT_EXT.has(path.extname(p.source).toLowerCase())) add(fileText(p.source, bytes.toString('utf8')).split('\n').flatMap(piecesOfText), p.rel, `unpublished prop: ${why}`);
+    if (TEXT_EXT.has(path.extname(p.source).toLowerCase())) add(piecesOfHtml(bytes.toString('utf8')), p.rel, `unpublished prop: ${why}`);
     heldProps.push({ rel: p.rel, address: p.address, hash: p.hash, size: bytes.length });
   }
 
