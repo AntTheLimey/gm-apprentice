@@ -13,7 +13,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { canonicalNfc } = require('../unicode');
 const { isPropNote, propKindOf, propFileOf, propAddressOf, propStyleOf } = require('./note');
-const { PROP_FILE_EXTS, addressKey, defaultPropAddress, addressShapeProblem } = require('./address');
+const { PROP_FILE_EXTS, PAGE_TAKER, addressKey, defaultPropAddress, fallbackPropAddress, addressShapeProblem } = require('./address');
 const { cutHtml } = require('./html-cut');
 const { within, realOrNull, findUnder } = require('./paths');
 const { localRefs } = require('./links');
@@ -129,6 +129,11 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
       }
       plan._explicit = asked !== null && !shape;
       plan.address = plan._explicit ? canonicalNfc(asked) : def;
+      // A default a built page holds moves once, to -prop; an address the GM wrote never moves.
+      if (!plan._explicit && taken.has(def) === PAGE_TAKER) {
+        plan._movedFrom = def;
+        plan.address = fallbackPropAddress(def);
+      }
     };
     if (!propFile) {
       if (plan.kind !== 'container' && !styleName) continue;
@@ -188,7 +193,11 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
     const why = taken.has(p.address, { explicit: p._explicit });
     const prior = claimed.get(addressKey(p.address));
     if (why || prior) {
-      problem(p.rel, `its address ${p.address} is taken by ${why ? takerName(why) : prior.rel}`, 'give it another prop_address');
+      const by = why ? takerName(why) : prior.rel;
+      const detail = p._movedFrom
+        ? `its address ${p._movedFrom} is taken by ${PAGE_TAKER}, and ${p.address} by ${by}`
+        : `its address ${p.address} is taken by ${by}`;
+      problem(p.rel, detail, 'give it another prop_address');
       p.address = null;
       continue;
     }
@@ -304,7 +313,7 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
   }
 
   for (const p of props) {
-    delete p._full; delete p._ext; delete p._propFile; delete p._explicit; delete p._bytes;
+    delete p._full; delete p._ext; delete p._propFile; delete p._explicit; delete p._bytes; delete p._movedFrom;
   }
   return { props, problems, styles: stylePlans };
 }

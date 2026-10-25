@@ -38,7 +38,7 @@ function quietBuild(configPath) {
 
 // The fixture's prop notes, by the style each names.
 function fixtureNotes() {
-  const dir = path.join(FIXTURE, 'Handouts');
+  const dir = path.join(FIXTURE, 'Props');
   const out = {};
   for (const name of fs.readdirSync(dir)) {
     const text = fs.readFileSync(path.join(dir, name), 'utf8');
@@ -109,7 +109,9 @@ describe('the prop-styles fixture, built', () => {
 
   it("every starter style's page says its note's words", () => {
     for (const [style, note] of Object.entries(notes)) {
-      const page = read('props', `${note.slug}.html`);
+      // The notes sit in Props/, so each note page holds props/<slug>.html and its prop moves to -prop.
+      const page = read('props', `${note.slug}-prop.html`);
+      assert.match(read('props', `${note.slug}.html`), new RegExp(`<a class="prop-btn" href="${note.slug}-prop\\.html">See the prop</a>`), style);
       assert.match(page, new RegExp(`<body class="prop-page prop-style-${style}">`));
       const text = propTextOf(note.text);
       if (text.mode === 'lines') {
@@ -120,20 +122,20 @@ describe('the prop-styles fixture, built', () => {
         continue;
       }
       const sheets = [...page.matchAll(/<div class="prop-text">([\s\S]*?)<\/div>/g)].map((m) => m[1]).join(' ');
-      const notePage = read('handouts', `${note.slug}.html`).replace(/<p class="prop-link">[\s\S]*?<\/p>/, '');
+      const notePage = read('props', `${note.slug}.html`).replace(/<p class="prop-link">[\s\S]*?<\/p>/, '');
       const section = /<h2>The Text<\/h2>([\s\S]*?)(?:<h2\b|<\/main>)/.exec(notePage)[1];
       assert.deepEqual(wordsOf(sheets), wordsOf(section), style);
     }
   });
 
   it('sheets break where prop_breaks says, and the sheet chrome follows', () => {
-    const term = read('props', 'kestrel-relay-log.html');
+    const term = read('props', 'kestrel-relay-log-prop.html');
     assert.equal((term.match(/<section class="sheet term"/g) || []).length, 2);
     assert.match(term, /SHEET 1\/2[\s\S]*MORE ▼[\s\S]*SHEET 2\/2[\s\S]*END OF FILE ■/);
     assert.equal((term.match(/END OF FILE/g) || []).length, 1);
     assert.match(term, /<section class="sheet desk" aria-label="The envelope">[\s\S]*POSTAGE PAID<strong>3 CR<\/strong>[\s\S]*style="--hand: 'Reenie Beanie'">KESTREL<\/div>/);
     assert.match(term, /<script src="styles\/terminal\/script\.js" defer><\/script>/);
-    const form = read('props', 'harbour-authority-lien.html');
+    const form = read('props', 'harbour-authority-lien-prop.html');
     assert.equal((form.match(/<section class="sheet form"/g) || []).length, 2);
     assert.equal((form.match(/class="stamp"/g) || []).length, 1, 'the stamp is on the first sheet only');
     assert.match(form, /style="--accent: #2f5d50"/);
@@ -141,7 +143,7 @@ describe('the prop-styles fixture, built', () => {
   });
 
   it('a starter style\'s page links nothing outside the site', () => {
-    const pages = walk(path.join(docs, 'props')).filter((f) => f.endsWith('.html'));
+    const pages = walk(path.join(docs, 'props')).filter((f) => f.endsWith('-prop.html'));
     assert.equal(pages.length, STARTERS.length);
     for (const f of pages) {
       const page = fs.readFileSync(f, 'utf8');
@@ -164,16 +166,16 @@ describe('the prop-styles fixture, built', () => {
       if (!/\.(html|json|txt|js|css|xml)$/.test(f)) continue;
       assert.doesNotMatch(fs.readFileSync(f, 'utf8'), /SEALED(?:LINE|BODY|TEXT)|WITHHELD(?:BODY|TEXT)/, f);
     }
-    assert.deepEqual(logs.filter((l) => /WARNING: Handouts\//.test(l)), [], 'no prop row on any note');
+    assert.deepEqual(logs.filter((l) => /WARNING: Props\//.test(l)), [], 'no prop row on any note');
   });
 
   it('the same vault with no styled props builds no prop styles and the NOTICE it had', () => {
     const plain = fs.mkdtempSync(path.join(os.tmpdir(), 'starter-plain-'));
     try {
       const configPath = prepareFixture('prop-styles', plain);
-      const handouts = path.join(plain, 'vault', 'Handouts');
-      for (const n of fs.readdirSync(handouts)) {
-        const file = path.join(handouts, n);
+      const notesDir = path.join(plain, 'vault', 'Props');
+      for (const n of fs.readdirSync(notesDir)) {
+        const file = path.join(notesDir, n);
         fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/^prop_style: .*\n/m, ''));
       }
       quietBuild(configPath);

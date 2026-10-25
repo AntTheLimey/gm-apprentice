@@ -223,3 +223,47 @@ test('propContainerOf reads the link target, NFC; showSealedOf is titles or none
   assert.strictEqual(showSealedOf({ show_sealed: 'all' }), 'none');
   assert.strictEqual(showSealedOf({}), 'none');
 });
+
+test('a default address a built page holds moves to -prop, made or hand-made', () => {
+  const root = tree('props-vault-', { 'Props/Letter.md': '', 'Props/Map.md': '', 'Props/map.html': '<p>map</p>' });
+  const { props, problems } = plan(root, [
+    page(root, 'Props/Letter.md', styled()),
+    page(root, 'Props/Map.md', { type: 'prop', prop_file: 'map.html' }),
+  ], { taken: takenAddresses({ pageOutputs: ['props/letter.html', 'props/map.html'] }) });
+  assert.deepStrictEqual(problems, []);
+  assert.deepStrictEqual(props.map((p) => p.address), ['props/letter-prop.html', 'props/map-prop.html']);
+  assert.deepStrictEqual(props.map(outs), [['props/letter-prop.html'], ['props/map-prop.html']]);
+});
+
+test('the -prop address is refused when it is taken too', () => {
+  const root = tree('props-vault-', { 'Props/Letter.md': '' });
+  const { props, problems } = plan(root, [page(root, 'Props/Letter.md', styled())],
+    { taken: takenAddresses({ pageOutputs: ['props/letter.html', 'props/letter-prop.html'] }) });
+  assert.deepStrictEqual(props.map((p) => p.address), [null]);
+  assert.deepStrictEqual(problems.map((p) => [p.detail, p.fix]), [
+    ['its address props/letter.html is taken by a page the site builds, and props/letter-prop.html by a page the site builds', 'give it another prop_address'],
+  ]);
+});
+
+test('a held prop whose default a built page holds keeps the -prop address for the gate', () => {
+  const root = tree('props-vault-', { 'Props/Letter.md': '' });
+  const { props, problems } = plan(root, [page(root, 'Props/Letter.md', styled())],
+    { ships: () => false, taken: takenAddresses({ pageOutputs: ['props/letter.html'] }) });
+  assert.deepStrictEqual(problems, []);
+  assert.strictEqual(props[0].address, 'props/letter-prop.html');
+});
+
+test('an explicit prop_address a built page holds is never moved', () => {
+  const root = tree('props-vault-', { 'Props/Letter.md': '' });
+  const { props, problems } = plan(root, [page(root, 'Props/Letter.md', styled({ prop_address: 'props/letter.html' }))],
+    { taken: takenAddresses({ pageOutputs: ['props/letter.html'] }) });
+  assert.deepStrictEqual(props.map((p) => p.address), [null]);
+  assert.deepStrictEqual(problems.map((p) => p.detail), ['its address props/letter.html is taken by a page the site builds']);
+});
+
+test('a default held by something other than a page does not move', () => {
+  const root = tree('props-vault-', { 'Props/Index.md': '' });
+  const { props, problems } = plan(root, [page(root, 'Props/Index.md', styled())]);
+  assert.deepStrictEqual(props.map((p) => p.address), [null]);
+  assert.deepStrictEqual(problems.map((p) => p.detail), ['its address props/index.html is taken by a file the site needs']);
+});
