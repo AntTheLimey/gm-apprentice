@@ -261,6 +261,44 @@ describe('leak gate: a short title of an unpublished prop in a kept folder (Ruli
     assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'gazetteer/old.html', note: 'Documents/The Ledger.md' }]);
   }, SHELF('prop_address: gazetteer/bookshelf.html\n'), { player: { keep: ['gazetteer'] } }));
 
+  it('a title a published page already says is no finding in a kept page', () => within((s) => {
+    assert.match(fs.readFileSync(path.join(s.outputDir, 'npcs', 'squire.html'), 'utf8'), /keeps The Ledger in his desk/);
+    write(s, 'gazetteer/notes.html', '<!doctype html><html><body><main><p>Ask the squire about The Ledger.</p></main></body></html>');
+    assert.deepEqual(gate(s).findings, []);
+  }, {
+    ...SHELF(), 'NPCs/Squire.md': '---\ntype: npc\n---\nThe squire keeps The Ledger in his desk, everyone knows.\n',
+    ...LIST(['Documents/Bookshelf.md', 'Documents/Other.md', 'NPCs/Squire.md']),
+  }, { player: { keep: ['gazetteer'] } }));
+
+  it("a shipping styled prop's own page in a kept folder, naming a held title, is no finding", () => within((s) => {
+    assert.ok(fs.existsSync(path.join(s.outputDir, 'gazetteer', 'letter.html')));
+    assert.deepEqual(gate(s).findings, []);
+  }, {
+    ...STYLE, 'Documents/The Ledger.md': '---\ntype: prop\n---\nA ledger.\n',
+    'Documents/Letter.md': '---\ntype: prop\nprop_style: t\nprop_address: gazetteer/letter.html\n---\nA note.\n\n## The Text\n\nBurn The Ledger tonight.\n',
+    ...LIST(['Documents/Letter.md']),
+  }, { player: { keep: ['gazetteer'] } }));
+
+  it('a page this build writes in a kept folder is not read for held titles, even where no published text says them', () => within((s) => {
+    leakBeforeBody(s, 'gazetteer/letter.html', 'The Ledger');
+    assert.deepEqual(gate(s).findings, []);
+    write(s, 'gazetteer/old.html', OLD_LISTING('The Ledger'));
+    assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'gazetteer/old.html', note: 'Documents/The Ledger.md' }]);
+  }, {
+    ...STYLE, 'Documents/The Ledger.md': '---\ntype: prop\n---\nA ledger.\n',
+    'Documents/Letter.md': '---\ntype: prop\nprop_style: t\nprop_address: gazetteer/letter.html\n---\nA note.\n\n## The Text\n\nBurn it tonight.\n',
+    ...LIST(['Documents/Letter.md']),
+  }, { player: { keep: ['gazetteer'] } }));
+
+  it('the props page set in a kept folder is not read for held titles', () => within((s) => {
+    assert.ok(fs.existsSync(path.join(s.outputDir, 'gazetteer', 'all-props.html')));
+    // The Old Map is in no container, so no listing prints it sealed: only the skip clears it here.
+    leakInto(s.outputDir, 'gazetteer/all-props.html', 'The Old Map');
+    assert.deepEqual(gate(s).findings, []);
+    write(s, 'gazetteer/old.html', OLD_LISTING('The Old Map'));
+    assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'gazetteer/old.html', note: 'Documents/The Old Map.md' }]);
+  }, { ...SHELF(), 'Documents/The Old Map.md': '---\ntype: prop\n---\nA map.\n' }, { player: { keep: ['gazetteer'], props: { address: 'gazetteer/all-props.html' } } }));
+
   it('a one-word title is not looked for', () => within((s) => {
     write(s, 'gazetteer/props.html', OLD_LISTING('Cipher'));
     assert.deepEqual(gate(s).findings, []);

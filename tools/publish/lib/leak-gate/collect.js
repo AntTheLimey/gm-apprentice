@@ -53,7 +53,7 @@ function collectHidden({ configPath, outputDir = null }) {
   const keptBy = player.vault.kept_by;
   // The GM's own words that must never reach players (player_site.never_show): looked for on every kind of vault.
   const neverShow = (player.site.never_show || []).filter((w) => typeof w === 'string' && w.trim());
-  const empty = { vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), heldProps: [], heldNotePages: [], heldTitles: [], sealedOn: new Map(), siteTakes: () => false, keeps: () => false };
+  const empty = { vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), heldProps: [], heldNotePages: [], heldTitles: [], sealedOn: new Map(), collectionAddress: null, siteTakes: () => false, keeps: () => false };
   if (keptBy === 'player') return empty;
 
   const quiet = () => {};
@@ -269,6 +269,7 @@ function collectHidden({ configPath, outputDir = null }) {
     vaultPath, siteDir, keptBy, neverShow, pieces, visible, warnings, notes, published, publishedRels, linkMap, outOf,
     propOwner, propFiles: new Set(propOwner.keys()), madeFiles, heldProps, heldNotePages, heldTitles, sealedOn,
     keeps: (rel) => taken.keeps(rel),
+    collectionAddress: collection && collection.address ? canonicalNfc(collection.address) : null,
     // An address the site itself fills (a page, a file it needs, a tool folder): a held prop there is not what is there.
     siteTakes: (address) => Boolean(taken.has(address, { explicit: true })),
   };

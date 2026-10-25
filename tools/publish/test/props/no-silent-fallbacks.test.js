@@ -166,3 +166,12 @@ test('the build and the leak gate ask one question: is this styled page made', (
   assert.strictEqual(styledPageProblem({ made: 'style', kind: 'container' }, 'No text section.'), null);
   assert.strictEqual(styledPageProblem({ made: 'container', kind: 'container' }, ''), null);
 });
+
+test('a note with CR-only line ends reads as its LF form to the gate, so its styled page is made as the build makes it', () => {
+  const { playerSafeMarkdown } = require('../../lib/processor');
+  const lf = 'Intro\n\n## The Text\n\nCome at nine.\n';
+  const read = (src) => playerSafeMarkdown(src, { excludeSections: ['GM Notes'], excludeCallouts: ['gm'], frontmatter: { type: 'prop' } }).text;
+  assert.strictEqual(read(lf.replace(/\n/g, '\r')), read(lf));
+  assert.strictEqual(read(lf.replace(/\n/g, '\r\n')), read(lf));
+  assert.strictEqual(styledPageProblem({ made: 'style', kind: 'document' }, read(lf.replace(/\n/g, '\r'))), null);
+});

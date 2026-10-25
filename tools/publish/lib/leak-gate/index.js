@@ -103,20 +103,28 @@ function propUnrevealed({ outputDir, hidden, files }) {
 
 // An unpublished prop's title in a kept folder (an old listing the build no longer cleans): looked for as a whole phrase,
 // as written, so a title of two or three words, too short to be hidden text, still counts there. One word is not looked
-// for (too common to tell). A listing's own sealed title stays allowed (sealedOn).
+// for (too common to tell). A listing's own sealed title stays allowed (sealedOn). A title the player site's own text
+// already says is no secret, by the rule a hidden piece is (`visible`, as words), and a page this build writes (a prop's
+// file, a page it makes, the props page) is not read here: the GM cannot clear a finding there by editing it.
 const NOT_WORD = '(?<![\\p{L}\\p{N}])';
 const NOT_WORD_AFTER = '(?![\\p{L}\\p{N}])';
 const escapeRe = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 function heldTitleFindings({ files, hidden }) {
   const found = [];
   if (!hidden.heldTitles.length) return found;
+  const shown = hidden.visible.map((text) => ` ${wordsOf(text).join(' ')} `);
   const titles = hidden.heldTitles.map((h) => ({
     ...h,
     text: wordsOf(h.title).join(' '),
     re: new RegExp(NOT_WORD + foldQuotes(h.title).trim().split(/\s+/).map(escapeRe).join('\\s+') + NOT_WORD_AFTER, 'u'),
-  }));
+  })).filter((t) => !shown.some((run) => run.includes(` ${t.text} `)));
+  if (!titles.length) return found;
+  const built = (rel) => {
+    const key = canonicalNfc(rel);
+    return hidden.madeFiles.has(key) || hidden.propFiles.has(key) || (hidden.collectionAddress !== null && addressKey(key) === addressKey(hidden.collectionAddress));
+  };
   for (const file of files) {
-    if (!hidden.keeps(file.rel)) continue;
+    if (!hidden.keeps(file.rel) || built(file.rel)) continue;
     const sealed = hidden.sealedOn.get(canonicalNfc(file.rel));
     const text = foldQuotes(file.text || '');
     for (const t of titles) {

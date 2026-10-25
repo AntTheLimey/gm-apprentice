@@ -1779,7 +1779,7 @@ function portraitBasename(frontmatter) {
 // (unclosed markers), for the caller to log wherever its warnings go.
 function playerSafeMarkdown(markdown, options = {}) {
   if (options.mark) return markedSafeMarkdown(markdown, options);
-  const stripped = strippedLines(String(markdown == null ? '' : markdown).replace(/\r/g, ''), options.excludeCallouts, null,
+  const stripped = strippedLines(String(markdown == null ? '' : markdown).replace(/\r\n?/g, '\n'), options.excludeCallouts, null,
     sectionWithholder(options.excludeSections, options.frontmatter, { pcKeepSections: options.pcKeepSections }));
   const { warnings } = stripped;
   let text = stripped.lines.join('\n');
