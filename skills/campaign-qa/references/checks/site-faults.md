@@ -495,10 +495,11 @@ you would change, and edit on a yes.
   to take the link out of the page. A picture can take its place.
   Otherwise offer to take the link out of the page. Say exactly what
   changes and edit on a yes. Before making the note, ask whether
-  players see the PDF too: with no publish list a new note publishes
-  as soon as it exists (on a no, write `publish: false` in it); with
-  one, it publishes only once listed, so on that yes run `SITE
-  manifest apply --publish "<new note>"`.
+  players see the PDF too. On a no, write `publish: false` in it. On a
+  yes, make it and check with `SITE explain "<new note>"`: if something
+  holds it back (not on the publish list, or drafts hidden and its
+  `canon_status: DRAFT`), say what, and on a yes run `SITE manifest
+  apply --publish "<new note>"` or change the status.
 - **Not really the kind its name says** (a `.png` that is a link to a
   note): offer to link the real file in its place.
 - **Could not be read:** give the GM the file and the reason.
