@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.101] — 2026-10-25
+
+The Wrap-Up writers take a session or Wrap-Up by name.
+
+### Fixed
+
+- `vault_write.py wrapup-new --session`, `wrapup-add` and
+  `story --wrapup` accept a note's name, a `[[link]]` or either half
+  of `Session 05 - Beneath the Mill`, as `scene-played` already did,
+  as well as its path. A name two notes share is refused with both
+  paths.
+
 ## [1.10.100] — 2026-10-24
 
 What came out in play is released at wrap-up, on the GM's say.

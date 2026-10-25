@@ -27,7 +27,8 @@
                                [--section] [--headless [--gm-input [PART ...]]]
                                [--write]                                < markdown
 
-Paths are vault-relative. Without --write every command prints its plan and
+Paths are vault-relative; a session index or Wrap-Up can also be named
+(`Session 05 - Beneath the Mill`, or either half). Without --write every command prints its plan and
 writes nothing. The script never writes prose: it places the text on stdin.
 A section is Keeper-facing when it is written under GM Notes and
 player-facing when it is not; any section name is accepted, except that a
@@ -48,7 +49,7 @@ import argparse
 import re
 import sys
 import unicodedata
-from collections.abc import Callable
+from collections.abc import Callable, Collection, Iterable
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
@@ -129,6 +130,35 @@ class Batch:
         want = nfc(stem).casefold()
         return sorted(rel for rel in self._files().values()
                       if nfc(Path(rel).stem).casefold() == want)
+
+    def note_named(self, raw: str, types: Collection[str],
+                   what: str) -> str:
+        """The note of one of `types` that `raw` names: a vault-relative
+        path, or a file name or [[link]] as `scene-played` takes. A name
+        like `Session 05 - Beneath the Mill` also answers to either half."""
+        rel = vl.normalize_file_arg(bare_link(raw))
+        if self.exists(rel):
+            return self.resolve(rel)
+        if "/" in rel:
+            return self.resolve(rel if rel.lower().endswith(".md")
+                                else f"{rel}.md")
+        name = nfc(" ".join(rel.removesuffix(".md").split())).casefold()
+
+        def typed(rels: Iterable[str]) -> list[str]:
+            return sorted(r for r in rels if not is_record(r)
+                          and vl.entity_type(vl.extract_frontmatter(
+                              self.read(r)) or {}) in types)
+        hits = typed(self.with_stem(name)) or typed(
+            r for r in self._files().values()
+            if name in (nfc(half).strip().casefold()
+                        for half in Path(r).stem.split(" - ", 1)))
+        if len(hits) != 1:
+            raise WriteError(
+                f"{what}: no {' or '.join(sorted(types))} note at or named "
+                f"{raw!r}" if not hits else
+                f"{what}: {len(hits)} notes named {raw!r}: "
+                + ", ".join(hits) + "; pass its path")
+        return hits[0]
 
     def exists(self, rel: str) -> bool:
         return rel in self.texts or (self.vault / rel).is_file()
@@ -507,7 +537,7 @@ def is_blank(value: str) -> bool:
 
 
 def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
-    index = batch.resolve(args.session)
+    index = batch.note_named(args.session, {"session"}, "--session")
     text = batch.read(index)
     fm = vl.extract_frontmatter(text) or {}
     if vl.entity_type(fm) != "session":
@@ -885,7 +915,7 @@ def section_exists(note: str, rel: str, level: int, title: str) -> bool:
 
 
 def cmd_wrapup_add(batch: Batch, args: argparse.Namespace, text: str) -> None:
-    rel = batch.resolve(args.wrapup)
+    rel = batch.note_named(args.wrapup, vc.WRAP_TYPES, "wrapup")
     note = batch.read(rel)
     if vl.entity_type(vl.extract_frontmatter(note) or {}) not in vc.WRAP_TYPES:
         raise WriteError(f"{rel}: not a Wrap-Up")
@@ -1025,7 +1055,7 @@ def story_label(story: str | None, number: int) -> str:
 
 
 def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
-    wrap_rel = batch.resolve(args.wrapup)
+    wrap_rel = batch.note_named(args.wrapup, vc.WRAP_TYPES, "--wrapup")
     wrap = batch.read(wrap_rel)
     fm = vl.extract_frontmatter(wrap) or {}
     if vl.entity_type(fm) not in vc.WRAP_TYPES:
@@ -2623,7 +2653,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = ap.add_subparsers(dest="command", required=True)
     new = sub.add_parser("wrapup-new", help="create a session's Wrap-Up")
     new.add_argument("--session", required=True,
-                     help="the session index, vault-relative")
+                     help="the session index: vault-relative, or its name")
     new.add_argument("--source", help="text of the Source callout")
     new.add_argument("--write", action="store_true")
     raw = argparse.RawDescriptionHelpFormatter
@@ -2634,7 +2664,7 @@ def build_parser() -> argparse.ArgumentParser:
             "A ## section is player-facing and goes before GM Notes; a ###\n"
             "or #### section goes under GM Notes, unless it is written\n"
             "inside a ## section, where it stays and players see it."))
-    add.add_argument("wrapup", help="the Wrap-Up, vault-relative")
+    add.add_argument("wrapup", help="the Wrap-Up: vault-relative, or its name")
     how = add.add_mutually_exclusive_group()
     how.add_argument("--replace", action="store_true",
                      help="replace a section that already exists")
