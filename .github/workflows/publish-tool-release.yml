@@ -91,6 +91,11 @@ jobs:
           # Mustache fills prop layouts at build time; its MIT text travels with it.
           tar -tzf "$TGZ" | grep -q "^package/node_modules/mustache/LICENSE$" \
             || { echo "::error::mustache's LICENSE is missing from $TGZ"; exit 1; }
+          # NOTICE.txt carries the licence text of every font a site serves, from these files.
+          for lic in OFL-1.1 Apache-2.0 UFL-1.0; do
+            tar -tzf "$TGZ" | grep -q "^package/licenses/$lic.txt$" \
+              || { echo "::error::licenses/$lic.txt is missing from $TGZ"; exit 1; }
+          done
           sha256sum "$TGZ" > SHA256SUMS
           sha256sum -c SHA256SUMS
           ls -l

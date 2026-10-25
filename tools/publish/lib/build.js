@@ -14,6 +14,7 @@ const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub'
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
 const { noticeText } = require('./notice');
+const { fontNamesOfFile, licenceOf } = require('./font-names');
 const { getsNoPage } = require('./previews');
 const { runSteps, packageScripts, packageNotes } = require('./settings/steps');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
@@ -513,8 +514,9 @@ function buildSite(options) {
     console.warn(`  WARNING: ${fontsLib.GOOGLE_WARNING(names.join(', '))}`);
   }
 
-  // The typefaces the site serves from fonts/, for NOTICE.txt: each Google family by its folder, and
-  // the paths of the fonts the GM supplied.
+  // The typefaces the site serves from fonts/, for NOTICE.txt: each Google family by its folder and
+  // one of its files (whose name table says its copyright and licence), and the paths of the fonts
+  // the GM supplied.
   const servedGoogleFonts = new Map();
   const servedLocalFonts = [];
   function copyFontFiles(files) {
@@ -523,7 +525,7 @@ function buildSite(options) {
       const dest = path.join(outputDir, 'fonts', f.rel);
       ensureDir(dest);
       fs.copyFileSync(f.from, dest);
-      if (f.family) servedGoogleFonts.set(f.family, f.rel.split('/')[0]);
+      if (f.family && !servedGoogleFonts.has(f.family)) servedGoogleFonts.set(f.family, { folder: f.rel.split('/')[0], from: f.from });
       console.log(`  wrote fonts/${f.rel}`);
     }
   }
@@ -2239,7 +2241,14 @@ function buildSite(options) {
   // names every style and typeface the build put on the site.
   if (writes === 'all') {
     const styles = propPlan ? propPlan.styles.filter((st) => st.from === 'plugin' && stylesWritten.has(st.name)).map((st) => st.name) : [];
-    const googleFonts = [...servedGoogleFonts].map(([family, folder]) => ({ family, folder }));
+    // Each Google font's copyright and licence, from its own file. One whose file does not say a
+    // licence the tool knows is listed with its licence page, and the build says so.
+    const googleFonts = [...servedGoogleFonts].map(([family, { folder, from }]) => {
+      const names = fontNamesOfFile(from);
+      const licence = names ? licenceOf(names.licenceUrl) : null;
+      if (!licence) console.warn(`  WARNING: the licence of the font "${family}" (fonts/${folder}/) could not be read from its file; NOTICE.txt points to its licence page on Google Fonts instead`);
+      return { family, folder, copyright: names ? names.copyright : null, licence };
+    });
     fs.writeFileSync(path.join(outputDir, 'NOTICE.txt'), noticeText({ lunr: !!searchData, styles, googleFonts, localFonts: servedLocalFonts }));
     console.log('  wrote NOTICE.txt');
   }

@@ -30,9 +30,13 @@ const sheetWords = (page) => wordsOf([...page.matchAll(/<section class="sheet">(
 const mainWords = (page) => wordsOf(/<main\b[\s\S]*<\/main>/.exec(page)[0]);
 const subset = (a, b) => [...a].filter((w) => !b.has(w));
 
-const seedFont = (slug, file = '0123456789abcdef.woff2') => ({
+// A family in the vault's font cache. `real`: the file is a real subset of VT323 (OFL), so its
+// name table names a copyright and a licence; otherwise the bytes say nothing.
+const VT323 = fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'vt323-subset.woff2'));
+const OFL_HEAD = 'SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007';
+const seedFont = (slug, { real = false, file = '0123456789abcdef.woff2' } = {}) => ({
   [`_meta/font-cache/${slug}/faces.json`]: JSON.stringify([{ style: 'normal', weight: '400', unicodeRange: null, file }]),
-  [`_meta/font-cache/${slug}/${file}`]: 'wOF2fake',
+  [`_meta/font-cache/${slug}/${file}`]: real ? VT323 : 'wOF2fake',
 });
 const quiet = (fn) => {
   const saved = { log: console.log, warn: console.warn };
@@ -168,13 +172,21 @@ describe('what a styled prop ships', () => {
 
 describe('style fonts', () => {
   it('style fonts are self-hosted from the cache', () => {
-    const s = buildBoth({ ...LETTER(), ...seedFont('vt323'), '_meta/prop-styles/t/style.json': '{"fonts":["VT323"]}' }, { sites: ['player'] });
+    const s = buildBoth({ ...LETTER(), ...seedFont('vt323', { real: true }), '_meta/prop-styles/t/style.json': '{"fonts":["VT323"]}' }, { sites: ['player'] });
     try {
       assert.match(s.player.read('props', 'styles', 'fonts.css'), /url\('\.\.\/\.\.\/fonts\/vt323\/0123456789abcdef\.woff2'\)/);
       assert.ok(s.player.exists('fonts', 'vt323', '0123456789abcdef.woff2'));
       assert.match(s.player.read('props', 'letter.html'), /<link rel="stylesheet" href="\.\.\/css\/props\.css">\n<link rel="stylesheet" href="styles\/fonts\.css">\n<link rel="stylesheet" href="styles\/t\/style\.css">/);
-      // NOTICE.txt names the family, its folder, where it came from and where its licence is.
-      assert.match(s.player.read('NOTICE.txt'), /VT323: fonts\/vt323\/, served unmodified from Google Fonts\. Licence: https:\/\/fonts\.google\.com\/specimen\/VT323\/license/);
+      // NOTICE.txt names the family, its folder, its copyright and licence, and carries the licence text.
+      const notice = s.player.read('NOTICE.txt');
+      assert.ok(notice.includes([
+        '  VT323: fonts/vt323/, served unmodified from Google Fonts',
+        '    Copyright 2011, The VT323 Project Authors (peter.hull@oikoi.com)',
+        '    Licence: SIL Open Font License, Version 1.1',
+        '    https://fonts.google.com/specimen/VT323/license',
+      ].join('\n')), notice);
+      assert.ok(notice.includes(`The SIL Open Font License, Version 1.1, for VT323:\n\n-----------------------------------------------------------\n${OFL_HEAD}`), notice);
+      assert.ok(!s.logs.some((l) => /licence of the font/.test(l)), s.logs.join('\n'));
     } finally { s.cleanup(); }
   });
 
@@ -182,7 +194,26 @@ describe('style fonts', () => {
     const s = buildBoth({ ...LETTER('prop_font: Special Elite\n'), ...seedFont('special-elite'), '_meta/prop-styles/t/layout.html': '<h1 style="font-family: {{prop_font|font}}">{{title}}</h1>{{{body}}}' }, { sites: ['player'] });
     try {
       assert.match(s.player.read('props', 'styles', 'fonts.css'), /font-family: 'Special Elite'/);
-      assert.match(s.player.read('NOTICE.txt'), /Special Elite: fonts\/special-elite\/, .*specimen\/Special\+Elite\/license/);
+    } finally { s.cleanup(); }
+  });
+
+  it('two OFL families carry the OFL text once', () => {
+    const s = buildBoth({ ...LETTER(), ...seedFont('vt323', { real: true }), ...seedFont('silkscreen', { real: true }), '_meta/prop-styles/t/style.json': '{"fonts":["VT323","Silkscreen"]}' }, { sites: ['player'] });
+    try {
+      const notice = s.player.read('NOTICE.txt');
+      assert.equal(notice.split(OFL_HEAD).length - 1, 1, notice);
+      assert.match(notice, /The SIL Open Font License, Version 1\.1, for VT323, Silkscreen:/);
+      assert.match(notice, / {2}Silkscreen: fonts\/silkscreen\/, served unmodified from Google Fonts\n {4}Copyright 2011/);
+    } finally { s.cleanup(); }
+  });
+
+  it('a font whose licence cannot be read is listed with its licence page, and the build warns', () => {
+    const s = buildBoth({ ...LETTER('prop_font: Special Elite\n'), ...seedFont('special-elite'), '_meta/prop-styles/t/layout.html': '<h1 style="font-family: {{prop_font|font}}">{{title}}</h1>{{{body}}}' }, { sites: ['player'] });
+    try {
+      const notice = s.player.read('NOTICE.txt');
+      assert.ok(notice.includes('  Special Elite: fonts/special-elite/, served unmodified from Google Fonts\n    Licence: see the address below\n    https://fonts.google.com/specimen/Special+Elite/license'), notice);
+      assert.ok(!notice.includes(OFL_HEAD) && !/Apache License/.test(notice), notice);
+      assert.deepEqual(s.logs.filter((l) => /licence of the font/.test(l)), ['  WARNING: the licence of the font "Special Elite" (fonts/special-elite/) could not be read from its file; NOTICE.txt points to its licence page on Google Fonts instead']);
     } finally { s.cleanup(); }
   });
 
@@ -240,7 +271,7 @@ describe('NOTICE.txt', () => {
     const s = buildBoth({ 'PCs/Ada.md': '---\ntype: pc\nsheet_skin: console\n---\nA pilot.\n', ...seedFont('chakra-petch') }, { sites: ['player'] });
     try {
       assert.ok(s.player.exists('fonts', 'chakra-petch', '0123456789abcdef.woff2'), rels(s.player).join(', '));
-      assert.match(s.player.read('NOTICE.txt'), /Chakra Petch: fonts\/chakra-petch\/, served unmodified from Google Fonts\. Licence: https:\/\/fonts\.google\.com\/specimen\/Chakra\+Petch\/license/);
+      assert.match(s.player.read('NOTICE.txt'), / {2}Chakra Petch: fonts\/chakra-petch\/, served unmodified from Google Fonts\n[\s\S]*https:\/\/fonts\.google\.com\/specimen\/Chakra\+Petch\/license/);
       assert.doesNotMatch(s.player.read('NOTICE.txt'), /IBM Plex Mono/, 'a family not in the cache is not served');
     } finally { s.cleanup(); }
   });
@@ -250,7 +281,7 @@ describe('NOTICE.txt', () => {
     try {
       const text = s.player.read('NOTICE.txt');
       assert.match(text, /supplied by the site's owner:\n\n {2}fonts\/[^\n]*hand\.woff2/);
-      assert.doesNotMatch(text, /Google Fonts\. Licence/);
+      assert.doesNotMatch(text, /served unmodified from Google Fonts/);
     } finally { s.cleanup(); }
   });
 
