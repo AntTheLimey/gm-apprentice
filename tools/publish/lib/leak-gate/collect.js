@@ -26,6 +26,7 @@ const { planProps, bytesOf, textOf } = require('../props/plan');
 const { placeCollection, propTaken, containerItems, propRow, sealedTitlesOn } = require('../props/collection');
 const { cutHtml } = require('../props/html-cut');
 const { textProblem } = require('../props/page');
+const { pathProblem } = require('../props/files');
 
 const NEVER_SHOWN = ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase());
 const neverShown = (rel) => rel.split('/').slice(0, -1).some((s) => NEVER_SHOWN.includes(s.toLowerCase()));
@@ -39,7 +40,9 @@ function printedRows(page) {
 }
 const clip = (s, max = 160) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
 
-function collectHidden({ configPath }) {
+// `outputDir`, when given, is the built site: a made page the build could not write there (a link on its path) is no
+// shipping prop's.
+function collectHidden({ configPath, outputDir = null }) {
   const resolvedConfig = path.resolve(configPath || './vault.config.json');
   const siteDir = path.dirname(resolvedConfig);
   const rawConfig = loadVaultConfig(resolvedConfig);
@@ -49,7 +52,7 @@ function collectHidden({ configPath }) {
   const keptBy = player.vault.kept_by;
   // The GM's own words that must never reach players (player_site.never_show): looked for on every kind of vault.
   const neverShow = (player.site.never_show || []).filter((w) => typeof w === 'string' && w.trim());
-  const empty = { vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), heldProps: [], sealedOn: new Map(), siteTakes: () => false };
+  const empty = { vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), heldProps: [], heldNotePages: [], sealedOn: new Map(), siteTakes: () => false };
   if (keptBy === 'player') return empty;
 
   const quiet = () => {};
@@ -187,6 +190,8 @@ function collectHidden({ configPath }) {
     propOuts.get(rel).push(out);
   };
   const heldProps = [];
+  // The page each unpublished prop note would have, at its scanned output path (index.js watches links to it).
+  const heldNotePages = [];
   // The pages the tool makes for shipping props (a styled page, a container's page): read as ordinary pages, their words
   // their notes' published words. Not a prop file of their note: no hidden text of another note is excused on them.
   const madeFiles = new Set();
@@ -200,10 +205,13 @@ function collectHidden({ configPath }) {
     if (!publishedSet.has(p.page) && !inWorkingDir(p.rel)) {
       add([propRow(p, { isShown: () => false, excludeFields, fieldOverrides }).title], p.rel, 'the title of an unpublished prop');
     }
+    if (!publishedSet.has(p.page) && p.page.outputPath) heldNotePages.push({ rel: p.rel, address: p.page.outputPath });
     if (!p.source) {
-      // A styled page the build does not make (its note shows no words under ## The Text, props/page.js) is not on the
-      // site: its address is no shipping prop's.
-      const unmade = p.made === 'style' && p.kind !== 'container' && textProblem(shownBodyOf.get(p.page) || '') !== null;
+      // A page the build does not make is not on the site: its address is no shipping prop's. A styled page whose note
+      // shows no words under ## The Text (props/page.js), and a made page whose path in the site folder is not a plain
+      // folder or file (props/files.js), as the build blocks them.
+      const unmade = (p.made === 'style' && p.kind !== 'container' && textProblem(shownBodyOf.get(p.page) || '') !== null)
+        || Boolean(outputDir && p.address && pathProblem(outputDir, p.address));
       if (p.ships && p.address && p.made && !unmade) {
         madeFiles.add(canonicalNfc(p.address));
         if (!propOuts.has(p.rel)) propOuts.set(p.rel, []);
@@ -251,7 +259,7 @@ function collectHidden({ configPath }) {
   const outOf = (rel) => [outputOf.get(rel), ...(propOuts.get(rel) || [])].filter(Boolean);
   return {
     vaultPath, siteDir, keptBy, neverShow, pieces, visible, warnings, notes, published, publishedRels, linkMap, outOf,
-    propOwner, propFiles: new Set(propOwner.keys()), madeFiles, heldProps, sealedOn,
+    propOwner, propFiles: new Set(propOwner.keys()), madeFiles, heldProps, heldNotePages, sealedOn,
     // An address the site itself fills (a page, a file it needs, a tool folder): a held prop there is not what is there.
     siteTakes: (address) => Boolean(taken.has(address, { explicit: true })),
   };

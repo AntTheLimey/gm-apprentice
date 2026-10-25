@@ -86,6 +86,14 @@ describe('leak gate: a styled prop page', () => {
     assert.deepEqual(gate(s).findings.map(pick), [{ code: 'PROP_UNREVEALED', page: 'props/letter.html', note: 'Drafts/Letter.md' }]);
   }, { ...STYLE, 'Documents/Letter.md': '---\ntype: prop\nprop_style: t\n---\nA note with no text section.\n', 'Drafts/Letter.md': LETTER('publish: false\n') }));
 
+  it('a made page the build could not write (something not a file at its address) is not counted as shipped', () => within((s) => {
+    const found = () => gate(s).findings.filter((f) => f.code === 'WITHHELD_PUBLISHED').map((f) => f.page).sort();
+    assert.deepEqual(found(), ['documents/letter.html', 'props/letter.html']);
+    fs.rmSync(path.join(s.outputDir, 'props', 'letter.html'));
+    fs.mkdirSync(path.join(s.outputDir, 'props', 'letter.html'));
+    assert.deepEqual(found(), ['documents/letter.html']);
+  }, { ...STYLE, 'Documents/Letter.md': LETTER('withheld: true\n') }));
+
   it('a styled page at an address naming a withheld note is a finding', () => within((s) => {
     assert.ok(fs.existsSync(path.join(s.outputDir, 'props', 'lord-zorn.html')));
     assert.deepEqual(gate(s).findings.filter((f) => f.page === 'props/lord-zorn.html').map((f) => [f.code, f.note]), [['WITHHELD_IN_PROSE', 'NPCs/Lord Zorn.md']]);
@@ -176,6 +184,20 @@ describe('leak gate: a sealed title on its listings', () => {
     'Documents/The Letter from Lady Anne Smith.md': '---\ntype: prop\nprop_container: "[[Bookshelf]]"\n---\nA folded letter.\n',
     'Prep/Session 5.md': '---\ntype: session-prep\n---\nProps to plant:\n\n- Letter from Lady Anne\n',
     ...OTHER, ...LIST(['Documents/Bookshelf.md', 'Documents/Other.md']),
+  }));
+
+  it("an old props page in a kept folder, holding a held plain prop's row, is PROP_UNREVEALED however short its title", () => within((s) => {
+    assert.deepEqual(gate(s).findings, []);
+    write(s, 'gazetteer/props.html', '<!doctype html><html><body><main><h1>Props</h1><ul class="prop-list"><li class="prop-item"><a href="../documents/the-ledger.html">The Ledger</a></li></ul></main></body></html>');
+    assert.deepEqual(gate(s).findings.map(pick), [{ code: 'PROP_UNREVEALED', page: 'gazetteer/props.html', note: 'Documents/The Ledger.md' }]);
+  }, { ...SHELF(), 'Documents/The Ledger.md': '---\ntype: prop\n---\nA ledger.\n' }, { player: { keep: ['gazetteer'] } }));
+
+  it('published pages that mention a held plain prop by wikilink and field give no finding', () => within((s) => {
+    assert.match(fs.readFileSync(path.join(s.outputDir, 'documents', 'other.html'), 'utf8'), /The Ledger/);
+    assert.deepEqual(gate(s).findings, []);
+  }, {
+    ...SHELF(), 'Documents/The Ledger.md': '---\ntype: prop\nprop_container: "[[Bookshelf]]"\n---\nA ledger.\n',
+    'Documents/Other.md': '---\ntype: document\nrelated: "[[The Ledger]]"\n---\nThe vicar keeps [[The Ledger]] close.\n',
   }));
 
   it("a hidden prep note listing the sealed item by name gives no finding on its listings", () => within((s) => {

@@ -31,8 +31,8 @@ const byPageText = (a, b) => (a.page < b.page ? -1 : a.page > b.page ? 1 : a.tex
 
 // A file of a prop the site does not publish: one at the prop's address (unless a shipping prop or the site itself has
 // it), or any other file that is not text and has the prop file's bytes (a PDF or picture copied by hand). A text prop
-// file is found by its text. And a page or SVG that links that address (an old listing left in a kept folder, however
-// short the prop's title): no page the site builds links a held prop's address.
+// file is found by its text. And a page or SVG that links that address, or the page its note would have (an old listing
+// left in a kept folder, however short the prop's title): no page the site builds links either.
 const UNREVEALED = 'the prop file of a note the site does not publish';
 const LINK_ATTR = /\s(?:href|src|xlink:href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
 const EXTERNAL = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
@@ -50,11 +50,18 @@ function linkedAddresses(rel, raw) {
 }
 function propUnrevealed({ outputDir, hidden, files }) {
   const found = [];
-  if (!hidden.heldProps.length) return found;
+  if (!hidden.heldProps.length && !hidden.heldNotePages.length) return found;
   const shipped = new Set([...hidden.propFiles, ...hidden.madeFiles].map(addressKey));
   const atAddress = new Map();
   for (const h of hidden.heldProps) {
     if (h.address && !shipped.has(addressKey(h.address)) && !hidden.siteTakes(h.address) && !atAddress.has(addressKey(h.address))) atAddress.set(addressKey(h.address), h);
+  }
+  // The page an unpublished prop note would have: the build never links a page it does not publish, so a link there
+  // (an old listing's row of a plain prop) is its prop shown. Only a link: a file there is read by its text.
+  const linkedOnly = new Map(atAddress);
+  for (const h of hidden.heldNotePages) {
+    const key = addressKey(h.address);
+    if (!shipped.has(key) && !hidden.siteTakes(h.address) && !linkedOnly.has(key)) linkedOnly.set(key, h);
   }
   const bySize = new Map();
   for (const h of hidden.heldProps) {
@@ -67,11 +74,11 @@ function propUnrevealed({ outputDir, hidden, files }) {
     const text = wordsOf(h.rel).join(' ');
     found.push({ id: findingId(page, text), kind: 'name', code: 'PROP_UNREVEALED', page, text, shown: page, note: h.rel, reason: UNREVEALED });
   };
-  if (atAddress.size) {
+  if (linkedOnly.size) {
     for (const file of files) {
       if (!['.html', '.htm', '.svg'].includes(file.ext)) continue;
       for (const address of linkedAddresses(file.rel, file.raw)) {
-        const at = atAddress.get(addressKey(address));
+        const at = linkedOnly.get(addressKey(address));
         if (at) add(file.rel, at);
       }
     }
@@ -96,7 +103,7 @@ function propUnrevealed({ outputDir, hidden, files }) {
 function runLeakGate({ configPath, outputDir }) {
   const start = performance.now();
   const done = (r) => ({ skipped: null, missing: false, findings: [], unneeded: [], warnings: [], files: 0, ...r, seconds: (performance.now() - start) / 1000 });
-  const hidden = collectHidden({ configPath });
+  const hidden = collectHidden({ configPath, outputDir });
   if (hidden.keptBy === 'player' && hidden.neverShow.length === 0) {
     return done({ skipped: 'The leak check is skipped: this vault is kept by a player (vault.kept_by: player), so it holds nothing hidden.' });
   }
