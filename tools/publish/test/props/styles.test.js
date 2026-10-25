@@ -212,3 +212,57 @@ test('propStyleOf', () => {
   assert.ok(PROP_STYLE_RE.test('terminal'));
   assert.ok(!PROP_STYLE_RE.test('../x'));
 });
+
+test('a symlinked _meta/prop-styles pointing out of the vault is outside', () => {
+  const outside = tree('props-out-', { 'away/layout.html': LAYOUT, 'away/style.css': CSS });
+  const root = vault({ '_meta/.keep': '' });
+  fs.symlinkSync(outside, path.join(root, VAULT_STYLES_DIR));
+  assert.deepStrictEqual(loadStyle('away', { vaultPath: root, pluginDir: plugin() }).problem, {
+    detail: 'the style "away" cannot be used: _meta/prop-styles/ is outside the vault',
+    fix: 'make _meta/prop-styles/ a folder inside the vault, not a link out of it',
+  });
+});
+
+test('a vault override that is a plain file is a problem, not the plugin\'s style', () => {
+  const root = vault({ [vs('terminal')]: 'not a folder' });
+  const { style, problem } = loadStyle('terminal', { vaultPath: root, pluginDir: plugin() });
+  assert.strictEqual(style, undefined);
+  assert.deepStrictEqual(problem, {
+    detail: 'the style "terminal" cannot be used: _meta/prop-styles/terminal is not a folder',
+    fix: "make _meta/prop-styles/terminal/ a folder holding layout.html and style.css, or remove it to use the plugin's",
+  });
+});
+
+test('a vault override that is a dangling link is a problem, not the plugin\'s style', () => {
+  const root = vault({ [vs('.keep')]: '' });
+  fs.symlinkSync(path.join(root, 'nowhere'), path.join(root, VAULT_STYLES_DIR, 'terminal'));
+  const { problem } = loadStyle('terminal', { vaultPath: root, pluginDir: plugin() });
+  assert.strictEqual(problem.detail, 'the style "terminal" cannot be used: _meta/prop-styles/terminal is not a folder');
+});
+
+test('a wrongly spelled file names the spelling it should have', () => {
+  const pluginDir = plugin({ 'bad/Layout.html': LAYOUT, 'bad/style.css': CSS });
+  assert.deepStrictEqual(loadStyle('bad', { vaultPath: vault(), pluginDir }).problem, {
+    detail: 'the style "bad" cannot be used: Layout.html should be named layout.html',
+    fix: "fix the style's Layout.html",
+  });
+});
+
+test('a wrongly spelled assets folder names the spelling it should have', () => {
+  const pluginDir = plugin({ 'terminal/Assets/paper.jpg': 'JPG' });
+  assert.strictEqual(loadStyle('terminal', { vaultPath: vault(), pluginDir }).problem.detail,
+    'the style "terminal" cannot be used: Assets/ should be named assets/');
+});
+
+test('with no styles at all, the fix says where to add one', () => {
+  const pluginDir = fs.mkdtempSync(path.join(os.tmpdir(), 'props-plugin-'));
+  assert.deepStrictEqual(loadStyle('fax', { vaultPath: vault(), pluginDir }).problem, {
+    detail: 'the style "fax" is not one the plugin has or the vault adds in _meta/prop-styles/',
+    fix: 'add the style in _meta/prop-styles/fax/',
+  });
+});
+
+test('a style.json with a byte-order mark reads', () => {
+  const pluginDir = plugin({ 'f/layout.html': LAYOUT, 'f/style.css': CSS, 'f/style.json': '﻿{"title":"F"}' });
+  assert.strictEqual(loadStyle('f', { vaultPath: vault(), pluginDir }).style.json.title, 'F');
+});

@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { PROP_STYLE_RE } = require('./note');
 const { checkLayout } = require('./layout');
-const { within, realOrNull, findUnder } = require('./plan');
+const { within, realOrNull, findUnder } = require('./paths');
 const { isValidFamily } = require('../fonts');
 
 const PLUGIN_STYLES_DIR = path.join(__dirname, '..', '..', 'prop-styles');
@@ -16,19 +16,22 @@ const VAULT_STYLES_DIR = '_meta/prop-styles';
 const STYLE_ASSET_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif', '.woff2', '.woff', '.ttf', '.otf']);
 const DEFAULT_SHEET = '<section class="sheet">{{{text}}}</section>';
 
-// The style folders directly under `root`, by exact name.
-function styleNames(root) {
+// The style names directly under `root`, by exact name. The plugin's are its folders; in a vault
+// any entry with a style's name counts (a file or a dangling link too), so an override the GM
+// meant but got wrong is reported rather than quietly passed over for the plugin's.
+function styleNames(root, { foldersOnly }) {
   let entries;
   try { entries = fs.readdirSync(root); } catch { return []; }
   return entries.filter((n) => {
     if (!PROP_STYLE_RE.test(n)) return false;
+    if (!foldersOnly) return true;
     try { return fs.statSync(path.join(root, n)).isDirectory(); } catch { return false; }
   });
 }
 
 function listStyles({ vaultPath, pluginDir = PLUGIN_STYLES_DIR }) {
-  const vaultNames = styleNames(path.join(vaultPath, VAULT_STYLES_DIR));
-  const pluginNames = styleNames(pluginDir);
+  const vaultNames = styleNames(path.join(vaultPath, VAULT_STYLES_DIR), { foldersOnly: false });
+  const pluginNames = styleNames(pluginDir, { foldersOnly: true });
   const all = [...new Set([...vaultNames, ...pluginNames])].sort();
   return all.map((name) => (vaultNames.includes(name)
     ? { name, from: 'vault', replaces: pluginNames.includes(name) }
@@ -40,7 +43,7 @@ const unusable = (name, why, file) => ({
 });
 
 function readText(real) {
-  return fs.readFileSync(real, 'utf8').replace(/^﻿/, '');
+  return fs.readFileSync(real, 'utf8').replace(/^\ufeff/, '');
 }
 
 // style.json's values the tool uses, each of the type it expects; anything else is dropped.
@@ -74,12 +77,29 @@ function loadStyle(name, { vaultPath, pluginDir = PLUGIN_STYLES_DIR }) {
     return {
       problem: {
         detail: `the style "${name}" is not one the plugin has or the vault adds in _meta/prop-styles/`,
-        fix: `use one of: ${names.join(', ')}, or add the style`,
+        fix: names.length ? `use one of: ${names.join(', ')}, or add the style` : `add the style in _meta/prop-styles/${name}/`,
       },
     };
   }
   const root = entry.from === 'vault' ? path.join(vaultPath, VAULT_STYLES_DIR) : pluginDir;
   const rootReal = realOrNull(root);
+  if (entry.from === 'vault') {
+    // A vault's styles are vault files: like a prop's files, they resolve inside the vault.
+    const vaultReal = realOrNull(path.resolve(vaultPath));
+    if (!vaultReal || !rootReal || !within(rootReal, vaultReal)) {
+      return { problem: { detail: `the style "${name}" cannot be used: ${VAULT_STYLES_DIR}/ is outside the vault`, fix: `make ${VAULT_STYLES_DIR}/ a folder inside the vault, not a link out of it` } };
+    }
+    let isFolder = false;
+    try { isFolder = fs.statSync(path.join(root, name)).isDirectory(); } catch { isFolder = false; }
+    if (!isFolder) {
+      return {
+        problem: {
+          detail: `the style "${name}" cannot be used: ${VAULT_STYLES_DIR}/${name} is not a folder`,
+          fix: `make ${VAULT_STYLES_DIR}/${name}/ a folder holding layout.html and style.css, or remove it to use the plugin's`,
+        },
+      };
+    }
+  }
   const dir = realOrNull(path.join(root, name));
   if (!rootReal || !dir || dir === rootReal || !within(dir, rootReal)) return unusable(name, `${name}/ is outside the style's folder`, `${name}/`);
 
@@ -89,6 +109,7 @@ function loadStyle(name, { vaultPath, pluginDir = PLUGIN_STYLES_DIR }) {
   for (const file of ['layout.html', 'style.css', 'sheet.html', 'style.json', 'script.js']) {
     const hit = find([file]);
     if (hit.why === 'outside') return unusable(name, `${file} is outside the style's folder`, file);
+    if (hit.why === 'case') return unusable(name, `${hit.name} should be named ${file}`, hit.name);
     files[file] = hit.real || null;
   }
   for (const file of ['layout.html', 'style.css']) {
@@ -109,9 +130,13 @@ function loadStyle(name, { vaultPath, pluginDir = PLUGIN_STYLES_DIR }) {
     }
   }
 
-  // assets/: one level, the listed kinds only.
+  // assets/: one level, the listed kinds only. Matched by its exact name, as the files are.
   const assets = [];
-  const assetsHit = realOrNull(path.join(dir, 'assets'));
+  let top = [];
+  try { top = fs.readdirSync(dir); } catch { top = []; }
+  const misspelled = top.find((n) => n !== 'assets' && n.toLowerCase() === 'assets');
+  if (misspelled && !top.includes('assets')) return unusable(name, `${misspelled}/ should be named assets/`, `${misspelled}/`);
+  const assetsHit = top.includes('assets') ? realOrNull(path.join(dir, 'assets')) : null;
   if (assetsHit) {
     if (!within(assetsHit, dir)) return unusable(name, "assets/ is outside the style's folder", 'assets/');
     let entries = [];
