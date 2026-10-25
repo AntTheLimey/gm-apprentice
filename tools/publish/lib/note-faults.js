@@ -1,6 +1,6 @@
 'use strict';
 
-// Faults in a NOTE that change what the site shows. Four codes:
+// Faults in a NOTE that change what the site shows. The codes:
 //
 //   NAMED_NO_PAGE   a vault note with no page, linked from a published page that prints its
 //                   name as plain words
@@ -27,6 +27,10 @@
 //                     after the block is withheld with it (information; the build says so per page)
 //   TABLE_OVERWIDE  a table with a row wider than its header, which the renderer widens so no cell
 //                     is lost (information; the build says so per page)
+//   PROP_NOT_COPIED  a prop note's file, its address or a file it links that the site cannot
+//                     publish (missing, outside the note's folder, a kind it does not copy, an
+//                     address taken or not a path, a link in the site folder); the plan's own
+//                     words, from props/plan.js and the build
 //
 // Nothing here reads a page a second way, and nothing here knows which field a template
 // prints. The names are decided by the page as the build makes it: every link to a note
@@ -51,7 +55,7 @@ const { kindOfType } = require('./kind-label');
 const { STORY_SUFFIX } = require('./scanner');
 const { decodeEntities } = require('./templates/gurps/tables');
 
-const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE'];
+const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE', 'PROP_NOT_COPIED'];
 const WORST = 3;
 // The human report names this many of the pages that link a note with no page.
 const PAGES_SHOWN = 3;
@@ -1047,6 +1051,9 @@ function summaryLines(findings) {
       continue;   // information for campaign-qa; the build has nothing to say about it
     } else if (code === 'HEADING_IN_HIDDEN_BLOCK' || code === 'TABLE_OVERWIDE') {
       continue;   // information for campaign-qa; the build said it per page as it went
+    } else if (code === 'PROP_NOT_COPIED') {
+      const worst = [...new Set(rows.map((f) => baseName(f.path)))].slice(0, WORST);
+      lines.push(`${n} prop ${plural(n, 'file', 'files')} could not be put on the site (${worst.join(', ')}) — ${where} ${these}.`);
     } else if (code === 'WITHHELD_NAME_PUBLIC') {
       const names = [...new Set(rows.map((f) => f.name))];
       lines.push(`${names.length} withheld ${plural(names.length, 'name is also the name of a published page', 'names are also the names of published pages')}, so ${plural(names.length, 'it is', 'they are')} not looked for (${names.slice(0, WORST).join(', ')}) — ${where} ${plural(names.length, 'it', 'these')}.`);

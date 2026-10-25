@@ -12,6 +12,8 @@ const { listFileText } = require('../helpers/publish-list');
 const { takenAddresses } = require('../../lib/props/address');
 const { propBar, withPropBar, propLinkHtml } = require('../../lib/templates/prop-bar');
 const { propHrefFor, propOutputs } = require('../../lib/props/files');
+const { runSiteDoctor } = require('../../lib/site-doctor');
+const { summaryLines } = require('../../lib/note-faults');
 
 const PROP = (extra = '') => `---\ntype: prop\nprop_file: invitation.html\n${extra}---\nAn invitation to the ball.\n`;
 const PAGE = [
@@ -29,6 +31,11 @@ const PROP_FILES = {
   'Documents/assets/secret.jpg': 'SECRETBYTES',
 };
 const rels = (s) => s.player.files().map((f) => path.relative(s.player.dir, f).split(path.sep).join('/'));
+const quietly = async (fn) => {
+  const saved = { log: console.log, warn: console.warn };
+  console.log = () => {}; console.warn = () => {};
+  try { return await fn(); } finally { Object.assign(console, saved); }
+};
 const quiet = (fn) => {
   const saved = { log: console.log, warn: console.warn };
   const lines = [];
@@ -169,6 +176,37 @@ describe('what cannot ship is a warning', () => {
       assert.equal(mine.length, 1, JSON.stringify(faults));
       assert.equal(mine[0].severity, 'warning');
       assert.equal(mine[0].path, 'Documents/Invitation.md');
+    } finally { s.cleanup(); }
+  });
+});
+
+describe('PROP_NOT_COPIED in the doctor and the summary', () => {
+  it('doctor --site reports PROP_NOT_COPIED', async () => {
+    const s = buildBoth({ 'Documents/Invitation.md': PROP() }, { sites: [] });
+    try {
+      const out = [];
+      await quietly(() => runSiteDoctor({ configPath: s.configPath, json: true }, { out: (l) => out.push(String(l)), detect: () => null }));
+      const mine = JSON.parse(out.join('\n')).findings.filter((f) => f.code === 'PROP_NOT_COPIED');
+      assert.equal(mine.length, 1, out.join('\n'));
+      assert.equal(mine[0].severity, 'warning');
+      assert.equal(mine[0].path, 'Documents/Invitation.md');
+      assert.match(mine[0].detail, /the prop file "invitation\.html" is not in Documents/);
+      assert.equal(mine[0].fix, 'put the file beside the note, or correct prop_file');
+    } finally { s.cleanup(); }
+  });
+
+  it('the build summary counts the props and names the worst three notes', () => {
+    const row = (p) => ({ code: 'PROP_NOT_COPIED', severity: 'warning', path: p, detail: 'd', fix: 'f' });
+    assert.deepEqual(summaryLines([row('Documents/A.md')]),
+      ["1 prop file could not be put on the site (A) — campaign-qa's Site Faults check fixes it."]);
+    assert.deepEqual(summaryLines(['A', 'B', 'C', 'D'].map((n) => row(`Documents/${n}.md`))),
+      ["4 prop files could not be put on the site (A, B, C) — campaign-qa's Site Faults check fixes these."]);
+  });
+
+  it('the build prints the summary line', () => {
+    const s = buildBoth({ 'Documents/Invitation.md': PROP() }, { sites: ['player'] });
+    try {
+      assert.ok(s.logs.includes("  WARNING: 1 prop file could not be put on the site (Invitation) — campaign-qa's Site Faults check fixes it."), s.logs.join('\n'));
     } finally { s.cleanup(); }
   });
 });
@@ -424,6 +462,21 @@ describe('a link on a prop path in the site folder', () => {
       } finally { s.cleanup(); }
     });
 
+    it(`${where}: an in-memory build (the doctor's) raises the same row, and touches nothing`, () => {
+      const { s, outside } = linked('', { sub });
+      try {
+        let faults = null;
+        quiet(() => build({ configPath: s.configPath, site: 'player', inMemory: true, onNoteFaults: (f) => { faults = f; } }));
+        assert.deepEqual(fs.readdirSync(path.join(outside, 'papers')), []);
+        const mine = faults.filter((f) => f.code === 'PROP_NOT_COPIED');
+        assert.ok(mine.length > 0 && mine.every((f) => f.path === 'Documents/Invitation.md'), JSON.stringify(faults));
+        assert.match(mine[0].detail, /gazetteer\/papers\/invitation\.html was not written: a folder on its path in the site folder is a link/);
+        let full = null;
+        quiet(() => build({ configPath: s.configPath, site: 'player', onNoteFaults: (f) => { full = f; } }));
+        assert.deepEqual(mine, full.filter((f) => f.code === 'PROP_NOT_COPIED'), 'the rows a full build raises');
+      } finally { s.cleanup(); }
+    });
+
     it(`${where}: an unpublished prop's matching copy behind it is not deleted`, () => {
       // Built once through a real folder, the copy is then moved behind the link: same bytes.
       const { s, outside } = linked('', { sub, listed: false });
@@ -438,6 +491,19 @@ describe('a link on a prop path in the site folder', () => {
       } finally { s.cleanup(); }
     });
   }
+
+  it('an in-memory build looks only in kept folders: a link the full build would clean away is no row', () => {
+    const s = buildBoth({ 'Documents/Invitation.md': PROP('prop_address: papers/invitation.html\n'), ...PROP_FILES }, { sites: [] });
+    try {
+      const outside = path.join(s.root, 'outside');
+      fs.mkdirSync(outside, { recursive: true });
+      fs.mkdirSync(s.player.dir, { recursive: true });
+      fs.symlinkSync(outside, path.join(s.player.dir, 'papers'));
+      let faults = null;
+      quiet(() => build({ configPath: s.configPath, site: 'player', inMemory: true, onNoteFaults: (f) => { faults = f; } }));
+      assert.deepEqual(faults.filter((f) => f.code === 'PROP_NOT_COPIED'), []);
+    } finally { s.cleanup(); }
+  });
 
   it('a stale copy whose bytes differ is left, and the build says so', () => {
     const s = buildBoth({

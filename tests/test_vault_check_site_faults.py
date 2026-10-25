@@ -285,6 +285,13 @@ class SiteFaultRowsTests(unittest.TestCase):
         self.assertIn("— Add header cells for the extra columns", rows[0])
         self.assertIn("TABLE_OVERWIDE", vc.NOTE_FAULT_CODES)
 
+    def test_prop_not_copied_row(self):
+        self.assertEqual(vc._site_fault_row(
+            {"code": "PROP_NOT_COPIED", "severity": "warning",
+             "path": "Props/A.md", "detail": "d", "fix": "f"}, False),
+            "WARNING\tProps/A.md\tPROP_NOT_COPIED: d — f")
+        self.assertIn("PROP_NOT_COPIED", vc.NOTE_FAULT_CODES)
+
     def test_a_withheld_name_printed_on_a_page_is_a_row(self):
         vault, _site = make(self, {
             MARA: npc("Lord Zorn rides at dawn."),

@@ -76,6 +76,7 @@ every page that names it. Use it to confirm each fix.
 | `SKILL_BELOW_BASE` (`INFO`) | Info | A CoC skill is written below the base its characteristics give |
 | `HEADING_IN_HIDDEN_BLOCK` (`INFO`) | Info | A hidden heading sits inside a hidden block, so the text after it is withheld |
 | `TABLE_OVERWIDE` (`INFO`) | Info | A table row has more cells than its header, so the site widened the table |
+| `PROP_NOT_COPIED` | Warning | A prop's file, address or a file it links to is not on the site |
 
 A row is raised only where the site shows the fault. A stray `%%` or
 an open fence that lies wholly under `## GM Notes` changes nothing a
@@ -458,6 +459,40 @@ the table so no cell is lost; the extra columns have blank headings.
 Per table, ask the GM what to call each extra column, then add those
 header cells (and the matching `---` cells) in the note. Edit only on
 an answer.
+
+## PROP_NOT_COPIED
+
+A prop note's file, its address or a file its page links cannot go on
+the site. The note's own page still publishes, without the link to the
+prop. The row names the note and says what is wrong; after the `—` it
+says the fix. Work one note at a time: show the row's words, say what
+you would change, and edit on a yes.
+
+- **The prop file is not there, or is outside the note's folder:** look
+  for a file of that name in the vault (`find "<vault>" -iname
+  "<name>"`). An accented letter can be stored two ways, so if `find`
+  gives nothing, list the likely folders and compare the names as they
+  read. Offer to move the file beside the note, or to correct
+  `prop_file` to where it is. It must sit in the note's folder or a
+  folder under it.
+- **A kind the site does not copy:** a prop file is a page, a PDF or a
+  picture. Ask the GM for it in one of those forms.
+- **The address is taken, or `prop_address` is not a path the site can
+  use:** offer a `prop_address` under `props/` that nothing else has,
+  ending as the prop file does (`props/invitation.html`).
+- **A file the prop's page links** (not there, outside its folder, a
+  letter-case difference, a kind not copied, an address starting with
+  `/`): show the line of the page that links it. Offer to move the file
+  beside the page, or into a folder under it, and correct the link to
+  match. The page is the GM's own work: never edit it without saying
+  exactly what changes.
+- **Could not be read:** give the GM the file and the reason.
+- **A link in the site folder:** a folder on the prop's address, in a
+  kept folder of the site, is a link, so nothing is written through it.
+  That is the site folder, not the vault. Tell the GM, and offer
+  another `prop_address`.
+
+Confirm each fix with `site-faults --file "<note>"`.
 
 ## Reporting
 

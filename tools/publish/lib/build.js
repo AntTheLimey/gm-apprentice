@@ -1195,12 +1195,14 @@ function buildSite(options) {
 
   cleanOutput();
   // A prop file is never written through a link in the site folder (a kept folder can hold
-  // one): such a file is not written, and its note does not link it.
+  // one): such a file is not written, and its note does not link it. In memory (the doctor)
+  // nothing was cleaned, so only a kept folder is looked in: all that a clean would leave.
   const propBlocked = new Set();
-  if (propPlan && writes === 'all') {
+  const survivesClean = (out) => !dry || config.preserveDirs.some((kept) => kept.toLowerCase() === out.split('/')[0].toLowerCase());
+  if (propPlan && (writes === 'all' || dry)) {
     for (const p of propPlan.props) {
       for (const f of p.ships && p.address ? p.files : []) {
-        const why = pathProblem(outputDir, f.out);
+        const why = survivesClean(f.out) && pathProblem(outputDir, f.out);
         if (!why) continue;
         propBlocked.add(f.out);
         const detail = why === 'link' ? `${f.out} was not written: a folder on its path in the site folder is a link` : `${f.out} was not written: something that is not a file is at that address in the site folder`;
