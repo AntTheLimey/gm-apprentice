@@ -220,6 +220,13 @@ class RevealTests(unittest.TestCase):
             text = (self.root / VEX).read_text(encoding="utf-8")
             self.assertEqual(text, "---\ntype: npc\nwithheld: false\n---\n\nVex.\n", spelled)
 
+    def test_crlf_note_keeps_crlf(self) -> None:
+        (self.root / VEX).write_bytes(b"---\r\ntype: npc\r\nwithheld: true\r\n---\r\n\r\nVex.\r\n")
+        code, out, _ = run(self.root, "--publish", VEX, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual((self.root / VEX).read_bytes(),
+                         b"---\r\ntype: npc\r\nwithheld: false\r\n---\r\n\r\nVex.\r\n")
+
     def test_spelling_the_helpers_refuse_is_not_published(self) -> None:
         for spelled in ("withheld : true", '"withheld": true'):
             (self.root / VEX).write_text(f"---\ntype: npc\n{spelled}\n---\n\nVex.\n",

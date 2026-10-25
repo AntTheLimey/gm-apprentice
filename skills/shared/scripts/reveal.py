@@ -109,7 +109,8 @@ def _refusal(vault: Path, rel: str) -> str | None:
 def _clear_withheld(vault: Path, rel: str) -> tuple[str | None, str | None]:
     """(new text with `withheld: false` or None when there is nothing to do,
     why it could not be done)."""
-    text = (vault / rel).read_text(encoding="utf-8")
+    with open(vault / rel, encoding="utf-8", newline="") as f:
+        text = f.read()     # no newline translation: a CRLF note stays CRLF
     lines = text.splitlines(keepends=True)
     end, error = frontmatter_span(lines)
     if error == "no frontmatter":
