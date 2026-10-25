@@ -2158,11 +2158,12 @@ function buildSite(options) {
       written += 1;
       const full = path.join(outputDir, ...f.out.split('/'));
       ensureDir(full);
+      const replaced = f.replacesKept && fs.existsSync(full);
       if (f.isPage) writeHtml(full, f.text, propPlan.props.find((p) => p.rel === f.rel).page);
       else fs.writeFileSync(full, f.text !== undefined ? f.text : f.bytes);
       console.log(`  wrote ${f.out}`);
       shipped.add(f.rel);
-      if (f.replacesKept) console.log(`  replaces kept file: ${f.out}`);
+      if (replaced) console.log(`  replaces kept file: ${f.out}`);
     }
     if (writes === 'all' && propPlan.props.length > 0) console.log(`Props: ${shipped.size} published (${written} files)`);
   }

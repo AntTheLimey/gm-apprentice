@@ -253,6 +253,16 @@ describe('kept folders', () => {
     } finally { s.cleanup(); }
   });
 
+  it('an explicit address inside a kept folder with no file there only says it wrote', () => {
+    const s = buildBoth({ 'Documents/Invitation.md': PROP('prop_address: gazetteer/invitation.html\n'), ...PROP_FILES }, { sites: [], player: { keep: ['gazetteer'] } });
+    try {
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.match(s.player.read('gazetteer', 'invitation.html'), /You are invited/);
+      assert.ok(lines.includes('  wrote gazetteer/invitation.html'), lines.join('\n'));
+      assert.ok(!lines.some((l) => /replaces kept file/.test(l)), lines.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
   it('a default address inside a kept folder is refused', () => {
     const s = buildBoth({ 'Documents/Invitation.md': PROP(), ...PROP_FILES }, { sites: [], player: { keep: ['props'] } });
     try {
