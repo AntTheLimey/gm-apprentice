@@ -132,10 +132,41 @@ test('checkLayout refuses what it cannot read the way the browser does', () => {
     '<!-- a note --><p>{{prop_x}}</p>',
     '<script>var a = 1;</script><p>{{prop_x}}</p>',
     '<p title=\'{{prop_x}}\' class=x>',
+    '<div {{#first}}a="1" {{/first}}{{^first}}b="2" {{/first}}>',
+    '<div {{#first}}{{#last}}a{{/last}} b{{/first}}>',
   ];
   for (const text of fine) {
     assert.deepStrictEqual(checkLayout(text, { file: 'f' }), [], text);
   }
+});
+
+// HTML counts only tab, LF, FF, CR and space as whitespace; other spaces are ordinary characters.
+test('only HTML whitespace ends a name, a value or a script', () => {
+  for (const [label, sp] of [['NBSP', '\u00A0'], ['VT', '\u000B'], ['LS', '\u2028'], ['FEFF', '\uFEFF'], ['EMSP', '\u2003']]) {
+    const refused = [
+      `<div title=a${sp}b=" onclick={{prop_x}} ">`,
+      `<p${sp}x=" onclick={{prop_x}} ">`,
+      `<script>x="</script${sp}><p title='";{{prop_x}}//'>";</script>`,
+      `<div ${sp}{{#first}}a{{/first}}>`,
+      `<div {{#first}}a{{/first}}${sp}>`,
+    ];
+    for (const text of refused) {
+      assert.ok(checkLayout(text, { file: 'f' }).length > 0, `${label}: ${JSON.stringify(text)}`);
+    }
+    // The browser reads one attribute named "y<space>x" whose quoted value holds the field:
+    // the same reading as the walker's, and a safe one.
+    assert.deepStrictEqual(checkLayout(`<p y${sp}x=" onclick={{prop_x}} ">`, { file: 'f' }), [], label);
+    assert.ok(checkLayout(`<p y${sp}onclick="{{prop_x}}">`, { file: 'f' }).length === 0, label);
+  }
+  assert.deepStrictEqual(checkLayout('<div\ttitle=a\nclass="{{prop_x}}"\f\r>', { file: 'f' }), []);
+});
+
+test('no head or embedding elements in a layout', () => {
+  for (const el of ['meta', 'base', 'link', 'object', 'embed', 'frame', 'frameset', 'applet', 'form']) {
+    const [problem] = checkLayout(`<p>x</p><${el} title="a">`, { file: 'f' });
+    assert.ok(problem && problem.startsWith(`f line 1: <${el}> belongs in a page's head or embeds another document`), el);
+  }
+  assert.ok(checkLayout('<meta http-equiv="refresh" content="0;url={{prop_x}}">', { file: 'f' }).length > 0);
 });
 
 test('each refusal says why', () => {

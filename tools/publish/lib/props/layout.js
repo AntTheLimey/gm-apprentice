@@ -46,6 +46,14 @@ function dangerousAttr(name) {
 // Elements whose content the browser reads by rules the walker does not follow (raw text,
 // RCDATA, template contents, foreign content): a layout may not use them at all.
 const REFUSED_ELEMENTS = new Set(['title', 'textarea', 'xmp', 'iframe', 'noembed', 'noframes', 'noscript', 'plaintext', 'template', 'svg', 'math']);
+// Elements that belong in a page's head or embed another document. A layout is a fragment of
+// the page body, and a field in one of these (a meta refresh's content, an object's data) can
+// send the reader elsewhere.
+const HEAD_OR_EMBED = new Set(['meta', 'base', 'link', 'object', 'embed', 'frame', 'frameset', 'applet', 'form']);
+// HTML's whitespace: JavaScript's \s also matches NBSP, VT and other Unicode spaces the
+// browser reads as ordinary characters.
+const HTML_WS = /^[\t\n\f\r ]$/;
+const HTML_WS_OR_END = /^[\t\n\f\r />]$/;
 // The states of a tag in which the next character starts or continues an attribute name.
 const NAME_STATES = new Set(['beforeName', 'name', 'afterName', 'afterQuoted', 'selfClosing']);
 
@@ -93,6 +101,8 @@ class ContextWalker {
     const name = this.tagName.toLowerCase();
     if (!this.closing && REFUSED_ELEMENTS.has(name)) {
       this.refuse(this.i - name.length, `<${name}>`, `is an element whose content the safety check cannot read; a style may not use <${name}>`);
+    } else if (!this.closing && HEAD_OR_EMBED.has(name)) {
+      this.refuse(this.i - name.length, `<${name}>`, `belongs in a page's head or embeds another document; a layout is part of the page body and may not use <${name}>`);
     }
   }
 
@@ -116,7 +126,7 @@ class ContextWalker {
     const s = this.s;
     while (this.i < end) {
       const c = s[this.i];
-      const ws = /\s/.test(c);
+      const ws = HTML_WS.test(c);
       if (this.mode === 'text') {
         if (c === '<') {
           const next = s[this.i + 1] || '';
@@ -145,7 +155,7 @@ class ContextWalker {
           this.refuse(this.i, '<!--', `is inside <${this.raw}>, where it changes where the element ends`);
         }
         const close = `</${this.raw}`;
-        if (s.slice(this.i, this.i + close.length).toLowerCase() === close && /^[\s/>]/.test(s[this.i + close.length] || '')) {
+        if (s.slice(this.i, this.i + close.length).toLowerCase() === close && HTML_WS_OR_END.test(s[this.i + close.length] || '')) {
           this.openTag(true);
           this.tagName = this.raw;
           this.raw = '';
@@ -302,10 +312,13 @@ function checkLayout(text, { file } = {}) {
       const name = walker.name;
       visit(token[4]);
       walker.walkTo(offset);
-      const after = skeleton[offset] || '';
-      if (inTag && !/\s/.test(skeleton[start - 1] || '')) {
+      // A close directly followed by another section is fine: that section's own opening
+      // check reads what comes before it in either outcome.
+      const closeEnd = text.indexOf(TAGS[1], token[5]) + TAGS[1].length;
+      const nextSection = /^\{\{\s*[#^]/.test(text.slice(closeEnd));
+      if (inTag && !HTML_WS.test(skeleton[start - 1] || '')) {
         say(token, 'opens inside a tag without a space before it; a section in a tag must hold whole attributes');
-      } else if (inTag && !/^[\s/>]$/.test(after)) {
+      } else if (inTag && !nextSection && !HTML_WS_OR_END.test(skeleton[offset] || '')) {
         say(token, 'closes inside a tag without a space, / or > after it; a section in a tag must hold whole attributes');
       } else if (inTag && !wholeAttributes(skeleton.slice(start, offset))) {
         say(token, 'holds an unbalanced quote, < or > inside a tag; a section in a tag must hold whole attributes');
