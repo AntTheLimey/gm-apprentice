@@ -20,10 +20,12 @@
 .prop-style-terminal .sheet { position: relative; box-sizing: border-box; width: min(880px, 100%); min-height: calc(min(880px, 100vw - 32px) * 11 / 8.5);
   margin: 0 auto 2.2rem; overflow: hidden; container-type: inline-size; }
 
-.term { display: flex; flex-direction: column; padding: 2.6cqw 3.2cqw 2.4cqw; color: var(--phos);
+.term { display: flex; flex-direction: column; color: var(--phos);
   background: radial-gradient(ellipse at 50% 45%, #06180e 0%, var(--tube) 62%, #010402 100%);
   border-radius: 2.2cqw; text-transform: uppercase; font-family: 'VT323', ui-monospace, monospace;
   box-shadow: 0 0 0 0.9cqw #0b0e10, 0 0 0 1.1cqw #1c2226, 0 2cqw 6cqw rgba(0, 0, 0, 0.8), inset 0 0 9cqw rgba(0, 0, 0, 0.9); }
+/* The glass holds the padding: padding on the sheet, the size container, would shrink every cqw inside it. */
+.term .glass { flex: 1; display: flex; flex-direction: column; padding: 2.6cqw 3.2cqw 2.4cqw; }
 /* Scanlines and a slow roll bar over the glass. */
 .term::before { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 3;
   background: repeating-linear-gradient(to bottom, transparent 0 2px, rgba(0, 0, 0, 0.28) 3px, transparent 4px); }
@@ -58,7 +60,8 @@
 
 /* Printout: the same file on thermal stock. */
 .paper .term { color: var(--ink); background: linear-gradient(180deg, #f3f3ea, var(--paper)); border-radius: 0;
-  box-shadow: 0 1.2cqw 4cqw rgba(0, 0, 0, 0.7); padding-left: 2.4cqw; padding-right: 2.4cqw; }
+  box-shadow: 0 1.2cqw 4cqw rgba(0, 0, 0, 0.7); }
+.paper .term .glass { padding-left: 2.4cqw; padding-right: 2.4cqw; }
 .paper .term::before { background: repeating-linear-gradient(to bottom, transparent 0 5px, rgba(20, 40, 30, 0.035) 6px); }
 .paper .term::after, .paper .term .l-last::after { display: none; }
 .paper .term .prop-text { text-shadow: none; font-size: max(14px, 2.5cqw); }

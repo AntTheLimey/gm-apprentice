@@ -10,7 +10,7 @@
 .decree-desk { padding: 1.6rem 16px 4rem; }
 
 .prop-style-decree .sheet { position: relative; box-sizing: border-box; width: min(210mm, 100%); min-height: calc(min(210mm, 100vw - 32px) * 1.414);
-  margin: 0 auto 2rem; padding: 6cqw; display: flex; container-type: inline-size;
+  margin: 0 auto 2rem; display: flex; container-type: inline-size;
   background:
     radial-gradient(ellipse 70% 50% at 30% 20%, rgba(255, 250, 235, 0.5), transparent 70%),
     radial-gradient(ellipse 80% 60% at 75% 95%, rgba(150, 110, 60, 0.18), transparent 70%),
@@ -18,6 +18,8 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 14px 44px rgba(0, 0, 0, 0.55), inset 0 0 50px rgba(96, 68, 30, 0.2); }
 .decree .border { position: relative; flex: 1; display: flex; flex-direction: column; padding: 6cqw 6.4cqw 7cqw;
   border: 0.55cqw double rgba(36, 26, 18, 0.8); outline: 0.2cqw solid rgba(36, 26, 18, 0.55); outline-offset: 1.1cqw; }
+/* The border's margin, not the sheet's padding: padding on the size container would shrink every cqw inside it. */
+.decree .border { margin: 6cqw; }
 /* Corner ornaments. */
 .decree .border::before, .decree .border::after { content: "❦"; position: absolute; font-size: max(14px, 2.6cqw); color: var(--red); line-height: 1; }
 .decree .border::before { top: 1.2cqw; left: 1.4cqw; }

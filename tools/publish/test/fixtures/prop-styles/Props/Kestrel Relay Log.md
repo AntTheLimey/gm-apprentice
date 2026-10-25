@@ -4,8 +4,8 @@ prop_style: terminal
 prop_device: RELAY STATION KESTREL · MAINTENANCE LOG
 prop_plate: The last log the relay keeper sent before the station went quiet
 prop_envelope: KESTREL
-prop_frank: POSTAGE PAID
-prop_frank_amount: 3 CR
+prop_frank: RELAY POST
+prop_frank_amount: 12 SCRIP
 prop_font: Reenie Beanie
 prop_breaks: "DAY 6"
 ---

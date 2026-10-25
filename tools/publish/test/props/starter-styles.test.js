@@ -135,7 +135,7 @@ describe('the prop-styles fixture, built', () => {
     assert.equal((term.match(/<section class="sheet term"/g) || []).length, 2);
     assert.match(term, /SHEET 1\/2[\s\S]*MORE ▼[\s\S]*SHEET 2\/2[\s\S]*END OF FILE ■/);
     assert.equal((term.match(/END OF FILE/g) || []).length, 1);
-    assert.match(term, /<section class="sheet desk" aria-label="The envelope">[\s\S]*POSTAGE PAID<strong>3 CR<\/strong>[\s\S]*style="--hand: 'Reenie Beanie'">KESTREL<\/div>/);
+    assert.match(term, /<section class="sheet desk" aria-label="The envelope">[\s\S]*RELAY POST<strong>12 SCRIP<\/strong>[\s\S]*style="--hand: 'Reenie Beanie'">KESTREL<\/div>/);
     assert.match(term, /<script src="styles\/terminal\/script\.js" defer><\/script>/);
     const form = read('props', 'harbour-authority-lien-prop.html');
     assert.equal((form.match(/<section class="sheet form"/g) || []).length, 2);

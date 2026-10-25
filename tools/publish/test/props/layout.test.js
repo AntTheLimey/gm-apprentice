@@ -45,7 +45,7 @@ test('the view holds only strings and booleans', () => {
 });
 
 test('filters keep only safe values', () => {
-  assert.strictEqual(FILTERS.color('#43345e'), '#43345e');
+  assert.strictEqual(FILTERS.color('#2f5d50'), '#2f5d50');
   assert.strictEqual(FILTERS.color('rebeccapurple'), 'rebeccapurple');
   assert.strictEqual(FILTERS.color('red;background:url(javascript:x)'), '');
   assert.strictEqual(FILTERS.class('Chart'), 'chart');
