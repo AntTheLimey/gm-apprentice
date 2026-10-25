@@ -15,6 +15,7 @@ const { isAcceptedTie } = require('../accepted-ties');
 const { indexTexts } = require('./index-text');
 const { addressKey } = require('../props/address');
 const { canonicalNfc } = require('../unicode');
+const { decodeEntities } = require('../templates/gurps/tables');
 
 const findingId = (page, text) => crypto.createHash('sha1').update(`${page}\n${text}`).digest('hex').slice(0, 6);
 const keyOf = (page, text) => `${page}\n${text}`;
@@ -30,9 +31,24 @@ const byPageText = (a, b) => (a.page < b.page ? -1 : a.page > b.page ? 1 : a.tex
 
 // A file of a prop the site does not publish: one at the prop's address (unless a shipping prop or the site itself has
 // it), or any other file that is not text and has the prop file's bytes (a PDF or picture copied by hand). A text prop
-// file is found by its text.
+// file is found by its text. And a page or SVG that links that address (an old listing left in a kept folder, however
+// short the prop's title): no page the site builds links a held prop's address.
 const UNREVEALED = 'the prop file of a note the site does not publish';
-function propUnrevealed({ outputDir, hidden }) {
+const LINK_ATTR = /\s(?:href|src|xlink:href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
+const EXTERNAL = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
+// The site addresses a page or SVG at `rel` links: each href or src, read relative to the file, without its query or anchor.
+function linkedAddresses(rel, raw) {
+  const out = [];
+  for (const m of raw.matchAll(LINK_ATTR)) {
+    let v = decodeEntities(m[1] ?? m[2] ?? m[3]).trim().replace(/[?#].*$/, '');
+    if (!v || EXTERNAL.test(v)) continue;
+    try { v = decodeURIComponent(v); } catch (e) { /* as written */ }
+    const joined = v.startsWith('/') ? path.posix.normalize(v.slice(1)) : path.posix.join(path.posix.dirname(rel), v);
+    if (joined && !joined.startsWith('..')) out.push(joined);
+  }
+  return out;
+}
+function propUnrevealed({ outputDir, hidden, files }) {
   const found = [];
   if (!hidden.heldProps.length) return found;
   const shipped = new Set([...hidden.propFiles, ...hidden.madeFiles].map(addressKey));
@@ -51,6 +67,15 @@ function propUnrevealed({ outputDir, hidden }) {
     const text = wordsOf(h.rel).join(' ');
     found.push({ id: findingId(page, text), kind: 'name', code: 'PROP_UNREVEALED', page, text, shown: page, note: h.rel, reason: UNREVEALED });
   };
+  if (atAddress.size) {
+    for (const file of files) {
+      if (!['.html', '.htm', '.svg'].includes(file.ext)) continue;
+      for (const address of linkedAddresses(file.rel, file.raw)) {
+        const at = atAddress.get(addressKey(address));
+        if (at) add(file.rel, at);
+      }
+    }
+  }
   for (const rel of listFiles(outputDir)) {
     if (hidden.propFiles.has(canonicalNfc(rel))) continue;
     const at = atAddress.get(addressKey(rel));
@@ -94,11 +119,11 @@ function runLeakGate({ configPath, outputDir }) {
     // a scene quotes), its own note's hidden text is a leak as anywhere.
     const owners = hidden.propOwner.get(canonicalNfc(file.rel));
     // A listing (a container's page, the props page) prints the title of an item the players have not found: those
-    // words of that item, exactly, are no finding there.
+    // words, exactly, are no finding there.
     const sealed = hidden.sealedOn.get(canonicalNfc(file.rel));
     for (const { piece } of matcher.scan(file.words)) {
       if (owners !== undefined && !owners.has(piece.note)) continue;
-      if (sealed !== undefined && sealed.get(piece.note) === piece.text) continue;
+      if (sealed !== undefined && sealed.has(piece.text)) continue;
       const key = keyOf(file.rel, piece.text);
       if (raw.has(key)) continue;
       raw.set(key, { id: findingId(file.rel, piece.text), kind: 'text', code: 'HIDDEN_TEXT', page: file.rel, text: piece.text, shown: piece.shown, note: piece.note, reason: piece.reason });
@@ -124,7 +149,7 @@ function runLeakGate({ configPath, outputDir }) {
     const key = keyOf(f.page, f.text);
     if (!raw.has(key)) raw.set(key, f);
   }
-  for (const f of propUnrevealed({ outputDir, hidden })) {
+  for (const f of propUnrevealed({ outputDir, hidden, files })) {
     const key = keyOf(f.page, f.text);
     if (!raw.has(key)) raw.set(key, f);
   }

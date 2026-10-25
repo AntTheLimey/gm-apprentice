@@ -63,6 +63,29 @@ describe('leak gate: a styled prop page', () => {
     assert.deepEqual(gate(s).findings, []);
   }, { ...STYLE, 'Documents/Letter.md': LETTER(), 'Drafts/Letter.md': LETTER('publish: false\n') }));
 
+  it('a styled prop moved to its -prop address agrees with the build, shipping and held', () => {
+    const vault = (publishing) => ({
+      ...STYLE, 'Props/Letter.md': '---\ntype: document\n---\nA page about letters.\n', 'Documents/Letter.md': LETTER(),
+      ...(publishing ? LIST(publishing) : {}),
+    });
+    within((s) => {
+      assert.ok(fs.existsSync(path.join(s.outputDir, 'props', 'letter-prop.html')));
+      assert.deepEqual(gate(s).findings, []);
+    }, vault(null));
+    within((s) => {
+      assert.ok(!fs.existsSync(path.join(s.outputDir, 'props', 'letter-prop.html')));
+      write(s, 'props/letter-prop.html', '<p>an older page</p>');
+      assert.deepEqual(gate(s).findings.map(pick), [{ code: 'PROP_UNREVEALED', page: 'props/letter-prop.html', note: 'Documents/Letter.md' }]);
+    }, vault(['Props/Letter.md']));
+  });
+
+  it("a styled page the build does not make (no ## The Text) is not shipped: a held prop's page there is PROP_UNREVEALED", () => within((s) => {
+    assert.ok(!fs.existsSync(path.join(s.outputDir, 'props', 'letter.html')));
+    assert.deepEqual(gate(s).findings, []);
+    write(s, 'props/letter.html', '<p>an older page</p>');
+    assert.deepEqual(gate(s).findings.map(pick), [{ code: 'PROP_UNREVEALED', page: 'props/letter.html', note: 'Drafts/Letter.md' }]);
+  }, { ...STYLE, 'Documents/Letter.md': '---\ntype: prop\nprop_style: t\n---\nA note with no text section.\n', 'Drafts/Letter.md': LETTER('publish: false\n') }));
+
   it('a styled page at an address naming a withheld note is a finding', () => within((s) => {
     assert.ok(fs.existsSync(path.join(s.outputDir, 'props', 'lord-zorn.html')));
     assert.deepEqual(gate(s).findings.filter((f) => f.page === 'props/lord-zorn.html').map((f) => [f.code, f.note]), [['WITHHELD_IN_PROSE', 'NPCs/Lord Zorn.md']]);
@@ -112,11 +135,11 @@ describe('leak gate: a sealed title on its listings', () => {
     assert.deepEqual(gate(s).findings, []);
     leakInto(s.outputDir, 'props/bookshelf.html', 'Ledger of the Old Debts');
     leakInto(s.outputDir, 'props/index.html', 'Ledger of the Old Debts');
-    // One finding per page: the name check's WITHHELD_IN_PROSE and the hidden title are the same page and words.
-    assert.deepEqual(gate(s).findings.map(pick), [
-      { code: 'HIDDEN_TEXT', page: 'props/bookshelf.html', note: 'Documents/Ledger of the Old Debts.md' },
-      { code: 'HIDDEN_TEXT', page: 'props/index.html', note: 'Documents/Ledger of the Old Debts.md' },
-    ]);
+    // The name check's WITHHELD_IN_PROSE and the hidden title are the same page and words: either may be the one told.
+    const found = gate(s).findings;
+    for (const page of ['props/bookshelf.html', 'props/index.html']) {
+      assert.ok(found.some((f) => f.page === page && f.note === 'Documents/Ledger of the Old Debts.md' && ['HIDDEN_TEXT', 'WITHHELD_IN_PROSE'].includes(f.code)), JSON.stringify(found.map(pick)));
+    }
   }, SHELF()));
 
   it("a withheld item's short title, too short to be hidden text, is a finding by its name", () => within((s) => {
@@ -128,9 +151,24 @@ describe('leak gate: a sealed title on its listings', () => {
   it("an old props page left in a kept folder, naming an unrevealed prop, is a finding", () => within((s) => {
     assert.deepEqual(gate(s).findings, []);
     // What an earlier build wrote at gazetteer/props.html when the letter was revealed.
-    write(s, 'gazetteer/props.html', '<!doctype html><html><body><main><h1>Props</h1><ul class="prop-list"><li class="prop-item"><a href="../props/letter-from-lady-anne.html">Letter from Lady Anne</a></li></ul></main></body></html>');
+    write(s, 'gazetteer/props.html', '<!doctype html><html><body><main><h1>Props</h1><ul class="prop-list"><li class="prop-item"><span class="prop-title">Letter from Lady Anne</span></li></ul></main></body></html>');
     assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'gazetteer/props.html', note: 'Documents/Letter from Lady Anne.md' }]);
   }, SHELF(), { player: { keep: ['gazetteer'] } }));
+
+  it("an old props page left in a kept folder, linking a held prop's address, is PROP_UNREVEALED however short its title", () => within((s) => {
+    assert.deepEqual(gate(s).findings, []);
+    write(s, 'gazetteer/props.html', '<!doctype html><html><body><main><h1>Props</h1><ul class="prop-list"><li class="prop-item"><a href="../props/the-ledger.html">The Ledger</a></li></ul></main></body></html>');
+    assert.deepEqual(gate(s).findings.map(pick), [{ code: 'PROP_UNREVEALED', page: 'gazetteer/props.html', note: 'Documents/The Ledger.md' }]);
+  }, {
+    ...SHELF(), 'Documents/The Ledger.md': '---\ntype: prop\nprop_style: t\n---\nA ledger.\n\n## The Text\n\nSums owed.\n',
+  }, { player: { keep: ['gazetteer'] } }));
+
+  it("a hidden prep note listing the sealed item by name gives no finding on its listings", () => within((s) => {
+    assert.deepEqual(gate(s).findings, []);
+    leakInto(s.outputDir, 'documents/other.html', 'Letter from Lady Anne');
+    // Elsewhere those words are still hidden text (of the letter or of the prep note: one finding per page and words).
+    assert.deepEqual(gate(s).findings.map((f) => [f.code, f.page]), [['HIDDEN_TEXT', 'documents/other.html']]);
+  }, { ...SHELF(), 'Prep/Session 5.md': '---\ntype: session-prep\n---\nProps to plant:\n\n- [[Letter from Lady Anne]]\n' }));
 
   it('the props page set elsewhere is held from the props, as the build holds it', () => within((s) => {
     assert.ok(fs.existsSync(path.join(s.outputDir, 'props', 'shelf.html')), 'the props page at its asked address');

@@ -25,6 +25,7 @@ const { TEXT_EXT } = require('./match');
 const { planProps, bytesOf, textOf } = require('../props/plan');
 const { placeCollection, propTaken, containerItems, propRow, sealedTitlesOn } = require('../props/collection');
 const { cutHtml } = require('../props/html-cut');
+const { textProblem } = require('../props/page');
 
 const NEVER_SHOWN = ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase());
 const neverShown = (rel) => rel.split('/').slice(0, -1).some((s) => NEVER_SHOWN.includes(s.toLowerCase()));
@@ -94,6 +95,8 @@ function collectHidden({ configPath }) {
 
   const publishedRels = new Set();
   const outputOf = new Map();
+  // Each published note's body as its page shows it (the build's publishedMarkdown): a styled prop's page is made from it.
+  const shownBodyOf = new Map();
   for (const page of published) {
     const rel = relOf(page);
     publishedRels.add(rel);
@@ -129,6 +132,7 @@ function collectHidden({ configPath }) {
       // Read as the hidden pieces are (textsOfMarkdown), so a sentence the GM wrote in both places matches; its blocks as
       // one run, in order, as the page shows them (a table row's cells, a callout's title and its text, a heading).
       const shownMarkdown = playerSafeMarkdown(shownText, options).text;
+      if (source === page.markdown) shownBodyOf.set(page, shownMarkdown);
       visible.push(textsOfMarkdown(shownMarkdown, { headings: true }).join('\n'));
       visible.push(...tableRunsOf(shownMarkdown));
     }
@@ -197,7 +201,10 @@ function collectHidden({ configPath }) {
       add([propRow(p, { isShown: () => false, excludeFields, fieldOverrides }).title], p.rel, 'the title of an unpublished prop');
     }
     if (!p.source) {
-      if (p.ships && p.address && p.made) {
+      // A styled page the build does not make (its note shows no words under ## The Text, props/page.js) is not on the
+      // site: its address is no shipping prop's.
+      const unmade = p.made === 'style' && p.kind !== 'container' && textProblem(shownBodyOf.get(p.page) || '') !== null;
+      if (p.ships && p.address && p.made && !unmade) {
         madeFiles.add(canonicalNfc(p.address));
         if (!propOuts.has(p.rel)) propOuts.set(p.rel, []);
         propOuts.get(p.rel).push(p.address);
@@ -231,11 +238,13 @@ function collectHidden({ configPath }) {
   }
 
   // Where a container lists an item the players have not found by its title alone: that title's words, on that
-  // container's page and on the props page, are no finding (index.js). Never a withheld item's (containerItems lists none).
+  // container's page and on the props page, are no finding, whichever hidden note also says them (a prep note's list of
+  // props to plant): the page prints those words and no more (index.js). Never a withheld item's title (containerItems
+  // lists none).
   const listed = containerItems({ props, isShown: (pg) => publishedSet.has(pg), excludeFields, fieldOverrides });
   const sealedOn = new Map();
   for (const [address, titles] of sealedTitlesOn(listed, collection && collection.address)) {
-    sealedOn.set(canonicalNfc(address), new Map([...titles].map(([rel, title]) => [rel, wordsOf(title).join(' ')])));
+    sealedOn.set(canonicalNfc(address), new Set([...titles.values()].map((title) => wordsOf(title).join(' '))));
   }
 
   // A note's outputs: its page, then its prop's files.
