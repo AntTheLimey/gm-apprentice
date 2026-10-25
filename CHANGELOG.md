@@ -35,7 +35,7 @@ picture you made.
   as documents do.
 - A prop written into a kept folder (`player_site.keep`) through an
   explicit `prop_address` replaces the file there, and the build says
-  so. It is removed again when its note stops publishing, only if the
+  so when there was one. It is removed again when its note stops publishing, only if the
   file is unchanged.
 - A withheld-name finding on a copied file's name now names the note it
   comes from.
