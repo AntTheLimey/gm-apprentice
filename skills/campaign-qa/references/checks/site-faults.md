@@ -474,7 +474,9 @@ you would change, and edit on a yes.
   gives nothing, list the likely folders and compare the names as they
   read. Offer to move the file beside the note; or, where it already
   sits in the note's folder or a folder under it, to correct
-  `prop_file` to that path.
+  `prop_file` to that path. Before a move, `grep -rlF "<name>"
+  "<vault>"` for other notes that embed or link it; if any do, offer
+  to copy it beside the note instead.
 - **A kind the site does not copy:** a prop file is a page, a PDF or a
   picture. Where you can make one from the file (a text or Markdown
   handout as a page, say), offer to, and point `prop_file` at it on a
