@@ -270,7 +270,8 @@ function fileLine(readFile, abs, source, bodyLine) {
  * @param {object} input
  * @param {object[]} input.notes          scanAllNotes(vaultPath)
  * @param {Set<string>} input.publishedRels  the vault paths of the notes that get a page
- * @param {function} input.outOf          vault path -> the note's page on the site, or null
+ * @param {function} input.outOf          vault path -> the note's page on the site, or null; or a list of the files
+ *   it puts there (the leak gate: its page, then its prop's files)
  * @param {object} input.linkMap          the link map of the published pages
  * @returns {{names: object[], probe: RegExp|null, mayHold: function, secretKeys: Set<string>, collisions: object[],
  *   publishedWithheld: object[], unreadableFlags: object[], publicNames: Set<string>}}
@@ -279,7 +280,7 @@ function secretNamesOf(input) {
   const secretKeys = new Set();
   const aliasOwners = new Map();   // folded alias -> { alias, rel }
   const withheldOwners = new Map();   // folded name of a `withheld: true` note -> { alias, rel }
-  const publishedWithheld = [];       // withheld notes the site publishes: { rel, out }
+  const publishedWithheld = [];       // withheld notes the site publishes: { rel, out } (out as outOf gives it)
   const unreadableFlags = [];         // notes whose `withheld:` is neither true nor false: { rel, value }
   for (const note of input.notes) {
     const rel = noteRel(note);

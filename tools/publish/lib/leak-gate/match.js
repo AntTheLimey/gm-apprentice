@@ -132,4 +132,4 @@ function readOutput(dir) {
   return out.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
 }
 
-module.exports = { createMatcher, fileText, pageExtras, readOutput, isToolScript, isToolFile, listFiles };
+module.exports = { TEXT_EXT, createMatcher, fileText, pageExtras, readOutput, isToolScript, isToolFile, listFiles };

@@ -75,19 +75,23 @@ function nameFindings({ files, allFiles, hidden, findingId }) {
     }
   }
   // A copied file (a picture, a font) whose name holds a withheld name: the name is in its address. A page is not one
-  // (its address is its note's public name), and nor is a script or style the tool ships.
+  // (its address is its note's public name), and nor is a script or style the tool ships. A prop's page is: its address
+  // is the GM's own (prop_address) or its note's.
   for (const rel of allFiles) {
-    if (/\.html?$/i.test(rel) || isToolFile(rel)) continue;
+    if ((/\.html?$/i.test(rel) && !hidden.propFiles.has(canonicalNfc(rel))) || isToolFile(rel)) continue;
     const address = foldQuotes(rel.replace(/\.[^./]+$/, ''));
     for (const n of secrets.names) {
       if (n.kind !== 'withheld') continue;
-      if (hasName(n.re, address)) add(rel, 'withheld', n.alias, n.owner, rel);
+      if (hasName(n.re, address)) add(rel, 'withheld', n.alias, n.rel, rel);
     }
   }
+  // Once for each file the note puts on the site: its page and its prop's files.
   for (const w of secrets.publishedWithheld) {
-    const page = w.out || w.rel;
-    const text = wordsOf(page).join(' ');
-    found.push({ id: findingId(page, text), kind: 'name', code: 'WITHHELD_PUBLISHED', page, text, shown: page, note: w.rel, reason: 'a note marked withheld is published' });
+    const outs = [].concat(w.out || []);
+    for (const page of outs.length ? outs : [w.rel]) {
+      const text = wordsOf(page).join(' ');
+      found.push({ id: findingId(page, text), kind: 'name', code: 'WITHHELD_PUBLISHED', page, text, shown: page, note: w.rel, reason: 'a note marked withheld is published' });
+    }
   }
   return found;
 }

@@ -95,6 +95,11 @@ function tableRunsOf(markdown) {
   return runs;
 }
 
+// The pieces of an HTML or SVG part (a prop file's cut runs): its text with the words its tags carry, line by line.
+function piecesOfHtml(html) {
+  return pageText(html, { attributes: true }).split('\n').flatMap(piecesOfText);
+}
+
 function piecesOfMarkdown(markdown) {
   return textsOfMarkdown(markdown).flatMap(piecesOfText);
 }
@@ -156,4 +161,4 @@ function piecesOfValue(value) {
   return stringsOfValue(value).flatMap(piecesOfText);
 }
 
-module.exports = { MIN_WORDS, normalize, wordsOf, textsOfMarkdown, piecesOfMarkdown, stringsOfValue, piecesOfValue, fieldRunsOf, tableRunsOf, nameSet, onlyNames };
+module.exports = { MIN_WORDS, normalize, wordsOf, textsOfMarkdown, piecesOfText, piecesOfHtml, piecesOfMarkdown, stringsOfValue, piecesOfValue, fieldRunsOf, tableRunsOf, nameSet, onlyNames };
