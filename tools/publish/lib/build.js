@@ -45,6 +45,8 @@ const { pcIdentity } = require('./templates/pc-identity');
 const { planProps } = require('./props/plan');
 const { takenAddresses } = require('./props/address');
 const { propHrefFor, propOutputs, keptCopyOutputs, pathProblem } = require('./props/files');
+const { styledPage, styleFontFamilies, FONTS_CSS, BASE_CSS, NO_TEXT } = require('./props/page');
+const { propTextOf } = require('./props/text');
 
 const TOOL_VERSION = require('../package.json').version;
 
@@ -511,12 +513,17 @@ function buildSite(options) {
     console.warn(`  WARNING: ${fontsLib.GOOGLE_WARNING(names.join(', '))}`);
   }
 
+  // The typefaces the site serves from fonts/, for NOTICE.txt: each Google family by its folder, and
+  // the paths of the fonts the GM supplied.
+  const servedGoogleFonts = new Map();
+  const servedLocalFonts = [];
   function copyFontFiles(files) {
     if (writes !== 'all') return;
     for (const f of files) {
       const dest = path.join(outputDir, 'fonts', f.rel);
       ensureDir(dest);
       fs.copyFileSync(f.from, dest);
+      if (f.family) servedGoogleFonts.set(f.family, f.rel.split('/')[0]);
       console.log(`  wrote fonts/${f.rel}`);
     }
   }
@@ -579,6 +586,7 @@ function buildSite(options) {
       }
       ensureDir(dest);
       fs.copyFileSync(vaultFontPath, dest);
+      if (!servedLocalFonts.includes(outPath)) servedLocalFonts.push(outPath);
       console.log(`  wrote fonts/${outPath}`);
     }
   }
@@ -1265,12 +1273,6 @@ function buildSite(options) {
 
   writeNoJekyll();
 
-  // The licence notices for what the site ships (#428).
-  if (writes === 'all') {
-    fs.writeFileSync(path.join(outputDir, 'NOTICE.txt'), noticeText({ lunr: !!searchData }));
-    console.log('  wrote NOTICE.txt');
-  }
-
   // Write search index (only if search is enabled)
   if (writes !== 'all') {
     // nothing is written
@@ -1662,6 +1664,44 @@ function buildSite(options) {
       }
     }
     if (stale.length) throw new Error(`${stale.join(', ')} ${stale.length === 1 ? 'is' : 'are'} on the site but a full build would no longer write ${stale.length === 1 ? 'it' : 'them'}. Run a full build (gm-apprentice-publish build --site ${gm ? 'gm' : 'player'}); a sheets-only build deletes nothing. Nothing was written.`);
+  }
+
+  // The pages the tool makes for props that name a style, made before the note pages so a note
+  // links only a page that was made. A held prop's page is never made: its words would pass
+  // through the build. A container's page is not made here. The words are the note page's own
+  // player view of `## The Text`, on the GM site too (the GM sees the Keeper parts on the note page).
+  // The styles' typefaces are served from the site, from the vault's font cache: a miss warns once.
+  let styleFonts = { css: '', files: [] };
+  if (propPlan) {
+    const noPage = (p, problem) => {
+      const row = { rel: p.rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: problem.detail, fix: problem.fix };
+      propPlan.problems.push(row);
+      console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
+      propBlocked.add(p.address);
+    };
+    const styled = [];
+    for (const p of propPlan.props) {
+      if (!p.ships || !p.address || p.made !== 'style' || p.kind === 'container' || propBlocked.has(p.address)) continue;
+      if (propTextOf(p.page.publishedMarkdown || '') === null) {
+        noPage(p, NO_TEXT);
+        continue;
+      }
+      styled.push(p);
+    }
+    const families = [...new Set(styled.flatMap((p) => styleFontFamilies(p.style, p.page.frontmatter || {})))];
+    if (families.length) {
+      let warned = false;
+      styleFonts = fontsLib.selfHostedFontFaces(config.vaultPath, families, () => {
+        if (warned) return;
+        warned = true;
+        console.warn(`  WARNING: the typefaces for the prop styles are not in the vault's font cache and could not be downloaded; the styles use fallback type. ${fontsLib.missAdvice(options.offline === true)}`);
+      }, { offline: options.offline === true, fontsHref: '../../fonts/' });
+    }
+    for (const p of styled) {
+      const made = styledPage({ prop: p, style: p.style, page: p.page, linkMap, imageMap, usedImages, collectionHref: null, fontsCss: styleFonts.css !== '' });
+      if (made.problem) noPage(p, made.problem);
+      else p.made_html = made.html;
+    }
   }
 
   // Published NPC pages whose body runs session by session (story-sessions.js), in page order.
@@ -2115,6 +2155,7 @@ function buildSite(options) {
 
   // Each prop's files, read by the note-faults audit as they are written: a withheld name in a
   // prop page, or in the name of any file a prop puts on the site, is a fault of its note.
+  const stylesWritten = new Set();   // the styles of the styled pages written
   if (propPlan) {
     const { outputs, failed } = propOutputs(propPlan);
     propPlan.problems.push(...failed);
@@ -2156,6 +2197,7 @@ function buildSite(options) {
         continue;
       }
       written += 1;
+      if (typeof f.made === 'string') stylesWritten.add(f.made);
       const full = path.join(outputDir, ...f.out.split('/'));
       ensureDir(full);
       const replaced = f.replacesKept && fs.existsSync(full);
@@ -2166,7 +2208,40 @@ function buildSite(options) {
       shipped.add(f.rel);
       if (replaced) console.log(`  replaces kept file: ${f.out}`);
     }
+    // The files of each style a written page uses, the tool's base sheet, and the styles' fonts:
+    // only when a styled page is written, and never through a link in the site folder.
+    const writeFile = (out, data) => {
+      if (pathProblem(outputDir, out)) {
+        console.warn(`  WARNING: ${out} was not written: its path in the site folder is not a plain folder`);
+        return;
+      }
+      const full = path.join(outputDir, ...out.split('/'));
+      ensureDir(full);
+      fs.writeFileSync(full, data);
+      written += 1;
+      console.log(`  wrote ${out}`);
+    };
+    if (stylesWritten.size > 0) {
+      writeFile(BASE_CSS, fs.readFileSync(path.join(__dirname, '../css/props.css')));
+      for (const st of propPlan.styles.filter((x) => stylesWritten.has(x.name))) {
+        if (st.replaces) console.log(`  style "${st.name}": the vault's own (_meta/prop-styles/${st.name}) replaces the plugin's`);
+        for (const f of st.files) writeFile(f.out, fs.readFileSync(f.source));
+      }
+      if (styleFonts.css) {
+        writeFile(FONTS_CSS, styleFonts.css);
+        copyFontFiles(styleFonts.files);
+      }
+    }
     if (writes === 'all' && propPlan.props.length > 0) console.log(`Props: ${shipped.size} published (${written} files)`);
+  }
+
+  // The licence notices for what the site ships (#428): written once everything else is, so it
+  // names every style and typeface the build put on the site.
+  if (writes === 'all') {
+    const styles = propPlan ? propPlan.styles.filter((st) => st.from === 'plugin' && stylesWritten.has(st.name)).map((st) => st.name) : [];
+    const googleFonts = [...servedGoogleFonts].map(([family, folder]) => ({ family, folder }));
+    fs.writeFileSync(path.join(outputDir, 'NOTICE.txt'), noticeText({ lunr: !!searchData, styles, googleFonts, localFonts: servedLocalFonts }));
+    console.log('  wrote NOTICE.txt');
   }
 
   // Last thing before "Done", so it is the line the GM reads (#277). A session in Excluded

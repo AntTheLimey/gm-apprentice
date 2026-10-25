@@ -281,3 +281,18 @@ describe('a font missing from the cache (#449)', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 });
+
+describe('the fonts folder as a stylesheet sees it', () => {
+  it('selfHostedFontFaces takes a fontsHref', async () => {
+    const vault = tmp();
+    await fonts.ensureFontCache(vault, ['Cinzel'], { fetch: mockFetch([]), warn: () => {}, log: () => {} });
+    const plain = fonts.selfHostedFontFaces(vault, ['Cinzel'], () => {});
+    const deep = fonts.selfHostedFontFaces(vault, ['Cinzel'], () => {}, { fontsHref: '../../fonts/' });
+    assert.match(plain.css, /src: url\('\.\.\/fonts\/cinzel\/[0-9a-f]{16}\.woff2'\)/);
+    assert.match(deep.css, /src: url\('\.\.\/\.\.\/fonts\/cinzel\/[0-9a-f]{16}\.woff2'\)/);
+    assert.doesNotMatch(deep.css, /url\('\.\.\/fonts\//);
+    assert.deepStrictEqual(deep.files, plain.files);
+    assert.ok(deep.files.every((f) => f.family === 'Cinzel' && f.rel.startsWith('cinzel/')));
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+});

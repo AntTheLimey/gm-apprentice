@@ -27,9 +27,10 @@ function plannedProps(plan) {
   return plan ? plan.props.filter((p) => p.ships && p.address && p.files.length > 0) : [];
 }
 
-// The props the site holds: planned, with the prop file's own bytes in hand to write.
+// The props the site holds: planned, with the prop file's own bytes in hand to write, or (a page
+// the tool makes) with its page made: `made_html`, set by the build's make pass.
 function shippedProps(plan) {
-  return plannedProps(plan).filter((p) => bytesOf(p.files[0]) !== null);
+  return plannedProps(plan).filter((p) => (p.made ? typeof p.made_html === 'string' : bytesOf(p.files[0]) !== null));
 }
 
 // The site link from a note page to its prop: relative, encoded. null when its prop does not
@@ -40,13 +41,19 @@ function propHrefFor(plan, page, blocked = new Set()) {
 }
 
 // What the tool writes for `files` of prop `p`, from the bytes the plan read:
-// [{ rel, out, isPage, text | bytes, was, replacesKept, warnings }] (`was`: the encoding a text file
+// [{ rel, out, isPage, made, text | bytes, was, replacesKept, warnings }] (`made`: a page the tool made, its style's
+// name when it has one; `was`: the encoding a text file
 // was read from, when it is not UTF-8; its text is written as UTF-8), and a problem row in `failed`
 // for a file whose bytes the plan does not hold (the prop file's own: nothing of it is written).
+// A made page is its `made_html`; one the make pass did not make (it said why) writes nothing.
 function outputsOf(p, files) {
   const outputs = [];
   const failed = [];
   for (const [i, f] of files.entries()) {
+    if (f.made) {
+      if (typeof p.made_html === 'string') outputs.push({ rel: p.rel, out: f.out, isPage: true, made: p.style ? p.style.name : true, replacesKept: Boolean(p.replacesKept), warnings: [], text: p.made_html });
+      continue;
+    }
     const bytes = bytesOf(f);
     if (bytes === null) {
       failed.push({ rel: p.rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: `${f.out} could not be read`, fix: 'make the file readable' });

@@ -1,0 +1,9 @@
+/* The base sheet of every styled prop page the tool makes. A style's own style.css comes
+   after it and owns the look; this holds only what every printed prop needs. */
+@page { size: auto; margin: 0; }
+* { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+.sheet { break-after: page; }
+.sheet:last-child { break-after: auto; }
+/* A fenced ## The Text keeps its lines as written. */
+.prop-text { overflow-wrap: break-word; }
+pre.prop-text { white-space: pre-wrap; margin: 0; font: inherit; }
