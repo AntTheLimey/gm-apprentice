@@ -300,4 +300,4 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
   return { props, problems };
 }
 
-module.exports = { planProps, bytesOf, textOf, utf8Charset, LINKED_EXTS };
+module.exports = { planProps, bytesOf, textOf, utf8Charset, LINKED_EXTS, within, realOrNull, findUnder };

@@ -32,4 +32,12 @@ function propAddressOf(fm) {
   return text(fm && fm.prop_address) || null;
 }
 
-module.exports = { PROP_KINDS, isPropNote, propKindOf, propFileOf, propAddressOf };
+// A style name, as a folder under _meta/prop-styles/ or the plugin's prop-styles/.
+const PROP_STYLE_RE = /^[a-z0-9][a-z0-9-]{0,40}$/;
+
+// Lower-cased as written; a name that fails PROP_STYLE_RE is kept, so loadStyle can report it.
+function propStyleOf(fm) {
+  return text(fm && fm.prop_style).toLowerCase() || null;
+}
+
+module.exports = { PROP_KINDS, PROP_STYLE_RE, isPropNote, propKindOf, propFileOf, propAddressOf, propStyleOf };
