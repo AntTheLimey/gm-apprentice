@@ -12,8 +12,8 @@ Node 22 or later. Check with `node --version`.
 ## Vendored dependencies
 
 This tool's runtime dependencies (`gray-matter`, `lunr`,
-`markdown-it`, `yaml`, and their transitive deps) are **committed** under
-`node_modules/` — an exception to the usual rule, enforced by a
+`markdown-it`, `mustache`, `yaml`, and their transitive deps) are
+**committed** under `node_modules/` — an exception to the usual rule, enforced by a
 negation at the bottom of the repo's root `.gitignore`.
 
 This is deliberate. The gm-apprentice plugin distributes this tool
