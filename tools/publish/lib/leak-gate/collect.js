@@ -190,7 +190,8 @@ function collectHidden({ configPath, outputDir = null }) {
     propOuts.get(rel).push(out);
   };
   const heldProps = [];
-  // The page each unpublished prop note would have, at its scanned output path (index.js watches links to it).
+  // The page each unpublished prop note would have, at its scanned output path (index.js watches links to it). Not one
+  // inside a kept folder: the build writes no page there, so a file there is the GM's own.
   const heldNotePages = [];
   // The pages the tool makes for shipping props (a styled page, a container's page): read as ordinary pages, their words
   // their notes' published words. Not a prop file of their note: no hidden text of another note is excused on them.
@@ -205,7 +206,7 @@ function collectHidden({ configPath, outputDir = null }) {
     if (!publishedSet.has(p.page) && !inWorkingDir(p.rel)) {
       add([propRow(p, { isShown: () => false, excludeFields, fieldOverrides }).title], p.rel, 'the title of an unpublished prop');
     }
-    if (!publishedSet.has(p.page) && p.page.outputPath) heldNotePages.push({ rel: p.rel, address: p.page.outputPath });
+    if (!publishedSet.has(p.page) && p.page.outputPath && !taken.keeps(p.page.outputPath)) heldNotePages.push({ rel: p.rel, address: p.page.outputPath });
     if (!p.source) {
       // A page the build does not make is not on the site: its address is no shipping prop's. A styled page whose note
       // shows no words under ## The Text (props/page.js), and a made page whose path in the site folder is not a plain

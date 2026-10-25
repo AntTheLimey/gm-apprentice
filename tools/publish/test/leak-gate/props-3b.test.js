@@ -192,6 +192,14 @@ describe('leak gate: a sealed title on its listings', () => {
     assert.deepEqual(gate(s).findings.map(pick), [{ code: 'PROP_UNREVEALED', page: 'gazetteer/props.html', note: 'Documents/The Ledger.md' }]);
   }, { ...SHELF(), 'Documents/The Ledger.md': '---\ntype: prop\n---\nA ledger.\n' }, { player: { keep: ['gazetteer'] } }));
 
+  it("a kept folder's own page at a held prop note's would-be address, linked from the kept folder, gives no finding", () => within((s) => {
+    write(s, 'extras/map-of-the-town.html', '<!doctype html><html><body><main><p>My own hand-drawn map page.</p></main></body></html>');
+    write(s, 'extras/index.html', '<!doctype html><html><body><main><a href="map-of-the-town.html">Town</a></main></body></html>');
+    assert.deepEqual(gate(s).findings, []);
+  }, {
+    'Extras/Map Of The Town.md': '---\ntype: prop\npublish: false\n---\nA hidden map.\n', ...OTHER,
+  }, { player: { keep: ['extras'] } }));
+
   it('published pages that mention a held plain prop by wikilink and field give no finding', () => within((s) => {
     assert.match(fs.readFileSync(path.join(s.outputDir, 'documents', 'other.html'), 'utf8'), /The Ledger/);
     assert.deepEqual(gate(s).findings, []);
