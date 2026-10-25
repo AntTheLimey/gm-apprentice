@@ -488,9 +488,14 @@ you would change, and edit on a yes.
   into a folder under it, and correct the link to match. The page is
   the GM's own work: never edit it without saying exactly what changes.
 - **A kind the page cannot link** (audio, video, a PDF, another page):
-  show the line. Offer to link the file from the note instead, or to
-  use a picture in its place, and to take it out of the page, saying
-  exactly what changes.
+  show the line. A prop page cannot carry it, and the site publishes
+  no audio, video or other page. A PDF can be a prop of its own: offer
+  to make it one, a prop note (`shared/templates/prop.md`) beside the
+  file with `prop_file` naming it, linked from this prop's note. A
+  picture can take its place. Otherwise offer to take the link out of
+  the page. Say exactly what changes and edit on a yes.
+- **Not really the kind its name says** (a `.png` that is a link to a
+  note): offer to link the real file in its place.
 - **Could not be read:** give the GM the file and the reason.
 - **A link in the site folder:** a folder on the prop's address, in a
   kept folder of the site, is a link, so nothing is written through it.

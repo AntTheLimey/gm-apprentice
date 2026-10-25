@@ -25,7 +25,7 @@ const LINKED_EXTS = new Set([
   '.woff2', '.woff', '.ttf', '.otf',
 ]);
 const LINK_FIX = 'put the file beside the prop file and link it by a relative path';
-const KIND_FIX = 'a prop page cannot link this kind of file (audio, video, a PDF, another page): link it from the note instead, or use a picture';
+const KIND_FIX = 'a prop page cannot carry this kind of file: a PDF can be published as its own prop (its own note with prop_file), a picture can take its place; otherwise leave it out (the site does not publish audio, video or other pages)';
 
 function sha1(buf) {
   return crypto.createHash('sha1').update(buf).digest('hex');
@@ -214,7 +214,7 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
         if (hit.why === 'outside') { linkProblem(raw, 'is outside its folder'); continue; }
         if (hit.why === 'case') { linkProblem(raw, `differs in letter case from ${hit.name}`); continue; }
         if (!hit.full) { linkProblem(raw, 'is not there'); continue; }
-        if (!LINKED_EXTS.has(path.extname(hit.real).toLowerCase())) { notCopied(); continue; }
+        if (!LINKED_EXTS.has(path.extname(hit.real).toLowerCase())) { linkProblem(raw, `is not really a ${lext} file`, 'link the real file, not a link to another kind of file'); continue; }
         const rewrite = () => {
           const spelled = nfcSpelling(raw);
           if (spelled !== raw) (entry.rewrite = entry.rewrite || []).push([raw, spelled]);

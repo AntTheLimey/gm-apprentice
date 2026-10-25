@@ -327,7 +327,7 @@ test('a symlinked folder pointing out of the vault is never entered', () => {
 });
 
 // Fix round 1.
-const KIND_FIX = 'a prop page cannot link this kind of file (audio, video, a PDF, another page): link it from the note instead, or use a picture';
+const KIND_FIX = 'a prop page cannot carry this kind of file: a PDF can be published as its own prop (its own note with prop_file), a picture can take its place; otherwise leave it out (the site does not publish audio, video or other pages)';
 test('audio, video and PDF links are not copied; a module script is', () => {
   const root = vault({
     'A/Note.md': '', 'A/inv.html': '<audio src="a.mp3"></audio><video src="v.mp4"></video><embed src="d.pdf"><script type="module" src="m.mjs"></script>',
@@ -348,7 +348,7 @@ test('a picture name that is a symlink to a note is not copied', () => {
   fs.symlinkSync(path.join(root, 'A/Secret.md'), path.join(root, 'A/pic.png'));
   const { props, problems } = plan(root, [page(root, 'A/Note.md', { type: 'prop', prop_file: 'inv.html' })]);
   assert.deepStrictEqual(outs(props[0]), ['props/note.html']);
-  assert.deepStrictEqual(problems.map((p) => p.detail), ['inv.html links "pic.png", which is a kind of file a prop does not copy']);
+  assert.deepStrictEqual(problems.map((p) => [p.detail, p.fix]), [['inv.html links "pic.png", which is not really a .png file', 'link the real file, not a link to another kind of file']]);
 });
 
 test('a prop file name that is a symlink to a note is refused', () => {
