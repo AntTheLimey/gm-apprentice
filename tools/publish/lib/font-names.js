@@ -120,8 +120,14 @@ function licenceOf(url) {
   return null;
 }
 
-function licenceText(id) {
-  return fs.readFileSync(path.join(LICENSES_DIR, LICENCES[id].file), 'utf8');
+// A licence file's text with LF line ends: a checkout on Windows may give the tool's own files CRLF
+// ends, and NOTICE.txt is written with LF, so a licence copied in as read would mix the two.
+function readLicenceFile(file) {
+  return fs.readFileSync(file, 'utf8').replace(/\r\n?/g, '\n');
 }
 
-module.exports = { LICENCES, fontNames, fontNamesOfFile, licenceOf, licenceText };
+function licenceText(id) {
+  return readLicenceFile(path.join(LICENSES_DIR, LICENCES[id].file));
+}
+
+module.exports = { LICENCES, fontNames, fontNamesOfFile, licenceOf, licenceText, readLicenceFile };

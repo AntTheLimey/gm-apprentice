@@ -9,7 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { LICENCES, licenceText } = require('./font-names');
+const { LICENCES, licenceText, readLicenceFile } = require('./font-names');
 
 const GENERATOR_LICENSE = path.join(__dirname, '..', 'LICENSE');
 
@@ -18,7 +18,7 @@ function lunrDir() {
 }
 
 function lunrLicenseText() {
-  return fs.readFileSync(path.join(lunrDir(), 'LICENSE'), 'utf8');
+  return readLicenceFile(path.join(lunrDir(), 'LICENSE'));
 }
 
 // Google's page for a family's licence.
@@ -62,7 +62,7 @@ function noticeText({ lunr = true, styles = [], googleFonts = [], localFonts = [
   const parts = [
     'This site was built with gm-apprentice-publish. Its stylesheets and scripts (css/, js/) are the\n'
       + 'generator\'s, under this licence:\n\n'
-      + fs.readFileSync(GENERATOR_LICENSE, 'utf8').trim(),
+      + readLicenceFile(GENERATOR_LICENSE).trim(),
   ];
   if (styles.length) {
     parts.push('These prop styles are the generator\'s too, under the licence above:\n\n'

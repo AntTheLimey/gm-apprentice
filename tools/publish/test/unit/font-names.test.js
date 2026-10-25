@@ -53,4 +53,19 @@ describe('a font file names its copyright and licence', () => {
     assert.match(licenceText('Apache-2.0'), /Apache License\s+Version 2\.0, January 2004/);
     assert.match(licenceText('UFL-1.0'), /UBUNTU FONT LICENCE Version 1\.0/);
   });
+
+  it('a licence file checked out with CRLF ends reads with LF ends, and NOTICE.txt carries no CR', (t) => {
+    // Git on Windows may check the tool's text files out with CRLF (or old-Mac CR) line ends.
+    const real = fs.readFileSync;
+    t.mock.method(fs, 'readFileSync', (file, ...rest) => {
+      const text = real.call(fs, file, ...rest);
+      return typeof text === 'string' && /LICENSE|licenses/.test(String(file)) ? text.replace(/\n/g, '\r\n') : text;
+    });
+    assert.match(fs.readFileSync(path.join(__dirname, '..', '..', 'licenses', 'OFL-1.1.txt'), 'utf8'), /\r\n/, 'the mock gives CRLF');
+    assert.match(licenceText('OFL-1.1'), /^-+\nSIL OPEN FONT LICENSE Version 1\.1 - 26 February 2007\n/);
+    for (const id of Object.keys(LICENCES)) assert.doesNotMatch(licenceText(id), /\r/, id);
+    const { noticeText } = require('../../lib/notice');
+    const notice = noticeText({ lunr: true, googleFonts: [{ family: 'VT323', folder: 'vt323', copyright: 'c', licence: 'OFL-1.1' }] });
+    assert.doesNotMatch(notice, /\r/);
+  });
 });

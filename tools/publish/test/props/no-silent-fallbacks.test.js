@@ -68,7 +68,7 @@ test('a style with nothing left out has an empty skipped list', () => {
   assert.deepStrictEqual(style.skipped, []);
 });
 
-test('a style file that cannot be read is a problem, not a crash', { skip: asRoot && 'root reads any file' }, () => {
+test('a style file that cannot be read is a problem, not a crash', { skip: (asRoot && 'root reads any file') || (process.platform === 'win32' && 'chmod 0 does not stop a read on Windows') }, () => {
   const vaultPath = tree('props-vault-', MINE);
   fs.chmodSync(path.join(vaultPath, vs('mine/layout.html')), 0);
   try {

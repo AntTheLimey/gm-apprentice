@@ -179,7 +179,7 @@ describe('the prop-styles fixture, built', () => {
       const notesDir = path.join(plain, 'vault', 'Props');
       for (const n of fs.readdirSync(notesDir)) {
         const file = path.join(notesDir, n);
-        fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/^prop_style: .*\n/m, ''));
+        fs.writeFileSync(file, fs.readFileSync(file, 'utf8').replace(/^prop_style: .*\r?\n/m, ''));
       }
       quietBuild(configPath);
       const out = path.join(plain, 'docs');
