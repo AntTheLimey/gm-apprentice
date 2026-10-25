@@ -42,6 +42,9 @@ const { publishedPages } = require('./published-pages');
 const { isOutOfPlay } = require('./pc-status');
 const { sheetSourceOf } = require('./sheet-source');
 const { pcIdentity } = require('./templates/pc-identity');
+const { planProps } = require('./props/plan');
+const { takenAddresses } = require('./props/address');
+const { propHrefFor, propOutputs } = require('./props/files');
 
 const TOOL_VERSION = require('../package.json').version;
 
@@ -793,6 +796,18 @@ function buildSite(options) {
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
 
+  // The props the player site ships: a prop note's own file, at its address, with the files
+  // it links. A prop ships with its note's full page; a stub's prop does not. A fast build
+  // plans none. The doctor reads the plan from publishConfig._props.
+  const propPlan = gm || onlySheets ? null : planProps({
+    vaultPath: config.vaultPath, pages: corpus, relOf: vaultRelPathOf,
+    ships: (p) => pages.includes(p) && publishMode(p.sourceFrontmatter || p.frontmatter) !== 'stub',
+    taken: takenAddresses({ pageOutputs: pages.map((p) => p.outputPath), keptDirs: config.preserveDirs }),
+    site: 'player', cutKeeper: true,
+  });
+  publishConfig._props = propPlan;
+  for (const r of propPlan ? propPlan.problems : []) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);
+
   // A GM alias must never reach the site (#212): rewrite every one to the
   // title of the note that owns it, in every scanned page's body and
   // frontmatter, before anything renders or derives from them. Owners come
@@ -1498,7 +1513,7 @@ function buildSite(options) {
             processed.html = sessionBodyHtml(page, { wrapUp, chapter, recapChars: publishConfig.limits.recap_chars });
           }
         }
-        html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap, pages });
+        html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap, pages, propHref: propHrefFor(propPlan, page) });
         break;
       }
     }
@@ -2075,6 +2090,31 @@ function buildSite(options) {
     console.log(said);
   }, true);
 
+  // Each prop's files, read by the note-faults audit as they are written: a withheld name in a
+  // prop page, or in the name of any file a prop puts on the site, is a fault of its note.
+  if (propPlan) {
+    const { outputs, failed } = propOutputs(propPlan);
+    propPlan.problems.push(...failed);
+    for (const r of failed) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);
+    for (const f of outputs) {
+      logWarnings(f.rel, f.warnings);
+      if (audit && f.text !== undefined && /\.(?:html?|svg)$/i.test(f.out)) {
+        audit.read(f.rel, f.text);
+        audit.readAddresses(f.rel, f.text);
+      }
+      if (audit) audit.readFileName(f.rel, f.out);
+      if (writes !== 'all') continue;
+      const full = path.join(outputDir, ...f.out.split('/'));
+      ensureDir(full);
+      if (f.isPage) writeHtml(full, f.text, propPlan.props.find((p) => p.rel === f.rel).page);
+      else fs.writeFileSync(full, f.text !== undefined ? f.text : f.bytes);
+      console.log(`  wrote ${f.out}`);
+      if (f.replacesKept) console.log(`  replaces kept file: ${f.out}`);
+    }
+    const shipped = new Set(outputs.map((f) => f.rel));
+    if (writes === 'all' && propPlan.props.length > 0) console.log(`Props: ${shipped.size} published (${outputs.length} files)`);
+  }
+
   // Last thing before "Done", so it is the line the GM reads (#277). A session in Excluded
   // is a decision and never lands here; one in Needs Decision or in no section does.
   // Split by what publish-played will do with each (its own plan, so this never promises
@@ -2207,6 +2247,7 @@ function buildSite(options) {
   if (runningSteps && errorCount === 0 && publishConfig.steps.after.length) runSteps(publishConfig.steps.after, { cwd: configDir, label: 'after_build', log: options.stepsLog, stdio: options.stepsStdio, extraEnv: stepEnv });
   if (!gm) for (const pc of tohitRows) audit.calculator(pc.rel, pc.rows);
   if (!gm) for (const t of tableRows) audit.calculator(t.rel, t.rows);
+  if (audit && propPlan) for (const r of propPlan.problems) audit.calculator(r.rel, [r]);
   // A withheld heading inside a hidden block (#447): the text after it is withheld; campaign-qa offers to move it.
   if (!gm) {
     for (const [page, facts] of stripFacts) {

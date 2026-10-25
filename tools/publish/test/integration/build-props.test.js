@@ -1,0 +1,284 @@
+'use strict';
+// The player site publishes a prop's own page beside its note: the files ship cut, the note
+// page links the prop, the prop page has a bar back, and what cannot ship is a warning.
+const { describe, it, after } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { build } = require('../../lib/build');
+const { buildBoth, allFiles } = require('../helpers/gm-build');
+const { listFileText } = require('../helpers/publish-list');
+const { takenAddresses } = require('../../lib/props/address');
+const { propBar, withPropBar, propLinkHtml } = require('../../lib/templates/prop-bar');
+
+const PROP = (extra = '') => `---\ntype: prop\nprop_file: invitation.html\n${extra}---\nAn invitation to the ball.\n`;
+const PAGE = [
+  '<!doctype html><html><head><link rel="stylesheet" href="props.css"></head>',
+  '<body class="paper"><h1>You are invited</h1><img src="assets/paper.jpg">',
+  '<!-- gm-only --><div>KEEPER ONLY</div><img src="assets/secret.jpg"><!-- /gm-only -->',
+  '<!-- note to self -->',
+  '<script>document.title = "Invitation";</script>',
+  '</body></html>',
+].join('\n');
+const PROP_FILES = {
+  'Documents/invitation.html': PAGE,
+  'Documents/props.css': 'body { background: url(assets/paper.jpg); }\n',
+  'Documents/assets/paper.jpg': 'JPEGBYTES',
+  'Documents/assets/secret.jpg': 'SECRETBYTES',
+};
+const rels = (s) => s.player.files().map((f) => path.relative(s.player.dir, f).split(path.sep).join('/'));
+const quiet = (fn) => {
+  const saved = { log: console.log, warn: console.warn };
+  const lines = [];
+  console.log = (m) => lines.push(String(m)); console.warn = (m) => lines.push(String(m));
+  try { fn(); } finally { Object.assign(console, saved); }
+  return lines;
+};
+
+describe('the prop bar and link', () => {
+  it('goes after <body>, else after </head>, else at the start', () => {
+    assert.equal(withPropBar('<html><body class="x">A</body></html>', 'BAR'), '<html><body class="x">BARA</body></html>');
+    assert.equal(withPropBar('<head></head>A', 'BAR'), '<head></head>BARA');
+    assert.equal(withPropBar('A', 'BAR'), 'BARA');
+  });
+  it('links the note, hides when printed, and the note links the prop', () => {
+    const bar = propBar({ noteHref: '../documents/invitation.html', noteTitle: 'The <Invitation>', collectionHref: null });
+    assert.match(bar, /^<nav class="gma-prop-bar"/);
+    assert.match(bar, /<a href="\.\.\/documents\/invitation\.html">&larr; The &lt;Invitation&gt;<\/a>/);
+    assert.match(bar, /@media print\{\.gma-prop-bar\{display:none\}\}/);
+    assert.equal(propBar({ noteHref: null, noteTitle: 'X', collectionHref: null }), '');
+    assert.equal(propLinkHtml('../props/a.html'), '<p class="prop-link"><a class="prop-btn" href="../props/a.html">See the prop</a></p>');
+  });
+});
+
+describe('a published prop', () => {
+  const s = buildBoth({ 'Documents/Invitation.md': PROP(), ...PROP_FILES }, { sites: ['player'] });
+  after(() => s.cleanup());
+
+  it("a published prop's page, stylesheet and picture are on the site", () => {
+    assert.ok(s.player.exists('props', 'invitation.html'));
+    assert.equal(s.player.read('props', 'props.css'), PROP_FILES['Documents/props.css']);
+    assert.equal(s.player.read('props', 'assets', 'paper.jpg'), 'JPEGBYTES');
+    const note = s.player.read('documents', 'invitation.html');
+    assert.match(note, /<a class="prop-btn" href="\.\.\/props\/invitation\.html">See the prop<\/a>/);
+  });
+
+  it('the gm-only part and every comment are cut', () => {
+    const page = s.player.read('props', 'invitation.html');
+    assert.doesNotMatch(page, /KEEPER ONLY|gm-only|note to self|<!--/);
+    assert.match(page, /<body class="paper"><nav class="gma-prop-bar"/);
+    assert.match(page, /<a href="\.\.\/documents\/invitation\.html">&larr; Invitation<\/a>/);
+  });
+
+  it("a gm-only picture's file is not on the site", () => {
+    assert.ok(!rels(s).some((f) => /secret/.test(f)), rels(s).join(', '));
+    for (const f of s.player.files()) assert.doesNotMatch(fs.readFileSync(f, 'utf8'), /SECRETBYTES/, f);
+  });
+
+  it('a script in a hand-made page ships as written', () => {
+    assert.match(s.player.read('props', 'invitation.html'), /<script>document\.title = "Invitation";<\/script>/);
+  });
+});
+
+describe('props that do not ship', () => {
+  it('a prop whose note is not published ships nothing', () => {
+    const s = buildBoth({
+      'Documents/Invitation.md': PROP(), 'Documents/Other.md': '---\ntype: document\n---\nOther.\n', ...PROP_FILES,
+      '_meta/publish-list.yaml': listFileText({ publishing: ['Documents/Other.md'] }),
+    }, { sites: ['player'] });
+    try {
+      assert.ok(s.player.exists('documents', 'other.html'));
+      assert.ok(!s.player.exists('props'));
+      assert.ok(!rels(s).some((f) => /props\.css|paper\.jpg|invitation/.test(f)), rels(s).join(', '));
+    } finally { s.cleanup(); }
+  });
+
+  it("a stub note's prop ships nothing", () => {
+    const s = buildBoth({ 'Documents/Invitation.md': PROP('publish: stub\n'), ...PROP_FILES }, { sites: ['player'] });
+    try {
+      assert.ok(s.player.exists('documents', 'invitation.html'));
+      assert.doesNotMatch(s.player.read('documents', 'invitation.html'), /prop-link/);
+      assert.ok(!s.player.exists('props'));
+    } finally { s.cleanup(); }
+  });
+
+  it('a document note without prop_file is unchanged', () => {
+    const s = buildBoth({ 'Documents/Letter.md': '---\ntype: document\n---\nA letter.\n' }, { sites: ['player'] });
+    try {
+      assert.doesNotMatch(s.player.read('documents', 'letter.html'), /prop-link/);
+      assert.ok(!s.player.exists('props'));
+    } finally { s.cleanup(); }
+  });
+
+  it('a Dead End reference note with prop: and prop_look: is not a prop', () => {
+    const s = buildBoth({
+      'Reference/Crate.md': '---\ntype: item\nprop: crate.html\nprop_look: battered\n---\nA crate.\n',
+      'Reference/crate.html': '<p>crate</p>',
+    }, { sites: ['player'] });
+    try {
+      assert.doesNotMatch(s.player.read('reference', 'crate.html'), /prop-link/);
+      assert.ok(!s.player.exists('props'));
+    } finally { s.cleanup(); }
+  });
+});
+
+describe('what cannot ship is a warning', () => {
+  it('a ../ link is reported, not copied', () => {
+    const s = buildBoth({
+      'Documents/Invitation.md': PROP(), 'Documents/invitation.html': '<body><img src="../up.png"></body>', 'up.png': 'UP',
+    }, { sites: ['player'] });
+    try {
+      assert.ok(s.logs.some((l) => /WARNING: Documents\/Invitation\.md: invitation\.html links "\.\.\/up\.png", which is outside its folder — /.test(l)), s.logs.join('\n'));
+      assert.ok(s.player.exists('props', 'invitation.html'));
+      assert.ok(!rels(s).some((f) => /up\.png/.test(f)));
+    } finally { s.cleanup(); }
+  });
+
+  it('a missing prop file: the note page publishes with no link and a warning', () => {
+    const s = buildBoth({ 'Documents/Invitation.md': PROP() }, { sites: ['player'] });
+    try {
+      assert.ok(s.player.exists('documents', 'invitation.html'));
+      assert.doesNotMatch(s.player.read('documents', 'invitation.html'), /prop-link/);
+      assert.ok(s.logs.some((l) => /WARNING: Documents\/Invitation\.md: the prop file "invitation\.html" is not in Documents/.test(l)), s.logs.join('\n'));
+      assert.ok(!s.player.exists('props'));
+    } finally { s.cleanup(); }
+  });
+
+  it('an address on a page is refused and the page is untouched', () => {
+    const s = buildBoth({
+      'Documents/Letter.md': '---\ntype: document\n---\nTHE NOTE PAGE.\n',
+      'Documents/Invitation.md': PROP('prop_address: documents/letter.html\n'), ...PROP_FILES,
+    }, { sites: ['player'] });
+    try {
+      assert.match(s.player.read('documents', 'letter.html'), /THE NOTE PAGE\./);
+      assert.doesNotMatch(s.player.read('documents', 'letter.html'), /You are invited/);
+      assert.ok(s.logs.some((l) => /its address documents\/letter\.html is taken by a page the site builds/.test(l)), s.logs.join('\n'));
+      assert.doesNotMatch(s.player.read('documents', 'invitation.html'), /prop-link/);
+    } finally { s.cleanup(); }
+  });
+
+  it('each problem is a PROP_NOT_COPIED note fault', () => {
+    const s = buildBoth({ 'Documents/Invitation.md': PROP() }, { sites: [] });
+    try {
+      let faults = null;
+      quiet(() => build({ configPath: s.configPath, site: 'player', inMemory: true, onNoteFaults: (f) => { faults = f; } }));
+      const mine = faults.filter((f) => f.code === 'PROP_NOT_COPIED');
+      assert.equal(mine.length, 1, JSON.stringify(faults));
+      assert.equal(mine[0].severity, 'warning');
+      assert.equal(mine[0].path, 'Documents/Invitation.md');
+    } finally { s.cleanup(); }
+  });
+});
+
+describe('other kinds of prop', () => {
+  it('a PDF prop is copied as is and linked', () => {
+    const pdf = '%PDF-1.4\n<!-- gm-only -->not cut in a PDF<!-- /gm-only -->\n';
+    const s = buildBoth({
+      'Documents/Invitation.md': '---\ntype: prop\nprop_file: invitation.pdf\n---\nA letter.\n', 'Documents/invitation.pdf': pdf,
+    }, { sites: ['player'] });
+    try {
+      assert.equal(s.player.read('props', 'invitation.pdf'), pdf);
+      assert.match(s.player.read('documents', 'invitation.html'), /href="\.\.\/props\/invitation\.pdf">See the prop/);
+    } finally { s.cleanup(); }
+  });
+
+  it('a prop with no prop_file publishes its note page only', () => {
+    const s = buildBoth({ 'Documents/Invitation.md': '---\ntype: prop\n---\nA letter.\n' }, { sites: ['player'] });
+    try {
+      assert.ok(s.player.exists('documents', 'invitation.html'));
+      assert.doesNotMatch(s.player.read('documents', 'invitation.html'), /prop-link/);
+      assert.ok(!s.player.exists('props'));
+      assert.ok(!s.logs.some((l) => /Invitation/.test(l)), s.logs.join('\n'));
+    } finally { s.cleanup(); }
+  });
+});
+
+describe('kept folders', () => {
+  const setup = (address) => {
+    const s = buildBoth({ 'Documents/Invitation.md': PROP(address ? `prop_address: ${address}\n` : ''), ...PROP_FILES }, { sites: [], player: { keep: ['gazetteer'] } });
+    fs.mkdirSync(path.join(s.player.dir, 'gazetteer'), { recursive: true });
+    fs.writeFileSync(path.join(s.player.dir, 'gazetteer', 'invitation.html'), 'MINE');
+    return s;
+  };
+
+  it('an explicit address inside a kept folder replaces the kept file and says so', () => {
+    const s = setup('gazetteer/invitation.html');
+    try {
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.match(s.player.read('gazetteer', 'invitation.html'), /You are invited/);
+      assert.ok(lines.includes('  wrote gazetteer/invitation.html'), lines.join('\n'));
+      assert.ok(lines.includes('  replaces kept file: gazetteer/invitation.html'), lines.join('\n'));
+      assert.ok(lines.includes('Props: 1 published (3 files)'), lines.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  it('a default address inside a kept folder is refused', () => {
+    const s = buildBoth({ 'Documents/Invitation.md': PROP(), ...PROP_FILES }, { sites: [], player: { keep: ['props'] } });
+    try {
+      fs.mkdirSync(path.join(s.player.dir, 'props'), { recursive: true });
+      fs.writeFileSync(path.join(s.player.dir, 'props', 'invitation.html'), 'MINE');
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.equal(s.player.read('props', 'invitation.html'), 'MINE');
+      assert.ok(!s.player.exists('props', 'props.css'));
+      assert.ok(lines.some((l) => /WARNING: Documents\/Invitation\.md: its address props\/invitation\.html is taken by the kept folder props/.test(l)), lines.join('\n'));
+    } finally { s.cleanup(); }
+  });
+});
+
+describe('a withheld name in a prop', () => {
+  it('in a prop page or in a file name is a fault of the note', () => {
+    const s = buildBoth({
+      'NPCs/Lord Zorn.md': '---\ntype: npc\nwithheld: true\npublish: false\n---\nSecret.\n',
+      'Documents/Invitation.md': PROP(),
+      'Documents/invitation.html': '<body><p>From Lord Zorn, with love.</p></body>',
+      'Documents/Gift.md': '---\ntype: prop\nprop_file: gift.html\n---\nA gift.\n',
+      'Documents/gift.html': '<body><img src="lord-zorn.png"></body>',
+      'Documents/lord-zorn.png': 'PNG',
+    }, { sites: [] });
+    try {
+      let faults = null;
+      quiet(() => build({ configPath: s.configPath, site: 'player', inMemory: true, onNoteFaults: (f) => { faults = f; } }));
+      const paths = new Set(faults.filter((f) => /Lord Zorn/.test(JSON.stringify(f))).map((f) => f.path));
+      assert.ok(paths.has('Documents/Invitation.md'), JSON.stringify(faults, null, 1));
+      assert.ok(paths.has('Documents/Gift.md'), JSON.stringify(faults, null, 1));
+    } finally { s.cleanup(); }
+  });
+});
+
+describe('a sheets-only build', () => {
+  it('plans nothing and writes nothing', () => {
+    const s = buildBoth({ 'PCs/Ann.md': '---\ntype: pc\n---\n# Ann\n', 'Documents/Invitation.md': PROP(), ...PROP_FILES }, { sites: ['player'] });
+    try {
+      assert.ok(s.player.exists('props', 'invitation.html'));
+      fs.rmSync(path.join(s.player.dir, 'props'), { recursive: true, force: true });
+      fs.rmSync(path.join(s.root, 'vault', 'Documents', 'props.css'));   // a problem a full build would report
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player', only: 'sheets' }));
+      assert.ok(!s.player.exists('props'));
+      assert.ok(!lines.some((l) => /Props:|props\.css|Invitation/.test(l)), lines.join('\n'));
+    } finally { s.cleanup(); }
+  });
+});
+
+describe('every file a build writes is a taken address', () => {
+  const fixturesDir = path.join(__dirname, '..', 'fixtures');
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-props-taken-'));
+  after(() => fs.rmSync(outputDir, { recursive: true, force: true }));
+
+  it('the reserved files and folders cover the site the build writes', () => {
+    const configPath = path.join(outputDir, 'config.json');
+    fs.writeFileSync(configPath, JSON.stringify({
+      vaultPath: path.join(fixturesDir, 'redesign-full'), outputDir: path.join(outputDir, 'docs'), attachmentsDir: '_attachments',
+      siteTitle: 'Redesign Test', siteUrl: 'https://example.github.io/redesign-test', searchEnabled: true,
+      excludeDirs: ['_meta', '_Templates'], excludeSections: [],
+      folderMap: { 'Characters/PCs': 'characters/pcs', 'Characters/NPCs': 'characters/npcs', Locations: 'locations', Events: 'events', Sessions: 'sessions', Factions: 'factions' },
+    }));
+    quiet(() => build({ configPath }));
+    const docs = path.join(outputDir, 'docs');
+    const written = allFiles(docs).map((f) => path.relative(docs, f).split(path.sep).join('/')).filter((f) => !f.startsWith('props/'));
+    const taken = takenAddresses({});
+    const checked = written.filter((f) => (!f.includes('/') && /\.(?:html|json)$/.test(f)) || /^(?:css|js|images|fonts|story)\//.test(f));
+    assert.ok(checked.length > 10, checked.join(', '));
+    for (const f of checked) assert.ok(taken.has(f), `${f} is written by the build but is not a taken address`);
+  });
+});
