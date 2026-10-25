@@ -463,9 +463,10 @@ an answer.
 ## PROP_NOT_COPIED
 
 A prop note's file, its style, its address or a file its page links
-cannot go on the site, or its container cannot list it. The note's own
-page still publishes, without the link to the prop; a misplaced item is
-listed on its own. The row names the note and says what is wrong; after
+cannot go on the site as written, its kind is unknown, or its container
+cannot list it. The note's own page still publishes, without the link
+to a prop that is not on the site; a misplaced item is listed on its
+own. The row names the note and says what is wrong; after
 the `—` it says the fix. Work one note at a time: show the row's words,
 say what you would change, and edit on a yes. Styles and containers:
 publish-site's `references/prop-styles.md`.
@@ -507,12 +508,22 @@ publish-site's `references/prop-styles.md`.
 - **Not really the kind its name says** (a `.png` that is a link to a
   note): offer to link the real file in its place.
 - **Could not be read:** give the GM the file and the reason.
+- **An unknown `prop_kind`** (the prop is read as a document): offer
+  the listed kind that fits what the note describes.
 - **The style is unknown or cannot be used** (not a style name, not
-  one there is, a file missing, outside its folder or refused, or a
+  one there is, a file missing, outside its folder, refused, unreadable
+  or not UTF-8, `_meta/prop-styles` not a readable folder, or a
   container's style with no `{{{items}}}` place): the row names the
   style and the file; offer one of the styles the row lists, or show
-  the line of the vault style it names and offer the fix, or, for a
-  container, remove `prop_style`; never edit a plugin style.
+  the line of the vault style it names and offer the fix (save a vault
+  style file as UTF-8 on a yes), or, for a container, remove
+  `prop_style`; never edit a plugin style. A plugin style that cannot
+  be read: tell the GM to reinstall the plugin.
+- **The style leaves out assets** (the page is still built): for each
+  one the row names, offer to move a picture or font out of a subfolder
+  directly into `assets/`, point a link to nothing at the real file,
+  make an `assets` file a folder, or remove a kind a style does not
+  copy; show the line of `style.css` that wants it, if any.
 - **Both a prop_file and a prop_style:** ask which the GM wants; remove
   the other on a yes.
 - **No ## The Text (or none players see), or a prop_container that is
