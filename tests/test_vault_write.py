@@ -345,6 +345,48 @@ class WrapupNewTests(unittest.TestCase):
         code, _ = run(vault, "wrapup-new", "--session", "nope.md")
         self.assertEqual(code, 1)
 
+    def test_the_index_can_be_named_instead_of_pathed(self):
+        for name in ("Session 02 - The Docks", "[[Session 02 - The Docks]]",
+                     "[[Session 02 - The Docks|last week]]",
+                     "session 02 - the docks.md", "The Docks", "Session 02",
+                     INDEX_REL.removesuffix(".md")):
+            with self.subTest(name=name):
+                vault = make_vault(self, {INDEX_REL: INDEX})
+                code, out = run(vault, "wrapup-new", "--session", name)
+                self.assertEqual(code, 0, out)
+                self.assertIn(f"WOULD-CREATE\t{WRAP_REL}", out)
+
+    def test_a_name_only_matches_a_session_index(self):
+        # The Plan shares the session's name; only the index is a session.
+        plan = INDEX_REL.replace(".md", " - Plan.md")
+        vault = make_vault(self, {INDEX_REL: INDEX,
+                                  plan: "---\ntype: session-plan\n---\n"})
+        code, out = run(vault, "wrapup-new", "--session", "The Docks")
+        self.assertEqual(code, 0, out)
+
+    def test_a_name_two_indexes_share_is_refused_with_both_paths(self):
+        other = INDEX_REL.replace("Chapter 1 - Arrival", "Chapter 2 - Return")
+        vault = make_vault(self, {INDEX_REL: INDEX, other: INDEX})
+        code, out = run(vault, "wrapup-new", "--session", "Session 02")
+        self.assertEqual(code, 1)
+        self.assertIn("2 notes named", out)
+        self.assertIn(INDEX_REL, out)
+        self.assertIn(other, out)
+
+    def test_an_exact_name_does_not_hide_a_half_name_match(self):
+        other = INDEX_REL.replace("Session 02/Session 02 - The Docks",
+                                  "The Docks/The Docks")
+        vault = make_vault(self, {INDEX_REL: INDEX, other: INDEX})
+        code, out = run(vault, "wrapup-new", "--session", "The Docks")
+        self.assertEqual(code, 1)
+        self.assertIn("2 notes named", out)
+
+    def test_an_unknown_name_is_refused(self):
+        vault = make_vault(self, {INDEX_REL: INDEX})
+        code, out = run(vault, "wrapup-new", "--session", "The Mill")
+        self.assertEqual(code, 1)
+        self.assertIn("no session note at or named 'The Mill'", out)
+
     def _no_notes_index(self):
         return INDEX.replace(
             '  play_notes: "[[Session 02 - The Docks - Play Notes]]"\n', "")
@@ -434,6 +476,13 @@ class WrapupAddTests(unittest.TestCase):
             "<!-- gm-only -->", "## GM Notes", "### Quick Bullets",
             "### World State", "### Handoff to session-prep",
             "<!-- /gm-only -->"])
+
+    def test_the_wrap_up_can_be_named_instead_of_pathed(self):
+        vault = wrap_vault(self)
+        code, out = run(vault, "wrapup-add", "Chapter_01_Session_02_Wrap_Up",
+                        "--write", stdin="## Narrative Recap\n\nThey ran.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("They ran.", read(vault, WRAP_REL))
 
     def test_several_sections_in_one_call(self):
         vault = wrap_vault(self)
