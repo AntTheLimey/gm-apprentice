@@ -1,0 +1,53 @@
+/* Scroll: parchment unrolled between two turned rods, on a dark table. The text is in
+   the scribe's hand (prop_font, MedievalSharp by default); headings and the first
+   letter are uncial capitals. */
+.prop-style-scroll {
+  margin: 0; min-height: 100vh; color: #3b2a17;
+  background: radial-gradient(ellipse 120% 80% at 50% 0%, #2c2418 0%, #1a150e 55%, #0f0c08 100%) fixed #0f0c08;
+  font-family: 'MedievalSharp', Georgia, serif;
+}
+.scroll-desk { padding: 1.6rem 16px 4rem; }
+
+.prop-style-scroll .sheet { position: relative; box-sizing: border-box; width: min(880px, 100%); min-height: calc(min(880px, 100vw - 32px) * 11 / 8.5);
+  margin: 0 auto 2.2rem; display: grid; place-items: center; padding: 5cqw 0; container-type: inline-size; }
+
+.scroll { position: relative; width: min(100%, max(320px, 66cqw)); filter: drop-shadow(0 1.4cqw 2cqw rgba(0, 0, 0, 0.6)); }
+/* A rod: the rolled parchment, with a turned knob at each end. */
+.scroll .rod { position: relative; height: 5.4cqw; margin: 0 -3.4cqw; border-radius: 2.7cqw;
+  background:
+    linear-gradient(90deg, #5a3a1c 0 3.4cqw, transparent 3.4cqw calc(100% - 3.4cqw), #5a3a1c calc(100% - 3.4cqw)),
+    linear-gradient(180deg, #b79a6a 0%, #ead7ae 22%, #d8bf8e 50%, #a8875a 78%, #7a5d36 100%); }
+.scroll .rod::before, .scroll .rod::after { content: ""; position: absolute; top: 0.6cqw; bottom: 0.6cqw; width: 3cqw; border-radius: 1.5cqw;
+  background: linear-gradient(180deg, #8a6236 0%, #c79a5e 30%, #6b4522 75%, #3e2510 100%); }
+.scroll .rod::before { left: -1.6cqw; }
+.scroll .rod::after { right: -1.6cqw; }
+.scroll .rod.top { margin-bottom: -0.8cqw; z-index: 1; }
+.scroll .rod.bottom { margin-top: -0.8cqw; z-index: 1; }
+
+.scroll .vellum { position: relative; padding: 6cqw 6.4cqw; color: #3b2a17;
+  font-family: var(--hand, 'MedievalSharp'), 'MedievalSharp', Georgia, serif;
+  background:
+    linear-gradient(180deg, rgba(90, 60, 20, 0.28), transparent 5%, transparent 95%, rgba(90, 60, 20, 0.28)),
+    radial-gradient(ellipse 40% 30% at 20% 30%, rgba(150, 100, 40, 0.14), transparent 70%),
+    radial-gradient(ellipse 35% 25% at 80% 70%, rgba(150, 100, 40, 0.16), transparent 70%),
+    linear-gradient(90deg, rgba(120, 80, 30, 0.22), transparent 6%, transparent 94%, rgba(120, 80, 30, 0.22)),
+    #ecdcb5; }
+.scroll .prop-text { font-size: max(16px, 2.45cqw); line-height: 1.55; }
+.scroll .prop-text p { margin: 0 0 0.9em; }
+.first-sheet .scroll .prop-text > p:first-child { display: flow-root; }
+.first-sheet .scroll .prop-text > p:first-child::first-letter { float: left; margin: 0.06em 0.1em 0 0; font-family: 'Uncial Antiqua', Georgia, serif;
+  font-size: 3.1em; line-height: 0.85; color: #7a2316; }
+.scroll .prop-text h1, .scroll .prop-text h2, .scroll .prop-text h3, .scroll .prop-text h4 {
+  margin: 0 0 0.8em; font-family: 'Uncial Antiqua', Georgia, serif; font-weight: 400; text-align: center; color: #7a2316; line-height: 1.2; }
+.scroll .prop-text h1, .scroll .prop-text h2 { font-size: 1.6em; }
+.scroll .prop-text h3, .scroll .prop-text h4 { font-size: 1.25em; }
+.scroll .prop-text hr { border: none; text-align: center; margin: 0.6em 0; }
+.scroll .prop-text hr::after { content: "❧"; color: #7a2316; }
+.scroll .prop-text a { color: inherit; }
+
+@media print {
+  .prop-style-scroll { background: none; min-height: 0; }
+  .scroll-desk { padding: 0; }
+  .prop-style-scroll .sheet { width: 100%; min-height: 100vh; margin: 0; }
+  .scroll { filter: none; }
+}

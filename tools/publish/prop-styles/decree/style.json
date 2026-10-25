@@ -1,0 +1,9 @@
+{
+  "title": "Decree",
+  "about": "A proclamation on heavy paper inside a ruled border, headed with its title in black letter and closed with a red wax seal.",
+  "fonts": ["UnifrakturMaguntia", "IM Fell English"],
+  "fields": {
+    "prop_issuer": "Who proclaims it, printed above the heading, e.g. The Council of Aldmere",
+    "prop_seal": "The words pressed into the wax seal on the last sheet, e.g. SEAL OF THE COUNCIL; no seal when left out"
+  }
+}

@@ -1,0 +1,47 @@
+/* Ticket: a printed card ticket on a desk, with its company's name in display type,
+   a serial number on the face and on the stub, and a row of perforations between them.
+   The note's lines are typed on the face; a key line (WORD ..... value) gets its key in red. */
+.prop-style-ticket {
+  margin: 0; min-height: 100vh; color: #2b2418;
+  background: radial-gradient(ellipse 120% 80% at 50% 0%, #2f3a3a 0%, #1b2323 55%, #111717 100%) fixed #111717;
+  font-family: 'Cutive Mono', 'Courier New', monospace;
+}
+.ticket-desk { padding: 1.6rem 16px 4rem; }
+
+.prop-style-ticket .sheet { position: relative; box-sizing: border-box; width: min(880px, 100%); min-height: min(70vh, 640px);
+  margin: 0 auto 2rem; display: grid; place-items: center; padding: 4cqw 0; container-type: inline-size; }
+
+.ticket { --card: #e6d7ae; --red: #9c2f22; --ink: #2b2418; position: relative; display: grid; grid-template-columns: 20cqw 1fr;
+  width: min(100%, max(320px, 78cqw)); min-height: 36cqw; transform: rotate(-1.5deg); color: var(--ink); border-radius: 1.2cqw;
+  background:
+    radial-gradient(ellipse 60% 50% at 20% 20%, rgba(255, 250, 230, 0.4), transparent 70%),
+    radial-gradient(ellipse 50% 60% at 90% 90%, rgba(120, 90, 40, 0.18), transparent 70%),
+    var(--card);
+  box-shadow: 0 1.4cqw 3.6cqw rgba(0, 0, 0, 0.6), inset 0 0 3cqw rgba(110, 80, 30, 0.2); }
+/* The stub, behind a row of punched holes. */
+.ticket .stub { position: relative; display: flex; flex-direction: column; justify-content: space-between; align-items: center;
+  padding: 3cqw 1.4cqw; text-align: center; border-right: 0.3cqw dashed transparent; }
+.ticket .stub::after { content: ""; position: absolute; top: 1.4cqw; bottom: 1.4cqw; right: -0.55cqw; width: 1.1cqw;
+  background: radial-gradient(circle, #1b2323 0.38cqw, transparent 0.44cqw) center top / 1.1cqw 1.8cqw repeat-y; }
+.ticket .stub .serial { writing-mode: vertical-rl; transform: rotate(180deg); color: var(--red); font-size: max(12px, 2.4cqw); letter-spacing: 0.12em; }
+.ticket .stub-class { font-family: 'Rye', Georgia, serif; font-size: max(10px, 1.7cqw); line-height: 1.1; text-transform: uppercase; }
+
+.ticket .face { display: flex; flex-direction: column; padding: 2.6cqw 3.4cqw 3cqw 3.6cqw; }
+.ticket .head { margin-bottom: 2cqw; padding-bottom: 1.2cqw; border-bottom: 0.4cqw double rgba(43, 36, 24, 0.7); }
+.ticket .line-name { margin: 0; font-family: 'Rye', Georgia, serif; font-size: max(17px, 3.6cqw); line-height: 1.1; text-align: center; letter-spacing: 0.02em; }
+.ticket .head-row { display: flex; justify-content: space-between; gap: 2cqw; margin: 1cqw 0 0; font-size: max(11px, 1.8cqw); letter-spacing: 0.14em; text-transform: uppercase; }
+.ticket .head-row:empty { display: none; }
+.ticket .head-row .serial { color: var(--red); margin-left: auto; }
+
+.ticket .body { flex: 1; display: flex; align-items: center; }
+.ticket .prop-text { font-size: max(13px, 2.5cqw); line-height: 1.3; }
+.ticket .l-caps:first-child { font-family: 'Rye', Georgia, serif; font-size: 1.2em; letter-spacing: 0.04em; }
+.ticket .l-key { color: var(--red); }
+
+@media print {
+  .prop-style-ticket { background: none; min-height: 0; }
+  .ticket-desk { padding: 0; }
+  .prop-style-ticket .sheet { width: 100%; min-height: 100vh; margin: 0; }
+  .ticket { box-shadow: none; outline: 1px dashed rgba(0, 0, 0, 0.35); outline-offset: 3mm; transform: none; }
+  .ticket .stub::after { background: radial-gradient(circle, #fff 0.38cqw, transparent 0.44cqw) center top / 1.1cqw 1.8cqw repeat-y; }
+}

@@ -1,0 +1,66 @@
+/* Newspaper clipping: one narrow column of yellowed newsprint, cut out with scissors at
+   the sides and torn top and bottom (a CSS mask), lying on a desk. A heading in the
+   note's text is the headline. */
+.prop-style-clipping {
+  margin: 0; min-height: 100vh; color: #1f1b16;
+  background: radial-gradient(ellipse 120% 80% at 50% 0%, #3a3127 0%, #231d16 55%, #17130e 100%) fixed #17130e;
+  font-family: 'Old Standard TT', Georgia, serif;
+}
+.clip-desk { padding: 1.6rem 16px 4rem; }
+
+.prop-style-clipping .sheet { position: relative; box-sizing: border-box; width: min(880px, 100%); min-height: calc(min(880px, 100vw - 32px) * 11 / 8.5);
+  margin: 0 auto 2.2rem; display: grid; place-items: center; padding: 8cqw 0; container-type: inline-size;
+  filter: drop-shadow(0.2cqw 0.5cqw 0.5cqw rgba(0, 0, 0, 0.5)); }
+
+.clipping { --tear: 1.5cqw; position: relative; box-sizing: border-box; width: min(100%, max(300px, 46cqw)); padding: 5cqw 4cqw;
+  transform: rotate(-1.2deg); color: #221d17;
+  background:
+    radial-gradient(ellipse 60% 40% at 25% 15%, rgba(255, 252, 240, 0.35), transparent 70%),
+    radial-gradient(ellipse 70% 50% at 85% 85%, rgba(140, 100, 40, 0.18), transparent 70%),
+    repeating-linear-gradient(90deg, transparent 0 2px, rgba(90, 70, 40, 0.025) 2px 3px),
+    linear-gradient(175deg, #e9dfc4 0%, #e0d3b2 60%, #d6c7a1 100%);
+  /* Torn top and bottom: three rows of teeth of different sizes laid over each other, so the
+     edge is ragged rather than pinked. The shadow is the sheet's, so it follows the tear. */
+  -webkit-mask:
+    linear-gradient(#000 0 0) center / 100% calc(100% - 2 * var(--tear) + 2px) no-repeat,
+    conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 0 0 / calc(var(--tear) * 1.7) var(--tear) repeat-x,
+    conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 0.4cqw calc(var(--tear) * 0.3) / calc(var(--tear) * 1.1) calc(var(--tear) * 0.7) repeat-x,
+    conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 1.1cqw calc(var(--tear) * 0.55) / calc(var(--tear) * 2.3) calc(var(--tear) * 0.45) repeat-x,
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 0 100% / calc(var(--tear) * 1.3) var(--tear) repeat-x,
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 0.7cqw calc(100% - var(--tear) * 0.3) / calc(var(--tear) * 1.9) calc(var(--tear) * 0.7) repeat-x,
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 0.2cqw calc(100% - var(--tear) * 0.5) / calc(var(--tear) * 0.9) calc(var(--tear) * 0.5) repeat-x;
+  mask:
+    linear-gradient(#000 0 0) center / 100% calc(100% - 2 * var(--tear) + 2px) no-repeat,
+    conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 0 0 / calc(var(--tear) * 1.7) var(--tear) repeat-x,
+    conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 0.4cqw calc(var(--tear) * 0.3) / calc(var(--tear) * 1.1) calc(var(--tear) * 0.7) repeat-x,
+    conic-gradient(from 135deg at top, #0000, #000 1deg 89deg, #0000 90deg) 1.1cqw calc(var(--tear) * 0.55) / calc(var(--tear) * 2.3) calc(var(--tear) * 0.45) repeat-x,
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 0 100% / calc(var(--tear) * 1.3) var(--tear) repeat-x,
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 0.7cqw calc(100% - var(--tear) * 0.3) / calc(var(--tear) * 1.9) calc(var(--tear) * 0.7) repeat-x,
+    conic-gradient(from -45deg at bottom, #0000, #000 1deg 89deg, #0000 90deg) 0.2cqw calc(100% - var(--tear) * 0.5) / calc(var(--tear) * 0.9) calc(var(--tear) * 0.5) repeat-x; }
+.clipping .masthead { margin: 0; padding-bottom: 0.25em; border-bottom: 3px double rgba(34, 29, 23, 0.75); text-align: center;
+  font-family: 'IM Fell English SC', Georgia, serif; font-size: max(17px, 3.3cqw); letter-spacing: 0.06em; line-height: 1.1; }
+.clipping .dateline { margin: 0.35em 0 1em; padding-bottom: 0.3em; border-bottom: 1px solid rgba(34, 29, 23, 0.6); text-align: center;
+  font-size: max(10px, 1.45cqw); letter-spacing: 0.14em; text-transform: uppercase; }
+
+.clipping .prop-text { font-size: max(13px, 1.95cqw); line-height: 1.38; text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
+.clipping .prop-text p { margin: 0; text-indent: 1.2em; }
+.clipping .prop-text h1 + p, .clipping .prop-text h2 + p, .clipping .prop-text h3 + p, .clipping .prop-text h4 + p,
+.clipping .prop-text p:first-child { text-indent: 0; }
+.clipping .prop-text h1, .clipping .prop-text h2, .clipping .prop-text h3, .clipping .prop-text h4 {
+  margin: 0.2em 0 0.5em; text-align: center; font-weight: 700; line-height: 1.08; text-transform: uppercase; letter-spacing: 0.02em; hyphens: none; }
+.clipping .prop-text h1, .clipping .prop-text h2 { font-size: 1.7em; }
+.clipping .prop-text h3 { font-size: 1.45em; }
+.clipping .prop-text h4 { font-size: 1.1em; }
+.clipping .prop-text h1::after, .clipping .prop-text h2::after, .clipping .prop-text h3::after {
+  content: ""; display: block; width: 30%; margin: 0.35em auto 0; border-top: 1px solid rgba(34, 29, 23, 0.6); }
+.clipping .prop-text hr { border: none; border-top: 1px solid rgba(34, 29, 23, 0.55); width: 24%; margin: 0.7em auto; }
+.clipping .prop-text blockquote { margin: 0.4em 1em; font-style: italic; }
+.clipping .prop-text a { color: inherit; }
+.clipping pre.prop-text { text-align: left; }
+
+@media print {
+  .prop-style-clipping { background: none; min-height: 0; }
+  .clip-desk { padding: 0; }
+  .prop-style-clipping .sheet { width: 100%; min-height: 100vh; margin: 0; }
+  .prop-style-clipping .sheet { filter: none; }
+}

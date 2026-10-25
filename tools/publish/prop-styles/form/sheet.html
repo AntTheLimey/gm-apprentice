@@ -1,0 +1,8 @@
+<section class="sheet form" {{#prop_accent}}style="--accent: {{prop_accent|color}}"{{/prop_accent}} aria-label="Sheet {{sheet_number}} of {{sheet_count}}">
+  <div class="bar" aria-hidden="true"></div>
+  <div class="holes" aria-hidden="true"><i></i><i></i></div>
+  <i class="reg tl" aria-hidden="true"></i><i class="reg tr" aria-hidden="true"></i><i class="reg bl" aria-hidden="true"></i><i class="reg br" aria-hidden="true"></i>
+  <div class="doc">{{{text}}}</div>
+  {{#first}}{{#prop_stamp}}<div class="stamp">{{prop_stamp}}</div>{{/prop_stamp}}{{/first}}
+  <div class="tally"><span class="barcode" aria-hidden="true"></span><span>HARDCOPY · SHEET {{sheet_number}}/{{sheet_count}}</span></div>
+</section>

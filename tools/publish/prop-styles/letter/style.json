@@ -1,0 +1,9 @@
+{
+  "title": "Letter",
+  "about": "A period letter in ink on foxed, folded paper, on a candlelit desk; it prints one sheet per page.",
+  "fonts": ["IM Fell English", "IM Fell English SC", "Tangerine"],
+  "fields": {
+    "prop_font": "The writer's hand: a Google Fonts family, e.g. Pinyon Script (Tangerine when left out)",
+    "prop_plate": "A caption above the sheets on screen; it never prints"
+  }
+}

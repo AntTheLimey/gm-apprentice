@@ -1,0 +1,50 @@
+/* Handwritten scrap: real paper on a dark desk, folded in nine and carried a long time.
+   The hand is prop_font (Reenie Beanie by default); from the line prop_shift names, the
+   writer presses harder (the tool's l-shift class). */
+.prop-style-hand {
+  margin: 0; min-height: 100vh; color: #c9d4cf;
+  background: radial-gradient(ellipse at 50% 0%, #161a1d 0%, #07090b 60%, #030405 100%) fixed #050607;
+  font-family: 'Share Tech Mono', ui-monospace, Menlo, monospace;
+}
+.hand-desk { padding: 1.2rem 16px 3rem; }
+.hand-desk .plate { max-width: 880px; margin: 0 auto 0.8rem; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 207, 122, 0.8); }
+
+.prop-style-hand .sheet { position: relative; box-sizing: border-box; width: min(880px, 100%); min-height: calc(min(880px, 100vw - 32px) * 11 / 8.5);
+  margin: 0 auto 2.2rem; display: grid; place-items: center; padding: 6cqw 0; container-type: inline-size; border-radius: 0.6cqw;
+  background: radial-gradient(ellipse at 40% 30%, #1a2024 0%, #0a0d10 70%); }
+
+.scrap { position: relative; box-sizing: border-box; width: 80%; padding: 6.5cqw 5cqw 6cqw 6cqw; transform: rotate(-1.3deg);
+  background: linear-gradient(170deg, #e9e3cf 0%, #ddd5bd 60%, #d2c9ae 100%);
+  box-shadow: 0 2cqw 5cqw rgba(0, 0, 0, 0.75), inset 0 0 7cqw rgba(80, 60, 25, 0.2);
+  clip-path: polygon(0.4% 0.8%, 31% 0, 64% 0.5%, 99.4% 0, 100% 34%, 99.3% 67%, 100% 99.4%, 66% 100%, 33% 99.2%, 0 100%, 0.7% 66%, 0 33%); }
+/* The folds, and the stains of being carried. */
+.scrap::before { content: ""; position: absolute; inset: 0; pointer-events: none; background:
+  linear-gradient(to right, transparent 33%, rgba(70, 55, 25, 0.2) 33.2%, rgba(255, 255, 255, 0.3) 33.5%, transparent 33.9%,
+    transparent 66.2%, rgba(70, 55, 25, 0.2) 66.4%, rgba(255, 255, 255, 0.3) 66.7%, transparent 67.1%),
+  linear-gradient(to bottom, transparent 33%, rgba(70, 55, 25, 0.22) 33.15%, rgba(255, 255, 255, 0.3) 33.4%, transparent 33.7%,
+    transparent 66.3%, rgba(70, 55, 25, 0.22) 66.45%, rgba(255, 255, 255, 0.3) 66.7%, transparent 67%),
+  radial-gradient(ellipse at 84% 12%, rgba(90, 65, 25, 0.18), transparent 38%),
+  radial-gradient(ellipse at 10% 88%, rgba(90, 65, 25, 0.2), transparent 40%); }
+/* Chart paper: blue rules and a red margin. */
+.scrap.chart { --rule: max(22px, 3.7cqw); width: 88%; padding-left: 11.5cqw;
+  background: repeating-linear-gradient(to bottom, transparent 0 calc(var(--rule) - 1px), rgba(60, 110, 120, 0.3) calc(var(--rule) - 1px) var(--rule)) 0 2.3cqw,
+    linear-gradient(to right, transparent 9.2cqw, rgba(170, 60, 60, 0.35) 9.2cqw 9.4cqw, transparent 9.4cqw),
+    linear-gradient(170deg, #eceadd 0%, #e2dfcf 60%, #d6d2bf 100%); }
+
+.hand { position: relative; transform: rotate(-0.7deg); color: #14203a;
+  font-family: var(--hand, 'Reenie Beanie'), 'Reenie Beanie', 'Bradley Hand', cursive; }
+.hand .prop-text { font-size: max(19px, 3.2cqw); line-height: 1.16; letter-spacing: 0.01em;
+  text-shadow: 0 0.09cqw 0 rgba(255, 255, 255, 0.55), 0.03cqw 0 0 #14203a, 0 -0.04cqw 0.05cqw rgba(10, 14, 30, 0.35); }
+.scrap.chart .prop-text { line-height: var(--rule); }
+.hand .l-shift { color: #0a1022; text-shadow: 0.05cqw 0 0 #0a1022, -0.03cqw 0.03cqw 0 #0a1022, 0 0.12cqw 0 rgba(255, 255, 255, 0.6), 0 -0.06cqw 0.08cqw rgba(0, 0, 0, 0.5); }
+
+@media print {
+  .prop-style-hand { background: none; min-height: 0; }
+  .hand-desk { padding: 0; }
+  .hand-desk .plate { display: none; }
+  .prop-style-hand .sheet { width: 100%; min-height: 100vh; margin: 0; border-radius: 0; background: none; }
+  .scrap { box-shadow: none; }
+  /* Offset shadows print as extra copies of each line in the PDF's text; a stroke presses harder instead. */
+  .hand .prop-text, .hand .l-shift { text-shadow: none; }
+  .hand .l-shift { -webkit-text-stroke: 0.025em currentColor; }
+}

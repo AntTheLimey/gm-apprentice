@@ -1,0 +1,14 @@
+<main class="term-desk">
+{{#prop_plate}}<p class="plate">{{prop_plate}}</p>{{/prop_plate}}
+<p class="term-mode"><button type="button" class="mode-toggle" aria-pressed="false" hidden>Show as printout</button></p>
+{{{body}}}
+{{#prop_envelope}}
+<section class="sheet desk" aria-label="The envelope">
+  <div class="envelope">
+    {{#prop_frank}}<div class="frank">{{prop_frank}}{{#prop_frank_amount}}<strong>{{prop_frank_amount}}</strong>{{/prop_frank_amount}}</div>{{/prop_frank}}
+    <div class="envelope-word{{#prop_font}} by-hand{{/prop_font}}" {{#prop_font}}style="--hand: '{{prop_font|font}}'"{{/prop_font}}>{{prop_envelope}}</div>
+    <div class="bars" aria-hidden="true"></div>
+  </div>
+</section>
+{{/prop_envelope}}
+</main>

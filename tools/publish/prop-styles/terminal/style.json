@@ -1,0 +1,13 @@
+{
+  "title": "Terminal",
+  "about": "A green-phosphor screen with a status bar and sheet counter; a button turns it into an ink-saving paper printout, and it can come with its envelope.",
+  "fonts": ["VT323", "Share Tech Mono"],
+  "fields": {
+    "prop_device": "The machine's name in the status bar, e.g. PERSONAL DATAPAD · OUTBOUND MAIL (TERMINAL OUTPUT when left out)",
+    "prop_plate": "A caption above the sheets on screen; it never prints",
+    "prop_envelope": "A word written on an envelope, printed as a last sheet; no envelope when left out",
+    "prop_frank": "The postage frank on the envelope, e.g. POSTAGE PAID",
+    "prop_frank_amount": "The amount under the frank, e.g. 2 CR",
+    "prop_font": "A Google Fonts handwriting family for the envelope word, e.g. Reenie Beanie; a printed label when left out"
+  }
+}

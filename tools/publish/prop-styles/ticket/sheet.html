@@ -1,0 +1,15 @@
+<section class="sheet ticket-sheet" aria-label="Sheet {{sheet_number}} of {{sheet_count}}">
+  <div class="ticket">
+    <div class="stub">
+      {{#prop_serial}}<span class="serial">{{prop_serial}}</span>{{/prop_serial}}
+      {{#prop_class}}<span class="stub-class">{{prop_class}}</span>{{/prop_class}}
+    </div>
+    <div class="face">
+      <div class="head">
+        {{#prop_line_name}}<p class="line-name">{{prop_line_name}}</p>{{/prop_line_name}}
+        <p class="head-row">{{#prop_class}}<span class="class">{{prop_class}}</span>{{/prop_class}}{{#prop_serial}}<span class="serial">{{prop_serial}}</span>{{/prop_serial}}</p>
+      </div>
+      <div class="body">{{{text}}}</div>
+    </div>
+  </div>
+</section>

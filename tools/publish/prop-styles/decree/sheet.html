@@ -1,0 +1,11 @@
+<section class="sheet decree{{#first}} first-sheet{{/first}}" aria-label="Sheet {{sheet_number}} of {{sheet_count}}">
+  <div class="border">
+    {{#first}}
+    {{#prop_issuer}}<p class="issuer">{{prop_issuer}}</p>{{/prop_issuer}}
+    <h1 class="heading">{{title}}</h1>
+    <p class="flourish" aria-hidden="true"></p>
+    {{/first}}
+    <div class="words">{{{text}}}</div>
+    {{#last}}{{#prop_seal}}<div class="seal"><span>{{prop_seal}}</span></div>{{/prop_seal}}{{/last}}
+  </div>
+</section>

@@ -1,0 +1,59 @@
+/* Passport: the booklet lies open on a desk. The left page is the data page (photo box,
+   the holder's name, which is the prop's title, and a machine-readable strip); the right
+   page holds the note's text. Later sheets face a visa page instead. */
+.prop-style-passport {
+  margin: 0; min-height: 100vh; color: #2a2733;
+  background: radial-gradient(ellipse 120% 80% at 50% 0%, #3b3140 0%, #241e28 55%, #16121a 100%) fixed #16121a;
+  font-family: 'Cormorant Garamond', Garamond, Georgia, serif;
+}
+.passport-desk { padding: 1.6rem 16px 4rem; }
+
+.prop-style-passport .sheet { position: relative; box-sizing: border-box; width: min(960px, 100%); min-height: min(80vh, 760px);
+  margin: 0 auto 2rem; display: grid; place-items: center; padding: 4cqw 0; container-type: inline-size; }
+
+.booklet { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); width: min(100%, 92cqw); padding: 1.1cqw; border-radius: 1.4cqw;
+  background: linear-gradient(160deg, #3a1f2a, #24121b); box-shadow: 0 2cqw 5cqw rgba(0, 0, 0, 0.6); }
+.booklet > .page { position: relative; box-sizing: border-box; min-height: 60cqw; padding: 4cqw 3.6cqw 3cqw;
+  background:
+    repeating-radial-gradient(circle at 50% 120%, transparent 0 0.9cqw, rgba(90, 110, 140, 0.07) 0.9cqw 1cqw),
+    repeating-linear-gradient(60deg, transparent 0 1.4cqw, rgba(140, 90, 120, 0.05) 1.4cqw 1.5cqw),
+    linear-gradient(180deg, #f2efe4, #e8e3d3); }
+.booklet > .page:first-child { border-radius: 0.6cqw 0 0 0.6cqw; box-shadow: inset -1.6cqw 0 2cqw -1.2cqw rgba(60, 40, 50, 0.45); }
+.booklet > .page:last-child { border-radius: 0 0.6cqw 0.6cqw 0; box-shadow: inset 1.6cqw 0 2cqw -1.2cqw rgba(60, 40, 50, 0.45); }
+
+.page.data { display: flex; flex-direction: column; }
+.page.data .issuer { margin: 0; text-align: center; font-size: max(13px, 2.3cqw); font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; }
+.page.data .kind { margin: 0.2em 0 1.6em; text-align: center; font-size: max(11px, 1.7cqw); letter-spacing: 0.3em; text-transform: uppercase; color: #6b5b70; }
+.data-grid { display: grid; grid-template-columns: 14cqw minmax(0, 1fr); gap: 2.4cqw; align-items: start; }
+.photo { aspect-ratio: 35 / 45; border: 0.25cqw solid rgba(42, 39, 51, 0.5);
+  background:
+    radial-gradient(ellipse 30% 22% at 50% 38%, rgba(42, 39, 51, 0.32) 98%, transparent 100%),
+    radial-gradient(ellipse 52% 30% at 50% 100%, rgba(42, 39, 51, 0.32) 98%, transparent 100%),
+    linear-gradient(180deg, #dcd8cc, #cfcabb); }
+.data-grid dl { margin: 0; }
+.data-grid dt { font-size: max(9px, 1.25cqw); letter-spacing: 0.14em; text-transform: uppercase; color: #6b5b70; }
+.data-grid dd { margin: 0 0 1.2cqw; overflow-wrap: anywhere; font-family: 'Cutive Mono', 'Courier New', monospace; font-size: max(12px, 1.9cqw); text-transform: uppercase; }
+.data-grid dd.number { color: #8a2433; }
+.mrz { margin-top: auto; padding-top: 2cqw; display: flex; flex-direction: column; gap: 0.4em; overflow: hidden;
+  font-family: 'Cutive Mono', 'Courier New', monospace; font-size: max(9px, 1.55cqw); letter-spacing: 0.12em; text-transform: uppercase; color: #2a2733; }
+.mrz span { display: block; white-space: nowrap; overflow: hidden; }
+
+.page.visas .page-head, .page.text .folio { margin: 0; font-size: max(10px, 1.4cqw); letter-spacing: 0.3em; text-transform: uppercase; color: #6b5b70; }
+.page.visas .page-head { text-align: center; }
+.page.text { display: flex; flex-direction: column; }
+.page.text .words { flex: 1; }
+.page.text .folio { margin-top: 2cqw; text-align: center; letter-spacing: 0.1em; }
+.page.text .prop-text { font-size: max(15px, 2.15cqw); line-height: 1.4; color: #2a2733; }
+.page.text .prop-text p { margin: 0 0 0.8em; }
+.page.text .prop-text strong { font-weight: 700; letter-spacing: 0.04em; }
+.page.text .prop-text h1, .page.text .prop-text h2, .page.text .prop-text h3, .page.text .prop-text h4 {
+  margin: 0 0 0.8em; font-size: 1em; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; text-align: center; }
+.page.text .prop-text a { color: inherit; }
+.page.text pre.prop-text { font-family: 'Cutive Mono', 'Courier New', monospace; font-size: max(12px, 1.8cqw); }
+
+@media print {
+  .prop-style-passport { background: none; min-height: 0; }
+  .passport-desk { padding: 0; }
+  .prop-style-passport .sheet { width: 100%; min-height: 100vh; margin: 0; padding: 0 4cqw; }
+  .booklet { box-shadow: none; }
+}

@@ -1,0 +1,58 @@
+/* Letter: a period document in ink on laid paper, foxed and folded in three, on a
+   candlelit desk. The paper is drawn with gradients alone. The hand is prop_font
+   (Tangerine by default); headings and anything set in type use IM Fell English. */
+.prop-style-letter {
+  --desk-1: #191108; --desk-2: #2a1c0e; --ink: #2a2118; --iron-gall: #3a2c1c; --gilt: #c9a75c;
+  margin: 0; min-height: 100vh; color: var(--ink);
+  background: radial-gradient(ellipse 120% 70% at 50% -10%, rgba(255, 196, 110, 0.10), transparent 60%),
+    radial-gradient(ellipse 140% 120% at 50% 55%, var(--desk-2), var(--desk-1) 85%) fixed var(--desk-1);
+  font-family: 'IM Fell English', Georgia, serif;
+}
+.letter-desk { padding: 1.2rem 16px 4rem; }
+.letter-desk .plate { max-width: 210mm; margin: 0 auto 1rem; font-family: 'IM Fell English SC', Georgia, serif; font-size: 0.95rem;
+  letter-spacing: 0.12em; color: rgba(201, 167, 92, 0.75); }
+
+.prop-style-letter .sheet { position: relative; box-sizing: border-box; width: min(210mm, 100%); min-height: calc(min(210mm, 100vw - 32px) * 1.414);
+  margin: 0 auto 2rem; padding: 11cqw 10.5cqw; overflow: hidden; container-type: inline-size; border-radius: 2px;
+  background:
+    radial-gradient(ellipse 70% 50% at 30% 20%, rgba(255, 250, 235, 0.55), transparent 70%),
+    radial-gradient(ellipse 90% 60% at 80% 90%, rgba(150, 110, 60, 0.16), transparent 70%),
+    repeating-linear-gradient(to bottom, transparent 0 3px, rgba(120, 90, 50, 0.035) 3px 4px),
+    linear-gradient(170deg, #f1e6cc 0%, #e9dbbb 55%, #e0cfa9 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 14px 44px rgba(0, 0, 0, 0.55), inset 0 0 60px rgba(96, 68, 30, 0.22), inset 0 0 6px rgba(70, 48, 20, 0.25); }
+/* Foxing spots. */
+.prop-style-letter .sheet::after { content: ""; position: absolute; inset: 0; pointer-events: none; background:
+  radial-gradient(circle 26px at 88% 6%, rgba(122, 84, 40, 0.14), transparent 70%),
+  radial-gradient(circle 14px at 8% 88%, rgba(122, 84, 40, 0.12), transparent 70%),
+  radial-gradient(circle 40px at 96% 94%, rgba(100, 66, 28, 0.10), transparent 70%),
+  radial-gradient(circle 10px at 20% 12%, rgba(122, 84, 40, 0.10), transparent 70%),
+  radial-gradient(circle 7px at 63% 71%, rgba(122, 84, 40, 0.09), transparent 70%); }
+/* Folded in three for the post. */
+.letter .fold { position: absolute; inset: 0; pointer-events: none; background:
+  linear-gradient(to bottom, transparent 33.2%, rgba(90, 70, 40, 0.2) 33.33%, rgba(255, 255, 255, 0.35) 33.5%, transparent 33.7%,
+    transparent 66.4%, rgba(90, 70, 40, 0.2) 66.6%, rgba(255, 255, 255, 0.35) 66.75%, transparent 67%); }
+
+.letter .hand { position: relative; z-index: 1; color: var(--iron-gall);
+  font-family: var(--hand, 'Tangerine'), 'Tangerine', 'Apple Chancery', cursive; }
+/* font-size-adjust evens out the x-heights of the hands a GM may choose: Tangerine is small, Pinyon Script large. */
+.letter .prop-text { font-size: max(22px, 3.9cqw); font-size-adjust: 0.3; line-height: 1.42; }
+.letter .prop-text p { margin: 0 0 0.7em; }
+.letter .prop-text h1, .letter .prop-text h2, .letter .prop-text h3, .letter .prop-text h4 {
+  font-family: 'IM Fell English SC', Georgia, serif; font-weight: 400; letter-spacing: 0.12em; text-align: center; color: var(--ink);
+  font-size: 0.62em; margin: 0 0 1.2em; }
+.letter .prop-text hr { border: none; text-align: center; margin: 0.8em 0; }
+.letter .prop-text hr::after { content: "— ✦ —"; color: rgba(74, 60, 40, 0.55); font-family: 'IM Fell English', Georgia, serif; font-size: 0.8em; }
+.letter .prop-text blockquote { margin: 0 0 0.7em 1.4em; }
+.letter .prop-text table { font-family: 'IM Fell English', Georgia, serif; font-size: 0.5em; border-collapse: collapse; }
+.letter .prop-text td, .letter .prop-text th { border-bottom: 1px solid rgba(74, 60, 40, 0.35); padding: 0.2em 0.6em; text-align: left; }
+.letter .prop-text a { color: inherit; }
+/* A fenced text in a letter keeps its lines, still in the hand. */
+.letter pre.prop-text { line-height: 1.35; }
+
+@media print {
+  .prop-style-letter { background: none; min-height: 0; }
+  .letter-desk { padding: 0; }
+  .letter-desk .plate { display: none; }
+  .prop-style-letter .sheet { width: 100%; min-height: 100vh; margin: 0; border-radius: 0; -webkit-box-decoration-break: clone; box-decoration-break: clone; box-shadow: inset 0 0 60px rgba(96, 68, 30, 0.18); }
+  .letter .prop-text p { orphans: 3; widows: 3; }
+}
