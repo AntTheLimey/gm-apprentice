@@ -96,6 +96,15 @@ describe('leak gate: a file two props share', () => {
     assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'props/style.css', note: 'Letters/Beta.md', reason: 'GM Notes section' }]);
   }, VAULT()));
 
+  it("a file a shared stylesheet reaches belongs to both", () => within((s) => {
+    assert.deepEqual(gate(s).findings, []);
+    fs.appendFileSync(path.join(s.outputDir, 'props', 'more.css'), `/* ${BISHOP} */\n/* ${GARDENER} */\n`);
+    assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'props/more.css', note: 'Letters/Beta.md', reason: 'GM Notes section' }]);
+  }, {
+    ...VAULT(), 'Documents/style.css': '@import "more.css";\n', 'Letters/style.css': '@import "more.css";\n',
+    'Documents/more.css': CSS, 'Letters/more.css': CSS,
+  }));
+
   it('a withheld second prop is published on the shared file too', () => within((s) => {
     const found = gate(s).findings.filter((f) => f.code === 'WITHHELD_PUBLISHED').map((f) => f.page).sort();
     assert.deepEqual(found, ['letters/beta.html', 'props/beta.html', 'props/style.css']);

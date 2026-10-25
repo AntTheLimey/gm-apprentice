@@ -426,3 +426,26 @@ test('a file two props share byte for byte is planned once, and is listed as sha
   assert.deepStrictEqual(props[0].shared, []);
   assert.deepStrictEqual(props[1].shared, ['props/style.css']);
 });
+
+test('what a shared stylesheet reaches is shared too; a nested file with other bytes is a conflict', () => {
+  const files = (more) => ({
+    'Documents/Alpha.md': '', 'Documents/a.html': '<link rel="stylesheet" href="props.css">', 'Documents/props.css': '@import "more.css";', 'Documents/more.css': 'a{}',
+    'Letters/Beta.md': '', 'Letters/b.html': '<link rel="stylesheet" href="props.css">', 'Letters/props.css': '@import "more.css";', 'Letters/more.css': more,
+  });
+  const pages = (root) => [
+    page(root, 'Documents/Alpha.md', { type: 'prop', prop_file: 'a.html' }),
+    page(root, 'Letters/Beta.md', { type: 'prop', prop_file: 'b.html' }),
+  ];
+  const same = vault(files('a{}'));
+  const { props, problems } = plan(same, pages(same));
+  assert.deepStrictEqual(problems, []);
+  assert.deepStrictEqual(outs(props[0]), ['props/alpha.html', 'props/props.css', 'props/more.css']);
+  assert.deepStrictEqual(outs(props[1]), ['props/beta.html']);
+  assert.deepStrictEqual(props[1].shared, ['props/props.css', 'props/more.css']);
+  const other = vault(files('b{}'));
+  const differs = plan(other, pages(other));
+  assert.deepStrictEqual(differs.problems.map((p) => [p.rel, p.detail]), [
+    ['Letters/Beta.md', 'props.css links "more.css", which would land on props/more.css, taken by Documents/Alpha.md'],
+  ]);
+  assert.deepStrictEqual(differs.props[1].shared, ['props/props.css']);
+});

@@ -240,6 +240,12 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
           planned.add(addressKey(out));
           rewrite();
           if (prior.rel !== p.rel) p.shared.push(out);
+          // A shared stylesheet or SVG is walked from this prop's own folder too: what it reaches is shared when the
+          // bytes match, and a conflict when this prop's file there differs. Nothing of it is written for this prop.
+          if (follows) {
+            if (!firstOut.has(hit.real)) firstOut.set(hit.real, out);
+            queue.push({ entry: { source: hit.real, out, cut: Boolean(cutKeeper) && markup(lext) }, full: hit.full, at: joined.slice(0, -1).join('/'), ext: lext, bytes: read.bytes });
+          }
           continue;
         }
         if (why || prior) {
