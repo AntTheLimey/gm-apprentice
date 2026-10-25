@@ -61,7 +61,7 @@ describe('a font file names its copyright and licence', () => {
     const real = fs.readFileSync;
     t.mock.method(fs, 'readFileSync', (file, ...rest) => {
       const text = real.call(fs, file, ...rest);
-      return typeof text === 'string' && /LICENSE|licenses/.test(String(file)) ? text.replace(/\n/g, '\r\n') : text;
+      return typeof text === 'string' && /LICENSE|licenses/.test(String(file)) ? text.replace(/\r?\n/g, '\r\n') : text;
     });
     assert.match(fs.readFileSync(path.join(__dirname, '..', '..', 'licenses', 'OFL-1.1.txt'), 'utf8'), /\r\n/, 'the mock gives CRLF');
     assert.match(licenceText('OFL-1.1'), /^-+\nSIL OPEN FONT LICENSE Version 1\.1 - 26 February 2007\n/);
