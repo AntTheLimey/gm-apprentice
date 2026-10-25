@@ -1,8 +1,8 @@
 'use strict';
 
-// The pages that list props: a container's page (what it holds). Each row is a prop the site
+// The pages that list props: a container's page (what it holds), and the props page (every prop the site shows). Each row is a prop the site
 // shows, linked, or (asked for by its container) the title of one not yet found, and nothing more.
-const { escapeHtml, relativeHref, encodeHref } = require('../processor');
+const { escapeHtml, relativeHref, encodeHref, campaignImageSrc, isWebImageAddress } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts } = require('./base');
 const { propTextOf, propSheets } = require('../props/text');
 const { fieldText } = require('../props/layout');
@@ -62,4 +62,35 @@ function containerTemplate({ container, rows, address, title: shownTitle, noteTi
   });
 }
 
-module.exports = { containerTemplate, propListHtml, containerItemsHtml };
+// The props page, in the site shell: its title, its cover picture and paragraph when set, then each
+// group under its heading (linked when the heading is a page), with its rows. `model` is collectionModel's;
+// its `cover` is a web address, or the picture's path on the site.
+function collectionTemplate(model, navFor, config, publishConfig) {
+  const { address, title } = model;
+  const href = (out) => escapeHtml(encodeHref(relativeHref(address, out)));
+  const cover = model.cover ? campaignImageSrc(isWebImageAddress(model.cover) ? model.cover : relativeHref(address, model.cover)) : '';
+  const groups = model.groups.map((g) => {
+    const heading = g.href ? `<a href="${href(g.href)}">${escapeHtml(g.heading)}</a>` : escapeHtml(g.heading);
+    return `<section class="prop-group">\n<h2>${heading}</h2>\n${containerItemsHtml(g.rows, address)}\n</section>`;
+  });
+  const content = [
+    `<h1 class="page-title">${escapeHtml(title)}</h1>`,
+    ...(cover ? [`<img class="props-cover" src="${escapeHtml(cover)}" alt="">`] : []),
+    ...(model.intro ? [`<p class="props-intro">${escapeHtml(model.intro)}</p>`] : []),
+    ...groups,
+  ].join('\n');
+  return baseShell({
+    title,
+    siteTitle: config.siteTitle,
+    cssHref: cssPath(address),
+    navHtml: navFor(address, config),
+    rootHref: rootPath(address),
+    content,
+    footer: config.footer,
+    genrePreset: publishConfig._genrePreset,
+    overridesCss: publishConfig._overridesCss,
+    scripts: clientScripts(address),
+  });
+}
+
+module.exports = { containerTemplate, collectionTemplate, propListHtml, containerItemsHtml };

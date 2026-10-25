@@ -149,7 +149,7 @@ describe('props that do not ship', () => {
     try {
       assert.ok(s.player.exists('documents', 'invitation.html'));
       assert.doesNotMatch(s.player.read('documents', 'invitation.html'), /prop-link/);
-      assert.ok(!s.player.exists('props'));
+      assert.deepEqual(s.player.files().map((f) => path.relative(s.player.dir, f).split(path.sep).join('/')).filter((f) => f.startsWith('props/')), ['props/index.html'], 'only the props page');
     } finally { s.cleanup(); }
   });
 
@@ -191,7 +191,7 @@ describe('what cannot ship is a warning', () => {
       assert.ok(s.player.exists('documents', 'invitation.html'));
       assert.doesNotMatch(s.player.read('documents', 'invitation.html'), /prop-link/);
       assert.ok(s.logs.some((l) => /WARNING: Documents\/Invitation\.md: the prop file "invitation\.html" is not in Documents/.test(l)), s.logs.join('\n'));
-      assert.ok(!s.player.exists('props'));
+      assert.deepEqual(s.player.files().map((f) => path.relative(s.player.dir, f).split(path.sep).join('/')).filter((f) => f.startsWith('props/')), ['props/index.html'], 'only the props page');
     } finally { s.cleanup(); }
   });
 
@@ -269,7 +269,7 @@ describe('other kinds of prop', () => {
     try {
       assert.ok(s.player.exists('documents', 'invitation.html'));
       assert.doesNotMatch(s.player.read('documents', 'invitation.html'), /prop-link/);
-      assert.ok(!s.player.exists('props'));
+      assert.deepEqual(s.player.files().map((f) => path.relative(s.player.dir, f).split(path.sep).join('/')).filter((f) => f.startsWith('props/')), ['props/index.html'], 'only the props page');
       assert.ok(!s.logs.some((l) => /Invitation/.test(l)), s.logs.join('\n'));
     } finally { s.cleanup(); }
   });

@@ -4,13 +4,14 @@
 // players have not found is, when its container asks (`show_sealed: titles`), its title alone,
 // read from the frontmatter the site would publish; a withheld item is never a row. The build
 // and the leak gate both ask this module, so they agree on what each listing shows.
-const { publishedFrontmatter, isWithheld, parseWikiRef, publishMode } = require('../processor');
+const { publishedFrontmatter, isWithheld, parseWikiRef, publishMode, valueText } = require('../processor');
 const { linkKeys } = require('../scanner');
 const { sessionSortKey } = require('../templates/index-page');
 const { canonicalNfc } = require('../unicode');
-const { propContainerOf, showSealedOf } = require('./note');
+const { isPropNote, propContainerOf, showSealedOf } = require('./note');
 const { bytesOf } = require('./plan');
 const { fieldText } = require('./layout');
+const { PAGE_TAKER, addressShapeProblem } = require('./address');
 
 const sourceOf = (page) => page.sourceFrontmatter || page.frontmatter || {};
 
@@ -120,4 +121,137 @@ function containerItems({ props, isShown, excludeFields = [], fieldOverrides = {
   return out;
 }
 
-module.exports = { containerItems, propRow, byArrival, propPageOf };
+// The props page: one page per site listing every prop it shows, by where each sits.
+const COLLECTION_ADDRESS = 'props/index.html';
+// Where the page goes when a page the site builds holds props/index.html (a vault's own Props/Index note).
+const COLLECTION_FALLBACK = 'props/collection.html';
+const OTHER_HEADING = 'Other props';
+
+// The page's settings from a publishConfig (its non-listed `props` and `landing.latest_props`), each
+// filled in: the address as written, or the default.
+function collectionSettingsOf(settingsLike) {
+  const s = (settingsLike && settingsLike.props) || {};
+  const latest = settingsLike && settingsLike.landing ? settingsLike.landing.latest_props : 0;
+  const text = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  return {
+    title: text(s.title) || 'Props',
+    address: text(s.address) || COLLECTION_ADDRESS,
+    cover: text(s.cover),
+    intro: text(s.intro),
+    latest: Number.isInteger(latest) && latest > 0 ? latest : 0,
+  };
+}
+
+// Whether the site has a props page: a prop note it publishes that a listing may show (on the
+// player site a withheld note is never listed).
+function hasCollection(pages, { site = 'player' } = {}) {
+  return pages.some((pg) => isPropNote(sourceOf(pg)) && (site === 'gm' || !isWithheld(sourceOf(pg))));
+}
+
+// Where the page is: { address, warning, replacesKept }. An address that is not a site path ending in
+// .html, or is taken (`taken`, props/address.js), falls back to the default with a warning; the default
+// moves once to props/collection.html when a page the site builds holds it. One in a kept folder
+// replaces the kept file. `name` is the setting as the vault writes it. `address` null: no place for it.
+function collectionAddress(asked, taken, { name = 'player_site.props.address' } = {}) {
+  const fallback = taken.has(COLLECTION_ADDRESS) === PAGE_TAKER ? COLLECTION_FALLBACK : COLLECTION_ADDRESS;
+  if (fallback !== COLLECTION_ADDRESS && taken.has(fallback, { explicit: true })) {
+    return { address: null, warning: `${name}: ${COLLECTION_ADDRESS} and ${COLLECTION_FALLBACK} are both taken by pages the site builds, so the site has no props page`, replacesKept: false };
+  }
+  const moved = (a, why) => ({ address: fallback, warning: `${name} "${a}" ${why}; the props page is at ${fallback}`, replacesKept: false });
+  if (asked === COLLECTION_ADDRESS) return fallback === COLLECTION_ADDRESS ? { address: fallback, warning: null, replacesKept: false } : moved(asked, `is taken by ${PAGE_TAKER}`);
+  const shape = addressShapeProblem(asked, '.html');
+  if (shape) return moved(asked, shape);
+  const why = taken.has(asked, { explicit: true });
+  if (why) return moved(asked, `is taken by ${String(why).replace(/^inside /, '')}`);
+  return { address: canonicalNfc(asked), warning: null, replacesKept: Boolean(taken.has(asked)) };
+}
+
+const headingOrder = (a, b) => a.heading.localeCompare(b.heading, 'en', { sensitivity: 'base' });
+
+// The props page's model, or null when the site has none (`settings` null). Groups, each { heading,
+// href (null: a heading that is no page), rows }: one per container the site shows (`containers`, from
+// containerItems, its rows as its own page lists them), then each other prop the site shows by its
+// published `prop_group`, then by its chapter (its published `chapter` field, else the folder under
+// Chapters/ it sits in, when that names a chapter page the site publishes), then `Other props`. A
+// container is never a row of these (one inside a container is a row of that container). Groups run in
+// the order of their first row (byArrival), ties by heading; an empty container comes last.
+// `rowOf(p)`: the prop's row (propRow, with the site's options); `nameOf(page, text)` as containerItems.
+function collectionModel({ plan, rowOf, containers, settings, site = 'player', isShown, resolvePage = () => null, nameOf = (pg, t) => t, blocked = new Set() }) {
+  if (!settings || !plan) return null;
+  const groups = [];
+  const inContainer = new Set();
+  for (const entry of containers.values()) {
+    groups.push({ heading: entry.title, href: propPageOf(entry.container, blocked) || entry.container.page.outputPath, rows: entry.rows });
+    for (const r of entry.rows) inContainer.add(r.rel);
+  }
+  const byGroup = new Map();
+  const byChapter = new Map();
+  const other = [];
+  const chapterOf = (p) => {
+    const fm = p.page.frontmatter || {};
+    const isChapter = (pg) => (pg && pg.frontmatter && pg.frontmatter.type === 'chapter' ? pg : null);
+    const raw = valueText(fm.chapter).trim();
+    const named = raw ? isChapter(resolvePage(canonicalNfc(parseWikiRef(raw).target))) : null;
+    if (named) return named;
+    const parts = String(p.rel).split('/');
+    return parts.length > 2 && parts[0].toLowerCase() === 'chapters' ? isChapter(resolvePage(canonicalNfc(parts[1]))) : null;
+  };
+  for (const p of plan.props) {
+    if (p.kind === 'container' || inContainer.has(p.rel) || !isShown(p.page)) continue;
+    if (site !== 'gm' && isWithheld(sourceOf(p.page))) continue;
+    const row = rowOf(p);
+    const group = fieldText((p.page.frontmatter || {}).prop_group).trim();
+    if (group) {
+      const key = canonicalNfc(group);
+      if (!byGroup.has(key)) byGroup.set(key, { heading: key, href: null, rows: [] });
+      byGroup.get(key).rows.push(row);
+      continue;
+    }
+    const chapter = chapterOf(p);
+    if (chapter) {
+      if (!byChapter.has(chapter.outputPath)) byChapter.set(chapter.outputPath, { heading: nameOf(chapter, chapter.displayTitle || chapter.title || ''), href: chapter.outputPath, rows: [] });
+      byChapter.get(chapter.outputPath).rows.push(row);
+      continue;
+    }
+    other.push(row);
+  }
+  groups.push(...byGroup.values(), ...byChapter.values());
+  if (other.length) groups.push({ heading: OTHER_HEADING, href: null, rows: other });
+  for (const g of groups) g.rows.sort(byArrival);
+  groups.sort((a, b) => {
+    if (!a.rows.length || !b.rows.length) return (b.rows.length > 0) - (a.rows.length > 0) || headingOrder(a, b);
+    return byArrival(a.rows[0], b.rows[0]) || headingOrder(a, b);
+  });
+  return { title: settings.title, address: settings.address, cover: settings.cover, intro: settings.intro, groups };
+}
+
+// Every shown row of the model, once each.
+function shownRows(model) {
+  const seen = new Set();
+  const out = [];
+  for (const g of model ? model.groups : []) {
+    for (const r of g.rows) {
+      if (r.sealed || seen.has(r.rel)) continue;
+      seen.add(r.rel);
+      out.push(r);
+    }
+  }
+  return out;
+}
+
+// Descending, a missing value (null) last.
+const missingLastDesc = (x, y) => (x === y ? 0 : x === null ? 1 : y === null ? -1 : x > y ? -1 : 1);
+
+// The newest `n` shown rows: by the number of the session each arrived in, then lastUpdated (both
+// newest first, none last), then title.
+function latestProps(model, n) {
+  const session = (r) => (r.arrived && sessionSortKey(r.arrived.title)) || null;
+  return shownRows(model).sort((a, b) => missingLastDesc(session(a), session(b))
+    || missingLastDesc(a.updated || null, b.updated || null)
+    || byTitle(a, b)).slice(0, Math.max(0, n));
+}
+
+module.exports = {
+  containerItems, propRow, byArrival, propPageOf,
+  COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, hasCollection, collectionAddress, collectionModel, latestProps, shownRows,
+};

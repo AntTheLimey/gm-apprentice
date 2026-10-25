@@ -74,7 +74,7 @@ describe('the GM site and props', () => {
     const s = buildBoth({ ...FILES, 'Documents/Invitation.md': PROP.replace('---\nAn', 'publish: stub\n---\nAn') });
     try {
       assert.match(s.gm.read('props', 'invitation.html'), /KEEPER ONLY/);
-      assert.ok(!s.player.exists('props'));
+      assert.deepEqual(s.player.files().map((f) => path.relative(s.player.dir, f).split(path.sep).join('/')).filter((f) => f.startsWith('props/')), ['props/index.html'], 'only the props page');
     } finally { s.cleanup(); }
   });
 

@@ -47,10 +47,10 @@ const { planProps } = require('./props/plan');
 const { takenAddresses } = require('./props/address');
 const { propHrefFor, propOutputs, keptCopyOutputs, pathProblem } = require('./props/files');
 const { styledPage, styleFontFamilies, textProblem, FONTS_CSS, BASE_CSS } = require('./props/page');
-const { containerItems } = require('./props/collection');
+const { containerItems, propRow, COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, hasCollection, collectionAddress, collectionModel, latestProps, shownRows } = require('./props/collection');
 const { layoutNames } = require('./props/layout');
 const { isWithheld, withheldPlaceholder, withheldNameMarked } = require('./processor');
-const { containerTemplate, containerItemsHtml } = require('./templates/props-page');
+const { containerTemplate, collectionTemplate, containerItemsHtml } = require('./templates/props-page');
 
 const TOOL_VERSION = require('../package.json').version;
 
@@ -813,6 +813,18 @@ function buildSite(options) {
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
 
+  // The props page: one per site, when it publishes a prop note. Its address is decided here, so
+  // no prop takes it, the menu links it and each prop page's bar links it. A fast build writes no
+  // page of it, but its sheets' menus link it as a full build's do.
+  let collection = null;
+  if (hasCollection(pages, { site: gm ? 'gm' : 'player' })) {
+    const settings = collectionSettingsOf(publishConfig);
+    const placed = collectionAddress(settings.address, takenAddresses({ pageOutputs: pages.map((p) => p.outputPath), keptDirs: gm ? [] : config.preserveDirs }), { name: nm('player_site.props.address') });
+    if (placed.warning) console.warn(`  WARNING: ${placed.warning}`);
+    // A [[wikilink]] in the words prints as its name, as the landing banner's does.
+    if (placed.address) collection = { ...settings, title: plainMetaValue(settings.title), intro: settings.intro && plainMetaValue(settings.intro), address: placed.address, replacesKept: placed.replacesKept };
+  }
+
   // The props the player site ships: a prop note's own file, at its address, with the files
   // it links. A prop ships with its note's full page; a stub's prop does not. A fast build
   // plans none. The doctor reads the plan from publishConfig._props.
@@ -820,7 +832,8 @@ function buildSite(options) {
     vaultPath: config.vaultPath, pages: corpus, relOf: vaultRelPathOf,
     // The GM site shows every prop of every note it shows, uncut while Keeper blocks are on; it keeps no folder.
     ships: gm ? (p) => pages.includes(p) : (p) => pages.includes(p) && publishMode(p.sourceFrontmatter || p.frontmatter) !== 'stub',
-    taken: takenAddresses({ pageOutputs: pages.map((p) => p.outputPath), keptDirs: gm ? [] : config.preserveDirs }),
+    // props/index.html is already a file the site needs; a props page set elsewhere is held like a page.
+    taken: takenAddresses({ pageOutputs: [...pages.map((p) => p.outputPath), ...(collection && collection.address !== 'props/index.html' ? [collection.address] : [])], keptDirs: gm ? [] : config.preserveDirs }),
     cutKeeper: gm ? !show.has('gm_only_blocks') : true, cleanup: writes === 'all' && !gm,
   });
   publishConfig._props = propPlan;
@@ -1232,6 +1245,11 @@ function buildSite(options) {
       if (p.files.length && propBlocked.has(p.files[0].out)) for (const f of p.files) propBlocked.add(f.out);
     }
   }
+  // The props page is never written through a link either: then the site has none, and nothing links it.
+  if (collection && (writes === 'all' || dry) && survivesClean(collection.address) && pathProblem(outputDir, collection.address)) {
+    console.warn(`  WARNING: ${nm('player_site.props.address')} "${collection.address}": its path in the site folder is not a plain folder, so the site has no props page`);
+    collection = null;
+  }
   // The GM site's folder is its own from here: the marker goes in first (finished: null) and is written again last.
   if (gm && writes === 'all') {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -1321,7 +1339,9 @@ function buildSite(options) {
     }
     menuExtra.push({ label: item.label, href: read.href, external: read.kind === 'outside', group: item.group || null });
   }
-  const navFor = generateNav(pages, { hasStory, timelineHref, extra: menuExtra });
+  const navFor = generateNav(pages, { hasStory, timelineHref, extra: menuExtra, collection: collection ? { href: collection.address, label: collection.title } : null });
+  // The props page's link from a page at `out`, for its bar: relative, encoded; null when the site has none.
+  const collectionHrefFrom = (out) => (collection ? encodeHref(relativeHref(out, collection.address)) : null);
 
   // Render each page
   const usedImages = new Set();
@@ -1682,6 +1702,7 @@ function buildSite(options) {
   // what it holds, so a row links only a page that was made; one that names a style fills its layout.
   // The styles' typefaces are served from the site, from the vault's font cache: a miss warns once.
   let styleFonts = { css: '', files: [] };
+  let collectionBuilt = null;   // the props page's model (collectionModel), made with the container pages
   if (propPlan) {
     const noPage = (p, problem) => {
       const row = { rel: p.rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: problem.detail, fix: problem.fix };
@@ -1718,7 +1739,7 @@ function buildSite(options) {
       }, { offline: options.offline === true, fontsHref: '../../fonts/' });
     }
     for (const p of styled) {
-      const made = styledPage({ prop: p, style: p.style, page: p.page, linkMap, imageMap, usedImages, collectionHref: null, fontsCss: styleFonts.css !== '' });
+      const made = styledPage({ prop: p, style: p.style, page: p.page, linkMap, imageMap, usedImages, collectionHref: collectionHrefFrom(p.address), fontsCss: styleFonts.css !== '' });
       if (made.problem) noPage(p, made.problem);
       else p.made_html = made.html;
     }
@@ -1740,10 +1761,19 @@ function buildSite(options) {
       propPlan.problems.push(row);
       console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
     }
+    // The props page lists the same rows, so a prop reads alike on every page that lists it.
+    collectionBuilt = collectionModel({
+      plan: propPlan, containers: listed, settings: collection, site: gm ? 'gm' : 'player', nameOf, blocked: propBlocked,
+      isShown: (pg) => shown.has(pg), resolvePage: (target) => pageAt.get(linkMap[target]) || null,
+      rowOf: (p) => propRow(p, {
+        isShown: (pg) => shown.has(pg), excludeFields, fieldOverrides, site: gm ? 'gm' : 'player', nameOf, blocked: propBlocked,
+        resolvePage: (target) => pageAt.get(linkMap[target]) || null, isPlayerShown: gm ? (pg) => onPlayerSite.has(pg) : null,
+      }),
+    });
     for (const p of containers) {
       const { rows, title, noteTitle } = listed.get(p.rel);
       p.made_html = p.style
-        ? styledPage({ prop: p, style: p.style, page: p.page, linkMap, imageMap, usedImages, collectionHref: null, fontsCss: styleFonts.css !== '', items: containerItemsHtml(rows, p.address), names: { title, noteTitle } }).html
+        ? styledPage({ prop: p, style: p.style, page: p.page, linkMap, imageMap, usedImages, collectionHref: collectionHrefFrom(p.address), fontsCss: styleFonts.css !== '', items: containerItemsHtml(rows, p.address), names: { title, noteTitle } }).html
         : containerTemplate({ container: p, rows, address: p.address, title, noteTitle }, navFor, config, publishConfig, { linkMap, imageMap, usedImages });
     }
   }
@@ -2020,6 +2050,25 @@ function buildSite(options) {
     }
   }
 
+  // The props page's cover picture and words, resolved once: a web address as written, a vault picture copied
+  // as the landing banner's is (to images/banners/props/). Then the landing page's box of the newest props.
+  let collectionResolved = false;
+  function resolveCollection() {
+    if (collectionResolved || !collectionBuilt) return;
+    collectionResolved = true;
+    const cover = collectionBuilt.cover;
+    if (cover && !isWebImageAddress(cover)) {
+      const imageFull = resolveVaultAsset(cover, nm('player_site.props.cover'));
+      collectionBuilt.cover = imageFull ? (writes !== 'all' ? `images/banners/props/${path.basename(imageFull)}` : copyBannerAsset(imageFull, 'props')) : null;
+      // Named after the vault's file, as a section banner is: a withheld name in it is in its address.
+      if (imageFull && !gm) audit.readFileName(canonicalNfc(String(cover).replace(/\\/g, '/')), collectionBuilt.cover);
+    }
+    const latest = collection.latest > 0 ? latestProps(collectionBuilt, collection.latest) : [];
+    publishConfig._propsLatest = latest.length
+      ? { title: collectionBuilt.title, href: collectionBuilt.address, rows: latest, total: shownRows(collectionBuilt).length }
+      : null;
+  }
+
   const pcRoster = pages.find(isRoster);
   const pcRedirectTarget = pcRoster ? pcRoster.outputPath : null;
 
@@ -2079,6 +2128,20 @@ function buildSite(options) {
     if (live) characterStories = buildCharacterStories();
     if (spine.length || characterStories.length || npcStories.length) {
       emit('story.html', storyLanding(spine, characterStories, config, publishConfig, navFor, npcStories), '  wrote story.html');
+    }
+
+    // The props page. One set in a kept folder replaces the file there, and the build says so.
+    if (collectionBuilt) {
+      resolveCollection();
+      const out = collectionBuilt.address;
+      const full = path.join(outputDir, ...out.split('/'));
+      if (live && !dry && pathProblem(outputDir, out)) {
+        console.warn(`  WARNING: ${out} was not written: its path in the site folder is not a plain folder`);
+      } else {
+        const replaced = live && !dry && collection.replacesKept && fs.existsSync(full);
+        emit(out, collectionTemplate(collectionBuilt, navFor, config, publishConfig), `  wrote ${out}`);
+        if (replaced) console.log(`  replaces kept file: ${out}`);
+      }
     }
 
     // Landing page
@@ -2201,7 +2264,7 @@ function buildSite(options) {
   // prop page, or in the name of any file a prop puts on the site, is a fault of its note.
   const stylesWritten = new Set();   // the styles of the styled pages written
   if (propPlan) {
-    const { outputs, failed } = propOutputs(propPlan);
+    const { outputs, failed } = propOutputs(propPlan, { collectionAddress: collection && collection.address });
     propPlan.problems.push(...failed);
     // A kept folder is never cleaned, so a prop written into one by an earlier build would
     // outlive its note: each file still holding exactly what the tool wrote there goes. A
@@ -2209,7 +2272,9 @@ function buildSite(options) {
     if (writes === 'all') {
       const writing = new Set(outputs.map((f) => f.out.toLowerCase()));
       const kept = config.preserveDirs.map((d) => d.toLowerCase().replace(/\/+$/, ''));
-      for (const f of keptCopyOutputs(propPlan)) {
+      // Its bar linked the props page if that build had one: at this build's address, or a default.
+      const collectionAddresses = [...new Set([null, collection && collection.address, COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf(publishConfig).address])];
+      for (const f of keptCopyOutputs(propPlan, { collectionAddresses })) {
         const key = f.out.toLowerCase();
         if (writing.has(key) || !kept.some((d) => key.startsWith(`${d}/`))) continue;
         const full = path.join(outputDir, ...f.out.split('/'));
@@ -2217,8 +2282,8 @@ function buildSite(options) {
         const why = pathProblem(outputDir, f.out);
         if (why === 'link') { console.log(`  left in kept folder: ${f.out} (a folder on its path is a link)`); continue; }
         if (why) continue;
-        const want = f.text !== undefined ? Buffer.from(f.text) : f.bytes;
-        if (!fs.readFileSync(full).equals(want)) { console.log(`  left in kept folder: ${f.out} (it differs from what the tool would write)`); continue; }
+        const have = fs.readFileSync(full);
+        if (!f.wants.some((want) => have.equals(want))) { console.log(`  left in kept folder: ${f.out} (it differs from what the tool would write)`); continue; }
         fs.unlinkSync(full);
         console.log(`  removed from kept folder: ${f.out} (its prop is not published)`);
       }

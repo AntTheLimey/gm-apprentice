@@ -8,6 +8,7 @@ const {
 const { canonicalNfc } = require('../unicode');
 const { isOutOfPlay } = require('../pc-status');
 const { isPlayedSession } = require('../session-hub');
+const { propListHtml } = require('./props-page');
 
 function formatDate(dateStr) {
   if (!dateStr) return null;
@@ -295,7 +296,19 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
 </div>`
     : '';
 
-  const content = [heroZone, bannerZone, recapZone, teamZone, memoriamZone, quickLinkZone, npcZone, locationZone, eventZone, timelineZone, exploreZone]
+  // --- The newest props (player_site.landing.latest_props; chosen in build.js), before Explore the World ---
+  const latestProps = publishConfig && publishConfig._propsLatest;
+  let propsZone = '';
+  if (latestProps && latestProps.rows.length > 0) {
+    const all = escapeHtml(encodeHref(latestProps.href));
+    propsZone = [
+      `<section class="dashboard-section props-latest"><h2><a href="${all}">Latest from ${escapeHtml(latestProps.title)}</a></h2>`,
+      propListHtml(latestProps.rows, outputPath),
+      `<p><a href="${all}">All ${latestProps.total} props</a></p></section>`,
+    ].join('\n');
+  }
+
+  const content = [heroZone, bannerZone, recapZone, teamZone, memoriamZone, quickLinkZone, npcZone, locationZone, eventZone, timelineZone, propsZone, exploreZone]
     .filter(Boolean)
     .join('\n');
 

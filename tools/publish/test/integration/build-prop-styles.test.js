@@ -119,7 +119,8 @@ describe('what a styled prop ships', () => {
 
   const shipsNothing = (s) => {
     const all = rels(s.player);
-    assert.ok(!all.some((f) => f.startsWith('props/')), all.join(', '));
+    // A prop note the site publishes (a stub's, or a held one's neighbour) gives the props page alone.
+    assert.ok(!all.some((f) => f.startsWith('props/') && f !== 'props/index.html'), all.join(', '));
     assert.ok(!all.includes('css/props.css'));
     assert.ok(!all.some((f) => f.startsWith('fonts/')), all.join(', '));
     assert.doesNotMatch(s.player.read('NOTICE.txt'), /typefaces/);
@@ -140,7 +141,7 @@ describe('what a styled prop ships', () => {
     try {
       assert.ok(s.player.exists('documents', 'letter.html'));
       assert.doesNotMatch(s.player.read('documents', 'letter.html'), /See the prop/);
-      assert.ok(!s.player.exists('props'));
+      assert.deepEqual(rels(s.player).filter((f) => f.startsWith('props/')), ['props/index.html'], 'only the props page');
       assert.ok(s.logs.includes('  WARNING: Documents/Letter.md: has no ## The Text section, so its styled page is not made — add a ## The Text section with the words the players see'), s.logs.join('\n'));
     } finally { s.cleanup(); }
   });
@@ -261,7 +262,7 @@ describe('fix round 1', () => {
     for (const text of ['', '<!-- gm-only -->\nKEEPER\n<!-- /gm-only -->']) {
       const s = buildBoth({ ...STYLE, 'Documents/Letter.md': note('', text) + '\n## After\n\nMore.\n' }, { sites: ['player'] });
       try {
-        assert.ok(!s.player.exists('props'));
+        assert.deepEqual(rels(s.player).filter((f) => f.startsWith('props/')), ['props/index.html'], 'only the props page');
         assert.doesNotMatch(s.player.read('documents', 'letter.html'), /See the prop/);
         assert.ok(s.logs.includes('  WARNING: Documents/Letter.md: has a ## The Text section with no words the players see, so its styled page is not made — write the words the players see under ## The Text (outside any hidden block)'), s.logs.join('\n'));
         assert.ok(!s.logs.some((l) => /has no ## The Text section/.test(l)), s.logs.join('\n'));

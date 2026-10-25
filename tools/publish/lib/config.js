@@ -209,6 +209,15 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
     value: { title: bannerText(b.title), text: bannerText(b.text), link: bannerText(b.link), image: bannerText(b.image) },
     enumerable: false, writable: true, configurable: true,
   });
+  // The props page's four texts (null when unset) and the landing box's size. Not listed, like the banner.
+  const pp = p.props || {};
+  Object.defineProperty(merged, 'props', {
+    value: { title: bannerText(pp.title), address: bannerText(pp.address), cover: bannerText(pp.cover), intro: bannerText(pp.intro) },
+    enumerable: false,
+  });
+  const latestProps = merged.landing.latest_props;
+  delete merged.landing.latest_props;
+  Object.defineProperty(merged.landing, 'latest_props', { value: Number.isInteger(latestProps) ? latestProps : 0, enumerable: false });
 
   // The numbers, the header facts and the withheld words the build used to fix in code. Not listed, like
   // `menu_extra`: a site that sets none builds as it did. Each is passed down to the code that uses it.
