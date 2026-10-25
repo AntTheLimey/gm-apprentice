@@ -39,23 +39,30 @@ function allowedName(name) {
 }
 
 function dangerousAttr(name) {
-  // '' and '?' are names the walker could not pin down; treat them as the worst case.
-  return name === '' || name === '?' || DANGEROUS_ATTRS.has(name) || name.startsWith('on');
+  // '' and a name holding '?' are names the walker could not pin down; treat them as the worst case.
+  return name === '' || name.includes('?') || DANGEROUS_ATTRS.has(name) || name.startsWith('on');
 }
 
+// Elements whose content the browser reads by rules the walker does not follow (raw text,
+// RCDATA, template contents, foreign content): a layout may not use them at all.
+const REFUSED_ELEMENTS = new Set(['title', 'textarea', 'xmp', 'iframe', 'noembed', 'noframes', 'noscript', 'plaintext', 'template', 'svg', 'math']);
+// The states of a tag in which the next character starts or continues an attribute name.
+const NAME_STATES = new Set(['beforeName', 'name', 'afterName', 'afterQuoted', 'selfClosing']);
+
 // Reads the HTML around each Mustache tag. It walks the template's own text (the text tokens,
-// joined), so the tags themselves never move it, tracking tags, quoted attribute values,
-// comments and <script>/<style> until their close tag.
+// joined), so the tags themselves never move it. It follows the browser's tokenizer for tags,
+// attributes, comments and <script>/<style>, and refuses (through `refuse`) every construct
+// it does not follow, so the context it reports is the one the browser will see.
 class ContextWalker {
-  constructor(skeleton) {
+  constructor(skeleton, refuse) {
     this.s = skeleton;
+    this.refuse = refuse;  // (skeleton offset, snippet, why)
     this.i = 0;
-    this.mode = 'text';  // text | tag | attr | raw | comment
-    this.sub = '';       // in a tag: tagname | names | value | unquoted
+    this.mode = 'text';    // text | tag | attr | raw | comment
+    this.sub = '';         // in a tag: tagname | beforeName | name | afterName | beforeValue | unquoted | afterQuoted | selfClosing
     this.tagName = '';
     this.closing = false;
-    this.name = '';      // the attribute being read
-    this.gap = true;     // the next name character starts a new attribute name
+    this.name = '';        // the attribute being read
     this.quote = '';
     this.raw = '';
   }
@@ -69,8 +76,24 @@ class ContextWalker {
 
   // What must match on both sides of a section for its two outcomes to leave the same HTML.
   key() {
-    const tag = this.mode === 'tag' ? `${this.sub}:${this.sub === 'tagname' ? this.tagName : ''}` : '';
+    let tag = '';
+    if (this.mode === 'tag') tag = NAME_STATES.has(this.sub) ? 'names' : `${this.sub}:${this.tagName}`;
     return [this.mode, tag, this.quote, this.raw].join('|');
+  }
+
+  openTag(closing) {
+    this.mode = 'tag';
+    this.sub = 'tagname';
+    this.tagName = '';
+    this.closing = closing;
+    this.name = '';
+  }
+
+  endTagName() {
+    const name = this.tagName.toLowerCase();
+    if (!this.closing && REFUSED_ELEMENTS.has(name)) {
+      this.refuse(this.i - name.length, `<${name}>`, `is an element whose content the safety check cannot read; a style may not use <${name}>`);
+    }
   }
 
   endTag() {
@@ -84,13 +107,9 @@ class ContextWalker {
     this.sub = '';
   }
 
-  openTag(closing) {
-    this.mode = 'tag';
-    this.sub = 'tagname';
-    this.tagName = '';
-    this.closing = closing;
-    this.name = '';
-    this.gap = true;
+  startName(c) {
+    this.sub = 'name';
+    this.name = c.toLowerCase();
   }
 
   walkTo(end) {
@@ -99,14 +118,34 @@ class ContextWalker {
       const c = s[this.i];
       const ws = /\s/.test(c);
       if (this.mode === 'text') {
-        if (c === '<' && s.startsWith('<!--', this.i)) { this.mode = 'comment'; this.i += 4; continue; }
-        if (c === '<' && /[a-zA-Z!?]/.test(s[this.i + 1] || '')) { this.openTag(false); this.i += 1; continue; }
-        if (c === '<' && s[this.i + 1] === '/' && /[a-zA-Z]/.test(s[this.i + 2] || '')) { this.openTag(true); this.i += 2; continue; }
+        if (c === '<') {
+          const next = s[this.i + 1] || '';
+          if (s.startsWith('<!--', this.i)) {
+            if (s.startsWith('<!-->', this.i) || s.startsWith('<!--->', this.i)) {
+              this.refuse(this.i, '<!-->', 'is a comment the browser closes at once; write <!-- … --> with text between');
+            }
+            this.mode = 'comment';
+            this.i += 4;
+            continue;
+          }
+          if (s.startsWith('<![CDATA[', this.i)) this.refuse(this.i, '<![CDATA[', 'starts a CDATA section, which a style may not use');
+          else if (next === '!') this.refuse(this.i, '<!', 'starts a declaration or bogus comment, which a style may not use (only <!-- … -->)');
+          else if (next === '?') this.refuse(this.i, '<?', 'starts a processing instruction, which a style may not use');
+          else if (/[a-zA-Z]/.test(next)) { this.openTag(false); this.i += 1; continue; }
+          else if (next === '/') {
+            if (/[a-zA-Z]/.test(s[this.i + 2] || '')) { this.openTag(true); this.i += 2; continue; }
+            this.refuse(this.i, '</', 'is not followed by a tag name, which the browser reads as a bogus comment');
+          }
+        }
       } else if (this.mode === 'comment') {
         if (s.startsWith('-->', this.i)) { this.mode = 'text'; this.i += 3; continue; }
+        if (s.startsWith('--!>', this.i)) this.refuse(this.i, '--!>', 'closes a comment in a way the safety check does not follow; end it with -->');
       } else if (this.mode === 'raw') {
+        if (s.startsWith('<!--', this.i)) {
+          this.refuse(this.i, '<!--', `is inside <${this.raw}>, where it changes where the element ends`);
+        }
         const close = `</${this.raw}`;
-        if (s.slice(this.i, this.i + close.length).toLowerCase() === close) {
+        if (s.slice(this.i, this.i + close.length).toLowerCase() === close && /^[\s/>]/.test(s[this.i + close.length] || '')) {
           this.openTag(true);
           this.tagName = this.raw;
           this.raw = '';
@@ -114,42 +153,73 @@ class ContextWalker {
           continue;
         }
       } else if (this.mode === 'attr') {
-        if (c === this.quote) { this.mode = 'tag'; this.sub = 'names'; this.quote = ''; this.gap = true; }
+        if (c === this.quote) { this.mode = 'tag'; this.sub = 'afterQuoted'; this.quote = ''; }
       } else if (this.sub === 'tagname') {
-        if (c === '>') this.endTag();
-        else if (ws || c === '/') { this.sub = 'names'; this.gap = true; }
+        if (c === '>') { this.endTagName(); this.endTag(); }
+        else if (ws) { this.endTagName(); this.sub = 'beforeName'; }
+        else if (c === '/') { this.endTagName(); this.sub = 'selfClosing'; }
         else this.tagName += c;
-      } else if (this.sub === 'names') {
-        if (c === '>') this.endTag();
-        else if (ws || c === '/') this.gap = true;
-        else if (c === '=') { this.sub = 'value'; this.name = this.name.toLowerCase(); }
-        else if (this.gap) { this.name = c; this.gap = false; }
-        else this.name += c;
-      } else if (this.sub === 'value') {
-        if (c === '>') this.endTag();
-        else if (c === '"' || c === "'") { this.mode = 'attr'; this.quote = c; }
-        else if (!ws) this.sub = 'unquoted';
-      } else if (this.sub === 'unquoted') {
-        if (c === '>') this.endTag();
-        else if (ws) { this.sub = 'names'; this.gap = true; }
+      } else {
+        // Attribute states, as the HTML tokenizer names them.
+        let sub = this.sub;
+        if (sub === 'selfClosing' || sub === 'afterQuoted') {
+          if (c === '>') { this.endTag(); this.i += 1; continue; }
+          if (ws && sub === 'afterQuoted') { this.sub = 'beforeName'; this.i += 1; continue; }
+          if (c === '/') { this.sub = 'selfClosing'; this.i += 1; continue; }
+          sub = 'beforeName'; // the browser reads this character again as the start of a name
+        }
+        if (sub === 'beforeName') {
+          this.sub = 'beforeName';
+          if (c === '>') this.endTag();
+          else if (c === '/') this.sub = 'selfClosing';
+          else if (c === '=') {
+            this.refuse(this.i, '=', 'starts an attribute name, which the browser reads differently from the safety check');
+            this.startName(c);
+          } else if (!ws) this.startName(c);
+        } else if (sub === 'name') {
+          if (c === '>') this.endTag();
+          else if (ws) this.sub = 'afterName';
+          else if (c === '/') this.sub = 'selfClosing';
+          else if (c === '=') this.sub = 'beforeValue';
+          else this.name += c.toLowerCase();
+        } else if (sub === 'afterName') {
+          if (c === '>') this.endTag();
+          else if (c === '/') this.sub = 'selfClosing';
+          else if (c === '=') this.sub = 'beforeValue';
+          else if (!ws) this.startName(c);
+        } else if (sub === 'beforeValue') {
+          if (c === '>') this.endTag();
+          else if (c === '"' || c === "'") { this.mode = 'attr'; this.quote = c; }
+          else if (!ws) this.sub = 'unquoted';
+        } else if (sub === 'unquoted') {
+          if (c === '>') this.endTag();
+          else if (ws) this.sub = 'beforeName';
+        }
       }
       this.i += 1;
     }
   }
 }
 
-// The template's own text, in document order with every tag taken out. Mustache hands back
-// its cached tokens, so nothing here writes to them.
+// The template's own text, in document order with every tag taken out, and where each run of
+// it starts in the template. Mustache hands back its cached tokens, so nothing here writes to them.
 function skeletonOf(tokens) {
   let skeleton = '';
+  const runs = []; // [offset in the skeleton, index in the template]
   const walk = (list) => {
     for (const token of list) {
-      if (token[0] === 'text') skeleton += token[1];
+      if (token[0] === 'text') { runs.push([skeleton.length, token[2]]); skeleton += token[1]; }
       else if (Array.isArray(token[4])) walk(token[4]);
     }
   };
   walk(tokens);
-  return skeleton;
+  return { skeleton, runs };
+}
+
+function templateIndex(runs, offset) {
+  let index = 0;
+  for (const [at, start] of runs) if (at <= offset) index = start + (offset - at);
+  return index;
 }
 
 function lineOf(text, index) {
@@ -182,11 +252,23 @@ function nameProblem(token, ctx) {
   if (ctx.startsWith('raw:')) return `sits inside <${ctx.slice(4)}>`;
   const attr = ctx.split(':').slice(1, -1).join(':');
   if (!dangerousAttr(attr)) return null;
-  if (attr === '?') return 'is the value of an attribute whose name a section changes, which may not hold a field';
+  if (attr.includes('?')) return 'is the value of an attribute whose name a section changes, which may not hold a field';
   return `is the value of ${attr || 'an unnamed attribute'}="…", which may not hold a field`;
 }
 
+// Inside a tag, a section must hold whole attributes: quotes balanced and no < or > outside them.
+function wholeAttributes(body) {
+  let quote = '';
+  for (const c of body) {
+    if (quote) { if (c === quote) quote = ''; }
+    else if (c === '"' || c === "'") quote = c;
+    else if (c === '<' || c === '>') return false;
+  }
+  return !quote;
+}
+
 // Problems with a layout, each "<file> line <n>: {{<tag>}} <why>"; [] when the layout is usable.
+// A problem in the HTML itself names the HTML instead of a Mustache tag.
 function checkLayout(text, { file } = {}) {
   const where = file || 'layout';
   let tokens;
@@ -196,8 +278,11 @@ function checkLayout(text, { file } = {}) {
     const at = /at (\d+)/.exec(err.message);
     return [at ? `${where} line ${lineOf(text, Number(at[1]))}: ${err.message}` : `${where}: ${err.message}`];
   }
-  const walker = new ContextWalker(skeletonOf(tokens));
+  const { skeleton, runs } = skeletonOf(tokens);
   const problems = [];
+  const walker = new ContextWalker(skeleton, (at, snippet, why) => {
+    problems.push(`${where} line ${lineOf(text, templateIndex(runs, at))}: ${snippet} ${why}`);
+  });
   let offset = 0; // how much of the joined text comes before the current token
   const say = (token, why) => problems.push(`${where} line ${lineOf(text, token[2])}: ${text.slice(token[2], token[3])} ${why}`);
   const visit = (list) => {
@@ -211,11 +296,20 @@ function checkLayout(text, { file } = {}) {
       const why = nameProblem(token, walker.context());
       if (why) say(token, why);
       if (type !== '#' && type !== '^') continue;
+      const inTag = walker.mode === 'tag';
+      const start = offset;
       const before = walker.key();
       const name = walker.name;
       visit(token[4]);
       walker.walkTo(offset);
-      if (walker.key() !== before) {
+      const after = skeleton[offset] || '';
+      if (inTag && !/\s/.test(skeleton[start - 1] || '')) {
+        say(token, 'opens inside a tag without a space before it; a section in a tag must hold whole attributes');
+      } else if (inTag && !/^[\s/>]$/.test(after)) {
+        say(token, 'closes inside a tag without a space, / or > after it; a section in a tag must hold whole attributes');
+      } else if (inTag && !wholeAttributes(skeleton.slice(start, offset))) {
+        say(token, 'holds an unbalanced quote, < or > inside a tag; a section in a tag must hold whole attributes');
+      } else if (walker.key() !== before) {
         say(token, 'changes the HTML around it inside the section, so the page differs with and without it');
       } else if (walker.name !== name) {
         walker.name = '?'; // either name may be the one that holds the value
@@ -223,6 +317,7 @@ function checkLayout(text, { file } = {}) {
     }
   };
   visit(tokens);
+  walker.walkTo(skeleton.length);
   return problems;
 }
 
@@ -245,7 +340,9 @@ function layoutNames(text) {
   return names;
 }
 
+// False and empty read as '', so a section over the field skips it; true reads 'true'.
 function fieldText(value) {
+  if (value === false) return '';
   const scalar = ['string', 'number', 'boolean'].includes(typeof value) || value instanceof Date;
   return scalar ? plainMetaValue(valueText(value)) : '';
 }

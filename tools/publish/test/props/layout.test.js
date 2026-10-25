@@ -84,7 +84,7 @@ test('checkLayout reads names, filters and contexts closely', () => {
   assert.strictEqual(problems('<p class="{{prop_x}}">').length, 0);
   assert.strictEqual(problems('<p title={{prop_x}}>').length, 1);
   assert.strictEqual(problems('<A HREF="{{prop_x}}">').length, 1);
-  assert.strictEqual(problems('<svg><use xlink:href="{{prop_x}}"/></svg>').length, 1);
+  assert.strictEqual(problems('<use xlink:href="{{prop_x}}"/>').length, 1);
   assert.strictEqual(problems('<p title="{{{text}}}">').length, 1);
   assert.strictEqual(problems('<script>{{#first}}x{{/first}}</script>').length, 1);
   assert.strictEqual(problems('<script>x</script><p>{{prop_x}}</p>').length, 0);
@@ -92,8 +92,68 @@ test('checkLayout reads names, filters and contexts closely', () => {
   assert.strictEqual(problems('<!-- {{prop_x}} -->').length, 1);
   // A section must leave the HTML context as it found it, so both of its outcomes agree.
   assert.match(problems('{{#first}}<a href={{/first}}"{{prop_x}}"')[0], /\{\{#first\}\} changes the HTML around it/);
-  assert.strictEqual(problems('<div {{^first}}href{{/first}}{{#first}}title{{/first}}="{{prop_x}}">').length, 1);
+  assert.ok(problems('<div {{^first}}href{{/first}}{{#first}}title{{/first}}="{{prop_x}}">').length > 0);
   assert.strictEqual(problems('{{#first}}x').length, 1);
+});
+
+// Layouts where the browser reads the HTML differently from a simple walk: each must be refused.
+test('checkLayout refuses what it cannot read the way the browser does', () => {
+  const attacks = [
+    '<!--><div title="-->" onclick="{{prop_x}}">x</div>',
+    '<!---><div title="-->" onclick="{{prop_x}}">x</div>',
+    '<!x title="><div onclick={{prop_x}}>">',
+    '<?x title="><a href={{prop_x}}>y</a>">',
+    '<title><a title="</title><a href={{prop_x}}>x</a>"></title>',
+    '<textarea><a title="</textarea><img src=x onerror={{prop_x}}>"></textarea>',
+    '<svg><![CDATA[<a title="]]><a href={{prop_x}}>x</a>">]]></svg>',
+    '<script>x="<!--<script>";y="</script><p title=\'";{{prop_x}}//\'></p>";</script>',
+    '<div {{#first}}onclic{{/first}}k="{{prop_x}}">',
+    '<div on{{#first}} {{/first}}click="{{prop_x}}">',
+    '<a hr{{#first}} {{/first}}ef="{{prop_x}}">',
+    // Each of these is refused by name, whatever follows it.
+    ...['xmp', 'iframe', 'noembed', 'noframes', 'noscript', 'plaintext', 'template', 'math'].map(el => `<${el}><p title="{{prop_x}}"></p></${el}>`),
+    '<![CDATA[x]]>',
+    '<!DOCTYPE html><p>{{prop_x}}</p>',
+    '<!-- a --!><a title="-->" href="{{prop_x}}">',
+    '</!<a title="><a href={{prop_x}}>">',
+    '<style>a{}<!-- </style> --></style>',
+    '<script></scriptx><p title="{{prop_x}}"></script>',
+    '<p title/="{{prop_x}}">',
+    '<div {{#first}}title="{{/first}}x" onclick="{{prop_x}}">',
+  ];
+  for (const text of attacks) {
+    assert.ok(checkLayout(text, { file: 'f' }).length > 0, text);
+  }
+  const fine = [
+    '<div {{#first}}data-first{{/first}}>',
+    '<div {{#first}}data-first{{/first}} class="a">',
+    '<div {{#first}}title="{{prop_x}}"{{/first}}>',
+    '<p {{^last}}data-more {{/last}}/>',
+    '<!-- a note --><p>{{prop_x}}</p>',
+    '<script>var a = 1;</script><p>{{prop_x}}</p>',
+    '<p title=\'{{prop_x}}\' class=x>',
+  ];
+  for (const text of fine) {
+    assert.deepStrictEqual(checkLayout(text, { file: 'f' }), [], text);
+  }
+});
+
+test('each refusal says why', () => {
+  const why = (text) => checkLayout(text, { file: 'f' })[0];
+  assert.match(why('<!-->'), /^f line 1: <!--> is a comment the browser closes at once/);
+  assert.match(why('<?x?>'), /processing instruction/);
+  assert.match(why('<![CDATA[x]]>'), /CDATA section/);
+  assert.match(why('<p>\n<noscript></noscript>'), /^f line 2: <noscript> is an element whose content the safety check cannot read/);
+  assert.match(why('<script><!--</script>'), /<!-- is inside <script>/);
+  assert.match(why('<div a{{#first}} b{{/first}}>'), /opens inside a tag without a space before it/);
+  assert.match(why('<div {{#first}}b{{/first}}c>'), /closes inside a tag without a space, \/ or > after it/);
+  assert.match(why('<div {{#first}}b="{{/first}} ">'), /unbalanced quote/);
+});
+
+test('a false or empty field skips its section; true prints', () => {
+  const view = layoutView({ prop_envelope: false, prop_seal: '', prop_ok: true }, ['prop_envelope', 'prop_seal', 'prop_ok'], {});
+  assert.deepStrictEqual(view, { prop_envelope: '', prop_seal: '', prop_ok: 'true' });
+  assert.strictEqual(fillLayout('[{{#prop_envelope}}ENVELOPE{{/prop_envelope}}{{#prop_seal}}SEAL{{/prop_seal}}{{#prop_ok}}{{prop_ok}}{{/prop_ok}}]', view), '[true]');
 });
 
 test('a problem names the file and line', () => {
