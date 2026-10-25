@@ -130,6 +130,18 @@ describe('leak gate: a file two props share', () => {
   }, VAULT('withheld: true\n')));
 });
 
+describe('leak gate: a held prop page in UTF-16', () => {
+  it('its sentence, copied onto another page as UTF-8, is hidden text', () => within((s) => {
+    assert.deepEqual(gate(s).findings, []);
+    leakInto(s.outputDir, 'documents/other.html', HELD);
+    assert.deepEqual(gate(s).findings.map(pick),
+      [{ code: 'HIDDEN_TEXT', page: 'documents/other.html', note: 'Documents/Invitation.md', reason: 'unpublished prop: not on the publish list' }]);
+  }, {
+    'Documents/Invitation.md': PROP(), 'Documents/inv.html': Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(PAGE(`<p>${HELD}</p>`), 'utf16le')]),
+    ...OTHER, ...LIST(['Documents/Other.md']),
+  }));
+});
+
 describe('leak gate: a prop that does not ship', () => {
   const HELD_VAULT = (extra = '') => ({
     'Documents/Invitation.md': PROP(extra), 'Documents/inv.html': PAGE(`<p>${HELD}</p>`), 'Documents/props.css': CSS,

@@ -17,9 +17,9 @@ picture you made.
 - Prop notes: `type: prop` with `prop_kind`, `prop_file` and
   `prop_address`. A published prop's hand-made page, PDF or picture is
   on the site with what it links to, its Keeper parts cut, a "See the
-  prop" link on its note and a bar back. A page or stylesheet that is
-  not UTF-8 (an old Windows "Web page") keeps its own bytes. The GM site
-  shows every prop.
+  prop" link on its note and a bar back. A page or stylesheet not in
+  UTF-8 (the Windows or Word "Unicode" encodings) is converted to UTF-8,
+  so its letters show correctly. The GM site shows every prop.
 - Story pages show the pictures a recap embeds.
 - Site Faults code `PROP_NOT_COPIED`, for a prop whose file the build
   could not copy.
@@ -37,8 +37,8 @@ picture you made.
   as documents do.
 - A prop written into a kept folder (`player_site.keep`) through an
   explicit `prop_address` replaces the file there, and the build says
-  so when there was one. It is removed again when its note stops publishing, only if the
-  file is unchanged.
+  so when there was one. It is removed again when its note stops
+  publishing, only if the file is unchanged.
 - A withheld-name finding on a copied file's name now names the note it
   comes from.
 

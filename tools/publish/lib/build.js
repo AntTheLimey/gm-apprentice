@@ -279,13 +279,11 @@ function buildSite(options) {
   const nm = (name) => nameIn(rawConfig.vaultPath, name);
   if (off && !dry) throw new Error(off);
   // Every HTML file goes through here: on the GM site it is marked (gmPage); on the player site it is written as made.
-  // `encode` gives the bytes of a hand-made prop page in its own encoding (props/files.js).
-  function writeHtml(full, html, page, encode = null) {
-    const out = gm ? gmPage(html, {
+  function writeHtml(full, html, page) {
+    fs.writeFileSync(full, gm ? gmPage(html, {
       marks: mark.marks, hiddenBecause: page && page.gmHiddenBecause, hidden: page && page.gmHidden,
       linkMap: publishConfig._linkMap || {}, from: (page && page.outputPath) || '',
-    }) : html;
-    fs.writeFileSync(full, encode ? encode(out) : out);
+    }) : html);
   }
   // A JSON file the GM site writes holds no mark: the words between them are kept.
   const jsonText = (data) => (gm ? unmark(JSON.stringify(data)) : JSON.stringify(data));
@@ -2134,7 +2132,7 @@ function buildSite(options) {
         const why = pathProblem(outputDir, f.out);
         if (why === 'link') { console.log(`  left in kept folder: ${f.out} (a folder on its path is a link)`); continue; }
         if (why) continue;
-        const want = f.text !== undefined ? f.encode(f.text) : f.bytes;
+        const want = f.text !== undefined ? Buffer.from(f.text) : f.bytes;
         if (!fs.readFileSync(full).equals(want)) { console.log(`  left in kept folder: ${f.out} (it differs from what the tool would write)`); continue; }
         fs.unlinkSync(full);
         console.log(`  removed from kept folder: ${f.out} (its prop is not published)`);
@@ -2161,9 +2159,10 @@ function buildSite(options) {
       const full = path.join(outputDir, ...f.out.split('/'));
       ensureDir(full);
       const replaced = f.replacesKept && fs.existsSync(full);
-      if (f.isPage) writeHtml(full, f.text, propPlan.props.find((p) => p.rel === f.rel).page, f.encode);
-      else fs.writeFileSync(full, f.text !== undefined ? f.encode(f.text) : f.bytes);
+      if (f.isPage) writeHtml(full, f.text, propPlan.props.find((p) => p.rel === f.rel).page);
+      else fs.writeFileSync(full, f.text !== undefined ? f.text : f.bytes);
       console.log(`  wrote ${f.out}`);
+      if (f.was) console.log(`  ${f.out}: written as UTF-8 (it was ${f.was})`);
       shipped.add(f.rel);
       if (replaced) console.log(`  replaces kept file: ${f.out}`);
     }

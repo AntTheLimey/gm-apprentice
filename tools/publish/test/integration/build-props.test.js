@@ -91,25 +91,43 @@ describe('a published prop', () => {
 });
 
 describe('a prop page that is not UTF-8', () => {
+  const BAR = /<nav class="gma-prop-bar"[\s\S]*?<\/nav>/;
+  const BLOCK = '<!-- gm-only --><p>KEEPER ONLY</p><!-- /gm-only -->';
   // A windows-1252 page (an old "save as Web page"): é is 0xE9, the curly quotes 0x93 and 0x94.
-  const head = Buffer.concat([Buffer.from('<html><body><p>Caf'), Buffer.from([0xe9, 0x20, 0x93]), Buffer.from('hush'), Buffer.from([0x94]), Buffer.from('</p>')]);
-  const block = Buffer.from('<!-- gm-only --><p>KEEPER ONLY</p><!-- /gm-only -->');
-  const tail = Buffer.from('</body></html>');
+  const cp1252 = (text) => Buffer.from(text.replace(/\u201c/g, '\x93').replace(/\u201d/g, '\x94'), 'latin1');
+  const HEAD = '<html><head><meta http-equiv="Content-Type" content="text/html; charset=windows-1252"><link rel="stylesheet" href="old.css"></head><body><p>Café \u201chush\u201d</p>';
+  const CSS = '@charset "windows-1252";\np::after { content: "é"; }\n';
   const s = buildBoth({
-    'Documents/Lettre – copie.md': '---\ntype: prop\nprop_file: lettre.html\n---\nA letter.\n',
-    'Documents/lettre.html': Buffer.concat([head, block, tail]),
+    'Documents/Lettre \u2013 copie.md': '---\ntype: prop\nprop_file: lettre.html\n---\nA letter.\n',
+    'Documents/lettre.html': cp1252(`${HEAD}${BLOCK}</body></html>`),
+    'Documents/old.css': cp1252(CSS),
+    'Documents/Unicode.md': '---\ntype: prop\nprop_file: unicode.html\n---\nA Word page.\n',
+    'Documents/unicode.html': Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(`<html><head><meta charset="utf-16"></head><body><p>Zoë</p>${BLOCK}</body></html>`, 'utf16le')]),
+    'Documents/Plain.md': '---\ntype: prop\nprop_file: plain.html\n---\nA page.\n',
+    'Documents/plain.html': `<html><head><meta charset="utf-8"></head><body><p>Café \u201chush\u201d</p>${BLOCK}</body></html>`,
   }, { sites: ['player'] });
   after(() => s.cleanup());
+  const page = (name) => s.player.read('props', name).replace(BAR, '');
+  // The build lines, from building the player site again (the helper keeps only warnings).
+  let built = null;
+  const lines = () => (built = built || quiet(() => build({ configPath: s.configPath, site: 'player' })));
 
-  it('keeps its bytes: only the gm-only part goes, and the bar names the note in entities', () => {
-    const dir = path.join(s.player.dir, 'props');
-    const out = fs.readFileSync(path.join(dir, fs.readdirSync(dir)[0]));
-    const bar = /<nav class="gma-prop-bar"[\s\S]*?<\/nav>/.exec(out.toString('latin1'));
-    assert.ok(bar, out.toString('latin1'));
-    assert.match(bar[0], /&larr; Lettre &#x2013; copie<\/a>/);
-    const at = out.indexOf(Buffer.from(bar[0], 'latin1'));
-    const without = Buffer.concat([out.subarray(0, at), out.subarray(at + Buffer.byteLength(bar[0], 'latin1'))]);
-    assert.ok(without.equals(Buffer.concat([head, tail])), without.toString('latin1'));
+  it('a windows-1252 page and stylesheet are written as UTF-8, their charset said so, the gm-only part cut', () => {
+    assert.equal(page('lettre-copie.html'), `${HEAD.replace('charset=windows-1252', 'charset=utf-8')}</body></html>`);
+    assert.match(s.player.read('props', 'lettre-copie.html'), /&larr; Lettre \u2013 copie<\/a>/);
+    assert.equal(s.player.read('props', 'old.css'), CSS.replace('windows-1252', 'utf-8'));
+    assert.ok(lines().includes('  props/lettre-copie.html: written as UTF-8 (it was windows-1252)'), lines().join('\n'));
+    assert.ok(lines().includes('  props/old.css: written as UTF-8 (it was windows-1252)'), lines().join('\n'));
+  });
+
+  it('a UTF-16 page with a byte-order mark is written as UTF-8, the gm-only part cut', () => {
+    assert.equal(page('unicode.html'), '<html><head><meta charset="utf-8"></head><body><p>Zoë</p></body></html>');
+    assert.ok(lines().includes('  props/unicode.html: written as UTF-8 (it was UTF-16)'), lines().join('\n'));
+  });
+
+  it('a UTF-8 page and stylesheet are unchanged byte for byte, but for the cut and the bar', () => {
+    assert.equal(page('plain.html'), '<html><head><meta charset="utf-8"></head><body><p>Café \u201chush\u201d</p></body></html>');
+    assert.ok(!lines().some((l) => /plain\.html: written as UTF-8/.test(l)), lines().join('\n'));
   });
 });
 

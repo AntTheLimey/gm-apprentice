@@ -8,11 +8,13 @@
 const fs = require('fs');
 const path = require('path');
 const { cutHtml } = require('./html-cut');
-const { bytesOf, textOf, bytesOfText } = require('./plan');
+const { bytesOf, textOf, utf8Charset } = require('./plan');
 const { relativeHref, encodeHref } = require('../processor');
 const { propBar, withPropBar } = require('../templates/prop-bar');
 
 const PAGE_EXTS = new Set(['.html', '.htm']);
+// The files written from their text: a page, SVG or stylesheet not in UTF-8 is written in UTF-8.
+const TEXT_EXTS = new Set([...PAGE_EXTS, '.svg', '.css']);
 
 function respelled(text, pairs) {
   let out = text;
@@ -38,7 +40,8 @@ function propHrefFor(plan, page, blocked = new Set()) {
 }
 
 // What the tool writes for `files` of prop `p`, from the bytes the plan read:
-// [{ rel, out, isPage, text and encode | bytes, replacesKept, warnings }] (`encode` gives text's bytes in the file's own encoding), and a problem row in `failed`
+// [{ rel, out, isPage, text | bytes, was, replacesKept, warnings }] (`was`: the encoding a text file
+// was read from, when it is not UTF-8; its text is written as UTF-8), and a problem row in `failed`
 // for a file whose bytes the plan does not hold (the prop file's own: nothing of it is written).
 function outputsOf(p, files) {
   const outputs = [];
@@ -52,12 +55,16 @@ function outputsOf(p, files) {
     }
     const ext = path.extname(f.out).toLowerCase();
     const entry = { rel: p.rel, out: f.out, isPage: PAGE_EXTS.has(ext), replacesKept: Boolean(i === 0 ? p.replacesKept : f.replacesKept), warnings: [] };
-    if (!f.cut && !f.rewrite && !(i === 0 && entry.isPage)) {
+    let { text, was } = TEXT_EXTS.has(ext) ? textOf(bytes) : { text: null, was: null };
+    if (!f.cut && !f.rewrite && !(i === 0 && entry.isPage) && !was) {
       entry.bytes = bytes;
       outputs.push(entry);
       continue;
     }
-    let { text, encoding } = textOf(bytes);
+    if (was) {
+      text = utf8Charset(text, ext);
+      entry.was = was;
+    }
     if (f.cut) {
       const cut = cutHtml(text);
       text = cut.text;
@@ -68,7 +75,6 @@ function outputsOf(p, files) {
       text = withPropBar(text, propBar({ noteHref: encodeHref(relativeHref(p.address, p.page.outputPath)), noteTitle: p.page.displayTitle || p.page.title || '', collectionHref: null }));
     }
     entry.text = text;
-    entry.encode = (t) => bytesOfText(t, encoding, ext);
     outputs.push(entry);
   }
   return { outputs, failed };

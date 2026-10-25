@@ -35,21 +35,24 @@ function within(real, root) {
   return real === root || real.startsWith(root + path.sep);
 }
 
-// A markup file's or stylesheet's text, and how to write it back: UTF-8 when its bytes are
-// valid UTF-8 (a byte-order mark kept), otherwise latin1, one character per byte, so a
-// windows-1252 page cut or respelled is written back byte for byte everywhere else.
+// A markup file's or stylesheet's text, and the encoding it was read from when that is not
+// UTF-8 (`was`). The site writes it as UTF-8, as hosts serve it: after a UTF-16 byte-order
+// mark (a Word "Unicode" save) it is UTF-16, otherwise windows-1252 (an old Windows "Web page").
+// A UTF-8 file's byte-order mark is kept, so its text writes back byte for byte.
 const UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 function textOf(bytes) {
-  try { return { text: UTF8.decode(bytes), encoding: 'utf8' }; } catch (e) { return { text: bytes.toString('latin1'), encoding: 'latin1' }; }
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return { text: new TextDecoder('utf-16le').decode(bytes), was: 'UTF-16' };
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return { text: new TextDecoder('utf-16be').decode(bytes), was: 'UTF-16' };
+  try { return { text: UTF8.decode(bytes), was: null }; } catch (e) { return { text: new TextDecoder('windows-1252').decode(bytes), was: 'windows-1252' }; }
 }
 
-// The bytes of `text` in `encoding` (textOf's). A character latin1 cannot hold (the prop
-// bar's note title, say) goes as an escape: a numeric entity in a page, `\hex ` in a stylesheet.
-function bytesOfText(text, encoding, ext = '') {
-  if (encoding !== 'latin1') return Buffer.from(text, 'utf8');
-  const css = ext.toLowerCase() === '.css';
-  const safe = text.replace(/[^\x00-\xff]/gu, (c) => (css ? `\\${c.codePointAt(0).toString(16)} ` : `&#x${c.codePointAt(0).toString(16)};`));
-  return Buffer.from(safe, 'latin1');
+// A transcoded file's own charset declarations, now utf-8: a page's <meta charset> and
+// http-equiv Content-Type, an SVG's XML declaration, a stylesheet's @charset.
+function utf8Charset(text, ext) {
+  if (ext === '.css') return text.replace(/^(\ufeff?@charset\s*["'])[^"']*/i, '$1utf-8');
+  return text
+    .replace(/^(\s*<\?xml\b[^>]*?\bencoding\s*=\s*["'])[^"']*/i, '$1utf-8')
+    .replace(/<meta\b(?:"[^"]*"|'[^']*'|[^>"'])*>/gi, (tag) => tag.replace(/(\bcharset\s*=\s*["']?)[^"'\s;>/]+/i, '$1utf-8'));
 }
 
 function readOrError(p) {
@@ -297,4 +300,4 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
   return { props, problems };
 }
 
-module.exports = { planProps, bytesOf, textOf, bytesOfText, LINKED_EXTS };
+module.exports = { planProps, bytesOf, textOf, utf8Charset, LINKED_EXTS };

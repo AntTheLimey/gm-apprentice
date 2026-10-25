@@ -450,16 +450,23 @@ test('what a shared stylesheet reaches is shared too; a nested file with other b
   assert.deepStrictEqual(differs.props[1].shared, ['props/props.css']);
 });
 
-test('a file\'s text goes back to the same bytes: UTF-8 with its byte-order mark, or latin1 when not UTF-8', () => {
-  const { textOf, bytesOfText } = require('../../lib/props/plan');
+test('a file that is not UTF-8 is read as UTF-16 after a byte-order mark, else as windows-1252', () => {
+  const { textOf } = require('../../lib/props/plan');
   const bom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from('Café “hush”')]);
-  const u = textOf(bom);
-  assert.strictEqual(u.encoding, 'utf8');
-  assert.ok(bytesOfText(u.text, u.encoding).equals(bom));
-  const cp1252 = Buffer.from([0x43, 0x61, 0x66, 0xe9, 0x20, 0x93, 0x68, 0x94]);
-  const l = textOf(cp1252);
-  assert.strictEqual(l.encoding, 'latin1');
-  assert.ok(bytesOfText(l.text, l.encoding).equals(cp1252));
-  assert.strictEqual(bytesOfText('a–b', 'latin1', '.html').toString('latin1'), 'a&#x2013;b');
-  assert.strictEqual(bytesOfText('a–b', 'latin1', '.css').toString('latin1'), 'a\\2013 b');
+  assert.deepStrictEqual(textOf(bom), { text: '\ufeffCafé “hush”', was: null });
+  assert.deepStrictEqual(textOf(Buffer.from([0x43, 0x61, 0x66, 0xe9, 0x20, 0x93, 0x68, 0x94])), { text: 'Café “h”', was: 'windows-1252' });
+  const le = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('Zoë', 'utf16le')]);
+  assert.deepStrictEqual(textOf(le), { text: 'Zoë', was: 'UTF-16' });
+  const be = Buffer.from(le.subarray(2)).swap16();
+  assert.deepStrictEqual(textOf(Buffer.concat([Buffer.from([0xfe, 0xff]), be])), { text: 'Zoë', was: 'UTF-16' });
+});
+
+test('a page or stylesheet read from another encoding says utf-8 where it named its charset', () => {
+  const { utf8Charset } = require('../../lib/props/plan');
+  assert.strictEqual(utf8Charset('<meta charset="windows-1252"><META http-equiv="Content-Type" content="text/html; charset=iso-8859-1">', '.html'),
+    '<meta charset="utf-8"><META http-equiv="Content-Type" content="text/html; charset=utf-8">');
+  assert.strictEqual(utf8Charset('<meta charset=utf-16>', '.htm'), '<meta charset=utf-8>');
+  assert.strictEqual(utf8Charset('<?xml version="1.0" encoding="windows-1252"?><svg/>', '.svg'), '<?xml version="1.0" encoding="utf-8"?><svg/>');
+  assert.strictEqual(utf8Charset('@charset "windows-1252";\np{}', '.css'), '@charset "utf-8";\np{}');
+  assert.strictEqual(utf8Charset('<p>charset=latin1 in prose</p>', '.html'), '<p>charset=latin1 in prose</p>');
 });
