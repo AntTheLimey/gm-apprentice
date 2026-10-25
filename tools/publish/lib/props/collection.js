@@ -11,7 +11,7 @@ const { canonicalNfc } = require('../unicode');
 const { isPropNote, propContainerOf, showSealedOf } = require('./note');
 const { bytesOf } = require('./plan');
 const { fieldText } = require('./layout');
-const { PAGE_TAKER, addressShapeProblem } = require('./address');
+const { PAGE_TAKER, addressShapeProblem, takenAddresses } = require('./address');
 
 const sourceOf = (page) => page.sourceFrontmatter || page.frontmatter || {};
 
@@ -170,6 +170,45 @@ function collectionAddress(asked, taken, { name = 'player_site.props.address' } 
   return placed(fallback, fallback === COLLECTION_ADDRESS ? null : `${name} "${asked}" is taken by ${PAGE_TAKER}; the props page is at ${fallback}`);
 }
 
+// The site's props page, placed: its settings (collectionSettingsOf, from `settingsLike`) at the address
+// collectionAddress gives against the site's built pages (`pageOutputs`) and kept folders, with
+// `replacesKept`; null when the site has none. `warning`: what the build says of the address. The build
+// and the leak gate both place it here, so they agree on where it is.
+function placeCollection({ pages, settingsLike, pageOutputs, keptDirs = [], site = 'player', name }) {
+  if (!hasCollection(pages, { site })) return { collection: null, warning: null };
+  const settings = collectionSettingsOf(settingsLike);
+  const placed = collectionAddress(settings.address, takenAddresses({ pageOutputs, keptDirs }), { name });
+  return { collection: placed.address ? { ...settings, address: placed.address, replacesKept: placed.replacesKept } : null, warning: placed.warning };
+}
+
+// The addresses no prop may take: the built pages, the files and folders the site needs, the kept
+// folders (props/address.js), and the props page where it is set elsewhere than props/index.html (that
+// one is already a file the site needs), held like a page.
+function propTaken({ pageOutputs, keptDirs = [], collection = null }) {
+  const extra = collection && collection.address !== COLLECTION_ADDRESS ? [collection.address] : [];
+  return takenAddresses({ pageOutputs: [...pageOutputs, ...extra], keptDirs });
+}
+
+// Where the player site prints a sealed item's title, and which: on its container's page, when the
+// container ships with a page the tool makes, and on the props page (`collectionAddress`; null: the site
+// has none), which lists each container's rows as its page does. `listed` is containerItems' answer.
+// Map<address, Map<item vault path, title>>.
+function sealedTitlesOn(listed, collectionAddress) {
+  const on = new Map();
+  const put = (address, row) => {
+    if (!on.has(address)) on.set(address, new Map());
+    on.get(address).set(row.rel, row.title);
+  };
+  for (const { container, rows } of listed.values()) {
+    for (const row of rows) {
+      if (!row.sealed) continue;
+      if (container.ships && container.address && container.made) put(container.address, row);
+      if (collectionAddress) put(collectionAddress, row);
+    }
+  }
+  return on;
+}
+
 const headingOrder = (a, b) => a.heading.localeCompare(b.heading, 'en', { sensitivity: 'base' });
 
 // The props page's model, or null when the site has none (`settings` null). Groups, each { heading,
@@ -258,4 +297,5 @@ function latestProps(model, n) {
 module.exports = {
   containerItems, propRow, byArrival, propPageOf,
   COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, hasCollection, collectionAddress, collectionModel, latestProps, shownRows,
+  placeCollection, propTaken, sealedTitlesOn,
 };

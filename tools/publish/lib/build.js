@@ -44,10 +44,9 @@ const { isOutOfPlay } = require('./pc-status');
 const { sheetSourceOf } = require('./sheet-source');
 const { pcIdentity } = require('./templates/pc-identity');
 const { planProps } = require('./props/plan');
-const { takenAddresses } = require('./props/address');
 const { propHrefFor, propOutputs, keptCopyOutputs, pathProblem } = require('./props/files');
 const { styledPage, styleFontFamilies, textProblem, FONTS_CSS, BASE_CSS } = require('./props/page');
-const { containerItems, propRow, COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, hasCollection, collectionAddress, collectionModel, latestProps, shownRows } = require('./props/collection');
+const { containerItems, propRow, COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, placeCollection, propTaken, collectionModel, latestProps, shownRows } = require('./props/collection');
 const { layoutNames } = require('./props/layout');
 const { isWithheld, withheldPlaceholder, withheldNameMarked } = require('./processor');
 const { containerTemplate, collectionTemplate, containerItemsHtml } = require('./templates/props-page');
@@ -816,14 +815,11 @@ function buildSite(options) {
   // The props page: one per site, when it publishes a prop note. Its address is decided here, so
   // no prop takes it, the menu links it and each prop page's bar links it. A fast build writes no
   // page of it, but its sheets' menus link it as a full build's do.
-  let collection = null;
-  if (hasCollection(pages, { site: gm ? 'gm' : 'player' })) {
-    const settings = collectionSettingsOf(publishConfig);
-    const placed = collectionAddress(settings.address, takenAddresses({ pageOutputs: pages.map((p) => p.outputPath), keptDirs: gm ? [] : config.preserveDirs }), { name: nm('player_site.props.address') });
-    if (placed.warning) console.warn(`  WARNING: ${placed.warning}`);
-    // A [[wikilink]] in the words prints as its name, as the landing banner's does.
-    if (placed.address) collection = { ...settings, title: plainMetaValue(settings.title), intro: settings.intro && plainMetaValue(settings.intro), address: placed.address, replacesKept: placed.replacesKept };
-  }
+  const keptDirs = gm ? [] : config.preserveDirs;
+  const placed = placeCollection({ pages, settingsLike: publishConfig, pageOutputs: pages.map((p) => p.outputPath), keptDirs, site: gm ? 'gm' : 'player', name: nm('player_site.props.address') });
+  if (placed.warning) console.warn(`  WARNING: ${placed.warning}`);
+  // A [[wikilink]] in the words prints as its name, as the landing banner's does.
+  let collection = placed.collection && { ...placed.collection, title: plainMetaValue(placed.collection.title), intro: placed.collection.intro && plainMetaValue(placed.collection.intro) };
 
   // The props the player site ships: a prop note's own file, at its address, with the files
   // it links. A prop ships with its note's full page; a stub's prop does not. A fast build
@@ -832,8 +828,7 @@ function buildSite(options) {
     vaultPath: config.vaultPath, pages: corpus, relOf: vaultRelPathOf,
     // The GM site shows every prop of every note it shows, uncut while Keeper blocks are on; it keeps no folder.
     ships: gm ? (p) => pages.includes(p) : (p) => pages.includes(p) && publishMode(p.sourceFrontmatter || p.frontmatter) !== 'stub',
-    // props/index.html is already a file the site needs; a props page set elsewhere is held like a page.
-    taken: takenAddresses({ pageOutputs: [...pages.map((p) => p.outputPath), ...(collection && collection.address !== 'props/index.html' ? [collection.address] : [])], keptDirs: gm ? [] : config.preserveDirs }),
+    taken: propTaken({ pageOutputs: pages.map((p) => p.outputPath), keptDirs, collection }),
     cutKeeper: gm ? !show.has('gm_only_blocks') : true, cleanup: writes === 'all' && !gm,
   });
   publishConfig._props = propPlan;

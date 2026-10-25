@@ -23,7 +23,7 @@ const { createMarks, markKinds, sanitize, markedSpans } = require('../gm-marks')
 const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf } = require('./text');
 const { TEXT_EXT } = require('./match');
 const { planProps, bytesOf, textOf } = require('../props/plan');
-const { takenAddresses } = require('../props/address');
+const { placeCollection, propTaken, containerItems, propRow, sealedTitlesOn } = require('../props/collection');
 const { cutHtml } = require('../props/html-cut');
 
 const NEVER_SHOWN = ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase());
@@ -48,7 +48,7 @@ function collectHidden({ configPath }) {
   const keptBy = player.vault.kept_by;
   // The GM's own words that must never reach players (player_site.never_show): looked for on every kind of vault.
   const neverShow = (player.site.never_show || []).filter((w) => typeof w === 'string' && w.trim());
-  const empty = { vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), heldProps: [], siteTakes: () => false };
+  const empty = { vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), heldProps: [], sealedOn: new Map(), siteTakes: () => false };
   if (keptBy === 'player') return empty;
 
   const quiet = () => {};
@@ -159,8 +159,12 @@ function collectHidden({ configPath }) {
   }
 
   // The props, planned as the player build plans them (props/plan.js): a prop ships with its note's full page, never
-  // with a stub's, at an address no page, tool folder or (by default) kept folder takes, cut of its Keeper parts.
-  const taken = takenAddresses({ pageOutputs: published.map((p) => p.outputPath), keptDirs: player.site.keep || [] });
+  // with a stub's, at an address no page, tool folder, props page or (by default) kept folder takes, cut of its Keeper
+  // parts. The props page is placed as the build places it (props/collection.js).
+  const pageOutputs = published.map((p) => p.outputPath);
+  const keptDirs = player.site.keep || [];
+  const { collection } = placeCollection({ pages: published, settingsLike: playerConfig, pageOutputs, keptDirs });
+  const taken = propTaken({ pageOutputs, keptDirs, collection });
   const { props } = planProps({
     vaultPath, pages: corpus, relOf,
     ships: (p) => publishedSet.has(p) && publishMode(p.sourceFrontmatter || p.frontmatter) !== 'stub',
@@ -179,11 +183,30 @@ function collectHidden({ configPath }) {
     propOuts.get(rel).push(out);
   };
   const heldProps = [];
+  // The pages the tool makes for shipping props (a styled page, a container's page): read as ordinary pages, their words
+  // their notes' published words. Not a prop file of their note: no hidden text of another note is excused on them.
+  const madeFiles = new Set();
   const shownName = (p, source) => {
     try { return path.relative(fs.realpathSync(path.dirname(p.page.sourcePath)), source).split(path.sep).join('/'); } catch (e) { return path.basename(source); }
   };
   for (const p of props) {
-    if (!p.source) continue;
+    // A prop whose note the site does not publish: the title a listing would print for it is hidden text (an old props
+    // page naming it). Allowed only where a container lists it sealed (sealedOn, below). Not one in the plugin's working
+    // folders, whose notes are left out as above.
+    if (!publishedSet.has(p.page) && !inWorkingDir(p.rel)) {
+      add([propRow(p, { isShown: () => false, excludeFields, fieldOverrides }).title], p.rel, 'the title of an unpublished prop');
+    }
+    if (!p.source) {
+      if (p.ships && p.address && p.made) {
+        madeFiles.add(canonicalNfc(p.address));
+        if (!propOuts.has(p.rel)) propOuts.set(p.rel, []);
+        propOuts.get(p.rel).push(p.address);
+      } else if (!p.ships && p.address) {
+        // A held prop the tool would make a page for (its style may not have loaded): a page at its address is stale.
+        heldProps.push({ rel: p.rel, address: p.address, hash: null, size: null });
+      }
+      continue;
+    }
     if (p.ships && p.address && p.files.length) {
       for (const f of p.files) {
         own(f.out, p.rel);
@@ -207,11 +230,19 @@ function collectHidden({ configPath }) {
     heldProps.push({ rel: p.rel, address: p.address, hash: p.hash, size: bytes.length });
   }
 
+  // Where a container lists an item the players have not found by its title alone: that title's words, on that
+  // container's page and on the props page, are no finding (index.js). Never a withheld item's (containerItems lists none).
+  const listed = containerItems({ props, isShown: (pg) => publishedSet.has(pg), excludeFields, fieldOverrides });
+  const sealedOn = new Map();
+  for (const [address, titles] of sealedTitlesOn(listed, collection && collection.address)) {
+    sealedOn.set(canonicalNfc(address), new Map([...titles].map(([rel, title]) => [rel, wordsOf(title).join(' ')])));
+  }
+
   // A note's outputs: its page, then its prop's files.
   const outOf = (rel) => [outputOf.get(rel), ...(propOuts.get(rel) || [])].filter(Boolean);
   return {
     vaultPath, siteDir, keptBy, neverShow, pieces, visible, warnings, notes, published, publishedRels, linkMap, outOf,
-    propOwner, propFiles: new Set(propOwner.keys()), heldProps,
+    propOwner, propFiles: new Set(propOwner.keys()), madeFiles, heldProps, sealedOn,
     // An address the site itself fills (a page, a file it needs, a tool folder): a held prop there is not what is there.
     siteTakes: (address) => Boolean(taken.has(address, { explicit: true })),
   };

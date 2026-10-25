@@ -35,14 +35,15 @@ const UNREVEALED = 'the prop file of a note the site does not publish';
 function propUnrevealed({ outputDir, hidden }) {
   const found = [];
   if (!hidden.heldProps.length) return found;
-  const shipped = new Set([...hidden.propFiles].map(addressKey));
+  const shipped = new Set([...hidden.propFiles, ...hidden.madeFiles].map(addressKey));
   const atAddress = new Map();
   for (const h of hidden.heldProps) {
     if (h.address && !shipped.has(addressKey(h.address)) && !hidden.siteTakes(h.address) && !atAddress.has(addressKey(h.address))) atAddress.set(addressKey(h.address), h);
   }
   const bySize = new Map();
   for (const h of hidden.heldProps) {
-    if (TEXT_EXT.has(path.extname(h.address || '').toLowerCase())) continue;
+    // A page the tool would make has no bytes to know it by (hash null): only its address is watched.
+    if (h.hash === null || TEXT_EXT.has(path.extname(h.address || '').toLowerCase())) continue;
     if (!bySize.has(h.size)) bySize.set(h.size, []);
     bySize.get(h.size).push(h);
   }
@@ -92,8 +93,12 @@ function runLeakGate({ configPath, outputDir }) {
     // A shipping prop's own file is its note's published form: another note's hidden text there is the prop's (a letter
     // a scene quotes), its own note's hidden text is a leak as anywhere.
     const owners = hidden.propOwner.get(canonicalNfc(file.rel));
+    // A listing (a container's page, the props page) prints the title of an item the players have not found: those
+    // words of that item, exactly, are no finding there.
+    const sealed = hidden.sealedOn.get(canonicalNfc(file.rel));
     for (const { piece } of matcher.scan(file.words)) {
       if (owners !== undefined && !owners.has(piece.note)) continue;
+      if (sealed !== undefined && sealed.get(piece.note) === piece.text) continue;
       const key = keyOf(file.rel, piece.text);
       if (raw.has(key)) continue;
       raw.set(key, { id: findingId(file.rel, piece.text), kind: 'text', code: 'HIDDEN_TEXT', page: file.rel, text: piece.text, shown: piece.shown, note: piece.note, reason: piece.reason });
