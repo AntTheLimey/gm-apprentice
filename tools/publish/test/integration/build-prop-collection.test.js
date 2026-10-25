@@ -228,3 +228,152 @@ describe('a sheets-only build', () => {
     } finally { s.cleanup(); }
   });
 });
+
+// Fix round 1.
+describe('the props page address, more cases', () => {
+  const COIN = { 'Documents/Coin.md': '---\ntype: prop\n---\nA coin.\n' };
+
+  it('a free asked address is used though both defaults are taken by pages', () => {
+    const s = buildBoth({ ...COIN, 'Props/Index.md': '---\ntype: document\n---\nOne.\n', 'Props/Collection.md': '---\ntype: document\n---\nTwo.\n' }, { sites: ['player'], player: { props: { address: 'reference/all.html' } } });
+    try {
+      assert.match(s.player.read('reference', 'all.html'), /<h1 class="page-title">Props<\/h1>/);
+      assert.ok(!s.logs.some((l) => /props\.address/.test(l)), s.logs.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  it('with both defaults taken and nothing asked, the site has no props page and says so', () => {
+    const s = buildBoth({ ...COIN, 'Props/Index.md': '---\ntype: document\n---\nOne.\n', 'Props/Collection.md': '---\ntype: document\n---\nTwo.\n' }, { sites: ['player'] });
+    try {
+      assert.ok(s.logs.some((l) => l.includes('player_site.props.address: props/index.html and props/collection.html are both taken by pages the site builds, so the site has no props page')), s.logs.join('\n'));
+      assert.doesNotMatch(s.player.read('documents', 'coin.html'), />Props<\/a>/);
+    } finally { s.cleanup(); }
+  });
+
+  it('the default address in a kept props folder replaces the kept file and says so', () => {
+    const s = buildBoth(COIN, { sites: [], player: { keep: ['props'] } });
+    try {
+      fs.mkdirSync(path.join(s.player.dir, 'props'), { recursive: true });
+      fs.writeFileSync(path.join(s.player.dir, 'props', 'index.html'), 'MINE');
+      const out = lines(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.match(s.player.read('props', 'index.html'), /<h1 class="page-title">Props<\/h1>/);
+      assert.ok(out.includes('  replaces kept file: props/index.html'), out.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  it('a props page whose path is a link is dropped, and a sheets-only build drops its menu link too', () => {
+    const s = buildBoth({ ...COIN, 'Characters/PCs/Ann.md': '---\ntype: pc\nstatus: active\n---\nAnn.\n' }, { sites: [], player: { keep: ['extras'], props: { address: 'extras/props.html' } } });
+    try {
+      const outside = path.join(s.root, 'outside');
+      fs.mkdirSync(outside);
+      fs.mkdirSync(s.player.dir, { recursive: true });
+      fs.symlinkSync(outside, path.join(s.player.dir, 'extras'));
+      const full = lines(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(full.some((l) => l.includes('player_site.props.address "extras/props.html": its path in the site folder is not a plain folder, so the site has no props page')), full.join('\n'));
+      assert.deepEqual(fs.readdirSync(outside), []);
+      const sheet = rels(s.player).find((r) => /ann\.html$/.test(r));
+      const before = s.player.read(...sheet.split('/'));
+      assert.doesNotMatch(before, />Props<\/a>/);
+      lines(() => build({ configPath: s.configPath, site: 'player', only: 'sheets' }));
+      assert.equal(s.player.read(...sheet.split('/')), before);
+    } finally { s.cleanup(); }
+  });
+});
+
+describe('the cover', () => {
+  const COIN = { 'Documents/Coin.md': '---\ntype: prop\n---\nA coin.\n' };
+  const cover = (value) => buildBoth(COIN, { sites: ['player'], player: { props: { cover: value } } });
+
+  it('a web address is printed as written', () => {
+    const s = cover('https://example.com/a cover.png');
+    try {
+      assert.match(s.player.read('props', 'index.html'), /<img class="props-cover" src="https:\/\/example\.com\/a%20cover\.png" alt="">/);
+      assert.ok(!s.player.exists('images', 'banners', 'props'));
+    } finally { s.cleanup(); }
+  });
+
+  it('a missing file is reported and the page shows without it', () => {
+    const s = cover('Art/none.png');
+    try {
+      assert.ok(s.logs.some((l) => l.includes('WARNING: player_site.props.cover "Art/none.png" not found in the vault — skipping')), s.logs.join('\n'));
+      assert.doesNotMatch(s.player.read('props', 'index.html'), /props-cover/);
+    } finally { s.cleanup(); }
+  });
+
+  it('a file outside the vault is reported, never copied, and the page shows without it', () => {
+    const s = buildBoth({ ...COIN }, { sites: [], player: { props: { cover: '../outside.png' } } });
+    try {
+      fs.writeFileSync(path.join(s.root, 'outside.png'), 'OUT');
+      const out = lines(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(out.some((l) => l.includes('WARNING: player_site.props.cover "../outside.png" resolves outside the vault — skipping')), out.join('\n'));
+      assert.doesNotMatch(s.player.read('props', 'index.html'), /props-cover/);
+      assert.ok(!rels(s.player).some((r) => /outside\.png/.test(r)));
+    } finally { s.cleanup(); }
+  });
+});
+
+describe('chapters that do not group', () => {
+  const s = buildBoth({
+    'Documents/Hidden Ref.md': '---\ntype: prop\nchapter: "[[Chapter Hidden]]"\n---\nA.\n',
+    'Documents/Place Ref.md': '---\ntype: prop\nchapter: "[[Harbour]]"\n---\nB.\n',
+    'Chapters/Chapter Hidden.md': '---\ntype: chapter\nstatus: played\npublish: false\n---\nHidden.\n',
+    'Locations/Harbour.md': '---\ntype: location\n---\nA harbour.\n',
+    'Chapters/Act One/Chapter One.md': '---\ntype: chapter\nstatus: played\n---\nThe first.\n',
+    'Chapters/Act One/Folder Ref.md': '---\ntype: prop\n---\nC.\n',
+  }, { sites: ['player'] });
+  after(() => s.cleanup());
+
+  it('an unpublished chapter, a page that is not a chapter, and a folder not named after a chapter page all go to Other props', () => {
+    const page = s.player.read('props', 'index.html');
+    assert.deepEqual(headings(page), ['Other props']);
+    for (const t of ['Hidden Ref', 'Place Ref', 'Folder Ref']) assert.match(page, new RegExp(`>${t}</a>`));
+    assert.doesNotMatch(page, /Chapter Hidden|Chapter One/);
+  });
+});
+
+describe('the landing box, more cases', () => {
+  const NOTES = {
+    'Documents/Zulu.md': '---\ntype: prop\nlastUpdated: 2026-03-01\n---\nZ.\n',
+    'Documents/Charlie.md': '---\ntype: prop\nlastUpdated: 2026-01-01\n---\nC.\n',
+    'Documents/Alpha.md': '---\ntype: prop\n---\nA.\n',
+  };
+  const boxTitles = (index) => {
+    const box = /<section class="dashboard-section props-latest">[\s\S]*?<\/section>/.exec(index);
+    return box ? [...box[0].matchAll(/<li class="prop-item"><a href="[^"]*">([^<]*)<\/a>/g)].map((m) => m[1]) : null;
+  };
+
+  it('lastUpdated orders before title, newest first', () => {
+    const s = buildBoth(NOTES, { sites: ['player'], player: { landing: { latest_props: 3 } } });
+    try { assert.deepEqual(boxTitles(s.player.read('index.html')), ['Zulu', 'Charlie', 'Alpha']); } finally { s.cleanup(); }
+  });
+
+  it('gm_site.landing.latest_props gives the GM site a box of its own', () => {
+    const s = buildBoth(NOTES, { gm: { landing: { latest_props: 1 } } });
+    try {
+      assert.deepEqual(boxTitles(s.gm.read('index.html')), ['Zulu']);
+      assert.equal(boxTitles(s.player.read('index.html')), null);
+    } finally { s.cleanup(); }
+  });
+
+  it('a number written as a string is read as the number, as the registry reads every number', () => {
+    const s = buildBoth(NOTES, { sites: ['player'], player: { landing: { latest_props: '2' } } });
+    try {
+      assert.deepEqual(boxTitles(s.player.read('index.html')), ['Zulu', 'Charlie']);
+      assert.ok(!s.logs.some((l) => /latest_props/.test(l)), s.logs.join('\n'));
+    } finally { s.cleanup(); }
+  });
+});
+
+describe('a title and intro holding markup', () => {
+  const s = buildBoth({ 'Documents/Coin.md': '---\ntype: prop\n---\nA coin.\n' }, { sites: ['player'], player: { props: { title: 'Locker <b>&</b>', intro: 'If 1 < 2 then <script>x</script>' }, landing: { latest_props: 1 } } });
+  after(() => s.cleanup());
+
+  it('are escaped on the page, in the menu and in the landing box', () => {
+    const page = s.player.read('props', 'index.html');
+    assert.match(page, /<h1 class="page-title">Locker &lt;b&gt;&amp;&lt;\/b&gt;<\/h1>/);
+    assert.match(page, /<p class="props-intro">If 1 &lt; 2 then &lt;script&gt;x&lt;\/script&gt;<\/p>/);
+    assert.match(page, /<title>Locker &lt;b&gt;&amp;&lt;\/b&gt;/);
+    assert.match(s.player.read('documents', 'coin.html'), />Locker &lt;b&gt;&amp;&lt;\/b&gt;<\/a>/);
+    assert.match(s.player.read('index.html'), />Latest from Locker &lt;b&gt;&amp;&lt;\/b&gt;<\/a>/);
+    for (const f of s.player.files()) assert.doesNotMatch(fs.readFileSync(f, 'utf8'), /<script>x<\/script>|<b>&<\/b>/, f);
+  });
+});

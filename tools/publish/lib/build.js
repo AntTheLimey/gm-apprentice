@@ -1246,7 +1246,10 @@ function buildSite(options) {
     }
   }
   // The props page is never written through a link either: then the site has none, and nothing links it.
-  if (collection && (writes === 'all' || dry) && survivesClean(collection.address) && pathProblem(outputDir, collection.address)) {
+  // A full build looks after the clean; the doctor and a sheets-only build (which cleans nothing) look
+  // only in a kept folder, all that a full build's clean would leave, so all three link it alike.
+  const keptOnSite = (out) => !gm && config.preserveDirs.some((kept) => kept.toLowerCase() === out.split('/')[0].toLowerCase());
+  if (collection && (writes === 'all' || keptOnSite(collection.address)) && pathProblem(outputDir, collection.address)) {
     console.warn(`  WARNING: ${nm('player_site.props.address')} "${collection.address}": its path in the site folder is not a plain folder, so the site has no props page`);
     collection = null;
   }

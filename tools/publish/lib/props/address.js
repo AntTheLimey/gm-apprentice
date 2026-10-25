@@ -50,6 +50,7 @@ function addressShapeProblem(address, fileExt) {
 // `has(address, { explicit })` says why an address is taken, or null. A kept folder
 // (`player_site.keep`) refuses only a default address: an explicit `prop_address` there
 // replaces the kept file.
+// `keeps(address)`: whether the address is inside a kept folder, whatever else holds it.
 function takenAddresses({ pageOutputs = [], keptDirs = [] } = {}) {
   const files = new Map();
   for (const f of RESERVED_FILES) files.set(addressKey(f), 'a file the site needs');
@@ -68,6 +69,10 @@ function takenAddresses({ pageOutputs = [], keptDirs = [] } = {}) {
         if (dir) return `inside the kept folder ${dir}`;
       }
       return null;
+    },
+    keeps(address) {
+      const key = addressKey(address);
+      return kept.some((d) => key.startsWith(`${d}/`));
     },
   };
 }

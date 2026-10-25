@@ -148,22 +148,26 @@ function hasCollection(pages, { site = 'player' } = {}) {
   return pages.some((pg) => isPropNote(sourceOf(pg)) && (site === 'gm' || !isWithheld(sourceOf(pg))));
 }
 
-// Where the page is: { address, warning, replacesKept }. An address that is not a site path ending in
-// .html, or is taken (`taken`, props/address.js), falls back to the default with a warning; the default
-// moves once to props/collection.html when a page the site builds holds it. One in a kept folder
-// replaces the kept file. `name` is the setting as the vault writes it. `address` null: no place for it.
+// Where the page is: { address, warning, replacesKept }. The asked address when it is a site path
+// ending in .html and free (`taken`, props/address.js); else the default, with a warning. The default
+// moves once to props/collection.html when a page the site builds holds it, and when a page holds that
+// too the site has no props page (`address` null). One in a kept folder replaces the kept file.
+// `name` is the setting as the vault writes it.
 function collectionAddress(asked, taken, { name = 'player_site.props.address' } = {}) {
+  const placed = (address, warning) => ({ address, warning, replacesKept: address !== null && taken.keeps(address) });
+  let why = null;
+  if (asked !== COLLECTION_ADDRESS) {
+    const shape = addressShapeProblem(asked, '.html');
+    const taker = shape ? null : taken.has(asked, { explicit: true });
+    if (!shape && !taker) return placed(canonicalNfc(asked), null);
+    why = shape || `is taken by ${String(taker).replace(/^inside /, '')}`;
+  }
   const fallback = taken.has(COLLECTION_ADDRESS) === PAGE_TAKER ? COLLECTION_FALLBACK : COLLECTION_ADDRESS;
   if (fallback !== COLLECTION_ADDRESS && taken.has(fallback, { explicit: true })) {
-    return { address: null, warning: `${name}: ${COLLECTION_ADDRESS} and ${COLLECTION_FALLBACK} are both taken by pages the site builds, so the site has no props page`, replacesKept: false };
+    return placed(null, `${name}: ${COLLECTION_ADDRESS} and ${COLLECTION_FALLBACK} are both taken by pages the site builds, so the site has no props page`);
   }
-  const moved = (a, why) => ({ address: fallback, warning: `${name} "${a}" ${why}; the props page is at ${fallback}`, replacesKept: false });
-  if (asked === COLLECTION_ADDRESS) return fallback === COLLECTION_ADDRESS ? { address: fallback, warning: null, replacesKept: false } : moved(asked, `is taken by ${PAGE_TAKER}`);
-  const shape = addressShapeProblem(asked, '.html');
-  if (shape) return moved(asked, shape);
-  const why = taken.has(asked, { explicit: true });
-  if (why) return moved(asked, `is taken by ${String(why).replace(/^inside /, '')}`);
-  return { address: canonicalNfc(asked), warning: null, replacesKept: Boolean(taken.has(asked)) };
+  if (why) return placed(fallback, `${name} "${asked}" ${why}; the props page is at ${fallback}`);
+  return placed(fallback, fallback === COLLECTION_ADDRESS ? null : `${name} "${asked}" is taken by ${PAGE_TAKER}; the props page is at ${fallback}`);
 }
 
 const headingOrder = (a, b) => a.heading.localeCompare(b.heading, 'en', { sensitivity: 'base' });
