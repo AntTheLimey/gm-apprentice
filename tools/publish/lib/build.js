@@ -1812,6 +1812,8 @@ function buildSite(options) {
   // what actually publishes (decidePage's verdicts, above), and `usedImages` is populated
   // from that filtered set regardless of whether a manifest exists, so gating this on
   // `manifest` just meant a manifest-less player build shipped every GM-only image.
+  // A recap's picture counts as used: the story pages are rendered once here, for the set only.
+  buildStorySpine(pages, linkMap, hubWrapUps, { imageMap, usedImages });
   const filteredMap = {};
   for (const [basename, entry] of Object.entries(imageMap)) {
     if (usedImages.has(basename)) filteredMap[basename] = entry;
@@ -1985,7 +1987,7 @@ function buildSite(options) {
     }
 
     // The story: its chapters, each PC's own story, its contents page.
-    const spine = buildStorySpine(pages, linkMap, hubWrapUps);
+    const spine = buildStorySpine(pages, linkMap, hubWrapUps, { imageMap, usedImages });
     for (const unit of spine) {
       unit.refsHtml = renderRefsHtml(unit);
       emit(unit.outputPath, renderStoryUnit(unit, config, publishConfig, navFor), `  wrote ${unit.outputPath}`);

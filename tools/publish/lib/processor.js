@@ -1635,7 +1635,7 @@ function resolveImageEmbeds(markdown, imageMap, currentOutputPath, usedImages, o
     const key = canonicalNfc(basename);
     const entry = imageMap[key];
     if (!entry) {
-      console.warn(`processor: image embed not found — "${basename}" (${currentOutputPath})`);
+      if (options.warn !== false) console.warn(`processor: image embed not found — "${basename}" (${currentOutputPath})`);
       return '';
     }
 

@@ -1,6 +1,6 @@
 const path = require('path');
 const { refTarget } = require('./wikilink');
-const { extractSections, parseWikiRef, resolveWikiLinks, publishedSource } = require('./processor');
+const { extractSections, parseWikiRef, resolveWikiLinks, resolveImageEmbeds, publishedSource } = require('./processor');
 const { slugify } = require('./scanner');
 const { canonicalNfc } = require('./unicode');
 const { parseWikilink } = require('./wikilink');
@@ -193,12 +193,16 @@ function orderedSessions(pages) {
 
 // `pairs` is the build's hub -> Wrap-Up map (session-hub.js pairHubs), computed once on
 // the unreduced frontmatter; without it no session pairs with a Wrap-Up.
-function buildStorySpine(pages, linkMap, pairs) {
+function buildStorySpine(pages, linkMap, pairs, images = null) {
   // Recap markdown renders to HTML inside findRecap, so wiki-links must resolve here —
   // downstream has no markdown left to work with. Resolution is relative to the unit's
   // own output path under story/. Without a linkMap (the hasStory probe), skip it.
+  // With `images` ({ imageMap, usedImages }) the recap's `![[x.png]]` embeds show too; the
+  // recap text is the published view, so a picture only in a hidden part is never added.
   const resolverFor = linkMap
-    ? (outputPath) => (md) => resolveWikiLinks(md, linkMap, outputPath)
+    ? (outputPath) => (md) => resolveWikiLinks(images
+      ? resolveImageEmbeds(md, images.imageMap, outputPath, images.usedImages, { warn: false })
+      : md, linkMap, outputPath)
     : () => undefined;
   const chapters = sortedChapters(pages);
   const sessions = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session');
