@@ -12,11 +12,12 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { canonicalNfc } = require('../unicode');
-const { isPropNote, propKindOf, propFileOf, propAddressOf } = require('./note');
+const { isPropNote, propKindOf, propFileOf, propAddressOf, propStyleOf } = require('./note');
 const { PROP_FILE_EXTS, addressKey, defaultPropAddress, addressShapeProblem } = require('./address');
 const { cutHtml } = require('./html-cut');
 const { within, realOrNull, findUnder } = require('./paths');
 const { localRefs } = require('./links');
+const { styleLoader } = require('./styles');
 
 const MARKUP_EXTS = new Set(['.html', '.htm', '.svg']);
 // What a prop page may pull in beside itself: styles, scripts, pictures and fonts. Never a
@@ -87,10 +88,16 @@ function bytesOf(entry) {
   return BYTES.get(entry) || null;
 }
 
+// A prop's page comes from, in order: its `prop_file` (published as it is; a `prop_style` beside it
+// is not used, with a row); a container (`prop_kind: container`), a listing the tool makes, styled
+// when it names a style; a `prop_style`, a page the tool makes from the note's words. A made prop
+// has no source: its one file is `{ source: null, out: address, made }`, written by the build.
+// `styles` loads a style by name; `plan.styles` lists the files of each style a shipping made prop uses.
+//
 // `cleanup: true` also plans, for a prop that does not ship but names a prop_address inside a
 // kept folder, the files an earlier build would have written there (`keptCopies`). Nothing
 // is claimed for them and they never ship: the build compares them with what is in the folder.
-function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup = false }) {
+function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup = false, styles = styleLoader({ vaultPath }) }) {
   const problems = [];
   const vaultReal = realOrNull(path.resolve(vaultPath));
   const problem = (rel, detail, fix) => problems.push({ rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail, fix });
@@ -104,12 +111,35 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
       rel, page, ships: Boolean(ships(page)), kind: propKindOf(fm),
       // `shared`: outputs another prop's files already put there, with the same bytes. Written once, under that
       // prop; listed here so the leak gate counts the file as this prop's too.
-      address: null, source: null, files: [], shared: [], hash: null,
+      address: null, source: null, files: [], shared: [], hash: null, style: null, made: null,
     };
     props.push(plan);
     const propFile = propFileOf(fm);
-    if (!propFile) continue;
+    const styleName = propStyleOf(fm);
     const say = plan.ships ? problem : () => {};
+    // Where a page the tool makes lands: as a prop file's would, with .html.
+    const placeAt = (ext) => {
+      const def = defaultPropAddress(rel, ext);
+      const asked = propAddressOf(fm);
+      const shape = asked === null ? null : addressShapeProblem(asked, ext);
+      if (asked !== null && shape) {
+        say(rel, `prop_address "${asked}" ${shape}; it is published at ${def}`, `write a path such as ${def}`);
+      }
+      plan._explicit = asked !== null && !shape;
+      plan.address = plan._explicit ? canonicalNfc(asked) : def;
+    };
+    if (!propFile) {
+      if (plan.kind !== 'container' && !styleName) continue;
+      if (styleName) {
+        const loaded = styles(styleName);
+        if (loaded.problem) { say(rel, loaded.problem.detail, loaded.problem.fix); continue; }
+        plan.style = loaded.style;
+      }
+      plan.made = plan.style ? 'style' : 'container';
+      placeAt('.html');
+      continue;
+    }
+    if (styleName) say(rel, `prop_style "${styleName}" is not used: the note names a prop_file, which is published as it is`, 'remove prop_style, or remove prop_file to use the style');
 
     const ext = path.extname(propFile).toLowerCase();
     const wrongKind = () => say(rel, `the prop file "${propFile}" is not a page, PDF or picture`, 'use an .html, .pdf or picture file');
@@ -139,15 +169,7 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
     plan._propFile = propFile;
     plan._bytes = read.bytes;
     plan.hash = sha1(read.bytes);
-
-    const def = defaultPropAddress(rel, ext);
-    const asked = propAddressOf(fm);
-    const shape = asked === null ? null : addressShapeProblem(asked, ext);
-    if (asked !== null && shape) {
-      say(rel, `prop_address "${asked}" ${shape}; it is published at ${def}`, `write a path such as ${def}`);
-    }
-    plan._explicit = asked !== null && !shape;
-    plan.address = plan._explicit ? canonicalNfc(asked) : def;
+    placeAt(ext);
   }
 
   // Claims among shipping props: an explicit address before a default, then vault-path order.
@@ -249,7 +271,22 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
       }
     }
   }
-  for (const p of order) if (p.address) planFiles(p, p.files, problem, claimed);
+  for (const p of order) {
+    if (!p.address) continue;
+    if (p.made) p.files.push({ source: null, out: p.address, made: p.made });
+    else planFiles(p, p.files, problem, claimed);
+  }
+
+  // Each style a shipping made prop uses, once: its stylesheet, script and assets under props/styles/<name>/.
+  const used = new Map();
+  for (const p of order) if (p.address && p.style && !used.has(p.style.name)) used.set(p.style.name, p.style);
+  const stylePlans = [...used.values()].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)).map((st) => {
+    const at = (rel) => `props/styles/${st.name}/${rel}`;
+    const files = [{ source: st.css, out: at('style.css') }];
+    if (st.script) files.push({ source: st.script, out: at('script.js') });
+    for (const a of st.assets) files.push({ source: a.source, out: at(a.rel) });
+    return { name: st.name, from: st.from, replaces: st.replaces, files };
+  });
   if (cleanup) {
     for (const p of props) {
       if (p.ships || !p.source || !p._explicit || !keptReplaced(p.address)) continue;
@@ -262,7 +299,7 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
   for (const p of props) {
     delete p._full; delete p._ext; delete p._propFile; delete p._explicit; delete p._bytes;
   }
-  return { props, problems };
+  return { props, problems, styles: stylePlans };
 }
 
 module.exports = { planProps, bytesOf, textOf, utf8Charset, LINKED_EXTS };

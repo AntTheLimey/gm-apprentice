@@ -2,7 +2,8 @@
 
 // What makes a note a prop: `type: prop`, or a document/handout that names a `prop_file`.
 // The whole tool asks these functions, so the reading of the fields lives in one place.
-const { isDocumentPage } = require('../processor');
+const { isDocumentPage, parseWikiRef } = require('../processor');
+const { canonicalNfc } = require('../unicode');
 
 const PROP_KINDS = ['document', 'object', 'diagram', 'supplied', 'container'];
 
@@ -40,4 +41,15 @@ function propStyleOf(fm) {
   return text(fm && fm.prop_style).toLowerCase() || null;
 }
 
-module.exports = { PROP_KINDS, PROP_STYLE_RE, isPropNote, propKindOf, propFileOf, propAddressOf, propStyleOf };
+// The note a prop sits in: the target of prop_container, bare or as a wikilink.
+function propContainerOf(fm) {
+  const raw = text(fm && fm.prop_container);
+  return raw ? canonicalNfc(parseWikiRef(raw).target) || null : null;
+}
+
+// A container's items not yet found: listed by title (`titles`) or not at all (`none`, the default).
+function showSealedOf(fm) {
+  return text(fm && fm.show_sealed).toLowerCase() === 'titles' ? 'titles' : 'none';
+}
+
+module.exports = { PROP_KINDS, PROP_STYLE_RE, isPropNote, propKindOf, propFileOf, propAddressOf, propStyleOf, propContainerOf, showSealedOf };
