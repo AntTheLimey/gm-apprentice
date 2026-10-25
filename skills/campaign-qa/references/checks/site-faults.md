@@ -491,9 +491,13 @@ you would change, and edit on a yes.
   show the line. A prop page cannot carry it, and the site publishes
   no audio, video or other page. A PDF can be a prop of its own: offer
   to make it one, a prop note (`shared/templates/prop.md`) beside the
-  file with `prop_file` naming it, linked from this prop's note. A
-  picture can take its place. Otherwise offer to take the link out of
-  the page. Say exactly what changes and edit on a yes.
+  file with `prop_file` naming it, linked from this prop's note, and
+  to take the link out of the page. A picture can take its place.
+  Otherwise offer to take the link out of the page. Say exactly what
+  changes and edit on a yes. A new prop note publishes only from the
+  publish list: if this prop is published, ask whether players see the
+  PDF too, and only on that yes run `SITE manifest apply --publish
+  "<new note>"`.
 - **Not really the kind its name says** (a `.png` that is a link to a
   note): offer to link the real file in its place.
 - **Could not be read:** give the GM the file and the reason.
