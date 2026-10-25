@@ -327,6 +327,7 @@ test('a symlinked folder pointing out of the vault is never entered', () => {
 });
 
 // Fix round 1.
+const KIND_FIX = 'a prop page cannot link this kind of file (audio, video, a PDF, another page): link it from the note instead, or use a picture';
 test('audio, video and PDF links are not copied; a module script is', () => {
   const root = vault({
     'A/Note.md': '', 'A/inv.html': '<audio src="a.mp3"></audio><video src="v.mp4"></video><embed src="d.pdf"><script type="module" src="m.mjs"></script>',
@@ -339,6 +340,7 @@ test('audio, video and PDF links are not copied; a module script is', () => {
     'inv.html links "d.pdf", which is a kind of file a prop does not copy',
     'inv.html links "v.mp4", which is a kind of file a prop does not copy',
   ]);
+  for (const p of problems) assert.strictEqual(p.fix, KIND_FIX);
 });
 
 test('a picture name that is a symlink to a note is not copied', () => {

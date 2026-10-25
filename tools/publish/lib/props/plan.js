@@ -25,6 +25,7 @@ const LINKED_EXTS = new Set([
   '.woff2', '.woff', '.ttf', '.otf',
 ]);
 const LINK_FIX = 'put the file beside the prop file and link it by a relative path';
+const KIND_FIX = 'a prop page cannot link this kind of file (audio, video, a PDF, another page): link it from the note instead, or use a picture';
 
 function sha1(buf) {
   return crypto.createHash('sha1').update(buf).digest('hex');
@@ -201,13 +202,13 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
       if (entry.cut) text = cutHtml(text).text;
       const { refs, rooted } = localRefs(text, ext === '.css' ? '.css' : '.html');
       const shown = entry === first ? p._propFile : canonicalNfc(path.posix.join(shownDir, at, path.basename(full)));
-      const linkProblem = (raw, which) => problem(p.rel, `${shown} links "${raw}", which ${which}`, LINK_FIX);
+      const linkProblem = (raw, which, fix = LINK_FIX) => problem(p.rel, `${shown} links "${raw}", which ${which}`, fix);
       for (const raw of rooted) linkProblem(raw, 'starts with /, an address on the site');
       for (const { raw, path: ref } of refs) {
         const joined = segmentsBelow(path.posix.join(at || '.', ref));
         if (!joined) { linkProblem(raw, 'is outside its folder'); continue; }
         const lext = path.extname(ref).toLowerCase();
-        const notCopied = () => linkProblem(raw, 'is a kind of file a prop does not copy');
+        const notCopied = () => linkProblem(raw, 'is a kind of file a prop does not copy', KIND_FIX);
         if (!LINKED_EXTS.has(lext)) { notCopied(); continue; }
         const hit = findUnder(propDir, joined, [vaultReal, propDirReal]);
         if (hit.why === 'outside') { linkProblem(raw, 'is outside its folder'); continue; }

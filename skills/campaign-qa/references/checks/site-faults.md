@@ -472,19 +472,24 @@ you would change, and edit on a yes.
   for a file of that name in the vault (`find "<vault>" -iname
   "<name>"`). An accented letter can be stored two ways, so if `find`
   gives nothing, list the likely folders and compare the names as they
-  read. Offer to move the file beside the note, or to correct
-  `prop_file` to where it is. It must sit in the note's folder or a
-  folder under it.
+  read. Offer to move the file beside the note; or, where it already
+  sits in the note's folder or a folder under it, to correct
+  `prop_file` to that path.
 - **A kind the site does not copy:** a prop file is a page, a PDF or a
-  picture. Ask the GM for it in one of those forms.
+  picture. Where you can make one from the file (a text or Markdown
+  handout as a page, say), offer to, and point `prop_file` at it on a
+  yes. Ask the GM only for what only they have.
 - **The address is taken, or `prop_address` is not a path the site can
   use:** offer a `prop_address` under `props/` that nothing else has,
   ending as the prop file does (`props/invitation.html`).
 - **A file the prop's page links** (not there, outside its folder, a
-  letter-case difference, a kind not copied, an address starting with
-  `/`): show the line of the page that links it. Offer to move the file
-  beside the page, or into a folder under it, and correct the link to
-  match. The page is the GM's own work: never edit it without saying
+  letter-case difference, an address starting with `/`): show the line
+  of the page that links it. Offer to move the file beside the page, or
+  into a folder under it, and correct the link to match. The page is
+  the GM's own work: never edit it without saying exactly what changes.
+- **A kind the page cannot link** (audio, video, a PDF, another page):
+  show the line. Offer to link the file from the note instead, or to
+  use a picture in its place, and to take it out of the page, saying
   exactly what changes.
 - **Could not be read:** give the GM the file and the reason.
 - **A link in the site folder:** a folder on the prop's address, in a
