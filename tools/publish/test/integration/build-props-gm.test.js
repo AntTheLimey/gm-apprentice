@@ -56,7 +56,7 @@ describe('the GM site and props', () => {
     } finally { s.cleanup(); }
   });
 
-  it('the GM site never writes through a link in its output folder', () => {
+  it('a link left in the GM folder is cleared, not followed', () => {
     const s = buildBoth(FILES, { sites: ['gm'] });
     try {
       const outside = path.join(s.root, 'outside');
@@ -67,6 +67,25 @@ describe('the GM site and props', () => {
       assert.deepEqual(fs.readdirSync(outside), []);
       assert.ok(!fs.lstatSync(path.join(s.gm.dir, 'props')).isSymbolicLink());
       assert.match(s.gm.read('props', 'invitation.html'), /KEEPER ONLY/);
+    } finally { s.cleanup(); }
+  });
+
+  it("a stub note's prop is on the GM site, not the player site", () => {
+    const s = buildBoth({ ...FILES, 'Documents/Invitation.md': PROP.replace('---\nAn', 'publish: stub\n---\nAn') });
+    try {
+      assert.match(s.gm.read('props', 'invitation.html'), /KEEPER ONLY/);
+      assert.ok(!s.player.exists('props'));
+    } finally { s.cleanup(); }
+  });
+
+  it('a PDF prop is copied to the GM site as is', () => {
+    const pdf = '%PDF-1.4\n<!-- gm-only -->not cut in a PDF<!-- /gm-only -->\n';
+    const s = buildBoth({
+      'Documents/Invitation.md': '---\ntype: prop\nprop_file: invitation.pdf\n---\nA letter.\n', 'Documents/invitation.pdf': pdf,
+    });
+    try {
+      assert.equal(s.gm.read('props', 'invitation.pdf'), pdf);
+      assert.match(s.gm.read('documents', 'invitation.html'), /href="\.\.\/props\/invitation\.pdf">See the prop/);
     } finally { s.cleanup(); }
   });
 });
