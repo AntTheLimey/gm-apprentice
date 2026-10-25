@@ -48,6 +48,8 @@ const { takenAddresses } = require('./props/address');
 const { propHrefFor, propOutputs, keptCopyOutputs, pathProblem } = require('./props/files');
 const { styledPage, styleFontFamilies, textProblem, FONTS_CSS, BASE_CSS } = require('./props/page');
 const { containerItems } = require('./props/collection');
+const { layoutNames } = require('./props/layout');
+const { isWithheld, withheldPlaceholder, withheldNameMarked } = require('./processor');
 const { containerTemplate, containerItemsHtml } = require('./templates/props-page');
 
 const TOOL_VERSION = require('../package.json').version;
@@ -1698,6 +1700,14 @@ function buildSite(options) {
       styled.push(p);
     }
     const containers = propPlan.props.filter((p) => p.ships && p.address && p.kind === 'container' && p.made && !propBlocked.has(p.address));
+    // A container whose style has no place for its list gets the site's own look, and the GM is told.
+    for (const p of containers) {
+      if (!p.style || [p.style.layout, p.style.sheet].some((t) => layoutNames(t).includes('items'))) continue;
+      const row = { rel: p.rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: `the style "${p.style.name}" has no {{{items}}} place, so the container's page uses the site's own look`, fix: 'use a style made for containers, or remove prop_style from the container' };
+      propPlan.problems.push(row);
+      console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
+      p.style = null;   // so none of the style's files or typefaces ship on its account
+    }
     const families = [...new Set([...styled, ...containers.filter((p) => p.style)].flatMap((p) => styleFontFamilies(p.style, p.page.frontmatter || {})))];
     if (families.length) {
       let warned = false;
@@ -1717,8 +1727,12 @@ function buildSite(options) {
     const shown = new Set(pages);
     const pageAt = new Map(pages.map((pg) => [pg.outputPath, pg]));
     const misplaced = [];
+    // On the GM site a withheld note the player site does not publish is named inside the usual withheld mark.
+    const nameOf = (pg, text) => (gm && isWithheld(pg.sourceFrontmatter || pg.frontmatter) && !onPlayerSite.has(pg)
+      ? withheldNameMarked(text, withheldPlaceholder((pg.sourceFrontmatter || pg.frontmatter).type, publishConfig.withheld_words), mark)
+      : text);
     const listed = containerItems({
-      props: propPlan.props, isShown: (pg) => shown.has(pg), excludeFields, site: gm ? 'gm' : 'player',
+      props: propPlan.props, isShown: (pg) => shown.has(pg), excludeFields, fieldOverrides, site: gm ? 'gm' : 'player', nameOf,
       resolvePage: (target) => pageAt.get(linkMap[target]) || null,
       isPlayerShown: gm ? (pg) => onPlayerSite.has(pg) : null, blocked: propBlocked, problems: misplaced,
     });
@@ -1727,10 +1741,10 @@ function buildSite(options) {
       console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
     }
     for (const p of containers) {
-      const { rows } = listed.get(p.rel);
+      const { rows, title, noteTitle } = listed.get(p.rel);
       p.made_html = p.style
-        ? styledPage({ prop: p, style: p.style, page: p.page, linkMap, imageMap, usedImages, collectionHref: null, fontsCss: styleFonts.css !== '', items: containerItemsHtml(rows, p.address) }).html
-        : containerTemplate({ container: p, rows, address: p.address }, navFor, config, publishConfig, { linkMap, imageMap, usedImages });
+        ? styledPage({ prop: p, style: p.style, page: p.page, linkMap, imageMap, usedImages, collectionHref: null, fontsCss: styleFonts.css !== '', items: containerItemsHtml(rows, p.address), names: { title, noteTitle } }).html
+        : containerTemplate({ container: p, rows, address: p.address, title, noteTitle }, navFor, config, publishConfig, { linkMap, imageMap, usedImages });
     }
   }
 

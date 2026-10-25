@@ -100,3 +100,91 @@ describe('a hidden prop_title on a sealed item', () => {
     for (const f of s.player.files()) assert.doesNotMatch(fs.readFileSync(f, 'utf8'), /Lady Anne/, f);
   });
 });
+
+// Ruling 19: on the GM site a withheld note's name (an item's, or a container's) carries the usual
+// withheld_names mark, and with gm_site.show.withheld_names off reads as players would see it.
+const WITHHELD = {
+  'Documents/Vault Box.md': '---\ntype: prop\nprop_kind: container\nwithheld: true\n---\nA box.\n',
+  'Documents/Coin.md': '---\ntype: prop\nprop_container: "[[Vault Box]]"\n---\nA coin.\n',
+  'Documents/Bookshelf.md': '---\ntype: prop\nprop_kind: container\n---\nA shelf.\n',
+  'Documents/Ledger.md': '---\ntype: prop\nprop_container: "[[Bookshelf]]"\nwithheld: true\n---\nA ledger.\n',
+  '_meta/publish-list.yaml': listFileText({ publishing: ['Documents/Bookshelf.md', 'Documents/Coin.md'] }),
+};
+const MARK = (name) => `<span class="gm-mark gm-mark--withheld_names" data-gm-kind="withheld_names" data-gm-label="players see: something">${name}</span>`;
+
+describe('withheld names on the GM site', () => {
+  it('carry the withheld mark', () => {
+    const s = buildBoth(WITHHELD);
+    try {
+      const shelf = s.gm.read('props', 'bookshelf.html');
+      assert.ok(shelf.includes(`<a href="../documents/ledger.html">${MARK('Ledger')}</a> <span class="gm-unrevealed">not yet revealed</span>`), shelf);
+      const box = s.gm.read('props', 'vault-box.html');
+      assert.ok(box.includes(`<h1 class="page-title">${MARK('Vault Box')}</h1>`), box);
+      assert.ok(box.includes(`&larr; ${MARK('Vault Box')}</a>`), box);
+      assert.match(box, /<title>Vault Box — T<\/title>/);
+      assert.doesNotMatch(s.player.read('props', 'bookshelf.html'), /Ledger|something/);
+    } finally { s.cleanup(); }
+  });
+
+  it('read as players see them when withheld_names is off', () => {
+    const s = buildBoth(WITHHELD, { gm: { show: { withheld_names: false } } });
+    try {
+      const shelf = s.gm.read('props', 'bookshelf.html');
+      assert.match(shelf, /<a href="\.\.\/documents\/ledger\.html">something<\/a> <span class="gm-unrevealed">not yet revealed<\/span>/);
+      assert.doesNotMatch(shelf, /Ledger<|gm-mark--withheld_names/);
+      const box = s.gm.read('props', 'vault-box.html');
+      assert.match(box, /<h1 class="page-title">something<\/h1>/);
+      assert.doesNotMatch(box, /gm-mark--withheld_names/);
+    } finally { s.cleanup(); }
+  });
+});
+
+describe('a container whose style has no place for its list', () => {
+  const s = buildBoth({
+    'Documents/Chest.md': '---\ntype: prop\nprop_kind: container\nprop_style: scroll\n---\nA chest.\n',
+    'Documents/Coin.md': '---\ntype: prop\nprop_container: "[[Chest]]"\n---\nA coin.\n',
+  }, { sites: ['player'] });
+  after(() => s.cleanup());
+
+  it('gets the site\'s own page and a warning row', () => {
+    const page = s.player.read('props', 'chest.html');
+    assert.match(page, /<h1 class="page-title">Chest<\/h1>/);
+    assert.match(page, /<a href="\.\.\/documents\/coin\.html">Coin<\/a>/);
+    assert.match(page, /<link rel="stylesheet" href="\.\.\/css\/style\.css">/);
+    assert.ok(!s.player.exists('props', 'styles', 'scroll'), 'no style files on its account');
+    assert.ok(s.logs.some((l) => l.includes('Documents/Chest.md: the style "scroll" has no {{{items}}} place, so the container\'s page uses the site\'s own look — use a style made for containers, or remove prop_style from the container')), s.logs.join('\n'));
+  });
+});
+
+describe('a style that lists the items on its sheet', () => {
+  const s = buildBoth({
+    '_meta/prop-styles/s/layout.html': '<main class="s">{{{body}}}</main>',
+    '_meta/prop-styles/s/sheet.html': '<section class="sheet">{{{text}}}<div class="held">{{{items}}}</div></section>',
+    '_meta/prop-styles/s/style.css': '.s { color: red; }\n',
+    'Documents/Chest.md': '---\ntype: prop\nprop_kind: container\nprop_style: s\n---\nA chest.\n',
+    'Documents/Coin.md': '---\ntype: prop\nprop_container: "[[Chest]]"\n---\nA coin.\n',
+  }, { sites: ['player'] });
+  after(() => s.cleanup());
+
+  it('fills one sheet with them, though the container has no words', () => {
+    const page = s.player.read('props', 'chest.html');
+    assert.equal((page.match(/<section class="sheet">/g) || []).length, 1);
+    assert.match(page, /<div class="held"><ul class="prop-list">\n<li class="prop-item"><a href="\.\.\/documents\/coin\.html">Coin<\/a><\/li>/);
+    assert.ok(!s.logs.some((l) => /Chest/.test(l)), s.logs.join('\n'));
+  });
+});
+
+describe('a stub item (Ruling 20)', () => {
+  const s = buildBoth({
+    'Documents/Bookshelf.md': '---\ntype: prop\nprop_kind: container\n---\nA shelf.\n',
+    'Documents/Diary.md': '---\ntype: prop\nprop_container: "[[Bookshelf]]"\npublish: stub\nprop_line: STUBLINE\nrevealed_in: "[[Session 2]]"\n---\nA diary.\n',
+    'Sessions/Session 2.md': '---\ntype: session\nsession_number: 2\nstatus: played\n---\nPlayed.\n',
+  }, { sites: ['player'] });
+  after(() => s.cleanup());
+
+  it('is its title linking its stub page, with no line and no session', () => {
+    const page = s.player.read('props', 'bookshelf.html');
+    assert.match(page, /<li class="prop-item"><a href="\.\.\/documents\/diary\.html">Diary<\/a><\/li>/);
+    for (const f of s.player.files()) assert.doesNotMatch(fs.readFileSync(f, 'utf8'), /STUBLINE/, f);
+  });
+});

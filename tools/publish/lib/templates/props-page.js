@@ -33,11 +33,12 @@ function containerItemsHtml(rows, fromOut) {
 }
 
 // A container's own page, in the site shell: its title, a link back to its note, its
-// `## The Text` as the note page shows it (if it has one), then what it holds.
-function containerTemplate({ container, rows, address }, navFor, config, publishConfig, { linkMap, imageMap, usedImages } = {}) {
+// `## The Text` as the note page shows it (if it has one), then what it holds. `title` and
+// `noteTitle` are as containerItems gives them (the GM site's marks in them); by default the note's own.
+function containerTemplate({ container, rows, address, title: shownTitle, noteTitle: shownNote }, navFor, config, publishConfig, { linkMap, imageMap, usedImages } = {}) {
   const page = container.page;
-  const noteTitle = page.displayTitle || page.title || '';
-  const title = fieldText((page.frontmatter || {}).prop_title).trim() || noteTitle;
+  const noteTitle = shownNote || page.displayTitle || page.title || '';
+  const title = shownTitle || fieldText((page.frontmatter || {}).prop_title).trim() || noteTitle;
   const text = propTextOf(page.publishedMarkdown || '');
   const sheets = propSheets(text, { linkMap, imageMap, usedImages, outputPath: address });
   const back = escapeHtml(encodeHref(relativeHref(address, page.outputPath)));

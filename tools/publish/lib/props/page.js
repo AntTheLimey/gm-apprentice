@@ -54,22 +54,27 @@ function styleFontFamilies(style, fields) {
 }
 
 // `items`: a container's listing (its rows' HTML), for `{{{items}}}`; a container's `## The Text` is optional.
-function styledPage({ prop, style, page, linkMap, imageMap, usedImages, collectionHref = null, fontsCss = false, items = null }) {
+// `names`: { title, noteTitle } as a listing prints them (the GM site's marks in them), in place of the note's own.
+function styledPage({ prop, style, page, linkMap, imageMap, usedImages, collectionHref = null, fontsCss = false, items = null, names = null }) {
   const problem = items === null ? textProblem(page.publishedMarkdown) : null;
   if (problem) return { problem };
   const text = propTextOf(page.publishedMarkdown);
   const fields = page.frontmatter || {};
-  const noteTitle = page.displayTitle || page.title || '';
-  const title = textField(fields, 'prop_title') || noteTitle;
+  const noteTitle = (names && names.noteTitle) || page.displayTitle || page.title || '';
+  const title = (names && names.title) || textField(fields, 'prop_title') || noteTitle;
   const at = prop.address;
-  const sheets = propSheets(text, {
+  const found = propSheets(text, {
     breaks: breaksOf(fields), shift: textField(fields, 'prop_shift') || undefined,
     linkMap, imageMap, usedImages, outputPath: at,
   });
+  // A container with no words still has one sheet when its sheet is where the style lists the items.
+  const sheets = found.length || items === null || !layoutNames(style.sheet).includes('items') ? found : [''];
   const sheetNames = layoutNames(style.sheet);
   const filled = sheets.map((html, i) => fillLayout(style.sheet, layoutView(fields, sheetNames, {
     title, note_title: noteTitle, text: html,
     sheet_number: String(i + 1), sheet_count: String(sheets.length), first: i === 0, last: i === sheets.length - 1,
+    // A container's listing, once: on its last sheet.
+    items: i === sheets.length - 1 ? items || '' : '',
   })));
   const body = fillLayout(style.layout, layoutView(fields, layoutNames(style.layout), { title, note_title: noteTitle, body: filled.join('\n'), items: items || '' }));
 

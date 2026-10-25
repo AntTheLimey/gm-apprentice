@@ -45,7 +45,7 @@ test('a container lists its revealed items in arrival order', () => {
   const diary = rows[1];
   assert.deepEqual(diary, {
     rel: 'Props/Diary.md', title: 'Diary', href: 'documents/diary.html', line: 'A water-stained diary',
-    arrived: { title: 'Session 14', href: 'sessions/session-14.html' }, sealed: false, unrevealed: false,
+    arrived: { title: 'Session 14', href: 'sessions/session-14.html' }, sealed: false, unrevealed: false, updated: null,
   });
   assert.equal(rows[0].arrived.title, 'Session 3', 'the first entry of revealed_in');
   const html = propListHtml(rows, 'props/bookshelf.html');
@@ -130,9 +130,57 @@ test('the GM site lists every item it shows, marks the unrevealed, and seals not
 });
 
 test('byArrival: session, then lastUpdated, then title, none last; sealed after', () => {
-  const r = (title, extra = {}) => ({ title, sealed: false, arrived: null, ...extra });
-  const rows = [r('b', { sealed: true }), r('a', { sealed: true }), r('x'), r('m', { arrived: { title: 'Session 2' } }), r('c', { arrived: { title: 'Session 10' } })];
-  assert.deepEqual(rows.sort(byArrival).map((x) => x.title), ['m', 'c', 'x', 'a', 'b']);
+  const r = (title, extra = {}) => ({ title, sealed: false, arrived: null, updated: null, ...extra });
+  const rows = [r('b', { sealed: true }), r('a', { sealed: true }), r('x'), r('m', { arrived: { title: 'Session 2' } }), r('c', { arrived: { title: 'Session 10' } }),
+    r('late', { updated: '2026-03-01' }), r('early', { updated: '2026-01-01' }), r('s2', { arrived: { title: 'Session 2' }, updated: '2025-12-01' })];
+  assert.deepEqual(rows.sort(byArrival).map((x) => x.title), ['s2', 'm', 'c', 'early', 'late', 'x', 'a', 'b']);
+});
+
+test('lastUpdated orders items that arrived in no session, and rides on the row', () => {
+  const { rows } = listing([container(),
+    prop('Props/C.md', { prop_container: IN }),
+    prop('Props/B.md', { prop_container: IN, lastUpdated: '2026-05-01' }),
+    prop('Props/A.md', { prop_container: IN, lastUpdated: '2026-02-01' })]);
+  assert.deepEqual(rows.map((r) => [r.title, r.updated]), [['A', '2026-02-01'], ['B', '2026-05-01'], ['C', null]]);
+  assert.deepEqual([...rows].map((r) => ({ ...r })).reverse().sort(byArrival).map((r) => r.title), ['A', 'B', 'C'], 'a copied row sorts the same');
+});
+
+test('an item that names itself as its container is listed on its own, with its own row', () => {
+  const self = prop('Props/Bookshelf.md', { prop_kind: 'container', prop_container: IN }, { kind: 'container' });
+  const { out, problems } = listing([self]);
+  assert.deepEqual(out.get('Props/Bookshelf.md').rows, []);
+  assert.equal(problems.length, 1);
+  assert.match(problems[0].detail, /names itself as its container/);
+  assert.doesNotMatch(problems[0].detail, /not a container prop/);
+});
+
+test('a stub item is its title and note link only, on the player site', () => {
+  const stub = prop('Props/Diary.md', { prop_container: IN, publish: 'stub', prop_line: 'STUBLINE', revealed_in: '[[Session 3]]', lastUpdated: '2026-01-01' });
+  stub.address = 'props/diary.html';
+  assert.deepEqual(listing([container(), stub]).rows, [{ rel: 'Props/Diary.md', title: 'Diary', href: 'documents/diary.html', line: null, arrived: null, sealed: false, unrevealed: false, updated: null }]);
+});
+
+test('a sealed title honours the note\'s field exceptions', () => {
+  const item = prop('Props/Letter.md', { prop_container: IN, prop_title: 'From Lady Anne' }, { shown: false });
+  const { rows } = listing([container({ show_sealed: 'titles' }), item], {
+    excludeFields: ['prop_title'], fieldOverrides: { 'Props/Letter.md': { include: ['prop_title'] } },
+  });
+  assert.equal(rows[0].title, 'From Lady Anne');
+});
+
+test('a wikilink in prop_title or prop_line prints its name', () => {
+  const { rows } = listing([container(), prop('Props/Diary.md', { prop_container: IN, prop_title: '[[Corvid Financial|the bank]]', prop_line: 'Signed by [[Vesper Hale]]' })]);
+  assert.equal(rows[0].title, 'the bank');
+  assert.equal(rows[0].line, 'Signed by Vesper Hale');
+});
+
+test('nameOf names the container and each shown row as the site prints the note', () => {
+  const item = prop('Props/Diary.md', { prop_container: IN });
+  const { out } = listing([container(), item], { site: 'gm', isPlayerShown: () => true, nameOf: (pg, t) => (pg === item.page ? `<<${t}>>` : `[${t}]`) });
+  const entry = out.get('Props/Bookshelf.md');
+  assert.equal(entry.title, '[Bookshelf]');
+  assert.equal(entry.noteTitle, '[Bookshelf]');
+  assert.equal(entry.rows[0].title, '<<Diary>>');
 });
 
 test('every text is escaped', () => {
