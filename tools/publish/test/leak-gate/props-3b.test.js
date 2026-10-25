@@ -163,6 +163,21 @@ describe('leak gate: a sealed title on its listings', () => {
     ...SHELF(), 'Documents/The Ledger.md': '---\ntype: prop\nprop_style: t\n---\nA ledger.\n\n## The Text\n\nSums owed.\n',
   }, { player: { keep: ['gazetteer'] } }));
 
+  it('a hidden phrase inside a sealed title gives no finding on its listings, and is a finding elsewhere', () => within((s) => {
+    for (const page of ['props/bookshelf.html', 'props/index.html']) {
+      assert.match(fs.readFileSync(path.join(s.outputDir, ...page.split('/')), 'utf8'), /<span class="prop-title">The Letter from Lady Anne Smith<\/span>/, page);
+    }
+    assert.deepEqual(gate(s).findings, []);
+    leakInto(s.outputDir, 'documents/other.html', 'Letter from Lady Anne');
+    assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'documents/other.html', note: 'Prep/Session 5.md' }]);
+  }, {
+    ...STYLE,
+    'Documents/Bookshelf.md': '---\ntype: prop\nprop_kind: container\nshow_sealed: titles\n---\nA tall shelf in the study.\n',
+    'Documents/The Letter from Lady Anne Smith.md': '---\ntype: prop\nprop_container: "[[Bookshelf]]"\n---\nA folded letter.\n',
+    'Prep/Session 5.md': '---\ntype: session-prep\n---\nProps to plant:\n\n- Letter from Lady Anne\n',
+    ...OTHER, ...LIST(['Documents/Bookshelf.md', 'Documents/Other.md']),
+  }));
+
   it("a hidden prep note listing the sealed item by name gives no finding on its listings", () => within((s) => {
     assert.deepEqual(gate(s).findings, []);
     leakInto(s.outputDir, 'documents/other.html', 'Letter from Lady Anne');

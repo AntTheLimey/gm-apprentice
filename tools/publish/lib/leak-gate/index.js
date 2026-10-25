@@ -119,11 +119,13 @@ function runLeakGate({ configPath, outputDir }) {
     // a scene quotes), its own note's hidden text is a leak as anywhere.
     const owners = hidden.propOwner.get(canonicalNfc(file.rel));
     // A listing (a container's page, the props page) prints the title of an item the players have not found: those
-    // words, exactly, are no finding there.
-    const sealed = hidden.sealedOn.get(canonicalNfc(file.rel));
+    // words, and any hidden piece whose words run wholly inside them, are no finding there. Titles and pieces are both
+    // words joined by single spaces, so a padded `includes` matches whole words in order, never part of a word.
+    const titles = hidden.sealedOn.get(canonicalNfc(file.rel));
+    const sealed = titles && [...titles].map((t) => ` ${t} `);
     for (const { piece } of matcher.scan(file.words)) {
       if (owners !== undefined && !owners.has(piece.note)) continue;
-      if (sealed !== undefined && sealed.has(piece.text)) continue;
+      if (sealed && sealed.some((t) => t.includes(` ${piece.text} `))) continue;
       const key = keyOf(file.rel, piece.text);
       if (raw.has(key)) continue;
       raw.set(key, { id: findingId(file.rel, piece.text), kind: 'text', code: 'HIDDEN_TEXT', page: file.rel, text: piece.text, shown: piece.shown, note: piece.note, reason: piece.reason });
