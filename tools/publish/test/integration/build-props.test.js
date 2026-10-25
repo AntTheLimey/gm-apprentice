@@ -386,3 +386,71 @@ describe('a kept-folder prop that stops shipping', () => {
     } finally { s.cleanup(); }
   });
 });
+
+describe('a link on a prop path in the site folder', () => {
+  const OUTSIDE_PAGE = '<body>THE GM OWN PAGE</body>';
+  // A kept folder that is a link to a folder outside the site (standing in for the vault).
+  const linked = (fm, { sub = false, listed = true } = {}) => {
+    const s = buildBoth({
+      'Documents/Invitation.md': PROP(`prop_address: gazetteer/papers/invitation.html\n${fm}`), ...PROP_FILES,
+      'Documents/Other.md': '---\ntype: document\n---\nOther.\n',
+      '_meta/publish-list.yaml': listFileText({ publishing: listed ? ['Documents/Invitation.md', 'Documents/Other.md'] : ['Documents/Other.md'] }),
+    }, { sites: [], player: { keep: ['gazetteer'] } });
+    const outside = path.join(s.root, 'outside');
+    fs.mkdirSync(path.join(outside, 'papers'), { recursive: true });
+    fs.mkdirSync(s.player.dir, { recursive: true });
+    if (sub) {
+      fs.mkdirSync(path.join(s.player.dir, 'gazetteer'));
+      fs.symlinkSync(path.join(outside, 'papers'), path.join(s.player.dir, 'gazetteer', 'papers'));
+    } else {
+      fs.symlinkSync(outside, path.join(s.player.dir, 'gazetteer'));
+    }
+    return { s, outside };
+  };
+
+  for (const sub of [false, true]) {
+    const where = sub ? 'a linked folder inside a kept folder' : 'a kept folder that is a link';
+    it(`${where}: a shipping prop is not written through it`, () => {
+      const { s, outside } = linked('', { sub });
+      try {
+        fs.writeFileSync(path.join(outside, 'papers', 'invitation.html'), OUTSIDE_PAGE);
+        let faults = null;
+        const lines = quiet(() => build({ configPath: s.configPath, site: 'player', onNoteFaults: (f) => { faults = f; } }));
+        assert.equal(fs.readFileSync(path.join(outside, 'papers', 'invitation.html'), 'utf8'), OUTSIDE_PAGE);
+        assert.deepEqual(fs.readdirSync(path.join(outside, 'papers')), ['invitation.html']);
+        assert.ok(!lines.some((l) => /wrote gazetteer/.test(l)), lines.join('\n'));
+        assert.ok(faults.some((f) => f.code === 'PROP_NOT_COPIED' && f.path === 'Documents/Invitation.md' && /is a link/.test(f.detail)), JSON.stringify(faults));
+        assert.doesNotMatch(s.player.read('documents', 'invitation.html'), /prop-link/);
+      } finally { s.cleanup(); }
+    });
+
+    it(`${where}: an unpublished prop's matching copy behind it is not deleted`, () => {
+      // Built once through a real folder, the copy is then moved behind the link: same bytes.
+      const { s, outside } = linked('', { sub, listed: false });
+      try {
+        const real = buildBoth({ 'Documents/Invitation.md': PROP('prop_address: gazetteer/papers/invitation.html\n'), ...PROP_FILES }, { sites: ['player'], player: { keep: ['gazetteer'] } });
+        const copy = real.player.read('gazetteer', 'papers', 'invitation.html');
+        real.cleanup();
+        fs.writeFileSync(path.join(outside, 'papers', 'invitation.html'), copy);
+        const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+        assert.equal(fs.readFileSync(path.join(outside, 'papers', 'invitation.html'), 'utf8'), copy);
+        assert.ok(lines.includes('  left in kept folder: gazetteer/papers/invitation.html (a folder on its path is a link)'), lines.join('\n'));
+      } finally { s.cleanup(); }
+    });
+  }
+
+  it('a stale copy whose bytes differ is left, and the build says so', () => {
+    const s = buildBoth({
+      'Documents/Invitation.md': PROP('prop_address: gazetteer/invitation.html\n'), ...PROP_FILES,
+      'Documents/Other.md': '---\ntype: document\n---\nOther.\n',
+      '_meta/publish-list.yaml': listFileText({ publishing: ['Documents/Other.md'] }),
+    }, { sites: [], player: { keep: ['gazetteer'] } });
+    try {
+      fs.mkdirSync(path.join(s.player.dir, 'gazetteer'), { recursive: true });
+      fs.writeFileSync(path.join(s.player.dir, 'gazetteer', 'invitation.html'), 'MINE');
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.equal(s.player.read('gazetteer', 'invitation.html'), 'MINE');
+      assert.ok(lines.includes('  left in kept folder: gazetteer/invitation.html (it differs from what the tool would write)'), lines.join('\n'));
+    } finally { s.cleanup(); }
+  });
+});

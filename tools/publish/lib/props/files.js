@@ -5,6 +5,7 @@
 // A page or SVG is written as cut (its Keeper parts and comments gone) when the plan says
 // so, never as the vault holds it; a link the plan respelled is respelled; the prop's own page gets the bar back to its
 // note. Everything else is copied as it is.
+const fs = require('fs');
 const path = require('path');
 const { cutHtml } = require('./html-cut');
 const { bytesOf } = require('./plan');
@@ -29,9 +30,10 @@ function shippedProps(plan) {
   return plannedProps(plan).filter((p) => bytesOf(p.files[0]) !== null);
 }
 
-// The site link from a note page to its prop: relative, encoded. null when its prop does not ship.
-function propHrefFor(plan, page) {
-  const prop = shippedProps(plan).find((p) => p.page === page);
+// The site link from a note page to its prop: relative, encoded. null when its prop does not
+// ship, or its own file is in `blocked` (outputs the build will not write).
+function propHrefFor(plan, page, blocked = new Set()) {
+  const prop = shippedProps(plan).find((p) => p.page === page && !blocked.has(p.files[0].out));
   return prop ? encodeHref(relativeHref(page.outputPath, prop.address)) : null;
 }
 
@@ -89,4 +91,21 @@ function keptCopyOutputs(plan) {
   return plan.props.filter((p) => p.keptCopies).flatMap((p) => outputsOf(p, p.keptCopies).outputs);
 }
 
-module.exports = { shippedProps, propHrefFor, propOutputs, keptCopyOutputs };
+// Whether a prop's output `out` may be written or removed in `outputDir`: every part of its
+// path that exists below the folder is a real folder (not a link, which would lead the write
+// out of the site), and the file itself, if there, a plain file. Returns null when it may, else
+// why not: 'link' or 'not a file'.
+function pathProblem(outputDir, out) {
+  const parts = String(out).split('/');
+  let at = outputDir;
+  for (const [i, part] of parts.entries()) {
+    at = path.join(at, part);
+    let stat;
+    try { stat = fs.lstatSync(at); } catch (e) { return null; }
+    if (stat.isSymbolicLink()) return 'link';
+    if (i < parts.length - 1 ? !stat.isDirectory() : !stat.isFile()) return 'not a file';
+  }
+  return null;
+}
+
+module.exports = { shippedProps, propHrefFor, propOutputs, keptCopyOutputs, pathProblem };

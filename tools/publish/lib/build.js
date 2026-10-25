@@ -44,7 +44,7 @@ const { sheetSourceOf } = require('./sheet-source');
 const { pcIdentity } = require('./templates/pc-identity');
 const { planProps } = require('./props/plan');
 const { takenAddresses } = require('./props/address');
-const { propHrefFor, propOutputs, keptCopyOutputs } = require('./props/files');
+const { propHrefFor, propOutputs, keptCopyOutputs, pathProblem } = require('./props/files');
 
 const TOOL_VERSION = require('../package.json').version;
 
@@ -1194,6 +1194,24 @@ function buildSite(options) {
   }
 
   cleanOutput();
+  // A prop file is never written through a link in the site folder (a kept folder can hold
+  // one): such a file is not written, and its note does not link it.
+  const propBlocked = new Set();
+  if (propPlan && writes === 'all') {
+    for (const p of propPlan.props) {
+      for (const f of p.ships && p.address ? p.files : []) {
+        const why = pathProblem(outputDir, f.out);
+        if (!why) continue;
+        propBlocked.add(f.out);
+        const detail = why === 'link' ? `${f.out} was not written: a folder on its path in the site folder is a link` : `${f.out} was not written: something that is not a file is at that address in the site folder`;
+        const row = { rel: p.rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail, fix: why === 'link' ? 'replace the link with a real folder, or give the prop another prop_address' : 'give the prop another prop_address' };
+        propPlan.problems.push(row);
+        console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
+      }
+      // A prop page that is not written takes the files it links with it.
+      if (p.files.length && propBlocked.has(p.files[0].out)) for (const f of p.files) propBlocked.add(f.out);
+    }
+  }
   // The GM site's folder is its own from here: the marker goes in first (finished: null) and is written again last.
   if (gm && writes === 'all') {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -1513,7 +1531,7 @@ function buildSite(options) {
             processed.html = sessionBodyHtml(page, { wrapUp, chapter, recapChars: publishConfig.limits.recap_chars });
           }
         }
-        html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap, pages, propHref: propHrefFor(propPlan, page) });
+        html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap, pages, propHref: propHrefFor(propPlan, page, propBlocked) });
         break;
       }
     }
@@ -2105,16 +2123,19 @@ function buildSite(options) {
         const key = f.out.toLowerCase();
         if (writing.has(key) || !kept.some((d) => key.startsWith(`${d}/`))) continue;
         const full = path.join(outputDir, ...f.out.split('/'));
-        let stat = null;
-        try { stat = fs.lstatSync(full); } catch (e) { continue; }
-        if (!stat.isFile()) continue;
+        if (!fs.existsSync(full)) continue;
+        const why = pathProblem(outputDir, f.out);
+        if (why === 'link') { console.log(`  left in kept folder: ${f.out} (a folder on its path is a link)`); continue; }
+        if (why) continue;
         const want = f.text !== undefined ? Buffer.from(f.text) : f.bytes;
-        if (!fs.readFileSync(full).equals(want)) continue;
+        if (!fs.readFileSync(full).equals(want)) { console.log(`  left in kept folder: ${f.out} (it differs from what the tool would write)`); continue; }
         fs.unlinkSync(full);
         console.log(`  removed from kept folder: ${f.out} (its prop is not published)`);
       }
     }
     for (const r of failed) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);
+    let written = 0;
+    const shipped = new Set();
     for (const f of outputs) {
       logWarnings(f.rel, f.warnings);
       if (audit && f.text !== undefined && /\.(?:html?|svg)$/i.test(f.out)) {
@@ -2122,16 +2143,23 @@ function buildSite(options) {
         audit.readAddresses(f.rel, f.text);
       }
       if (audit) audit.readFileName(f.rel, f.out);
-      if (writes !== 'all') continue;
+      if (writes !== 'all' || propBlocked.has(f.out)) continue;
+      if (pathProblem(outputDir, f.out)) {   // checked again as it is written
+        const row = { rel: f.rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: `${f.out} was not written: its path in the site folder is not a plain folder`, fix: 'give the prop another prop_address' };
+        propPlan.problems.push(row);
+        console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
+        continue;
+      }
+      written += 1;
       const full = path.join(outputDir, ...f.out.split('/'));
       ensureDir(full);
       if (f.isPage) writeHtml(full, f.text, propPlan.props.find((p) => p.rel === f.rel).page);
       else fs.writeFileSync(full, f.text !== undefined ? f.text : f.bytes);
       console.log(`  wrote ${f.out}`);
+      shipped.add(f.rel);
       if (f.replacesKept) console.log(`  replaces kept file: ${f.out}`);
     }
-    const shipped = new Set(outputs.map((f) => f.rel));
-    if (writes === 'all' && propPlan.props.length > 0) console.log(`Props: ${shipped.size} published (${outputs.length} files)`);
+    if (writes === 'all' && propPlan.props.length > 0) console.log(`Props: ${shipped.size} published (${written} files)`);
   }
 
   // Last thing before "Done", so it is the line the GM reads (#277). A session in Excluded
