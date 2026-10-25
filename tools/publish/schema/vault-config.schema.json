@@ -1045,6 +1045,63 @@
                   ]
                 }
               }
+            },
+            "latest_props": {
+              "description": "How many of the newest props the landing page shows in a box, with a link to all of them; 0 shows none",
+              "default": 0,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "props": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "title": {
+              "description": "The name of the page listing every prop the players have, and of its link in the menu. Plain text, shown as written",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "address": {
+              "description": "Where that page is on the site: a path ending in .html. One inside a folder the site keeps (player_site.keep) replaces the file there",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "cover": {
+              "description": "A picture at the top of the page. A file that is missing from the vault, or outside it, is reported and the page shows without it",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "intro": {
+              "description": "A paragraph under the title. Plain text, shown as written",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
             }
           }
         },
@@ -2058,6 +2115,62 @@
                   ]
                 }
               }
+            },
+            "latest_props": {
+              "description": "How many of the newest props the landing page shows in a box, with a link to all of them; 0 shows none",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "props": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "title": {
+              "description": "The name of the page listing every prop the players have, and of its link in the menu. Plain text, shown as written",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "address": {
+              "description": "Where that page is on the site: a path ending in .html. One inside a folder the site keeps (player_site.keep) replaces the file there",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "cover": {
+              "description": "A picture at the top of the page. A file that is missing from the vault, or outside it, is reported and the page shows without it",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "intro": {
+              "description": "A paragraph under the title. Plain text, shown as written",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
             }
           }
         },

@@ -1130,5 +1130,5 @@ ${bodyContent}`;
 
 module.exports = {
   indexTemplate, buildPillFilters, buildLocationTree, renderLocationsPage,
-  resolveLocationGrouping, partitionByPivot, renderDocuments,
+  resolveLocationGrouping, partitionByPivot, renderDocuments, sessionSortKey,
 };

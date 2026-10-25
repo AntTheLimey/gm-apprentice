@@ -1,0 +1,63 @@
+/* Decree: a proclamation on heavy paper inside a double-ruled border. The prop's title
+   is the black-letter heading; the issuer stands above it; a red wax seal with ribbon
+   tails closes the last sheet. */
+.prop-style-decree {
+  --ink: #241a12; --red: #8e2a1c;
+  margin: 0; min-height: 100vh; color: var(--ink);
+  background: radial-gradient(ellipse 120% 80% at 50% 0%, #33281c 0%, #1f1810 55%, #120e09 100%) fixed #120e09;
+  font-family: 'IM Fell English', Georgia, serif;
+}
+.decree-desk { padding: 1.6rem 16px 4rem; }
+
+.prop-style-decree .sheet { position: relative; box-sizing: border-box; width: min(210mm, 100%); min-height: calc(min(210mm, 100vw - 32px) * 1.414);
+  margin: 0 auto 2rem; display: flex; container-type: inline-size;
+  background:
+    radial-gradient(ellipse 70% 50% at 30% 20%, rgba(255, 250, 235, 0.5), transparent 70%),
+    radial-gradient(ellipse 80% 60% at 75% 95%, rgba(150, 110, 60, 0.18), transparent 70%),
+    linear-gradient(175deg, #f3ead3 0%, #ebdfc2 60%, #e2d3b0 100%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 14px 44px rgba(0, 0, 0, 0.55), inset 0 0 50px rgba(96, 68, 30, 0.2); }
+/* The border's margin, not the sheet's padding: padding on the size container would shrink every cqw inside it. */
+.decree .border { position: relative; flex: 1; display: flex; flex-direction: column; margin: 6cqw; padding: 6cqw 6.4cqw 7cqw;
+  border: 0.55cqw double rgba(36, 26, 18, 0.8); outline: 0.2cqw solid rgba(36, 26, 18, 0.55); outline-offset: 1.1cqw; }
+/* Corner ornaments. */
+.decree .border::before, .decree .border::after { content: "❦"; position: absolute; font-size: max(14px, 2.6cqw); color: var(--red); line-height: 1; }
+.decree .border::before { top: 1.2cqw; left: 1.4cqw; }
+.decree .border::after { bottom: 1.2cqw; right: 1.4cqw; transform: rotate(180deg); }
+
+.decree .issuer { margin: 0 0 0.6em; text-align: center; font-size: max(13px, 2cqw); letter-spacing: 0.24em; text-transform: uppercase; }
+.decree .heading { margin: 0; text-align: center; font-family: 'UnifrakturMaguntia', 'Old English Text MT', serif; font-weight: 400;
+  font-size: max(30px, 6.4cqw); line-height: 1.1; color: var(--ink); }
+.decree .flourish { margin: 0.5em auto 1.4em; width: 40%; height: 1.4cqw;
+  background: linear-gradient(var(--ink), var(--ink)) center / 100% 0.18cqw no-repeat,
+    radial-gradient(circle, var(--red) 0.55cqw, transparent 0.62cqw) center / 1.4cqw 1.4cqw no-repeat; }
+
+.decree .words { flex: 1; }
+.decree .prop-text { font-size: max(15px, 2.35cqw); line-height: 1.55; text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
+.decree .prop-text p { margin: 0 0 0.85em; }
+.decree.first-sheet .prop-text > p:first-child { display: flow-root; }
+.decree.first-sheet .prop-text > p:first-child::first-letter { float: left; margin: 0.04em 0.12em 0 0; font-family: 'UnifrakturMaguntia', serif;
+  font-size: 3.4em; line-height: 0.8; color: var(--red); }
+.decree .prop-text h1, .decree .prop-text h2, .decree .prop-text h3, .decree .prop-text h4 {
+  margin: 0.6em 0; font-family: 'UnifrakturMaguntia', serif; font-weight: 400; text-align: center; font-size: 1.5em; }
+.decree .prop-text hr { border: none; border-top: 0.18cqw solid rgba(36, 26, 18, 0.6); width: 30%; margin: 1em auto; }
+.decree .prop-text a { color: inherit; }
+
+/* The wax seal and its ribbon tails. */
+.decree .seal { position: relative; align-self: flex-end; width: max(96px, 18cqw); aspect-ratio: 1; margin: 2cqw 2cqw 6cqw 0; transform: rotate(-8deg); }
+.decree .seal::before, .decree .seal::after { content: ""; position: absolute; top: 62%; width: 26%; height: 72%;
+  background: linear-gradient(180deg, #7a2418, #5a1810); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 82%, 0 100%); }
+.decree .seal::before { left: 20%; transform: rotate(14deg); }
+.decree .seal::after { right: 20%; transform: rotate(-12deg); }
+.decree .seal span { position: absolute; inset: 0; z-index: 1; box-sizing: border-box; display: grid; place-items: center; padding: 22%;
+  border-radius: 47% 53% 50% 50% / 52% 48% 52% 48%;
+  background: radial-gradient(circle, transparent 0 59%, rgba(60, 12, 6, 0.5) 60% 61.5%, transparent 62.5%),
+    radial-gradient(circle at 38% 32%, #c05a40, #8a2f1f 55%, #5e1c11 85%);
+  box-shadow: inset 0 0.4cqw 0.9cqw rgba(255, 190, 150, 0.3), inset 0 -0.5cqw 1cqw rgba(0, 0, 0, 0.45), 0 0.3cqw 0.6cqw rgba(0, 0, 0, 0.35);
+  font-size: max(8px, 1.55cqw); line-height: 1.15; letter-spacing: 0.06em; text-align: center; text-transform: uppercase;
+  color: rgba(50, 10, 5, 0.8); text-shadow: 0 0.08cqw 0 rgba(255, 170, 140, 0.35); }
+
+@media print {
+  .prop-style-decree { background: none; min-height: 0; }
+  .decree-desk { padding: 0; }
+  .prop-style-decree .sheet { width: 100%; min-height: 100vh; margin: 0; box-shadow: inset 0 0 50px rgba(96, 68, 30, 0.15); }
+}

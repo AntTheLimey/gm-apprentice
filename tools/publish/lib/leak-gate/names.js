@@ -75,10 +75,10 @@ function nameFindings({ files, allFiles, hidden, findingId }) {
     }
   }
   // A copied file (a picture, a font) whose name holds a withheld name: the name is in its address. A page is not one
-  // (its address is its note's public name), and nor is a script or style the tool ships. A prop's page is: its address
-  // is the GM's own (prop_address) or its note's.
+  // (its address is its note's public name), and nor is a script or style the tool ships. A prop's page is, a page the
+  // tool makes for one too: its address is the GM's own (prop_address) or its note's.
   for (const rel of allFiles) {
-    if ((/\.html?$/i.test(rel) && !hidden.propFiles.has(canonicalNfc(rel))) || isToolFile(rel)) continue;
+    if ((/\.html?$/i.test(rel) && !hidden.propFiles.has(canonicalNfc(rel)) && !hidden.madeFiles.has(canonicalNfc(rel))) || isToolFile(rel)) continue;
     const address = foldQuotes(rel.replace(/\.[^./]+$/, ''));
     for (const n of secrets.names) {
       if (n.kind !== 'withheld') continue;

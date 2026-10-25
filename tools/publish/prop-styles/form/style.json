@@ -1,0 +1,10 @@
+{
+  "title": "Form",
+  "about": "Official hardcopy on pale stock: a coloured filing bar, punch holes, registration marks, a rubber stamp on the first sheet and a sheet tally.",
+  "fonts": ["Share Tech Mono"],
+  "fields": {
+    "prop_accent": "The issuing body's colour, as #rrggbb or a colour name, e.g. #2f5d50",
+    "prop_stamp": "The words of the rubber stamp on the first sheet, e.g. IMPOUNDED; no stamp when left out",
+    "prop_plate": "A caption above the sheets on screen; it never prints"
+  }
+}

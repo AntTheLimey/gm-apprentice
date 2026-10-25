@@ -14,6 +14,7 @@ const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub'
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
 const { noticeText } = require('./notice');
+const { fontNamesOfFile, licenceOf } = require('./font-names');
 const { getsNoPage } = require('./previews');
 const { runSteps, packageScripts, packageNotes } = require('./settings/steps');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
@@ -43,8 +44,12 @@ const { isOutOfPlay } = require('./pc-status');
 const { sheetSourceOf } = require('./sheet-source');
 const { pcIdentity } = require('./templates/pc-identity');
 const { planProps } = require('./props/plan');
-const { takenAddresses } = require('./props/address');
 const { propHrefFor, propOutputs, keptCopyOutputs, pathProblem } = require('./props/files');
+const { styledPage, styleFontFamilies, styledPageProblem, FONTS_CSS, BASE_CSS } = require('./props/page');
+const { containerItems, propRow, COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, placeCollection, propTaken, collectionModel, latestProps, shownRows } = require('./props/collection');
+const { layoutNames } = require('./props/layout');
+const { isWithheld, withheldPlaceholder, withheldNameMarked } = require('./processor');
+const { containerTemplate, collectionTemplate, containerItemsHtml } = require('./templates/props-page');
 
 const TOOL_VERSION = require('../package.json').version;
 
@@ -279,10 +284,11 @@ function buildSite(options) {
   const nm = (name) => nameIn(rawConfig.vaultPath, name);
   if (off && !dry) throw new Error(off);
   // Every HTML file goes through here: on the GM site it is marked (gmPage); on the player site it is written as made.
-  function writeHtml(full, html, page) {
+  // `gmCssHref`: where a page the tool makes with no style.css link (a styled prop page) finds css/gm.css.
+  function writeHtml(full, html, page, { gmCssHref = null } = {}) {
     fs.writeFileSync(full, gm ? gmPage(html, {
       marks: mark.marks, hiddenBecause: page && page.gmHiddenBecause, hidden: page && page.gmHidden,
-      linkMap: publishConfig._linkMap || {}, from: (page && page.outputPath) || '',
+      linkMap: publishConfig._linkMap || {}, from: (page && page.outputPath) || '', gmCssHref,
     }) : html);
   }
   // A JSON file the GM site writes holds no mark: the words between them are kept.
@@ -511,12 +517,21 @@ function buildSite(options) {
     console.warn(`  WARNING: ${fontsLib.GOOGLE_WARNING(names.join(', '))}`);
   }
 
+  // The typefaces the site serves from fonts/, for NOTICE.txt: each Google family by its folder and
+  // one of its files (whose name table says its copyright and licence), and the paths of the fonts
+  // the GM supplied. A file two sources share (a skin's and a style's typeface) is copied once.
+  const servedGoogleFonts = new Map();
+  const servedLocalFonts = [];
+  const fontsWritten = new Set();
   function copyFontFiles(files) {
     if (writes !== 'all') return;
     for (const f of files) {
+      if (fontsWritten.has(f.rel)) continue;
+      fontsWritten.add(f.rel);
       const dest = path.join(outputDir, 'fonts', f.rel);
       ensureDir(dest);
       fs.copyFileSync(f.from, dest);
+      if (f.family && !servedGoogleFonts.has(f.family)) servedGoogleFonts.set(f.family, { folder: f.rel.split('/')[0], from: f.from });
       console.log(`  wrote fonts/${f.rel}`);
     }
   }
@@ -579,6 +594,7 @@ function buildSite(options) {
       }
       ensureDir(dest);
       fs.copyFileSync(vaultFontPath, dest);
+      if (!servedLocalFonts.includes(outPath)) servedLocalFonts.push(outPath);
       console.log(`  wrote fonts/${outPath}`);
     }
   }
@@ -796,6 +812,15 @@ function buildSite(options) {
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
 
+  // The props page: one per site, when it publishes a prop note. Its address is decided here, so
+  // no prop takes it, the menu links it and each prop page's bar links it. A fast build writes no
+  // page of it, but its sheets' menus link it as a full build's do.
+  const keptDirs = gm ? [] : config.preserveDirs;
+  const placed = placeCollection({ pages, settingsLike: publishConfig, pageOutputs: pages.map((p) => p.outputPath), keptDirs, site: gm ? 'gm' : 'player', name: nm('player_site.props.address') });
+  if (placed.warning) console.warn(`  WARNING: ${placed.warning}`);
+  // A [[wikilink]] in the words prints as its name, as the landing banner's does.
+  let collection = placed.collection && { ...placed.collection, title: plainMetaValue(placed.collection.title), intro: placed.collection.intro && plainMetaValue(placed.collection.intro) };
+
   // The props the player site ships: a prop note's own file, at its address, with the files
   // it links. A prop ships with its note's full page; a stub's prop does not. A fast build
   // plans none. The doctor reads the plan from publishConfig._props.
@@ -803,7 +828,7 @@ function buildSite(options) {
     vaultPath: config.vaultPath, pages: corpus, relOf: vaultRelPathOf,
     // The GM site shows every prop of every note it shows, uncut while Keeper blocks are on; it keeps no folder.
     ships: gm ? (p) => pages.includes(p) : (p) => pages.includes(p) && publishMode(p.sourceFrontmatter || p.frontmatter) !== 'stub',
-    taken: takenAddresses({ pageOutputs: pages.map((p) => p.outputPath), keptDirs: gm ? [] : config.preserveDirs }),
+    taken: propTaken({ pageOutputs: pages.map((p) => p.outputPath), keptDirs, collection }),
     cutKeeper: gm ? !show.has('gm_only_blocks') : true, cleanup: writes === 'all' && !gm,
   });
   publishConfig._props = propPlan;
@@ -1215,6 +1240,14 @@ function buildSite(options) {
       if (p.files.length && propBlocked.has(p.files[0].out)) for (const f of p.files) propBlocked.add(f.out);
     }
   }
+  // The props page is never written through a link either: then the site has none, and nothing links it.
+  // A full build looks after the clean; the doctor and a sheets-only build (which cleans nothing) look
+  // only in a kept folder, all that a full build's clean would leave, so all three link it alike.
+  const keptOnSite = (out) => !gm && config.preserveDirs.some((kept) => kept.toLowerCase() === out.split('/')[0].toLowerCase());
+  if (collection && (writes === 'all' || keptOnSite(collection.address)) && pathProblem(outputDir, collection.address)) {
+    console.warn(`  WARNING: ${nm('player_site.props.address')} "${collection.address}": its path in the site folder is not a plain folder, so the site has no props page`);
+    collection = null;
+  }
   // The GM site's folder is its own from here: the marker goes in first (finished: null) and is written again last.
   if (gm && writes === 'all') {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -1265,12 +1298,6 @@ function buildSite(options) {
 
   writeNoJekyll();
 
-  // The licence notices for what the site ships (#428).
-  if (writes === 'all') {
-    fs.writeFileSync(path.join(outputDir, 'NOTICE.txt'), noticeText({ lunr: !!searchData }));
-    console.log('  wrote NOTICE.txt');
-  }
-
   // Write search index (only if search is enabled)
   if (writes !== 'all') {
     // nothing is written
@@ -1310,7 +1337,9 @@ function buildSite(options) {
     }
     menuExtra.push({ label: item.label, href: read.href, external: read.kind === 'outside', group: item.group || null });
   }
-  const navFor = generateNav(pages, { hasStory, timelineHref, extra: menuExtra });
+  const navFor = generateNav(pages, { hasStory, timelineHref, extra: menuExtra, collection: collection ? { href: collection.address, label: collection.title } : null });
+  // The props page's link from a page at `out`, for its bar: relative, encoded; null when the site has none.
+  const collectionHrefFrom = (out) => (collection ? encodeHref(relativeHref(out, collection.address)) : null);
 
   // Render each page
   const usedImages = new Set();
@@ -1664,6 +1693,83 @@ function buildSite(options) {
     if (stale.length) throw new Error(`${stale.join(', ')} ${stale.length === 1 ? 'is' : 'are'} on the site but a full build would no longer write ${stale.length === 1 ? 'it' : 'them'}. Run a full build (gm-apprentice-publish build --site ${gm ? 'gm' : 'player'}); a sheets-only build deletes nothing. Nothing was written.`);
   }
 
+  // The pages the tool makes for props that name a style, made before the note pages so a note
+  // links only a page that was made. A held prop's page is never made: its words would pass
+  // through the build. The words are the note page's own player view of `## The Text`, on the GM
+  // site too (the GM sees the Keeper parts on the note page). Then each container's page, which lists
+  // what it holds, so a row links only a page that was made; one that names a style fills its layout.
+  // The styles' typefaces are served from the site, from the vault's font cache: a miss warns once.
+  let styleFonts = { css: '', files: [] };
+  let collectionBuilt = null;   // the props page's model (collectionModel), made with the container pages
+  if (propPlan) {
+    const noPage = (p, problem) => {
+      const row = { rel: p.rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: problem.detail, fix: problem.fix };
+      propPlan.problems.push(row);
+      console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
+      propBlocked.add(p.address);
+    };
+    const styled = [];
+    for (const p of propPlan.props) {
+      if (!p.ships || !p.address || p.made !== 'style' || p.kind === 'container' || propBlocked.has(p.address)) continue;
+      const problem = styledPageProblem(p, p.page.publishedMarkdown);
+      if (problem) {
+        noPage(p, problem);
+        continue;
+      }
+      styled.push(p);
+    }
+    const containers = propPlan.props.filter((p) => p.ships && p.address && p.kind === 'container' && p.made && !propBlocked.has(p.address));
+    // A container whose style has no place for its list gets the site's own look, and the GM is told.
+    for (const p of containers) {
+      if (!p.style || [p.style.layout, p.style.sheet].some((t) => layoutNames(t).includes('items'))) continue;
+      const row = { rel: p.rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: `the style "${p.style.name}" has no {{{items}}} place, so the container's page uses the site's own look`, fix: 'use a style made for containers, or remove prop_style from the container' };
+      propPlan.problems.push(row);
+      console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
+      p.style = null;   // so none of the style's files or typefaces ship on its account
+    }
+    const families = [...new Set([...styled, ...containers.filter((p) => p.style)].flatMap((p) => styleFontFamilies(p.style, p.page.frontmatter || {})))];
+    if (families.length) {
+      let warned = false;
+      styleFonts = fontsLib.selfHostedFontFaces(config.vaultPath, families, () => {
+        if (warned) return;
+        warned = true;
+        console.warn(`  WARNING: the typefaces for the prop styles are not in the vault's font cache and could not be downloaded; the styles use fallback type. ${fontsLib.missAdvice(options.offline === true)}`);
+      }, { offline: options.offline === true, fontsHref: '../../fonts/' });
+    }
+    for (const p of styled) {
+      const made = styledPage({ prop: p, style: p.style, page: p.page, linkMap, imageMap, usedImages, collectionHref: collectionHrefFrom(p.address), fontsCss: styleFonts.css !== '' });
+      if (made.problem) noPage(p, made.problem);
+      else p.made_html = made.html;
+    }
+    // What a listing shows is the note pages this site publishes; on the GM site, a row the
+    // player site does not publish is marked.
+    const shown = new Set(pages);
+    const pageAt = new Map(pages.map((pg) => [pg.outputPath, pg]));
+    const misplaced = [];
+    // On the GM site a withheld note the player site does not publish is named inside the usual withheld mark.
+    const nameOf = (pg, text) => (gm && isWithheld(pg.sourceFrontmatter || pg.frontmatter) && !onPlayerSite.has(pg)
+      ? withheldNameMarked(text, withheldPlaceholder((pg.sourceFrontmatter || pg.frontmatter).type, publishConfig.withheld_words), mark)
+      : text);
+    // How every listing reads a row: the same for a container's page and the props page.
+    const rowOptions = {
+      isShown: (pg) => shown.has(pg), excludeFields, fieldOverrides, site: gm ? 'gm' : 'player', nameOf, blocked: propBlocked,
+      resolvePage: (target) => pageAt.get(linkMap[target]) || null, isPlayerShown: gm ? (pg) => onPlayerSite.has(pg) : null,
+    };
+    const listed = containerItems({ props: propPlan.props, ...rowOptions, problems: misplaced });
+    for (const row of misplaced) {
+      propPlan.problems.push(row);
+      console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
+    }
+    // The props page lists the same rows, so a prop reads alike on every page that lists it.
+    collectionBuilt = collectionModel({ plan: propPlan, containers: listed, settings: collection, ...rowOptions, rowOf: (p) => propRow(p, rowOptions) });
+    for (const p of containers) {
+      const { rows, title, noteTitle } = listed.get(p.rel);
+      p.made_html = p.style
+        ? styledPage({ prop: p, style: p.style, page: p.page, linkMap, imageMap, usedImages, collectionHref: collectionHrefFrom(p.address), fontsCss: styleFonts.css !== '', items: containerItemsHtml(rows, p.address), names: { title, noteTitle } }).html
+        : containerTemplate({ container: p, rows, address: p.address, title, noteTitle }, navFor, config, publishConfig, { linkMap, imageMap, usedImages });
+    }
+  }
+
   // Published NPC pages whose body runs session by session (story-sessions.js), in page order.
   const npcStories = [];
   // Each PC page's own backstory (processed, GM-only text already stripped or marked), kept for its story page's prologue.
@@ -1936,6 +2042,25 @@ function buildSite(options) {
     }
   }
 
+  // The props page's cover picture and words, resolved once: a web address as written, a vault picture copied
+  // as the landing banner's is (to images/banners/props/). Then the landing page's box of the newest props.
+  let collectionResolved = false;
+  function resolveCollection() {
+    if (collectionResolved || !collectionBuilt) return;
+    collectionResolved = true;
+    const cover = collectionBuilt.cover;
+    if (cover && !isWebImageAddress(cover)) {
+      const imageFull = resolveVaultAsset(cover, nm('player_site.props.cover'));
+      collectionBuilt.cover = imageFull ? (writes !== 'all' ? `images/banners/props/${path.basename(imageFull)}` : copyBannerAsset(imageFull, 'props')) : null;
+      // Named after the vault's file, as a section banner is: a withheld name in it is in its address.
+      if (imageFull && !gm) audit.readFileName(canonicalNfc(String(cover).replace(/\\/g, '/')), collectionBuilt.cover);
+    }
+    const latest = collection.latest > 0 ? latestProps(collectionBuilt, collection.latest) : [];
+    publishConfig._propsLatest = latest.length
+      ? { title: collectionBuilt.title, href: collectionBuilt.address, rows: latest, total: shownRows(collectionBuilt).length }
+      : null;
+  }
+
   const pcRoster = pages.find(isRoster);
   const pcRedirectTarget = pcRoster ? pcRoster.outputPath : null;
 
@@ -1995,6 +2120,20 @@ function buildSite(options) {
     if (live) characterStories = buildCharacterStories();
     if (spine.length || characterStories.length || npcStories.length) {
       emit('story.html', storyLanding(spine, characterStories, config, publishConfig, navFor, npcStories), '  wrote story.html');
+    }
+
+    // The props page. One set in a kept folder replaces the file there, and the build says so.
+    if (collectionBuilt) {
+      resolveCollection();
+      const out = collectionBuilt.address;
+      const full = path.join(outputDir, ...out.split('/'));
+      if (live && !dry && pathProblem(outputDir, out)) {
+        console.warn(`  WARNING: ${out} was not written: its path in the site folder is not a plain folder`);
+      } else {
+        const replaced = live && !dry && collection.replacesKept && fs.existsSync(full);
+        emit(out, collectionTemplate(collectionBuilt, navFor, config, publishConfig), `  wrote ${out}`);
+        if (replaced) console.log(`  replaces kept file: ${out}`);
+      }
     }
 
     // Landing page
@@ -2115,8 +2254,9 @@ function buildSite(options) {
 
   // Each prop's files, read by the note-faults audit as they are written: a withheld name in a
   // prop page, or in the name of any file a prop puts on the site, is a fault of its note.
+  const stylesWritten = new Set();   // the styles of the styled pages written
   if (propPlan) {
-    const { outputs, failed } = propOutputs(propPlan);
+    const { outputs, failed } = propOutputs(propPlan, { collectionAddress: collection && collection.address });
     propPlan.problems.push(...failed);
     // A kept folder is never cleaned, so a prop written into one by an earlier build would
     // outlive its note: each file still holding exactly what the tool wrote there goes. A
@@ -2124,7 +2264,9 @@ function buildSite(options) {
     if (writes === 'all') {
       const writing = new Set(outputs.map((f) => f.out.toLowerCase()));
       const kept = config.preserveDirs.map((d) => d.toLowerCase().replace(/\/+$/, ''));
-      for (const f of keptCopyOutputs(propPlan)) {
+      // Its bar linked the props page if that build had one: at this build's address, or a default.
+      const collectionAddresses = [...new Set([null, collection && collection.address, COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf(publishConfig).address])];
+      for (const f of keptCopyOutputs(propPlan, { collectionAddresses })) {
         const key = f.out.toLowerCase();
         if (writing.has(key) || !kept.some((d) => key.startsWith(`${d}/`))) continue;
         const full = path.join(outputDir, ...f.out.split('/'));
@@ -2132,8 +2274,8 @@ function buildSite(options) {
         const why = pathProblem(outputDir, f.out);
         if (why === 'link') { console.log(`  left in kept folder: ${f.out} (a folder on its path is a link)`); continue; }
         if (why) continue;
-        const want = f.text !== undefined ? Buffer.from(f.text) : f.bytes;
-        if (!fs.readFileSync(full).equals(want)) { console.log(`  left in kept folder: ${f.out} (it differs from what the tool would write)`); continue; }
+        const have = fs.readFileSync(full);
+        if (!f.wants.some((want) => have.equals(want))) { console.log(`  left in kept folder: ${f.out} (it differs from what the tool would write)`); continue; }
         fs.unlinkSync(full);
         console.log(`  removed from kept folder: ${f.out} (its prop is not published)`);
       }
@@ -2156,17 +2298,71 @@ function buildSite(options) {
         continue;
       }
       written += 1;
+      if (typeof f.made === 'string') stylesWritten.add(f.made);
       const full = path.join(outputDir, ...f.out.split('/'));
       ensureDir(full);
       const replaced = f.replacesKept && fs.existsSync(full);
-      if (f.isPage) writeHtml(full, f.text, propPlan.props.find((p) => p.rel === f.rel).page);
+      if (f.isPage) writeHtml(full, f.text, propPlan.props.find((p) => p.rel === f.rel).page, { gmCssHref: f.made ? encodeHref(relativeHref(f.out, 'css/gm.css')) : null });
       else fs.writeFileSync(full, f.text !== undefined ? f.text : f.bytes);
       console.log(`  wrote ${f.out}`);
       if (f.was) console.log(`  ${f.out}: written as UTF-8 (it was ${f.was})`);
       shipped.add(f.rel);
       if (replaced) console.log(`  replaces kept file: ${f.out}`);
     }
+    // The files of each style a made page uses are read by the note-faults audit as the first
+    // prop (by vault path) that uses the style: a withheld name in one of their names is that note's fault.
+    const styleUser = new Map();
+    for (const p of propPlan.props.filter((x) => typeof x.made_html === 'string' && x.style && !propBlocked.has(x.address))
+      .sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0))) {
+      if (!styleUser.has(p.style.name)) styleUser.set(p.style.name, p.rel);
+    }
+    const usedStyles = propPlan.styles.filter((st) => styleUser.has(st.name));
+    if (audit) for (const st of usedStyles) for (const f of st.files) audit.readFileName(styleUser.get(st.name), f.out);
+    // Those files, the tool's base sheet and the styles' fonts are written only when a styled page
+    // is, and never through a link in the site folder: one that would be is a problem of that note.
+    const writeFile = (out, data, rel, what) => {
+      if (pathProblem(outputDir, out)) {
+        const row = { rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: `${out} (${what}) was not written: its path in the site folder is not a plain folder`, fix: 'replace the link in the site folder with a real folder' };
+        propPlan.problems.push(row);
+        console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
+        return;
+      }
+      const full = path.join(outputDir, ...out.split('/'));
+      ensureDir(full);
+      fs.writeFileSync(full, data);
+      written += 1;
+      console.log(`  wrote ${out}`);
+    };
+    const writtenStyles = usedStyles.filter((st) => stylesWritten.has(st.name));
+    if (writtenStyles.length > 0) {
+      const first = styleUser.get(writtenStyles[0].name);
+      writeFile(BASE_CSS, fs.readFileSync(path.join(__dirname, '../css/props.css')), first, "the styled pages' base sheet");
+      for (const st of writtenStyles) {
+        if (st.replaces) console.log(`  style "${st.name}": the vault's own (_meta/prop-styles/${st.name}) replaces the plugin's`);
+        for (const f of st.files) writeFile(f.out, fs.readFileSync(f.source), styleUser.get(st.name), `a file of the style "${st.name}"`);
+      }
+      if (styleFonts.css) {
+        writeFile(FONTS_CSS, styleFonts.css, first, "the prop styles' typefaces");
+        copyFontFiles(styleFonts.files);
+      }
+    }
     if (writes === 'all' && propPlan.props.length > 0) console.log(`Props: ${shipped.size} published (${written} files)`);
+  }
+
+  // The licence notices for what the site ships (#428): written once everything else is, so it
+  // names every style and typeface the build put on the site.
+  if (writes === 'all') {
+    const styles = propPlan ? propPlan.styles.filter((st) => st.from === 'plugin' && stylesWritten.has(st.name)).map((st) => st.name) : [];
+    // Each Google font's copyright and licence, from its own file. One whose file does not say a
+    // licence the tool knows is listed with its licence page, and the build says so.
+    const googleFonts = [...servedGoogleFonts].map(([family, { folder, from }]) => {
+      const names = fontNamesOfFile(from);
+      const licence = names ? licenceOf(names.licenceUrl) : null;
+      if (!licence) console.warn(`  WARNING: the licence of the font "${family}" (fonts/${folder}/) could not be read from its file; NOTICE.txt points to its licence page on Google Fonts instead`);
+      return { family, folder, copyright: names ? names.copyright : null, licence };
+    });
+    fs.writeFileSync(path.join(outputDir, 'NOTICE.txt'), noticeText({ lunr: !!searchData, styles, googleFonts, localFonts: servedLocalFonts }));
+    console.log('  wrote NOTICE.txt');
   }
 
   // Last thing before "Done", so it is the line the GM reads (#277). A session in Excluded

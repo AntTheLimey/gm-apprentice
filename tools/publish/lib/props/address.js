@@ -8,8 +8,11 @@ const { DIR_LABELS } = require('../templates/base');
 
 const PROP_FILE_EXTS = new Set(['.html', '.htm', '.svg', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif']);
 
+// What `has()` says of an address a built page holds.
+const PAGE_TAKER = 'a page the site builds';
+
 const RESERVED_FILES = ['index.html', '404.html', 'story.html', 'timeline.html', 'previews.json', 'search-index.json', 'robots.txt', 'gm-build.json', 'NOTICE.txt', '.nojekyll', 'props/index.html'];
-const RESERVED_PREFIXES = ['css/', 'js/', 'images/', 'fonts/', 'story/'];
+const RESERVED_PREFIXES = ['css/', 'js/', 'images/', 'fonts/', 'story/', 'props/styles/'];
 
 // Two addresses are the same file when they match after NFC and case folding.
 function addressKey(a) {
@@ -27,6 +30,13 @@ function defaultPropAddress(noteRel, fileExt) {
   return `props/${slugify(canonicalNfc(name).replace(/_/g, ' '))}${normExt(fileExt)}`;
 }
 
+// The one other default a prop tries when a built page holds its default (a note kept in a
+// Props/ folder has its page at props/<slug>.html): props/<slug>-prop<ext>.
+function fallbackPropAddress(address) {
+  const ext = path.posix.extname(address);
+  return `${address.slice(0, address.length - ext.length)}-prop${ext}`;
+}
+
 function addressShapeProblem(address, fileExt) {
   const a = String(address);
   const notRelative = 'is not a relative site path';
@@ -40,11 +50,12 @@ function addressShapeProblem(address, fileExt) {
 // `has(address, { explicit })` says why an address is taken, or null. A kept folder
 // (`player_site.keep`) refuses only a default address: an explicit `prop_address` there
 // replaces the kept file.
+// `keeps(address)`: whether the address is inside a kept folder, whatever else holds it.
 function takenAddresses({ pageOutputs = [], keptDirs = [] } = {}) {
   const files = new Map();
   for (const f of RESERVED_FILES) files.set(addressKey(f), 'a file the site needs');
   for (const dir of Object.keys(DIR_LABELS)) files.set(addressKey(`${dir}/index.html`), `the ${dir} index page`);
-  for (const p of pageOutputs) files.set(addressKey(p), 'a page the site builds');
+  for (const p of pageOutputs) files.set(addressKey(p), PAGE_TAKER);
   const prefixes = RESERVED_PREFIXES.map(addressKey);
   const kept = keptDirs.map((d) => addressKey(d).replace(/\/+$/, ''));
   return {
@@ -59,7 +70,11 @@ function takenAddresses({ pageOutputs = [], keptDirs = [] } = {}) {
       }
       return null;
     },
+    keeps(address) {
+      const key = addressKey(address);
+      return kept.some((d) => key.startsWith(`${d}/`));
+    },
   };
 }
 
-module.exports = { PROP_FILE_EXTS, addressKey, defaultPropAddress, addressShapeProblem, takenAddresses, RESERVED_FILES, RESERVED_PREFIXES };
+module.exports = { PROP_FILE_EXTS, PAGE_TAKER, addressKey, defaultPropAddress, fallbackPropAddress, addressShapeProblem, takenAddresses, RESERVED_FILES, RESERVED_PREFIXES };

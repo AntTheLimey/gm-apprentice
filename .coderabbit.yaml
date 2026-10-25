@@ -3,3 +3,10 @@ reviews:
   path_filters:
     - "!tests/fixtures/**"
     - "!tools/publish/node_modules/**"
+    - "!tools/publish/test/fixtures/**"
+    - "!tools/publish/licenses/**"
+    - "!tools/publish/schema/vault-config.schema.json"
+    - "!skills/shared/template-history.json"
+    - "!docs/site-settings.md"
+    - "!tools/publish/package-lock.json"
+    - "!.claude-plugin/plugin.json"

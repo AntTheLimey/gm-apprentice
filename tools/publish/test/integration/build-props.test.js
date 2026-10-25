@@ -149,7 +149,7 @@ describe('props that do not ship', () => {
     try {
       assert.ok(s.player.exists('documents', 'invitation.html'));
       assert.doesNotMatch(s.player.read('documents', 'invitation.html'), /prop-link/);
-      assert.ok(!s.player.exists('props'));
+      assert.deepEqual(s.player.files().map((f) => path.relative(s.player.dir, f).split(path.sep).join('/')).filter((f) => f.startsWith('props/')), ['props/index.html'], 'only the props page');
     } finally { s.cleanup(); }
   });
 
@@ -191,7 +191,7 @@ describe('what cannot ship is a warning', () => {
       assert.ok(s.player.exists('documents', 'invitation.html'));
       assert.doesNotMatch(s.player.read('documents', 'invitation.html'), /prop-link/);
       assert.ok(s.logs.some((l) => /WARNING: Documents\/Invitation\.md: the prop file "invitation\.html" is not in Documents/.test(l)), s.logs.join('\n'));
-      assert.ok(!s.player.exists('props'));
+      assert.deepEqual(s.player.files().map((f) => path.relative(s.player.dir, f).split(path.sep).join('/')).filter((f) => f.startsWith('props/')), ['props/index.html'], 'only the props page');
     } finally { s.cleanup(); }
   });
 
@@ -239,15 +239,17 @@ describe('PROP_NOT_COPIED in the doctor and the summary', () => {
   it('the build summary counts the props and names the worst three notes', () => {
     const row = (p) => ({ code: 'PROP_NOT_COPIED', severity: 'warning', path: p, detail: 'd', fix: 'f' });
     assert.deepEqual(summaryLines([row('Documents/A.md')]),
-      ["1 prop file could not be put on the site (A) — campaign-qa's Site Faults check fixes it."]);
+      ["1 prop could not be put on the site as asked (A) — campaign-qa's Site Faults check fixes it."]);
+    assert.deepEqual(summaryLines([row('Documents/A.md'), row('Documents/A.md')]),
+      ["1 prop could not be put on the site as asked (A) — campaign-qa's Site Faults check fixes it."]);
     assert.deepEqual(summaryLines(['A', 'B', 'C', 'D'].map((n) => row(`Documents/${n}.md`))),
-      ["4 prop files could not be put on the site (A, B, C) — campaign-qa's Site Faults check fixes these."]);
+      ["4 props could not be put on the site as asked (A, B, C) — campaign-qa's Site Faults check fixes these."]);
   });
 
   it('the build prints the summary line', () => {
     const s = buildBoth({ 'Documents/Invitation.md': PROP() }, { sites: ['player'] });
     try {
-      assert.ok(s.logs.includes("  WARNING: 1 prop file could not be put on the site (Invitation) — campaign-qa's Site Faults check fixes it."), s.logs.join('\n'));
+      assert.ok(s.logs.includes("  WARNING: 1 prop could not be put on the site as asked (Invitation) — campaign-qa's Site Faults check fixes it."), s.logs.join('\n'));
     } finally { s.cleanup(); }
   });
 });
@@ -269,7 +271,7 @@ describe('other kinds of prop', () => {
     try {
       assert.ok(s.player.exists('documents', 'invitation.html'));
       assert.doesNotMatch(s.player.read('documents', 'invitation.html'), /prop-link/);
-      assert.ok(!s.player.exists('props'));
+      assert.deepEqual(s.player.files().map((f) => path.relative(s.player.dir, f).split(path.sep).join('/')).filter((f) => f.startsWith('props/')), ['props/index.html'], 'only the props page');
       assert.ok(!s.logs.some((l) => /Invitation/.test(l)), s.logs.join('\n'));
     } finally { s.cleanup(); }
   });

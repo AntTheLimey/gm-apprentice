@@ -228,8 +228,11 @@ function missAdvice(offline) {
 }
 
 // Sync, cache-only. Returns { css, files } where files are the cached fonts to copy to the
-// output; families with no cache warn and contribute nothing.
+// output ({ from, rel, family }, rel under the site's fonts/); families with no cache warn and
+// contribute nothing. `opts.fontsHref`: the site's fonts/ folder as the stylesheet that holds
+// the rules sees it (default '../fonts/', for a stylesheet in css/).
 function selfHostedFontFaces(vaultPath, families, warn = console.warn, opts = {}) {
+  const fontsHref = opts.fontsHref || '../fonts/';
   const rules = [];
   const files = [];
   for (const family of families) {
@@ -247,9 +250,9 @@ function selfHostedFontFaces(vaultPath, families, warn = console.warn, opts = {}
     const dir = familyDir(vaultPath, family);
     for (const f of faces) {
       const range = f.unicodeRange ? `\n  unicode-range: ${f.unicodeRange};` : '';
-      rules.push(`@font-face {\n  font-family: '${family}';\n  font-style: ${f.style};\n  font-weight: ${f.weight};\n  font-display: swap;\n  src: url('../fonts/${slug}/${f.file}') format('woff2');${range}\n}`);
+      rules.push(`@font-face {\n  font-family: '${family}';\n  font-style: ${f.style};\n  font-weight: ${f.weight};\n  font-display: swap;\n  src: url('${fontsHref}${slug}/${f.file}') format('woff2');${range}\n}`);
       const rel = `${slug}/${f.file}`;
-      if (!files.some(x => x.rel === rel)) files.push({ from: path.join(dir, f.file), rel });
+      if (!files.some(x => x.rel === rel)) files.push({ from: path.join(dir, f.file), rel, family });
     }
   }
   return { css: rules.length ? rules.join('\n') + '\n\n' : '', files };
@@ -293,6 +296,7 @@ async function prefetchForConfig(configPath, opts = {}) {
     await ensureFontCache(vaultPath, selfHostFamilies(fonts, presetFamiliesFor(publishConfig.theme)), opts);
   }
   await prefetchSkinFonts(siteConfig, vaultPath, publishConfig, opts);
+  await prefetchStyleFonts(siteConfig, vaultPath, publishConfig, opts);
 }
 
 // A sheet skin's typefaces are always served from the site, whatever theme.fonts.source says.
@@ -302,6 +306,29 @@ async function prefetchSkinFonts(config, vaultPath, publishConfig, opts) {
   const { fontFamiliesFor, skinsInVault } = require('./skins');
   const scanConfig = scanConfigFor(Object.assign({}, config, { vaultPath }), publishConfig);
   const families = fontFamiliesFor(skinsInVault(scanConfig, publishConfig.sheetLook));
+  if (families.length) await ensureFontCache(vaultPath, families, Object.assign({}, opts, { warn: () => {} }));
+}
+
+// A prop style's typefaces are served from the site too: every prop note that names a style, read
+// through the GM site's scan (the wider of the two sites'). A superset of what ships (a held prop's
+// style counts), as for the skins: fetching one face too many is harmless. The build reports a miss once.
+async function prefetchStyleFonts(config, vaultPath, publishConfig, opts) {
+  const { scanVaultReport } = require('./scanner');
+  const { ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
+  const { isPropNote, propFileOf, propStyleOf } = require('./props/note');
+  const { styleLoader } = require('./props/styles');
+  const { styleFontFamilies } = require('./props/page');
+  // Every folder the GM site reads (build.js), so a styled prop only the GM site shows gets its typefaces too.
+  const scanConfig = Object.assign({}, config, { vaultPath, excludeDirs: ALWAYS_EXCLUDE_DIRS });
+  const styles = styleLoader({ vaultPath });
+  const families = [];
+  for (const page of scanVaultReport(scanConfig, { quiet: true }).pages) {
+    const fm = page.frontmatter || {};
+    const name = isPropNote(fm) && !propFileOf(fm) ? propStyleOf(fm) : null;
+    const loaded = name ? styles(name) : null;
+    if (!loaded || !loaded.style) continue;
+    for (const f of styleFontFamilies(loaded.style, fm)) if (!families.includes(f)) families.push(f);
+  }
   if (families.length) await ensureFontCache(vaultPath, families, Object.assign({}, opts, { warn: () => {} }));
 }
 
@@ -319,5 +346,5 @@ const GOOGLE_WARNING = (names) => `Custom fonts ${names} are loaded from Google 
 module.exports = {
   GENERIC_FAMILIES, CACHE_DIR, AXIS_CANDIDATES, GOOGLE_WARNING,
   isValidFamily, slugFor, selfHostFamilies, presetImportFamilies, parseFontFaces,
-  readFamilyCache, ensureFontCache, missAdvice, selfHostedFontFaces, prefetchForConfig, presetFamiliesFor, googleFontsFor, buildWithFonts,
+  readFamilyCache, ensureFontCache, missAdvice, selfHostedFontFaces, prefetchForConfig, prefetchStyleFonts, presetFamiliesFor, googleFontsFor, buildWithFonts,
 };

@@ -62,6 +62,12 @@ function generateNavGroups(pages, options = {}) {
       return { name: group.name, links };
     });
 
+  // The props page (`options.collection`: { href, label }) closes the Reference group's own links.
+  if (options.collection) {
+    const at = NAV_GROUPS.findIndex(g => g.name === 'Reference');
+    built[at].links.push({ label: options.collection.label, href: options.collection.href });
+  }
+
   // The GM's own entries (`player_site.menu_extra`, already resolved by the build) join their group after
   // its own links. A group of the menu with no page of its own is shown when an entry names it; a name that is
   // none of the four makes a group after them. An entry with no group is not a group's: renderTopNav stands it alone.

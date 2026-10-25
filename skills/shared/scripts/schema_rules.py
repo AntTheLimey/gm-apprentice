@@ -113,6 +113,8 @@ FACTION_STATUS = frozenset({"active", "weakened", "destroyed", "allied", "dorman
 # What a prop is: a made page or text, a physical thing, a drawing, a file the
 # GM supplies, or a holder for other props.
 PROP_KINDS = frozenset({"document", "object", "diagram", "supplied", "container"})
+# Whether a container lists the items players have not found yet, by title alone.
+PROP_SHOW_SEALED = frozenset({"titles", "none"})
 
 # The values a field takes, by note type ("*": any type). CHECKED_VALUES is
 # what both checks (vault_check.py frontmatter, scripts/validate_schema.py)
@@ -132,7 +134,7 @@ CHECKED_VALUES: dict[str, dict[str, frozenset[str]]] = {
                           "scope": frozenset(ADVENTURE_BRIEF_SCOPE)},
     "world_domain": {"status": frozenset(WORLD_DOMAIN_STATUS)},
     "plan": {"plan_type": frozenset(PLAN_TYPES)},
-    "prop": {"prop_kind": PROP_KINDS},
+    "prop": {"prop_kind": PROP_KINDS, "show_sealed": PROP_SHOW_SEALED},
 }
 # Another spelling a checked field accepts: spelling -> the value it means.
 VALUE_ALIASES: dict[str, dict[str, dict[str, str]]] = {

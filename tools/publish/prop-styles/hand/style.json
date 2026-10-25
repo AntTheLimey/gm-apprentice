@@ -1,0 +1,10 @@
+{
+  "title": "Handwritten scrap",
+  "about": "A note written by hand on a scrap of paper folded in nine, lying on a dark desk; it prints on a white page, ready to cut out and fold.",
+  "fonts": ["Reenie Beanie", "Share Tech Mono"],
+  "fields": {
+    "prop_font": "The writer's hand: a Google Fonts family, e.g. Covered By Your Grace (Reenie Beanie when left out)",
+    "prop_paper": "The paper: chart for ruled chart paper with a margin line; plain when left out",
+    "prop_plate": "A caption above the sheets on screen; it never prints"
+  }
+}

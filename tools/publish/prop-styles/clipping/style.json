@@ -1,0 +1,9 @@
+{
+  "title": "Newspaper clipping",
+  "about": "A column cut from a newspaper: yellowed newsprint, a masthead and dateline, torn top and bottom, lying on a desk.",
+  "fonts": ["Old Standard TT", "IM Fell English SC"],
+  "fields": {
+    "prop_masthead": "The paper's name, printed above the column on the first sheet, e.g. The Halvard Courant",
+    "prop_dateline": "The date line under the masthead, e.g. Tuesday, 4 March 1924"
+  }
+}

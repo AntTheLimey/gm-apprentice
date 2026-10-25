@@ -200,7 +200,7 @@ describe('leak gate: a prop that does not ship', () => {
   }, HELD_VAULT('prop_address: gazetteer/invitation.html\n'), { player: { keep: ['gazetteer'] } }));
 
   it('a stub note holds its prop, and its text is hidden', () => within((s) => {
-    assert.ok(!fs.existsSync(path.join(s.outputDir, 'props')));
+    assert.deepEqual(fs.readdirSync(path.join(s.outputDir, 'props')), ['index.html'], 'only the props page');
     leakInto(s.outputDir, 'documents/invitation.html', HELD);
     assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'documents/invitation.html', note: 'Documents/Invitation.md', reason: 'unpublished prop: publish: stub' }]);
   }, { 'Documents/Invitation.md': PROP('publish: stub\n'), 'Documents/inv.html': PAGE(`<p>${HELD}</p>`) }));

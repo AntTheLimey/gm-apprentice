@@ -415,6 +415,35 @@ player_site:
     quick_links: ["Harbour_City_Map"]
 ```
 
+## Props
+
+When the site publishes a prop note, it gets one page listing every prop
+the players have, linked from the menu (under Reference) and from the bar
+on each prop page. Props in a container are listed under it; the rest are
+grouped by their `prop_group`, then by their chapter, then under "Other
+props". The landing page can show the newest few in a box.
+
+<!-- settings:props -->
+
+| Setting | What it does | Values | Left out |
+|---------|--------------|--------|----------|
+| `player_site.props.title` | The name of the page listing every prop the players have, and of its link in the menu. Plain text, shown as written | Text | Props |
+| `player_site.props.address` | Where that page is on the site: a path ending in .html. One inside a folder the site keeps (player_site.keep) replaces the file there | Text | `props/index.html` |
+| `player_site.props.cover` | A picture at the top of the page. A file that is missing from the vault, or outside it, is reported and the page shows without it | A picture's path in the vault, or a web address | No picture |
+| `player_site.props.intro` | A paragraph under the title. Plain text, shown as written | Text | No paragraph |
+| `player_site.landing.latest_props` | How many of the newest props the landing page shows in a box, with a link to all of them; 0 shows none | A whole number, 0 or more | `0` |
+
+<!-- /settings:props -->
+
+```yaml
+player_site:
+  props:
+    title: The Evidence Locker
+    intro: Everything the investigators have picked up so far.
+  landing:
+    latest_props: 3
+```
+
 ## Lists and pictures
 
 <!-- settings:lists -->

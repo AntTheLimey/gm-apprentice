@@ -41,6 +41,7 @@ const GROUPS = [
   { id: 'sheets', title: 'Character sheets' },
   { id: 'live', title: 'Live play' },
   { id: 'landing', title: 'The landing page' },
+  { id: 'props', title: 'Props' },
   { id: 'lists', title: 'Lists and pictures' },
   { id: 'limits', title: 'Limits' },
   { id: 'gm', title: 'The GM site' },
@@ -521,6 +522,35 @@ const REGISTRY = [
     shape: "a picture's path in the vault, or a web address",
     does: "A picture at the top of the banner. A file that is missing from the vault, or outside it, is reported and the banner shows without it",
     left_out: 'No picture',
+  },
+
+  // The props page: one page listing every prop the site shows, and its box on the landing page
+  { name: 'player_site.props', type: 'map', container: true },
+  {
+    name: 'player_site.props.title', type: 'text', group: 'props',
+    does: 'The name of the page listing every prop the players have, and of its link in the menu. Plain text, shown as written',
+    left_out: 'Props',
+  },
+  {
+    name: 'player_site.props.address', type: 'text', group: 'props',
+    does: 'Where that page is on the site: a path ending in .html. One inside a folder the site keeps (player_site.keep) replaces the file there',
+    left_out: '`props/index.html`',
+  },
+  {
+    name: 'player_site.props.cover', type: 'text', group: 'props',
+    shape: "a picture's path in the vault, or a web address",
+    does: 'A picture at the top of the page. A file that is missing from the vault, or outside it, is reported and the page shows without it',
+    left_out: 'No picture',
+  },
+  {
+    name: 'player_site.props.intro', type: 'text', group: 'props',
+    does: 'A paragraph under the title. Plain text, shown as written',
+    left_out: 'No paragraph',
+  },
+  {
+    name: 'player_site.landing.latest_props', type: 'number', integer: true, min: 0, default: 0, group: 'props',
+    does: 'How many of the newest props the landing page shows in a box, with a link to all of them; 0 shows none',
+    left_out: '`0`',
   },
 
   // Limits

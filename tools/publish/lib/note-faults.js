@@ -29,8 +29,10 @@
 //                     is lost (information; the build says so per page)
 //   PROP_NOT_COPIED  a prop note's file, its address or a file it links that the site cannot
 //                     publish (missing, outside the note's folder, a kind it does not copy, an
-//                     address taken or not a path, a link in the site folder); the plan's own
-//                     words, from props/plan.js and the build
+//                     address taken or not a path, a link in the site folder), or a prop's
+//                     style, `## The Text` or container that cannot be used (an unusable
+//                     style, a missing `## The Text`, a `prop_container` naming no container);
+//                     the plan's own words, from props/plan.js and the build
 //
 // Nothing here reads a page a second way, and nothing here knows which field a template
 // prints. The names are decided by the page as the build makes it: every link to a note
@@ -1053,8 +1055,11 @@ function summaryLines(findings) {
     } else if (code === 'HEADING_IN_HIDDEN_BLOCK' || code === 'TABLE_OVERWIDE') {
       continue;   // information for campaign-qa; the build said it per page as it went
     } else if (code === 'PROP_NOT_COPIED') {
-      const worst = [...new Set(rows.map((f) => baseName(f.path)))].slice(0, WORST);
-      lines.push(`${n} prop ${plural(n, 'file', 'files')} could not be put on the site (${worst.join(', ')}) — ${where} ${these}.`);
+      // One prop can raise several rows (a file, a style, its container): the count is of props.
+      const props = [...new Set(rows.map((f) => f.path))];
+      const worst = [...new Set(props.map((p) => baseName(p)))].slice(0, WORST);
+      const k = props.length;
+      lines.push(`${k} ${plural(k, 'prop', 'props')} could not be put on the site as asked (${worst.join(', ')}) — ${where} ${plural(k, 'it', 'these')}.`);
     } else if (code === 'WITHHELD_NAME_PUBLIC') {
       const names = [...new Set(rows.map((f) => f.name))];
       lines.push(`${names.length} withheld ${plural(names.length, 'name is also the name of a published page', 'names are also the names of published pages')}, so ${plural(names.length, 'it is', 'they are')} not looked for (${names.slice(0, WORST).join(', ')}) — ${where} ${plural(names.length, 'it', 'these')}.`);

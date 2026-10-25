@@ -1,0 +1,8 @@
+{
+  "title": "Scroll",
+  "about": "An unrolled parchment scroll with wooden rods at top and bottom, lettered in an old hand; a heading in the text is set in uncial capitals.",
+  "fonts": ["Uncial Antiqua", "MedievalSharp"],
+  "fields": {
+    "prop_font": "The scribe's hand: a Google Fonts family, e.g. IM Fell English (MedievalSharp when left out)"
+  }
+}

@@ -1779,7 +1779,7 @@ function portraitBasename(frontmatter) {
 // (unclosed markers), for the caller to log wherever its warnings go.
 function playerSafeMarkdown(markdown, options = {}) {
   if (options.mark) return markedSafeMarkdown(markdown, options);
-  const stripped = strippedLines(String(markdown == null ? '' : markdown).replace(/\r/g, ''), options.excludeCallouts, null,
+  const stripped = strippedLines(String(markdown == null ? '' : markdown).replace(/\r\n?/g, '\n'), options.excludeCallouts, null,
     sectionWithholder(options.excludeSections, options.frontmatter, { pcKeepSections: options.pcKeepSections }));
   const { warnings } = stripped;
   let text = stripped.lines.join('\n');
@@ -2417,6 +2417,12 @@ const GM_ALIAS_NAME_FIELDS = new Set([
 // still happen when that page has no URL (the link then renders as its public
 // title in plain text).
 //
+// A withheld note's name as a site prints it: on the GM site (`mark`) inside a `withheld_names` mark saying what
+// players see in its place (`hidden`, the withheld words), or those words where the site does not show that kind.
+function withheldNameMarked(name, hidden, mark) {
+  return mark && mark.show.has('withheld_names') ? `${mark.marks.open('withheld_names', `players see: ${hidden}`)}${name}${mark.marks.close()}` : hidden;
+}
+
 // A GM alias that is also a published page's title or public alias is
 // skipped: that name belongs to the other page, and its links stay as they
 // are. `published` is the pages the site publishes (default: all of `pages`).
@@ -2533,8 +2539,7 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
       // An unlabelled link to a withheld page (by any of its names) prints the placeholder,
       // not the page's name.
       if (hidden && !effectiveLabel) {
-        const name = marked('withheld_names', `players see: ${hidden}`, withheldName(target));
-        return `${bang}[[${owner ? owner.title : target}${anchor || ''}${bar}${name === null ? hidden : name}]]`;
+        return `${bang}[[${owner ? owner.title : target}${anchor || ''}${bar}${withheldNameMarked(withheldName(target), hidden, mark)}]]`;
       }
       // The GM site keeps the secret alias, inside a mark that says what players see in its place.
       if (mark && !effectiveLabel) {
@@ -2572,14 +2577,12 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
       // A bare name that is a withheld note's: the page prints the placeholder, as for a link.
       const hidden = placeholderFor(v);
       if (owner && hidden) {
-        const name = marked('withheld_names', `players see: ${hidden}`, withheldName(v));
-        return `[[${owner.title}|${name === null ? hidden : name}]]`;
+        return `[[${owner.title}|${withheldNameMarked(withheldName(v), hidden, mark)}]]`;
       }
       if (owner) return owner.title;
       const bare = v.trim();
       if (bare && !bare.includes('[[') && hidden) {
-        const name = marked('withheld_names', `players see: ${hidden}`, withheldName(bare));
-        return `[[${bare}|${name === null ? hidden : name}]]`;
+        return `[[${bare}|${withheldNameMarked(withheldName(bare), hidden, mark)}]]`;
       }
       // A bare name with a note after it (`Zorn (the host)`, a participant's form): the name is read on its own.
       const noted = /^([^[\]()]+?)\s*(\([^()]+\))$/.exec(bare);
@@ -2622,4 +2625,4 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
   };
 }
 
-module.exports = { isDocumentPage, unstableBodyMarked, unstableSectionsMarked, markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, cutLines, sectionWithholder, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, uncommentedLines, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, campaignImageSrc, isWebImageAddress, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };
+module.exports = { isDocumentPage, fenceStep, unstableBodyMarked, unstableSectionsMarked, markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, cutLines, sectionWithholder, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, uncommentedLines, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, campaignImageSrc, isWebImageAddress, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, withheldNameMarked, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };

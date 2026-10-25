@@ -1,0 +1,10 @@
+{
+  "title": "Ticket",
+  "about": "A printed card ticket with the company's name, a serial number and a perforated stub; it prints on a white page, ready to cut out.",
+  "fonts": ["Cutive Mono", "Rye"],
+  "fields": {
+    "prop_line_name": "The company or line that issued it, across the top, e.g. Halvard & Northern Railway",
+    "prop_serial": "The serial number, on the ticket and its stub, e.g. No 004127",
+    "prop_class": "The class or kind of ticket, e.g. Second Class"
+  }
+}

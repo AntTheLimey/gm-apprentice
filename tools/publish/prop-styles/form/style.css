@@ -1,0 +1,68 @@
+/* Form: official hardcopy on pale stock, one accent colour per issuing body, filing
+   furniture in the margins. The note's lines are styled by the tool's line classes:
+   letterhead (above the first rule), rules, section headings, keys and fine print
+   (below the last rule). */
+/* The accent is a registered colour, so an accent the filter emptied (prop_accent not a colour)
+   is invalid and falls back to the default instead of blanking the bar and headings. */
+@property --accent { syntax: '<color>'; inherits: true; initial-value: #3d4a52; }
+.prop-style-form {
+  margin: 0; min-height: 100vh; color: #c9d4cf;
+  background: radial-gradient(ellipse at 50% 0%, #161a1d 0%, #07090b 60%, #030405 100%) fixed #050607;
+  font-family: 'Share Tech Mono', ui-monospace, Menlo, monospace;
+}
+.form-desk { padding: 1.2rem 16px 3rem; }
+.form-desk .plate { max-width: 880px; margin: 0 auto 0.8rem; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 207, 122, 0.8); }
+
+.prop-style-form .sheet { position: relative; box-sizing: border-box; width: min(880px, 100%); min-height: calc(min(880px, 100vw - 32px) * 11 / 8.5);
+  margin: 0 auto 2.2rem; overflow: hidden; container-type: inline-size; }
+
+.form { --accent: #3d4a52; --stock: #e4e4d8; --type: #1d2326; color: var(--type);
+  background: radial-gradient(ellipse at 22% 12%, rgba(255, 255, 255, 0.5), transparent 46%),
+    radial-gradient(ellipse at 84% 92%, rgba(90, 80, 50, 0.16), transparent 50%),
+    repeating-linear-gradient(to bottom, transparent 0 3px, rgba(40, 50, 45, 0.022) 4px), var(--stock);
+  box-shadow: 0 1.2cqw 4cqw rgba(0, 0, 0, 0.7); }
+/* The margins are the text's padding, not the sheet's: padding on the sheet, the size container, would
+   shrink every cqw inside it. The first sheet keeps clear room above the stamp, so a long text never runs under it. */
+.form .doc { position: relative; padding: 8.4cqw 6cqw 12cqw 20cqw; }
+.form:has(.stamp) .doc { padding-bottom: 20cqw; }
+.form .bar { position: absolute; top: 0; bottom: 0; left: 0; width: 5.2cqw; background: var(--accent); }
+.form .bar::after { content: ""; position: absolute; top: 0; bottom: 0; left: 6.1cqw; width: 0.35cqw; background: var(--accent); opacity: 0.55; }
+.form .holes { position: absolute; left: 9.6cqw; top: 0; bottom: 0; display: flex; flex-direction: column; justify-content: space-around; padding: 18cqw 0; }
+.form .holes i { display: block; width: 2.4cqw; height: 2.4cqw; border-radius: 50%; background: #0a0d10;
+  box-shadow: inset 0 0.25cqw 0.5cqw rgba(0, 0, 0, 0.9), 0 0 0 0.16cqw rgba(0, 0, 0, 0.12); }
+.form .reg { position: absolute; width: 3cqw; height: 3cqw; opacity: 0.55;
+  background: linear-gradient(var(--type), var(--type)) 50% 0 / 0.14cqw 100% no-repeat,
+    linear-gradient(var(--type), var(--type)) 0 50% / 100% 0.14cqw no-repeat,
+    radial-gradient(circle, transparent 0.72cqw, var(--type) 0.74cqw, var(--type) 0.88cqw, transparent 0.9cqw); }
+.form .reg.tl { top: 2.6cqw; left: 15cqw; }
+.form .reg.tr { top: 2.6cqw; right: 3cqw; }
+.form .reg.bl { bottom: 2.6cqw; left: 15cqw; }
+.form .reg.br { bottom: 2.6cqw; right: 3cqw; }
+
+.form .prop-text { font-family: 'Share Tech Mono', ui-monospace, monospace; font-size: max(11px, 2.16cqw); line-height: 1.2; letter-spacing: 0.01em; }
+.form .l-head { color: var(--accent); letter-spacing: 0.06em; }
+.form .l-head1 { font-size: 1.32em; line-height: 1.25; letter-spacing: 0.02em; color: var(--type); text-shadow: 0.05cqw 0 0 var(--type); }
+.form .l-rule { color: var(--accent); letter-spacing: 0; }
+/* A section heading: a capitals line in the body that is not indented and not a key line. */
+.form .l-caps:not(.l-indent):not(.l-leader):not(.l-head):not(.l-fine):not(.l-rule) {
+  color: var(--stock); background: var(--accent); padding: 0.08em 0.5em 0.04em; margin-left: -0.5em; letter-spacing: 0.08em; }
+.form .l-key { color: var(--accent); }
+.form .l-fine { font-size: 0.86em; color: rgba(29, 35, 38, 0.72); }
+
+.form .stamp { position: absolute; bottom: 9.2cqw; right: 5.5cqw; transform: rotate(-11deg); padding: 0.5cqw 1.6cqw 0.3cqw;
+  border: 0.5cqw double rgba(150, 30, 30, 0.72); color: rgba(150, 30, 30, 0.72); mix-blend-mode: multiply;
+  font-family: 'Share Tech Mono', monospace; font-size: 3.6cqw; letter-spacing: 0.2em; white-space: nowrap;
+  -webkit-mask-image: repeating-linear-gradient(115deg, #000 0 0.9cqw, rgba(0, 0, 0, 0.55) 0.9cqw 1.05cqw, #000 1.05cqw 2.3cqw, rgba(0, 0, 0, 0.75) 2.3cqw 2.6cqw);
+  mask-image: repeating-linear-gradient(115deg, #000 0 0.9cqw, rgba(0, 0, 0, 0.55) 0.9cqw 1.05cqw, #000 1.05cqw 2.3cqw, rgba(0, 0, 0, 0.75) 2.3cqw 2.6cqw); }
+.form .tally { position: absolute; bottom: 3.4cqw; left: 20cqw; right: 8cqw; display: flex; justify-content: space-between; align-items: flex-end;
+  font-family: 'Share Tech Mono', monospace; font-size: max(8px, 1.3cqw); letter-spacing: 0.16em; color: rgba(29, 35, 38, 0.6); }
+.form .barcode { display: block; width: 26cqw; height: 3.6cqw; opacity: 0.8;
+  background: repeating-linear-gradient(90deg, var(--type) 0 0.22cqw, transparent 0.22cqw 0.5cqw, var(--type) 0.5cqw 0.6cqw, transparent 0.6cqw 1.15cqw,
+    var(--type) 1.15cqw 1.6cqw, transparent 1.6cqw 1.9cqw, var(--type) 1.9cqw 2cqw, transparent 2cqw 2.7cqw); }
+
+@media print {
+  .prop-style-form { background: none; min-height: 0; }
+  .form-desk { padding: 0; }
+  .form-desk .plate { display: none; }
+  .prop-style-form .sheet { width: 100%; min-height: 100vh; margin: 0; box-shadow: none; }
+}

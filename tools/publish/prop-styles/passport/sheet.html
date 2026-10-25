@@ -1,0 +1,26 @@
+<section class="sheet passport-sheet" aria-label="Sheet {{sheet_number}} of {{sheet_count}}">
+  <div class="booklet">
+    {{#first}}
+    <div class="page data">
+      {{#prop_issuer}}<p class="issuer">{{prop_issuer}}</p>{{/prop_issuer}}
+      <p class="kind">Passport</p>
+      <div class="data-grid">
+        <div class="photo" aria-hidden="true"></div>
+        <dl>
+          <dt>Name</dt><dd class="holder">{{title}}</dd>
+          {{#prop_number}}<dt>Passport No.</dt><dd class="number">{{prop_number}}</dd>{{/prop_number}}
+          {{#prop_issuer}}<dt>Issued by</dt><dd>{{prop_issuer}}</dd>{{/prop_issuer}}
+        </dl>
+      </div>
+      <div class="mrz" aria-hidden="true"><span>P&lt;{{prop_issuer}}&lt;&lt;{{title}}&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;</span><span>{{prop_number}}&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;</span></div>
+    </div>
+    {{/first}}
+    {{^first}}
+    <div class="page visas" aria-hidden="true"><p class="page-head">Visas</p></div>
+    {{/first}}
+    <div class="page text">
+      <div class="words">{{{text}}}</div>
+      <p class="folio" aria-hidden="true">{{sheet_number}}</p>
+    </div>
+  </div>
+</section>

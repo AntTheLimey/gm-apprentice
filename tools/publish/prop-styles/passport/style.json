@@ -1,0 +1,9 @@
+{
+  "title": "Passport",
+  "about": "An open passport: a data page with a photo box, the holder's name (the prop's title) and a machine-readable strip, facing the note's text.",
+  "fonts": ["Cormorant Garamond", "Cutive Mono"],
+  "fields": {
+    "prop_issuer": "The country or authority that issued it, e.g. Republic of Vestria",
+    "prop_number": "The passport number, e.g. VX 0412977"
+  }
+}
