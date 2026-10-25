@@ -21,10 +21,12 @@ describe('a font file names its copyright and licence', () => {
     assert.equal(fontNames(Buffer.alloc(0)), null);
   });
 
-  it("a font that unpacks to more than it says it holds reads as null", () => {
+  it('a font that understates its totalSfntSize still parses, and a stream past the cap reads as null', () => {
+    // WOFF2 makes totalSfntSize reference information only, never a limit on the stream.
     const small = Buffer.from(VT323);
     small.writeUInt32BE(64, 16);   // totalSfntSize: far less than the stream holds
-    assert.equal(fontNames(small), null);
+    assert.deepEqual(fontNames(small), fontNames(VT323));
+    assert.equal(fontNames(small).copyright, 'Copyright 2011, The VT323 Project Authors (peter.hull@oikoi.com)');
     // A stream that would unpack past the 64 MiB cap is refused before it is held in memory.
     const zlib = require('node:zlib');
     const bomb = zlib.brotliCompressSync(Buffer.alloc(80 * 1024 * 1024));

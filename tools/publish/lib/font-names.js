@@ -22,7 +22,7 @@ const NAME_INDEX = 5;
 const GLYF_INDEX = 10;
 const LOCA_INDEX = 11;
 const HEADER_SIZE = 48;
-// The most a font may unpack to: its own stated size, never more than this.
+// The most a font may unpack to, whatever size it says it holds.
 const MAX_UNPACKED = 64 * 1024 * 1024;
 
 function readBase128(buf, at) {
@@ -41,7 +41,6 @@ function nameTableOf(buf) {
   if (buf.length < HEADER_SIZE || buf.toString('latin1', 0, 4) !== 'wOF2') return null;
   if (buf.toString('latin1', 4, 8) === 'ttcf') return null;
   const numTables = buf.readUInt16BE(12);
-  const sfntSize = buf.readUInt32BE(16);
   const compressed = buf.readUInt32BE(20);
   const at = { pos: HEADER_SIZE };
   let offset = 0;
@@ -59,9 +58,10 @@ function nameTableOf(buf) {
     offset += stored;
   }
   if (!found) return null;
-  // The stream unpacks to no more than the font says it holds: a crafted file that claims more
-  // is refused (and reads as null) rather than filling memory.
-  const stream = zlib.brotliDecompressSync(buf.subarray(at.pos, at.pos + compressed), { maxOutputLength: Math.max(1, Math.min(sfntSize, MAX_UNPACKED)) });
+  // The stream unpacks to no more than MAX_UNPACKED: a crafted file that would unpack past it is
+  // refused (and reads as null) rather than filling memory. The header's totalSfntSize is not the
+  // limit: WOFF2 makes it reference information only, so a font that understates it still parses.
+  const stream = zlib.brotliDecompressSync(buf.subarray(at.pos, at.pos + compressed), { maxOutputLength: MAX_UNPACKED });
   if (found.offset + found.length > stream.length) return null;
   return stream.subarray(found.offset, found.offset + found.length);
 }
