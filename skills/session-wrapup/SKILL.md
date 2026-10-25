@@ -312,9 +312,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/reveal.py" \
 ```
 
 Show the dry-run rows as-is. Yes → re-run with `--write`; it
-publishes, lifts `withheld` and logs the session. No → put back the page
-edits. Tell the GM the
-reason on any ERROR row. Never publish a scene, Plan or session note.
+publishes, lifts `withheld` and logs the session. No, or an ERROR row, puts back that page's edits
+(or a later publish shows it unhidden). Tell the GM the reason on any
+ERROR row. Never publish a scene, Plan or session note.
 
 ### 5. Remaining GM Notes
 

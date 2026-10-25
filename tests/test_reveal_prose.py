@@ -74,6 +74,10 @@ class WrapupStep4dTests(unittest.TestCase):
                       "Notes secrets as they are; step 4d releases them "
                       "with the GM.", step4)
 
+    def test_not_published_row_puts_edits_back(self):
+        flat = " ".join(self.step.split())
+        self.assertIn("No, or an ERROR row, puts back that page's edits", flat)
+
     def test_reads_wrapup_too_and_none_skips(self):
         self.assertIn("From the Play Notes, the Wrap-Up and the recap", self.step)
         self.assertIn("On none, skip the rest.", " ".join(self.step.split()))
