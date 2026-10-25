@@ -95,15 +95,25 @@ function tableRunsOf(markdown) {
   return runs;
 }
 
+// The attributes of a tag a person can read (a picture's alt text, a tooltip, a label, a field's hint).
+const READ_ATTRS = /\s(?:alt|title|aria-label|placeholder)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
+
 // The pieces of a hand-made page or SVG, or of a part of one (a prop file's cut runs), as a reader sees it: its body's
-// text, line by line. Not its head or title, its tags' attributes, its scripts, styles or comments: a page's head is
-// the same viewport and font lines on every page of the site, and would match them all.
+// text, line by line, and the words of its tags' readable attributes. Not its head or <title>, any other attribute
+// (content, href, src), its scripts, styles or comments: a page's head is the same viewport and font lines on every
+// page of the site, and would match them all.
 function piecesOfHtml(html) {
   const body = /<body\b[^>]*>([\s\S]*?)(?:<\/body\s*>|$)/i.exec(String(html));
   const shown = (body ? body[1] : String(html))
     .replace(/<head\b[\s\S]*?(?:<\/head\s*>|$)/gi, '\n')
-    .replace(/<title\b[\s\S]*?<\/title\s*>/gi, '\n');
-  return pageText(shown).split('\n').flatMap(piecesOfText);
+    .replace(/<title\b[\s\S]*?<\/title\s*>/gi, '\n')
+    .replace(/<(script|style|template)\b[\s\S]*?<\/\1\s*>/gi, '\n')
+    .replace(/<!--[\s\S]*?-->/g, '');
+  const read = [];
+  for (const tag of shown.matchAll(/<[a-zA-Z][^>]*>/g)) {
+    for (const m of tag[0].matchAll(READ_ATTRS)) read.push(pageText(m[1] !== undefined ? m[1] : m[2]));
+  }
+  return [...pageText(shown).split('\n'), ...read].flatMap(piecesOfText);
 }
 
 function piecesOfMarkdown(markdown) {

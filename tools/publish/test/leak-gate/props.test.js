@@ -71,6 +71,16 @@ describe('leak gate: a prop page and its own note', () => {
     'Documents/inv.html': PAGE().replace('<head>', '<head><!-- gm-only --><meta name="viewport" content="width=device-width, initial-scale=1"><!-- /gm-only -->'),
   }));
 
+  it("a gm-only picture's alt text is hidden text if it reaches the site", () => within((s) => {
+    assert.deepEqual(gate(s).findings, []);
+    leakBeforeBody(s, 'props/invitation.html', 'the seal was forged in Calcutta last spring');
+    assert.deepEqual(gate(s).findings.map(pick),
+      [{ code: 'HIDDEN_TEXT', page: 'props/invitation.html', note: 'Documents/Invitation.md', reason: 'a hidden part of its prop file (inv.html)' }]);
+  }, {
+    'Documents/Invitation.md': PROP(), 'Documents/props.css': CSS,
+    'Documents/inv.html': PAGE().replace('</body>', '<!-- gm-only --><img src="seal.png" alt="the seal was forged in Calcutta last spring"><!-- /gm-only --></body>'),
+  }));
+
   it("the search index and the prop's own note page are checked as before", () => within((s) => {
     leakInto(s.outputDir, 'documents/invitation.html', LETTER);
     leakIntoIndex(s, 'documents/invitation.html', LETTER);
@@ -154,6 +164,10 @@ describe('leak gate: a prop that does not ship', () => {
     assert.deepEqual(gate(s).findings, []);
     leakInto(s.outputDir, 'documents/other.html', HELD);
     assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'documents/other.html', note: 'Documents/Glove.md', reason: 'unpublished prop: not on the publish list' }]);
+    leakInto(s.outputDir, 'documents/index.html', 'A small folded paper square.');
+    assert.deepEqual(gate(s).findings.map((f) => [f.page, f.text]), [
+      ['documents/index.html', 'a small folded paper square'], ['documents/other.html', 'only the vicar knows the crypt is empty'],
+    ]);
   }, {
     'Documents/Glove.md': '---\ntype: prop\nprop_file: glove.html\n---\nA note.\n',
     'Documents/glove.html': [
