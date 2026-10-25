@@ -190,9 +190,9 @@ test('claims: explicit beats default, then vault-path order', () => {
 });
 
 test('two notes whose names slug alike, untitled included, are settled by vault path', () => {
-  const root = vault({ 'A/!!!.md': '', 'A/x.html': 'a', 'B/???.md': '', 'B/x.html': 'b' });
+  const root = vault({ 'A/!!!.md': '', 'A/x.html': 'a', 'B/~~~.md': '', 'B/x.html': 'b' });
   const r = plan(root, [
-    page(root, 'B/???.md', { type: 'prop', prop_file: 'x.html' }),
+    page(root, 'B/~~~.md', { type: 'prop', prop_file: 'x.html' }),
     page(root, 'A/!!!.md', { type: 'prop', prop_file: 'x.html' }),
   ]);
   assert.deepStrictEqual(r.props.map((p) => p.address), [null, 'props/untitled.html']);
@@ -390,7 +390,7 @@ test('a percent-encoded NFD link is rewritten to the encoded NFC spelling', () =
 });
 
 const asRoot = typeof process.getuid === 'function' && process.getuid() === 0;
-test('an unreadable prop file or linked file is a problem, not a crash', { skip: asRoot && 'root reads every file' }, () => {
+test('an unreadable prop file or linked file is a problem, not a crash', { skip: (asRoot && 'root reads every file') || (process.platform === 'win32' && 'chmod cannot make a file unreadable on Windows') }, () => {
   const root = vault({ 'A/One.md': '', 'A/one.html': 'x', 'B/Two.md': '', 'B/two.html': '<img src="p.png">', 'B/p.png': 'P' });
   fs.chmodSync(path.join(root, 'A/one.html'), 0o000);
   fs.chmodSync(path.join(root, 'B/p.png'), 0o000);

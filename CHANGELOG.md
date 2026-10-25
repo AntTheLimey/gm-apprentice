@@ -23,8 +23,8 @@ picture you made.
 - Story pages show the pictures a recap embeds.
 - Site Faults code `PROP_NOT_COPIED`, for a prop whose file the build
   could not copy.
-- The update adds `_Templates/_Template_Prop.md` to existing vaults
-  (the `template:` check). Publish tool 1.49.0.
+- The update adds `_Templates/_Template_Prop.md` and the Prop entry in
+  `_meta/entity-types.md` to existing vaults. Publish tool 1.49.0.
 
 ### Changed
 
