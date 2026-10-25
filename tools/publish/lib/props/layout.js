@@ -30,8 +30,8 @@ const FILTERS = {
 };
 
 // Attributes whose value is a URL, a script or a style: escaping does not make a field safe there.
-// srcdoc is HTML the browser parses after unescaping, so it joins the list.
-const DANGEROUS_ATTRS = new Set(['href', 'src', 'srcset', 'action', 'formaction', 'xlink:href', 'poster', 'background', 'data', 'style', 'srcdoc']);
+// srcdoc is HTML the browser parses after unescaping, so it joins the list; ping sends a request to its addresses on a click.
+const DANGEROUS_ATTRS = new Set(['href', 'src', 'srcset', 'action', 'formaction', 'xlink:href', 'poster', 'background', 'data', 'style', 'srcdoc', 'ping']);
 const NAME_PROBLEM = "which a style may not read (only prop_ fields and the tool's names)";
 
 function allowedName(name) {

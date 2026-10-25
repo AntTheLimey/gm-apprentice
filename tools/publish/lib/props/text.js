@@ -10,6 +10,8 @@ const RULE_RE = /^[─═━\-_=]{8,}$/;
 const KEY_RE = /^([A-Z][A-Z ]*? \.+)(?= )/;
 
 const isBlank = (line) => /^\s*$/.test(line);
+// A thematic break: three or more of one of - * _, spaces between allowed (CommonMark).
+const BREAK_RE = /^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$/;
 
 function trimBlankEdges(lines) {
   let start = 0;
@@ -60,7 +62,10 @@ function fencedLines(body) {
 function propTextOf(markdown) {
   const body = sectionLines(markdown);
   if (!body || !body.length) return null;
-  const inner = fencedLines(body);
+  // Rules and blank lines after the fence are not words of it (a note often ends the section with `---`).
+  let last = body.length;
+  while (last > 0 && (isBlank(body[last - 1]) || BREAK_RE.test(body[last - 1]))) last--;
+  const inner = fencedLines(body.slice(0, last));
   if (inner) {
     let end = inner.length;
     while (end > 0 && isBlank(inner[end - 1])) end--;

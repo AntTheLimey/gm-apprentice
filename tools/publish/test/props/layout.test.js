@@ -60,6 +60,7 @@ test('checkLayout refuses a field in a dangerous place', () => {
     '<a href="{{prop_x}}">', "<img src='{{prop_x}}'>", '<div onclick="{{prop_x}}">', '<div {{prop_x}}>',
     '<div style="color:{{prop_x}}">', '<script>{{prop_x}}</script>', '<style>{{prop_x}}</style>',
     '{{{prop_x}}}', '{{& prop_x}}', '{{> other}}', '{{=<% %>=}}', '{{gm_aliases}}',
+    '<a ping="{{prop_x}}">',
   ];
   for (const text of bad) {
     assert.strictEqual(checkLayout(text, { file: 'layout.html' }).length, 1, text);

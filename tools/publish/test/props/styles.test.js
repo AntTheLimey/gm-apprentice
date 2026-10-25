@@ -263,6 +263,6 @@ test('with no styles at all, the fix says where to add one', () => {
 });
 
 test('a style.json with a byte-order mark reads', () => {
-  const pluginDir = plugin({ 'f/layout.html': LAYOUT, 'f/style.css': CSS, 'f/style.json': '﻿{"title":"F"}' });
+  const pluginDir = plugin({ 'f/layout.html': LAYOUT, 'f/style.css': CSS, 'f/style.json': '\uFEFF{"title":"F"}' });
   assert.strictEqual(loadStyle('f', { vaultPath: vault(), pluginDir }).style.json.title, 'F');
 });

@@ -1,6 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { propTextOf, splitSheets, lineClasses, propSheets, linesOfPropHtml } = require('../../lib/props/text');
+const { textProblem } = require('../../lib/props/page');
 
 test('the text is the section under ## The Text', () => {
   const note = ['## Description', 'x', '## the text', '```', 'one', '## The Text', 'two', '```', '### Note', '## Related', 'y'].join('\n');
@@ -24,6 +25,19 @@ test('a fence keeps its lines exactly', () => {
   assert.deepStrictEqual(linesOfPropHtml(html), lines.slice(0, -1));
   assert.ok(html.includes('[[x|y]]'), html);
   assert.ok(html.includes('&lt;b&gt; &amp;'), html);
+});
+
+test('rules and blank lines after the fence leave it lines (Ruling 31)', () => {
+  for (const tail of ['---', '***', ' _ _ _ ', '---\n\n***\n']) {
+    const note = `## The Text\n\n\`\`\`\nDEAR SIR\nPay up.\n\`\`\`\n\n${tail}\n\n## GM Notes\nSecret.\n`;
+    assert.deepStrictEqual(propTextOf(note), { mode: 'lines', lines: ['DEAR SIR', 'Pay up.'] }, tail);
+    assert.strictEqual(textProblem(note), null, tail);
+  }
+});
+
+test('a fence and a paragraph stay prose', () => {
+  const note = '## The Text\n\n```\nDEAR SIR\n```\n\nA paragraph.\n\n---\n';
+  assert.deepStrictEqual(propTextOf(note), { mode: 'prose', markdown: '```\nDEAR SIR\n```\n\nA paragraph.\n\n---' });
 });
 
 test('CRLF reads as LF', () => {

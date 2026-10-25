@@ -191,6 +191,19 @@ describe('style fonts', () => {
     } finally { s.cleanup(); }
   });
 
+  it('a letter with no prop_font is in Pinyon Script (Ruling 18)', () => {
+    const s = buildBoth({
+      'Documents/Letter.md': '---\ntype: prop\nprop_style: letter\n---\nA letter.\n\n## The Text\n\nMy dear cousin, the roads are bad.\n',
+      ...seedFont('im-fell-english'), ...seedFont('im-fell-english-sc'), ...seedFont('pinyon-script'),
+    }, { sites: ['player'] });
+    try {
+      assert.match(s.player.read('props', 'styles', 'fonts.css'), /font-family: 'Pinyon Script'[\s\S]*?url\('\.\.\/\.\.\/fonts\/pinyon-script\/0123456789abcdef\.woff2'\)/);
+      assert.ok(s.player.exists('fonts', 'pinyon-script', '0123456789abcdef.woff2'));
+      assert.match(s.player.read('NOTICE.txt'), / {2}Pinyon Script: fonts\/pinyon-script\/, served unmodified from Google Fonts/);
+      assert.match(s.player.read('props', 'styles', 'letter', 'style.css'), /font-family: var\(--hand, 'Pinyon Script'\)/);
+    } finally { s.cleanup(); }
+  });
+
   it('a font a field names through the font filter is self-hosted too', () => {
     const s = buildBoth({ ...LETTER('prop_font: Special Elite\n'), ...seedFont('special-elite'), '_meta/prop-styles/t/layout.html': '<h1 style="font-family: {{prop_font|font}}">{{title}}</h1>{{{body}}}' }, { sites: ['player'] });
     try {

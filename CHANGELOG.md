@@ -17,6 +17,8 @@ the words you write, and a campaign gets one page that lists them.
 - Prop styles (`prop_style`): nine starter styles (terminal, form, hand,
   letter, clipping, ticket, passport, scroll, decree) and the vault's own
   in `_meta/prop-styles/`. The styled page is built from `## The Text`.
+  Every style reads `prop_title`, `prop_breaks`, `prop_shift` and
+  `prop_font` (where it uses a font), and each adds its own fields.
 - Container props with `show_sealed: titles`.
 - One props page per campaign (`player_site.props.*`), its menu link, an
   "All props" link on every prop, and `player_site.landing.latest_props`.

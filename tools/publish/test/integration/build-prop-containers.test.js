@@ -174,6 +174,24 @@ describe('a style that lists the items on its sheet', () => {
   });
 });
 
+describe('a style that reads {{{items}}} in both its layout and its sheet', () => {
+  const s = buildBoth({
+    '_meta/prop-styles/s/layout.html': '<main class="s">{{{body}}}<div class="outer">{{{items}}}</div></main>',
+    '_meta/prop-styles/s/sheet.html': '<section class="sheet">{{{text}}}<div class="inner">{{{items}}}</div></section>',
+    '_meta/prop-styles/s/style.css': '.s { color: red; }\n',
+    'Documents/Chest.md': '---\ntype: prop\nprop_kind: container\nprop_style: s\n---\nA chest.\n\n## The Text\n\nIron bands.\n',
+    'Documents/Coin.md': '---\ntype: prop\nprop_container: "[[Chest]]"\n---\nA coin.\n',
+  }, { sites: ['player'] });
+  after(() => s.cleanup());
+
+  it('prints the list once, in the layout\'s place', () => {
+    const page = s.player.read('props', 'chest.html');
+    assert.equal((page.match(/documents\/coin\.html/g) || []).length, 1, page);
+    assert.match(page, /<div class="outer"><ul class="prop-list">/);
+    assert.match(page, /<div class="inner"><\/div>/);
+  });
+});
+
 describe('a stub item (Ruling 20)', () => {
   const s = buildBoth({
     'Documents/Bookshelf.md': '---\ntype: prop\nprop_kind: container\n---\nA shelf.\n',

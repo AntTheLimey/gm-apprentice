@@ -189,6 +189,17 @@ describe('the landing box', () => {
   });
 });
 
+describe('the landing box with one prop', () => {
+  const s = buildBoth({
+    'Documents/Alpha.md': '---\ntype: prop\n---\nA.\n',
+  }, { sites: ['player'], player: { landing: { latest_props: 3 } } });
+  after(() => s.cleanup());
+
+  it('says so in the singular', () => {
+    assert.match(s.player.read('index.html'), /<p><a href="props\/index\.html">1 prop so far<\/a><\/p><\/section>/);
+  });
+});
+
 // Ruling 19 and 20: names as each note's own page prints them; a stub's row is its title and link.
 describe('withheld and stub props', () => {
   const MARK = (name) => `<span class="gm-mark gm-mark--withheld_names" data-gm-kind="withheld_names" data-gm-label="players see: something">${name}</span>`;

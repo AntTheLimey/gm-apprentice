@@ -1750,24 +1750,18 @@ function buildSite(options) {
     const nameOf = (pg, text) => (gm && isWithheld(pg.sourceFrontmatter || pg.frontmatter) && !onPlayerSite.has(pg)
       ? withheldNameMarked(text, withheldPlaceholder((pg.sourceFrontmatter || pg.frontmatter).type, publishConfig.withheld_words), mark)
       : text);
-    const listed = containerItems({
-      props: propPlan.props, isShown: (pg) => shown.has(pg), excludeFields, fieldOverrides, site: gm ? 'gm' : 'player', nameOf,
-      resolvePage: (target) => pageAt.get(linkMap[target]) || null,
-      isPlayerShown: gm ? (pg) => onPlayerSite.has(pg) : null, blocked: propBlocked, problems: misplaced,
-    });
+    // How every listing reads a row: the same for a container's page and the props page.
+    const rowOptions = {
+      isShown: (pg) => shown.has(pg), excludeFields, fieldOverrides, site: gm ? 'gm' : 'player', nameOf, blocked: propBlocked,
+      resolvePage: (target) => pageAt.get(linkMap[target]) || null, isPlayerShown: gm ? (pg) => onPlayerSite.has(pg) : null,
+    };
+    const listed = containerItems({ props: propPlan.props, ...rowOptions, problems: misplaced });
     for (const row of misplaced) {
       propPlan.problems.push(row);
       console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
     }
     // The props page lists the same rows, so a prop reads alike on every page that lists it.
-    collectionBuilt = collectionModel({
-      plan: propPlan, containers: listed, settings: collection, site: gm ? 'gm' : 'player', nameOf, blocked: propBlocked,
-      isShown: (pg) => shown.has(pg), resolvePage: (target) => pageAt.get(linkMap[target]) || null,
-      rowOf: (p) => propRow(p, {
-        isShown: (pg) => shown.has(pg), excludeFields, fieldOverrides, site: gm ? 'gm' : 'player', nameOf, blocked: propBlocked,
-        resolvePage: (target) => pageAt.get(linkMap[target]) || null, isPlayerShown: gm ? (pg) => onPlayerSite.has(pg) : null,
-      }),
-    });
+    collectionBuilt = collectionModel({ plan: propPlan, containers: listed, settings: collection, ...rowOptions, rowOf: (p) => propRow(p, rowOptions) });
     for (const p of containers) {
       const { rows, title, noteTitle } = listed.get(p.rel);
       p.made_html = p.style

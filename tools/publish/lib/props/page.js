@@ -67,16 +67,18 @@ function styledPage({ prop, style, page, linkMap, imageMap, usedImages, collecti
     breaks: breaksOf(fields), shift: textField(fields, 'prop_shift') || undefined,
     linkMap, imageMap, usedImages, outputPath: at,
   });
-  // A container with no words still has one sheet when its sheet is where the style lists the items.
-  const sheets = found.length || items === null || !layoutNames(style.sheet).includes('items') ? found : [''];
+  // A container's listing prints once: in the layout when the layout reads {{{items}}}, else on the last sheet.
   const sheetNames = layoutNames(style.sheet);
+  const layoutItems = layoutNames(style.layout).includes('items');
+  const sheetItems = !layoutItems && sheetNames.includes('items');
+  // A container with no words still has one sheet when its sheet is where the style lists the items.
+  const sheets = found.length || items === null || !sheetItems ? found : [''];
   const filled = sheets.map((html, i) => fillLayout(style.sheet, layoutView(fields, sheetNames, {
     title, note_title: noteTitle, text: html,
     sheet_number: String(i + 1), sheet_count: String(sheets.length), first: i === 0, last: i === sheets.length - 1,
-    // A container's listing, once: on its last sheet.
-    items: i === sheets.length - 1 ? items || '' : '',
+    items: sheetItems && i === sheets.length - 1 ? items || '' : '',
   })));
-  const body = fillLayout(style.layout, layoutView(fields, layoutNames(style.layout), { title, note_title: noteTitle, body: filled.join('\n'), items: items || '' }));
+  const body = fillLayout(style.layout, layoutView(fields, layoutNames(style.layout), { title, note_title: noteTitle, body: filled.join('\n'), items: layoutItems ? items || '' : '' }));
 
   const rel = (out) => escapeHtml(encodeHref(relativeHref(at, out)));
   const own = (file) => rel(`${STYLES_DIR}/${style.name}/${file}`);
