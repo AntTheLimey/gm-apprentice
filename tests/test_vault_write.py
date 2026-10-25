@@ -347,6 +347,7 @@ class WrapupNewTests(unittest.TestCase):
 
     def test_the_index_can_be_named_instead_of_pathed(self):
         for name in ("Session 02 - The Docks", "[[Session 02 - The Docks]]",
+                     "[[Session 02 - The Docks|last week]]",
                      "session 02 - the docks.md", "The Docks", "Session 02",
                      INDEX_REL.removesuffix(".md")):
             with self.subTest(name=name):

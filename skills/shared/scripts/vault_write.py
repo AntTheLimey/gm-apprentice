@@ -136,7 +136,8 @@ class Batch:
         """The note of one of `types` that `raw` names: a vault-relative
         path, or a file name or [[link]] as `scene-played` takes. A name
         like `Session 05 - Beneath the Mill` also answers to either half."""
-        rel = vl.normalize_file_arg(bare_link(raw))
+        rel = vl.normalize_file_arg(
+            re.split(r"[|#^]", bare_link(raw), maxsplit=1)[0].strip())
         if self.exists(rel):
             return self.resolve(rel)
         if "/" in rel:
