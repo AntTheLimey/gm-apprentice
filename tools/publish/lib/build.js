@@ -46,8 +46,7 @@ const { pcIdentity } = require('./templates/pc-identity');
 const { planProps } = require('./props/plan');
 const { takenAddresses } = require('./props/address');
 const { propHrefFor, propOutputs, keptCopyOutputs, pathProblem } = require('./props/files');
-const { styledPage, styleFontFamilies, FONTS_CSS, BASE_CSS, NO_TEXT } = require('./props/page');
-const { propTextOf } = require('./props/text');
+const { styledPage, styleFontFamilies, textProblem, FONTS_CSS, BASE_CSS } = require('./props/page');
 
 const TOOL_VERSION = require('../package.json').version;
 
@@ -282,10 +281,11 @@ function buildSite(options) {
   const nm = (name) => nameIn(rawConfig.vaultPath, name);
   if (off && !dry) throw new Error(off);
   // Every HTML file goes through here: on the GM site it is marked (gmPage); on the player site it is written as made.
-  function writeHtml(full, html, page) {
+  // `gmCssHref`: where a page the tool makes with no style.css link (a styled prop page) finds css/gm.css.
+  function writeHtml(full, html, page, { gmCssHref = null } = {}) {
     fs.writeFileSync(full, gm ? gmPage(html, {
       marks: mark.marks, hiddenBecause: page && page.gmHiddenBecause, hidden: page && page.gmHidden,
-      linkMap: publishConfig._linkMap || {}, from: (page && page.outputPath) || '',
+      linkMap: publishConfig._linkMap || {}, from: (page && page.outputPath) || '', gmCssHref,
     }) : html);
   }
   // A JSON file the GM site writes holds no mark: the words between them are kept.
@@ -516,12 +516,15 @@ function buildSite(options) {
 
   // The typefaces the site serves from fonts/, for NOTICE.txt: each Google family by its folder and
   // one of its files (whose name table says its copyright and licence), and the paths of the fonts
-  // the GM supplied.
+  // the GM supplied. A file two sources share (a skin's and a style's typeface) is copied once.
   const servedGoogleFonts = new Map();
   const servedLocalFonts = [];
+  const fontsWritten = new Set();
   function copyFontFiles(files) {
     if (writes !== 'all') return;
     for (const f of files) {
+      if (fontsWritten.has(f.rel)) continue;
+      fontsWritten.add(f.rel);
       const dest = path.join(outputDir, 'fonts', f.rel);
       ensureDir(dest);
       fs.copyFileSync(f.from, dest);
@@ -1684,8 +1687,9 @@ function buildSite(options) {
     const styled = [];
     for (const p of propPlan.props) {
       if (!p.ships || !p.address || p.made !== 'style' || p.kind === 'container' || propBlocked.has(p.address)) continue;
-      if (propTextOf(p.page.publishedMarkdown || '') === null) {
-        noPage(p, NO_TEXT);
+      const problem = textProblem(p.page.publishedMarkdown);
+      if (problem) {
+        noPage(p, problem);
         continue;
       }
       styled.push(p);
@@ -2203,18 +2207,29 @@ function buildSite(options) {
       const full = path.join(outputDir, ...f.out.split('/'));
       ensureDir(full);
       const replaced = f.replacesKept && fs.existsSync(full);
-      if (f.isPage) writeHtml(full, f.text, propPlan.props.find((p) => p.rel === f.rel).page);
+      if (f.isPage) writeHtml(full, f.text, propPlan.props.find((p) => p.rel === f.rel).page, { gmCssHref: f.made ? encodeHref(relativeHref(f.out, 'css/gm.css')) : null });
       else fs.writeFileSync(full, f.text !== undefined ? f.text : f.bytes);
       console.log(`  wrote ${f.out}`);
       if (f.was) console.log(`  ${f.out}: written as UTF-8 (it was ${f.was})`);
       shipped.add(f.rel);
       if (replaced) console.log(`  replaces kept file: ${f.out}`);
     }
-    // The files of each style a written page uses, the tool's base sheet, and the styles' fonts:
-    // only when a styled page is written, and never through a link in the site folder.
-    const writeFile = (out, data) => {
+    // The files of each style a made page uses are read by the note-faults audit as the first
+    // prop (by vault path) that uses the style: a withheld name in one of their names is that note's fault.
+    const styleUser = new Map();
+    for (const p of propPlan.props.filter((x) => typeof x.made_html === 'string' && x.style && !propBlocked.has(x.address))
+      .sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0))) {
+      if (!styleUser.has(p.style.name)) styleUser.set(p.style.name, p.rel);
+    }
+    const usedStyles = propPlan.styles.filter((st) => styleUser.has(st.name));
+    if (audit) for (const st of usedStyles) for (const f of st.files) audit.readFileName(styleUser.get(st.name), f.out);
+    // Those files, the tool's base sheet and the styles' fonts are written only when a styled page
+    // is, and never through a link in the site folder: one that would be is a problem of that note.
+    const writeFile = (out, data, rel, what) => {
       if (pathProblem(outputDir, out)) {
-        console.warn(`  WARNING: ${out} was not written: its path in the site folder is not a plain folder`);
+        const row = { rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: `${out} (${what}) was not written: its path in the site folder is not a plain folder`, fix: 'replace the link in the site folder with a real folder' };
+        propPlan.problems.push(row);
+        console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
         return;
       }
       const full = path.join(outputDir, ...out.split('/'));
@@ -2223,14 +2238,16 @@ function buildSite(options) {
       written += 1;
       console.log(`  wrote ${out}`);
     };
-    if (stylesWritten.size > 0) {
-      writeFile(BASE_CSS, fs.readFileSync(path.join(__dirname, '../css/props.css')));
-      for (const st of propPlan.styles.filter((x) => stylesWritten.has(x.name))) {
+    const writtenStyles = usedStyles.filter((st) => stylesWritten.has(st.name));
+    if (writtenStyles.length > 0) {
+      const first = styleUser.get(writtenStyles[0].name);
+      writeFile(BASE_CSS, fs.readFileSync(path.join(__dirname, '../css/props.css')), first, "the styled pages' base sheet");
+      for (const st of writtenStyles) {
         if (st.replaces) console.log(`  style "${st.name}": the vault's own (_meta/prop-styles/${st.name}) replaces the plugin's`);
-        for (const f of st.files) writeFile(f.out, fs.readFileSync(f.source));
+        for (const f of st.files) writeFile(f.out, fs.readFileSync(f.source), styleUser.get(st.name), `a file of the style "${st.name}"`);
       }
       if (styleFonts.css) {
-        writeFile(FONTS_CSS, styleFonts.css);
+        writeFile(FONTS_CSS, styleFonts.css, first, "the prop styles' typefaces");
         copyFontFiles(styleFonts.files);
       }
     }

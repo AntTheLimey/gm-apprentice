@@ -5,7 +5,7 @@
 // in its head is relative, to the tool's base sheet, the self-hosted fonts and the style's own
 // files under props/styles/<name>/; nothing is loaded from another site.
 const { escapeHtml, relativeHref, encodeHref } = require('../processor');
-const { propTextOf, propSheets } = require('./text');
+const { propTextOf, propTextState, propSheets } = require('./text');
 const { layoutNames, layoutView, fillLayout, FILTERS } = require('./layout');
 const { propBar, withPropBar } = require('../templates/prop-bar');
 
@@ -16,6 +16,16 @@ const NO_TEXT = {
   detail: 'has no ## The Text section, so its styled page is not made',
   fix: 'add a ## The Text section with the words the players see',
 };
+const EMPTY_TEXT = {
+  detail: 'has a ## The Text section with no words the players see, so its styled page is not made',
+  fix: 'write the words the players see under ## The Text (outside any hidden block)',
+};
+
+// Why a note's player view gives no words for a styled page, or null when it gives some.
+function textProblem(markdown) {
+  const state = propTextState(markdown || '');
+  return state === 'none' ? NO_TEXT : state === 'empty' ? EMPTY_TEXT : null;
+}
 
 const textField = (fields, name) => {
   const v = fields && fields[name];
@@ -44,8 +54,9 @@ function styleFontFamilies(style, fields) {
 }
 
 function styledPage({ prop, style, page, linkMap, imageMap, usedImages, collectionHref = null, fontsCss = false }) {
-  const text = propTextOf(page.publishedMarkdown || '');
-  if (!text) return { problem: NO_TEXT };
+  const problem = textProblem(page.publishedMarkdown);
+  if (problem) return { problem };
+  const text = propTextOf(page.publishedMarkdown);
   const fields = page.frontmatter || {};
   const noteTitle = page.displayTitle || page.title || '';
   const title = textField(fields, 'prop_title') || noteTitle;
@@ -86,4 +97,4 @@ function styledPage({ prop, style, page, linkMap, imageMap, usedImages, collecti
   return { html };
 }
 
-module.exports = { styledPage, styleFontFamilies, STYLES_DIR, FONTS_CSS, BASE_CSS, NO_TEXT };
+module.exports = { styledPage, styleFontFamilies, textProblem, STYLES_DIR, FONTS_CSS, BASE_CSS, NO_TEXT, EMPTY_TEXT };

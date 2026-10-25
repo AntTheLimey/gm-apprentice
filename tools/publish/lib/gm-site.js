@@ -190,12 +190,14 @@ const STYLE_HREF = /<link\b[^>]*\bhref="([^"]*?)css\/style\.css"/;
 
 // A page as the GM site writes it: noindex, the GM meta tag and gm.css in the head; the band, the reason players do
 // not see the page and the hidden-fields panel at the top of <main> (of <body>, on a page with no <main>); and every
-// mark rendered. gm.css sits beside style.css, so its address is taken from the page's own style.css link.
-function gmPage(html, { marks, hiddenBecause = null, hidden = [], linkMap = {}, from = '' } = {}) {
+// mark rendered. gm.css sits beside style.css, so its address is taken from the page's own style.css link; a page
+// the tool makes with no style.css link (a styled prop page) names it in `gmCssHref`.
+function gmPage(html, { marks, hiddenBecause = null, hidden = [], linkMap = {}, from = '', gmCssHref = null } = {}) {
   const { renderMarks } = require('./gm-marks');
   let out = String(html);
   const style = STYLE_HREF.exec(out);
-  const css = style ? `<link rel="stylesheet" href="${style[1]}css/gm.css">` : '';
+  const href = style ? `${style[1]}css/gm.css` : gmCssHref && escapeAttr(gmCssHref);
+  const css = href ? `<link rel="stylesheet" href="${href}">` : '';
   const head = `${ROBOTS_META}\n${GM_META_TAG}\n${css}`;
   out = /<\/head>/i.test(out) ? out.replace(/<\/head>/i, () => `${head}\n</head>`) : `${head}\n${out}`;
   const reason = hiddenBecause ? `Players don't see this page: ${hiddenBecause}` : null;

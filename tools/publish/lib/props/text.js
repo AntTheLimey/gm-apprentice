@@ -19,7 +19,7 @@ function trimBlankEdges(lines) {
   return lines.slice(start, end);
 }
 
-// The section's lines, or null when the note has no (non-empty) `## The Text`.
+// The section's lines, blank edges dropped ([] when it is empty), or null when the note has no `## The Text`.
 function sectionLines(markdown) {
   const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
   let fence = null;
@@ -39,8 +39,7 @@ function sectionLines(markdown) {
     }
   }
   if (start === -1) return null;
-  const body = trimBlankEdges(lines.slice(start, end));
-  return body.length ? body : null;
+  return trimBlankEdges(lines.slice(start, end));
 }
 
 // The section's lines when they are exactly one fenced block, closed on the last line.
@@ -56,9 +55,11 @@ function fencedLines(body) {
   return body.slice(1, -1);
 }
 
+// The words under `## The Text`: { mode: 'lines', lines } or { mode: 'prose', markdown }; null when
+// the note has no such section or it holds no words (propTextState says which).
 function propTextOf(markdown) {
   const body = sectionLines(markdown);
-  if (!body) return null;
+  if (!body || !body.length) return null;
   const inner = fencedLines(body);
   if (inner) {
     let end = inner.length;
@@ -68,6 +69,14 @@ function propTextOf(markdown) {
   const quoted = body.filter((l) => !isBlank(l)).every((l) => /^ {0,3}>/.test(l));
   const out = quoted ? body.map((l) => l.replace(/^ {0,3}> ?/, '')) : body;
   return { mode: 'prose', markdown: out.join('\n') };
+}
+
+// 'none' (no `## The Text`), 'empty' (the section holds no words), or 'words'.
+function propTextState(markdown) {
+  if (sectionLines(markdown) === null) return 'none';
+  const text = propTextOf(markdown);
+  const words = text && (text.mode === 'lines' ? text.lines.some((l) => !isBlank(l)) : !isBlank(text.markdown));
+  return words ? 'words' : 'empty';
 }
 
 const breakStrings = (breaks) => (Array.isArray(breaks) ? breaks : []).filter((b) => typeof b === 'string' && b !== '');
@@ -187,4 +196,4 @@ function linesOfPropHtml(html) {
   return out;
 }
 
-module.exports = { propTextOf, splitSheets, lineClasses, propSheets, linesOfPropHtml };
+module.exports = { propTextOf, propTextState, splitSheets, lineClasses, propSheets, linesOfPropHtml };

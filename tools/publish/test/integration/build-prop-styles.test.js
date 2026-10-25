@@ -246,6 +246,54 @@ describe('style fonts', () => {
   });
 });
 
+describe('fix round 1', () => {
+  it('a style font that is also a skin font is copied once', () => {
+    const s = buildBoth({ ...LETTER(), 'PCs/Ada.md': '---\ntype: pc\nsheet_skin: case-file\n---\nA clerk.\n', ...seedFont('special-elite', { real: true }), '_meta/prop-styles/t/style.json': '{"fonts":["Special Elite"]}' }, { sites: [] });
+    try {
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(s.player.exists('css', 'skins.css') && /special-elite/.test(s.player.read('css', 'skins.css')), 'the skin uses the family');
+      assert.equal(lines.filter((l) => l === '  wrote fonts/special-elite/0123456789abcdef.woff2').length, 1, lines.join('\n'));
+      assert.match(s.player.read('props', 'styles', 'fonts.css'), /special-elite/);
+    } finally { s.cleanup(); }
+  });
+
+  it('an empty ## The Text is named as empty, not missing', () => {
+    for (const text of ['', '<!-- gm-only -->\nKEEPER\n<!-- /gm-only -->']) {
+      const s = buildBoth({ ...STYLE, 'Documents/Letter.md': note('', text) + '\n## After\n\nMore.\n' }, { sites: ['player'] });
+      try {
+        assert.ok(!s.player.exists('props'));
+        assert.doesNotMatch(s.player.read('documents', 'letter.html'), /See the prop/);
+        assert.ok(s.logs.includes('  WARNING: Documents/Letter.md: has a ## The Text section with no words the players see, so its styled page is not made — write the words the players see under ## The Text (outside any hidden block)'), s.logs.join('\n'));
+        assert.ok(!s.logs.some((l) => /has no ## The Text section/.test(l)), s.logs.join('\n'));
+      } finally { s.cleanup(); }
+    }
+  });
+
+  it("a withheld name in a style file's name is a fault of the note that uses the style", () => {
+    const s = buildBoth({ ...LETTER(), 'NPCs/Lord Zorn.md': '---\ntype: npc\nwithheld: true\npublish: false\n---\nSecret.\n', '_meta/prop-styles/t/assets/lord-zorn.png': 'PNG' }, { sites: [] });
+    try {
+      let faults = null;
+      quiet(() => build({ configPath: s.configPath, site: 'player', inMemory: true, onNoteFaults: (f) => { faults = f; } }));
+      const paths = new Set(faults.filter((f) => /Lord Zorn/.test(JSON.stringify(f))).map((f) => f.path));
+      assert.ok(paths.has('Documents/Letter.md'), JSON.stringify(faults, null, 1));
+    } finally { s.cleanup(); }
+  });
+
+  it('a style file blocked by a link in the site folder is a problem of the note', () => {
+    const s = buildBoth(LETTER('prop_stamp: PAID\nprop_address: props/letter.html\n'), { sites: [], player: { keep: ['props'] } });
+    try {
+      const outside = path.join(s.root, 'outside');
+      fs.mkdirSync(outside, { recursive: true });
+      fs.mkdirSync(path.join(s.player.dir, 'props'), { recursive: true });
+      fs.symlinkSync(outside, path.join(s.player.dir, 'props', 'styles'));
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.deepEqual(fs.readdirSync(outside), []);
+      assert.ok(s.player.exists('props', 'letter.html'), lines.join('\n'));
+      assert.ok(lines.includes('  WARNING: Documents/Letter.md: props/styles/t/style.css (a file of the style "t") was not written: its path in the site folder is not a plain folder — replace the link in the site folder with a real folder'), lines.join('\n'));
+    } finally { s.cleanup(); }
+  });
+});
+
 describe('the GM site', () => {
   it('the GM site shows a held styled prop with its band', () => {
     const s = buildBoth({ ...LETTER(), ...OTHER, '_meta/publish-list.yaml': listFileText({ publishing: ['Documents/Other.md'] }) });
@@ -256,6 +304,30 @@ describe('the GM site', () => {
       assert.deepEqual(linesOfPropHtml(page), FENCE);
       assert.ok(s.gm.exists('props', 'styles', 't', 'style.css'));
       assert.ok(!s.player.exists('props'));
+    } finally { s.cleanup(); }
+  });
+
+  it('the GM band on a styled page is styled; a hand-made page is as 3a wrote it', () => {
+    const s = buildBoth({ ...LETTER(), 'Documents/Invitation.md': '---\ntype: prop\nprop_file: invitation.html\n---\nAn invitation.\n', 'Documents/invitation.html': '<html><head></head><body><p>HANDMADE</p></body></html>' }, { sites: ['gm'] });
+    try {
+      const page = s.gm.read('props', 'letter.html');
+      assert.match(page, /<link rel="stylesheet" href="\.\.\/css\/gm\.css">\n<\/head>/);
+      assert.ok(s.gm.exists('css', 'gm.css'));
+      assert.match(page, /class="gm-band"/);
+      assert.doesNotMatch(s.gm.read('props', 'invitation.html'), /gm\.css/);
+    } finally { s.cleanup(); }
+  });
+
+  it("the GM site's styled page says only what the player note page says", () => {
+    const s = buildBoth({ ...LETTER('', 'Signed, [[Elias Crowe]].\n\n<!-- gm-only -->\nKEEPER LINE\n<!-- /gm-only -->'), 'NPCs/Lord Vane.md': '---\ntype: npc\ngm_aliases: ["Elias Crowe"]\n---\nA patron.\n' });
+    try {
+      for (const site of [s.player, s.gm]) {
+        const page = site.read('props', 'letter.html');
+        const sheets = [...page.matchAll(/<section class="sheet">([\s\S]*?)<\/section>/g)].map((m) => m[1]).join('');
+        assert.doesNotMatch(page, /KEEPER LINE|Elias Crowe/);
+        assert.match(sheets, /Lord Vane/);
+        assert.doesNotMatch(sheets, /gm-mark/);
+      }
     } finally { s.cleanup(); }
   });
 });
