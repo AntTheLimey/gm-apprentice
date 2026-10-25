@@ -8,3 +8,5 @@ reviews:
     - "!tools/publish/schema/vault-config.schema.json"
     - "!skills/shared/template-history.json"
     - "!docs/site-settings.md"
+    - "!tools/publish/package-lock.json"
+    - "!.claude-plugin/plugin.json"
