@@ -76,6 +76,7 @@ every page that names it. Use it to confirm each fix.
 | `SKILL_BELOW_BASE` (`INFO`) | Info | A CoC skill is written below the base its characteristics give |
 | `HEADING_IN_HIDDEN_BLOCK` (`INFO`) | Info | A hidden heading sits inside a hidden block, so the text after it is withheld |
 | `TABLE_OVERWIDE` (`INFO`) | Info | A table row has more cells than its header, so the site widened the table |
+| `PROP_NOT_COPIED` | Warning | A prop's file, address or a file it links to is not on the site |
 
 A row is raised only where the site shows the fault. A stray `%%` or
 an open fence that lies wholly under `## GM Notes` changes nothing a
@@ -458,6 +459,58 @@ the table so no cell is lost; the extra columns have blank headings.
 Per table, ask the GM what to call each extra column, then add those
 header cells (and the matching `---` cells) in the note. Edit only on
 an answer.
+
+## PROP_NOT_COPIED
+
+A prop note's file, its address or a file its page links cannot go on
+the site. The note's own page still publishes, without the link to the
+prop. The row names the note and says what is wrong; after the `—` it
+says the fix. Work one note at a time: show the row's words, say what
+you would change, and edit on a yes.
+
+- **The prop file is not there, or is outside the note's folder:** look
+  for a file of that name in the vault (`find "<vault>" -iname
+  "<name>"`). An accented letter can be stored two ways, so if `find`
+  gives nothing, list the likely folders and compare the names as they
+  read. Offer to move the file beside the note; or, where it already
+  sits in the note's folder or a folder under it, to correct
+  `prop_file` to that path. Before a move, `grep -rlF "<name>"
+  "<vault>"` for other notes that embed or link it; if any do, offer
+  to copy it beside the note instead.
+- **A kind the site does not copy:** a prop file is a page, a PDF or a
+  picture. Where you can make one from the file (a text or Markdown
+  handout as a page, say), offer to, and point `prop_file` at it on a
+  yes. Ask the GM only for what only they have.
+- **The address is taken, or `prop_address` is not a path the site can
+  use:** offer a `prop_address` under `props/` that nothing else has,
+  ending as the prop file does (`props/invitation.html`).
+- **A file the prop's page links** (not there, outside its folder, a
+  letter-case difference, an address starting with `/`): show the line
+  of the page that links it. Offer to move the file beside the page, or
+  into a folder under it, and correct the link to match. The page is
+  the GM's own work: never edit it without saying exactly what changes.
+- **A kind the page cannot link** (audio, video, a PDF, another page):
+  show the line. A prop page cannot carry it, and the site publishes
+  no audio, video or other page. A PDF can be a prop of its own: offer
+  to make it one, a prop note (`shared/templates/prop.md`) beside the
+  file with `prop_file` naming it, linked from this prop's note, and
+  to take the link out of the page. A picture can take its place.
+  Otherwise offer to take the link out of the page. Say exactly what
+  changes and edit on a yes. Before making the note, ask whether
+  players see the PDF too. On a no, write `publish: false` in it. On a
+  yes, make it and check with `SITE explain "<new note>"`: if something
+  holds it back (not on the publish list, or drafts hidden and its
+  `canon_status: DRAFT`), say what, and on a yes run `SITE manifest
+  apply --publish "<new note>"` or change the status.
+- **Not really the kind its name says** (a `.png` that is a link to a
+  note): offer to link the real file in its place.
+- **Could not be read:** give the GM the file and the reason.
+- **A link in the site folder:** a folder on the prop's address, in a
+  kept folder of the site, is a link, so nothing is written through it.
+  That is the site folder, not the vault. Tell the GM, and offer
+  another `prop_address`.
+
+Confirm each fix with `site-faults --file "<note>"`.
 
 ## Reporting
 

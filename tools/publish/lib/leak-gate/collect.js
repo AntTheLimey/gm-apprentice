@@ -20,7 +20,11 @@ const {
   playerSafeMarkdown, stubMarked, stubCut, hiddenFieldsOf, publishedFrontmatter, pcHeadingsUnstable, publishMode,
 } = require('../processor');
 const { createMarks, markKinds, sanitize, markedSpans } = require('../gm-marks');
-const { piecesOfMarkdown, piecesOfValue, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf } = require('./text');
+const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf } = require('./text');
+const { TEXT_EXT } = require('./match');
+const { planProps, bytesOf, textOf } = require('../props/plan');
+const { takenAddresses } = require('../props/address');
+const { cutHtml } = require('../props/html-cut');
 
 const NEVER_SHOWN = ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase());
 const neverShown = (rel) => rel.split('/').slice(0, -1).some((s) => NEVER_SHOWN.includes(s.toLowerCase()));
@@ -44,7 +48,7 @@ function collectHidden({ configPath }) {
   const keptBy = player.vault.kept_by;
   // The GM's own words that must never reach players (player_site.never_show): looked for on every kind of vault.
   const neverShow = (player.site.never_show || []).filter((w) => typeof w === 'string' && w.trim());
-  const empty = { vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => null };
+  const empty = { vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), heldProps: [], siteTakes: () => false };
   if (keptBy === 'player') return empty;
 
   const quiet = () => {};
@@ -154,7 +158,63 @@ function collectHidden({ configPath }) {
     add(piecesOfMarkdown(body), rel, `unpublished note: ${why}`);
   }
 
-  return { vaultPath, siteDir, keptBy, neverShow, pieces, visible, warnings, notes, published, publishedRels, linkMap, outOf: (rel) => outputOf.get(rel) || null };
+  // The props, planned as the player build plans them (props/plan.js): a prop ships with its note's full page, never
+  // with a stub's, at an address no page, tool folder or (by default) kept folder takes, cut of its Keeper parts.
+  const taken = takenAddresses({ pageOutputs: published.map((p) => p.outputPath), keptDirs: player.site.keep || [] });
+  const { props } = planProps({
+    vaultPath, pages: corpus, relOf,
+    ships: (p) => publishedSet.has(p) && publishMode(p.sourceFrontmatter || p.frontmatter) !== 'stub',
+    taken,
+    cutKeeper: true,
+  });
+  // Each file a shipping prop puts on the site, and its notes: there it is their published form. A file two props share
+  // byte for byte is written once and belongs to both.
+  const propOwner = new Map();
+  const propOuts = new Map();
+  const own = (out, rel) => {
+    const key = canonicalNfc(out);
+    if (!propOwner.has(key)) propOwner.set(key, new Set());
+    propOwner.get(key).add(rel);
+    if (!propOuts.has(rel)) propOuts.set(rel, []);
+    propOuts.get(rel).push(out);
+  };
+  const heldProps = [];
+  const shownName = (p, source) => {
+    try { return path.relative(fs.realpathSync(path.dirname(p.page.sourcePath)), source).split(path.sep).join('/'); } catch (e) { return path.basename(source); }
+  };
+  for (const p of props) {
+    if (!p.source) continue;
+    if (p.ships && p.address && p.files.length) {
+      for (const f of p.files) {
+        own(f.out, p.rel);
+        // What the cut takes out of a page or SVG: hidden text of the note, if it reaches the site.
+        if (!f.cut || !bytesOf(f)) continue;
+        for (const run of cutHtml(textOf(bytesOf(f)).text).cut) add(piecesOfHtml(run), p.rel, `a hidden part of its prop file (${shownName(p, f.source)})`);
+      }
+      for (const out of p.shared) own(out, p.rel);
+      continue;
+    }
+    // A prop that does not ship: its whole file is hidden, and so is any file at its address or with its bytes.
+    const verdict = verdicts.get(p.page);
+    const fm = p.page.sourceFrontmatter || p.page.frontmatter;
+    const why = p.ships ? 'its file is not copied (PROP_NOT_COPIED)'
+      : publishedSet.has(p.page) && publishMode(fm) === 'stub' ? 'publish: stub'
+        : verdict && verdict.player ? verdict.player.reason : 'not on the site';
+    let bytes;
+    // A prop file that cannot be read stops the check, as a note does: its text could be anywhere on the site.
+    try { bytes = fs.readFileSync(p.source); } catch (e) { throw new Error(`Leak check: the prop file of ${p.rel} could not be read (${e.message}), so its text cannot be checked. Fix the file and deploy again.`); }
+    if (TEXT_EXT.has(path.extname(p.source).toLowerCase())) add(piecesOfHtml(textOf(bytes).text), p.rel, `unpublished prop: ${why}`);
+    heldProps.push({ rel: p.rel, address: p.address, hash: p.hash, size: bytes.length });
+  }
+
+  // A note's outputs: its page, then its prop's files.
+  const outOf = (rel) => [outputOf.get(rel), ...(propOuts.get(rel) || [])].filter(Boolean);
+  return {
+    vaultPath, siteDir, keptBy, neverShow, pieces, visible, warnings, notes, published, publishedRels, linkMap, outOf,
+    propOwner, propFiles: new Set(propOwner.keys()), heldProps,
+    // An address the site itself fills (a page, a file it needs, a tool folder): a held prop there is not what is there.
+    siteTakes: (address) => Boolean(taken.has(address, { explicit: true })),
+  };
 }
 
 module.exports = { collectHidden };

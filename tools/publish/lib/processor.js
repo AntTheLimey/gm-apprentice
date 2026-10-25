@@ -132,7 +132,7 @@ const DOCUMENT_KEEPER_SQUASHED_RE = /^(context|clues.*|(physical)?propnotes|deli
 // `handout` is the alias index_build.py accepts for `document`.
 function isDocumentPage(frontmatter) {
   const type = frontmatter ? String(frontmatter.type || '').trim().toLowerCase() : '';
-  return type === 'document' || type === 'handout';
+  return type === 'document' || type === 'handout' || type === 'prop';
 }
 
 // Why a heading is withheld: 'excluded' (on the exclude list at any level, or a
@@ -1635,7 +1635,7 @@ function resolveImageEmbeds(markdown, imageMap, currentOutputPath, usedImages, o
     const key = canonicalNfc(basename);
     const entry = imageMap[key];
     if (!entry) {
-      console.warn(`processor: image embed not found — "${basename}" (${currentOutputPath})`);
+      if (options.warn !== false) console.warn(`processor: image embed not found — "${basename}" (${currentOutputPath})`);
       return '';
     }
 
@@ -2622,4 +2622,4 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
   };
 }
 
-module.exports = { unstableBodyMarked, unstableSectionsMarked, markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, cutLines, sectionWithholder, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, uncommentedLines, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, campaignImageSrc, isWebImageAddress, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };
+module.exports = { isDocumentPage, unstableBodyMarked, unstableSectionsMarked, markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, cutLines, sectionWithholder, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, uncommentedLines, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, campaignImageSrc, isWebImageAddress, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };

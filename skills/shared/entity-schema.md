@@ -76,13 +76,14 @@ artifact (abstract)
 │   ├── relic
 │   ├── tool
 │   └── consumable
-└── document
-    ├── spell
-    ├── map
-    ├── letter
-    ├── prophecy
-    ├── contract
-    └── journal
+├── document
+│   ├── spell
+│   ├── map
+│   ├── letter
+│   ├── prophecy
+│   ├── contract
+│   └── journal
+└── prop
 
 narrative (abstract)
 ├── event
@@ -313,6 +314,11 @@ etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
 The text goes in the body under `## The Text`; an older `content`
 field moves there
 
+**Prop:** `prop_kind` (document, object, diagram, supplied,
+container), `prop_file` (a hand-made page, PDF or picture beside
+the note), `prop_address` (its address on the site; empty means
+`props/<note name>`). It publishes when the note does
+
 **Plan:** `plan_type` (arc/scene/investigation/timeline),
 `chapter` (wiki-link), `participants` (wiki-links),
 `locations` (wiki-links), `leads_to` (wiki-links)
@@ -432,6 +438,7 @@ no `precedes` or `alternative_to`. A vault vocabulary with a
 | creature (all subtypes) | Creatures/ |
 | event (all subtypes) | Events/ |
 | document (all subtypes) | Documents/ |
+| prop | beside its prop file, e.g. Chapters/{chapter}/Props/ or Documents/ |
 | clue | Clues/ |
 | plan | `Chapters/{chapter}/Planning/` |
 | scene | `Chapters/{chapter}/Scenes/` |

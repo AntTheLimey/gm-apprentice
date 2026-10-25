@@ -2,6 +2,7 @@ const { escapeHtml, relativeHref, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, metadataBadgesFor, portraitImg, connectionsSection } = require('./base');
 const { orderedSessions } = require('../story-spine');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
+const { propLinkHtml } = require('./prop-bar');
 
 function wikiTemplate(page, processedContent, navFor, config, imageMap, context) {
   const fm = page.frontmatter;
@@ -40,7 +41,9 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
 
   const graphHtml = connectionsSection(page, publishConfig);
 
-  const bodyHtml = `<h1 class="page-title">${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>\n${portrait}\n${badges}\n${processedContent.html}\n${graphHtml}`;
+  // A prop note links its prop under the title (`propHref`: relative, encoded).
+  const propLink = (context || {}).propHref ? `\n${propLinkHtml(context.propHref)}` : '';
+  const bodyHtml = `<h1 class="page-title">${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>${propLink}\n${portrait}\n${badges}\n${processedContent.html}\n${graphHtml}`;
   const mainContent = storyNav ? `${storyNav}\n${bodyHtml}\n${storyNav}` : bodyHtml;
 
   return baseShell({

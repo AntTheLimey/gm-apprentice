@@ -110,6 +110,9 @@ PLAN_TYPES = {"arc", "scene", "investigation", "timeline"}
 # where a faction or organization stands.
 SOURCE_VALUES = frozenset({"play", "prep", "backstory", "world-evolution"})
 FACTION_STATUS = frozenset({"active", "weakened", "destroyed", "allied", "dormant"})
+# What a prop is: a made page or text, a physical thing, a drawing, a file the
+# GM supplies, or a holder for other props.
+PROP_KINDS = frozenset({"document", "object", "diagram", "supplied", "container"})
 
 # The values a field takes, by note type ("*": any type). CHECKED_VALUES is
 # what both checks (vault_check.py frontmatter, scripts/validate_schema.py)
@@ -129,6 +132,7 @@ CHECKED_VALUES: dict[str, dict[str, frozenset[str]]] = {
                           "scope": frozenset(ADVENTURE_BRIEF_SCOPE)},
     "world_domain": {"status": frozenset(WORLD_DOMAIN_STATUS)},
     "plan": {"plan_type": frozenset(PLAN_TYPES)},
+    "prop": {"prop_kind": PROP_KINDS},
 }
 # Another spelling a checked field accepts: spelling -> the value it means.
 VALUE_ALIASES: dict[str, dict[str, dict[str, str]]] = {
@@ -167,6 +171,7 @@ REQUIRED_FIELDS = {
     "clue": ["type", "canon_status"],
     "event": ["type", "canon_status"],
     "document": ["type", "canon_status"],
+    "prop": ["type", "canon_status"],
     "adventure-brief": ["type", "canon_status", "scope"],
     "session": ["type", "session_number", "status", "documents"],
     "session-plan": ["type", "canon_status", "session"],
@@ -207,6 +212,7 @@ TEMPLATE_NAMES = {
     "event.md": "_Template_Event.md",
     "clue.md": "_Template_Clue.md",
     "document.md": "_Template_Document.md",
+    "prop.md": "_Template_Prop.md",
     "heritage.md": "_Template_Heritage.md",
     "world-domain.md": "_Template_World_Domain.md",
     "plan.md": "_Template_Plan.md",

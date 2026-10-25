@@ -64,6 +64,17 @@ as the search index, a copied file's name) is its own finding, accepted on its
 own. Never offer `leaks accept --note player_site.never_show`: it accepts
 every listed word on every page at once.
 
+A finding with the code `PROP_UNREVEALED` is a whole file: `page` is the
+file of a prop whose note (`note`) the site holds back, at its own address
+or as the same bytes elsewhere (a copy left in a kept folder, a picture a
+published note embeds). If the players already have the prop, offer to
+publish its note: `node "$TOOL" explain "<note>" --config
+<dir>/vault.config.json` says what holds it back, and on a yes
+`manifest apply --publish "<note>"` (same `TOOL` and `--config`). Otherwise
+offer to remove the copy, or the embed or link that ships it, saying
+exactly which file or line goes, and change it on a yes. Or accept it, on
+the GM's word, as above.
+
 ## When they are settled
 
 Run `deploy` again. `node "$TOOL" leaks check --config <dir>/vault.config.json`

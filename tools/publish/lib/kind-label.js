@@ -39,7 +39,7 @@ function typeLabelText(value) {
 // type is never offered a page by mistake. null when there is no type to read.
 const ENTITY_TYPES = new Set([
   'npc', 'pc', 'creature', 'location', 'faction', 'organization', 'item', 'event', 'clue',
-  'document', 'handout', 'npc_group', 'heritage', 'world_domain',
+  'document', 'handout', 'prop', 'npc_group', 'heritage', 'world_domain',
 ]);
 
 function kindOfType(type) {

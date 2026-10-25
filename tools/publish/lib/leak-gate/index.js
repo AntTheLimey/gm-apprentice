@@ -2,16 +2,19 @@
 // The leak gate (#293): the finished player site, after every build step, read for hidden text and secret names.
 // It writes nothing. deploy refuses on a finding; `leaks` lists, checks, accepts and prunes.
 const fs = require('fs');
+const path = require('path');
 const crypto = require('crypto');
 const { performance } = require('perf_hooks');
 const { loadPublishList } = require('../manifest');
 const { collectHidden } = require('./collect');
-const { createMatcher, readOutput, listFiles } = require('./match');
+const { createMatcher, readOutput, listFiles, TEXT_EXT } = require('./match');
 const { nameFindings, neverShowFindings } = require('./names');
 const { wordsOf, nameSet, onlyNames } = require('./text');
 const { isSettledHeading, settledHeadingGone } = require('../settled-headings');
 const { isAcceptedTie } = require('../accepted-ties');
 const { indexTexts } = require('./index-text');
+const { addressKey } = require('../props/address');
+const { canonicalNfc } = require('../unicode');
 
 const findingId = (page, text) => crypto.createHash('sha1').update(`${page}\n${text}`).digest('hex').slice(0, 6);
 const keyOf = (page, text) => `${page}\n${text}`;
@@ -24,6 +27,45 @@ const NEVER_NOTE = 'player_site.never_show';
 const findingKey = (f) => (f.code === 'NEVER_SHOW' ? `never\n${keyOf(f.page, f.text)}` : keyOf(f.page, f.text));
 const acceptedKey = (a) => (a.note === NEVER_NOTE ? `never\n${keyOf(a.page, a.text)}` : keyOf(a.page, a.text));
 const byPageText = (a, b) => (a.page < b.page ? -1 : a.page > b.page ? 1 : a.text < b.text ? -1 : a.text > b.text ? 1 : 0);
+
+// A file of a prop the site does not publish: one at the prop's address (unless a shipping prop or the site itself has
+// it), or any other file that is not text and has the prop file's bytes (a PDF or picture copied by hand). A text prop
+// file is found by its text.
+const UNREVEALED = 'the prop file of a note the site does not publish';
+function propUnrevealed({ outputDir, hidden }) {
+  const found = [];
+  if (!hidden.heldProps.length) return found;
+  const shipped = new Set([...hidden.propFiles].map(addressKey));
+  const atAddress = new Map();
+  for (const h of hidden.heldProps) {
+    if (h.address && !shipped.has(addressKey(h.address)) && !hidden.siteTakes(h.address) && !atAddress.has(addressKey(h.address))) atAddress.set(addressKey(h.address), h);
+  }
+  const bySize = new Map();
+  for (const h of hidden.heldProps) {
+    if (TEXT_EXT.has(path.extname(h.address || '').toLowerCase())) continue;
+    if (!bySize.has(h.size)) bySize.set(h.size, []);
+    bySize.get(h.size).push(h);
+  }
+  const add = (page, h) => {
+    const text = wordsOf(h.rel).join(' ');
+    found.push({ id: findingId(page, text), kind: 'name', code: 'PROP_UNREVEALED', page, text, shown: page, note: h.rel, reason: UNREVEALED });
+  };
+  for (const rel of listFiles(outputDir)) {
+    if (hidden.propFiles.has(canonicalNfc(rel))) continue;
+    const at = atAddress.get(addressKey(rel));
+    if (at) { add(rel, at); continue; }
+    if (TEXT_EXT.has(path.extname(rel).toLowerCase())) continue;
+    const full = path.join(outputDir, ...rel.split('/'));
+    let size;
+    try { size = fs.statSync(full).size; } catch (e) { continue; }
+    const same = bySize.get(size);
+    if (!same) continue;
+    const hash = crypto.createHash('sha1').update(fs.readFileSync(full)).digest('hex');
+    const h = same.find((x) => x.hash === hash);
+    if (h) add(rel, h);
+  }
+  return found;
+}
 
 function runLeakGate({ configPath, outputDir }) {
   const start = performance.now();
@@ -47,7 +89,11 @@ function runLeakGate({ configPath, outputDir }) {
   const files = readOutput(outputDir);
   const raw = new Map();
   for (const file of files) {
+    // A shipping prop's own file is its note's published form: another note's hidden text there is the prop's (a letter
+    // a scene quotes), its own note's hidden text is a leak as anywhere.
+    const owners = hidden.propOwner.get(canonicalNfc(file.rel));
     for (const { piece } of matcher.scan(file.words)) {
+      if (owners !== undefined && !owners.has(piece.note)) continue;
       const key = keyOf(file.rel, piece.text);
       if (raw.has(key)) continue;
       raw.set(key, { id: findingId(file.rel, piece.text), kind: 'text', code: 'HIDDEN_TEXT', page: file.rel, text: piece.text, shown: piece.shown, note: piece.note, reason: piece.reason });
@@ -70,6 +116,10 @@ function runLeakGate({ configPath, outputDir }) {
   }
   // The name checks add theirs here, before the accepted list is applied.
   for (const f of nameFindings({ files, allFiles: listFiles(outputDir), hidden, findingId })) {
+    const key = keyOf(f.page, f.text);
+    if (!raw.has(key)) raw.set(key, f);
+  }
+  for (const f of propUnrevealed({ outputDir, hidden })) {
     const key = keyOf(f.page, f.text);
     if (!raw.has(key)) raw.set(key, f);
   }

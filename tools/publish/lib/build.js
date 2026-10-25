@@ -42,6 +42,9 @@ const { publishedPages } = require('./published-pages');
 const { isOutOfPlay } = require('./pc-status');
 const { sheetSourceOf } = require('./sheet-source');
 const { pcIdentity } = require('./templates/pc-identity');
+const { planProps } = require('./props/plan');
+const { takenAddresses } = require('./props/address');
+const { propHrefFor, propOutputs, keptCopyOutputs, pathProblem } = require('./props/files');
 
 const TOOL_VERSION = require('../package.json').version;
 
@@ -793,6 +796,19 @@ function buildSite(options) {
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
 
+  // The props the player site ships: a prop note's own file, at its address, with the files
+  // it links. A prop ships with its note's full page; a stub's prop does not. A fast build
+  // plans none. The doctor reads the plan from publishConfig._props.
+  const propPlan = onlySheets ? null : planProps({
+    vaultPath: config.vaultPath, pages: corpus, relOf: vaultRelPathOf,
+    // The GM site shows every prop of every note it shows, uncut while Keeper blocks are on; it keeps no folder.
+    ships: gm ? (p) => pages.includes(p) : (p) => pages.includes(p) && publishMode(p.sourceFrontmatter || p.frontmatter) !== 'stub',
+    taken: takenAddresses({ pageOutputs: pages.map((p) => p.outputPath), keptDirs: gm ? [] : config.preserveDirs }),
+    cutKeeper: gm ? !show.has('gm_only_blocks') : true, cleanup: writes === 'all' && !gm,
+  });
+  publishConfig._props = propPlan;
+  for (const r of propPlan ? propPlan.problems : []) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);
+
   // A GM alias must never reach the site (#212): rewrite every one to the
   // title of the note that owns it, in every scanned page's body and
   // frontmatter, before anything renders or derives from them. Owners come
@@ -1179,6 +1195,26 @@ function buildSite(options) {
   }
 
   cleanOutput();
+  // A prop file is never written through a link in the site folder (a kept folder can hold
+  // one): such a file is not written, and its note does not link it. In memory (the doctor)
+  // nothing was cleaned, so only a kept folder is looked in: all that a clean would leave.
+  const propBlocked = new Set();
+  const survivesClean = (out) => !dry || config.preserveDirs.some((kept) => kept.toLowerCase() === out.split('/')[0].toLowerCase());
+  if (propPlan && (writes === 'all' || dry)) {
+    for (const p of propPlan.props) {
+      for (const f of p.ships && p.address ? p.files : []) {
+        const why = survivesClean(f.out) && pathProblem(outputDir, f.out);
+        if (!why) continue;
+        propBlocked.add(f.out);
+        const detail = why === 'link' ? `${f.out} was not written: a folder on its path in the site folder is a link` : `${f.out} was not written: something that is not a file is at that address in the site folder`;
+        const row = { rel: p.rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail, fix: why === 'link' ? 'replace the link with a real folder, or give the prop another prop_address' : 'give the prop another prop_address' };
+        propPlan.problems.push(row);
+        console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
+      }
+      // A prop page that is not written takes the files it links with it.
+      if (p.files.length && propBlocked.has(p.files[0].out)) for (const f of p.files) propBlocked.add(f.out);
+    }
+  }
   // The GM site's folder is its own from here: the marker goes in first (finished: null) and is written again last.
   if (gm && writes === 'all') {
     fs.mkdirSync(outputDir, { recursive: true });
@@ -1498,7 +1534,7 @@ function buildSite(options) {
             processed.html = sessionBodyHtml(page, { wrapUp, chapter, recapChars: publishConfig.limits.recap_chars });
           }
         }
-        html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap, pages });
+        html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap, pages, propHref: propHrefFor(propPlan, page, propBlocked) });
         break;
       }
     }
@@ -1776,6 +1812,8 @@ function buildSite(options) {
   // what actually publishes (decidePage's verdicts, above), and `usedImages` is populated
   // from that filtered set regardless of whether a manifest exists, so gating this on
   // `manifest` just meant a manifest-less player build shipped every GM-only image.
+  // A recap's picture counts as used: the story pages are rendered once here, for the set only.
+  if (!onlySheets) buildStorySpine(pages, linkMap, hubWrapUps, { imageMap, usedImages });
   const filteredMap = {};
   for (const [basename, entry] of Object.entries(imageMap)) {
     if (usedImages.has(basename)) filteredMap[basename] = entry;
@@ -1949,7 +1987,7 @@ function buildSite(options) {
     }
 
     // The story: its chapters, each PC's own story, its contents page.
-    const spine = buildStorySpine(pages, linkMap, hubWrapUps);
+    const spine = buildStorySpine(pages, linkMap, hubWrapUps, { imageMap, usedImages });
     for (const unit of spine) {
       unit.refsHtml = renderRefsHtml(unit);
       emit(unit.outputPath, renderStoryUnit(unit, config, publishConfig, navFor), `  wrote ${unit.outputPath}`);
@@ -2074,6 +2112,62 @@ function buildSite(options) {
     writeHtml(full, html);
     console.log(said);
   }, true);
+
+  // Each prop's files, read by the note-faults audit as they are written: a withheld name in a
+  // prop page, or in the name of any file a prop puts on the site, is a fault of its note.
+  if (propPlan) {
+    const { outputs, failed } = propOutputs(propPlan);
+    propPlan.problems.push(...failed);
+    // A kept folder is never cleaned, so a prop written into one by an earlier build would
+    // outlive its note: each file still holding exactly what the tool wrote there goes. A
+    // file with other bytes may be the GM's own and stays (the leak gate reads it).
+    if (writes === 'all') {
+      const writing = new Set(outputs.map((f) => f.out.toLowerCase()));
+      const kept = config.preserveDirs.map((d) => d.toLowerCase().replace(/\/+$/, ''));
+      for (const f of keptCopyOutputs(propPlan)) {
+        const key = f.out.toLowerCase();
+        if (writing.has(key) || !kept.some((d) => key.startsWith(`${d}/`))) continue;
+        const full = path.join(outputDir, ...f.out.split('/'));
+        if (!fs.existsSync(full)) continue;
+        const why = pathProblem(outputDir, f.out);
+        if (why === 'link') { console.log(`  left in kept folder: ${f.out} (a folder on its path is a link)`); continue; }
+        if (why) continue;
+        const want = f.text !== undefined ? Buffer.from(f.text) : f.bytes;
+        if (!fs.readFileSync(full).equals(want)) { console.log(`  left in kept folder: ${f.out} (it differs from what the tool would write)`); continue; }
+        fs.unlinkSync(full);
+        console.log(`  removed from kept folder: ${f.out} (its prop is not published)`);
+      }
+    }
+    for (const r of failed) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);
+    let written = 0;
+    const shipped = new Set();
+    for (const f of outputs) {
+      logWarnings(f.rel, f.warnings);
+      if (audit && f.text !== undefined && /\.(?:html?|svg)$/i.test(f.out)) {
+        audit.read(f.rel, f.text);
+        audit.readAddresses(f.rel, f.text);
+      }
+      if (audit) audit.readFileName(f.rel, f.out);
+      if (writes !== 'all' || propBlocked.has(f.out)) continue;
+      if (pathProblem(outputDir, f.out)) {   // checked again as it is written
+        const row = { rel: f.rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: `${f.out} was not written: its path in the site folder is not a plain folder`, fix: 'give the prop another prop_address' };
+        propPlan.problems.push(row);
+        console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
+        continue;
+      }
+      written += 1;
+      const full = path.join(outputDir, ...f.out.split('/'));
+      ensureDir(full);
+      const replaced = f.replacesKept && fs.existsSync(full);
+      if (f.isPage) writeHtml(full, f.text, propPlan.props.find((p) => p.rel === f.rel).page);
+      else fs.writeFileSync(full, f.text !== undefined ? f.text : f.bytes);
+      console.log(`  wrote ${f.out}`);
+      if (f.was) console.log(`  ${f.out}: written as UTF-8 (it was ${f.was})`);
+      shipped.add(f.rel);
+      if (replaced) console.log(`  replaces kept file: ${f.out}`);
+    }
+    if (writes === 'all' && propPlan.props.length > 0) console.log(`Props: ${shipped.size} published (${written} files)`);
+  }
 
   // Last thing before "Done", so it is the line the GM reads (#277). A session in Excluded
   // is a decision and never lands here; one in Needs Decision or in no section does.
@@ -2207,6 +2301,7 @@ function buildSite(options) {
   if (runningSteps && errorCount === 0 && publishConfig.steps.after.length) runSteps(publishConfig.steps.after, { cwd: configDir, label: 'after_build', log: options.stepsLog, stdio: options.stepsStdio, extraEnv: stepEnv });
   if (!gm) for (const pc of tohitRows) audit.calculator(pc.rel, pc.rows);
   if (!gm) for (const t of tableRows) audit.calculator(t.rel, t.rows);
+  if (audit && propPlan) for (const r of propPlan.problems) audit.calculator(r.rel, [r]);
   // A withheld heading inside a hidden block (#447): the text after it is withheld; campaign-qa offers to move it.
   if (!gm) {
     for (const [page, facts] of stripFacts) {

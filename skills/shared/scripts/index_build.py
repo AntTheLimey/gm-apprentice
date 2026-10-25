@@ -75,6 +75,7 @@ SECTION_FOR_TYPE: dict[str, tuple[str, str]] = {
     "event": ("Events", ""),
     "document": ("Documents", ""),
     "handout": ("Documents", ""),
+    "prop": ("Props", ""),
     "clue": ("Clues", ""),
 }
 
@@ -82,7 +83,7 @@ SECTION_FOR_TYPE: dict[str, tuple[str, str]] = {
 # A type outside SECTION_FOR_TYPE falls into "Other", subgrouped by type.
 SECTION_ORDER = ["Characters", "Locations", "Factions & Organizations",
                   "Items & Artifacts", "Creatures", "Events", "Documents",
-                  "Clues"]
+                  "Props", "Clues"]
 
 NARRATIVE_TYPES = {"chapter", "session", "scene"}
 

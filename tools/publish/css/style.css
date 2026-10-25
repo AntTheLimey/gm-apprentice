@@ -350,6 +350,19 @@ img {
   font-size: 1.75rem;
   margin-bottom: 0.5rem;
 }
+/* A prop note's link to its prop, under the title */
+.prop-link { margin: 0 0 1rem; }
+.prop-btn {
+  display: inline-block;
+  padding: 0.4rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--accent-dim);
+  color: var(--text);
+  font-weight: 600;
+  text-decoration: none;
+}
+.prop-btn:hover, .prop-btn:focus-visible { background: var(--accent); color: var(--bg); }
 .page-subtitle {
   color: var(--text-muted);
   font-size: 1rem;

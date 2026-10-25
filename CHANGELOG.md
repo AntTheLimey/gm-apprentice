@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.102] — 2026-10-25
+
+A prop is a note of its own, and the site shows it as the page, PDF or
+picture you made.
+
+### Added
+
+- Prop notes: `type: prop` with `prop_kind`, `prop_file` and
+  `prop_address`. A published prop's hand-made page, PDF or picture is
+  on the site with what it links to, its Keeper parts cut, a "See the
+  prop" link on its note and a bar back. A page, drawing or stylesheet
+  not in UTF-8 (the Windows or Word "Unicode" encodings) is converted to
+  UTF-8, so its letters show correctly. The GM site shows every prop.
+- Story pages show the pictures a recap embeds.
+- Site Faults code `PROP_NOT_COPIED`, for a prop whose file the build
+  could not copy.
+- The update adds `_Templates/_Template_Prop.md` and the Prop entry in
+  `_meta/entity-types.md` to existing vaults. Publish tool 1.49.0.
+
+### Changed
+
+- The leak check reads a prop's files as its note's published form. A
+  held picture or PDF prop whose exact bytes reach the site another
+  way, such as the same image embedded in a published note, is now a
+  leak finding, `PROP_UNREVEALED`. It can be accepted like any finding
+  and may appear at your first deploy.
+- `type: prop` notes withhold Context, Clues, Prop Notes and Delivery,
+  as documents do.
+- A prop written into a kept folder (`player_site.keep`) through an
+  explicit `prop_address` replaces the file there, and the build says
+  so when there was one. It is removed again when its note stops
+  publishing, only if the file is unchanged.
+- A withheld-name finding on a copied file's name now names the note it
+  comes from.
+
 ## [1.10.101] — 2026-10-25
 
 The Wrap-Up writers take a session or Wrap-Up by name.
