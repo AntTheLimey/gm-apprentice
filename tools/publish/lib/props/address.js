@@ -6,7 +6,7 @@ const { slugify } = require('../scanner');
 const { canonicalNfc } = require('../unicode');
 const { DIR_LABELS } = require('../templates/base');
 
-const PROP_FILE_EXTS = new Set(['.html', '.htm', '.svg', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif']);
+const PROP_FILE_EXTS = new Set(['.html', '.htm', '.svg', '.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif']);
 
 const RESERVED_FILES = ['index.html', '404.html', 'story.html', 'timeline.html', 'previews.json', 'search-index.json', 'robots.txt', 'gm-build.json', 'NOTICE.txt', '.nojekyll', 'props/index.html'];
 const RESERVED_PREFIXES = ['css/', 'js/', 'images/', 'fonts/', 'story/'];

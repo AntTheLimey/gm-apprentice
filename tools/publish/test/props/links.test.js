@@ -37,3 +37,13 @@ test('url() and @import in <style> and style=""', () => {
 test('CSS files', () => {
   assert.deepStrictEqual(paths("a{background:url('assets/paper-light.jpg')}\n@import \"more.css\";", '.css'), ['assets/paper-light.jpg', 'more.css']);
 });
+
+test('a > inside a quoted attribute does not end the tag', () => {
+  assert.deepStrictEqual(paths('<img alt="a > b" src="pic.png">'), ['pic.png']);
+  assert.deepStrictEqual(paths("<img title='x>y' src='q.png'>"), ['q.png']);
+});
+
+test('an unquoted src before /> is read without the slash', () => {
+  assert.deepStrictEqual(paths('<img src=a.png/>'), ['a.png']);
+  assert.deepStrictEqual(paths('<img src=a.png>'), ['a.png']);
+});

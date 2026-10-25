@@ -24,3 +24,10 @@ test('propFileOf and propAddressOf trim and null out empties', () => {
   assert.strictEqual(propAddressOf({ prop_address: ' x/y.html ' }), 'x/y.html');
   assert.strictEqual(propAddressOf({}), null);
 });
+
+test('propKindOf knows all five kinds, and only a prop type chooses one', () => {
+  assert.strictEqual(propKindOf({ type: 'prop', prop_kind: 'object' }), 'object');
+  assert.strictEqual(propKindOf({ type: 'prop', prop_kind: 'diagram' }), 'diagram');
+  assert.strictEqual(propKindOf({ type: 'prop', prop_kind: 'supplied' }), 'supplied');
+  assert.strictEqual(propKindOf({ type: 'document', prop_file: 'a.html', prop_kind: 'container' }), 'document');
+});

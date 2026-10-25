@@ -13,11 +13,11 @@ function cssRefs(css) {
 
 function htmlRefs(html) {
   const found = [];
-  for (const tag of html.matchAll(/<([a-zA-Z][\w:-]*)((?:\s[^>]*)?)>/g)) {
+  for (const tag of html.matchAll(/<([a-zA-Z][\w:-]*)((?:\s(?:"[^"]*"|'[^']*'|[^>"'])*)?)>/g)) {
     const name = tag[1].toLowerCase();
     const attrs = {};
     for (const a of tag[2].matchAll(/([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g)) {
-      attrs[a[1].toLowerCase()] = a[2] ?? a[3] ?? a[4];
+      attrs[a[1].toLowerCase()] = a[2] ?? a[3] ?? a[4].replace(/\/$/, "");
     }
     if (attrs.src) found.push(attrs.src);
     if (attrs.poster) found.push(attrs.poster);

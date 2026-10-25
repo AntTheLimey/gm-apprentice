@@ -42,3 +42,16 @@ test('an explicit address inside a kept folder replaces the kept file and says s
   assert.ok(t.has('css/x.css', { explicit: true }));
   assert.ok(t.has('documents/letter.html', { explicit: true }));
 });
+
+test('avif default address; jpg and jpeg are distinct, htm and html equal', () => {
+  assert.strictEqual(defaultPropAddress('Props/Map.md', '.AVIF'), 'props/map.avif');
+  assert.strictEqual(addressShapeProblem('props/a.jpeg', '.jpg'), 'must end in .jpg');
+  assert.strictEqual(addressShapeProblem('props/a.jpg', '.jpeg'), 'must end in .jpeg');
+  assert.strictEqual(addressShapeProblem('props/a.htm', '.html'), null);
+});
+
+test('a kept folder with a trailing slash behaves the same', () => {
+  const t = takenAddresses({ pageOutputs: [], keptDirs: ['gazetteer/'] });
+  assert.match(t.has('gazetteer/papers/a.html'), /gazetteer/);
+  assert.strictEqual(t.has('gazetteer/papers/a.html', { explicit: true }), null);
+});
