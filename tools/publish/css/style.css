@@ -363,6 +363,24 @@ img {
   text-decoration: none;
 }
 .prop-btn:hover, .prop-btn:focus-visible { background: var(--accent); color: var(--bg); }
+/* A listing of props: what a container holds */
+.prop-list { list-style: none; margin: 1rem 0; padding: 0; }
+.prop-item { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
+.prop-item:last-child { border-bottom: none; }
+.prop-line { display: block; color: var(--text-muted); font-size: 0.95rem; }
+.prop-arrived, .gm-unrevealed { display: inline-block; margin-left: 0.5rem; font-size: 0.85rem; color: var(--text-muted); }
+.gm-unrevealed { font-style: italic; }
+.prop-sealed .prop-title { color: var(--text-muted); }
+.prop-seal {
+  margin-left: 0.5rem;
+  padding: 0 0.4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
 .page-subtitle {
   color: var(--text-muted);
   font-size: 1rem;

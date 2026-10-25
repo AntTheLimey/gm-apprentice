@@ -145,8 +145,9 @@ describe('the prop-styles fixture, built', () => {
   });
 
   it('a starter style\'s page links nothing outside the site', () => {
+    // Every styled note's page, and the container's (the sea chest), which lists them.
     const pages = walk(path.join(docs, 'props')).filter((f) => f.endsWith('-prop.html'));
-    assert.equal(pages.length, notes.length);
+    assert.deepEqual(pages.map((f) => path.basename(f)).sort(), [...notes.map((n) => `${n.slug}-prop.html`), 'sea-chest-prop.html'].sort());
     for (const f of pages) {
       const page = fs.readFileSync(f, 'utf8');
       for (const [, url] of page.matchAll(/(?:href|src)="([^"]*)"/g)) assert.doesNotMatch(url, /^(?:[a-z][a-z0-9+.-]*:|\/)/i, `${f}: ${url}`);

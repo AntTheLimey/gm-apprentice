@@ -387,4 +387,4 @@ function fillLayout(text, view) {
   return Mustache.render(text, view, {}, TAGS);
 }
 
-module.exports = { TOOL_NAMES, TOOL_HTML, FILTERS, checkLayout, layoutNames, layoutView, fillLayout };
+module.exports = { TOOL_NAMES, TOOL_HTML, FILTERS, checkLayout, layoutNames, layoutView, fillLayout, fieldText };

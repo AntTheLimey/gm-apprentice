@@ -53,8 +53,9 @@ function styleFontFamilies(style, fields) {
   return out.filter((v, i, a) => a.indexOf(v) === i);
 }
 
-function styledPage({ prop, style, page, linkMap, imageMap, usedImages, collectionHref = null, fontsCss = false }) {
-  const problem = textProblem(page.publishedMarkdown);
+// `items`: a container's listing (its rows' HTML), for `{{{items}}}`; a container's `## The Text` is optional.
+function styledPage({ prop, style, page, linkMap, imageMap, usedImages, collectionHref = null, fontsCss = false, items = null }) {
+  const problem = items === null ? textProblem(page.publishedMarkdown) : null;
   if (problem) return { problem };
   const text = propTextOf(page.publishedMarkdown);
   const fields = page.frontmatter || {};
@@ -70,7 +71,7 @@ function styledPage({ prop, style, page, linkMap, imageMap, usedImages, collecti
     title, note_title: noteTitle, text: html,
     sheet_number: String(i + 1), sheet_count: String(sheets.length), first: i === 0, last: i === sheets.length - 1,
   })));
-  const body = fillLayout(style.layout, layoutView(fields, layoutNames(style.layout), { title, note_title: noteTitle, body: filled.join('\n') }));
+  const body = fillLayout(style.layout, layoutView(fields, layoutNames(style.layout), { title, note_title: noteTitle, body: filled.join('\n'), items: items || '' }));
 
   const rel = (out) => escapeHtml(encodeHref(relativeHref(at, out)));
   const own = (file) => rel(`${STYLES_DIR}/${style.name}/${file}`);

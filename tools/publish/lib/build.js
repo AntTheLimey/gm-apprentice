@@ -47,6 +47,8 @@ const { planProps } = require('./props/plan');
 const { takenAddresses } = require('./props/address');
 const { propHrefFor, propOutputs, keptCopyOutputs, pathProblem } = require('./props/files');
 const { styledPage, styleFontFamilies, textProblem, FONTS_CSS, BASE_CSS } = require('./props/page');
+const { containerItems } = require('./props/collection');
+const { containerTemplate, containerItemsHtml } = require('./templates/props-page');
 
 const TOOL_VERSION = require('../package.json').version;
 
@@ -1673,8 +1675,9 @@ function buildSite(options) {
 
   // The pages the tool makes for props that name a style, made before the note pages so a note
   // links only a page that was made. A held prop's page is never made: its words would pass
-  // through the build. A container's page is not made here. The words are the note page's own
-  // player view of `## The Text`, on the GM site too (the GM sees the Keeper parts on the note page).
+  // through the build. The words are the note page's own player view of `## The Text`, on the GM
+  // site too (the GM sees the Keeper parts on the note page). Then each container's page, which lists
+  // what it holds, so a row links only a page that was made; one that names a style fills its layout.
   // The styles' typefaces are served from the site, from the vault's font cache: a miss warns once.
   let styleFonts = { css: '', files: [] };
   if (propPlan) {
@@ -1694,7 +1697,8 @@ function buildSite(options) {
       }
       styled.push(p);
     }
-    const families = [...new Set(styled.flatMap((p) => styleFontFamilies(p.style, p.page.frontmatter || {})))];
+    const containers = propPlan.props.filter((p) => p.ships && p.address && p.kind === 'container' && p.made && !propBlocked.has(p.address));
+    const families = [...new Set([...styled, ...containers.filter((p) => p.style)].flatMap((p) => styleFontFamilies(p.style, p.page.frontmatter || {})))];
     if (families.length) {
       let warned = false;
       styleFonts = fontsLib.selfHostedFontFaces(config.vaultPath, families, () => {
@@ -1707,6 +1711,26 @@ function buildSite(options) {
       const made = styledPage({ prop: p, style: p.style, page: p.page, linkMap, imageMap, usedImages, collectionHref: null, fontsCss: styleFonts.css !== '' });
       if (made.problem) noPage(p, made.problem);
       else p.made_html = made.html;
+    }
+    // What a listing shows is the note pages this site publishes; on the GM site, a row the
+    // player site does not publish is marked.
+    const shown = new Set(pages);
+    const pageAt = new Map(pages.map((pg) => [pg.outputPath, pg]));
+    const misplaced = [];
+    const listed = containerItems({
+      props: propPlan.props, isShown: (pg) => shown.has(pg), excludeFields, site: gm ? 'gm' : 'player',
+      resolvePage: (target) => pageAt.get(linkMap[target]) || null,
+      isPlayerShown: gm ? (pg) => onPlayerSite.has(pg) : null, blocked: propBlocked, problems: misplaced,
+    });
+    for (const row of misplaced) {
+      propPlan.problems.push(row);
+      console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
+    }
+    for (const p of containers) {
+      const { rows } = listed.get(p.rel);
+      p.made_html = p.style
+        ? styledPage({ prop: p, style: p.style, page: p.page, linkMap, imageMap, usedImages, collectionHref: null, fontsCss: styleFonts.css !== '', items: containerItemsHtml(rows, p.address) }).html
+        : containerTemplate({ container: p, rows, address: p.address }, navFor, config, publishConfig, { linkMap, imageMap, usedImages });
     }
   }
 
