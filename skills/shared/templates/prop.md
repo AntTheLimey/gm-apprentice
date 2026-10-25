@@ -24,9 +24,8 @@ does. Parts of a hand-made page inside a gm-only comment fence are cut
 from the published copy. Files the page links to are copied if they sit
 beside it. With a prop_style, the words under ## The Text are the
 prop's words; a fenced block that is the whole section keeps its lines
-exactly. Everything above
-the gm-only fence is what players see on the site. Omit a section
-rather than leave its heading empty. -->
+exactly. Everything above the gm-only fence is what players see on the
+site. Omit a section rather than leave its heading empty. -->
 
 ## Description
 

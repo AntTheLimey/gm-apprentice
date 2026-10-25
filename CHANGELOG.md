@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.103] — 2026-10-25
+
+Props can be styled as a terminal, a form, a letter and more, built from
+the words you write, and a campaign gets one page that lists them.
+
+### Added
+
+- Prop styles (`prop_style`): nine starter styles (terminal, form, hand,
+  letter, clipping, ticket, passport, scroll, decree) and the vault's own
+  in `_meta/prop-styles/`. The styled page is built from `## The Text`.
+- Container props with `show_sealed: titles`.
+- One props page per campaign (`player_site.props.*`), its menu link, an
+  "All props" link on every prop, and `player_site.landing.latest_props`.
+- New prop fields `prop_line`, `prop_group`, `prop_container` and
+  `show_sealed`. The update refreshes `_Templates/_Template_Prop.md`
+  through the existing template check. Publish tool 1.50.0 (adds the
+  `mustache` dependency).
+
+### Changed
+
+- The leak check reads styled and container pages as ordinary pages and
+  allows a sealed title on its own listings only.
+- The leak check also blocks a page that links a held prop's address or
+  an unrevealed prop's note page.
+- `PROP_NOT_COPIED` also covers an unusable style, a missing
+  `## The Text` and a `prop_container` that names no container.
+- `NOTICE.txt` now lists every font the site serves from Google Fonts
+  (theme fonts, sheet skins, prop styles) with its copyright and licence,
+  and carries the OFL, Apache-2.0 and UFL licence texts it needs (the
+  tool ships them in `tools/publish/licenses/`).
+- A prop whose default address is taken by a page the site builds moves
+  to `props/<name>-prop.html`.
+- The build summary counts props, not rows ("N props could not be put on
+  the site as asked").
+
 ## [1.10.102] — 2026-10-25
 
 A prop is a note of its own, and the site shows it as the page, PDF or

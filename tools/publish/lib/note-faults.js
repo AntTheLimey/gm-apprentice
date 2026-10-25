@@ -29,8 +29,10 @@
 //                     is lost (information; the build says so per page)
 //   PROP_NOT_COPIED  a prop note's file, its address or a file it links that the site cannot
 //                     publish (missing, outside the note's folder, a kind it does not copy, an
-//                     address taken or not a path, a link in the site folder); the plan's own
-//                     words, from props/plan.js and the build
+//                     address taken or not a path, a link in the site folder), or a prop's
+//                     style, `## The Text` or container that cannot be used (an unusable
+//                     style, a missing `## The Text`, a `prop_container` naming no container);
+//                     the plan's own words, from props/plan.js and the build
 //
 // Nothing here reads a page a second way, and nothing here knows which field a template
 // prints. The names are decided by the page as the build makes it: every link to a note
