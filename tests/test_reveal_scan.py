@@ -52,14 +52,18 @@ def make_vault(tmp: str, files: dict[str, str]) -> Path:
 
 
 def tool(listed: bool = True, publishing: list[str] | None = None,
-         stripped: dict[str, list[str]] | None = None) -> Any:
+         stripped: dict[str, list[str]] | None = None,
+         props: tuple[str, ...] = ()) -> Any:
     def ask(vault: Path, args: list[str], site_optional: bool = False) -> ToolAnswer:
         if args[:2] == ["manifest", "list"]:
             if not listed:
                 return ToolAnswer(data={"listed": False, "publishing": []})
             return ToolAnswer(data={"listed": True, "publishing": publishing or [],
                                     "excluded": [], "needs_decision": []})
-        pages = [{"path": p, "strippedSections": s} for p, s in (stripped or {}).items()]
+        pages = [{"path": p, "strippedSections": s, "prop": p in props}
+                 for p, s in (stripped or {}).items()]
+        pages += [{"path": p, "strippedSections": [], "prop": True}
+                  for p in props if p not in (stripped or {})]
         return ToolAnswer(data={"pages": pages})
     return ask
 
@@ -237,6 +241,33 @@ class RevealScan(unittest.TestCase):
         self.assertEqual(rv.render(res), [
             "reveals: Session 12 - Mill (sources: Play Notes, Wrap-Up)",
             "NPCs/Vex.md\tunpublished withheld\t", "# notes: 1"])
+
+
+    def test_marks_prop_rows(self) -> None:
+        ledger = "---\ntype: prop\nwithheld: true\n---\n\nLedger.\n"
+        res = run_scan({**base(play="Met [[Vex]], found [[Ledger]].\n"),
+                        "NPCs/Vex.md": VEX, "Handouts/Ledger.md": ledger},
+                       props=("Handouts/Ledger.md",))
+        self.assertEqual(rv.render(res)[1:3], [
+            "NPCs/Vex.md\tunpublished withheld\t",
+            "Handouts/Ledger.md\tunpublished withheld prop\t"])
+
+    def test_no_marker_when_explain_fails(self) -> None:
+        listed = tool()
+        def ask(vault: Path, args: list[str], site_optional: bool = False) -> ToolAnswer:
+            if args[:1] == ["explain"]:
+                return ToolAnswer(why="explain --all timed out after 60s")
+            return listed(vault, args, site_optional)
+        ledger = "---\ntype: prop\n---\n\nLedger.\n"
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(rv, "ask_publish_tool", ask):
+            res = rv.scan(make_vault(tmp, {**base(play="[[Ledger]]\n"),
+                                           "Handouts/Ledger.md": ledger}), INDEX)
+        self.assertEqual(rv.render(res), [
+            "reveals: Session 12 - Mill (sources: Play Notes, Wrap-Up)",
+            "Handouts/Ledger.md\tunpublished\t",
+            "# warning: section titles unknown: explain --all timed out after 60s",
+            "# notes: 1"])
 
 
 if __name__ == "__main__":

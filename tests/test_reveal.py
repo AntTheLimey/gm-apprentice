@@ -25,6 +25,10 @@ from vault_check import ToolAnswer  # noqa: E402
 
 VEX = "NPCs/Vex.md"
 SESSION = "Chapters/Chapter 1/Sessions/Session 12 - Mill.md"
+LEDGER = "Handouts/Ledger.md"
+PELL = "NPCs/Pell.md"
+LETTER = "Handouts/Letter.md"
+S05 = "Session 05 - Beneath the Mill"
 
 
 def make(root: Path, extra: dict[str, str] | None = None) -> None:
@@ -41,19 +45,35 @@ def make(root: Path, extra: dict[str, str] | None = None) -> None:
         p.write_text(text, encoding="utf-8")
 
 
+def explain_answer(props: tuple[str, ...] = (), others: tuple[str, ...] = ()) -> ToolAnswer:
+    pages = [{"path": p, "prop": True} for p in props] + \
+        [{"path": p, "prop": False} for p in others]
+    return ToolAnswer(data={"pages": pages})
+
+
 def run(root: Path, *args: str, applied: tuple[list[str], str | None] | None = None,
-        site: bool = True, state: tuple[set[str] | None, str | None] = (set(), None)) -> tuple[int, str, mock.Mock]:
+        site: bool = True, state: tuple[set[str] | None, str | None] = (set(), None),
+        explain: ToolAnswer | None = None, session: str = "Session 12",
+        asked: list[list[str]] | None = None) -> tuple[int, str, mock.Mock]:
     buf = io.StringIO()
     config = (Path("/site/vault.config.json"), None) if site else (None, None)
 
     def fake(_vault: Path, paths: list[str], _before: object = None) -> tuple[list[str], str | None]:
         return (list(paths), None) if applied is None else applied
 
+    def ask(_vault: Path, tool_args: list[str], site_optional: bool = False) -> ToolAnswer:
+        if asked is not None:
+            asked.append(tool_args)
+        if tool_args != ["explain", "--all"]:
+            raise AssertionError(f"unexpected publish tool call {tool_args}")
+        return explain or explain_answer()
+
     with mock.patch.object(reveal, "_site_config", return_value=config), \
             mock.patch.object(reveal, "publish_state", return_value=state), \
             mock.patch.object(reveal, "apply_publish", side_effect=fake) as ap, \
+            mock.patch.object(reveal, "ask_publish_tool", side_effect=ask), \
             contextlib.redirect_stdout(buf):
-        code = reveal.main([str(root), "--session", "Session 12", *args])
+        code = reveal.main([str(root), "--session", session, *args])
     return code, buf.getvalue(), ap
 
 
@@ -84,7 +104,7 @@ class RevealTests(unittest.TestCase):
         ap.assert_called_once()
         self.assertEqual(ap.call_args.args[1], [VEX])
         self.assertIn("withheld: false", (self.root / VEX).read_text(encoding="utf-8"))
-        self.assertIn("# publish: 1 clear: 1 log: 1 errors: 0", out)
+        self.assertIn("# publish: 1 clear: 1 stamp: 0 log: 1 errors: 0", out)
         entries = log_of(self.root)["entries"]
         self.assertTrue(entries[0]["before_tracking"])
         self.assertEqual(entries[1]["session"], "Session 12")
@@ -208,7 +228,7 @@ class RevealTests(unittest.TestCase):
             code, out, _ = run(self.root, "--publish", VEX, "--write")
         self.assertEqual(code, 1)
         self.assertIn(f"ERROR\t{VEX}\twithheld not cleared", out)
-        self.assertIn("# publish: 1 clear: 0 log: 1 errors: 1", out)
+        self.assertIn("# publish: 1 clear: 0 stamp: 0 log: 1 errors: 1", out)
         self.assertEqual(log_of(self.root)["entries"][-1]["published"], [VEX])
 
     def test_other_spellings_of_the_key_are_cleared(self) -> None:
@@ -242,6 +262,7 @@ class RevealTests(unittest.TestCase):
                                   return_value=(Path("/site/vault.config.json"), None)):
             ask.side_effect = [
                 ToolAnswer(data={"listed": True, "publishing": []}),
+                explain_answer(),
                 ToolAnswer(data={}),
                 ToolAnswer(data={"listed": True, "publishing": [VEX]})]
             reveal.run(self.root, "Session 12", [VEX], [], True)
@@ -260,6 +281,164 @@ class RevealTests(unittest.TestCase):
         self.assertIn({"page": "Places/Mill.md", "what": "the wheel"}, released)
         self.assertIn({"page": "A.md", "what": "x"}, released)
         self.assertIn("junk", released)
+
+
+    # revealed_in: the session a prop reached the players (Review Focus 1).
+
+    def _props(self) -> None:
+        make(self.root, {
+            LEDGER: "---\ntype: prop\nwithheld: true\n---\n\nLedger.\n",
+            PELL: "---\ntype: npc\n---\n\nPell.\n",
+            LETTER: "---\ntype: prop\n---\n\nLetter.\n",
+        })
+
+    def test_stamps_only_newly_published_props(self) -> None:
+        self._props()
+        asked: list[list[str]] = []
+        code, out, ap = run(self.root, "--publish", LEDGER, "--publish", PELL,
+                            "--publish", LETTER, "--write", session=S05,
+                            state=({LETTER}, None), asked=asked,
+                            explain=explain_answer((LEDGER, LETTER), (PELL,)))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(asked, [["explain", "--all"]])
+        self.assertEqual(ap.call_args.args[1], [LEDGER, PELL])
+        ledger = (self.root / LEDGER).read_text(encoding="utf-8")
+        self.assertIn(f'revealed_in: "[[{S05}]]"', ledger)
+        self.assertIn("withheld: false", ledger)
+        self.assertNotIn("revealed_in", (self.root / PELL).read_text(encoding="utf-8"))
+        self.assertNotIn("revealed_in", (self.root / LETTER).read_text(encoding="utf-8"))
+        self.assertIn(f"STAMPED\t{LEDGER}\trevealed_in: [[{S05}]]", out)
+        self.assertNotIn(f"STAMPED\t{LETTER}", out)
+        self.assertNotIn(f"STAMPED\t{PELL}", out)
+
+    def test_prop_the_tool_does_not_list_is_not_stamped(self) -> None:
+        self._props()
+        code, out, _ = run(self.root, "--publish", LEDGER, "--publish", LETTER, "--write",
+                           applied=([LETTER], None),
+                           explain=explain_answer((LEDGER, LETTER)))
+        self.assertEqual(code, 1)
+        self.assertNotIn("revealed_in", (self.root / LEDGER).read_text(encoding="utf-8"))
+        self.assertIn('revealed_in: "[[Session 12]]"',
+                      (self.root / LETTER).read_text(encoding="utf-8"))
+
+    def test_never_overwrites_revealed_in(self) -> None:
+        self._props()
+        for value in ('"[[Session 02]]"', '[[Session 02]]', '\n  - "[[Session 02]]"'):
+            text = f"---\ntype: prop\nrevealed_in: {value}\nwithheld: true\n---\n\nL.\n"
+            text = text.replace("revealed_in: \n", "revealed_in:\n")
+            (self.root / LEDGER).write_text(text, encoding="utf-8")
+            code, out, _ = run(self.root, "--publish", LEDGER, "--write",
+                               explain=explain_answer((LEDGER,)))
+            self.assertEqual(code, 0, out)
+            after = (self.root / LEDGER).read_text(encoding="utf-8")
+            self.assertEqual(after, text.replace("withheld: true", "withheld: false"), value)
+            self.assertIn(f"SKIP\t{LEDGER}\trevealed_in already set", out)
+            self.assertNotIn("STAMPED", out)
+            self.assertIn("stamp: 0", out)
+
+    def test_empty_revealed_in_is_filled(self) -> None:
+        self._props()
+        for value in ('""', "[]", '"" # written at wrap-up'):
+            (self.root / LEDGER).write_text(
+                f"---\ntype: prop\nrevealed_in: {value}\n---\n\nL.\n", encoding="utf-8")
+            code, out, _ = run(self.root, "--publish", LEDGER, "--write",
+                               explain=explain_answer((LEDGER,)))
+            self.assertEqual(code, 0, out)
+            self.assertEqual((self.root / LEDGER).read_text(encoding="utf-8"),
+                             '---\ntype: prop\nrevealed_in: "[[Session 12]]"\n---\n\nL.\n',
+                             value)
+
+    def test_failed_publish_stamps_nothing(self) -> None:
+        self._props()
+        before = (self.root / LEDGER).read_text(encoding="utf-8")
+        code, out, _ = run(self.root, "--publish", LEDGER, "--write",
+                           applied=([], "why"), explain=explain_answer((LEDGER,)))
+        self.assertEqual(code, 1)
+        self.assertEqual((self.root / LEDGER).read_text(encoding="utf-8"), before)
+        self.assertNotIn("STAMPED", out)
+        self.assertNotIn("CLEARED", out)
+
+    def test_explain_failure_warns_and_publishes(self) -> None:
+        self._props()
+        code, out, ap = run(self.root, "--publish", LEDGER, "--write",
+                            explain=ToolAnswer(why="explain --all timed out after 60s"))
+        self.assertEqual(code, 0, out)
+        ap.assert_called_once()
+        self.assertIn("WARNING\t-\trevealed_in not written: explain --all timed out after 60s",
+                      out)
+        text = (self.root / LEDGER).read_text(encoding="utf-8")
+        self.assertIn("withheld: false", text)
+        self.assertNotIn("revealed_in", text)
+        self.assertIn("# publish: 1 clear: 1 stamp: 0 log: 1 errors: 0", out)
+
+    def test_explain_answer_not_understood_warns(self) -> None:
+        self._props()
+        code, out, _ = run(self.root, "--publish", LEDGER, "--write",
+                           explain=ToolAnswer(data={"pages": "nope"}))
+        self.assertEqual(code, 0, out)
+        self.assertIn("WARNING\t-\trevealed_in not written: ", out)
+        self.assertNotIn("revealed_in", (self.root / LEDGER).read_text(encoding="utf-8"))
+
+    def test_stamp_and_clear_one_write_crlf(self) -> None:
+        self._props()
+        (self.root / LEDGER).write_bytes(b"---\r\ntype: prop\r\nwithheld: true\r\n---\r\n\r\nL.\r\n")
+        real = Path.write_text
+        writes: list[str] = []
+
+        def counted(self_: Path, *a: object, **kw: object) -> int:
+            if self_.name == "Ledger.md":
+                writes.append(self_.name)
+            return real(self_, *a, **kw)  # type: ignore[arg-type]
+
+        with mock.patch.object(Path, "write_text", counted):
+            code, out, _ = run(self.root, "--publish", LEDGER, "--write",
+                               explain=explain_answer((LEDGER,)))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(writes, ["Ledger.md"])
+        self.assertEqual((self.root / LEDGER).read_bytes(),
+                         b'---\r\ntype: prop\r\nwithheld: false\r\n'
+                         b'revealed_in: "[[Session 12]]"\r\n---\r\n\r\nL.\r\n')
+        self.assertIn("CLEARED", out)
+        self.assertIn("STAMPED", out)
+
+    def test_dry_run_would_stamp(self) -> None:
+        self._props()
+        before = {r: (self.root / r).read_bytes() for r in (LEDGER, PELL)}
+        code, out, ap = run(self.root, "--publish", LEDGER, "--publish", PELL,
+                            explain=explain_answer((LEDGER,), (PELL,)))
+        self.assertEqual(code, 0, out)
+        ap.assert_not_called()
+        self.assertEqual({r: (self.root / r).read_bytes() for r in (LEDGER, PELL)}, before)
+        self.assertIn(f"WOULD-STAMP\t{LEDGER}\trevealed_in: [[Session 12]] if it publishes", out)
+        self.assertNotIn(f"WOULD-STAMP\t{PELL}", out)
+
+    def test_dry_run_does_not_offer_stamp_on_already_published(self) -> None:
+        self._props()
+        _, out, _ = run(self.root, "--publish", LETTER, state=({LETTER}, None),
+                        explain=explain_answer((LETTER,)))
+        self.assertNotIn("WOULD-STAMP", out)
+
+    def test_unstampable_frontmatter_refuses_the_path(self) -> None:
+        self._props()
+        (self.root / LEDGER).write_text("---\ntype: prop\n--- \nL.\n", encoding="utf-8")
+        code, out, ap = run(self.root, "--publish", LEDGER, "--publish", PELL, "--write",
+                            explain=explain_answer((LEDGER,)))
+        self.assertEqual(code, 1)
+        self.assertEqual(ap.call_args.args[1], [PELL])
+        self.assertIn(f"ERROR\t{LEDGER}\tnot published, nothing changed", out)
+
+    def test_count_line(self) -> None:
+        self._props()
+        code, out, _ = run(self.root, "--publish", LEDGER, "--publish", PELL, "--write",
+                           explain=explain_answer((LEDGER,)))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.splitlines()[-1],
+                         "# publish: 2 clear: 1 stamp: 1 log: 1 errors: 0")
+
+    def test_released_only_does_not_ask_explain(self) -> None:
+        asked: list[list[str]] = []
+        run(self.root, "--released", "Places/Mill.md=the wheel", "--write", asked=asked)
+        self.assertEqual(asked, [])
 
 
 @unittest.skipUnless(shutil.which("node"), "node is not installed")
