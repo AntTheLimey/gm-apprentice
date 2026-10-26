@@ -23,8 +23,8 @@ and filed in a few commands.
 - The hand registry `_meta/prop-hands.json` and the `prop_hand` field.
 - `gm-publish props pages`, which counts a prop's printed pages, and
   `--note <note>` to count a prop before it is published (fonts are
-  fetched first and warnings show on the row). A supplied PDF is counted
-  from its page tree; one that cannot be counted says so.
+  fetched first and warnings show on the row). A supplied PDF is not
+  counted; it keeps its own pages.
 - `ttrpg-expert`'s making-a-prop reference.
 - Template fields `prop_hand` and `revealed_in`. The update refreshes
   `_Templates/_Template_Prop.md` through the existing template check.

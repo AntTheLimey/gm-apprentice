@@ -228,7 +228,7 @@ output folder (props/letter.html). A page that is not built says "not built".
 published or not: "<note><TAB><n> pages", with "(warning: ...)" when the build
 warned about it (an unknown hand, a typeface not cached, a picture not in the
 vault), or the reason it has no count, still with its warnings. A supplied PDF is
-counted from its page tree, without Chrome. Fonts are fetched first, as a build
+not counted: it keeps its own pages. Fonts are fetched first, as a build
 does; nothing is written to the site. With no Chrome or Chromium installed it says
 so and exits 0; open the page and use print preview instead.
 

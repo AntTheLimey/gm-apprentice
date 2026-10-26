@@ -4,7 +4,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { rowsFor, formatLine, NO_CHROME, COULD_NOT_COUNT } = require('../../lib/props/pages-cli');
+const { rowsFor, formatLine, NO_CHROME, SUPPLIED_PDF } = require('../../lib/props/pages-cli');
 const { propVault } = require('../helpers/prop-vault');
 
 // No Chrome, and no network: the font prefetch is a spy that fetches nothing.
@@ -52,13 +52,6 @@ test('a held styled prop with no Chrome: the no-Chrome reason, and nothing writt
   const rows = await rowsFor(v.configPath, [{ note: 'Props/Note.md' }, { note: 'Props/Missing.md' }], noChrome());
   assert.deepEqual(rows.map((r) => r.why), [NO_CHROME, 'no such note in the vault']);
   assert.deepEqual(fs.readdirSync(v.siteDir), ['vault.config.json']);
-});
-
-test('a hand-made PDF is counted without Chrome', async (t) => {
-  const v = propVault(t, { 'Props/Deed.md': '---\ntype: prop\nprop_file: deed.pdf\n---\nA deed.\n' });
-  fs.writeFileSync(path.join(v.vaultDir, 'Props', 'deed.pdf'), '%PDF-1.4\n<< /Type /Pages /Count 2 >> << /Type /Page >> << /Type /Page >>\n%%EOF\n');
-  const [row] = await rowsFor(v.configPath, [{ note: 'Props/Deed.md' }], noChrome());
-  assert.deepEqual(row, { note: 'Props/Deed.md', pages: 2, why: null, warnings: [] });
 });
 
 test('addresses and notes keep the order they were given', async (t) => {
@@ -116,34 +109,18 @@ test('a note path is read as vault-relative: ./, an absolute path inside the vau
   const given = ['./Props/Deed.md', path.join(v.vaultDir, 'Props', 'Deed.md'), 'Props\\Deed.md', '../outside.md'];
   const rows = await rowsFor(v.configPath, given.map((note) => ({ note })), noChrome());
   assert.deepEqual(rows.map((r) => [r.note, r.pages, r.why]), [
-    ['Props/Deed.md', 1, null], ['Props/Deed.md', 1, null], ['Props/Deed.md', 1, null],
+    ['Props/Deed.md', null, SUPPLIED_PDF], ['Props/Deed.md', null, SUPPLIED_PDF], ['Props/Deed.md', null, SUPPLIED_PDF],
     ['../outside.md', null, 'outside the vault'],
   ]);
 });
 
 const DEED = { 'Props/Deed.md': '---\ntype: prop\nprop_file: deed.pdf\n---\nA deed.\n' };
-const realPdf = (name) => fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'pdf', name));
-
-test('a supplied PDF a real writer packed into object streams is counted from its page tree', async (t) => {
+test('a supplied PDF is not counted: it keeps its own pages', async (t) => {
   const v = propVault(t, DEED);
-  fs.writeFileSync(path.join(v.vaultDir, 'Props', 'deed.pdf'), realPdf('objstm-3-pages.pdf'));
+  fs.writeFileSync(path.join(v.vaultDir, 'Props', 'deed.pdf'), '%PDF-1.4\n<< /Type /Pages /Count 3 >>\n%%EOF\n');
   const [row] = await rowsFor(v.configPath, [{ note: 'Props/Deed.md' }], noChrome());
-  assert.deepEqual(row, { note: 'Props/Deed.md', pages: 3, why: null, warnings: [] });
-});
-
-test('a supplied PDF edited in an incremental update counts each page once', async (t) => {
-  const v = propVault(t, DEED);
-  fs.writeFileSync(path.join(v.vaultDir, 'Props', 'deed.pdf'), realPdf('incremental-2-pages.pdf'));
-  const [row] = await rowsFor(v.configPath, [{ note: 'Props/Deed.md' }], noChrome());
-  assert.equal(row.pages, 2);
-});
-
-test('a supplied PDF whose pages cannot be counted says so, never 0 pages', async (t) => {
-  const v = propVault(t, DEED);
-  fs.writeFileSync(path.join(v.vaultDir, 'Props', 'deed.pdf'), '%PDF-1.4\n<< /Type /Page >>\n%%EOF\n');
-  const [row] = await rowsFor(v.configPath, [{ note: 'Props/Deed.md' }], noChrome());
-  assert.deepEqual(row, { note: 'Props/Deed.md', pages: null, why: COULD_NOT_COUNT, warnings: [] });
-  assert.equal(formatLine(row), `Props/Deed.md\t${COULD_NOT_COUNT}`);
+  assert.deepEqual(row, { note: 'Props/Deed.md', pages: null, why: SUPPLIED_PDF, warnings: [] });
+  assert.equal(formatLine(row), 'Props/Deed.md\ta supplied PDF keeps its own pages; open it to check');
 });
 
 test("the build's warning about the prop's page (a picture not in the vault) is carried into the row", async (t) => {
