@@ -1,8 +1,9 @@
 'use strict';
 // `gm-publish props pages`: how many printed pages a built prop page runs to, counted by printing it to PDF in
 // headless Chrome. Addresses are relative to the site's output folder. A note (`--note`, vault-relative) is
-// counted as players would get its prop, published or not: the build makes it in memory, as if it published,
-// and its files are printed from a temp folder. Nothing is written to the site.
+// counted as players would get its prop, published or not: the vault's font cache is filled first, as a build
+// fills it, then the build makes the prop in memory, as if it published, and its files are printed from a temp
+// folder. Nothing is written to the site.
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -51,18 +52,32 @@ function pagesFor(siteDir, addresses, { findChrome = defaultFindChrome } = {}) {
   }
 }
 
-// A prop note's pages, { pages, why }: its files as the build made them in memory, written into `work` and printed
-// there. A PDF prop is counted from its bytes.
-function notePages(configPath, vaultPath, note, binary, work) {
-  const at = path.resolve(vaultPath, note);
-  if (path.relative(vaultPath, at).startsWith('..') || !fs.existsSync(at)) return { pages: null, why: 'no such note in the vault' };
+// A --note as the vault-relative, forward-slash path the build knows it by: `./`, backslashes and an absolute path
+// inside the vault are all read; null when it is outside the vault.
+function vaultRel(vaultPath, note) {
+  const rel = path.relative(vaultPath, path.resolve(vaultPath, String(note).replace(/\\/g, '/')));
+  return rel === '' || rel.startsWith('..') || path.isAbsolute(rel) ? null : rel.split(path.sep).join('/');
+}
+
+// A prop note's row: its files as the build made them in memory, written into `work` and printed there, and what
+// the build said of it (`warnings`). A PDF prop is counted from its bytes.
+function noteRow(configPath, vaultPath, given, binary, work) {
+  const note = vaultRel(vaultPath, given);
+  if (note === null) return { note: given, pages: null, why: 'outside the vault', warnings: [] };
+  const { pages, why, warnings = [] } = notePages(configPath, path.join(vaultPath, note), note, binary, work);
+  return { note, pages, why, warnings };
+}
+
+function notePages(configPath, full, note, binary, work) {
+  if (!fs.existsSync(full)) return { pages: null, why: 'no such note in the vault' };
   let made;
   try {
-    made = require('../build').build({ configPath, inMemory: true, shownFor: note.replace(/\\/g, '/') }).shownProp;
+    made = require('../build').build({ configPath, inMemory: true, shownFor: note }).shownProp;
   } catch (err) {
     return { pages: null, why: err.message };
   }
   if (!made || made.why) return { pages: null, why: made ? made.why : 'not a prop note' };
+  const warnings = made.warnings;
   const site = fs.mkdtempSync(path.join(work, 'site-'));
   try {
     for (const f of made.files) {
@@ -72,22 +87,29 @@ function notePages(configPath, vaultPath, note, binary, work) {
       else fs.writeFileSync(full, f.text !== undefined ? f.text : f.bytes);
     }
     const page = path.join(site, ...made.files[0].out.split('/'));
-    if (/\.pdf$/i.test(page)) return { pages: countPdfPages(fs.readFileSync(page)), why: null };
-    return countFile(binary, page, work);
+    if (/\.pdf$/i.test(page)) return { pages: countPdfPages(fs.readFileSync(page)), why: null, warnings };
+    return { ...countFile(binary, page, work), warnings };
   } finally {
     fs.rmSync(site, { recursive: true, force: true });
   }
 }
 
-// One row per target, in order: an { address } gives { address, pages, why }, a { note } gives { note, pages, why }.
-function rowsFor(configPath, targets, { findChrome = defaultFindChrome } = {}) {
+// The vault's font cache filled as a build fills it before it builds (bin/gm-publish.js): a hand or style just
+// added is counted in its own typeface. What it says goes to stderr, so stdout holds only the rows.
+const prefetchFonts = (configPath) => require('../fonts').prefetchForConfig(configPath, { log: (m) => console.error(m) });
+
+// One row per target, in order: an { address } gives { address, pages, why }, a { note } gives
+// { note, pages, why, warnings }. The fonts are fetched once, before any note is built.
+async function rowsFor(configPath, targets, { findChrome = defaultFindChrome, prefetch = prefetchFonts } = {}) {
   const binary = findChrome();
+  const notes = targets.some((x) => x.note !== undefined);
+  if (notes) await prefetch(configPath);
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'props-pages-'));
   try {
     const site = targets.some((x) => x.address !== undefined) ? outputFolder(configPath) : null;
-    const vaultPath = targets.some((x) => x.note !== undefined) ? vaultFolder(configPath) : null;
+    const vaultPath = notes ? vaultFolder(configPath) : null;
     return targets.map((x) => (x.note !== undefined
-      ? { note: x.note, ...notePages(configPath, vaultPath, x.note, binary, work) }
+      ? noteRow(configPath, vaultPath, x.note, binary, work)
       : { address: x.address, ...countFile(binary, path.resolve(site, x.address), work) }));
   } finally {
     fs.rmSync(work, { recursive: true, force: true });
@@ -96,7 +118,8 @@ function rowsFor(configPath, targets, { findChrome = defaultFindChrome } = {}) {
 
 function formatLine(row) {
   const name = row.note !== undefined ? row.note : row.address;
-  if (row.pages !== null) return `${name}\t${row.pages} ${row.pages === 1 ? 'page' : 'pages'}`;
+  const said = row.warnings && row.warnings.length ? ` (warning: ${row.warnings.join('; ')})` : '';
+  if (row.pages !== null) return `${name}\t${row.pages} ${row.pages === 1 ? 'page' : 'pages'}${said}`;
   return row.why === NO_CHROME ? row.why : `${name}\t${row.why}`;
 }
 
@@ -114,8 +137,8 @@ function vaultFolder(configPath) {
 }
 
 // `targets`: [{ address } | { note }], in the order they were given.
-function runPages({ configPath, targets, json = false }) {
-  const rows = rowsFor(configPath || './vault.config.json', targets);
+async function runPages({ configPath, targets, json = false }) {
+  const rows = await rowsFor(configPath || './vault.config.json', targets);
   if (json) console.log(JSON.stringify(rows, null, 2));
   else {
     for (const row of rows.filter((r) => r.why !== NO_CHROME)) console.log(formatLine(row));

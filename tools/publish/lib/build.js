@@ -1669,9 +1669,10 @@ function buildSite(options) {
     };
   }
   // The files the site would hold for the prop note asked about, as this build made them (`props pages --note`
-  // prints them to count their pages): { files: [{ out, text | bytes | from }] }, its own page first; or { why }
-  // when there is no page to print. A styled page brings the base sheet, its style's files, the typefaces the
-  // font cache holds and the pictures it shows.
+  // prints them to count their pages): { files: [{ out, text | bytes | from }], warnings }, its own page first; or
+  // { why } when there is no page to print. A styled page brings the base sheet, its style's files, the typefaces
+  // the font cache holds and the pictures it shows. `warnings`: what the build said of this prop, its hand
+  // registry and a typeface it did not have, so a count laid out in fallback type says so.
   function shownPropOf() {
     if (shownRel === null) return null;
     if (!shownPage) return { why: 'the site does not read this note' };
@@ -1687,7 +1688,11 @@ function buildSite(options) {
     // An unstyled container's page is a listing in the site's own look, which only the built site has.
     if (p.made === 'container' && !p.style) return { why: "a container's page without a style uses the site's own look: count it once it is built" };
     const files = outputs.map((f) => ({ out: f.out, text: f.text, bytes: f.bytes }));
-    if (p.style && typeof p.made_html === 'string') {
+    const styled = Boolean(p.style && typeof p.made_html === 'string');
+    const warnings = propPlan.problems.filter((r) => r.rel === p.rel || (styled && r.rel === HANDS_FILE)).map((r) => r.detail);
+    const missing = styled ? styleFontFamilies(p.style, p.fields).filter((f) => !fontsLib.readFamilyCache(config.vaultPath, f)) : [];
+    if (missing.length) warnings.push(`${missing.map((f) => `"${f}"`).join(', ')} ${missing.length === 1 ? 'is' : 'are'} not in the vault's font cache, so the page is laid out in fallback type`);
+    if (styled) {
       files.push({ out: BASE_CSS, from: path.join(__dirname, '../css/props.css') });
       const st = propPlan.styles.find((x) => x.name === p.style.name);
       for (const f of st ? st.files : []) files.push({ out: f.out, from: f.source });
@@ -1702,7 +1707,7 @@ function buildSite(options) {
         if (srcs.has(`images/${entry.relPath}`)) files.push({ out: `images/${entry.relPath}`, from: entry.encodedPath || entry.sourcePath });
       }
     }
-    return { files };
+    return { files, warnings: [...new Set(warnings)] };
   }
 
   // A fast build deletes nothing. A PC page already in the folder that a full build would no longer write

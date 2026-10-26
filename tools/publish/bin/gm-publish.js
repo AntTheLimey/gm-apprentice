@@ -225,12 +225,13 @@ Prints one line per address, "<address><TAB><n> pages", counting the pages the
 built page prints to in headless Chrome. Addresses are relative to the site's
 output folder (props/letter.html). A page that is not built says "not built".
 --note counts a prop from its note (vault-relative) as players would get it,
-published or not: "<note><TAB><n> pages", or the reason it has no page. Nothing
-is written to the site. With no Chrome or Chromium installed it says so and
+published or not: "<note><TAB><n> pages", with "(warning: ...)" when the build
+warned about it (an unknown hand, a typeface not cached), or the reason it has no
+page. Fonts are fetched first, as a build does; nothing is written to the site. With no Chrome or Chromium installed it says so and
 exits 0; open the page and use print preview instead.
 
   --note <rel>       A prop note to count before it is published (repeatable)
-  --json             [{ address, pages, why }]; a note's row has note in place of address
+  --json             [{ address, pages, why }]; a note's row: { note, pages, why, warnings }
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
 `,
@@ -1118,12 +1119,12 @@ if (command === 'props') {
     printSubcommandHelp('props');
     process.exit(1);
   }
-  try {
-    require('../lib/props/pages-cli.js').runPages({ configPath: parsed.configPath, targets, json: !!parsed.flags.json });
-  } catch (err) {
-    console.error(`Error: ${err.message}`);
-    process.exit(1);
-  }
+  require('../lib/props/pages-cli.js').runPages({ configPath: parsed.configPath, targets, json: !!parsed.flags.json })
+    .then(() => exitAfterFlush(0))
+    .catch((err) => {
+      console.error(`Error: ${err.message}`);
+      exitAfterFlush(1);
+    });
   return;
 }
 
