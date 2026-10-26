@@ -26,6 +26,8 @@
                                [--hand ID [--hand-font FAMILY]
                                [--hand-who TEXT]] [--scene SCENE]
                                [--container NAME] [--folder SUB] [--write]
+    vault_write.py VAULT prop-hand --hand ID --hand-font FAMILY
+                               [--hand-who TEXT] [--write]
     vault_write.py VAULT promote-plan DRAFT --to PLAN --plan-type T
                                [--chapter C] [--leads-to PLAN]... [--write]
     vault_write.py VAULT plan --number N [--chapter C] [--title T]
@@ -2751,6 +2753,12 @@ def use_hand(batch: Batch, hand: str, font: str | None,
               f"hand {hand} is {font}")
 
 
+def cmd_prop_hand(batch: Batch, args: argparse.Namespace,
+                  _text: str) -> None:
+    """Add a hand to the registry for props already filed."""
+    use_hand(batch, args.hand, args.hand_font, args.hand_who)
+
+
 def one_container(batch: Batch, raw: str) -> str:
     name = clean_name(bare_link(raw), "--container")
     hits = live_stem_clash(batch, name)
@@ -3037,6 +3045,20 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--container", help="the container prop it sits in")
     pr.add_argument("--folder", help="a sub-folder of the chapter")
     pr.add_argument("--write", action="store_true")
+    ph = sub.add_parser(
+        "prop-hand", help="add a writer's hand to _meta/prop-hands.json",
+        formatter_class=raw, description=(
+            "Adds a hand for props already filed (prop-new adds one for a\n"
+            "new prop). The same id with the same font is a skip; with a\n"
+            "different font, refused. It never touches a note or the\n"
+            "publish list."))
+    ph.add_argument("--hand", required=True,
+                    help="the writer's hand id, e.g. sophia")
+    ph.add_argument("--hand-font", dest="hand_font", required=True,
+                    help="the hand's font family")
+    ph.add_argument("--hand-who", dest="hand_who",
+                    help="the hand's writer, in words")
+    ph.add_argument("--write", action="store_true")
     pl = sub.add_parser(
         "plan", help="write a session's Plan and check it",
         formatter_class=raw, description=(
@@ -3078,10 +3100,11 @@ COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "chapter-new": cmd_chapter_new,
                                 "scene-new": cmd_scene_new,
                                 "scene-played": cmd_scene_played,
-                                "prop-new": cmd_prop_new}
+                                "prop-new": cmd_prop_new,
+                                "prop-hand": cmd_prop_hand}
 NO_STDIN = frozenset({"wrapup-new", "session-new", "resolve",
                       "promote-plan", "chapter-new", "scene-new",
-                      "scene-played", "prop-new"})
+                      "scene-played", "prop-new", "prop-hand"})
 
 
 def read_stdin() -> str:

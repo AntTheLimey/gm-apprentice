@@ -292,5 +292,101 @@ class PropNew(unittest.TestCase):
         self.ask.assert_not_called()
 
 
+class PropHand(unittest.TestCase):
+    """prop-hand: the registry half of prop-new, for props already filed."""
+
+    def setUp(self):
+        self.vault = make_vault(self)
+
+    def run_cmd(self, *argv, vault=None):
+        out = io.StringIO()
+        with mock.patch("sys.stdout", out), mock.patch("sys.stderr",
+                                                       io.StringIO()):
+            code = vw.main([str(vault or self.vault), "prop-hand", *argv])
+        return code, out.getvalue()
+
+    def read(self, rel):
+        return (self.vault / rel).read_text(encoding="utf-8")
+
+    def test_new_registry_is_created(self):
+        code, out = self.run_cmd("--hand", "sophia", "--hand-font", "Caveat",
+                                 "--hand-who", "Sophia", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("CREATED\t_meta/prop-hands.json\t\thand sophia is "
+                      "Caveat", out)
+        self.assertEqual(
+            json.loads(self.read(HANDS)),
+            {"hands": {"sophia": {"font": "Caveat", "who": "Sophia"}}})
+
+    def test_second_hand_is_added(self):
+        self.run_cmd("--hand", "a", "--hand-font", "Caveat", "--write")
+        code, out = self.run_cmd("--hand", "b", "--hand-font", "Lobster",
+                                 "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("ADDED\t_meta/prop-hands.json", out)
+        self.assertEqual(set(json.loads(self.read(HANDS))["hands"]),
+                         {"a", "b"})
+
+    def test_same_hand_same_font_is_a_skip(self):
+        self.run_cmd("--hand", "a", "--hand-font", "Caveat", "--write")
+        before = snapshot(self.vault)
+        code, out = self.run_cmd("--hand", "a", "--hand-font", "Caveat",
+                                 "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("SKIP\t_meta/prop-hands.json\t\thand a is Caveat", out)
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_same_hand_other_font_refused(self):
+        self.run_cmd("--hand", "a", "--hand-font", "Caveat", "--write")
+        before = snapshot(self.vault)
+        code, out = self.run_cmd("--hand", "a", "--hand-font", "Lobster",
+                                 "--write")
+        self.assertEqual(code, 1)
+        self.assertIn('hand "a" is already Caveat; use it, or choose a new '
+                      'id for a new writer', out)
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_hand_who_on_existing_hand_is_said_to_be_ignored(self):
+        self.run_cmd("--hand", "a", "--hand-font", "Caveat", "--write")
+        _c, out = self.run_cmd("--hand", "a", "--hand-font", "Caveat",
+                               "--hand-who", "Ann", "--write")
+        self.assertIn("WARNING\t_meta/prop-hands.json\t\t--hand-who "
+                      "ignored", out)
+
+    def test_bad_registry_refused_nothing_written(self):
+        for bad in ("not json", '{"other": 1}', '{"hands": {"a": "x"}}'):
+            vault = make_vault(self, {**FILES, HANDS: bad})
+            before = snapshot(vault)
+            code, out = self.run_cmd("--hand", "b", "--hand-font", "Caveat",
+                                     "--write", vault=vault)
+            self.assertEqual(code, 1, out)
+            self.assertEqual(snapshot(vault), before)
+
+    def test_bad_hand_id_and_font_refused(self):
+        for argv in (("--hand", "Bad Id", "--hand-font", "Caveat"),
+                     ("--hand", "ok", "--hand-font", "Bad;Font")):
+            code, _out = self.run_cmd(*argv, "--write")
+            self.assertEqual(code, 1)
+        self.assertFalse((self.vault / HANDS).exists())
+
+    def test_font_is_required(self):
+        with mock.patch("sys.stderr", io.StringIO()), \
+                self.assertRaises(SystemExit) as caught:
+            vw.main([str(self.vault), "prop-hand", "--hand", "a"])
+        self.assertEqual(caught.exception.code, 2)
+
+    def test_dry_run_writes_nothing_and_notes_are_untouched(self):
+        before = snapshot(self.vault)
+        code, out = self.run_cmd("--hand", "a", "--hand-font", "Caveat")
+        self.assertEqual(code, 0, out)
+        self.assertIn("WOULD-CREATE\t_meta/prop-hands.json", out)
+        self.assertEqual(snapshot(self.vault), before)
+        self.run_cmd("--hand", "a", "--hand-font", "Caveat", "--write")
+        after = snapshot(self.vault)
+        self.assertEqual(set(after) - set(before), {HANDS})
+        self.assertEqual({k: v for k, v in after.items() if k != HANDS},
+                         before)
+
+
 if __name__ == "__main__":
     unittest.main()

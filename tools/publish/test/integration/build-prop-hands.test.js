@@ -35,7 +35,7 @@ describe('hands in the build', () => {
       assert.match(s.player.read('props', 'letter.html'), /--hand: ''/);
       assert.ok(!s.player.exists('fonts', 'tangerine', '0123456789abcdef.woff2'));
       const warns = s.logs.filter((l) => /prop_hand/.test(l));
-      assert.deepEqual(warns, ['  WARNING: Documents/Letter.md: prop_hand "scrawl" is not in _meta/prop-hands.json, so the style\'s own hand is used — add the hand to _meta/prop-hands.json (vault_write.py prop-new --hand scrawl --hand-font "<family>"), or correct prop_hand']);
+      assert.deepEqual(warns, ['  WARNING: Documents/Letter.md: prop_hand "scrawl" is not in _meta/prop-hands.json, so the style\'s own hand is used — add the hand to _meta/prop-hands.json (vault_write.py prop-hand --hand scrawl --hand-font "<family>"), or correct prop_hand']);
     } finally { s.cleanup(); }
   });
 

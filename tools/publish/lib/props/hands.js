@@ -1,9 +1,9 @@
 'use strict';
 
 // The vault's hand registry: one handwriting typeface per writer, so every prop a writer wrote
-// is in the same hand. `prop-new` writes _meta/prop-hands.json; only the tool reads it (`_meta`
-// never publishes). A prop's `prop_hand` names a hand; the hand's font stands in for `prop_font`
-// unless the note chose a font of its own.
+// is in the same hand. `prop-new` and `prop-hand` write _meta/prop-hands.json; only the tool
+// reads it (`_meta` never publishes). A prop's `prop_hand` names a hand; the hand's font stands
+// in for `prop_font` unless the note chose a font of its own.
 const fs = require('fs');
 const path = require('path');
 const { isValidFamily } = require('../fonts');
@@ -62,7 +62,7 @@ function withHand(fields, hands) {
     fields,
     problem: {
       detail: `prop_hand "${id}" is not in ${HANDS_FILE}, so the style's own hand is used`,
-      fix: `add the hand to ${HANDS_FILE} (vault_write.py prop-new --hand ${id} --hand-font "<family>"), or correct prop_hand`,
+      fix: `add the hand to ${HANDS_FILE} (vault_write.py prop-hand --hand ${id} --hand-font "<family>"), or correct prop_hand`,
     },
   };
 }

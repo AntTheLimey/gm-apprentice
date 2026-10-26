@@ -78,7 +78,7 @@ describe('withHand', () => {
     assert.equal(r.fields, fields);
     assert.deepEqual(r.problem, {
       detail: 'prop_hand "scrawl" is not in _meta/prop-hands.json, so the style\'s own hand is used',
-      fix: 'add the hand to _meta/prop-hands.json (vault_write.py prop-new --hand scrawl --hand-font "<family>"), or correct prop_hand',
+      fix: 'add the hand to _meta/prop-hands.json (vault_write.py prop-hand --hand scrawl --hand-font "<family>"), or correct prop_hand',
     });
   });
 
