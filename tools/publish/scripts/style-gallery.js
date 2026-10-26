@@ -15,18 +15,14 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { prepareFixture } = require('../test/helpers/fixture-build');
-const { findChrome } = require('../test/helpers/browser');
+const { findChrome } = require('../lib/chrome');
+const { countPdfPages } = require('../lib/props/pages-cli');
 const { prefetchForConfig } = require('../lib/fonts');
 const { build } = require('../lib/build');
 const { loadVaultConfig } = require('../lib/config');
 const { listStyles } = require('../lib/props/styles');
 
 const fileUrl = (p) => `file://${p.replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')}`;
-
-// A PDF's page count: each page object is `/Type /Page`, the page tree `/Type /Pages`.
-function pdfPageCount(file) {
-  return (fs.readFileSync(file).toString('latin1').match(/\/Type\s*\/Page(?!s)/g) || []).length;
-}
 
 function chrome(binary, profile, args) {
   const run = spawnSync(binary, ['--headless', '--disable-gpu', '--hide-scrollbars', '--no-first-run', '--no-default-browser-check',
@@ -74,7 +70,7 @@ async function main() {
       const pdf = path.join(out, `${base}.pdf`);
       chrome(binary, profile, [`--screenshot=${png}`, '--window-size=1000,1400', fileUrl(page)]);
       chrome(binary, profile, [`--print-to-pdf=${pdf}`, '--no-pdf-header-footer', fileUrl(page)]);
-      const entry = { style, page: `site/props/${name}`, png: path.basename(png), pdfPages: pdfPageCount(pdf) };
+      const entry = { style, page: `site/props/${name}`, png: path.basename(png), pdfPages: countPdfPages(fs.readFileSync(pdf)) };
       gallery.push(entry);
       console.log(`  ${style}: ${entry.png}, ${entry.pdfPages} PDF page(s)`);
     }

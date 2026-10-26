@@ -39,6 +39,7 @@ Usage:
   gm-apprentice-publish update-pin [options] Repoint this site at the newest installed build tool
   gm-apprentice-publish manifest <cmd>       Compare the publish manifest with the vault, or update it
   gm-apprentice-publish leaks <cmd>          Check the built player site for hidden text (list, check, accept, prune, settle)
+  gm-apprentice-publish props pages <address>...  Count a built prop page's printed pages (headless Chrome)
   gm-apprentice-publish relationships <cmd>  The relationship words, short (words); every relationship rule checked (check); the tones listed (list); the certain repairs (fix)
   gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
@@ -216,6 +217,19 @@ vocabulary are listed on one line.
                              (a flag the command does not take is refused)
   --json                     words: { subset, predicates, tones, strength, notInVocabulary }; check: the findings
   --help, -h                 Show this help
+`,
+  props: `
+gm-apprentice-publish props pages [--config <path>] [--json] <address>...
+
+Prints one line per address, "<address><TAB><n> pages", counting the pages the
+built page prints to in headless Chrome. Addresses are relative to the site's
+output folder (props/letter.html). A page that is not built says "not built".
+With no Chrome or Chromium installed it says so and exits 0; open the page and
+use print preview instead.
+
+  --json             [{ address, pages, why }]
+  --config <path>    Path to vault.config.json (default: ./vault.config.json)
+  --help, -h         Show this help
 `,
   leaks: `
 gm-apprentice-publish leaks <list|check|accept|prune|settle> [--config <path>] [--json]
@@ -1074,6 +1088,33 @@ if (command === 'leaks') {
   runLeaks({ verb, configPath: parsed.configPath, json: !!parsed.flags.json, page: positional[0], text: positional[1], allOnPage: parsed.flags.page, note: parsed.flags.note, vault: parsed.flags.vault })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
+  return;
+}
+
+if (command === 'props') {
+  if (args[1] !== 'pages') {
+    console.error(args[1] ? `Error: Unknown props command: ${args[1]}` : 'Error: props needs a command (pages)');
+    printSubcommandHelp('props');
+    process.exit(1);
+  }
+  const rest = args.slice(2);
+  const addresses = [];
+  const flagWords = [];
+  for (let i = 0; i < rest.length; i++) {
+    if (rest[i] === '--config') { flagWords.push(rest[i], rest[i + 1]); i++; } else if (rest[i].startsWith('--')) flagWords.push(rest[i]); else addresses.push(rest[i]);
+  }
+  const parsed = parseSubcommandArgs(flagWords.filter((w) => w !== undefined), { '--json': 'json' });
+  if (parsed.error || !addresses.length) {
+    console.error(`Error: ${parsed.error || 'props pages needs at least one page address'}`);
+    printSubcommandHelp('props');
+    process.exit(1);
+  }
+  try {
+    require('../lib/props/pages-cli.js').runPages({ configPath: parsed.configPath, addresses, json: !!parsed.flags.json });
+  } catch (err) {
+    console.error(`Error: ${err.message}`);
+    process.exit(1);
+  }
   return;
 }
 

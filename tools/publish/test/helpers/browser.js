@@ -8,22 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const CANDIDATES = [
-  process.env.GM_TEST_CHROME,
-  process.env.CHROME_PATH,
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  'google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser', 'chrome',
-].filter(Boolean);
-
-function findChrome() {
-  for (const c of CANDIDATES) {
-    if (/[\\/]/.test(c) ? fs.existsSync(c) : spawnSync(c, ['--version'], { stdio: 'ignore' }).status === 0) return c;
-  }
-  return null;
-}
+const { findChrome } = require('../../lib/chrome');
 
 // The `skip` for a browser check: a reason without a browser, but never on CI, where the check runs and fails;
 // except on the Windows CI runner, where it is always skipped. The checks test Chrome's layout, which is the same
