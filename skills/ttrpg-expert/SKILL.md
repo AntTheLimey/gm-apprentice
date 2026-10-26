@@ -52,6 +52,9 @@ review: `scenario-writing.md` + `continuity-engine.md`.
 → `handouts-and-props.md`. Type → voice → embed info → write
 in-character → prop notes.
 
+**"Make a prop for X"** / **"file this handout for the site"**
+→ `making-a-prop.md`.
+
 **"Make something random"** / **"inspiration"** → `random-generation.md`.
 
 **"Check for plot holes"** / **"review continuity"**

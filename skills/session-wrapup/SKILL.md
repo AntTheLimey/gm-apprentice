@@ -296,8 +296,9 @@ handed over or shown; places visited. Never propose from the Plan.
 The GM picks all, some or none; nothing changes until they confirm.
 Then rewrite any Narrative Recap, Campaign Log or Timeline line this
 run wrote that states what they kept hidden, so it says only what came
-out (the truth can go in GM Notes `### Behind the Scenes`). On none,
-skip the rest.
+out (the truth can go in GM Notes `### Behind the Scenes`). Link each picked prop's note
+(`[[Note]]`) from the recap line where it came up; reveal.py writes its
+`revealed_in` itself. On none, skip the rest.
 
 For each picked secret, edit that page so the fact is hidden nowhere
 on it, in whatever way suits how it came out, and remove the spoiler

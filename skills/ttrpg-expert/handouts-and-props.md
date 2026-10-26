@@ -303,7 +303,8 @@ In a vault, file it on `shared/templates/document.md`: the handout
 text under `## The Text`, and everything Keeper-facing (context, the
 clues it carries, prop notes, delivery) as `###` subsections of the
 fenced `## GM Notes`. Never as top-level `##` sections beside the
-text: those publish to the player site.
+text: those publish to the player site. To file it as a prop on the
+site instead, follow `making-a-prop.md`.
 
 ## Handout Continuity
 
