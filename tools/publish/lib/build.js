@@ -45,6 +45,7 @@ const { sheetSourceOf } = require('./sheet-source');
 const { pcIdentity } = require('./templates/pc-identity');
 const { planProps } = require('./props/plan');
 const { propHrefFor, propOutputs, keptCopyOutputs, pathProblem } = require('./props/files');
+const { loadHands, withHand, HANDS_FILE } = require('./props/hands');
 const { styledPage, styleFontFamilies, styledPageProblem, FONTS_CSS, BASE_CSS } = require('./props/page');
 const { containerItems, propRow, COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, placeCollection, propTaken, collectionModel, latestProps, shownRows } = require('./props/collection');
 const { layoutNames } = require('./props/layout');
@@ -1727,7 +1728,24 @@ function buildSite(options) {
       console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
       p.style = null;   // so none of the style's files or typefaces ship on its account
     }
-    const families = [...new Set([...styled, ...containers.filter((p) => p.style)].flatMap((p) => styleFontFamilies(p.style, p.page.frontmatter || {})))];
+    // Each shipping prop's hand is resolved once: its fields carry the hand's font as prop_font.
+    // A registry that cannot be read is raised once; an unknown hand, once per prop.
+    const raise = (rel, problem) => {
+      const row = { rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: problem.detail, fix: problem.fix };
+      propPlan.problems.push(row);
+      console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
+    };
+    const styledProps = [...styled, ...containers.filter((p) => p.style)];
+    if (styledProps.length) {
+      const registry = loadHands(config.vaultPath);
+      if (registry.problem) raise(HANDS_FILE, registry.problem);
+      for (const p of styledProps) {
+        const { fields, problem } = withHand(p.page.frontmatter || {}, registry.hands);
+        p.fields = fields;
+        if (problem) raise(p.rel, problem);
+      }
+    }
+    const families = [...new Set(styledProps.flatMap((p) => styleFontFamilies(p.style, p.fields)))];
     if (families.length) {
       let warned = false;
       styleFonts = fontsLib.selfHostedFontFaces(config.vaultPath, families, () => {
@@ -1737,7 +1755,7 @@ function buildSite(options) {
       }, { offline: options.offline === true, fontsHref: '../../fonts/' });
     }
     for (const p of styled) {
-      const made = styledPage({ prop: p, style: p.style, page: p.page, linkMap, imageMap, usedImages, collectionHref: collectionHrefFrom(p.address), fontsCss: styleFonts.css !== '' });
+      const made = styledPage({ prop: p, style: p.style, page: p.page, fields: p.fields, linkMap, imageMap, usedImages, collectionHref: collectionHrefFrom(p.address), fontsCss: styleFonts.css !== '' });
       if (made.problem) noPage(p, made.problem);
       else p.made_html = made.html;
     }
@@ -1765,7 +1783,7 @@ function buildSite(options) {
     for (const p of containers) {
       const { rows, title, noteTitle } = listed.get(p.rel);
       p.made_html = p.style
-        ? styledPage({ prop: p, style: p.style, page: p.page, linkMap, imageMap, usedImages, collectionHref: collectionHrefFrom(p.address), fontsCss: styleFonts.css !== '', items: containerItemsHtml(rows, p.address), names: { title, noteTitle } }).html
+        ? styledPage({ prop: p, style: p.style, page: p.page, fields: p.fields, linkMap, imageMap, usedImages, collectionHref: collectionHrefFrom(p.address), fontsCss: styleFonts.css !== '', items: containerItemsHtml(rows, p.address), names: { title, noteTitle } }).html
         : containerTemplate({ container: p, rows, address: p.address, title, noteTitle }, navFor, config, publishConfig, { linkMap, imageMap, usedImages });
     }
   }

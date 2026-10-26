@@ -61,12 +61,13 @@ function styleFontFamilies(style, fields) {
 }
 
 // `items`: a container's listing (its rows' HTML), for `{{{items}}}`; a container's `## The Text` is optional.
+// `fields`: the note's frontmatter with its hand resolved (withHand), in place of the note's own.
 // `names`: { title, noteTitle } as a listing prints them (the GM site's marks in them), in place of the note's own.
-function styledPage({ prop, style, page, linkMap, imageMap, usedImages, collectionHref = null, fontsCss = false, items = null, names = null }) {
+function styledPage({ prop, style, page, fields: given = null, linkMap, imageMap, usedImages, collectionHref = null, fontsCss = false, items = null, names = null }) {
   const problem = items === null ? textProblem(page.publishedMarkdown) : null;
   if (problem) return { problem };
   const text = propTextOf(page.publishedMarkdown);
-  const fields = page.frontmatter || {};
+  const fields = given || page.frontmatter || {};
   const noteTitle = (names && names.noteTitle) || page.displayTitle || page.title || '';
   const title = (names && names.title) || textField(fields, 'prop_title') || noteTitle;
   const at = prop.address;
