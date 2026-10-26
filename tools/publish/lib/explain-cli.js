@@ -22,6 +22,7 @@ const { pcKeepList, retiredSheetFieldsFor } = require('./pc-prose');
 const { getCanonStatus } = require('./templates/base');
 const { sheetSourceOf } = require('./sheet-source');
 const { parseNote } = require('./frontmatter');
+const { isPropNote } = require('./props/note');
 const { markersIn } = require('./markers');
 const YAML = require('yaml');
 const { nearestNames, readerView } = require('./site-doctor');
@@ -203,6 +204,7 @@ async function runExplain(options, deps) {
       directory: dir,
       mappedTo: mappedTo || null,
       type: (frontmatter && frontmatter.type) || null,
+      prop: page ? isPropNote(page.sourceFrontmatter || page.frontmatter) : false,
       publishMode: frontmatter ? publishMode(frontmatter) : null,
       autoExclude: auto,
       canonStatus,
@@ -360,6 +362,8 @@ function publishedPagesOf(survey) {
 //                  body is the only source); [] when none, null for any other file
 //   frontmatterError the parser's message for a file whose frontmatter could not be
 //                  parsed (code FILE_UNPARSEABLE, no page is built); null otherwise (#287)
+//   prop           the note is a prop (isPropNote, props/note.js); false when the scanner
+//                  made no page for it
 // `explain --all` as typed (the words after `--all`): the options runExplainAll takes,
 // or { error }.
 function explainAllOptions(args) {
@@ -405,6 +409,7 @@ async function runExplainAll(options, deps) {
         : null,
       // vault_check frontmatter reports these: its own reader accepts YAML this one rejects.
       frontmatterError: parseErrors.has(rel) ? parseErrors.get(rel) : null,
+      prop: page ? isPropNote(page.sourceFrontmatter || page.frontmatter) : false,
     };
   });
   out(JSON.stringify({ vaultPath: survey.vaultPath, switches: switchesOf(survey.publishConfig),
