@@ -4,6 +4,7 @@
 import io
 import json
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -271,15 +272,34 @@ class PropNew(unittest.TestCase):
                       f"to player_site.folder_map (gm-publish settings set",
                       out)
         self.ask.assert_called_with(
-            self.vault, ["explain", f"{LYON}/Props/X.md"],
-            site_optional=True)
+            self.vault, ["explain", f"{LYON}/Props/X.md"])
 
-    def test_mapped_or_unanswered_folder_says_nothing(self):
+    def test_mapped_folder_or_no_site_says_nothing(self):
         for answer in (vc.ToolAnswer(data={"verdict": {"code": "OK"}}),
-                       vc.ToolAnswer(why="no node")):
+                       vc.ToolAnswer()):
             self.ask.return_value = answer
             _code, out = self.run_cmd("--title", f"T{id(answer)}", "--write")
             self.assertNotIn("does not show", out)
+            self.assertNotIn("WARNING", out)
+
+    def test_folder_check_the_tool_cannot_answer_says_so(self):
+        self.ask.return_value = vc.ToolAnswer(why="node is not on PATH")
+        code, out = self.run_cmd("--title", "X", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"WARNING\t{LYON}/Props/X.md\t\tcould not check whether "
+                      f"the site shows notes in {LYON}/Props: node is not on "
+                      f"PATH", out)
+
+    def test_reused_hand_with_a_font_the_site_cannot_use_is_refused(self):
+        for entry in ('{}', '{"font": " Caveat"}', '{"font": "Bad;Font"}'):
+            vault = make_vault(self, {**FILES, HANDS: '{"hands": {"a": %s}}' % entry})
+            before = snapshot(vault)
+            code, out = self.run_cmd("--title", "X", "--hand", "a", "--write",
+                                     vault=vault)
+            self.assertEqual(code, 1, out)
+            self.assertIn('hand "a" in _meta/prop-hands.json has no font the '
+                          'site can use', out)
+            self.assertEqual(snapshot(vault), before)
 
     def test_dry_run_writes_nothing(self):
         before = snapshot(self.vault)
@@ -364,10 +384,62 @@ class PropHand(unittest.TestCase):
 
     def test_bad_hand_id_and_font_refused(self):
         for argv in (("--hand", "Bad Id", "--hand-font", "Caveat"),
-                     ("--hand", "ok", "--hand-font", "Bad;Font")):
+                     ("--hand", "ok", "--hand-font", "Bad;Font"),
+                     ("--hand", "ok", "--hand-font", " La Belle Aurore"),
+                     ("--hand", "ok", "--hand-font", "La  Belle Aurore"),
+                     ("--hand", "ok", "--hand-font", "A" * 65)):
             code, _out = self.run_cmd(*argv, "--write")
-            self.assertEqual(code, 1)
+            self.assertEqual(code, 1, argv)
         self.assertFalse((self.vault / HANDS).exists())
+
+    def test_hyphenated_and_long_font_names_the_site_reads_are_accepted(self):
+        for hand, font in (("a", "Zilla-Slab Highlight"), ("b", "A" * 64)):
+            code, out = self.run_cmd("--hand", hand, "--hand-font", font, "--write")
+            self.assertEqual(code, 0, out)
+        self.assertEqual(json.loads(self.read(HANDS))["hands"]["a"]["font"],
+                         "Zilla-Slab Highlight")
+
+    def test_font_rule_matches_the_publish_tools(self):
+        node = shutil.which("node")
+        if not node:
+            self.skipTest("node is not on PATH")
+        names = ["Caveat", "La Belle Aurore", " Caveat", "Caveat ", "La  Belle",
+                 "Zilla-Slab", "-Lead", "A" * 64, "A" * 65, "", "Bad;Font",
+                 "Caf\u00e9", "Two\nLines", "9 Point"]
+        fonts = REPO / "tools" / "publish" / "lib" / "fonts.js"
+        script = ("const { isValidFamily } = require(process.argv[1]);"
+                  "console.log(JSON.stringify(JSON.parse(process.argv[2])"
+                  ".map(isValidFamily)));")
+        run = subprocess.run([node, "-e", script, str(fonts), json.dumps(names)],
+                             capture_output=True, text=True, check=True)
+        self.assertEqual([vw.valid_font(n) for n in names], json.loads(run.stdout))
+
+    def test_a_hand_with_an_unusable_font_is_mended_by_giving_one(self):
+        vault = make_vault(self, {**FILES, HANDS: '{"hands": {"a": {"font": "Bad;Font", "who": "Ann"}}}'})
+        code, out = self.run_cmd("--hand", "a", "--hand-font", "Caveat", "--write",
+                                 vault=vault)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(json.loads((vault / HANDS).read_text(encoding="utf-8")),
+                         {"hands": {"a": {"font": "Caveat", "who": "Ann"}}})
+
+    def test_other_top_level_keys_are_kept(self):
+        vault = make_vault(self, {**FILES, HANDS: '{"_note": "kept", "hands": {}}'})
+        code, out = self.run_cmd("--hand", "a", "--hand-font", "Caveat", "--write",
+                                 vault=vault)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(json.loads((vault / HANDS).read_text(encoding="utf-8")),
+                         {"_note": "kept", "hands": {"a": {"font": "Caveat", "who": ""}}})
+
+    def test_registry_not_utf8_is_refused_in_the_dry_run(self):
+        vault = make_vault(self, FILES)
+        (vault / HANDS).write_bytes('{"hands": {"s": {"font": "Caveat", "who": "M\u00e9nard"}}}'
+                                    .encode("latin-1"))
+        before = snapshot(vault)
+        code, out = self.run_cmd("--hand", "roy", "--hand-font", "Caveat", vault=vault)
+        self.assertEqual(code, 1, out)
+        self.assertIn("_meta/prop-hands.json is not UTF-8 text; fix it by hand first", out)
+        self.assertNotIn("WOULD-CREATE", out)
+        self.assertEqual(snapshot(vault), before)
 
     def test_font_is_required(self):
         with mock.patch("sys.stderr", io.StringIO()), \

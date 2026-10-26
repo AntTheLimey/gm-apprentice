@@ -182,9 +182,17 @@ class Batch:
         assert rel in DATA_FILES
         if rel in self.texts:
             return self.texts[rel]
-        text = _on_disk(self.vault / rel)
-        if text is not None:
-            self.originals[rel] = self.texts[rel] = text
+        try:
+            with (self.vault / rel).open("r", encoding="utf-8", newline="") as f:
+                text = f.read()
+        except FileNotFoundError:
+            return None
+        except UnicodeDecodeError:
+            raise WriteError(f"{rel} is not UTF-8 text; fix it by hand "
+                             f"first") from None
+        except OSError as e:
+            raise WriteError(f"{rel} cannot be read: {e}") from None
+        self.originals[rel] = self.texts[rel] = text
         return text
 
     def write_data(self, rel: str, text: str) -> None:
@@ -2696,14 +2704,22 @@ def cmd_scene_played(batch: Batch, args: argparse.Namespace,
 PROP_TEMPLATES = ("_Template_Prop.md",)
 HANDS_REL = "_meta/prop-hands.json"
 HAND_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
-HAND_FONT_RE = re.compile(r"^[A-Za-z0-9 ]{1,60}$")
+# tools/publish/lib/fonts.js isValidFamily, which the build reads a hand's
+# font with: a family it refuses is skipped there.
+HAND_FONT_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9 \-]{0,63}")
 
 
-def read_hands(batch: Batch) -> dict[str, Any]:
-    """The hand registry's `hands` table; none yet is an empty table."""
+def valid_font(name: object) -> bool:
+    """Whether the publish tool can use `name` as a font family."""
+    return isinstance(name, str) and HAND_FONT_RE.fullmatch(name) is not None \
+        and "  " not in name
+
+
+def read_hands(batch: Batch) -> tuple[dict[str, Any], dict[str, Any]]:
+    """(the hand registry as read, its `hands` table); none yet is empty."""
     raw = batch.read_data(HANDS_REL)
     if raw is None:
-        return {}
+        return {}, {}
     try:
         data = json.loads(raw)
     except ValueError:
@@ -2717,7 +2733,7 @@ def read_hands(batch: Batch) -> dict[str, Any]:
         if not isinstance(entry, dict):
             raise WriteError(f"{HANDS_REL}: hand {name!r} is not an "
                              f"object with a font; fix it by hand first")
-    return hands
+    return data, hands
 
 
 def use_hand(batch: Batch, hand: str, font: str | None,
@@ -2726,10 +2742,15 @@ def use_hand(batch: Batch, hand: str, font: str | None,
     if not HAND_ID_RE.match(hand):
         raise WriteError(f"--hand {hand!r} must be lower-case letters, "
                          f"digits and hyphens, up to 41 characters")
-    hands = read_hands(batch)
+    data, hands = read_hands(batch)
     have = hands.get(hand)
-    if have is not None:
-        have_font = str(have.get("font") or "")
+    if have is not None and not valid_font(have.get("font")):
+        if font is None:
+            raise WriteError(f'hand "{hand}" in {HANDS_REL} has no font the '
+                             f"site can use ({have.get('font')!r}); give one "
+                             f"with prop-hand --hand {hand} --hand-font")
+    elif have is not None:
+        have_font = str(have.get("font"))
         if font is not None and font != have_font:
             raise WriteError(f'hand "{hand}" is already {have_font}; use '
                              f"it, or choose a new id for a new writer")
@@ -2741,16 +2762,20 @@ def use_hand(batch: Batch, hand: str, font: str | None,
     if font is None:
         raise WriteError(f'hand "{hand}" is new: give its font with '
                          f"--hand-font")
-    if not HAND_FONT_RE.match(font):
+    if not valid_font(font):
         raise WriteError(f"--hand-font {font!r} must be a font family name "
-                         f"(letters, digits and spaces, up to 60)")
+                         f"(letters, digits, single spaces and hyphens, "
+                         f"starting with a letter or digit, up to 64)")
     fresh = batch.read_data(HANDS_REL) is None
-    hands[hand] = {"font": font, "who": who or ""}
+    old: dict[str, Any] = have or {}
+    hands[hand] = {"font": font, "who": who or str(old.get("who") or "")}
     batch.write_data(HANDS_REL, json.dumps(
-        {"hands": hands}, indent=2, ensure_ascii=False,
+        {**data, "hands": hands}, indent=2, ensure_ascii=False,
         sort_keys=True) + "\n")
     batch.row("WOULD-CREATE" if fresh else "WOULD-ADD", HANDS_REL, "",
-              f"hand {hand} is {font}")
+              f"hand {hand} is {font}"
+              + (f" (was {old.get('font')!r}, which the site cannot use)"
+                 if have is not None else ""))
 
 
 def cmd_prop_hand(batch: Batch, args: argparse.Namespace,
@@ -2771,14 +2796,17 @@ def one_container(batch: Batch, raw: str) -> str:
 
 
 def warn_if_unmapped(batch: Batch, rel: str) -> None:
-    answer = vc.ask_publish_tool(batch.vault, ["explain", rel],
-                                 site_optional=True)
+    folder = Path(rel).parent.as_posix()
+    answer = vc.ask_publish_tool(batch.vault, ["explain", rel])
     data = answer.data
     verdict = data.get("verdict") if isinstance(data, dict) else None
-    if answer.why or not isinstance(verdict, dict) \
-            or verdict.get("code") != "DIR_UNMAPPED":
+    if answer.why or (data is not None and not isinstance(verdict, dict)):
+        batch.row("WARNING", rel, "",
+                  f"could not check whether the site shows notes in {folder}: "
+                  f"{answer.why or 'the publish tool answer is not understood'}")
         return
-    folder = Path(rel).parent.as_posix()
+    if not isinstance(verdict, dict) or verdict.get("code") != "DIR_UNMAPPED":
+        return
     batch.row("WARNING", rel, "",
               f"the site does not show notes in {folder}: add it to "
               f"player_site.folder_map (gm-publish settings set \u2026)")
