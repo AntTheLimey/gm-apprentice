@@ -170,10 +170,12 @@ class PropNew(unittest.TestCase):
             self.assertEqual(code, 1)
 
     def test_scene_entities_gain_link_once(self):
+        codes = []
         for _ in range(2):
-            code, out = self.run_cmd("--title", "Invitation", "--scene",
-                                     "The Docks", "--write")
-            self.assertIn(code, (0, 1))
+            code, _out = self.run_cmd("--title", "Invitation", "--scene",
+                                      "The Docks", "--write")
+            codes.append(code)
+        self.assertEqual(codes, [0, 1])     # the second hits the title clash
         text = self.read(SCENE)
         self.assertEqual(text.count("[[Invitation]]"), 1)
         self.assertIn("status: ready", text)
@@ -196,6 +198,53 @@ class PropNew(unittest.TestCase):
         self.assertEqual(text.count("[[A]]"), 1)
         self.assertEqual(text.count("[[B]]"), 1)
 
+    def test_registry_is_not_a_target_for_other_commands(self):
+        self.run_cmd("--title", "X", "--hand", "a", "--hand-font", "Caveat",
+                     "--write")
+        before = self.read(HANDS)
+        out = io.StringIO()
+        with mock.patch("sys.stdout", out), mock.patch("sys.stderr",
+                                                       io.StringIO()):
+            code = vw.main([str(self.vault), "timeline", "--under",
+                            "## Events", "--file", HANDS, "--write"],
+                           stdin="- 1500: Something.\n")
+        self.assertEqual(code, 1, out.getvalue())
+        self.assertEqual(self.read(HANDS), before)
+
+    def test_new_registry_is_a_create_and_added_hand_an_add(self):
+        _c, out = self.run_cmd("--title", "A", "--hand", "a", "--hand-font",
+                               "Caveat", "--write")
+        self.assertIn("CREATED\t_meta/prop-hands.json", out)
+        _c, out = self.run_cmd("--title", "B", "--hand", "b", "--hand-font",
+                               "Lobster", "--write")
+        self.assertIn("ADDED\t_meta/prop-hands.json", out)
+
+    def test_malformed_entry_refused(self):
+        vault = make_vault(self, {**FILES, HANDS: '{"hands": {"a": "x"}}'})
+        before = snapshot(vault)
+        code, out = self.run_cmd("--title", "X", "--hand", "a", "--write",
+                                 vault=vault)
+        self.assertEqual(code, 1)
+        self.assertIn("hand 'a' is not an object", out)
+        self.assertEqual(snapshot(vault), before)
+
+    def test_hand_who_on_existing_hand_is_said_to_be_ignored(self):
+        self.run_cmd("--title", "A", "--hand", "a", "--hand-font", "Caveat",
+                     "--hand-who", "Ann", "--write")
+        _c, out = self.run_cmd("--title", "B", "--hand", "a", "--hand-who",
+                               "Bob", "--write")
+        self.assertIn("--hand-who ignored", out)
+        self.assertIn('"who": "Ann"', self.read(HANDS))
+
+    def test_failing_check_after_writing_is_a_warning_not_nothing_written(
+            self):
+        self.ask.side_effect = RuntimeError("boom")
+        code, out = self.run_cmd("--title", "X", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("nothing written", out)
+        self.assertIn("a check after writing failed", out)
+        self.assertTrue((self.vault / LYON / "Props/X.md").is_file())
+
     def test_title_clash_refused(self):
         code, out = self.run_cmd("--title", "The Docks", "--write")
         self.assertEqual(code, 1)
@@ -208,7 +257,13 @@ class PropNew(unittest.TestCase):
         self.assertEqual((self.vault / PUBLISH).read_bytes(), before)
 
     def test_unmapped_folder_warns(self):
-        self.ask.return_value = vc.ToolAnswer(data={"code": "DIR_UNMAPPED"})
+        # The shape `explain <rel> --json` really answers with.
+        self.ask.return_value = vc.ToolAnswer(data={
+            "path": f"{LYON}/Props/X.md", "exists": True, "prop": False,
+            "verdict": {"bucket": "decide", "code": "DIR_UNMAPPED",
+                        "reason": "its folder is not in "
+                                  "publish.folder_map",
+                        "outputPath": None}})
         code, out = self.run_cmd("--title", "X", "--write")
         self.assertEqual(code, 0, out)
         self.assertIn("WARNING", out)
@@ -220,7 +275,7 @@ class PropNew(unittest.TestCase):
             site_optional=True)
 
     def test_mapped_or_unanswered_folder_says_nothing(self):
-        for answer in (vc.ToolAnswer(data={"code": "OK"}),
+        for answer in (vc.ToolAnswer(data={"verdict": {"code": "OK"}}),
                        vc.ToolAnswer(why="no node")):
             self.ask.return_value = answer
             _code, out = self.run_cmd("--title", f"T{id(answer)}", "--write")

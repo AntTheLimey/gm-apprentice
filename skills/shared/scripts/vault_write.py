@@ -106,8 +106,6 @@ class Batch:
 
     def guard(self, rel: str) -> None:
         """Refuse a path that is not a note inside the vault."""
-        if rel in DATA_FILES:
-            return
         if not rel.lower().endswith(".md"):
             raise WriteError(f"{rel}: not a note (.md)")
         full = self.vault / rel
@@ -174,6 +172,24 @@ class Batch:
                 f"{what}: {len(hits)} notes named {raw!r}: "
                 + ", ".join(hits) + "; pass its path")
         return hits[0]
+
+    def read_data(self, rel: str) -> str | None:
+        """An internal data file's text, or None when it is not there yet.
+        Only a command that owns the file calls this; `guard` still
+        refuses the file as any user-supplied path."""
+        assert rel in DATA_FILES
+        if rel in self.texts:
+            return self.texts[rel]
+        text = _on_disk(self.vault / rel)
+        if text is not None:
+            self.originals[rel] = self.texts[rel] = text
+        return text
+
+    def write_data(self, rel: str, text: str) -> None:
+        assert rel in DATA_FILES
+        if rel not in self.texts:
+            self.originals[rel] = None
+        self.texts[rel] = text
 
     def exists(self, rel: str) -> bool:
         return rel in self.texts or (self.vault / rel).is_file()
@@ -2556,30 +2572,39 @@ def cmd_chapter_new(batch: Batch, args: argparse.Namespace,
               f"chapter template, sort_order {order_text}")
 
 
+def chapter_subfolder(raw: str | None) -> str:
+    """`/Sub/Folder` for a --folder value, or "" for none; refused unless
+    it is a sub-folder of the chapter."""
+    if not raw:
+        return ""
+    parts = [p for p in raw.replace("\\", "/").split("/") if p.strip()]
+    if not parts or any(p in (".", "..") or BAD_NAME_RE.search(p)
+                        for p in parts) or raw.startswith(("/", "\\")):
+        raise WriteError(f"--folder {raw!r} must be a sub-folder of the "
+                         f"chapter")
+    return "/" + "/".join(parts)
+
+
+def live_stem_clash(batch: Batch, name: str) -> list[str]:
+    """The live notes whose file name is `name`."""
+    return [other for other in batch.with_stem(name)
+            if other.split("/", 1)[0] not in ("_Templates", "_meta")
+            and not other.startswith(".")]
+
+
 def cmd_scene_new(batch: Batch, args: argparse.Namespace,
                   _text: str) -> None:
     title = clean_name(args.title, "title")
     found = find_chapter(batch.vault, args.chapter)
     assert found is not None
     _chapter_rel, chapter_dir, chapter_name = found
-    folder = ""
-    if args.folder:
-        parts = [p for p in args.folder.replace("\\", "/").split("/")
-                 if p.strip()]
-        if not parts or any(p in (".", "..") or BAD_NAME_RE.search(p)
-                            for p in parts) \
-                or args.folder.startswith(("/", "\\")):
-            raise WriteError(f"--folder {args.folder!r} must be a "
-                             f"sub-folder of the chapter")
-        folder = "/" + "/".join(parts)
+    folder = chapter_subfolder(args.folder)
     base = f"{chapter_dir}{folder}/Scenes"
     rel = (f"{base}/{title}/{title}.md" if args.set_piece
            else f"{base}/{title}.md")
     # `[[Title]]` must name one note, or the Plan's pointer and
     # scene-played cannot tell which.
-    clash = [other for other in batch.with_stem(title)
-             if other.split("/", 1)[0] not in ("_Templates", "_meta")
-             and not other.startswith(".")]
+    clash = live_stem_clash(batch, title)
     if clash:
         raise WriteError(f"a note named {title!r} already exists: "
                          + ", ".join(clash) + "; choose another title")
@@ -2672,19 +2697,13 @@ HAND_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
 HAND_FONT_RE = re.compile(r"^[A-Za-z0-9 ]{1,60}$")
 
 
-def live_stem_clash(batch: Batch, name: str) -> list[str]:
-    """The live notes whose file name is `name`."""
-    return [other for other in batch.with_stem(name)
-            if other.split("/", 1)[0] not in ("_Templates", "_meta")
-            and not other.startswith(".")]
-
-
 def read_hands(batch: Batch) -> dict[str, Any]:
     """The hand registry's `hands` table; none yet is an empty table."""
-    if not batch.exists(HANDS_REL):
+    raw = batch.read_data(HANDS_REL)
+    if raw is None:
         return {}
     try:
-        data = json.loads(batch.read(HANDS_REL))
+        data = json.loads(raw)
     except ValueError:
         raise WriteError(f"{HANDS_REL} is not JSON; fix it by hand "
                          f"first") from None
@@ -2692,6 +2711,10 @@ def read_hands(batch: Batch) -> dict[str, Any]:
     if not isinstance(hands, dict):
         raise WriteError(f"{HANDS_REL} has no \"hands\" table; fix it "
                          f"by hand first")
+    for name, entry in hands.items():
+        if not isinstance(entry, dict):
+            raise WriteError(f"{HANDS_REL}: hand {name!r} is not an "
+                             f"object with a font; fix it by hand first")
     return hands
 
 
@@ -2704,12 +2727,14 @@ def use_hand(batch: Batch, hand: str, font: str | None,
     hands = read_hands(batch)
     have = hands.get(hand)
     if have is not None:
-        have_font = str(have.get("font") or "") \
-            if isinstance(have, dict) else ""
+        have_font = str(have.get("font") or "")
         if font is not None and font != have_font:
             raise WriteError(f'hand "{hand}" is already {have_font}; use '
                              f"it, or choose a new id for a new writer")
         batch.row("SKIP", HANDS_REL, "", f"hand {hand} is {have_font}")
+        if who is not None:
+            batch.row("WARNING", HANDS_REL, "", f"--hand-who ignored: hand "
+                      f"{hand} already exists")
         return
     if font is None:
         raise WriteError(f'hand "{hand}" is new: give its font with '
@@ -2717,14 +2742,13 @@ def use_hand(batch: Batch, hand: str, font: str | None,
     if not HAND_FONT_RE.match(font):
         raise WriteError(f"--hand-font {font!r} must be a font family name "
                          f"(letters, digits and spaces, up to 60)")
+    fresh = batch.read_data(HANDS_REL) is None
     hands[hand] = {"font": font, "who": who or ""}
-    text = json.dumps({"hands": hands}, indent=2, ensure_ascii=False,
-                      sort_keys=True) + "\n"
-    if batch.exists(HANDS_REL):
-        batch.put(HANDS_REL, text)
-    else:
-        batch.create(HANDS_REL, text)
-    batch.row("WOULD-ADD", HANDS_REL, "", f"hand {hand} is {font}")
+    batch.write_data(HANDS_REL, json.dumps(
+        {"hands": hands}, indent=2, ensure_ascii=False,
+        sort_keys=True) + "\n")
+    batch.row("WOULD-CREATE" if fresh else "WOULD-ADD", HANDS_REL, "",
+              f"hand {hand} is {font}")
 
 
 def one_container(batch: Batch, raw: str) -> str:
@@ -2742,8 +2766,9 @@ def warn_if_unmapped(batch: Batch, rel: str) -> None:
     answer = vc.ask_publish_tool(batch.vault, ["explain", rel],
                                  site_optional=True)
     data = answer.data
-    if answer.why or not isinstance(data, dict) \
-            or data.get("code") != "DIR_UNMAPPED":
+    verdict = data.get("verdict") if isinstance(data, dict) else None
+    if answer.why or not isinstance(verdict, dict) \
+            or verdict.get("code") != "DIR_UNMAPPED":
         return
     folder = Path(rel).parent.as_posix()
     batch.row("WARNING", rel, "",
@@ -2767,16 +2792,7 @@ def cmd_prop_new(batch: Batch, args: argparse.Namespace,
                          f"letters, digits and hyphens")
     if args.hand_font is not None and not args.hand:
         raise WriteError("--hand-font needs --hand")
-    folder = ""
-    if args.folder:
-        parts = [p for p in args.folder.replace("\\", "/").split("/")
-                 if p.strip()]
-        if not parts or any(p in (".", "..") or BAD_NAME_RE.search(p)
-                            for p in parts) \
-                or args.folder.startswith(("/", "\\")):
-            raise WriteError(f"--folder {args.folder!r} must be a "
-                             f"sub-folder of the chapter")
-        folder = "/" + "/".join(parts)
+    folder = chapter_subfolder(args.folder)
     rel = f"{chapter_dir}{folder}/Props/{title}.md"
     clash = live_stem_clash(batch, title)
     if clash:
@@ -3121,7 +3137,11 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
             apply(batch)
             wrote = True
             for ask in batch.after_write:
-                ask()
+                try:
+                    ask()
+                except Exception as e:      # the files are written
+                    batch.row("WARNING", "", "", f"a check after writing "
+                              f"failed ({e.__class__.__name__}: {e})")
     except RestoreFailed as e:
         print(f"ERROR\t{e}")
         print("# files were left changed: restore them from the list above")
