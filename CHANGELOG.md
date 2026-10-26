@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.104] — 2026-10-26
+
+A prop now records the session it arrived in, and a new prop can be made
+and filed in a few commands.
+
+### Added
+
+- Wrap-up writes `revealed_in` on each prop it publishes, so the props
+  page shows the session it arrived in. `reveal.py` warns when a note on
+  the publish list has no page (its folder is not in
+  `player_site.folder_map`).
+- `vault_write.py prop-new` files a new prop in its chapter, in its
+  writer's hand, and `prop-hand` adds a hand for props already filed.
+- The hand registry `_meta/prop-hands.json` and the `prop_hand` field.
+- `gm-publish props pages`, which counts a prop's printed pages, and
+  `--note <note>` to count a prop before it is published (fonts are
+  fetched first and warnings show on the row).
+- `ttrpg-expert`'s making-a-prop reference.
+- Template fields `prop_hand` and `revealed_in`. The update refreshes
+  `_Templates/_Template_Prop.md` through the existing template check.
+  Publish tool 1.51.0.
+
+### Changed
+
+- `explain` reports `prop`.
+- `reveal_scan.py` marks prop rows, and the `reveal.py` count line gains
+  `stamp`.
+- One font scan of the vault serves skins and styles (#514).
+
 ## [1.10.103] — 2026-10-25
 
 Props can be styled as a terminal, a form, a letter and more, built from
