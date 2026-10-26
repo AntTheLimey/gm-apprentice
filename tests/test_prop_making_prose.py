@@ -63,8 +63,15 @@ class MakingAPropTests(unittest.TestCase):
         self.assertIn("<!-- /gm-only -->", self.text)
 
     def test_page_count_by_tool(self):
+        # --note counts a prop before it publishes, so the check works
+        # while the prop is being made.
         self.assertRegex(self.text, r"npx gm-apprentice-publish props pages"
-                                    r"\s*\\?\s*--config <site>/vault\.config\.json")
+                                    r"\s*\\?\s*--config <site>/vault\.config\.json"
+                                    r"\s*\\?\s*--note \"<")
+        self.assertNotIn("not built", self.text)
+
+    def test_new_writer_on_a_filed_prop(self):
+        self.assertRegex(self.text, r"prop-hand(?!s)")
 
     def test_never_edits_the_publish_list(self):
         self.assertRegex(self.text, r"(?i)never edit the publish list")
@@ -99,12 +106,12 @@ class HandsTests(unittest.TestCase):
     def test_site_faults_offers_to_add_the_hand(self):
         step = section(read("campaign-qa/references/checks/site-faults.md"),
                        "## PROP_NOT_COPIED")
-        # prop-new refuses an existing title, so the hand is added to the
-        # registry itself, with the font the GM names.
+        # A filed prop's hand is added with prop-hand, with the font the
+        # GM names.
         self.assertIn("prop_hand", step)
-        self.assertIn('"<id>": {"font": "<family>"', step)
+        self.assertRegex(step, r"vault_write\.py\s+prop-hand --hand <id>\s+"
+                               r"--hand-font \"<family>\"")
         self.assertRegex(step, r"Ask the GM for the font;\s+never pick one")
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -48,7 +48,8 @@ whole section one fenced block. What only the GM knows goes under
 Read `_meta/prop-hands.json` (`{"hands": {"<id>": {"font", "who"}}}`).
 A writer who has a hand reuses it. A new writer gets a new id with
 `--hand-font "<Google Fonts family>"` and `--hand-who "<who wrote it>"`;
-`who` is never published. An id never names a writer the players must
+`who` is never published. For a prop already filed, add the hand with
+`vault_write.py prop-hand` (same flags), then set `prop_hand`. An id never names a writer the players must
 not learn (`unsigned-1`, not the culprit's name). The same hand on two
 props tells a careful reader one person wrote both.
 
@@ -68,15 +69,16 @@ links (pictures, fonts) sit beside it or in a folder under it.
 
 ## 6. Check
 
-Build the site, then:
+Count its printed pages as players will get it, before it publishes
+(nothing is written to the site):
 
 ```bash
 npx gm-apprentice-publish props pages \
-  --config <site>/vault.config.json props/<name>.html
+  --config <site>/vault.config.json --note "<vault-relative note path>"
 ```
 
-The count should equal the sheets the GM meant. Until the note
-publishes, it says `not built`: check again once it is on the site.
+The count should equal the sheets the GM meant. A container with no
+style cannot be counted.
 
 ## 7. Publishing
 
