@@ -21,6 +21,11 @@
                                [--folder SUB] [--write]
     vault_write.py VAULT scene-played --scene T --session S [--paused]
                                [--write]
+    vault_write.py VAULT prop-new --chapter C --title T [--kind K]
+                               [--style S | --file F]
+                               [--hand ID [--hand-font FAMILY]
+                               [--hand-who TEXT]] [--scene SCENE]
+                               [--container NAME] [--folder SUB] [--write]
     vault_write.py VAULT promote-plan DRAFT --to PLAN --plan-type T
                                [--chapter C] [--leads-to PLAN]... [--write]
     vault_write.py VAULT plan --number N [--chapter C] [--title T]
@@ -46,6 +51,7 @@ written; 2 bad arguments. Stdlib only.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import unicodedata
@@ -68,6 +74,8 @@ OPEN_GM, CLOSE_GM = "open-gm", "close-gm"
 OPENERS = frozenset({OPEN_GM, "open-spoiler"})
 CLOSERS = frozenset({CLOSE_GM, "close-spoiler"})
 LIST_RE = re.compile(r"^\s*[-*+] ")
+# The one non-note file a command may change, in the same all-or-none batch.
+DATA_FILES = frozenset({"_meta/prop-hands.json"})
 VERBS = {"WOULD-CREATE": "CREATED", "WOULD-ADD": "ADDED"}
 
 
@@ -92,10 +100,14 @@ class Batch:
         self.texts: dict[str, str] = {}
         self.rows: list[str] = []
         self.after: list[str] = []      # printed below the totals line
+        # Questions that can only be asked once the files are on disk.
+        self.after_write: list[Callable[[], None]] = []
         self._listing: dict[str, str] | None = None
 
     def guard(self, rel: str) -> None:
         """Refuse a path that is not a note inside the vault."""
+        if rel in DATA_FILES:
+            return
         if not rel.lower().endswith(".md"):
             raise WriteError(f"{rel}: not a note (.md)")
         full = self.vault / rel
@@ -2582,19 +2594,10 @@ def cmd_scene_new(batch: Batch, args: argparse.Namespace,
               + (", set piece" if args.set_piece else ""))
 
 
-def cmd_scene_played(batch: Batch, args: argparse.Namespace,
-                     _text: str) -> None:
-    session = clean_name(bare_link(args.session), "--session")
-    sessions = [rel for rel in batch.with_stem(session)
-                if not is_record(rel)
-                and vl.entity_type(vl.extract_frontmatter(batch.read(rel))
-                                   ) == "session"]
-    if len(sessions) != 1:
-        raise WriteError(
-            f"no session note named {session!r}" if not sessions else
-            f"{len(sessions)} session notes named {session!r}: "
-            + ", ".join(sessions))
-    raw = bare_link(args.scene)
+def find_scene(batch: Batch, name: str) -> str:
+    """The one scene note `name` means: its name, or its vault-relative
+    path when several share the name."""
+    raw = bare_link(name)
     scene_notes = [rel for rel, _t in notes_of_type(batch.vault, "scene")]
     if "/" in raw:
         # A vault-relative path names one of several scenes of a name.
@@ -2607,10 +2610,25 @@ def cmd_scene_played(batch: Batch, args: argparse.Namespace,
                   if nfc(Path(rel).stem).casefold() == want]
     if len(scenes) != 1:
         raise WriteError(
-            f"no scene note at or named {args.scene!r}" if not scenes else
-            f"{len(scenes)} scene notes named {args.scene!r}: "
+            f"no scene note at or named {name!r}" if not scenes else
+            f"{len(scenes)} scene notes named {name!r}: "
             + ", ".join(scenes) + "; pass its path as --scene")
-    rel = scenes[0]
+    return scenes[0]
+
+
+def cmd_scene_played(batch: Batch, args: argparse.Namespace,
+                     _text: str) -> None:
+    session = clean_name(bare_link(args.session), "--session")
+    sessions = [rel for rel in batch.with_stem(session)
+                if not is_record(rel)
+                and vl.entity_type(vl.extract_frontmatter(batch.read(rel))
+                                   ) == "session"]
+    if len(sessions) != 1:
+        raise WriteError(
+            f"no session note named {session!r}" if not sessions else
+            f"{len(sessions)} session notes named {session!r}: "
+            + ", ".join(sessions))
+    rel = find_scene(batch, args.scene)
     text = batch.read(rel)
     lines = text.splitlines(keepends=True)
     end, error = vl.frontmatter_span(lines)
@@ -2644,6 +2662,189 @@ def cmd_scene_played(batch: Batch, args: argparse.Namespace,
               f"status {new_status}; played_in "
               + (f"+ [[{session}]]" if added else "already lists "
                  f"[[{session}]]"))
+
+
+# --- prop-new ----------------------------------------------------------------
+
+PROP_TEMPLATES = ("_Template_Prop.md",)
+HANDS_REL = "_meta/prop-hands.json"
+HAND_ID_RE = re.compile(r"^[a-z0-9][a-z0-9-]{0,40}$")
+HAND_FONT_RE = re.compile(r"^[A-Za-z0-9 ]{1,60}$")
+
+
+def live_stem_clash(batch: Batch, name: str) -> list[str]:
+    """The live notes whose file name is `name`."""
+    return [other for other in batch.with_stem(name)
+            if other.split("/", 1)[0] not in ("_Templates", "_meta")
+            and not other.startswith(".")]
+
+
+def read_hands(batch: Batch) -> dict[str, Any]:
+    """The hand registry's `hands` table; none yet is an empty table."""
+    if not batch.exists(HANDS_REL):
+        return {}
+    try:
+        data = json.loads(batch.read(HANDS_REL))
+    except ValueError:
+        raise WriteError(f"{HANDS_REL} is not JSON; fix it by hand "
+                         f"first") from None
+    hands = data.get("hands") if isinstance(data, dict) else None
+    if not isinstance(hands, dict):
+        raise WriteError(f"{HANDS_REL} has no \"hands\" table; fix it "
+                         f"by hand first")
+    return hands
+
+
+def use_hand(batch: Batch, hand: str, font: str | None,
+             who: str | None) -> None:
+    """Check `hand` against the registry and add it when it is new."""
+    if not HAND_ID_RE.match(hand):
+        raise WriteError(f"--hand {hand!r} must be lower-case letters, "
+                         f"digits and hyphens, up to 41 characters")
+    hands = read_hands(batch)
+    have = hands.get(hand)
+    if have is not None:
+        have_font = str(have.get("font") or "") \
+            if isinstance(have, dict) else ""
+        if font is not None and font != have_font:
+            raise WriteError(f'hand "{hand}" is already {have_font}; use '
+                             f"it, or choose a new id for a new writer")
+        batch.row("SKIP", HANDS_REL, "", f"hand {hand} is {have_font}")
+        return
+    if font is None:
+        raise WriteError(f'hand "{hand}" is new: give its font with '
+                         f"--hand-font")
+    if not HAND_FONT_RE.match(font):
+        raise WriteError(f"--hand-font {font!r} must be a font family name "
+                         f"(letters, digits and spaces, up to 60)")
+    hands[hand] = {"font": font, "who": who or ""}
+    text = json.dumps({"hands": hands}, indent=2, ensure_ascii=False,
+                      sort_keys=True) + "\n"
+    if batch.exists(HANDS_REL):
+        batch.put(HANDS_REL, text)
+    else:
+        batch.create(HANDS_REL, text)
+    batch.row("WOULD-ADD", HANDS_REL, "", f"hand {hand} is {font}")
+
+
+def one_container(batch: Batch, raw: str) -> str:
+    name = clean_name(bare_link(raw), "--container")
+    hits = live_stem_clash(batch, name)
+    hits = [h for h in hits if not is_record(h)]
+    if len(hits) != 1:
+        raise WriteError(
+            f"no note named {name!r} for --container" if not hits else
+            f"{len(hits)} notes named {name!r}: " + ", ".join(hits))
+    return name
+
+
+def warn_if_unmapped(batch: Batch, rel: str) -> None:
+    answer = vc.ask_publish_tool(batch.vault, ["explain", rel],
+                                 site_optional=True)
+    data = answer.data
+    if answer.why or not isinstance(data, dict) \
+            or data.get("code") != "DIR_UNMAPPED":
+        return
+    folder = Path(rel).parent.as_posix()
+    batch.row("WARNING", rel, "",
+              f"the site does not show notes in {folder}: add it to "
+              f"player_site.folder_map (gm-publish settings set \u2026)")
+
+
+def cmd_prop_new(batch: Batch, args: argparse.Namespace,
+                 _text: str) -> None:
+    title = clean_name(args.title, "title")
+    found = find_chapter(batch.vault, args.chapter)
+    assert found is not None
+    _chapter_rel, chapter_dir, chapter_name = found
+    if args.kind not in schema_rules.PROP_KINDS:
+        raise WriteError(f"--kind must be one of "
+                         f"{', '.join(sorted(schema_rules.PROP_KINDS))}")
+    if args.style and args.file:
+        raise WriteError("a prop has a style or a hand-made file, not both")
+    if args.style and not HAND_ID_RE.match(args.style):
+        raise WriteError(f"--style {args.style!r} must be lower-case "
+                         f"letters, digits and hyphens")
+    if args.hand_font is not None and not args.hand:
+        raise WriteError("--hand-font needs --hand")
+    folder = ""
+    if args.folder:
+        parts = [p for p in args.folder.replace("\\", "/").split("/")
+                 if p.strip()]
+        if not parts or any(p in (".", "..") or BAD_NAME_RE.search(p)
+                            for p in parts) \
+                or args.folder.startswith(("/", "\\")):
+            raise WriteError(f"--folder {args.folder!r} must be a "
+                             f"sub-folder of the chapter")
+        folder = "/" + "/".join(parts)
+    rel = f"{chapter_dir}{folder}/Props/{title}.md"
+    clash = live_stem_clash(batch, title)
+    if clash:
+        raise WriteError(f"a note named {title!r} already exists: "
+                         + ", ".join(clash) + "; choose another title")
+    if args.file:
+        parts = args.file.replace("\\", "/").split("/")
+        if args.file.startswith(("/", "\\")) or ".." in parts:
+            raise WriteError(f"--file {args.file!r} must be a name beside "
+                             f"the note")
+    container = one_container(batch, args.container) \
+        if args.container else None
+    scene = find_scene(batch, args.scene) if args.scene else None
+    if args.hand:
+        use_hand(batch, args.hand, args.hand_font, args.hand_who)
+    template = template_text(batch.vault, PROP_TEMPLATES, "prop.md")
+    fm = template_frontmatter(template)
+
+    def quoted(value: str) -> str:
+        return json.dumps(value, ensure_ascii=False)
+    set_block(fm, "name", quoted(title))
+    set_block(fm, "prop_kind", args.kind)
+    if args.style:
+        set_block(fm, "prop_style", quoted(args.style))
+    if args.file:
+        set_block(fm, "prop_file", quoted(args.file))
+    if args.hand:
+        set_block(fm, "prop_hand", quoted(args.hand))
+    if container:
+        set_block(fm, "prop_container", quoted(f"[[{container}]]"))
+    text = "---\n" + "\n".join(fm) + "\n---\n" + template_body(template)
+    batch.create(rel, text)
+    schema_check(batch, rel, text)
+    detail = f"prop template, chapter {chapter_name}, kind {args.kind}"
+    if args.style:
+        detail += f", style {args.style}"
+    if args.hand:
+        detail += f", hand {args.hand}"
+    batch.row("WOULD-CREATE", rel, "", detail)
+    if args.file and not (batch.vault / Path(rel).parent / args.file
+                          ).exists():
+        batch.row("WARNING", rel, "", "write the page beside the note "
+                  "before it is revealed")
+    if scene:
+        link_scene(batch, scene, title)
+    batch.after_write.append(lambda: warn_if_unmapped(batch, rel))
+
+
+def link_scene(batch: Batch, rel: str, title: str) -> None:
+    """Add [[title]] to the scene's `entities` once; nothing else changes."""
+    text = batch.read(rel)
+    lines = text.splitlines(keepends=True)
+    end, error = vl.frontmatter_span(lines)
+    if error:
+        raise WriteError(f"{rel}: {error}")
+    eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
+    fm = [ln.rstrip("\r\n") for ln in lines[1:end]]
+    have = (vl.extract_frontmatter(text) or {}).get("entities") or []
+    if not isinstance(have, list):
+        have = [have]
+    links = [vl.wikilink_target(str(x)) or bare_link(str(x)) for x in have]
+    if nfc(title).casefold() in {nfc(x).casefold() for x in links}:
+        batch.row("SKIP", rel, "", f"entities already lists [[{title}]]")
+        return
+    set_block(fm, "entities", *link_list([*links, title]))
+    batch.put(rel, "---" + eol + eol.join(fm) + eol + "---" + eol
+              + "".join(lines[end + 1:]))
+    batch.row("WOULD-ADD", rel, "", f"entities + [[{title}]]")
 
 
 # --- CLI ---------------------------------------------------------------------
@@ -2795,6 +2996,31 @@ def build_parser() -> argparse.ArgumentParser:
                     help="the session note's name")
     sp.add_argument("--paused", action="store_true")
     sp.add_argument("--write", action="store_true")
+    pr = sub.add_parser(
+        "prop-new", help="file a new prop in its chapter's Props folder",
+        formatter_class=raw, description=(
+            "Creates <chapter folder>[/<folder>]/Props/<title>.md from the\n"
+            "prop template. --style builds the page on the site; --file\n"
+            "names a hand-made page beside the note. --hand names the\n"
+            "writer's hand in _meta/prop-hands.json (a new one needs\n"
+            "--hand-font). --scene links the prop from that scene's\n"
+            "entities. The publish list is never touched."))
+    pr.add_argument("--chapter", required=True)
+    pr.add_argument("--title", required=True)
+    pr.add_argument("--kind", default="document",
+                    help="document | object | diagram | supplied | "
+                         "container (default document)")
+    pr.add_argument("--style", help="a site style, e.g. letter")
+    pr.add_argument("--file", help="a hand-made page beside the note")
+    pr.add_argument("--hand", help="the writer's hand id, e.g. sophia")
+    pr.add_argument("--hand-font", dest="hand_font",
+                    help="a new hand's font family")
+    pr.add_argument("--hand-who", dest="hand_who",
+                    help="a new hand's writer, in words")
+    pr.add_argument("--scene", help="the scene that hands it over")
+    pr.add_argument("--container", help="the container prop it sits in")
+    pr.add_argument("--folder", help="a sub-folder of the chapter")
+    pr.add_argument("--write", action="store_true")
     pl = sub.add_parser(
         "plan", help="write a session's Plan and check it",
         formatter_class=raw, description=(
@@ -2835,10 +3061,11 @@ COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "plan": cmd_plan,
                                 "chapter-new": cmd_chapter_new,
                                 "scene-new": cmd_scene_new,
-                                "scene-played": cmd_scene_played}
+                                "scene-played": cmd_scene_played,
+                                "prop-new": cmd_prop_new}
 NO_STDIN = frozenset({"wrapup-new", "session-new", "resolve",
                       "promote-plan", "chapter-new", "scene-new",
-                      "scene-played"})
+                      "scene-played", "prop-new"})
 
 
 def read_stdin() -> str:
@@ -2893,6 +3120,8 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
         if args.write:
             apply(batch)
             wrote = True
+            for ask in batch.after_write:
+                ask()
     except RestoreFailed as e:
         print(f"ERROR\t{e}")
         print("# files were left changed: restore them from the list above")
