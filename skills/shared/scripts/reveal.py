@@ -19,7 +19,9 @@ Without `--write` it only says what it would do. With it, in this order:
 
 A path that does not end up publishing keeps its `withheld` and gets no
 `revealed_in`. When `explain` cannot be asked, a WARNING row says so and
-nothing is stamped; publishing goes ahead. Prep notes
+nothing is stamped; publishing goes ahead. A WARNING row also names each
+note the site makes no page for (a folder outside the folder map): the
+tool cannot say whether it is a prop, so it is not stamped. Prep notes
 (sessions, plans, scenes, play notes, wrap-ups, chapters, `_meta/`) are
 never published here. With no site to publish through, `--publish` is
 refused; `--released` still logs.
@@ -97,16 +99,33 @@ def apply_publish(vault: Path, paths: list[str],
     return [p for p in paths if _nfc(p) in after], None
 
 
-def prop_paths(vault: Path) -> tuple[set[str] | None, str | None]:
-    """(the notes the publish tool says are props, why not)."""
+def prop_paths(vault: Path) -> tuple[set[str] | None, dict[str, str], str | None]:
+    """(the notes the publish tool says are props; the notes it makes no
+    page for, with its verdict code, since `prop` is false for those only
+    because there is no page; why not)."""
     answer = ask_publish_tool(vault, ["explain", "--all"])
     if answer.why or not isinstance(answer.data, dict):
-        return None, _tool_why(answer)
+        return None, {}, _tool_why(answer)
+    props: set[str] = set()
+    no_page: dict[str, str] = {}
     try:
-        return {_nfc(str(page["path"])) for page in answer.data["pages"]
-                if page.get("prop") is True}, None
+        for page in answer.data["pages"]:
+            path = _nfc(str(page["path"]))
+            if page.get("prop") is True:
+                props.add(path)
+            elif "strippedSections" in page and page["strippedSections"] is None:
+                no_page[path] = str(page.get("code") or "")
     except (KeyError, TypeError, AttributeError):
-        return None, "the publish tool's explain answer is not understood"
+        return None, {}, "the publish tool's explain answer is not understood"
+    return props, no_page, None
+
+
+def _no_page_why(rel: str, code: str) -> str:
+    if code == "DIR_UNMAPPED":
+        folder = Path(rel).parent.as_posix()
+        return (f"the site does not show notes in {folder}, so this note has no page "
+                "(add the folder to player_site.folder_map)")
+    return f"the site makes no page for this note ({code or 'no reason given'})"
 
 
 def _refusal(vault: Path, rel: str) -> str | None:
@@ -268,11 +287,15 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                 else ("WOULD-PUBLISH", "WOULD-CLEAR", "WOULD-STAMP")
             props: set[str] = set()
             if fresh:
-                found, why = prop_paths(vault)
+                found, no_page, why = prop_paths(vault)
                 if found is None:
                     row("WARNING", "-", f"revealed_in not written: {why}")
                 else:
                     props = found
+                    for rel in fresh:
+                        if _nfc(rel) in no_page:
+                            row("WARNING", rel, "revealed_in not written: "
+                                + _no_page_why(rel, no_page[_nfc(rel)]))
             # Know the edit can be done before anything is published: the
             # clear, and on a prop newly publishing with no arrival yet, the
             # stamp, one write per note. A published note is never stamped.

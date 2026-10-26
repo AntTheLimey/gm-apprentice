@@ -427,6 +427,26 @@ class RevealTests(unittest.TestCase):
         self.assertEqual(ap.call_args.args[1], [PELL])
         self.assertIn(f"ERROR\t{LEDGER}\tnot published, nothing changed", out)
 
+    def test_unmapped_path_warns_not_stamped(self) -> None:
+        self._props()
+        explain = ToolAnswer(data={"pages": [
+            {"path": LEDGER, "prop": False, "code": "DIR_UNMAPPED", "strippedSections": None},
+            {"path": PELL, "prop": False, "code": "INCLUDED", "strippedSections": []},
+            {"path": LETTER, "prop": False, "code": "DIR_UNMAPPED", "strippedSections": None}]})
+        code, out, ap = run(self.root, "--publish", LEDGER, "--publish", PELL,
+                            "--publish", LETTER, "--write", state=({LETTER}, None),
+                            explain=explain)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(ap.call_args.args[1], [LEDGER, PELL])
+        self.assertIn(f"WARNING\t{LEDGER}\trevealed_in not written: the site does not show "
+                      "notes in Handouts, so this note has no page (add the folder to "
+                      "player_site.folder_map)", out)
+        warned = [ln.split("\t")[1] for ln in out.splitlines() if ln.startswith("WARNING")]
+        self.assertEqual(warned, [LEDGER])      # not Pell (has a page), not Letter (published)
+        self.assertNotIn("revealed_in", (self.root / LEDGER).read_text(encoding="utf-8"))
+        self.assertIn("withheld: false", (self.root / LEDGER).read_text(encoding="utf-8"))
+        self.assertIn("# publish: 2 clear: 1 stamp: 0 log: 1 errors: 0", out)
+
     def test_count_line(self) -> None:
         self._props()
         code, out, _ = run(self.root, "--publish", LEDGER, "--publish", PELL, "--write",
