@@ -7,18 +7,89 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const zlib = require('node:zlib');
 const { spawnSync } = require('node:child_process');
-const { findChrome: defaultFindChrome } = require('../chrome');
+const { findChrome: defaultFindChrome, fileUrl } = require('../chrome');
 const { loadVaultConfig, siteConfigFor, outputFolderOf } = require('../config');
 
 const NO_CHROME = 'no Chrome or Chromium found; open the page and use print preview';
+const COULD_NOT_COUNT = 'could not count the pages of this PDF; open it to check';
+const NO_PAGES_PRINTED = 'Chrome printed no pages it could count; open the page and use print preview';
+// Clean-up that outlives a lock Chrome's helpers hold for a moment after it exits (Windows).
+const RM = { recursive: true, force: true, maxRetries: 5, retryDelay: 100 };
 
-// A PDF's page count: each page object is `/Type /Page`, the page tree `/Type /Pages`.
+// The pages of a PDF Chrome printed: each page object is `/Type /Page`, the page tree `/Type /Pages`. Chrome writes
+// every object in the open, once.
 function countPdfPages(bytes) {
   return (Buffer.from(bytes).toString('latin1').match(/\/Type\s*\/Page(?!s)/g) || []).length;
 }
 
-const fileUrl = (p) => `file://${p.replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')}`;
+// The end of the literal string `(...)` that opens at `i`: brackets nest, and a backslash escapes the next byte.
+function endOfString(text, i) {
+  let depth = 0;
+  for (let j = i; j < text.length; j++) {
+    if (text[j] === '\\') j++;
+    else if (text[j] === '(') depth++;
+    else if (text[j] === ')' && --depth === 0) return j + 1;
+  }
+  return text.length;
+}
+
+// Every dictionary in `text`, each as its own text with the dictionaries nested in it cut out, in file order. A
+// stream's bytes are skipped, except an object stream's (where a PDF 1.5 writer packs its objects), which is
+// inflated and read in place.
+function dictsIn(text, found, nested = false) {
+  const stack = [];
+  let i = 0;
+  while (i < text.length) {
+    const c = text[i];
+    if (c === '%') {
+      const eol = /[\r\n]/g;
+      eol.lastIndex = i;
+      const m = eol.exec(text);
+      i = m ? m.index : text.length;
+    } else if (c === '(') {
+      i = endOfString(text, i);
+    } else if (c === '<' && text[i + 1] === '<') {
+      stack.push({ start: i, inner: [] });
+      i += 2;
+    } else if (c === '>' && text[i + 1] === '>' && stack.length) {
+      const d = stack.pop();
+      const end = i + 2;
+      let own = '';
+      let at = d.start;
+      for (const [from, to] of d.inner) { own += text.slice(at, from); at = to; }
+      found.push(own + text.slice(at, end));
+      i = end;
+      if (stack.length) { stack[stack.length - 1].inner.push([d.start, end]); continue; }
+      const opens = /^\s*stream\r?\n/.exec(text.slice(end, end + 32));
+      if (!opens) continue;
+      const from = end + opens[0].length;
+      const to = text.indexOf('endstream', from);
+      if (to < 0) return;
+      const dict = found[found.length - 1];
+      if (!nested && /\/Type\s*\/ObjStm\b/.test(dict) && /\/Filter\s*\[?\s*\/FlateDecode\s*\]?\s*(\/|>>)/.test(dict)) {
+        try {
+          dictsIn(zlib.inflateSync(Buffer.from(text.slice(from, to), 'latin1'), { finishFlush: zlib.constants.Z_SYNC_FLUSH }).toString('latin1'), found, true);
+        } catch (err) { /* an object stream that will not inflate: its objects are not read */ }
+      }
+      i = to + 'endstream'.length;
+    } else {
+      i++;
+    }
+  }
+}
+
+// A supplied PDF's page count, from its page tree: the /Count of the root /Pages node (the one with no /Parent).
+// After an incremental update the last root is the one a reader takes. Null when no count can be read.
+function pdfPageTreeCount(bytes) {
+  const dicts = [];
+  dictsIn(Buffer.from(bytes).toString('latin1'), dicts);
+  const roots = dicts.filter((d) => /\/Type\s*\/Pages(?![A-Za-z0-9])/.test(d) && !/\/Parent(?![A-Za-z0-9])/.test(d));
+  if (!roots.length) return null;
+  const m = /\/Count\s+(\d+)(\s+\d+\s+R)?/.exec(roots[roots.length - 1]);
+  return m && !m[2] && Number(m[1]) > 0 ? Number(m[1]) : null;
+}
 
 // Print one file to PDF and count its pages. Throws if Chrome fails.
 function printedPages(binary, file, work) {
@@ -35,20 +106,10 @@ function countFile(binary, file, work) {
   if (!fs.existsSync(file) || !fs.statSync(file).isFile()) return { pages: null, why: 'not built' };
   if (!binary) return { pages: null, why: NO_CHROME };
   try {
-    return { pages: printedPages(binary, file, work), why: null };
+    const pages = printedPages(binary, file, work);
+    return pages > 0 ? { pages, why: null } : { pages: null, why: NO_PAGES_PRINTED };
   } catch (err) {
     return { pages: null, why: err.message };
-  }
-}
-
-// One row per address: { address, pages, why }; `why` says why there is no count.
-function pagesFor(siteDir, addresses, { findChrome = defaultFindChrome } = {}) {
-  const binary = findChrome();
-  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'props-pages-'));
-  try {
-    return addresses.map((address) => ({ address, ...countFile(binary, path.resolve(siteDir, address), work) }));
-  } finally {
-    fs.rmSync(work, { recursive: true, force: true });
   }
 }
 
@@ -70,14 +131,17 @@ function noteRow(configPath, vaultPath, given, binary, work) {
 
 function notePages(configPath, full, note, binary, work) {
   if (!fs.existsSync(full)) return { pages: null, why: 'no such note in the vault' };
-  let made;
+  let built;
   try {
-    made = require('../build').build({ configPath, inMemory: true, shownFor: note }).shownProp;
+    built = require('../build').build({ configPath, inMemory: true, shownFor: note });
   } catch (err) {
     return { pages: null, why: err.message };
   }
+  const made = built.shownProp;
   if (!made || made.why) return { pages: null, why: made ? made.why : 'not a prop note' };
-  const warnings = made.warnings;
+  // What the build said while it made the prop's own page (a picture not in the vault, say), beside the prop's rows.
+  const said = (built.warnings || []).filter((w) => w.includes(`(${made.files[0].out})`));
+  const warnings = [...new Set([...made.warnings, ...said])];
   const site = fs.mkdtempSync(path.join(work, 'site-'));
   try {
     for (const f of made.files) {
@@ -87,10 +151,13 @@ function notePages(configPath, full, note, binary, work) {
       else fs.writeFileSync(full, f.text !== undefined ? f.text : f.bytes);
     }
     const page = path.join(site, ...made.files[0].out.split('/'));
-    if (/\.pdf$/i.test(page)) return { pages: countPdfPages(fs.readFileSync(page)), why: null, warnings };
+    if (/\.pdf$/i.test(page)) {
+      const pages = pdfPageTreeCount(fs.readFileSync(page));
+      return { pages, why: pages === null ? COULD_NOT_COUNT : null, warnings };
+    }
     return { ...countFile(binary, page, work), warnings };
   } finally {
-    fs.rmSync(site, { recursive: true, force: true });
+    fs.rmSync(site, RM);
   }
 }
 
@@ -112,15 +179,17 @@ async function rowsFor(configPath, targets, { findChrome = defaultFindChrome, pr
       ? noteRow(configPath, vaultPath, x.note, binary, work)
       : { address: x.address, ...countFile(binary, path.resolve(site, x.address), work) }));
   } finally {
-    fs.rmSync(work, { recursive: true, force: true });
+    fs.rmSync(work, RM);
   }
 }
 
+// A row's line. A row with no count still names its warnings; a no-Chrome row with none is the one NO_CHROME line.
 function formatLine(row) {
   const name = row.note !== undefined ? row.note : row.address;
   const said = row.warnings && row.warnings.length ? ` (warning: ${row.warnings.join('; ')})` : '';
   if (row.pages !== null) return `${name}\t${row.pages} ${row.pages === 1 ? 'page' : 'pages'}${said}`;
-  return row.why === NO_CHROME ? row.why : `${name}\t${row.why}`;
+  if (row.why === NO_CHROME) return said ? `${name}\tno count${said}` : NO_CHROME;
+  return `${name}\t${row.why}${said}`;
 }
 
 // The site's output folder, as `--config` names it.
@@ -141,9 +210,9 @@ async function runPages({ configPath, targets, json = false }) {
   const rows = await rowsFor(configPath || './vault.config.json', targets);
   if (json) console.log(JSON.stringify(rows, null, 2));
   else {
-    for (const row of rows.filter((r) => r.why !== NO_CHROME)) console.log(formatLine(row));
+    for (const line of rows.map(formatLine).filter((l) => l !== NO_CHROME)) console.log(line);
     if (rows.some((r) => r.why === NO_CHROME)) console.log(NO_CHROME);
   }
 }
 
-module.exports = { countPdfPages, pagesFor, rowsFor, formatLine, runPages, NO_CHROME };
+module.exports = { countPdfPages, pdfPageTreeCount, rowsFor, formatLine, runPages, NO_CHROME, COULD_NOT_COUNT };

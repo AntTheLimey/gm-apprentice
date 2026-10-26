@@ -20,4 +20,7 @@ function findChrome() {
   return null;
 }
 
-module.exports = { findChrome };
+// A file URL Chrome opens, a Windows path included.
+const fileUrl = (p) => `file://${p.replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')}`;
+
+module.exports = { findChrome, fileUrl };

@@ -15,14 +15,13 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { prepareFixture } = require('../test/helpers/fixture-build');
-const { findChrome } = require('../lib/chrome');
+const { findChrome, fileUrl } = require('../lib/chrome');
 const { countPdfPages } = require('../lib/props/pages-cli');
 const { prefetchForConfig } = require('../lib/fonts');
 const { build } = require('../lib/build');
 const { loadVaultConfig } = require('../lib/config');
 const { listStyles } = require('../lib/props/styles');
 
-const fileUrl = (p) => `file://${p.replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')}`;
 
 function chrome(binary, profile, args) {
   const run = spawnSync(binary, ['--headless', '--disable-gpu', '--hide-scrollbars', '--no-first-run', '--no-default-browser-check',

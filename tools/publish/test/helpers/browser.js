@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const { findChrome } = require('../../lib/chrome');
+const { findChrome, fileUrl } = require('../../lib/chrome');
 
 // The `skip` for a browser check: a reason without a browser, but never on CI, where the check runs and fails;
 // except on the Windows CI runner, where it is always skipped. The checks test Chrome's layout, which is the same
@@ -18,9 +18,6 @@ function browserSkip({ platform = process.platform, env = process.env, chrome = 
   if (platform === 'win32' && env.CI) return 'real-browser layout checks run on the Mac and Ubuntu CI jobs: the layout engine is the same on Windows, and a Chrome start on the Windows runner slows every test beside it';
   return chrome() || env.CI ? false : 'no Chrome or Chromium found (set GM_TEST_CHROME to point at one)';
 }
-
-// A file URL that also works for a Windows path.
-const fileUrl = (p) => `file://${p.replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')}`;
 
 // `script` runs in the page once it has loaded, with `done(result)` to call with a JSON-able answer. A page error
 // raised at any time is added to the result as `errors`. Returns the result. Given a list of pages (all in one

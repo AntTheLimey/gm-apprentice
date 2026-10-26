@@ -1675,7 +1675,11 @@ function buildSite(options) {
   // registry and a typeface it did not have, so a count laid out in fallback type says so.
   function shownPropOf() {
     if (shownRel === null) return null;
-    if (!shownPage) return { why: 'the site does not read this note' };
+    if (!shownPage) {
+      const dir = path.posix.dirname(shownRel);
+      const unmapped = dir !== '.' && require('./scanner').mapFolder(dir, config.folderMap || {}) === null;
+      return { why: unmapped ? `the site does not read this note: its folder ${dir} is not in ${nameIn(config.vaultPath, 'player_site.folder_map')}` : 'the site does not read this note' };
+    }
     const p = propPlan && propPlan.props.find((x) => x.page === shownPage);
     if (!p) return { why: 'not a prop note' };
     const { outputs } = propOutputs({ props: [p] }, { collectionAddress: collection && collection.address });

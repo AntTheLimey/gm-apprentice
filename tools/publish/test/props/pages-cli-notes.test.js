@@ -4,7 +4,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { rowsFor, formatLine, NO_CHROME } = require('../../lib/props/pages-cli');
+const { rowsFor, formatLine, NO_CHROME, COULD_NOT_COUNT } = require('../../lib/props/pages-cli');
 const { propVault } = require('../helpers/prop-vault');
 
 // No Chrome, and no network: the font prefetch is a spy that fetches nothing.
@@ -112,11 +112,52 @@ test('a counted row names its warnings', () => {
 
 test('a note path is read as vault-relative: ./, an absolute path inside the vault, backslashes; outside is refused', async (t) => {
   const v = propVault(t, { 'Props/Deed.md': '---\ntype: prop\nprop_file: deed.pdf\n---\nA deed.\n' });
-  fs.writeFileSync(path.join(v.vaultDir, 'Props', 'deed.pdf'), '%PDF-1.4\n<< /Type /Page >>\n%%EOF\n');
+  fs.writeFileSync(path.join(v.vaultDir, 'Props', 'deed.pdf'), '%PDF-1.4\n<< /Type /Pages /Count 1 >> << /Type /Page >>\n%%EOF\n');
   const given = ['./Props/Deed.md', path.join(v.vaultDir, 'Props', 'Deed.md'), 'Props\\Deed.md', '../outside.md'];
   const rows = await rowsFor(v.configPath, given.map((note) => ({ note })), noChrome());
   assert.deepEqual(rows.map((r) => [r.note, r.pages, r.why]), [
     ['Props/Deed.md', 1, null], ['Props/Deed.md', 1, null], ['Props/Deed.md', 1, null],
     ['../outside.md', null, 'outside the vault'],
   ]);
+});
+
+const DEED = { 'Props/Deed.md': '---\ntype: prop\nprop_file: deed.pdf\n---\nA deed.\n' };
+const realPdf = (name) => fs.readFileSync(path.join(__dirname, '..', 'fixtures', 'pdf', name));
+
+test('a supplied PDF a real writer packed into object streams is counted from its page tree', async (t) => {
+  const v = propVault(t, DEED);
+  fs.writeFileSync(path.join(v.vaultDir, 'Props', 'deed.pdf'), realPdf('objstm-3-pages.pdf'));
+  const [row] = await rowsFor(v.configPath, [{ note: 'Props/Deed.md' }], noChrome());
+  assert.deepEqual(row, { note: 'Props/Deed.md', pages: 3, why: null, warnings: [] });
+});
+
+test('a supplied PDF edited in an incremental update counts each page once', async (t) => {
+  const v = propVault(t, DEED);
+  fs.writeFileSync(path.join(v.vaultDir, 'Props', 'deed.pdf'), realPdf('incremental-2-pages.pdf'));
+  const [row] = await rowsFor(v.configPath, [{ note: 'Props/Deed.md' }], noChrome());
+  assert.equal(row.pages, 2);
+});
+
+test('a supplied PDF whose pages cannot be counted says so, never 0 pages', async (t) => {
+  const v = propVault(t, DEED);
+  fs.writeFileSync(path.join(v.vaultDir, 'Props', 'deed.pdf'), '%PDF-1.4\n<< /Type /Page >>\n%%EOF\n');
+  const [row] = await rowsFor(v.configPath, [{ note: 'Props/Deed.md' }], noChrome());
+  assert.deepEqual(row, { note: 'Props/Deed.md', pages: null, why: COULD_NOT_COUNT, warnings: [] });
+  assert.equal(formatLine(row), `Props/Deed.md\t${COULD_NOT_COUNT}`);
+});
+
+test("the build's warning about the prop's page (a picture not in the vault) is carried into the row", async (t) => {
+  const v = propVault(t, { 'Props/Map.md': STYLED().replace('Dear friend.', 'Dear friend.\n\n![[missing-map.png]]') });
+  const [row] = await rowsFor(v.configPath, [{ note: 'Props/Map.md' }], noChrome());
+  assert.equal(row.why, NO_CHROME);
+  assert.deepEqual(row.warnings.filter((w) => /image embed not found — "missing-map\.png" \(props\/map-prop\.html\)/.test(w)).length, 1);
+  assert.match(formatLine(row), /^Props\/Map\.md\tno count \(warning: .*missing-map\.png/);
+});
+
+test('a prop in a folder the site does not show names the folder and the fix', async (t) => {
+  const v = propVault(t, { 'Props/Note.md': STYLED() });
+  fs.mkdirSync(path.join(v.vaultDir, 'Chapters', 'Paris', 'Props'), { recursive: true });
+  fs.writeFileSync(path.join(v.vaultDir, 'Chapters', 'Paris', 'Props', 'Paris Note.md'), STYLED());
+  const [row] = await rowsFor(v.configPath, [{ note: 'Chapters/Paris/Props/Paris Note.md' }], noChrome());
+  assert.equal(row.why, 'the site does not read this note: its folder Chapters/Paris/Props is not in player_site.folder_map');
 });

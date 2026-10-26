@@ -226,9 +226,11 @@ built page prints to in headless Chrome. Addresses are relative to the site's
 output folder (props/letter.html). A page that is not built says "not built".
 --note counts a prop from its note (vault-relative) as players would get it,
 published or not: "<note><TAB><n> pages", with "(warning: ...)" when the build
-warned about it (an unknown hand, a typeface not cached), or the reason it has no
-page. Fonts are fetched first, as a build does; nothing is written to the site. With no Chrome or Chromium installed it says so and
-exits 0; open the page and use print preview instead.
+warned about it (an unknown hand, a typeface not cached, a picture not in the
+vault), or the reason it has no count, still with its warnings. A supplied PDF is
+counted from its page tree, without Chrome. Fonts are fetched first, as a build
+does; nothing is written to the site. With no Chrome or Chromium installed it says
+so and exits 0; open the page and use print preview instead.
 
   --note <rel>       A prop note to count before it is published (repeatable)
   --json             [{ address, pages, why }]; a note's row: { note, pages, why, warnings }
