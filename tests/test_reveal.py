@@ -492,11 +492,11 @@ class RevealTests(unittest.TestCase):
                             explain=self._unmapped())
         self.assertEqual(code, 0, out)
         self.assertEqual(ap.call_args.args[1], [LEDGER, PELL])
-        self.assertIn(f"WARNING\t{LEDGER}\ton the publish list, but the site does not show "
+        self.assertIn(f"WARNING\t{LEDGER}\tthe site does not show "
                       "notes in Handouts, so it has no page (add the folder to "
                       "player_site.folder_map); revealed_in: [[Session 12]] is written "
                       "all the same", out)
-        self.assertIn(f"WARNING\t{PELL}\ton the publish list, but the site does not show "
+        self.assertIn(f"WARNING\t{PELL}\tthe site does not show "
                       "notes in NPCs, so it has no page (add the folder to "
                       "player_site.folder_map)\n", out)
         warned = [ln.split("\t")[1] for ln in out.splitlines() if ln.startswith("WARNING")]
@@ -523,7 +523,7 @@ class RevealTests(unittest.TestCase):
             {"path": PELL, "prop": False, "code": "SOMETHING_ELSE", "strippedSections": None}]})
         code, out, _ = run(self.root, "--publish", PELL, explain=explain)
         self.assertEqual(code, 0, out)
-        self.assertIn(f"WARNING\t{PELL}\ton the publish list, but the site makes no page "
+        self.assertIn(f"WARNING\t{PELL}\tthe site makes no page "
                       "for it (SOMETHING_ELSE)", out)
         self.assertNotIn("revealed_in not written", out)
 

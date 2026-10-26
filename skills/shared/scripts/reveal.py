@@ -127,9 +127,9 @@ def prop_paths(vault: Path) -> tuple[set[str] | None, dict[str, str], str | None
 def _no_page_why(rel: str, code: str) -> str:
     if code == "DIR_UNMAPPED":
         folder = Path(rel).parent.as_posix()
-        return (f"on the publish list, but the site does not show notes in {folder}, "
+        return (f"the site does not show notes in {folder}, "
                 "so it has no page (add the folder to player_site.folder_map)")
-    return f"on the publish list, but the site makes no page for it ({code or 'no reason given'})"
+    return f"the site makes no page for it ({code or 'no reason given'})"
 
 
 def _refusal(vault: Path, rel: str) -> str | None:
