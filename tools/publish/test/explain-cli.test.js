@@ -696,6 +696,23 @@ describe('explain --all (#276)', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  it('reads prop from the note itself when the site makes no page for it; false when the note cannot be parsed', async () => {
+    const vault = makeVault();
+    write(vault, 'Chapters/Lyon/Props/Letter.md', '---\ntype: prop\nprop_style: letter\n---\n\nDear reader.\n');
+    write(vault, 'Chapters/Lyon/Props/Plain.md', '---\ntype: document\n---\n\nJust a document.\n');
+    write(vault, 'Chapters/Lyon/Props/Broken.md', '---\ntype: prop\nprop_style: [unclosed\n---\n\nBroken.\n');
+    const configPath = siteFor(vault);
+    const pages = byPath((await all(configPath)).json);
+    assert.deepStrictEqual(['Letter', 'Plain', 'Broken'].map((n) => {
+      const p = pages.get(`Chapters/Lyon/Props/${n}.md`);
+      return [p.code, p.strippedSections, p.prop];
+    }), [['DIR_UNMAPPED', null, true], ['DIR_UNMAPPED', null, false], ['FILE_UNPARSEABLE', null, false]]);
+    const c = capture();
+    await runExplain({ configPath, target: 'Chapters/Lyon/Props/Letter.md', json: true }, c.deps);
+    assert.strictEqual(JSON.parse(c.out.join('')).prop, true);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('names the headings the GM settled for players, from the publish list\'s accepted list (#453)', async () => {
     const vault = makeVault();
     write(vault, '_meta/publish-list.yaml', 'accepted:\n  - page: Sessions/Session_07.md\n    text: Secret Tactics\n    note: gm-leak.heading\n'

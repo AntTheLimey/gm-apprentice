@@ -176,13 +176,35 @@ class RevealTests(unittest.TestCase):
         ap.assert_not_called()
 
     def test_already_published_is_skipped_not_logged(self) -> None:
+        code, out, ap = run(self.root, "--publish", "Places/Mill.md", "--publish", VEX,
+                            "--write", state=({"Places/Mill.md"}, None))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(ap.call_args.args[1], [VEX])
+        self.assertIn("SKIP\tPlaces/Mill.md\talready published; not logged for this session", out)
+        self.assertEqual(log_of(self.root)["entries"][-1]["published"], [VEX])
+
+    def test_withheld_note_already_listed_is_revealed(self) -> None:
+        # Listed but withheld, the site showed nothing of it: lifting withheld is this
+        # session's reveal, so it is logged and its row says so.
         code, out, ap = run(self.root, "--publish", VEX, "--publish", "Places/Mill.md",
                             "--write", state=({VEX}, None))
         self.assertEqual(code, 0, out)
         self.assertEqual(ap.call_args.args[1], ["Places/Mill.md"])
-        self.assertIn(f"SKIP\t{VEX}", out)
+        self.assertNotIn(f"SKIP\t{VEX}", out)
+        self.assertIn(f"PUBLISHED\t{VEX}\talready on the publish list; withheld lifted", out)
+        self.assertIn(f"CLEARED\t{VEX}\twithheld: false", out)
         self.assertIn("withheld: false", (self.root / VEX).read_text(encoding="utf-8"))
-        self.assertEqual(log_of(self.root)["entries"][-1]["published"], ["Places/Mill.md"])
+        self.assertEqual(log_of(self.root)["entries"][-1]["published"], [VEX, "Places/Mill.md"])
+        self.assertIn("# publish: 2 clear: 1 stamp: 0 log: 1 errors: 0", out)
+
+    def test_withheld_note_already_listed_dry_run(self) -> None:
+        before = (self.root / VEX).read_bytes()
+        code, out, ap = run(self.root, "--publish", VEX, state=({VEX}, None))
+        self.assertEqual(code, 0, out)
+        ap.assert_not_called()
+        self.assertEqual((self.root / VEX).read_bytes(), before)
+        self.assertIn(f"WOULD-PUBLISH\t{VEX}\talready on the publish list; withheld lifted", out)
+        self.assertIn(f"WOULD-LOG\t_meta/reveals.json\tSession 12: 1 published", out)
 
     def test_tool_leaves_one_out(self) -> None:
         code, out, _ = run(self.root, "--publish", VEX, "--publish", "Places/Mill.md",
@@ -418,6 +440,30 @@ class RevealTests(unittest.TestCase):
                         explain=explain_answer((LETTER,)))
         self.assertNotIn("WOULD-STAMP", out)
 
+    def test_listed_prop_not_withheld_stays_skipped_and_unstamped(self) -> None:
+        self._props()
+        before = (self.root / LETTER).read_bytes()
+        code, out, ap = run(self.root, "--publish", LETTER, "--write", state=({LETTER}, None),
+                            explain=explain_answer((LETTER,)))
+        self.assertEqual(code, 0, out)
+        self.assertEqual((self.root / LETTER).read_bytes(), before)
+        self.assertIn(f"SKIP\t{LETTER}\talready published; not logged for this session", out)
+        self.assertIn("# publish: 0 clear: 0 stamp: 0 log: 0 errors: 0", out)
+
+    def test_listed_withheld_prop_is_lifted_stamped_and_logged(self) -> None:
+        self._props()
+        code, out, ap = run(self.root, "--publish", LEDGER, "--write", session=S05,
+                            state=({LEDGER}, None), explain=explain_answer((LEDGER,)))
+        self.assertEqual(code, 0, out)
+        ap.assert_not_called()
+        text = (self.root / LEDGER).read_text(encoding="utf-8")
+        self.assertIn("withheld: false", text)
+        self.assertIn(f'revealed_in: "[[{S05}]]"', text)
+        self.assertIn(f"PUBLISHED\t{LEDGER}\talready on the publish list; withheld lifted", out)
+        self.assertIn(f"STAMPED\t{LEDGER}\trevealed_in: [[{S05}]]", out)
+        self.assertEqual(log_of(self.root)["entries"][-1]["published"], [LEDGER])
+        self.assertIn("# publish: 1 clear: 1 stamp: 1 log: 1 errors: 0", out)
+
     def test_unstampable_frontmatter_refuses_the_path(self) -> None:
         self._props()
         (self.root / LEDGER).write_text("---\ntype: prop\n--- \nL.\n", encoding="utf-8")
@@ -427,25 +473,49 @@ class RevealTests(unittest.TestCase):
         self.assertEqual(ap.call_args.args[1], [PELL])
         self.assertIn(f"ERROR\t{LEDGER}\tnot published, nothing changed", out)
 
-    def test_unmapped_path_warns_not_stamped(self) -> None:
+    # The shape `explain --all --json` gives for notes in a folder the site does not show
+    # (gm-publish 1.51.0 on a scratch vault): no page, so strippedSections is null, and
+    # prop read from the note's own frontmatter.
+    def _unmapped(self) -> ToolAnswer:
+        return ToolAnswer(data={"pages": [
+            {"path": LEDGER, "code": "DIR_UNMAPPED", "strippedSections": None, "prop": True,
+             "publishes": False},
+            {"path": PELL, "code": "DIR_UNMAPPED", "strippedSections": None, "prop": False,
+             "publishes": False},
+            {"path": LETTER, "code": "DIR_UNMAPPED", "strippedSections": None, "prop": True,
+             "publishes": False}]})
+
+    def test_unmapped_prop_is_stamped_and_warned(self) -> None:
         self._props()
-        explain = ToolAnswer(data={"pages": [
-            {"path": LEDGER, "prop": False, "code": "DIR_UNMAPPED", "strippedSections": None},
-            {"path": PELL, "prop": False, "code": "INCLUDED", "strippedSections": []},
-            {"path": LETTER, "prop": False, "code": "DIR_UNMAPPED", "strippedSections": None}]})
         code, out, ap = run(self.root, "--publish", LEDGER, "--publish", PELL,
                             "--publish", LETTER, "--write", state=({LETTER}, None),
-                            explain=explain)
+                            explain=self._unmapped())
         self.assertEqual(code, 0, out)
         self.assertEqual(ap.call_args.args[1], [LEDGER, PELL])
         self.assertIn(f"WARNING\t{LEDGER}\ton the publish list, but the site does not show "
                       "notes in Handouts, so it has no page (add the folder to "
-                      "player_site.folder_map)", out)
+                      "player_site.folder_map); revealed_in: [[Session 12]] is written "
+                      "all the same", out)
+        self.assertIn(f"WARNING\t{PELL}\ton the publish list, but the site does not show "
+                      "notes in NPCs, so it has no page (add the folder to "
+                      "player_site.folder_map)\n", out)
         warned = [ln.split("\t")[1] for ln in out.splitlines() if ln.startswith("WARNING")]
-        self.assertEqual(warned, [LEDGER])      # not Pell (has a page), not Letter (published)
+        self.assertEqual(warned, [LEDGER, PELL])    # not Letter: already published
+        ledger = (self.root / LEDGER).read_text(encoding="utf-8")
+        self.assertIn('revealed_in: "[[Session 12]]"', ledger)
+        self.assertIn("withheld: false", ledger)
+        self.assertNotIn("revealed_in", (self.root / PELL).read_text(encoding="utf-8"))
+        self.assertNotIn("revealed_in", (self.root / LETTER).read_text(encoding="utf-8"))
+        self.assertIn("# publish: 2 clear: 1 stamp: 1 log: 1 errors: 0", out)
+
+    def test_unmapped_prop_dry_run_says_it_would_be_stamped(self) -> None:
+        self._props()
+        code, out, _ = run(self.root, "--publish", LEDGER, explain=self._unmapped())
+        self.assertEqual(code, 0, out)
+        self.assertIn("player_site.folder_map); revealed_in: [[Session 12]] would be "
+                      "written all the same", out)
+        self.assertIn(f"WOULD-STAMP\t{LEDGER}", out)
         self.assertNotIn("revealed_in", (self.root / LEDGER).read_text(encoding="utf-8"))
-        self.assertIn("withheld: false", (self.root / LEDGER).read_text(encoding="utf-8"))
-        self.assertIn("# publish: 2 clear: 1 stamp: 0 log: 1 errors: 0", out)
 
     def test_other_no_page_code_is_neutral(self) -> None:
         self._props()

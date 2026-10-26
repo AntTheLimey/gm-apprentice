@@ -12,16 +12,19 @@ Without `--write` it only says what it would do. With it, in this order:
    `withheld` key (a note without one is left alone).
 3. stamp: `revealed_in: "[[SESSION]]"` on each of those notes the publish
    tool (`explain --all`, asked before publishing) says is a prop, unless
-   it already names one. Only notes newly publishing in this run are
-   stamped; the clear and the stamp are one write per note.
+   it already names one. Only notes revealed in this run are stamped; the
+   clear and the stamp are one write per note.
 4. log: the session is recorded in `_meta/reveals.json`. The log is
    history only; nothing reads it to decide what publishes.
 
-A path that does not end up publishing keeps its `withheld` and gets no
+A note revealed in this run is one newly publishing, or one already on the
+list whose `withheld` is lifted now (the site showed nothing of it before);
+any other note already on the list is skipped, unlogged and unstamped. A
+path that does not end up publishing keeps its `withheld` and gets no
 `revealed_in`. When `explain` cannot be asked, a WARNING row says so and
 nothing is stamped; publishing goes ahead. A WARNING row also names each
-note the site makes no page for (a folder outside the folder map): the
-tool cannot say whether it is a prop, so it is not stamped. Prep notes
+note the site makes no page for (a folder outside the folder map); a prop
+there is stamped all the same, and the row says so. Prep notes
 (sessions, plans, scenes, play notes, wrap-ups, chapters, `_meta/`) are
 never published here. With no site to publish through, `--publish` is
 refused; `--released` still logs.
@@ -48,8 +51,8 @@ from reveal_scan import NEVER_CANDIDATES  # noqa: E402
 from vault_check import _site_config, ask_publish_tool  # noqa: E402
 from vault_write import set_block  # noqa: E402
 from vaultlib import (  # noqa: E402
-    WITHHELD_KEY_RE, entity_type, extract_frontmatter, frontmatter_span, normalize_file_arg,
-    scalar_value)
+    WITHHELD_KEY_RE, PublishToolUnavailable, entity_type, extract_frontmatter,
+    frontmatter_span, normalize_file_arg, note_withheld, scalar_value)
 
 LOG = "_meta/reveals.json"
 EMPTY_VALUES = ("", "[]", "null", "~")     # YAML's empty values, as scalar_value reads them
@@ -101,9 +104,9 @@ def apply_publish(vault: Path, paths: list[str],
 
 
 def prop_paths(vault: Path) -> tuple[set[str] | None, dict[str, str], str | None]:
-    """(the notes the publish tool says are props; the notes it makes no
-    page for, with its verdict code, since `prop` is false for those only
-    because there is no page; why not)."""
+    """(the notes the publish tool says are props, read from the note itself
+    when the site makes no page for it; the notes it makes no page for, with
+    its verdict code; why not)."""
     answer = ask_publish_tool(vault, ["explain", "--all"])
     if answer.why or not isinstance(answer.data, dict):
         return None, {}, _tool_why(answer)
@@ -114,7 +117,7 @@ def prop_paths(vault: Path) -> tuple[set[str] | None, dict[str, str], str | None
             path = _nfc(str(page["path"]))
             if page.get("prop") is True:
                 props.add(path)
-            elif "strippedSections" in page and page["strippedSections"] is None:
+            if "strippedSections" in page and page["strippedSections"] is None:
                 no_page[path] = str(page.get("code") or "")
     except (KeyError, TypeError, AttributeError):
         return None, {}, "the publish tool's explain answer is not understood"
@@ -288,23 +291,33 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                 error(rel, f"publish refused, nothing changed: {why}")
             wanted = []
         else:
-            already = [r for r in wanted if _nfc(r) in before]
-            fresh = [r for r in wanted if r not in already]
+            listed = [r for r in wanted if _nfc(r) in before]
+            fresh = [r for r in wanted if r not in listed]
+            # Listed but withheld, the site showed nothing of it: lifting withheld
+            # is this session's reveal, logged and stamped like a new publish.
+            lifted: list[str] = []
+            unknown: dict[str, str] = {}
+            for rel in listed:
+                try:
+                    if note_withheld((vault / rel).read_text(encoding="utf-8"))[0]:
+                        lifted.append(rel)
+                except PublishToolUnavailable as e:
+                    unknown[rel] = str(e)
+            already = [r for r in listed if r not in lifted]
+            revealing = [*fresh, *lifted]
             verb_pub, verb_clear, verb_stamp = ("PUBLISHED", "CLEARED", "STAMPED") if write \
                 else ("WOULD-PUBLISH", "WOULD-CLEAR", "WOULD-STAMP")
             props: set[str] = set()
-            if fresh:
+            no_page: dict[str, str] = {}
+            if revealing:
                 found, no_page, why = prop_paths(vault)
                 if found is None:
                     row("WARNING", "-", f"revealed_in not written: {why}")
                 else:
                     props = found
-                    for rel in fresh:
-                        if _nfc(rel) in no_page:
-                            row("WARNING", rel, _no_page_why(rel, no_page[_nfc(rel)]))
             # Know the edit can be done before anything is published: the
-            # clear, and on a prop newly publishing with no arrival yet, the
-            # stamp, one write per note. A published note is never stamped.
+            # clear, and on a prop revealed now with no arrival yet, the stamp,
+            # one write per note. A note published before is never stamped.
             edits: dict[str, tuple[str | None, str | None]] = {}
             clearing: set[str] = set()
             stamping: set[str] = set()
@@ -314,7 +327,7 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                 new, problem = edits[rel]
                 if new is not None:
                     clearing.add(rel)
-                if problem or rel not in fresh or _nfc(rel) not in props:
+                if problem or rel not in revealing or _nfc(rel) not in props:
                     continue
                 if _frontmatter_edit(vault, rel, clear=False, stamp=session)[0] is None:
                     unstamped[rel] = "revealed_in already set" if _has_frontmatter(vault, rel) \
@@ -322,6 +335,12 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                 else:
                     stamping.add(rel)
                     edits[rel] = _frontmatter_edit(vault, rel, clear=True, stamp=session)
+            for rel in revealing:
+                if _nfc(rel) in no_page:
+                    stamped = (f"; revealed_in: [[{session}]] "
+                               + ("is" if write else "would be") + " written all the same") \
+                        if rel in stamping else ""
+                    row("WARNING", rel, _no_page_why(rel, no_page[_nfc(rel)]) + stamped)
             for rel in list(fresh):
                 if edits[rel][1]:
                     error(rel, f"not published, nothing changed: {edits[rel][1]}")
@@ -338,8 +357,9 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                             error(rel, "the publish tool does not list it as "
                                        "publishing; withheld kept")
             for rel in already:
-                row("SKIP", rel, "already published; not logged for this session")
-            for rel in [*done, *already]:
+                why_not = f"withheld unknown ({unknown[rel]}), so " if rel in unknown else ""
+                row("SKIP", rel, f"already published; {why_not}not logged for this session")
+            for rel in [*done, *lifted, *already]:
                 if rel in done:
                     counts["publish"] += 1
                     row(verb_pub, rel)
@@ -357,13 +377,17 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                                       if on]
                             error(rel, f"{', '.join(undone)}: {e}")
                             continue
+                    if rel in lifted:
+                        counts["publish"] += 1
+                        row(verb_pub, rel, "already on the publish list; withheld lifted")
+                        published.append(rel)
                     if rel in clearing:
                         counts["clear"] += 1
                         row(verb_clear, rel, "withheld: false")
                     if rel in stamping:
                         counts["stamp"] += 1
                         row(verb_stamp, rel, f"revealed_in: [[{session}]]"
-                            + ("" if write else " if it publishes"))
+                            + ("" if write or rel in lifted else " if it publishes"))
                 if rel in unstamped:
                     row("SKIP", rel, unstamped[rel])
 

@@ -176,7 +176,7 @@ class RevealScan(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, \
                 mock.patch.object(rv, "ask_publish_tool", ask):
             res = rv.scan(make_vault(tmp, {**base(), "NPCs/Vex.md": VEX}), INDEX)
-        self.assertIn("# warning: section titles unknown: explain --all timed out after 60s",
+        self.assertIn("# warning: section titles and prop marks unknown: explain --all timed out after 60s",
                       rv.render(res))
 
     def test_fallback_play_notes_beside_index(self) -> None:
@@ -266,7 +266,7 @@ class RevealScan(unittest.TestCase):
         self.assertEqual(rv.render(res), [
             "reveals: Session 12 - Mill (sources: Play Notes, Wrap-Up)",
             "Handouts/Ledger.md\tunpublished\t",
-            "# warning: section titles unknown: explain --all timed out after 60s",
+            "# warning: section titles and prop marks unknown: explain --all timed out after 60s",
             "# notes: 1"])
 
 

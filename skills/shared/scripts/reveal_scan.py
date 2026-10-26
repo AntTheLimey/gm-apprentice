@@ -188,7 +188,7 @@ def scan(vault: Path, session: str) -> ScanResult:
 
     stripped, props, why = _stripped_by_path(vault)
     if why:
-        result.warnings.append(f"section titles unknown: {why}")
+        result.warnings.append(f"section titles and prop marks unknown: {why}")
     for note in candidates:
         rel = unicodedata.normalize("NFC", note.rel)
         published = rel in publishing
