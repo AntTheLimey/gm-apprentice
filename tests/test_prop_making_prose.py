@@ -71,7 +71,12 @@ class MakingAPropTests(unittest.TestCase):
         self.assertNotIn("not built", self.text)
 
     def test_new_writer_on_a_filed_prop(self):
-        self.assertRegex(self.text, r"prop-hand(?!s)")
+        self.assertRegex(self.text, r"vault_write\.py <vault> prop-hand(?!s)")
+        self.assertIn('stamp_entities.py <vault> "<note>" --set prop_hand=<id>',
+                      self.text)
+
+    def test_hand_only_for_a_writer(self):
+        self.assertRegex(self.text, r"`--hand <id>` only when a person wrote it")
 
     def test_never_edits_the_publish_list(self):
         self.assertRegex(self.text, r"(?i)never edit the publish list")
@@ -109,7 +114,7 @@ class HandsTests(unittest.TestCase):
         # A filed prop's hand is added with prop-hand, with the font the
         # GM names.
         self.assertIn("prop_hand", step)
-        self.assertRegex(step, r"vault_write\.py\s+prop-hand --hand <id>\s+"
+        self.assertRegex(step, r"vault_write\.py\s+\"<vault>\" prop-hand --hand <id>\s+"
                                r"--hand-font \"<family>\"")
         self.assertRegex(step, r"Ask the GM for the font;\s+never pick one")
 
