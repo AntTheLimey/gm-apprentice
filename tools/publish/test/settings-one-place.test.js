@@ -334,7 +334,8 @@ test('setup-backend.js and site-doctor.js read no site-folder key off the site f
 
 // (d) A build step is run in one place: lib/settings/steps.js. This looks at the settings package too, so a second
 // runner there is caught. Files that require child_process: run-command.js (the shared runner for git, npm install,
-// wrangler and gh), image-optimize.js (image tools), steps.js (the steps) and settings/move.js, whose one use runs
+// wrangler and gh), image-optimize.js (image tools), chrome.js and props/pages-cli.js (find and run Chrome to print a
+// page; not build steps), steps.js (the steps) and settings/move.js, whose one use runs
 // this tool's own `update-pin --check`. The only code that runs `npm run <hook>` is the dated block in deploy-cli.js,
 // which keeps a site on the old layout running its package.json prebuild/postbuild until the site is updated
 // (legacy.js's buildHooks; it goes with that file). The two script names appear as code only there, in legacy.js (that
@@ -343,7 +344,7 @@ test('a build step is run only by the steps module and the dated deploy hook', (
   const everywhere = [...sources, ...files(SETTINGS)];
   const grepAll = (re) => everywhere.filter((f) => re.test(code(f))).map(rel).sort();
   assert.deepEqual(grepAll(/\brequire\(\s*['"](?:node:)?child_process['"]\s*\)/),
-    ['lib/image-optimize.js', 'lib/run-command.js', 'lib/settings/move.js', 'lib/settings/steps.js']);
+    ['lib/chrome.js', 'lib/image-optimize.js', 'lib/props/pages-cli.js', 'lib/run-command.js', 'lib/settings/move.js', 'lib/settings/steps.js']);
   // move.js starts exactly one process: this tool, to ask update-pin about the site.
   const moveSpawns = code(path.join(SETTINGS, 'move.js')).match(/\bspawnSync\(/g) || [];
   assert.equal(moveSpawns.length, 1, 'move.js: one call');

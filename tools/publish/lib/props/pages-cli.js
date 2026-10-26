@@ -22,7 +22,7 @@ function printedPages(binary, file, work) {
   const pdf = path.join(work, 'page.pdf');
   const run = spawnSync(binary, ['--headless', '--disable-gpu', '--no-pdf-header-footer', '--no-first-run',
     '--no-default-browser-check', `--user-data-dir=${path.join(work, 'profile')}`, '--virtual-time-budget=6000',
-    `--print-to-pdf=${pdf}`, fileUrl(file)], { stdio: 'pipe', timeout: 60000 });
+    `--print-to-pdf=${pdf}`, fileUrl(file)], { stdio: 'pipe', timeout: 60000, killSignal: 'SIGKILL' });
   if (run.status !== 0 || !fs.existsSync(pdf)) throw new Error(`Chrome failed (${run.status}): ${String(run.stderr).slice(0, 200)}`);
   return countPdfPages(fs.readFileSync(pdf));
 }
@@ -62,8 +62,10 @@ function outputFolder(configPath) {
 function runPages({ configPath, addresses, json = false }) {
   const rows = pagesFor(outputFolder(configPath), addresses);
   if (json) console.log(JSON.stringify(rows, null, 2));
-  else if (rows.some((r) => r.why === NO_CHROME)) console.log(NO_CHROME);
-  else for (const row of rows) console.log(formatLine(row));
+  else {
+    for (const row of rows.filter((r) => r.why !== NO_CHROME)) console.log(formatLine(row));
+    if (rows.some((r) => r.why === NO_CHROME)) console.log(NO_CHROME);
+  }
 }
 
 module.exports = { countPdfPages, pagesFor, formatLine, runPages, NO_CHROME };

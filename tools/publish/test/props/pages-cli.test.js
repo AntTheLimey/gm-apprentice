@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { countPdfPages, pagesFor, formatLine } = require('../../lib/props/pages-cli');
+const { countPdfPages, pagesFor, formatLine, NO_CHROME } = require('../../lib/props/pages-cli');
 
 const tmp = (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'props-pages-'));
@@ -39,4 +39,11 @@ test('no Chrome is not an error', (t) => {
 test('lines read 1 page and n pages', () => {
   assert.equal(formatLine({ address: 'a', pages: 1, why: null }), 'a\t1 page');
   assert.equal(formatLine({ address: 'a', pages: 3, why: null }), 'a\t3 pages');
+});
+
+test('with no Chrome, a missing page is still named, then the one no-Chrome line', (t) => {
+  const dir = tmp(t);
+  fs.writeFileSync(path.join(dir, 'a.html'), '<p>x</p>');
+  const rows = pagesFor(dir, ['gone.html', 'a.html', 'b.html'], { findChrome: () => null });
+  assert.deepEqual(rows.map((r) => r.why), ['not built', NO_CHROME, 'not built']);
 });
