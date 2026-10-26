@@ -52,6 +52,7 @@ from vaultlib import (  # noqa: E402
     scalar_value)
 
 LOG = "_meta/reveals.json"
+EMPTY_VALUES = ("", "[]", "null", "~")     # YAML's empty values, as scalar_value reads them
 REVEALED_IN_KEY_RE = re.compile(r"""^["']?revealed_in["']?[ \t]*:""")
 
 
@@ -123,9 +124,9 @@ def prop_paths(vault: Path) -> tuple[set[str] | None, dict[str, str], str | None
 def _no_page_why(rel: str, code: str) -> str:
     if code == "DIR_UNMAPPED":
         folder = Path(rel).parent.as_posix()
-        return (f"the site does not show notes in {folder}, so this note has no page "
-                "(add the folder to player_site.folder_map)")
-    return f"the site makes no page for this note ({code or 'no reason given'})"
+        return (f"on the publish list, but the site does not show notes in {folder}, "
+                "so it has no page (add the folder to player_site.folder_map)")
+    return f"on the publish list, but the site makes no page for it ({code or 'no reason given'})"
 
 
 def _refusal(vault: Path, rel: str) -> str | None:
@@ -153,7 +154,7 @@ def _revealed_in_set(fm: list[str]) -> bool:
     at = next((i for i, ln in enumerate(fm) if REVEALED_IN_KEY_RE.match(ln)), None)
     if at is None:
         return False
-    if scalar_value(fm[at].split(":", 1)[1]) not in ("", "[]"):
+    if scalar_value(fm[at].split(":", 1)[1]).lower() not in EMPTY_VALUES:
         return True
     for line in fm[at + 1:]:
         if line.strip() and not line[:1].isspace():
@@ -161,6 +162,11 @@ def _revealed_in_set(fm: list[str]) -> bool:
         if scalar_value(line.strip().removeprefix("-")):
             return True
     return False
+
+
+def _has_frontmatter(vault: Path, rel: str) -> bool:
+    lines = (vault / rel).read_text(encoding="utf-8").splitlines(keepends=True)
+    return frontmatter_span(lines)[1] != "no frontmatter"
 
 
 def _frontmatter_edit(vault: Path, rel: str, *, clear: bool,
@@ -191,7 +197,8 @@ def _frontmatter_edit(vault: Path, rel: str, *, clear: bool,
         at = next((i for i, ln in enumerate(fm) if REVEALED_IN_KEY_RE.match(ln)), None)
         if at is not None:
             fm[at] = "revealed_in:"
-        set_block(fm, "revealed_in", f'"[[{stamp}]]"')
+        # A JSON string is a valid YAML double-quoted scalar, escapes and all.
+        set_block(fm, "revealed_in", json.dumps(f"[[{stamp}]]", ensure_ascii=False))
         changed = True
     if not changed:
         return None, None
@@ -294,15 +301,14 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                     props = found
                     for rel in fresh:
                         if _nfc(rel) in no_page:
-                            row("WARNING", rel, "revealed_in not written: "
-                                + _no_page_why(rel, no_page[_nfc(rel)]))
+                            row("WARNING", rel, _no_page_why(rel, no_page[_nfc(rel)]))
             # Know the edit can be done before anything is published: the
             # clear, and on a prop newly publishing with no arrival yet, the
             # stamp, one write per note. A published note is never stamped.
             edits: dict[str, tuple[str | None, str | None]] = {}
             clearing: set[str] = set()
             stamping: set[str] = set()
-            arrived: set[str] = set()
+            unstamped: dict[str, str] = {}     # a prop not stamped, and why
             for rel in wanted:
                 edits[rel] = _frontmatter_edit(vault, rel, clear=True, stamp=None)
                 new, problem = edits[rel]
@@ -311,7 +317,8 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                 if problem or rel not in fresh or _nfc(rel) not in props:
                     continue
                 if _frontmatter_edit(vault, rel, clear=False, stamp=session)[0] is None:
-                    arrived.add(rel)
+                    unstamped[rel] = "revealed_in already set" if _has_frontmatter(vault, rel) \
+                        else "revealed_in not written: the note has no frontmatter"
                 else:
                     stamping.add(rel)
                     edits[rel] = _frontmatter_edit(vault, rel, clear=True, stamp=session)
@@ -357,8 +364,8 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                         counts["stamp"] += 1
                         row(verb_stamp, rel, f"revealed_in: [[{session}]]"
                             + ("" if write else " if it publishes"))
-                if rel in arrived:
-                    row("SKIP", rel, "revealed_in already set")
+                if rel in unstamped:
+                    row("SKIP", rel, unstamped[rel])
 
     items = [{"page": normalize_file_arg(p), "what": w} for p, w in released]
     if published or items:

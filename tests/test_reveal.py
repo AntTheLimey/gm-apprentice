@@ -46,8 +46,8 @@ def make(root: Path, extra: dict[str, str] | None = None) -> None:
 
 
 def explain_answer(props: tuple[str, ...] = (), others: tuple[str, ...] = ()) -> ToolAnswer:
-    pages = [{"path": p, "prop": True} for p in props] + \
-        [{"path": p, "prop": False} for p in others]
+    pages = [{"path": p, "prop": True, "strippedSections": []} for p in props] + \
+        [{"path": p, "prop": False, "strippedSections": []} for p in others]
     return ToolAnswer(data={"pages": pages})
 
 
@@ -438,14 +438,79 @@ class RevealTests(unittest.TestCase):
                             explain=explain)
         self.assertEqual(code, 0, out)
         self.assertEqual(ap.call_args.args[1], [LEDGER, PELL])
-        self.assertIn(f"WARNING\t{LEDGER}\trevealed_in not written: the site does not show "
-                      "notes in Handouts, so this note has no page (add the folder to "
+        self.assertIn(f"WARNING\t{LEDGER}\ton the publish list, but the site does not show "
+                      "notes in Handouts, so it has no page (add the folder to "
                       "player_site.folder_map)", out)
         warned = [ln.split("\t")[1] for ln in out.splitlines() if ln.startswith("WARNING")]
         self.assertEqual(warned, [LEDGER])      # not Pell (has a page), not Letter (published)
         self.assertNotIn("revealed_in", (self.root / LEDGER).read_text(encoding="utf-8"))
         self.assertIn("withheld: false", (self.root / LEDGER).read_text(encoding="utf-8"))
         self.assertIn("# publish: 2 clear: 1 stamp: 0 log: 1 errors: 0", out)
+
+    def test_other_no_page_code_is_neutral(self) -> None:
+        self._props()
+        explain = ToolAnswer(data={"pages": [
+            {"path": PELL, "prop": False, "code": "SOMETHING_ELSE", "strippedSections": None}]})
+        code, out, _ = run(self.root, "--publish", PELL, explain=explain)
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"WARNING\t{PELL}\ton the publish list, but the site makes no page "
+                      "for it (SOMETHING_ELSE)", out)
+        self.assertNotIn("revealed_in not written", out)
+
+    def test_session_with_quote_and_backslash_stays_valid(self) -> None:
+        self._props()
+        odd = 'Session "5" \\ x'
+        code, out, _ = run(self.root, "--publish", LEDGER, "--write", session=odd,
+                           explain=explain_answer((LEDGER,)))
+        self.assertEqual(code, 0, out)
+        line = next(ln for ln in (self.root / LEDGER).read_text(encoding="utf-8").splitlines()
+                    if ln.startswith("revealed_in:"))
+        self.assertEqual(line, 'revealed_in: "[[Session \\"5\\" \\\\ x]]"')
+        # A JSON string is a valid YAML double-quoted scalar.
+        self.assertEqual(json.loads(line.split(":", 1)[1]), f"[[{odd}]]")
+
+    def test_null_revealed_in_is_filled(self) -> None:
+        self._props()
+        for value in ("null", "~", "Null", "NULL"):
+            (self.root / LEDGER).write_text(
+                f"---\ntype: prop\nrevealed_in: {value}\n---\n\nL.\n", encoding="utf-8")
+            code, out, _ = run(self.root, "--publish", LEDGER, "--write",
+                               explain=explain_answer((LEDGER,)))
+            self.assertEqual(code, 0, out)
+            self.assertNotIn("already set", out)
+            self.assertEqual((self.root / LEDGER).read_text(encoding="utf-8"),
+                             '---\ntype: prop\nrevealed_in: "[[Session 12]]"\n---\n\nL.\n',
+                             value)
+
+    def test_prop_with_no_frontmatter_is_not_called_already_set(self) -> None:
+        self._props()
+        (self.root / LEDGER).write_text("Ledger, no frontmatter.\n", encoding="utf-8")
+        code, out, _ = run(self.root, "--publish", LEDGER, "--write",
+                           explain=explain_answer((LEDGER,)))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("already set", out)
+        self.assertIn(f"SKIP\t{LEDGER}\trevealed_in not written: the note has no frontmatter",
+                      out)
+        self.assertEqual((self.root / LEDGER).read_text(encoding="utf-8"),
+                         "Ledger, no frontmatter.\n")
+
+    def test_failed_write_on_a_stamped_note_names_both(self) -> None:
+        self._props()
+        real = Path.write_text
+
+        def boom(self_: Path, *a: object, **kw: object) -> int:
+            if self_.name == "Ledger.md":
+                raise PermissionError("read-only")
+            return real(self_, *a, **kw)  # type: ignore[arg-type]
+
+        with mock.patch.object(Path, "write_text", boom):
+            code, out, _ = run(self.root, "--publish", LEDGER, "--write",
+                               explain=explain_answer((LEDGER,)))
+        self.assertEqual(code, 1)
+        self.assertIn(f"ERROR\t{LEDGER}\twithheld not cleared, revealed_in not written: "
+                      "read-only", out)
+        self.assertNotIn("STAMPED", out)
+        self.assertIn("# publish: 1 clear: 0 stamp: 0 log: 1 errors: 1", out)
 
     def test_count_line(self) -> None:
         self._props()
