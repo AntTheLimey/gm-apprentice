@@ -17,13 +17,14 @@ and filed in a few commands.
 - Wrap-up writes `revealed_in` on each prop it publishes, so the props
   page shows the session it arrived in. `reveal.py` warns when a note on
   the publish list has no page (its folder is not in
-  `player_site.folder_map`).
+  `player_site.folder_map`), and stamps a prop there all the same.
 - `vault_write.py prop-new` files a new prop in its chapter, in its
   writer's hand, and `prop-hand` adds a hand for props already filed.
 - The hand registry `_meta/prop-hands.json` and the `prop_hand` field.
 - `gm-publish props pages`, which counts a prop's printed pages, and
   `--note <note>` to count a prop before it is published (fonts are
-  fetched first and warnings show on the row).
+  fetched first and warnings show on the row). A supplied PDF is counted
+  from its page tree; one that cannot be counted says so.
 - `ttrpg-expert`'s making-a-prop reference.
 - Template fields `prop_hand` and `revealed_in`. The update refreshes
   `_Templates/_Template_Prop.md` through the existing template check.
@@ -31,9 +32,12 @@ and filed in a few commands.
 
 ### Changed
 
-- `explain` reports `prop`.
+- `explain` reports `prop`, read from the note itself when the site
+  makes no page for it.
 - `reveal_scan.py` marks prop rows, and the `reveal.py` count line gains
   `stamp`.
+- `reveal.py` counts a withheld note already on the publish list as
+  revealed when it lifts `withheld`: stamped, logged, and said so.
 - One font scan of the vault serves skins and styles (#514).
 
 ## [1.10.103] — 2026-10-25

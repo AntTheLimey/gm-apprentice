@@ -52,10 +52,10 @@ A writer who has a hand reuses it. A new writer gets a new id with
 `--hand-font "<Google Fonts family>"` and `--hand-who "<who wrote it>"`;
 `who` is never published. For a prop already filed, add the hand with
 `vault_write.py <vault> prop-hand` (same flags), then set it on the note
-with `stamp_entities.py <vault> "<note>" --set prop_hand=<id>` (dry run;
-`--write`). An id never names a writer the players must not learn
-(`unsigned-1`, not the culprit's name). The same hand on two props tells
-a careful reader one person wrote both.
+with `stamp_entities.py <vault> "<note path>" --set prop_hand=<id>`
+(dry run; `--write`). An id never names a writer the players must not
+learn (`unsigned-1`, not the culprit's name). The same hand on two props
+tells a careful reader one person wrote both.
 
 ## 5. A hand-made page
 

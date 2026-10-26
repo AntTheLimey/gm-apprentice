@@ -38,6 +38,10 @@ class WrapupRecapLinkTests(unittest.TestCase):
     def test_picked_props_are_linked_from_the_recap(self):
         self.assertRegex(self.step, r"(?s)prop.{0,80}`\[\[.*?\]\]`.{0,80}recap")
 
+    def test_a_no_at_the_dry_run_puts_back_the_recap_link(self):
+        self.assertRegex(self.step, r"(?s)No, or an ERROR\s+row, puts back that "
+                                    r"page's edits\s+and any recap link to it")
+
     def test_reveal_writes_revealed_in_itself(self):
         self.assertIn("revealed_in", self.step)
         self.assertRegex(self.step, r"(?s)reveal\.py.{0,40}writes.{0,80}"
@@ -72,7 +76,7 @@ class MakingAPropTests(unittest.TestCase):
 
     def test_new_writer_on_a_filed_prop(self):
         self.assertRegex(self.text, r"vault_write\.py <vault> prop-hand(?!s)")
-        self.assertIn('stamp_entities.py <vault> "<note>" --set prop_hand=<id>',
+        self.assertIn('stamp_entities.py <vault> "<note path>" --set prop_hand=<id>',
                       self.text)
 
     def test_hand_only_for_a_writer(self):
