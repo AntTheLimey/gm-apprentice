@@ -295,39 +295,46 @@ async function prefetchForConfig(configPath, opts = {}) {
   if (fonts.source === 'self-host') {
     await ensureFontCache(vaultPath, selfHostFamilies(fonts, presetFamiliesFor(publishConfig.theme)), opts);
   }
-  await prefetchSkinFonts(siteConfig, vaultPath, publishConfig, opts);
-  await prefetchStyleFonts(siteConfig, vaultPath, publishConfig, opts);
+  // One read of the vault feeds both passes below (#514).
+  const report = scanForPrefetch(siteConfig, vaultPath);
+  await prefetchSkinFonts(siteConfig, vaultPath, publishConfig, opts, report);
+  await prefetchStyleFonts(siteConfig, vaultPath, publishConfig, opts, report);
+}
+
+// The one scan the prefetch passes share: every folder the GM site reads (build.js), the widest of the two sites'.
+function scanForPrefetch(config, vaultPath) {
+  const { scanVaultReport } = require('./scanner');
+  const { ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
+  return scanVaultReport(Object.assign({}, config, { vaultPath, excludeDirs: ALWAYS_EXCLUDE_DIRS }), { quiet: true });
 }
 
 // A sheet skin's typefaces are always served from the site, whatever theme.fonts.source says.
 // The build reports a miss once, so this pass stays quiet about it.
-async function prefetchSkinFonts(config, vaultPath, publishConfig, opts) {
+async function prefetchSkinFonts(config, vaultPath, publishConfig, opts, report = null) {
   const { scanConfigFor } = require('./config');
   const { fontFamiliesFor, skinsInVault } = require('./skins');
   const scanConfig = scanConfigFor(Object.assign({}, config, { vaultPath }), publishConfig);
-  const families = fontFamiliesFor(skinsInVault(scanConfig, publishConfig.sheetLook));
+  const families = fontFamiliesFor(skinsInVault(scanConfig, publishConfig.sheetLook, report || scanForPrefetch(config, vaultPath)));
   if (families.length) await ensureFontCache(vaultPath, families, Object.assign({}, opts, { warn: () => {} }));
 }
 
 // A prop style's typefaces are served from the site too: every prop note that names a style, read
 // through the GM site's scan (the wider of the two sites'). A superset of what ships (a held prop's
-// style counts), as for the skins: fetching one face too many is harmless. The build reports a miss once.
-async function prefetchStyleFonts(config, vaultPath, publishConfig, opts) {
-  const { scanVaultReport } = require('./scanner');
-  const { ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
+// style counts, and a hand the registry does not know is left to the build to report), as for the skins: fetching one face too many is harmless. The build reports a miss once.
+async function prefetchStyleFonts(config, vaultPath, publishConfig, opts, report = null) {
   const { isPropNote, propFileOf, propStyleOf } = require('./props/note');
   const { styleLoader } = require('./props/styles');
   const { styleFontFamilies } = require('./props/page');
-  // Every folder the GM site reads (build.js), so a styled prop only the GM site shows gets its typefaces too.
-  const scanConfig = Object.assign({}, config, { vaultPath, excludeDirs: ALWAYS_EXCLUDE_DIRS });
+  const { loadHands, withHand } = require('./props/hands');
   const styles = styleLoader({ vaultPath });
+  const hands = loadHands(vaultPath).hands;
   const families = [];
-  for (const page of scanVaultReport(scanConfig, { quiet: true }).pages) {
+  for (const page of (report || scanForPrefetch(config, vaultPath)).pages) {
     const fm = page.frontmatter || {};
     const name = isPropNote(fm) && !propFileOf(fm) ? propStyleOf(fm) : null;
     const loaded = name ? styles(name) : null;
     if (!loaded || !loaded.style) continue;
-    for (const f of styleFontFamilies(loaded.style, fm)) if (!families.includes(f)) families.push(f);
+    for (const f of styleFontFamilies(loaded.style, withHand(fm, hands).fields)) if (!families.includes(f)) families.push(f);
   }
   if (families.length) await ensureFontCache(vaultPath, families, Object.assign({}, opts, { warn: () => {} }));
 }
