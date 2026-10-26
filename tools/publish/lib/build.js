@@ -209,8 +209,9 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {
 //   options.vaultPath   another vault through this site's rules (`--vault`)
 //   options.rawConfig   the site file already parsed
 //   options.shownFor    in memory: a vault-relative note path; the result's `shown` is what
-//                       the site holds of it, built as if it published
-// Returns { noteFaults, shown, renderErrors, warnings }: renderErrors are what failed to render (a build that
+//                       the site holds of it, built as if it published, and `shownProp` the
+//                       files of its prop (shownPropOf)
+// Returns { noteFaults, shown, shownProp, renderErrors, warnings }: renderErrors are what failed to render (a build that
 // has any also throws, with the same list on the error as `renderErrors`), warnings the text of every warning the
 // build printed, without its "WARNING:" prefix. Both are still printed.
 function build(options = {}) {
@@ -1667,6 +1668,42 @@ function buildSite(options) {
       } : null,
     };
   }
+  // The files the site would hold for the prop note asked about, as this build made them (`props pages --note`
+  // prints them to count their pages): { files: [{ out, text | bytes | from }] }, its own page first; or { why }
+  // when there is no page to print. A styled page brings the base sheet, its style's files, the typefaces the
+  // font cache holds and the pictures it shows.
+  function shownPropOf() {
+    if (shownRel === null) return null;
+    if (!shownPage) return { why: 'the site does not read this note' };
+    const p = propPlan && propPlan.props.find((x) => x.page === shownPage);
+    if (!p) return { why: 'not a prop note' };
+    const { outputs } = propOutputs({ props: [p] }, { collectionAddress: collection && collection.address });
+    if (!outputs.length || propBlocked.has(p.address)) {
+      const said = propPlan.problems.find((r) => r.rel === p.rel);
+      if (said) return { why: said.detail };
+      if (!p.ships) return { why: 'its note never publishes in full (publish: false, or a stub), so its prop never ships' };
+      return { why: p.made || p.source ? 'its page is not made' : 'it names no prop_style or prop_file, so it has no page to print' };
+    }
+    // An unstyled container's page is a listing in the site's own look, which only the built site has.
+    if (p.made === 'container' && !p.style) return { why: "a container's page without a style uses the site's own look: count it once it is built" };
+    const files = outputs.map((f) => ({ out: f.out, text: f.text, bytes: f.bytes }));
+    if (p.style && typeof p.made_html === 'string') {
+      files.push({ out: BASE_CSS, from: path.join(__dirname, '../css/props.css') });
+      const st = propPlan.styles.find((x) => x.name === p.style.name);
+      for (const f of st ? st.files : []) files.push({ out: f.out, from: f.source });
+      if (styleFonts.css) {
+        files.push({ out: FONTS_CSS, text: styleFonts.css });
+        for (const f of styleFonts.files) files.push({ out: `fonts/${f.rel}`, from: f.from });
+      }
+      const dir = path.posix.dirname(p.address);
+      const srcs = new Set([...p.made_html.matchAll(/<img\b[^>]*\ssrc="([^"]+)"/gi)]
+        .map((m) => { try { return path.posix.join(dir, decodeURIComponent(m[1])); } catch (e) { return null; } }));
+      for (const entry of Object.values(imageMap)) {
+        if (srcs.has(`images/${entry.relPath}`)) files.push({ out: `images/${entry.relPath}`, from: entry.encodedPath || entry.sourcePath });
+      }
+    }
+    return { files };
+  }
 
   // A fast build deletes nothing. A PC page already in the folder that a full build would no longer write
   // (the note went unpublished, left the publish list, or was renamed) stops it before it writes anything.
@@ -2531,7 +2568,7 @@ function buildSite(options) {
   for (const line of summaryLines(noteFaults)) console.warn(`  WARNING: ${line}`);
 
   if (dry) {
-    return { noteFaults, shown: shownOf(), renderErrors, auditGaps, faults: publishConfig.faults };
+    return { noteFaults, shown: shownOf(), shownProp: shownPropOf(), renderErrors, auditGaps, faults: publishConfig.faults };
   }
 
   if (errorCount > 0) {
