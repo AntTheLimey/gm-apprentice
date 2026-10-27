@@ -71,3 +71,24 @@ describe("an item's own page that loads its container's state file", () => {
     assert.match(s.player.read('props', 'books', 'atlas.html'), /<script src="\.\.\/state\.js"><\/script>/);
   });
 });
+
+describe('a state file refused because another container already makes it', () => {
+  // The only way the build refuses a state file: a second container whose state lands on the same address (a site
+  // file, a tool folder, a kept folder or a page could only hold that address if the container's own address were
+  // refused first, see task 15's report). The first container's file is made, so the second's items link a real file.
+  const s = buildBoth({
+    ...FILES(),
+    'Library/Chest.md': '---\ntype: prop\nprop_kind: container\nprop_address: props/chest.html\nprop_state: state.js\nprop_state_global: CHEST\n---\nA sea chest.\n',
+    'Library/Tide Book.md': '---\ntype: prop\nprop_container: "[[Bookcase]]"\nprop_file: tide.html\nprop_address: props/tide.html\n---\nA tide book.\n',
+    'Library/tide.html': '<!doctype html><html><head><title>Book</title></head><body><p>A book.</p><script src="state.js"></script></body></html>',
+    ...LIST(['Library/Chest.md', 'Library/Tide Book.md']),
+  }, { ...SETTINGS, sites: ['player'] });
+  after(() => s.cleanup());
+
+  it('names the refusal, ships the one made file, and the items link it', () => {
+    assert.ok(s.logs.some((l) => /Bookcase\.md: prop_state "state\.js" would land on props\/state\.js, taken by Library\/Chest\.md/.test(l)), s.logs.join('\n'));
+    assert.ok('CHEST' in stateOf(s.player.read('props', 'state.js')), 'the made file is the chest\'s');
+    assert.ok(!s.logs.some((l) => /tide\.html links "state\.js"/.test(l)), s.logs.join('\n'));
+    assert.ok(s.player.exists('props', 'tide.html'));
+  });
+});

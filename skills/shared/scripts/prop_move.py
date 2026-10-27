@@ -592,7 +592,8 @@ def _only_external(line: str) -> bool:
 def _tags_only(mine: list[str], theirs: list[str], eol: str) -> list[str]:
     """A difference of tags alone: the vault's lines, except that the lines
     naming only addresses off the site (a font service's link) are the live
-    page's, set where the vault's first such line was."""
+    page's, set where the vault's first such line was, or first when the
+    vault has none (a line the live page added)."""
     outside = [ln for ln in theirs if _only_external(ln)]
     out: list[str] = []
     placed = False
@@ -603,7 +604,7 @@ def _tags_only(mine: list[str], theirs: list[str], eol: str) -> list[str]:
                 placed = True
             continue
         out.append(line)
-    return out
+    return out if placed else [*_ended(outside, eol), *out]
 
 
 def _ended(lines: list[str], eol: str) -> list[str]:

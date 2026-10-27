@@ -828,3 +828,14 @@ def test_a_note_the_tool_does_not_call_a_prop_names_no_page(tmp_path: Path) -> N
     vault, site = gazetteer(tmp_path, {f"{CH4}/The Collector.md": npc})
     c = converted(vault, site)
     assert f"{CH4}/dinner-menu.md" in c.batch.texts
+
+
+def test_a_font_link_only_the_live_page_has_is_kept() -> None:
+    vault = '<html><head>\n<link rel="stylesheet" href="props.css">\n</head><body>\n<p>Words.</p>\n</body></html>\n'
+    live = ('<html><head>\n<link href="https://fonts.example.com/css?family=New+Hand" rel="stylesheet">\n'
+            '<link rel="stylesheet" href="props.css">\n</head><body>\n<p>Words.</p>\n</body></html>\n')
+    merged, keeper = prop_move.merge_delivered(vault, live)
+    assert merged == live and keeper == []
+    # A local line only the live page has stays out: the vault's own files are the page's.
+    local = live.replace("https://fonts.example.com/css?family=New+Hand", "papers.css")
+    assert prop_move.merge_delivered(vault, local)[0] == vault
