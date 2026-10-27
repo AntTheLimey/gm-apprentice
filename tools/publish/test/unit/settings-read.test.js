@@ -89,7 +89,7 @@ test('exclude_callouts [note] in the vault, true in the site file: true', () => 
 
 test('landing in both files: the site file adds the sub-key the vault lacks', () => {
   const { values, legacy, golden, r } = both('landing-site-extra-subkey');
-  assert.deepEqual(values.landing, { ...golden.landing, max_events: 4, explore_descriptions: null, featured_npcs: [], featured_locations: [], quick_links: [], banner: { title: null, text: null, link: null, image: null }, latest_props: 0 });
+  assert.deepEqual(values.landing, { ...golden.landing, max_events: 4, explore_descriptions: null, featured_npcs: [], featured_locations: [], quick_links: [], banner: { title: null, text: null, link: null, image: null }, latest_props: 0, latest_props_title: null });
   assert.equal(values.landing.max_npcs, 3);
   assert.equal(values.landing.max_locations, 2);
   assert.deepEqual(legacy, golden.legacy);
