@@ -764,9 +764,14 @@ def _note_path(c: Conversion, folder: str, stem: str) -> str | None:
 
 
 def _prop_note(c: Conversion, rel: str, fields: list[tuple[str, str]], body: str = "") -> None:
-    """A note made from the prop template, with `fields` set (YAML values)."""
+    """A note made from the prop template, with `fields` set (YAML values).
+    Its `title:` is its name: the site heads its page, its prop bar and
+    every Connections line with `title:`, else the file name (a slug)."""
     template = vault_write.template_text(c.vault, vault_write.PROP_TEMPLATES, "prop.md")
     fm = vault_write.template_frontmatter(template)
+    named = dict(fields)
+    if "name" in named and "title" not in named:
+        fields = [("title", named["name"]), *fields]
     for key, value in fields:
         vault_write.set_block(fm, key, value)
     c.batch.create(rel, "---\n" + "\n".join(fm) + "\n---\n" + body)

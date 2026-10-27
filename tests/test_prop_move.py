@@ -985,3 +985,17 @@ def test_a_killed_apply_puts_the_vault_back(tmp_path: Path) -> None:
         assert snapshot(vault) == before and folders(vault) == dirs
         # The handlers are the caller's again afterwards.
         assert signal.getsignal(sig) == kept
+
+
+def test_every_new_prop_note_has_its_title(tmp_path: Path) -> None:
+    # Ruling 38: the page heading, the prop bar and Connections read `title:`, else the file name (a slug here).
+    vault, site = gazetteer(tmp_path)
+    c = converted(vault, site)
+    made = [rel for rel in c.batch.changed() if rel.endswith(".md") and c.batch.originals.get(rel) is None]
+    assert made
+    for rel in made:
+        fm = fm_of(c.batch.texts[rel])
+        assert fm.get("title") == fm["name"], rel
+    assert fm_of(c.batch.texts[f"{CH4}/dinner-menu.md"])["title"] == "The Bill of Fare"
+    assert fm_of(c.batch.texts[f"{CH4}/sealed-letter.md"])["title"] == "The Sealed Letter"
+    assert fm_of(c.batch.texts[f"{NOTES}/shelf/Tide Tables.md"])["title"] == "Tide Tables"
