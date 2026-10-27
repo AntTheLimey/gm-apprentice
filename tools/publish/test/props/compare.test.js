@@ -126,6 +126,19 @@ test('a listing keeps its links', (t) => {
   assert.equal(lost.blockers, 1);
 });
 
+test('a listing that keeps its links in another order is its own row, no blocker (#526)', (t) => {
+  const old = shelf([['papers/menu.html', 'The menu'], ['papers/bill.html', 'A bill'], ['papers/card.html', 'A card']]);
+  const moved = shelf([['papers/card.html', 'A card'], ['papers/menu.html', 'The menu'], ['papers/bill.html', 'A bill']]);
+  const opts = { serves: ['gazetteer/'], listings: ['gazetteer/'] };
+  const result = run(sites(t, { 'gazetteer/index.html': old, ...PAPERS }, { 'gazetteer/index.html': moved, ...PAPERS }), opts);
+  const row = rowOf(result, 'gazetteer/index.html');
+  assert.equal(row.kind, 'listing-reordered');
+  assert.equal(row.blocker, false);
+  assert.equal(result.blockers, 0);
+  assert.match(row.detail, /^3 links kept, in another order: 3 moved; gazetteer\/papers\/menu\.html \(1 -> 2\), gazetteer\/papers\/bill\.html \(2 -> 3\), gazetteer\/papers\/card\.html \(3 -> 1\)/);
+  assert.match(formatRows(result).join('\n'), /^LISTING-REORDERED\tgazetteer\/index\.html\t/m);
+});
+
 test('a lost link into the served set blocks', (t) => {
   const old = { 'index.html': page('<div class="banner"><a href="gazetteer/">The Gazetteer</a></div>'), 'gazetteer/index.html': page('<p>Cover</p>') };
   const opts = { serves: ['gazetteer/'] };

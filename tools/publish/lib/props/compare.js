@@ -120,7 +120,24 @@ function listingRow(address, oldRaw, newRaw, isServed, asFolder) {
   if (!newRaw) return { kind: 'listing-ok', address, detail: 'the page is gone; it linked nothing in the served folders' };
   const { removed, added } = wordRuns(pageWords(address, oldRaw.toString('utf8')), pageWords(address, newRaw.toString('utf8')));
   const words = removed.length || added.length ? `; words: ${removed.reduce((n, r) => n + r.length, 0)} removed, ${added.reduce((n, r) => n + r.length, 0)} added` : '';
-  return { kind: 'listing-ok', address, detail: `${wanted.length} link${wanted.length === 1 ? '' : 's'} kept${words}` };
+  const kept = `${wanted.length} link${wanted.length === 1 ? '' : 's'} kept`;
+  const moves = orderMoves([...targetsOf(address, oldRaw.toString('utf8'), { anchors: true, asFolder })].filter(isServed),
+    [...have].filter((t) => wanted.includes(t)));
+  if (moves.length) {
+    const shown = moves.slice(0, MOVES_SHOWN).map((m) => `${m.target} (${m.from} -> ${m.to})`).join(', ');
+    const more = moves.length > MOVES_SHOWN ? ` and ${moves.length - MOVES_SHOWN} more` : '';
+    return { kind: 'listing-reordered', address, detail: `${kept}, in another order: ${moves.length} moved; ${shown}${more}${words}` };
+  }
+  return { kind: 'listing-ok', address, detail: `${kept}${words}` };
+}
+
+// A listing's links in the order a reader meets them (each at its first place), old beside new: the links whose place
+// changed, { target, from, to } (1-based places), in the old order. None when both run in the same order.
+const MOVES_SHOWN = 3;
+function orderMoves(oldOrder, newOrder) {
+  const at = new Map(newOrder.map((t, i) => [t, i]));
+  return oldOrder.map((t, i) => ({ target: t, from: i + 1, to: at.has(t) ? at.get(t) + 1 : null }))
+    .filter((m) => m.to !== null && m.to !== m.from);
 }
 
 // A site address, as typed (`x/` is its index page), in the form every address here is kept in.
@@ -230,4 +247,4 @@ function formatRows(result) {
   ];
 }
 
-module.exports = { compareSites, pageWords, formatRows, linkTarget };
+module.exports = { compareSites, pageWords, formatRows, linkTarget, orderMoves };
