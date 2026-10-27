@@ -41,7 +41,10 @@ and listed, and the update checks that no live page changes when they do.
   and state fields count as hidden text, so a deploy can stop on a
   finding it did not have before.
 - A site link with a `/` or a page ending (a menu entry, the landing
-  banner) is read as a site address first, prop addresses included.
+  banner) is read as a site address first, prop addresses included, and
+  printed in the site's own spelling.
+- A page's last breadcrumb is the note's `title:` when it has one, as
+  its heading shows it.
 - The landing page's story count leaves out prop notes.
 - A file outside a prop's folder that another shipping prop ships at
   the same address with the same bytes is no longer a problem.
