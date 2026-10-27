@@ -273,8 +273,10 @@ blocker (or an error line), else 0.
   FILE-DROPPED    a served file, or a page outside them, is not in the new
                   site; a blocker only when a new page still links it
 
-A link is read relative to its page, without its query or anchor, a folder as
-its index.html. Words are read as the leak check reads a page.
+A link is read relative to its page, without its query or anchor, a folder
+(gazetteer/ or gazetteer) as its index.html; a link in a comment or a script is
+not a link. Words are read as the leak check reads a page. A --serves folder
+or a --listing address the old site does not have is an error.
 
   --serves <folder>      A folder the live site serves that the move replaces (repeatable)
   --listing <address>    An old index page the move replaces with a listing (repeatable)

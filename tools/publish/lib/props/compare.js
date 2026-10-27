@@ -42,18 +42,27 @@ function linkTarget(rel, href) {
 // The tag pattern of props/links.js (a quoted attribute value may hold a '>').
 const TAG = /<([a-zA-Z][\w:-]*)((?:\s(?:"[^"]*"|'[^']*'|[^>"'])*)?)>/g;
 const ATTR = /([\w:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g;
+// The markup a reader's browser reads as tags: without scripts, styles, templates and comments, as the tool's page text
+// (note-faults pageText) reads a page; a comment that never closes runs to the end, as a browser reads it.
+function liveMarkup(raw) {
+  const s = String(raw).replace(/<(script|style|template)\b[\s\S]*?<\/\1\s*>/gi, '\n').replace(/<!--[\s\S]*?-->/g, '');
+  const open = s.indexOf('<!--');
+  return open === -1 ? s : s.slice(0, open);
+}
+
 // The addresses a page links a reader to (`<a href>`, `<area href>`; `anchors`), or every address it names (any href,
-// src or xlink:href: a stylesheet, a picture, a script, a link).
-function targetsOf(rel, raw, { anchors }) {
+// src or xlink:href: a stylesheet, a picture, a script, a link). `asFolder(target)`: a target that names a folder
+// without its slash (href="gazetteer"; the hosts send it on to gazetteer/), as that folder's index.html.
+function targetsOf(rel, raw, { anchors, asFolder = (t) => t }) {
   const out = new Set();
-  for (const tag of String(raw).matchAll(TAG)) {
+  for (const tag of liveMarkup(raw).matchAll(TAG)) {
     const name = tag[1].toLowerCase();
     if (anchors && name !== 'a' && name !== 'area') continue;
     for (const a of tag[2].matchAll(ATTR)) {
       const attr = a[1].toLowerCase();
       if (attr !== 'href' && (anchors || (attr !== 'src' && attr !== 'xlink:href'))) continue;
       const target = linkTarget(rel, a[2] ?? a[3] ?? a[4]);
-      if (target) out.add(target);
+      if (target) out.add(asFolder(target));
     }
   }
   return out;
@@ -99,9 +108,9 @@ function servedPageRow(address, oldRaw, newRaw, expected) {
   return { kind: 'words-differ', address, detail: [runsText('removed', removed), addedText].filter(Boolean).join('; ') };
 }
 
-function listingRow(address, oldRaw, newRaw, isServed) {
-  const wanted = [...targetsOf(address, oldRaw.toString('utf8'), { anchors: true })].filter(isServed).sort();
-  const have = newRaw ? targetsOf(address, newRaw.toString('utf8'), { anchors: true }) : new Set();
+function listingRow(address, oldRaw, newRaw, isServed, asFolder) {
+  const wanted = [...targetsOf(address, oldRaw.toString('utf8'), { anchors: true, asFolder })].filter(isServed).sort();
+  const have = newRaw ? targetsOf(address, newRaw.toString('utf8'), { anchors: true, asFolder }) : new Set();
   const lost = wanted.filter((t) => !have.has(t));
   if (lost.length) return { kind: 'listing-lost', address, detail: `${newRaw ? 'links lost' : 'the page is gone; links lost'}: ${lost.join(', ')}` };
   if (!newRaw) return { kind: 'listing-ok', address, detail: 'the page is gone; it linked nothing in the served folders' };
@@ -136,6 +145,17 @@ function compareSites({ oldDir, newDir, serves, listings = [], expectGone = [] }
   const oldFiles = filesOf(oldDir);
   const newFiles = filesOf(newDir);
   const read = (files, address) => (files.has(address) ? fs.readFileSync(files.get(address)) : null);
+  // A folder or a listing the old site does not have: the gate would compare nothing there and call it safe.
+  for (const [given, prefix] of serves.map((p, i) => [p, prefixes[i]])) {
+    if (![...oldFiles.keys()].some((a) => a.startsWith(prefix))) throw new Error(`--serves ${given} matches nothing in the old site (${oldDir})`);
+  }
+  for (const [given, address] of listings.map((a) => [a, addressOf(a)])) {
+    if (!oldFiles.has(address)) throw new Error(`--listing ${given} is not in the old site (${address} under ${oldDir})`);
+  }
+  // Every folder of the old site and every served folder, by its address without the slash.
+  const folders = new Set(prefixes.map((p) => p.slice(0, -1)));
+  for (const a of oldFiles.keys()) for (let i = a.indexOf('/'); i !== -1; i = a.indexOf('/', i + 1)) folders.add(a.slice(0, i));
+  const asFolder = (t) => (folders.has(t) && !oldFiles.has(t) ? `${t}/index.html` : t);
 
   // Every address a page of the new site names, and the pages that name it: a file the move drops that a new page still
   // links is a broken page.
@@ -145,7 +165,7 @@ function compareSites({ oldDir, newDir, serves, listings = [], expectGone = [] }
       namedBy = new Map();
       for (const [rel, file] of newFiles) {
         if (!isPage(rel)) continue;
-        for (const t of targetsOf(rel, fs.readFileSync(file, 'utf8'), { anchors: false })) {
+        for (const t of targetsOf(rel, fs.readFileSync(file, 'utf8'), { anchors: false, asFolder })) {
           if (!namedBy.has(t)) namedBy.set(t, []);
           namedBy.get(t).push(rel);
         }
@@ -167,7 +187,7 @@ function compareSites({ oldDir, newDir, serves, listings = [], expectGone = [] }
     const newRaw = read(newFiles, address);
     if (isPage(address)) {
       if (isServed(address)) pages++;
-      if (listing) { rows.push(listingRow(address, oldRaw, newRaw, isServed)); continue; }
+      if (listing) { rows.push(listingRow(address, oldRaw, newRaw, isServed, asFolder)); continue; }
       const row = newRaw ? servedPageRow(address, oldRaw, newRaw, expected) : { kind: 'missing', address, detail: 'not in the new site' };
       if (row.kind === 'same' || row.kind === 'same-words') same++;
       rows.push(row);
@@ -185,9 +205,9 @@ function compareSites({ oldDir, newDir, serves, listings = [], expectGone = [] }
     if (!isPage(address) || isServed(address) || listingSet.has(address)) continue;
     const newRaw = read(newFiles, address);
     if (!newRaw) { rows.push({ kind: 'file-dropped', address, detail: 'a page outside the served folders, not in the new site' }); continue; }
-    const wanted = [...targetsOf(address, read(oldFiles, address).toString('utf8'), { anchors: true })].filter(isServed).sort();
+    const wanted = [...targetsOf(address, read(oldFiles, address).toString('utf8'), { anchors: true, asFolder })].filter(isServed).sort();
     if (!wanted.length) continue;
-    const have = targetsOf(address, newRaw.toString('utf8'), { anchors: true });
+    const have = targetsOf(address, newRaw.toString('utf8'), { anchors: true, asFolder });
     for (const target of wanted) if (!have.has(target)) rows.push({ kind: 'link-lost', address, detail: `its link to ${target} is gone` });
   }
   for (const row of rows) if (row.blocker === undefined) row.blocker = BLOCKS.has(row.kind);

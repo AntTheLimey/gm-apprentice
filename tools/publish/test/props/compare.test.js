@@ -206,3 +206,44 @@ test('a listing that is gone loses its links; one that linked nothing served is 
   assert.equal(rowOf(empty, 'gazetteer/index.html').kind, 'listing-ok');
   assert.equal(empty.blockers, 0);
 });
+
+test('a served folder or a listing the old site does not have is an error', (t) => {
+  const dirs = sites(t, { 'gazetteer/a.html': LETTER }, { 'gazetteer/a.html': LETTER });
+  assert.throws(() => run(dirs, { serves: ['gazeteer/'] }), /--serves gazeteer\/ matches nothing in the old site/);
+  assert.throws(() => run(dirs, { serves: ['gazetteer/'], listings: ['gazetteer/index.html'] }), /--listing gazetteer\/index\.html is not in the old site/);
+  const cli = spawnSync(process.execPath, [CLI, 'props', 'compare', '--old', dirs.oldDir, '--new', dirs.newDir, '--serves', 'gazeteer/'], { encoding: 'utf8' });
+  assert.equal(cli.status, 1);
+  assert.match(cli.stderr, /gazeteer\//);
+  assert.equal(cli.stdout, '');
+});
+
+test('a link to a served folder without its slash is a link into it', (t) => {
+  const opts = { serves: ['gazetteer/'] };
+  const cover = { 'gazetteer/index.html': page('<p>Cover</p>') };
+  for (const href of ['gazetteer', '/gazetteer']) {
+    const old = { 'index.html': page(`<a href="${href}">The Gazetteer</a>`), ...cover };
+    const kept = run(sites(t, old, { 'index.html': page('<a href="gazetteer/">Gazetteer</a>'), ...cover }), opts);
+    assert.equal(kept.blockers, 0, href);
+    const lost = run(sites(t, old, { 'index.html': page('<p>Welcome</p>'), ...cover }), opts);
+    const row = rowOf(lost, 'index.html');
+    assert.equal(row && row.kind, 'link-lost', href);
+    assert.match(row.detail, /gazetteer\/index\.html/);
+  }
+  // A folder of the old site that is not served reads the same way: a listing's link to papers is a link to papers/.
+  const old = { 'gazetteer/index.html': shelf([['papers', 'All papers']]), 'gazetteer/papers/index.html': page('<p>Papers</p>') };
+  const lost = run(sites(t, old, { 'gazetteer/index.html': shelf([]), 'gazetteer/papers/index.html': page('<p>Papers</p>') }), { serves: ['gazetteer/'], listings: ['gazetteer/'] });
+  assert.equal(rowOf(lost, 'gazetteer/index.html').kind, 'listing-lost');
+  assert.match(rowOf(lost, 'gazetteer/index.html').detail, /gazetteer\/papers\/index\.html/);
+});
+
+test('a link inside a comment or a script is not a kept link', (t) => {
+  const opts = { serves: ['gazetteer/'], listings: ['gazetteer/'] };
+  const old = shelf([['papers/menu.html', 'The menu'], ['papers/bill.html', 'A bill']]);
+  for (const hidden of ['<!-- <a href="papers/bill.html">A bill</a> -->', '<script>const s = \'<a href="papers/bill.html">x</a>\';</script>', '<!-- unclosed <a href="papers/bill.html">A bill</a>']) {
+    const now = page(`<a href="papers/menu.html">Menu</a>${hidden}`);
+    const r = run(sites(t, { 'gazetteer/index.html': old, ...PAPERS }, { 'gazetteer/index.html': now, ...PAPERS }), opts);
+    const row = rowOf(r, 'gazetteer/index.html');
+    assert.equal(row.kind, 'listing-lost', hidden);
+    assert.match(row.detail, /gazetteer\/papers\/bill\.html/);
+  }
+});
