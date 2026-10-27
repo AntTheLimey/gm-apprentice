@@ -16,16 +16,26 @@ note changes.
 
 from __future__ import annotations
 
+import difflib
+import json
+import posixpath
 import re
 import sys
 import unicodedata
 from dataclasses import dataclass, field
+from html.parser import HTMLParser
 from pathlib import Path
+from typing import Any
+from urllib.parse import unquote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import vault_write  # noqa: E402
-from vault_write import HAND_ID_RE, HANDS_REL, Batch, WriteError, use_hand  # noqa: E402
-from vaultlib import frontmatter_span, is_skipped_path, scalar_value, yaml_scalar  # noqa: E402
+from migrate_core import StepFailed, plugin_tool  # noqa: E402
+from reveal_scan import NEVER_CANDIDATES  # noqa: E402
+from vault_write import BAD_NAME_RE, HAND_ID_RE, HANDS_REL, Batch, WriteError, use_hand  # noqa: E402
+from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter,  # noqa: E402
+                      frontmatter_span, is_skipped_path, scalar_value, settings,
+                      yaml_scalar, yaml_value_for_cli)
 
 PERSON = "NEEDS-A-PERSON"
 # A top-level frontmatter line: its key and the rest of the line.
@@ -201,6 +211,10 @@ class Conversion:
     rows: list[str] = field(default_factory=list)
     build_props: list[str] = field(default_factory=list)    # the notes converted
     addresses: dict[str, str] = field(default_factory=dict)  # note -> its prop's address
+    decisions: dict[str, Any] = field(default_factory=dict)
+    inferred_settings: dict[str, Any] = field(default_factory=dict)
+    taken: set[str] = field(default_factory=set)            # note names made now
+    live_root: Path | None = None
 
     def row(self, verb: str, where: str, detail: str = "") -> None:
         self.rows.append(f"{verb}\t{where}\t{detail}")
@@ -264,14 +278,864 @@ def convert_build_props(c: Conversion) -> None:
             c.row(PERSON, HANDS_REL, f"hand {short}: {e}")
 
 
+# --- reading pages (html.parser) ------------------------------------------------
+
+VOID = frozenset({"area", "base", "br", "col", "embed", "hr", "img", "input",
+                  "link", "meta", "source", "track", "wbr"})
+EXTERNAL_RE = re.compile(r"^(?:[a-z][a-z0-9+.-]*:|//)", re.I)
+CSS_URL_RE = re.compile(r"""url\(\s*(['"]?)([^'")]+)\1\s*\)|@import\s+(['"])([^'"]+)\3""")
+PAGE_EXTS = (".html", ".htm")
+GM_FENCE_RE = re.compile(r"<!--\s*(/?)gm-only\s*-->")
+CODE_TAG_RE = re.compile(r"<(/?)(script|style)\b", re.I)
+
+
+def squash(text: str) -> str:
+    return " ".join(text.split())
+
+
+class PageReader(HTMLParser):
+    """What the move reads off a page: its title, every address it names,
+    its pictures and scripts, and its links with the words in them (the
+    first element inside a link, the rest, and the heading or `p.sub` line
+    the link sits under)."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.title = ""
+        self.refs: list[str] = []
+        self.imgs: list[tuple[str, str]] = []
+        self.scripts: list[str] = []
+        self.anchors: list[dict[str, str]] = []
+        self._group = ""
+        self._cap: tuple[str, list[str]] | None = None
+        self._a: dict[str, Any] | None = None
+        self._in_title = False
+        self._code = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        a = {k: v or "" for k, v in attrs}
+        for key in ("href", "src"):
+            if a.get(key):
+                self.refs.append(a[key])
+        if tag == "img" and a.get("src"):
+            self.imgs.append((a["src"], squash(a.get("alt", ""))))
+        if tag == "script" and a.get("src"):
+            self.scripts.append(a["src"])
+        if tag == "title":
+            self._in_title = True
+        if tag in ("script", "style"):
+            self._code += 1
+        anchor = self._a
+        if anchor is not None:
+            if tag not in VOID:
+                anchor["depth"] += 1
+                if anchor["first_tag"] is None and anchor["depth"] == 1:
+                    anchor["first_tag"], anchor["in_first"] = tag, True
+            return
+        if tag in ("h2", "h3", "h4") or (tag == "p" and "sub" in a.get("class", "").split()):
+            self._cap = (tag, [])
+        if tag == "a" and a.get("href"):
+            self._a = {"href": a["href"], "depth": 0, "first_tag": None,
+                       "in_first": False, "first": [], "rest": []}
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in VOID:
+            return
+        if tag in ("script", "style") and self._code:
+            self._code -= 1
+        if tag == "title":
+            self._in_title = False
+        anchor = self._a
+        if anchor is not None:
+            if tag == "a" and anchor["depth"] == 0:
+                first, rest = squash("".join(anchor["first"])), squash("".join(anchor["rest"]))
+                if anchor["first_tag"] is None:
+                    first, rest = rest, ""
+                self.anchors.append({"href": anchor["href"], "title": first,
+                                     "line": rest, "group": self._group})
+                self._a = None
+            elif anchor["depth"] > 0:
+                anchor["depth"] -= 1
+                if anchor["depth"] == 0:
+                    anchor["in_first"] = False
+            return
+        if self._cap is not None and tag == self._cap[0]:
+            self._group = squash("".join(self._cap[1]))
+            self._cap = None
+
+    def handle_data(self, data: str) -> None:
+        if self._in_title:
+            self.title += data
+        if self._code:
+            return
+        if self._a is not None:
+            self._a["first" if self._a["in_first"] else "rest"].append(data)
+        elif self._cap is not None:
+            self._cap[1].append(data)
+
+
+class LineReader(HTMLParser):
+    """The first tag on a line, its class, and the words on it."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.tag = ""
+        self.cls = ""
+        self.text: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if not self.tag:
+            self.tag = tag
+            self.cls = squash(dict(attrs).get("class") or "")
+
+    def handle_data(self, data: str) -> None:
+        self.text.append(data)
+
+
+def read_line(line: str) -> LineReader:
+    reader = LineReader()
+    reader.feed(line)
+    reader.close()
+    return reader
+
+
+def words_of(text: str) -> list[str]:
+    return re.findall(r"\w+", text.lower())
+
+
+def read_text(path: Path) -> str:
+    with path.open("r", encoding="utf-8", errors="replace", newline="") as f:
+        return f.read()
+
+
+def read_page(path: Path) -> PageReader:
+    reader = PageReader()
+    reader.feed(read_text(path))
+    reader.close()
+    return reader
+
+
+def short_title(title: str) -> str:
+    """A page's title before its ` — ` (the site's name after it)."""
+    return squash(title).split(" — ")[0].strip()
+
+
+def target(page_rel: str, url: str) -> str | None:
+    """The address `url` on the page at `page_rel` goes to, without its query
+    or anchor, a folder as its index.html; None off the site."""
+    v = unquote(url.strip())
+    if not v or v.startswith("#") or EXTERNAL_RE.match(v):
+        return None
+    v = re.sub(r"[?#].*$", "", v)
+    if not v:
+        return None
+    joined = v[1:] if v.startswith("/") else posixpath.join(posixpath.dirname(page_rel), v)
+    joined = posixpath.normpath(joined) if joined else "."
+    if joined == ".." or joined.startswith("../"):
+        return None
+    if joined == "." or v.endswith("/"):
+        joined = posixpath.join("" if joined == "." else joined, "index.html")
+    return nfc(joined)
+
+
+def linked_files(live: Path, page_rel: str, inside: str) -> list[str]:
+    """The files (not pages) the page at `page_rel` names, and the files its
+    stylesheets name in turn, that exist under `inside` in the live output."""
+    found: list[str] = []
+    todo = [(page_rel, url) for url in read_page(live / page_rel).refs]
+    while todo:
+        at, url = todo.pop(0)
+        rel = target(at, url)
+        if (rel is None or rel in found or rel.lower().endswith(PAGE_EXTS)
+                or not rel.startswith(inside) or not (live / rel).is_file()):
+            continue
+        found.append(rel)
+        if rel.lower().endswith(".css"):
+            for m in CSS_URL_RE.finditer(read_text(live / rel)):
+                todo.append((rel, m.group(2) or m.group(4)))
+    return found
+
+
+def read_state(path: Path) -> dict[str, Any] | None:
+    """What a container's hand-made state script sets, as the publish tool
+    reads it (`props read-state`): {global, items}, or None when it is not a
+    state script the tool can read."""
+    try:
+        code, out, _err = plugin_tool(["props", "read-state", str(path), "--json"])
+    except StepFailed:
+        return None
+    if code != 0:
+        return None
+    try:
+        data = json.loads(out)
+    except ValueError:
+        return None
+    return data if isinstance(data, dict) else None
+
+
+# --- the diff-merge of a delivered page ----------------------------------------
+
+def _code_lines(lines: list[str]) -> set[int]:
+    """The lines inside a <script> or <style> block: their words are code."""
+    inside, out = False, set()
+    for i, line in enumerate(lines):
+        start = inside
+        for m in CODE_TAG_RE.finditer(line):
+            inside = not m.group(1)
+        if start or (inside and not CODE_TAG_RE.search(line)):
+            out.add(i)
+    return out
+
+
+def _says(lines: list[str], at: int, code: set[int]) -> bool:
+    return any(not (at + k in code) and words_of("".join(read_line(ln).text))
+               for k, ln in enumerate(lines))
+
+
+def _ended(lines: list[str], eol: str) -> list[str]:
+    return [ln.rstrip("\r\n") + eol for ln in lines]
+
+
+Shape = tuple[str, str, str]
+
+
+def shape_of(line: str) -> Shape | None:
+    """A Keeper line's shape: its first tag, that tag's class, the first two
+    words on it; None for a line with no words."""
+    r = read_line(line)
+    words = words_of("".join(r.text))
+    return (r.tag, r.cls, " ".join(words[:2])) if words else None
+
+
+def merge_delivered(vault_text: str, live_text: str) -> tuple[str, list[str]]:
+    """(the vault page with the live copy's words, the vault lines that only
+    the GM keeps). Lines both share stay; a difference of tags alone keeps
+    the vault's side; any other difference keeps the vault's lines in a
+    gm-only fence with the live lines after them, so the page's player view
+    says what the live page says."""
+    a = vault_text.splitlines(keepends=True)
+    b = live_text.splitlines(keepends=True)
+    eol = _eol(a[0]) if a and _eol(a[0]) else "\n"
+    code_a, code_b = _code_lines(a), _code_lines(b)
+    matcher = difflib.SequenceMatcher(None, [x.rstrip("\r\n") for x in a],
+                                      [x.rstrip("\r\n") for x in b], autojunk=False)
+    out: list[str] = []
+    keeper: list[str] = []
+    for op, i1, i2, j1, j2 in matcher.get_opcodes():
+        mine, theirs = a[i1:i2], b[j1:j2]
+        if op == "equal" or (not _says(mine, i1, code_a) and not _says(theirs, j1, code_b)):
+            out += mine
+            continue
+        if out and not _eol(out[-1]):
+            out[-1] += eol
+        if mine:
+            out += [f"<!-- gm-only -->{eol}", *_ended(mine, eol), f"<!-- /gm-only -->{eol}"]
+            keeper += [ln for k, ln in enumerate(mine) if i1 + k not in code_a]
+        out += _ended(theirs, eol)
+    return "".join(out), keeper
+
+
+def wrap_keeper_lines(text: str, shapes: set[Shape]) -> tuple[str, int]:
+    """`text` with every line whose shape is a Keeper line's in a gm-only
+    fence (lines side by side share one); (new text, lines wrapped). Lines
+    already in a fence, and code, are left."""
+    lines = text.splitlines(keepends=True)
+    eol = _eol(lines[0]) if lines and _eol(lines[0]) else "\n"
+    code = _code_lines(lines)
+    depth, count = 0, 0
+    out: list[str] = []
+    run: list[str] = []
+
+    def flush() -> None:
+        nonlocal count
+        if run:
+            out.extend([f"<!-- gm-only -->{eol}", *_ended(run, eol), f"<!-- /gm-only -->{eol}"])
+            count += len(run)
+            run.clear()
+    for i, line in enumerate(lines):
+        before = depth
+        for m in GM_FENCE_RE.finditer(line):
+            depth = max(0, depth - 1) if m.group(1) else depth + 1
+        if before == 0 and depth == 0 and i not in code and not GM_FENCE_RE.search(line) \
+                and shape_of(line) in shapes:
+            run.append(line)
+            continue
+        flush()
+        out.append(line)
+    flush()
+    return "".join(out), count
+
+
+# --- 15b: hand-made pages and kept folders --------------------------------------
+
+KNOWN_STEPS: dict[str, dict[str, list[str]]] = {
+    "add-props": {"serves": ["props/"], "expect_gone": ["Chapter 1 props", "About this handout"]},
+    "inject-gazetteer": {"serves": ["gazetteer/"], "expect_gone": []},
+}
+STEP_RE = re.compile(r"\s*node\s+([\"']?)((?:[^\s\"']*[/\\])?([\w.-]+?)\.(?:m|c)?js)\1\s*")
+BANNER = ("player_site.landing.banner.title", "player_site.landing.banner.text",
+          "player_site.landing.banner.link")
+PROPS_ADDRESS = "player_site.props.address"
+DEFAULT_PROPS_ADDRESS = "props/index.html"
+DECISION_KEYS = ("notes_folder", "settings", "retire", "serves", "listings", "expect_gone", "groups")
+
+
+def step_script(command: str) -> tuple[str, str] | None:
+    """(the script's path as written, its name) of a `node <script>` step."""
+    m = STEP_RE.fullmatch(command)
+    return (m.group(2), m.group(3)) if m else None
+
+
+def quoted(value: str) -> str:
+    """A text value for a frontmatter line: a JSON string is a valid YAML
+    double-quoted scalar, escapes and all."""
+    return json.dumps(value, ensure_ascii=False)
+
+
+def field_value(value: Any) -> str | None:
+    """A state entry's value as YAML: text as a quoted string, a number,
+    true/false or null as `yaml_value_for_cli` types them, a list or map as
+    JSON-style flow YAML; None for anything else."""
+    if isinstance(value, str):
+        return quoted(value)
+    if value is None or isinstance(value, (bool, int, float)):
+        return yaml_value_for_cli(json.dumps(value))
+    if isinstance(value, (list, dict)):
+        return json.dumps(value, ensure_ascii=False)
+    return None
+
+
+def clean_stem(title: str, fallback: str) -> str:
+    stem = squash(BAD_NAME_RE.sub("", title))
+    return stem or fallback
+
+
+@dataclass
+class Live:
+    """The site's output as the move reads it."""
+    root: Path
+    kept: list[str]                              # kept folders that are there
+    files: list[str] = field(default_factory=list)   # every file under them
+
+    def pages(self, under: str) -> list[str]:
+        return [f for f in self.files if f.startswith(under) and f.lower().endswith(PAGE_EXTS)]
+
+
+def _live(root: Path, keep: list[str]) -> Live:
+    kept = [k for k in keep if (root / k).is_dir()]
+    files = sorted(nfc(p.relative_to(root).as_posix()) for k in kept
+                   for p in (root / k).rglob("*") if p.is_file())
+    return Live(root=root, kept=kept, files=files)
+
+
+def _note_path(c: Conversion, folder: str, stem: str) -> str | None:
+    """A free note path for `stem` in `folder`: the stem when no note in the
+    vault has it, else `<stem> (prop)`; None (and a row) when both are taken."""
+    for name in (stem, f"{stem} (prop)"):
+        key = nfc(name).casefold()
+        if key not in c.taken and not vault_write.live_stem_clash(c.batch, name):
+            c.taken.add(key)
+            return f"{folder}/{name}.md" if folder else f"{name}.md"
+    c.row(PERSON, f"{folder}/{stem}.md", f"no free note name for {stem!r} "
+          f"(it and {stem!r} (prop) are taken)")
+    return None
+
+
+def _prop_note(c: Conversion, rel: str, fields: list[tuple[str, str]], body: str = "") -> None:
+    """A note made from the prop template, with `fields` set (YAML values)."""
+    template = vault_write.template_text(c.vault, vault_write.PROP_TEMPLATES, "prop.md")
+    fm = vault_write.template_frontmatter(template)
+    for key, value in fields:
+        vault_write.set_block(fm, key, value)
+    c.batch.create(rel, "---\n" + "\n".join(fm) + "\n---\n" + body)
+
+
+def _copy(c: Conversion, rel: str, source: Path, label: str) -> bool:
+    """Plan a copy of `source` to `rel` in the vault; a different file already
+    there is never overwritten (a row says so)."""
+    data = source.read_bytes()
+    if rel in c.files:
+        return c.files[rel] == data
+    have = c.vault / rel
+    if have.is_file():
+        if have.read_bytes() == data:
+            return True
+        c.row(PERSON, rel, f"not copied: the vault already has another file "
+              f"here; {label} needs it (compare the two and keep one)")
+        return False
+    c.files[rel] = data
+    c.sources[rel] = label
+    return True
+
+
+def _printable_lines(c: Conversion) -> list[tuple[str, str, str]]:
+    """(note, its name, the words of each `Printable prop` line, with the line
+    after a heading of that name) of every note that is not prep or a Props
+    folder's own file."""
+    out = []
+    for rel, text in _notes(c.vault):
+        if "Printable prop" not in text or "/Props/" in f"/{rel}":
+            continue
+        fm = extract_frontmatter(text) or {}
+        if entity_type(fm) in NEVER_CANDIDATES:
+            continue
+        name = str(fm.get("name") or fm.get("title") or Path(rel).stem)
+        lines = text.splitlines()
+        for i, line in enumerate(lines):
+            if "Printable prop" not in line:
+                continue
+            window = [line]
+            if line.lstrip().startswith("#"):
+                window += [ln for ln in lines[i + 1:i + 4] if ln.strip()][:1]
+            out.append((rel, name, " ".join(window)))
+    return out
+
+
+def _handout_for(printable: list[tuple[str, str, str]], page: str) -> tuple[str, str] | None:
+    """(the handout note, its name) whose Printable prop line names `page`."""
+    name = re.escape(posixpath.basename(page))
+    pattern = re.compile(rf"(?:^|[\s`/(\[]){name}(?:$|[\s`).,;:\]])")
+    hits = sorted((rel, title) for rel, title, line in printable
+                  if page in line or pattern.search(line))
+    return hits[0] if hits else None
+
+
+def _handmade_pages(c: Conversion) -> list[str]:
+    """Pages in a `Props/` folder under Chapters/ that no prop note names by
+    `prop_file` and no build_props note builds (index.html aside)."""
+    named: set[str] = set()
+    for rel, text in _notes(c.vault):
+        fm = extract_frontmatter(text) or {}
+        for key in ("prop_file", "prop"):
+            value = fm.get(key)
+            if isinstance(value, str) and value.strip():
+                if key == "prop":
+                    named.add(f"*/{value.strip()}")
+                else:
+                    named.add(nfc(posixpath.normpath(posixpath.join(posixpath.dirname(rel), value.strip()))))
+    pages = []
+    for folder in sorted((c.vault / "Chapters").rglob("Props")) if (c.vault / "Chapters").is_dir() else []:
+        if not folder.is_dir():
+            continue
+        for p in sorted(folder.iterdir()):
+            rel = nfc(p.relative_to(c.vault).as_posix())
+            if (p.is_file() and p.suffix.lower() in PAGE_EXTS and p.name.lower() != "index.html"
+                    and rel not in named and f"*/{p.name}" not in named
+                    and not is_skipped_path(rel)):
+                pages.append(rel)
+    return pages
+
+
+def _infer_retire(c: Conversion, site: Path | None, steps: list[str], converting: list[str]) -> None:
+    """retire.after_build, serves and expect_gone from the site's build steps:
+    a known prop step is retired when what it serves is being moved; any
+    other step is left, and named for a person when its script writes under
+    a served folder. Unknown steps are never retired."""
+    retire, serves, gone = [], [f"{k}/" for k in converting], []
+    for command in steps:
+        found = step_script(str(command))
+        if not found or found[1] not in KNOWN_STEPS:
+            continue
+        name = found[1]
+        if name == "add-props" and not c.build_props:
+            continue
+        if name == "inject-gazetteer" and "gazetteer" not in converting:
+            continue
+        retire.append(str(command))
+        serves += KNOWN_STEPS[name]["serves"]
+        gone += KNOWN_STEPS[name]["expect_gone"]
+    serves = list(dict.fromkeys(serves))
+    for command in steps:
+        found = step_script(str(command))
+        if str(command) in retire:
+            continue
+        script = site / found[0] if site and found else None
+        try:
+            text = script.read_text(encoding="utf-8", errors="replace") if script else ""
+        except OSError:
+            text = ""
+        hit = [p for p in serves if p in text]
+        if hit:
+            c.row(PERSON, str(command), f"a build step that is left: its script "
+                  f"names {', '.join(hit)}, which the move serves from the vault; "
+                  f"check what it writes there")
+    c.decisions["retire"] = {"keep": [], "after_build": retire}
+    c.decisions["serves"] = serves
+    c.decisions["expect_gone"] = list(dict.fromkeys(gone))
+
+
+def _infer_listings(c: Conversion, root: Path, converted: set[str], props_address: str) -> None:
+    """Every index.html under a served folder whose links mostly go to
+    converted props is a listing; one that is not the props page becomes a
+    container named by its title."""
+    listings: dict[str, dict[str, Any]] = {}
+    for prefix in c.decisions["serves"]:
+        if not (root / prefix).is_dir():
+            continue
+        for p in sorted((root / prefix).rglob("index.html")):
+            rel = nfc(p.relative_to(root).as_posix())
+            reader = read_page(p)
+            links = {t for t in (target(rel, a["href"]) for a in reader.anchors) if t}
+            if not links or sum(t in converted for t in links) * 2 <= len(links):
+                continue
+            name = None if rel == props_address else clean_stem(short_title(reader.title), "Listing")
+            listings[rel] = {"container": name, "style": None}
+    c.decisions["listings"] = listings
+
+
+def _infer_notes_folder(c: Conversion, live: Live, homes: dict[str, str]) -> None:
+    """Each kept folder's vault home: a folder named for it in the Props
+    folder holding most of its live pages."""
+    folders: dict[str, str] = {}
+    for k in live.kept:
+        counts: dict[str, int] = {}
+        for page, address in homes.items():
+            if address.startswith(f"{k}/"):
+                props = posixpath.dirname(page)
+                counts[props] = counts.get(props, 0) + 1
+        base = max(sorted(counts), key=lambda f: counts[f]) if counts else "Props"
+        folders[k] = f"{base}/{k[:1].upper()}{k[1:]}"
+    c.decisions["notes_folder"] = folders
+
+
+def _given(c: Conversion, given: dict[str, Any] | None, keys: tuple[str, ...]) -> None:
+    for key in keys:
+        if given and key in given:
+            c.decisions[key] = given[key]
+
+
+def convert_kept(c: Conversion, site: Path | None, live_root: Path | None,
+                 keep: list[str], steps: list[str], props_address: str,
+                 given: dict[str, Any] | None) -> None:
+    """15b: hand-made pages become prop notes (live ones published, held ones
+    not), and every page and file of each kept folder is served by a note."""
+    live = _live(live_root, keep) if live_root and live_root.is_dir() else Live(Path("."), [])
+    printable = _printable_lines(c)
+    pages = _handmade_pages(c)
+    by_name: dict[str, list[str]] = {}
+    for f in live.files:
+        by_name.setdefault(posixpath.basename(f), []).append(f)
+    homes: dict[str, str] = {}
+    for page in pages:
+        found = by_name.get(posixpath.basename(page), [])
+        if len(found) > 1:
+            c.row(PERSON, page, f"live in {len(found)} places ({', '.join(found)}); "
+                  f"read as {found[0]}")
+        if found:
+            homes[page] = found[0]
+    _infer_notes_folder(c, live, homes)
+    _infer_retire(c, site, steps, live.kept)
+    converted = set(homes.values()) | set(c.addresses.values())
+    _infer_listings(c, live.root, converted, props_address)
+    _given(c, given, ("notes_folder", "retire", "serves", "listings", "expect_gone"))
+    listings: dict[str, dict[str, Any]] = c.decisions["listings"]
+
+    # Each listing's words for the pages it links, and its container.
+    info: dict[str, dict[str, str]] = {}
+    container_of: dict[str, str] = {}
+    folder_container: dict[str, str] = {}
+    for f in live.files:
+        if posixpath.basename(f) != "index.html":
+            continue
+        for a in read_page(live.root / f).anchors:
+            t = target(f, a["href"])
+            if t and t not in info:
+                info[t] = a
+        listed = (listings.get(f) or {}).get("container")
+        if listed:
+            folder_container[posixpath.dirname(f)] = listed
+            for a in read_page(live.root / f).anchors:
+                t = target(f, a["href"])
+                if t:
+                    container_of[t] = listed
+
+    # Shapes of the Keeper lines, learnt from each delivered page and its live copy.
+    merged: dict[str, str] = {}
+    shapes: set[Shape] = set()
+    for page, delivered in homes.items():
+        text, keeper = merge_delivered(read_text(c.vault / page), read_text(live.root / delivered))
+        merged[page] = text
+        shapes |= {s for s in map(shape_of, keeper) if s}
+
+    for page in pages:
+        folder, base = posixpath.dirname(page), posixpath.basename(page)
+        stem = posixpath.splitext(base)[0]
+        handout = _handout_for(printable, page)
+        address: str | None = homes.get(page)
+        box: str | None
+        if address is not None:
+            row = info.get(address, {})
+            title = row.get("title") or short_title(read_page(c.vault / page).title) or stem
+            line, group = row.get("line", ""), row.get("group", "")
+            box = container_of.get(address)
+            if merged[page] != read_text(c.vault / page):
+                c.files[page] = merged[page].encode("utf-8")
+                c.sources[page] = f"merged with {address}"
+        else:
+            siblings = [posixpath.dirname(homes[p]) for p in pages
+                        if p in homes and posixpath.dirname(p) == folder]
+            home = max(sorted(set(siblings)), key=siblings.count) if siblings else None
+            address = f"{home}/{base}" if home else None
+            title = handout[1] if handout else (short_title(read_page(c.vault / page).title) or stem)
+            line, group = "", ""
+            box = folder_container.get(home or "")
+            text, n = wrap_keeper_lines(read_text(c.vault / page), shapes)
+            if n:
+                c.files[page] = text.encode("utf-8")
+                c.sources[page] = "Keeper lines wrapped"
+                c.row("WOULD-WRAP", page, f"{n} Keeper lines put in a gm-only fence "
+                      f"(the same shape as a line the live copies dropped)")
+        rel = _note_path(c, folder, stem)
+        if rel is None:
+            continue
+        fields = [("name", quoted(title)), ("prop_kind", "document"), ("prop_file", quoted(base))]
+        if address:
+            fields.append(("prop_address", quoted(address)))
+        fields += [("prop_title", quoted(title)), ("prop_line", quoted(line)),
+                   ("prop_group", quoted(group))]
+        if box:
+            fields.append(("prop_container", quoted(f"[[{box}]]")))
+        body = (f"\n## Description\n\nThe page that goes with [[{Path(handout[0]).stem}]].\n"
+                if handout else "")
+        _prop_note(c, rel, fields, body)
+        if page in homes:
+            c.publish.append(rel)
+
+    served = set(homes.values())
+    folders: dict[str, str] = c.decisions["notes_folder"]
+    groups: dict[str, str] = {}
+    for k in live.kept:
+        cover = live.root / k / "index.html"
+        groups[k] = short_title(read_page(cover).title) if cover.is_file() else k
+    c.decisions["groups"] = groups
+    _given(c, given, ("groups",))
+
+    def home_of(address: str) -> tuple[str, str] | None:
+        """(the kept folder, the vault folder that mirrors it) of an address."""
+        k = address.split("/", 1)[0]
+        if k not in folders:
+            return None
+        return k, folders[k]
+
+    def vault_rel(address: str) -> str | None:
+        found = home_of(address)
+        return f"{found[1]}/{address.split('/', 1)[1]}" if found else None
+
+    def copy_page(address: str) -> bool:
+        """The page at `address` and the files it links, into the vault."""
+        dest = vault_rel(address)
+        if dest is None:
+            return False
+        k = address.split("/", 1)[0]
+        ok = _copy(c, dest, live.root / address, address)
+        for f in linked_files(live.root, address, f"{k}/"):
+            rel = vault_rel(f)
+            if rel:
+                _copy(c, rel, live.root / f, f)
+        return ok
+
+    # Listing pages become containers.
+    for address, choice in sorted(listings.items()):
+        box = (choice or {}).get("container")
+        served.add(address)
+        if not box:
+            continue
+        mirror = home_of(address)
+        folder = posixpath.dirname(vault_rel(address) or "") if mirror else posixpath.dirname(address)
+        rel = _note_path(c, folder, clean_stem(str(box), "Listing"))
+        if rel is None:
+            continue
+        fields = [("name", quoted(str(box))), ("prop_kind", "container"),
+                  ("prop_address", quoted(address)), ("show_sealed", "none")]
+        if (choice or {}).get("style"):
+            fields.append(("prop_style", quoted(str(choice["style"]))))
+        if mirror:
+            fields.append(("prop_group", quoted(groups.get(mirror[0], ""))))
+        _prop_note(c, rel, fields)
+        c.publish.append(rel)
+
+    # A kept sub-folder whose page loads a state script: a container and its items.
+    for f in live.files:
+        if posixpath.basename(f) != "index.html" or f in served:
+            continue
+        reader = read_page(live.root / f)
+        for src in reader.scripts:
+            script = target(f, src)
+            if not script or not (live.root / script).is_file():
+                continue
+            state = read_state(live.root / script)
+            items = state.get("items") if state else None
+            if not (state and isinstance(state.get("global"), str) and isinstance(items, dict) and items
+                    and all(isinstance(v, dict) and isinstance(v.get("title"), str) for v in items.values())):
+                continue
+            served.add(f)
+            _state_container(c, live.root, f, script, state, reader, copy_page, vault_rel, served, groups)
+            break
+
+    # Every other page of a kept folder: a supplied prop, copied with its files.
+    for k in live.kept:
+        for address in live.pages(f"{k}/"):
+            if address in served:
+                continue
+            reader = read_page(live.root / address)
+            if not copy_page(address):
+                continue
+            dest = vault_rel(address)
+            assert dest is not None
+            served.add(address)
+            title = short_title(reader.title) or posixpath.splitext(posixpath.basename(address))[0]
+            rel = _note_path(c, posixpath.dirname(dest), clean_stem(title, posixpath.splitext(posixpath.basename(address))[0]))
+            if rel is None:
+                continue
+            _prop_note(c, rel, [("name", quoted(title)), ("prop_kind", "supplied"),
+                                ("prop_file", quoted(posixpath.basename(address))),
+                                ("prop_address", quoted(address)), ("prop_title", quoted(title)),
+                                ("prop_group", quoted(groups.get(k, "")))])
+            c.publish.append(rel)
+            if address == f"{k}/index.html" and "player_site.props.cover" not in c.inferred_settings:
+                c.inferred_settings["player_site.props.title"] = title
+                c.inferred_settings["player_site.props.cover"] = f"[[{Path(rel).stem}]]"
+            # Its player maps (SVG pictures) are props of their own.
+            for src, alt in reader.imgs:
+                svg = target(address, src)
+                if not svg or not svg.lower().endswith(".svg") or svg in served or not (live.root / svg).is_file():
+                    continue
+                served.add(svg)
+                svg_rel = vault_rel(svg)
+                if svg_rel is None or not _copy(c, svg_rel, live.root / svg, svg):
+                    continue
+                page_dir = posixpath.dirname(dest)
+                inside = svg_rel.startswith(f"{page_dir}/")
+                note_dir = page_dir if inside else posixpath.dirname(svg_rel)
+                stem = posixpath.splitext(posixpath.basename(svg))[0]
+                name = alt or stem
+                note = _note_path(c, note_dir, clean_stem(name, stem))
+                if note is None:
+                    continue
+                _prop_note(c, note, [("name", quoted(name)), ("prop_kind", "supplied"),
+                                     ("prop_file", quoted(posixpath.relpath(svg_rel, note_dir))),
+                                     ("prop_address", quoted(svg)), ("prop_title", quoted(name)),
+                                     ("prop_group", quoted(groups.get(k, "")))])
+                c.publish.append(note)
+
+    # A kept folder retires only when the vault serves every page in it.
+    keep_done = [k for k in live.kept if all(p in served for p in live.pages(f"{k}/"))]
+    for k in live.kept:
+        left = [p for p in live.pages(f"{k}/") if p not in served]
+        if left:
+            c.row(PERSON, f"{k}/", f"kept: {len(left)} pages the move does not serve "
+                  f"({', '.join(left[:5])}{' …' if len(left) > 5 else ''})")
+    retire = c.decisions["retire"]
+    if not (given and "retire" in given):
+        retire["keep"] = keep_done
+
+
+def _state_container(c: Conversion, root: Path, index: str, script: str, state: dict[str, Any],
+                     reader: PageReader, copy_page: Any, vault_rel: Any,
+                     served: set[str], groups: dict[str, str]) -> None:
+    """A kept sub-folder whose page reads a state script: a container note
+    for the page, an item note per entry, every item published."""
+    dest = vault_rel(index)
+    if dest is None or not copy_page(index):
+        return
+    folder = posixpath.dirname(dest)
+    sub = posixpath.dirname(index)
+    k = index.split("/", 1)[0]
+    script_rel = vault_rel(script)
+    if script_rel:
+        _copy(c, script_rel, root / script, script)
+    title = short_title(reader.title) or posixpath.basename(sub)
+    box = clean_stem(title, posixpath.basename(sub))
+    rel = _note_path(c, folder, box)
+    if rel is None:
+        return
+    box = Path(rel).stem
+    _prop_note(c, rel, [("name", quoted(title)), ("prop_kind", "container"),
+                        ("prop_file", quoted("index.html")),
+                        ("prop_state", quoted(posixpath.relpath(script, sub))),
+                        ("prop_state_global", quoted(state["global"])),
+                        ("prop_address", quoted(index)), ("show_sealed", "none"),
+                        ("prop_group", quoted(groups.get(k, "")))])
+    c.publish.append(rel)
+    for key, entry in state["items"].items():
+        name = str(entry["title"])
+        href = entry.get("href")
+        fields = [("name", quoted(name)),
+                  ("prop_kind", "document" if isinstance(href, str) and href else "object"),
+                  ("prop_container", quoted(f"[[{box}]]")), ("prop_title", quoted(name)),
+                  ("prop_line", quoted(str(entry.get("line") or "")))]
+        if isinstance(href, str) and href:
+            address = target(index, href)
+            if address and (root / address).is_file():
+                copy_page(address)
+                served.add(address)
+                fields += [("prop_file", quoted(href)), ("prop_address", quoted(address))]
+        for k2, value in entry.items():
+            if k2 in ("title", "line", "href", "sealed"):
+                continue
+            yaml = field_value(value)
+            if yaml is None or not re.fullmatch(r"[A-Za-z0-9_]+", k2):
+                c.row(PERSON, rel, f"{key}: field {k2!r} not carried over")
+                continue
+            fields.append((f"prop_{k2}", yaml))
+            # A picture the entry names comes into the vault beside its page.
+            if isinstance(value, str) and not EXTERNAL_RE.match(value):
+                pic = target(index, value)
+                pic_rel = vault_rel(pic) if pic else None
+                if pic and pic_rel and (root / pic).is_file() and not pic.lower().endswith(PAGE_EXTS):
+                    _copy(c, pic_rel, root / pic, pic)
+        item = _note_path(c, folder, clean_stem(name, key))
+        if item is None:
+            continue
+        _prop_note(c, item, fields)
+        c.publish.append(item)
+
+
 def new_conversion(vault: Path) -> Conversion:
     return Conversion(vault=vault, batch=vault_write.Batch(vault))
 
 
-def convert(vault: Path) -> Conversion:
-    """Everything the move would do to `vault`, worked out without writing."""
+def _setting(s: Any, name: str, default: Any) -> Any:
+    try:
+        value = s.get(name)
+    except KeyError:
+        return default
+    return default if value is None else value
+
+
+def convert(vault: Path, *, site: Path | None = None, given: dict[str, Any] | None = None) -> Conversion:
+    """Everything the move would do to `vault`, worked out without writing.
+    `site` is the site folder whose output holds what is live; `given`, the
+    decisions file, overrides what is inferred, key by key."""
     c = new_conversion(vault)
     convert_build_props(c)
+    keep: list[str] = []
+    steps: list[str] = []
+    props_address = DEFAULT_PROPS_ADDRESS
+    output = "docs"
+    try:
+        s = settings(vault)
+    except SettingsUnavailable as e:
+        raise StepFailed(str(e)) from e
+    keep = [str(k) for k in _setting(s, "player_site.keep", []) or []]
+    steps = [str(x) for x in _setting(s, "player_site.after_build", []) or []]
+    output = str(_setting(s, "player_site.output", "docs") or "docs")
+    props_address = str(_setting(s, PROPS_ADDRESS, "") or DEFAULT_PROPS_ADDRESS)
+    given_settings = (given or {}).get("settings") or {}
+    props_address = str(given_settings.get(PROPS_ADDRESS) or props_address)
+    c.live_root = (site / output) if site else None
+    convert_kept(c, site, c.live_root, keep, steps, props_address, given)
+    if given and "settings" in given:
+        c.decisions["settings"] = dict(given["settings"])
+    else:
+        c.decisions["settings"] = dict(c.inferred_settings)
+    have = c.decisions["settings"]
+    names = [found[1] for found in map(step_script, c.decisions["retire"]["after_build"]) if found]
+    if "inject-gazetteer" in names and not all(b in have for b in BANNER):
+        c.row(PERSON, "player_site.landing.banner", "inject-gazetteer.js writes a box on the "
+              "landing page; write its heading, words and link (gazetteer/index.html) as "
+              f"{', '.join(BANNER)} in the decisions file")
+    c.decisions = {"version": 1, **{k: c.decisions[k] for k in DECISION_KEYS if k in c.decisions}}
     return c
 
 
