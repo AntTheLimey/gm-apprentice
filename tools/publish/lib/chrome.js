@@ -2,6 +2,7 @@
 // An installed Chrome or Chromium, found by path or on PATH. The tests' browser helper and `props pages` both ask here.
 const fs = require('node:fs');
 const { spawnSync } = require('node:child_process');
+const { pathToFileURL } = require('node:url');
 
 const CANDIDATES = [
   process.env.GM_TEST_CHROME,
@@ -20,7 +21,7 @@ function findChrome() {
   return null;
 }
 
-// A file URL Chrome opens, a Windows path included.
-const fileUrl = (p) => `file://${p.replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')}`;
+// A file URL Chrome opens; `#`, `?` and spaces in the path are escaped.
+const fileUrl = (p) => pathToFileURL(p).href;
 
 module.exports = { findChrome, fileUrl };
