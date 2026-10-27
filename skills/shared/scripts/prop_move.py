@@ -25,7 +25,9 @@ reads a state script becomes a container with a note per entry; a listing
 of the papers becomes a container.
 
 `plan` works on a copy of the vault and writes nothing in the vault or the
-site; it checks the copy against the live site with `props move-check`.
+site; it checks the copy against the live site with `props move-check`,
+whose leak check on the new build must find nothing the live site did not
+have (a finding that is new is a blocker).
 `apply` does the same to the vault, publishes, sets the settings, runs the
 check, and only then retires the kept folders and build steps, prunes the
 leak check's accepts and starts the reveals log. A blocker or any failure
@@ -63,7 +65,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import vault_write  # noqa: E402
 from migrate_core import StepFailed, plugin_tool  # noqa: E402
 from migrate_site import AFTER_BUILD, _set_settings  # noqa: E402
-from reveal import LOG, _load_log, _write_log, apply_publish, publish_state  # noqa: E402
+from reveal import LOG, _load_log, _write_log, apply_publish, prop_paths, publish_state  # noqa: E402
 from reveal_scan import NEVER_CANDIDATES  # noqa: E402
 from vault_check import configured_site  # noqa: E402
 from vault_write import BAD_NAME_RE, HAND_ID_RE, HANDS_REL, Batch, WriteError, use_hand  # noqa: E402
@@ -577,6 +579,33 @@ def _says(lines: list[str], at: int, code: set[int]) -> bool:
                for k, ln in enumerate(lines))
 
 
+def _only_external(line: str) -> bool:
+    """Whether the line names at least one address and every address it
+    names is off the site."""
+    reader = PageReader()
+    reader.feed(line)
+    reader.close()
+    refs = [r.strip() for r in reader.refs if r.strip()]
+    return bool(refs) and all(EXTERNAL_RE.match(r) for r in refs)
+
+
+def _tags_only(mine: list[str], theirs: list[str], eol: str) -> list[str]:
+    """A difference of tags alone: the vault's lines, except that the lines
+    naming only addresses off the site (a font service's link) are the live
+    page's, set where the vault's first such line was."""
+    outside = [ln for ln in theirs if _only_external(ln)]
+    out: list[str] = []
+    placed = False
+    for line in mine:
+        if outside and _only_external(line):
+            if not placed:
+                out += _ended(outside, eol)
+                placed = True
+            continue
+        out.append(line)
+    return out
+
+
 def _ended(lines: list[str], eol: str) -> list[str]:
     return [ln.rstrip("\r\n") + eol for ln in lines]
 
@@ -608,8 +637,11 @@ def merge_delivered(vault_text: str, live_text: str) -> tuple[str, list[str]]:
     keeper: list[str] = []
     for op, i1, i2, j1, j2 in matcher.get_opcodes():
         mine, theirs = a[i1:i2], b[j1:j2]
-        if op == "equal" or (not _says(mine, i1, code_a) and not _says(theirs, j1, code_b)):
+        if op == "equal":
             out += mine
+            continue
+        if not _says(mine, i1, code_a) and not _says(theirs, j1, code_b):
+            out += _tags_only(mine, theirs, eol)
             continue
         if out and not _eol(out[-1]):
             out[-1] += eol
@@ -790,27 +822,33 @@ def _handout_for(printable: list[tuple[str, str, str]], page: str) -> tuple[str,
 def _handmade_pages(c: Conversion) -> list[str]:
     """Pages in a `Props/` folder under Chapters/ that no prop note names by
     `prop_file` and no build_props note builds (index.html aside)."""
-    named: set[str] = set()
-    for rel, text in _notes(c.vault):
-        fm = extract_frontmatter(text) or {}
-        for key in ("prop_file", "prop"):
-            value = fm.get(key)
-            if isinstance(value, str) and value.strip():
-                if key == "prop":
-                    named.add(f"*/{value.strip()}")
-                else:
-                    named.add(nfc(posixpath.normpath(posixpath.join(posixpath.dirname(rel), value.strip()))))
-    pages = []
+    candidates = []
     for folder in sorted((c.vault / "Chapters").rglob("Props")) if (c.vault / "Chapters").is_dir() else []:
         if not folder.is_dir():
             continue
         for p in sorted(folder.iterdir()):
             rel = nfc(p.relative_to(c.vault).as_posix())
             if (p.is_file() and p.suffix.lower() in PAGE_EXTS and p.name.lower() != "index.html"
-                    and rel not in named and f"*/{p.name}" not in named
                     and not is_skipped_path(rel)):
-                pages.append(rel)
-    return pages
+                candidates.append(rel)
+    if not candidates:
+        return []
+    # Which notes are props is the publish tool's answer (explain --all); their prop_file says which page each has.
+    props, _no_page, why = prop_paths(c.vault)
+    if props is None:
+        raise StepFailed(f"the publish tool could not say which notes are props: {why}")
+    built = {f"*/{posixpath.basename(c.addresses[rel])}" for rel in c.build_props if rel in c.addresses}
+    named: set[str] = set()
+    for rel, text in _notes(c.vault):
+        fm = extract_frontmatter(text) or {}
+        value = fm.get("prop_file")
+        if nfc(rel) in props and isinstance(value, str) and value.strip():
+            named.add(nfc(posixpath.normpath(posixpath.join(posixpath.dirname(rel), value.strip()))))
+        build_page = fm.get("prop")
+        if isinstance(build_page, str) and build_page.strip() and fm.get("prop_look"):
+            built.add(f"*/{build_page.strip()}")
+    return [rel for rel in candidates
+            if rel not in named and f"*/{posixpath.basename(rel)}" not in built]
 
 
 def _infer_retire(c: Conversion, site: Path | None, steps: list[str], converting: list[str]) -> None:
@@ -939,9 +977,9 @@ def convert_kept(c: Conversion, site: Path | None, live_root: Path | None,
     info: dict[str, dict[str, str]] = {}
     container_of: dict[str, str] = {}
     folder_container: dict[str, str] = {}
-    for f in live.files:
-        if posixpath.basename(f) != "index.html":
-            continue
+    # The decided listings first: a page's title and line are the ones its listing gives it, not the cover's link.
+    indexes = [f for f in live.files if posixpath.basename(f) == "index.html"]
+    for f in sorted(indexes, key=lambda f: (f not in listings, f)):
         for a in read_page(live.root / f).anchors:
             t = target(f, a["href"])
             if t and t not in info:
@@ -1249,8 +1287,26 @@ def convert(vault: Path, *, site: Path | None = None, given: dict[str, Any] | No
         else:
             c.row(PERSON, str(command), "not retired: not a prop step the move knows; "
                   "it stays in player_site.after_build")
-    retire["after_build"] = known
-    retire["keep"] = [str(k) for k in retire.get("keep") or []]
+    # Only what the check compares retires: a kept folder or a step whose folder is not served is never checked.
+    served = {x if str(x).endswith("/") else f"{x}/" for x in c.decisions.get("serves") or []}
+    checked = []
+    for command in known:
+        found = step_script(command)
+        need = KNOWN_STEPS[found[1]]["serves"] if found else []
+        if all(x in served for x in need):
+            checked.append(command)
+        else:
+            c.row(PERSON, command, f"not retired: the check does not compare {', '.join(need)} "
+                  "(add it to serves, or keep the step)")
+    retire["after_build"] = checked
+    keep = []
+    for k in [str(k) for k in retire.get("keep") or []]:
+        if f"{k.strip('/')}/" in served:
+            keep.append(k)
+        else:
+            c.row(PERSON, f"{k}/", "not retired: the check does not compare this kept folder "
+                  "(add it to serves, or keep the folder)")
+    retire["keep"] = keep
     names = [found[1] for found in map(step_script, known) if found]
     if "inject-gazetteer" in names and not all(b in have for b in BANNER):
         c.row(PERSON, "player_site.landing.banner", "inject-gazetteer.js writes a box on the "
@@ -1485,17 +1541,34 @@ def _copy_vault(vault: Path, to: Path) -> None:
             shutil.copy2(p, dest)
 
 
-def _copy_live(live: Path, to: Path, serves: list[str]) -> None:
-    """What move-check reads of the live output: every file under a served
-    folder and every page elsewhere."""
-    prefixes = [s if s.endswith("/") else f"{s}/" for s in serves]
-    for p in sorted(live.rglob("*")):
-        rel = p.relative_to(live).as_posix()
-        if p.is_file() and (any(rel.startswith(x) for x in prefixes)
-                            or p.suffix.lower() in PAGE_EXTS):
-            dest = to / rel
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(p, dest)
+def leak_findings(config: Path) -> set[tuple[str, str]]:
+    """The leak check's findings on a site as it stands (`leaks list`), as
+    (page, sentence): what is there before the move is not the move's."""
+    code, out, err = plugin_tool(["leaks", "list", "--config", str(config), "--json"])
+    try:
+        data = json.loads(out)
+    except ValueError:
+        data = None
+    if code != 0 or not isinstance(data, dict) or data.get("missing") or not isinstance(data.get("findings", []), list):
+        said = [ln.strip() for ln in err.splitlines() if ln.strip()]
+        raise StepFailed(f"the leak check could not read the live site: {said[-1] if said else f'exit {code}'}")
+    return {(str(f.get("page")), str(f.get("text"))) for f in data.get("findings") or [] if isinstance(f, dict)}
+
+
+def new_leaks(data: dict[str, Any], before: set[tuple[str, str]]) -> list[str]:
+    """A CHECK row for each leak finding on move-check's new build that the
+    live site did not have: each is a blocker."""
+    leaks = data.get("leaks")
+    if not isinstance(leaks, list):
+        raise StepFailed("move-check did not run the leak check on its build; the publish tool is older than this script")
+    rows = []
+    for f in leaks:
+        if not isinstance(f, dict) or (str(f.get("page")), str(f.get("text"))) in before:
+            continue
+        why = f" ({f['reason']})" if f.get("reason") else ""
+        rows.append(f"CHECK\t{f.get('page')}\tLEAK: \"{f.get('text')}\" from {f.get('note') or 'a hidden note'}"
+                    f"{why}; the live site does not show it")
+    return rows
 
 
 def run_plan(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], Conversion | None, int]:
@@ -1513,7 +1586,15 @@ def run_plan(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], Conv
         stand_in.mkdir()
         (stand_in / "vault.config.json").write_text(json.dumps({"vaultPath": str(copy)}), encoding="utf-8")
         if site:
-            _set_settings(copy, [("player_site.folder", str(stand_in))])
+            pairs: list[tuple[str, object]] = [("player_site.folder", str(stand_in))]
+            if _setting(settings(copy), "gm_site.folder", None):
+                pairs.append(("gm_site.folder", str(tmp / "gm-site")))
+            _set_settings(copy, pairs)
+        before: set[tuple[str, str]] = set()
+        if site and live:
+            # The live output, whole, beside the copy as it was: the leak check's findings before the move.
+            shutil.copytree(live, stand_in / live.relative_to(site), symlinks=True)
+            before = leak_findings(stand_in / "vault.config.json")
         c = convert(copy, site=site if live else None, given=given)
         rows = plan_rows(c) + c.rows
         blockers = 0
@@ -1523,14 +1604,13 @@ def run_plan(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], Conv
                             f"{why or 'nothing the live site serves is moved'}")
             return rows, c, 0
         write_conversion(c, Journal(copy))
-        output = live.relative_to(site) if site else Path("docs")
-        _copy_live(live, stand_in / output, c.decisions["serves"])
         _publish(copy, c.publish)
         if _settings(c):
             _set_settings(copy, _settings(c))
         data = move_check(stand_in / "vault.config.json", c.decisions)
-        rows += check_rows(data)
-        blockers = data["blockers"]
+        leaks = new_leaks(data, before)
+        rows += check_rows(data) + leaks
+        blockers = data["blockers"] + len(leaks)
         return rows, c, blockers
     finally:
         forget_settings(copy)
@@ -1554,14 +1634,16 @@ def run_apply(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], int
     rows: list[str] = []
     blockers = 0
     try:
+        before = leak_findings(config)
         journal.watch_meta()
         write_conversion(c, journal)
         _publish(vault, c.publish)
         if _settings(c):
             _set_settings(vault, _settings(c))
         data = move_check(config, c.decisions)
-        rows += check_rows(data)
-        blockers = data["blockers"]
+        leaks = new_leaks(data, before)
+        rows += check_rows(data) + leaks
+        blockers = data["blockers"] + len(leaks)
         if blockers:
             raise Blocked(f"move-check found {blockers} blocker{'' if blockers == 1 else 's'}")
         retire = c.decisions.get("retire") or {}

@@ -339,29 +339,34 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
     }
     return { name, global, out: canonicalNfc(path.posix.join(path.posix.dirname(p.address), name)) };
   }
-  // The state file planned, claimed as the prop's files are, so no later prop's file lands on it.
+  // The state file claimed, as the prop's files are, so no other prop's file lands on it: its entry, or null (with a
+  // row) when its address is taken.
   function planState(p, { name, global, out }) {
     const key = addressKey(out);
     const why = taken.has(out, { explicit: p._explicit });
     const prior = claimed.get(key);
     if (why || prior) {
       problem(p.rel, `prop_state "${name}" would land on ${out}, taken by ${why ? takerName(why) : prior.rel}, so it is not made`, 'give the state file another name, or the container another prop_address');
-      return;
+      return null;
     }
     claimed.set(key, { rel: p.rel, hash: null });
-    p.files.push({ source: null, out, made: 'state', global, ...(p._explicit && keptReplaced(out) ? { replacesKept: true } : {}) });
     STATES.set(p, { dir: p._full ? path.dirname(p._full) : null, explicit: p._explicit });
+    return { source: null, out, made: 'state', global, ...(p._explicit && keptReplaced(out) ? { replacesKept: true } : {}) };
   }
-  // Every container's state file is asked for before any page's links are followed.
-  const asks = new Map();
-  for (const p of order) if (p.address) asks.set(p, stateAsked(p));
-  const stateOuts = new Set([...asks.values()].filter(Boolean).map((a) => addressKey(a.out)));
+  // Every container's state file is claimed before any page's links are followed: a link to one the build makes is that
+  // file (stateOuts); a link to one it refused is an ordinary link again.
+  const states = new Map();
+  for (const p of order) {
+    const asked = p.address ? stateAsked(p) : null;
+    const entry = asked && planState(p, asked);
+    if (entry) states.set(p, entry);
+  }
+  const stateOuts = new Set([...states.values()].map((e) => addressKey(e.out)));
   for (const p of order) {
     if (!p.address) continue;
-    const asked = asks.get(p);
     if (p.made) p.files.push({ source: null, out: p.address, made: p.made });
     else planFiles(p, p.files, problem, claimed, stateOuts);
-    if (asked) planState(p, asked);
+    if (states.has(p)) p.files.push(states.get(p));
   }
   PLANS.set(result, { claimed, taken, keptReplaced, vaultReal, cutKeeper: Boolean(cutKeeper) });
 

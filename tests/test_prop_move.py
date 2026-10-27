@@ -517,18 +517,28 @@ def test_handout_notes_untouched(tmp_path: Path) -> None:
 # --- plan, apply, roll back (15c) ------------------------------------------------
 
 # `gm-publish props move-check --json` on a site whose live page the vault no
-# longer builds, and on one where every served page is still there (real runs).
+# longer builds (and whose vault page carries its note's GM Notes sentence),
+# on one where every served page is still there, and a leak alone: real runs.
 CHECK_BLOCKED = {"rows": [
     {"kind": "missing", "address": "gazetteer/papers/extra.html", "detail": "not in the new site", "blocker": True},
-    {"kind": "same-words", "address": "gazetteer/papers/menu.html", "detail": "other markup, the same words",
-     "blocker": False}], "blockers": 1, "served": 2, "pages": 2, "same": 1}
+    {"kind": "same-words", "address": "gazetteer/papers/menu.html",
+     "detail": "added: \"the fish course hides the poisoned sauce boat\"", "blocker": False}],
+    "blockers": 1, "served": 2, "pages": 2, "same": 1,
+    "leaks": [{"code": "HIDDEN_TEXT", "page": "gazetteer/papers/menu.html",
+               "text": "the fish course hides the poisoned sauce boat", "note": "Documents/Menu.md",
+               "reason": "GM Notes section"}]}
 CHECK_PASSED = {"rows": [
     {"kind": "same-words", "address": "gazetteer/papers/menu.html", "detail": "other markup, the same words",
-     "blocker": False}], "blockers": 0, "served": 1, "pages": 1, "same": 1}
+     "blocker": False}], "blockers": 0, "served": 1, "pages": 1, "same": 1, "leaks": []}
+CHECK_LEAK = {**CHECK_PASSED, "leaks": CHECK_BLOCKED["leaks"]}
 
 
 def snapshot(root: Path) -> dict[str, bytes]:
     return {p.relative_to(root).as_posix(): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+def mtimes(root: Path) -> dict[str, int]:
+    return {p.relative_to(root).as_posix(): p.stat().st_mtime_ns for p in sorted(root.rglob("*"))}
 
 
 def folders(root: Path) -> set[str]:
@@ -555,6 +565,7 @@ def test_plan_writes_nothing(tmp_path: Path) -> None:
     vault, site = gazetteer(tmp_path)
     before_v, before_s = snapshot(vault), snapshot(site)
     dirs_v, dirs_s = folders(vault), folders(site)
+    times_v, times_s = mtimes(vault), mtimes(site)
     draft, report = tmp_path / "draft.json", tmp_path / "plan.json"
     out = io.StringIO()
     with contextlib.redirect_stdout(out):
@@ -563,6 +574,7 @@ def test_plan_writes_nothing(tmp_path: Path) -> None:
     assert code == 0, text
     assert snapshot(vault) == before_v and snapshot(site) == before_s
     assert folders(vault) == dirs_v and folders(site) == dirs_s
+    assert mtimes(vault) == times_v and mtimes(site) == times_s
     assert f"WOULD-CREATE\t{CH4}/dinner-menu.md\t" in text
     assert f"WOULD-COPY\t{NOTES}/guide.html\t" in text
     assert f"WOULD-PUBLISH\t{CH4}/dinner-menu.md\t" in text
@@ -727,3 +739,92 @@ def test_build_props_credits_expected_gone(tmp_path: Path) -> None:
     given = prop_move.convert(vault, site=site, given={"version": 1, "expect_gone": ["Chapter 1 props"]})
     assert given.decisions["expect_gone"] == ["Chapter 1 props"]
     assert not [r for r in given.rows if r.startswith("EXPECT-GONE")]
+
+
+# --- fix round 3 (Rulings 31, 32) ---------------------------------------------------
+
+def test_unchecked_keep_and_steps_never_retire(tmp_path: Path) -> None:
+    vault, site = gazetteer(tmp_path)
+    with mock.patch.object(prop_move, "read_state", read_state_stub):
+        decisions = prop_move.convert(vault, site=site).decisions
+    # The check would compare only the papers: the cover, maps and shelf would go unchecked.
+    decisions["serves"] = ["gazetteer/papers/"]
+    path = tmp_path / "decisions.json"
+    path.write_text(json.dumps(decisions), encoding="utf-8")
+    with mock.patch.object(prop_move, "read_state", read_state_stub):
+        c = prop_move.convert(vault, site=site, given=decisions)
+    assert c.decisions["retire"] == {"keep": [], "after_build": []}
+    person = [r for r in c.rows if r.startswith(prop_move.PERSON)]
+    assert any(r.startswith(f"{prop_move.PERSON}\tgazetteer/\tnot retired") for r in person), person
+    assert any(r.startswith(f"{prop_move.PERSON}\tnode inject-gazetteer.js\tnot retired") for r in person), person
+    code, text = run_apply(vault, CHECK_PASSED, "--decisions", str(path))
+    assert code == 0, text
+    config = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
+    assert "- gazetteer" in config and "inject-gazetteer.js" in config
+
+
+def test_apply_blocks_on_a_new_leak(tmp_path: Path) -> None:
+    vault, site = gazetteer(tmp_path)
+    before, dirs = snapshot(vault), folders(vault)
+    code, text = run_apply(vault, CHECK_LEAK)
+    assert code == 1, text
+    assert ('CHECK\tgazetteer/papers/menu.html\tLEAK: "the fish course hides the poisoned sauce boat" '
+            "from Documents/Menu.md (GM Notes section); the live site does not show it") in text
+    assert "the vault is as it was" in text and "RETIRED" not in text and "PRUNED" not in text
+    assert snapshot(vault) == before and folders(vault) == dirs
+    # The same finding on the live site before the move is not the move's.
+    with mock.patch.object(prop_move, "leak_findings",
+                           lambda _c: {("gazetteer/papers/menu.html", "the fish course hides the poisoned sauce boat")}):
+        code, text = run_apply(vault, CHECK_LEAK)
+    assert code == 0, text
+    assert "LEAK" not in text and "PRUNED\t" in text
+
+
+def test_tag_only_hunk_with_outside_addresses_keeps_live_side() -> None:
+    vault = ('<html><head>\n<link href="https://fonts.example.com/css?family=Old+Face" rel="stylesheet">\n'
+             '<link rel="stylesheet" href="props.css">\n</head><body>\n<p>Words.</p>\n</body></html>\n')
+    live = ('<html><head>\n<link href="https://fonts.example.com/css?family=Old+Face&family=New+Hand" rel="stylesheet">\n'
+            '<link rel="stylesheet" href="papers.css">\n</head><body>\n<p>Words.</p>\n</body></html>\n')
+    merged, keeper = prop_move.merge_delivered(vault, live)
+    # The font service's link is the live page's; the stylesheet beside the page stays the vault's.
+    assert "family=New+Hand" in merged and "family=Old+Face\"" not in merged
+    assert 'href="props.css"' in merged and "papers.css" not in merged
+    assert keeper == [] and "gm-only" not in merged
+
+
+def test_listing_words_win_over_other_links(tmp_path: Path) -> None:
+    cover = COVER.replace('<a href="papers/index.html">The Papers</a>',
+                          '<a href="papers/index.html">The Papers</a>\n<a href="papers/dinner-menu.html">Supper</a>')
+    vault, site = gazetteer(tmp_path)
+    (site / "docs" / "gazetteer" / "index.html").write_text(cover, encoding="utf-8")
+    c = converted(vault, site)
+    assert fm_of(c.batch.texts[f"{CH4}/dinner-menu.md"])["prop_title"] == "The Bill of Fare"
+
+
+def test_plan_points_the_gm_site_at_a_stand_in(tmp_path: Path) -> None:
+    import contextlib
+    import io
+    vault, site = gazetteer(tmp_path)
+    config = vault / "_meta" / "vault-config.yaml"
+    gm = tmp_path / "gm-site"
+    config.write_text(config.read_text(encoding="utf-8") + f"gm_site:\n  folder: {json.dumps(str(gm))}\n",
+                      encoding="utf-8")
+    seen: list[list[tuple[str, object]]] = []
+    real = prop_move._set_settings
+
+    def record(v: Path, pairs: list[tuple[str, object]]) -> None:
+        seen.append(list(pairs))
+        real(v, pairs)
+    with mock.patch.object(prop_move, "_set_settings", record), contextlib.redirect_stdout(io.StringIO()):
+        assert prop_move.main([str(vault), "plan"]) == 0
+    first = dict(seen[0])
+    assert first["player_site.folder"] != str(site) and first["gm_site.folder"] != str(gm)
+    assert not gm.exists()
+
+
+def test_a_note_the_tool_does_not_call_a_prop_names_no_page(tmp_path: Path) -> None:
+    # An NPC note naming the menu page by prop_file is no prop (the publish tool says so): the page is still hand-made.
+    npc = "---\ntype: npc\nprop_file: dinner-menu.html\n---\nThe Collector.\n"
+    vault, site = gazetteer(tmp_path, {f"{CH4}/The Collector.md": npc})
+    c = converted(vault, site)
+    assert f"{CH4}/dinner-menu.md" in c.batch.texts
