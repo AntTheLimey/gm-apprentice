@@ -244,7 +244,8 @@ GUIDE = """<!DOCTYPE html>
 """
 MAPS = """<!DOCTYPE html>
 <html><head><title>The Maps — The Port Gazetteer</title><link rel="stylesheet" href="gazetteer.css"></head>
-<body><a href="index.html">Back</a><img src="assets/port-map.svg" alt="The Port and its Quays — the bar, the customs house and the moorings"></body></html>
+<body><a href="index.html">Back</a><img src="assets/port-map.svg" alt="The Port and its Quays — the bar, the customs house and the moorings">
+<a class="plate-frame" data-map="assets/plate-full.jpg" data-overlay="plate" href="#">Open the plate</a></body></html>
 """
 SHELF_INDEX = """<!DOCTYPE html>
 <html><head><title>The Shelf — The Port Gazetteer</title><link rel="stylesheet" href="shelf.css"></head>
@@ -332,6 +333,7 @@ def gazetteer(tmp_path: Path, extra_vault: dict[str, str | bytes] | None = None)
         "gazetteer/assets/paper.jpg": b"\xff\xd8paper",
         "gazetteer/assets/port-map.svg": "<svg xmlns=\"http://www.w3.org/2000/svg\"><title>Port</title></svg>\n",
         "gazetteer/assets/unused.jpg": b"\xff\xd8unused",
+        "gazetteer/assets/plate-full.jpg": b"\xff\xd8plate",
         "gazetteer/papers/index.html": PAPERS_INDEX,
         "gazetteer/papers/papers.css": "body { background: url('../assets/paper.jpg'); }\n",
         "gazetteer/shelf/index.html": SHELF_INDEX,
@@ -448,7 +450,9 @@ def test_site_only_pages_become_supplied_props(tmp_path: Path) -> None:
     c = converted(vault, site)
     docs = site / "docs" / "gazetteer"
     # Each site-only page and the files it links, copied with its layout.
-    for rel in ("guide.html", "maps.html", "index.html", "assets/paper.jpg", "assets/port-map.svg"):
+    # (The full plate is named only in a data- attribute the page's script opens.)
+    for rel in ("guide.html", "maps.html", "index.html", "assets/paper.jpg", "assets/port-map.svg",
+                "assets/plate-full.jpg"):
         assert c.files[f"{NOTES}/{rel}"] == (docs / rel).read_bytes(), rel
     assert f"{NOTES}/assets/unused.jpg" not in c.files
     # A vault file is never overwritten: the clash is for a person.

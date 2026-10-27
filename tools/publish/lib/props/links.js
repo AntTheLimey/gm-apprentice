@@ -2,7 +2,10 @@
 
 // The local files a hand-made prop page links, read with patterns over a fixed set of
 // attributes (the tool has no HTML parser). `<a href>` is never read: a link to another
-// page is not a file the prop needs.
+// page is not a file the prop needs. A `data-*` attribute is read only when its value is a
+// picture's path: a page's own script may show it (a map plate opened full screen).
+
+const PICTURE_PATH = /^[^\s:]+\.(?:png|jpe?g|gif|webp|svg|avif)(?:[?#].*)?$/i;
 
 function cssRefs(css) {
   const found = [];
@@ -32,6 +35,9 @@ function htmlRefs(html) {
       if (attrs['xlink:href']) found.push(attrs['xlink:href']);
     }
     if (attrs.style) found.push(...cssRefs(attrs.style));
+    for (const [key, value] of Object.entries(attrs)) {
+      if (key.startsWith('data-') && PICTURE_PATH.test(value.trim())) found.push(value);
+    }
   }
   for (const s of html.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi)) found.push(...cssRefs(s[1]));
   return found;

@@ -322,6 +322,7 @@ VOID = frozenset({"area", "base", "br", "col", "embed", "hr", "img", "input",
 EXTERNAL_RE = re.compile(r"^(?:[a-z][a-z0-9+.-]*:|//)", re.I)
 CSS_URL_RE = re.compile(r"""url\(\s*(['"]?)([^'")]+)\1\s*\)|@import\s+(['"])([^'"]+)\3""")
 PAGE_EXTS = (".html", ".htm")
+PICTURE_PATH_RE = re.compile(r"^[^\s:]+\.(?:png|jpe?g|gif|webp|svg|avif)(?:[?#].*)?$", re.I)
 GM_FENCE_RE = re.compile(r"<!--\s*(/?)gm-only\s*-->")
 CODE_TAG_RE = re.compile(r"<(/?)(script|style)\b", re.I)
 
@@ -354,6 +355,9 @@ class PageReader(HTMLParser):
         for key in ("href", "src"):
             if a.get(key):
                 self.refs.append(a[key])
+        # A picture named in a data- attribute, which the page's script shows
+        # (the publish tool copies it as it does an img src).
+        self.refs += [v for k, v in a.items() if k.startswith("data-") and PICTURE_PATH_RE.match(v.strip())]
         if tag == "img" and a.get("src"):
             self.imgs.append((a["src"], squash(a.get("alt", ""))))
         if tag == "script" and a.get("src"):
