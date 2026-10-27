@@ -144,4 +144,4 @@ async function runPages({ configPath, targets, json = false }) {
   }
 }
 
-module.exports = { countPdfPages, rowsFor, formatLine, runPages, NO_CHROME, SUPPLIED_PDF };
+module.exports = { countPdfPages, rowsFor, formatLine, runPages, outputFolder, NO_CHROME, SUPPLIED_PDF };

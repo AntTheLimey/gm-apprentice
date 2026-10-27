@@ -41,6 +41,8 @@ Usage:
   gm-apprentice-publish leaks <cmd>          Check the built player site for hidden text (list, check, accept, prune, settle)
   gm-apprentice-publish props pages <address>...  Count a prop page's printed pages (headless Chrome; --note: before it publishes)
   gm-apprentice-publish props read-state <file>   Print what a container's state script sets (--json: { global, items })
+  gm-apprentice-publish props compare             Compare two site folders' served pages (--old, --new, --serves)
+  gm-apprentice-publish props move-check          Build from the vault alone and compare it with the live site's served pages
   gm-apprentice-publish relationships <cmd>  The relationship words, short (words); every relationship rule checked (check); the tones listed (list); the certain repairs (fix)
   gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
@@ -245,6 +247,41 @@ window, no require, process or timers, for one second at most, and prints the
 one name it set and each item's key. --json prints { global, items }. A script
 that sets no name or several, fails, or reaches for anything else is an error
 line and exit 1. The build never runs it.
+
+gm-apprentice-publish props compare --old <dir> --new <dir> --serves <folder>...
+    [--listing <address>]... [--expect-gone <phrase>]... [--json]
+gm-apprentice-publish props move-check [--config <path>] --serves <folder>...
+    [--listing <address>]... [--expect-gone <phrase>]... [--json]
+
+compare reads every file of the old site under a served folder (gazetteer/;
+repeat --serves for more) beside the new site's file at the same address.
+move-check builds the player site from the vault alone into a temp folder (no
+build steps run, no kept folder is in it), compares the site's output folder
+with it, and removes the temp folder. Each prints "KIND<TAB>address<TAB>detail"
+rows, then "# served: N pages: N same: N blockers: N", and exits 1 on any
+blocker (or an error line), else 0.
+
+  SAME            the same bytes
+  SAME-WORDS      every word still there (added words, or the tool's prop bar)
+  WORDS-DIFFER    a word is gone (blocker), unless every gone run is an
+                  --expect-gone phrase
+  MISSING         a served page the new site does not have (blocker)
+  LISTING-OK      a --listing page keeps every link into the served folders
+  LISTING-LOST    a --listing page loses one (blocker); its words never block
+  LINK-LOST       another page loses a link into the served folders (blocker)
+  FILE-DIFFERS    a served file that is not a page has other bytes
+  FILE-DROPPED    a served file, or a page outside them, is not in the new
+                  site; a blocker only when a new page still links it
+
+A link is read relative to its page, without its query or anchor, a folder as
+its index.html. Words are read as the leak check reads a page.
+
+  --serves <folder>      A folder the live site serves that the move replaces (repeatable)
+  --listing <address>    An old index page the move replaces with a listing (repeatable)
+  --expect-gone <phrase> Words the move takes off a page on purpose (repeatable)
+  --old, --new <dir>     compare: the two site folders
+  --json                 { rows: [{ kind, address, detail, blocker }], blockers, served, pages, same }
+  --config <path>        move-check: path to vault.config.json (default: ./vault.config.json)
 `,
   leaks: `
 gm-apprentice-publish leaks <list|check|accept|prune|settle> [--config <path>] [--json]
@@ -1119,8 +1156,25 @@ if (command === 'props') {
     exitAfterFlush(require('../lib/props/state-cli.js').runReadState({ file: files[0], json: rest.includes('--json') }));
     return;
   }
+  if (args[1] === 'compare' || args[1] === 'move-check') {
+    const check = args[1] === 'move-check';
+    const parsed = parseSubcommandArgs(args.slice(2), { '--json': 'json' }, check ? {} : { '--old': 'oldDir', '--new': 'newDir' },
+      { '--serves': 'serves', '--listing': 'listings', '--expect-gone': 'expectGone' });
+    const missing = parsed.error || (!parsed.flags.serves.length ? '--serves needs at least one folder (gazetteer/)' : null)
+      || (!check && (!parsed.flags.oldDir || !parsed.flags.newDir) ? 'props compare needs --old and --new site folders' : null)
+      || (!check && parsed.configGiven ? 'props compare takes no --config: it compares two folders' : null);
+    if (missing) {
+      console.error(`Error: ${missing}`);
+      printSubcommandHelp('props');
+      process.exit(1);
+    }
+    const { runCompare, runMoveCheck } = require('../lib/props/compare-cli.js');
+    const opts = { serves: parsed.flags.serves, listings: parsed.flags.listings, expectGone: parsed.flags.expectGone, json: !!parsed.flags.json };
+    exitAfterFlush(check ? runMoveCheck({ configPath: parsed.configPath, ...opts }) : runCompare({ oldDir: parsed.flags.oldDir, newDir: parsed.flags.newDir, ...opts }));
+    return;
+  }
   if (args[1] !== 'pages') {
-    console.error(args[1] ? `Error: Unknown props command: ${args[1]}` : 'Error: props needs a command (pages, read-state)');
+    console.error(args[1] ? `Error: Unknown props command: ${args[1]}` : 'Error: props needs a command (pages, read-state, compare, move-check)');
     printSubcommandHelp('props');
     process.exit(1);
   }
