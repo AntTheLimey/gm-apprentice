@@ -113,6 +113,7 @@ decision rather than pure score.
 
 ## Completed
 
+- ~~Props move fixes from the real Canticle run~~ — live props settled, the clasped book's empty page gone, a reordered listing named, a missing listing style named, no second props-move offer, the `props-settle` repair, arrival order by play order, and a leak-gate false positive on a title and its heading (#525-#528). (#PR, v1.10.106)
 - ~~Prop press: printable HTML handout pages~~ — props are notes in the vault, printable pages the build promotes after discovery: prop notes and their pages (#509), the build and leak gate for them (#518), arrivals and making props (#520), and the move of hand-kept props into the vault with the migration's props-move choice (#523). (#509, #518, #520, #523)
 - ~~Scenes, sessions and chapters, part 2: unlock by play~~ — wrap-up step 4d, "What came out tonight": `reveal_scan.py` lists what the site still hides in the notes a session touched, the GM picks what the players learned, and `reveal.py` publishes those notes through the publish list, lifts `withheld` and logs the session in `_meta/reveals.json`. Reconcile 3.5 asks only when no log entry exists. (#503, v1.10.100)
 - ~~The old publish list skips commented-out lines~~ — a `%%` or `<!-- -->` comment in `_meta/publish-manifest.md` hides its entry from both list readers and from `manifest convert`, by the page rule of #497; the converter says how many it left out. Already-converted vaults: #500. (#498, v1.10.99, publish tool 1.48.2)

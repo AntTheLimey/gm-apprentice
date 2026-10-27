@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.106] — 2026-10-27
+
+Fixes from the props move on a real vault: live props no longer show a
+Draft badge, a shelf's closed book gets no empty page, and the update
+stops offering a move that is done.
+
+### Added
+
+- Migration check `props-settle`, for a vault moved by 1.10.105. It
+  names each prop note the move made for a page already live that is
+  still `canon_status: DRAFT`. Your choice: settle (mark them
+  `AUTHORITATIVE`) or leave. A note you have written in since, or one a
+  session revealed, is never offered.
+- `props compare` and `props move-check` print `LISTING-REORDERED` for
+  a listing that keeps every link in another order, naming the first
+  moves. It is no blocker; the plan's summary counts these listings.
+- A listing style that the decisions file names but that is in neither
+  `_meta/prop-styles/` nor the plugin is a `NEEDS-A-PERSON` row. The
+  move then builds and checks nothing until it is there.
+- Publish tool 1.53.0.
+
+### Changed
+
+- The move marks each note it makes for a page that is live today
+  `AUTHORITATIVE`. A held paper keeps the template's `DRAFT`.
+- An `object` prop in a container with no file, no style, no ties and
+  no words of its own gets no page and no search entry. Its container's
+  listing shows its title unlinked, and the state file keeps its fields
+  with `href: null`. Words in its body give it its page back.
+- Props are listed in arrival order by the session `revealed_in` names,
+  placed by chapter and then session (the order of the session pages'
+  prev/next links). A session's title no longer needs a number. Two
+  props from the same session are listed by title, because nothing
+  records which came first.
+
+### Fixed
+
+- The update no longer offers `props-move` again after a move. The old
+  build_props pages that stay in a Props folder are pages that a styled
+  prop note now builds.
+- The leak gate no longer reports a source line naming a page and the
+  heading under it, such as `[[Chapter_0.1_Wrap_Up]] — narrative recap`.
+  The page's title and its first heading are text players can see. A
+  heading players cannot see is still found.
+
 ## [1.10.105] — 2026-10-27
 
 A vault's props can move into the vault, where each one can be styled
