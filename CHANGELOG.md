@@ -16,16 +16,21 @@ stops offering a move that is done.
 ### Added
 
 - Migration check `props-settle`, for a vault moved by 1.10.105. It
-  names each prop note the move made for a page already live that is
-  still `canon_status: DRAFT`. Your choice: settle (mark them
-  `AUTHORITATIVE`) or leave. A note you have written in since, or one a
-  session revealed, is never offered.
+  names each prop note the move made that is published, still as the
+  move wrote it, never revealed by a session, and `canon_status:
+  DRAFT`. Your choice: settle (mark them `AUTHORITATIVE`) or leave. A
+  note you have written in since is never offered. If it stops partway,
+  it says which notes it already settled.
+- The move records the Props pages it dealt with, by vault path, in
+  `_meta/prop-move-record.json`.
 - `props compare` and `props move-check` print `LISTING-REORDERED` for
   a listing that keeps every link in another order, naming the first
-  moves. It is no blocker; the plan's summary counts these listings.
+  moves (one link moved reads as one). It is no blocker; the plan's
+  summary counts these listings.
 - A listing style that the decisions file names but that is in neither
-  `_meta/prop-styles/` nor the plugin is a `NEEDS-A-PERSON` row. The
-  move then builds and checks nothing until it is there.
+  `_meta/prop-styles/` nor the plugin (a folder with a `layout.html`)
+  is a `NEEDS-A-PERSON` row. The move then builds and checks nothing
+  until it is there.
 - Publish tool 1.53.0.
 
 ### Changed
@@ -33,20 +38,26 @@ stops offering a move that is done.
 - The move marks each note it makes for a page that is live today
   `AUTHORITATIVE`. A held paper keeps the template's `DRAFT`.
 - An `object` prop in a container with no file, no style, no ties and
-  no words of its own gets no page and no search entry. Its container's
-  listing shows its title unlinked, and the state file keeps its fields
-  with `href: null`. Words in its body give it its page back.
+  no words its site shows gets no page and no search entry. Its
+  container's listing shows its title unlinked, and the state file keeps
+  its fields with `href: null`. Words players can read give it its page
+  back on the player site; GM Notes give it one on the GM site only.
+  `explain` says so, and a page naming it gets its own fix line
+  (`LISTED_ONLY`).
 - Props are listed in arrival order by the session `revealed_in` names,
   placed by chapter and then session (the order of the session pages'
-  prev/next links). A session's title no longer needs a number. Two
+  prev/next links). A Wrap-Up or Play Notes page counts as its session.
+  A session's title no longer needs a number; on a site that orders its
+  sessions, a page that is no session sorts with the props that name
+  none. Two
   props from the same session are listed by title, because nothing
   records which came first.
 
 ### Fixed
 
-- The update no longer offers `props-move` again after a move. The old
-  build_props pages that stay in a Props folder are pages that a styled
-  prop note now builds.
+- The update no longer offers `props-move` again after a move: it
+  skips the pages the move recorded. A page of the same name elsewhere
+  is still offered.
 - The leak gate no longer reports a source line naming a page and the
   heading under it, such as `[[Chapter_0.1_Wrap_Up]] — narrative recap`.
   The page's title and its first heading are text players can see. A
