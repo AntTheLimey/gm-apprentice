@@ -798,10 +798,6 @@ class ExcludeListTests(unittest.TestCase):
                          ("1.10.47", 2, True))
 
 
-@unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
-                     or (shutil.which("node") and (
-                         vc.PUBLISH_TOOL.parent.parent / "node_modules").is_dir()),
-                     "node and the publish tool's node_modules are needed")
 class PropsMoveTests(unittest.TestCase):
     """15's move offered as a per-vault choice; nothing moves unanswered."""
 
@@ -889,6 +885,10 @@ class PropsMoveTests(unittest.TestCase):
             self.assertNotIn(name, ms.RETIRED_FROM)
 
 
+@unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
+                     or (shutil.which("node") and (
+                         vc.PUBLISH_TOOL.parent.parent / "node_modules").is_dir()),
+                     "node and the publish tool's node_modules are needed")
 class VaultSettingEndToEndTests(unittest.TestCase):
     def test_the_real_tool_reads_sets_and_reads_again(self):
         vault = tmp(self, "vs-e2e-vault-")
