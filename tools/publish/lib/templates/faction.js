@@ -35,7 +35,7 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
   <h1>${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>
 </div>`;
 
-  const crumbs = generateBreadcrumbs(page.outputPath, {});
+  const crumbs = generateBreadcrumbs(page.outputPath, { page });
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
 
   const graphHtml = connectionsSection(page, publishConfig);

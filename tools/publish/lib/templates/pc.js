@@ -408,7 +408,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     extraCss: [cssPath(page.outputPath).replace('style.css', 'skins.css')],
   } : {};
 
-  const crumbs = generateBreadcrumbs(page.outputPath, {});
+  const crumbs = generateBreadcrumbs(page.outputPath, { page });
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
 
   // --- Cinematic Hero Banner ---

@@ -14,7 +14,7 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
   const badges = metadataBadgesFor(fm);
   const portrait = portraitImg(fm, page.outputPath, imageMap || {});
 
-  const crumbs = generateBreadcrumbs(page.outputPath, {});
+  const crumbs = generateBreadcrumbs(page.outputPath, { page });
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
 
   // Prev/next navigation for sessions and chapters

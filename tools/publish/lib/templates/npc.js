@@ -12,7 +12,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
   const fm = page.frontmatter;
   const backlinks = backlinksOf((publishConfig || {})._backlinks, page);
 
-  const crumbs = generateBreadcrumbs(page.outputPath, {});
+  const crumbs = generateBreadcrumbs(page.outputPath, { page });
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
 
   // --- Zone 1: Portrait header banner ---
