@@ -878,6 +878,19 @@ class PropsMoveTests(unittest.TestCase):
             with self.assertRaises(StepFailed) as cm:
                 item.apply("move")
         self.assertIn("move-check found 1 blocker", str(cm.exception))
+        self.assertIn("the vault is as it was", str(cm.exception))
+
+    def test_move_failure_names_the_files_it_could_not_put_back(self):
+        vault = self.props_vault()
+        (item,) = ms.find_props_move(vault)
+        said = ("ERROR\t-\tthe settings could not be written: disk full; "
+                "these could not be put back: _meta/vault-config.yaml, Props/a.html\n")
+        with mock.patch.object(ms, "_run_prop_move", return_value=(1, said, "")):
+            with self.assertRaises(StepFailed) as cm:
+                item.apply("move")
+        text = str(cm.exception)
+        self.assertIn("these could not be put back: _meta/vault-config.yaml, Props/a.html", text)
+        self.assertNotIn("as it was", text)
 
     def test_apply_runs_with_no_outer_timeout(self):
         # Ruling 35: the move bounds each tool call itself; an outer limit would kill it between steps.

@@ -1017,8 +1017,9 @@ def _run_prop_move(vault: Path, args: list[str]) -> tuple[int, str, str]:
 
 
 def _move_failure(code: int, out: str, err: str) -> str:
-    """The move's own reason, one line: its ERROR rows (the vault is put back
-    by then), else the last thing it said."""
+    """The move's own reason, one line: its ERROR rows (each ends with the
+    outcome: the vault as it was, or the files it could not put back), else
+    the last thing it said."""
     errors = [c[2] for c in (row.split("\t", 2) for row in out.splitlines())
               if len(c) == 3 and c[0] == "ERROR"]
     lines = [x.strip() for x in (out + "\n" + err).splitlines() if x.strip()]
@@ -1106,8 +1107,9 @@ def find_props_move(vault: Path) -> list[Item]:
             args += ["--decisions", PROP_MOVE_DECISIONS]
         code, out, err = _run_prop_move(vault, args)
         if code != 0:
-            raise StepFailed("the props move did not go through, and the vault "
-                             f"is as it was: {_move_failure(code, out, err)}")
+            # prop_move's own ERROR row ends "the vault is as it was" or names the files it could not put back;
+            # that outcome is passed through as it said it, never assumed.
+            raise StepFailed(f"the props move did not go through: {_move_failure(code, out, err)}")
         done = [x for x in out.splitlines() if x.strip()]
         return [f"moved the props into the vault ({done[-1].lstrip('# ')})"
                 if done else "moved the props into the vault"]

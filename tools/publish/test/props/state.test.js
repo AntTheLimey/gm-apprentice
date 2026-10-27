@@ -183,4 +183,12 @@ describe('props read-state', () => {
       assert.match(r.stderr, said, text);
     }
   });
+  it('read-state times a promise job a script queues, and does not hang', { timeout: 15000 }, () => {
+    // spawnSync's own limit, so a regression fails here rather than hanging the run.
+    const file = path.join(dir, 'x.js');
+    fs.writeFileSync(file, 'Promise.resolve().then(() => { while (true) {} }); window.X = {};');
+    const r = spawnSync(process.execPath, [BIN, 'props', 'read-state', file], { encoding: 'utf8', timeout: 10000 });
+    assert.equal(r.status, 1, r.error ? String(r.error) : r.stderr);
+    assert.match(r.stderr, /could not be run: Script execution timed out/);
+  });
 });

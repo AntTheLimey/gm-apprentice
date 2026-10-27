@@ -1,7 +1,7 @@
 'use strict';
 // `gm-publish props read-state FILE`: what a container's hand-made state script sets, for the move of a vault's own
 // props into prop notes (prop_move.py reads it). The file runs in a fresh `vm` context holding only `window = {}`: no
-// require, no process, no timers, a 1 s limit. A context is no security boundary; the file is the GM's own, and this
+// require, no process, no timers, a 1 s limit that also covers the promise jobs it queues. A context is no security boundary; the file is the GM's own, and this
 // only keeps it from reaching the tool's own objects by accident. The build never runs it.
 const fs = require('node:fs');
 const vm = require('node:vm');
@@ -10,7 +10,7 @@ const vm = require('node:vm');
 function readState(file) {
   let code;
   try { code = fs.readFileSync(file, 'utf8'); } catch (e) { throw new Error(`${file} could not be read (${e.code || e.message})`); }
-  const context = vm.createContext({ window: {} });
+  const context = vm.createContext({ window: {} }, { microtaskMode: 'afterEvaluate' });
   try {
     vm.runInContext(code, context, { filename: file, timeout: 1000 });
   } catch (e) {
