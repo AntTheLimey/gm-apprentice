@@ -15,26 +15,38 @@ and listed, and the update checks that no live page changes when they do.
 ### Added
 
 - Container state files: `prop_state` and `prop_state_global`.
-- Grouped container listings on the props page.
+- Grouped listings on a container's page.
 - A prop can be the cover of the props page.
 - `player_site.landing.latest_props_title`.
 - `gm-publish props compare` (reads a page's words without its
-  scripts), `props move-check` and `props read-state`.
+  scripts), `props move-check` (`--keep-build` keeps its build) and
+  `props read-state` (it names the fields the tool reads itself).
+- `leaks prune --also <dir>` keeps an accepted finding that another
+  built folder still needs.
 - `prop_move.py`, which is plan-only by default and moves only notes
   whose page is live now.
 - Migration check `props-move`. Your choice: move or leave. Nothing
   changes without your yes, and the move puts the vault back if any live
   page would change.
 - The leak gate lets through a hidden part of a prop file that the same
-  file shows, and the words a Connections section prints. The move has
-  its own gate check.
+  file shows, the words a Connections section prints, and the words a
+  used style's layout writes. The move has its own gate check.
 - Picture paths in `data-*` attributes are followed for props.
 - Dependency `diff` 5.2.2. Publish tool 1.52.0.
 
 ### Changed
 
+- The leak gate is stricter on every deploy, not only on a move: it
+  reads container state files, and an unpublished prop's `prop_line`
+  and state fields count as hidden text, so a deploy can stop on a
+  finding it did not have before.
+- A site link with a `/` or a page ending (a menu entry, the landing
+  banner) is read as a site address first, prop addresses included.
+- The landing page's story count leaves out prop notes.
+- A file outside a prop's folder that another shipping prop ships at
+  the same address with the same bytes is no longer a problem.
 - The props make pass moved to `lib/props/make.js` (#514).
-- Skill text sizes: `prop-styles.md` 4,829 to 5,811 bytes (cap raised to
+- Skill text sizes: `prop-styles.md` 4,829 to 5,846 bytes (cap raised to
   5,850), `entity-schema.md` 19,792 to 19,945, `templates/prop.md`
   2,600 to 2,663.
 

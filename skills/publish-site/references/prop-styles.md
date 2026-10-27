@@ -66,9 +66,9 @@ the site's look and the build warns.
 style's, or an `.html` prop file's) for the page's own script to read.
 It sets `window.PROP_ITEMS` (or the name in `prop_state_global`; set
 one only when asked) to what the page lists: a shown item's title,
-`line`, `href` and its other `prop_*` fields without the `prop_`; a
-title alone for one listed by title; nothing for one left off. A page
-linking the file gets the made one.
+`line`, `href` and its other `prop_*` fields minus `prop_` (none the
+tool reads, e.g. `prop_group`); a title alone for one listed by title;
+nothing for one left off. A page linking the file gets the made one.
 
 ## The props page
 
