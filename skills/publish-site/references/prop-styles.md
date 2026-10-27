@@ -54,12 +54,13 @@ reads:
 
 A `prop_kind: container` prop (a bookshelf, a strongbox) gets a page
 listing what it holds: each prop whose `prop_container` links it,
-under its `prop_group` heading, first found first, unfound items last.
+under its `prop_group` heading, in the order the players found them.
 An item players have not found is left off, unless the container says
 `show_sealed: titles`: then its title alone shows (its `prop_title`,
 else its name), so give it a title players may read. A withheld item
-never shows. A container's `prop_style` must have an `{{{items}}}`
-place; otherwise its page uses the site's look and the build warns.
+never shows. Titles alone come last, under no heading. A container's
+`prop_style` must have an `{{{items}}}` place; otherwise its page uses
+the site's look and the build warns.
 
 `prop_state: <name>.js` writes a script beside a container's page (a
 style's, or an `.html` prop file's) for the page's own script to read.
@@ -81,8 +82,9 @@ headed by `player_site.landing.latest_props_title`. A prop shows when
 its note publishes: never edit the publish list to show a prop.
 
 An older site's own props move into the vault by the update's
-`props-move` choice, which checks every live page and undoes itself on
-a problem.
+`props-move` choice. It checks every live page first, and puts the
+vault back as it was if a page would go, lose words or links, or show
+something hidden.
 
 ## A vault's own style
 
