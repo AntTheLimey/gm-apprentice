@@ -23,7 +23,7 @@ const {
   parseWikiRef, portraitBasename, playerSafeMarkdown, publishMode, keepOnlySections, publishedFrontmatter, pcHeadingsUnstable,
 } = require('./processor');
 const { CODES: NOTE_FAULT_CODES, PAGES_SHOWN } = require('./note-faults');
-const { getsNoPage } = require('./previews');
+const { getsNoPage, decideNoPage } = require('./previews');
 const { pairHubs, isWrapUp, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { canonicalNfc } = require('./unicode');
 const { wikilinkRe } = require('./wikilink');
@@ -235,6 +235,8 @@ async function runSiteDoctor(options, deps) {
   pairStoryFiles(pages, vaultPath, d);
   const verdicts = new Map(pages.map((page) => [page, decidePage(page, { rel: relOf(page), publishConfig, manifest })]));
   // A note the build writes no page for (a world-flags file) is not in its link map either.
+  // Which published notes get no page, decided as the player build decides it (its hidden sections and callouts).
+  decideNoPage(pages.filter((page) => publishesPage(verdicts.get(page))), { excludeSections: publishConfig.exclude_sections, excludeCallouts: publishConfig.exclude_callouts });
   const published = pages.filter((page) => publishesPage(verdicts.get(page)) && !getsNoPage(page));
   const linkMap = buildLinkMap(published);
   const linkNames = Object.keys(linkMap);

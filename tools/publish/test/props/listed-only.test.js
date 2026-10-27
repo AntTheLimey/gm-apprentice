@@ -159,3 +159,17 @@ describe('a listed-only prop whose unprinted field echoes its GM Notes', () => {
     assert.ok(found.includes('the clasp hides a key behind the spine'), found.join(' | '));
   });
 });
+
+describe('decideNoPage reads the site\'s own hidden sections', () => {
+  const { decideNoPage, getsNoPage } = require('../../lib/previews');
+  const note = () => ({
+    frontmatter: { type: 'prop', prop_kind: 'object', prop_container: '[[Bookcase]]', relationships: [] },
+    markdown: '## Binder Notes\n\nRebound in 1790.\n',
+  });
+  it('a custom hidden section leaves it nothing to show; the default list does not', () => {
+    const custom = note();
+    decideNoPage([custom], { excludeSections: ['GM Notes', 'Binder Notes'] });
+    assert.equal(getsNoPage(custom), true);
+    assert.equal(getsNoPage(note()), false);
+  });
+});
