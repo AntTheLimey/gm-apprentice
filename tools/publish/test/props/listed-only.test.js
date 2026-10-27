@@ -122,3 +122,23 @@ describe('a listed-only prop with a hidden field', () => {
     assert.ok(found.includes('pawned twice by the harbour clerk'), found.join(' | '));
   });
 });
+
+describe('a listed-only prop whose GM Notes the GM site does not show', () => {
+  const GM = '## GM Notes\n\nThe clasp hides a key.\n';
+  const s = buildBoth(files(GM), { ...SETTINGS, gm: { show: { sections: false } } });
+  after(() => s.cleanup());
+
+  it('has no page on the GM site either', () => {
+    assert.ok(!s.gm.files().some((f) => /clasped-volume/i.test(f)), s.gm.files().join(', '));
+    assert.ok(!s.player.files().some((f) => /clasped-volume/i.test(f)));
+  });
+});
+
+describe('a listed-only prop whose GM Notes the GM site shows (the default)', () => {
+  const s = buildBoth(files('## GM Notes\n\nThe clasp hides a key.\n'), { ...SETTINGS });
+  after(() => s.cleanup());
+
+  it('has its page on the GM site', () => {
+    assert.ok(s.gm.files().some((f) => /clasped-volume\.html$/.test(f)), s.gm.files().join(', '));
+  });
+});

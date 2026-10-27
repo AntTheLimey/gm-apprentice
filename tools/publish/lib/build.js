@@ -837,7 +837,7 @@ function buildSite(options) {
   // the unpublished: the link map, backlinks, Connections, indexes, search and cards all read
   // `pages`, so none of them can name it or link to a file that is not built.
   // Which notes get no page is decided once, for this site: a listed-only prop is judged on the body this site shows.
-  decideNoPage(published, gm ? { gm: true } : { excludeSections, excludeCallouts });
+  decideNoPage(published, gm ? { gm: true, show, excludeSections, excludeCallouts } : { excludeSections, excludeCallouts });
   pages = published.filter(p => !getsNoPage(p));
   // The props a container lists with no page of their own (previews.js listedOnly): its listing and state file show
   // them, from their published frontmatter (reduced with the pages' below).

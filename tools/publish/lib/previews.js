@@ -5,6 +5,7 @@
 const path = require('path');
 const { publishedSource, portraitBasename, plainRefValue, valueText, playerSafeMarkdown } = require('./processor');
 const { entry } = require('./settings/registry');
+const { createMarks, sanitize, unmark } = require('./gm-marks');
 const { excerptFromMarkdown } = require('./excerpt');
 const { getCanonStatus, headerValueText } = require('./templates/base');
 const { headerMeta, pcEpithetText } = require('./pc-header-meta');
@@ -113,9 +114,15 @@ function cardFor(page, ctx) {
 const noPage = new WeakMap();
 const DEFAULT_HIDDEN_SECTIONS = entry('player_site.hide.sections').default;
 
-function shownBody(page, { gm = false, excludeSections = DEFAULT_HIDDEN_SECTIONS, excludeCallouts = false } = {}) {
+// `show`: on the GM site, the kinds of hidden material it shows (gm_site.show), so the body it shows is the player cut
+// with those kinds kept (their words count); without it, the note as written.
+function shownBody(page, { gm = false, show = null, excludeSections = DEFAULT_HIDDEN_SECTIONS, excludeCallouts = false } = {}) {
   const fm = page.sourceFrontmatter || page.frontmatter || {};
-  if (gm) return String(page.markdown == null ? '' : page.markdown);
+  if (gm && !show) return String(page.markdown == null ? '' : page.markdown);
+  if (gm) {
+    const mark = { marks: createMarks(), show, sanitized: true };
+    return unmark(playerSafeMarkdown(sanitize(page.markdown), { excludeSections, excludeCallouts, frontmatter: fm, mark }).text);
+  }
   return playerSafeMarkdown(page.markdown, { excludeSections, excludeCallouts, frontmatter: fm }).text;
 }
 
@@ -125,7 +132,7 @@ function noPageFor(page, site) {
   return isListedOnly(fm, '') && isListedOnly(fm, shownBody(page, site));
 }
 
-// Decide, for one site's build (`site`: { gm, excludeSections, excludeCallouts }), which of `pages` get no page.
+// Decide, for one site's build (`site`: { gm, show, excludeSections, excludeCallouts }), which of `pages` get no page.
 function decideNoPage(pages, site = {}) {
   for (const page of pages) noPage.set(page, noPageFor(page, site));
 }
