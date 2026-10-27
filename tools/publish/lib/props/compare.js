@@ -131,13 +131,15 @@ function listingRow(address, oldRaw, newRaw, isServed, asFolder) {
   return { kind: 'listing-ok', address, detail: `${kept}${words}` };
 }
 
-// A listing's links in the order a reader meets them (each at its first place), old beside new: the links whose place
-// changed, { target, from, to } (1-based places), in the old order. None when both run in the same order.
+// A listing's links in the order a reader meets them (each at its first place), old beside new: the links that moved,
+// { target, from, to } (1-based places), in the old order. The links that keep their order are the longest run common
+// to both (diff), so one link moved reads as one move. None when both run in the same order.
 const MOVES_SHOWN = 3;
 function orderMoves(oldOrder, newOrder) {
   const at = new Map(newOrder.map((t, i) => [t, i]));
-  return oldOrder.map((t, i) => ({ target: t, from: i + 1, to: at.has(t) ? at.get(t) + 1 : null }))
-    .filter((m) => m.to !== null && m.to !== m.from);
+  const from = new Map(oldOrder.map((t, i) => [t, i]));
+  const moved = diffArrays(oldOrder, newOrder).filter((part) => part.removed).flatMap((part) => part.value);
+  return moved.filter((t) => at.has(t)).map((t) => ({ target: t, from: from.get(t) + 1, to: at.get(t) + 1 }));
 }
 
 // A site address, as typed (`x/` is its index page), in the form every address here is kept in.

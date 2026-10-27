@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { compareSites, pageWords, formatRows } = require('../../lib/props/compare');
+const { compareSites, pageWords, formatRows, orderMoves } = require('../../lib/props/compare');
 const { propBar, withPropBar } = require('../../lib/templates/prop-bar');
 const { fileText } = require('../../lib/leak-gate/match');
 const { wordsOf } = require('../../lib/leak-gate/text');
@@ -135,8 +135,15 @@ test('a listing that keeps its links in another order is its own row, no blocker
   assert.equal(row.kind, 'listing-reordered');
   assert.equal(row.blocker, false);
   assert.equal(result.blockers, 0);
-  assert.match(row.detail, /^3 links kept, in another order: 3 moved; gazetteer\/papers\/menu\.html \(1 -> 2\), gazetteer\/papers\/bill\.html \(2 -> 3\), gazetteer\/papers\/card\.html \(3 -> 1\)/);
+  // One link moved reads as one move.
+  assert.match(row.detail, /^3 links kept, in another order: 1 moved; gazetteer\/papers\/card\.html \(3 -> 1\)(;|$)/);
   assert.match(formatRows(result).join('\n'), /^LISTING-REORDERED\tgazetteer\/index\.html\t/m);
+});
+
+test('orderMoves counts what left the longest common run', () => {
+  assert.deepEqual(orderMoves(['a', 'b', 'c', 'd'], ['a', 'b', 'c', 'd']), []);
+  assert.deepEqual(orderMoves(['a', 'b', 'c', 'd'], ['b', 'c', 'd', 'a']), [{ target: 'a', from: 1, to: 4 }]);
+  assert.equal(orderMoves(['a', 'b', 'c', 'd'], ['d', 'c', 'b', 'a']).length, 3);
 });
 
 test('a lost link into the served set blocks', (t) => {
