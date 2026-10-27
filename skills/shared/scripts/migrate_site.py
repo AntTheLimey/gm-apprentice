@@ -1046,7 +1046,7 @@ def find_props_move(vault: Path) -> list[Item]:
     site, _has_config = configured_site(vault)
     if site is None:
         return []
-    from prop_move import _notes, is_build_props_note  # prop_move imports this module
+    from prop_move import _notes, is_build_props_note, moved_pages, nfc  # prop_move imports this module
     from vaultlib import extract_frontmatter, is_skipped_path
     try:
         s = settings(vault)
@@ -1057,8 +1057,11 @@ def find_props_move(vault: Path) -> list[Item]:
         return []
     keep = [str(k) for k in keep] if isinstance(keep, list) else []
     built = 0
+    notes = _notes(vault)
     named: set[str] = set()
-    for rel, text in _notes(vault):
+    # The pages a finished move dealt with, by vault path (#525).
+    done = moved_pages(vault)
+    for rel, text in notes:
         if is_build_props_note(text):
             built += 1
         value = (extract_frontmatter(text) or {}).get("prop_file")
@@ -1070,6 +1073,7 @@ def find_props_move(vault: Path) -> list[Item]:
         for p in sorted(folder.iterdir()) if folder.is_dir() else []:
             if (p.is_file() and p.suffix.lower() in PAGE_EXTS
                     and p.name.lower() != "index.html" and p.name.lower() not in named
+                    and nfc(p.relative_to(vault).as_posix()) not in done
                     and not is_skipped_path(p.relative_to(vault).as_posix())):
                 pages.append(p)
     kept: dict[str, int] = {}
@@ -1118,6 +1122,52 @@ def find_props_move(vault: Path) -> list[Item]:
                  holds_stamp=True)]
 
 
+PROPS_SETTLE = "props-settle"
+
+
+def find_props_settle(vault: Path) -> list[Item]:
+    """1.10.106: the 1.10.105 move made its notes for live pages from the
+    prop template, which marks them DRAFT, so their pages show players a
+    Draft badge. Offered for exactly the notes the move wrote and left as it
+    wrote them (prop_move.moved_drafts), each named; only the GM's answer
+    changes anything, and only `canon_status`."""
+    site, _has_config = configured_site(vault)
+    if site is None:
+        return []
+    from prop_move import SETTLED, moved_drafts  # prop_move imports this module
+    rels = moved_drafts(vault)
+    if not rels:
+        return []
+    lines = [f"{len(rels)} prop note{'' if len(rels) == 1 else 's'} the props move made {'is' if len(rels) == 1 else 'are'} "
+             f"published, still as the move wrote {'it' if len(rels) == 1 else 'them'}, never revealed by a session, and "
+             f"marked DRAFT, so {'its page shows' if len(rels) == 1 else 'their pages show'} players a Draft badge. "
+             f"settle: mark {'it' if len(rels) == 1 else 'them'} {SETTLED}; leave: keep DRAFT"]
+    lines += [f"{rel}\tcanon_status: DRAFT -> {SETTLED}" for rel in rels]
+
+    def apply(value: str | None) -> list[str]:
+        if value not in ("settle", "leave"):
+            raise StepFailed(f"{PROPS_SETTLE} takes settle or leave")
+        if value == "leave":
+            return ["left the moved prop notes as DRAFT"]
+        done: list[str] = []
+        for rel in rels:
+            def change(fm: list[str], eol: str) -> None:
+                at = [i for i, ln in enumerate(fm) if re.match(r"canon_status:\s*[\"']?DRAFT[\"']?\s*$", ln.rstrip("\r\n"))]
+                if len(at) != 1:
+                    raise ValueError("its canon_status is no longer DRAFT")
+                fm[at[0]] = f"canon_status: {SETTLED}{eol}"
+            try:
+                edit_frontmatter(vault / rel, change)
+            except StepFailed as e:
+                # Say what already changed: those notes are settled and stay so.
+                changed = ", ".join(rels[:len(done)]) or "none"
+                raise StepFailed(f"{rel} was not settled ({e}); settled before it: {changed}") from e
+            done.append(f"{rel}: canon_status {SETTLED}")
+        return done
+
+    return [Item(PROPS_SETTLE, CHOICE, lines, apply, wants="settle or leave", holds_stamp=True)]
+
+
 SITE_CHECKS: list[Check] = [
     Check(REPIN, None, 1, "the site's publish tool", find_site_repin),
     Check(MOVE, None, 2, "the settings move to the new settings file",
@@ -1156,4 +1206,6 @@ SITE_CHECKS: list[Check] = [
     Check("props-move", "1.10.105", 4, "props kept by hand or by site scripts "
           "move into the vault", find_props_move, asks_site=True,
           choices=("props-move=",)),
+    Check(PROPS_SETTLE, "1.10.106", 4, "prop notes the props move left as drafts",
+          find_props_settle, asks_site=True, choices=(f"{PROPS_SETTLE}=",)),
 ]

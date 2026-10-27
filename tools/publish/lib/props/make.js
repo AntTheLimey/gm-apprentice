@@ -9,8 +9,10 @@ const { containerItems, propRow, collectionModel, stateItems, stateScript } = re
 const { stateFileOf } = require('./plan');
 const { layoutNames } = require('./layout');
 const { containerTemplate, containerItemsHtml } = require('../templates/props-page');
-const { isWithheld, withheldPlaceholder, withheldNameMarked } = require('../processor');
+const { isWithheld, withheldPlaceholder, withheldNameMarked, valueText, parseWikiRef } = require('../processor');
+const { canonicalNfc } = require('../unicode');
 const fontsLib = require('../fonts');
+const { orderedSessions } = require('../story-spine');
 
 // The pages the tool makes for props that name a style, made before the note pages so a note
 // links only a page that was made. A held prop's page is never made: its words would pass
@@ -21,7 +23,7 @@ const fontsLib = require('../fonts');
 // The styles' typefaces are served from the site, from the vault's font cache: a miss warns once.
 // Returns { collectionBuilt, styleFonts, problems }: the props page's model (collectionModel), the
 // typefaces the styles are served with, and the plan's problems (the same array the build reads).
-function makeProps({ propPlan, propBlocked, pages, linkMap, imageMap, usedImages, config, options, publishConfig, collection,
+function makeProps({ propPlan, propBlocked, pages, listedOnlyPages = [], hubPairs = null, linkMap, imageMap, usedImages, config, options, publishConfig, collection,
   collectionHrefFrom, navFor, gm, mark, onPlayerSite, excludeFields, fieldOverrides, coverName = 'player_site.props.cover' }) {
   let styleFonts = { css: '', files: [] };
   let collectionBuilt = null;
@@ -84,7 +86,9 @@ function makeProps({ propPlan, propBlocked, pages, linkMap, imageMap, usedImages
   }
   // What a listing shows is the note pages this site publishes; on the GM site, a row the
   // player site does not publish is marked.
-  const shown = new Set(pages);
+  // A prop its container lists with no page of its own (previews.js listedOnly) is shown in the listings, unlinked.
+  const shown = new Set([...pages, ...listedOnlyPages]);
+  const hasPage = new Set(pages);
   const pageAt = new Map(pages.map((pg) => [pg.outputPath, pg]));
   const misplaced = [];
   // On the GM site a withheld note the player site does not publish is named inside the usual withheld mark.
@@ -92,8 +96,31 @@ function makeProps({ propPlan, propBlocked, pages, linkMap, imageMap, usedImages
     ? withheldNameMarked(text, withheldPlaceholder((pg.sourceFrontmatter || pg.frontmatter).type, publishConfig.withheld_words), mark)
     : text);
   // How every listing reads a row: the same for a container's page and the props page.
+  // A row's session is placed in the campaign's play order (chapter, then session), the order the Saga and the session
+  // pages' prev/next links read: a session page's title need hold no number.
+  const playOrder = new Map(orderedSessions(pages).map((pg, i) => [pg, i + 1]));
+  // A Wrap-Up or Play Notes page stands for its session: the Wrap-Up by the build's one hub pairing (session-hub.js
+  // pairHubs), the Play Notes by its session's `documents.play_notes` link, each resolved as the site resolves a link.
+  const sessionOf = new Map();
+  for (const [hub, wrapUp] of hubPairs || []) sessionOf.set(wrapUp, hub);
+  for (const hub of playOrder.keys()) {
+    const docs = (hub.sourceFrontmatter || hub.frontmatter || {}).documents;
+    const raw = docs && typeof docs === 'object' ? valueText(docs.play_notes).trim() : '';
+    const notes = raw ? pageAt.get(linkMap[canonicalNfc(parseWikiRef(raw).target)]) : null;
+    if (notes && !sessionOf.has(notes)) sessionOf.set(notes, hub);
+  }
+  // Else a page's own `session:` link (a Play Notes page names its session so).
+  const ownSession = (pg) => {
+    const raw = valueText((pg.sourceFrontmatter || pg.frontmatter || {}).session).trim();
+    return raw ? pageAt.get(linkMap[canonicalNfc(parseWikiRef(raw).target)]) : undefined;
+  };
+  const placeOf = (pg) => {
+    if (!playOrder.size) return undefined;
+    return playOrder.get(pg) ?? playOrder.get(sessionOf.get(pg)) ?? playOrder.get(ownSession(pg)) ?? null;
+  };
   const rowOptions = {
     isShown: (pg) => shown.has(pg), excludeFields, fieldOverrides, site: gm ? 'gm' : 'player', nameOf, blocked: propBlocked,
+    sessionOrder: placeOf, hasPage: (pg) => hasPage.has(pg),
     resolvePage: (target) => pageAt.get(linkMap[target]) || null, isPlayerShown: gm ? (pg) => onPlayerSite.has(pg) : null,
   };
   const listed = containerItems({ props: propPlan.props, ...rowOptions, problems: misplaced });

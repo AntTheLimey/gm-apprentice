@@ -15,7 +15,7 @@ const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate
 const { isRoster } = require('./templates/nav');
 const { noticeText } = require('./notice');
 const { fontNamesOfFile, licenceOf } = require('./font-names');
-const { getsNoPage } = require('./previews');
+const { getsNoPage, decideNoPage, listedOnly } = require('./previews');
 const { runSteps, packageScripts, packageNotes } = require('./settings/steps');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
 const { ignoringMark } = require('./heading-key');
@@ -836,7 +836,12 @@ function buildSite(options) {
   // A note the build writes no page for (previews.js getsNoPage) leaves the list here, with
   // the unpublished: the link map, backlinks, Connections, indexes, search and cards all read
   // `pages`, so none of them can name it or link to a file that is not built.
+  // Which notes get no page is decided once, for this site: a listed-only prop is judged on the body this site shows.
+  decideNoPage(published, gm ? { gm: true, show, excludeSections, excludeCallouts } : { excludeSections, excludeCallouts });
   pages = published.filter(p => !getsNoPage(p));
+  // The props a container lists with no page of their own (previews.js listedOnly): its listing and state file show
+  // them, from their published frontmatter (reduced with the pages' below).
+  const listedOnlyPages = published.filter((p) => listedOnly(p));
 
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
@@ -968,6 +973,10 @@ function buildSite(options) {
         ? hiddenFieldsOf(page.sourceFrontmatter, excludeFields, overridesForFile).filter((h) => show.has(h.kind))
         : [];
     }
+  }
+  for (const page of listedOnlyPages) {
+    page.sourceFrontmatter = page.frontmatter;
+    page.frontmatter = publishedFrontmatter(page.frontmatter, excludeFields, fieldOverrides[vaultRelPathOf(page)] || {});
   }
 
   // Two PCs on one live key would share one set of live stats (HP, loadouts, party board).
@@ -1259,7 +1268,7 @@ function buildSite(options) {
   // published fields, so this waits for the published view. Planned before the paths are checked below.
   if (propPlan) {
     const site = gm ? 'gm' : 'player';
-    const shownPages = new Set(pages);
+    const shownPages = new Set([...pages, ...listedOnlyPages]);
     const listed = containerItems({ props: propPlan.props, isShown: (pg) => shownPages.has(pg), excludeFields, fieldOverrides, site });
     for (const r of planStatePictures(propPlan, stateFieldsOfListed(listed, { props: propPlan.props, site }))) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);
   }
@@ -1783,7 +1792,7 @@ function buildSite(options) {
     if (stale.length) throw new Error(`${stale.join(', ')} ${stale.length === 1 ? 'is' : 'are'} on the site but a full build would no longer write ${stale.length === 1 ? 'it' : 'them'}. Run a full build (gm-apprentice-publish build --site ${gm ? 'gm' : 'player'}); a sheets-only build deletes nothing. Nothing was written.`);
   }
 
-  const { collectionBuilt, styleFonts } = makeProps({ propPlan, propBlocked, pages, linkMap, imageMap, usedImages, config, options, publishConfig, collection,
+  const { collectionBuilt, styleFonts } = makeProps({ propPlan, propBlocked, pages, listedOnlyPages, hubPairs: hubWrapUps, linkMap, imageMap, usedImages, config, options, publishConfig, collection,
     collectionHrefFrom, navFor, gm, mark, onPlayerSite, excludeFields, fieldOverrides, coverName: nm('player_site.props.cover') });
 
   // Published NPC pages whose body runs session by session (story-sessions.js), in page order.

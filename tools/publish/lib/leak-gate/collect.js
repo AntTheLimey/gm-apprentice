@@ -11,16 +11,16 @@ const { readSettings, forSite } = require('../settings');
 const { loadManifest } = require('../manifest');
 const { publishedPages } = require('../published-pages');
 const { ALWAYS_EXCLUDE_DIRS } = require('../publish-decision');
-const { getsNoPage, rowsFor } = require('../previews');
+const { getsNoPage, decideNoPage, listedOnly, rowsFor } = require('../previews');
 const { pcKeepList } = require('../pc-prose');
 const { pairHubs } = require('../session-hub');
 const { parseNote } = require('../frontmatter');
 const { canonicalNfc } = require('../unicode');
 const {
-  playerSafeMarkdown, stubMarked, stubCut, hiddenFieldsOf, publishedFrontmatter, pcHeadingsUnstable, publishMode, isWithheld,
+  playerSafeMarkdown, stubMarked, stubCut, hiddenFieldsOf, publishedFrontmatter, pcHeadingsUnstable, publishMode, isWithheld, stripLeadingH1,
 } = require('../processor');
 const { createMarks, markKinds, sanitize, markedSpans } = require('../gm-marks');
-const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf } = require('./text');
+const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf, stringsOfValue } = require('./text');
 const { TEXT_EXT, fileText } = require('./match');
 const { planProps, planStatePictures, stateFileOf, bytesOf, textOf } = require('../props/plan');
 const { placeCollection, propTaken, containerItems, propRow, sealedTitlesOn, stateFieldsOf, stateFieldsOfListed } = require('../props/collection');
@@ -72,8 +72,13 @@ function collectHidden({ configPath, outputDir = null }) {
   const { verdicts, playerPublished } = publishedPages(pages, {
     vaultPath, publishConfig: playerConfig, manifest, relOf, site: 'gm', show, hiddenFolders: playerConfig.exclude_dirs, playerConfig,
   });
+  // Which notes get no page, as the player site's build decides it.
+  decideNoPage(playerPublished, { excludeSections: playerConfig.exclude_sections, excludeCallouts: playerConfig.exclude_callouts });
   const published = playerPublished.filter((p) => !getsNoPage(p));
   const publishedSet = new Set(published);
+  // The props a container lists with no page of their own (previews.js listedOnly): published, shown in their listings.
+  const listedSet = new Set(playerPublished.filter((p) => listedOnly(p)));
+  const shownSet = new Set([...published, ...listedSet]);
   const linkMap = buildLinkMap(published);
   const notes = scanAllNotes(vaultPath);
   const hubs = pairHubs(corpus, published, { vaultPath, allNotes: notes, withheldWords: playerConfig.withheld_words });
@@ -103,16 +108,24 @@ function collectHidden({ configPath, outputDir = null }) {
   const outputOf = new Map();
   // Each published note's body as its page shows it (the build's publishedMarkdown): a styled prop's page is made from it.
   const shownBodyOf = new Map();
-  for (const page of published) {
+  // A prop its container lists with no page of its own is read as a published note too: its listing row and state entry
+  // print its title and published fields, so its hidden fields and the hidden parts of its body are hidden text.
+  for (const page of [...published, ...listedSet]) {
     const rel = relOf(page);
     publishedRels.add(rel);
-    outputOf.set(rel, page.outputPath);
+    if (!listedSet.has(page)) outputOf.set(rel, page.outputPath);
     if (page.storyMarkdown) publishedRels.add(rel.replace(/\.md$/i, STORY_SUFFIX));
     const fm = page.frontmatter || {};
     const overrides = fieldOverrides[rel] || {};
     for (const h of hiddenFieldsOf(fm, excludeFields, overrides)) add(piecesOfValue(h.value), rel, h.label);
     const shownFields = publishedFrontmatter(fm, excludeFields, overrides);
-    visible.push(String(page.displayTitle || ''), ...fieldRunsOf(shownFields, page.displayTitle), ...printedRows({ ...page, frontmatter: shownFields }));
+    if (listedSet.has(page)) {
+      // No page of its own: only what its listing row and its container's state entry print is visible (its title,
+      // prop_title, prop_line and the state fields), never a field nothing prints.
+      visible.push(String(page.displayTitle || ''), ...stringsOfValue([shownFields.prop_title, shownFields.prop_line, ...Object.values(stateFieldsOf(shownFields))]));
+    } else {
+      visible.push(String(page.displayTitle || ''), ...fieldRunsOf(shownFields, page.displayTitle), ...printedRows({ ...page, frontmatter: shownFields }));
+    }
     if (hubs.has(page)) {
       add(piecesOfMarkdown(page.markdown), rel, 'session index body (its Wrap-Up publishes)');
       continue;
@@ -140,6 +153,9 @@ function collectHidden({ configPath, outputDir = null }) {
       const shownMarkdown = playerSafeMarkdown(shownText, options).text;
       if (source === page.markdown) shownBodyOf.set(page, shownMarkdown);
       visible.push(textsOfMarkdown(shownMarkdown, { headings: true }).join('\n'));
+      // The page's title heads its body in place of the note's own leading H1 (the build drops it), so the title runs on
+      // into the first words under it: "[[Wrap Up]] — narrative recap" is a page title and the heading players see next.
+      if (source === page.markdown) visible.push([String(page.displayTitle || ''), ...textsOfMarkdown(stripLeadingH1(shownMarkdown), { headings: true })].join('\n'));
       visible.push(...tableRunsOf(shownMarkdown));
     }
   }
@@ -151,7 +167,7 @@ function collectHidden({ configPath, outputDir = null }) {
     const rel = canonicalNfc(String(note.vaultPath).replace(/\\/g, '/') + '.md');
     if (publishedRels.has(rel) || neverShown(rel) || inWorkingDir(rel)) continue;
     const page = scannedByRel.get(rel);
-    if (page && publishedSet.has(page)) continue;
+    if (page && shownSet.has(page)) continue;
     const verdict = page ? verdicts.get(page) : null;
     let body = page ? page.markdown : null;
     if (body == null) {
@@ -195,7 +211,7 @@ function collectHidden({ configPath, outputDir = null }) {
   const { props } = propPlan;
   // What each container lists, as the build's listings show it: the pictures its state file names ship as its files
   // (props/plan.js), from the items' published fields.
-  const listed = containerItems({ props, isShown: (pg) => publishedSet.has(pg), excludeFields, fieldOverrides });
+  const listed = containerItems({ props, isShown: (pg) => shownSet.has(pg), excludeFields, fieldOverrides, hasPage: (pg) => publishedSet.has(pg) });
   const publishedFieldsOf = (p) => publishedFrontmatter(p.page.sourceFrontmatter || p.page.frontmatter || {}, excludeFields, fieldOverrides[p.rel] || {});
   planStatePictures(propPlan, stateFieldsOfListed(listed, { props, fieldsOf: publishedFieldsOf }));
   // Each file a shipping prop puts on the site, and its notes: there it is their published form. A file two props share
@@ -238,7 +254,7 @@ function collectHidden({ configPath, outputDir = null }) {
     // A prop whose note the site does not publish: the title a listing would print for it is hidden text (an old props
     // page naming it). Allowed only where a container lists it sealed (sealedOn, below). Not one in the plugin's working
     // folders, whose notes are left out as above.
-    if (!publishedSet.has(p.page) && !inWorkingDir(p.rel)) {
+    if (!shownSet.has(p.page) && !inWorkingDir(p.rel)) {
       const title = propRow(p, { isShown: () => false, excludeFields, fieldOverrides }).title;
       add([title], p.rel, HELD_TITLE);
       // Its line and the fields a container's state file would give it: no listing prints them (a sealed row is its title).
@@ -246,7 +262,7 @@ function collectHidden({ configPath, outputDir = null }) {
       add(piecesOfValue([heldFm.prop_line, ...Object.values(stateFieldsOf(heldFm))]), p.rel, HELD_FIELD);
       if (!isWithheld(p.page.sourceFrontmatter || p.page.frontmatter) && wordsOf(title).length >= 2) heldTitles.push({ title, note: p.rel });
     }
-    if (!publishedSet.has(p.page) && p.page.outputPath && !taken.keeps(p.page.outputPath)) heldNotePages.push({ rel: p.rel, address: p.page.outputPath });
+    if (!shownSet.has(p.page) && p.page.outputPath && !taken.keeps(p.page.outputPath)) heldNotePages.push({ rel: p.rel, address: p.page.outputPath });
     if (!p.source) {
       // A page the build does not make is not on the site: its address is no shipping prop's. A styled page whose note
       // shows no words under ## The Text (styledPageProblem, which the build's make pass asks of the same player view; a

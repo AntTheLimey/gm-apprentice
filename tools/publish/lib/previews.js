@@ -3,7 +3,9 @@
 // may hold only what its page shows: prose comes through publishedSource, fields from the
 // frontmatter the build has already filtered. Never page.markdown, never sourceFrontmatter.
 const path = require('path');
-const { publishedSource, portraitBasename, plainRefValue, valueText } = require('./processor');
+const { publishedSource, portraitBasename, plainRefValue, valueText, playerSafeMarkdown } = require('./processor');
+const { entry } = require('./settings/registry');
+const { createMarks, sanitize, unmark } = require('./gm-marks');
 const { excerptFromMarkdown } = require('./excerpt');
 const { getCanonStatus, headerValueText } = require('./templates/base');
 const { headerMeta, pcEpithetText } = require('./pc-header-meta');
@@ -12,6 +14,7 @@ const { kindLabel } = require('./kind-label');
 const { canonicalNfc } = require('./unicode');
 const { labelsForLinks } = require('./wikilink');
 const { NO_PAGE_TYPES } = require('./excluding-values');
+const { isListedOnly } = require('./props/note');
 
 const ORDINARY_STATUS = new Set(['alive', 'active']);
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
@@ -103,8 +106,45 @@ function cardFor(page, ctx) {
 
 // A note the build writes no page for (a world-flags file is internal tracking). The one
 // definition: the render loop and the card list both ask it, so a note with no page has no card.
+// A prop a container lists with nothing of its own to show (props/note.js isListedOnly) is one too: its container lists it
+// with no link. Whether it has anything to show is judged on the body the site shows: on the player site its player view
+// (gm-only fences, GM Notes and the other hidden sections cut), on the GM site the note as written, where its GM Notes
+// show. Each site's build decides its pages once (decideNoPage) before it asks, so every later ask agrees with the first;
+// a page no build decided is judged as the player site with the default hidden sections.
+const noPage = new WeakMap();
+const DEFAULT_HIDDEN_SECTIONS = entry('player_site.hide.sections').default;
+
+// `show`: on the GM site, the kinds of hidden material it shows (gm_site.show), so the body it shows is the player cut
+// with those kinds kept (their words count); without it, the note as written.
+function shownBody(page, { gm = false, show = null, excludeSections = DEFAULT_HIDDEN_SECTIONS, excludeCallouts = false } = {}) {
+  const fm = page.sourceFrontmatter || page.frontmatter || {};
+  if (gm && !show) return String(page.markdown == null ? '' : page.markdown);
+  if (gm) {
+    const mark = { marks: createMarks(), show, sanitized: true };
+    return unmark(playerSafeMarkdown(sanitize(page.markdown), { excludeSections, excludeCallouts, frontmatter: fm, mark }).text);
+  }
+  return playerSafeMarkdown(page.markdown, { excludeSections, excludeCallouts, frontmatter: fm }).text;
+}
+
+function noPageFor(page, site) {
+  const fm = page.sourceFrontmatter || page.frontmatter || {};
+  if (NO_PAGE_TYPES.has(fm.type)) return true;
+  return isListedOnly(fm, '') && isListedOnly(fm, shownBody(page, site));
+}
+
+// Decide, for one site's build (`site`: { gm, show, excludeSections, excludeCallouts }), which of `pages` get no page.
+function decideNoPage(pages, site = {}) {
+  for (const page of pages) noPage.set(page, noPageFor(page, site));
+}
+
 function getsNoPage(page) {
-  return NO_PAGE_TYPES.has((page.frontmatter || {}).type);
+  if (!noPage.has(page)) noPage.set(page, noPageFor(page, {}));
+  return noPage.get(page);
+}
+
+// A published note its container lists with no page of its own (isListedOnly), as getsNoPage decided it.
+function listedOnly(page) {
+  return getsNoPage(page) && !NO_PAGE_TYPES.has((page.sourceFrontmatter || page.frontmatter || {}).type);
 }
 
 function buildPreviews(pages, ctx) {
@@ -125,4 +165,4 @@ function onlyBuiltPages(cards, isBuilt) {
   return out;
 }
 
-module.exports = { cardFor, rowsFor, buildPreviews, getsNoPage, onlyBuiltPages };
+module.exports = { cardFor, rowsFor, buildPreviews, getsNoPage, decideNoPage, listedOnly, onlyBuiltPages };

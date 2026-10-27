@@ -55,6 +55,7 @@ const { decidePage, publishesPage } = require('./publish-decision');
 const { gmAliasList, nameList, gmAliasKey, wikiTargetLabel, humanizeName, isWithheld } = require('./processor');
 const { kindOfType } = require('./kind-label');
 const { STORY_SUFFIX } = require('./scanner');
+const { NO_PAGE_TYPES } = require('./excluding-values');
 const { decodeEntities } = require('./templates/gurps/tables');
 
 const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE', 'PROP_NOT_COPIED'];
@@ -205,7 +206,9 @@ function noPageReason(rel, page, input, skipped) {
     const verdict = input.verdicts.get(page);
     if (!verdict) return null;   // a PC's story companion: its text is on the PC's story page
     if (!publishesPage(verdict)) return verdict.code;
-    return input.getsNoPage(page) ? 'TYPE_NEVER_PUBLISHES' : null;
+    // A prop its container lists with no page of its own (previews.js listedOnly) has none by its emptiness, not its type.
+    if (!input.getsNoPage(page)) return null;
+    return NO_PAGE_TYPES.has((page.sourceFrontmatter || page.frontmatter || {}).type) ? 'TYPE_NEVER_PUBLISHES' : 'LISTED_ONLY';
   }
   const dir = rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '';
   const always = decidePage({ rel, frontmatter: null }, { rel, publishConfig: input.publishConfig, manifest: input.manifest });
@@ -927,7 +930,9 @@ function startNoteAudit(input) {
         // and the words it prints are the placeholder, not its name.
         const withheld = isWithheld(record.frontmatter);
         let fix;
-        if (withheld) {
+        if (record.why === 'LISTED_ONLY') {
+          fix = `its container lists it; write words in the body of ${rel}, or a tie, to give it a page of its own, or turn the link to ${name} into plain words`;
+        } else if (withheld) {
           fix = `${name} is marked withheld, so it stays off the site: turn the links to it into the words the players know (links.py unlink "${rel.replace(/\.md$/, '')}" --in "<page>" --as "<words>"), or leave the neutral word it prints and record that with manifest apply --exclude "${rel}=stays hidden: <why>"`;
         } else if (kind === 'entity') {
           // Listing a note under Publishing gives it a page only when the manifest is what holds it back.

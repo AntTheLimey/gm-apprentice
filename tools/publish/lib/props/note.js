@@ -85,7 +85,21 @@ function propStateGlobalOf(fm) {
   return text(raw) || PROP_STATE_GLOBAL;
 }
 
+// An item a container lists that has nothing of its own to show: an `object` in a container (prop_container), with no
+// file and no style (no prop page), no relationships and no words under its frontmatter. Its listing row and its
+// container's state file carry its title, line and fields; a page of its own would be an empty page with a search
+// entry, so the build writes none (previews.js getsNoPage). Words in its body, or a tie, give it its page back.
+// `markdown`: the note's body as written.
+function isListedOnly(fm, markdown) {
+  if (!fm || propKindOf(fm) !== 'object' || !propContainerOf(fm)) return false;
+  if (propFileOf(fm) !== null || propStyleOf(fm) !== null) return false;
+  const ties = fm.relationships;
+  if (ties != null && !(Array.isArray(ties) && ties.length === 0) && ties !== '') return false;
+  return String(markdown == null ? '' : markdown).trim() === '';
+}
+
 module.exports = {
+  isListedOnly,
   PROP_KINDS, PROP_STYLE_RE, PROP_STATE_RE, PROP_STATE_GLOBAL_RE, PROP_STATE_GLOBAL,
   isPropNote, propKindOf, unknownKindOf, propFileOf, propAddressOf, propStyleOf, propContainerOf, showSealedOf, propStateOf, propStateGlobalOf,
 };

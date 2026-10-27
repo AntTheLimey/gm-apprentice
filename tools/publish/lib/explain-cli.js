@@ -13,6 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const { mapFolder, matchExcludedDir } = require('./scanner');
 const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, alwaysExcludedSegment } = require('./publish-decision');
+const { decideNoPage, listedOnly } = require('./previews');
 const { surveyVault, pairsWith } = require('./manifest-cli');
 const { assertNoStops, outputFolderOf } = require('./config');
 const { canonicalPath, loadPublishList } = require('./manifest');
@@ -161,9 +162,12 @@ async function runExplain(options, deps) {
   // A story companion has no page of its own; its content is on the PC's page, so
   // that is the URL to name.
   const mergedInto = verdict.code === 'STORY_COMPANION' ? storyCompanionPc(target, pagesByRel) : null;
+  // A prop its container lists with nothing of its own to show publishes with no page (previews.js listedOnly).
+  if (page && publishes) decideNoPage([page], { excludeSections: publishConfig.exclude_sections, excludeCallouts: publishConfig.exclude_callouts });
+  const pageless = !!page && publishes && listedOnly(page);
   const outputPath = mergedInto
     ? `${outputFolderOf(config)}/${mergedInto.outputPath}`
-    : (publishes && verdict.outputPath ? `${outputFolderOf(config)}/${verdict.outputPath}` : null);
+    : (publishes && !pageless && verdict.outputPath ? `${outputFolderOf(config)}/${verdict.outputPath}` : null);
   const auto = frontmatter ? autoExcludeCode(frontmatter) : null;
   const canonStatus = frontmatter ? getCanonStatus(frontmatter) : null;
   const section = manifestSectionOf(manifest, target);
@@ -249,7 +253,9 @@ async function runExplain(options, deps) {
   out(`  publish list: ${manifest ? (section ? MANIFEST_LABEL[section] : 'not listed') : 'no publish list'}`);
   out(mergedInto
     ? `  VERDICT: publishes as part of ${outputPath}`
-    : publishes
+    : pageless
+      ? '  VERDICT: listed by its container, with no page of its own (LISTED_ONLY) — it has nothing to show players; write words in its body, or a tie, to give it a page'
+      : publishes
       ? `  VERDICT: publishes at ${outputPath}`
       : `  VERDICT: does not publish — ${verdict.reason} (${verdict.code})`);
   out('');
@@ -394,7 +400,10 @@ async function runExplainAll(options, deps) {
     const verdict = survey.verdicts.get(rel);
     const publishes = publishesPage(verdict);
     const withheld = !!page && pairs.has(page);
+    if (page && publishes) decideNoPage([page], { excludeSections: survey.publishConfig.exclude_sections, excludeCallouts: survey.publishConfig.exclude_callouts });
     return {
+      // Published, but listed by its container with no page of its own (previews.js listedOnly).
+      ...(page && publishes && listedOnly(page) ? { noPage: true } : {}),
       path: rel,
       type: (page && page.frontmatter && page.frontmatter.type) || null,
       publishes,

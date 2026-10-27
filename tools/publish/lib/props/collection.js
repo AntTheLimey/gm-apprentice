@@ -38,7 +38,13 @@ function firstOf(value) {
 // names it), with the note's own field exceptions (`fieldOverrides`, by vault path) as its page has them.
 // `unrevealed`: shown on the GM site, not on the player site. `nameOf(page, title)`: the title as this site
 // prints the note's name (the GM site marks a withheld one).
-function propRow(p, { isShown, excludeFields = [], fieldOverrides = {}, resolvePage = () => null, isPlayerShown = null, blocked = new Set(), site = 'player', nameOf = (pg, t) => t }) {
+// `sessionOrder(page)`: the place in the campaign's play order (chapter, then session; story-spine.js orderedSessions) of
+// the session `revealed_in` names, or of the session a Wrap-Up or Play Notes page it names belongs to; null when the site
+// orders its sessions and the page has no place (it sorts with the props that name no session); undefined when the site
+// has no ordered sessions, and the number in the page's title places it.
+// `hasPage(page)`: whether the site writes the note's page (a prop its container lists with no page of its own has
+// none: its row links its prop page or nothing).
+function propRow(p, { isShown, excludeFields = [], fieldOverrides = {}, resolvePage = () => null, isPlayerShown = null, blocked = new Set(), site = 'player', nameOf = (pg, t) => t, sessionOrder = () => undefined, hasPage = () => true }) {
   const page = p.page;
   if (!isShown(page)) {
     const fm = publishedFrontmatter(sourceOf(page), excludeFields, fieldOverrides[p.rel] || {});
@@ -50,12 +56,13 @@ function propRow(p, { isShown, excludeFields = [], fieldOverrides = {}, resolveP
   const first = stub ? null : firstOf(fm.revealed_in);
   const target = typeof first === 'string' ? canonicalNfc(parseWikiRef(first).target) : '';
   const at = target ? resolvePage(target) : null;
+  const order = at ? sessionOrder(at) : undefined;
   return {
     rel: p.rel,
     title: nameOf(page, fieldText(fm.prop_title).trim() || page.displayTitle || page.title || ''),
-    href: propPageOf(p, blocked) || page.outputPath,
+    href: propPageOf(p, blocked) || (hasPage(page) ? page.outputPath : null),
     line: (!stub && fieldText(fm.prop_line).trim()) || null,
-    arrived: at ? { title: at.displayTitle || at.title || '', href: at.outputPath } : null,
+    arrived: at ? { title: at.displayTitle || at.title || '', href: at.outputPath, ...(order !== undefined ? { order } : {}) } : null,
     sealed: false,
     // A withheld item is never on the player site's listing, so on the GM's it is unrevealed too.
     unrevealed: isPlayerShown ? !isPlayerShown(page) || isWithheld(sourceOf(page)) : false,
@@ -69,12 +76,20 @@ const byTitle = (a, b) => a.title.localeCompare(b.title, 'en', { sensitivity: 'b
 // Ascending, a missing value (null) last.
 const missingLast = (x, y) => (x === y ? 0 : x === null ? 1 : y === null ? -1 : x < y ? -1 : 1);
 
-// Shown rows first: by the session they arrived in, then lastUpdated, then title (none last
-// each time). Sealed rows after, by title.
+// The session a row arrived in, as a sort key: its place in the play order (chapter, then session) when the site orders
+// its sessions (`order`, null for a page with no place), else the number in the session's title. null: none.
+function arrivalKey(r) {
+  if (!r.arrived) return null;
+  if (r.arrived.order !== undefined) return Number.isInteger(r.arrived.order) ? r.arrived.order : null;
+  return sessionSortKey(r.arrived.title) || null;
+}
+
+// Shown rows first: by the session they arrived in (arrivalKey), then lastUpdated, then title (none last each time):
+// two props from one session run by title, as nothing records which came first. Sealed rows after, by title.
 function byArrival(a, b) {
   if (a.sealed !== b.sealed) return a.sealed ? 1 : -1;
   if (a.sealed) return byTitle(a, b);
-  const session = (r) => (r.arrived && sessionSortKey(r.arrived.title)) || null;
+  const session = arrivalKey;
   return missingLast(session(a), session(b))
     || missingLast(a.updated || null, b.updated || null)
     || byTitle(a, b);
@@ -87,7 +102,7 @@ function byArrival(a, b) {
 // `site: 'gm'`: no sealed rows (nothing is sealed from the GM), withheld items show, and a row the
 // player site does not show (`isPlayerShown`) is marked unrevealed.
 // `blocked`: outputs the build will not write, so no row links one.
-function containerItems({ props, isShown, excludeFields = [], fieldOverrides = {}, resolvePage = () => null, site = 'player', isPlayerShown = null, blocked = new Set(), problems = [], nameOf = (pg, t) => t }) {
+function containerItems({ props, isShown, excludeFields = [], fieldOverrides = {}, resolvePage = () => null, site = 'player', isPlayerShown = null, blocked = new Set(), problems = [], nameOf = (pg, t) => t, sessionOrder = () => undefined, hasPage = () => true }) {
   const gm = site === 'gm';
   const containers = props.filter((p) => p.kind === 'container');
   // Names to containers, as a link reaches a page: a title before a vault path or an alias.
@@ -119,7 +134,7 @@ function containerItems({ props, isShown, excludeFields = [], fieldOverrides = {
     if (!entry) continue;
     if (!gm && isWithheld(sourceOf(p.page))) continue;
     if (!shown && (gm || showSealedOf(sourceOf(container.page)) !== 'titles')) continue;
-    entry.rows.push(propRow(p, { isShown, excludeFields, fieldOverrides, resolvePage, isPlayerShown: gm ? isPlayerShown : null, blocked, site, nameOf }));
+    entry.rows.push(propRow(p, { isShown, excludeFields, fieldOverrides, resolvePage, isPlayerShown: gm ? isPlayerShown : null, blocked, site, nameOf, sessionOrder, hasPage }));
   }
   for (const entry of out.values()) entry.rows.sort(byArrival);
   return out;
@@ -403,7 +418,7 @@ const missingLastDesc = (x, y) => (x === y ? 0 : x === null ? 1 : y === null ? -
 // The newest `n` shown rows: by the number of the session each arrived in, then lastUpdated (both
 // newest first, none last), then title.
 function latestProps(model, n) {
-  const session = (r) => (r.arrived && sessionSortKey(r.arrived.title)) || null;
+  const session = arrivalKey;
   return shownRows(model).sort((a, b) => missingLastDesc(session(a), session(b))
     || missingLastDesc(a.updated || null, b.updated || null)
     || byTitle(a, b)).slice(0, Math.max(0, n));

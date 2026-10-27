@@ -310,6 +310,20 @@ describe('NAMED_NO_PAGE with the rest of the audit', () => {
   });
 });
 
+describe('NAMED_NO_PAGE for a prop its container lists with no page of its own', () => {
+  it('names the rule and the way to a page, not the publish list', async () => {
+    const files = {
+      'Characters/Mara_Quill.md': npc('M', 'She borrowed [[Clasped Volume]].'),
+      'Library/Bookcase.md': '---\ntype: prop\nprop_kind: container\n---\nA bookcase.\n',
+      'Library/Clasped Volume.md': '---\ntype: prop\nprop_kind: object\nprop_container: "[[Bookcase]]"\nprop_line: It stays shut\n---\n',
+    };
+    const [f] = await faults(files, {}, 'NAMED_NO_PAGE');
+    assert.strictEqual(f.why, 'LISTED_ONLY');
+    assert.match(f.fix, /^its container lists it; write words in the body of Library\/Clasped Volume\.md, or a tie, to give it a page of its own/);
+    assert.doesNotMatch(f.fix, /manifest apply|explain/);
+  });
+});
+
 describe('COMMENT_STRAY', () => {
   it('is silent for a clean comment, inline or block, and for one in code or a gm-only block', async () => {
     const body = ['A %% private note %% line.', '', '%%', 'block', '%%', '', '```', '50%% in code', '```', '', '<!-- gm-only -->', '50%% x', '<!-- /gm-only -->', '', 'Done.'].join('\n');
