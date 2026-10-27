@@ -11,7 +11,7 @@ const { readSettings, forSite } = require('../settings');
 const { loadManifest } = require('../manifest');
 const { publishedPages } = require('../published-pages');
 const { ALWAYS_EXCLUDE_DIRS } = require('../publish-decision');
-const { getsNoPage, listedOnly, rowsFor } = require('../previews');
+const { getsNoPage, decideNoPage, listedOnly, rowsFor } = require('../previews');
 const { pcKeepList } = require('../pc-prose');
 const { pairHubs } = require('../session-hub');
 const { parseNote } = require('../frontmatter');
@@ -72,6 +72,8 @@ function collectHidden({ configPath, outputDir = null }) {
   const { verdicts, playerPublished } = publishedPages(pages, {
     vaultPath, publishConfig: playerConfig, manifest, relOf, site: 'gm', show, hiddenFolders: playerConfig.exclude_dirs, playerConfig,
   });
+  // Which notes get no page, as the player site's build decides it.
+  decideNoPage(playerPublished, { excludeSections: playerConfig.exclude_sections, excludeCallouts: playerConfig.exclude_callouts });
   const published = playerPublished.filter((p) => !getsNoPage(p));
   const publishedSet = new Set(published);
   // The props a container lists with no page of their own (previews.js listedOnly): published, shown in their listings.
@@ -106,10 +108,12 @@ function collectHidden({ configPath, outputDir = null }) {
   const outputOf = new Map();
   // Each published note's body as its page shows it (the build's publishedMarkdown): a styled prop's page is made from it.
   const shownBodyOf = new Map();
-  for (const page of published) {
+  // A prop its container lists with no page of its own is read as a published note too: its listing row and state entry
+  // print its title and published fields, so its hidden fields and the hidden parts of its body are hidden text.
+  for (const page of [...published, ...listedSet]) {
     const rel = relOf(page);
     publishedRels.add(rel);
-    outputOf.set(rel, page.outputPath);
+    if (!listedSet.has(page)) outputOf.set(rel, page.outputPath);
     if (page.storyMarkdown) publishedRels.add(rel.replace(/\.md$/i, STORY_SUFFIX));
     const fm = page.frontmatter || {};
     const overrides = fieldOverrides[rel] || {};

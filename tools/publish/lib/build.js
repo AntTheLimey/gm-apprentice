@@ -15,7 +15,7 @@ const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate
 const { isRoster } = require('./templates/nav');
 const { noticeText } = require('./notice');
 const { fontNamesOfFile, licenceOf } = require('./font-names');
-const { getsNoPage, listedOnly } = require('./previews');
+const { getsNoPage, decideNoPage, listedOnly } = require('./previews');
 const { runSteps, packageScripts, packageNotes } = require('./settings/steps');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
 const { ignoringMark } = require('./heading-key');
@@ -836,6 +836,8 @@ function buildSite(options) {
   // A note the build writes no page for (previews.js getsNoPage) leaves the list here, with
   // the unpublished: the link map, backlinks, Connections, indexes, search and cards all read
   // `pages`, so none of them can name it or link to a file that is not built.
+  // Which notes get no page is decided once, for this site: a listed-only prop is judged on the body this site shows.
+  decideNoPage(published, gm ? { gm: true } : { excludeSections, excludeCallouts });
   pages = published.filter(p => !getsNoPage(p));
   // The props a container lists with no page of their own (previews.js listedOnly): its listing and state file show
   // them, from their published frontmatter (reduced with the pages' below).

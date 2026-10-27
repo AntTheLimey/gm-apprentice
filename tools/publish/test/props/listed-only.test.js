@@ -68,3 +68,44 @@ describe('the same prop with words in its body', () => {
     assert.match(stateOf(s.player.read('props', 'state.js')).LIBRARY['clasped-volume'].href, /clasped-volume\.html$/);
   });
 });
+
+// Wave 1: the player view decides, per site.
+describe('a listed-only prop whose body holds only GM Notes', () => {
+  const GM = '<!-- gm-only -->\n\n## GM Notes\n\nThe clasp hides a key.\n\n<!-- /gm-only -->\n';
+  const s = buildBoth(files(GM), { ...SETTINGS });
+  after(() => s.cleanup());
+
+  it('has no page and no search entry on the player site', () => {
+    assert.ok(!s.player.files().some((f) => /clasped-volume/i.test(f)), s.player.files().join(', '));
+    assert.doesNotMatch(s.player.read('search-index.json'), /Clasped Volume/);
+    assert.equal(stateOf(s.player.read('props', 'state.js')).LIBRARY['clasped-volume'].href, null);
+  });
+
+  it('has its page on the GM site, where its GM Notes show', () => {
+    assert.ok(s.gm.files().some((f) => /clasped-volume\.html$/.test(f)), s.gm.files().join(', '));
+  });
+
+  it('its GM Notes are hidden text to the leak check', () => {
+    const { leakInto } = require('../helpers/leak-site');
+    leakInto(s.player.dir, 'props/index.html', 'The clasp hides a key.');
+    const found = runLeakGate({ configPath: s.configPath, outputDir: s.player.dir }).findings.map((f) => f.text);
+    assert.ok(found.includes('the clasp hides a key'), found.join(' | '));
+  });
+});
+
+describe('a listed-only prop with a hidden field', () => {
+  const HIDDEN = 'Pawned twice by the harbour clerk';
+  const s = buildBoth(FILES({
+    'Library/Clasped Volume.md': CLASPED().replace('prop_status: clasped\n', `prop_status: clasped\nprop_secret: ${HIDDEN}\n`),
+    ...LIST(['Library/Clasped Volume.md']),
+  }), { ...SETTINGS, sites: ['player'] });
+  after(() => s.cleanup());
+
+  it('the field is not in the state file, and found where a page shows it', () => {
+    assert.ok(!s.player.read('props', 'state.js').includes(HIDDEN));
+    const { leakInto } = require('../helpers/leak-site');
+    leakInto(s.player.dir, 'props/index.html', HIDDEN);
+    const found = runLeakGate({ configPath: s.configPath, outputDir: s.player.dir }).findings.map((f) => f.text);
+    assert.ok(found.includes('pawned twice by the harbour clerk'), found.join(' | '));
+  });
+});
