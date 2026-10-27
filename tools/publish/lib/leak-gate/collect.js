@@ -20,7 +20,7 @@ const {
   playerSafeMarkdown, stubMarked, stubCut, hiddenFieldsOf, publishedFrontmatter, pcHeadingsUnstable, publishMode, isWithheld, stripLeadingH1,
 } = require('../processor');
 const { createMarks, markKinds, sanitize, markedSpans } = require('../gm-marks');
-const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf } = require('./text');
+const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf, stringsOfValue } = require('./text');
 const { TEXT_EXT, fileText } = require('./match');
 const { planProps, planStatePictures, stateFileOf, bytesOf, textOf } = require('../props/plan');
 const { placeCollection, propTaken, containerItems, propRow, sealedTitlesOn, stateFieldsOf, stateFieldsOfListed } = require('../props/collection');
@@ -119,7 +119,13 @@ function collectHidden({ configPath, outputDir = null }) {
     const overrides = fieldOverrides[rel] || {};
     for (const h of hiddenFieldsOf(fm, excludeFields, overrides)) add(piecesOfValue(h.value), rel, h.label);
     const shownFields = publishedFrontmatter(fm, excludeFields, overrides);
-    visible.push(String(page.displayTitle || ''), ...fieldRunsOf(shownFields, page.displayTitle), ...printedRows({ ...page, frontmatter: shownFields }));
+    if (listedSet.has(page)) {
+      // No page of its own: only what its listing row and its container's state entry print is visible (its title,
+      // prop_title, prop_line and the state fields), never a field nothing prints.
+      visible.push(String(page.displayTitle || ''), ...stringsOfValue([shownFields.prop_title, shownFields.prop_line, ...Object.values(stateFieldsOf(shownFields))]));
+    } else {
+      visible.push(String(page.displayTitle || ''), ...fieldRunsOf(shownFields, page.displayTitle), ...printedRows({ ...page, frontmatter: shownFields }));
+    }
     if (hubs.has(page)) {
       add(piecesOfMarkdown(page.markdown), rel, 'session index body (its Wrap-Up publishes)');
       continue;

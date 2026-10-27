@@ -142,3 +142,20 @@ describe('a listed-only prop whose GM Notes the GM site shows (the default)', ()
     assert.ok(s.gm.files().some((f) => /clasped-volume\.html$/.test(f)), s.gm.files().join(', '));
   });
 });
+
+describe('a listed-only prop whose unprinted field echoes its GM Notes', () => {
+  const SECRET = 'The clasp hides a key behind the spine';
+  const s = buildBoth(FILES({
+    'Library/Clasped Volume.md': CLASPED(`## GM Notes\n\n${SECRET}.\n`).replace('prop_status: clasped\n', `prop_status: clasped\ndescription: ${SECRET}\n`),
+    ...LIST(['Library/Clasped Volume.md']),
+  }), { ...SETTINGS, sites: ['player'] });
+  after(() => s.cleanup());
+
+  it('the field is not visible (nothing prints it), so the GM Notes on a page are still found', () => {
+    assert.ok(!s.player.files().some((f) => /clasped-volume/i.test(f)), 'still listed only');
+    const { leakInto } = require('../helpers/leak-site');
+    leakInto(s.player.dir, 'props/index.html', `${SECRET}.`);
+    const found = runLeakGate({ configPath: s.configPath, outputDir: s.player.dir }).findings.map((f) => f.text);
+    assert.ok(found.includes('the clasp hides a key behind the spine'), found.join(' | '));
+  });
+});
