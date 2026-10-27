@@ -1138,8 +1138,9 @@ def find_props_settle(vault: Path) -> list[Item]:
     rels = moved_drafts(vault)
     if not rels:
         return []
-    lines = [f"{len(rels)} prop note{'' if len(rels) == 1 else 's'} the props move made for pages "
-             f"already live are marked DRAFT, so their pages show players a Draft badge. "
+    lines = [f"{len(rels)} prop note{'' if len(rels) == 1 else 's'} the props move made {'is' if len(rels) == 1 else 'are'} "
+             f"published, still as the move wrote {'it' if len(rels) == 1 else 'them'}, never revealed by a session, and "
+             f"marked DRAFT, so {'its page shows' if len(rels) == 1 else 'their pages show'} players a Draft badge. "
              f"settle: mark {'it' if len(rels) == 1 else 'them'} {SETTLED}; leave: keep DRAFT"]
     lines += [f"{rel}\tcanon_status: DRAFT -> {SETTLED}" for rel in rels]
 
@@ -1148,14 +1149,19 @@ def find_props_settle(vault: Path) -> list[Item]:
             raise StepFailed(f"{PROPS_SETTLE} takes settle or leave")
         if value == "leave":
             return ["left the moved prop notes as DRAFT"]
-        done = []
+        done: list[str] = []
         for rel in rels:
             def change(fm: list[str], eol: str) -> None:
                 at = [i for i, ln in enumerate(fm) if re.match(r"canon_status:\s*[\"']?DRAFT[\"']?\s*$", ln.rstrip("\r\n"))]
                 if len(at) != 1:
                     raise ValueError("its canon_status is no longer DRAFT")
                 fm[at[0]] = f"canon_status: {SETTLED}{eol}"
-            edit_frontmatter(vault / rel, change)
+            try:
+                edit_frontmatter(vault / rel, change)
+            except StepFailed as e:
+                # Say what already changed: those notes are settled and stay so.
+                changed = ", ".join(rels[:len(done)]) or "none"
+                raise StepFailed(f"{rel} was not settled ({e}); settled before it: {changed}") from e
             done.append(f"{rel}: canon_status {SETTLED}")
         return done
 

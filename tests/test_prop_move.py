@@ -1280,3 +1280,24 @@ def test_settle_leaves_notes_the_gm_has_touched_or_a_session_revealed(tmp_path: 
     # No reveals log with a before-tracking entry: nothing is offered.
     (vault / "_meta" / "reveals.json").unlink()
     assert migrate_site.find_props_settle(vault) == []
+
+
+def test_settle_names_what_it_changed_when_it_stops_partway(tmp_path: Path) -> None:
+    import migrate_core
+    import migrate_site
+    vault = moved_like_1_10_105(tmp_path)
+    (item,) = migrate_site.find_props_settle(vault)
+    rels = [ln.split("\t")[0] for ln in item.lines[1:]]
+    assert "published, still as the move wrote them, never revealed by a session" in item.lines[0]
+    assert "already live" not in item.lines[0]
+    # The third note stops being DRAFT behind the item's back.
+    third = vault / rels[2]
+    third.write_text(third.read_text(encoding="utf-8").replace("canon_status: DRAFT", "canon_status: STUB", 1), encoding="utf-8")
+    try:
+        item.apply("settle")
+    except migrate_core.StepFailed as e:
+        said = str(e)
+    else:
+        raise AssertionError("settle went through")
+    assert said.startswith(f"{rels[2]} was not settled (")
+    assert said.endswith(f"settled before it: {rels[0]}, {rels[1]}"), said
