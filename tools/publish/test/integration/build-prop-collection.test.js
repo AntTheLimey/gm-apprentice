@@ -369,6 +369,32 @@ describe('a prop as the cover', () => {
     } finally { s.cleanup(); }
   });
 
+  it('a cover whose title and line are hidden shows only published words', () => {
+    const s = buildBoth({
+      ...FILES,
+      'Documents/Gazetteer Cover.md': '---\ntype: prop\nprop_title: SECRETTITLE\nprop_line: SECRETLINE\n---\nA cover.\n',
+    }, { sites: ['player'], player: { hide: { fields: ['prop_title', 'prop_line'] }, props: { cover: '[[Gazetteer Cover]]' } } });
+    try {
+      const page = s.player.read('props', 'index.html');
+      assert.match(page, /<a class="props-cover" href="[^"]*"><span class="props-cover-title">Gazetteer Cover<\/span><\/a>/);
+      assert.doesNotMatch(page, /SECRETTITLE|SECRETLINE/);
+    } finally { s.cleanup(); }
+  });
+
+  it('a cover that is also a container item is left out of that container', () => {
+    const s = buildBoth({
+      ...FILES,
+      'Documents/Shelf.md': '---\ntype: prop\nprop_kind: container\n---\nA shelf.\n',
+      'Documents/Gazetteer Cover.md': '---\ntype: prop\nprop_container: "[[Shelf]]"\n---\nA cover.\n',
+    }, { sites: ['player'], player: { props: { cover: '[[Gazetteer Cover]]' } } });
+    try {
+      const page = s.player.read('props', 'index.html');
+      assert.equal((page.match(/Gazetteer Cover/g) || []).length, 1, page);
+      assert.match(page, /<a class="props-cover"/);
+      assert.match(page, /<h2><a href="[^"]*">Shelf<\/a><\/h2>\n<p class="prop-empty">/);
+    } finally { s.cleanup(); }
+  });
+
   it('a picture cover is unchanged', () => {
     const s = buildBoth(FILES, { sites: ['player'], player: { props: { cover: 'Art/cover.png' } } });
     try {
