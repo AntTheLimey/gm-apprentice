@@ -274,9 +274,45 @@ def _notes(vault: Path) -> list[tuple[str, str]]:
     return out
 
 
+class EnvelopeHandReader(HTMLParser):
+    """The hand class (`<x>-hand`) of the first element inside a page's
+    `envelope` element: the hand build_props wrote the envelope word in."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.hand: str | None = None
+        self._depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        classes = (dict(attrs).get("class") or "").split()
+        if self._depth:
+            if self.hand is None:
+                self.hand = next((x for x in classes if x.endswith(HAND_SUFFIX)), None)
+            if tag not in VOID:
+                self._depth += 1
+        elif "envelope" in classes and tag not in VOID:
+            self._depth = 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._depth and tag not in VOID:
+            self._depth -= 1
+
+
+def envelope_hand(page: Path) -> str | None:
+    """The hand class build_props wrote a live page's envelope word in."""
+    if not page.is_file():
+        return None
+    reader = EnvelopeHandReader()
+    reader.feed(read_text(page))
+    reader.close()
+    return reader.hand
+
+
 def convert_build_props(c: Conversion) -> None:
     """15a: every build_props note becomes a prop note; its hands go into the
-    hand registry through the one writer `vault_write.py prop-hand` uses."""
+    hand registry through the one writer `vault_write.py prop-hand` uses. An
+    envelope's word is in the hand build_props gave every envelope, read off
+    the live page; the tool reads it from `prop_hand`."""
     used: dict[str, list[str]] = {}
     for rel, text in _notes(c.vault):
         if not is_build_props_note(text):
@@ -285,16 +321,26 @@ def convert_build_props(c: Conversion) -> None:
         if new is None:
             c.row(PERSON, rel, f"not converted: {why}")
             continue
-        c.batch.put(rel, new)
-        c.build_props.append(rel)
         m = re.search(r"^prop_address: (.*)$", new, re.M)
         if m:
             c.addresses[rel] = m.group(1).strip()
+        if re.search(r"^prop_envelope:", new, re.M):
+            wrote = envelope_hand(c.live_root / c.addresses[rel]) if c.live_root and rel in c.addresses else None
+            if wrote is None:
+                c.row(PERSON, rel, "its envelope was written in a hand build_props chose for "
+                      "every envelope; set prop_hand to that hand, or the style's own font is used")
+            elif hand is None:
+                hand = wrote
+                line = f"prop_hand: {wrote[:-len(HAND_SUFFIX)]}{_eol(new.splitlines(keepends=True)[0]) or chr(10)}"
+                new = re.sub(r"^prop_style: ", lambda _m: f"{line}prop_style: ", new, count=1, flags=re.M)
+            elif hand != wrote:
+                c.row(PERSON, rel, f"its envelope is in the hand {wrote[:-len(HAND_SUFFIX)]}, the letter in "
+                      f"{hand[:-len(HAND_SUFFIX)] if hand.endswith(HAND_SUFFIX) else hand}; prop_hand holds one "
+                      f"(the letter's is kept), so choose which")
+        c.batch.put(rel, new)
+        c.build_props.append(rel)
         if hand:
             used.setdefault(hand, []).append(rel)
-        elif re.search(r"^prop_envelope:", new, re.M):
-            c.row(PERSON, rel, "its envelope was written in a hand build_props chose for "
-                  "every envelope; set prop_hand to that hand, or the style's own font is used")
     if not used:
         return
     fonts = hand_fonts(c.vault)
@@ -1298,7 +1344,6 @@ def convert(vault: Path, *, site: Path | None = None, given: dict[str, Any] | No
     `site` is the site folder whose output holds what is live; `given`, the
     decisions file, overrides what is inferred, key by key."""
     c = new_conversion(vault)
-    convert_build_props(c)
     keep: list[str] = []
     steps: list[str] = []
     props_address = DEFAULT_PROPS_ADDRESS
@@ -1314,6 +1359,7 @@ def convert(vault: Path, *, site: Path | None = None, given: dict[str, Any] | No
     given_settings = (given or {}).get("settings") or {}
     props_address = str(given_settings.get(PROPS_ADDRESS) or props_address)
     c.live_root = (site / output) if site else None
+    convert_build_props(c)
     convert_kept(c, site, c.live_root, keep, steps, props_address, given)
     if given and "settings" in given:
         c.decisions["settings"] = dict(given["settings"])

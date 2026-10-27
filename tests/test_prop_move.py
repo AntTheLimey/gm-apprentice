@@ -1022,3 +1022,35 @@ def test_new_note_names_free_as_links_fold_them(tmp_path: Path) -> None:
         "Documents/Other.md": "---\ntype: document\naliases: [The Port Gazetteer (Prop)]\n---\nOld.\n"})
     c2 = converted(vault2, site2)
     assert any(r.startswith(f"{prop_move.PERSON}\t{NOTES}/The Port Gazetteer.md\tno free note name") for r in c2.rows), c2.rows
+
+
+def test_envelope_hand_read_from_the_live_page(tmp_path: Path) -> None:
+    # Ruling 42: build_props writes every envelope word in one fixed hand class; the live page says which.
+    mail = (LETTER.replace("gull-letter.html", "mail.html").replace("prop_look: hand", "prop_look: terminal")
+            .replace("prop_hand: gull-hand\n", "prop_envelope: ANA\n"))
+    both = (LETTER.replace("gull-letter.html", "both.html").replace("prop_hand: gull-hand\n",
+                                                                   "prop_hand: wren-hand\nprop_envelope: ANA\n"))
+    same = (LETTER.replace("gull-letter.html", "same.html").replace("prop_hand: gull-hand\n",
+                                                                   "prop_hand: six-hand\nprop_envelope: ANA\n"))
+    css = STYLESHEET + ".six-hand { position: absolute; font-family: 'Permanent Marker', cursive; }\n"
+    vault = vault_with(tmp_path, {"Documents/Mail.md": mail, "Documents/Both.md": both, "Documents/Same.md": same}, css)
+    site = tmp_path / "site"
+    envelope = ('<section class="sheet desk"><div class="envelope"><div class="frank">PAID</div>'
+                '<div class="six-hand">ANA</div></div></section>')
+    write_tree(vault, {"_meta/vault-config.yaml": (
+        "version: 1\nplayer_site:\n"
+        f"  folder: {json.dumps(str(site))}\n  title: Run\n"
+        "  folder_map:\n    Documents: documents\n"
+        "  after_build:\n    - node scripts/add-props.mjs\n")})
+    write_tree(site, {"vault.config.json": json.dumps({"vaultPath": str(vault)}),
+                      **{f"docs/props/{p}.html": f"<html><body>{envelope}</body></html>\n" for p in ("mail", "both", "same")}})
+    c = prop_move.convert(vault, site=site)
+    assert fm_of(c.batch.texts["Documents/Mail.md"])["prop_hand"] == "six"
+    hands = json.loads(c.batch.texts["_meta/prop-hands.json"])["hands"]
+    assert hands["six"]["font"] == "Permanent Marker"
+    person = [r for r in c.rows if r.startswith(prop_move.PERSON)]
+    assert not [r for r in person if "Mail.md" in r or "Same.md" in r], person
+    assert fm_of(c.batch.texts["Documents/Same.md"])["prop_hand"] == "six"
+    # The letter has a hand of its own, and prop_hand holds one: a person chooses.
+    assert fm_of(c.batch.texts["Documents/Both.md"])["prop_hand"] == "wren"
+    assert any(r.startswith(f"{prop_move.PERSON}\tDocuments/Both.md\t") and "six" in r and "envelope" in r for r in person), person
