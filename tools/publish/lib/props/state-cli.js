@@ -34,14 +34,17 @@ function readState(file) {
   return { global, items };
 }
 
-// Prints { global, items } (--json), or the global and each item's key, one a line. Exit 1 with an error line otherwise.
+// Prints { global, items, tool_fields } (--json), or the global and each item's key, one a line. Exit 1 with an error line otherwise.
 function runReadState({ file, json }) {
   let state;
   try { state = readState(file); } catch (e) {
     console.error(`Error: ${e.message}`);
     return 1;
   }
-  if (json) console.log(JSON.stringify(state, null, 2));
+  // tool_fields: the prop fields the tool reads itself (collection.js); a state file never gives an item one of them,
+  // so a hand-made entry's field by that name has nowhere to go (prop_move.py asks a person).
+  const { GENERIC_PROP_FIELDS } = require('./collection');
+  if (json) console.log(JSON.stringify({ ...state, tool_fields: [...GENERIC_PROP_FIELDS].sort() }, null, 2));
   else {
     const keys = Object.keys(state.items);
     console.log(`window.${state.global}: ${keys.length} item${keys.length === 1 ? '' : 's'}`);

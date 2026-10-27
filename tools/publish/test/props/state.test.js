@@ -10,7 +10,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { buildBoth } = require('../helpers/gm-build');
 const { FILES, BOOKCASE, SETTINGS, SEALED_TITLE, SEALED_LINE, HIDDEN_FIELD, ODD, stateOf } = require('../helpers/prop-state-vault');
-const { stateItems, stateScript } = require('../../lib/props/collection');
+const { stateItems, stateScript, GENERIC_PROP_FIELDS } = require('../../lib/props/collection');
 
 const BIN = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
 const rels = (site) => site.files().map((f) => path.relative(site.dir, f).split(path.sep).join('/'));
@@ -152,7 +152,9 @@ describe('props read-state', () => {
   it('read-state reads window.LIBRARY', () => {
     const r = run('state.js', 'var shelf = { atlas: { title: "Atlas", pages: 212 } };\nshelf.map = { title: "Map" };\nwindow.LIBRARY = shelf;\n', '--json');
     assert.equal(r.status, 0, r.stderr);
-    assert.deepEqual(JSON.parse(r.stdout), { global: 'LIBRARY', items: { atlas: { title: 'Atlas', pages: 212 }, map: { title: 'Map' } } });
+    // tool_fields: the prop fields the tool reads itself, which a state file never gives an item (Ruling 36).
+    assert.deepEqual(JSON.parse(r.stdout), { global: 'LIBRARY', items: { atlas: { title: 'Atlas', pages: 212 }, map: { title: 'Map' } }, tool_fields: [...GENERIC_PROP_FIELDS].sort() });
+    assert.ok(JSON.parse(r.stdout).tool_fields.includes('prop_group'));
     const plain = run('state.js', 'window.LIBRARY = { atlas: {}, map: {} };\n');
     assert.equal(plain.status, 0, plain.stderr);
     assert.equal(plain.stdout, 'window.LIBRARY: 2 items\n  atlas\n  map\n');

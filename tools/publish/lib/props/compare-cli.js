@@ -36,7 +36,9 @@ function toStderr(fn) {
   try { return fn(); } finally { console.log = saved; }
 }
 
-function runMoveCheck({ configPath, serves, listings = [], expectGone = [], json = false }) {
+// `keepBuild`: a folder (not there, or empty) the build goes into and stays in, for the caller to read; else a temp
+// folder, removed.
+function runMoveCheck({ configPath, serves, listings = [], expectGone = [], json = false, keepBuild = null }) {
   let oldDir;
   try { oldDir = outputFolder(configPath); } catch (e) {
     console.error(`Error: ${e.message}`);
@@ -46,7 +48,17 @@ function runMoveCheck({ configPath, serves, listings = [], expectGone = [], json
     console.error(`Error: the site's output folder is not there: ${oldDir}. move-check compares the pages the site serves now; build or deploy it first.`);
     return 1;
   }
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-move-check-'));
+  let tmp;
+  if (keepBuild) {
+    tmp = path.resolve(keepBuild);
+    let entries = null;
+    try { entries = fs.readdirSync(tmp); } catch (e) { if (e.code !== 'ENOENT') entries = ['?']; }
+    if (entries && entries.length) {
+      console.error(`Error: --keep-build ${tmp} is not an empty folder; name a new one`);
+      return 1;
+    }
+    fs.mkdirSync(tmp, { recursive: true });
+  } else tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-move-check-'));
   try {
     const { build } = require('../build');
     try {
@@ -74,7 +86,7 @@ function runMoveCheck({ configPath, serves, listings = [], expectGone = [], json
     }
     return print(result, json);
   } finally {
-    fs.rmSync(tmp, RM);
+    if (!keepBuild) fs.rmSync(tmp, RM);
   }
 }
 

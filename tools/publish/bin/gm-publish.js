@@ -251,7 +251,7 @@ line and exit 1. The build never runs it.
 gm-apprentice-publish props compare --old <dir> --new <dir> --serves <folder>...
     [--listing <address>]... [--expect-gone <phrase>]... [--json]
 gm-apprentice-publish props move-check [--config <path>] --serves <folder>...
-    [--listing <address>]... [--expect-gone <phrase>]... [--json]
+    [--listing <address>]... [--expect-gone <phrase>]... [--json] [--keep-build <dir>]
 
 compare reads every file of the old site under a served folder (gazetteer/;
 repeat --serves for more) beside the new site's file at the same address.
@@ -290,6 +290,7 @@ an error.
   --json                 { rows: [{ kind, address, detail, blocker }], blockers, served, pages, same }
                          (move-check adds leaks: [{ code, page, text, note, reason }])
   --config <path>        move-check: path to vault.config.json (default: ./vault.config.json)
+  --keep-build <dir>     move-check: build into this new or empty folder and leave it there
 `,
   leaks: `
 gm-apprentice-publish leaks <list|check|accept|prune|settle> [--config <path>] [--json]
@@ -314,6 +315,7 @@ deploy --ignore-leaks); these commands run it without deploying.
                              (each is still recorded as its page and sentence;
                              accepting needs the site's tool at 1.30.0 or later)
   leaks prune                Remove accepted findings that are no longer needed
+                             (--also <dir>: and that this other built folder does not need either)
   leaks settle <note> <heading>
                              Settle a Keeper-looking heading that vault_check
                              gm-leak flags and the GM means for players: it is
@@ -1130,7 +1132,8 @@ if (command === 'leaks') {
   const rest = args.slice(2);
   const positional = [];
   if (verb === 'accept' || verb === 'settle') { while (rest.length && !rest[0].startsWith('--')) positional.push(rest.shift()); }
-  const parsed = parseSubcommandArgs(rest, { '--json': 'json' }, verb === 'accept' ? { '--page': 'page', '--note': 'note' } : verb === 'settle' ? { '--vault': 'vault' } : {});
+  const parsed = parseSubcommandArgs(rest, { '--json': 'json' }, verb === 'accept' ? { '--page': 'page', '--note': 'note' } : verb === 'settle' ? { '--vault': 'vault' } : {},
+    verb === 'prune' ? { '--also': 'also' } : {});
   if (verb === 'settle' && (parsed.error || positional.length !== 2)) {
     console.error(`Error: ${parsed.error || 'leaks settle needs a note and its heading'}`);
     printSubcommandHelp('leaks');
@@ -1145,7 +1148,7 @@ if (command === 'leaks') {
     process.exit(1);
   }
   const { runLeaks } = require('../lib/leaks-cli.js');
-  runLeaks({ verb, configPath: parsed.configPath, json: !!parsed.flags.json, page: positional[0], text: positional[1], allOnPage: parsed.flags.page, note: parsed.flags.note, vault: parsed.flags.vault })
+  runLeaks({ verb, configPath: parsed.configPath, json: !!parsed.flags.json, page: positional[0], text: positional[1], allOnPage: parsed.flags.page, note: parsed.flags.note, vault: parsed.flags.vault, also: parsed.flags.also })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
   return;
@@ -1166,7 +1169,7 @@ if (command === 'props') {
   }
   if (args[1] === 'compare' || args[1] === 'move-check') {
     const check = args[1] === 'move-check';
-    const parsed = parseSubcommandArgs(args.slice(2), { '--json': 'json' }, check ? {} : { '--old': 'oldDir', '--new': 'newDir' },
+    const parsed = parseSubcommandArgs(args.slice(2), { '--json': 'json' }, check ? { '--keep-build': 'keepBuild' } : { '--old': 'oldDir', '--new': 'newDir' },
       { '--serves': 'serves', '--listing': 'listings', '--expect-gone': 'expectGone' });
     const missing = parsed.error || (!parsed.flags.serves.length ? '--serves needs at least one folder (gazetteer/)' : null)
       || (!check && (!parsed.flags.oldDir || !parsed.flags.newDir) ? 'props compare needs --old and --new site folders' : null)
@@ -1178,7 +1181,7 @@ if (command === 'props') {
     }
     const { runCompare, runMoveCheck } = require('../lib/props/compare-cli.js');
     const opts = { serves: parsed.flags.serves, listings: parsed.flags.listings, expectGone: parsed.flags.expectGone, json: !!parsed.flags.json };
-    exitAfterFlush(check ? runMoveCheck({ configPath: parsed.configPath, ...opts }) : runCompare({ oldDir: parsed.flags.oldDir, newDir: parsed.flags.newDir, ...opts }));
+    exitAfterFlush(check ? runMoveCheck({ configPath: parsed.configPath, keepBuild: parsed.flags.keepBuild || null, ...opts }) : runCompare({ oldDir: parsed.flags.oldDir, newDir: parsed.flags.newDir, ...opts }));
     return;
   }
   if (args[1] !== 'pages') {

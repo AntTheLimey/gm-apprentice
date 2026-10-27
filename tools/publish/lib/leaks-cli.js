@@ -136,7 +136,14 @@ async function runLeaks(options, deps) {
     const list = loadPublishList(vaultPath, { warn: () => {} });
     // By page, text and note: a never-show acceptance and another rule's on the same page and text are two.
     const keyOf = (a) => `${a.page}\n${a.text}\n${a.note || ''}`;
-    const stale = new Set(result.unneeded.map(keyOf));
+    let stale = new Set(result.unneeded.map(keyOf));
+    // --also: other built folders of this site (the move's checked build); an accept any of them still needs stays.
+    for (const dir of opts.also || []) {
+      const other = runLeakGate({ configPath, outputDir: path.resolve(dir) });
+      if (other.missing) return print([`There is no built site in ${path.resolve(dir)} to check; nothing pruned.`], { pruned: 0 }, 2);
+      const unneeded = new Set(other.unneeded.map(keyOf));
+      stale = new Set([...stale].filter((k) => unneeded.has(k)));
+    }
     if (!list || stale.size === 0) return print(['Nothing to prune.'], { pruned: 0 }, 0);
     const kept = (list.accepted || []).filter((a) => !stale.has(keyOf(a)));
     try { writeAccepted(vaultPath, kept); } catch (e) { return print([e.message], { pruned: 0 }, 1); }

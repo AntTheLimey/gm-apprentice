@@ -110,3 +110,19 @@ test('move-check runs the leak check on the new build and lists what it finds', 
   assert.match(text.stdout, /^LEAK\tgazetteer\/papers\/menu\.html\t"the fish course hides the poisoned sauce boat" from Documents\/Menu\.md/m);
   assert.match(text.stdout, / leaks: 1 blockers: \d+$/m);
 });
+
+test('Ruling 36/37: move-check --keep-build leaves its build in a folder the caller names', (t) => {
+  const s = liveSite(t);
+  const keep = path.join(s.root, 'kept-build');
+  const cli = (...extra) => spawnSync(process.execPath, [CLI, 'props', 'move-check', '--config', s.configPath, '--serves', 'gazetteer/', '--json', ...extra], { encoding: 'utf8' });
+  const ok = cli('--keep-build', keep);
+  assert.equal(ok.status, 0, ok.stderr);
+  assert.equal(JSON.parse(ok.stdout).blockers, 0);
+  const built = fs.readFileSync(path.join(keep, 'gazetteer', 'papers', 'menu.html'), 'utf8');
+  assert.match(built, /Turtle soup, then a saddle of mutton\./);
+  // A folder that is there and not empty is refused: the build never writes over the caller's files.
+  const again = cli('--keep-build', keep);
+  assert.equal(again.status, 1);
+  assert.match(again.stderr, /--keep-build/);
+  assert.equal(fs.readFileSync(path.join(keep, 'gazetteer', 'papers', 'menu.html'), 'utf8'), built);
+});
