@@ -1792,7 +1792,7 @@ function buildSite(options) {
     if (stale.length) throw new Error(`${stale.join(', ')} ${stale.length === 1 ? 'is' : 'are'} on the site but a full build would no longer write ${stale.length === 1 ? 'it' : 'them'}. Run a full build (gm-apprentice-publish build --site ${gm ? 'gm' : 'player'}); a sheets-only build deletes nothing. Nothing was written.`);
   }
 
-  const { collectionBuilt, styleFonts } = makeProps({ propPlan, propBlocked, pages, listedOnlyPages, linkMap, imageMap, usedImages, config, options, publishConfig, collection,
+  const { collectionBuilt, styleFonts } = makeProps({ propPlan, propBlocked, pages, listedOnlyPages, hubPairs: hubWrapUps, linkMap, imageMap, usedImages, config, options, publishConfig, collection,
     collectionHrefFrom, navFor, gm, mark, onPlayerSite, excludeFields, fieldOverrides, coverName: nm('player_site.props.cover') });
 
   // Published NPC pages whose body runs session by session (story-sessions.js), in page order.
