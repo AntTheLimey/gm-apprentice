@@ -276,8 +276,9 @@ blocker (or an error line), else 0.
 
 A link is read relative to its page, without its query or anchor, a folder
 (gazetteer/ or gazetteer) as its index.html; a link in a comment or a script is
-not a link. Words are read as the leak check reads a page. A --serves folder
-or a --listing address the old site does not have is an error.
+not a link. Words are read as the leak check reads a page, less its inline
+scripts. A --serves folder or a --listing address the old site does not have is
+an error.
 
   --serves <folder>      A folder the live site serves that the move replaces (repeatable)
   --listing <address>    An old index page the move replaces with a listing (repeatable)

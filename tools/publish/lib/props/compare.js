@@ -24,9 +24,10 @@ const RUN_WORDS = 20;
 const RUNS_SHOWN = 5;
 
 // The words a page says, as the leak gate reads a page, without the bar the tool adds to a prop page (it is the tool's
-// way back to the note, not the page's words).
+// way back to the note, not the page's words) and without its inline scripts (code a page runs, not words it shows: a
+// rewritten toggle script is no lost word).
 function pageWords(rel, raw) {
-  return wordsOf(fileText(rel, withoutPropBar(raw)));
+  return wordsOf(fileText(rel, withoutPropBar(raw), { scripts: false }));
 }
 
 // The address a link on the page at `rel` goes to: relative to the page (or the site's root, from a leading /), without

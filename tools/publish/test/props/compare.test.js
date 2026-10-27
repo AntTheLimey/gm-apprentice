@@ -9,6 +9,8 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { compareSites, pageWords, formatRows } = require('../../lib/props/compare');
 const { propBar, withPropBar } = require('../../lib/templates/prop-bar');
+const { fileText } = require('../../lib/leak-gate/match');
+const { wordsOf } = require('../../lib/leak-gate/text');
 
 const CLI = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
 
@@ -183,6 +185,24 @@ test('a dropped picture blocks even when no new page links it; a dropped script 
   }
   for (const address of ['props/state.js', 'props/extra.css']) assert.equal(rowOf(r, address).blocker, false, address);
   assert.equal(r.blockers, 2);
+});
+
+test('a removed inline script does not block; a removed visible word still does', (t) => {
+  const old = page('<button id="mode">Show as printout</button><p>Meet me at the old mill.</p>'
+    + '<script>const b = document.getElementById("mode"); b.textContent = "Show as terminal";</script>');
+  const scriptGone = page('<button id="mode">Show as printout</button><p>Meet me at the old mill.</p>');
+  const r = run(sites(t, { 'props/letter.html': old }, { 'props/letter.html': scriptGone }));
+  assert.equal(rowOf(r, 'props/letter.html').kind, 'same-words');
+  assert.equal(r.blockers, 0);
+  const wordGone = page('<p>Meet me at the old mill.</p>'
+    + '<script>const b = document.getElementById("mode"); b.textContent = "Show as terminal";</script>');
+  const lost = run(sites(t, { 'props/letter.html': old }, { 'props/letter.html': wordGone }));
+  assert.equal(rowOf(lost, 'props/letter.html').kind, 'words-differ');
+  assert.match(rowOf(lost, 'props/letter.html').detail, /show as printout/);
+  assert.equal(lost.blockers, 1);
+  // The page's words leave the script out; the leak gate's reading of the same page keeps it.
+  assert.ok(!pageWords('a.html', old).includes('getelementbyid'));
+  assert.ok(wordsOf(fileText('a.html', old)).includes('getelementbyid'));
 });
 
 test('the text rows and the summary line', (t) => {
