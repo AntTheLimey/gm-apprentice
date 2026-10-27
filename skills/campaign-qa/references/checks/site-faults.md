@@ -524,6 +524,11 @@ publish-site's `references/prop-styles.md`.
   directly into `assets/`, point a link to nothing at the real file,
   make an `assets` file a folder, or remove a kind a style does not
   copy; show the line of `style.css` that wants it, if any.
+- **An unknown `prop_hand`, or a broken `_meta/prop-hands.json`:**
+  offer to correct `prop_hand`, to add the hand with `vault_write.py
+  "<vault>" prop-hand --hand <id> --hand-font "<family>"`, or to mend the
+  entry or JSON the row names. Ask the GM for the font; never pick one
+  for them.
 - **Both a prop_file and a prop_style:** ask which the GM wants; remove
   the other on a yes.
 - **No ## The Text (or none players see), or a prop_container that is

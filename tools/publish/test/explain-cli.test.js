@@ -342,6 +342,19 @@ describe('explain', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  it('--json reports prop', async () => {
+    const vault = makeVault();
+    write(vault, 'Sessions/Letter.md', '---\ntype: prop\nprop_kind: letter\n---\n\nDear reader.\n');
+    const configPath = siteFor(vault);
+    const c = capture();
+    await runExplain({ configPath, target: 'Sessions/Letter.md', json: true }, c.deps);
+    assert.strictEqual(JSON.parse(c.out.join('')).prop, true);
+    const n = capture();
+    await runExplain({ configPath, target: 'Sessions/Session_07.md', json: true }, n.deps);
+    assert.strictEqual(JSON.parse(n.out.join('')).prop, false);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('--json carries the verdict and the stripped sections', async () => {
     const vault = makeVault();
     const c = capture();
@@ -661,10 +674,42 @@ describe('explain --all (#276)', () => {
       sheetWithheldSections: [],
       retiredSheetFields: null,
       frontmatterError: null,
+      prop: false,
     });
     assert.strictEqual(pages.get('Sessions/Session_07_Wrap_Up.md').bodyPublishes, true);
     assert.strictEqual(pages.get('Sessions/Session_08.md').publishes, false);
     assert.strictEqual(pages.get('Sessions/Session_08.md').code, 'AUTO_EXCLUDED_STATUS');
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('reports prop notes', async () => {
+    const vault = makeVault();
+    write(vault, 'Sessions/Letter.md', '---\ntype: prop\nprop_kind: letter\n---\n\nDear reader.\n');
+    write(vault, 'Sessions/Scan.md', '---\ntype: document\nprop_file: scan.pdf\n---\n\nA scan.\n');
+    write(vault, 'Sessions/Plain.md', '---\ntype: document\n---\n\nJust a document.\n');
+    write(vault, 'Sessions/Vesper.md', '---\ntype: npc\n---\n\nAn NPC.\n');
+    const { json } = await all(siteFor(vault));
+    const pages = byPath(json);
+    assert.deepStrictEqual(
+      ['Letter', 'Scan', 'Plain', 'Vesper'].map((n) => pages.get(`Sessions/${n}.md`).prop),
+      [true, true, false, false]);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('reads prop from the note itself when the site makes no page for it; false when the note cannot be parsed', async () => {
+    const vault = makeVault();
+    write(vault, 'Chapters/Lyon/Props/Letter.md', '---\ntype: prop\nprop_style: letter\n---\n\nDear reader.\n');
+    write(vault, 'Chapters/Lyon/Props/Plain.md', '---\ntype: document\n---\n\nJust a document.\n');
+    write(vault, 'Chapters/Lyon/Props/Broken.md', '---\ntype: prop\nprop_style: [unclosed\n---\n\nBroken.\n');
+    const configPath = siteFor(vault);
+    const pages = byPath((await all(configPath)).json);
+    assert.deepStrictEqual(['Letter', 'Plain', 'Broken'].map((n) => {
+      const p = pages.get(`Chapters/Lyon/Props/${n}.md`);
+      return [p.code, p.strippedSections, p.prop];
+    }), [['DIR_UNMAPPED', null, true], ['DIR_UNMAPPED', null, false], ['FILE_UNPARSEABLE', null, false]]);
+    const c = capture();
+    await runExplain({ configPath, target: 'Chapters/Lyon/Props/Letter.md', json: true }, c.deps);
+    assert.strictEqual(JSON.parse(c.out.join('')).prop, true);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 

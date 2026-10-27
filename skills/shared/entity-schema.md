@@ -319,11 +319,13 @@ container), `prop_file` (a hand-made page, PDF or picture beside
 the note), `prop_address` (its address on the site; empty means
 `props/<note name>`, or `props/<note name>-prop.html` when a page
 the site builds has that address), `prop_style` (the look of the page the
-site makes from `## The Text`; not with a `prop_file`), `prop_line` (one line
+site makes from `## The Text`; not with a `prop_file`), `prop_hand` (a hand id
+from the vault's `_meta/prop-hands.json`, so one writer always has one hand;
+`prop_font` on the note wins), `prop_line` (one line
 for the props page), `prop_group` (its heading there; empty uses its
 chapter), `prop_container` (wiki-link to the container prop it sits
 in), `show_sealed` (containers: `titles` or `none`), `revealed_in`
-(the session it arrived in; written at wrap-up). Style fields
+(the session it reached the players; wrap-up's reveal step writes it, first arrival only). Style fields
 (`prop_title`, `prop_breaks`, `prop_shift`, `prop_font`, and each
 style's own) are listed in publish-site's prop-styles reference. It
 publishes when the note does

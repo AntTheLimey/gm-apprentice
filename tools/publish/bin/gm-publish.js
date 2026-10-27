@@ -39,6 +39,7 @@ Usage:
   gm-apprentice-publish update-pin [options] Repoint this site at the newest installed build tool
   gm-apprentice-publish manifest <cmd>       Compare the publish manifest with the vault, or update it
   gm-apprentice-publish leaks <cmd>          Check the built player site for hidden text (list, check, accept, prune, settle)
+  gm-apprentice-publish props pages <address>...  Count a prop page's printed pages (headless Chrome; --note: before it publishes)
   gm-apprentice-publish relationships <cmd>  The relationship words, short (words); every relationship rule checked (check); the tones listed (list); the certain repairs (fix)
   gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
@@ -216,6 +217,25 @@ vocabulary are listed on one line.
                              (a flag the command does not take is refused)
   --json                     words: { subset, predicates, tones, strength, notInVocabulary }; check: the findings
   --help, -h                 Show this help
+`,
+  props: `
+gm-apprentice-publish props pages [--config <path>] [--json] [--note <rel>]... [<address>...]
+
+Prints one line per address, "<address><TAB><n> pages", counting the pages the
+built page prints to in headless Chrome. Addresses are relative to the site's
+output folder (props/letter.html). A page that is not built says "not built".
+--note counts a prop from its note (vault-relative) as players would get it,
+published or not: "<note><TAB><n> pages", with "(warning: ...)" when the build
+warned about it (an unknown hand, a typeface not cached, a picture not in the
+vault), or the reason it has no count, still with its warnings. A supplied PDF is
+not counted: it keeps its own pages. Fonts are fetched first, as a build
+does; nothing is written to the site. With no Chrome or Chromium installed it says
+so and exits 0; open the page and use print preview instead.
+
+  --note <rel>       A prop note to count before it is published (repeatable)
+  --json             [{ address, pages, why }]; a note's row: { note, pages, why, warnings }
+  --config <path>    Path to vault.config.json (default: ./vault.config.json)
+  --help, -h         Show this help
 `,
   leaks: `
 gm-apprentice-publish leaks <list|check|accept|prune|settle> [--config <path>] [--json]
@@ -1074,6 +1094,39 @@ if (command === 'leaks') {
   runLeaks({ verb, configPath: parsed.configPath, json: !!parsed.flags.json, page: positional[0], text: positional[1], allOnPage: parsed.flags.page, note: parsed.flags.note, vault: parsed.flags.vault })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
+  return;
+}
+
+if (command === 'props') {
+  if (args[1] !== 'pages') {
+    console.error(args[1] ? `Error: Unknown props command: ${args[1]}` : 'Error: props needs a command (pages)');
+    printSubcommandHelp('props');
+    process.exit(1);
+  }
+  const rest = args.slice(2);
+  // Addresses and --note paths, in the order given: each prints its row in that order.
+  const targets = [];
+  const flagWords = [];
+  let noteError = null;
+  for (let i = 0; i < rest.length; i++) {
+    if (rest[i] === '--config') { flagWords.push(rest[i], rest[i + 1]); i++; } else if (rest[i] === '--note') {
+      const note = rest[i + 1];
+      if (note === undefined || note.startsWith('--')) noteError = noteError || '--note needs a vault-relative note path';
+      else { targets.push({ note }); i++; }
+    } else if (rest[i].startsWith('--')) flagWords.push(rest[i]); else targets.push({ address: rest[i] });
+  }
+  const parsed = parseSubcommandArgs(flagWords.filter((w) => w !== undefined), { '--json': 'json' });
+  if (parsed.error || noteError || !targets.length) {
+    console.error(`Error: ${parsed.error || noteError || 'props pages needs at least one page address or --note'}`);
+    printSubcommandHelp('props');
+    process.exit(1);
+  }
+  require('../lib/props/pages-cli.js').runPages({ configPath: parsed.configPath, targets, json: !!parsed.flags.json })
+    .then(() => exitAfterFlush(0))
+    .catch((err) => {
+      console.error(`Error: ${err.message}`);
+      exitAfterFlush(1);
+    });
   return;
 }
 

@@ -10,16 +10,27 @@ Without `--write` it only says what it would do. With it, in this order:
    (`manifest apply`); the tool says which now publish.
 2. clear: `withheld: false` on each of those notes that carries a
    `withheld` key (a note without one is left alone).
-3. log: the session is recorded in `_meta/reveals.json`. The log is
+3. stamp: `revealed_in: "[[SESSION]]"` on each of those notes the publish
+   tool (`explain --all`, asked before publishing) says is a prop, unless
+   it already names one. Only notes revealed in this run are stamped; the
+   clear and the stamp are one write per note.
+4. log: the session is recorded in `_meta/reveals.json`. The log is
    history only; nothing reads it to decide what publishes.
 
-A path that does not end up publishing keeps its `withheld`. Prep notes
+A note revealed in this run is one newly publishing, or one already on the
+list whose `withheld` is lifted now (the site showed nothing of it before);
+any other note already on the list is skipped, unlogged and unstamped. A
+path that does not end up publishing keeps its `withheld` and gets no
+`revealed_in`. When `explain` cannot be asked, a WARNING row says so and
+nothing is stamped; publishing goes ahead. A WARNING row also names each
+note the site makes no page for (a folder outside the folder map); a prop
+there is stamped all the same, and the row says so. Prep notes
 (sessions, plans, scenes, play notes, wrap-ups, chapters, `_meta/`) are
 never published here. With no site to publish through, `--publish` is
 refused; `--released` still logs.
 
 Rows are `verb <TAB> path <TAB> detail`, then
-`# publish: N clear: N log: N errors: N`.
+`# publish: N clear: N stamp: N log: N errors: N`.
 Exit: 0 ok; 1 a path was refused or failed; 2 bad arguments.
 """
 
@@ -28,6 +39,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import unicodedata
 from datetime import date
@@ -39,9 +51,12 @@ from reveal_scan import NEVER_CANDIDATES  # noqa: E402
 from vault_check import _site_config, ask_publish_tool  # noqa: E402
 from vault_write import set_block  # noqa: E402
 from vaultlib import (  # noqa: E402
-    WITHHELD_KEY_RE, entity_type, extract_frontmatter, frontmatter_span, normalize_file_arg)
+    WITHHELD_KEY_RE, PublishToolUnavailable, entity_type, extract_frontmatter,
+    frontmatter_span, normalize_file_arg, note_withheld, scalar_value)
 
 LOG = "_meta/reveals.json"
+EMPTY_VALUES = ("", "[]", "null", "~")     # YAML's empty values, as scalar_value reads them
+REVEALED_IN_KEY_RE = re.compile(r"""^["']?revealed_in["']?[ \t]*:""")
 
 
 def _nfc(s: str) -> str:
@@ -88,6 +103,35 @@ def apply_publish(vault: Path, paths: list[str],
     return [p for p in paths if _nfc(p) in after], None
 
 
+def prop_paths(vault: Path) -> tuple[set[str] | None, dict[str, str], str | None]:
+    """(the notes the publish tool says are props, read from the note itself
+    when the site makes no page for it; the notes it makes no page for, with
+    its verdict code; why not)."""
+    answer = ask_publish_tool(vault, ["explain", "--all"])
+    if answer.why or not isinstance(answer.data, dict):
+        return None, {}, _tool_why(answer)
+    props: set[str] = set()
+    no_page: dict[str, str] = {}
+    try:
+        for page in answer.data["pages"]:
+            path = _nfc(str(page["path"]))
+            if page.get("prop") is True:
+                props.add(path)
+            if "strippedSections" in page and page["strippedSections"] is None:
+                no_page[path] = str(page.get("code") or "")
+    except (KeyError, TypeError, AttributeError):
+        return None, {}, "the publish tool's explain answer is not understood"
+    return props, no_page, None
+
+
+def _no_page_why(rel: str, code: str) -> str:
+    if code == "DIR_UNMAPPED":
+        folder = Path(rel).parent.as_posix()
+        return (f"the site does not show notes in {folder}, "
+                "so it has no page (add the folder to player_site.folder_map)")
+    return f"the site makes no page for it ({code or 'no reason given'})"
+
+
 def _refusal(vault: Path, rel: str) -> str | None:
     if rel.startswith("_meta/"):
         return "not published here: _meta notes stay out of the site"
@@ -106,9 +150,34 @@ def _refusal(vault: Path, rel: str) -> str | None:
     return None
 
 
-def _clear_withheld(vault: Path, rel: str) -> tuple[str | None, str | None]:
-    """(new text with `withheld: false` or None when there is nothing to do,
-    why it could not be done)."""
+def _revealed_in_set(fm: list[str]) -> bool:
+    """Whether the frontmatter lines name a `revealed_in` (a string or a
+    list). A value not read as empty counts as set: an arrival is never
+    written over."""
+    at = next((i for i, ln in enumerate(fm) if REVEALED_IN_KEY_RE.match(ln)), None)
+    if at is None:
+        return False
+    if scalar_value(fm[at].split(":", 1)[1]).lower() not in EMPTY_VALUES:
+        return True
+    for line in fm[at + 1:]:
+        if line.strip() and not line[:1].isspace():
+            break
+        if scalar_value(line.strip().removeprefix("-")):
+            return True
+    return False
+
+
+def _has_frontmatter(vault: Path, rel: str) -> bool:
+    lines = (vault / rel).read_text(encoding="utf-8").splitlines(keepends=True)
+    return frontmatter_span(lines)[1] != "no frontmatter"
+
+
+def _frontmatter_edit(vault: Path, rel: str, *, clear: bool,
+                      stamp: str | None) -> tuple[str | None, str | None]:
+    """(new text, or None when there is nothing to do; why it could not be
+    done). `clear` sets `withheld: false` on a note whose `withheld` is not
+    already false; `stamp` sets `revealed_in: "[[stamp]]"` on a note that
+    names no `revealed_in` yet. Both land in the one edit."""
     with open(vault / rel, encoding="utf-8", newline="") as f:
         text = f.read()     # no newline translation: a CRLF note stays CRLF
     lines = text.splitlines(keepends=True)
@@ -116,14 +185,26 @@ def _clear_withheld(vault: Path, rel: str) -> tuple[str | None, str | None]:
     if error == "no frontmatter":
         return None, None
     if error:
-        return None, f"withheld not cleared: frontmatter {error}"
+        what = "withheld not cleared" if clear else "revealed_in not written"
+        return None, f"{what}: frontmatter {error}"
     eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
     fm = [ln.rstrip("\r\n") for ln in lines[1:end]]
-    at = next((i for i, ln in enumerate(fm) if WITHHELD_KEY_RE.match(ln)), None)
-    if at is None or fm[at].split(":", 1)[1].strip().lower() == "false":
+    changed = False
+    if clear:
+        at = next((i for i, ln in enumerate(fm) if WITHHELD_KEY_RE.match(ln)), None)
+        if at is not None and fm[at].split(":", 1)[1].strip().lower() != "false":
+            fm[at] = "withheld:"    # the spellings the build accepts, one spelling here
+            set_block(fm, "withheld", "false")
+            changed = True
+    if stamp is not None and not _revealed_in_set(fm):
+        at = next((i for i, ln in enumerate(fm) if REVEALED_IN_KEY_RE.match(ln)), None)
+        if at is not None:
+            fm[at] = "revealed_in:"
+        # A JSON string is a valid YAML double-quoted scalar, escapes and all.
+        set_block(fm, "revealed_in", json.dumps(f"[[{stamp}]]", ensure_ascii=False))
+        changed = True
+    if not changed:
         return None, None
-    fm[at] = "withheld:"        # the spellings the build accepts, one spelling here
-    set_block(fm, "withheld", "false")
     return "---" + eol + eol.join(fm) + eol + "---" + eol + "".join(lines[end + 1:]), None
 
 
@@ -180,7 +261,7 @@ def _write_log(vault: Path, log: dict[str, Any]) -> None:
 def run(vault: Path, session: str, publish: list[str], released: list[tuple[str, str]],
         write: bool) -> tuple[list[str], int]:
     rows: list[str] = []
-    counts = {"publish": 0, "clear": 0, "log": 0, "errors": 0}
+    counts = {"publish": 0, "clear": 0, "stamp": 0, "log": 0, "errors": 0}
 
     def row(verb: str, path: str, detail: str = "") -> None:
         rows.append(f"{verb}\t{path}\t{detail}")
@@ -210,15 +291,59 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                 error(rel, f"publish refused, nothing changed: {why}")
             wanted = []
         else:
-            already = [r for r in wanted if _nfc(r) in before]
-            fresh = [r for r in wanted if r not in already]
-            verb_pub, verb_clear = ("PUBLISHED", "CLEARED") if write else \
-                ("WOULD-PUBLISH", "WOULD-CLEAR")
-            # Know the clear can be done before anything is published.
-            clears = {r: _clear_withheld(vault, r) for r in wanted}
+            listed = [r for r in wanted if _nfc(r) in before]
+            fresh = [r for r in wanted if r not in listed]
+            # Listed but withheld, the site showed nothing of it: lifting withheld
+            # is this session's reveal, logged and stamped like a new publish.
+            lifted: list[str] = []
+            unknown: dict[str, str] = {}
+            for rel in listed:
+                try:
+                    if note_withheld((vault / rel).read_text(encoding="utf-8"))[0]:
+                        lifted.append(rel)
+                except PublishToolUnavailable as e:
+                    unknown[rel] = str(e)
+            already = [r for r in listed if r not in lifted]
+            revealing = [*fresh, *lifted]
+            verb_pub, verb_clear, verb_stamp = ("PUBLISHED", "CLEARED", "STAMPED") if write \
+                else ("WOULD-PUBLISH", "WOULD-CLEAR", "WOULD-STAMP")
+            props: set[str] = set()
+            no_page: dict[str, str] = {}
+            if revealing:
+                found, no_page, why = prop_paths(vault)
+                if found is None:
+                    row("WARNING", "-", f"revealed_in not written: {why}")
+                else:
+                    props = found
+            # Know the edit can be done before anything is published: the
+            # clear, and on a prop revealed now with no arrival yet, the stamp,
+            # one write per note. A note published before is never stamped.
+            edits: dict[str, tuple[str | None, str | None]] = {}
+            clearing: set[str] = set()
+            stamping: set[str] = set()
+            unstamped: dict[str, str] = {}     # a prop not stamped, and why
+            for rel in wanted:
+                edits[rel] = _frontmatter_edit(vault, rel, clear=True, stamp=None)
+                new, problem = edits[rel]
+                if new is not None:
+                    clearing.add(rel)
+                if problem or rel not in revealing or _nfc(rel) not in props:
+                    continue
+                if _frontmatter_edit(vault, rel, clear=False, stamp=session)[0] is None:
+                    unstamped[rel] = "revealed_in already set" if _has_frontmatter(vault, rel) \
+                        else "revealed_in not written: the note has no frontmatter"
+                else:
+                    stamping.add(rel)
+                    edits[rel] = _frontmatter_edit(vault, rel, clear=True, stamp=session)
+            for rel in revealing:
+                if _nfc(rel) in no_page:
+                    stamped = (f"; revealed_in: [[{session}]] "
+                               + ("is" if write else "would be") + " written all the same") \
+                        if rel in stamping else ""
+                    row("WARNING", rel, _no_page_why(rel, no_page[_nfc(rel)]) + stamped)
             for rel in list(fresh):
-                if clears[rel][1]:
-                    error(rel, f"not published, nothing changed: {clears[rel][1]}")
+                if edits[rel][1]:
+                    error(rel, f"not published, nothing changed: {edits[rel][1]}")
                     fresh.remove(rel)
             done = list(fresh)
             if write and fresh:
@@ -232,13 +357,14 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                             error(rel, "the publish tool does not list it as "
                                        "publishing; withheld kept")
             for rel in already:
-                row("SKIP", rel, "already published; not logged for this session")
-            for rel in [*done, *already]:
+                why_not = f"withheld unknown ({unknown[rel]}), so " if rel in unknown else ""
+                row("SKIP", rel, f"already published; {why_not}not logged for this session")
+            for rel in [*done, *lifted, *already]:
                 if rel in done:
                     counts["publish"] += 1
                     row(verb_pub, rel)
                     published.append(rel)
-                new, problem = clears[rel]
+                new, problem = edits[rel]
                 if problem:
                     error(rel, problem)
                 elif new is not None:
@@ -246,10 +372,24 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                         try:
                             (vault / rel).write_text(new, encoding="utf-8", newline="")
                         except OSError as e:
-                            error(rel, f"withheld not cleared: {e}")
+                            undone = [w for w, on in (("withheld not cleared", rel in clearing),
+                                                      ("revealed_in not written", rel in stamping))
+                                      if on]
+                            error(rel, f"{', '.join(undone)}: {e}")
                             continue
-                    counts["clear"] += 1
-                    row(verb_clear, rel, "withheld: false")
+                    if rel in lifted:
+                        counts["publish"] += 1
+                        row(verb_pub, rel, "already on the publish list; withheld lifted")
+                        published.append(rel)
+                    if rel in clearing:
+                        counts["clear"] += 1
+                        row(verb_clear, rel, "withheld: false")
+                    if rel in stamping:
+                        counts["stamp"] += 1
+                        row(verb_stamp, rel, f"revealed_in: [[{session}]]"
+                            + ("" if write or rel in lifted else " if it publishes"))
+                if rel in unstamped:
+                    row("SKIP", rel, unstamped[rel])
 
     items = [{"page": normalize_file_arg(p), "what": w} for p, w in released]
     if published or items:
@@ -265,7 +405,7 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                 counts["log"] = 0
                 error(LOG, f"not logged: {e}")
     rows.append(f"# publish: {counts['publish']} clear: {counts['clear']} "
-                f"log: {counts['log']} errors: {counts['errors']}")
+                f"stamp: {counts['stamp']} log: {counts['log']} errors: {counts['errors']}")
     return rows, (1 if counts["errors"] else 0)
 
 

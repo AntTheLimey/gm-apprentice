@@ -45,6 +45,10 @@ reads:
 - `prop_shift`: in a fenced section, the line start from which the hand
   changes (the hand style presses harder).
 - `prop_font`: a Google Fonts family, where the style uses one.
+- `prop_hand`: the writer's hand, an id in `_meta/prop-hands.json`
+  (`{"hands": {"<id>": {"font": "<family>", "who": "<writer>"}}}`;
+  `who` never publishes). The style uses its font; `prop_font` on the
+  note wins. An unknown hand warns and the style's own font is used.
 
 ## Containers
 

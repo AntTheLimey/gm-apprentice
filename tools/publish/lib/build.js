@@ -45,6 +45,7 @@ const { sheetSourceOf } = require('./sheet-source');
 const { pcIdentity } = require('./templates/pc-identity');
 const { planProps } = require('./props/plan');
 const { propHrefFor, propOutputs, keptCopyOutputs, pathProblem } = require('./props/files');
+const { loadHands, withHand, HANDS_FILE } = require('./props/hands');
 const { styledPage, styleFontFamilies, styledPageProblem, FONTS_CSS, BASE_CSS } = require('./props/page');
 const { containerItems, propRow, COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, placeCollection, propTaken, collectionModel, latestProps, shownRows } = require('./props/collection');
 const { layoutNames } = require('./props/layout');
@@ -208,8 +209,9 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {
 //   options.vaultPath   another vault through this site's rules (`--vault`)
 //   options.rawConfig   the site file already parsed
 //   options.shownFor    in memory: a vault-relative note path; the result's `shown` is what
-//                       the site holds of it, built as if it published
-// Returns { noteFaults, shown, renderErrors, warnings }: renderErrors are what failed to render (a build that
+//                       the site holds of it, built as if it published, and `shownProp` the
+//                       files of its prop (shownPropOf)
+// Returns { noteFaults, shown, shownProp, renderErrors, warnings }: renderErrors are what failed to render (a build that
 // has any also throws, with the same list on the error as `renderErrors`), warnings the text of every warning the
 // build printed, without its "WARNING:" prefix. Both are still printed.
 function build(options = {}) {
@@ -1666,6 +1668,51 @@ function buildSite(options) {
       } : null,
     };
   }
+  // The files the site would hold for the prop note asked about, as this build made them (`props pages --note`
+  // prints them to count their pages): { files: [{ out, text | bytes | from }], warnings }, its own page first; or
+  // { why } when there is no page to print. A styled page brings the base sheet, its style's files, the typefaces
+  // the font cache holds and the pictures it shows. `warnings`: what the build said of this prop, its hand
+  // registry and a typeface it did not have, so a count laid out in fallback type says so.
+  function shownPropOf() {
+    if (shownRel === null) return null;
+    if (!shownPage) {
+      const dir = path.posix.dirname(shownRel);
+      const unmapped = dir !== '.' && require('./scanner').mapFolder(dir, config.folderMap || {}) === null;
+      return { why: unmapped ? `the site does not read this note: its folder ${dir} is not in ${nameIn(config.vaultPath, 'player_site.folder_map')}` : 'the site does not read this note' };
+    }
+    const p = propPlan && propPlan.props.find((x) => x.page === shownPage);
+    if (!p) return { why: 'not a prop note' };
+    const { outputs } = propOutputs({ props: [p] }, { collectionAddress: collection && collection.address });
+    if (!outputs.length || propBlocked.has(p.address)) {
+      const said = propPlan.problems.find((r) => r.rel === p.rel);
+      if (said) return { why: said.detail };
+      if (!p.ships) return { why: 'its note never publishes in full (publish: false, or a stub), so its prop never ships' };
+      return { why: p.made || p.source ? 'its page is not made' : 'it names no prop_style or prop_file, so it has no page to print' };
+    }
+    // An unstyled container's page is a listing in the site's own look, which only the built site has.
+    if (p.made === 'container' && !p.style) return { why: "a container's page without a style uses the site's own look: count it once it is built" };
+    const files = outputs.map((f) => ({ out: f.out, text: f.text, bytes: f.bytes }));
+    const styled = Boolean(p.style && typeof p.made_html === 'string');
+    const warnings = propPlan.problems.filter((r) => r.rel === p.rel || (styled && r.rel === HANDS_FILE)).map((r) => r.detail);
+    const missing = styled ? styleFontFamilies(p.style, p.fields).filter((f) => !fontsLib.readFamilyCache(config.vaultPath, f)) : [];
+    if (missing.length) warnings.push(`${missing.map((f) => `"${f}"`).join(', ')} ${missing.length === 1 ? 'is' : 'are'} not in the vault's font cache, so the page is laid out in fallback type`);
+    if (styled) {
+      files.push({ out: BASE_CSS, from: path.join(__dirname, '../css/props.css') });
+      const st = propPlan.styles.find((x) => x.name === p.style.name);
+      for (const f of st ? st.files : []) files.push({ out: f.out, from: f.source });
+      if (styleFonts.css) {
+        files.push({ out: FONTS_CSS, text: styleFonts.css });
+        for (const f of styleFonts.files) files.push({ out: `fonts/${f.rel}`, from: f.from });
+      }
+      const dir = path.posix.dirname(p.address);
+      const srcs = new Set([...p.made_html.matchAll(/<img\b[^>]*\ssrc="([^"]+)"/gi)]
+        .map((m) => { try { return path.posix.join(dir, decodeURIComponent(m[1])); } catch (e) { return null; } }));
+      for (const entry of Object.values(imageMap)) {
+        if (srcs.has(`images/${entry.relPath}`)) files.push({ out: `images/${entry.relPath}`, from: entry.encodedPath || entry.sourcePath });
+      }
+    }
+    return { files, warnings: [...new Set(warnings)] };
+  }
 
   // A fast build deletes nothing. A PC page already in the folder that a full build would no longer write
   // (the note went unpublished, left the publish list, or was renamed) stops it before it writes anything.
@@ -1727,7 +1774,24 @@ function buildSite(options) {
       console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
       p.style = null;   // so none of the style's files or typefaces ship on its account
     }
-    const families = [...new Set([...styled, ...containers.filter((p) => p.style)].flatMap((p) => styleFontFamilies(p.style, p.page.frontmatter || {})))];
+    // Each shipping prop's hand is resolved once: its fields carry the hand's font as prop_font.
+    // A registry that cannot be read is raised once; an unknown hand, once per prop.
+    const raise = (rel, problem) => {
+      const row = { rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: problem.detail, fix: problem.fix };
+      propPlan.problems.push(row);
+      console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
+    };
+    const styledProps = [...styled, ...containers.filter((p) => p.style)];
+    if (styledProps.length) {
+      const registry = loadHands(config.vaultPath);
+      if (registry.problem) raise(HANDS_FILE, registry.problem);
+      for (const p of styledProps) {
+        const { fields, problem } = withHand(p.page.frontmatter || {}, registry.hands);
+        p.fields = fields;
+        if (problem) raise(p.rel, problem);
+      }
+    }
+    const families = [...new Set(styledProps.flatMap((p) => styleFontFamilies(p.style, p.fields)))];
     if (families.length) {
       let warned = false;
       styleFonts = fontsLib.selfHostedFontFaces(config.vaultPath, families, () => {
@@ -1737,7 +1801,7 @@ function buildSite(options) {
       }, { offline: options.offline === true, fontsHref: '../../fonts/' });
     }
     for (const p of styled) {
-      const made = styledPage({ prop: p, style: p.style, page: p.page, linkMap, imageMap, usedImages, collectionHref: collectionHrefFrom(p.address), fontsCss: styleFonts.css !== '' });
+      const made = styledPage({ prop: p, style: p.style, page: p.page, fields: p.fields, linkMap, imageMap, usedImages, collectionHref: collectionHrefFrom(p.address), fontsCss: styleFonts.css !== '' });
       if (made.problem) noPage(p, made.problem);
       else p.made_html = made.html;
     }
@@ -1765,7 +1829,7 @@ function buildSite(options) {
     for (const p of containers) {
       const { rows, title, noteTitle } = listed.get(p.rel);
       p.made_html = p.style
-        ? styledPage({ prop: p, style: p.style, page: p.page, linkMap, imageMap, usedImages, collectionHref: collectionHrefFrom(p.address), fontsCss: styleFonts.css !== '', items: containerItemsHtml(rows, p.address), names: { title, noteTitle } }).html
+        ? styledPage({ prop: p, style: p.style, page: p.page, fields: p.fields, linkMap, imageMap, usedImages, collectionHref: collectionHrefFrom(p.address), fontsCss: styleFonts.css !== '', items: containerItemsHtml(rows, p.address), names: { title, noteTitle } }).html
         : containerTemplate({ container: p, rows, address: p.address, title, noteTitle }, navFor, config, publishConfig, { linkMap, imageMap, usedImages });
     }
   }
@@ -2513,7 +2577,7 @@ function buildSite(options) {
   for (const line of summaryLines(noteFaults)) console.warn(`  WARNING: ${line}`);
 
   if (dry) {
-    return { noteFaults, shown: shownOf(), renderErrors, auditGaps, faults: publishConfig.faults };
+    return { noteFaults, shown: shownOf(), shownProp: shownPropOf(), renderErrors, auditGaps, faults: publishConfig.faults };
   }
 
   if (errorCount > 0) {

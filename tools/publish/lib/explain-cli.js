@@ -22,6 +22,7 @@ const { pcKeepList, retiredSheetFieldsFor } = require('./pc-prose');
 const { getCanonStatus } = require('./templates/base');
 const { sheetSourceOf } = require('./sheet-source');
 const { parseNote } = require('./frontmatter');
+const { isPropNote } = require('./props/note');
 const { markersIn } = require('./markers');
 const YAML = require('yaml');
 const { nearestNames, readerView } = require('./site-doctor');
@@ -41,6 +42,14 @@ function switchesOf(publishConfig) {
 function sheetWithheldOf(publishConfig, markdown, frontmatter) {
   return [...new Set(sheetWithheldTitles(markdown, publishConfig.exclude_sections || [], frontmatter,
     { pcKeepSections: pcKeepList(publishConfig) }))];
+}
+
+// Whether a note is a prop: read off the page the scanner made, or, when it made none (a folder the site does not
+// show), off the note's own frontmatter, so a prop filed where the site cannot see it is still known as one. False
+// when the note cannot be read or parsed.
+function propOf(page, full, readFile) {
+  if (page) return isPropNote(page.sourceFrontmatter || page.frontmatter);
+  try { return isPropNote(parseNote(readFile(full)).data); } catch (e) { return false; }
 }
 
 const MANIFEST_LABEL = { publishing: 'publishing', excluded: 'excluded', needsDecision: 'needs a decision' };
@@ -203,6 +212,7 @@ async function runExplain(options, deps) {
       directory: dir,
       mappedTo: mappedTo || null,
       type: (frontmatter && frontmatter.type) || null,
+      prop: frontmatterError ? false : propOf(page, path.join(vaultPath, target), readFile),
       publishMode: frontmatter ? publishMode(frontmatter) : null,
       autoExclude: auto,
       canonStatus,
@@ -360,6 +370,8 @@ function publishedPagesOf(survey) {
 //                  body is the only source); [] when none, null for any other file
 //   frontmatterError the parser's message for a file whose frontmatter could not be
 //                  parsed (code FILE_UNPARSEABLE, no page is built); null otherwise (#287)
+//   prop           the note is a prop (isPropNote, props/note.js), from its own frontmatter
+//                  when the scanner made no page for it; false when it cannot be parsed
 // `explain --all` as typed (the words after `--all`): the options runExplainAll takes,
 // or { error }.
 function explainAllOptions(args) {
@@ -372,6 +384,7 @@ async function runExplainAll(options, deps) {
   const opts = options || {};
   const d = deps || {};
   const out = d.out || console.log;
+  const readFile = d.readFile || ((p) => fs.readFileSync(p, 'utf8'));
   const survey = surveyVault(opts, d);
   assertNoStops(survey.publishConfig, 'explain');
   const pairs = pairsWith(survey, publishedPagesOf(survey));
@@ -405,6 +418,7 @@ async function runExplainAll(options, deps) {
         : null,
       // vault_check frontmatter reports these: its own reader accepts YAML this one rejects.
       frontmatterError: parseErrors.has(rel) ? parseErrors.get(rel) : null,
+      prop: parseErrors.has(rel) ? false : propOf(page, path.join(survey.vaultPath, rel), readFile),
     };
   });
   out(JSON.stringify({ vaultPath: survey.vaultPath, switches: switchesOf(survey.publishConfig),

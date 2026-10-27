@@ -36,6 +36,7 @@ being open.
 | Rebuild `_meta/index.md` | `index_build.py` |
 | Session Plan conformance | `plan_check.py` |
 | Write a session's Plan (or `--section`s of it), stamp its index, check it | `vault_write.py plan` |
+| File a new prop in its chapter's `Props/`, in its writer's hand, linked from its scene (dry run first; `--write`) | `vault_write.py prop-new` |
 | Narrative-plan discovery (`Planning/` + `_midwife/`) | `plans_index.py` |
 | Frontmatter writes (set/increment/promote/supersede/reconciled), legacy canon-key repair | `stamp_entities.py` |
 | Ingest source classification manifest | `ingest_survey.py` |

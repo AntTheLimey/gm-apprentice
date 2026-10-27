@@ -6,10 +6,12 @@ prop_kind: document   # document, object, diagram, supplied or container
 prop_file: ""         # a hand-made page, PDF or image beside this note, e.g. "invitation.html"
 prop_address: ""      # where it lives on the site; leave empty for props/<this note's name>.html (props/<name>-prop.html if a site page has that address)
 prop_style: ""        # a style the site builds the page in (terminal, form, hand, letter, clipping, ticket, passport, scroll, decree); leave empty with a prop_file
+prop_hand: ""         # the hand it is written in, from _meta/prop-hands.json (one hand per writer); styles that write by hand use its font
 prop_line: ""         # one line for the props page: how it reached the players
 prop_group: ""        # the heading it sits under on the props page; empty uses its chapter
 prop_container: ""    # the container prop it sits in, e.g. "[[The Bookshelf]]"
 show_sealed: none     # containers only: "titles" also lists items not yet found, by title alone
+revealed_in: ""       # the session it reached the players; written at wrap-up
 source: ""
 createdSession: ""
 asOfSession: ""

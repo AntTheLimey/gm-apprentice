@@ -71,8 +71,24 @@ class PropSchemaTests(unittest.TestCase):
         front = text.split("---")[1]
         keys = [line.split(":")[0] for line in front.splitlines() if line and not line.startswith(" ")]
         at = keys.index("prop_address")
-        self.assertEqual(keys[at + 1:at + 6],
-                         ["prop_style", "prop_line", "prop_group", "prop_container", "show_sealed"])
+        self.assertEqual(keys[at + 1:at + 8],
+                         ["prop_style", "prop_hand", "prop_line", "prop_group", "prop_container",
+                          "show_sealed", "revealed_in"])
+
+    def test_template_lists_3c_fields(self):
+        text = (ROOT / "skills" / "shared" / "templates" / "prop.md").read_text(encoding="utf-8")
+        front = text.split("---")[1]
+        keys = [line.split(":")[0] for line in front.splitlines() if line and not line.startswith(" ")]
+        self.assertEqual(keys[keys.index("prop_style") + 1], "prop_hand")
+        self.assertEqual(keys[keys.index("show_sealed") + 1], "revealed_in")
+
+    def test_schema_show_lists_prop_hand(self):
+        out = subprocess.run(
+            [sys.executable, str(SCRIPTS / "schema_rules.py"), "show", "prop"],
+            capture_output=True, text=True, check=True).stdout
+        optional = next(l for l in out.splitlines() if l.startswith("optional:"))
+        self.assertEqual(optional.count("prop_hand"), 1)
+        self.assertEqual(optional.count("revealed_in"), 1)
 
     def test_prop_template_named(self):
         self.assertEqual(sr.TEMPLATE_NAMES["prop.md"], "_Template_Prop.md")

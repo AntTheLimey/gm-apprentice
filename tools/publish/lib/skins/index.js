@@ -102,10 +102,11 @@ function fontFamiliesFor(ids) {
 // filters, because fetching one face too many is harmless and missing one is not.
 // `scanConfig` is what scanConfigFor returns; `site` is { skin, frame } (the resolved
 // config carries it as publishConfig.sheetLook).
-function skinsInVault(scanConfig, site) {
+// `report`: a scan the caller already made (scanVaultReport), read in place of a scan of its own.
+function skinsInVault(scanConfig, site, report = null) {
   const { scanVaultReport } = require('../scanner');
   const ids = new Set(site.skin ? [site.skin] : []);
-  for (const page of scanVaultReport(scanConfig, { quiet: true }).pages) {
+  for (const page of (report || scanVaultReport(scanConfig, { quiet: true })).pages) {
     const fm = page.frontmatter || {};
     if (fm.type === 'pc') ids.add(resolveLook(fm, site).skin);
   }
