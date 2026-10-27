@@ -16,13 +16,20 @@ function readState(file) {
   } catch (e) {
     throw new Error(`${file} could not be run: ${String(e && e.message ? e.message : e).split('\n')[0]}`);
   }
-  const names = Object.keys(context.window);
+  // Read inside the context too, under the same limit, and handed out as one string: a getter or a Proxy on window
+  // runs there, where the timeout stops it.
+  let read;
+  try {
+    read = JSON.parse(vm.runInContext('(() => { const names = Object.keys(window); let json; try { json = names.length === 1 ? JSON.stringify(window[names[0]]) : undefined; } catch (e) { json = undefined; } return JSON.stringify({ names: names.map(String), json }); })()', context, { timeout: 1000 }));
+  } catch (e) {
+    throw new Error(`${file} could not be read back: ${String(e && e.message ? e.message : e).split('\n')[0]}`);
+  }
+  const { names } = read;
   if (names.length !== 1) {
     throw new Error(names.length ? `${file} sets ${names.length} names on window (${names.join(', ')}); one is read` : `${file} sets nothing on window`);
   }
   const [global] = names;
-  let items;
-  try { items = JSON.parse(JSON.stringify(context.window[global])); } catch (e) { items = undefined; }
+  const items = read.json === undefined ? undefined : JSON.parse(read.json);
   if (items === undefined || items === null || typeof items !== 'object') throw new Error(`${file} sets window.${global} to something that is not a list or map`);
   return { global, items };
 }

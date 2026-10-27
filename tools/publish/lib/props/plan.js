@@ -233,7 +233,8 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
 
   // A prop's own file, then (for a page or SVG) every file it reaches, each once, into `files`.
   const markup = (ext) => MARKUP_EXTS.has(ext);
-  function planFiles(p, files, problem, claimed) {
+  // `stateOut`: the container's state file (planState), which the build makes: a link to it is no file to copy.
+  function planFiles(p, files, problem, claimed, stateOut = null) {
     const first = { source: p.source, out: p.address, cut: Boolean(cutKeeper) && markup(p._ext) };
     BYTES.set(first, p._bytes);
     files.push(first);
@@ -258,6 +259,7 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
       for (const { raw, path: ref } of refs) {
         const joined = segmentsBelow(path.posix.join(at || '.', ref));
         if (!joined) { linkProblem(raw, 'is outside its folder'); continue; }
+        if (stateOut && addressKey(canonicalNfc(path.posix.join(path.posix.dirname(p.address), ...joined))) === addressKey(stateOut)) continue;
         const lext = path.extname(ref).toLowerCase();
         const notCopied = () => linkProblem(raw, 'is a kind of file a prop does not copy', KIND_FIX);
         if (!LINKED_EXTS.has(lext)) { notCopied(); continue; }
@@ -313,35 +315,32 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
       }
     }
   }
-  // A container's state file (prop_state), beside its page: made by the build from what the container lists. The
-  // vault's own copy, which the page links, is not copied: the made file takes its place. Claimed as the prop's files
-  // are, so no later prop's file lands on it.
-  function planState(p) {
+  // A container's state file (prop_state), beside its page: made by the build from what the container lists. Asked
+  // for before the page's links are followed, so a link to it is the made file (the vault's own copy, if any, is not
+  // copied) and never a missing one. { name, global, out }, or null (with a row when the fields are wrong).
+  function stateAsked(p) {
     const fm = p.page.sourceFrontmatter || p.page.frontmatter;
     const name = propStateOf(fm);
-    if (p.kind !== 'container' || name === null) return;
+    if (p.kind !== 'container' || name === null) return null;
     const shown = (v) => (typeof v === 'string' ? `"${v}"` : JSON.stringify(v));
     if (typeof name !== 'string' || !PROP_STATE_RE.test(name)) {
       problem(p.rel, `prop_state ${shown(name)} is not a file name the state file can have, so it is not made`, 'write a name such as state.js: lower-case letters, digits, dots, - and _, ending in .js, with no folder');
-      return;
+      return null;
     }
     const global = propStateGlobalOf(fm);
     if (typeof global !== 'string' || !PROP_STATE_GLOBAL_RE.test(global)) {
       problem(p.rel, `prop_state_global ${shown(global)} is not a name the state file can set, so it is not made`, 'write a name such as PROP_ITEMS: capital letters, digits and _, starting with a letter');
-      return;
+      return null;
     }
     if (!p.made && !PAGE_FILE_EXTS.has(path.extname(p.address).toLowerCase())) {
       problem(p.rel, `prop_state ${shown(name)} is not made: the container's prop file is not a page`, 'use an .html prop file, or remove prop_state');
-      return;
+      return null;
     }
-    const out = canonicalNfc(path.posix.join(path.posix.dirname(p.address), name));
+    return { name, global, out: canonicalNfc(path.posix.join(path.posix.dirname(p.address), name)) };
+  }
+  // The state file planned, claimed as the prop's files are, so no later prop's file lands on it.
+  function planState(p, { name, global, out }) {
     const key = addressKey(out);
-    const own = p.files.findIndex((f, i) => i > 0 && addressKey(f.out) === key);
-    if (own !== -1) {
-      p.files.splice(own, 1);
-      claimed.delete(key);
-    }
-    p.shared = p.shared.filter((o) => addressKey(o) !== key);
     const why = taken.has(out, { explicit: p._explicit });
     const prior = claimed.get(key);
     if (why || prior) {
@@ -354,9 +353,10 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
   }
   for (const p of order) {
     if (!p.address) continue;
+    const asked = stateAsked(p);
     if (p.made) p.files.push({ source: null, out: p.address, made: p.made });
-    else planFiles(p, p.files, problem, claimed);
-    planState(p);
+    else planFiles(p, p.files, problem, claimed, asked && asked.out);
+    if (asked) planState(p, asked);
   }
   PLANS.set(result, { claimed, taken, keptReplaced, vaultReal, cutKeeper: Boolean(cutKeeper) });
 

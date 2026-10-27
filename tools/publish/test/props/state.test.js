@@ -69,7 +69,7 @@ describe('a container state file', () => {
   });
 });
 
-describe('a state file that cannot be made', () => {
+describe('a state file asked for in other ways', () => {
   for (const [name, fm, said] of [
     ['a bad prop_state name is a row and no file', 'prop_state: State.JS\n', /prop_state "State\.JS" is not a file name/],
     ['a prop_state with a folder is a row and no file', 'prop_state: data/state.js\n', /prop_state "data\/state\.js" is not a file name/],
@@ -89,6 +89,16 @@ describe('a state file that cannot be made', () => {
       } finally { s.cleanup(); }
     });
   }
+
+  it('a container page linking a state file the vault does not hold gets the made file and no row', () => {
+    const files = FILES();
+    delete files['Library/state.js'];
+    const s = buildBoth(files, { ...SETTINGS, sites: ['player'] });
+    try {
+      assert.ok(!s.logs.some((l) => /Bookcase\.md:|links "state\.js"|could not be put on the site as asked \(Bookcase/.test(l)), s.logs.join('\n'));
+      assert.match(s.player.read('props', 'state.js'), /^window\.LIBRARY = \{/);
+    } finally { s.cleanup(); }
+  });
 
   it('a prop_state on a note that is not a container is ignored', () => {
     const files = FILES({ 'Library/Card.md': '---\ntype: prop\nprop_file: card.html\nprop_state: items.js\n---\nA card.\n', 'Library/card.html': '<p>A card.</p>' });
@@ -163,6 +173,8 @@ describe('props read-state', () => {
       ['window.A = {}; window.B = {};', /sets 2 names on window \(A, B\)/],
       ['window.X = 3;', /not a list or map/],
       ['while (true) {}', /could not be run: Script execution timed out/],
+      ['window.X = { get a() { while (true) {} } };', /could not be read back: Script execution timed out/],
+      ['window = new Proxy({}, { ownKeys() { while (true) {} } });', /could not be read back: Script execution timed out/],
     ]) {
       const r = run('x.js', text);
       assert.equal(r.status, 1, text);
