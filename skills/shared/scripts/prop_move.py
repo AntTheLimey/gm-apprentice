@@ -818,18 +818,19 @@ def _vault_names(c: Conversion) -> set[str]:
     return c.names
 
 
-def _note_path(c: Conversion, folder: str, stem: str) -> str | None:
+def _note_path(c: Conversion, folder: str, stem: str, other: str | None = None) -> str | None:
     """A free note path for `stem` in `folder`: the stem when no note in the
-    vault answers to it as a link does, else `<stem> (prop)`; None (and a
-    row) when both are taken."""
-    for name in (stem, f"{stem} (prop)"):
+    vault answers to it as a link does, else `other` (`<stem> (prop)` when
+    not given); None (and a row) when both are taken."""
+    other = other or f"{stem} (prop)"
+    for name in (stem, other):
         key = fold_name(name)
         if (key not in c.taken and key not in _vault_names(c)
                 and not vault_write.live_stem_clash(c.batch, name)):
             c.taken.add(key)
             return f"{folder}/{name}.md" if folder else f"{name}.md"
     c.row(PERSON, f"{folder}/{stem}.md", f"no free note name for {stem!r} "
-          f"(it and {stem!r} (prop) are taken)")
+          f"(it and {other!r} are taken)")
     return None
 
 
@@ -1320,7 +1321,10 @@ def _state_container(c: Conversion, root: Path, index: str, script: str, state: 
                 pic_rel = vault_rel(pic) if pic else None
                 if pic and pic_rel and (root / pic).is_file() and not pic.lower().endswith(PAGE_EXTS):
                     _copy(c, pic_rel, root / pic, pic)
-        item = _note_path(c, folder, clean_stem(name, key))
+        # An item with no page of its own is keyed in the made state file by its note's file name: when its title
+        # is taken, the old key names the note, so the shelf's script reads the same key.
+        own_page = any(f == "prop_file" for f, _v in fields)
+        item = _note_path(c, folder, clean_stem(name, key), None if own_page else clean_stem(key, key))
         if item is None:
             continue
         _prop_note(c, item, fields)

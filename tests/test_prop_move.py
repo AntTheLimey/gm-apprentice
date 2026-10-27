@@ -1054,3 +1054,17 @@ def test_envelope_hand_read_from_the_live_page(tmp_path: Path) -> None:
     # The letter has a hand of its own, and prop_hand holds one: a person chooses.
     assert fm_of(c.batch.texts["Documents/Both.md"])["prop_hand"] == "wren"
     assert any(r.startswith(f"{prop_move.PERSON}\tDocuments/Both.md\t") and "six" in r and "envelope" in r for r in person), person
+
+
+def test_a_state_item_without_a_page_keeps_its_state_key_when_its_name_is_taken(tmp_path: Path) -> None:
+    # The tool keys an item with no page of its own by its note's file name: "(prop)" would change the key the
+    # shelf's script reads, so the old key itself names the note (its title stays the book's).
+    vault, site = gazetteer(tmp_path, {"Items/Moon_Almanac.md": "---\ntype: item\n---\nThe real almanac.\n"})
+    c = converted(vault, site)
+    rel = f"{NOTES}/shelf/moon-almanac.md"
+    assert rel in c.batch.texts, sorted(c.batch.changed())
+    assert fm_of(c.batch.texts[rel])["title"] == "Moon Almanac"
+    assert f"{NOTES}/shelf/Moon Almanac (prop).md" not in c.batch.texts
+    # An item with a page of its own is keyed by its page: "(prop)" is fine there.
+    vault2, site2 = gazetteer(tmp_path / "two", {"Items/Tide_Tables.md": "---\ntype: item\n---\nOld.\n"})
+    assert f"{NOTES}/shelf/Tide Tables (prop).md" in converted(vault2, site2).batch.texts
