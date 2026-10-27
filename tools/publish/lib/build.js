@@ -173,7 +173,8 @@ const addressOf = (text) => {
 
 // `addresses`: the other files the site serves (each shipping prop's files, the props page), and `kept`, the kept
 // folders, as the build knows them. A link with a / or a page ending is read as an address first: one the site has
-// stands, before any note name is tried for it.
+// stands, in the site's own spelling, before any note name is tried for it. A link into a kept folder stands as written
+// only when it names a file (a file ending) or a folder (a trailing /): `Maps/Harbour Map` is still a note's name.
 function resolveSiteLink(link, { linkMap = Object.create(null), pages = [], addresses = [], kept = [] } = {}) {
   const text = String(link == null ? '' : link).trim();
   if (/^https?:\/\//i.test(text)) return { kind: 'outside', href: text };
@@ -191,8 +192,14 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [], addr
   if (!wiki && (/[\\/]/.test(decoded) || /\.html?(?:[?#]|$)/i.test(decoded))) {
     const at = addressOf(canonicalNfc(decoded.trim()));
     const known = (a) => addressOf(String(a)) === at;
-    if (Object.values(linkMap).some(known) || addresses.some(known)
-        || kept.some((k) => at.startsWith(addressOf(`${String(k).replace(/[\\/]+$/, '')}/`).slice(0, -'index.html'.length)))) {
+    const after = (/[?#][\s\S]*$/.exec(text) || [''])[0];
+    const page = Object.values(linkMap).find(known);
+    if (page) return { kind: 'page', href: page };
+    const served = addresses.find(known);
+    if (served) return { kind: 'site', href: `${served}${after}` };
+    const bare = decoded.trim().replace(/[?#][\s\S]*$/, '');
+    if ((/\/$/.test(bare) || /\.[a-z0-9]+$/i.test(path.posix.basename(bare)))
+        && kept.some((k) => at.startsWith(addressOf(`${String(k).replace(/[\\/]+$/, '')}/`).slice(0, -'index.html'.length)))) {
       return { kind: 'site', href: text.replace(/^\.\//, '') };
     }
   }
