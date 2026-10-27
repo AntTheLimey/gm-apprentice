@@ -514,3 +514,21 @@ describe('prop_group headings on the props page and the landing box', () => {
     assert.match(section('Bookshelf'), /<h3 class="prop-group">Papers<\/h3>/);
   });
 });
+
+describe('Ruling 43: the landing page counts no prop note as a story entry', () => {
+  const s = buildBoth({
+    'Chapters/Chapter One/Chapter One.md': '---\ntype: chapter\nstatus: played\n---\nThe first.\n',
+    'Chapters/Chapter One/Props/Map.md': '---\ntype: prop\n---\nA map.\n',
+    'Chapters/Chapter One/Props/Menu.md': '---\ntype: prop\nprop_kind: document\n---\nA menu.\n',
+    'Chapters/Chapter Two.md': '---\ntype: chapter\nstatus: played\n---\nThe second.\n',
+  });
+  after(() => s.cleanup());
+
+  it('The Story counts the two chapters only', () => {
+    for (const site of [s.player, s.gm]) {
+      const html = site.read('index.html');
+      const card = html.slice(html.indexOf('<h4>The Story</h4>'), html.indexOf('</a>', html.indexOf('<h4>The Story</h4>')));
+      assert.match(card, /<div class="count">2 entries<\/div>/);
+    }
+  });
+});

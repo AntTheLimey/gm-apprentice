@@ -9,6 +9,7 @@ const { canonicalNfc } = require('../unicode');
 const { isOutOfPlay } = require('../pc-status');
 const { isPlayedSession } = require('../session-hub');
 const { propListHtml } = require('./props-page');
+const { isPropNote } = require('../props/note');
 
 function formatDate(dateStr) {
   if (!dateStr) return null;
@@ -261,7 +262,10 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   const dirCounts = {};
   for (const page of pages) {
     const d = page.outputDir;
+    // A prop note kept beside its chapter is not a story entry.
+    const prop = isPropNote(page.sourceFrontmatter || page.frontmatter);
     for (const ed of exploreDirs) {
+      if (ed.key === 'story' && prop) continue;
       if (d === ed.dir || d.startsWith(ed.dir + '/')) {
         dirCounts[ed.key] = (dirCounts[ed.key] || 0) + 1;
       }
