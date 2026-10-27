@@ -41,7 +41,8 @@ stops offering a move that is done.
   no words its site shows gets no page and no search entry. Its
   container's listing shows its title unlinked, and the state file keeps
   its fields with `href: null`. Words players can read give it its page
-  back on the player site; GM Notes give it one on the GM site only.
+  back on the player site; GM Notes give it one on the GM site only,
+  when that site shows them.
   `explain` says so, and a page naming it gets its own fix line
   (`LISTED_ONLY`).
 - Props are listed in arrival order by the session `revealed_in` names,
@@ -57,7 +58,8 @@ stops offering a move that is done.
 
 - The update no longer offers `props-move` again after a move: it
   skips the pages the move recorded. A page of the same name elsewhere
-  is still offered.
+  is still offered. A vault moved under 1.10.105 has no record, so the
+  pages that move left in place may be offered again; answer `leave`.
 - The leak gate no longer reports a source line naming a page and the
   heading under it, such as `[[Chapter_0.1_Wrap_Up]] — narrative recap`.
   The page's title and its first heading are text players can see. A
