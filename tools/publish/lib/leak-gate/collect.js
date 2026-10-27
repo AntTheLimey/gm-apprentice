@@ -17,7 +17,7 @@ const { pairHubs } = require('../session-hub');
 const { parseNote } = require('../frontmatter');
 const { canonicalNfc } = require('../unicode');
 const {
-  playerSafeMarkdown, stubMarked, stubCut, hiddenFieldsOf, publishedFrontmatter, pcHeadingsUnstable, publishMode, isWithheld,
+  playerSafeMarkdown, stubMarked, stubCut, hiddenFieldsOf, publishedFrontmatter, pcHeadingsUnstable, publishMode, isWithheld, stripLeadingH1,
 } = require('../processor');
 const { createMarks, markKinds, sanitize, markedSpans } = require('../gm-marks');
 const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf } = require('./text');
@@ -143,6 +143,9 @@ function collectHidden({ configPath, outputDir = null }) {
       const shownMarkdown = playerSafeMarkdown(shownText, options).text;
       if (source === page.markdown) shownBodyOf.set(page, shownMarkdown);
       visible.push(textsOfMarkdown(shownMarkdown, { headings: true }).join('\n'));
+      // The page's title heads its body in place of the note's own leading H1 (the build drops it), so the title runs on
+      // into the first words under it: "[[Wrap Up]] — narrative recap" is a page title and the heading players see next.
+      if (source === page.markdown) visible.push([String(page.displayTitle || ''), ...textsOfMarkdown(stripLeadingH1(shownMarkdown), { headings: true })].join('\n'));
       visible.push(...tableRunsOf(shownMarkdown));
     }
   }

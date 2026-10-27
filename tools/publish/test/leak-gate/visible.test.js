@@ -83,6 +83,25 @@ describe('leak gate: also visible, read as the page reads it', () => {
     } finally { site.cleanup(); }
   });
 
+  // A page's title heads its body in place of the note's own leading H1, so "[[Wrap Up]] — narrative recap" in a GM's
+  // source list is the page's title and the heading players read under it (Canticle, 2026-10-27).
+  const WRAP = { 'Sessions/Wrap Up One.md': '---\ntype: event\n---\n# The First Night (Wrap-Up)\n\n## Narrative Recap\n\nThe party met at the inn.\n\n## GM Notes\n\n### Hidden Ending\n\nThe innkeeper is the thief.\n' };
+  const SOURCES = (line) => ({ 'NPCs/Baker.md': `---\ntype: npc\n---\nThe baker.\n\n## GM Notes\n\n### Source References\n\n- ${line}\n` });
+  const WRAP_SETTINGS = { player: { folder_map: { ...SETTINGS.player.folder_map, Sessions: 'sessions' } } };
+
+  it('a page\'s title and the heading under it, named in GM Notes, is not a finding', () => {
+    const site = leakSite({ ...WRAP, ...SOURCES('[[Wrap Up One]] — narrative recap') }, WRAP_SETTINGS);
+    try { assert.deepEqual(gate(site).findings, []); } finally { site.cleanup(); }
+  });
+
+  it('a page\'s title and a heading players do not see is still found', () => {
+    const site = leakSite({ ...WRAP, ...SOURCES('[[Wrap Up One]] — hidden ending') }, WRAP_SETTINGS);
+    try {
+      leakInto(site.outputDir, 'sessions/wrap-up-one.html', 'Wrap Up One hidden ending');
+      assert.deepEqual(gate(site).findings.map((f) => f.text), ['wrap up one hidden ending']);
+    } finally { site.cleanup(); }
+  });
+
   it('a hidden sentence the site does not say is still found', () => {
     const site = leakSite({
       ...MAYOR,
