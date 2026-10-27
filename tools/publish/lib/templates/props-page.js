@@ -14,7 +14,8 @@ function rowHtml(row, fromOut) {
   if (row.sealed) {
     return `<li class="prop-item prop-sealed"><span class="prop-title">${escapeHtml(row.title)}</span> <span class="prop-seal">Sealed</span></li>`;
   }
-  const parts = [`<a href="${href(row.href)}">${escapeHtml(row.title)}</a>`];
+  // A prop its container lists with no page of its own has no link: its title alone.
+  const parts = [row.href ? `<a href="${href(row.href)}">${escapeHtml(row.title)}</a>` : `<span class="prop-title">${escapeHtml(row.title)}</span>`];
   if (row.line) parts.push(`<span class="prop-line">${escapeHtml(row.line)}</span>`);
   if (row.arrived) parts.push(`<span class="prop-arrived">Arrived in <a href="${href(row.arrived.href)}">${escapeHtml(row.arrived.title)}</a></span>`);
   if (row.unrevealed) parts.push('<span class="gm-unrevealed">not yet revealed</span>');
@@ -88,7 +89,7 @@ function collectionTemplate(model, navFor, config, publishConfig) {
   const href = (out) => escapeHtml(encodeHref(relativeHref(address, out)));
   const cover = model.cover ? campaignImageSrc(isWebImageAddress(model.cover) ? model.cover : relativeHref(address, model.cover)) : '';
   const row = model.coverRow;
-  const coverLink = row ? `<a class="props-cover" href="${href(row.href)}"><span class="props-cover-title">${escapeHtml(row.title)}</span>${row.line ? `<span class="prop-line">${escapeHtml(row.line)}</span>` : ''}</a>${row.unrevealed ? ' <span class="gm-unrevealed">not yet revealed</span>' : ''}` : '';
+  const coverLink = row && row.href ? `<a class="props-cover" href="${href(row.href)}"><span class="props-cover-title">${escapeHtml(row.title)}</span>${row.line ? `<span class="prop-line">${escapeHtml(row.line)}</span>` : ''}</a>${row.unrevealed ? ' <span class="gm-unrevealed">not yet revealed</span>' : ''}` : '';
   const groups = model.groups.map((g) => {
     const heading = g.href ? `<a href="${href(g.href)}">${escapeHtml(g.heading)}</a>` : escapeHtml(g.heading);
     return `<section class="prop-group">\n<h2>${heading}</h2>\n${containerItemsHtml(g.rows, address)}\n</section>`;

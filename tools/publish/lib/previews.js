@@ -12,6 +12,7 @@ const { kindLabel } = require('./kind-label');
 const { canonicalNfc } = require('./unicode');
 const { labelsForLinks } = require('./wikilink');
 const { NO_PAGE_TYPES } = require('./excluding-values');
+const { isListedOnly } = require('./props/note');
 
 const ORDINARY_STATUS = new Set(['alive', 'active']);
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
@@ -103,8 +104,21 @@ function cardFor(page, ctx) {
 
 // A note the build writes no page for (a world-flags file is internal tracking). The one
 // definition: the render loop and the card list both ask it, so a note with no page has no card.
+// A prop a container lists that has nothing of its own to show (props/note.js isListedOnly) is one too: its container
+// lists it with no link. Decided once per page, on the note as written (the first ask comes before the build cuts a
+// body), so every later ask agrees with the first.
+const noPage = new WeakMap();
 function getsNoPage(page) {
-  return NO_PAGE_TYPES.has((page.frontmatter || {}).type);
+  if (noPage.has(page)) return noPage.get(page);
+  const fm = page.sourceFrontmatter || page.frontmatter || {};
+  const answer = NO_PAGE_TYPES.has(fm.type) || isListedOnly(fm, page.markdown);
+  noPage.set(page, answer);
+  return answer;
+}
+
+// A published note its container lists with no page of its own (isListedOnly), as getsNoPage decided it.
+function listedOnly(page) {
+  return getsNoPage(page) && !NO_PAGE_TYPES.has((page.sourceFrontmatter || page.frontmatter || {}).type);
 }
 
 function buildPreviews(pages, ctx) {
@@ -125,4 +139,4 @@ function onlyBuiltPages(cards, isBuilt) {
   return out;
 }
 
-module.exports = { cardFor, rowsFor, buildPreviews, getsNoPage, onlyBuiltPages };
+module.exports = { cardFor, rowsFor, buildPreviews, getsNoPage, listedOnly, onlyBuiltPages };
