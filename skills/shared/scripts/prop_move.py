@@ -52,6 +52,7 @@ import os
 import posixpath
 import re
 import shutil
+import signal
 import sys
 import tempfile
 import unicodedata
@@ -1338,6 +1339,21 @@ COPY_EXTS = frozenset({".md", ".html", ".htm", ".css", ".js", ".png", ".jpg", ".
                        ".gif", ".webp", ".svg", ".avif", ".pdf"})
 
 
+class Stopped(KeyboardInterrupt):
+    """The move was told to stop (SIGTERM, SIGHUP): it puts the vault back as
+    it does on Ctrl-C."""
+
+
+def _stop(signum: int, _frame: Any) -> None:
+    # One stop is enough: a second signal must not cut the put-back short.
+    for sig in STOP_SIGNALS:
+        signal.signal(sig, signal.SIG_IGN)
+    raise Stopped(f"the move was stopped by {signal.Signals(signum).name}")
+
+
+STOP_SIGNALS = tuple(s for s in (getattr(signal, "SIGTERM", None), getattr(signal, "SIGHUP", None)) if s is not None)
+
+
 class Blocked(StepFailed):
     """move-check found a served page the vault alone does not reproduce."""
 
@@ -1789,7 +1805,13 @@ def main(argv: list[str] | None = None) -> int:
     vault = args.vault.resolve()
     try:
         if args.mode == "apply":
-            rows, code = run_apply(vault, given)
+            # A kill (the update stopping, a closed terminal) takes the same put-back path as Ctrl-C.
+            kept = {sig: signal.signal(sig, _stop) for sig in STOP_SIGNALS}
+            try:
+                rows, code = run_apply(vault, given)
+            finally:
+                for sig, handler in kept.items():
+                    signal.signal(sig, handler)
             print("\n".join(rows))
             return code
         rows, c, blockers = run_plan(vault, given)

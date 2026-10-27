@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from migrate_core import (CHOICE, PERSON, TOOL_TIMEOUT, WILL, Check, Item,
+from migrate_core import (CHOICE, PERSON, WILL, Check, Item,
                           StepFailed, cells, edit_frontmatter, plugin_tool, stopped)
 from migrate_vault import vault_system
 from vault_check import (ExplainAll, ask_publish_tool, check_frontmatter, check_gm_leak,
@@ -1003,14 +1003,14 @@ PROP_MOVE_SCRIPT = Path(__file__).resolve().parent / "prop_move.py"
 
 
 def _run_prop_move(vault: Path, args: list[str]) -> tuple[int, str, str]:
-    """prop_move.py on `vault`: (exit code, stdout, stderr)."""
+    """prop_move.py on `vault`: (exit code, stdout, stderr). No time limit:
+    the move bounds each tool call itself, and a limit here would kill it
+    between steps, past its put-back."""
     try:
         proc = subprocess.run(
             [sys.executable, str(PROP_MOVE_SCRIPT), str(vault), *args],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
-            timeout=TOOL_TIMEOUT, check=False)
-    except subprocess.TimeoutExpired as e:
-        raise StepFailed(f"prop_move.py timed out after {TOOL_TIMEOUT}s") from e
+            check=False)
     except OSError as e:
         raise StepFailed(f"prop_move.py could not run ({e.__class__.__name__})") from e
     return proc.returncode, proc.stdout, proc.stderr

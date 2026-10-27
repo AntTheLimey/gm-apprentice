@@ -959,3 +959,29 @@ def test_plan_round_trip_blocks_a_state_field_the_tool_reads(tmp_path: Path) -> 
     assert f"{prop_move.PERSON}\t{NOTES}/shelf/The Shelf.md\ttide-tables: field 'group' not carried over" in text, text
     # Built and read back, the made state file lacks it: a blocker, not a quiet loss.
     assert "CHECK\tgazetteer/shelf/state.js\tSTATE-DIFFERS: tide-tables.group gone" in text, text
+
+
+def test_a_killed_apply_puts_the_vault_back(tmp_path: Path) -> None:
+    import contextlib
+    import io
+    import os
+    import signal
+    for n, sig in enumerate((signal.SIGTERM, signal.SIGHUP)):
+        vault, site = gazetteer(tmp_path / str(n))
+        before, dirs = snapshot(vault), folders(vault)
+        kept = signal.getsignal(sig)
+
+        def killed(config: Path, decisions: dict, keep: Path | None = None, sig: signal.Signals = sig) -> dict:
+            # The notes are written and published by now: the half state a kill must never leave.
+            assert (vault / CH4 / "dinner-menu.md").is_file()
+            os.kill(os.getpid(), sig)
+            raise AssertionError("the signal did not stop the move")
+        out = io.StringIO()
+        with mock.patch.object(prop_move, "move_check", killed), contextlib.redirect_stdout(out):
+            code = prop_move.main([str(vault), "apply"])
+        text = out.getvalue()
+        assert code == 1, text
+        assert f"stopped by {sig.name}" in text and "the vault is as it was" in text, text
+        assert snapshot(vault) == before and folders(vault) == dirs
+        # The handlers are the caller's again afterwards.
+        assert signal.getsignal(sig) == kept

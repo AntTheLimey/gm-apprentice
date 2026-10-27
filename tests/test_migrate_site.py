@@ -879,6 +879,14 @@ class PropsMoveTests(unittest.TestCase):
                 item.apply("move")
         self.assertIn("move-check found 1 blocker", str(cm.exception))
 
+    def test_apply_runs_with_no_outer_timeout(self):
+        # Ruling 35: the move bounds each tool call itself; an outer limit would kill it between steps.
+        vault = self.props_vault()
+        done = subprocess.CompletedProcess([], 0, "# notes: 1\n", "")
+        with mock.patch.object(ms.subprocess, "run", return_value=done) as run:
+            self.assertEqual(ms._run_prop_move(vault, ["apply"]), (0, "# notes: 1\n", ""))
+        self.assertIsNone(run.call_args.kwargs.get("timeout"))
+
     def test_prop_steps_are_not_in_retired_steps(self):
         for name in ("add-props", "inject-gazetteer"):
             self.assertNotIn(name, ms.RETIRED_STEPS)
