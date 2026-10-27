@@ -233,8 +233,9 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
 
   // A prop's own file, then (for a page or SVG) every file it reaches, each once, into `files`.
   const markup = (ext) => MARKUP_EXTS.has(ext);
-  // `stateOut`: the container's state file (planState), which the build makes: a link to it is no file to copy.
-  function planFiles(p, files, problem, claimed, stateOut = null) {
+  // `stateOuts`: the addresses of the containers' state files (planState), which the build makes: a link from any
+  // prop's page to one is that made file, not a file to copy (a container's items often load their shelf's state).
+  function planFiles(p, files, problem, claimed, stateOuts = new Set()) {
     const first = { source: p.source, out: p.address, cut: Boolean(cutKeeper) && markup(p._ext) };
     BYTES.set(first, p._bytes);
     files.push(first);
@@ -257,9 +258,9 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
       const linkProblem = (raw, which, fix = LINK_FIX) => problem(p.rel, `${shown} links "${raw}", which ${which}`, fix);
       for (const raw of rooted) linkProblem(raw, 'starts with /, an address on the site');
       for (const { raw, path: ref } of refs) {
+        if (stateOuts.size && stateOuts.has(addressKey(canonicalNfc(path.posix.join(path.posix.dirname(p.address), at || '.', ref))))) continue;
         const joined = segmentsBelow(path.posix.join(at || '.', ref));
         if (!joined) { linkProblem(raw, 'is outside its folder'); continue; }
-        if (stateOut && addressKey(canonicalNfc(path.posix.join(path.posix.dirname(p.address), ...joined))) === addressKey(stateOut)) continue;
         const lext = path.extname(ref).toLowerCase();
         const notCopied = () => linkProblem(raw, 'is a kind of file a prop does not copy', KIND_FIX);
         if (!LINKED_EXTS.has(lext)) { notCopied(); continue; }
@@ -351,11 +352,15 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
     p.files.push({ source: null, out, made: 'state', global, ...(p._explicit && keptReplaced(out) ? { replacesKept: true } : {}) });
     STATES.set(p, { dir: p._full ? path.dirname(p._full) : null, explicit: p._explicit });
   }
+  // Every container's state file is asked for before any page's links are followed.
+  const asks = new Map();
+  for (const p of order) if (p.address) asks.set(p, stateAsked(p));
+  const stateOuts = new Set([...asks.values()].filter(Boolean).map((a) => addressKey(a.out)));
   for (const p of order) {
     if (!p.address) continue;
-    const asked = stateAsked(p);
+    const asked = asks.get(p);
     if (p.made) p.files.push({ source: null, out: p.address, made: p.made });
-    else planFiles(p, p.files, problem, claimed, asked && asked.out);
+    else planFiles(p, p.files, problem, claimed, stateOuts);
     if (asked) planState(p, asked);
   }
   PLANS.set(result, { claimed, taken, keptReplaced, vaultReal, cutKeeper: Boolean(cutKeeper) });

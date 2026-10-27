@@ -271,7 +271,8 @@ blocker (or an error line), else 0.
   LINK-LOST       another page loses a link into the served folders (blocker)
   FILE-DIFFERS    a served file that is not a page has other bytes
   FILE-DROPPED    a served file, or a page outside them, is not in the new
-                  site; a blocker only when a new page still links it
+                  site; a blocker when it is a picture or a new page still
+                  links it
 
 A link is read relative to its page, without its query or anchor, a folder
 (gazetteer/ or gazetteer) as its index.html; a link in a comment or a script is

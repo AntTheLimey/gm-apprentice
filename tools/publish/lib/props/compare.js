@@ -15,6 +15,9 @@ const { decodeEntities } = require('../templates/gurps/tables');
 
 const BLOCKS = new Set(['missing', 'words-differ', 'listing-lost', 'link-lost']);
 const isPage = (rel) => /\.html?$/i.test(rel);
+// A served picture the new site drops blocks even when no new page names it: a page's script may (a shelf's state file
+// names its covers), and a lost picture is lost from the reader's view. Stylesheets and scripts do not block.
+const isPicture = (rel) => /\.(?:png|jpe?g|gif|webp|svg|avif)$/i.test(rel);
 const EXTERNAL = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
 // A run of words named in a row: at most this many words of it, and at most this many runs.
 const RUN_WORDS = 20;
@@ -195,7 +198,9 @@ function compareSites({ oldDir, newDir, serves, listings = [], expectGone = [] }
       const linkers = linkersOf(address);
       rows.push(linkers.length
         ? { kind: 'file-dropped', address, detail: `not in the new site, and still linked from ${linkers.slice(0, RUNS_SHOWN).join(', ')}${linkers.length > RUNS_SHOWN ? ` and ${linkers.length - RUNS_SHOWN} more` : ''}`, blocker: true }
-        : { kind: 'file-dropped', address, detail: 'not in the new site; no new page links it' });
+        : isPicture(address)
+          ? { kind: 'file-dropped', address, detail: 'a picture not in the new site (no new page links it, but a script may show it)', blocker: true }
+          : { kind: 'file-dropped', address, detail: 'not in the new site; no new page links it' });
     } else {
       rows.push(oldRaw.equals(newRaw) ? { kind: 'same', address, detail: '' } : { kind: 'file-differs', address, detail: 'its bytes differ' });
     }

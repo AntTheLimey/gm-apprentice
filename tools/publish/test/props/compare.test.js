@@ -170,6 +170,21 @@ test('a dropped file a new page still links blocks', (t) => {
   assert.match(row.detail, /props\/letter\.html/);
 });
 
+test('a dropped picture blocks even when no new page links it; a dropped script or stylesheet does not', (t) => {
+  // A shelf whose covers only its state script names: the new site keeps the page and drops the pictures.
+  const shelf = page('<div id="shelf"></div><script src="state.js"></script>');
+  const old = { 'props/shelf.html': shelf, 'props/state.js': 'window.S = { a: { cover: "covers/a.jpg" } };', 'props/covers/a.jpg': 'JPEG', 'props/covers/b.svg': '<svg/>', 'props/extra.css': 'p{}' };
+  const r = run(sites(t, old, { 'props/shelf.html': page('<div id="shelf"></div>') }));
+  for (const address of ['props/covers/a.jpg', 'props/covers/b.svg']) {
+    const row = rowOf(r, address);
+    assert.equal(row.kind, 'file-dropped', address);
+    assert.equal(row.blocker, true, address);
+    assert.match(row.detail, /picture/);
+  }
+  for (const address of ['props/state.js', 'props/extra.css']) assert.equal(rowOf(r, address).blocker, false, address);
+  assert.equal(r.blockers, 2);
+});
+
 test('the text rows and the summary line', (t) => {
   const r = run(sites(t, { 'props/letter.html': LETTER, 'props/gone.html': LETTER }, { 'props/letter.html': LETTER }));
   const lines = formatRows(r);
