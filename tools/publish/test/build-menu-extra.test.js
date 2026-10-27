@@ -487,10 +487,12 @@ test('Ruling 40: an address the site serves stands before any note name, a folde
   const served = { linkMap: map, pages, addresses: ['gazetteer/index.html', 'gazetteer/maps.svg'], kept: ['archive'] };
   // Ruling 47: the address in the site's own spelling, with the link's query or anchor kept.
   for (const [link, href] of [['gazetteer/index.html', 'gazetteer/index.html'], ['gazetteer/', 'gazetteer/index.html'],
-    ['./gazetteer/index.html#top', 'gazetteer/index.html#top'], ['Gazetteer/Index.html', 'gazetteer/index.html'],
+    ['./gazetteer/index.html#top', 'gazetteer/index.html#top'],
     ['archive/old-tam.html', 'archive/old-tam.html'], ['archive/', 'archive/']]) {
     assert.deepEqual(resolveSiteLink(link, served), { kind: 'site', href }, link);
   }
+  // Ruling 49: a prop address counts only spelled exactly; in another case it is read as names are, as before.
+  assert.deepEqual(resolveSiteLink('Gazetteer/Index.html', served), { kind: 'page', href: 'documents/index-note.html' });
   // Not a site address: the note named index is not taken for it, and a hidden name still drops it.
   assert.equal(resolveSiteLink('elsewhere/old-tam.html', served).kind, 'none');
   assert.equal(resolveSiteLink('archived/old-tam.html', served).kind, 'none');
@@ -503,11 +505,18 @@ test('Ruling 47: an address-first match never changes what an ordinary link gave
     'Maps/Harbour Map': 'documents/harbour-map.html' });
   rememberHiddenNames(map, [{ vaultPath: 'Locations/Harbour', displayTitle: 'Harbour', frontmatter: {} }]);
   const served = { linkMap: map, pages, addresses: ['gazetteer/index.html'], kept: ['maps'] };
-  // A page's address in another case is that page, as the site spells it (not a 404 on a case-sensitive host). The
-  // href is base's; the kind says it was read as an address (menu and banner print both alike).
+  // A page's address in another case is that page, as the site spells it (not a 404 on a case-sensitive host).
   for (const link of ['Locations/Harbour.html', 'LOCATIONS/HARBOUR.HTML']) {
-    assert.deepEqual(resolveSiteLink(link, served), { kind: 'site', href: 'locations/harbour.html' }, link);
+    assert.deepEqual(resolveSiteLink(link, served), { kind: 'page', href: 'locations/harbour.html' }, link);
   }
+  // Ruling 49: a kept folder named like the note's vault folder, and a note named with a file ending, is the note.
+  for (const link of ['Maps/Harbour Map.md', 'Maps/Harbour Map.html', 'Maps/Harbour_Map.html', 'maps/harbour map.htm']) {
+    assert.deepEqual(resolveSiteLink(link, served), { kind: 'page', href: 'documents/harbour-map.html' }, link);
+  }
+  // .md never names a file in a kept folder: a hidden note's name there is still dropped, where .html would stand.
+  rememberHiddenNames(map, [{ vaultPath: 'Hidden/Old_Tam', displayTitle: 'Old Tam', frontmatter: {} }]);
+  assert.equal(resolveSiteLink('maps/old-tam.md', served).kind, 'none');
+  assert.deepEqual(resolveSiteLink('maps/old-tam.html', served), { kind: 'site', href: 'maps/old-tam.html' });
   // A kept folder's name before a note name with no file ending is still the note.
   assert.deepEqual(resolveSiteLink('Maps/Harbour Map', served), { kind: 'page', href: 'documents/harbour-map.html' });
   assert.deepEqual(resolveSiteLink('maps/old-chart.png', served), { kind: 'site', href: 'maps/old-chart.png' });

@@ -164,17 +164,19 @@ function foldedPagePath(linkMap, name) {
   return LOWER_KEYS.get(linkMap).get(foldName(name));
 }
 
-// A written address as one key: slashes and dot segments normalised, lower-cased, a folder as its index.html.
-const addressOf = (text) => {
+// A written address as one key: slashes and dot segments normalised, a folder as its index.html; lower-cased unless
+// `exact`.
+const addressOf = (text, exact = false) => {
   const v = text.replace(/\\/g, '/').replace(/[?#][\s\S]*$/, '');
   const norm = path.posix.normalize(`/${v}`).slice(1);
-  return (v.endsWith('/') || norm === '' ? path.posix.join(norm, 'index.html') : norm).toLowerCase();
+  const at = v.endsWith('/') || norm === '' ? path.posix.join(norm, 'index.html') : norm;
+  return exact ? at : at.toLowerCase();
 };
 
-// `addresses`: the other files the site serves (each shipping prop's files, the props page), and `kept`, the kept
-// folders, as the build knows them. A link with a / or a page ending is read as an address first: one the site has
-// stands, in the site's own spelling, before any note name is tried for it. A link into a kept folder stands as written
-// only when it names a file (a file ending) or a folder (a trailing /): `Maps/Harbour Map` is still a note's name.
+// A link is read in this order: (1) an address the site serves besides its pages (`addresses`: each shipping prop's
+// files, the props page), spelled exactly, stands in the site's spelling; (2) a note's name, as always; (3) an address
+// inside a kept folder (`kept`) stands as written when it names a file (any ending but .md, which names a note) or a
+// folder (a trailing /); then a page's address, and anything else unless it names a hidden note.
 function resolveSiteLink(link, { linkMap = Object.create(null), pages = [], addresses = [], kept = [] } = {}) {
   const text = String(link == null ? '' : link).trim();
   if (/^https?:\/\//i.test(text)) return { kind: 'outside', href: text };
@@ -189,17 +191,13 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [], addr
   try { decoded = decodeURIComponent(wiki ? wiki[1] : text); } catch (e) { return { kind: 'none', href: null }; }
   const target = canonicalNfc(parseWikilink(decoded).name.replace(/\?[\s\S]*$/, '').trim());
   const parts = pathParts(target);
-  if (!wiki && (/[\\/]/.test(decoded) || /\.html?(?:[?#]|$)/i.test(decoded))) {
-    const at = addressOf(canonicalNfc(decoded.trim()));
-    const known = (a) => addressOf(String(a)) === at;
-    const after = (/[?#][\s\S]*$/.exec(text) || [''])[0];
-    const served = Object.values(linkMap).find(known) || addresses.find(known);
+  const after = (/[?#][\s\S]*$/.exec(text) || [''])[0];
+  const bare = canonicalNfc(decoded.trim().replace(/[?#][\s\S]*$/, ''));
+  const addressLike = !wiki && (/[\\/]/.test(bare) || /\.html?$/i.test(bare));
+  if (addressLike) {
+    const at = addressOf(bare, true);
+    const served = addresses.find((a) => addressOf(String(a), true) === at);
     if (served) return { kind: 'site', href: `${served}${after}` };
-    const bare = decoded.trim().replace(/[?#][\s\S]*$/, '');
-    if ((/\/$/.test(bare) || /\.[a-z0-9]+$/i.test(path.posix.basename(bare)))
-        && kept.some((k) => at.startsWith(addressOf(`${String(k).replace(/[\\/]+$/, '')}/`).slice(0, -'index.html'.length)))) {
-      return { kind: 'site', href: text.replace(/^\.\//, '') };
-    }
   }
   const name = parts.length ? canonicalNfc(parts.join('/')) : '';
   if (name) {
@@ -215,9 +213,16 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [], addr
   }
   // A bracketed link is a note, and no page was found for it: never printed.
   if (wiki) return { kind: 'none', href: null };
-  // The address of a published page, spelled as the build writes it, stands.
+  if (addressLike && (/\/$/.test(bare) || /\.(?!md$)[a-z0-9]+$/i.test(path.posix.basename(bare)))) {
+    const at = addressOf(bare);
+    if (kept.some((k) => at.startsWith(addressOf(`${String(k).replace(/[\\/]+$/, '')}/`).slice(0, -'index.html'.length)))) {
+      return { kind: 'site', href: text.replace(/^\.\//, '') };
+    }
+  }
+  // The address of a published page stands, in the site's spelling.
   const address = parts.join('/').toLowerCase();
-  if (Object.values(linkMap).some((p) => pathParts(String(p)).join('/').toLowerCase() === address)) return { kind: 'site', href: text.replace(/^\.\//, '') };
+  const page = Object.values(linkMap).find((p) => pathParts(String(p)).join('/').toLowerCase() === address);
+  if (page) return { kind: 'site', href: /\.html?$/i.test(bare) ? `${page}${after}` : text.replace(/^\.\//, '') };
   // Anything else: if ANY part of the path is the name, file name, title, alias or slug of a hidden note, it is dropped.
   const hiddenNames = HIDDEN_NAMES.get(linkMap) || new Set();
   const hiddenSlugs = HIDDEN_SLUGS.get(linkMap) || new Set();
