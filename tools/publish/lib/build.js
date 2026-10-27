@@ -193,9 +193,7 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [], addr
     const at = addressOf(canonicalNfc(decoded.trim()));
     const known = (a) => addressOf(String(a)) === at;
     const after = (/[?#][\s\S]*$/.exec(text) || [''])[0];
-    const page = Object.values(linkMap).find(known);
-    if (page) return { kind: 'page', href: page };
-    const served = addresses.find(known);
+    const served = Object.values(linkMap).find(known) || addresses.find(known);
     if (served) return { kind: 'site', href: `${served}${after}` };
     const bare = decoded.trim().replace(/[?#][\s\S]*$/, '');
     if ((/\/$/.test(bare) || /\.[a-z0-9]+$/i.test(path.posix.basename(bare)))

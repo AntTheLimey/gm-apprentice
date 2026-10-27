@@ -503,9 +503,10 @@ test('Ruling 47: an address-first match never changes what an ordinary link gave
     'Maps/Harbour Map': 'documents/harbour-map.html' });
   rememberHiddenNames(map, [{ vaultPath: 'Locations/Harbour', displayTitle: 'Harbour', frontmatter: {} }]);
   const served = { linkMap: map, pages, addresses: ['gazetteer/index.html'], kept: ['maps'] };
-  // A page's address in another case is that page, as the site spells it (not a 404 on a case-sensitive host).
+  // A page's address in another case is that page, as the site spells it (not a 404 on a case-sensitive host). The
+  // href is base's; the kind says it was read as an address (menu and banner print both alike).
   for (const link of ['Locations/Harbour.html', 'LOCATIONS/HARBOUR.HTML']) {
-    assert.deepEqual(resolveSiteLink(link, served), { kind: 'page', href: 'locations/harbour.html' }, link);
+    assert.deepEqual(resolveSiteLink(link, served), { kind: 'site', href: 'locations/harbour.html' }, link);
   }
   // A kept folder's name before a note name with no file ending is still the note.
   assert.deepEqual(resolveSiteLink('Maps/Harbour Map', served), { kind: 'page', href: 'documents/harbour-map.html' });
