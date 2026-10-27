@@ -388,3 +388,30 @@ describe('a title and intro holding markup', () => {
     for (const f of s.player.files()) assert.doesNotMatch(fs.readFileSync(f, 'utf8'), /<script>x<\/script>|<b>&<\/b>/, f);
   });
 });
+
+describe('prop_group headings on the props page and the landing box', () => {
+  const s = buildBoth({
+    'Documents/Bookshelf.md': '---\ntype: prop\nprop_kind: container\n---\nA shelf.\n',
+    'Documents/Diary.md': '---\ntype: prop\nprop_container: "[[Bookshelf]]"\nprop_group: Papers\nrevealed_in: "[[Session 03]]"\n---\nA diary.\n',
+    'Documents/Badge.md': '---\ntype: prop\nprop_group: Evidence\nrevealed_in: "[[Session 02]]"\n---\nA badge.\n',
+    'Documents/Coin.md': '---\ntype: prop\n---\nA coin.\n',
+    'Sessions/Session 02.md': SESSION(2),
+    'Sessions/Session 03.md': SESSION(3),
+  }, { sites: ['player'], player: { landing: { latest_props: 3 } } });
+  after(() => s.cleanup());
+
+  it('the latest-props box stays one flat list', () => {
+    const box = /<section class="dashboard-section props-latest">[\s\S]*?<\/section>/.exec(s.player.read('index.html'));
+    assert.ok(box);
+    assert.match(box[0], /Diary/);
+    assert.doesNotMatch(box[0], /prop-group|Papers/);
+  });
+
+  it('a group that is not a container prints no second heading; a container group does', () => {
+    const page = s.player.read('props', 'index.html');
+    const section = (name) => new RegExp(`<section class="prop-group">\\n<h2>(?:<a[^>]*>)?${name}[\\s\\S]*?</section>`).exec(page)[0];
+    assert.doesNotMatch(section('Evidence'), /<h3/);
+    assert.doesNotMatch(section('Other props'), /<h3/);
+    assert.match(section('Bookshelf'), /<h3 class="prop-group">Papers<\/h3>/);
+  });
+});

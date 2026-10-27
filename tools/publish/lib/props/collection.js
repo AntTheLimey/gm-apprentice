@@ -345,7 +345,8 @@ function collectionModel({ plan, rowOf, containers, settings, site = 'player', i
   for (const p of plan.props) {
     if (p.kind === 'container' || inContainer.has(p.rel) || !isShown(p.page)) continue;
     if (site !== 'gm' && isWithheld(sourceOf(p.page))) continue;
-    const row = { ...rowOf(p), group: null }; // the page's own headings group it
+    // The page's own headings group it, so the row carries no prop_group heading of its own.
+    const row = { ...rowOf(p), group: null };
     const group = fieldText((p.page.frontmatter || {}).prop_group).trim();
     if (group) {
       const key = canonicalNfc(group);
