@@ -930,7 +930,9 @@ function startNoteAudit(input) {
         // and the words it prints are the placeholder, not its name.
         const withheld = isWithheld(record.frontmatter);
         let fix;
-        if (withheld) {
+        if (record.why === 'LISTED_ONLY') {
+          fix = `its container lists it; write words in the body of ${rel}, or a tie, to give it a page of its own, or turn the link to ${name} into plain words`;
+        } else if (withheld) {
           fix = `${name} is marked withheld, so it stays off the site: turn the links to it into the words the players know (links.py unlink "${rel.replace(/\.md$/, '')}" --in "<page>" --as "<words>"), or leave the neutral word it prints and record that with manifest apply --exclude "${rel}=stays hidden: <why>"`;
         } else if (kind === 'entity') {
           // Listing a note under Publishing gives it a page only when the manifest is what holds it back.

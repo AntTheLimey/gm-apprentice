@@ -54,6 +54,19 @@ describe('a prop its container lists with nothing of its own to show', () => {
     assert.doesNotMatch(page, /<a [^>]*>Clasped Volume</);
   });
 
+  it('explain says its container lists it with no page, not that it publishes at an address', () => {
+    const { spawnSync } = require('node:child_process');
+    const path = require('node:path');
+    const bin = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
+    const done = spawnSync(process.execPath, [bin, 'explain', 'Library/Clasped Volume.md', '--config', s.configPath], { encoding: 'utf8' });
+    assert.match(done.stdout, /VERDICT: listed by its container, with no page of its own \(LISTED_ONLY\)/, done.stdout + done.stderr);
+    assert.doesNotMatch(done.stdout, /VERDICT: publishes at/);
+    const all = spawnSync(process.execPath, [bin, 'explain', '--all', '--json', '--config', s.configPath], { encoding: 'utf8' });
+    const row = JSON.parse(all.stdout).pages.find((p) => p.path === 'Library/Clasped Volume.md');
+    assert.equal(row.noPage, true);
+    assert.equal(row.publishes, true);
+  });
+
   it('the leak check finds nothing', () => {
     assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.player.dir }).findings, []);
   });
