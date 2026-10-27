@@ -253,3 +253,22 @@ test('a [[wikilink]] in the title or text prints as its name, as page text does 
   assert.match(html, /<p class="landing-banner-text">See Mara at the Harbour\.<\/p>/);
   assert.doesNotMatch(html, /\[\[/);
 });
+
+test('Ruling 40: a link with a / or a page ending is a site address before any note name: a prop address stands though a hidden note is called index', (t) => {
+  const prop = '---\ntype: prop\nname: The Port Gazetteer\nprop_kind: supplied\nprop_file: index.html\nprop_address: gazetteer/index.html\n---\n\nThe cover.\n';
+  const s = site({ title: 'The Gazetteer', link: 'gazetteer/index.html' }, {
+    files: {
+      'Hidden/index.md': npc('publish: false\n'),
+      'Locations/Gazetteer/The Port Gazetteer.md': prop,
+      'Locations/Gazetteer/index.html': '<!DOCTYPE html><html><body><h1>The Port Gazetteer</h1></body></html>\n',
+    },
+  });
+  t.after(() => fs.rmSync(s.root, { recursive: true, force: true }));
+  assert.ok(s.exists('gazetteer', 'index.html'), 'the prop ships at its address');
+  assert.match(bannerOf(s.read('index.html')), /<a class="landing-banner"[^>]*href="gazetteer\/index\.html"/);
+  assert.ok(!s.warnings.some((w) => /banner/.test(w) && /not a link/.test(w)), s.warnings.join('\n'));
+  // An address the site does not have still meets the hidden-name rule.
+  const off = site({ title: 'The Gazetteer', link: 'elsewhere/index.html' }, { files: { 'Hidden/index.md': npc('publish: false\n') } });
+  t.after(() => fs.rmSync(off.root, { recursive: true, force: true }));
+  assert.doesNotMatch(bannerOf(off.read('index.html')), /href=/);
+});

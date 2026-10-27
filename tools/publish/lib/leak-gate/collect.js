@@ -21,12 +21,13 @@ const {
 } = require('../processor');
 const { createMarks, markKinds, sanitize, markedSpans } = require('../gm-marks');
 const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf } = require('./text');
-const { TEXT_EXT } = require('./match');
-const { planProps, bytesOf, textOf } = require('../props/plan');
-const { placeCollection, propTaken, containerItems, propRow, sealedTitlesOn } = require('../props/collection');
+const { TEXT_EXT, fileText } = require('./match');
+const { planProps, planStatePictures, stateFileOf, bytesOf, textOf } = require('../props/plan');
+const { placeCollection, propTaken, containerItems, propRow, sealedTitlesOn, stateFieldsOf, stateFieldsOfListed } = require('../props/collection');
 const { cutHtml } = require('../props/html-cut');
 const { styledPageProblem } = require('../props/page');
 const { pathProblem } = require('../props/files');
+const { buildConnections } = require('../connections');
 
 const NEVER_SHOWN = ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase());
 const neverShown = (rel) => rel.split('/').slice(0, -1).some((s) => NEVER_SHOWN.includes(s.toLowerCase()));
@@ -39,6 +40,7 @@ function printedRows(page) {
   try { return rowsFor(page, {}).filter(([, text]) => text).map(([label, text]) => `${label} ${text}`); } catch (e) { return []; }
 }
 const HELD_TITLE = 'the title of an unpublished prop';
+const HELD_FIELD = 'a field of an unpublished prop';
 const clip = (s, max = 160) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
 
 // `outputDir`, when given, is the built site: a made page the build could not write there (a link on its path) is no
@@ -53,7 +55,7 @@ function collectHidden({ configPath, outputDir = null }) {
   const keptBy = player.vault.kept_by;
   // The GM's own words that must never reach players (player_site.never_show): looked for on every kind of vault.
   const neverShow = (player.site.never_show || []).filter((w) => typeof w === 'string' && w.trim());
-  const empty = { vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), heldProps: [], heldNotePages: [], heldTitles: [], sealedOn: new Map(), collectionAddress: null, siteTakes: () => false, keeps: () => false };
+  const empty = { vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), stateFiles: new Set(), heldProps: [], heldNotePages: [], heldTitles: [], sealedOn: new Map(), collectionAddress: null, siteTakes: () => false, keeps: () => false };
   if (keptBy === 'player') return empty;
 
   const quiet = () => {};
@@ -166,6 +168,17 @@ function collectHidden({ configPath, outputDir = null }) {
     add(piecesOfMarkdown(body), rel, `unpublished note: ${why}`);
   }
 
+  // What a page's Connections section prints (lib/connections.js), made as the build makes it from the published
+  // frontmatter: each group's label with each name under it ("Trusted by" and a name), words the page says itself. A tie
+  // to a name with no page counts here as a note's (left off the page), so nothing is read in that the page leaves out.
+  if (playerConfig.connections !== 'off') {
+    const view = published.map((p) => ({ ...p, frontmatter: publishedFrontmatter(p.frontmatter || {}, excludeFields, fieldOverrides[relOf(p)] || {}) }));
+    const cx = buildConnections({ pages: view, linkMap, backlinks: {}, hubPairs: new Map(), imageMap: {}, extras: new Map(), pageFor: () => undefined, noteExists: () => true });
+    for (const page of view) {
+      for (const tab of cx.for(page).tabs) for (const group of tab.groups) for (const it of group.items) visible.push(`${group.label} ${it.title}`);
+    }
+  }
+
   // The props, planned as the player build plans them (props/plan.js): a prop ships with its note's full page, never
   // with a stub's, at an address no page, tool folder, props page or (by default) kept folder takes, cut of its Keeper
   // parts. The props page is placed as the build places it (props/collection.js).
@@ -173,12 +186,18 @@ function collectHidden({ configPath, outputDir = null }) {
   const keptDirs = player.site.keep || [];
   const { collection } = placeCollection({ pages: published, settingsLike: playerConfig, pageOutputs, keptDirs });
   const taken = propTaken({ pageOutputs, keptDirs, collection });
-  const { props } = planProps({
+  const propPlan = planProps({
     vaultPath, pages: corpus, relOf,
     ships: (p) => publishedSet.has(p) && publishMode(p.sourceFrontmatter || p.frontmatter) !== 'stub',
     taken,
     cutKeeper: true,
   });
+  const { props } = propPlan;
+  // What each container lists, as the build's listings show it: the pictures its state file names ship as its files
+  // (props/plan.js), from the items' published fields.
+  const listed = containerItems({ props, isShown: (pg) => publishedSet.has(pg), excludeFields, fieldOverrides });
+  const publishedFieldsOf = (p) => publishedFrontmatter(p.page.sourceFrontmatter || p.page.frontmatter || {}, excludeFields, fieldOverrides[p.rel] || {});
+  planStatePictures(propPlan, stateFieldsOfListed(listed, { props, fieldsOf: publishedFieldsOf }));
   // Each file a shipping prop puts on the site, and its notes: there it is their published form. A file two props share
   // byte for byte is written once and belongs to both.
   const propOwner = new Map();
@@ -191,6 +210,17 @@ function collectHidden({ configPath, outputDir = null }) {
     propOuts.get(rel).push(out);
   };
   const heldProps = [];
+  // A container's state file (prop_state) is a file the tool makes, as a container's page is: read as text, with no
+  // hidden text of another note excused on it, only its sealed titles (sealedOn). One the build could not write is not.
+  const stateFiles = new Set();
+  const madeState = (p) => {
+    const state = stateFileOf(p);
+    if (!state || (outputDir && (pathProblem(outputDir, p.address) || pathProblem(outputDir, state.out)))) return;
+    madeFiles.add(canonicalNfc(state.out));
+    stateFiles.add(canonicalNfc(state.out));
+    if (!propOuts.has(p.rel)) propOuts.set(p.rel, []);
+    propOuts.get(p.rel).push(state.out);
+  };
   // The page each unpublished prop note would have, at its scanned output path (index.js watches links to it). Not one
   // inside a kept folder: the build writes no page there, so a file there is the GM's own.
   const heldNotePages = [];
@@ -203,6 +233,7 @@ function collectHidden({ configPath, outputDir = null }) {
   // The titles of 2 words or more of unpublished props that are not withheld (a withheld one is a secret name already):
   // looked for whole, as written, in the kept folders (index.js), where an old listing can outlive the build.
   const heldTitles = [];
+  const usedStyles = new Map();
   for (const p of props) {
     // A prop whose note the site does not publish: the title a listing would print for it is hidden text (an old props
     // page naming it). Allowed only where a container lists it sealed (sealedOn, below). Not one in the plugin's working
@@ -210,6 +241,9 @@ function collectHidden({ configPath, outputDir = null }) {
     if (!publishedSet.has(p.page) && !inWorkingDir(p.rel)) {
       const title = propRow(p, { isShown: () => false, excludeFields, fieldOverrides }).title;
       add([title], p.rel, HELD_TITLE);
+      // Its line and the fields a container's state file would give it: no listing prints them (a sealed row is its title).
+      const heldFm = p.page.sourceFrontmatter || p.page.frontmatter || {};
+      add(piecesOfValue([heldFm.prop_line, ...Object.values(stateFieldsOf(heldFm))]), p.rel, HELD_FIELD);
       if (!isWithheld(p.page.sourceFrontmatter || p.page.frontmatter) && wordsOf(title).length >= 2) heldTitles.push({ title, note: p.rel });
     }
     if (!publishedSet.has(p.page) && p.page.outputPath && !taken.keeps(p.page.outputPath)) heldNotePages.push({ rel: p.rel, address: p.page.outputPath });
@@ -222,8 +256,10 @@ function collectHidden({ configPath, outputDir = null }) {
         || Boolean(outputDir && p.address && pathProblem(outputDir, p.address));
       if (p.ships && p.address && p.made && !unmade) {
         madeFiles.add(canonicalNfc(p.address));
+        if (p.style) usedStyles.set(p.style.name, p.style);
         if (!propOuts.has(p.rel)) propOuts.set(p.rel, []);
         propOuts.get(p.rel).push(p.address);
+        madeState(p);
       } else if (!p.ships && p.address) {
         // A held prop the tool would make a page for (its style may not have loaded): a page at its address is stale.
         heldProps.push({ rel: p.rel, address: p.address, hash: null, size: null });
@@ -231,11 +267,18 @@ function collectHidden({ configPath, outputDir = null }) {
       continue;
     }
     if (p.ships && p.address && p.files.length) {
+      madeState(p);
       for (const f of p.files) {
+        if (f.made === 'state') continue;
         own(f.out, p.rel);
-        // What the cut takes out of a page or SVG: hidden text of the note, if it reaches the site.
+        // What the cut takes out of a page or SVG: hidden text of the note, if it reaches the site. A hidden sentence the
+        // same file also shows players (a GM's credits line beside the one players got) is on that page anyway: not hidden.
         if (!f.cut || !bytesOf(f)) continue;
-        for (const run of cutHtml(textOf(bytesOf(f)).text).cut) add(piecesOfHtml(run), p.rel, `a hidden part of its prop file (${shownName(p, f.source)})`);
+        const cut = cutHtml(textOf(bytesOf(f)).text);
+        const shownWords = ` ${wordsOf(fileText(f.out, cut.text)).join(' ')} `;
+        for (const run of cut.cut) {
+          add(piecesOfHtml(run).filter((t) => !shownWords.includes(` ${wordsOf(t).join(' ')} `)), p.rel, `a hidden part of its prop file (${shownName(p, f.source)})`);
+        }
       }
       for (const out of p.shared) own(out, p.rel);
       continue;
@@ -253,11 +296,18 @@ function collectHidden({ configPath, outputDir = null }) {
     heldProps.push({ rel: p.rel, address: p.address, hash: p.hash, size: bytes.length });
   }
 
+  // The words a style's layout (and its sheet) writes around every page made with it are the build's own, on the site
+  // for players: already visible, as a published page's words are. Only a style a page on this site is made with.
+  for (const style of usedStyles.values()) {
+    for (const template of [style.layout, style.sheet]) {
+      visible.push(...piecesOfHtml(String(template || '').replace(/\{\{\{?[^{}]*\}?\}\}/g, '\n')));
+    }
+  }
+
   // Where a container lists an item the players have not found by its title alone: that title's words, on that
   // container's page and on the props page, are no finding, whichever hidden note also says them (a prep note's list of
-  // props to plant): the page prints those words and no more (index.js). Never a withheld item's title (containerItems
-  // lists none).
-  const listed = containerItems({ props, isShown: (pg) => publishedSet.has(pg), excludeFields, fieldOverrides });
+  // props to plant): the page prints those words and no more (index.js), and so does its state file. Never a withheld
+  // item's title (containerItems lists none).
   const sealedOn = new Map();
   for (const [address, titles] of sealedTitlesOn(listed, collection && collection.address)) {
     sealedOn.set(canonicalNfc(address), new Set([...titles.values()].map((title) => wordsOf(title).join(' '))));
@@ -267,7 +317,7 @@ function collectHidden({ configPath, outputDir = null }) {
   const outOf = (rel) => [outputOf.get(rel), ...(propOuts.get(rel) || [])].filter(Boolean);
   return {
     vaultPath, siteDir, keptBy, neverShow, pieces, visible, warnings, notes, published, publishedRels, linkMap, outOf,
-    propOwner, propFiles: new Set(propOwner.keys()), madeFiles, heldProps, heldNotePages, heldTitles, sealedOn,
+    propOwner, propFiles: new Set(propOwner.keys()), madeFiles, stateFiles, heldProps, heldNotePages, heldTitles, sealedOn,
     keeps: (rel) => taken.keeps(rel),
     collectionAddress: collection && collection.address ? canonicalNfc(collection.address) : null,
     // An address the site itself fills (a page, a file it needs, a tool folder): a held prop there is not what is there.

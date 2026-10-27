@@ -81,7 +81,7 @@ jobs:
           TGZ="gm-apprentice-publish-${{ steps.version.outputs.version }}.tgz"
           test -f "$TGZ"
           # The vendored runtime deps must travel inside the tarball.
-          for dep in gray-matter lunr markdown-it mustache; do
+          for dep in diff gray-matter lunr markdown-it mustache; do
             tar -tzf "$TGZ" | grep -q "^package/node_modules/$dep/package.json$" \
               || { echo "::error::$dep is missing from $TGZ"; exit 1; }
           done
@@ -91,6 +91,9 @@ jobs:
           # Mustache fills prop layouts at build time; its MIT text travels with it.
           tar -tzf "$TGZ" | grep -q "^package/node_modules/mustache/LICENSE$" \
             || { echo "::error::mustache's LICENSE is missing from $TGZ"; exit 1; }
+          # diff compares a page's words before props move into the vault; its BSD text travels with it.
+          tar -tzf "$TGZ" | grep -q "^package/node_modules/diff/LICENSE$" \
+            || { echo "::error::diff's LICENSE is missing from $TGZ"; exit 1; }
           # NOTICE.txt carries the licence text of every font a site serves, from these files.
           for lic in OFL-1.1 Apache-2.0 UFL-1.0; do
             tar -tzf "$TGZ" | grep -q "^package/licenses/$lic.txt$" \

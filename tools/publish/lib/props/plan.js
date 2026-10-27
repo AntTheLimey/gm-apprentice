@@ -12,7 +12,9 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { canonicalNfc } = require('../unicode');
-const { PROP_KINDS, isPropNote, propKindOf, unknownKindOf, propFileOf, propAddressOf, propStyleOf } = require('./note');
+const {
+  PROP_KINDS, PROP_STATE_RE, PROP_STATE_GLOBAL_RE, isPropNote, propKindOf, unknownKindOf, propFileOf, propAddressOf, propStyleOf, propStateOf, propStateGlobalOf,
+} = require('./note');
 const { PROP_FILE_EXTS, PAGE_TAKER, addressKey, defaultPropAddress, fallbackPropAddress, addressShapeProblem } = require('./address');
 const { cutHtml } = require('./html-cut');
 const { within, realOrNull, findUnder } = require('./paths');
@@ -20,12 +22,15 @@ const { localRefs } = require('./links');
 const { styleLoader, STYLE_ASSET_EXTS } = require('./styles');
 
 const MARKUP_EXTS = new Set(['.html', '.htm', '.svg']);
+const PAGE_FILE_EXTS = new Set(['.html', '.htm']);
 // What a prop page may pull in beside itself: styles, scripts, pictures and fonts. Never a
 // page (a second hand-made page with Keeper parts of its own), a note, audio, video or PDF.
 const LINKED_EXTS = new Set([
   '.css', '.js', '.mjs', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif', '.ico',
   '.woff2', '.woff', '.ttf', '.otf',
 ]);
+// The pictures a container's state file may name in its items' fields, copied beside it.
+const STATE_PICTURE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif']);
 const LINK_FIX = 'put the file beside the prop file and link it by a relative path';
 const KIND_FIX = 'a prop page cannot carry this kind of file: a PDF can be published as its own prop (its own note with prop_file), a picture can take its place; otherwise leave it out (the site does not publish audio, video or other pages)';
 
@@ -87,6 +92,15 @@ const BYTES = new WeakMap();
 function bytesOf(entry) {
   return BYTES.get(entry) || null;
 }
+// What planStatePictures needs of a plan (its claims, the taken addresses) and of each container with a state file
+// (its prop file's folder), kept off the plan objects as BYTES is.
+const PLANS = new WeakMap();
+const STATES = new WeakMap();
+
+// A container's state file entry ({ source: null, out, made: 'state', global }), or null.
+function stateFileOf(p) {
+  return (p && p.files ? p.files.find((f) => f.made === 'state') : null) || null;
+}
 
 // A prop's page comes from, in order: its `prop_file` (published as it is; a `prop_style` beside it
 // is not used, with a row); a container (`prop_kind: container`), a listing the tool makes, styled
@@ -105,6 +119,7 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
   const problem = (rel, detail, fix) => problems.push({ rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail, fix });
 
   const props = [];
+  const result = { props, problems, styles: [] };
   const skipSaid = new Set();
   for (const page of pages) {
     const fm = page.sourceFrontmatter || page.frontmatter;
@@ -218,7 +233,11 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
 
   // A prop's own file, then (for a page or SVG) every file it reaches, each once, into `files`.
   const markup = (ext) => MARKUP_EXTS.has(ext);
-  function planFiles(p, files, problem, claimed) {
+  // `stateOuts`: the addresses of the containers' state files (planState), which the build makes: a link from any
+  // prop's page to one is that made file, not a file to copy (a container's items often load their shelf's state).
+  // `outside`: when given, a link outside the prop's folder is held there, not reported, until every shipping prop's
+  // files are planned (another prop may ship that very file at that address).
+  function planFiles(p, files, problem, claimed, stateOuts = new Set(), outside = null) {
     const first = { source: p.source, out: p.address, cut: Boolean(cutKeeper) && markup(p._ext) };
     BYTES.set(first, p._bytes);
     files.push(first);
@@ -241,8 +260,16 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
       const linkProblem = (raw, which, fix = LINK_FIX) => problem(p.rel, `${shown} links "${raw}", which ${which}`, fix);
       for (const raw of rooted) linkProblem(raw, 'starts with /, an address on the site');
       for (const { raw, path: ref } of refs) {
+        if (stateOuts.size && stateOuts.has(addressKey(canonicalNfc(path.posix.join(path.posix.dirname(p.address), at || '.', ref))))) continue;
         const joined = segmentsBelow(path.posix.join(at || '.', ref));
-        if (!joined) { linkProblem(raw, 'is outside its folder'); continue; }
+        if (!joined) {
+          const report = () => linkProblem(raw, 'is outside its folder');
+          const out = path.posix.normalize(path.posix.join(path.posix.dirname(p.address), at || '.', ref));
+          if (outside && !out.startsWith('../') && !path.posix.isAbsolute(ref)) {
+            outside.push({ p, out: canonicalNfc(out), full: path.resolve(propDir, at || '.', ref), report });
+          } else report();
+          continue;
+        }
         const lext = path.extname(ref).toLowerCase();
         const notCopied = () => linkProblem(raw, 'is a kind of file a prop does not copy', KIND_FIX);
         if (!LINKED_EXTS.has(lext)) { notCopied(); continue; }
@@ -298,11 +325,70 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
       }
     }
   }
+  // A container's state file (prop_state), beside its page: made by the build from what the container lists. Asked
+  // for before the page's links are followed, so a link to it is the made file (the vault's own copy, if any, is not
+  // copied) and never a missing one. { name, global, out }, or null (with a row when the fields are wrong).
+  function stateAsked(p) {
+    const fm = p.page.sourceFrontmatter || p.page.frontmatter;
+    const name = propStateOf(fm);
+    if (p.kind !== 'container' || name === null) return null;
+    const shown = (v) => (typeof v === 'string' ? `"${v}"` : JSON.stringify(v));
+    if (typeof name !== 'string' || !PROP_STATE_RE.test(name)) {
+      problem(p.rel, `prop_state ${shown(name)} is not a file name the state file can have, so it is not made`, 'write a name such as state.js: lower-case letters, digits, dots, - and _, ending in .js, with no folder');
+      return null;
+    }
+    const global = propStateGlobalOf(fm);
+    if (typeof global !== 'string' || !PROP_STATE_GLOBAL_RE.test(global)) {
+      problem(p.rel, `prop_state_global ${shown(global)} is not a name the state file can set, so it is not made`, 'write a name such as PROP_ITEMS: capital letters, digits and _, starting with a letter');
+      return null;
+    }
+    if (!p.made && !PAGE_FILE_EXTS.has(path.extname(p.address).toLowerCase())) {
+      problem(p.rel, `prop_state ${shown(name)} is not made: the container's prop file is not a page`, 'use an .html prop file, or remove prop_state');
+      return null;
+    }
+    return { name, global, out: canonicalNfc(path.posix.join(path.posix.dirname(p.address), name)) };
+  }
+  // The state file claimed, as the prop's files are, so no other prop's file lands on it: its entry, or null (with a
+  // row) when its address is taken.
+  function planState(p, { name, global, out }) {
+    const key = addressKey(out);
+    const why = taken.has(out, { explicit: p._explicit });
+    const prior = claimed.get(key);
+    if (why || prior) {
+      problem(p.rel, `prop_state "${name}" would land on ${out}, taken by ${why ? takerName(why) : prior.rel}, so it is not made`, 'give the state file another name, or the container another prop_address');
+      return null;
+    }
+    claimed.set(key, { rel: p.rel, hash: null });
+    STATES.set(p, { dir: p._full ? path.dirname(p._full) : null, explicit: p._explicit });
+    return { source: null, out, made: 'state', global, ...(p._explicit && keptReplaced(out) ? { replacesKept: true } : {}) };
+  }
+  // Every container's state file is claimed before any page's links are followed: a link to one the build makes is that
+  // file (stateOuts); a link to one it refused is an ordinary link again.
+  const states = new Map();
+  for (const p of order) {
+    const asked = p.address ? stateAsked(p) : null;
+    const entry = asked && planState(p, asked);
+    if (entry) states.set(p, entry);
+  }
+  const stateOuts = new Set([...states.values()].map((e) => addressKey(e.out)));
+  const outside = [];
   for (const p of order) {
     if (!p.address) continue;
     if (p.made) p.files.push({ source: null, out: p.address, made: p.made });
-    else planFiles(p, p.files, problem, claimed);
+    else planFiles(p, p.files, problem, claimed, stateOuts, outside);
+    if (states.has(p)) p.files.push(states.get(p));
   }
+  // A link outside a prop's folder resolves on the site when another shipping prop ships that address with the bytes
+  // the link names in the vault: the file is shared, not a problem. Anything else is still outside its folder.
+  for (const { p, out, full, report } of outside) {
+    const prior = claimed.get(addressKey(out));
+    const real = prior && prior.rel !== p.rel && prior.hash ? realOrNull(full) : null;
+    const read = real && vaultReal && real.startsWith(vaultReal + path.sep) ? readOrError(real) : null;
+    if (read && !read.error && sha1(read.bytes) === prior.hash) {
+      if (!p.shared.includes(out)) p.shared.push(out);
+    } else report();
+  }
+  PLANS.set(result, { claimed, taken, keptReplaced, vaultReal, cutKeeper: Boolean(cutKeeper) });
 
   // Each style a shipping made prop uses, once: its stylesheet, script and assets under props/styles/<name>/.
   const used = new Map();
@@ -326,7 +412,84 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
   for (const p of props) {
     delete p._full; delete p._ext; delete p._propFile; delete p._explicit; delete p._bytes; delete p._movedFrom;
   }
-  return { props, problems, styles: stylePlans };
+  result.styles = stylePlans;
+  return result;
 }
 
-module.exports = { planProps, bytesOf, textOf, utf8Charset, LINKED_EXTS };
+// The pictures a container's state file names, planned as files of the container (once the build knows what each
+// container lists): an item field's value that is a relative path (no `:`, no leading `/`, no `..`) to a picture at or
+// below the container's prop file's folder ships at the same path from the container's address, by the rules a page's
+// links follow (NFC, letter case exact, real paths inside, the same bytes shared). `itemFields`: Map<container vault
+// path, [{ rel, fields }]>, each item the container's listing shows with the fields its state file gives it
+// (collection.js stateFieldsOfListed): a sealed or withheld item gives none. Only a container with a prop file has a
+// folder to read them from. Returns the problem rows it added to the plan's problems.
+function planStatePictures(plan, itemFields) {
+  const ctx = plan ? PLANS.get(plan) : null;
+  const added = [];
+  if (!ctx) return added;
+  const problem = (rel, detail, fix) => {
+    const row = { rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail, fix };
+    plan.problems.push(row);
+    added.push(row);
+  };
+  for (const p of plan.props) {
+    const st = STATES.get(p);
+    const state = stateFileOf(p);
+    if (!st || !st.dir || !state || !p.address) continue;
+    const dirReal = realOrNull(st.dir);
+    if (!dirReal) continue;
+    const planned = new Set(p.files.map((f) => addressKey(f.out)));
+    for (const { rel, fields } of itemFields.get(p.rel) || []) {
+      for (const { field, value } of pictureValues(fields)) {
+        const said = (which, fix = `put the picture in the folder of ${p.rel.replace(/\.md$/i, '')}'s prop file (or a folder under it) and name it by its path from there`) => problem(rel, `prop_${field} "${value}" ${which}, so it is not copied beside ${state.out}`, fix);
+        const segments = /(^|[\\/])\.\.([\\/]|$)/.test(value) ? null : segmentsBelow(value);
+        if (!segments) { said('climbs out of the container\'s prop file folder'); continue; }
+        const hit = findUnder(st.dir, segments, [ctx.vaultReal, dirReal]);
+        if (hit.why === 'outside') { said('is outside the container\'s prop file folder'); continue; }
+        if (hit.why === 'case') { said(`differs in letter case from ${hit.name}`); continue; }
+        if (!hit.full) { said('is not in the container\'s prop file folder'); continue; }
+        if (!STATE_PICTURE_EXTS.has(path.extname(hit.real).toLowerCase())) { said('is not really a picture', 'name the picture itself, not a link to another kind of file'); continue; }
+        const out = canonicalNfc(path.posix.join(path.posix.dirname(p.address), ...segments));
+        const key = addressKey(out);
+        if (planned.has(key)) continue;
+        const read = readOrError(hit.real);
+        if (read.error) { said(`could not be read (${read.error})`, 'make the file readable'); continue; }
+        const hash = sha1(read.bytes);
+        const why = ctx.taken.has(out, { explicit: st.explicit });
+        const prior = ctx.claimed.get(key);
+        planned.add(key);
+        if (!why && prior && prior.hash === hash) {
+          if (prior.rel !== p.rel) p.shared.push(out);
+          continue;
+        }
+        if (why || prior) {
+          said(`would land on ${out}, taken by ${why ? takerName(why) : prior.rel}`, 'give the container another prop_address');
+          continue;
+        }
+        ctx.claimed.set(key, { rel: p.rel, hash });
+        const entry = { source: hit.real, out, cut: ctx.cutKeeper && path.extname(out).toLowerCase() === '.svg' };
+        if (st.explicit && ctx.keptReplaced(out)) entry.replacesKept = true;
+        BYTES.set(entry, read.bytes);
+        p.files.push(entry);
+      }
+    }
+  }
+  return added;
+}
+
+// Every text in an item's state fields that names a picture by its extension: { field, value }. A link (`:`) or a site
+// address (leading `/`) is the GM's own and is not looked at.
+function pictureValues(fields) {
+  const out = [];
+  const walk = (field, v) => {
+    if (typeof v === 'string') {
+      const value = v.trim();
+      if (value && !value.includes(':') && !value.startsWith('/') && STATE_PICTURE_EXTS.has(path.posix.extname(value).toLowerCase())) out.push({ field, value });
+    } else if (Array.isArray(v)) v.forEach((x) => walk(field, x));
+    else if (v && typeof v === 'object') Object.values(v).forEach((x) => walk(field, x));
+  };
+  for (const [field, v] of Object.entries(fields || {})) walk(field, v);
+  return out;
+}
+
+module.exports = { planProps, planStatePictures, stateFileOf, bytesOf, textOf, utf8Charset, LINKED_EXTS };

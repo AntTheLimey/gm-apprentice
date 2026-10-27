@@ -322,6 +322,105 @@ describe('the cover', () => {
   });
 });
 
+describe('a prop as the cover', () => {
+  const FILES = {
+    'Documents/Gazetteer Cover.md': '---\ntype: prop\nprop_title: The Gazetteer\nprop_line: Price one penny\n---\nA cover.\n',
+    'Documents/Coin.md': '---\ntype: prop\n---\nA coin.\n',
+    'Art/cover.png': 'PNG',
+  };
+  const coverWarning = (logs) => logs.filter((l) => l.includes('player_site.props.cover names'));
+
+  it('a prop cover is linked and not listed', () => {
+    const s = buildBoth(FILES, { player: { props: { cover: '[[Gazetteer Cover]]' } } });
+    try {
+      const page = s.player.read('props', 'index.html');
+      assert.match(page, /<h1 class="page-title">Props<\/h1>\n<a class="props-cover" href="\.\.\/documents\/gazetteer-cover\.html"><span class="props-cover-title">The Gazetteer<\/span><span class="prop-line">Price one penny<\/span><\/a>\n/);
+      assert.doesNotMatch(page, /<img class="props-cover"/);
+      assert.equal((page.match(/Gazetteer/g) || []).length, 1, page);
+      assert.match(page, />Coin<\/a>/);
+      assert.equal(coverWarning(s.logs).length, 0, s.logs.join('\n'));
+      // The menu link is unchanged.
+      assert.match(s.player.read('documents', 'coin.html'), /<a href="\.\.\/props\/index\.html">Props<\/a>/);
+    } finally { s.cleanup(); }
+  });
+
+  it('a cover with no line prints only its title', () => {
+    const s = buildBoth({ ...FILES, 'Documents/Gazetteer Cover.md': '---\ntype: prop\n---\nA cover.\n' }, { sites: ['player'], player: { props: { cover: '[[Gazetteer Cover]]' } } });
+    try {
+      assert.match(s.player.read('props', 'index.html'), /<a class="props-cover" href="\.\.\/documents\/gazetteer-cover\.html"><span class="props-cover-title">Gazetteer Cover<\/span><\/a>/);
+    } finally { s.cleanup(); }
+  });
+
+  it('a held cover is no cover, with a warning; the GM site shows it marked', () => {
+    const s = buildBoth({ ...FILES, 'Documents/Gazetteer Cover.md': '---\ntype: prop\npublish: false\n---\nA cover.\n' }, { player: { props: { cover: '[[Gazetteer Cover]]' } } });
+    try {
+      assert.doesNotMatch(s.player.read('props', 'index.html'), /props-cover|Gazetteer/);
+      assert.deepEqual(coverWarning(s.logs), ['  WARNING: player_site.props.cover names "Gazetteer Cover", which is not a prop the site publishes with a page; the props page shows no cover']);
+      assert.match(s.gm.read('props', 'index.html'), /<a class="props-cover"[^>]*>.*<\/a> <span class="gm-unrevealed">not yet revealed<\/span>/);
+    } finally { s.cleanup(); }
+  });
+
+  it('a name that is no prop is no cover, with a warning', () => {
+    const s = buildBoth(FILES, { sites: ['player'], player: { props: { cover: '[[Nothing Here]]' } } });
+    try {
+      assert.doesNotMatch(s.player.read('props', 'index.html'), /props-cover/);
+      assert.equal(coverWarning(s.logs).length, 1, s.logs.join('\n'));
+      assert.match(coverWarning(s.logs)[0], /names "Nothing Here"/);
+    } finally { s.cleanup(); }
+  });
+
+  it('a cover whose title and line are hidden shows only published words', () => {
+    const s = buildBoth({
+      ...FILES,
+      'Documents/Gazetteer Cover.md': '---\ntype: prop\nprop_title: SECRETTITLE\nprop_line: SECRETLINE\n---\nA cover.\n',
+    }, { sites: ['player'], player: { hide: { fields: ['prop_title', 'prop_line'] }, props: { cover: '[[Gazetteer Cover]]' } } });
+    try {
+      const page = s.player.read('props', 'index.html');
+      assert.match(page, /<a class="props-cover" href="[^"]*"><span class="props-cover-title">Gazetteer Cover<\/span><\/a>/);
+      assert.doesNotMatch(page, /SECRETTITLE|SECRETLINE/);
+    } finally { s.cleanup(); }
+  });
+
+  it('a cover that is also a container item is left out of that container', () => {
+    const s = buildBoth({
+      ...FILES,
+      'Documents/Shelf.md': '---\ntype: prop\nprop_kind: container\n---\nA shelf.\n',
+      'Documents/Gazetteer Cover.md': '---\ntype: prop\nprop_container: "[[Shelf]]"\n---\nA cover.\n',
+    }, { sites: ['player'], player: { props: { cover: '[[Gazetteer Cover]]' } } });
+    try {
+      const page = s.player.read('props', 'index.html');
+      assert.equal((page.match(/Gazetteer Cover/g) || []).length, 1, page);
+      assert.match(page, /<a class="props-cover"/);
+      assert.match(page, /<h2><a href="[^"]*">Shelf<\/a><\/h2>\n<p class="prop-empty">/);
+    } finally { s.cleanup(); }
+  });
+
+  it('a picture cover is unchanged', () => {
+    const s = buildBoth(FILES, { sites: ['player'], player: { props: { cover: 'Art/cover.png' } } });
+    try {
+      assert.match(s.player.read('props', 'index.html'), /<img class="props-cover" src="\.\.\/images\/banners\/props\/cover\.png" alt="">/);
+      assert.equal(coverWarning(s.logs).length, 0);
+    } finally { s.cleanup(); }
+  });
+});
+
+describe('the newest-props heading', () => {
+  const COIN = { 'Documents/Coin.md': '---\ntype: prop\n---\nA coin.\n' };
+  const index = (title) => {
+    const s = buildBoth(COIN, { sites: ['player'], player: { landing: { latest_props: 3, ...(title === undefined ? {} : { latest_props_title: title }) } } });
+    try { return s.player.read('index.html'); } finally { s.cleanup(); }
+  };
+
+  it('the newest-props heading can be set', () => {
+    assert.match(index('Latest Messages & More'), /<h2><a href="props\/index\.html">Latest Messages &amp; More<\/a><\/h2>/);
+  });
+
+  it('an empty heading setting keeps "Latest from"', () => {
+    assert.match(index(''), /<h2><a href="props\/index\.html">Latest from Props<\/a><\/h2>/);
+    assert.match(index(), /<h2><a href="props\/index\.html">Latest from Props<\/a><\/h2>/);
+  });
+});
+
 describe('chapters that do not group', () => {
   const s = buildBoth({
     'Documents/Hidden Ref.md': '---\ntype: prop\nchapter: "[[Chapter Hidden]]"\n---\nA.\n',
@@ -386,5 +485,50 @@ describe('a title and intro holding markup', () => {
     assert.match(s.player.read('documents', 'coin.html'), />Locker &lt;b&gt;&amp;&lt;\/b&gt;<\/a>/);
     assert.match(s.player.read('index.html'), />Latest from Locker &lt;b&gt;&amp;&lt;\/b&gt;<\/a>/);
     for (const f of s.player.files()) assert.doesNotMatch(fs.readFileSync(f, 'utf8'), /<script>x<\/script>|<b>&<\/b>/, f);
+  });
+});
+
+describe('prop_group headings on the props page and the landing box', () => {
+  const s = buildBoth({
+    'Documents/Bookshelf.md': '---\ntype: prop\nprop_kind: container\n---\nA shelf.\n',
+    'Documents/Diary.md': '---\ntype: prop\nprop_container: "[[Bookshelf]]"\nprop_group: Papers\nrevealed_in: "[[Session 03]]"\n---\nA diary.\n',
+    'Documents/Badge.md': '---\ntype: prop\nprop_group: Evidence\nrevealed_in: "[[Session 02]]"\n---\nA badge.\n',
+    'Documents/Coin.md': '---\ntype: prop\n---\nA coin.\n',
+    'Sessions/Session 02.md': SESSION(2),
+    'Sessions/Session 03.md': SESSION(3),
+  }, { sites: ['player'], player: { landing: { latest_props: 3 } } });
+  after(() => s.cleanup());
+
+  it('the latest-props box stays one flat list', () => {
+    const box = /<section class="dashboard-section props-latest">[\s\S]*?<\/section>/.exec(s.player.read('index.html'));
+    assert.ok(box);
+    assert.match(box[0], /Diary/);
+    assert.doesNotMatch(box[0], /prop-group|Papers/);
+  });
+
+  it('a group that is not a container prints no second heading; a container group does', () => {
+    const page = s.player.read('props', 'index.html');
+    const section = (name) => new RegExp(`<section class="prop-group">\\n<h2>(?:<a[^>]*>)?${name}[\\s\\S]*?</section>`).exec(page)[0];
+    assert.doesNotMatch(section('Evidence'), /<h3/);
+    assert.doesNotMatch(section('Other props'), /<h3/);
+    assert.match(section('Bookshelf'), /<h3 class="prop-group">Papers<\/h3>/);
+  });
+});
+
+describe('Ruling 43: the landing page counts no prop note as a story entry', () => {
+  const s = buildBoth({
+    'Chapters/Chapter One/Chapter One.md': '---\ntype: chapter\nstatus: played\n---\nThe first.\n',
+    'Chapters/Chapter One/Props/Map.md': '---\ntype: prop\n---\nA map.\n',
+    'Chapters/Chapter One/Props/Menu.md': '---\ntype: prop\nprop_kind: document\n---\nA menu.\n',
+    'Chapters/Chapter Two.md': '---\ntype: chapter\nstatus: played\n---\nThe second.\n',
+  });
+  after(() => s.cleanup());
+
+  it('The Story counts the two chapters only', () => {
+    for (const site of [s.player, s.gm]) {
+      const html = site.read('index.html');
+      const card = html.slice(html.indexOf('<h4>The Story</h4>'), html.indexOf('</a>', html.indexOf('<h4>The Story</h4>')));
+      assert.match(card, /<div class="count">2 entries<\/div>/);
+    }
   });
 });

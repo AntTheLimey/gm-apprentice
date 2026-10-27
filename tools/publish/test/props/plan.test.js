@@ -470,3 +470,28 @@ test('a page or stylesheet read from another encoding says utf-8 where it named 
   assert.strictEqual(utf8Charset('@charset "windows-1252";\np{}', '.css'), '@charset "utf-8";\np{}');
   assert.strictEqual(utf8Charset('<p>charset=latin1 in prose</p>', '.html'), '<p>charset=latin1 in prose</p>');
 });
+
+test('Ruling 44: a link outside the folder that another shipping prop ships at the same address and bytes is no problem', (t) => {
+  const PAGE = '<html><head><link rel="stylesheet" href="shelf.css"></head><body>Books</body></html>';
+  const root = vault({
+    'G/Cover.md': '', 'G/index.html': INV.replace('props.css', 'cover.css'), 'G/cover.css': 'body{background:url("assets/paper.jpg")}',
+    'G/assets/paper.jpg': 'JPG',
+    'G/shelf/Shelf.md': '', 'G/shelf/index.html': PAGE, 'G/shelf/shelf.css': 'body{background:url("../assets/paper.jpg")}',
+    // A second cover elsewhere whose picture at the same address has other bytes.
+    'H/Cover.md': '', 'H/index.html': INV.replace('props.css', 'cover.css'), 'H/cover.css': 'body{background:url("assets/paper.jpg")}',
+    'H/assets/paper.jpg': 'OTHER',
+  });
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const cover = (dir) => page(root, `${dir}/Cover.md`, { type: 'prop', prop_file: 'index.html', prop_address: 'gazetteer/index.html' });
+  const shelfPage = page(root, 'G/shelf/Shelf.md', { type: 'prop', prop_file: 'index.html', prop_address: 'gazetteer/shelf/index.html' });
+  const { props, problems } = plan(root, [cover('G'), shelfPage]);
+  assert.deepStrictEqual(problems, []);
+  const shelf = props.find((p) => p.rel === 'G/shelf/Shelf.md');
+  assert.deepStrictEqual(outs(shelf), ['gazetteer/shelf/index.html', 'gazetteer/shelf/shelf.css']);
+  assert.deepStrictEqual(shelf.shared, ['gazetteer/assets/paper.jpg']);
+  // Otherwise unchanged: no prop ships that address, the prop that has it does not ship, or its bytes differ.
+  const OUTSIDE = ['shelf.css links "../assets/paper.jpg", which is outside its folder'];
+  assert.deepStrictEqual(plan(root, [shelfPage]).problems.map((p) => p.detail), OUTSIDE);
+  assert.deepStrictEqual(plan(root, [cover('G'), shelfPage], { ships: (p) => p.rel !== 'G/Cover.md' }).problems.map((p) => p.detail), OUTSIDE);
+  assert.deepStrictEqual(plan(root, [cover('H'), shelfPage]).problems.map((p) => p.detail), OUTSIDE);
+});

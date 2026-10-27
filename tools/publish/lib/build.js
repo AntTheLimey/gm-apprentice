@@ -43,14 +43,13 @@ const { publishedPages } = require('./published-pages');
 const { isOutOfPlay } = require('./pc-status');
 const { sheetSourceOf } = require('./sheet-source');
 const { pcIdentity } = require('./templates/pc-identity');
-const { planProps } = require('./props/plan');
+const { planProps, planStatePictures } = require('./props/plan');
 const { propHrefFor, propOutputs, keptCopyOutputs, pathProblem } = require('./props/files');
-const { loadHands, withHand, HANDS_FILE } = require('./props/hands');
-const { styledPage, styleFontFamilies, styledPageProblem, FONTS_CSS, BASE_CSS } = require('./props/page');
-const { containerItems, propRow, COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, placeCollection, propTaken, collectionModel, latestProps, shownRows } = require('./props/collection');
-const { layoutNames } = require('./props/layout');
-const { isWithheld, withheldPlaceholder, withheldNameMarked } = require('./processor');
-const { containerTemplate, collectionTemplate, containerItemsHtml } = require('./templates/props-page');
+const { HANDS_FILE } = require('./props/hands');
+const { styleFontFamilies, FONTS_CSS, BASE_CSS } = require('./props/page');
+const { COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, placeCollection, propTaken, latestProps, shownRows, containerItems, stateFieldsOfListed } = require('./props/collection');
+const { makeProps } = require('./props/make');
+const { collectionTemplate } = require('./templates/props-page');
 
 const TOOL_VERSION = require('../package.json').version;
 
@@ -165,7 +164,20 @@ function foldedPagePath(linkMap, name) {
   return LOWER_KEYS.get(linkMap).get(foldName(name));
 }
 
-function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {}) {
+// A written address as one key: slashes and dot segments normalised, a folder as its index.html; lower-cased unless
+// `exact`.
+const addressOf = (text, exact = false) => {
+  const v = text.replace(/\\/g, '/').replace(/[?#][\s\S]*$/, '');
+  const norm = path.posix.normalize(`/${v}`).slice(1);
+  const at = v.endsWith('/') || norm === '' ? path.posix.join(norm, 'index.html') : norm;
+  return exact ? at : at.toLowerCase();
+};
+
+// A link is read in this order: (1) an address the site serves besides its pages (`addresses`: each shipping prop's
+// files, the props page), spelled exactly, stands in the site's spelling; (2) a note's name, as always; (3) an address
+// inside a kept folder (`kept`) stands as written when it names a file (any ending but .md, which names a note) or a
+// folder (a trailing /); then a page's address, and anything else unless it names a hidden note.
+function resolveSiteLink(link, { linkMap = Object.create(null), pages = [], addresses = [], kept = [] } = {}) {
   const text = String(link == null ? '' : link).trim();
   if (/^https?:\/\//i.test(text)) return { kind: 'outside', href: text };
   if (PASS_SCHEME_RE.test(text)) return { kind: 'outside', href: text };
@@ -179,6 +191,14 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {
   try { decoded = decodeURIComponent(wiki ? wiki[1] : text); } catch (e) { return { kind: 'none', href: null }; }
   const target = canonicalNfc(parseWikilink(decoded).name.replace(/\?[\s\S]*$/, '').trim());
   const parts = pathParts(target);
+  const after = (/[?#][\s\S]*$/.exec(text) || [''])[0];
+  const bare = canonicalNfc(decoded.trim().replace(/[?#][\s\S]*$/, ''));
+  const addressLike = !wiki && (/[\\/]/.test(bare) || /\.html?$/i.test(bare));
+  if (addressLike) {
+    const at = addressOf(bare, true);
+    const served = addresses.find((a) => addressOf(String(a), true) === at);
+    if (served) return { kind: 'site', href: `${served}${after}` };
+  }
   const name = parts.length ? canonicalNfc(parts.join('/')) : '';
   if (name) {
     const candidates = [name];
@@ -193,9 +213,16 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {
   }
   // A bracketed link is a note, and no page was found for it: never printed.
   if (wiki) return { kind: 'none', href: null };
-  // The address of a published page, spelled as the build writes it, stands.
+  if (addressLike && (/\/$/.test(bare) || /\.(?!md$)[a-z0-9]+$/i.test(path.posix.basename(bare)))) {
+    const at = addressOf(bare);
+    if (kept.some((k) => at.startsWith(addressOf(`${String(k).replace(/[\\/]+$/, '')}/`).slice(0, -'index.html'.length)))) {
+      return { kind: 'site', href: text.replace(/^\.\//, '') };
+    }
+  }
+  // The address of a published page stands, in the site's spelling.
   const address = parts.join('/').toLowerCase();
-  if (Object.values(linkMap).some((p) => pathParts(String(p)).join('/').toLowerCase() === address)) return { kind: 'site', href: text.replace(/^\.\//, '') };
+  const page = Object.values(linkMap).find((p) => pathParts(String(p)).join('/').toLowerCase() === address);
+  if (page) return { kind: 'site', href: /\.html?$/i.test(bare) ? `${page}${after}` : text.replace(/^\.\//, '') };
   // Anything else: if ANY part of the path is the name, file name, title, alias or slug of a hidden note, it is dropped.
   const hiddenNames = HIDDEN_NAMES.get(linkMap) || new Set();
   const hiddenSlugs = HIDDEN_SLUGS.get(linkMap) || new Set();
@@ -834,6 +861,13 @@ function buildSite(options) {
     cutKeeper: gm ? !show.has('gm_only_blocks') : true, cleanup: writes === 'all' && !gm,
   });
   publishConfig._props = propPlan;
+  // What else the site serves at an address, for the links the GM writes (resolveSiteLink): each shipping prop's
+  // files and the props page, and the kept folders.
+  const siteLinks = {
+    addresses: [...(propPlan ? propPlan.props.filter((p) => p.ships).flatMap((p) => p.files.map((f) => f.out)) : []),
+      ...(collection ? [collection.address] : [])],
+    kept: keptDirs,
+  };
   for (const r of propPlan ? propPlan.problems : []) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);
 
   // A GM alias must never reach the site (#212): rewrite every one to the
@@ -1221,6 +1255,15 @@ function buildSite(options) {
     }
   }
 
+  // The pictures a container's state file names ship beside it: the items its listing shows name them in their
+  // published fields, so this waits for the published view. Planned before the paths are checked below.
+  if (propPlan) {
+    const site = gm ? 'gm' : 'player';
+    const shownPages = new Set(pages);
+    const listed = containerItems({ props: propPlan.props, isShown: (pg) => shownPages.has(pg), excludeFields, fieldOverrides, site });
+    for (const r of planStatePictures(propPlan, stateFieldsOfListed(listed, { props: propPlan.props, site }))) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);
+  }
+
   cleanOutput();
   // A prop file is never written through a link in the site folder (a kept folder can hold
   // one): such a file is not written, and its note does not link it. In memory (the doctor)
@@ -1332,7 +1375,7 @@ function buildSite(options) {
   // texts the note audit reads.
   const menuExtra = [];
   for (const item of publishConfig.menu_extra || []) {
-    const read = resolveSiteLink(item.link, { linkMap, pages });
+    const read = resolveSiteLink(item.link, { linkMap, pages, ...siteLinks });
     if (read.kind === 'none') {
       console.warn(`  WARNING: ${nm('player_site.menu_extra')} entry "${item.label}" links to "${item.link}", which is a note the site makes no page of, or an address the site cannot link to — it is left out of the menu`);
       continue;
@@ -1740,99 +1783,8 @@ function buildSite(options) {
     if (stale.length) throw new Error(`${stale.join(', ')} ${stale.length === 1 ? 'is' : 'are'} on the site but a full build would no longer write ${stale.length === 1 ? 'it' : 'them'}. Run a full build (gm-apprentice-publish build --site ${gm ? 'gm' : 'player'}); a sheets-only build deletes nothing. Nothing was written.`);
   }
 
-  // The pages the tool makes for props that name a style, made before the note pages so a note
-  // links only a page that was made. A held prop's page is never made: its words would pass
-  // through the build. The words are the note page's own player view of `## The Text`, on the GM
-  // site too (the GM sees the Keeper parts on the note page). Then each container's page, which lists
-  // what it holds, so a row links only a page that was made; one that names a style fills its layout.
-  // The styles' typefaces are served from the site, from the vault's font cache: a miss warns once.
-  let styleFonts = { css: '', files: [] };
-  let collectionBuilt = null;   // the props page's model (collectionModel), made with the container pages
-  if (propPlan) {
-    const noPage = (p, problem) => {
-      const row = { rel: p.rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: problem.detail, fix: problem.fix };
-      propPlan.problems.push(row);
-      console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
-      propBlocked.add(p.address);
-    };
-    const styled = [];
-    for (const p of propPlan.props) {
-      if (!p.ships || !p.address || p.made !== 'style' || p.kind === 'container' || propBlocked.has(p.address)) continue;
-      const problem = styledPageProblem(p, p.page.publishedMarkdown);
-      if (problem) {
-        noPage(p, problem);
-        continue;
-      }
-      styled.push(p);
-    }
-    const containers = propPlan.props.filter((p) => p.ships && p.address && p.kind === 'container' && p.made && !propBlocked.has(p.address));
-    // A container whose style has no place for its list gets the site's own look, and the GM is told.
-    for (const p of containers) {
-      if (!p.style || [p.style.layout, p.style.sheet].some((t) => layoutNames(t).includes('items'))) continue;
-      const row = { rel: p.rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: `the style "${p.style.name}" has no {{{items}}} place, so the container's page uses the site's own look`, fix: 'use a style made for containers, or remove prop_style from the container' };
-      propPlan.problems.push(row);
-      console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
-      p.style = null;   // so none of the style's files or typefaces ship on its account
-    }
-    // Each shipping prop's hand is resolved once: its fields carry the hand's font as prop_font.
-    // A registry that cannot be read is raised once; an unknown hand, once per prop.
-    const raise = (rel, problem) => {
-      const row = { rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail: problem.detail, fix: problem.fix };
-      propPlan.problems.push(row);
-      console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
-    };
-    const styledProps = [...styled, ...containers.filter((p) => p.style)];
-    if (styledProps.length) {
-      const registry = loadHands(config.vaultPath);
-      if (registry.problem) raise(HANDS_FILE, registry.problem);
-      for (const p of styledProps) {
-        const { fields, problem } = withHand(p.page.frontmatter || {}, registry.hands);
-        p.fields = fields;
-        if (problem) raise(p.rel, problem);
-      }
-    }
-    const families = [...new Set(styledProps.flatMap((p) => styleFontFamilies(p.style, p.fields)))];
-    if (families.length) {
-      let warned = false;
-      styleFonts = fontsLib.selfHostedFontFaces(config.vaultPath, families, () => {
-        if (warned) return;
-        warned = true;
-        console.warn(`  WARNING: the typefaces for the prop styles are not in the vault's font cache and could not be downloaded; the styles use fallback type. ${fontsLib.missAdvice(options.offline === true)}`);
-      }, { offline: options.offline === true, fontsHref: '../../fonts/' });
-    }
-    for (const p of styled) {
-      const made = styledPage({ prop: p, style: p.style, page: p.page, fields: p.fields, linkMap, imageMap, usedImages, collectionHref: collectionHrefFrom(p.address), fontsCss: styleFonts.css !== '' });
-      if (made.problem) noPage(p, made.problem);
-      else p.made_html = made.html;
-    }
-    // What a listing shows is the note pages this site publishes; on the GM site, a row the
-    // player site does not publish is marked.
-    const shown = new Set(pages);
-    const pageAt = new Map(pages.map((pg) => [pg.outputPath, pg]));
-    const misplaced = [];
-    // On the GM site a withheld note the player site does not publish is named inside the usual withheld mark.
-    const nameOf = (pg, text) => (gm && isWithheld(pg.sourceFrontmatter || pg.frontmatter) && !onPlayerSite.has(pg)
-      ? withheldNameMarked(text, withheldPlaceholder((pg.sourceFrontmatter || pg.frontmatter).type, publishConfig.withheld_words), mark)
-      : text);
-    // How every listing reads a row: the same for a container's page and the props page.
-    const rowOptions = {
-      isShown: (pg) => shown.has(pg), excludeFields, fieldOverrides, site: gm ? 'gm' : 'player', nameOf, blocked: propBlocked,
-      resolvePage: (target) => pageAt.get(linkMap[target]) || null, isPlayerShown: gm ? (pg) => onPlayerSite.has(pg) : null,
-    };
-    const listed = containerItems({ props: propPlan.props, ...rowOptions, problems: misplaced });
-    for (const row of misplaced) {
-      propPlan.problems.push(row);
-      console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
-    }
-    // The props page lists the same rows, so a prop reads alike on every page that lists it.
-    collectionBuilt = collectionModel({ plan: propPlan, containers: listed, settings: collection, ...rowOptions, rowOf: (p) => propRow(p, rowOptions) });
-    for (const p of containers) {
-      const { rows, title, noteTitle } = listed.get(p.rel);
-      p.made_html = p.style
-        ? styledPage({ prop: p, style: p.style, page: p.page, fields: p.fields, linkMap, imageMap, usedImages, collectionHref: collectionHrefFrom(p.address), fontsCss: styleFonts.css !== '', items: containerItemsHtml(rows, p.address), names: { title, noteTitle } }).html
-        : containerTemplate({ container: p, rows, address: p.address, title, noteTitle }, navFor, config, publishConfig, { linkMap, imageMap, usedImages });
-    }
-  }
+  const { collectionBuilt, styleFonts } = makeProps({ propPlan, propBlocked, pages, linkMap, imageMap, usedImages, config, options, publishConfig, collection,
+    collectionHrefFrom, navFor, gm, mark, onPlayerSite, excludeFields, fieldOverrides, coverName: nm('player_site.props.cover') });
 
   // Published NPC pages whose body runs session by session (story-sessions.js), in page order.
   const npcStories = [];
@@ -2096,7 +2048,7 @@ function buildSite(options) {
       banner.image = imageFull ? (writes !== 'all' ? `images/banners/landing/${path.basename(imageFull)}` : copyBannerAsset(imageFull, 'landing')) : null;
     }
     if (banner.link) {
-      const read = resolveSiteLink(banner.link, { linkMap, pages });
+      const read = resolveSiteLink(banner.link, { linkMap, pages, ...siteLinks });
       if (read.kind === 'none') {
         console.warn(`  WARNING: ${nm('player_site.landing.banner.link')} is "${banner.link}", which is a note the site makes no page of, or an address the site cannot link to — the banner is not a link`);
         banner.link = null;
@@ -2121,7 +2073,7 @@ function buildSite(options) {
     }
     const latest = collection.latest > 0 ? latestProps(collectionBuilt, collection.latest) : [];
     publishConfig._propsLatest = latest.length
-      ? { title: collectionBuilt.title, href: collectionBuilt.address, rows: latest, total: shownRows(collectionBuilt).length }
+      ? { title: collectionBuilt.title, heading: collection.latestTitle, href: collectionBuilt.address, rows: latest, total: shownRows(collectionBuilt).length }
       : null;
   }
 

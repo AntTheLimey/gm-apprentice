@@ -28,7 +28,7 @@ function worldDomainTemplate(page, processedContent, navFor, config, imageMap, c
 
   const headerHtml = `<h1>${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>${summaryHtml}${portrait}`;
 
-  const crumbs = generateBreadcrumbs(page.outputPath, {});
+  const crumbs = generateBreadcrumbs(page.outputPath, { page });
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
 
   const mainContent = [headerHtml, rulesHtml, processedContent.html].filter(Boolean).join('\n');

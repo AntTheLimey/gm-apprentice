@@ -21,10 +21,28 @@ function rowHtml(row, fromOut) {
   return `<li class="prop-item">${parts.join(' ')}</li>`;
 }
 
-// The rows as a list, each link relative to `fromOut` (the page it is printed on); '' with none.
-function propListHtml(rows, fromOut) {
+const listOf = (rows, fromOut) => `<ul class="prop-list">\n${rows.map((r) => rowHtml(r, fromOut)).join('\n')}\n</ul>`;
+
+// The rows as a list, each link relative to `fromOut` (the page it is printed on); '' with none. When a
+// row has a `group`: the ungrouped shown rows first, then one headed list per group in the order of its
+// first row, then the sealed rows in a last bare list. `flat`: one list whatever the groups.
+function propListHtml(rows, fromOut, { flat = false } = {}) {
   if (!rows.length) return '';
-  return `<ul class="prop-list">\n${rows.map((r) => rowHtml(r, fromOut)).join('\n')}\n</ul>`;
+  if (flat || !rows.some((r) => r.group)) return listOf(rows, fromOut);
+  const groups = new Map();
+  const bare = [];
+  const sealed = [];
+  for (const r of rows) {
+    if (r.sealed) sealed.push(r);
+    else if (!r.group) bare.push(r);
+    else if (groups.has(r.group)) groups.get(r.group).push(r);
+    else groups.set(r.group, [r]);
+  }
+  return [
+    ...(bare.length ? [listOf(bare, fromOut)] : []),
+    ...[...groups].map(([heading, list]) => `<h3 class="prop-group">${escapeHtml(heading)}</h3>\n${listOf(list, fromOut)}`),
+    ...(sealed.length ? [listOf(sealed, fromOut)] : []),
+  ].join('\n');
 }
 
 // What a container's page lists: its rows, or that it holds nothing yet.
@@ -64,17 +82,20 @@ function containerTemplate({ container, rows, address, title: shownTitle, noteTi
 
 // The props page, in the site shell: its title, its cover picture and paragraph when set, then each
 // group under its heading (linked when the heading is a page), with its rows. `model` is collectionModel's;
-// its `cover` is a web address, or the picture's path on the site.
+// its `cover` is a web address, or the picture's path on the site; or `coverRow` is a prop, printed as a link.
 function collectionTemplate(model, navFor, config, publishConfig) {
   const { address, title } = model;
   const href = (out) => escapeHtml(encodeHref(relativeHref(address, out)));
   const cover = model.cover ? campaignImageSrc(isWebImageAddress(model.cover) ? model.cover : relativeHref(address, model.cover)) : '';
+  const row = model.coverRow;
+  const coverLink = row ? `<a class="props-cover" href="${href(row.href)}"><span class="props-cover-title">${escapeHtml(row.title)}</span>${row.line ? `<span class="prop-line">${escapeHtml(row.line)}</span>` : ''}</a>${row.unrevealed ? ' <span class="gm-unrevealed">not yet revealed</span>' : ''}` : '';
   const groups = model.groups.map((g) => {
     const heading = g.href ? `<a href="${href(g.href)}">${escapeHtml(g.heading)}</a>` : escapeHtml(g.heading);
     return `<section class="prop-group">\n<h2>${heading}</h2>\n${containerItemsHtml(g.rows, address)}\n</section>`;
   });
   const content = [
     `<h1 class="page-title">${escapeHtml(title)}</h1>`,
+    ...(coverLink ? [coverLink] : []),
     ...(cover ? [`<img class="props-cover" src="${escapeHtml(cover)}" alt="">`] : []),
     ...(model.intro ? [`<p class="props-intro">${escapeHtml(model.intro)}</p>`] : []),
     ...groups,

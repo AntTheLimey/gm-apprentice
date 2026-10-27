@@ -54,13 +54,32 @@ function jsonStrings(value, into) {
   return into;
 }
 
+// A container's state file (props/collection.js stateScript), `window.NAME = <JSON>;`, as its JSON's keys and strings, so
+// an escape (\n, \u003c) does not run two words together; a text with markup in it is read both as written and as a
+// page shows it. A file of any other shape is read as written.
+function stateFileText(raw) {
+  const m = /^\s*window\.[A-Za-z_$][\w$]*\s*=\s*([\s\S]*?);?\s*$/.exec(raw);
+  if (!m) return raw;
+  let value;
+  try { value = JSON.parse(m[1]); } catch (e) { return raw; }
+  const out = [];
+  (function walk(v) {
+    if (typeof v === 'string') {
+      out.push(v);
+      if (v.includes('<')) out.push(pageText(v, { attributes: true }));
+    } else if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { out.push(k); walk(x); }
+  }(value));
+  return out.join('\n');
+}
+
 const jsonOrRaw = (raw) => { try { return jsonStrings(JSON.parse(raw), []).join('\n'); } catch (e) { return raw; } };
 
 // What a page sends that its text does not show: each inline script (a JSON island as its strings, so an escaped line
-// break does not join two words) and each data-* attribute's value.
-function pageExtras(raw) {
+// break does not join two words), unless `scripts` is false, and each data-* attribute's value.
+function pageExtras(raw, { scripts = true } = {}) {
   const out = [];
-  for (const m of raw.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)) {
+  for (const m of scripts ? raw.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi) : []) {
     out.push(/\stype\s*=\s*["']?application\/(?:ld\+)?json/i.test(m[1]) ? jsonOrRaw(m[2]) : m[2]);
   }
   for (const m of raw.matchAll(/\sdata-[a-z0-9-]+\s*=\s*"([^"]*)"/gi)) out.push(pageText(m[1]));
@@ -70,9 +89,10 @@ function pageExtras(raw) {
 // The words a visitor can be sent in one file: a page's text with the words its tags carry, its inline scripts and data
 // attributes; an XML or SVG file's text and the words its tags carry; every string of a JSON file; anything else as it
 // stands.
-function fileText(rel, raw) {
+// `scripts: false` leaves a page's inline scripts out: what a reader is shown, for props compare (the gate reads them).
+function fileText(rel, raw, { scripts = true } = {}) {
   const ext = path.posix.extname(rel).toLowerCase();
-  if (ext === '.html' || ext === '.htm') return [pageText(raw, { attributes: true }), ...pageExtras(raw)].join('\n');
+  if (ext === '.html' || ext === '.htm') return [pageText(raw, { attributes: true }), ...pageExtras(raw, { scripts })].join('\n');
   if (MARKUP_EXT.has(ext)) return pageText(raw, { attributes: true });
   if (JSON_EXT.has(ext)) return jsonOrRaw(raw);
   return raw;
@@ -132,4 +152,4 @@ function readOutput(dir) {
   return out.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
 }
 
-module.exports = { TEXT_EXT, createMatcher, fileText, pageExtras, readOutput, isToolScript, isToolFile, listFiles };
+module.exports = { TEXT_EXT, createMatcher, fileText, stateFileText, pageExtras, readOutput, isToolScript, isToolFile, listFiles };

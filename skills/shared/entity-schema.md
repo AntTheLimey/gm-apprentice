@@ -324,7 +324,10 @@ from the vault's `_meta/prop-hands.json`, so one writer always has one hand;
 `prop_font` on the note wins), `prop_line` (one line
 for the props page), `prop_group` (its heading there; empty uses its
 chapter), `prop_container` (wiki-link to the container prop it sits
-in), `show_sealed` (containers: `titles` or `none`), `revealed_in`
+in), `show_sealed` (containers: `titles` or `none`), `prop_state`
+(containers: a `.js` file filled with what the page lists, for
+its script), `prop_state_global` (the global it sets; default
+`PROP_ITEMS`), `revealed_in`
 (the session it reached the players; wrap-up's reveal step writes it, first arrival only). Style fields
 (`prop_title`, `prop_breaks`, `prop_shift`, `prop_font`, and each
 style's own) are listed in publish-site's prop-styles reference. It

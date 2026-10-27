@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
-from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
-                          cells, edit_frontmatter, plugin_tool, stopped)
+from migrate_core import (CHOICE, PERSON, WILL, Check, Item,
+                          StepFailed, cells, edit_frontmatter, plugin_tool, stopped)
 from migrate_vault import vault_system
 from vault_check import (ExplainAll, ask_publish_tool, check_frontmatter, check_gm_leak,
                          check_pc_body, check_sessions, configured_site,
@@ -861,6 +863,8 @@ def find_exclude_lists(vault: Path) -> list[Item]:
 
 
 AFTER_BUILD = "player_site.after_build"
+PROP_KEEP = "player_site.keep"
+PAGE_EXTS = (".html", ".htm")
 OPTIMIZE = "player_site.images.optimize"
 
 # The site build steps the publish tool now does itself, by script name: what
@@ -993,6 +997,127 @@ def find_retire_steps(vault: Path, release: str = "1.10.63") -> list[Item]:
     return items
 
 
+PROP_MOVE_DECISIONS = "_meta/prop-move.json"
+PROP_STEPS = ("add-props", "inject-gazetteer")
+PROP_MOVE_SCRIPT = Path(__file__).resolve().parent / "prop_move.py"
+
+
+def _run_prop_move(vault: Path, args: list[str]) -> tuple[int, str, str]:
+    """prop_move.py on `vault`: (exit code, stdout, stderr). No time limit:
+    the move bounds each tool call itself, and a limit here would kill it
+    between steps, past its put-back."""
+    try:
+        proc = subprocess.run(
+            [sys.executable, str(PROP_MOVE_SCRIPT), str(vault), *args],
+            capture_output=True, text=True, encoding="utf-8", errors="replace",
+            check=False)
+    except OSError as e:
+        raise StepFailed(f"prop_move.py could not run ({e.__class__.__name__})") from e
+    return proc.returncode, proc.stdout, proc.stderr
+
+
+def _move_failure(code: int, out: str, err: str) -> str:
+    """The move's own reason, one line: its ERROR rows (each ends with the
+    outcome: the vault as it was, or the files it could not put back), else
+    the last thing it said."""
+    errors = [c[2] for c in (row.split("\t", 2) for row in out.splitlines())
+              if len(c) == 3 and c[0] == "ERROR"]
+    lines = [x.strip() for x in (out + "\n" + err).splitlines() if x.strip()]
+    return "; ".join(errors) or (lines[-1] if lines else f"prop_move.py exited {code}")
+
+
+def _prop_steps(steps: list[Any]) -> list[str]:
+    """The names of the prop build steps (`add-props`, `inject-gazetteer`)
+    among `steps`, once each."""
+    from prop_move import step_script  # prop_move imports this module
+    names = []
+    for command in steps:
+        found = step_script(str(command))
+        if found and found[1] in PROP_STEPS:
+            names.append(found[1])
+    return list(dict.fromkeys(names))
+
+
+def find_props_move(vault: Path) -> list[Item]:
+    """1.10.105: props kept by hand or by site scripts can move into the
+    vault as prop notes. Cheap: reads notes, folders and settings, builds
+    nothing; `prop_move.py VAULT plan` does the comparing. Offered once per
+    vault, and only the GM's answer moves anything."""
+    site, _has_config = configured_site(vault)
+    if site is None:
+        return []
+    from prop_move import _notes, is_build_props_note  # prop_move imports this module
+    from vaultlib import extract_frontmatter, is_skipped_path
+    try:
+        s = settings(vault)
+        keep = s.get(PROP_KEEP)
+        steps = s.get(AFTER_BUILD)
+        output = str(s.get("player_site.output") or "docs")
+    except SettingsUnavailable:
+        return []
+    keep = [str(k) for k in keep] if isinstance(keep, list) else []
+    built = 0
+    named: set[str] = set()
+    for rel, text in _notes(vault):
+        if is_build_props_note(text):
+            built += 1
+        value = (extract_frontmatter(text) or {}).get("prop_file")
+        if isinstance(value, str) and value.strip():
+            named.add(Path(value.strip()).name.lower())
+    pages: list[Path] = []
+    chapters = vault / "Chapters"
+    for folder in sorted(chapters.rglob("Props")) if chapters.is_dir() else []:
+        for p in sorted(folder.iterdir()) if folder.is_dir() else []:
+            if (p.is_file() and p.suffix.lower() in PAGE_EXTS
+                    and p.name.lower() != "index.html" and p.name.lower() not in named
+                    and not is_skipped_path(p.relative_to(vault).as_posix())):
+                pages.append(p)
+    kept: dict[str, int] = {}
+    live_names: set[str] = set()
+    for k in keep:
+        root = site / output / k
+        if root.is_dir():
+            files = [f for f in root.rglob("*") if f.is_file()]
+            live_names.update(f.name.lower() for f in files)
+            kept[k] = sum(1 for f in files if f.suffix.lower() in PAGE_EXTS)
+    live = sum(1 for p in pages if p.name.lower() in live_names)
+    lines: list[str] = []
+    if built:
+        lines.append(f"{built} build_props note{'' if built == 1 else 's'} "
+                     "become prop notes")
+    if pages:
+        lines.append(f"{len(pages)} hand-made page{'' if len(pages) == 1 else 's'} "
+                     f"in Props folders, {live} of them live on the site")
+    for k, n in kept.items():
+        lines.append(f"kept folder {k} with {n} page{'' if n == 1 else 's'}")
+    for name in _prop_steps(steps if isinstance(steps, list) else []):
+        lines.append(f"build step {name} is present")
+    if not lines:
+        return []
+    lines.append("run prop_move.py VAULT plan to see every page compared "
+                 "before choosing")
+
+    def apply(value: str | None) -> list[str]:
+        if value not in ("move", "leave"):
+            raise StepFailed("props-move takes move or leave")
+        if value == "leave":
+            return ["left the props where they are; nothing moved"]
+        args = ["apply"]
+        if (vault / PROP_MOVE_DECISIONS).is_file():
+            args += ["--decisions", PROP_MOVE_DECISIONS]
+        code, out, err = _run_prop_move(vault, args)
+        if code != 0:
+            # prop_move's own ERROR row ends "the vault is as it was" or names the files it could not put back;
+            # that outcome is passed through as it said it, never assumed.
+            raise StepFailed(f"the props move did not go through: {_move_failure(code, out, err)}")
+        done = [x for x in out.splitlines() if x.strip()]
+        return [f"moved the props into the vault ({done[-1].lstrip('# ')})"
+                if done else "moved the props into the vault"]
+
+    return [Item("props-move", CHOICE, lines, apply, wants="move or leave",
+                 holds_stamp=True)]
+
+
 SITE_CHECKS: list[Check] = [
     Check(REPIN, None, 1, "the site's publish tool", find_site_repin),
     Check(MOVE, None, 2, "the settings move to the new settings file",
@@ -1028,4 +1153,7 @@ SITE_CHECKS: list[Check] = [
           "into the vault file", find_exclude_lists, asks_site=True),
     Check("gm-leak", None, 4, "sections the site withholds are nested under "
           "GM Notes", find_gm_leak, asks_site=True),
+    Check("props-move", "1.10.105", 4, "props kept by hand or by site scripts "
+          "move into the vault", find_props_move, asks_site=True,
+          choices=("props-move=",)),
 ]

@@ -101,7 +101,7 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
     participantsHtml = `<div class="event-participants"><h3>Participants</h3><ul>${items}</ul></div>`;
   }
 
-  const crumbs = generateBreadcrumbs(page.outputPath, {});
+  const crumbs = generateBreadcrumbs(page.outputPath, { page });
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
 
   const graphHtml = connectionsSection(page, publishConfig);

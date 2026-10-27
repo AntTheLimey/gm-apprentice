@@ -72,7 +72,11 @@ function generateBreadcrumbs(outputPath, options = {}) {
   }
 
   if (!isIndex) {
-    const entityName = titleFromSlug(filename);
+    // A note with its own `title:` is named by it, as its heading names it (the page's display title); any other
+    // page by its file name, as it always was.
+    const page = options.page;
+    const own = page && page.frontmatter && page.frontmatter.title;
+    const entityName = own && typeof page.displayTitle === 'string' && page.displayTitle.trim() ? page.displayTitle : titleFromSlug(filename);
     crumbs.push({ label: entityName, href: null });
   }
 

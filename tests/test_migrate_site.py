@@ -798,6 +798,114 @@ class ExcludeListTests(unittest.TestCase):
                          ("1.10.47", 2, True))
 
 
+class PropsMoveTests(unittest.TestCase):
+    """15's move offered as a per-vault choice; nothing moves unanswered."""
+
+    def props_vault(self):
+        root = tmp(self, "mig-props-")
+        vault, site = root / "Vault", root / "site"
+        (vault / "_meta").mkdir(parents=True)
+        site.mkdir()
+        (site / "vault.config.json").write_text("{}", encoding="utf-8")
+        (vault / "_meta" / "vault-config.yaml").write_text(
+            f"version: 1\nplayer_site:\n  folder: {site.as_posix()}\n"
+            "  keep:\n    - props\n  after_build:\n"
+            "    - node scripts/add-props.mjs\n", encoding="utf-8")
+        props = vault / "Chapters" / "Ch1" / "Props"
+        props.mkdir(parents=True)
+        (props / "letter.html").write_text("<p>a</p>", encoding="utf-8")
+        (props / "index.html").write_text("<p>i</p>", encoding="utf-8")
+        live = site_of(vault) / "docs" / "props"
+        live.mkdir(parents=True)
+        (live / "letter.html").write_text("<p>a</p>", encoding="utf-8")
+        (vault / "Chapters" / "built.md").write_text(
+            "---\nprop: built.html\nprop_look: paper\n---\nbody\n", encoding="utf-8")
+        return vault
+
+    def test_props_move_offered_once_per_vault(self):
+        vault = self.props_vault()
+        (item,) = ms.find_props_move(vault)
+        self.assertEqual((item.id, item.group, item.wants, item.holds_stamp),
+                         ("props-move", migrate_core.CHOICE, "move or leave", True))
+        text = "\n".join(item.lines)
+        for part in ("1 build_props note", "1 hand-made page in Props folders, 1 of them live",
+                     "kept folder props with 1 page", "build step add-props",
+                     "run prop_move.py VAULT plan to see every page compared before choosing"):
+            self.assertIn(part, text)
+        self.assertEqual(item.lines[-1].split()[-1], "choosing")
+        check = next(c for c in ms.SITE_CHECKS if c.name == "props-move")
+        self.assertEqual((check.release, check.band, check.asks_site, check.choices),
+                         ("1.10.105", 4, True, ("props-move=",)))
+
+    def test_nothing_to_move_no_item(self):
+        self.assertEqual(ms.find_props_move(make_vault(self)), [])
+        self.assertEqual(ms.find_props_move(make_vault(self, site=False)), [])
+        # Props on disk but no site: apply could not check the move.
+        vault = make_vault(self, site=False)
+        (vault / "built.md").write_text(
+            "---\nprop: b.html\nprop_look: paper\n---\n", encoding="utf-8")
+        self.assertEqual(ms.find_props_move(vault), [])
+
+    def test_leave_keeps_everything(self):
+        vault = self.props_vault()
+        (item,) = ms.find_props_move(vault)
+        before = sorted(p.relative_to(vault).as_posix() for p in vault.rglob("*"))
+        with mock.patch.object(ms, "_run_prop_move") as run:
+            out = item.apply("leave")
+        run.assert_not_called()
+        self.assertIn("nothing moved", out[0])
+        self.assertEqual(before, sorted(p.relative_to(vault).as_posix() for p in vault.rglob("*")))
+        with self.assertRaises(StepFailed):
+            item.apply("maybe")
+
+    def test_move_runs_apply_with_the_decisions_file_when_there_is_one(self):
+        vault = self.props_vault()
+        (item,) = ms.find_props_move(vault)
+        with mock.patch.object(ms, "_run_prop_move",
+                               return_value=(0, "# notes: 2\n", "")) as run:
+            item.apply("move")
+        run.assert_called_once_with(vault, ["apply"])
+        (vault / "_meta" / "prop-move.json").write_text("{}", encoding="utf-8")
+        with mock.patch.object(ms, "_run_prop_move", return_value=(0, "# x\n", "")) as run:
+            item.apply("move")
+        run.assert_called_once_with(vault, ["apply", "--decisions", "_meta/prop-move.json"])
+
+    def test_move_failure_is_step_failed(self):
+        vault = self.props_vault()
+        (item,) = ms.find_props_move(vault)
+        said = "ERROR\t-\tmove-check found 1 blocker; the vault is as it was\n"
+        with mock.patch.object(ms, "_run_prop_move", return_value=(1, said, "")):
+            with self.assertRaises(StepFailed) as cm:
+                item.apply("move")
+        self.assertIn("move-check found 1 blocker", str(cm.exception))
+        self.assertIn("the vault is as it was", str(cm.exception))
+
+    def test_move_failure_names_the_files_it_could_not_put_back(self):
+        vault = self.props_vault()
+        (item,) = ms.find_props_move(vault)
+        said = ("ERROR\t-\tthe settings could not be written: disk full; "
+                "these could not be put back: _meta/vault-config.yaml, Props/a.html\n")
+        with mock.patch.object(ms, "_run_prop_move", return_value=(1, said, "")):
+            with self.assertRaises(StepFailed) as cm:
+                item.apply("move")
+        text = str(cm.exception)
+        self.assertIn("these could not be put back: _meta/vault-config.yaml, Props/a.html", text)
+        self.assertNotIn("as it was", text)
+
+    def test_apply_runs_with_no_outer_timeout(self):
+        # Ruling 35: the move bounds each tool call itself; an outer limit would kill it between steps.
+        vault = self.props_vault()
+        done = subprocess.CompletedProcess([], 0, "# notes: 1\n", "")
+        with mock.patch.object(ms.subprocess, "run", return_value=done) as run:
+            self.assertEqual(ms._run_prop_move(vault, ["apply"]), (0, "# notes: 1\n", ""))
+        self.assertIsNone(run.call_args.kwargs.get("timeout"))
+
+    def test_prop_steps_are_not_in_retired_steps(self):
+        for name in ("add-props", "inject-gazetteer"):
+            self.assertNotIn(name, ms.RETIRED_STEPS)
+            self.assertNotIn(name, ms.RETIRED_FROM)
+
+
 @unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
                      or (shutil.which("node") and (
                          vc.PUBLISH_TOOL.parent.parent / "node_modules").is_dir()),

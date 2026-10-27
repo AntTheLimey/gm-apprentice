@@ -51,6 +51,11 @@ function outputsOf(p, files, collectionAddress = null) {
   const outputs = [];
   const failed = [];
   for (const [i, f] of files.entries()) {
+    // A container's state file: the script the make pass wrote from its listing (`state_js`); nothing when it made none.
+    if (f.made === 'state') {
+      if (typeof p.state_js === 'string') outputs.push({ rel: p.rel, out: f.out, isPage: false, replacesKept: Boolean(f.replacesKept), warnings: [], text: p.state_js });
+      continue;
+    }
     if (f.made) {
       if (typeof p.made_html === 'string') outputs.push({ rel: p.rel, out: f.out, isPage: true, made: p.style ? p.style.name : true, replacesKept: Boolean(p.replacesKept), warnings: [], text: p.made_html });
       continue;

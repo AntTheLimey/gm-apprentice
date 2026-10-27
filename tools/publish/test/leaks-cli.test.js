@@ -381,3 +381,35 @@ describe('leaks', () => {
   });
 });
 
+
+describe('leaks prune --also (Ruling 37)', () => {
+  it('an accept another built folder still needs is kept; one no folder needs goes', async () => {
+    const site = leakSite(NOTES, SETTINGS);
+    const other = path.join(site.root, 'other-build');
+    try {
+      fs.cpSync(site.outputDir, other, { recursive: true });
+      leakInto(site.outputDir, 'npcs/b.html', 'The baker poisoned the mayor last winter.');
+      leakInto(other, 'npcs/b.html', 'The baker poisoned the mayor last winter.');
+      assert.equal((await run(site, 'accept', { page: 'npcs/b.html', text: 'The baker poisoned the mayor last winter.' })).rc, 0);
+      // The site's own output no longer has it; the other build does: kept.
+      fs.writeFileSync(path.join(site.outputDir, 'npcs', 'b.html'), '<html><body><main><p>A fisher.</p></main></body></html>');
+      const kept = JSON.parse((await run(site, 'prune', { json: true, also: [other] })).out.join(''));
+      assert.equal(kept.pruned, 0);
+      assert.equal(loadPublishList(vaultOf(site), { warn: () => {} }).accepted.length, 1);
+      // Neither needs it: pruned.
+      fs.writeFileSync(path.join(other, 'npcs', 'b.html'), '<html><body><main><p>A fisher.</p></main></body></html>');
+      const gone = JSON.parse((await run(site, 'prune', { json: true, also: [other] })).out.join(''));
+      assert.equal(gone.pruned, 1);
+      assert.equal(loadPublishList(vaultOf(site), { warn: () => {} }).accepted.length, 0);
+    } finally { site.cleanup(); }
+  });
+
+  it('an --also folder that is not there is an error and prunes nothing', async () => {
+    const site = leakSite(NOTES, SETTINGS);
+    try {
+      const r = await run(site, 'prune', { also: [path.join(site.root, 'nowhere')] });
+      assert.equal(r.rc, 2);
+      assert.match(r.text, /nowhere/);
+    } finally { site.cleanup(); }
+  });
+});

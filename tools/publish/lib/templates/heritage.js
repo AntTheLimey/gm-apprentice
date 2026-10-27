@@ -36,7 +36,7 @@ function heritageTemplate(page, processedContent, navFor, config, imageMap, cont
   ${statCard}
 </div>`;
 
-  const crumbs = generateBreadcrumbs(page.outputPath, {});
+  const crumbs = generateBreadcrumbs(page.outputPath, { page });
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
 
   const graphHtml = connectionsSection(page, publishConfig);

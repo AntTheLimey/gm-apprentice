@@ -47,3 +47,8 @@ test('an unquoted src before /> is read without the slash', () => {
   assert.deepStrictEqual(paths('<img src=a.png/>'), ['a.png']);
   assert.deepStrictEqual(paths('<img src=a.png>'), ['a.png']);
 });
+
+test('a picture path in a data- attribute is a linked file; other data- values are not', () => {
+  assert.deepStrictEqual(paths('<a class="plate-frame" data-map="assets/x.jpg" data-overlay="simms" href="#">Plate</a>'), ['assets/x.jpg']);
+  assert.deepStrictEqual(paths('<div data-full="maps/big%20plan.SVG?v=1" data-count="3" data-src="https://x/y.png" data-note="a.png is the cover"></div>'), ['maps/big plan.SVG']);
+});

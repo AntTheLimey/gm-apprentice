@@ -4,12 +4,14 @@
 // players have not found is, when its container asks (`show_sealed: titles`), its title alone,
 // read from the frontmatter the site would publish; a withheld item is never a row. The build
 // and the leak gate both ask this module, so they agree on what each listing shows.
-const { publishedFrontmatter, isWithheld, parseWikiRef, publishMode, valueText } = require('../processor');
-const { linkKeys } = require('../scanner');
+const path = require('path');
+const { publishedFrontmatter, isWithheld, parseWikiRef, publishMode, valueText, relativeHref, encodeHref } = require('../processor');
+const { linkKeys, slugify } = require('../scanner');
+const { unmark } = require('../gm-marks');
 const { sessionSortKey } = require('../templates/index-page');
 const { canonicalNfc } = require('../unicode');
 const { isPropNote, propContainerOf, showSealedOf } = require('./note');
-const { bytesOf } = require('./plan');
+const { bytesOf, stateFileOf } = require('./plan');
 const { fieldText } = require('./layout');
 const { PAGE_TAKER, addressShapeProblem, takenAddresses } = require('./address');
 
@@ -32,7 +34,7 @@ function firstOf(value) {
 // One prop as a row. Shown: linked to its prop page (else its note page), with its line and the
 // session it arrived in (`updated`, its lastUpdated, orders it after that). A `publish: stub` item on
 // the player site is its title and its note link only: its stub page shows neither line nor session.
-// Not shown: its title alone, from the published view of its frontmatter (so a hidden prop_title never
+// `group`: its published prop_group, or null. Not shown: its title alone, from the published view of its frontmatter (so a hidden prop_title never
 // names it), with the note's own field exceptions (`fieldOverrides`, by vault path) as its page has them.
 // `unrevealed`: shown on the GM site, not on the player site. `nameOf(page, title)`: the title as this site
 // prints the note's name (the GM site marks a withheld one).
@@ -41,7 +43,7 @@ function propRow(p, { isShown, excludeFields = [], fieldOverrides = {}, resolveP
   if (!isShown(page)) {
     const fm = publishedFrontmatter(sourceOf(page), excludeFields, fieldOverrides[p.rel] || {});
     const named = fm.title === undefined ? String(page.title || '').replace(/_/g, ' ') : page.displayTitle;
-    return { rel: p.rel, title: fieldText(fm.prop_title).trim() || named || '', href: null, line: null, arrived: null, sealed: true, unrevealed: false };
+    return { rel: p.rel, title: fieldText(fm.prop_title).trim() || named || '', href: null, line: null, arrived: null, sealed: true, unrevealed: false, group: null };
   }
   const fm = page.frontmatter || {};
   const stub = site !== 'gm' && publishMode(sourceOf(page)) === 'stub';
@@ -58,6 +60,8 @@ function propRow(p, { isShown, excludeFields = [], fieldOverrides = {}, resolveP
     // A withheld item is never on the player site's listing, so on the GM's it is unrevealed too.
     unrevealed: isPlayerShown ? !isPlayerShown(page) || isWithheld(sourceOf(page)) : false,
     updated: (!stub && fieldText(fm.lastUpdated).trim()) || null,
+    // Its published prop_group: the heading a container's page lists it under (a sealed row has none).
+    group: canonicalNfc(fieldText(fm.prop_group).trim()) || null,
   };
 }
 
@@ -121,6 +125,102 @@ function containerItems({ props, isShown, excludeFields = [], fieldOverrides = {
   return out;
 }
 
+// The fields the tool itself reads off a prop: a container's state file gives an item every other prop_* field.
+const GENERIC_PROP_FIELDS = new Set([
+  'prop_kind', 'prop_file', 'prop_address', 'prop_style', 'prop_line', 'prop_group', 'prop_container', 'prop_title',
+  'prop_state', 'prop_state_global', 'prop_hand', 'prop_font', 'prop_breaks', 'prop_shift', 'show_sealed',
+]);
+const STATE_CORE = ['title', 'line', 'href', 'sealed'];
+
+// A field value as the state file gives it: text, a finite number, true or false, or a list or map of those; undefined
+// for anything else (a date, an empty value), which is left out whole.
+function stateValue(v) {
+  if (typeof v === 'string' || typeof v === 'boolean') return v;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : undefined;
+  if (Array.isArray(v)) {
+    const out = v.map(stateValue);
+    return out.includes(undefined) ? undefined : out;
+  }
+  if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) {
+    const out = {};
+    for (const [k, x] of Object.entries(v)) {
+      const value = stateValue(x);
+      if (value === undefined) return undefined;
+      out[k] = value;
+    }
+    return out;
+  }
+  return undefined;
+}
+
+// An item's own fields for its container's state file, from frontmatter `fm` (the published view, so a hidden field is
+// never one): every prop_* field the tool does not read itself, named without prop_. A name the item's entry already
+// has (title, line, href, sealed) is left out.
+function stateFieldsOf(fm) {
+  const out = {};
+  for (const [name, raw] of Object.entries(fm || {})) {
+    if (!name.startsWith('prop_') || GENERIC_PROP_FIELDS.has(name)) continue;
+    const key = name.slice('prop_'.length);
+    const value = stateValue(raw);
+    if (!key || STATE_CORE.includes(key) || value === undefined) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
+// What each container's state file gives each item of `rows` (a listing's, containerItems): a sealed row its title
+// alone, a shown row its fields (stateFieldsOf of `fieldsOf(p)`, the item's published frontmatter). A `publish: stub`
+// item on the player site gives none: its stub page shows neither line nor fields.
+function stateEntries(rows, { props, site = 'player', fieldsOf = (p) => p.page.frontmatter || {} }) {
+  const byRel = new Map(props.map((p) => [p.rel, p]));
+  return rows.map((row) => {
+    const p = byRel.get(row.rel);
+    const stub = site !== 'gm' && publishMode(sourceOf(p.page)) === 'stub';
+    return { row, p, fields: row.sealed || stub ? {} : stateFieldsOf(fieldsOf(p)) };
+  });
+}
+
+// For the plan's pictures (plan.js planStatePictures): Map<container vault path, [{ rel, fields }]>, from containerItems'
+// answer `listed`.
+function stateFieldsOfListed(listed, options) {
+  const out = new Map();
+  for (const [rel, { rows }] of listed) out.set(rel, stateEntries(rows, options).map(({ row, fields }) => ({ rel: row.rel, fields })));
+  return out;
+}
+
+// A container's state file's items: an object keyed by item, in its listing's order (`rows`, already byArrival). The key
+// is the item's prop page's file name without its extension when it has a prop page, else its note's name, slugified;
+// a sealed item's is its title, slugified (its note's name may say more than its title). A key met again gets -2, -3.
+// A shown item is { title, line, href, sealed: false, ...its fields }, `href` relative from the state file (`from`),
+// null without a page; a sealed one is { title, sealed: true } and nothing else. A withheld item is no row on the player
+// site, so it is not here either. The GM site's marks are taken out of a title: a script prints it as text.
+function stateItems(rows, { props, site = 'player', fieldsOf, from }) {
+  const items = {};
+  const put = (base, value) => {
+    const root = base || 'item';
+    let key = root;
+    for (let n = 2; Object.prototype.hasOwnProperty.call(items, key); n++) key = `${root}-${n}`;
+    items[key] = value;
+  };
+  for (const { row, p, fields } of stateEntries(rows, { props, site, fieldsOf })) {
+    const title = unmark(row.title);
+    if (row.sealed) {
+      put(slugify(title), { title, sealed: true });
+      continue;
+    }
+    const ownPage = row.href && row.href !== p.page.outputPath;
+    const key = ownPage ? path.posix.basename(row.href, path.posix.extname(row.href)) : slugify(path.posix.basename(p.rel, path.posix.extname(p.rel)));
+    put(key, { title, line: row.line, href: row.href ? encodeHref(relativeHref(from, row.href)) : null, sealed: false, ...fields });
+  }
+  return items;
+}
+
+// The state file's text: one statement setting window.<global>. Every < is written \u003c, so no value can close the
+// script or open a comment in a page that inlines it.
+function stateScript(global, items) {
+  return `window.${global} = ${JSON.stringify(items, null, 2).replace(/</g, '\\u003c')};\n`;
+}
+
 // The props page: one page per site listing every prop it shows, by where each sits.
 const COLLECTION_ADDRESS = 'props/index.html';
 // Where the page goes when a page the site builds holds props/index.html (a vault's own Props/Index note).
@@ -128,17 +228,22 @@ const COLLECTION_FALLBACK = 'props/collection.html';
 const OTHER_HEADING = 'Other props';
 
 // The page's settings from a publishConfig (its non-listed `props` and `landing.latest_props`), each
-// filled in: the address as written, or the default.
+// filled in: the address as written, or the default. A `cover` that is a [[wikilink]] names a prop
+// (`coverNote`, the name inside it) and is no picture.
 function collectionSettingsOf(settingsLike) {
   const s = (settingsLike && settingsLike.props) || {};
   const latest = settingsLike && settingsLike.landing ? settingsLike.landing.latest_props : 0;
   const text = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const cover = text(s.cover);
+  const coverNote = cover && /^\[\[[^\]]+\]\]$/.test(cover) ? canonicalNfc(parseWikiRef(cover).target) : null;
   return {
     title: text(s.title) || 'Props',
     address: text(s.address) || COLLECTION_ADDRESS,
-    cover: text(s.cover),
+    cover: coverNote ? null : cover,
+    coverNote: coverNote || null,
     intro: text(s.intro),
     latest: Number.isInteger(latest) && latest > 0 ? latest : 0,
+    latestTitle: text(settingsLike && settingsLike.landing ? settingsLike.landing.latest_props_title : null),
   };
 }
 
@@ -203,6 +308,9 @@ function sealedTitlesOn(listed, collectionAddress) {
     for (const row of rows) {
       if (!row.sealed) continue;
       if (container.ships && container.address && container.made) put(container.address, row);
+      // Its state file prints the title too, and nothing else of the item (stateItems).
+      const state = container.ships && container.address ? stateFileOf(container) : null;
+      if (state) put(state.out, row);
       if (collectionAddress) put(collectionAddress, row);
     }
   }
@@ -217,14 +325,20 @@ const headingOrder = (a, b) => a.heading.localeCompare(b.heading, 'en', { sensit
 // published `prop_group`, then by its chapter (its published `chapter` field, else the folder under
 // Chapters/ it sits in, when that names a chapter page the site publishes), then `Other props`. A
 // container is never a row of these (one inside a container is a row of that container). Groups run in
-// the order of their first row (byArrival), ties by heading; an empty container comes last.
+// the order of their first row (byArrival), ties by heading; an empty container comes last. `coverRow`: the
+// row of the prop the settings' cover names (`coverNote`), when the site shows it with a page; it is in no group.
+// `coverNote` stays set when it names nothing the site shows, for the build to say so.
 // `rowOf(p)`: the prop's row (propRow, with the site's options); `nameOf(page, text)` as containerItems.
 function collectionModel({ plan, rowOf, containers, settings, site = 'player', isShown, resolvePage = () => null, nameOf = (pg, t) => t, blocked = new Set() }) {
   if (!settings || !plan) return null;
   const groups = [];
   const inContainer = new Set();
+  const coverPage = settings.coverNote ? resolvePage(settings.coverNote) : null;
+  const coverProp = coverPage ? plan.props.find((p) => p.page === coverPage) : null;
+  const covered = coverProp && coverProp.ships && isShown(coverProp.page) && (site === 'gm' || !isWithheld(sourceOf(coverProp.page))) ? coverProp : null;
+  const coverRow = covered ? rowOf(covered) : null;
   for (const entry of containers.values()) {
-    groups.push({ heading: entry.title, href: propPageOf(entry.container, blocked) || entry.container.page.outputPath, rows: entry.rows });
+    groups.push({ heading: entry.title, href: propPageOf(entry.container, blocked) || entry.container.page.outputPath, rows: covered ? entry.rows.filter((r) => r.rel !== covered.rel) : entry.rows });
     for (const r of entry.rows) inContainer.add(r.rel);
   }
   const byGroup = new Map();
@@ -240,9 +354,10 @@ function collectionModel({ plan, rowOf, containers, settings, site = 'player', i
     return parts.length > 2 && parts[0].toLowerCase() === 'chapters' ? isChapter(resolvePage(canonicalNfc(parts[1]))) : null;
   };
   for (const p of plan.props) {
-    if (p.kind === 'container' || inContainer.has(p.rel) || !isShown(p.page)) continue;
+    if (p.kind === 'container' || p === covered || inContainer.has(p.rel) || !isShown(p.page)) continue;
     if (site !== 'gm' && isWithheld(sourceOf(p.page))) continue;
-    const row = rowOf(p);
+    // The page's own headings group it, so the row carries no prop_group heading of its own.
+    const row = { ...rowOf(p), group: null };
     const group = fieldText((p.page.frontmatter || {}).prop_group).trim();
     if (group) {
       const key = canonicalNfc(group);
@@ -265,7 +380,7 @@ function collectionModel({ plan, rowOf, containers, settings, site = 'player', i
     if (!a.rows.length || !b.rows.length) return (b.rows.length > 0) - (a.rows.length > 0) || headingOrder(a, b);
     return byArrival(a.rows[0], b.rows[0]) || headingOrder(a, b);
   });
-  return { title: settings.title, address: settings.address, cover: settings.cover, intro: settings.intro, groups };
+  return { title: settings.title, address: settings.address, cover: settings.cover, coverNote: settings.coverNote, coverRow, intro: settings.intro, groups };
 }
 
 // Every shown row of the model, once each.
@@ -298,4 +413,5 @@ module.exports = {
   containerItems, propRow, byArrival, propPageOf,
   COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, hasCollection, collectionAddress, collectionModel, latestProps, shownRows,
   placeCollection, propTaken, sealedTitlesOn,
+  GENERIC_PROP_FIELDS, stateFieldsOf, stateFieldsOfListed, stateItems, stateScript,
 };

@@ -64,4 +64,28 @@ function showSealedOf(fm) {
   return text(fm && fm.show_sealed).toLowerCase() === 'titles' ? 'titles' : 'none';
 }
 
-module.exports = { PROP_KINDS, PROP_STYLE_RE, isPropNote, propKindOf, unknownKindOf, propFileOf, propAddressOf, propStyleOf, propContainerOf, showSealedOf };
+// A container's state file: a script beside its page that sets one global to what the container lists, for the
+// page's own script to read. Its file name (no folder) and the global's name.
+const PROP_STATE_RE = /^[a-z0-9][a-z0-9._-]{0,60}\.js$/;
+const PROP_STATE_GLOBAL_RE = /^[A-Z][A-Z0-9_]{0,40}$/;
+const PROP_STATE_GLOBAL = 'PROP_ITEMS';
+
+// The state file's name as written (trimmed), or null when the note names none; a value that is not text is kept,
+// so the plan can say it is not a file name.
+function propStateOf(fm) {
+  const raw = fm ? fm.prop_state : null;
+  if (raw != null && typeof raw !== 'string') return raw;
+  return text(raw) || null;
+}
+
+// The global the state file sets: as written (trimmed), or PROP_ITEMS when the note names none.
+function propStateGlobalOf(fm) {
+  const raw = fm ? fm.prop_state_global : null;
+  if (raw != null && typeof raw !== 'string') return raw;
+  return text(raw) || PROP_STATE_GLOBAL;
+}
+
+module.exports = {
+  PROP_KINDS, PROP_STYLE_RE, PROP_STATE_RE, PROP_STATE_GLOBAL_RE, PROP_STATE_GLOBAL,
+  isPropNote, propKindOf, unknownKindOf, propFileOf, propAddressOf, propStyleOf, propContainerOf, showSealedOf, propStateOf, propStateGlobalOf,
+};

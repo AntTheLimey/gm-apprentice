@@ -10,12 +10,23 @@ const BAR_STYLE = '.gma-prop-bar{display:flex;gap:1rem;align-items:center;margin
   + '.gma-prop-bar a{color:#58a6ff;text-decoration:none}.gma-prop-bar a:hover{text-decoration:underline}'
   + '@media print{.gma-prop-bar{display:none}}';
 
+const BAR_OPEN = `<nav class="gma-prop-bar" aria-label="Back to the campaign site"><style>${BAR_STYLE}</style>`;
+const BAR_CLOSE = '</nav>';
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// The bar as propBar writes it, and only that: its exact opening, its links (each escaped, so no '<' inside), its close.
+const BAR_WRITTEN = new RegExp(`${escapeRe(BAR_OPEN)}(?:<a href="[^"<]*">[^<]*</a>)*${escapeRe(BAR_CLOSE)}`, 'g');
+
 function propBar({ noteHref = null, noteTitle = '', collectionHref = null } = {}) {
   const links = [];
   if (noteHref) links.push(`<a href="${escapeHtml(noteHref)}">&larr; ${escapeHtml(noteTitle)}</a>`);
   if (collectionHref) links.push(`<a href="${escapeHtml(collectionHref)}">All props</a>`);
   if (links.length === 0) return '';
-  return `<nav class="gma-prop-bar" aria-label="Back to the campaign site"><style>${BAR_STYLE}</style>${links.join('')}</nav>`;
+  return `${BAR_OPEN}${links.join('')}${BAR_CLOSE}`;
+}
+
+// A page as it was before withPropBar: every bar the tool wrote taken out (props/compare.js reads a page's own words).
+function withoutPropBar(html) {
+  return String(html).replace(BAR_WRITTEN, '');
 }
 
 // After the opening <body> tag; with none, after </head>; with neither, at the start.
@@ -35,4 +46,4 @@ function propLinkHtml(href) {
   return `<p class="prop-link"><a class="prop-btn" href="${escapeHtml(href)}">See the prop</a></p>`;
 }
 
-module.exports = { propBar, withPropBar, propLinkHtml };
+module.exports = { propBar, withPropBar, withoutPropBar, propLinkHtml };

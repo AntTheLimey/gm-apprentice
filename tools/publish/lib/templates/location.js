@@ -25,11 +25,12 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   const parent = referenceOf(fm.parent_location);
   const parentTarget = parent && parent.target && linkMap ? linkMap[parent.target] : null;
   const crumbs = generateBreadcrumbs(page.outputPath, parent ? {
+    page,
     parentLocation: plainRefValue(fm.parent_location),
     // Breadcrumb hrefs are relative to the current page; linkMap holds the root-relative
     // output path, so make it relative or it resolves under the current dir and 404s.
     parentLocationHref: parentTarget ? encodeHref(relativeHref(page.outputPath, parentTarget)) : null,
-  } : {});
+  } : { page });
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
 
   // --- Zone 1: Hero Banner ---

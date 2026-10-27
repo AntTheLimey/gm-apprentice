@@ -538,8 +538,8 @@ const REGISTRY = [
   },
   {
     name: 'player_site.props.cover', type: 'text', group: 'props',
-    shape: "a picture's path in the vault, or a web address",
-    does: 'A picture at the top of the page. A file that is missing from the vault, or outside it, is reported and the page shows without it',
+    shape: "a picture's path in the vault, a web address, or a [[prop note]]",
+    does: 'A picture at the top of the page, or a prop (as a [[link]]) shown there as a link to it, and left out of the page\'s lists. A file that is missing from the vault, or outside it, or a prop the site does not publish with a page, is reported and the page shows without it',
     left_out: 'No picture',
   },
   {
@@ -551,6 +551,11 @@ const REGISTRY = [
     name: 'player_site.landing.latest_props', type: 'number', integer: true, min: 0, default: 0, group: 'props',
     does: 'How many of the newest props the landing page shows in a box, with a link to all of them; 0 shows none',
     left_out: '`0`',
+  },
+  {
+    name: 'player_site.landing.latest_props_title', type: 'text', group: 'props',
+    does: "The heading of the landing page's newest-props box. Empty: \"Latest from <props page title>\"",
+    left_out: '`Latest from` and the props page title',
   },
 
   // Limits

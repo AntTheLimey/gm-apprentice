@@ -82,6 +82,10 @@ class PropSchemaTests(unittest.TestCase):
         self.assertEqual(keys[keys.index("prop_style") + 1], "prop_hand")
         self.assertEqual(keys[keys.index("show_sealed") + 1], "revealed_in")
 
+    def test_template_mentions_prop_state(self):
+        text = (ROOT / "skills" / "shared" / "templates" / "prop.md").read_text(encoding="utf-8")
+        self.assertIn("prop_state", text.split("---")[1])
+
     def test_schema_show_lists_prop_hand(self):
         out = subprocess.run(
             [sys.executable, str(SCRIPTS / "schema_rules.py"), "show", "prop"],
