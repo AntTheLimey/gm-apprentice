@@ -34,7 +34,8 @@ what is inferred, key by key; `--draft` writes what was used.
 
 Rows are `verb <TAB> path <TAB> detail` (WOULD-CREATE, WOULD-EDIT,
 WOULD-COPY, WOULD-WRAP, WOULD-PUBLISH, WOULD-SET, WOULD-RETIRE, CHECK,
-NEEDS-A-PERSON; the done forms on apply), then
+NEEDS-A-PERSON, and EXPECT-GONE for each build_props page's credits line
+the move takes off; the done forms on apply), then
 `# notes: N files: N publish: N retire: N blockers: N`.
 Exit: 0 a plan made, or the move applied; 1 nothing changed (a blocker, a
 failure; the vault was put back); 2 bad arguments.
@@ -435,6 +436,41 @@ class LineReader(HTMLParser):
     def handle_data(self, data: str) -> None:
         if not self._code:
             self.text.append(data)
+
+
+class CreditsReader(HTMLParser):
+    """The words of a page's first `class="credits"` element: the line
+    build_props writes under every page it builds (`<p class="credits">`)."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.text: list[str] = []
+        self.done = False
+        self._tag = ""
+        self._depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self._depth:
+            if tag == self._tag:
+                self._depth += 1
+        elif not self.done and "credits" in (dict(attrs).get("class") or "").split() and tag not in VOID:
+            self._tag, self._depth = tag, 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if self._depth and tag == self._tag:
+            self._depth -= 1
+            self.done = self._depth == 0
+
+    def handle_data(self, data: str) -> None:
+        if self._depth:
+            self.text.append(data)
+
+
+def credits_of(path: Path) -> str:
+    reader = CreditsReader()
+    reader.feed(read_text(path))
+    reader.close()
+    return squash("".join(reader.text))
 
 
 def read_line(line: str) -> LineReader:
@@ -878,7 +914,21 @@ def convert_kept(c: Conversion, site: Path | None, live_root: Path | None,
     c.decisions["listings"] = {}
     if live_root and live_root.is_dir():
         _infer_listings(c, live_root, converted, props_address)
+    # Each build_props page's credits line goes with the move: its words, read
+    # from the live page's own credits element, are expected gone.
+    credits: list[tuple[str, str]] = []
+    if live_root and live_root.is_dir():
+        for built_note in c.build_props:
+            built = c.addresses.get(built_note, "")
+            if built and (live_root / built).is_file() and any(built.startswith(x) for x in c.decisions["serves"]):
+                said = credits_of(live_root / built)
+                if said:
+                    credits.append((built, said))
+    c.decisions["expect_gone"] = list(dict.fromkeys([*c.decisions["expect_gone"], *(t for _, t in credits)]))
     _given(c, given, ("notes_folder", "retire", "serves", "listings", "expect_gone"))
+    for built, said in credits:
+        if said in c.decisions["expect_gone"]:
+            c.row("EXPECT-GONE", built, said)
     listings: dict[str, dict[str, Any]] = c.decisions["listings"]
 
     # Each listing's words for the pages it links, and its container.

@@ -672,3 +672,54 @@ def test_decisions_file_overrides_inference(tmp_path: Path) -> None:
     assert fm_of(c.batch.texts["Documents/Gazetteer/papers/The Papers.md"])["prop_kind"] == "supplied"
     assert "Documents/Gazetteer/papers/index.html" in c.files
     assert not [r for r in c.rows if "player_site.landing.banner" in r]
+
+
+# --- fix round 1: build_props credits lines (Ruling 27) ---------------------------
+
+def built_page(credits: str) -> str:
+    """A page shaped like the ones build_props writes: a ribbon with the shelf
+    crumb and the note link, the sheet, and its credits line."""
+    return ("<!DOCTYPE html>\n<html><head><title>A Note from Gull</title>"
+            "<link rel=\"stylesheet\" href=\"props.css\"></head>\n<body>\n<nav class=\"ribbon\">\n"
+            "  <a href=\"index.html\">&larr; Chapter 1 props</a>\n  <span class=\"plate\">Left under the hatch</span>\n"
+            "  <a href=\"../documents/gull.html\">About this handout</a>\n</nav>\n"
+            "<pre class=\"hand gull-hand\">Ana, the pumps are fixed.\nDo not trust the harbourmaster.</pre>\n"
+            f"<p class=\"credits\">{credits}</p>\n</body></html>\n")
+
+
+def test_build_props_credits_expected_gone(tmp_path: Path) -> None:
+    credits = ("One page. Text is verbatim from <em>Documents/Gull.md</em>. "
+               "To print, tick <strong>Background graphics</strong> &amp; set margins to None.")
+    vault = vault_with(tmp_path, {"Documents/Gull.md": LETTER})
+    site = tmp_path / "site"
+    write_tree(vault, {"_meta/vault-config.yaml": (
+        "version: 1\nplayer_site:\n"
+        f"  folder: {json.dumps(str(site))}\n  title: Run\n"
+        "  folder_map:\n    Documents: documents\n"
+        "  after_build:\n    - node scripts/add-props.mjs\n")})
+    old = built_page(credits)
+    write_tree(site, {"vault.config.json": json.dumps({"vaultPath": str(vault)}),
+                      "scripts/add-props.mjs": "// builds docs/props/ with build_props.py\n",
+                      "docs/props/gull-letter.html": old})
+    c = prop_move.convert(vault, site=site)
+    said = ("One page. Text is verbatim from Documents/Gull.md. "
+            "To print, tick Background graphics & set margins to None.")
+    assert c.decisions["expect_gone"] == ["Chapter 1 props", "About this handout", said]
+    assert f"EXPECT-GONE\tprops/gull-letter.html\t{said}" in c.rows
+    # The phrase reads as the tool reads the page: a page without the crumb,
+    # the note link and the credits line keeps every other word.
+    now = old.replace('  <a href="index.html">&larr; Chapter 1 props</a>\n', "").replace(
+        '  <a href="../documents/gull.html">About this handout</a>\n', "").replace(
+        f'<p class="credits">{credits}</p>\n', "")
+    write_tree(tmp_path / "new", {"props/gull-letter.html": now})
+    args = ["node", str(TOOL / "bin" / "gm-publish.js"), "props", "compare", "--old", str(site / "docs"),
+            "--new", str(tmp_path / "new"), "--serves", "props/"]
+    for phrase in c.decisions["expect_gone"]:
+        args += ["--expect-gone", phrase]
+    done = subprocess.run(args, capture_output=True, text=True)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert done.stdout.startswith("SAME-WORDS\tprops/gull-letter.html\t"), done.stdout
+    # A decisions file's expect_gone wins, and then no credits row is shown for a phrase it left out.
+    given = prop_move.convert(vault, site=site, given={"version": 1, "expect_gone": ["Chapter 1 props"]})
+    assert given.decisions["expect_gone"] == ["Chapter 1 props"]
+    assert not [r for r in given.rows if r.startswith("EXPECT-GONE")]
