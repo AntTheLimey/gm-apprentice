@@ -28,3 +28,13 @@ test('the reference names every starter style and every field it reads', () => {
     }
   }
 });
+
+test('the reference names prop_state and prop_state_global', () => {
+  const text = fs.readFileSync(REFERENCE, 'utf8');
+  // `prop_state` is written with its value, `prop_state: <name>.js`.
+  assert.match(text, /`prop_state[`:]/, 'the reference does not name prop_state');
+  assert.ok(text.includes('`window.PROP_ITEMS`'), 'the reference does not name the default global');
+  for (const field of ['prop_state_global', 'player_site.landing.latest_props_title']) {
+    assert.ok(text.includes(`\`${field}\``), `the reference does not name ${field}`);
+  }
+});

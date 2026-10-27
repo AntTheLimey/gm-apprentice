@@ -53,21 +53,36 @@ reads:
 ## Containers
 
 A `prop_kind: container` prop (a bookshelf, a strongbox) gets a page
-listing what it holds: each prop whose `prop_container` links it. An
-item players have not found is left off, unless the container says
+listing what it holds: each prop whose `prop_container` links it,
+under its `prop_group` heading, first found first, unfound items last.
+An item players have not found is left off, unless the container says
 `show_sealed: titles`: then its title alone shows (its `prop_title`,
 else its name), so give it a title players may read. A withheld item
 never shows. A container's `prop_style` must have an `{{{items}}}`
 place; otherwise its page uses the site's look and the build warns.
 
+`prop_state: <name>.js` writes a script beside a container's page (a
+style's, or an `.html` prop file's) for the page's own script to read.
+It sets `window.PROP_ITEMS` (or the name in `prop_state_global`; set
+one only when asked) to what the page lists: a shown item's title,
+`line`, `href` and its other `prop_*` fields without the `prop_`; a
+title alone for one listed by title; nothing for one left off. A page
+linking the file gets the made one.
+
 ## The props page
 
 One page lists every prop the players have, under its container, its
 `prop_group`, else its chapter, each with its `prop_line`. Its title,
-address, cover and intro are `player_site.props.*`;
-`player_site.landing.latest_props` adds a box to the landing page. A
-prop shows when its note publishes: never edit the publish list to show
-a prop.
+address, cover and intro are `player_site.props.*`. The cover may be a
+prop, `cover: "[[Note]]"`: shown at the top, off the lists; while
+players cannot see it the page has no cover and the build warns.
+`player_site.landing.latest_props` adds a box to the landing page,
+headed by `player_site.landing.latest_props_title`. A prop shows when
+its note publishes: never edit the publish list to show a prop.
+
+An older site's own props move into the vault by the update's
+`props-move` choice, which checks every live page and undoes itself on
+a problem.
 
 ## A vault's own style
 

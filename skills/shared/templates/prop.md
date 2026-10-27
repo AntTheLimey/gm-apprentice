@@ -10,7 +10,7 @@ prop_hand: ""         # the hand it is written in, from _meta/prop-hands.json (o
 prop_line: ""         # one line for the props page: how it reached the players
 prop_group: ""        # the heading it sits under on the props page; empty uses its chapter
 prop_container: ""    # the container prop it sits in, e.g. "[[The Bookshelf]]"
-show_sealed: none     # containers only: "titles" also lists items not yet found, by title alone
+show_sealed: none     # containers only: "titles" also lists items not yet found, by title alone; add prop_state: "items.js" to give its page's script the list
 revealed_in: ""       # the session it reached the players; written at wrap-up
 source: ""
 createdSession: ""
