@@ -1324,3 +1324,21 @@ def test_real_compare_output_reaches_the_plan_summary(tmp_path: Path) -> None:
     n = prop_move.counts(converted(vault, site), data["blockers"], rows)
     assert n["reordered"] == 1 and n["blockers"] == 0
     assert prop_move.totals(n).endswith("listings reordered: 1 blockers: 0")
+
+
+def test_the_record_holds_only_the_pages_the_move_dealt_with(tmp_path: Path) -> None:
+    # A page whose note name is taken twice gets no note (a NEEDS-A-PERSON row, which does not stop apply), and a
+    # build_props note that cannot be converted keeps its page: neither is recorded, so the update offers them again.
+    vault, _site = gazetteer(tmp_path, {
+        "Documents/quay-notice.md": "---\ntype: location\n---\nThe quay.\n",
+        "Documents/quay-notice (prop).md": "---\ntype: location\n---\nThe other quay.\n",
+        "Documents/Gull.md": LETTER.replace("```", "", 2),
+        f"{CH4}/gull-letter.html": BUILT_LETTER,
+    })
+    code, text = run_apply(vault, CHECK_PASSED)
+    assert code == 0, text
+    assert f"{prop_move.PERSON}\t{CH4}/quay-notice.md\tno free note name" in text
+    assert f"{prop_move.PERSON}\tDocuments/Gull.md\tnot converted" in text
+    pages = json.loads((vault / prop_move.RECORD).read_text(encoding="utf-8"))["pages"]
+    assert f"{CH4}/dinner-menu.html" in pages
+    assert f"{CH4}/quay-notice.html" not in pages and f"{CH4}/gull-letter.html" not in pages

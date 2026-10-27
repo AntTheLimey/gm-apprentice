@@ -257,8 +257,8 @@ class Conversion:
     names: set[str] | None = None                           # every note's names in the vault, folded
     states: list[str] = field(default_factory=list)          # the live state files the made ones replace
     missing_styles: list[str] = field(default_factory=list)  # listing styles neither the vault nor the plugin has
-    dealt: list[str] = field(default_factory=list)           # build_props pages in Props folders the move leaves in place
-    handmade: list[str] = field(default_factory=list)        # the hand-made Props pages it makes notes for
+    dealt: list[str] = field(default_factory=list)           # pages of build_props notes converted now, left in place
+    handmade: list[str] = field(default_factory=list)        # the hand-made Props pages it made a note for
     live_root: Path | None = None
 
     def row(self, verb: str, where: str, detail: str = "") -> None:
@@ -956,7 +956,9 @@ def _handmade_pages(c: Conversion) -> list[str]:
     done = moved_pages(c.vault)
     pages = [rel for rel in candidates if rel not in done]
     # The build_props pages the move leaves where they are: dealt with, as the pages it makes notes for are.
-    c.dealt = [rel for rel in pages if rel not in named and f"*/{posixpath.basename(rel)}" in built]
+    # Only the pages of the notes converted now: one whose note was not converted is still the build's.
+    converted = {posixpath.basename(c.addresses[rel]) for rel in c.build_props if rel in c.addresses}
+    c.dealt = [rel for rel in pages if rel not in named and posixpath.basename(rel) in converted]
     return [rel for rel in pages if rel not in named and f"*/{posixpath.basename(rel)}" not in built]
 
 
@@ -1048,7 +1050,6 @@ def convert_kept(c: Conversion, site: Path | None, live_root: Path | None,
     # What publishes now, as the publish tool says; None when it cannot say.
     publishing, _why = publish_state(c.vault)
     pages = _handmade_pages(c)
-    c.handmade = list(pages)
     by_name: dict[str, list[str]] = {}
     for f in live.files:
         by_name.setdefault(posixpath.basename(f), []).append(f)
@@ -1155,6 +1156,7 @@ def convert_kept(c: Conversion, site: Path | None, live_root: Path | None,
             body = (f"\n## Description\n\n{said}\n" if publishing and nfc(handout[0]) in publishing
                     else f"\n<!-- gm-only -->\n\n## GM Notes\n\n{said}\n\n<!-- /gm-only -->\n")
         _prop_note(c, rel, fields, body, live=page in homes)
+        c.handmade.append(page)
         if page in homes:
             c.publish.append(rel)
 
@@ -1398,8 +1400,8 @@ def is_moved_note(text: str) -> bool:
 
 
 def moved_drafts(vault: Path) -> list[str]:
-    """The notes a 1.10.105 move made for live pages and left marked DRAFT:
-    in a vault whose reveals log starts with the move's before-tracking
+    """The notes a 1.10.105 move made that it published and left marked
+    DRAFT: in a vault whose reveals log starts with the move's before-tracking
     entry, a note that is exactly as the move wrote it (is_moved_note),
     still `canon_status: DRAFT`, on the publish list, and published by no
     session since (a note a wrap-up revealed is the GM's own to settle).
