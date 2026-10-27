@@ -999,3 +999,26 @@ def test_every_new_prop_note_has_its_title(tmp_path: Path) -> None:
     assert fm_of(c.batch.texts[f"{CH4}/dinner-menu.md"])["title"] == "The Bill of Fare"
     assert fm_of(c.batch.texts[f"{CH4}/sealed-letter.md"])["title"] == "The Sealed Letter"
     assert fm_of(c.batch.texts[f"{NOTES}/shelf/Tide Tables.md"])["title"] == "Tide Tables"
+
+
+def test_new_note_names_free_as_links_fold_them(tmp_path: Path) -> None:
+    # Ruling 39: [[The Port Gazetteer]] must name one note; the site folds case, underscores and spaces, and reads
+    # titles and aliases too.
+    vault, site = gazetteer(tmp_path, {
+        "Documents/The_Port_Gazetteer.md": "---\ntype: document\n---\nThe old write-up.\n",
+        "Locations/Quay.md": "---\ntype: location\naliases: [\"the  harbour guide\"]\n---\nThe quay.\n",
+        "Items/tide__TABLES.md": "---\ntype: item\n---\nA book.\n",
+        # A title is not a link name: it takes nothing.
+        "Items/Book.md": "---\ntype: item\ntitle: The Maps\n---\nA book.\n"})
+    c = converted(vault, site)
+    made = {Path(rel).stem for rel in c.batch.changed() if c.batch.originals.get(rel) is None}
+    assert {"The Port Gazetteer (prop)", "The Harbour Guide (prop)", "Tide Tables (prop)"} <= made, made
+    assert not {"The Port Gazetteer", "The Harbour Guide", "Tide Tables"} & made
+    assert "The Maps" in made
+    assert c.decisions["settings"]["player_site.props.cover"] == "[[The Port Gazetteer (prop)]]"
+    # Both names taken: a person names it.
+    vault2, site2 = gazetteer(tmp_path / "two", {
+        "Documents/The_Port_Gazetteer.md": "---\ntype: document\n---\nOld.\n",
+        "Documents/Other.md": "---\ntype: document\naliases: [The Port Gazetteer (Prop)]\n---\nOld.\n"})
+    c2 = converted(vault2, site2)
+    assert any(r.startswith(f"{prop_move.PERSON}\t{NOTES}/The Port Gazetteer.md\tno free note name") for r in c2.rows), c2.rows

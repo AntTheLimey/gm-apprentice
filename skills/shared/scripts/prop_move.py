@@ -250,7 +250,8 @@ class Conversion:
     addresses: dict[str, str] = field(default_factory=dict)  # note -> its prop's address
     decisions: dict[str, Any] = field(default_factory=dict)
     inferred_settings: dict[str, Any] = field(default_factory=dict)
-    taken: set[str] = field(default_factory=set)            # note names made now
+    taken: set[str] = field(default_factory=set)            # note names made now, folded
+    names: set[str] | None = None                           # every note's names in the vault, folded
     states: list[str] = field(default_factory=list)          # the live state files the made ones replace
     live_root: Path | None = None
 
@@ -750,12 +751,35 @@ def _live(root: Path, keep: list[str]) -> Live:
     return Live(root=root, kept=kept, files=files)
 
 
+def fold_name(name: str) -> str:
+    """A name as the publish tool matches a link to it: any case, an
+    underscore as a space, runs of spaces as one."""
+    return " ".join(nfc(name).replace("_", " ").split()).casefold()
+
+
+def _vault_names(c: Conversion) -> set[str]:
+    """Every name a link in the vault can reach a note by, folded: each
+    note's file name and aliases (the publish tool's link names; a `title:`
+    is not one)."""
+    if c.names is None:
+        c.names = set()
+        for rel, text in _notes(c.vault):
+            fm = extract_frontmatter(text) or {}
+            aliases = fm.get("aliases")
+            for name in [Path(rel).stem, *(aliases if isinstance(aliases, list) else [])]:
+                if isinstance(name, str) and name.strip():
+                    c.names.add(fold_name(name))
+    return c.names
+
+
 def _note_path(c: Conversion, folder: str, stem: str) -> str | None:
     """A free note path for `stem` in `folder`: the stem when no note in the
-    vault has it, else `<stem> (prop)`; None (and a row) when both are taken."""
+    vault answers to it as a link does, else `<stem> (prop)`; None (and a
+    row) when both are taken."""
     for name in (stem, f"{stem} (prop)"):
-        key = nfc(name).casefold()
-        if key not in c.taken and not vault_write.live_stem_clash(c.batch, name):
+        key = fold_name(name)
+        if (key not in c.taken and key not in _vault_names(c)
+                and not vault_write.live_stem_clash(c.batch, name)):
             c.taken.add(key)
             return f"{folder}/{name}.md" if folder else f"{name}.md"
     c.row(PERSON, f"{folder}/{stem}.md", f"no free note name for {stem!r} "
