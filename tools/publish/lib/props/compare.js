@@ -222,9 +222,11 @@ function compareSites({ oldDir, newDir, serves, listings = [], expectGone = [] }
 
 // The lines `props compare` prints: one per row, KIND, address and detail apart by tabs, then the counts.
 function formatRows(result) {
+  const leaks = result.leaks || [];
   return [
     ...result.rows.map((r) => `${r.kind.toUpperCase()}\t${r.address}\t${r.detail}`),
-    `# served: ${result.served} pages: ${result.pages} same: ${result.same} blockers: ${result.blockers}`,
+    ...leaks.map((f) => `LEAK\t${f.page}\t"${f.text}" from ${f.note || 'a hidden note'}${f.reason ? ` (${f.reason})` : ''}`),
+    `# served: ${result.served} pages: ${result.pages} same: ${result.same}${result.leaks ? ` leaks: ${leaks.length}` : ''} blockers: ${result.blockers}`,
   ];
 }
 

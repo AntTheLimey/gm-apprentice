@@ -62,6 +62,16 @@ function runMoveCheck({ configPath, serves, listings = [], expectGone = [], json
       console.error(`Error: ${e.message}`);
       return 1;
     }
+    // The leak check on the new build, as deploy would run it (accepted findings apply). Whether a finding is the move's
+    // is for the caller, who read the live site before the move (prop_move.py); a finding never changes the exit code.
+    try {
+      const { runLeakGate } = require('../leak-gate');
+      const gate = toStderr(() => runLeakGate({ configPath, outputDir: tmp }));
+      result.leaks = (gate.findings || []).map((f) => ({ code: f.code, page: f.page, text: f.text, note: f.note || null, reason: f.reason || null }));
+    } catch (e) {
+      console.error(`Error: the leak check could not run on the new build: ${e.message}`);
+      return 1;
+    }
     return print(result, json);
   } finally {
     fs.rmSync(tmp, RM);

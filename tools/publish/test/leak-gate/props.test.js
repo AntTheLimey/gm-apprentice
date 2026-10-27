@@ -71,6 +71,20 @@ describe('leak gate: a prop page and its own note', () => {
     'Documents/inv.html': PAGE().replace('<head>', '<head><!-- gm-only --><meta name="viewport" content="width=device-width, initial-scale=1"><!-- /gm-only -->'),
   }));
 
+  it('a gm-only sentence the same prop file also shows players is not hidden; one it does not show still is', () => within((s) => {
+    // The GM's own credits line, kept in a fence beside the one players got: the two share a sentence.
+    assert.deepEqual(gate(s).findings, []);
+    leakInto(s.outputDir, 'documents/other.html', 'Print it on heavy card stock please.');
+    assert.deepEqual(gate(s).findings, []);
+    leakInto(s.outputDir, 'documents/other.html', KEEPER);
+    assert.deepEqual(gate(s).findings.map(pick),
+      [{ code: 'HIDDEN_TEXT', page: 'documents/other.html', note: 'Documents/Invitation.md', reason: 'a hidden part of its prop file (inv.html)' }]);
+  }, {
+    'Documents/Invitation.md': PROP(), 'Documents/props.css': CSS, ...OTHER, ...LIST(['Documents/Invitation.md', 'Documents/Other.md']),
+    'Documents/inv.html': PAGE('<!-- gm-only --><p class="credits">Keeper copy. Print it on heavy card stock please.</p><!-- /gm-only -->'
+      + '<p class="credits">Print it on heavy card stock please.</p>'),
+  }));
+
   it("a gm-only picture's alt text is hidden text if it reaches the site", () => within((s) => {
     assert.deepEqual(gate(s).findings, []);
     leakBeforeBody(s, 'props/invitation.html', 'the seal was forged in Calcutta last spring');

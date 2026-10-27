@@ -53,3 +53,26 @@ describe('leak gate: a container state file', () => {
     assert.deepEqual(gate(s).findings, []);
   }, FILES(), SETTINGS));
 });
+
+describe("leak gate: the words a page's Connections section prints", () => {
+  const { listFileText } = require('../helpers/publish-list');
+  // A held prop's byline is the label a Connections group prints and a published name after it ("Trusted by" a name): the
+  // page says those words itself, so they are no finding there; the byline's own longer sentence still is.
+  const files = (heldBody) => ({
+    'Characters/Mira Vale Dunmore.md': '---\ntype: npc\nrelationships:\n  - target: "[[Tobin Ashe]]"\n    type: trusts\n---\nA ferry keeper.\n',
+    'Characters/Tobin Ashe.md': '---\ntype: npc\n---\nA lamplighter.\n',
+    'Props/Tract.md': '---\ntype: prop\nprop_file: tract.html\n---\nA tract.\n',
+    'Props/tract.html': `<!doctype html><html><body>${heldBody}</body></html>`,
+    '_meta/publish-list.yaml': listFileText({ publishing: ['Characters/Mira Vale Dunmore.md', 'Characters/Tobin Ashe.md'] }),
+  });
+
+  it('a hidden piece made of a group label and a name under it is no finding', () => within((s) => {
+    assert.match(fs.readFileSync(path.join(s.outputDir, 'characters', 'tobin-ashe.html'), 'utf8'), /Trusted by/);
+    assert.deepEqual(gate(s).findings, []);
+  }, files('<h1>The Tract</h1><p class="by">By Mira Vale Dunmore</p>')));
+
+  it('a hidden sentence that runs on past the printed words still is', () => within((s) => {
+    leakInto(s.outputDir, 'characters/tobin-ashe.html', 'By Mira Vale Dunmore in the dark of the moon.');
+    assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'characters/tobin-ashe.html', note: 'Props/Tract.md' }]);
+  }, files('<p>By Mira Vale Dunmore in the dark of the moon.</p>')));
+});

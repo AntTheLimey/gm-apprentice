@@ -259,7 +259,10 @@ move-check builds the player site from the vault alone into a temp folder (no
 build steps run, no kept folder is in it), compares the site's output folder
 with it, and removes the temp folder. Each prints "KIND<TAB>address<TAB>detail"
 rows, then "# served: N pages: N same: N blockers: N", and exits 1 on any
-blocker (or an error line), else 0.
+blocker (or an error line), else 0. move-check also runs the leak check on the
+new build: a "LEAK<TAB>page<TAB>sentence" row per finding, and "leaks: N" in the
+count line. A leak does not change the exit code: whether the move caused it is
+for the caller to tell (prop_move.py compares the live site's own findings).
 
   SAME            the same bytes
   SAME-WORDS      every word still there (added words, or the tool's prop bar)
@@ -285,6 +288,7 @@ an error.
   --expect-gone <phrase> Words the move takes off a page on purpose (repeatable)
   --old, --new <dir>     compare: the two site folders
   --json                 { rows: [{ kind, address, detail, blocker }], blockers, served, pages, same }
+                         (move-check adds leaks: [{ code, page, text, note, reason }])
   --config <path>        move-check: path to vault.config.json (default: ./vault.config.json)
 `,
   leaks: `

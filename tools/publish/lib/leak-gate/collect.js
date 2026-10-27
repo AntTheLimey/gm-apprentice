@@ -21,12 +21,13 @@ const {
 } = require('../processor');
 const { createMarks, markKinds, sanitize, markedSpans } = require('../gm-marks');
 const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf } = require('./text');
-const { TEXT_EXT } = require('./match');
+const { TEXT_EXT, fileText } = require('./match');
 const { planProps, planStatePictures, stateFileOf, bytesOf, textOf } = require('../props/plan');
 const { placeCollection, propTaken, containerItems, propRow, sealedTitlesOn, stateFieldsOf, stateFieldsOfListed } = require('../props/collection');
 const { cutHtml } = require('../props/html-cut');
 const { styledPageProblem } = require('../props/page');
 const { pathProblem } = require('../props/files');
+const { buildConnections } = require('../connections');
 
 const NEVER_SHOWN = ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase());
 const neverShown = (rel) => rel.split('/').slice(0, -1).some((s) => NEVER_SHOWN.includes(s.toLowerCase()));
@@ -167,6 +168,17 @@ function collectHidden({ configPath, outputDir = null }) {
     add(piecesOfMarkdown(body), rel, `unpublished note: ${why}`);
   }
 
+  // What a page's Connections section prints (lib/connections.js), made as the build makes it from the published
+  // frontmatter: each group's label with each name under it ("Trusted by" and a name), words the page says itself. A tie
+  // to a name with no page counts here as a note's (left off the page), so nothing is read in that the page leaves out.
+  if (playerConfig.connections !== 'off') {
+    const view = published.map((p) => ({ ...p, frontmatter: publishedFrontmatter(p.frontmatter || {}, excludeFields, fieldOverrides[relOf(p)] || {}) }));
+    const cx = buildConnections({ pages: view, linkMap, backlinks: {}, hubPairs: new Map(), imageMap: {}, extras: new Map(), pageFor: () => undefined, noteExists: () => true });
+    for (const page of view) {
+      for (const tab of cx.for(page).tabs) for (const group of tab.groups) for (const it of group.items) visible.push(`${group.label} ${it.title}`);
+    }
+  }
+
   // The props, planned as the player build plans them (props/plan.js): a prop ships with its note's full page, never
   // with a stub's, at an address no page, tool folder, props page or (by default) kept folder takes, cut of its Keeper
   // parts. The props page is placed as the build places it (props/collection.js).
@@ -257,9 +269,14 @@ function collectHidden({ configPath, outputDir = null }) {
       for (const f of p.files) {
         if (f.made === 'state') continue;
         own(f.out, p.rel);
-        // What the cut takes out of a page or SVG: hidden text of the note, if it reaches the site.
+        // What the cut takes out of a page or SVG: hidden text of the note, if it reaches the site. A hidden sentence the
+        // same file also shows players (a GM's credits line beside the one players got) is on that page anyway: not hidden.
         if (!f.cut || !bytesOf(f)) continue;
-        for (const run of cutHtml(textOf(bytesOf(f)).text).cut) add(piecesOfHtml(run), p.rel, `a hidden part of its prop file (${shownName(p, f.source)})`);
+        const cut = cutHtml(textOf(bytesOf(f)).text);
+        const shownWords = ` ${wordsOf(fileText(f.out, cut.text)).join(' ')} `;
+        for (const run of cut.cut) {
+          add(piecesOfHtml(run).filter((t) => !shownWords.includes(` ${wordsOf(t).join(' ')} `)), p.rel, `a hidden part of its prop file (${shownName(p, f.source)})`);
+        }
       }
       for (const out of p.shared) own(out, p.rel);
       continue;

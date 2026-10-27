@@ -91,3 +91,22 @@ test('gm-publish props move-check: the exit code and --json', (t) => {
   assert.equal(none.status, 1);
   assert.match(none.stderr, /--serves/);
 });
+
+test('move-check runs the leak check on the new build and lists what it finds', (t) => {
+  const s = liveSite(t);
+  const cli = () => spawnSync(process.execPath, [CLI, 'props', 'move-check', '--config', s.configPath, '--serves', 'gazetteer/', '--json'], { encoding: 'utf8' });
+  const clean = cli();
+  assert.equal(clean.status, 0, clean.stderr);
+  assert.deepEqual(JSON.parse(clean.stdout).leaks, []);
+  // A sentence from the menu note's GM Notes, put on the page itself: the note's hidden text on its own prop file.
+  fs.writeFileSync(path.join(s.vaultDir, 'Documents', 'Menu.md'),
+    `${NOTE.trimEnd()}\n\n## GM Notes\n\nThe fish course hides the poisoned sauce boat.\n`);
+  fs.writeFileSync(path.join(s.vaultDir, 'Documents', 'menu.html'), PAGE.replace('</body>', '<p>The fish course hides the poisoned sauce boat.</p></body>'));
+  const leaky = cli();
+  assert.equal(leaky.status, 0, 'a leak never changes the exit code: the page lost no word');
+  const parsed = JSON.parse(leaky.stdout);
+  assert.deepEqual(parsed.leaks.map((f) => [f.code, f.page, f.note]), [['HIDDEN_TEXT', 'gazetteer/papers/menu.html', 'Documents/Menu.md']]);
+  const text = spawnSync(process.execPath, [CLI, 'props', 'move-check', '--config', s.configPath, '--serves', 'gazetteer/'], { encoding: 'utf8' });
+  assert.match(text.stdout, /^LEAK\tgazetteer\/papers\/menu\.html\t"the fish course hides the poisoned sauce boat" from Documents\/Menu\.md/m);
+  assert.match(text.stdout, / leaks: 1 blockers: \d+$/m);
+});
