@@ -45,7 +45,7 @@ test('a container lists its revealed items in arrival order', () => {
   const diary = rows[1];
   assert.deepEqual(diary, {
     rel: 'Props/Diary.md', title: 'Diary', href: 'documents/diary.html', line: 'A water-stained diary',
-    arrived: { title: 'Session 14', href: 'sessions/session-14.html' }, sealed: false, unrevealed: false, updated: null,
+    arrived: { title: 'Session 14', href: 'sessions/session-14.html' }, sealed: false, unrevealed: false, updated: null, group: null,
   });
   assert.equal(rows[0].arrived.title, 'Session 3', 'the first entry of revealed_in');
   const html = propListHtml(rows, 'props/bookshelf.html');
@@ -65,7 +65,7 @@ test('a sealed item is its title and nothing else', () => {
   const shownItem = prop('Props/Diary.md', { prop_container: IN });
   const { rows } = listing([container({ show_sealed: 'titles' }), sealed, shownItem]);
   assert.equal(rows.length, 2);
-  assert.deepEqual(rows[1], { rel: 'Props/Letter.md', title: 'Letter', href: null, line: null, arrived: null, sealed: true, unrevealed: false });
+  assert.deepEqual(rows[1], { rel: 'Props/Letter.md', title: 'Letter', href: null, line: null, arrived: null, sealed: true, unrevealed: false, group: null });
   const html = propListHtml(rows, 'props/bookshelf.html');
   assert.match(html, /<li class="prop-item prop-sealed"><span class="prop-title">Letter<\/span> <span class="prop-seal">Sealed<\/span><\/li>/);
   assert.doesNotMatch(html, /SECRET|letter\.html|Session 3/);
@@ -157,7 +157,7 @@ test('an item that names itself as its container is listed on its own, with its 
 test('a stub item is its title and note link only, on the player site', () => {
   const stub = prop('Props/Diary.md', { prop_container: IN, publish: 'stub', prop_line: 'STUBLINE', revealed_in: '[[Session 3]]', lastUpdated: '2026-01-01' });
   stub.address = 'props/diary.html';
-  assert.deepEqual(listing([container(), stub]).rows, [{ rel: 'Props/Diary.md', title: 'Diary', href: 'documents/diary.html', line: null, arrived: null, sealed: false, unrevealed: false, updated: null }]);
+  assert.deepEqual(listing([container(), stub]).rows, [{ rel: 'Props/Diary.md', title: 'Diary', href: 'documents/diary.html', line: null, arrived: null, sealed: false, unrevealed: false, updated: null, group: null }]);
 });
 
 test('a sealed title honours the note\'s field exceptions', () => {
@@ -190,4 +190,35 @@ test('every text is escaped', () => {
   ], 'props/x.html');
   assert.doesNotMatch(html, /<b>|<y>|<s>|<i>/);
   assert.match(html, /href="\.\.\/a%20b\/c\.html"/);
+});
+
+test('groups print in arrival order with their headings', () => {
+  const props = [
+    container(),
+    prop('Props/Plain.md', { prop_container: IN, revealed_in: '[[Session 14]]' }),
+    prop('Props/Late.md', { prop_container: IN, prop_group: 'Cellar', revealed_in: '[[Session 14]]' }),
+    prop('Props/Early.md', { prop_container: IN, prop_group: 'Attic', revealed_in: '[[Session 3]]' }),
+    prop('Props/Later.md', { prop_container: IN, prop_group: 'Attic', revealed_in: '[[Session 14]]' }),
+  ];
+  const { rows } = listing(props);
+  assert.deepEqual(rows.map((r) => r.group), ['Attic', 'Cellar', 'Attic', null]);
+  const html = propListHtml(rows, 'props/bookshelf.html');
+  const heads = [...html.matchAll(/<h3 class="prop-group">([^<]*)<\/h3>/g)].map((m) => m[1]);
+  assert.deepEqual(heads, ['Attic', 'Cellar']);
+  assert.ok(html.startsWith('<ul class="prop-list">\n<li class="prop-item"><a href="../documents/plain.html">Plain'), 'the ungrouped list comes first');
+  assert.match(html, /<h3 class="prop-group">Attic<\/h3>\n<ul class="prop-list">\n<li[^\n]*>Early<[^\n]*\n<li[^\n]*>Later</);
+});
+
+test('a sealed row is never under a heading', () => {
+  const sealed = prop('Props/Letter.md', { prop_container: IN, prop_group: 'SECRETGROUP' }, { shown: false });
+  const { rows } = listing([container({ show_sealed: 'titles' }), sealed, prop('Props/Diary.md', { prop_container: IN, prop_group: 'Attic' })]);
+  assert.equal(rows[1].group, null);
+  const html = propListHtml(rows, 'props/bookshelf.html');
+  assert.doesNotMatch(html, /SECRETGROUP/);
+  assert.match(html, /<h3 class="prop-group">Attic<\/h3>\n<ul class="prop-list">\n<li[^\n]*>Diary<[^\n]*\n<\/ul>\n<ul class="prop-list">\n<li class="prop-item prop-sealed">/);
+});
+
+test('a flat listing has no headings', () => {
+  const { rows } = listing([container(), prop('Props/Diary.md', { prop_container: IN })]);
+  assert.doesNotMatch(propListHtml(rows, 'props/bookshelf.html'), /prop-group/);
 });

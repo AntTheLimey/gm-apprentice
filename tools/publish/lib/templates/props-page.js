@@ -21,10 +21,28 @@ function rowHtml(row, fromOut) {
   return `<li class="prop-item">${parts.join(' ')}</li>`;
 }
 
-// The rows as a list, each link relative to `fromOut` (the page it is printed on); '' with none.
-function propListHtml(rows, fromOut) {
+const listOf = (rows, fromOut) => `<ul class="prop-list">\n${rows.map((r) => rowHtml(r, fromOut)).join('\n')}\n</ul>`;
+
+// The rows as a list, each link relative to `fromOut` (the page it is printed on); '' with none. When a
+// row has a `group`: the ungrouped shown rows first, then one headed list per group in the order of its
+// first row, then the sealed rows in a last bare list. `flat`: one list whatever the groups.
+function propListHtml(rows, fromOut, { flat = false } = {}) {
   if (!rows.length) return '';
-  return `<ul class="prop-list">\n${rows.map((r) => rowHtml(r, fromOut)).join('\n')}\n</ul>`;
+  if (flat || !rows.some((r) => r.group)) return listOf(rows, fromOut);
+  const groups = new Map();
+  const bare = [];
+  const sealed = [];
+  for (const r of rows) {
+    if (r.sealed) sealed.push(r);
+    else if (!r.group) bare.push(r);
+    else if (groups.has(r.group)) groups.get(r.group).push(r);
+    else groups.set(r.group, [r]);
+  }
+  return [
+    ...(bare.length ? [listOf(bare, fromOut)] : []),
+    ...[...groups].map(([heading, list]) => `<h3 class="prop-group">${escapeHtml(heading)}</h3>\n${listOf(list, fromOut)}`),
+    ...(sealed.length ? [listOf(sealed, fromOut)] : []),
+  ].join('\n');
 }
 
 // What a container's page lists: its rows, or that it holds nothing yet.

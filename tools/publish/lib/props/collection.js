@@ -34,7 +34,7 @@ function firstOf(value) {
 // One prop as a row. Shown: linked to its prop page (else its note page), with its line and the
 // session it arrived in (`updated`, its lastUpdated, orders it after that). A `publish: stub` item on
 // the player site is its title and its note link only: its stub page shows neither line nor session.
-// Not shown: its title alone, from the published view of its frontmatter (so a hidden prop_title never
+// `group`: its published prop_group, or null. Not shown: its title alone, from the published view of its frontmatter (so a hidden prop_title never
 // names it), with the note's own field exceptions (`fieldOverrides`, by vault path) as its page has them.
 // `unrevealed`: shown on the GM site, not on the player site. `nameOf(page, title)`: the title as this site
 // prints the note's name (the GM site marks a withheld one).
@@ -43,7 +43,7 @@ function propRow(p, { isShown, excludeFields = [], fieldOverrides = {}, resolveP
   if (!isShown(page)) {
     const fm = publishedFrontmatter(sourceOf(page), excludeFields, fieldOverrides[p.rel] || {});
     const named = fm.title === undefined ? String(page.title || '').replace(/_/g, ' ') : page.displayTitle;
-    return { rel: p.rel, title: fieldText(fm.prop_title).trim() || named || '', href: null, line: null, arrived: null, sealed: true, unrevealed: false };
+    return { rel: p.rel, title: fieldText(fm.prop_title).trim() || named || '', href: null, line: null, arrived: null, sealed: true, unrevealed: false, group: null };
   }
   const fm = page.frontmatter || {};
   const stub = site !== 'gm' && publishMode(sourceOf(page)) === 'stub';
@@ -60,6 +60,8 @@ function propRow(p, { isShown, excludeFields = [], fieldOverrides = {}, resolveP
     // A withheld item is never on the player site's listing, so on the GM's it is unrevealed too.
     unrevealed: isPlayerShown ? !isPlayerShown(page) || isWithheld(sourceOf(page)) : false,
     updated: (!stub && fieldText(fm.lastUpdated).trim()) || null,
+    // Its published prop_group: the heading a container's page lists it under (a sealed row has none).
+    group: canonicalNfc(fieldText(fm.prop_group).trim()) || null,
   };
 }
 
@@ -343,7 +345,7 @@ function collectionModel({ plan, rowOf, containers, settings, site = 'player', i
   for (const p of plan.props) {
     if (p.kind === 'container' || inContainer.has(p.rel) || !isShown(p.page)) continue;
     if (site !== 'gm' && isWithheld(sourceOf(p.page))) continue;
-    const row = rowOf(p);
+    const row = { ...rowOf(p), group: null }; // the page's own headings group it
     const group = fieldText((p.page.frontmatter || {}).prop_group).trim();
     if (group) {
       const key = canonicalNfc(group);

@@ -206,3 +206,40 @@ describe('a stub item (Ruling 20)', () => {
     for (const f of s.player.files()) assert.doesNotMatch(fs.readFileSync(f, 'utf8'), /STUBLINE/, f);
   });
 });
+
+describe('a container listing groups by prop_group', () => {
+  const crypto = require('node:crypto');
+  const flat = buildBoth({
+    'Documents/Bookshelf.md': '---\ntype: prop\nprop_kind: container\nshow_sealed: titles\n---\nA tall shelf.\n\n## The Text\n\nDusty.\n',
+    'Documents/Diary.md': '---\ntype: prop\nprop_container: "[[Bookshelf]]"\nprop_line: Kept\n---\nA diary.\n',
+    'Documents/Letter.md': '---\ntype: prop\nprop_container: "[[Bookshelf]]"\n---\nx\n',
+    '_meta/publish-list.yaml': listFileText({ publishing: ['Documents/Bookshelf.md', 'Documents/Diary.md'] }),
+  });
+  const grouped = buildBoth({
+    ...STYLE,
+    'Documents/Bookshelf.md': '---\ntype: prop\nprop_kind: container\nshow_sealed: titles\n---\nA shelf.\n',
+    'Documents/Briefcase.md': '---\ntype: prop\nprop_kind: container\nprop_style: t\n---\nA case.\n',
+    'Documents/Diary.md': '---\ntype: prop\nprop_container: "[[Bookshelf]]"\nprop_group: Papers\n---\nA diary.\n',
+    'Documents/Note.md': '---\ntype: prop\nprop_container: "[[Bookshelf]]"\n---\nA note.\n',
+    'Documents/Letter.md': '---\ntype: prop\nprop_container: "[[Bookshelf]]"\nprop_group: Papers\n---\nx\n',
+    'Documents/Map.md': '---\ntype: prop\nprop_container: "[[Briefcase]]"\nprop_group: Maps\n---\nA map.\n',
+    '_meta/publish-list.yaml': listFileText({ publishing: ['Documents/Bookshelf.md', 'Documents/Briefcase.md', 'Documents/Diary.md', 'Documents/Note.md', 'Documents/Map.md'] }),
+  }, { sites: ['player'] });
+  after(() => { flat.cleanup(); grouped.cleanup(); });
+  const sha = (t) => crypto.createHash('sha256').update(t).digest('hex');
+
+  it('a flat container is unchanged', () => {
+    assert.equal(sha(flat.player.read('props', 'bookshelf.html')), '05b2d31951664ed5e97104124218d8a4c91bfb3664a2199c146d223478a70d00');
+    assert.equal(sha(flat.gm.read('props', 'bookshelf.html')), '051ca089153f1d5fc79e772a1768863d9af44d097aa30eb7e4a193bf651ed291');
+  });
+
+  it('a container page prints its groups under headings, the sealed item last and bare', () => {
+    const page = grouped.player.read('props', 'bookshelf.html');
+    assert.match(page, /<h3 class="prop-group">Papers<\/h3>\n<ul class="prop-list">\n<li class="prop-item"><a href="\.\.\/documents\/diary\.html">Diary<\/a><\/li>\n<\/ul>\n<ul class="prop-list">\n<li class="prop-item prop-sealed"><span class="prop-title">Letter/);
+    assert.ok(page.indexOf('>Note<') < page.indexOf('Papers</h3>'), 'ungrouped first');
+  });
+
+  it('{{{items}}} in a container style gets the same grouping', () => {
+    assert.match(grouped.player.read('props', 'briefcase.html'), /<div class="held"><h3 class="prop-group">Maps<\/h3>\n<ul class="prop-list">\n<li class="prop-item"><a href="\.\.\/documents\/map\.html">Map<\/a><\/li>\n<\/ul><\/div>/);
+  });
+});

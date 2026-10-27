@@ -365,6 +365,7 @@ img {
 .prop-btn:hover, .prop-btn:focus-visible { background: var(--accent); color: var(--bg); }
 /* A listing of props: what a container holds */
 .prop-list { list-style: none; margin: 1rem 0; padding: 0; }
+h3.prop-group { margin: 1.25rem 0 0; font-size: 1.05rem; }
 .prop-item { padding: 0.5rem 0; border-bottom: 1px solid var(--border); }
 .prop-item:last-child { border-bottom: none; }
 .prop-line { display: block; color: var(--text-muted); font-size: 0.95rem; }
