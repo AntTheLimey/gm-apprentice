@@ -1085,3 +1085,189 @@ def test_a_stop_during_another_put_back_does_not_cut_it_short(tmp_path: Path) ->
     assert code == 1, text
     assert "the vault is as it was" in text
     assert snapshot(vault) == before and folders(vault) == dirs
+
+
+# --- props-move fixes (1.10.106) -------------------------------------------------------
+
+def test_live_notes_are_settled_and_held_ones_stay_draft(tmp_path: Path) -> None:
+    # #528: a note made for a page that is live today is settled canon; a held paper keeps the template's DRAFT.
+    vault, site = gazetteer(tmp_path)
+    c = converted(vault, site)
+    status = {rel: fm_of(c.batch.texts[rel]).get("canon_status") for rel in c.batch.changed() if rel.endswith(".md")}
+    for rel in c.publish:
+        assert status[rel] == prop_move.SETTLED, rel
+    assert status[f"{CH4}/sealed-letter.md"] == "DRAFT"
+    assert prop_move.SETTLED == "AUTHORITATIVE"
+    # The schema's values: DRAFT / AUTHORITATIVE / SUPERSEDED / STUB.
+    schema = (ROOT / "skills" / "shared" / "entity-schema.md").read_text(encoding="utf-8")
+    assert "DRAFT / AUTHORITATIVE / SUPERSEDED / STUB" in schema
+
+
+def test_a_missing_listing_style_is_a_person_row_before_any_build(tmp_path: Path) -> None:
+    # #527: a style the decisions name that neither the vault nor the plugin has.
+    vault, site = gazetteer(tmp_path)
+    given = converted(vault, site).decisions
+    given["listings"]["gazetteer/papers/index.html"]["style"] = "port-papers"
+    c = converted(vault, site, given)
+    row = (f"{prop_move.PERSON}\tlistings.gazetteer/papers/index.html.style\t"
+           f'no style "port-papers" in _meta/prop-styles/ or the plugin')
+    assert any(r.startswith(row) for r in c.rows), c.rows
+    assert c.missing_styles == ["port-papers"]
+    # In the vault it is no row.
+    write_tree(vault, {"_meta/prop-styles/port-papers/layout.html": "<main>{{{items}}}</main>\n"})
+    assert converted(vault, site, given).missing_styles == []
+    # A plugin style is no row either.
+    given["listings"]["gazetteer/papers/index.html"]["style"] = "letter"
+    assert converted(vault, site, given).missing_styles == []
+
+
+def test_apply_with_a_missing_listing_style_changes_nothing(tmp_path: Path) -> None:
+    vault, site = gazetteer(tmp_path)
+    given = converted(vault, site).decisions
+    given["listings"]["gazetteer/papers/index.html"]["style"] = "port-papers"
+    decisions = tmp_path / "decisions.json"
+    decisions.write_text(json.dumps(given), encoding="utf-8")
+    before = snapshot(vault)
+    calls: list[str] = []
+    with mock.patch.object(prop_move, "read_state", read_state_stub):
+        code, text = run_apply(vault, CHECK_PASSED, "--decisions", str(decisions), calls=calls)
+    assert code == 1 and calls == [], text
+    assert 'no style "port-papers"' in text and "the vault is as it was" in text
+    assert snapshot(vault) == before
+    # The plan says so and builds nothing: no CHECK row, no "the page is gone".
+    import contextlib
+    import io
+    out = io.StringIO()
+    with mock.patch.object(prop_move, "read_state", read_state_stub), contextlib.redirect_stdout(out):
+        assert prop_move.main([str(vault), "plan", "--decisions", str(decisions)]) == 0
+    said = out.getvalue()
+    assert 'listings.gazetteer/papers/index.html.style\tno style "port-papers"' in said
+    assert "CHECK\t" not in said and "LISTING-LOST" not in said
+    assert said.rstrip().endswith("blockers: 1")
+    assert snapshot(vault) == before
+
+
+def test_a_reordered_listing_is_counted_in_the_plan_summary(tmp_path: Path) -> None:
+    vault, site = gazetteer(tmp_path)
+    c = converted(vault, site)
+    rows = ["CHECK\tgazetteer/papers/index.html\tLISTING-REORDERED: 3 links kept, in another order: 2 moved; …",
+            "CHECK\tgazetteer/papers/menu.html\tSAME-WORDS: other markup, the same words"]
+    n = prop_move.counts(c, 0, rows)
+    assert n["reordered"] == 1 and n["blockers"] == 0
+    assert "listings reordered: 1 blockers: 0" in prop_move.totals(n)
+    assert "reordered" not in prop_move.totals(prop_move.counts(c, 0, rows[1:]))
+
+
+BUILT_LETTER = ("<!DOCTYPE html>\n<html><head><title>A Note from Gull</title><link rel=\"stylesheet\" href=\"props.css\">"
+                "</head>\n<body>\n<pre class=\"hand gull-hand\">Ana, the pumps are fixed.</pre>\n</body></html>\n")
+
+
+def build_props_vault(tmp_path: Path) -> tuple[Path, Path]:
+    """A vault shaped like Dead End's: a build_props note whose page build_props wrote into the chapter's Props folder,
+    served live under props/ by a site step."""
+    vault = vault_with(tmp_path, {"Documents/Gull.md": LETTER,
+                                  "Chapters/Chapter 1 - The Run/Props/gull-letter.html": BUILT_LETTER})
+    site = tmp_path / "site"
+    write_tree(vault, {
+        "_meta/vault-config.yaml": (
+            "version: 1\nplayer_site:\n"
+            f"  folder: {json.dumps(str(site))}\n  title: Run\n"
+            "  folder_map:\n    Documents: documents\n    Chapters: chapters\n"
+            "  after_build:\n    - node scripts/add-props.mjs\n"),
+        "_meta/publish-list.yaml": "publishing:\n  - Documents/Gull.md\nexcluded: []\nneeds_decision: []\n"})
+    write_tree(site, {"vault.config.json": json.dumps({"vaultPath": str(vault)}),
+                      "scripts/add-props.mjs": "// builds docs/props/ with build_props.py\n",
+                      "docs/index.html": "<html><body><a href=\"props/gull-letter.html\">Gull</a></body></html>\n",
+                      "docs/props/gull-letter.html": BUILT_LETTER})
+    return vault, site
+
+
+def test_a_finished_move_is_not_offered_again(tmp_path: Path) -> None:
+    # #525: the old build_props pages stay in the Props folder on purpose; a moved note's style builds each one now.
+    import migrate_site
+    vault, _site = build_props_vault(tmp_path)
+    assert migrate_site.find_props_move(vault), "offered before the move"
+    code, text = run_apply(vault, CHECK_PASSED)
+    assert code == 0, text
+    assert (vault / "Chapters/Chapter 1 - The Run/Props/gull-letter.html").is_file()
+    assert migrate_site.find_props_move(vault) == []
+    # A second plan finds nothing to move either: the page is no hand-made page.
+    assert prop_move._handmade_pages(prop_move.new_conversion(vault)) == []
+
+
+def test_a_vault_that_answered_leave_is_offered_as_before(tmp_path: Path) -> None:
+    import migrate_site
+    vault, _site = build_props_vault(tmp_path)
+    (item,) = migrate_site.find_props_move(vault)
+    assert item.apply("leave") == ["left the props where they are; nothing moved"]
+    (again,) = migrate_site.find_props_move(vault)
+    assert again.lines == item.lines
+
+
+def moved_like_1_10_105(tmp_path: Path) -> Path:
+    """The gazetteer vault after a move made by 1.10.105: its new notes as DRAFT."""
+    vault, _site = gazetteer(tmp_path)
+    code, text = run_apply(vault, CHECK_PASSED)
+    assert code == 0, text
+    for p in vault.rglob("*.md"):
+        t = p.read_text(encoding="utf-8")
+        if f"canon_status: {prop_move.SETTLED}\n" in t:
+            p.write_text(t.replace(f"canon_status: {prop_move.SETTLED}\n", "canon_status: DRAFT\n", 1), encoding="utf-8")
+    return vault
+
+
+def test_moved_drafts_are_offered_for_settling_by_name(tmp_path: Path) -> None:
+    import migrate_site
+    vault = moved_like_1_10_105(tmp_path)
+    # A GM's own draft prop, published: written by vault_write (a body of its own, no title after relationships).
+    write_tree(vault, {f"{CH4}/My Draft.md": (
+        "---\nname: \"My Draft\"\ntype: prop\ncanon_status: DRAFT\nprop_kind: document\nsource: \"\"\n"
+        "createdSession: \"\"\nlastUpdated: \"\"\nrelationships: []\n---\n\n## Description\n\nStill thinking.\n")})
+    with mock.patch.object(prop_move, "read_state", read_state_stub):
+        assert prop_move.apply_publish(vault, [f"{CH4}/My Draft.md"])[1] is None
+    (item,) = migrate_site.find_props_settle(vault)
+    assert (item.id, item.group, item.wants, item.holds_stamp) == ("props-settle", migrate_site.CHOICE, "settle or leave", True)
+    named = [ln.split("\t")[0] for ln in item.lines[1:]]
+    listed = (vault / "_meta" / "publish-list.yaml").read_text(encoding="utf-8")
+    assert f"{CH4}/dinner-menu.md" in named and f"{NOTES}/shelf/Tide Tables.md" in named
+    assert f"{CH4}/sealed-letter.md" not in named          # held: not published
+    assert f"{CH4}/My Draft.md" not in named               # the GM's own
+    assert all(rel in listed for rel in named)
+    before = (vault / CH4 / "My Draft.md").read_bytes()
+    done = item.apply("settle")
+    assert len(done) == len(named)
+    for rel in named:
+        assert fm_of((vault / rel).read_text(encoding="utf-8"))["canon_status"] == prop_move.SETTLED, rel
+    assert fm_of((vault / CH4 / "sealed-letter.md").read_text(encoding="utf-8"))["canon_status"] == "DRAFT"
+    assert (vault / CH4 / "My Draft.md").read_bytes() == before
+    # Once settled, nothing is offered.
+    assert migrate_site.find_props_settle(vault) == []
+    check = next(c for c in migrate_site.SITE_CHECKS if c.name == "props-settle")
+    assert (check.release, check.band, check.asks_site, check.choices) == ("1.10.106", 4, True, ("props-settle=",))
+
+
+def test_an_already_promoted_vault_is_not_offered(tmp_path: Path) -> None:
+    import migrate_site
+    vault, _site = gazetteer(tmp_path)
+    code, text = run_apply(vault, CHECK_PASSED)       # this release's move: live notes are settled already
+    assert code == 0, text
+    assert migrate_site.find_props_settle(vault) == []
+
+
+def test_settle_leaves_notes_the_gm_has_touched_or_a_session_revealed(tmp_path: Path) -> None:
+    import migrate_site
+    vault = moved_like_1_10_105(tmp_path)
+    menu, quay = vault / CH4 / "dinner-menu.md", vault / CH4 / "quay-notice.md"
+    menu.write_text(menu.read_text(encoding="utf-8") + "\nThe GM's own words.\n", encoding="utf-8")
+    log = json.loads((vault / "_meta" / "reveals.json").read_text(encoding="utf-8"))
+    log["entries"].append({"session": "Session 3", "published": [f"{CH4}/quay-notice.md"], "released": []})
+    (vault / "_meta" / "reveals.json").write_text(json.dumps(log), encoding="utf-8")
+    (item,) = migrate_site.find_props_settle(vault)
+    named = [ln.split("\t")[0] for ln in item.lines[1:]]
+    assert f"{CH4}/dinner-menu.md" not in named and f"{CH4}/quay-notice.md" not in named
+    assert f"{CH3}/hill-letter.md" in named
+    assert item.apply("leave") == ["left the moved prop notes as DRAFT"]
+    assert fm_of(quay.read_text(encoding="utf-8"))["canon_status"] == "DRAFT"
+    # No reveals log with a before-tracking entry: nothing is offered.
+    (vault / "_meta" / "reveals.json").unlink()
+    assert migrate_site.find_props_settle(vault) == []

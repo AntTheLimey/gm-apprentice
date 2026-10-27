@@ -70,11 +70,14 @@ from reveal import LOG, _load_log, _write_log, apply_publish, prop_paths, publis
 from reveal_scan import NEVER_CANDIDATES  # noqa: E402
 from vault_check import configured_site  # noqa: E402
 from vault_write import BAD_NAME_RE, HAND_ID_RE, HANDS_REL, Batch, WriteError, use_hand  # noqa: E402
-from vaultlib import (PublishToolUnavailable, SettingsUnavailable, entity_type,  # noqa: E402
+from vaultlib import (PUBLISH_TOOL, PublishToolUnavailable, SettingsUnavailable, entity_type,  # noqa: E402
                       extract_frontmatter, forget_settings, frontmatter_span, is_skipped_path,
                       scalar_value, settings, settings_remove, yaml_scalar, yaml_value_for_cli)
 
 PERSON = "NEEDS-A-PERSON"
+# The canon status of settled material (entity-schema.md: DRAFT / AUTHORITATIVE /
+# SUPERSEDED / STUB): what a note the move makes for a live page carries.
+SETTLED = "AUTHORITATIVE"
 # A top-level frontmatter line: its key and the rest of the line.
 KEY_RE = re.compile(r"^([A-Za-z_][\w-]*):(.*)$")
 FENCE_RE = re.compile(r"^```")
@@ -253,6 +256,7 @@ class Conversion:
     taken: set[str] = field(default_factory=set)            # note names made now, folded
     names: set[str] | None = None                           # every note's names in the vault, folded
     states: list[str] = field(default_factory=list)          # the live state files the made ones replace
+    missing_styles: list[str] = field(default_factory=list)  # listing styles neither the vault nor the plugin has
     live_root: Path | None = None
 
     def row(self, verb: str, where: str, detail: str = "") -> None:
@@ -834,15 +838,21 @@ def _note_path(c: Conversion, folder: str, stem: str, other: str | None = None) 
     return None
 
 
-def _prop_note(c: Conversion, rel: str, fields: list[tuple[str, str]], body: str = "") -> None:
+def _prop_note(c: Conversion, rel: str, fields: list[tuple[str, str]], body: str = "",
+               live: bool = False) -> None:
     """A note made from the prop template, with `fields` set (YAML values).
     Its `title:` is its name: the site heads its page, its prop bar and
-    every Connections line with `title:`, else the file name (a slug)."""
+    every Connections line with `title:`, else the file name (a slug).
+    `live`: what it holds is on the site today, in the players' hands, so it
+    is settled canon (SETTLED), not the template's draft; a held note keeps
+    the template's status."""
     template = vault_write.template_text(c.vault, vault_write.PROP_TEMPLATES, "prop.md")
     fm = vault_write.template_frontmatter(template)
     named = dict(fields)
     if "name" in named and "title" not in named:
         fields = [("title", named["name"]), *fields]
+    if live:
+        fields = [("canon_status", SETTLED), *fields]
     for key, value in fields:
         vault_write.set_block(fm, key, value)
     c.batch.create(rel, "---\n" + "\n".join(fm) + "\n---\n" + body)
@@ -898,6 +908,21 @@ def _handout_for(printable: list[tuple[str, str, str]], page: str) -> tuple[str,
     return hits[0] if hits else None
 
 
+def styled_page_names(notes: list[tuple[str, str]]) -> set[str]:
+    """The file names (lower-cased) of the pages prop notes with a style are
+    built at (`prop_address`): a page of that name in a Props folder is the
+    old build_props copy of one the site now makes from its note (the move
+    leaves it there), never a hand-made page still to move."""
+    out = set()
+    for _rel, text in notes:
+        fm = extract_frontmatter(text) or {}
+        style, address = fm.get("prop_style"), fm.get("prop_address")
+        if (entity_type(fm) == "prop" and isinstance(style, str) and style.strip()
+                and isinstance(address, str) and address.strip()):
+            out.add(posixpath.basename(address.strip()).lower())
+    return out
+
+
 def _handmade_pages(c: Conversion) -> list[str]:
     """Pages in a `Props/` folder under Chapters/ that no prop note names by
     `prop_file` and no build_props note builds (index.html aside)."""
@@ -926,8 +951,10 @@ def _handmade_pages(c: Conversion) -> list[str]:
         build_page = fm.get("prop")
         if isinstance(build_page, str) and build_page.strip() and fm.get("prop_look"):
             built.add(f"*/{build_page.strip()}")
+    styled = styled_page_names(_notes(c.vault))
     return [rel for rel in candidates
-            if rel not in named and f"*/{posixpath.basename(rel)}" not in built]
+            if rel not in named and f"*/{posixpath.basename(rel)}" not in built
+            and posixpath.basename(rel).lower() not in styled]
 
 
 def _infer_retire(c: Conversion, site: Path | None, steps: list[str], converting: list[str]) -> None:
@@ -1123,7 +1150,7 @@ def convert_kept(c: Conversion, site: Path | None, live_root: Path | None,
             # A handout the site does not show is named for the GM only.
             body = (f"\n## Description\n\n{said}\n" if publishing and nfc(handout[0]) in publishing
                     else f"\n<!-- gm-only -->\n\n## GM Notes\n\n{said}\n\n<!-- /gm-only -->\n")
-        _prop_note(c, rel, fields, body)
+        _prop_note(c, rel, fields, body, live=page in homes)
         if page in homes:
             c.publish.append(rel)
 
@@ -1178,7 +1205,7 @@ def convert_kept(c: Conversion, site: Path | None, live_root: Path | None,
             fields.append(("prop_style", quoted(str(choice["style"]))))
         if mirror:
             fields.append(("prop_group", quoted(groups.get(mirror[0], ""))))
-        _prop_note(c, rel, fields)
+        _prop_note(c, rel, fields, live=True)
         c.publish.append(rel)
 
     # A kept sub-folder whose page loads a state script: a container and its items.
@@ -1217,7 +1244,7 @@ def convert_kept(c: Conversion, site: Path | None, live_root: Path | None,
             _prop_note(c, rel, [("name", quoted(title)), ("prop_kind", "supplied"),
                                 ("prop_file", quoted(posixpath.basename(address))),
                                 ("prop_address", quoted(address)), ("prop_title", quoted(title)),
-                                ("prop_group", quoted(groups.get(k, "")))])
+                                ("prop_group", quoted(groups.get(k, "")))], live=True)
             c.publish.append(rel)
             if address == f"{k}/index.html" and "player_site.props.cover" not in c.inferred_settings:
                 c.inferred_settings["player_site.props.title"] = title
@@ -1242,7 +1269,7 @@ def convert_kept(c: Conversion, site: Path | None, live_root: Path | None,
                 _prop_note(c, note, [("name", quoted(name)), ("prop_kind", "supplied"),
                                      ("prop_file", quoted(posixpath.relpath(svg_rel, note_dir))),
                                      ("prop_address", quoted(svg)), ("prop_title", quoted(name)),
-                                     ("prop_group", quoted(groups.get(k, "")))])
+                                     ("prop_group", quoted(groups.get(k, "")))], live=True)
                 c.publish.append(note)
 
     # A kept folder retires only when the vault serves every page in it.
@@ -1282,7 +1309,7 @@ def _state_container(c: Conversion, root: Path, index: str, script: str, state: 
                         ("prop_state", quoted(posixpath.relpath(script, sub))),
                         ("prop_state_global", quoted(state["global"])),
                         ("prop_address", quoted(index)), ("show_sealed", "none"),
-                        ("prop_group", quoted(groups.get(k, "")))])
+                        ("prop_group", quoted(groups.get(k, "")))], live=True)
     c.publish.append(rel)
     c.states.append(script)
     # The fields the publish tool reads off a prop itself, which a state file never gives back to an item (its answer).
@@ -1327,8 +1354,70 @@ def _state_container(c: Conversion, root: Path, index: str, script: str, state: 
         item = _note_path(c, folder, clean_stem(name, key), None if own_page else clean_stem(key, key))
         if item is None:
             continue
-        _prop_note(c, item, fields)
+        _prop_note(c, item, fields, live=True)
         c.publish.append(item)
+
+
+# --- a vault moved under 1.10.105: its live notes left as drafts ---------------
+
+# The bodies the move writes under a new note's frontmatter: none, or one line
+# naming the handout the page goes with (for players, or in a gm-only fence).
+MOVED_BODY_RE = re.compile(
+    r"\A(?:"
+    r"|\n## Description\n\nThe page that goes with \[\[[^\]\n]+\]\]\.\n"
+    r"|\n<!-- gm-only -->\n\n## GM Notes\n\nThe page that goes with \[\[[^\]\n]+\]\]\.\n\n<!-- /gm-only -->\n"
+    r")\Z")
+MOVE_EMPTY = ("source", "createdSession", "lastUpdated")
+
+
+def is_moved_note(text: str) -> bool:
+    """Whether a note reads exactly as the move wrote it: the prop template's
+    frontmatter with `name:` first and `title:` set right after
+    `relationships:` (the template has no title; the move adds it last),
+    `source`, `createdSession` and `lastUpdated` still empty, and a body that
+    is one the move writes. A note the GM has written in since fails one of
+    these, so it is never taken for the move's."""
+    lines = text.splitlines(keepends=True)
+    end, error = frontmatter_span(lines)
+    if error:
+        return False
+    keys = [m.group(1) for m in (KEY_RE.match(ln.rstrip("\r\n")) for ln in lines[1:end]) if m]
+    if not keys or keys[0] != "name" or "relationships" not in keys:
+        return False
+    at = keys.index("relationships")
+    if at + 1 >= len(keys) or keys[at + 1] != "title":
+        return False
+    fm = extract_frontmatter(text) or {}
+    if entity_type(fm) != "prop" or any(fm.get(k) not in ("", None, []) for k in MOVE_EMPTY):
+        return False
+    return bool(MOVED_BODY_RE.match("".join(lines[end + 1:])))
+
+
+def moved_drafts(vault: Path) -> list[str]:
+    """The notes a 1.10.105 move made for live pages and left marked DRAFT:
+    in a vault whose reveals log starts with the move's before-tracking
+    entry, a note that is exactly as the move wrote it (is_moved_note),
+    still `canon_status: DRAFT`, on the publish list, and published by no
+    session since (a note a wrap-up revealed is the GM's own to settle).
+    Empty when the log or the publish list cannot be read."""
+    try:
+        log = _load_log(vault) if (vault / LOG).is_file() else None
+    except (OSError, ValueError):
+        return []
+    entries = [e for e in (log or {}).get("entries") or [] if isinstance(e, dict)]
+    if not any(e.get("before_tracking") is True for e in entries):
+        return []
+    later = {nfc(str(p)) for e in entries if e.get("session") for p in e.get("published") or []}
+    publishing, _why = publish_state(vault)
+    if publishing is None:
+        return []
+    out = []
+    for rel, text in _notes(vault):
+        fm = extract_frontmatter(text) or {}
+        if (fm.get("canon_status") == "DRAFT" and nfc(rel) in publishing and nfc(rel) not in later
+                and is_moved_note(text)):
+            out.append(rel)
+    return out
 
 
 def new_conversion(vault: Path) -> Conversion:
@@ -1399,6 +1488,7 @@ def convert(vault: Path, *, site: Path | None = None, given: dict[str, Any] | No
             c.row(PERSON, f"{k}/", "not retired: the check does not compare this kept folder "
                   "(add it to serves, or keep the folder)")
     retire["keep"] = keep
+    missing_styles(c)
     names = [found[1] for found in map(step_script, known) if found]
     if "inject-gazetteer" in names and not all(b in have for b in BANNER):
         c.row(PERSON, "player_site.landing.banner", "inject-gazetteer.js writes a box on the "
@@ -1406,6 +1496,26 @@ def convert(vault: Path, *, site: Path | None = None, given: dict[str, Any] | No
               f"{', '.join(BANNER)} in the decisions file")
     c.decisions = {"version": 1, **{k: c.decisions[k] for k in DECISION_KEYS if k in c.decisions}}
     return c
+
+
+VAULT_STYLES = "_meta/prop-styles"
+# The plugin's own styles, beside the publish tool the move builds with.
+PLUGIN_STYLES = PUBLISH_TOOL.parent.parent / "prop-styles"
+MISSING_STYLE = "a listing style that is not there"
+
+
+def missing_styles(c: Conversion) -> None:
+    """A NEEDS-A-PERSON row for each listing style the decisions name that is
+    neither the vault's (`_meta/prop-styles/<name>/`) nor the plugin's: the
+    build would make no page there, and the check would only say the page is
+    gone. The move is not built or checked while one is missing."""
+    for address, choice in sorted((c.decisions.get("listings") or {}).items()):
+        style = str((choice or {}).get("style") or "").strip()
+        if not style or (c.vault / VAULT_STYLES / style).is_dir() or (PLUGIN_STYLES / style).is_dir():
+            continue
+        c.row(PERSON, f"listings.{address}.style", f'no style "{style}" in {VAULT_STYLES}/ or the plugin '
+              f"({PLUGIN_STYLES}); copy the style's folder into {VAULT_STYLES}/, or name another style")
+        c.missing_styles.append(style)
 
 
 # --- 15c: writing, checking, retiring, putting back ------------------------------
@@ -1653,18 +1763,25 @@ def plan_rows(c: Conversion, done: bool = False) -> list[str]:
     return rows
 
 
-def counts(c: Conversion, blockers: int) -> dict[str, int]:
+REORDERED = "LISTING-REORDERED"
+
+
+def counts(c: Conversion, blockers: int, rows: list[str] | None = None) -> dict[str, int]:
+    """The plan's totals. `reordered`: listings whose links are all kept but
+    in another order (CHECK rows of `rows`), no blocker: a person reads them."""
     retire = c.decisions.get("retire") or {}
     notes = [r for r in c.batch.changed() if r.endswith(".md")]
     return {"notes": len(notes), "files": len(c.files) + (len(c.batch.changed()) - len(notes)),
             "publish": len(c.publish),
             "retire": len(retire.get("keep") or []) + len(retire.get("after_build") or []),
+            "reordered": sum(1 for r in rows or [] if r.startswith(f"CHECK\t") and f"\t{REORDERED}:" in r),
             "blockers": blockers}
 
 
 def totals(n: dict[str, int]) -> str:
+    reordered = f" listings reordered: {n['reordered']}" if n.get("reordered") else ""
     return (f"# notes: {n['notes']} files: {n['files']} publish: {n['publish']} "
-            f"retire: {n['retire']} blockers: {n['blockers']}")
+            f"retire: {n['retire']}{reordered} blockers: {n['blockers']}")
 
 
 def _site_of(vault: Path) -> tuple[Path | None, Path | None, str]:
@@ -1752,6 +1869,10 @@ def run_plan(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], Conv
         c = convert(copy, site=site if live else None, given=given)
         rows = plan_rows(c) + c.rows
         blockers = 0
+        if c.missing_styles:
+            rows.append(f"{PERSON}\t-\tthe move is not built or checked until {MISSING_STYLE} is there "
+                        f"({', '.join(c.missing_styles)})")
+            return rows, c, len(c.missing_styles)
         if not live or not c.decisions.get("serves"):
             if c.batch.changed() or c.files:
                 rows.append(f"{PERSON}\t-\tthe move cannot be checked: "
@@ -1779,6 +1900,9 @@ def run_apply(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], int
     if not site or not live:
         return [f"ERROR\t-\tnothing changed: {why}"], 1
     c = convert(vault, site=site, given=given)
+    if c.missing_styles:
+        return [*c.rows, f"ERROR\t-\tnothing changed: {MISSING_STYLE} ({', '.join(c.missing_styles)}); "
+                "the vault is as it was"], 1
     if not c.decisions.get("serves"):
         if c.batch.changed() or c.files:
             return [*c.rows, "ERROR\t-\tnothing changed: nothing the live site serves is "
@@ -1841,7 +1965,7 @@ def run_apply(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], int
                 f"{'' if pruned == 1 else 's'} the leak check no longer needs")
     if logged:
         rows.append(f"LOGGED\t{LOG}\tcreated with its before-tracking entry")
-    rows.append(totals(counts(c, 0)))
+    rows.append(totals(counts(c, 0, rows)))
     return rows, 0
 
 
@@ -1901,7 +2025,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"ERROR\t-\t{e}")
         return 1
     assert c is not None
-    n = counts(c, blockers)
+    n = counts(c, blockers, rows)
     rows.append(totals(n))
     print("\n".join(rows))
     if args.draft:
