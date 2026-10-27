@@ -54,6 +54,25 @@ function jsonStrings(value, into) {
   return into;
 }
 
+// A container's state file (props/collection.js stateScript), `window.NAME = <JSON>;`, as its JSON's keys and strings, so
+// an escape (\n, \u003c) does not run two words together; a text with markup in it is read both as written and as a
+// page shows it. A file of any other shape is read as written.
+function stateFileText(raw) {
+  const m = /^\s*window\.[A-Za-z_$][\w$]*\s*=\s*([\s\S]*?);?\s*$/.exec(raw);
+  if (!m) return raw;
+  let value;
+  try { value = JSON.parse(m[1]); } catch (e) { return raw; }
+  const out = [];
+  (function walk(v) {
+    if (typeof v === 'string') {
+      out.push(v);
+      if (v.includes('<')) out.push(pageText(v, { attributes: true }));
+    } else if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) { out.push(k); walk(x); }
+  }(value));
+  return out.join('\n');
+}
+
 const jsonOrRaw = (raw) => { try { return jsonStrings(JSON.parse(raw), []).join('\n'); } catch (e) { return raw; } };
 
 // What a page sends that its text does not show: each inline script (a JSON island as its strings, so an escaped line
@@ -132,4 +151,4 @@ function readOutput(dir) {
   return out.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
 }
 
-module.exports = { TEXT_EXT, createMatcher, fileText, pageExtras, readOutput, isToolScript, isToolFile, listFiles };
+module.exports = { TEXT_EXT, createMatcher, fileText, stateFileText, pageExtras, readOutput, isToolScript, isToolFile, listFiles };

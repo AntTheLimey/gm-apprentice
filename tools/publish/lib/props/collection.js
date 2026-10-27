@@ -4,12 +4,14 @@
 // players have not found is, when its container asks (`show_sealed: titles`), its title alone,
 // read from the frontmatter the site would publish; a withheld item is never a row. The build
 // and the leak gate both ask this module, so they agree on what each listing shows.
-const { publishedFrontmatter, isWithheld, parseWikiRef, publishMode, valueText } = require('../processor');
-const { linkKeys } = require('../scanner');
+const path = require('path');
+const { publishedFrontmatter, isWithheld, parseWikiRef, publishMode, valueText, relativeHref, encodeHref } = require('../processor');
+const { linkKeys, slugify } = require('../scanner');
+const { unmark } = require('../gm-marks');
 const { sessionSortKey } = require('../templates/index-page');
 const { canonicalNfc } = require('../unicode');
 const { isPropNote, propContainerOf, showSealedOf } = require('./note');
-const { bytesOf } = require('./plan');
+const { bytesOf, stateFileOf } = require('./plan');
 const { fieldText } = require('./layout');
 const { PAGE_TAKER, addressShapeProblem, takenAddresses } = require('./address');
 
@@ -121,6 +123,102 @@ function containerItems({ props, isShown, excludeFields = [], fieldOverrides = {
   return out;
 }
 
+// The fields the tool itself reads off a prop: a container's state file gives an item every other prop_* field.
+const GENERIC_PROP_FIELDS = new Set([
+  'prop_kind', 'prop_file', 'prop_address', 'prop_style', 'prop_line', 'prop_group', 'prop_container', 'prop_title',
+  'prop_state', 'prop_state_global', 'prop_hand', 'prop_font', 'prop_breaks', 'prop_shift', 'show_sealed',
+]);
+const STATE_CORE = ['title', 'line', 'href', 'sealed'];
+
+// A field value as the state file gives it: text, a finite number, true or false, or a list or map of those; undefined
+// for anything else (a date, an empty value), which is left out whole.
+function stateValue(v) {
+  if (typeof v === 'string' || typeof v === 'boolean') return v;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : undefined;
+  if (Array.isArray(v)) {
+    const out = v.map(stateValue);
+    return out.includes(undefined) ? undefined : out;
+  }
+  if (v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype) {
+    const out = {};
+    for (const [k, x] of Object.entries(v)) {
+      const value = stateValue(x);
+      if (value === undefined) return undefined;
+      out[k] = value;
+    }
+    return out;
+  }
+  return undefined;
+}
+
+// An item's own fields for its container's state file, from frontmatter `fm` (the published view, so a hidden field is
+// never one): every prop_* field the tool does not read itself, named without prop_. A name the item's entry already
+// has (title, line, href, sealed) is left out.
+function stateFieldsOf(fm) {
+  const out = {};
+  for (const [name, raw] of Object.entries(fm || {})) {
+    if (!name.startsWith('prop_') || GENERIC_PROP_FIELDS.has(name)) continue;
+    const key = name.slice('prop_'.length);
+    const value = stateValue(raw);
+    if (!key || STATE_CORE.includes(key) || value === undefined) continue;
+    out[key] = value;
+  }
+  return out;
+}
+
+// What each container's state file gives each item of `rows` (a listing's, containerItems): a sealed row its title
+// alone, a shown row its fields (stateFieldsOf of `fieldsOf(p)`, the item's published frontmatter). A `publish: stub`
+// item on the player site gives none: its stub page shows neither line nor fields.
+function stateEntries(rows, { props, site = 'player', fieldsOf = (p) => p.page.frontmatter || {} }) {
+  const byRel = new Map(props.map((p) => [p.rel, p]));
+  return rows.map((row) => {
+    const p = byRel.get(row.rel);
+    const stub = site !== 'gm' && publishMode(sourceOf(p.page)) === 'stub';
+    return { row, p, fields: row.sealed || stub ? {} : stateFieldsOf(fieldsOf(p)) };
+  });
+}
+
+// For the plan's pictures (plan.js planStatePictures): Map<container vault path, [{ rel, fields }]>, from containerItems'
+// answer `listed`.
+function stateFieldsOfListed(listed, options) {
+  const out = new Map();
+  for (const [rel, { rows }] of listed) out.set(rel, stateEntries(rows, options).map(({ row, fields }) => ({ rel: row.rel, fields })));
+  return out;
+}
+
+// A container's state file's items: an object keyed by item, in its listing's order (`rows`, already byArrival). The key
+// is the item's prop page's file name without its extension when it has a prop page, else its note's name, slugified;
+// a sealed item's is its title, slugified (its note's name may say more than its title). A key met again gets -2, -3.
+// A shown item is { title, line, href, sealed: false, ...its fields }, `href` relative from the state file (`from`),
+// null without a page; a sealed one is { title, sealed: true } and nothing else. A withheld item is no row on the player
+// site, so it is not here either. The GM site's marks are taken out of a title: a script prints it as text.
+function stateItems(rows, { props, site = 'player', fieldsOf, from }) {
+  const items = {};
+  const put = (base, value) => {
+    const root = base || 'item';
+    let key = root;
+    for (let n = 2; Object.prototype.hasOwnProperty.call(items, key); n++) key = `${root}-${n}`;
+    items[key] = value;
+  };
+  for (const { row, p, fields } of stateEntries(rows, { props, site, fieldsOf })) {
+    const title = unmark(row.title);
+    if (row.sealed) {
+      put(slugify(title), { title, sealed: true });
+      continue;
+    }
+    const ownPage = row.href && row.href !== p.page.outputPath;
+    const key = ownPage ? path.posix.basename(row.href, path.posix.extname(row.href)) : slugify(path.posix.basename(p.rel, path.posix.extname(p.rel)));
+    put(key, { title, line: row.line, href: row.href ? encodeHref(relativeHref(from, row.href)) : null, sealed: false, ...fields });
+  }
+  return items;
+}
+
+// The state file's text: one statement setting window.<global>. Every < is written \u003c, so no value can close the
+// script or open a comment in a page that inlines it.
+function stateScript(global, items) {
+  return `window.${global} = ${JSON.stringify(items, null, 2).replace(/</g, '\\u003c')};\n`;
+}
+
 // The props page: one page per site listing every prop it shows, by where each sits.
 const COLLECTION_ADDRESS = 'props/index.html';
 // Where the page goes when a page the site builds holds props/index.html (a vault's own Props/Index note).
@@ -203,6 +301,9 @@ function sealedTitlesOn(listed, collectionAddress) {
     for (const row of rows) {
       if (!row.sealed) continue;
       if (container.ships && container.address && container.made) put(container.address, row);
+      // Its state file prints the title too, and nothing else of the item (stateItems).
+      const state = container.ships && container.address ? stateFileOf(container) : null;
+      if (state) put(state.out, row);
       if (collectionAddress) put(collectionAddress, row);
     }
   }
@@ -298,4 +399,5 @@ module.exports = {
   containerItems, propRow, byArrival, propPageOf,
   COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, hasCollection, collectionAddress, collectionModel, latestProps, shownRows,
   placeCollection, propTaken, sealedTitlesOn,
+  GENERIC_PROP_FIELDS, stateFieldsOf, stateFieldsOfListed, stateItems, stateScript,
 };

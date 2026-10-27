@@ -5,7 +5,8 @@
 // page for is added to `blocked` and to the plan's problems, which the build reports.
 const { loadHands, withHand, HANDS_FILE } = require('./hands');
 const { styledPage, styleFontFamilies, styledPageProblem } = require('./page');
-const { containerItems, propRow, collectionModel } = require('./collection');
+const { containerItems, propRow, collectionModel, stateItems, stateScript } = require('./collection');
+const { stateFileOf } = require('./plan');
 const { layoutNames } = require('./layout');
 const { containerTemplate, containerItemsHtml } = require('../templates/props-page');
 const { isWithheld, withheldPlaceholder, withheldNameMarked } = require('../processor');
@@ -16,6 +17,7 @@ const fontsLib = require('../fonts');
 // through the build. The words are the note page's own player view of `## The Text`, on the GM
 // site too (the GM sees the Keeper parts on the note page). Then each container's page, which lists
 // what it holds, so a row links only a page that was made; one that names a style fills its layout.
+// Each container that names a state file gets it, written from the same rows.
 // The styles' typefaces are served from the site, from the vault's font cache: a miss warns once.
 // Returns { collectionBuilt, styleFonts, problems }: the props page's model (collectionModel), the
 // typefaces the styles are served with, and the plan's problems (the same array the build reads).
@@ -106,6 +108,12 @@ function makeProps({ propPlan, propBlocked, pages, linkMap, imageMap, usedImages
     p.made_html = p.style
       ? styledPage({ prop: p, style: p.style, page: p.page, fields: p.fields, linkMap, imageMap, usedImages, collectionHref: collectionHrefFrom(p.address), fontsCss: styleFonts.css !== '', items: containerItemsHtml(rows, p.address), names: { title, noteTitle } }).html
       : containerTemplate({ container: p, rows, address: p.address, title, noteTitle }, navFor, config, publishConfig, { linkMap, imageMap, usedImages });
+  }
+  // Each container's state file (prop_state): the rows its listing shows, as the script its page reads (`state_js`).
+  for (const p of propPlan.props) {
+    const state = stateFileOf(p);
+    if (!state || !p.ships || !p.address || !listed.has(p.rel) || propBlocked.has(state.out)) continue;
+    p.state_js = stateScript(state.global, stateItems(listed.get(p.rel).rows, { props: propPlan.props, site: rowOptions.site, from: state.out }));
   }
 
   return { collectionBuilt, styleFonts, problems: propPlan.problems };

@@ -40,6 +40,7 @@ Usage:
   gm-apprentice-publish manifest <cmd>       Compare the publish manifest with the vault, or update it
   gm-apprentice-publish leaks <cmd>          Check the built player site for hidden text (list, check, accept, prune, settle)
   gm-apprentice-publish props pages <address>...  Count a prop page's printed pages (headless Chrome; --note: before it publishes)
+  gm-apprentice-publish props read-state <file>   Print what a container's state script sets (--json: { global, items })
   gm-apprentice-publish relationships <cmd>  The relationship words, short (words); every relationship rule checked (check); the tones listed (list); the certain repairs (fix)
   gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
@@ -236,6 +237,14 @@ so and exits 0; open the page and use print preview instead.
   --json             [{ address, pages, why }]; a note's row: { note, pages, why, warnings }
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
+
+gm-apprentice-publish props read-state [--json] <file>
+
+Runs a container's state script (window.NAME = { ... };) with only an empty
+window, no require, process or timers, for one second at most, and prints the
+one name it set and each item's key. --json prints { global, items }. A script
+that sets no name or several, fails, or reaches for anything else is an error
+line and exit 1. The build never runs it.
 `,
   leaks: `
 gm-apprentice-publish leaks <list|check|accept|prune|settle> [--config <path>] [--json]
@@ -1098,8 +1107,20 @@ if (command === 'leaks') {
 }
 
 if (command === 'props') {
+  if (args[1] === 'read-state') {
+    const rest = args.slice(2);
+    const files = rest.filter((w) => !w.startsWith('--'));
+    const unknown = rest.filter((w) => w.startsWith('--') && w !== '--json');
+    if (unknown.length || files.length !== 1) {
+      console.error(`Error: ${unknown.length ? `Unknown option: ${unknown[0]}` : 'props read-state needs one file'}`);
+      printSubcommandHelp('props');
+      process.exit(1);
+    }
+    exitAfterFlush(require('../lib/props/state-cli.js').runReadState({ file: files[0], json: rest.includes('--json') }));
+    return;
+  }
   if (args[1] !== 'pages') {
-    console.error(args[1] ? `Error: Unknown props command: ${args[1]}` : 'Error: props needs a command (pages)');
+    console.error(args[1] ? `Error: Unknown props command: ${args[1]}` : 'Error: props needs a command (pages, read-state)');
     printSubcommandHelp('props');
     process.exit(1);
   }

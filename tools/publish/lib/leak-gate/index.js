@@ -8,7 +8,7 @@ const { performance } = require('perf_hooks');
 const { loadPublishList } = require('../manifest');
 const { collectHidden, HELD_TITLE } = require('./collect');
 const { foldQuotes } = require('../note-faults');
-const { createMatcher, readOutput, listFiles, TEXT_EXT } = require('./match');
+const { createMatcher, readOutput, listFiles, stateFileText, TEXT_EXT } = require('./match');
 const { nameFindings, neverShowFindings } = require('./names');
 const { wordsOf, nameSet, onlyNames } = require('./text');
 const { isSettledHeading, settledHeadingGone } = require('../settled-headings');
@@ -157,6 +157,12 @@ function runLeakGate({ configPath, outputDir }) {
   const matcher = createMatcher(looked);
 
   const files = readOutput(outputDir);
+  // A container's state file is read as the data it holds (match.js stateFileText).
+  for (const file of files) {
+    if (!hidden.stateFiles.has(canonicalNfc(file.rel))) continue;
+    file.text = stateFileText(file.raw);
+    file.words = wordsOf(file.text);
+  }
   const raw = new Map();
   for (const file of files) {
     // A shipping prop's own file is its note's published form: another note's hidden text there is the prop's (a letter

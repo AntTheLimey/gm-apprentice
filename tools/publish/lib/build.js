@@ -43,11 +43,11 @@ const { publishedPages } = require('./published-pages');
 const { isOutOfPlay } = require('./pc-status');
 const { sheetSourceOf } = require('./sheet-source');
 const { pcIdentity } = require('./templates/pc-identity');
-const { planProps } = require('./props/plan');
+const { planProps, planStatePictures } = require('./props/plan');
 const { propHrefFor, propOutputs, keptCopyOutputs, pathProblem } = require('./props/files');
 const { HANDS_FILE } = require('./props/hands');
 const { styleFontFamilies, FONTS_CSS, BASE_CSS } = require('./props/page');
-const { COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, placeCollection, propTaken, latestProps, shownRows } = require('./props/collection');
+const { COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, placeCollection, propTaken, latestProps, shownRows, containerItems, stateFieldsOfListed } = require('./props/collection');
 const { makeProps } = require('./props/make');
 const { collectionTemplate } = require('./templates/props-page');
 
@@ -1218,6 +1218,15 @@ function buildSite(options) {
         `${cacheDir ? `; ${stats.encoded} encoded now, the rest from the image cache` : ''}`
       );
     }
+  }
+
+  // The pictures a container's state file names ship beside it: the items its listing shows name them in their
+  // published fields, so this waits for the published view. Planned before the paths are checked below.
+  if (propPlan) {
+    const site = gm ? 'gm' : 'player';
+    const shownPages = new Set(pages);
+    const listed = containerItems({ props: propPlan.props, isShown: (pg) => shownPages.has(pg), excludeFields, fieldOverrides, site });
+    for (const r of planStatePictures(propPlan, stateFieldsOfListed(listed, { props: propPlan.props, site }))) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);
   }
 
   cleanOutput();
