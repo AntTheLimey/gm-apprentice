@@ -257,6 +257,8 @@ class Conversion:
     names: set[str] | None = None                           # every note's names in the vault, folded
     states: list[str] = field(default_factory=list)          # the live state files the made ones replace
     missing_styles: list[str] = field(default_factory=list)  # listing styles neither the vault nor the plugin has
+    dealt: list[str] = field(default_factory=list)           # build_props pages in Props folders the move leaves in place
+    handmade: list[str] = field(default_factory=list)        # the hand-made Props pages it makes notes for
     live_root: Path | None = None
 
     def row(self, verb: str, where: str, detail: str = "") -> None:
@@ -908,19 +910,19 @@ def _handout_for(printable: list[tuple[str, str, str]], page: str) -> tuple[str,
     return hits[0] if hits else None
 
 
-def styled_page_names(notes: list[tuple[str, str]]) -> set[str]:
-    """The file names (lower-cased) of the pages prop notes with a style are
-    built at (`prop_address`): a page of that name in a Props folder is the
-    old build_props copy of one the site now makes from its note (the move
-    leaves it there), never a hand-made page still to move."""
-    out = set()
-    for _rel, text in notes:
-        fm = extract_frontmatter(text) or {}
-        style, address = fm.get("prop_style"), fm.get("prop_address")
-        if (entity_type(fm) == "prop" and isinstance(style, str) and style.strip()
-                and isinstance(address, str) and address.strip()):
-            out.add(posixpath.basename(address.strip()).lower())
-    return out
+RECORD = "_meta/prop-move-record.json"
+
+
+def moved_pages(vault: Path) -> set[str]:
+    """The Props pages a finished move dealt with (the vault paths in its
+    record, `RECORD`): the hand-made pages it made notes for and the old
+    build_props pages it left in place. Empty when there is no record."""
+    try:
+        data = json.loads((vault / RECORD).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    pages = data.get("pages") if isinstance(data, dict) else None
+    return {nfc(str(p)) for p in pages} if isinstance(pages, list) else set()
 
 
 def _handmade_pages(c: Conversion) -> list[str]:
@@ -951,10 +953,11 @@ def _handmade_pages(c: Conversion) -> list[str]:
         build_page = fm.get("prop")
         if isinstance(build_page, str) and build_page.strip() and fm.get("prop_look"):
             built.add(f"*/{build_page.strip()}")
-    styled = styled_page_names(_notes(c.vault))
-    return [rel for rel in candidates
-            if rel not in named and f"*/{posixpath.basename(rel)}" not in built
-            and posixpath.basename(rel).lower() not in styled]
+    done = moved_pages(c.vault)
+    pages = [rel for rel in candidates if rel not in done]
+    # The build_props pages the move leaves where they are: dealt with, as the pages it makes notes for are.
+    c.dealt = [rel for rel in pages if rel not in named and f"*/{posixpath.basename(rel)}" in built]
+    return [rel for rel in pages if rel not in named and f"*/{posixpath.basename(rel)}" not in built]
 
 
 def _infer_retire(c: Conversion, site: Path | None, steps: list[str], converting: list[str]) -> None:
@@ -1045,6 +1048,7 @@ def convert_kept(c: Conversion, site: Path | None, live_root: Path | None,
     # What publishes now, as the publish tool says; None when it cannot say.
     publishing, _why = publish_state(c.vault)
     pages = _handmade_pages(c)
+    c.handmade = list(pages)
     by_name: dict[str, list[str]] = {}
     for f in live.files:
         by_name.setdefault(posixpath.basename(f), []).append(f)
@@ -1946,6 +1950,9 @@ def run_apply(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], int
             journal.record(LOG)
             _write_log(vault, _load_log(vault))
             logged = True
+        # What the move dealt with, by vault path: the update never offers these pages again.
+        record = sorted(moved_pages(vault) | set(c.handmade) | set(c.dealt))
+        journal.write(RECORD, (json.dumps({"version": 1, "pages": record}, indent=2, ensure_ascii=False) + "\n").encode("utf-8"))
     except (Exception, KeyboardInterrupt) as e:
         # Whatever started the put-back, a stop signal now must not cut it short.
         for sig in STOP_SIGNALS:
@@ -1965,6 +1972,7 @@ def run_apply(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], int
                 f"{'' if pruned == 1 else 's'} the leak check no longer needs")
     if logged:
         rows.append(f"LOGGED\t{LOG}\tcreated with its before-tracking entry")
+    rows.append(f"RECORDED\t{RECORD}\tthe Props pages the move dealt with, never offered again")
     rows.append(totals(counts(c, 0, rows)))
     return rows, 0
 

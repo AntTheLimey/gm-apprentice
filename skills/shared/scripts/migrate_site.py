@@ -1046,7 +1046,7 @@ def find_props_move(vault: Path) -> list[Item]:
     site, _has_config = configured_site(vault)
     if site is None:
         return []
-    from prop_move import _notes, is_build_props_note, styled_page_names  # prop_move imports this module
+    from prop_move import _notes, is_build_props_note, moved_pages, nfc  # prop_move imports this module
     from vaultlib import extract_frontmatter, is_skipped_path
     try:
         s = settings(vault)
@@ -1058,8 +1058,9 @@ def find_props_move(vault: Path) -> list[Item]:
     keep = [str(k) for k in keep] if isinstance(keep, list) else []
     built = 0
     notes = _notes(vault)
-    # A page a styled prop note is built at is one a finished move dealt with (#525).
-    named: set[str] = styled_page_names(notes)
+    named: set[str] = set()
+    # The pages a finished move dealt with, by vault path (#525).
+    done = moved_pages(vault)
     for rel, text in notes:
         if is_build_props_note(text):
             built += 1
@@ -1072,6 +1073,7 @@ def find_props_move(vault: Path) -> list[Item]:
         for p in sorted(folder.iterdir()) if folder.is_dir() else []:
             if (p.is_file() and p.suffix.lower() in PAGE_EXTS
                     and p.name.lower() != "index.html" and p.name.lower() not in named
+                    and nfc(p.relative_to(vault).as_posix()) not in done
                     and not is_skipped_path(p.relative_to(vault).as_posix())):
                 pages.append(p)
     kept: dict[str, int] = {}

@@ -1193,6 +1193,15 @@ def test_a_finished_move_is_not_offered_again(tmp_path: Path) -> None:
     assert migrate_site.find_props_move(vault) == []
     # A second plan finds nothing to move either: the page is no hand-made page.
     assert prop_move._handmade_pages(prop_move.new_conversion(vault)) == []
+    # The move recorded the page it left, by its vault path.
+    record = json.loads((vault / prop_move.RECORD).read_text(encoding="utf-8"))
+    assert record == {"version": 1, "pages": ["Chapters/Chapter 1 - The Run/Props/gull-letter.html"]}
+    assert f"RECORDED\t{prop_move.RECORD}\t" in text
+    # A page of the same name in another chapter is a page the move never dealt with: offered.
+    write_tree(vault, {"Chapters/Chapter 2 - The Shore/Props/gull-letter.html": BUILT_LETTER})
+    (item,) = migrate_site.find_props_move(vault)
+    assert any("1 hand-made page in Props folders" in ln for ln in item.lines), item.lines
+    assert prop_move._handmade_pages(prop_move.new_conversion(vault)) == ["Chapters/Chapter 2 - The Shore/Props/gull-letter.html"]
 
 
 def test_a_vault_that_answered_leave_is_offered_as_before(tmp_path: Path) -> None:
