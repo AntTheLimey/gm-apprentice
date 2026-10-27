@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """prop_move.py: move a vault's own props into prop notes.
 
+    prop_move.py VAULT plan [--decisions FILE] [--draft OUT] [--json OUT]
+    prop_move.py VAULT apply [--decisions FILE]
+
 Two layouts are read: notes a site script builds props from (`prop:` and
 `prop_look:` in the frontmatter, the build_props layout), and hand-made
 prop pages in a chapter's `Props/` folder with copies kept in the site's
@@ -10,17 +13,44 @@ A build_props note becomes a `type: prop` note in place: its look is its
 `prop_style`, its page lives where it did (`props/<page>`), its blurb is its
 `prop_line`, its hand is a hand in `_meta/prop-hands.json` (the family read
 from the build's stylesheet), and the section holding the prop's lines
-becomes `## The Text`, with the description above it. Nothing else on the
-note changes.
+becomes `## The Text`, with the description above it.
+
+A hand-made page gets a prop note of its own (the handout notes are left
+alone): live when the kept folder holds a copy (the note is published at
+that address, and the page takes the live copy's words, the vault's own
+lines kept in gm-only fences), held otherwise (not published; its Keeper
+lines wrapped in gm-only fences). Every other page of a kept folder comes
+into the vault with the files it links, as a supplied prop; a page that
+reads a state script becomes a container with a note per entry; a listing
+of the papers becomes a container.
+
+`plan` works on a copy of the vault and writes nothing in the vault or the
+site; it checks the copy against the live site with `props move-check`.
+`apply` does the same to the vault, publishes, sets the settings, runs the
+check, and only then retires the kept folders and build steps, prunes the
+leak check's accepts and starts the reveals log. A blocker or any failure
+puts every file back as it was. Decisions (JSON, `--decisions`) override
+what is inferred, key by key; `--draft` writes what was used.
+
+Rows are `verb <TAB> path <TAB> detail` (WOULD-CREATE, WOULD-EDIT,
+WOULD-COPY, WOULD-WRAP, WOULD-PUBLISH, WOULD-SET, WOULD-RETIRE, CHECK,
+NEEDS-A-PERSON; the done forms on apply), then
+`# notes: N files: N publish: N retire: N blockers: N`.
+Exit: 0 a plan made, or the move applied; 1 nothing changed (a blocker, a
+failure; the vault was put back); 2 bad arguments.
 """
 
 from __future__ import annotations
 
+import argparse
 import difflib
 import json
+import os
 import posixpath
 import re
+import shutil
 import sys
+import tempfile
 import unicodedata
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
@@ -31,11 +61,14 @@ from urllib.parse import unquote
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import vault_write  # noqa: E402
 from migrate_core import StepFailed, plugin_tool  # noqa: E402
+from migrate_site import AFTER_BUILD, _set_settings  # noqa: E402
+from reveal import LOG, _load_log, _write_log, apply_publish, publish_state  # noqa: E402
 from reveal_scan import NEVER_CANDIDATES  # noqa: E402
+from vault_check import configured_site  # noqa: E402
 from vault_write import BAD_NAME_RE, HAND_ID_RE, HANDS_REL, Batch, WriteError, use_hand  # noqa: E402
-from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter,  # noqa: E402
-                      frontmatter_span, is_skipped_path, scalar_value, settings,
-                      yaml_scalar, yaml_value_for_cli)
+from vaultlib import (PublishToolUnavailable, SettingsUnavailable, entity_type,  # noqa: E402
+                      extract_frontmatter, forget_settings, frontmatter_span, is_skipped_path,
+                      scalar_value, settings, settings_remove, yaml_scalar, yaml_value_for_cli)
 
 PERSON = "NEEDS-A-PERSON"
 # A top-level frontmatter line: its key and the rest of the line.
@@ -253,6 +286,9 @@ def convert_build_props(c: Conversion) -> None:
             c.addresses[rel] = m.group(1).strip()
         if hand:
             used.setdefault(hand, []).append(rel)
+        elif re.search(r"^prop_envelope:", new, re.M):
+            c.row(PERSON, rel, "its envelope was written in a hand build_props chose for "
+                  "every envelope; set prop_hand to that hand, or the style's own font is used")
     if not used:
         return
     fonts = hand_fonts(c.vault)
@@ -375,21 +411,30 @@ class PageReader(HTMLParser):
 
 
 class LineReader(HTMLParser):
-    """The first tag on a line, its class, and the words on it."""
+    """The first tag on a line, its class, and the words on it (a script's
+    or a stylesheet's text is code, not words)."""
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.tag = ""
         self.cls = ""
         self.text: list[str] = []
+        self._code = 0
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         if not self.tag:
             self.tag = tag
             self.cls = squash(dict(attrs).get("class") or "")
+        if tag in ("script", "style"):
+            self._code += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in ("script", "style") and self._code:
+            self._code -= 1
 
     def handle_data(self, data: str) -> None:
-        self.text.append(data)
+        if not self._code:
+            self.text.append(data)
 
 
 def read_line(line: str) -> LineReader:
@@ -598,8 +643,10 @@ def field_value(value: Any) -> str | None:
     JSON-style flow YAML; None for anything else."""
     if isinstance(value, str):
         return quoted(value)
-    if value is None or isinstance(value, (bool, int, float)):
+    if value is None or isinstance(value, (bool, int)):
         return yaml_value_for_cli(json.dumps(value))
+    if isinstance(value, float):
+        return json.dumps(value)
     if isinstance(value, (list, dict)):
         return json.dumps(value, ensure_ascii=False)
     return None
@@ -679,7 +726,7 @@ def _printable_lines(c: Conversion) -> list[tuple[str, str, str]]:
         fm = extract_frontmatter(text) or {}
         if entity_type(fm) in NEVER_CANDIDATES:
             continue
-        name = str(fm.get("name") or fm.get("title") or Path(rel).stem)
+        name = str(fm.get("name") or fm.get("title") or Path(rel).stem.replace("_", " "))
         lines = text.splitlines()
         for i, line in enumerate(lines):
             if "Printable prop" not in line:
@@ -811,6 +858,8 @@ def convert_kept(c: Conversion, site: Path | None, live_root: Path | None,
     not), and every page and file of each kept folder is served by a note."""
     live = _live(live_root, keep) if live_root and live_root.is_dir() else Live(Path("."), [])
     printable = _printable_lines(c)
+    # What publishes now, as the publish tool says; None when it cannot say.
+    publishing, _why = publish_state(c.vault)
     pages = _handmade_pages(c)
     by_name: dict[str, list[str]] = {}
     for f in live.files:
@@ -826,7 +875,9 @@ def convert_kept(c: Conversion, site: Path | None, live_root: Path | None,
     _infer_notes_folder(c, live, homes)
     _infer_retire(c, site, steps, live.kept)
     converted = set(homes.values()) | set(c.addresses.values())
-    _infer_listings(c, live.root, converted, props_address)
+    c.decisions["listings"] = {}
+    if live_root and live_root.is_dir():
+        _infer_listings(c, live_root, converted, props_address)
     _given(c, given, ("notes_folder", "retire", "serves", "listings", "expect_gone"))
     listings: dict[str, dict[str, Any]] = c.decisions["listings"]
 
@@ -895,8 +946,12 @@ def convert_kept(c: Conversion, site: Path | None, live_root: Path | None,
                    ("prop_group", quoted(group))]
         if box:
             fields.append(("prop_container", quoted(f"[[{box}]]")))
-        body = (f"\n## Description\n\nThe page that goes with [[{Path(handout[0]).stem}]].\n"
-                if handout else "")
+        body = ""
+        if handout:
+            said = f"The page that goes with [[{Path(handout[0]).stem}]]."
+            # A handout the site does not show is named for the GM only.
+            body = (f"\n## Description\n\n{said}\n" if publishing and nfc(handout[0]) in publishing
+                    else f"\n<!-- gm-only -->\n\n## GM Notes\n\n{said}\n\n<!-- /gm-only -->\n")
         _prop_note(c, rel, fields, body)
         if page in homes:
             c.publish.append(rel)
@@ -909,6 +964,7 @@ def convert_kept(c: Conversion, site: Path | None, live_root: Path | None,
         groups[k] = short_title(read_page(cover).title) if cover.is_file() else k
     c.decisions["groups"] = groups
     _given(c, given, ("groups",))
+    groups = c.decisions["groups"]
 
     def home_of(address: str) -> tuple[str, str] | None:
         """(the kept folder, the vault folder that mirrors it) of an address."""
@@ -1008,7 +1064,7 @@ def convert_kept(c: Conversion, site: Path | None, live_root: Path | None,
                 inside = svg_rel.startswith(f"{page_dir}/")
                 note_dir = page_dir if inside else posixpath.dirname(svg_rel)
                 stem = posixpath.splitext(posixpath.basename(svg))[0]
-                name = alt or stem
+                name = short_title(alt) or stem
                 note = _note_path(c, note_dir, clean_stem(name, stem))
                 if note is None:
                     continue
@@ -1130,7 +1186,18 @@ def convert(vault: Path, *, site: Path | None = None, given: dict[str, Any] | No
     else:
         c.decisions["settings"] = dict(c.inferred_settings)
     have = c.decisions["settings"]
-    names = [found[1] for found in map(step_script, c.decisions["retire"]["after_build"]) if found]
+    retire = c.decisions["retire"]
+    known = []
+    for command in retire.get("after_build") or []:
+        found = step_script(str(command))
+        if found and found[1] in KNOWN_STEPS:
+            known.append(str(command))
+        else:
+            c.row(PERSON, str(command), "not retired: not a prop step the move knows; "
+                  "it stays in player_site.after_build")
+    retire["after_build"] = known
+    retire["keep"] = [str(k) for k in retire.get("keep") or []]
+    names = [found[1] for found in map(step_script, known) if found]
     if "inject-gazetteer" in names and not all(b in have for b in BANNER):
         c.row(PERSON, "player_site.landing.banner", "inject-gazetteer.js writes a box on the "
               "landing page; write its heading, words and link (gazetteer/index.html) as "
@@ -1139,10 +1206,405 @@ def convert(vault: Path, *, site: Path | None = None, given: dict[str, Any] | No
     return c
 
 
-def written_rows(c: Conversion, verb_prefix: str = "WOULD-") -> list[str]:
-    """One row per note and file the conversion writes."""
+# --- 15c: writing, checking, retiring, putting back ------------------------------
+
+KEEP = "player_site.keep"
+PAGE_EDITS = ("merged with", "Keeper lines")     # sources of a page edited in place
+# What a vault copy for the plan holds: notes, pictures and pages (never
+# audio or video), plus every file under _meta/ and in each Props/ folder.
+COPY_EXTS = frozenset({".md", ".html", ".htm", ".css", ".js", ".png", ".jpg", ".jpeg",
+                       ".gif", ".webp", ".svg", ".avif", ".pdf"})
+
+
+class Blocked(StepFailed):
+    """move-check found a served page the vault alone does not reproduce."""
+
+
+def _write_bytes(path: Path, data: bytes) -> None:
+    """Write `data` to `path` exactly, swapped in so a failure partway leaves
+    the file as it was."""
+    try:
+        mode = path.stat().st_mode & 0o7777
+    except FileNotFoundError:
+        umask = os.umask(0)
+        os.umask(umask)
+        mode = 0o666 & ~umask
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
+
+
+class Journal:
+    """Every vault file the move writes or creates, with its bytes before; the
+    tool's own writes to `_meta/` (the settings, the publish list) are watched
+    the same way. `restore` puts all of it back and says what would not go."""
+
+    def __init__(self, vault: Path) -> None:
+        self.vault = vault
+        self.saved: dict[str, bytes | None] = {}
+        self.made: list[Path] = []
+        self.meta: set[str] = set()
+
+    def record(self, rel: str) -> None:
+        if rel not in self.saved:
+            path = self.vault / rel
+            self.saved[rel] = path.read_bytes() if path.is_file() else None
+
+    def watch_meta(self) -> None:
+        meta = self.vault / "_meta"
+        for p in sorted(meta.iterdir()) if meta.is_dir() else []:
+            if p.is_file():
+                rel = f"_meta/{p.name}"
+                self.meta.add(rel)
+                self.record(rel)
+
+    def write(self, rel: str, data: bytes) -> None:
+        self.record(rel)
+        path = self.vault / rel
+        missing = []
+        folder = path.parent
+        while not folder.exists():
+            missing.append(folder)
+            folder = folder.parent
+        for f in reversed(missing):
+            f.mkdir()
+            self.made.append(f)
+        _write_bytes(path, data)
+
+    def restore(self) -> list[str]:
+        """Put every recorded file back and remove what the run created;
+        then read each one again. The files that are not as they were."""
+        for rel, data in self.saved.items():
+            path = self.vault / rel
+            try:
+                if data is None:
+                    path.unlink(missing_ok=True)
+                elif not path.is_file() or path.read_bytes() != data:
+                    _write_bytes(path, data)
+            except OSError:
+                pass
+        meta = self.vault / "_meta"
+        for p in sorted(meta.iterdir()) if meta.is_dir() else []:
+            rel = f"_meta/{p.name}"
+            if p.is_file() and rel not in self.meta and rel not in self.saved:
+                try:
+                    p.unlink()      # made by the tool during the run
+                except OSError:
+                    pass
+        for folder in reversed(self.made):
+            try:
+                folder.rmdir()
+            except OSError:
+                pass
+        forget_settings(self.vault)
+        stuck = []
+        for rel, data in self.saved.items():
+            path = self.vault / rel
+            now = path.read_bytes() if path.is_file() else None
+            if now != data:
+                stuck.append(rel)
+        stuck += [f.relative_to(self.vault).as_posix() + "/" for f in self.made if f.exists()]
+        return sorted(stuck)
+
+
+def write_conversion(c: Conversion, journal: Journal) -> None:
+    """Write every note and file of the conversion into `c.vault`, each one
+    first checked to be as the conversion read it."""
+    for rel in sorted(c.batch.changed()):
+        before = c.batch.originals.get(rel)
+        path = c.vault / rel
+        now = read_text(path) if path.is_file() else None
+        if now != before:
+            raise StepFailed(f"{rel} changed while the move was being worked out; run it again")
+    for rel in sorted(c.batch.changed()):
+        journal.write(rel, c.batch.texts[rel].encode("utf-8"))
+    for rel in sorted(c.files):
+        journal.write(rel, c.files[rel])
+
+
+def move_check(config: Path, decisions: dict[str, Any]) -> dict[str, Any]:
+    """`gm-publish props move-check` on the site at `config`: {rows, blockers}.
+    Raises StepFailed when the tool gives no answer."""
+    args = ["props", "move-check", "--config", str(config), "--json"]
+    for prefix in decisions.get("serves") or []:
+        args += ["--serves", str(prefix)]
+    for address in decisions.get("listings") or {}:
+        args += ["--listing", str(address)]
+    for phrase in decisions.get("expect_gone") or []:
+        args += ["--expect-gone", str(phrase)]
+    _code, out, err = plugin_tool(args)
+    try:
+        data = json.loads(out)
+    except ValueError:
+        data = None
+    if not isinstance(data, dict) or not isinstance(data.get("rows"), list) \
+            or not isinstance(data.get("blockers"), int):
+        said = [ln.strip() for ln in err.splitlines() if ln.strip().startswith("Error:")]
+        raise StepFailed(f"move-check gave no answer: {said[-1] if said else 'no reason given'}")
+    return data
+
+
+def check_rows(data: dict[str, Any]) -> list[str]:
+    return [f"CHECK\t{r.get('address', '')}\t{str(r.get('kind', '')).upper()}: {r.get('detail', '')}"
+            for r in data["rows"] if isinstance(r, dict)]
+
+
+def _publish(vault: Path, paths: list[str]) -> None:
+    if not paths:
+        return
+    done, why = apply_publish(vault, paths)
+    if why:
+        raise StepFailed(f"publish failed: {why}")
+    left = [p for p in paths if p not in done]
+    if left:
+        raise StepFailed(f"the publish tool does not list these as publishing: {', '.join(left)}")
+
+
+def _settings(c: Conversion) -> list[tuple[str, object]]:
+    return [(str(k), v) for k, v in (c.decisions.get("settings") or {}).items()]
+
+
+def plan_rows(c: Conversion, done: bool = False) -> list[str]:
+    """One row per note, file, publish, setting and retirement."""
+    verb = (lambda a, b: b if done else f"WOULD-{a}")
     rows = []
     for rel in sorted(c.batch.changed()):
         created = c.batch.originals.get(rel) is None
-        rows.append(f"{verb_prefix}{'CREATE' if created else 'EDIT'}\t{rel}\t")
+        rows.append(f"{verb('CREATE', 'CREATED') if created else verb('EDIT', 'EDITED')}\t{rel}\t")
+    for rel in sorted(c.files):
+        edited = c.sources.get(rel, "").startswith(PAGE_EDITS)
+        rows.append(f"{verb('EDIT', 'EDITED') if edited else verb('COPY', 'COPIED')}\t{rel}\t{c.sources.get(rel, '')}")
+    rows += [f"{verb('PUBLISH', 'PUBLISHED')}\t{rel}\t" for rel in c.publish]
+    rows += [f"{verb('SET', 'SET')}\t{name}\t{json.dumps(value, ensure_ascii=False)}"
+             for name, value in _settings(c)]
+    retire = c.decisions.get("retire") or {}
+    rows += [f"{verb('RETIRE', 'RETIRED')}\t{KEEP}\t{k}" for k in retire.get("keep") or []]
+    rows += [f"{verb('RETIRE', 'RETIRED')}\t{AFTER_BUILD}\t{x}" for x in retire.get("after_build") or []]
     return rows
+
+
+def counts(c: Conversion, blockers: int) -> dict[str, int]:
+    retire = c.decisions.get("retire") or {}
+    notes = [r for r in c.batch.changed() if r.endswith(".md")]
+    return {"notes": len(notes), "files": len(c.files) + (len(c.batch.changed()) - len(notes)),
+            "publish": len(c.publish),
+            "retire": len(retire.get("keep") or []) + len(retire.get("after_build") or []),
+            "blockers": blockers}
+
+
+def totals(n: dict[str, int]) -> str:
+    return (f"# notes: {n['notes']} files: {n['files']} publish: {n['publish']} "
+            f"retire: {n['retire']} blockers: {n['blockers']}")
+
+
+def _site_of(vault: Path) -> tuple[Path | None, Path | None, str]:
+    """(the site folder, its output folder, why the move cannot check)."""
+    site, has_config = configured_site(vault)
+    if site is None:
+        return None, None, "the vault has no site to check against"
+    if not has_config:
+        return site, None, f"no vault.config.json in {site}"
+    output = str(_setting(settings(vault), "player_site.output", "docs") or "docs")
+    live = site / output
+    if not live.is_dir():
+        return site, None, f"the site's output folder is not there ({live}); build or deploy it first"
+    return site, live, ""
+
+
+def _copy_vault(vault: Path, to: Path) -> None:
+    """The vault's notes, pictures and pages, every file under _meta/ and in
+    each Props/ folder: what the conversion and the build read."""
+    for p in sorted(vault.rglob("*")):
+        rel = p.relative_to(vault)
+        parts = rel.parts
+        if not p.is_file() or any(x.startswith(".") for x in parts):
+            continue
+        if parts[0] == "_meta" or "Props" in parts[:-1] or p.suffix.lower() in COPY_EXTS:
+            dest = to / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(p, dest)
+
+
+def _copy_live(live: Path, to: Path, serves: list[str]) -> None:
+    """What move-check reads of the live output: every file under a served
+    folder and every page elsewhere."""
+    prefixes = [s if s.endswith("/") else f"{s}/" for s in serves]
+    for p in sorted(live.rglob("*")):
+        rel = p.relative_to(live).as_posix()
+        if p.is_file() and (any(rel.startswith(x) for x in prefixes)
+                            or p.suffix.lower() in PAGE_EXTS):
+            dest = to / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(p, dest)
+
+
+def run_plan(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], Conversion | None, int]:
+    """Work the move out and check it on a copy of the vault; nothing in the
+    vault or the site is written. (rows, the conversion, blockers)."""
+    site, live, why = _site_of(vault)
+    tmp = Path(tempfile.mkdtemp(prefix="prop-move-"))
+    copy = tmp / "vault"
+    try:
+        _copy_vault(vault, copy)
+        forget_settings(copy)
+        # The copy never names the real site: its site is a stand-in folder
+        # whose vault.config.json names the copy.
+        stand_in = tmp / "site"
+        stand_in.mkdir()
+        (stand_in / "vault.config.json").write_text(json.dumps({"vaultPath": str(copy)}), encoding="utf-8")
+        if site:
+            _set_settings(copy, [("player_site.folder", str(stand_in))])
+        c = convert(copy, site=site if live else None, given=given)
+        rows = plan_rows(c) + c.rows
+        blockers = 0
+        if not live or not c.decisions.get("serves"):
+            if c.batch.changed() or c.files:
+                rows.append(f"{PERSON}\t-\tthe move cannot be checked: "
+                            f"{why or 'nothing the live site serves is moved'}")
+            return rows, c, 0
+        write_conversion(c, Journal(copy))
+        output = live.relative_to(site) if site else Path("docs")
+        _copy_live(live, stand_in / output, c.decisions["serves"])
+        _publish(copy, c.publish)
+        if _settings(c):
+            _set_settings(copy, _settings(c))
+        data = move_check(stand_in / "vault.config.json", c.decisions)
+        rows += check_rows(data)
+        blockers = data["blockers"]
+        return rows, c, blockers
+    finally:
+        forget_settings(copy)
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def run_apply(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], int]:
+    """The move on the vault itself: write, publish, set, check; on a blocker
+    or any failure, everything is put back. Then retire, prune, log."""
+    site, live, why = _site_of(vault)
+    if not site or not live:
+        return [f"ERROR\t-\tnothing changed: {why}"], 1
+    c = convert(vault, site=site, given=given)
+    if not c.decisions.get("serves"):
+        if c.batch.changed() or c.files:
+            return [*c.rows, "ERROR\t-\tnothing changed: nothing the live site serves is "
+                    "moved, so the move cannot be checked"], 1
+        return [*c.rows, "# nothing to move"], 0
+    config = site / "vault.config.json"
+    journal = Journal(vault)
+    rows: list[str] = []
+    blockers = 0
+    try:
+        journal.watch_meta()
+        write_conversion(c, journal)
+        _publish(vault, c.publish)
+        if _settings(c):
+            _set_settings(vault, _settings(c))
+        data = move_check(config, c.decisions)
+        rows += check_rows(data)
+        blockers = data["blockers"]
+        if blockers:
+            raise Blocked(f"move-check found {blockers} blocker{'' if blockers == 1 else 's'}")
+        retire = c.decisions.get("retire") or {}
+        if retire.get("keep"):
+            settings_remove(vault, KEEP, list(retire["keep"]))
+        if retire.get("after_build"):
+            settings_remove(vault, AFTER_BUILD, list(retire["after_build"]))
+        code, out, err = plugin_tool(["leaks", "prune", "--config", str(config), "--json"])
+        try:
+            pruned = json.loads(out).get("pruned") if code == 0 else None
+        except (ValueError, AttributeError):
+            pruned = None
+        if not isinstance(pruned, int):
+            lines = [ln.strip() for ln in err.splitlines() if ln.strip()]
+            raise StepFailed(f"leaks prune failed: {lines[-1] if lines else f'exit {code}'}")
+        logged = False
+        if not (vault / LOG).is_file():
+            journal.record(LOG)
+            _write_log(vault, _load_log(vault))
+            logged = True
+    except (Exception, KeyboardInterrupt) as e:
+        stuck = journal.restore()
+        said = str(e) or type(e).__name__
+        if isinstance(e, SettingsUnavailable):
+            said = f"the settings could not be written: {said}"
+        rows.append(f"ERROR\t-\t{said}; " + (
+            f"these could not be put back: {', '.join(stuck)}" if stuck else "the vault is as it was"))
+        rows.append(totals(counts(c, blockers)))
+        return [*c.rows, *rows], 1
+    rows = plan_rows(c, done=True) + [r.replace("WOULD-WRAP\t", "WRAPPED\t", 1) for r in c.rows] + rows
+    rows.append(f"PRUNED\t_meta/publish-list.yaml\t{pruned} accepted finding"
+                f"{'' if pruned == 1 else 's'} the leak check no longer needs")
+    if logged:
+        rows.append(f"LOGGED\t{LOG}\tcreated with its before-tracking entry")
+    rows.append(totals(counts(c, 0)))
+    return rows, 0
+
+
+# --- the command line ------------------------------------------------------------
+
+def _load_decisions(path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise ValueError(f"{path} cannot be read as JSON ({e.__class__.__name__})") from e
+    if not isinstance(data, dict) or data.get("version") != 1:
+        raise ValueError(f"{path} is not a version 1 decisions file")
+    return data
+
+
+def _write_json(path: Path, data: Any) -> None:
+    path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(prog="prop_move.py", description=__doc__.split("\n\n")[0],
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("vault", type=Path)
+    ap.add_argument("mode", choices=("plan", "apply"))
+    ap.add_argument("--decisions", type=Path, metavar="FILE")
+    ap.add_argument("--draft", type=Path, metavar="OUT")
+    ap.add_argument("--json", type=Path, metavar="OUT", dest="json_out")
+    try:
+        args = ap.parse_args(argv)
+    except SystemExit as e:
+        return int(e.code) if isinstance(e.code, int) else 2
+    if not args.vault.is_dir():
+        print(f"prop_move.py: error: {args.vault} is not a folder", file=sys.stderr)
+        return 2
+    if args.mode == "apply" and (args.draft or args.json_out):
+        print("prop_move.py: error: --draft and --json are for plan", file=sys.stderr)
+        return 2
+    try:
+        given = _load_decisions(args.decisions) if args.decisions else None
+    except ValueError as e:
+        print(f"prop_move.py: error: {e}", file=sys.stderr)
+        return 2
+    vault = args.vault.resolve()
+    try:
+        if args.mode == "apply":
+            rows, code = run_apply(vault, given)
+            print("\n".join(rows))
+            return code
+        rows, c, blockers = run_plan(vault, given)
+    except (StepFailed, SettingsUnavailable, PublishToolUnavailable, WriteError) as e:
+        print(f"ERROR\t-\t{e}")
+        return 1
+    assert c is not None
+    n = counts(c, blockers)
+    rows.append(totals(n))
+    print("\n".join(rows))
+    if args.draft:
+        _write_json(args.draft, c.decisions)
+    if args.json_out:
+        _write_json(args.json_out, {"rows": rows[:-1], "counts": n, "decisions": c.decisions})
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -153,14 +153,18 @@ def test_hands_read_from_stylesheet(tmp_path: Path) -> None:
 def test_unreadable_hand_needs_a_person(tmp_path: Path) -> None:
     ghost = LETTER.replace("gull-hand", "ghost-hand")
     odd = LETTER.replace("gull-letter.html", "odd.html").replace("gull-hand", "Odd_One-hand")
-    vault = vault_with(tmp_path, {"Documents/Ghost.md": ghost, "Documents/Odd.md": odd})
+    # An envelope with no hand of its own was written in a hand build_props chose.
+    mail = (LETTER.replace("gull-letter.html", "mail.html").replace("prop_look: hand", "prop_look: terminal")
+            .replace("prop_hand: gull-hand\n", "prop_envelope: ANA\n"))
+    vault = vault_with(tmp_path, {"Documents/Ghost.md": ghost, "Documents/Odd.md": odd, "Documents/Mail.md": mail})
     c = prop_move.convert(vault)
     person = [r for r in c.rows if r.startswith(prop_move.PERSON)]
     assert any("Documents/Ghost.md" in r and "hand ghost" in r and "font-family" in r for r in person)
     assert any("Documents/Odd.md" in r and "Odd_One-hand" in r for r in person)
-    # No hand is registered for either, but both notes still convert.
+    assert any(r.startswith(f"{prop_move.PERSON}\tDocuments/Mail.md\t") and "envelope" in r for r in person)
+    # No hand is registered, but every note still converts.
     assert "_meta/prop-hands.json" not in c.batch.texts
-    assert sorted(c.build_props) == ["Documents/Ghost.md", "Documents/Odd.md"]
+    assert sorted(c.build_props) == ["Documents/Ghost.md", "Documents/Mail.md", "Documents/Odd.md"]
 
 
 # --- hand-made pages and kept folders (15b) -------------------------------------
@@ -240,7 +244,7 @@ GUIDE = """<!DOCTYPE html>
 """
 MAPS = """<!DOCTYPE html>
 <html><head><title>The Maps — The Port Gazetteer</title><link rel="stylesheet" href="gazetteer.css"></head>
-<body><a href="index.html">Back</a><img src="assets/port-map.svg" alt="The Port and its Quays"></body></html>
+<body><a href="index.html">Back</a><img src="assets/port-map.svg" alt="The Port and its Quays — the bar, the customs house and the moorings"></body></html>
 """
 SHELF_INDEX = """<!DOCTYPE html>
 <html><head><title>The Shelf — The Port Gazetteer</title><link rel="stylesheet" href="shelf.css"></head>
@@ -302,7 +306,7 @@ def gazetteer(tmp_path: Path, extra_vault: dict[str, str | bytes] | None = None)
             "  keep:\n    - gazetteer\n"
             "  after_build:\n    - node inject-gazetteer.js\n    - node add-weather.mjs\n"
             "    - node add-extra.mjs\n"),
-        "_meta/publish-list.yaml": "publish:\n  - Documents/Dinner_Menu.md\nexclude: []\nundecided: []\n",
+        "_meta/publish-list.yaml": "publishing:\n  - Documents/Dinner_Menu.md\nexcluded: []\nneeds_decision: []\n",
         **VAULT_PAGE,
         f"{CH4}/index.html": "<html><body><a href='dinner-menu.html'>Keeper shelf</a></body></html>\n",
         f"{CH4}/props.css": ".sheet { color: black; }\n",
@@ -367,7 +371,9 @@ def test_held_page_gets_unlisted_note(tmp_path: Path) -> None:
     assert fm["prop_address"] == "gazetteer/papers/sealed-letter.html"
     # The handout note's title, not the page's.
     assert fm["prop_title"] == "The Sealed Letter"
-    assert "[[Sealed_Letter]]" in c.batch.texts[rel]
+    # Its handout note does not publish, so it is named for the GM only.
+    assert ("<!-- gm-only -->\n\n## GM Notes\n\nThe page that goes with [[Sealed_Letter]].\n\n"
+            "<!-- /gm-only -->\n") in c.batch.texts[rel]
     # Never on the publish list: the handout note publishing must not carry it.
     assert rel not in c.publish
     assert not [p for p in c.publish if "sealed" in p.lower()]
@@ -453,6 +459,7 @@ def test_site_only_pages_become_supplied_props(tmp_path: Path) -> None:
     assert guide["prop_address"] == "gazetteer/guide.html"
     assert guide["prop_title"] == "The Harbour Guide"
     assert guide["prop_group"] == "The Port Gazetteer"
+    # A map is named by its picture's alt text, before any " — ".
     svg = fm_of(c.batch.texts[f"{NOTES}/The Port and its Quays.md"])
     assert svg["prop_kind"] == "supplied" and svg["prop_file"] == "assets/port-map.svg"
     assert svg["prop_address"] == "gazetteer/assets/port-map.svg"
@@ -501,3 +508,167 @@ def test_handout_notes_untouched(tmp_path: Path) -> None:
         assert rel not in c.batch.changed()
         assert rel not in c.publish
         assert (vault / rel).read_bytes() == data
+
+
+# --- plan, apply, roll back (15c) ------------------------------------------------
+
+# `gm-publish props move-check --json` on a site whose live page the vault no
+# longer builds, and on one where every served page is still there (real runs).
+CHECK_BLOCKED = {"rows": [
+    {"kind": "missing", "address": "gazetteer/papers/extra.html", "detail": "not in the new site", "blocker": True},
+    {"kind": "same-words", "address": "gazetteer/papers/menu.html", "detail": "other markup, the same words",
+     "blocker": False}], "blockers": 1, "served": 2, "pages": 2, "same": 1}
+CHECK_PASSED = {"rows": [
+    {"kind": "same-words", "address": "gazetteer/papers/menu.html", "detail": "other markup, the same words",
+     "blocker": False}], "blockers": 0, "served": 1, "pages": 1, "same": 1}
+
+
+def snapshot(root: Path) -> dict[str, bytes]:
+    return {p.relative_to(root).as_posix(): p.read_bytes() for p in sorted(root.rglob("*")) if p.is_file()}
+
+
+def folders(root: Path) -> set[str]:
+    return {p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_dir()}
+
+
+def run_apply(vault: Path, check: dict, *extra: str, calls: list[str] | None = None) -> tuple[int, str]:
+    import contextlib
+    import io
+
+    def fake_check(_config: Path, _decisions: dict) -> dict:
+        if calls is not None:
+            calls.append("check")
+        return check
+    out = io.StringIO()
+    with mock.patch.object(prop_move, "move_check", fake_check), contextlib.redirect_stdout(out):
+        code = prop_move.main([str(vault), "apply", *extra])
+    return code, out.getvalue()
+
+
+def test_plan_writes_nothing(tmp_path: Path) -> None:
+    import contextlib
+    import io
+    vault, site = gazetteer(tmp_path)
+    before_v, before_s = snapshot(vault), snapshot(site)
+    dirs_v, dirs_s = folders(vault), folders(site)
+    draft, report = tmp_path / "draft.json", tmp_path / "plan.json"
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = prop_move.main([str(vault), "plan", "--draft", str(draft), "--json", str(report)])
+    text = out.getvalue()
+    assert code == 0, text
+    assert snapshot(vault) == before_v and snapshot(site) == before_s
+    assert folders(vault) == dirs_v and folders(site) == dirs_s
+    assert f"WOULD-CREATE\t{CH4}/dinner-menu.md\t" in text
+    assert f"WOULD-COPY\t{NOTES}/guide.html\t" in text
+    assert f"WOULD-PUBLISH\t{CH4}/dinner-menu.md\t" in text
+    assert f"WOULD-PUBLISH\t{CH4}/sealed-letter.md" not in text
+    assert "WOULD-SET\tplayer_site.props.cover\t" in text
+    assert "WOULD-RETIRE\tplayer_site.keep\tgazetteer" in text
+    assert "WOULD-RETIRE\tplayer_site.after_build\tnode inject-gazetteer.js" in text
+    # move-check ran on the copy against the live output: the page the
+    # gazetteer step injected is still linked from nowhere (the banner is the
+    # GM's to write), so it is a blocker the plan shows.
+    assert "CHECK\tindex.html\tLINK-LOST" in text
+    assert text.rstrip().splitlines()[-1].startswith("# notes: ")
+    assert json.loads(draft.read_text(encoding="utf-8"))["retire"]["keep"] == ["gazetteer"]
+    assert json.loads(report.read_text(encoding="utf-8"))["counts"]["blockers"] >= 1
+
+
+def test_apply_rolls_back_on_failed_check(tmp_path: Path) -> None:
+    vault, site = gazetteer(tmp_path)
+    before, dirs = snapshot(vault), folders(vault)
+    code, text = run_apply(vault, CHECK_BLOCKED)
+    assert code == 1, text
+    assert "CHECK\tgazetteer/papers/extra.html\tMISSING" in text
+    assert snapshot(vault) == before
+    assert folders(vault) == dirs
+    assert "the vault is as it was" in text
+
+
+def test_apply_publishes_only_live(tmp_path: Path) -> None:
+    vault, site = gazetteer(tmp_path)
+    code, text = run_apply(vault, CHECK_PASSED)
+    assert code == 0, text
+    listed = (vault / "_meta" / "publish-list.yaml").read_text(encoding="utf-8")
+    for rel in (f"{CH4}/dinner-menu.md", f"{CH4}/quay-notice.md", f"{CH3}/hill-letter.md",
+                f"{NOTES}/papers/The Papers.md", f"{NOTES}/The Harbour Guide.md", f"{NOTES}/shelf/Tide Tables.md"):
+        assert rel in listed, rel
+    assert "sealed-letter" not in listed
+    assert (vault / CH4 / "sealed-letter.md").is_file()
+    # The handout note that already published is still the only other entry.
+    assert "Documents/Dinner_Menu.md" in listed and "Sealed_Letter" not in listed
+
+
+def test_apply_retires_only_after_check(tmp_path: Path) -> None:
+    vault, site = gazetteer(tmp_path)
+    calls: list[str] = []
+    real_remove = prop_move.settings_remove
+
+    def remove(v: Path, name: str, entries: list[str]) -> list[str]:
+        calls.append(f"retire {name}")
+        return real_remove(v, name, entries)
+    with mock.patch.object(prop_move, "settings_remove", remove):
+        code, text = run_apply(vault, CHECK_BLOCKED, calls=calls)
+        assert code == 1 and calls == ["check"]
+        calls.clear()
+        code, text = run_apply(vault, CHECK_PASSED, calls=calls)
+    assert code == 0, text
+    assert calls == ["check", "retire player_site.keep", "retire player_site.after_build"]
+    config = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
+    assert "gazetteer" not in config.split("after_build")[0].split("keep")[-1]
+    assert "inject-gazetteer" not in config
+    assert "add-weather.mjs" in config and "add-extra.mjs" in config
+    assert "RETIRED\tplayer_site.keep\tgazetteer" in text
+
+
+def test_unknown_steps_never_retired(tmp_path: Path) -> None:
+    vault, site = gazetteer(tmp_path)
+    decisions = tmp_path / "decisions.json"
+    with mock.patch.object(prop_move, "read_state", read_state_stub):
+        inferred = prop_move.convert(vault, site=site).decisions
+    inferred["retire"]["after_build"] = ["node add-weather.mjs", "node inject-gazetteer.js"]
+    decisions.write_text(json.dumps(inferred), encoding="utf-8")
+    code, text = run_apply(vault, CHECK_PASSED, "--decisions", str(decisions))
+    assert code == 0, text
+    config = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
+    assert "add-weather.mjs" in config and "inject-gazetteer" not in config
+    assert f"{prop_move.PERSON}\tnode add-weather.mjs\t" in text
+
+
+def test_log_created_before_tracking_only(tmp_path: Path) -> None:
+    vault, site = gazetteer(tmp_path)
+    code, text = run_apply(vault, CHECK_PASSED)
+    assert code == 0, text
+    log = json.loads((vault / "_meta" / "reveals.json").read_text(encoding="utf-8"))
+    assert len(log["entries"]) == 1 and log["entries"][0]["before_tracking"] is True
+    assert "session" not in log["entries"][0]
+    # A log that is there is left as it is.
+    vault2, _site2 = gazetteer(tmp_path / "again")
+    kept = '{"entries": [{"session": "Session 3", "published": []}]}\n'
+    (vault2 / "_meta" / "reveals.json").write_text(kept, encoding="utf-8")
+    code, text = run_apply(vault2, CHECK_PASSED)
+    assert code == 0, text
+    assert (vault2 / "_meta" / "reveals.json").read_text(encoding="utf-8") == kept
+
+
+def test_decisions_file_overrides_inference(tmp_path: Path) -> None:
+    vault, site = gazetteer(tmp_path)
+    given = {"version": 1, "notes_folder": {"gazetteer": "Documents/Gazetteer"},
+             "settings": {"player_site.props.title": "Port Papers",
+                          "player_site.landing.banner.title": "The Gazetteer",
+                          "player_site.landing.banner.text": "Open it.",
+                          "player_site.landing.banner.link": "gazetteer/index.html"},
+             "listings": {}, "groups": {"gazetteer": "From the port"}}
+    with mock.patch.object(prop_move, "read_state", read_state_stub):
+        c = prop_move.convert(vault, site=site, given=given)
+    assert c.decisions["notes_folder"] == {"gazetteer": "Documents/Gazetteer"}
+    assert c.decisions["settings"] == given["settings"]
+    guide = fm_of(c.batch.texts["Documents/Gazetteer/The Harbour Guide.md"])
+    assert guide["prop_group"] == "From the port"
+    # No listing: no container, and the papers keep no prop_container; the
+    # hand-made listing page is a supplied page of its own.
+    assert "prop_container: \"[[" not in c.batch.texts[f"{CH4}/dinner-menu.md"]
+    assert fm_of(c.batch.texts["Documents/Gazetteer/papers/The Papers.md"])["prop_kind"] == "supplied"
+    assert "Documents/Gazetteer/papers/index.html" in c.files
+    assert not [r for r in c.rows if "player_site.landing.banner" in r]
