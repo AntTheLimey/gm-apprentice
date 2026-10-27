@@ -1068,3 +1068,20 @@ def test_a_state_item_without_a_page_keeps_its_state_key_when_its_name_is_taken(
     # An item with a page of its own is keyed by its page: "(prop)" is fine there.
     vault2, site2 = gazetteer(tmp_path / "two", {"Items/Tide_Tables.md": "---\ntype: item\n---\nOld.\n"})
     assert f"{NOTES}/shelf/Tide Tables (prop).md" in converted(vault2, site2).batch.texts
+
+
+def test_a_stop_during_another_put_back_does_not_cut_it_short(tmp_path: Path) -> None:
+    import os
+    import signal
+    vault, site = gazetteer(tmp_path)
+    before, dirs = snapshot(vault), folders(vault)
+    real = prop_move.Journal.restore
+
+    def restore(self: prop_move.Journal) -> list[str]:
+        os.kill(os.getpid(), signal.SIGTERM)    # arrives while a blocker's put-back runs
+        return real(self)
+    with mock.patch.object(prop_move.Journal, "restore", restore):
+        code, text = run_apply(vault, CHECK_BLOCKED)
+    assert code == 1, text
+    assert "the vault is as it was" in text
+    assert snapshot(vault) == before and folders(vault) == dirs

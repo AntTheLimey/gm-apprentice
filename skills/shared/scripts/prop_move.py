@@ -1823,6 +1823,9 @@ def run_apply(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], int
             _write_log(vault, _load_log(vault))
             logged = True
     except (Exception, KeyboardInterrupt) as e:
+        # Whatever started the put-back, a stop signal now must not cut it short.
+        for sig in STOP_SIGNALS:
+            signal.signal(sig, signal.SIG_IGN)
         stuck = journal.restore()
         said = str(e) or type(e).__name__
         if isinstance(e, SettingsUnavailable):
