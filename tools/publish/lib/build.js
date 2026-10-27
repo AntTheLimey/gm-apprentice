@@ -164,7 +164,17 @@ function foldedPagePath(linkMap, name) {
   return LOWER_KEYS.get(linkMap).get(foldName(name));
 }
 
-function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {}) {
+// A written address as one key: slashes and dot segments normalised, lower-cased, a folder as its index.html.
+const addressOf = (text) => {
+  const v = text.replace(/\\/g, '/').replace(/[?#][\s\S]*$/, '');
+  const norm = path.posix.normalize(`/${v}`).slice(1);
+  return (v.endsWith('/') || norm === '' ? path.posix.join(norm, 'index.html') : norm).toLowerCase();
+};
+
+// `addresses`: the other files the site serves (each shipping prop's files, the props page), and `kept`, the kept
+// folders, as the build knows them. A link with a / or a page ending is read as an address first: one the site has
+// stands, before any note name is tried for it.
+function resolveSiteLink(link, { linkMap = Object.create(null), pages = [], addresses = [], kept = [] } = {}) {
   const text = String(link == null ? '' : link).trim();
   if (/^https?:\/\//i.test(text)) return { kind: 'outside', href: text };
   if (PASS_SCHEME_RE.test(text)) return { kind: 'outside', href: text };
@@ -178,6 +188,14 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {
   try { decoded = decodeURIComponent(wiki ? wiki[1] : text); } catch (e) { return { kind: 'none', href: null }; }
   const target = canonicalNfc(parseWikilink(decoded).name.replace(/\?[\s\S]*$/, '').trim());
   const parts = pathParts(target);
+  if (!wiki && (/[\\/]/.test(decoded) || /\.html?(?:[?#]|$)/i.test(decoded))) {
+    const at = addressOf(canonicalNfc(decoded.trim()));
+    const known = (a) => addressOf(String(a)) === at;
+    if (Object.values(linkMap).some(known) || addresses.some(known)
+        || kept.some((k) => at.startsWith(addressOf(`${String(k).replace(/[\\/]+$/, '')}/`).slice(0, -'index.html'.length)))) {
+      return { kind: 'site', href: text.replace(/^\.\//, '') };
+    }
+  }
   const name = parts.length ? canonicalNfc(parts.join('/')) : '';
   if (name) {
     const candidates = [name];
@@ -833,6 +851,13 @@ function buildSite(options) {
     cutKeeper: gm ? !show.has('gm_only_blocks') : true, cleanup: writes === 'all' && !gm,
   });
   publishConfig._props = propPlan;
+  // What else the site serves at an address, for the links the GM writes (resolveSiteLink): each shipping prop's
+  // files and the props page, and the kept folders.
+  const siteLinks = {
+    addresses: [...(propPlan ? propPlan.props.filter((p) => p.ships).flatMap((p) => p.files.map((f) => f.out)) : []),
+      ...(collection ? [collection.address] : [])],
+    kept: keptDirs,
+  };
   for (const r of propPlan ? propPlan.problems : []) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);
 
   // A GM alias must never reach the site (#212): rewrite every one to the
@@ -1340,7 +1365,7 @@ function buildSite(options) {
   // texts the note audit reads.
   const menuExtra = [];
   for (const item of publishConfig.menu_extra || []) {
-    const read = resolveSiteLink(item.link, { linkMap, pages });
+    const read = resolveSiteLink(item.link, { linkMap, pages, ...siteLinks });
     if (read.kind === 'none') {
       console.warn(`  WARNING: ${nm('player_site.menu_extra')} entry "${item.label}" links to "${item.link}", which is a note the site makes no page of, or an address the site cannot link to — it is left out of the menu`);
       continue;
@@ -2013,7 +2038,7 @@ function buildSite(options) {
       banner.image = imageFull ? (writes !== 'all' ? `images/banners/landing/${path.basename(imageFull)}` : copyBannerAsset(imageFull, 'landing')) : null;
     }
     if (banner.link) {
-      const read = resolveSiteLink(banner.link, { linkMap, pages });
+      const read = resolveSiteLink(banner.link, { linkMap, pages, ...siteLinks });
       if (read.kind === 'none') {
         console.warn(`  WARNING: ${nm('player_site.landing.banner.link')} is "${banner.link}", which is a note the site makes no page of, or an address the site cannot link to — the banner is not a link`);
         banner.link = null;

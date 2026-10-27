@@ -479,3 +479,18 @@ test('rule 6: the menu with no extra entries is the text a build made before the
   const out = generateNav([{ outputDir: 'world', outputPath: 'world/a.html', title: 'A', frontmatter: {} }], {})('index.html', { siteTitle: 'T' });
   assert.equal(require('node:crypto').createHash('sha256').update(out).digest('hex'), '0ef48ab93aae1b22c8ccd09aaa8dd07e7e224e900f145700a29b061940e87bdb');
 });
+
+test('Ruling 40: an address the site serves stands before any note name, a folder link as its index.html', () => {
+  const map = Object.assign(Object.create(null), { Harbour: 'locations/harbour.html', index: 'documents/index-note.html' });
+  rememberHiddenNames(map, [{ vaultPath: '_midwife/index', displayTitle: 'index', frontmatter: {} },
+    { vaultPath: 'Hidden/Old_Tam', displayTitle: 'Old Tam', frontmatter: {} }]);
+  const served = { linkMap: map, pages, addresses: ['gazetteer/index.html', 'gazetteer/maps.svg'], kept: ['archive'] };
+  for (const link of ['gazetteer/index.html', 'gazetteer/', './gazetteer/index.html#top', 'Gazetteer/Index.html', 'archive/old-tam.html']) {
+    assert.deepEqual(resolveSiteLink(link, served), { kind: 'site', href: link.replace(/^\.\//, '') }, link);
+  }
+  // Not a site address: the note named index is not taken for it, and a hidden name still drops it.
+  assert.equal(resolveSiteLink('elsewhere/old-tam.html', served).kind, 'none');
+  assert.equal(resolveSiteLink('archived/old-tam.html', served).kind, 'none');
+  // A note's name with its folder is still that note's page.
+  assert.deepEqual(resolveSiteLink('Locations/Harbour', served), { kind: 'page', href: 'locations/harbour.html' });
+});
