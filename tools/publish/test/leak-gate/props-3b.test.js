@@ -304,3 +304,31 @@ describe('leak gate: a short title of an unpublished prop in a kept folder (Ruli
     assert.deepEqual(gate(s).findings, []);
   }, SHELF(), { player: { keep: ['gazetteer'] } }));
 });
+
+// Ruling 41: words a vault style's layout writes are build-written text players see on every page of that style.
+describe('leak gate: the words a style\'s layout writes', () => {
+  const CREDITS = 'Print with background graphics ticked so each sheet is one page.';
+  const LAYOUT_STYLE = {
+    '_meta/prop-styles/t/layout.html': `<h1>{{title}}</h1>{{{body}}}<p class="credits">${CREDITS}</p>`,
+    '_meta/prop-styles/t/style.css': '.credits { color: grey; }\n',
+  };
+  const HELD = (gm) => ({ 'Documents/Held.md': `---\ntype: document\n---\nA paper.\n\n## GM Notes\n\n${gm}\n` });
+  const SITE = (gm) => ({ ...LAYOUT_STYLE, 'Documents/Letter.md': LETTER(), ...HELD(gm), ...LIST(['Documents/Letter.md']) });
+
+  it('a hidden sentence the layout also writes is no finding', () => within((s) => {
+    assert.match(fs.readFileSync(path.join(s.outputDir, 'props', 'letter.html'), 'utf8'), /each sheet is one page/);
+    assert.deepEqual(gate(s).findings, []);
+  }, SITE(CREDITS)));
+
+  it('a hidden sentence the layout does not write is still a finding on that page', () => within((s) => {
+    const other = 'Print the ledger on red paper so the forgery shows.';
+    leakBeforeBody(s, 'props/letter.html', other);
+    assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'props/letter.html', note: 'Documents/Held.md' }]);
+  }, SITE('Print the ledger on red paper so the forgery shows.')));
+
+  it('a style no shipping prop uses excuses nothing', () => within((s) => {
+    leakBeforeBody(s, 'props/letter.html', CREDITS);
+    assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'props/letter.html', note: 'Documents/Held.md' }]);
+  }, { ...STYLE, '_meta/prop-styles/u/layout.html': LAYOUT_STYLE['_meta/prop-styles/t/layout.html'],
+    '_meta/prop-styles/u/style.css': '.credits { color: grey; }\n', 'Documents/Letter.md': LETTER(), ...HELD(CREDITS), ...LIST(['Documents/Letter.md']) }));
+});

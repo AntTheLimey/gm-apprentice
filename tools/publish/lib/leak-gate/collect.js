@@ -233,6 +233,7 @@ function collectHidden({ configPath, outputDir = null }) {
   // The titles of 2 words or more of unpublished props that are not withheld (a withheld one is a secret name already):
   // looked for whole, as written, in the kept folders (index.js), where an old listing can outlive the build.
   const heldTitles = [];
+  const usedStyles = new Map();
   for (const p of props) {
     // A prop whose note the site does not publish: the title a listing would print for it is hidden text (an old props
     // page naming it). Allowed only where a container lists it sealed (sealedOn, below). Not one in the plugin's working
@@ -255,6 +256,7 @@ function collectHidden({ configPath, outputDir = null }) {
         || Boolean(outputDir && p.address && pathProblem(outputDir, p.address));
       if (p.ships && p.address && p.made && !unmade) {
         madeFiles.add(canonicalNfc(p.address));
+        if (p.style) usedStyles.set(p.style.name, p.style);
         if (!propOuts.has(p.rel)) propOuts.set(p.rel, []);
         propOuts.get(p.rel).push(p.address);
         madeState(p);
@@ -292,6 +294,14 @@ function collectHidden({ configPath, outputDir = null }) {
     try { bytes = fs.readFileSync(p.source); } catch (e) { throw new Error(`Leak check: the prop file of ${p.rel} could not be read (${e.message}), so its text cannot be checked. Fix the file and deploy again.`); }
     if (TEXT_EXT.has(path.extname(p.source).toLowerCase())) add(piecesOfHtml(textOf(bytes).text), p.rel, `unpublished prop: ${why}`);
     heldProps.push({ rel: p.rel, address: p.address, hash: p.hash, size: bytes.length });
+  }
+
+  // The words a style's layout (and its sheet) writes around every page made with it are the build's own, on the site
+  // for players: already visible, as a published page's words are. Only a style a page on this site is made with.
+  for (const style of usedStyles.values()) {
+    for (const template of [style.layout, style.sheet]) {
+      visible.push(...piecesOfHtml(String(template || '').replace(/\{\{\{?[^{}]*\}?\}\}/g, '\n')));
+    }
   }
 
   // Where a container lists an item the players have not found by its title alone: that title's words, on that
