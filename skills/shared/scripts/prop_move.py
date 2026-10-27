@@ -1510,12 +1510,13 @@ MISSING_STYLE = "a listing style that is not there"
 
 def missing_styles(c: Conversion) -> None:
     """A NEEDS-A-PERSON row for each listing style the decisions name that is
-    neither the vault's (`_meta/prop-styles/<name>/`) nor the plugin's: the
+    neither the vault's (`_meta/prop-styles/<name>/layout.html`) nor the
+    plugin's (a folder with no layout is no style): the
     build would make no page there, and the check would only say the page is
     gone. The move is not built or checked while one is missing."""
     for address, choice in sorted((c.decisions.get("listings") or {}).items()):
         style = str((choice or {}).get("style") or "").strip()
-        if not style or (c.vault / VAULT_STYLES / style).is_dir() or (PLUGIN_STYLES / style).is_dir():
+        if not style or any((root / style / "layout.html").is_file() for root in (c.vault / VAULT_STYLES, PLUGIN_STYLES)):
             continue
         c.row(PERSON, f"listings.{address}.style", f'no style "{style}" in {VAULT_STYLES}/ or the plugin '
               f"({PLUGIN_STYLES}); copy the style's folder into {VAULT_STYLES}/, or name another style")

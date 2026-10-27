@@ -1113,6 +1113,9 @@ def test_a_missing_listing_style_is_a_person_row_before_any_build(tmp_path: Path
            f'no style "port-papers" in _meta/prop-styles/ or the plugin')
     assert any(r.startswith(row) for r in c.rows), c.rows
     assert c.missing_styles == ["port-papers"]
+    # A folder with no layout in it is still no style.
+    write_tree(vault, {"_meta/prop-styles/port-papers/style.css": "main { margin: 0; }\n"})
+    assert converted(vault, site, given).missing_styles == ["port-papers"]
     # In the vault it is no row.
     write_tree(vault, {"_meta/prop-styles/port-papers/layout.html": "<main>{{{items}}}</main>\n"})
     assert converted(vault, site, given).missing_styles == []
@@ -1301,3 +1304,23 @@ def test_settle_names_what_it_changed_when_it_stops_partway(tmp_path: Path) -> N
         raise AssertionError("settle went through")
     assert said.startswith(f"{rels[2]} was not settled (")
     assert said.endswith(f"settled before it: {rels[0]}, {rels[1]}"), said
+
+
+def test_real_compare_output_reaches_the_plan_summary(tmp_path: Path) -> None:
+    # The tool's own LISTING-REORDERED row, read as the move reads move-check's answer, is counted in the summary.
+    shelf = lambda links: ("<!doctype html><html><head><title>T</title></head><body><ul>"
+                           + "".join(f'<li><a href="papers/{x}.html">{x}</a></li>' for x in links) + "</ul></body></html>")
+    papers = {f"gazetteer/papers/{x}.html": f"<html><body><p>{x}</p></body></html>" for x in ("menu", "bill", "card")}
+    write_tree(tmp_path / "old", {"gazetteer/index.html": shelf(["menu", "bill", "card"]), **papers})
+    write_tree(tmp_path / "new", {"gazetteer/index.html": shelf(["card", "menu", "bill"]), **papers})
+    done = subprocess.run(["node", str(TOOL / "bin" / "gm-publish.js"), "props", "compare", "--old", str(tmp_path / "old"),
+                           "--new", str(tmp_path / "new"), "--serves", "gazetteer/", "--listing", "gazetteer/", "--json"],
+                          capture_output=True, text=True)
+    assert done.returncode == 0, done.stdout + done.stderr
+    data = json.loads(done.stdout)
+    rows = prop_move.check_rows(data)
+    assert "CHECK\tgazetteer/index.html\tLISTING-REORDERED: 3 links kept, in another order: 1 moved" in "\n".join(rows)
+    vault, site = gazetteer(tmp_path / "v")
+    n = prop_move.counts(converted(vault, site), data["blockers"], rows)
+    assert n["reordered"] == 1 and n["blockers"] == 0
+    assert prop_move.totals(n).endswith("listings reordered: 1 blockers: 0")
