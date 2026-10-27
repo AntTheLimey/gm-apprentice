@@ -378,6 +378,23 @@ describe('a prop as the cover', () => {
   });
 });
 
+describe('the newest-props heading', () => {
+  const COIN = { 'Documents/Coin.md': '---\ntype: prop\n---\nA coin.\n' };
+  const index = (title) => {
+    const s = buildBoth(COIN, { sites: ['player'], player: { landing: { latest_props: 3, ...(title === undefined ? {} : { latest_props_title: title }) } } });
+    try { return s.player.read('index.html'); } finally { s.cleanup(); }
+  };
+
+  it('the newest-props heading can be set', () => {
+    assert.match(index('Latest Messages & More'), /<h2><a href="props\/index\.html">Latest Messages &amp; More<\/a><\/h2>/);
+  });
+
+  it('an empty heading setting keeps "Latest from"', () => {
+    assert.match(index(''), /<h2><a href="props\/index\.html">Latest from Props<\/a><\/h2>/);
+    assert.match(index(), /<h2><a href="props\/index\.html">Latest from Props<\/a><\/h2>/);
+  });
+});
+
 describe('chapters that do not group', () => {
   const s = buildBoth({
     'Documents/Hidden Ref.md': '---\ntype: prop\nchapter: "[[Chapter Hidden]]"\n---\nA.\n',

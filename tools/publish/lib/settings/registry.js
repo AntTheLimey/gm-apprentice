@@ -552,6 +552,11 @@ const REGISTRY = [
     does: 'How many of the newest props the landing page shows in a box, with a link to all of them; 0 shows none',
     left_out: '`0`',
   },
+  {
+    name: 'player_site.landing.latest_props_title', type: 'text', group: 'props',
+    does: "The heading of the landing page's newest-props box. Empty: \"Latest from <props page title>\"",
+    left_out: '`Latest from` and the props page title',
+  },
 
   // Limits
   { name: 'player_site.limits', type: 'map', container: true },

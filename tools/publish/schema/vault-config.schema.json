@@ -1062,6 +1062,14 @@
                   "type": "null"
                 }
               ]
+            },
+            "latest_props_title": {
+              "description": "The heading of the landing page's newest-props box. Empty: \"Latest from <props page title>\"",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
             }
           }
         },
@@ -2130,6 +2138,14 @@
                 {
                   "type": "null"
                 }
+              ]
+            },
+            "latest_props_title": {
+              "description": "The heading of the landing page's newest-props box. Empty: \"Latest from <props page title>\"",
+              "type": [
+                "string",
+                "number",
+                "null"
               ]
             }
           }

@@ -302,7 +302,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   if (latestProps && latestProps.rows.length > 0) {
     const all = escapeHtml(encodeHref(latestProps.href));
     propsZone = [
-      `<section class="dashboard-section props-latest"><h2><a href="${all}">Latest from ${escapeHtml(latestProps.title)}</a></h2>`,
+      `<section class="dashboard-section props-latest"><h2><a href="${all}">${escapeHtml(latestProps.heading || `Latest from ${latestProps.title}`)}</a></h2>`,
       propListHtml(latestProps.rows, outputPath, { flat: true }),
       `<p><a href="${all}">${latestProps.total === 1 ? '1 prop so far' : `All ${latestProps.total} props`}</a></p></section>`,
     ].join('\n');

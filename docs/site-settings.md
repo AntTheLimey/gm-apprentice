@@ -432,6 +432,7 @@ props". The landing page can show the newest few in a box.
 | `player_site.props.cover` | A picture at the top of the page, or a prop (as a [[link]]) shown there as a link to it, and left out of the page's lists. A file that is missing from the vault, or outside it, or a prop the site does not publish with a page, is reported and the page shows without it | A picture's path in the vault, a web address, or a [[prop note]] | No picture |
 | `player_site.props.intro` | A paragraph under the title. Plain text, shown as written | Text | No paragraph |
 | `player_site.landing.latest_props` | How many of the newest props the landing page shows in a box, with a link to all of them; 0 shows none | A whole number, 0 or more | `0` |
+| `player_site.landing.latest_props_title` | The heading of the landing page's newest-props box. Empty: "Latest from <props page title>" | Text | `Latest from` and the props page title |
 
 <!-- /settings:props -->
 

@@ -218,6 +218,9 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   const latestProps = merged.landing.latest_props;
   delete merged.landing.latest_props;
   Object.defineProperty(merged.landing, 'latest_props', { value: Number.isInteger(latestProps) ? latestProps : 0, enumerable: false });
+  const latestTitle = merged.landing.latest_props_title;
+  delete merged.landing.latest_props_title;
+  Object.defineProperty(merged.landing, 'latest_props_title', { value: bannerText(latestTitle), enumerable: false });
 
   // The numbers, the header facts and the withheld words the build used to fix in code. Not listed, like
   // `menu_extra`: a site that sets none builds as it did. Each is passed down to the code that uses it.

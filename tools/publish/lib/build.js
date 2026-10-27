@@ -2038,7 +2038,7 @@ function buildSite(options) {
     }
     const latest = collection.latest > 0 ? latestProps(collectionBuilt, collection.latest) : [];
     publishConfig._propsLatest = latest.length
-      ? { title: collectionBuilt.title, href: collectionBuilt.address, rows: latest, total: shownRows(collectionBuilt).length }
+      ? { title: collectionBuilt.title, heading: collection.latestTitle, href: collectionBuilt.address, rows: latest, total: shownRows(collectionBuilt).length }
       : null;
   }
 

@@ -243,6 +243,7 @@ function collectionSettingsOf(settingsLike) {
     coverNote: coverNote || null,
     intro: text(s.intro),
     latest: Number.isInteger(latest) && latest > 0 ? latest : 0,
+    latestTitle: text(settingsLike && settingsLike.landing ? settingsLike.landing.latest_props_title : null),
   };
 }
 
