@@ -169,6 +169,7 @@ def test_unreadable_hand_needs_a_person(tmp_path: Path) -> None:
 
 # --- hand-made pages and kept folders (15b) -------------------------------------
 
+import shutil  # noqa: E402
 import subprocess  # noqa: E402
 from unittest import mock  # noqa: E402
 
@@ -264,7 +265,10 @@ STATE_JS = """window.SHELF = {
 STATE_ANSWER = {"global": "SHELF", "items": {
     "tide-tables": {"title": "Tide Tables", "line": "A damp almanac of the bar.", "href": "tide-tables.html",
                     "status": "open", "cover": "assets/tide.jpg", "marks": [{"name": "spring", "state": "sealed"}]},
-    "moon-almanac": {"title": "Moon Almanac", "line": "Locked in its case.", "status": "shelved", "cover": None}}}
+    "moon-almanac": {"title": "Moon Almanac", "line": "Locked in its case.", "status": "shelved", "cover": None}},
+    "tool_fields": ["prop_address", "prop_breaks", "prop_container", "prop_file", "prop_font", "prop_group", "prop_hand",
+                    "prop_kind", "prop_line", "prop_shift", "prop_state", "prop_state_global", "prop_style", "prop_title",
+                    "show_sealed"]}
 DINNER_NOTE = """---
 name: "The Collector's Dinner Menu"
 type: document
@@ -549,9 +553,12 @@ def run_apply(vault: Path, check: dict, *extra: str, calls: list[str] | None = N
     import contextlib
     import io
 
-    def fake_check(_config: Path, _decisions: dict) -> dict:
+    def fake_check(config: Path, _decisions: dict, keep: Path | None = None) -> dict:
         if calls is not None:
             calls.append("check")
+        # The build move-check keeps: the live output as the vault would make it (the state file as it was).
+        if keep is not None:
+            shutil.copytree(config.parent / "docs", keep)
         return check
     out = io.StringIO()
     with mock.patch.object(prop_move, "move_check", fake_check), contextlib.redirect_stdout(out):
@@ -586,6 +593,8 @@ def test_plan_writes_nothing(tmp_path: Path) -> None:
     # gazetteer step injected is still linked from nowhere (the banner is the
     # GM's to write), so it is a blocker the plan shows.
     assert "CHECK\tindex.html\tLINK-LOST" in text
+    # The state file the build makes holds every entry and value of the live one (read back by the tool).
+    assert "STATE-DIFFERS" not in text, text
     assert text.rstrip().splitlines()[-1].startswith("# notes: ")
     assert json.loads(draft.read_text(encoding="utf-8"))["retire"]["keep"] == ["gazetteer"]
     assert json.loads(report.read_text(encoding="utf-8"))["counts"]["blockers"] >= 1
@@ -839,3 +848,114 @@ def test_a_font_link_only_the_live_page_has_is_kept() -> None:
     # A local line only the live page has stays out: the vault's own files are the page's.
     local = live.replace("https://fonts.example.com/css?family=New+Hand", "papers.css")
     assert prop_move.merge_delivered(vault, local)[0] == vault
+
+
+# --- fix wave: Rulings 35-44 --------------------------------------------------------
+
+def test_state_field_the_tool_reads_needs_a_person(tmp_path: Path) -> None:
+    vault, site = gazetteer(tmp_path)
+    answer = json.loads(json.dumps(STATE_ANSWER))
+    answer["items"]["tide-tables"].update({"group": "Poetry", "kind": "folio", "state": "wet"})
+    with mock.patch.object(prop_move, "read_state", lambda p: answer if p.name == "state.js" else None):
+        c = prop_move.convert(vault, site=site)
+    text = c.batch.texts[f"{NOTES}/shelf/Tide Tables.md"]
+    fm = fm_of(text)
+    # Not written: the tool reads these itself and would never give them back to the shelf's script.
+    assert fm["prop_kind"] == "document" and not fm.get("prop_group") and not fm.get("prop_state")
+    assert "Poetry" not in text and "folio" not in text and "wet" not in text
+    assert fm["prop_status"] == "open"
+    person = [r for r in c.rows if r.startswith(prop_move.PERSON)]
+    for k in ("group", "kind", "state"):
+        assert any(f"tide-tables: field {k!r}" in r and "the publish tool reads" in r for r in person), (k, person)
+    # An answer from a tool too old to name its fields is a failure, not a guess.
+    old = {k: v for k, v in STATE_ANSWER.items() if k != "tool_fields"}
+    with mock.patch.object(prop_move, "read_state", lambda p: old if p.name == "state.js" else None):
+        try:
+            prop_move.convert(vault, site=site)
+        except prop_move.StepFailed as e:
+            assert "older" in str(e)
+        else:
+            raise AssertionError("no failure")
+
+
+def test_state_files_compared(tmp_path: Path) -> None:
+    live = tmp_path / "live"
+    build = tmp_path / "build"
+    write_tree(live, {"g/shelf/state.js": STATE_JS})
+    same = STATE_JS.replace("'moon-almanac': {", "'moon-almanac': { sealed: false,").replace(
+        "  'tide-tables': {", "  'tide-tables': { sealed: false,")
+    write_tree(build, {"g/shelf/state.js": same})
+    c = prop_move.new_conversion(tmp_path)
+    c.live_root = live
+    c.states = ["g/shelf/state.js"]
+    # Order, and the tool's own sealed: false, are no difference; nor a null field left out.
+    assert prop_move.state_rows(c, build) == []
+    write_tree(build, {"g/shelf/state.js": same.replace(", cover: null", "")})
+    assert prop_move.state_rows(c, build) == []
+    write_tree(build, {"g/shelf/state.js": same.replace("status: 'open'", "status: 'shut'")
+                       .replace("cover: null", "cover: 'x.jpg'").replace("'Moon Almanac'", "'Moon Book'")})
+    rows = prop_move.state_rows(c, build)
+    assert len(rows) == 1 and rows[0].startswith("CHECK\tg/shelf/state.js\tSTATE-DIFFERS: "), rows
+    assert "tide-tables.status" in rows[0] and "moon-almanac.cover" in rows[0] and "moon-almanac.title" in rows[0]
+    write_tree(build, {"g/shelf/state.js": "window.SHELF = { 'tide-tables': { title: 'Tide Tables' } };\n"})
+    rows = prop_move.state_rows(c, build)
+    assert "moon-almanac gone" in rows[0] and "tide-tables.marks gone" in rows[0], rows
+    (build / "g/shelf/state.js").unlink()
+    assert "no state file" in prop_move.state_rows(c, build)[0]
+
+
+def test_apply_blocks_when_the_state_file_differs(tmp_path: Path) -> None:
+    vault, site = gazetteer(tmp_path)
+    before = snapshot(vault)
+    real = prop_move.move_check
+
+    def changed(config: Path, decisions: dict, keep: Path | None = None) -> dict:
+        assert keep is not None
+        shutil.copytree(config.parent / "docs", keep)
+        state = keep / "gazetteer" / "shelf" / "state.js"
+        state.write_text(state.read_text(encoding="utf-8").replace("'open'", "'shut'"), encoding="utf-8")
+        return CHECK_PASSED
+    import contextlib
+    import io
+    out = io.StringIO()
+    with mock.patch.object(prop_move, "move_check", changed), contextlib.redirect_stdout(out):
+        code = prop_move.main([str(vault), "apply"])
+    assert prop_move.move_check is real
+    text = out.getvalue()
+    assert code == 1, text
+    assert "CHECK\tgazetteer/shelf/state.js\tSTATE-DIFFERS: tide-tables.status" in text
+    assert "the vault is as it was" in text and snapshot(vault) == before
+
+
+def test_prune_keeps_what_the_checked_build_needs(tmp_path: Path) -> None:
+    vault, site = gazetteer(tmp_path)
+    seen: list[list[str]] = []
+    real = prop_move.plugin_tool
+
+    def tool(args: list[str]) -> tuple[int, str, str]:
+        if args[:2] == ["leaks", "prune"]:
+            seen.append(list(args))
+            keep = Path(args[args.index("--also") + 1])
+            assert (keep / "gazetteer" / "shelf" / "state.js").is_file(), "the checked build is still there"
+        return real(args)
+    with mock.patch.object(prop_move, "plugin_tool", tool):
+        code, text = run_apply(vault, CHECK_PASSED)
+    assert code == 0, text
+    assert len(seen) == 1 and "--also" in seen[0]
+    # The checked build is removed afterwards.
+    assert not Path(seen[0][seen[0].index("--also") + 1]).exists()
+
+
+def test_plan_round_trip_blocks_a_state_field_the_tool_reads(tmp_path: Path) -> None:
+    import contextlib
+    import io
+    vault, site = gazetteer(tmp_path)
+    state = site / "docs" / "gazetteer" / "shelf" / "state.js"
+    state.write_text(STATE_JS.replace("status: 'open',", "status: 'open', group: 'Poetry',"), encoding="utf-8")
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert prop_move.main([str(vault), "plan"]) == 0
+    text = out.getvalue()
+    assert f"{prop_move.PERSON}\t{NOTES}/shelf/The Shelf.md\ttide-tables: field 'group' not carried over" in text, text
+    # Built and read back, the made state file lacks it: a blocker, not a quiet loss.
+    assert "CHECK\tgazetteer/shelf/state.js\tSTATE-DIFFERS: tide-tables.group gone" in text, text

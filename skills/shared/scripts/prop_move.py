@@ -250,6 +250,7 @@ class Conversion:
     decisions: dict[str, Any] = field(default_factory=dict)
     inferred_settings: dict[str, Any] = field(default_factory=dict)
     taken: set[str] = field(default_factory=set)            # note names made now
+    states: list[str] = field(default_factory=list)          # the live state files the made ones replace
     live_root: Path | None = None
 
     def row(self, verb: str, where: str, detail: str = "") -> None:
@@ -1206,6 +1207,11 @@ def _state_container(c: Conversion, root: Path, index: str, script: str, state: 
                         ("prop_address", quoted(index)), ("show_sealed", "none"),
                         ("prop_group", quoted(groups.get(k, "")))])
     c.publish.append(rel)
+    c.states.append(script)
+    # The fields the publish tool reads off a prop itself, which a state file never gives back to an item (its answer).
+    reads = state.get("tool_fields")
+    if not isinstance(reads, list):
+        raise StepFailed("props read-state does not name the fields the tool reads; the publish tool is older than this script")
     for key, entry in state["items"].items():
         name = str(entry["title"])
         href = entry.get("href")
@@ -1225,6 +1231,11 @@ def _state_container(c: Conversion, root: Path, index: str, script: str, state: 
             yaml = field_value(value)
             if yaml is None or not re.fullmatch(r"[A-Za-z0-9_]+", k2):
                 c.row(PERSON, rel, f"{key}: field {k2!r} not carried over")
+                continue
+            if f"prop_{k2}" in reads:
+                c.row(PERSON, rel, f"{key}: field {k2!r} not carried over: the publish tool reads prop_{k2} "
+                      f"itself and never gives it back to the shelf's script (rename it in the script and the "
+                      f"state file, then carry it over by hand)")
                 continue
             fields.append((f"prop_{k2}", yaml))
             # A picture the entry names comes into the vault beside its page.
@@ -1439,10 +1450,13 @@ def write_conversion(c: Conversion, journal: Journal) -> None:
         journal.write(rel, c.files[rel])
 
 
-def move_check(config: Path, decisions: dict[str, Any]) -> dict[str, Any]:
+def move_check(config: Path, decisions: dict[str, Any], keep: Path | None = None) -> dict[str, Any]:
     """`gm-publish props move-check` on the site at `config`: {rows, blockers}.
-    Raises StepFailed when the tool gives no answer."""
+    `keep`: a new folder the check's build is left in. Raises StepFailed
+    when the tool gives no answer."""
     args = ["props", "move-check", "--config", str(config), "--json"]
+    if keep is not None:
+        args += ["--keep-build", str(keep)]
     for prefix in decisions.get("serves") or []:
         args += ["--serves", str(prefix)]
     for address in decisions.get("listings") or {}:
@@ -1459,6 +1473,50 @@ def move_check(config: Path, decisions: dict[str, Any]) -> dict[str, Any]:
         said = [ln.strip() for ln in err.splitlines() if ln.strip().startswith("Error:")]
         raise StepFailed(f"move-check gave no answer: {said[-1] if said else 'no reason given'}")
     return data
+
+
+def _state_differences(old: dict[str, Any], new: dict[str, Any]) -> list[str]:
+    """What the made state file changes of the live one: an entry or a field
+    gone, added or with another value. Order is no difference, nor the
+    tool's own `sealed: false` and an `href` it adds, nor a null field the
+    made file leaves out (the tool writes no empty value; a script reads
+    both as nothing)."""
+    out = []
+    if old.get("global") != new.get("global"):
+        out.append(f"window.{old.get('global')} is now window.{new.get('global')}")
+    a, b = old.get("items") or {}, new.get("items") or {}
+    out += [f"{k} gone" for k in a if k not in b] + [f"{k} added" for k in b if k not in a]
+    for k in (k for k in a if k in b):
+        x, y = a[k], b[k]
+        if not (isinstance(x, dict) and isinstance(y, dict)):
+            if x != y:
+                out.append(f"{k} changed")
+            continue
+        out += [f"{k}.{f} gone" if f not in y else f"{k}.{f} changed" for f in x
+                if y.get(f, object()) != x[f] and not (x[f] is None and f not in y)]
+        out += [f"{k}.{f} added" for f in y if f not in x
+                and not (f == "sealed" and y[f] is False) and f != "href"]
+    return out
+
+
+def state_rows(c: Conversion, build: Path) -> list[str]:
+    """A CHECK row (a blocker) for each live state file the made one does not
+    match entry for entry and value for value, both read by `props read-state`."""
+    rows = []
+    for address in c.states:
+        old = read_state(c.live_root / address) if c.live_root else None
+        new = read_state(build / address)
+        if old is None:
+            continue
+        if new is None:
+            said = ["the new build has no state file the tool can read here"]
+        else:
+            said = _state_differences(old, new)
+        if said:
+            more = f" and {len(said) - 8} more" if len(said) > 8 else ""
+            rows.append(f"CHECK\t{address}\tSTATE-DIFFERS: {', '.join(said[:8])}{more}; "
+                        f"the shelf's script would read other values")
+    return rows
 
 
 def check_rows(data: dict[str, Any]) -> list[str]:
@@ -1608,10 +1666,11 @@ def run_plan(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], Conv
         _publish(copy, c.publish)
         if _settings(c):
             _set_settings(copy, _settings(c))
-        data = move_check(stand_in / "vault.config.json", c.decisions)
+        data = move_check(stand_in / "vault.config.json", c.decisions, tmp / "build")
         leaks = new_leaks(data, before)
-        rows += check_rows(data) + leaks
-        blockers = data["blockers"] + len(leaks)
+        states = state_rows(c, tmp / "build")
+        rows += check_rows(data) + leaks + states
+        blockers = data["blockers"] + len(leaks) + len(states)
         return rows, c, blockers
     finally:
         forget_settings(copy)
@@ -1634,6 +1693,8 @@ def run_apply(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], int
     journal = Journal(vault)
     rows: list[str] = []
     blockers = 0
+    # The build move-check makes, kept until the end: its state files are compared, and an accept it still needs stays.
+    checked = Path(tempfile.mkdtemp(prefix="prop-move-check-"))
     try:
         before = leak_findings(config)
         journal.watch_meta()
@@ -1641,10 +1702,11 @@ def run_apply(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], int
         _publish(vault, c.publish)
         if _settings(c):
             _set_settings(vault, _settings(c))
-        data = move_check(config, c.decisions)
+        data = move_check(config, c.decisions, checked / "build")
         leaks = new_leaks(data, before)
-        rows += check_rows(data) + leaks
-        blockers = data["blockers"] + len(leaks)
+        states = state_rows(c, checked / "build")
+        rows += check_rows(data) + leaks + states
+        blockers = data["blockers"] + len(leaks) + len(states)
         if blockers:
             raise Blocked(f"move-check found {blockers} blocker{'' if blockers == 1 else 's'}")
         retire = c.decisions.get("retire") or {}
@@ -1652,7 +1714,7 @@ def run_apply(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], int
             settings_remove(vault, KEEP, list(retire["keep"]))
         if retire.get("after_build"):
             settings_remove(vault, AFTER_BUILD, list(retire["after_build"]))
-        code, out, err = plugin_tool(["leaks", "prune", "--config", str(config), "--json"])
+        code, out, err = plugin_tool(["leaks", "prune", "--config", str(config), "--also", str(checked / "build"), "--json"])
         try:
             pruned = json.loads(out).get("pruned") if code == 0 else None
         except (ValueError, AttributeError):
@@ -1674,6 +1736,8 @@ def run_apply(vault: Path, given: dict[str, Any] | None) -> tuple[list[str], int
             f"these could not be put back: {', '.join(stuck)}" if stuck else "the vault is as it was"))
         rows.append(totals(counts(c, blockers)))
         return [*c.rows, *rows], 1
+    finally:
+        shutil.rmtree(checked, ignore_errors=True)
     rows = plan_rows(c, done=True) + [r.replace("WOULD-WRAP\t", "WRAPPED\t", 1) for r in c.rows] + rows
     rows.append(f"PRUNED\t_meta/publish-list.yaml\t{pruned} accepted finding"
                 f"{'' if pruned == 1 else 's'} the leak check no longer needs")
