@@ -235,7 +235,9 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
   const markup = (ext) => MARKUP_EXTS.has(ext);
   // `stateOuts`: the addresses of the containers' state files (planState), which the build makes: a link from any
   // prop's page to one is that made file, not a file to copy (a container's items often load their shelf's state).
-  function planFiles(p, files, problem, claimed, stateOuts = new Set()) {
+  // `outside`: when given, a link outside the prop's folder is held there, not reported, until every shipping prop's
+  // files are planned (another prop may ship that very file at that address).
+  function planFiles(p, files, problem, claimed, stateOuts = new Set(), outside = null) {
     const first = { source: p.source, out: p.address, cut: Boolean(cutKeeper) && markup(p._ext) };
     BYTES.set(first, p._bytes);
     files.push(first);
@@ -260,7 +262,14 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
       for (const { raw, path: ref } of refs) {
         if (stateOuts.size && stateOuts.has(addressKey(canonicalNfc(path.posix.join(path.posix.dirname(p.address), at || '.', ref))))) continue;
         const joined = segmentsBelow(path.posix.join(at || '.', ref));
-        if (!joined) { linkProblem(raw, 'is outside its folder'); continue; }
+        if (!joined) {
+          const report = () => linkProblem(raw, 'is outside its folder');
+          const out = path.posix.normalize(path.posix.join(path.posix.dirname(p.address), at || '.', ref));
+          if (outside && !out.startsWith('../') && !path.posix.isAbsolute(ref)) {
+            outside.push({ p, out: canonicalNfc(out), full: path.resolve(propDir, at || '.', ref), report });
+          } else report();
+          continue;
+        }
         const lext = path.extname(ref).toLowerCase();
         const notCopied = () => linkProblem(raw, 'is a kind of file a prop does not copy', KIND_FIX);
         if (!LINKED_EXTS.has(lext)) { notCopied(); continue; }
@@ -362,11 +371,22 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
     if (entry) states.set(p, entry);
   }
   const stateOuts = new Set([...states.values()].map((e) => addressKey(e.out)));
+  const outside = [];
   for (const p of order) {
     if (!p.address) continue;
     if (p.made) p.files.push({ source: null, out: p.address, made: p.made });
-    else planFiles(p, p.files, problem, claimed, stateOuts);
+    else planFiles(p, p.files, problem, claimed, stateOuts, outside);
     if (states.has(p)) p.files.push(states.get(p));
+  }
+  // A link outside a prop's folder resolves on the site when another shipping prop ships that address with the bytes
+  // the link names in the vault: the file is shared, not a problem. Anything else is still outside its folder.
+  for (const { p, out, full, report } of outside) {
+    const prior = claimed.get(addressKey(out));
+    const real = prior && prior.rel !== p.rel && prior.hash ? realOrNull(full) : null;
+    const read = real && vaultReal && real.startsWith(vaultReal + path.sep) ? readOrError(real) : null;
+    if (read && !read.error && sha1(read.bytes) === prior.hash) {
+      if (!p.shared.includes(out)) p.shared.push(out);
+    } else report();
   }
   PLANS.set(result, { claimed, taken, keptReplaced, vaultReal, cutKeeper: Boolean(cutKeeper) });
 
