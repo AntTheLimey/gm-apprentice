@@ -1749,7 +1749,7 @@ function buildSite(options) {
   }
 
   const { collectionBuilt, styleFonts } = makeProps({ propPlan, propBlocked, pages, linkMap, imageMap, usedImages, config, options, publishConfig, collection,
-    collectionHrefFrom, navFor, gm, mark, onPlayerSite, excludeFields, fieldOverrides });
+    collectionHrefFrom, navFor, gm, mark, onPlayerSite, excludeFields, fieldOverrides, coverName: nm('player_site.props.cover') });
 
   // Published NPC pages whose body runs session by session (story-sessions.js), in page order.
   const npcStories = [];

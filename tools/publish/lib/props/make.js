@@ -22,7 +22,7 @@ const fontsLib = require('../fonts');
 // Returns { collectionBuilt, styleFonts, problems }: the props page's model (collectionModel), the
 // typefaces the styles are served with, and the plan's problems (the same array the build reads).
 function makeProps({ propPlan, propBlocked, pages, linkMap, imageMap, usedImages, config, options, publishConfig, collection,
-  collectionHrefFrom, navFor, gm, mark, onPlayerSite, excludeFields, fieldOverrides }) {
+  collectionHrefFrom, navFor, gm, mark, onPlayerSite, excludeFields, fieldOverrides, coverName = 'player_site.props.cover' }) {
   let styleFonts = { css: '', files: [] };
   let collectionBuilt = null;
   if (!propPlan) return { collectionBuilt, styleFonts, problems: [] };
@@ -103,6 +103,9 @@ function makeProps({ propPlan, propBlocked, pages, linkMap, imageMap, usedImages
   }
   // The props page lists the same rows, so a prop reads alike on every page that lists it.
   collectionBuilt = collectionModel({ plan: propPlan, containers: listed, settings: collection, ...rowOptions, rowOf: (p) => propRow(p, rowOptions) });
+  if (collectionBuilt && collectionBuilt.coverNote && !collectionBuilt.coverRow) {
+    console.warn(`  WARNING: ${coverName} names "${collectionBuilt.coverNote}", which is not a prop the site publishes with a page; the props page shows no cover`);
+  }
   for (const p of containers) {
     const { rows, title, noteTitle } = listed.get(p.rel);
     p.made_html = p.style

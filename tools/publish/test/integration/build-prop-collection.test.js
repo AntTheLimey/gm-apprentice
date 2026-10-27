@@ -322,6 +322,62 @@ describe('the cover', () => {
   });
 });
 
+describe('a prop as the cover', () => {
+  const FILES = {
+    'Documents/Gazetteer Cover.md': '---\ntype: prop\nprop_title: The Gazetteer\nprop_line: Price one penny\n---\nA cover.\n',
+    'Documents/Coin.md': '---\ntype: prop\n---\nA coin.\n',
+    'Art/cover.png': 'PNG',
+  };
+  const coverWarning = (logs) => logs.filter((l) => l.includes('player_site.props.cover names'));
+
+  it('a prop cover is linked and not listed', () => {
+    const s = buildBoth(FILES, { player: { props: { cover: '[[Gazetteer Cover]]' } } });
+    try {
+      const page = s.player.read('props', 'index.html');
+      assert.match(page, /<h1 class="page-title">Props<\/h1>\n<a class="props-cover" href="\.\.\/documents\/gazetteer-cover\.html"><span class="props-cover-title">The Gazetteer<\/span><span class="prop-line">Price one penny<\/span><\/a>\n/);
+      assert.doesNotMatch(page, /<img class="props-cover"/);
+      assert.equal((page.match(/Gazetteer/g) || []).length, 1, page);
+      assert.match(page, />Coin<\/a>/);
+      assert.equal(coverWarning(s.logs).length, 0, s.logs.join('\n'));
+      // The menu link is unchanged.
+      assert.match(s.player.read('documents', 'coin.html'), /<a href="\.\.\/props\/index\.html">Props<\/a>/);
+    } finally { s.cleanup(); }
+  });
+
+  it('a cover with no line prints only its title', () => {
+    const s = buildBoth({ ...FILES, 'Documents/Gazetteer Cover.md': '---\ntype: prop\n---\nA cover.\n' }, { sites: ['player'], player: { props: { cover: '[[Gazetteer Cover]]' } } });
+    try {
+      assert.match(s.player.read('props', 'index.html'), /<a class="props-cover" href="\.\.\/documents\/gazetteer-cover\.html"><span class="props-cover-title">Gazetteer Cover<\/span><\/a>/);
+    } finally { s.cleanup(); }
+  });
+
+  it('a held cover is no cover, with a warning; the GM site shows it marked', () => {
+    const s = buildBoth({ ...FILES, 'Documents/Gazetteer Cover.md': '---\ntype: prop\npublish: false\n---\nA cover.\n' }, { player: { props: { cover: '[[Gazetteer Cover]]' } } });
+    try {
+      assert.doesNotMatch(s.player.read('props', 'index.html'), /props-cover|Gazetteer/);
+      assert.deepEqual(coverWarning(s.logs), ['  WARNING: player_site.props.cover names "Gazetteer Cover", which is not a prop the site publishes with a page; the props page shows no cover']);
+      assert.match(s.gm.read('props', 'index.html'), /<a class="props-cover"[^>]*>.*<\/a> <span class="gm-unrevealed">not yet revealed<\/span>/);
+    } finally { s.cleanup(); }
+  });
+
+  it('a name that is no prop is no cover, with a warning', () => {
+    const s = buildBoth(FILES, { sites: ['player'], player: { props: { cover: '[[Nothing Here]]' } } });
+    try {
+      assert.doesNotMatch(s.player.read('props', 'index.html'), /props-cover/);
+      assert.equal(coverWarning(s.logs).length, 1, s.logs.join('\n'));
+      assert.match(coverWarning(s.logs)[0], /names "Nothing Here"/);
+    } finally { s.cleanup(); }
+  });
+
+  it('a picture cover is unchanged', () => {
+    const s = buildBoth(FILES, { sites: ['player'], player: { props: { cover: 'Art/cover.png' } } });
+    try {
+      assert.match(s.player.read('props', 'index.html'), /<img class="props-cover" src="\.\.\/images\/banners\/props\/cover\.png" alt="">/);
+      assert.equal(coverWarning(s.logs).length, 0);
+    } finally { s.cleanup(); }
+  });
+});
+
 describe('chapters that do not group', () => {
   const s = buildBoth({
     'Documents/Hidden Ref.md': '---\ntype: prop\nchapter: "[[Chapter Hidden]]"\n---\nA.\n',

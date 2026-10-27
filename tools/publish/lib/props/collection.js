@@ -228,15 +228,19 @@ const COLLECTION_FALLBACK = 'props/collection.html';
 const OTHER_HEADING = 'Other props';
 
 // The page's settings from a publishConfig (its non-listed `props` and `landing.latest_props`), each
-// filled in: the address as written, or the default.
+// filled in: the address as written, or the default. A `cover` that is a [[wikilink]] names a prop
+// (`coverNote`, the name inside it) and is no picture.
 function collectionSettingsOf(settingsLike) {
   const s = (settingsLike && settingsLike.props) || {};
   const latest = settingsLike && settingsLike.landing ? settingsLike.landing.latest_props : 0;
   const text = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const cover = text(s.cover);
+  const coverNote = cover && /^\[\[[^\]]+\]\]$/.test(cover) ? canonicalNfc(parseWikiRef(cover).target) : null;
   return {
     title: text(s.title) || 'Props',
     address: text(s.address) || COLLECTION_ADDRESS,
-    cover: text(s.cover),
+    cover: coverNote ? null : cover,
+    coverNote: coverNote || null,
     intro: text(s.intro),
     latest: Number.isInteger(latest) && latest > 0 ? latest : 0,
   };
@@ -320,14 +324,20 @@ const headingOrder = (a, b) => a.heading.localeCompare(b.heading, 'en', { sensit
 // published `prop_group`, then by its chapter (its published `chapter` field, else the folder under
 // Chapters/ it sits in, when that names a chapter page the site publishes), then `Other props`. A
 // container is never a row of these (one inside a container is a row of that container). Groups run in
-// the order of their first row (byArrival), ties by heading; an empty container comes last.
+// the order of their first row (byArrival), ties by heading; an empty container comes last. `coverRow`: the
+// row of the prop the settings' cover names (`coverNote`), when the site shows it with a page; it is in no group.
+// `coverNote` stays set when it names nothing the site shows, for the build to say so.
 // `rowOf(p)`: the prop's row (propRow, with the site's options); `nameOf(page, text)` as containerItems.
 function collectionModel({ plan, rowOf, containers, settings, site = 'player', isShown, resolvePage = () => null, nameOf = (pg, t) => t, blocked = new Set() }) {
   if (!settings || !plan) return null;
   const groups = [];
   const inContainer = new Set();
+  const coverPage = settings.coverNote ? resolvePage(settings.coverNote) : null;
+  const coverProp = coverPage ? plan.props.find((p) => p.page === coverPage) : null;
+  const covered = coverProp && coverProp.ships && isShown(coverProp.page) && (site === 'gm' || !isWithheld(sourceOf(coverProp.page))) ? coverProp : null;
+  const coverRow = covered ? rowOf(covered) : null;
   for (const entry of containers.values()) {
-    groups.push({ heading: entry.title, href: propPageOf(entry.container, blocked) || entry.container.page.outputPath, rows: entry.rows });
+    groups.push({ heading: entry.title, href: propPageOf(entry.container, blocked) || entry.container.page.outputPath, rows: covered ? entry.rows.filter((r) => r.rel !== covered.rel) : entry.rows });
     for (const r of entry.rows) inContainer.add(r.rel);
   }
   const byGroup = new Map();
@@ -343,7 +353,7 @@ function collectionModel({ plan, rowOf, containers, settings, site = 'player', i
     return parts.length > 2 && parts[0].toLowerCase() === 'chapters' ? isChapter(resolvePage(canonicalNfc(parts[1]))) : null;
   };
   for (const p of plan.props) {
-    if (p.kind === 'container' || inContainer.has(p.rel) || !isShown(p.page)) continue;
+    if (p.kind === 'container' || p === covered || inContainer.has(p.rel) || !isShown(p.page)) continue;
     if (site !== 'gm' && isWithheld(sourceOf(p.page))) continue;
     // The page's own headings group it, so the row carries no prop_group heading of its own.
     const row = { ...rowOf(p), group: null };
@@ -369,7 +379,7 @@ function collectionModel({ plan, rowOf, containers, settings, site = 'player', i
     if (!a.rows.length || !b.rows.length) return (b.rows.length > 0) - (a.rows.length > 0) || headingOrder(a, b);
     return byArrival(a.rows[0], b.rows[0]) || headingOrder(a, b);
   });
-  return { title: settings.title, address: settings.address, cover: settings.cover, intro: settings.intro, groups };
+  return { title: settings.title, address: settings.address, cover: settings.cover, coverNote: settings.coverNote, coverRow, intro: settings.intro, groups };
 }
 
 // Every shown row of the model, once each.

@@ -429,7 +429,7 @@ props". The landing page can show the newest few in a box.
 |---------|--------------|--------|----------|
 | `player_site.props.title` | The name of the page listing every prop the players have, and of its link in the menu. Plain text, shown as written | Text | Props |
 | `player_site.props.address` | Where that page is on the site: a path ending in .html. One inside a folder the site keeps (player_site.keep) replaces the file there | Text | `props/index.html` |
-| `player_site.props.cover` | A picture at the top of the page. A file that is missing from the vault, or outside it, is reported and the page shows without it | A picture's path in the vault, or a web address | No picture |
+| `player_site.props.cover` | A picture at the top of the page, or a prop (as a [[link]]) shown there as a link to it, and left out of the page's lists. A file that is missing from the vault, or outside it, or a prop the site does not publish with a page, is reported and the page shows without it | A picture's path in the vault, a web address, or a [[prop note]] | No picture |
 | `player_site.props.intro` | A paragraph under the title. Plain text, shown as written | Text | No paragraph |
 | `player_site.landing.latest_props` | How many of the newest props the landing page shows in a box, with a link to all of them; 0 shows none | A whole number, 0 or more | `0` |
 
