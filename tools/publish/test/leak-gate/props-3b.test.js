@@ -326,6 +326,14 @@ describe('leak gate: the words a style\'s layout writes', () => {
     assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'props/letter.html', note: 'Documents/Held.md' }]);
   }, SITE('Print the ledger on red paper so the forgery shows.')));
 
+  it('a field the layout pastes in by tag gets no words allowed, and words either side of a tag do not join', () => within((s) => {
+    const hidden = 'Filed by the night clerk at the harbour office after dark.';
+    leakBeforeBody(s, 'props/letter.html', hidden);
+    assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'props/letter.html', note: 'Documents/Held.md' }]);
+  }, { '_meta/prop-styles/t/layout.html': '<h1>{{title}}</h1>{{{body}}}<p class="aside">Filed by {{prop_clerk}} at the harbour office after dark.</p>',
+    '_meta/prop-styles/t/style.css': '.aside { color: grey; }\n', 'Documents/Letter.md': LETTER('prop_clerk: the night clerk\n'),
+    ...HELD('Filed by the night clerk at the harbour office after dark.'), ...LIST(['Documents/Letter.md']) }));
+
   it('a style no shipping prop uses excuses nothing', () => within((s) => {
     leakBeforeBody(s, 'props/letter.html', CREDITS);
     assert.deepEqual(gate(s).findings.map(pick), [{ code: 'HIDDEN_TEXT', page: 'props/letter.html', note: 'Documents/Held.md' }]);
