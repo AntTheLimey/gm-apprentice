@@ -3,7 +3,6 @@
 // and the only reader of the site folder's package.json scripts they were.
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
 const { isDeepStrictEqual } = require('node:util');
 const { REGISTRY } = require('./registry');
 
@@ -22,6 +21,9 @@ function envFor(cwd, extraEnv = {}) {
 // Runs each command in order, in `cwd`, printing it first; the first that fails stops the rest.
 // `stdio` lets a caller whose stdout is a payload send the steps' output to stderr.
 function runSteps(commands, { cwd, label, log = console.log, timeoutMs = TEN_MINUTES, stdio = 'inherit', extraEnv } = {}) {
+  // Loaded here, not with the module: the settings move reads this module's script splitter, and a host that embeds
+  // the move should not load child_process for it (#535).
+  const { spawnSync } = require('node:child_process');
   const total = commands.length;
   commands.forEach((command, i) => {
     log(`Running ${label} step ${i + 1} of ${total}: ${command}`);

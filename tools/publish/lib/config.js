@@ -132,6 +132,11 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   // The extra stylesheets are not part of the theme object every page reads: they are passed down on their own (below).
   delete theme.stylesheets;
   delete theme.hooks;
+  // The label face (#363) joins the fonts only when set: a site that sets none resolves to the fonts it had.
+  if (theme.fonts && theme.fonts.label == null) {
+    const { label, ...fonts } = theme.fonts;
+    theme.fonts = fonts;
+  }
   const merged = {
     link_previews: p.features.link_previews,
     tohit_calculator: p.features.tohit_calculator,
@@ -211,6 +216,14 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   Object.defineProperty(merged.landing, 'banner', {
     value: { title: bannerText(b.title), text: bannerText(b.text), link: bannerText(b.link), image: bannerText(b.image) },
     enumerable: false, writable: true, configurable: true,
+  });
+  // The landing hero's layout, focus and alignment (#530). Not listed, like the banner: a site that sets none builds as
+  // it did. A focus the reader refused is null (the reader has reported it).
+  const h = (p.landing && p.landing.hero) || {};
+  delete merged.landing.hero;
+  Object.defineProperty(merged.landing, 'hero', {
+    value: { layout: h.layout === 'full-bleed' ? 'full-bleed' : 'card', focus: h.focus || null, focus_narrow: h.focus_narrow || null, align: h.align === 'left' ? 'left' : 'center' },
+    enumerable: false,
   });
   // The props page's four texts (null when unset) and the landing box's size. Not listed, like the banner.
   const pp = p.props || {};

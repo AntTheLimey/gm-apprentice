@@ -41,6 +41,9 @@ const SEEN_ON = {
   'h1[data-page-title]': ['index.html', ...NOTE_PAGES, 'pcs/ash.html'],
   'p[data-first-paragraph]': NOTE_PAGES,
   'h2[data-section]': ['npcs/mara-quill.html', 'locations/harbour.html', 'sessions/session-01.html'],
+  '.landing-hero--full-bleed': ['index.html'],
+  'body.landing-full-bleed': ['index.html'],
+  '.landing-hero--align-left': ['index.html'],
 };
 
 // A regular expression that finds an element a simple selector (tag, one class, one attribute) names.
@@ -65,18 +68,27 @@ function built(player) {
 const on = built({ theme: { hooks: true } });
 const off = built({});
 const unset = built({ theme: { hooks: false } });
+// The layout settings each 'setting' hook is written with (the hooks switch stays off: they do not need it).
+const laidOut = built({ landing: { hero: { layout: 'full-bleed', align: 'left' } } });
 
 test('every listed hook has the pages it must be found on, and nothing else is listed there', () => {
   assert.deepEqual(Object.keys(SEEN_ON).sort(), HOOKS.map((h) => h.selector).sort());
 });
 
 for (const hook of HOOKS) {
-  test(`${hook.selector} is on the pages it marks, with the hooks on`, () => {
+  test(`${hook.selector} is on the pages it marks, ${hook.when === 'setting' ? 'with its setting' : 'with the hooks on'}`, () => {
     const re = finder(hook.selector);
+    const site = hook.when === 'setting' ? laidOut : on;
     for (const page of SEEN_ON[hook.selector]) {
-      assert.match(on.player.read(...page.split('/')), re, `${hook.selector} is missing from ${page}`);
+      assert.match(site.player.read(...page.split('/')), re, `${hook.selector} is missing from ${page}`);
     }
   });
+  if (hook.when === 'setting') {
+    test(`${hook.selector} is not written without its setting`, () => {
+      const re = finder(hook.selector);
+      for (const page of SEEN_ON[hook.selector]) assert.doesNotMatch(on.player.read(...page.split('/')), re, page);
+    });
+  }
   if (hook.when === 'always') {
     test(`${hook.selector} is there with the hooks off too`, () => {
       const re = finder(hook.selector);

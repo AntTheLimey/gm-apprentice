@@ -590,7 +590,10 @@ It includes these sections (each omitted if no relevant data exists):
   when `player_site.landing.banner.*` sets one
 - **Hero** — campaign image (from `player_site.theme.campaign_image` in
   `_meta/vault-config.yaml`), site title, last-played date, and in-game
-  date (from `vault.setting_year` in the same file)
+  date (from `vault.setting_year` in the same file). A rounded card by
+  default; `player_site.landing.hero.layout: full-bleed` runs the picture
+  edge to edge under the menu with the words over it, and `focus`,
+  `focus_narrow` and `align` place the picture and the words
 - **Story So Far** — first paragraph of the most recent played session's
   `## Narrative Recap` section, with a link to the full session page
 - **The Team** — PC cards with portrait (or initials fallback), status
@@ -682,14 +685,15 @@ all, in either mode.
 
 ### Theme fonts
 
-`player_site.theme.fonts.heading`/`.body` name Google Fonts families by
-default, and the build emits a `fonts.googleapis.com` `@import` at the
+`player_site.theme.fonts.heading`/`.body` (and `.label`, the face of the
+menu, labels, table heads, badges and buttons; unset, they keep the body
+face) name Google Fonts families by default, and the build emits a `fonts.googleapis.com` `@import` at the
 top of `css/theme.css` — every visitor's browser then requests the font
 directly from Google, and the build prints a warning saying so. Two ways
 to opt out:
 
 **`source: self-host`** (the setting new vaults get) downloads each
-non-generic heading/body family from Google Fonts at build time, once,
+non-generic heading, body and label family from Google Fonts at build time, once,
 and serves it from your site. Regular and bold, roman and italic are
 fetched, with Google's `unicode-range` subsets kept, and the files are
 served unmodified (they are OFL-licensed). They are cached in the vault
@@ -937,6 +941,31 @@ Template signatures vary slightly — most accept
 `sections` param, `itemTemplate`/`factionTemplate` add `linkMap` for
 relationship resolution, and `landingTemplate` accepts
 `(pages, navFor, config, publishConfig)`. See `lib/build.js` for exact usage.
+
+### Settings move
+
+`require('gm-apprentice-publish/lib/settings/move')` gives the code behind
+`settings move`, for a tool that embeds this one:
+
+- **`planMove(options, deps?)`** and **`applyMove(plan, deps?)`**: plan
+  the move of a vault to `_meta/vault-config.yaml`, then carry it out.
+  The move asks whether a site folder's own tool can read the new layout
+  by running this tool's `update-pin --check`. Pass `deps.pinCheck`
+  (`(siteDir) => ({ ok, ours, spec, installedBefore })`, or `null` when
+  there is no answer) to answer that yourself; then no program is
+  started, and `child_process` is never loaded. In a packaged host,
+  where `process.execPath` is the host and not Node, always pass it.
+- **`stripSiteKeys(siteText, options?)`**: the site file's text with the
+  keys the move takes out removed: `{ siteAfter, siteOut, removedKeys }`
+  (`siteOut` is `null` when nothing was removed).
+- **`movedSiteKeys(siteConfig, options?)`**: just the names it would
+  remove, from the parsed site file or its text. A host staging a site
+  file for a build on a moved vault leaves these out, or the build stops
+  on old-name faults. Stage with
+  `movedSiteKeys(siteConfig, { leaveFallback: true })`: the key that
+  lists folders the build keeps stays in the site file until the vault
+  has `player_site.keep`, and removing it sooner drops those folders
+  from the build.
 
 ---
 

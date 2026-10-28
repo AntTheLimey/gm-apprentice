@@ -15,6 +15,9 @@ fails when any listed hook leaves the output
 (`tools/publish/test/theme-hooks.test.js`), and its tables are written
 from the same list the test reads (`tools/publish/lib/theme-hooks.js`).
 
+The colours, typefaces, sizes and spacing a theme can set are listed in
+[Theme tokens](theme-tokens.md), with the same promise.
+
 ## Adding your own stylesheets
 
 `player_site.theme.stylesheets` links your own stylesheets on every page
@@ -74,6 +77,22 @@ own.
 A section is not wrapped in an element of its own, so a rule that styles
 a section's text reaches it from its heading, for example
 `h2[data-section="rumours"] + p`.
+
+## With a layout setting
+
+These classes are written only when a setting asks for the layout they
+mark, so a site that sets none of them carries none of them. A theme can
+style the layout through them without matching the page's structure.
+
+<!-- theme-hooks:setting -->
+
+| Hook | Written with | What it marks | Example |
+|------|--------------|---------------|---------|
+| `.landing-hero--full-bleed` | `player_site.landing.hero.layout: full-bleed` | The landing page's title area, laid out with the campaign picture edge to edge under the menu | `.landing-hero--full-bleed h1 { text-transform: uppercase; }` |
+| `body.landing-full-bleed` | `player_site.landing.hero.layout: full-bleed` | The landing page's `<body>` when its title area is full-bleed (the page whose menu sits over the picture) | `body.landing-full-bleed > .top-nav { backdrop-filter: blur(4px); }` |
+| `.landing-hero--align-left` | `player_site.landing.hero.align: left` | The landing page's title area with its title, tagline and dates set to the left | `.landing-hero--align-left h1 { margin-left: -0.05em; }` |
+
+<!-- /theme-hooks:setting -->
 
 ## What is not safe to style
 

@@ -709,6 +709,14 @@
                     "null"
                   ]
                 },
+                "label": {
+                  "description": "The lettering for the menu, labels, table heads, badges, buttons, meta lines and date labels (`--font-label`). Loaded the same way as the heading and body lettering",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
                 "source": {
                   "description": "Where the lettering comes from: `self-host` (the site downloads the typefaces once and serves them itself), `google` (the reader's browser fetches them from Google Fonts) or `local` (your own font files). With `self-host` a reader's browser never contacts Google. A source the tool does not know is reported, and `google` is used",
                   "default": "google",
@@ -1106,6 +1114,62 @@
                     "number",
                     "null"
                   ]
+                }
+              }
+            },
+            "hero": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "layout": {
+                  "description": "How the top of the landing page is laid out. `card`: the campaign picture, title, tagline and dates in a rounded box. `full-bleed`: the picture runs edge to edge under the menu, with the title, tagline and dates over it on a shade of the hero colour; the menu sits over the picture on the landing page only",
+                  "default": "card",
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^\\s*(?:[cC][aA][rR][dD]|[fF][uU][lL][lL]\\-[bB][lL][eE][eE][dD])\\s*$"
+                },
+                "focus": {
+                  "description": "With a `full-bleed` hero, the part of the picture kept in view when it is cropped to fill the width, as CSS writes a position (`20% center` keeps the left fifth in view)",
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^(?!(?:.*\\b(?:[lL][eE][fF][tT]|[rR][iI][gG][hH][tT])\\b){2})(?!(?:.*\\b(?:[tT][oO][pP]|[bB][oO][tT][tT][oO][mM])\\b){2})\\s*(?:[lL][eE][fF][tT]|[rR][iI][gG][hH][tT]|[tT][oO][pP]|[bB][oO][tT][tT][oO][mM]|[cC][eE][nN][tT][eE][rR]|0|-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:%|[pP][xX]|[rR][eE][mM]|[eE][mM]|[vV][wW]|[vV][hH]|[vV][mM][iI][nN]|[vV][mM][aA][xX]|[cC][hH]|[eE][xX]|[cC][mM]|[mM][mM]|[iI][nN]|[pP][tT]|[pP][cC]))(?:\\s+(?:[lL][eE][fF][tT]|[rR][iI][gG][hH][tT]|[tT][oO][pP]|[bB][oO][tT][tT][oO][mM]|[cC][eE][nN][tT][eE][rR]|0|-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:%|[pP][xX]|[rR][eE][mM]|[eE][mM]|[vV][wW]|[vV][hH]|[vV][mM][iI][nN]|[vV][mM][aA][xX]|[cC][hH]|[eE][xX]|[cC][mM]|[mM][mM]|[iI][nN]|[pP][tT]|[pP][cC]))){0,3}\\s*$"
+                    },
+                    {
+                      "const": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "focus_narrow": {
+                  "description": "The same as `focus`, on a screen narrower than 768 pixels (a phone), where a wide picture is cropped hardest",
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^(?!(?:.*\\b(?:[lL][eE][fF][tT]|[rR][iI][gG][hH][tT])\\b){2})(?!(?:.*\\b(?:[tT][oO][pP]|[bB][oO][tT][tT][oO][mM])\\b){2})\\s*(?:[lL][eE][fF][tT]|[rR][iI][gG][hH][tT]|[tT][oO][pP]|[bB][oO][tT][tT][oO][mM]|[cC][eE][nN][tT][eE][rR]|0|-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:%|[pP][xX]|[rR][eE][mM]|[eE][mM]|[vV][wW]|[vV][hH]|[vV][mM][iI][nN]|[vV][mM][aA][xX]|[cC][hH]|[eE][xX]|[cC][mM]|[mM][mM]|[iI][nN]|[pP][tT]|[pP][cC]))(?:\\s+(?:[lL][eE][fF][tT]|[rR][iI][gG][hH][tT]|[tT][oO][pP]|[bB][oO][tT][tT][oO][mM]|[cC][eE][nN][tT][eE][rR]|0|-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:%|[pP][xX]|[rR][eE][mM]|[eE][mM]|[vV][wW]|[vV][hH]|[vV][mM][iI][nN]|[vV][mM][aA][xX]|[cC][hH]|[eE][xX]|[cC][mM]|[mM][mM]|[iI][nN]|[pP][tT]|[pP][cC]))){0,3}\\s*$"
+                    },
+                    {
+                      "const": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "align": {
+                  "description": "Where the title, tagline and dates sit in the landing page's title area, card or full-bleed",
+                  "default": "center",
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^\\s*(?:[lL][eE][fF][tT]|[cC][eE][nN][tT][eE][rR])\\s*$"
                 }
               }
             },
@@ -1869,6 +1933,14 @@
                     "null"
                   ]
                 },
+                "label": {
+                  "description": "The lettering for the menu, labels, table heads, badges, buttons, meta lines and date labels (`--font-label`). Loaded the same way as the heading and body lettering",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
                 "source": {
                   "description": "Where the lettering comes from: `self-host` (the site downloads the typefaces once and serves them itself), `google` (the reader's browser fetches them from Google Fonts) or `local` (your own font files). With `self-host` a reader's browser never contacts Google. A source the tool does not know is reported, and `google` is used",
                   "type": [
@@ -2243,6 +2315,60 @@
                     "number",
                     "null"
                   ]
+                }
+              }
+            },
+            "hero": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "layout": {
+                  "description": "How the top of the landing page is laid out. `card`: the campaign picture, title, tagline and dates in a rounded box. `full-bleed`: the picture runs edge to edge under the menu, with the title, tagline and dates over it on a shade of the hero colour; the menu sits over the picture on the landing page only",
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^\\s*(?:[cC][aA][rR][dD]|[fF][uU][lL][lL]\\-[bB][lL][eE][eE][dD])\\s*$"
+                },
+                "focus": {
+                  "description": "With a `full-bleed` hero, the part of the picture kept in view when it is cropped to fill the width, as CSS writes a position (`20% center` keeps the left fifth in view)",
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^(?!(?:.*\\b(?:[lL][eE][fF][tT]|[rR][iI][gG][hH][tT])\\b){2})(?!(?:.*\\b(?:[tT][oO][pP]|[bB][oO][tT][tT][oO][mM])\\b){2})\\s*(?:[lL][eE][fF][tT]|[rR][iI][gG][hH][tT]|[tT][oO][pP]|[bB][oO][tT][tT][oO][mM]|[cC][eE][nN][tT][eE][rR]|0|-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:%|[pP][xX]|[rR][eE][mM]|[eE][mM]|[vV][wW]|[vV][hH]|[vV][mM][iI][nN]|[vV][mM][aA][xX]|[cC][hH]|[eE][xX]|[cC][mM]|[mM][mM]|[iI][nN]|[pP][tT]|[pP][cC]))(?:\\s+(?:[lL][eE][fF][tT]|[rR][iI][gG][hH][tT]|[tT][oO][pP]|[bB][oO][tT][tT][oO][mM]|[cC][eE][nN][tT][eE][rR]|0|-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:%|[pP][xX]|[rR][eE][mM]|[eE][mM]|[vV][wW]|[vV][hH]|[vV][mM][iI][nN]|[vV][mM][aA][xX]|[cC][hH]|[eE][xX]|[cC][mM]|[mM][mM]|[iI][nN]|[pP][tT]|[pP][cC]))){0,3}\\s*$"
+                    },
+                    {
+                      "const": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "focus_narrow": {
+                  "description": "The same as `focus`, on a screen narrower than 768 pixels (a phone), where a wide picture is cropped hardest",
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "pattern": "^(?!(?:.*\\b(?:[lL][eE][fF][tT]|[rR][iI][gG][hH][tT])\\b){2})(?!(?:.*\\b(?:[tT][oO][pP]|[bB][oO][tT][tT][oO][mM])\\b){2})\\s*(?:[lL][eE][fF][tT]|[rR][iI][gG][hH][tT]|[tT][oO][pP]|[bB][oO][tT][tT][oO][mM]|[cC][eE][nN][tT][eE][rR]|0|-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:%|[pP][xX]|[rR][eE][mM]|[eE][mM]|[vV][wW]|[vV][hH]|[vV][mM][iI][nN]|[vV][mM][aA][xX]|[cC][hH]|[eE][xX]|[cC][mM]|[mM][mM]|[iI][nN]|[pP][tT]|[pP][cC]))(?:\\s+(?:[lL][eE][fF][tT]|[rR][iI][gG][hH][tT]|[tT][oO][pP]|[bB][oO][tT][tT][oO][mM]|[cC][eE][nN][tT][eE][rR]|0|-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:%|[pP][xX]|[rR][eE][mM]|[eE][mM]|[vV][wW]|[vV][hH]|[vV][mM][iI][nN]|[vV][mM][aA][xX]|[cC][hH]|[eE][xX]|[cC][mM]|[mM][mM]|[iI][nN]|[pP][tT]|[pP][cC]))){0,3}\\s*$"
+                    },
+                    {
+                      "const": 0
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "align": {
+                  "description": "Where the title, tagline and dates sit in the landing page's title area, card or full-bleed",
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^\\s*(?:[lL][eE][fF][tT]|[cC][eE][nN][tT][eE][rR])\\s*$"
                 }
               }
             },

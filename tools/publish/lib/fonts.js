@@ -51,9 +51,9 @@ function slugFor(family) {
   return family.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
 
-// Families this config needs self-hosted, in heading, body, then preset order, deduped.
+// Families this config needs self-hosted, in heading, body, label, then preset order, deduped.
 function selfHostFamilies(fonts, extraFamilies = []) {
-  const names = [fonts && fonts.heading, fonts && fonts.body, ...extraFamilies]
+  const names = [fonts && fonts.heading, fonts && fonts.body, fonts && fonts.label, ...extraFamilies]
     .filter(f => f && !GENERIC_FAMILIES.has(f));
   return names.filter((v, i, a) => a.indexOf(v) === i);
 }

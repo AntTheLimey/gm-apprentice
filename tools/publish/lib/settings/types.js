@@ -26,6 +26,20 @@ const orList = (words) => (words.length < 2 ? words.join('') : `${words.slice(0,
 const plain = (x) => typeof x === 'string' || typeof x === 'number' || typeof x === 'boolean';
 const readTextList = (raw) => (Array.isArray(raw) && raw.every(plain) ? ok(raw.map(String)) : bad);
 
+// A picture position as CSS's object-position takes it: one to four words, each a side (left, right, top, bottom),
+// center, a percentage or a length; a bare number only as 0; never two words for one axis (left right, top bottom). Nothing else (no brackets, no semicolons), so a value
+// written into a page's style can never carry other CSS. Read lower case, one space between words.
+const POSITION_UNITS = ['%', 'px', 'rem', 'em', 'vw', 'vh', 'vmin', 'vmax', 'ch', 'ex', 'cm', 'mm', 'in', 'pt', 'pc'];
+const POSITION_PART = new RegExp(`^(?:left|right|top|bottom|center|0|-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:${POSITION_UNITS.join('|')}))$`);
+function readPosition(raw) {
+  if (typeof raw !== 'string' && typeof raw !== 'number') return bad;
+  const parts = String(raw).trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (parts.length < 1 || parts.length > 4 || !parts.every((x) => POSITION_PART.test(x))) return bad;
+  // Two words on one axis (left right, top bottom) is no position at all: CSS drops the whole value.
+  if (parts.filter((x) => x === 'left' || x === 'right').length > 1 || parts.filter((x) => x === 'top' || x === 'bottom').length > 1) return bad;
+  return ok(parts.join(' '));
+}
+
 const TYPES = {
   switch: {
     read: (raw) => { const b = readSwitch(raw); return typeof b === 'boolean' ? ok(b) : bad; },
@@ -114,6 +128,10 @@ const TYPES = {
     read: (raw) => (typeof raw === 'string' || typeof raw === 'number' ? ok(raw) : bad),
     takes: () => 'text',
   },
+  position: {
+    read: (raw) => readPosition(raw),
+    takes: () => 'a picture position: one to four of left, right, top, bottom, center, a percentage or a length (`20% center`)',
+  },
   // A value the registry lists so it is not "unknown", read by code that owns its shape.
   any: { read: (raw) => ok(raw), takes: (entry) => entry.shape || 'see the settings page' },
 };
@@ -133,4 +151,4 @@ function setIn(obj, name, value) {
   cur[segs[segs.length - 1]] = value;
 }
 
-module.exports = { TYPES, SWITCH_WORDS, readSwitch, isMap, getPath, setIn, firstLine, emptyIsFault };
+module.exports = { TYPES, SWITCH_WORDS, POSITION_UNITS, readSwitch, isMap, getPath, setIn, firstLine, emptyIsFault };

@@ -7,7 +7,6 @@
 // before a single file of the vault is touched. The vault is then changed by renames, the old
 // files kept aside until the last one succeeds, and put back if any step fails.
 const fs = require('node:fs');
-const { spawnSync } = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
@@ -201,6 +200,10 @@ function stripSiteKeys(siteText, { carriedOnly = false, leaveFallback = false, o
   return { siteAfter, siteOut: removedKeys.length ? jsonLike(siteAfter, siteText) : null, removedKeys };
 }
 
+// The site-file keys the move takes out (stripSiteKeys's removedKeys), for a host that stages a site file for a build
+// on a moved vault: the file's parsed object or its text in, the names out; the input is not changed.
+const movedSiteKeys = (siteConfig, options) => stripSiteKeys(typeof siteConfig === 'string' ? siteConfig : JSON.stringify(siteConfig), options).removedKeys;
+
 // A line about the carry or the steps is worded for after the move (past tense). Shown before the move it reads in
 // the present or future: `say` records that wording on the plan it was said into (so it lives only as long as the
 // plan), and `beforeMove` swaps it in from the plans it is given.
@@ -384,7 +387,11 @@ function planSteps(siteDir, held, { siteToolUpdated = false, pinCheck: ask = pin
 
 // What `update-pin --check --json` says of the site folder: { ok, ours, spec, installedBefore }, or null when it says
 // nothing usable. The same code the update uses; asked by running the command, so there is one rule.
+// A host that embeds the move answers this itself by passing `deps.pinCheck` (planMove / applyMove), and then no
+// program is started: child_process is loaded here, on first use, not when the module loads (#535). In a packaged
+// host process.execPath is the host, not node, so a host should always pass its own.
 function pinCheck(siteDir) {
+  const { spawnSync } = require('node:child_process');
   const bin = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
   const run = spawnSync(process.execPath, [bin, 'update-pin', '--check', '--json', '--site', siteDir], { encoding: 'utf8' });
   try {
@@ -1339,4 +1346,4 @@ function applyMove(plan, deps = {}) {
   return { moved: true, lines };
 }
 
-module.exports = { planMove, applyMove, isBoilerplate, siteToolHold, siteToolOlderThan, holdFrom, siteToolHoldAll, siteFileNamedBy };
+module.exports = { planMove, applyMove, isBoilerplate, siteToolHold, siteToolOlderThan, holdFrom, siteToolHoldAll, siteFileNamedBy, stripSiteKeys, movedSiteKeys };

@@ -9,7 +9,7 @@
   margin: 0 0 1rem;
   padding: 0.4rem 1rem;
   background: var(--warning);
-  color: #1a1a1a;
+  color: var(--on-warning, #1a1a1a);
   font-variant: small-caps;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -60,7 +60,7 @@ span.gm-mark::after {
   padding: 0.4rem 1rem;
   border-left: none;
   background: var(--warning);
-  color: #1a1a1a;
+  color: var(--on-warning, #1a1a1a);
   font-variant: normal;
   font-weight: 600;
   letter-spacing: normal;
@@ -79,4 +79,21 @@ span.gm-mark::after {
   margin: 0 0 0.5rem;
   font-size: 1rem;
   color: var(--text);
+}
+
+/* A full-bleed landing hero (player_site.landing.hero.layout): on the GM site the menu stays a solid bar, so the band
+   above the picture is never covered. */
+body.landing-full-bleed > .top-nav {
+  position: sticky;
+  background: var(--bg-header);
+  border-bottom-color: var(--border);
+}
+body.landing-full-bleed > main.content {
+  padding-top: 1rem;
+}
+body.landing-full-bleed > main.content > .gm-band {
+  width: auto;   /* its margins bring it back to the column's width */
+}
+.landing-hero.landing-hero--full-bleed {
+  padding-top: 3rem;
 }

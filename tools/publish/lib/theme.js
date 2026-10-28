@@ -30,8 +30,11 @@ function cssFontValue(font, fallback) {
   return `'${font}', ${fallback}`;
 }
 
+// The theme's typefaces: heading, body, and label (#363: the menu, labels, table heads, badges and buttons).
+const FONT_ROLES = ['heading', 'body', 'label'];
+
 function googleFontsImport(fonts) {
-  const toImport = ['heading', 'body']
+  const toImport = FONT_ROLES
     .map(k => fonts[k])
     .filter(f => f && !GENERIC_FAMILIES.has(f))
     .filter((v, i, a) => a.indexOf(v) === i);
@@ -42,7 +45,7 @@ function googleFontsImport(fonts) {
 
 // Non-generic families the Google import would name (source: google), for the build warning.
 function googleFontNames(fonts) {
-  return ['heading', 'body']
+  return FONT_ROLES
     .map(k => fonts[k])
     .filter(f => f && !GENERIC_FAMILIES.has(f))
     .filter((v, i, a) => a.indexOf(v) === i);
@@ -157,6 +160,8 @@ function generateThemeCSS(config, opts = {}) {
     // A PC's backstory and hook are read in the heading face (--font-reading, style.css).
     if (fonts.heading && !GENERIC_FAMILIES.has(fonts.heading)) fontVars.push(`  --font-heading: ${cssFontValue(fonts.heading, 'serif')};`, `  --font-reading: ${cssFontValue(fonts.heading, 'serif')};`);
     if (fonts.body && !GENERIC_FAMILIES.has(fonts.body)) fontVars.push(`  --font-body: ${cssFontValue(fonts.body, 'sans-serif')};`);
+    // A label face has no preset default to keep, so a generic family here is a choice and is written.
+    if (fonts.label) fontVars.push(`  --font-label: ${cssFontValue(fonts.label, 'sans-serif')};`);
     // Computed even when there are no --font-* overrides to emit: with source: local,
     // the GM may be self-hosting the preset's OWN font (e.g. scifi's Rajdhani) under
     // its own family name, with no heading/body override at all — the preset's static
@@ -214,6 +219,8 @@ function generateThemeCSS(config, opts = {}) {
   // default system-ui) leaves style.css's serif reading face.
   if (fonts.heading && !GENERIC_FAMILIES.has(fonts.heading)) vars.push(`  --font-reading: ${cssFontValue(fonts.heading, 'serif')};`);
   if (fonts.body) vars.push(`  --font-body: ${cssFontValue(fonts.body, 'sans-serif')};`);
+  // Unset, the label face is left out: each element the label rule covers keeps the face it has, inherited or its own.
+  if (fonts.label) vars.push(`  --font-label: ${cssFontValue(fonts.label, 'sans-serif')};`);
 
   const fontsImport = fontsPreamble(fonts, selfHostCss);
 
