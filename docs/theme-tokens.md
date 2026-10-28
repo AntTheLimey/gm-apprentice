@@ -51,6 +51,13 @@ own: one listed under `player_site.theme.stylesheets`, or
   (`css/skins/*.css`), so a value set in `:root` does not reach a
   skinned sheet. Style a skinned sheet through
   `main.content[data-skin="…"]`.
+- **The Call of Cthulhu sheet's inks** (`--paper`, `--ink` and the rest
+  of that table) are declared on the sheet itself, so a value in
+  `:root` or on `main.content` never reaches it. Set them on
+  `.coc-sheet-root`, and add `.cr-modal-backdrop.coc` when the change
+  request dialog should match. On a skinned page the skin's own rule
+  for the sheet is more specific, so write
+  `main.content[data-skin="…"] .coc-sheet-root`.
 - **Unset tokens** are declared nowhere. Each rule that reads one falls
   back to what it used before, so setting one changes those rules and
   leaving it unset changes nothing. `--font-label` is one: until a
