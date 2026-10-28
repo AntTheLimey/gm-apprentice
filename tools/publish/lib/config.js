@@ -129,6 +129,9 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   const genreWritten = named('player_site.theme.genre');
   const paletteWritten = Object.keys(origins).some((n) => n.startsWith('player_site.theme.palette.') && named(n));
   const theme = setOnly(p.theme, 'player_site.theme', origins);
+  // The extra stylesheets are not part of the theme object every page reads: they are passed down on their own (below).
+  delete theme.stylesheets;
+  delete theme.hooks;
   const merged = {
     link_previews: p.features.link_previews,
     tohit_calculator: p.features.tohit_calculator,
@@ -226,6 +229,14 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   // `menu_extra`: a site that sets none builds as it did. Each is passed down to the code that uses it.
   Object.defineProperty(merged, 'limits', { value: { ...p.limits }, enumerable: false });
   Object.defineProperty(merged, 'header_facts', { value: [...p.sheets.header_facts], enumerable: false });
+  // The rules text a sheet carries from the tool's own lists (the GURPS reference tables, the CoC skill list). Not listed,
+  // like `header_facts`: a site that sets neither builds as it did.
+  // The extra stylesheets' paths as written, blanks left out. Not listed, like `header_facts`: a site that sets none
+  // builds as it did. build.js finds and copies each.
+  Object.defineProperty(merged, 'stylesheets', { value: (p.theme.stylesheets || []).map((s) => s.trim()).filter(Boolean), enumerable: false });
+  // Whether pages carry the hooks a theme styles by (lib/theme-hooks.js). Not listed, like `stylesheets`.
+  Object.defineProperty(merged, 'theme_hooks', { value: p.theme.hooks === true, enumerable: false });
+  Object.defineProperty(merged, 'rules_lists', { value: { gurpsReference: p.sheets.gurps_reference_tables, cocSkillList: p.sheets.coc_skill_list }, enumerable: false });
   // A blank word reads as unset. A word that would break the link it is printed in is refused, with a warning.
   const words = {};
   for (const key of ['person', 'place', 'thing']) {

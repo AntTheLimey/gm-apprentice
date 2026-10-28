@@ -328,7 +328,7 @@ deploy --ignore-leaks); these commands run it without deploying.
   --help, -h                 Show this help
 `,
   manifest: `
-gm-apprentice-publish manifest <diff|apply|publish-played|never-publish|rename|convert|list> [options]
+gm-apprentice-publish manifest <diff|apply|publish-played|never-publish|rename|convert|list|hidden> [options]
 
 Compares the publish list (_meta/publish-list.yaml) with what is actually
 in the vault, and edits it. "diff" classifies every vault file with the same
@@ -374,6 +374,12 @@ excluded versus missing is the GM's call.
   manifest list --vault <dir> [--json]
                      The three lists (publishing, excluded with reasons,
                      needs_decision) and their counts.
+  manifest hidden --vault <dir> [--decide] [--json]
+                     The pages _meta/publish-list.yaml still publishes whose
+                     line in the old list (_meta/publish-manifest.md.converted)
+                     a %% or <!-- --> comment hid: a conversion before 1.48.2
+                     read them as ticked. --decide moves them to
+                     needs_decision, the file's comments and order kept.
   manifest rename --vault <dir> --from <vault path> --to <vault path> --json
                  [--name <spelling>]... [--config <site vault.config.json>]
                      What renaming a note would change in the files this tool
@@ -1066,8 +1072,8 @@ if (command === 'deploy') {
 
 if (command === 'manifest') {
   const verb = args[1];
-  if (verb !== 'diff' && verb !== 'apply' && verb !== 'publish-played' && verb !== 'never-publish' && verb !== 'rename' && verb !== 'convert' && verb !== 'list') {
-    console.error(verb ? `Error: Unknown manifest command: ${verb}` : 'Error: manifest needs a command (diff, apply, publish-played, never-publish, rename, convert or list)');
+  if (verb !== 'diff' && verb !== 'apply' && verb !== 'publish-played' && verb !== 'never-publish' && verb !== 'rename' && verb !== 'convert' && verb !== 'list' && verb !== 'hidden') {
+    console.error(verb ? `Error: Unknown manifest command: ${verb}` : 'Error: manifest needs a command (diff, apply, publish-played, never-publish, rename, convert, list or hidden)');
     printSubcommandHelp('manifest');
     process.exit(1);
   }
@@ -1079,7 +1085,8 @@ if (command === 'manifest') {
     Object.assign({ '--prune': 'prune', '--json': 'json' },
       verb === 'publish-played' ? { '--dry-run': 'dryRun', '-n': 'dryRun', '--include-unreviewed': 'includeUnreviewed', '--publish-body': 'publishBody' } : {},
       verb === 'convert' ? { '--check': 'check', '--site-tool-updated': 'siteToolUpdated' } : {},
-      verb === 'never-publish' ? { '--untyped': 'untyped', '--write': 'write' } : {}),
+      verb === 'never-publish' ? { '--untyped': 'untyped', '--write': 'write' } : {},
+      verb === 'hidden' ? { '--decide': 'decide' } : {}),
     // --vault: vault_check asks about the vault it is checking, which need not be the
     // one the site's vaultPath names (explain --all takes it for the same reason).
     verb === 'publish-played' ? { '--vault': 'vault', '--session': 'session' }
@@ -1097,7 +1104,7 @@ if (command === 'manifest') {
   runManifest({
     verb,
     // For rename, only a --config the caller typed: the default is a path in the working folder.
-    configPath: (verb === 'rename' || verb === 'convert') && !args.includes('--config') ? null : parsed.configPath,
+    configPath: (verb === 'rename' || verb === 'convert' || verb === 'hidden') && !args.includes('--config') ? null : parsed.configPath,
     vaultPath: parsed.flags.vault,
     session: parsed.flags.session,
     from: parsed.flags.from,

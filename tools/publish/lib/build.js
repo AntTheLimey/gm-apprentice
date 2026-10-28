@@ -1,5 +1,5 @@
 const { scopeColorScheme, headScript, storageKey } = require('./color-mode');
-const { configureColorMode, configureLinkPreviews, configureConnections } = require('./templates/base');
+const { configureColorMode, configureLinkPreviews, configureConnections, configureExtraStylesheets, configureThemeHooks, EXTRA_CSS_DIR } = require('./templates/base');
 const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
@@ -479,7 +479,8 @@ function buildSite(options) {
   function copyOverridesCSS() {
     const src = path.join(configDir, 'css/overrides.css');
     if (!fs.existsSync(src)) return false;
-    if (writes !== 'all') return true;
+    // A sheets-only build copies it too: the pages it writes link it, and nothing else reads it.
+    if (writes === 'none') return true;
     const dest = path.join(outputDir, 'css/overrides.css');
     // Output inside the site dir: never rewrite the GM's own source file.
     if (path.resolve(src) === path.resolve(dest)) return true;
@@ -487,6 +488,59 @@ function buildSite(options) {
     fs.writeFileSync(dest, scopeColorScheme(fs.readFileSync(src, 'utf8')));
     console.log('  wrote css/overrides.css');
     return true;
+  }
+
+  // The vault's extra stylesheets (player_site.theme.stylesheets): each path is looked for in the vault, then in the site
+  // folder, never outside the two. Each found .css is copied to css/extra/ under its own file name (a full build) and
+  // linked on every page (a sheets-only build copies them too: its pages link them). Each goes through scopeColorScheme,
+  // as every stylesheet the build writes does, so its light and dark rules answer to the reader's toggle. A missing file, one that is not a .css and a second file of the same name are warnings: the
+  // build goes on without them. Returns the file names to link, in the order written.
+  function copyExtraStylesheets() {
+    const setting = nm('player_site.theme.stylesheets');
+    const vaultRoot = path.resolve(config.vaultPath);
+    const siteRoot = path.resolve(configDir);
+    const inside = (root, p) => p.startsWith(root + path.sep);
+    // A link inside either folder is followed and must land inside it too, or a file from elsewhere would be published.
+    const real = (p) => { try { return fs.realpathSync(p); } catch (e) { return null; } };
+    const roots = [vaultRoot, siteRoot].map((root) => ({ root, real: real(root) }));
+    const kept = new Map();
+    for (const written of publishConfig.stylesheets || []) {
+      let pointsOut = false;
+      // `found` is the path as written (its file name names the copy); its target is checked by its real path.
+      const found = roots.map(({ root }) => path.resolve(root, written)).find((p, i) => {
+        if (!inside(roots[i].root, p) || !fs.existsSync(p)) return false;
+        const target = real(p);
+        if (!target || !roots[i].real || !inside(roots[i].real, target)) { pointsOut = true; return false; }
+        return fs.statSync(target).isFile();
+      });
+      if (!found && pointsOut) {
+        printWarning(`${setting} entry "${written}" is a link to a file outside the vault (${vaultRoot}) and the site folder (${siteRoot}); it is left out`);
+        continue;
+      }
+      if (!found) {
+        printWarning(`${setting} entry "${written}" was not found in the vault (${vaultRoot}) or the site folder (${siteRoot}); it is left out`);
+        continue;
+      }
+      if (path.extname(found).toLowerCase() !== '.css') {
+        printWarning(`${setting} entry "${written}" is not a .css file; it is left out`);
+        continue;
+      }
+      const name = path.basename(found);
+      if (kept.has(name)) {
+        printWarning(`${setting} entry "${written}" has the same file name as "${kept.get(name).written}"; only the first is used`);
+        continue;
+      }
+      kept.set(name, { written, found });
+    }
+    if (writes !== 'none') {
+      for (const [name, { found }] of kept) {
+        const dest = path.join(outputDir, ...EXTRA_CSS_DIR.split('/'), name);
+        ensureDir(dest);
+        fs.writeFileSync(dest, scopeColorScheme(fs.readFileSync(found, 'utf8')));
+        console.log(`  wrote ${EXTRA_CSS_DIR}/${name}`);
+      }
+    }
+    return [...kept.keys()];
   }
 
   // The to-hit calculator's script is copied after the pages are written, and only when one of them
@@ -1326,6 +1380,8 @@ function buildSite(options) {
   writeThemeCSS();
   copyThemeFonts();
   publishConfig._overridesCss = copyOverridesCSS();
+  configureExtraStylesheets(copyExtraStylesheets());
+  configureThemeHooks(publishConfig.theme_hooks === true);
 
   const campaignImageSource = publishConfig.theme.campaign_image;
   let campaignImageCopied = false;
@@ -1500,6 +1556,9 @@ function buildSite(options) {
             .update(JSON.stringify({ f: page.frontmatter, s: sections })).digest('hex').slice(0, 12),
           live: publishConfig.live.stats === true,
           tohit: publishConfig.tohit_calculator === 'on',
+          // The tool's own rules lists on the sheet: each on unless the vault turned it off.
+          gurpsReference: !publishConfig.rules_lists || publishConfig.rules_lists.gurpsReference !== false,
+          cocSkillList: !publishConfig.rules_lists || publishConfig.rules_lists.cocSkillList !== false,
         };
         const rendered = systemRenderer ? systemRenderer(page.frontmatter, sections, meta) : null;
         // A renderer returns an object (CoC, GURPS, D&D), or (PF2e, FitD) the sheet as a string.

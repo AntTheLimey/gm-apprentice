@@ -195,6 +195,72 @@ function writeAccepted(vaultPath, accepted) {
   writeAtomic(at(vaultPath, PUBLISH_LIST_FILE), listText({ ...base, accepted }));
 }
 
+// Moves paths from `publishing` to the end of `needs_decision` in the vault's publish list, each entry as written (its
+// reason and the comment above it go with it, the first entry's too); every other line of the file, comments, order,
+// indentation and line ends included, is kept. A path also under `excluded` or `needs_decision` only leaves
+// publishing: it stays where the GM had it (under excluded it is off the site, the GM's older choice). Read back before
+// it is written, by the reader's own rule for a path in two lists: the lists must be what was asked, or nothing is
+// written. A path that is not under publishing throws, naming it, the file untouched.
+// Returns [{ path, now: 'needs_decision' | 'excluded' }], one for each path, in the order asked.
+function moveToNeedsDecision(vaultPath, rels) {
+  const file = at(vaultPath, PUBLISH_LIST_FILE);
+  const raw = fs.readFileSync(file, 'utf-8');
+  const crlf = raw.includes('\r\n');
+  const text = raw.replace(/\r\n/g, '\n');
+  const before = parseNewFile(text, () => {});
+  const wanted = [...new Set(rels.map(canonicalPath))];
+  const missing = wanted.filter((rel) => !before.publishing.includes(rel));
+  if (missing.length) throw new Error(`${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} not under publishing in ${PUBLISH_LIST_FILE}; nothing was changed`);
+  const doc = YAML.parseDocument(text);
+  const pathOf = (node) => canonicalPath(String(YAML.isMap(node) ? node.get('path') : YAML.isScalar(node) ? node.value : '').trim());
+  const seqPaths = (key) => { const seq = doc.get(key, true); return new Set(YAML.isSeq(seq) ? seq.items.map(pathOf) : []); };
+  const inExcluded = seqPaths('excluded');
+  const inDecide = seqPaths('needs_decision');
+  const publishing = doc.get('publishing', true);
+  const moving = publishing.items.filter((node) => wanted.includes(pathOf(node)));
+  // The first entry's comment is kept on the list, not the entry: it goes with the entry.
+  if (moving.length && publishing.items[0] === moving[0] && publishing.commentBefore) {
+    moving[0].commentBefore = [publishing.commentBefore, moving[0].commentBefore].filter(Boolean).join('\n');
+    publishing.commentBefore = undefined;
+  }
+  publishing.items = publishing.items.filter((node) => !moving.includes(node));
+  // Only a path in neither other list goes to needs_decision, once.
+  const placed = new Set();
+  const toDecide = moving.filter((node) => {
+    const rel = pathOf(node);
+    if (inExcluded.has(rel) || inDecide.has(rel) || placed.has(rel)) return false;
+    placed.add(rel);
+    return true;
+  });
+  if (toDecide.length) {
+    let decide = doc.get('needs_decision', true);
+    if (!YAML.isSeq(decide)) {
+      decide = doc.createNode([]);
+      doc.set('needs_decision', decide);
+    }
+    decide.flow = false;
+    decide.items.push(...toDecide);
+  }
+  // The file's own indentation: a list written flush under its key stays flush; an indented one keeps its width.
+  const indented = /^[a-z_]+:[^\S\n]*\n( +)- /m.exec(text);
+  const flush = /^[a-z_]+:[^\S\n]*\n- /m.test(text);
+  const out = doc.toString({ lineWidth: 0, indentSeq: !(flush && !indented), indent: indented ? indented[1].length : 2 });
+  // What the reader must make of the result: the lists as they now stand in the file, read by its own rule.
+  const expected = {
+    publishing: before.publishing.filter((rel) => !wanted.includes(rel)),
+    excluded: [...new Set([...inExcluded].filter((rel) => !before.publishing.includes(rel) || wanted.includes(rel)))],
+    needs_decision: [...inDecide, ...toDecide.map(pathOf)],
+  };
+  const want = parseNewFile(YAML.stringify(expected), () => {});
+  const after = parseNewFile(out, () => {});
+  const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  for (const key of ['publishing', 'excluded', 'needsDecision']) {
+    if (!same(after[key], want[key])) throw new Error(`${PUBLISH_LIST_FILE} did not read back as asked after moving ${wanted.join(', ')} (${key} differs); nothing was changed`);
+  }
+  writeAtomic(file, crlf ? out.replace(/\n/g, '\r\n') : out);
+  return wanted.map((rel) => ({ path: rel, now: inExcluded.has(rel) ? 'excluded' : 'needs_decision' }));
+}
+
 function writePublishList(vaultPath, list) {
   writeAtomic(at(vaultPath, PUBLISH_LIST_FILE), listText(list));
 }
@@ -217,4 +283,4 @@ function parseListText(text, { warn = console.warn } = {}) {
   return parseNewFile(text, warn);
 }
 
-module.exports = { readPublishListFile, parseListText, loadManifest, loadPublishList, writeAccepted, listText, writePublishList, counts, canonicalPath, resetNotices };
+module.exports = { readPublishListFile, parseListText, loadManifest, loadPublishList, writeAccepted, listText, writePublishList, moveToNeedsDecision, counts, canonicalPath, resetNotices };

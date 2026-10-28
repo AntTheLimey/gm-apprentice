@@ -31,7 +31,9 @@ function stripInlineComment(entry) {
   return canonicalPath(match ? match[1] : trimmed);
 }
 
-function parseManifest(markdown) {
+// `keepComments`: read every line, a commented-out one too, as the reader did before #498 (tool 1.48.2); only
+// commentHiddenEntries asks for that, to find what an old conversion carried.
+function parseManifest(markdown, { keepComments = false } = {}) {
   let note;
   try {
     note = parseNote(markdown);
@@ -50,7 +52,7 @@ function parseManifest(markdown) {
 
   let currentSection = null;
   // A line a `%%` or `<!-- -->` comment hides is not read: in Obsidian it is gone (#498).
-  for (const line of uncommentedLines(content).lines) {
+  for (const line of keepComments ? String(content).replace(/\r/g, '').split('\n') : uncommentedLines(content).lines) {
     const sectionMatch = line.match(/^## (.+)/);
     if (sectionMatch) {
       const title = sectionMatch[1].trim();
@@ -96,6 +98,15 @@ function parseManifest(markdown) {
     resolved,
     excluded,
   };
+}
+
+// The entries of an old list that a `%%` or `<!-- -->` comment hides (#498): read by the reader before 1.48.2, which
+// had no comment rule, and not by the reader now. { publishing }: such paths under Publishing, in the file's order,
+// leaving out one the file also ticks where no comment hides it. A conversion made before 1.48.2 published them (#500).
+function commentHiddenEntries(markdown) {
+  const shown = new Set(parseManifest(markdown).publishing);
+  const all = parseManifest(markdown, { keepComments: true }).publishing;
+  return { publishing: [...new Set(all.filter((rel) => !shown.has(rel)))] };
 }
 
 // The manifest as an editable structure: path -> { section, annotation }, in
@@ -218,4 +229,4 @@ function renameInOldList(text, from, to) {
   return changed ? out.join('') : null;
 }
 
-module.exports = { parseManifest, parseAnnotatedManifest, renderManifest, stripInlineComment, renameInOldList, ENTRY_RE };
+module.exports = { parseManifest, commentHiddenEntries, parseAnnotatedManifest, renderManifest, stripInlineComment, renameInOldList, ENTRY_RE };

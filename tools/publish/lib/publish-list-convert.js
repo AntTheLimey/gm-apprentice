@@ -309,4 +309,4 @@ function summary(list, wouldDo) {
   return wouldDo ? `Would move the publish list to ${tail}` : `Moved the publish list to ${tail}`;
 }
 
-module.exports = { convertPublishList, setsOf, lostFromOld, holdFor };
+module.exports = { convertPublishList, setsOf, lostFromOld, holdFor, KEPT_SUFFIX };

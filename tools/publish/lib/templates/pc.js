@@ -654,6 +654,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
       leftoverSections: sheetSections,
     }) + cocIsland;
     return baseShell({
+      pageType: page.frontmatter.type,
       title: page.displayTitle,
       siteTitle: config.siteTitle,
       cssHref: cssPath(page.outputPath),
@@ -694,6 +695,7 @@ ${journeyContent}
 ${tabScript(pageTabs(systemSpellsHtml, sheetsOff))}`;
 
   return baseShell({
+    pageType: page.frontmatter.type,
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),

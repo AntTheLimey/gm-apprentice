@@ -294,6 +294,11 @@ is skipped, and the build says so.
 
 ## Theme
 
+To build a theme of your own on top of the pages, link your stylesheets
+with `player_site.theme.stylesheets`, and style by the classes and
+attributes listed in [Theme hooks](theme-hooks.md), which stay put
+between releases.
+
 <!-- settings:theme -->
 
 | Setting | What it does | Values | Left out |
@@ -310,6 +315,8 @@ is skipped, and the build says so.
 | `player_site.theme.campaign_image`<br>was `publish.theme.campaign_image`, `campaignImage` | The large picture at the top of the landing page | A picture's path in the vault | No picture |
 | `player_site.theme.default_mode`<br>was `publish.theme.default_mode` | Whether a reader starts in light or dark | `system`, `dark` or `light` | `system`: follows the reader's device |
 | `player_site.theme.tagline`<br>was `publish.theme.tagline`, `landingTagline` | One sentence under the title on the landing page | Text | No tagline |
+| `player_site.theme.hooks` | Writes the attributes a theme can style by on every page: the page's type, its title and title block, the first paragraph of a note's text and a key on each section heading (listed in docs/theme-hooks.md). Off, pages carry only the classes they always have | A switch | Off |
+| `player_site.theme.stylesheets` | More stylesheets on every page, each a `.css` file's path in the vault (or, when the vault has no file there, in the site folder). Each is copied to the site's `css/extra/` and linked after the tool's own stylesheets and before `css/overrides.css`, in the order written. A file that is missing or is not a `.css`, or a second file of the same name, is reported and left out | A list of stylesheet paths | None |
 | `player_site.lists.section_titles`<br>was `publish.section_titles` | Your own headings for the lists of locations, factions, items, creatures and documents | `locations`, `factions`, `items`, `creatures`, `documents`, each a title | Plain titles, or the genre's own |
 
 <!-- /settings:theme -->
@@ -353,6 +360,8 @@ With `local`, each font file is listed under `player_site.theme.fonts.files`.
 | `player_site.sheets.crest`<br>was `publish.sheet_crest`, `sheet_crest` | A crest or wax seal at the head of a Call of Cthulhu sheet | A picture's path in the vault | No crest |
 | `player_site.sheets.header_facts` | The facts shown under a character's name, as the names of fields in their note, for a character whose note has no `display_meta` of its own. An empty list shows none | A list of field names | `occupation`, `age`, `nationality` |
 | `player_site.features.tohit_calculator`<br>was `publish.tohit_calculator` | The to-hit calculator on a GURPS character's Combat tab | `on` or `off` | `on` |
+| `player_site.sheets.gurps_reference_tables` | The rules reference at the foot of a GURPS character's Combat tab (the Hit Location and Size and Speed/Range tables). Off, the tab has no reference block. The to-hit calculator has its own switch (`player_site.features.tohit_calculator`, on unless turned off) and, while it is on, still carries the hit-location penalties and the range bands in its own data on the same tab: turn it off too to leave those numbers out | A switch | On |
+| `player_site.sheets.coc_skill_list` | Whether a Call of Cthulhu character's skills are laid over the built-in skill list with its starting values (Regency Cthulhu's list on a Regency site). Off, the sheet lists only the skills the character's note has, with the values written there | A switch | On |
 | `vault.dndbeyond_sync`<br>was `publish.dndbeyond_sync` | When D&D characters that carry a D&D Beyond link are brought up to date: `build` before each site update, or `manual` only when you ask | `build` or `manual` | `manual` |
 
 <!-- /settings:sheets -->

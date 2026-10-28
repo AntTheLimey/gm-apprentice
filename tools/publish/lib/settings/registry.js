@@ -396,6 +396,16 @@ const REGISTRY = [
     left_out: 'No tagline',
   },
   {
+    name: 'player_site.theme.hooks', type: 'switch', default: false, group: 'theme',
+    does: "Writes the attributes a theme can style by on every page: the page's type, its title and title block, the first paragraph of a note's text and a key on each section heading (listed in docs/theme-hooks.md). Off, pages carry only the classes they always have",
+    left_out: 'Off',
+  },
+  {
+    name: 'player_site.theme.stylesheets', type: 'list', of: 'stylesheet paths', default: [], group: 'theme',
+    does: "More stylesheets on every page, each a `.css` file's path in the vault (or, when the vault has no file there, in the site folder). Each is copied to the site's `css/extra/` and linked after the tool's own stylesheets and before `css/overrides.css`, in the order written. A file that is missing or is not a `.css`, or a second file of the same name, is reported and left out",
+    left_out: 'None',
+  },
+  {
     name: 'player_site.lists.section_titles', was: [{ name: 'publish.section_titles', in: 'vault' }], type: 'map', default: {}, keys: ['locations', 'factions', 'items', 'creatures', 'documents'], group: 'theme',
     shape: '`locations`, `factions`, `items`, `creatures`, `documents`, each a title',
     does: 'Your own headings for the lists of locations, factions, items, creatures and documents',
@@ -438,6 +448,16 @@ const REGISTRY = [
     name: 'player_site.features.tohit_calculator', was: [{ name: 'publish.tohit_calculator', in: 'vault' }], type: 'choice', values: ['on', 'off'], aliases: ON_OFF, default: 'on', group: 'sheets',
     does: "The to-hit calculator on a GURPS character's Combat tab",
     left_out: '`on`',
+  },
+  {
+    name: 'player_site.sheets.gurps_reference_tables', type: 'switch', default: true, group: 'sheets',
+    does: "The rules reference at the foot of a GURPS character's Combat tab (the Hit Location and Size and Speed/Range tables). Off, the tab has no reference block. The to-hit calculator has its own switch (`player_site.features.tohit_calculator`, on unless turned off) and, while it is on, still carries the hit-location penalties and the range bands in its own data on the same tab: turn it off too to leave those numbers out",
+    left_out: 'On',
+  },
+  {
+    name: 'player_site.sheets.coc_skill_list', type: 'switch', default: true, group: 'sheets',
+    does: "Whether a Call of Cthulhu character's skills are laid over the built-in skill list with its starting values (Regency Cthulhu's list on a Regency site). Off, the sheet lists only the skills the character's note has, with the values written there",
+    left_out: 'On',
   },
   {
     name: 'vault.dndbeyond_sync', was: [{ name: 'publish.dndbeyond_sync', in: 'vault' }], type: 'choice', values: ['build', 'manual'], default: 'manual', group: 'sheets',

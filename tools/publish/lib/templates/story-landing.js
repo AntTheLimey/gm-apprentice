@@ -29,6 +29,7 @@ function storyLanding(spine, characterStories, config, publishConfig, navFor, np
   }
   const content = `<h1 class="page-title">Story</h1>${saga}${chars}`;
   return baseShell({
+    pageType: 'story',
     title: 'Story', siteTitle: config.siteTitle, cssHref: cssPath(OUT), navHtml: navFor(OUT, config),
     rootHref: rootPath(OUT), content, footer: config.footer,
     genrePreset: (publishConfig || {})._genrePreset,

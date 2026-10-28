@@ -24,6 +24,7 @@ function storyPage(unit, config, publishConfig, navFor) {
     ${refsHtml}
     ${storyNav(unit)}`;
   return baseShell({
+    pageType: 'story',
     title: unit.title,
     siteTitle: config.siteTitle,
     cssHref: cssPath(unit.outputPath),
@@ -49,6 +50,7 @@ function characterStoryPage(story, config, publishConfig, navFor) {
       ${body}
     </article>`;
   return baseShell({
+    pageType: 'story',
     title: story.title, siteTitle: config.siteTitle,
     cssHref: cssPath(story.outputPath), navHtml: navFor(story.outputPath, config),
     rootHref: rootPath(story.outputPath), content, footer: config.footer,

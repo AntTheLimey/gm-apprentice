@@ -7,7 +7,9 @@ const { RECORD_SECTIONS } = require('./layout');
 
 function renderCoCSheet(frontmatter, sections, meta) {
   const system = (meta && meta.system) || (frontmatter && frontmatter.system) || 'coc-7e';
-  const model = parseCoC(frontmatter, sections || [], system);
+  // The built-in skill list rides the build's setting (meta.cocSkillList); on unless it is false.
+  const skillList = !meta || meta.cocSkillList !== false;
+  const model = parseCoC(frontmatter, sections || [], system, { skillList });
   const statusBarHtml = buildStatusBar(model);
 
   // A legacy investigator sheet whose body diverges from the documented contract

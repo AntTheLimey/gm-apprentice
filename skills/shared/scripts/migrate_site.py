@@ -307,6 +307,68 @@ def find_publish_list(vault: Path) -> list[Item]:
     return [Item(PUBLISH_LIST, WILL, [str(x) for x in plan["lines"]], apply)]
 
 
+PUBLISH_HIDDEN = "publish-hidden"
+CONVERTED_LIST = OLD_PUBLISH_LIST + ".converted"
+
+
+def _ask_hidden(vault: Path, *extra: str) -> dict[str, Any]:
+    """`manifest hidden --json` for the vault: the paths a `%%` or
+    `<!-- -->` comment hid in the old list that publish-list.yaml still
+    publishes. The comment rule is the tool's (#498); never read here.
+    Raises StepFailed when it gives no usable answer."""
+    code, out, err = plugin_tool(["manifest", "hidden", "--vault", str(vault), "--json", *extra])
+    try:
+        data = json.loads(out)
+    except ValueError:
+        data = None
+    if code != 0 or not isinstance(data, dict) or not isinstance(data.get("publishing"), list) \
+            or not isinstance(data.get("moved"), list):
+        said = [x for x in (err or out).splitlines() if x.strip()]
+        raise StepFailed("the publish list's hidden entries could not be read: "
+                         + (said[-1].strip().removeprefix("Error: ") if said else f"it exited {code}"))
+    return data
+
+
+def find_publish_hidden(vault: Path) -> list[Item]:
+    """1.10.107 (#500): before publish tool 1.48.2 the publish list's move
+    read the old file with no comment rule, so a ticked line hidden by `%%`
+    or `<!-- -->` went into publish-list.yaml under publishing, uncommented.
+    The old text is kept as publish-manifest.md.converted; the tool names
+    each such path the list still publishes. Every one is named, and only
+    the GM's answer moves them (to needs_decision, by the tool, the file's
+    comments and order kept). A path the old file also ticks with no
+    comment around it was published on purpose and is not named."""
+    if not (vault / CONVERTED_LIST).is_file():
+        return []
+    rels = [str(x) for x in _ask_hidden(vault)["publishing"]]
+    if not rels:
+        return []
+    n = len(rels)
+    pages = f"{n} page{'' if n == 1 else 's'}"
+    lines = [f"{pages} the old publish list hid with a comment ({CONVERTED_LIST}) "
+             f"{'is' if n == 1 else 'are'} on your site: when the publish list moved to its new file, "
+             f"an older version missed the comments that hid {'it' if n == 1 else 'them'}. move: put "
+             f"{'it' if n == 1 else 'them'} under needs_decision in _meta/publish-list.yaml, off the site "
+             f"until you decide; leave: keep {'it' if n == 1 else 'them'} published"]
+    lines += [f"{rel}\tpublished; hidden by a comment in the old list" for rel in rels]
+
+    def apply(value: str | None) -> list[str]:
+        if value not in ("move", "leave"):
+            raise StepFailed(f"{PUBLISH_HIDDEN} takes move or leave")
+        if value == "leave":
+            return [f"left the {pages} published"]
+        data = _ask_hidden(vault, "--decide")
+        moved = [str(x) for x in data["moved"]]
+        got = data.get("now")
+        now: dict[str, Any] = got if isinstance(got, dict) else {}
+        if sorted(moved) != sorted(rels):
+            raise StepFailed(f"the move did not take the pages named: moved {', '.join(moved) or 'none'}")
+        return [f"{rel}: off publishing; it stays under excluded, as the list already had it"
+                if now.get(rel) == "excluded" else f"{rel}: moved to needs_decision" for rel in moved]
+
+    return [Item(PUBLISH_HIDDEN, CHOICE, lines, apply, wants="move or leave", holds_stamp=True)]
+
+
 FULL_MODE = "full-mode"
 RETIRED_MODE = "player_site.hide.mode"
 
@@ -1201,6 +1263,9 @@ SITE_CHECKS: list[Check] = [
           "notes the build cannot parse", find_unparseable, asks_site=True),
     Check("exclude-lists", "1.10.47", 2, "the built-in exclude lists, written "
           "into the vault file", find_exclude_lists, asks_site=True),
+    Check(PUBLISH_HIDDEN, "1.10.107", 2, "published pages the old publish "
+          "list hid with a comment", find_publish_hidden,
+          choices=(f"{PUBLISH_HIDDEN}=",)),
     Check("gm-leak", None, 4, "sections the site withholds are nested under "
           "GM Notes", find_gm_leak, asks_site=True),
     Check("props-move", "1.10.105", 4, "props kept by hand or by site scripts "

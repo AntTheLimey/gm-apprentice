@@ -1,6 +1,7 @@
 const { relativePath, escapeHtml, encodeImageUrl, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS } = require('../processor');
 const { typeLabelText } = require('../kind-label');
 const { entry } = require('../settings/registry');
+const { markPage, markFirstParagraph } = require('../theme-hooks');
 
 const DIR_LABELS = {
   'campaign': 'Campaign',
@@ -79,7 +80,28 @@ function configureColorMode(head) { colorModeHead = head || ''; }
 function colorModeHeadHtml() { return colorModeHead ? `\n  ${colorModeHead}` : ''; }
 function colorModeEnabled() { return Boolean(colorModeHead); }
 
-function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset, overridesCss, breadcrumbsHtml, scripts, mainAttrs, extraCss }) {
+// The vault's extra stylesheets (player_site.theme.stylesheets) the build copied, as file names under css/extra/, set
+// once per build by configureExtraStylesheets before any page renders, as the colour-mode script is. Every page links
+// them after the tool's own stylesheets and before css/overrides.css, in this order.
+const EXTRA_CSS_DIR = 'css/extra';
+let extraStylesheets = [];
+function configureExtraStylesheets(names) { extraStylesheets = Array.isArray(names) ? names.slice() : []; }
+// The extra stylesheets' <link> tags, each address made by `href` from its path from the site root ('' when none).
+function extraStylesheetTags(href) {
+  return extraStylesheets.map((name) => `\n  <link rel="stylesheet" href="${href(`${EXTRA_CSS_DIR}/${encodeURIComponent(name)}`)}">`).join('');
+}
+
+// Whether this build writes the hooks a theme styles by (player_site.theme.hooks), set once per build by
+// configureThemeHooks, as the colour-mode script is. Off, every page is as it was.
+let themeHooks = false;
+function configureThemeHooks(on) { themeHooks = on === true; }
+function themeHooksOn() { return themeHooks; }
+// A note's rendered text with its first paragraph marked, when the hooks are on; as given otherwise.
+function bodyHook(html) { return themeHooks ? markFirstParagraph(html) : html; }
+// The attribute that names the page's type on <main>, when the hooks are on ('' otherwise).
+function pageTypeAttr(pageType) { return themeHooks ? ` data-page-type="${escapeHtml(String(pageType || '').trim().toLowerCase() || 'page')}"` : ''; }
+
+function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset, overridesCss, breadcrumbsHtml, scripts, mainAttrs, extraCss, pageType }) {
   const footerHtml = footer ? `<footer class="site-footer">${escapeHtml(footer)}</footer>` : '';
   const themeCssHref = cssHref.replace('style.css', 'theme.css');
   const genreCssHref = genrePreset
@@ -94,7 +116,8 @@ function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, foot
   const overridesLinkTag = overridesCss
     ? `\n  <link rel="stylesheet" href="${cssHref.replace('style.css', 'overrides.css')}">`
     : '';
-  const extraLinks = (extraCss || []).map(h => `\n  <link rel="stylesheet" href="${h}">`).join('');
+  const extraLinks = (extraCss || []).map(h => `\n  <link rel="stylesheet" href="${h}">`).join('')
+    + extraStylesheetTags((rel) => cssHref.replace('css/style.css', rel));
   const breadcrumbs = breadcrumbsHtml || '';
   const scriptTags = scripts
     ? scripts.map(s => `<script src="${s}"></script>`).join('\n')
@@ -112,9 +135,9 @@ function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, foot
 
 ${navHtml}
 
-<main class="content"${mainAttrs || ''}${previewsAttr()}>
+<main class="content"${pageTypeAttr(pageType)}${mainAttrs || ''}${previewsAttr()}>
 ${breadcrumbs}
-${content}
+${themeHooks ? markPage(content) : content}
 </main>
 
 ${footerHtml}
@@ -254,5 +277,12 @@ module.exports = {
   portraitImg,
   configureColorMode,
   colorModeHeadHtml,
+  configureExtraStylesheets,
+  configureThemeHooks,
+  themeHooksOn,
+  bodyHook,
+  pageTypeAttr,
+  extraStylesheetTags,
+  EXTRA_CSS_DIR,
   colorModeEnabled,
 };

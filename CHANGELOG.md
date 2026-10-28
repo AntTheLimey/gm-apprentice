@@ -7,6 +7,69 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.107] — 2026-10-28
+
+Four asks from GM-Scriptorium, a tool that layers its own themes on the
+published pages: a documented list of what a theme may style, extra
+stylesheets, settings that leave out two built-in rules lists, and a
+repair for publish entries an old conversion carried out of a comment.
+A site that sets none of the new settings builds as before.
+
+### Added
+
+- `player_site.theme.stylesheets` (#361): a list of `.css` files, each
+  a path in the vault or, failing that, in the site folder. Each is
+  copied to `css/extra/` and linked on every page of both sites, after
+  the tool's own stylesheets and before `css/overrides.css`, in the
+  order written. A missing file, a file that is not a `.css` and a
+  second file of the same name are build warnings, never a stop. A path
+  outside the vault and the site folder is not read. Each goes through
+  the same light/dark step as the tool's own stylesheets, so its
+  colour-scheme rules answer to the reader's toggle.
+- `docs/theme-hooks.md` (#360): the classes and attributes a theme may
+  style, what each marks, an example, and the promise of a heads-up
+  issue to downstream tools before a listed hook changes. Its tables
+  are written from `lib/theme-hooks.js`, the list a test builds a site
+  against and fails on when a listed hook leaves the output.
+- `player_site.theme.hooks` (#360), off by default: writes
+  `data-page-type` on `<main>`, `data-title-block` and
+  `data-page-title` on the page's title, `data-first-paragraph` on the
+  first paragraph of a note's text and `data-section` (a key from the
+  heading's words) on each section heading. Off, every page is byte for
+  byte as it was, so a tool that matches `<h2>` or
+  `<h1 class="page-title">` as text keeps working. A downstream tool turns
+  the switch on once its matchers are ready for the attributes.
+- `player_site.sheets.gurps_reference_tables` and
+  `player_site.sheets.coc_skill_list` (#423), both on by default. Off,
+  a GURPS Combat tab has no rules reference block, and a Call of
+  Cthulhu sheet (Regency too) lists only the skills the character's
+  note has, with the values written there; its hint no longer says
+  every skill is shown. A base the note writes as a characteristic share
+  (`EDU`, `INT/5`) is worked out from the character's characteristics.
+  Nothing else on either sheet changes. The to-hit calculator has its
+  own switch (`player_site.features.tohit_calculator`, on by default)
+  and, while it is on, still carries the hit-location penalties and
+  range bands in its data on the same tab; turn it off too to leave
+  those numbers out.
+- `manifest hidden --vault <dir> [--decide] [--json]` (#500): the pages
+  `_meta/publish-list.yaml` still publishes whose line in the old list
+  (`_meta/publish-manifest.md.converted`) a `%%` or `<!-- -->` comment
+  hid, by the comment rule of #498. `--decide` moves them to
+  `needs_decision`, keeping the file's comments, order, indentation and
+  line ends. A page also under `excluded` leaves publishing and stays
+  excluded; one already under `needs_decision` just leaves publishing.
+- Migration check `publish-hidden` (#500): for a vault that has the
+  `.converted` file, it names each such page. Your choice: move them to
+  `needs_decision`, or leave them published. A page the old list also
+  ticked with no comment around it is not named. Nothing found, no item.
+- Publish tool 1.54.0.
+
+### Changed
+
+- A sheets-only build (`--only sheets`) copies `css/overrides.css` and
+  the extra stylesheets too, so the pages it writes never link a file
+  the site does not have yet.
+
 ## [1.10.106] — 2026-10-27
 
 Fixes from the props move on a real vault: live props no longer show a

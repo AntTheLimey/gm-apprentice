@@ -317,6 +317,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
     .join('\n');
 
   return baseShell({
+    pageType: 'landing',
     title: config.siteTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(outputPath),

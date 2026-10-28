@@ -21,7 +21,8 @@ function renderGURPSSheet(frontmatter, sections, meta) {
   if (equipmentNotes) equipmentHtml += '\n' + equipmentNotes;
   return {
     sheetHtml,
-    combatHtml: buildCombat(model, sections || [], tohitData ? tohitMarkup(tohitData) : ''),
+    // The rules reference rides the build's setting (meta.gurpsReference); on unless it is false.
+    combatHtml: buildCombat(model, sections || [], tohitData ? tohitMarkup(tohitData) : '', { reference: !meta || meta.gurpsReference !== false }),
     equipmentHtml,
     // Structural warnings (sections found but unread, hidden sub-tables, an
     // empty combat tab) — build.js prints them per page (#177).

@@ -13,6 +13,7 @@ function timelineTemplate(timelineContent, navFor, config, publishConfig) {
 </div>`;
 
   return baseShell({
+    pageType: 'timeline',
     title: 'Timeline',
     siteTitle: config.siteTitle,
     cssHref: cssPath(outputPath),

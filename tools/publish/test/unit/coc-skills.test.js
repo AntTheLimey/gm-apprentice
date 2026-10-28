@@ -136,4 +136,31 @@ describe('mergeSkills', () => {
     assert.equal(out.find(s => s.name === 'Charm').belowBase, undefined);
     assert.equal(out.find(s => s.name === 'Etiquette'), undefined, 'a skill left off has nothing to flag');
   });
+
+  it("with no list ('none'), keeps only the note's skills, each at the base and value it writes", () => {
+    const out = mergeSkills([{ name: 'Charm', base: 15, reg: 72 }, { name: 'Zither Playing', base: 5, reg: null }], 'none', { DEX: { reg: 50 } });
+    assert.deepEqual(out.map(s => [s.name, s.reg, s.developed]), [['Charm', 72, true], ['Zither Playing', 5, false]]);
+  });
+
+  it("with no list, a base written as a characteristic share is worked out from the note's characteristics", () => {
+    const chars = { INT: { reg: 70 }, EDU: { reg: 80 }, DEX: { reg: 60 } };
+    const out = mergeSkills([
+      { name: 'Etiquette', base: 5, baseText: 'INT/5', reg: null },
+      { name: 'Language (Own)', base: null, baseText: 'EDU', reg: null },
+      { name: 'Dodge', base: 2, baseText: 'DEX / 2', reg: 45 },
+      { name: 'Omen Reading', base: 3, baseText: 'SAN/3', reg: null },
+      { name: 'Luck Sense', base: 5, baseText: 'APP/5', reg: 20 },
+    ], 'none', chars);
+    assert.deepEqual(out.map(s => [s.name, s.reg, s.developed]),
+      [['Dodge', 45, true], ['Etiquette', 14, false], ['Language (Own)', 80, false], ['Luck Sense', 20, false]]);
+  });
+
+  it('with no list, a skill written below its worked-out share base is flagged, as with the list (Dodge DEX/2)', () => {
+    const out = mergeSkills([
+      { name: 'Dodge', base: 2, baseText: 'DEX/2', reg: 20 },
+      { name: 'Zither Playing', base: 5, baseText: '05', reg: 3 },
+    ], 'none', { DEX: { reg: 60 } });
+    assert.equal(out.find(s => s.name === 'Dodge').belowBase, 30);
+    assert.equal(out.find(s => s.name === 'Zither Playing').belowBase, undefined, 'a plain number is the note\'s own, not worked out');
+  });
 });
