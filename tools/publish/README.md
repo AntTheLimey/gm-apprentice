@@ -961,7 +961,11 @@ relationship resolution, and `landingTemplate` accepts
 - **`movedSiteKeys(siteConfig, options?)`**: just the names it would
   remove, from the parsed site file or its text. A host staging a site
   file for a build on a moved vault leaves these out, or the build stops
-  on old-name faults.
+  on old-name faults. Stage with
+  `movedSiteKeys(siteConfig, { leaveFallback: true })`: the fallback
+  keys, such as `preserveDirs`, stay in the site file until the vault
+  has `player_site.keep`, and removing them sooner drops the preserved
+  folders from the build.
 
 ---
 
