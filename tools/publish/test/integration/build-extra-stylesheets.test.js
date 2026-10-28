@@ -137,6 +137,54 @@ test('a path outside both the vault and the site folder is not read', () => {
   } finally { s.cleanup(); }
 });
 
+test('a link inside the vault that points outside both folders is not read', (t) => {
+  const s = site(undefined, { sites: [] });
+  try {
+    const outside = path.join(s.root, 'outside.css');
+    fs.writeFileSync(outside, 'p { color: red; }\n');
+    fs.mkdirSync(path.join(s.root, 'vault', '_meta', 'theme'), { recursive: true });
+    try { fs.symlinkSync(outside, path.join(s.root, 'vault', '_meta', 'theme', 'linked.css')); } catch (e) {
+      if (process.platform === 'win32') return t.skip('symlinks cannot be made here');
+      throw e;
+    }
+    const YAML = require('yaml');
+    const { writeNewConfig } = require('../helpers/settings-files');
+    const cfgFile = path.join(s.root, 'vault', '_meta', 'vault-config.yaml');
+    const cfg = YAML.parse(fs.readFileSync(cfgFile, 'utf8'));
+    cfg.player_site.theme = { stylesheets: ['_meta/theme/linked.css'] };
+    writeNewConfig(path.join(s.root, 'vault'), cfg);
+    const { build } = require('../../lib/build');
+    const saved = { log: console.log, warn: console.warn };
+    const logs = [];
+    console.log = () => {}; console.warn = (...a) => logs.push(a.join(' '));
+    try { build({ configPath: s.configPath }); } finally { Object.assign(console, saved); }
+    assert.ok(logs.some((l) => l.includes('_meta/theme/linked.css')), logs.join('\n'));
+    assert.ok(!s.player.exists('css', 'extra', 'linked.css'));
+    assert.ok(!links(s.player.read('npcs', 'mara-quill.html')).some((h) => h.includes('extra')));
+  } finally { s.cleanup(); }
+});
+
+test('a link inside the vault to a file inside it is read, under its own name', (t) => {
+  const s = site(undefined, { vaultCss: { '_meta/theme/real.css': 'p {}\n' }, sites: [] });
+  try {
+    try { fs.symlinkSync(path.join(s.root, 'vault', '_meta', 'theme', 'real.css'), path.join(s.root, 'vault', '_meta', 'theme', 'alias.css')); } catch (e) {
+      if (process.platform === 'win32') return t.skip('symlinks cannot be made here');
+      throw e;
+    }
+    const YAML = require('yaml');
+    const { writeNewConfig } = require('../helpers/settings-files');
+    const cfgFile = path.join(s.root, 'vault', '_meta', 'vault-config.yaml');
+    const cfg = YAML.parse(fs.readFileSync(cfgFile, 'utf8'));
+    cfg.player_site.theme = { stylesheets: ['_meta/theme/alias.css'] };
+    writeNewConfig(path.join(s.root, 'vault'), cfg);
+    const { build } = require('../../lib/build');
+    const saved = { log: console.log, warn: console.warn };
+    console.log = () => {}; console.warn = () => {};
+    try { build({ configPath: s.configPath }); } finally { Object.assign(console, saved); }
+    assert.equal(s.player.read('css', 'extra', 'alias.css'), 'p {}\n');
+  } finally { s.cleanup(); }
+});
+
 test('the GM site may set its own list', () => {
   const s = site(['_meta/theme/paper.css'], { vaultCss: { '_meta/theme/paper.css': 'p {}\n', '_meta/theme/gm.css': 'h1 {}\n' }, gm: { theme: { stylesheets: ['_meta/theme/gm.css'] } } });
   try {

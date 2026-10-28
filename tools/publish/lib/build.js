@@ -500,10 +500,23 @@ function buildSite(options) {
     const vaultRoot = path.resolve(config.vaultPath);
     const siteRoot = path.resolve(configDir);
     const inside = (root, p) => p.startsWith(root + path.sep);
+    // A link inside either folder is followed and must land inside it too, or a file from elsewhere would be published.
+    const real = (p) => { try { return fs.realpathSync(p); } catch (e) { return null; } };
+    const roots = [vaultRoot, siteRoot].map((root) => ({ root, real: real(root) }));
     const kept = new Map();
     for (const written of publishConfig.stylesheets || []) {
-      const found = [vaultRoot, siteRoot].map((root) => path.resolve(root, written))
-        .find((p, i) => inside([vaultRoot, siteRoot][i], p) && fs.existsSync(p) && fs.statSync(p).isFile());
+      let pointsOut = false;
+      // `found` is the path as written (its file name names the copy); its target is checked by its real path.
+      const found = roots.map(({ root }) => path.resolve(root, written)).find((p, i) => {
+        if (!inside(roots[i].root, p) || !fs.existsSync(p)) return false;
+        const target = real(p);
+        if (!target || !roots[i].real || !inside(roots[i].real, target)) { pointsOut = true; return false; }
+        return fs.statSync(target).isFile();
+      });
+      if (!found && pointsOut) {
+        printWarning(`${setting} entry "${written}" is a link to a file outside the vault (${vaultRoot}) and the site folder (${siteRoot}); it is left out`);
+        continue;
+      }
       if (!found) {
         printWarning(`${setting} entry "${written}" was not found in the vault (${vaultRoot}) or the site folder (${siteRoot}); it is left out`);
         continue;
