@@ -195,6 +195,41 @@ function writeAccepted(vaultPath, accepted) {
   writeAtomic(at(vaultPath, PUBLISH_LIST_FILE), listText({ ...base, accepted }));
 }
 
+// Moves paths from `publishing` to the end of `needs_decision` in the vault's publish list, each entry as written (its
+// reason and the comment above it go with it); every other line of the file, comments and order included, is kept.
+// Read back before it is written: the lists must be what was asked, or nothing is written. A path that is not under
+// publishing throws, the file untouched. Returns the paths moved.
+function moveToNeedsDecision(vaultPath, rels) {
+  const file = at(vaultPath, PUBLISH_LIST_FILE);
+  const text = fs.readFileSync(file, 'utf-8');
+  const before = parseNewFile(text, () => {});
+  const wanted = [...new Set(rels.map(canonicalPath))];
+  const missing = wanted.filter((rel) => !before.publishing.includes(rel));
+  if (missing.length) throw new Error(`${missing.join(', ')} ${missing.length === 1 ? 'is' : 'are'} not under publishing in ${PUBLISH_LIST_FILE}; nothing was changed`);
+  const doc = YAML.parseDocument(text);
+  const publishing = doc.get('publishing', true);
+  const pathOf = (node) => canonicalPath(String(YAML.isMap(node) ? node.get('path') : YAML.isScalar(node) ? node.value : '').trim());
+  const moving = publishing.items.filter((node) => wanted.includes(pathOf(node)));
+  publishing.items = publishing.items.filter((node) => !moving.includes(node));
+  let decide = doc.get('needs_decision', true);
+  if (!YAML.isSeq(decide)) {
+    decide = doc.createNode([]);
+    doc.set('needs_decision', decide);
+  }
+  decide.flow = false;
+  decide.items.push(...moving);
+  const out = doc.toString({ lineWidth: 0 });
+  const after = parseNewFile(out, () => {});
+  const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+  if (!same(after.publishing, before.publishing.filter((rel) => !wanted.includes(rel)))
+      || !same(after.needsDecision, [...new Set([...before.needsDecision.filter((rel) => !wanted.includes(rel)), ...moving.map(pathOf)])])
+      || !same(after.excluded, before.excluded)) {
+    throw new Error(`${PUBLISH_LIST_FILE} did not read back as asked after the move; nothing was changed`);
+  }
+  writeAtomic(file, out);
+  return wanted;
+}
+
 function writePublishList(vaultPath, list) {
   writeAtomic(at(vaultPath, PUBLISH_LIST_FILE), listText(list));
 }
@@ -217,4 +252,4 @@ function parseListText(text, { warn = console.warn } = {}) {
   return parseNewFile(text, warn);
 }
 
-module.exports = { readPublishListFile, parseListText, loadManifest, loadPublishList, writeAccepted, listText, writePublishList, counts, canonicalPath, resetNotices };
+module.exports = { readPublishListFile, parseListText, loadManifest, loadPublishList, writeAccepted, listText, writePublishList, moveToNeedsDecision, counts, canonicalPath, resetNotices };

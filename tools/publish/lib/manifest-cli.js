@@ -19,7 +19,7 @@ const { parseAnnotatedManifest, renderManifest } = require('./manifest-legacy');
 const { writeAtomic } = require('./settings/write');
 const { PUBLISH_LIST_FILE, OLD_LIST_FILE, PUBLISH_LIST_FROM, at } = require('./settings/layout');
 const { siteToolOlderThan } = require('./settings/move');
-const { convertPublishList, setsOf } = require('./publish-list-convert');
+const { convertPublishList, setsOf, KEPT_SUFFIX } = require('./publish-list-convert');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { pairHubs, isWrapUp, isPlayedSession } = require('./session-hub');
 const { getCanonStatus } = require('./templates/base');
@@ -545,6 +545,35 @@ function runConvert(opts, d) {
   return result.ok ? 0 : 1;
 }
 
+// `manifest hidden`: the paths a `%%` or `<!-- -->` comment hid in the old list (_meta/publish-manifest.md.converted)
+// that _meta/publish-list.yaml still publishes, because a conversion before 1.48.2 read them as ticked (#500). The
+// comment rule is the old reader's own (commentHiddenEntries). `--decide` moves them to needs_decision.
+// JSON: { converted (the old file is there), hidden (every path the rule hides there), publishing (those the list
+// still publishes), moved }.
+function runHidden(opts, d) {
+  const out = d.out || console.log;
+  const vault = vaultFor(opts, out);
+  if (!vault) return 1;
+  const { commentHiddenEntries } = require('./manifest-legacy');
+  const { moveToNeedsDecision } = require('./manifest');
+  const convertedFile = at(vault, `${OLD_LIST_FILE}${KEPT_SUFFIX}`);
+  const result = { converted: fs.existsSync(convertedFile), hidden: [], publishing: [], moved: [] };
+  if (result.converted) {
+    result.hidden = commentHiddenEntries(fs.readFileSync(convertedFile, 'utf8')).publishing;
+    const list = loadManifest(vault, { warn: () => {} });
+    const published = new Set(list && list.file === 'new' ? list.publishing : []);
+    result.publishing = result.hidden.filter((rel) => published.has(rel));
+    if (opts.decide && result.publishing.length) result.moved = moveToNeedsDecision(vault, result.publishing);
+  }
+  if (opts.json) out(JSON.stringify(result, null, 2));
+  else if (!result.publishing.length) out('No page the old publish list hid with a comment is published.');
+  else {
+    out(`${opts.decide ? 'Moved to needs_decision' : 'Published, though the old publish list hid them with a comment'} (${result.publishing.length}):`);
+    for (const rel of result.publishing) out(`  ${rel}`);
+  }
+  return 0;
+}
+
 // `manifest list`: the three lists and their counts, computed on request.
 function runList(opts, d) {
   const out = d.out || console.log;
@@ -583,6 +612,7 @@ async function runManifest(options, deps) {
   // Answers about one vault from its files alone: no site config, no survey.
   if (opts.verb === 'convert') return runConvert(opts, d);
   if (opts.verb === 'list') return runList(opts, d);
+  if (opts.verb === 'hidden') return runHidden(opts, d);
   if (opts.verb === 'rename') return require('./rename-refs').runRename(opts, d);
   const survey = surveyVault(opts, d);
   assertNoStops(survey.publishConfig, 'manifest');
