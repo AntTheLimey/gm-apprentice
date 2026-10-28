@@ -44,7 +44,8 @@ test('each section heading carries its key; a heading with no words, or one alre
 test('every hook is a selector with what it marks, an example and when it is written', () => {
   for (const h of HOOKS) {
     assert.ok(h.selector && h.marks && h.example, JSON.stringify(h));
-    assert.ok(['always', 'switch'].includes(h.when), h.selector);
+    assert.ok(['always', 'switch', 'setting'].includes(h.when), h.selector);
+    if (h.when === 'setting') assert.ok(h.setting, `${h.selector} names the setting that writes it`);
   }
   assert.equal(new Set(HOOKS.map((h) => h.selector)).size, HOOKS.length);
 });
