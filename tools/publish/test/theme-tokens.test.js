@@ -82,6 +82,31 @@ test('every custom property the stylesheets read is listed or private', () => {
   assert.deepEqual([...stray], [], 'list these in lib/theme-tokens.js, or name them private there');
 });
 
+// A styled prop page and a gazetteer page link css/gm.css and css/props.css without style.css, so a custom property
+// declared only in style.css is undefined there. Each read of one carries today's literal as its fallback, with two
+// exceptions: the palette names gm.css read bare before #363 (on such a page they have always been undefined, and a
+// fallback now would change how those pages look), and the full-bleed hero's rules, which match only on a landing page,
+// and every landing page loads style.css.
+test('gm.css and props.css read style.css-only tokens with a fallback (they load without style.css)', () => {
+  const declares = (text) => new Set([...text.matchAll(/(--[\w-]+)\s*:/g)].map((m) => m[1]));
+  const styleOnly = declares(noComments(fs.readFileSync(path.join(CSS, 'style.css'), 'utf8')));
+  const READ_BARE_BEFORE_363 = new Set(['--warning', '--bg-card', '--text', '--border']);
+  const LANDING_ONLY = /landing-full-bleed|landing-hero--full-bleed/;
+  const bare = [];
+  for (const f of ['gm.css', 'props.css']) {
+    const text = noComments(fs.readFileSync(path.join(CSS, f), 'utf8'));
+    const own = declares(text);
+    for (const m of text.matchAll(/([^{};]+)\{([^{}]*)\}/g)) {
+      if (LANDING_ONLY.test(m[1])) continue;
+      for (const v of m[2].matchAll(/var\((--[\w-]+)\s*([,)])/g)) {
+        if (v[2] === ',' || own.has(v[1]) || !styleOnly.has(v[1]) || READ_BARE_BEFORE_363.has(v[1])) continue;
+        bare.push(`${f}: ${m[1].trim()} reads ${v[1]}`);
+      }
+    }
+  }
+  assert.deepEqual(bare, [], 'give each of these its old literal as a fallback: var(--x, <literal>)');
+});
+
 test('style.css writes no colour into a rule: only token declarations, fallbacks, shadows and print', () => {
   let css = noComments(fs.readFileSync(path.join(CSS, 'style.css'), 'utf8'));
   css = css.slice(0, css.indexOf('@media print'));   // print is black on white, whatever the theme

@@ -47,7 +47,7 @@ const rule = (sel) => {
   assert.ok(m, `gm.css has a rule for ${sel}`);
   return m[1];
 };
-const colourOf = (sel) => { const m = rule(sel).match(/(?:^|[;\s])color:\s*var\((--[a-z-]+)\)/); assert.ok(m, `${sel} takes a colour name`); return m[1]; };
+const colourOf = (sel) => { const m = rule(sel).match(/(?:^|[;\s])color:\s*var\((--[a-z-]+)(?:,[^;]*)?\)/); assert.ok(m, `${sel} takes a colour name`); return m[1]; };
 const TINT = (() => { const m = rule('.gm-mark').match(/color-mix\(in srgb, var\(--warning\) (\d+)%, var\(--bg-card\)\)/); assert.ok(m, 'the mark tint'); return +m[1] / 100; })();
 
 describe('gm.css: the marks can be read in every look', () => {
