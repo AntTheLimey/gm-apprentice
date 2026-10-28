@@ -359,7 +359,8 @@ def find_publish_hidden(vault: Path) -> list[Item]:
             return [f"left the {pages} published"]
         data = _ask_hidden(vault, "--decide")
         moved = [str(x) for x in data["moved"]]
-        now = data.get("now") if isinstance(data.get("now"), dict) else {}
+        got = data.get("now")
+        now: dict[str, Any] = got if isinstance(got, dict) else {}
         if sorted(moved) != sorted(rels):
             raise StepFailed(f"the move did not take the pages named: moved {', '.join(moved) or 'none'}")
         return [f"{rel}: off publishing; it stays under excluded, as the list already had it"
