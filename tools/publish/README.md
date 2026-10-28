@@ -938,6 +938,27 @@ Template signatures vary slightly — most accept
 relationship resolution, and `landingTemplate` accepts
 `(pages, navFor, config, publishConfig)`. See `lib/build.js` for exact usage.
 
+### Settings move
+
+`require('gm-apprentice-publish/lib/settings/move')` gives the code behind
+`settings move`, for a tool that embeds this one:
+
+- **`planMove(options, deps?)`** and **`applyMove(plan, deps?)`**: plan
+  the move of a vault to `_meta/vault-config.yaml`, then carry it out.
+  The move asks whether a site folder's own tool can read the new layout
+  by running this tool's `update-pin --check`. Pass `deps.pinCheck`
+  (`(siteDir) => ({ ok, ours, spec, installedBefore })`, or `null` when
+  there is no answer) to answer that yourself; then no program is
+  started, and `child_process` is never loaded. In a packaged host,
+  where `process.execPath` is the host and not Node, always pass it.
+- **`stripSiteKeys(siteText, options?)`**: the site file's text with the
+  keys the move takes out removed: `{ siteAfter, siteOut, removedKeys }`
+  (`siteOut` is `null` when nothing was removed).
+- **`movedSiteKeys(siteConfig, options?)`**: just the names it would
+  remove, from the parsed site file or its text. A host staging a site
+  file for a build on a moved vault leaves these out, or the build stops
+  on old-name faults.
+
 ---
 
 ## Guided setup
