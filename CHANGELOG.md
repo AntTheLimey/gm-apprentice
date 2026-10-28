@@ -29,7 +29,9 @@ they look the same.
   colour, and the type sizes, spacing and corner radii that recur
   exactly in the site's own rules have a scale (`--font-size-875`,
   `--space-1000`, `--radius-500`). The genre presets and sheet skins
-  already set these names, so they are the worked examples.
+  already set these names, so they are the worked examples. The
+  page-not-found page's Home button reads `--theme-accent` and
+  `--white`, so both are now listed as its hooks.
 - `--on-accent` (#363), unset by default: the words on a control filled
   with the accent. Each control keeps today's colour until a theme sets
   it, so a palette whose accent is light can now fix #529 in one line.
