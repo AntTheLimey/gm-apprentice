@@ -103,14 +103,24 @@ test('the GM site follows the player site\'s hero and keeps its band in view', (
 
 test('a focus value is a picture position and nothing else', () => {
   const read = (raw) => TYPES.position.read(raw, entry('player_site.landing.hero.focus'));
-  for (const good of ['center', '20% center', 'left top', 'right 10% bottom 2rem', '0 0', '-5px 50%', '  68%   CENTER ', 0]) {
+  for (const good of ['center', '20% center', 'left top', 'right 10% bottom 2rem', '0 0', '-5px 50%', '  68%   CENTER ', 0, 'center center', 'left bottom', 'top right', 'center left']) {
     assert.equal(read(good).ok, true, String(good));
   }
   assert.equal(read('  68%   CENTER ').value, '68% center');
   assert.equal(read(0).value, '0');
-  for (const bad of ['20% center; } body { display: none', 'url(x)', 'var(--x)', 'calc(1px + 2px)', '1 2 3 4 5', '', 'middle', '20%;', '10furlongs', '<b>', '12', 12]) {
+  for (const bad of ['20% center; } body { display: none', 'url(x)', 'var(--x)', 'calc(1px + 2px)', '1 2 3 4 5', '', 'middle', '20%;', '10furlongs', '<b>', '12', 12, 'left right', 'top Bottom', 'right 10% left', 'bottom 2rem top']) {
     assert.equal(read(bad).ok, false, bad);
   }
+});
+
+test('the generated schema pattern agrees with the reader on same-axis positions', () => {
+  const { schema } = require('../lib/settings/describe');
+  const text = JSON.stringify(schema());
+  const pat = JSON.parse(text);
+  const find = (n) => { if (n && typeof n === 'object') { if (n.anyOf && n.anyOf[0] && n.anyOf[0].pattern && /\(\?!/.test(n.anyOf[0].pattern)) return n.anyOf[0].pattern; for (const v of Object.values(n)) { const r = find(v); if (r) return r; } } return null; };
+  const re = new RegExp(find(pat));
+  for (const good of ['center', '20% center', 'LEFT Top', 'right 10% bottom 2rem']) assert.ok(re.test(good), good);
+  for (const bad of ['left right', 'Top bottom', 'right 10% left', 'bottom 2rem top']) assert.ok(!re.test(bad), bad);
 });
 
 test('a bad focus is a settings fault with a plain message, and never reaches the page', () => {

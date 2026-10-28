@@ -92,7 +92,9 @@ const SCHEMAS = {
     const words = ['left', 'right', 'top', 'bottom', 'center'].map(caseless).join('|');
     const units = POSITION_UNITS.map(caseless).join('|');
     const part = `(?:${words}|0|-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:${units}))`;
-    return { anyOf: [{ type: 'string', pattern: `^\\s*${part}(?:\\s+${part}){0,3}\\s*$` }, { const: 0 }] };
+    // No two words for one axis: the lookaheads refuse a second of left/right, or of top/bottom.
+    const twice = (pair) => `(?!(?:.*\\b(?:${pair.map(caseless).join('|')})\\b){2})`;
+    return { anyOf: [{ type: 'string', pattern: `^${twice(['left', 'right'])}${twice(['top', 'bottom'])}\\s*${part}(?:\\s+${part}){0,3}\\s*$` }, { const: 0 }] };
   },
   any: () => ({}),
 };
