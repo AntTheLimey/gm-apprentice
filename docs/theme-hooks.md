@@ -15,6 +15,9 @@ fails when any listed hook leaves the output
 (`tools/publish/test/theme-hooks.test.js`), and its tables are written
 from the same list the test reads (`tools/publish/lib/theme-hooks.js`).
 
+The colours, typefaces, sizes and spacing a theme can set are listed in
+[Theme tokens](theme-tokens.md), with the same promise.
+
 ## Adding your own stylesheets
 
 `player_site.theme.stylesheets` links your own stylesheets on every page

@@ -65,7 +65,7 @@ describe('gm.css: the marks can be read in every look', () => {
         // an inline mark sits in running text: its tint is over the page, not a card
         ['an inline mark\'s text', t[colourOf('.gm-mark')], mix(t['--warning'], t['--bg'], TINT)],
         ['an inline mark\'s reason', t[colourOf('span.gm-mark::after')], mix(t['--warning'], t['--bg'], TINT)],
-        ['the band', hex(rule('.gm-band').match(/color:\s*(#[0-9a-fA-F]{3,6})/)[1]), t['--warning']],
+        ['the band', t[colourOf('.gm-band')], t['--warning']],
       ];
       for (const [what, fg, bg] of pairs) {
         assert.ok(fg && bg, `${what}: colours found`);
