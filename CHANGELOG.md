@@ -35,14 +35,20 @@ A site that sets none of the new settings builds as before.
   first paragraph of a note's text and `data-section` (a key from the
   heading's words) on each section heading. Off, every page is byte for
   byte as it was, so a tool that matches `<h2>` or
-  `<h1 class="page-title">` as text keeps working until it turns them on.
+  `<h1 class="page-title">` as text keeps working. A downstream tool turns
+  the switch on once its matchers are ready for the attributes.
 - `player_site.sheets.gurps_reference_tables` and
   `player_site.sheets.coc_skill_list` (#423), both on by default. Off,
   a GURPS Combat tab has no rules reference block, and a Call of
   Cthulhu sheet (Regency too) lists only the skills the character's
   note has, with the values written there; its hint no longer says
-  every skill is shown. Nothing else on either sheet changes, and the
-  to-hit calculator keeps its own setting.
+  every skill is shown. A base the note writes as a characteristic share
+  (`EDU`, `INT/5`) is worked out from the character's characteristics.
+  Nothing else on either sheet changes. The to-hit calculator has its
+  own switch (`player_site.features.tohit_calculator`, on by default)
+  and, while it is on, still carries the hit-location penalties and
+  range bands in its data on the same tab; turn it off too to leave
+  those numbers out.
 - `manifest hidden --vault <dir> [--decide] [--json]` (#500): the pages
   `_meta/publish-list.yaml` still publishes whose line in the old list
   (`_meta/publish-manifest.md.converted`) a `%%` or `<!-- -->` comment

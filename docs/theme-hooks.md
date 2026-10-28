@@ -54,14 +54,16 @@ They sit on markup the tool already writes: no wrapper is added, so
 nothing on the page moves. They are off by default because a tool that
 reads the pages as text, matching `<h2>` or `<h1 class="page-title">`
 exactly, would stop matching once an attribute is added; with the switch
-off, every page is byte for byte what it was. The GM site follows the
-player site's switch unless `gm_site.theme.hooks` sets its own.
+off, every page is byte for byte what it was. A downstream tool turns it
+on once its own matchers are ready for the attributes. The GM site
+follows the player site's switch unless `gm_site.theme.hooks` sets its
+own.
 
 <!-- theme-hooks:switch -->
 
 | Hook | What it marks | Example |
 |------|---------------|---------|
-| `main[data-page-type]` | The kind of page: a note's own `type` (`npc`, `pc`, `location`, `session` ...), or `landing`, `index` (a section's list), `story`, `timeline`, `props`, `prop-container` or `not-found` for a page the tool makes | `main[data-page-type="npc"] { --accent: #7a3b2e; }` |
+| `main[data-page-type]` | The kind of page: a note's own `type` (`npc`, `pc`, `location`, `session` ...), or `landing`, `index` (a section's list), `story`, `timeline`, `props`, `prop-container` or `not-found` for a page the tool makes; `page` for a note with no type | `main[data-page-type="npc"] { --accent: #7a3b2e; }` |
 | `[data-title-block]` | The block that holds the page's title and the facts beside it (a note's header card or banner, the landing title area); on a page with no such block, the title itself | `[data-title-block] { margin-bottom: 2rem; }` |
 | `h1[data-page-title]` | The page's title | `h1[data-page-title] { font-variant: small-caps; }` |
 | `p[data-first-paragraph]` | The first paragraph of a note's own text (not on a character page, which is laid out as a sheet) | `p[data-first-paragraph]::first-letter { font-size: 3em; float: left; }` |

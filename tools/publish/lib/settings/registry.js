@@ -451,7 +451,7 @@ const REGISTRY = [
   },
   {
     name: 'player_site.sheets.gurps_reference_tables', type: 'switch', default: true, group: 'sheets',
-    does: "The rules reference at the foot of a GURPS character's Combat tab (the Hit Location and Size and Speed/Range tables). Off, the tab has no reference block; the to-hit calculator is set on its own",
+    does: "The rules reference at the foot of a GURPS character's Combat tab (the Hit Location and Size and Speed/Range tables). Off, the tab has no reference block. The to-hit calculator has its own switch (`player_site.features.tohit_calculator`, on unless turned off) and, while it is on, still carries the hit-location penalties and the range bands in its own data on the same tab: turn it off too to leave those numbers out",
     left_out: 'On',
   },
   {
