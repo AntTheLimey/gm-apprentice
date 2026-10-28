@@ -132,6 +132,11 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   // The extra stylesheets are not part of the theme object every page reads: they are passed down on their own (below).
   delete theme.stylesheets;
   delete theme.hooks;
+  // The label face (#363) joins the fonts only when set: a site that sets none resolves to the fonts it had.
+  if (theme.fonts && theme.fonts.label == null) {
+    const { label, ...fonts } = theme.fonts;
+    theme.fonts = fonts;
+  }
   const merged = {
     link_previews: p.features.link_previews,
     tohit_calculator: p.features.tohit_calculator,

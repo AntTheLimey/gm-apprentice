@@ -369,6 +369,12 @@ const REGISTRY = [
     left_out: "The preset's lettering, or the reader's own system font",
   },
   {
+    name: 'player_site.theme.fonts.label', type: 'text', group: 'theme',
+    shape: "a typeface's name",
+    does: 'The lettering for the menu, labels, table heads, badges, buttons, meta lines and date labels (`--font-label`). Loaded the same way as the heading and body lettering',
+    left_out: 'The body lettering',
+  },
+  {
     name: 'player_site.theme.fonts.source', was: [{ name: 'publish.theme.fonts.source', in: 'vault' }], type: 'choice', values: ['google', 'self-host', 'local'], default: 'google', group: 'theme',
     does: 'Where the lettering comes from: `self-host` (the site downloads the typefaces once and serves them itself), `google` (the reader\'s browser fetches them from Google Fonts) or `local` (your own font files). With `self-host` a reader\'s browser never contacts Google. A source the tool does not know is reported, and `google` is used',
     left_out: '`google`: what a vault that never set a source gets',

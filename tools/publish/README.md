@@ -685,14 +685,15 @@ all, in either mode.
 
 ### Theme fonts
 
-`player_site.theme.fonts.heading`/`.body` name Google Fonts families by
-default, and the build emits a `fonts.googleapis.com` `@import` at the
+`player_site.theme.fonts.heading`/`.body` (and `.label`, the face of the
+menu, labels, table heads, badges and buttons; unset, they keep the body
+face) name Google Fonts families by default, and the build emits a `fonts.googleapis.com` `@import` at the
 top of `css/theme.css` — every visitor's browser then requests the font
 directly from Google, and the build prints a warning saying so. Two ways
 to opt out:
 
 **`source: self-host`** (the setting new vaults get) downloads each
-non-generic heading/body family from Google Fonts at build time, once,
+non-generic heading, body and label family from Google Fonts at build time, once,
 and serves it from your site. Regular and bold, roman and italic are
 fetched, with Google's `unicode-range` subsets kept, and the files are
 served unmodified (they are OFL-licensed). They are cached in the vault
