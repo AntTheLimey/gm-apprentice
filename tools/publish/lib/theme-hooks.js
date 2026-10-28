@@ -14,7 +14,8 @@ const { headingKey } = require('./heading-key');
 const { decodeEntities } = require('./templates/gurps/tables');
 
 // Each hook: `selector` (what a theme writes), `marks` (what it is on the page), `example` (a rule that uses it) and
-// `when`: 'always' (on every site), or 'switch' (only with player_site.theme.hooks on).
+// `when`: 'always' (on every site), 'switch' (only with player_site.theme.hooks on) or 'setting' (only when the
+// setting named in `setting` asks for the layout it marks).
 const HOOKS = [
   { selector: 'main.content', when: 'always', marks: "The page's main column, on every page", example: 'main.content { max-width: 52rem; }' },
   { selector: 'header.top-nav', when: 'always', marks: "The site's menu bar at the top of every page except the page-not-found page (`404.html`), which has no menu: its plain header is `header.site-header`, left as it is so that page stays as it was", example: 'header.top-nav { border-bottom: 1px solid currentColor; }' },
@@ -27,6 +28,9 @@ const HOOKS = [
   { selector: 'h1[data-page-title]', when: 'switch', marks: "The page's title", example: 'h1[data-page-title] { font-variant: small-caps; }' },
   { selector: 'p[data-first-paragraph]', when: 'switch', marks: "The first paragraph of a note's own text (not on a character page, which is laid out as a sheet)", example: 'p[data-first-paragraph]::first-letter { font-size: 3em; float: left; }' },
   { selector: 'h2[data-section]', when: 'switch', marks: 'Each section heading; `data-section` is a key made from the heading\'s words, lower case, joined by hyphens (`## Current Status` is `current-status`)', example: 'h2[data-section="gm-notes"] { color: #900; }' },
+  { selector: '.landing-hero--full-bleed', when: 'setting', setting: 'player_site.landing.hero.layout: full-bleed', marks: "The landing page's title area, laid out with the campaign picture edge to edge under the menu", example: '.landing-hero--full-bleed h1 { text-transform: uppercase; }' },
+  { selector: 'body.landing-full-bleed', when: 'setting', setting: 'player_site.landing.hero.layout: full-bleed', marks: "The landing page's `<body>` when its title area is full-bleed (the page whose menu sits over the picture)", example: 'body.landing-full-bleed > .top-nav { backdrop-filter: blur(4px); }' },
+  { selector: '.landing-hero--align-left', when: 'setting', setting: 'player_site.landing.hero.align: left', marks: "The landing page's title area with its title, tagline and dates set to the left", example: '.landing-hero--align-left h1 { margin-left: -0.05em; }' },
 ];
 
 // The classes of the blocks that hold a page's title, outermost first where they nest.

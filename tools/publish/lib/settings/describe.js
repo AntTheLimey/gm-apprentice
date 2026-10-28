@@ -1,6 +1,6 @@
 'use strict';
 // What the settings command says about one setting, built from its entry in the list.
-const { TYPES, SWITCH_WORDS, emptyIsFault } = require('./types');
+const { TYPES, SWITCH_WORDS, POSITION_UNITS, emptyIsFault } = require('./types');
 const { REGISTRY } = require('./registry');
 const { stopsUnknown } = require('./layout');
 
@@ -87,6 +87,13 @@ const SCHEMAS = {
     return { type: 'object', properties: Object.fromEntries(e.keys.map((k) => [k, {}])) };
   },
   text: () => ({ type: ['string', 'number'] }),
+  // The reader's rule (types.js) as a pattern: one to four parts, any casing, spaces round them.
+  position: () => {
+    const words = ['left', 'right', 'top', 'bottom', 'center'].map(caseless).join('|');
+    const units = POSITION_UNITS.map(caseless).join('|');
+    const part = `(?:${words}|0|-?(?:\\d+(?:\\.\\d+)?|\\.\\d+)(?:${units}))`;
+    return { anyOf: [{ type: 'string', pattern: `^\\s*${part}(?:\\s+${part}){0,3}\\s*$` }, { const: 0 }] };
+  },
   any: () => ({}),
 };
 

@@ -82,7 +82,15 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   heroDateParts.push(`<span><span class="date-label">Sessions</span> ${sessionCount}</span>`);
   const heroDates = heroDateParts.length > 0 ? `<div class="hero-dates">${heroDateParts.join('')}</div>` : '';
 
-  const heroZone = `<div class="landing-hero">
+  // player_site.landing.hero (#530). Card, centred, writes exactly the hero it always did. Full-bleed adds a class here
+  // and on <body> (the menu is laid over the picture on this page only); the focus values were checked by the settings
+  // reader (types.js `position`: words, percentages and lengths only), so they go into the style as written.
+  const hero = landingConfig.hero || {};
+  const fullBleed = hero.layout === 'full-bleed';
+  const heroClasses = ['landing-hero', ...(fullBleed ? ['landing-hero--full-bleed'] : []), ...(hero.align === 'left' ? ['landing-hero--align-left'] : [])];
+  const focusVars = fullBleed ? [hero.focus && `--hero-focus: ${hero.focus}`, hero.focus_narrow && `--hero-focus-narrow: ${hero.focus_narrow}`].filter(Boolean) : [];
+  const heroStyle = focusVars.length ? ` style="${escapeHtml(focusVars.join('; '))}"` : '';
+  const heroZone = `<div class="${heroClasses.join(' ')}"${heroStyle}>
   ${heroImgHtml}
   <h1>${escapeHtml(config.siteTitle)}</h1>
   ${tagline}
@@ -318,6 +326,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
 
   return baseShell({
     pageType: 'landing',
+    bodyAttrs: fullBleed ? ' class="landing-full-bleed"' : '',
     title: config.siteTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(outputPath),

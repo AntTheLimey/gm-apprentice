@@ -409,6 +409,10 @@ The apprentice does the setting up and writes the switch for you.
 | `player_site.landing.banner.text` | The words in the banner, under its heading. Plain text, shown as written | Text | No words |
 | `player_site.landing.banner.link` | Makes the whole banner a link. It is the name of a page, a web address (`https://…`), or an address on the site (`gazetteer/index.html`). A link to a note that has no page is left out, with a warning; a link with nothing else set shows no banner | Text | Not a link |
 | `player_site.landing.banner.image` | A picture at the top of the banner. A file that is missing from the vault, or outside it, is reported and the banner shows without it | A picture's path in the vault, or a web address | No picture |
+| `player_site.landing.hero.layout` | How the top of the landing page is laid out. `card`: the campaign picture, title, tagline and dates in a rounded box. `full-bleed`: the picture runs edge to edge under the menu, with the title, tagline and dates over it on a shade of the hero colour; the menu sits over the picture on the landing page only | `card` or `full-bleed` | `card` |
+| `player_site.landing.hero.focus` | With a `full-bleed` hero, the part of the picture kept in view when it is cropped to fill the width, as CSS writes a position (`20% center` keeps the left fifth in view) | A picture position: one to four of left, right, top, bottom, center, a percentage or a length (`20% center`) | The middle of the picture |
+| `player_site.landing.hero.focus_narrow` | The same as `focus`, on a screen narrower than 768 pixels (a phone), where a wide picture is cropped hardest | A picture position, as for `focus` | The `focus` |
+| `player_site.landing.hero.align` | Where the title, tagline and dates sit in the landing page's title area, card or full-bleed | `left` or `center` | `center` |
 
 <!-- /settings:landing -->
 

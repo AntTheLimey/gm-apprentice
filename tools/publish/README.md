@@ -590,7 +590,10 @@ It includes these sections (each omitted if no relevant data exists):
   when `player_site.landing.banner.*` sets one
 - **Hero** — campaign image (from `player_site.theme.campaign_image` in
   `_meta/vault-config.yaml`), site title, last-played date, and in-game
-  date (from `vault.setting_year` in the same file)
+  date (from `vault.setting_year` in the same file). A rounded card by
+  default; `player_site.landing.hero.layout: full-bleed` runs the picture
+  edge to edge under the menu with the words over it, and `focus`,
+  `focus_narrow` and `align` place the picture and the words
 - **Story So Far** — first paragraph of the most recent played session's
   `## Narrative Recap` section, with a link to the full session page
 - **The Team** — PC cards with portrait (or initials fallback), status

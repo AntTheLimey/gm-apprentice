@@ -544,6 +544,28 @@ const REGISTRY = [
     left_out: 'No picture',
   },
 
+  // The landing page's title area (#530): today's card, or the campaign picture edge to edge under the menu
+  { name: 'player_site.landing.hero', type: 'map', container: true },
+  {
+    name: 'player_site.landing.hero.layout', type: 'choice', values: ['card', 'full-bleed'], default: 'card', group: 'landing',
+    does: "How the top of the landing page is laid out. `card`: the campaign picture, title, tagline and dates in a rounded box. `full-bleed`: the picture runs edge to edge under the menu, with the title, tagline and dates over it on a shade of the hero colour; the menu sits over the picture on the landing page only",
+  },
+  {
+    name: 'player_site.landing.hero.focus', type: 'position', group: 'landing',
+    does: 'With a `full-bleed` hero, the part of the picture kept in view when it is cropped to fill the width, as CSS writes a position (`20% center` keeps the left fifth in view)',
+    left_out: 'The middle of the picture',
+  },
+  {
+    name: 'player_site.landing.hero.focus_narrow', type: 'position', group: 'landing',
+    shape: 'a picture position, as for `focus`',
+    does: 'The same as `focus`, on a screen narrower than 768 pixels (a phone), where a wide picture is cropped hardest',
+    left_out: 'The `focus`',
+  },
+  {
+    name: 'player_site.landing.hero.align', type: 'choice', values: ['left', 'center'], default: 'center', group: 'landing',
+    does: 'Where the title, tagline and dates sit in the landing page\'s title area, card or full-bleed',
+  },
+
   // The props page: one page listing every prop the site shows, and its box on the landing page
   { name: 'player_site.props', type: 'map', container: true },
   {

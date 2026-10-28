@@ -212,6 +212,14 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
     value: { title: bannerText(b.title), text: bannerText(b.text), link: bannerText(b.link), image: bannerText(b.image) },
     enumerable: false, writable: true, configurable: true,
   });
+  // The landing hero's layout, focus and alignment (#530). Not listed, like the banner: a site that sets none builds as
+  // it did. A focus the reader refused is null (the reader has reported it).
+  const h = (p.landing && p.landing.hero) || {};
+  delete merged.landing.hero;
+  Object.defineProperty(merged.landing, 'hero', {
+    value: { layout: h.layout === 'full-bleed' ? 'full-bleed' : 'card', focus: h.focus || null, focus_narrow: h.focus_narrow || null, align: h.align === 'left' ? 'left' : 'center' },
+    enumerable: false,
+  });
   // The props page's four texts (null when unset) and the landing box's size. Not listed, like the banner.
   const pp = p.props || {};
   Object.defineProperty(merged, 'props', {

@@ -126,6 +126,7 @@ function sampleFor(e) {
     case 'switchOrList': return ['Sample'];
     case 'map': return e.keys ? { [e.keys[0]]: 'Sample' } : { 'Sample key': 'Sample' };
     case 'text': return 'Sample';
+    case 'position': return '20% center';
     case 'listOfMaps': return [Object.fromEntries(Object.keys(e.fields).map((k) => [k, 'Sample']))];
     default: return [];
   }
