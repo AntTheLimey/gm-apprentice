@@ -74,6 +74,10 @@ own.
 
 <!-- /theme-hooks:switch -->
 
+A section is not wrapped in an element of its own, so a rule that styles
+a section's text reaches it from its heading, for example
+`h2[data-section="rumours"] + p`.
+
 ## With a layout setting
 
 These classes are written only when a setting asks for the layout they
@@ -89,10 +93,6 @@ style the layout through them without matching the page's structure.
 | `.landing-hero--align-left` | `player_site.landing.hero.align: left` | The landing page's title area with its title, tagline and dates set to the left | `.landing-hero--align-left h1 { margin-left: -0.05em; }` |
 
 <!-- /theme-hooks:setting -->
-
-A section is not wrapped in an element of its own, so a rule that styles
-a section's text reaches it from its heading, for example
-`h2[data-section="rumours"] + p`.
 
 ## What is not safe to style
 
