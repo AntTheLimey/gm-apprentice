@@ -15,6 +15,8 @@ test('a label face is written as --font-label, with or without a palette or genr
   assert.match(genre, /:root \{\n {2}--font-label: 'Share Tech Mono', sans-serif;\n\}/);
   // A generic family is written as itself, as heading and body are.
   assert.match(generateThemeCSS({ fonts: { label: 'monospace' } }), /--font-label: monospace, sans-serif;/);
+  // ...and with a genre preset too: no preset face is there to keep (heading and body have one).
+  assert.match(generateThemeCSS({ genre: 'scifi', palette: null, fonts: { label: 'monospace' } }), /:root \{\n {2}--font-label: monospace, sans-serif;\n\}/);
 });
 
 test('the label face is loaded like the others: from Google, self-hosted or local', () => {

@@ -160,7 +160,8 @@ function generateThemeCSS(config, opts = {}) {
     // A PC's backstory and hook are read in the heading face (--font-reading, style.css).
     if (fonts.heading && !GENERIC_FAMILIES.has(fonts.heading)) fontVars.push(`  --font-heading: ${cssFontValue(fonts.heading, 'serif')};`, `  --font-reading: ${cssFontValue(fonts.heading, 'serif')};`);
     if (fonts.body && !GENERIC_FAMILIES.has(fonts.body)) fontVars.push(`  --font-body: ${cssFontValue(fonts.body, 'sans-serif')};`);
-    if (fonts.label && !GENERIC_FAMILIES.has(fonts.label)) fontVars.push(`  --font-label: ${cssFontValue(fonts.label, 'sans-serif')};`);
+    // A label face has no preset default to keep, so a generic family here is a choice and is written.
+    if (fonts.label) fontVars.push(`  --font-label: ${cssFontValue(fonts.label, 'sans-serif')};`);
     // Computed even when there are no --font-* overrides to emit: with source: local,
     // the GM may be self-hosting the preset's OWN font (e.g. scifi's Rajdhani) under
     // its own family name, with no heading/body override at all — the preset's static
