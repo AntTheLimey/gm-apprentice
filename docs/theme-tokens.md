@@ -109,24 +109,24 @@ The menu bar and the landing title area stay dark in both palettes, so their wor
 
 <!-- /theme-tokens:fonts -->
 
-<!-- theme-tokens:text -->
+<!-- theme-tokens:size -->
 
-Sizes that recur exactly in the site's own rules. The number is the size in thousandths of a rem: `--text-875` is 0.875rem. The character sheets keep their own sizes.
+Sizes that recur exactly in the site's own rules. The number is the size in thousandths of a rem: `--font-size-875` is 0.875rem. The character sheets keep their own sizes.
 
 | Token | What it sets | Default |
 |-------|--------------|---------|
-| `--text-650` | Type size | `0.65rem` |
-| `--text-700` | Type size | `0.7rem` |
-| `--text-750` | Type size | `0.75rem` |
-| `--text-800` | Type size | `0.8rem` |
-| `--text-850` | Type size | `0.85rem` |
-| `--text-875` | Type size | `0.875rem` |
-| `--text-900` | Type size | `0.9rem` |
-| `--text-950` | Type size | `0.95rem` |
-| `--text-1000` | Type size | `1rem` |
-| `--text-1100` | Type size | `1.1rem` |
+| `--font-size-650` | Type size | `0.65rem` |
+| `--font-size-700` | Type size | `0.7rem` |
+| `--font-size-750` | Type size | `0.75rem` |
+| `--font-size-800` | Type size | `0.8rem` |
+| `--font-size-850` | Type size | `0.85rem` |
+| `--font-size-875` | Type size | `0.875rem` |
+| `--font-size-900` | Type size | `0.9rem` |
+| `--font-size-950` | Type size | `0.95rem` |
+| `--font-size-1000` | Type size | `1rem` |
+| `--font-size-1100` | Type size | `1.1rem` |
 
-<!-- /theme-tokens:text -->
+<!-- /theme-tokens:size -->
 
 <!-- theme-tokens:space -->
 

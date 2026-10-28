@@ -27,7 +27,7 @@ they look the same.
   party boards, the Call of Cthulhu sheet's other inks, words over a
   picture, the GM band's ink) is a named token whose default is that
   colour, and the type sizes, spacing and corner radii that recur
-  exactly in the site's own rules have a scale (`--text-875`,
+  exactly in the site's own rules have a scale (`--font-size-875`,
   `--space-1000`, `--radius-500`). The genre presets and sheet skins
   already set these names, so they are the worked examples.
 - `--on-accent` (#363), unset by default: the words on a control filled
