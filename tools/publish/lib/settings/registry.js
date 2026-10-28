@@ -372,7 +372,7 @@ const REGISTRY = [
     name: 'player_site.theme.fonts.label', type: 'text', group: 'theme',
     shape: "a typeface's name",
     does: 'The lettering for the menu, labels, table heads, badges, buttons, meta lines and date labels (`--font-label`). Loaded the same way as the heading and body lettering',
-    left_out: 'The body lettering',
+    left_out: 'Each keeps the lettering it has',
   },
   {
     name: 'player_site.theme.fonts.source', was: [{ name: 'publish.theme.fonts.source', in: 'vault' }], type: 'choice', values: ['google', 'self-host', 'local'], default: 'google', group: 'theme',

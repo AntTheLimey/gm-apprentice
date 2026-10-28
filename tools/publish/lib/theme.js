@@ -218,7 +218,7 @@ function generateThemeCSS(config, opts = {}) {
   // default system-ui) leaves style.css's serif reading face.
   if (fonts.heading && !GENERIC_FAMILIES.has(fonts.heading)) vars.push(`  --font-reading: ${cssFontValue(fonts.heading, 'serif')};`);
   if (fonts.body) vars.push(`  --font-body: ${cssFontValue(fonts.body, 'sans-serif')};`);
-  // Unset, the label face is left out: every rule that reads --font-label falls back to the body face.
+  // Unset, the label face is left out: each element the label rule covers keeps the face it has, inherited or its own.
   if (fonts.label) vars.push(`  --font-label: ${cssFontValue(fonts.label, 'sans-serif')};`);
 
   const fontsImport = fontsPreamble(fonts, selfHostCss);

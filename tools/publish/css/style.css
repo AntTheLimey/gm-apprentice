@@ -135,12 +135,15 @@ img {
   height: auto;
 }
 
-/* The label face (#363): the menu, labels, table heads, badges, buttons, meta lines and date labels. --font-label is
-   unset by default, so each of these keeps the body face it had; a theme sets --font-label, or
-   player_site.theme.fonts.label writes it into theme.css. Controls that set their own face read it the same way.
-   (The DRAFT, STUB and SUPERSEDED badges sit in a title and take its face, so they are not in this list.) */
-.top-nav, .breadcrumbs, .meta, .label, .date-label, .recap-link, .metadata-badge, .status-badge, .story-begin, .cr-send, th {
-  font-family: var(--font-label, var(--font-body));
+/* The label face (#363): the menu, labels, table heads, badges, buttons, meta lines and date labels. A theme sets
+   --font-label, or player_site.theme.fonts.label writes it into theme.css. It is unset by default, and this rule has
+   no fallback on purpose: an unset var() makes the declaration invalid at computed-value time, so font-family acts as
+   unset and these elements inherit their face exactly as they did before (from a sheet, a backstory, or a site's own
+   body or container face). :where() keeps it at zero specificity, so any rule that sets a face on one of them still
+   wins; those rules read var(--font-label, <their own face>). (The DRAFT, STUB and SUPERSEDED badges sit in a title and
+   take its face, so they are not in this list.) */
+:where(.top-nav, .breadcrumbs, .meta, .label, .date-label, .recap-link, .metadata-badge, .status-badge, .story-begin, .cr-send, th) {
+  font-family: var(--font-label);
 }
 
 /* ===== TOP NAV BAR ===== */
@@ -3408,7 +3411,7 @@ body.landing-full-bleed > main.content > :not(.landing-hero) {
 .coc-sheet-root .skill.dev .reg{ color:var(--oxblood);}
 .coc-sheet-root .skill .h,.coc-sheet-root .skill .f{ font-size:.92rem; text-align:right; color:var(--ink-mid); font-weight:600; font-family:var(--didone);}
 .coc-sheet-root table.weap{ width:100%; border-collapse:collapse; font-size:.86rem;}
-.coc-sheet-root table.weap th{ text-align:left; font-family:var(--didone); font-size:.6rem; letter-spacing:.1em; text-transform:uppercase; color:var(--oxblood); border-bottom:1.5px solid var(--rule); padding:.32rem .4rem;}
+.coc-sheet-root table.weap th{ text-align:left; font-family:var(--font-label, var(--didone)); font-size:.6rem; letter-spacing:.1em; text-transform:uppercase; color:var(--oxblood); border-bottom:1.5px solid var(--rule); padding:.32rem .4rem;}
 .coc-sheet-root table.weap td{ padding:.32rem .4rem; border-bottom:1px solid var(--rule-soft);}
 .coc-sheet-root table.weap td:first-child{ font-weight:600;}
 /* ---- Correspondence (change-request / comms) widget — same #cr-root/.cr-* structure as the
@@ -3451,7 +3454,7 @@ body.landing-full-bleed > main.content > :not(.landing-hero) {
 .coc-sheet-root .cr-hint{ font-size:.82rem; color:var(--ink-mid); margin:0; font-style:italic;}
 .coc-sheet-root .cr-text{ width:100%; box-sizing:border-box; min-height:5rem; resize:vertical; font-family:var(--body); font-size:.98rem; line-height:1.4; padding:.6rem .7rem; border:1px solid var(--rule); border-radius:3px; background:var(--input-paper); color:var(--ink);}
 .coc-sheet-root .cr-text::placeholder{ color:var(--ink-mid); opacity:.7;}
-.coc-sheet-root .cr-send{ align-self:flex-start; cursor:pointer; font-family:var(--didone); font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-size:.7rem; min-height:44px; padding:.5rem 1.6rem; border-radius:3px; border:1px solid var(--oxblood); background:var(--oxblood); color:var(--on-oxblood);}
+.coc-sheet-root .cr-send{ align-self:flex-start; cursor:pointer; font-family:var(--font-label, var(--didone)); font-weight:700; letter-spacing:.12em; text-transform:uppercase; font-size:.7rem; min-height:44px; padding:.5rem 1.6rem; border-radius:3px; border:1px solid var(--oxblood); background:var(--oxblood); color:var(--on-oxblood);}
 .cr-modal-backdrop.coc .cr-logpanel{ margin-top:.65rem; border-top:1px solid var(--rule); padding-top:.65rem;}
 .cr-modal-backdrop.coc .cr-loglabel{ font-family:var(--didone); font-size:.6rem; letter-spacing:.16em; text-transform:uppercase; color:var(--oxblood); margin:0 0 .5rem;}
 .cr-modal-backdrop.coc .cr-logentry{ margin-bottom:.75rem; font-size:.9rem;}
@@ -4956,6 +4959,7 @@ svg.cx-web .cx-node.cx-sel text, svg.cx-web .cx-node:focus-visible text { fill: 
 .cr-text::placeholder { color: var(--text-muted, #888); }
 .cr-send {
   align-self: flex-start; cursor: pointer; font: inherit; font-weight: 600;
+  font-family: var(--font-label);   /* after the shorthand, no fallback: unset inherits, as font: inherit did */
   min-height: 44px; padding: .5rem 1.4rem; border-radius: 6px;
   border: 1px solid var(--border, #ccc); background: var(--accent, #3b82f6); color: var(--on-accent, #fff);
 }

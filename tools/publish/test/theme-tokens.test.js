@@ -64,7 +64,12 @@ for (const t of TOKENS) {
     if (t.light) assert.equal(light.get(t.name), t.light, `${t.name} in the light palette`);
     if (t.scope === 'unset') {
       assert.doesNotMatch(noComments(built), new RegExp(`${t.name}\\s*:`), `${t.name} is declared, but the list says it is unset`);
-      const uses = allCss().flatMap(({ f, text }) => [...text.matchAll(new RegExp(`var\\(${t.name}(\\s*[,)])`, 'g'))].map((m) => ({ f, sep: m[1].trim() })));
+      // One exemption: --font-label read bare as a whole font-family value (the label rule, and .cr-send after its font
+      // shorthand). font-family inherits, so while --font-label is unset that declaration is invalid at computed-value
+      // time and acts as `unset`, which is inherit: each element keeps the face it inherited before. A fallback there
+      // would force one face on elements that used to inherit another (a sheet's, a backstory's, a site's own).
+      const inheritOk = (text) => (t.name === '--font-label' ? text.replace(/font-family:\s*var\(--font-label\)\s*(?=[;}])/g, '') : text);
+      const uses = allCss().flatMap(({ f, text }) => [...inheritOk(text).matchAll(new RegExp(`var\\(${t.name}(\\s*[,)])`, 'g'))].map((m) => ({ f, sep: m[1].trim() })));
       assert.ok(uses.length > 0, `${t.name} is read nowhere`);
       for (const u of uses) assert.equal(u.sep, ',', `${u.f} reads ${t.name} with nothing to fall back on`);
     } else {

@@ -53,9 +53,11 @@ own: one listed under `player_site.theme.stylesheets`, or
   `main.content[data-skin="…"]`.
 - **Unset tokens** are declared nowhere. Each rule that reads one falls
   back to what it used before, so setting one changes those rules and
-  leaving it unset changes nothing. `--font-label` is one: the menu,
-  labels, table heads, badges and buttons keep the body face until a
-  theme or `player_site.theme.fonts.label` sets it.
+  leaving it unset changes nothing. `--font-label` is one: until a
+  theme or `player_site.theme.fonts.label` sets it, the menu, labels,
+  table heads, badges and buttons keep the face they have, whether they
+  inherit it (from the body, a sheet, a backstory or a face your own
+  stylesheet sets on a container) or set their own.
 
 ## The tokens
 
@@ -100,7 +102,7 @@ The menu bar and the landing title area stay dark in both palettes, so their wor
 |-------|--------------|---------|
 | `--font-heading` | Headings and the site's name | `system-ui, -apple-system, sans-serif` |
 | `--font-body` | Body text | `system-ui, -apple-system, sans-serif` |
-| `--font-label` | The menu, labels, table heads, badges, buttons, meta lines and date labels | Unset: `var(--font-body)` |
+| `--font-label` | The menu, labels, table heads, badges, buttons, meta lines and date labels | Unset: each element keeps the face it has: the one it inherits (the body face, or a sheet's, a backstory's or a site's own), or its own where a rule sets one |
 | `--font-mono` | Numbers and code | `ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, Monaco, Consolas, monospace` |
 | `--font-serif` | A story page's prose | `Georgia, "Times New Roman", serif` |
 | `--font-reading` | A character's backstory and hook | `Georgia, 'Iowan Old Style', 'Times New Roman', serif` |

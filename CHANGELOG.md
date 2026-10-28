@@ -36,7 +36,9 @@ they look the same.
 - `--font-label` and `player_site.theme.fonts.label` (#363): a third
   typeface for the menu, labels, table heads, badges, buttons, meta lines
   and date labels, loaded the same three ways as the heading and body
-  faces. Unset, each of those keeps the body face it had.
+  faces. Unset, each of those keeps the face it had, whether it
+  inherits one (from the body, a sheet, a backstory, or a site's own
+  stylesheet) or sets its own.
 - `player_site.landing.hero.layout` (#530), `card` (today's look) or
   `full-bleed`: the campaign picture runs edge to edge under the menu,
   with the title, tagline and dates over it on a shade mixed toward

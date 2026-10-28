@@ -52,7 +52,7 @@ const TOKENS = [
   T('header', '--text-muted-on-header', 'var(--text-muted)', 'Quieter words there: the menu\'s group names, the search button', { scope: 'unset' }),
   T('fonts', '--font-heading', 'system-ui, -apple-system, sans-serif', 'Headings and the site\'s name'),
   T('fonts', '--font-body', 'system-ui, -apple-system, sans-serif', 'Body text'),
-  T('fonts', '--font-label', 'var(--font-body)', 'The menu, labels, table heads, badges, buttons, meta lines and date labels', { scope: 'unset' }),
+  T('fonts', '--font-label', 'each element keeps the face it has: the one it inherits (the body face, or a sheet\'s, a backstory\'s or a site\'s own), or its own where a rule sets one', 'The menu, labels, table heads, badges, buttons, meta lines and date labels', { scope: 'unset' }),
   T('fonts', '--font-mono', 'ui-monospace, "Cascadia Mono", "Segoe UI Mono", Menlo, Monaco, Consolas, monospace', 'Numbers and code'),
   T('fonts', '--font-serif', 'Georgia, "Times New Roman", serif', 'A story page\'s prose'),
   T('fonts', '--font-reading', "Georgia, 'Iowan Old Style', 'Times New Roman', serif", 'A character\'s backstory and hook'),
