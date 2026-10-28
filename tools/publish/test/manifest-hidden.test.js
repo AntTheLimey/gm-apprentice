@@ -129,16 +129,54 @@ test('an empty or missing needs_decision is made a block list', () => {
   assert.deepEqual(loadManifest(bare, { warn: () => {} }).publishing, ['B.md']);
 });
 
+const read = (dir) => fs.readFileSync(path.join(dir, '_meta', 'publish-list.yaml'), 'utf8');
+
+test('a page also under excluded leaves publishing and stays excluded; one already under needs_decision just leaves publishing', () => {
+  const dir = vault({ list: 'publishing:\n  - A.md\n  - B.md\n  - C.md\nexcluded:\n  - path: A.md\n    reason: x\nneeds_decision:\n  - B.md\n  - D.md\n' });
+  const moved = moveToNeedsDecision(dir, ['A.md', 'B.md']);
+  assert.deepEqual(moved, [{ path: 'A.md', now: 'excluded' }, { path: 'B.md', now: 'needs_decision' }]);
+  assert.equal(read(dir), 'publishing:\n  - C.md\nexcluded:\n  - path: A.md\n    reason: x\nneeds_decision:\n  - B.md\n  - D.md\n');
+  const list = loadManifest(dir, { warn: () => {} });
+  assert.deepEqual(list.publishing, ['C.md']);
+  assert.deepEqual(list.excluded, ['A.md']);
+  assert.deepEqual(list.needsDecision, ['B.md', 'D.md']);
+});
+
+test('the CLI names where each page went', async () => {
+  const dir = vault({ list: 'publishing:\n  - NPCs/Secret One.md\n  - NPCs/Secret Two.md\nexcluded:\n  - NPCs/Secret Two.md\n' });
+  const { data } = await run({ vaultPath: dir, decide: true });
+  assert.deepEqual(data.moved, ['NPCs/Secret One.md', 'NPCs/Secret Two.md']);
+  assert.deepEqual(data.now, { 'NPCs/Secret One.md': 'needs_decision', 'NPCs/Secret Two.md': 'excluded' });
+});
+
+test('the comment above the first entry moves with it', () => {
+  const dir = vault({ list: 'publishing:\n  # keep off: spoiler\n  - B.md\n  # about A\n  - A.md\nneeds_decision: []\n' });
+  moveToNeedsDecision(dir, ['B.md']);
+  assert.equal(read(dir), 'publishing:\n  # about A\n  - A.md\nneeds_decision:\n  # keep off: spoiler\n  - B.md\n');
+});
+
+test('the file keeps its line ends and its indentation', () => {
+  const crlf = vault({ list: '# list\r\npublishing:\r\n  - A.md\r\n  - B.md\r\nneeds_decision:\r\n  - C.md\r\n' });
+  moveToNeedsDecision(crlf, ['B.md']);
+  assert.equal(read(crlf), '# list\r\npublishing:\r\n  - A.md\r\nneeds_decision:\r\n  - C.md\r\n  - B.md\r\n');
+  const flat = vault({ list: 'publishing:\n- A.md\n- B.md\nneeds_decision:\n- C.md\n' });
+  moveToNeedsDecision(flat, ['A.md']);
+  assert.equal(read(flat), 'publishing:\n- B.md\nneeds_decision:\n- C.md\n- A.md\n');
+  const wide = vault({ list: 'publishing:\n    - A.md\n    - B.md\n' });
+  moveToNeedsDecision(wide, ['A.md']);
+  assert.equal(read(wide), 'publishing:\n    - B.md\nneeds_decision:\n    - A.md\n');
+});
+
 test('moving a path the list does not publish is refused, and the file is left as it was', () => {
   const dir = vault();
-  assert.throws(() => moveToNeedsDecision(dir, ['NPCs/Gone.md']), /not under publishing/);
+  assert.throws(() => moveToNeedsDecision(dir, ['NPCs/Gone.md']), /NPCs\/Gone\.md is not under publishing/);
   assert.equal(fs.readFileSync(path.join(dir, '_meta', 'publish-list.yaml'), 'utf8'), LIST);
 });
 
 test('a vault without the .converted file, or without a publish-list.yaml, has nothing to name', async () => {
   const none = await run({ vaultPath: vault({ converted: null }) });
   assert.equal(none.code, 0);
-  assert.deepEqual(none.data, { converted: false, hidden: [], publishing: [], moved: [] });
+  assert.deepEqual(none.data, { converted: false, hidden: [], publishing: [], moved: [], now: {} });
   const noList = await run({ vaultPath: vault({ list: null }) });
   assert.deepEqual(noList.data.publishing, []);
 });

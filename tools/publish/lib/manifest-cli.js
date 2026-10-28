@@ -549,7 +549,7 @@ function runConvert(opts, d) {
 // that _meta/publish-list.yaml still publishes, because a conversion before 1.48.2 read them as ticked (#500). The
 // comment rule is the old reader's own (commentHiddenEntries). `--decide` moves them to needs_decision.
 // JSON: { converted (the old file is there), hidden (every path the rule hides there), publishing (those the list
-// still publishes), moved }.
+// still publishes), moved, now (each moved path: 'needs_decision', or 'excluded' when it was already there) }.
 function runHidden(opts, d) {
   const out = d.out || console.log;
   const vault = vaultFor(opts, out);
@@ -557,19 +557,24 @@ function runHidden(opts, d) {
   const { commentHiddenEntries } = require('./manifest-legacy');
   const { moveToNeedsDecision } = require('./manifest');
   const convertedFile = at(vault, `${OLD_LIST_FILE}${KEPT_SUFFIX}`);
-  const result = { converted: fs.existsSync(convertedFile), hidden: [], publishing: [], moved: [] };
+  const result = { converted: fs.existsSync(convertedFile), hidden: [], publishing: [], moved: [], now: {} };
   if (result.converted) {
     result.hidden = commentHiddenEntries(fs.readFileSync(convertedFile, 'utf8')).publishing;
     const list = loadManifest(vault, { warn: () => {} });
     const published = new Set(list && list.file === 'new' ? list.publishing : []);
     result.publishing = result.hidden.filter((rel) => published.has(rel));
-    if (opts.decide && result.publishing.length) result.moved = moveToNeedsDecision(vault, result.publishing);
+    if (opts.decide && result.publishing.length) {
+      for (const m of moveToNeedsDecision(vault, result.publishing)) {
+        result.moved.push(m.path);
+        result.now[m.path] = m.now;
+      }
+    }
   }
   if (opts.json) out(JSON.stringify(result, null, 2));
   else if (!result.publishing.length) out('No page the old publish list hid with a comment is published.');
   else {
     out(`${opts.decide ? 'Moved to needs_decision' : 'Published, though the old publish list hid them with a comment'} (${result.publishing.length}):`);
-    for (const rel of result.publishing) out(`  ${rel}`);
+    for (const rel of result.publishing) out(`  ${rel}${result.now[rel] === 'excluded' ? ' (already under excluded: it stays there)' : ''}`);
   }
   return 0;
 }

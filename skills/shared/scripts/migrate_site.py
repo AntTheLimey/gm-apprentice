@@ -346,21 +346,24 @@ def find_publish_hidden(vault: Path) -> list[Item]:
     n = len(rels)
     pages = f"{n} page{'' if n == 1 else 's'}"
     lines = [f"{pages} the old publish list hid with a comment ({CONVERTED_LIST}) "
-             f"{'is' if n == 1 else 'are'} published: a move before publish tool 1.48.2 read "
-             f"{'it' if n == 1 else 'them'} as ticked. move: put {'it' if n == 1 else 'them'} under "
-             f"needs_decision in _meta/publish-list.yaml, off the site until you decide; "
-             f"leave: keep {'it' if n == 1 else 'them'} published"]
-    lines += [f"{rel}	published; hidden by a comment in the old list" for rel in rels]
+             f"{'is' if n == 1 else 'are'} on your site: when the publish list moved to its new file, "
+             f"an older version missed the comments that hid {'it' if n == 1 else 'them'}. move: put "
+             f"{'it' if n == 1 else 'them'} under needs_decision in _meta/publish-list.yaml, off the site "
+             f"until you decide; leave: keep {'it' if n == 1 else 'them'} published"]
+    lines += [f"{rel}\tpublished; hidden by a comment in the old list" for rel in rels]
 
     def apply(value: str | None) -> list[str]:
         if value not in ("move", "leave"):
             raise StepFailed(f"{PUBLISH_HIDDEN} takes move or leave")
         if value == "leave":
             return [f"left the {pages} published"]
-        moved = [str(x) for x in _ask_hidden(vault, "--decide")["moved"]]
+        data = _ask_hidden(vault, "--decide")
+        moved = [str(x) for x in data["moved"]]
+        now = data.get("now") if isinstance(data.get("now"), dict) else {}
         if sorted(moved) != sorted(rels):
             raise StepFailed(f"the move did not take the pages named: moved {', '.join(moved) or 'none'}")
-        return [f"{rel}: moved to needs_decision" for rel in moved]
+        return [f"{rel}: off publishing; it stays under excluded, as the list already had it"
+                if now.get(rel) == "excluded" else f"{rel}: moved to needs_decision" for rel in moved]
 
     return [Item(PUBLISH_HIDDEN, CHOICE, lines, apply, wants="move or leave", holds_stamp=True)]
 
