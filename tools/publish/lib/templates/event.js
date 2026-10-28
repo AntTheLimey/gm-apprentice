@@ -1,5 +1,5 @@
 const { escapeHtml, relativePath, wikiTargetLabel, encodeHref, renderMetaValue, refMetaValue } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection, badgeSpan } = require('./base');
+const { baseShell, bodyHook, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection, badgeSpan } = require('./base');
 const { WIKILINK_SOURCE, parseWikilink, wikilinkSpans } = require('../wikilink');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { participantsOf, targetRef } = require('../connections');
@@ -106,8 +106,9 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
 
   const graphHtml = connectionsSection(page, publishConfig);
 
-  const mainContent = `${headerCard}\n${badgeHtml}\n${outcomeHtml}\n${participantsHtml}\n${processedContent.html}\n${graphHtml}`;
+  const mainContent = `${headerCard}\n${badgeHtml}\n${outcomeHtml}\n${participantsHtml}\n${bodyHook(processedContent.html)}\n${graphHtml}`;
   return baseShell({
+    pageType: page.frontmatter.type,
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),

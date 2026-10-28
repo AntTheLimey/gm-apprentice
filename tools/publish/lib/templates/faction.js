@@ -1,5 +1,5 @@
 const { escapeHtml, refMetaValue } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection, badgeSpan } = require('./base');
+const { baseShell, bodyHook, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection, badgeSpan } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
 function factionTemplate(page, processedContent, navFor, config, imageMap, linkMap, allPages, context) {
@@ -40,8 +40,9 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
 
   const graphHtml = connectionsSection(page, publishConfig);
 
-  const mainContent = `${headerCard}\n${badgeHtml}\n${leadershipHtml}\n${territoryHtml}\n${goals}\n${processedContent.html}\n${graphHtml}`;
+  const mainContent = `${headerCard}\n${badgeHtml}\n${leadershipHtml}\n${territoryHtml}\n${goals}\n${bodyHook(processedContent.html)}\n${graphHtml}`;
   return baseShell({
+    pageType: page.frontmatter.type,
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),

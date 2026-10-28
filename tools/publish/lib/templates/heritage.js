@@ -1,5 +1,5 @@
 const { escapeHtml } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, connectionsSection, badgeSpan } = require('./base');
+const { baseShell, bodyHook, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, connectionsSection, badgeSpan } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
 function heritageTemplate(page, processedContent, navFor, config, imageMap, context) {
@@ -41,8 +41,9 @@ function heritageTemplate(page, processedContent, navFor, config, imageMap, cont
 
   const graphHtml = connectionsSection(page, publishConfig);
 
-  const mainContent = `${headerCard}\n${badgeHtml}\n${processedContent.html}\n${graphHtml}`;
+  const mainContent = `${headerCard}\n${badgeHtml}\n${bodyHook(processedContent.html)}\n${graphHtml}`;
   return baseShell({
+    pageType: page.frontmatter.type,
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),

@@ -68,6 +68,7 @@ function containerTemplate({ container, rows, address, title: shownTitle, noteTi
     containerItemsHtml(rows, address),
   ].join('\n');
   return baseShell({
+    pageType: 'prop-container',
     title,
     siteTitle: config.siteTitle,
     cssHref: cssPath(address),
@@ -102,6 +103,7 @@ function collectionTemplate(model, navFor, config, publishConfig) {
     ...groups,
   ].join('\n');
   return baseShell({
+    pageType: 'props',
     title,
     siteTitle: config.siteTitle,
     cssHref: cssPath(address),

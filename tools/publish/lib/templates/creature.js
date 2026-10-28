@@ -1,5 +1,5 @@
 const { escapeHtml, relativePath } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection, badgeSpan } = require('./base');
+const { baseShell, bodyHook, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection, badgeSpan } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
 function creatureTemplate(page, processedContent, navFor, config, imageMap, context) {
@@ -53,8 +53,9 @@ function creatureTemplate(page, processedContent, navFor, config, imageMap, cont
 
   const graphHtml = connectionsSection(page, publishConfig);
 
-  const mainContent = `${headerCard}\n${badgeHtml}\n${statBlock}\n${abilities}\n${weaknesses}\n${processedContent.html}\n${graphHtml}`;
+  const mainContent = `${headerCard}\n${badgeHtml}\n${statBlock}\n${abilities}\n${weaknesses}\n${bodyHook(processedContent.html)}\n${graphHtml}`;
   return baseShell({
+    pageType: page.frontmatter.type,
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),

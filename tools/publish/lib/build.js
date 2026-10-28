@@ -1,5 +1,5 @@
 const { scopeColorScheme, headScript, storageKey } = require('./color-mode');
-const { configureColorMode, configureLinkPreviews, configureConnections, configureExtraStylesheets, EXTRA_CSS_DIR } = require('./templates/base');
+const { configureColorMode, configureLinkPreviews, configureConnections, configureExtraStylesheets, configureThemeHooks, EXTRA_CSS_DIR } = require('./templates/base');
 const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
@@ -1366,6 +1366,7 @@ function buildSite(options) {
   copyThemeFonts();
   publishConfig._overridesCss = copyOverridesCSS();
   configureExtraStylesheets(copyExtraStylesheets());
+  configureThemeHooks(publishConfig.theme_hooks === true);
 
   const campaignImageSource = publishConfig.theme.campaign_image;
   let campaignImageCopied = false;

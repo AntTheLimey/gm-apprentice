@@ -396,6 +396,11 @@ const REGISTRY = [
     left_out: 'No tagline',
   },
   {
+    name: 'player_site.theme.hooks', type: 'switch', default: false, group: 'theme',
+    does: "Writes the attributes a theme can style by on every page: the page's type, its title and title block, the first paragraph of a note's text and a key on each section heading (listed in docs/theme-hooks.md). Off, pages carry only the classes they always have",
+    left_out: 'Off',
+  },
+  {
     name: 'player_site.theme.stylesheets', type: 'list', of: 'stylesheet paths', default: [], group: 'theme',
     does: "More stylesheets on every page, each a `.css` file's path in the vault (or, when the vault has no file there, in the site folder). Each is copied to the site's `css/extra/` and linked after the tool's own stylesheets and before `css/overrides.css`, in the order written. A file that is missing or is not a `.css`, or a second file of the same name, is reported and left out",
     left_out: 'None',

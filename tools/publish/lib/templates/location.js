@@ -1,6 +1,6 @@
 const { refTarget } = require('../wikilink');
 const { escapeHtml, relativeHref, publishedSource, encodeHref, plainRefValue, referenceOf } = require('../processor');
-const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts, headerValueText, connectionsSection, badgeSpan } = require('./base');
+const { baseShell, bodyHook, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts, headerValueText, connectionsSection, badgeSpan } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
 const { excerptFromMarkdown } = require('../excerpt');
@@ -137,10 +137,11 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
 
   const graphHtml = connectionsSection(page, publishConfig);
 
-  const mainContent = [heroBanner, pullQuote, bodyContent, subLocationsHtml, whosHereHtml, timelineHtml, graphHtml]
+  const mainContent = [heroBanner, pullQuote, bodyHook(bodyContent), subLocationsHtml, whosHereHtml, timelineHtml, graphHtml]
     .filter(Boolean).join('\n');
 
   return baseShell({
+    pageType: page.frontmatter.type,
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),

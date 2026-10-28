@@ -1,6 +1,7 @@
 const { relativePath, escapeHtml, encodeImageUrl, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS } = require('../processor');
 const { typeLabelText } = require('../kind-label');
 const { entry } = require('../settings/registry');
+const { markPage, markFirstParagraph } = require('../theme-hooks');
 
 const DIR_LABELS = {
   'campaign': 'Campaign',
@@ -90,7 +91,17 @@ function extraStylesheetTags(href) {
   return extraStylesheets.map((name) => `\n  <link rel="stylesheet" href="${href(`${EXTRA_CSS_DIR}/${encodeURIComponent(name)}`)}">`).join('');
 }
 
-function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset, overridesCss, breadcrumbsHtml, scripts, mainAttrs, extraCss }) {
+// Whether this build writes the hooks a theme styles by (player_site.theme.hooks), set once per build by
+// configureThemeHooks, as the colour-mode script is. Off, every page is as it was.
+let themeHooks = false;
+function configureThemeHooks(on) { themeHooks = on === true; }
+function themeHooksOn() { return themeHooks; }
+// A note's rendered text with its first paragraph marked, when the hooks are on; as given otherwise.
+function bodyHook(html) { return themeHooks ? markFirstParagraph(html) : html; }
+// The attribute that names the page's type on <main>, when the hooks are on ('' otherwise).
+function pageTypeAttr(pageType) { return themeHooks ? ` data-page-type="${escapeHtml(String(pageType || '').trim().toLowerCase() || 'page')}"` : ''; }
+
+function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset, overridesCss, breadcrumbsHtml, scripts, mainAttrs, extraCss, pageType }) {
   const footerHtml = footer ? `<footer class="site-footer">${escapeHtml(footer)}</footer>` : '';
   const themeCssHref = cssHref.replace('style.css', 'theme.css');
   const genreCssHref = genrePreset
@@ -124,9 +135,9 @@ function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, foot
 
 ${navHtml}
 
-<main class="content"${mainAttrs || ''}${previewsAttr()}>
+<main class="content"${pageTypeAttr(pageType)}${mainAttrs || ''}${previewsAttr()}>
 ${breadcrumbs}
-${content}
+${themeHooks ? markPage(content) : content}
 </main>
 
 ${footerHtml}
@@ -267,6 +278,10 @@ module.exports = {
   configureColorMode,
   colorModeHeadHtml,
   configureExtraStylesheets,
+  configureThemeHooks,
+  themeHooksOn,
+  bodyHook,
+  pageTypeAttr,
   extraStylesheetTags,
   EXTRA_CSS_DIR,
   colorModeEnabled,

@@ -151,7 +151,10 @@ settings, and how to give it build steps of its own, are in
 ## Technical details
 
 For the configuration file reference, CLI commands, and the library API,
-see the [tool README](../tools/publish/README.md).
+see the [tool README](../tools/publish/README.md). For styling the pages
+with a theme of your own, see [Theme hooks](theme-hooks.md): the classes
+and attributes that stay put between releases, and how to link your own
+stylesheets.
 
 The tool requires Node 22 or later. It **ships inside the gm-apprentice
 plugin** — it is not installed from the npm registry. The publish-site

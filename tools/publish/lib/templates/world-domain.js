@@ -1,5 +1,5 @@
 const { escapeHtml, renderMetaValue } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg } = require('./base');
+const { baseShell, bodyHook, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
 function worldDomainTemplate(page, processedContent, navFor, config, imageMap, context) {
@@ -31,8 +31,9 @@ function worldDomainTemplate(page, processedContent, navFor, config, imageMap, c
   const crumbs = generateBreadcrumbs(page.outputPath, { page });
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
 
-  const mainContent = [headerHtml, rulesHtml, processedContent.html].filter(Boolean).join('\n');
+  const mainContent = [headerHtml, rulesHtml, bodyHook(processedContent.html)].filter(Boolean).join('\n');
   return baseShell({
+    pageType: page.frontmatter.type,
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),

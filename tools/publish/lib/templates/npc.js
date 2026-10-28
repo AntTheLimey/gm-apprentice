@@ -1,7 +1,7 @@
 const { backlinksOf } = require('../backlinks');
 const { escapeHtml, relativeHref, renderMetaValue, publishedSource, encodeHref } = require('../processor');
 const { linkText } = require('../wikilink');
-const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts, connectionsSection } = require('./base');
+const { baseShell, bodyHook, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts, connectionsSection } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
 const { excerptFromMarkdown } = require('../excerpt');
@@ -100,10 +100,11 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
 
   const graphHtml = connectionsSection(page, publishConfig);
 
-  const mainContent = [heroBanner, pullQuote, bodyContent, locationCardHtml, arcTimelineHtml, graphHtml]
+  const mainContent = [heroBanner, pullQuote, bodyHook(bodyContent), locationCardHtml, arcTimelineHtml, graphHtml]
     .filter(Boolean).join('\n');
 
   return baseShell({
+    pageType: page.frontmatter.type,
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),

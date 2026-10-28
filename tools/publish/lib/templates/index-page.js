@@ -1114,6 +1114,7 @@ ${bodyContent}`;
   const bannerHtml = ((publishConfig || {})._banners || {})[dir] || '';
 
   return baseShell({
+    pageType: 'index',
     title: label,
     siteTitle: config.siteTitle,
     cssHref: cssPath(outputPath),
