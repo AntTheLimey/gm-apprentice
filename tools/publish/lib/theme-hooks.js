@@ -17,7 +17,7 @@ const { decodeEntities } = require('./templates/gurps/tables');
 // `when`: 'always' (on every site), or 'switch' (only with player_site.theme.hooks on).
 const HOOKS = [
   { selector: 'main.content', when: 'always', marks: "The page's main column, on every page", example: 'main.content { max-width: 52rem; }' },
-  { selector: 'header.top-nav', when: 'always', marks: "The site's menu bar at the top of every page", example: 'header.top-nav { border-bottom: 1px solid currentColor; }' },
+  { selector: 'header.top-nav', when: 'always', marks: "The site's menu bar at the top of every page except the page-not-found page (`404.html`), which has no menu: its plain header is `header.site-header`, left as it is so that page stays as it was", example: 'header.top-nav { border-bottom: 1px solid currentColor; }' },
   { selector: 'nav.breadcrumbs', when: 'always', marks: 'The trail of links above a note\'s title', example: 'nav.breadcrumbs { font-size: 0.85rem; }' },
   { selector: '.page-title', when: 'always', marks: 'The title of a section list, a story page or a plain note page (an `<h1>`)', example: 'h1.page-title { letter-spacing: 0.05em; }' },
   { selector: '.metadata-badge[data-field]', when: 'always', marks: 'One fact in a note\'s header; `data-field` names the field it shows (`event_type`, `in_game_date`, `session_number` ...)', example: '.metadata-badge[data-field="in_game_date"] { font-style: italic; }' },

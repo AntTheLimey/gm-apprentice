@@ -85,6 +85,15 @@ for (const hook of HOOKS) {
   }
 }
 
+test('the 404 page has no menu bar: its plain header is header.site-header, and the list says so', () => {
+  const page = off.player.read('404.html');
+  assert.doesNotMatch(page, finder('header.top-nav'));
+  assert.match(page, finder('header.site-header'));
+  const topNav = HOOKS.find((h) => h.selector === 'header.top-nav');
+  assert.match(topNav.marks, /404\.html/);
+  assert.match(topNav.marks, /header\.site-header/);
+});
+
 test('the page types are the note\'s type, or the kind of page the tool makes', () => {
   const type = (page) => (on.player.read(...page.split('/')).match(/<main class="content" data-page-type="([^"]+)"/) || [])[1];
   assert.equal(type('index.html'), 'landing');

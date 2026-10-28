@@ -39,7 +39,7 @@ These classes are on every site's pages, with nothing to turn on.
 | Hook | What it marks | Example |
 |------|---------------|---------|
 | `main.content` | The page's main column, on every page | `main.content { max-width: 52rem; }` |
-| `header.top-nav` | The site's menu bar at the top of every page | `header.top-nav { border-bottom: 1px solid currentColor; }` |
+| `header.top-nav` | The site's menu bar at the top of every page except the page-not-found page (`404.html`), which has no menu: its plain header is `header.site-header`, left as it is so that page stays as it was | `header.top-nav { border-bottom: 1px solid currentColor; }` |
 | `nav.breadcrumbs` | The trail of links above a note's title | `nav.breadcrumbs { font-size: 0.85rem; }` |
 | `.page-title` | The title of a section list, a story page or a plain note page (an `<h1>`) | `h1.page-title { letter-spacing: 0.05em; }` |
 | `.metadata-badge[data-field]` | One fact in a note's header; `data-field` names the field it shows (`event_type`, `in_game_date`, `session_number` ...) | `.metadata-badge[data-field="in_game_date"] { font-style: italic; }` |
