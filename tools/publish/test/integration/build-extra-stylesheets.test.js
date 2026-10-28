@@ -167,7 +167,32 @@ test('a sheets-only build links them on the pages it writes', () => {
     const { build } = require('../../lib/build');
     const saved = { log: console.log, warn: console.warn };
     console.log = () => {}; console.warn = () => {};
+    // Added since the full build: the sheets-only build copies it and the overrides, so no page links a missing file.
+    fs.writeFileSync(path.join(s.root, 'vault', '_meta', 'theme', 'ink.css'), 'h1 {}\n');
+    fs.writeFileSync(path.join(s.siteDir, 'css', 'overrides.css'), ':root { --accent: #004400; }\n');
+    const { writeNewConfig } = require('../helpers/settings-files');
+    const YAML = require('yaml');
+    const cfgFile = path.join(s.root, 'vault', '_meta', 'vault-config.yaml');
+    const cfg = YAML.parse(fs.readFileSync(cfgFile, 'utf8'));
+    cfg.player_site.theme.stylesheets.push('_meta/theme/ink.css');
+    writeNewConfig(path.join(s.root, 'vault'), cfg);
+    fs.rmSync(path.join(s.player.dir, 'css', 'extra'), { recursive: true });
     try { build({ configPath: s.configPath, only: 'sheets' }); } finally { Object.assign(console, saved); }
-    assert.ok(links(s.player.read('pcs', 'ash.html')).includes('../css/extra/paper.css'));
+    const head = links(s.player.read('pcs', 'ash.html'));
+    assert.ok(head.includes('../css/extra/paper.css') && head.includes('../css/extra/ink.css'), head.join(', '));
+    assert.equal(s.player.read('css', 'extra', 'paper.css'), 'p {}\n');
+    assert.equal(s.player.read('css', 'extra', 'ink.css'), 'h1 {}\n');
+    assert.match(s.player.read('css', 'overrides.css'), /#004400/);
+  } finally { s.cleanup(); }
+});
+
+test('an extra stylesheet goes through the colour-switch step, as the tool\'s own do', () => {
+  const { scopeColorScheme } = require('../../lib/color-mode');
+  const css = 'body { color: #111; }\n@media (prefers-color-scheme: light) { body { background: #fff; } }\n';
+  const s = site(['_meta/theme/paper.css'], { vaultCss: { '_meta/theme/paper.css': css }, sites: ['player'] });
+  try {
+    const out = s.player.read('css', 'extra', 'paper.css');
+    assert.equal(out, scopeColorScheme(css));
+    assert.notEqual(out, css, 'the light block answers to the toggle');
   } finally { s.cleanup(); }
 });

@@ -479,7 +479,8 @@ function buildSite(options) {
   function copyOverridesCSS() {
     const src = path.join(configDir, 'css/overrides.css');
     if (!fs.existsSync(src)) return false;
-    if (writes !== 'all') return true;
+    // A sheets-only build copies it too: the pages it writes link it, and nothing else reads it.
+    if (writes === 'none') return true;
     const dest = path.join(outputDir, 'css/overrides.css');
     // Output inside the site dir: never rewrite the GM's own source file.
     if (path.resolve(src) === path.resolve(dest)) return true;
@@ -491,7 +492,8 @@ function buildSite(options) {
 
   // The vault's extra stylesheets (player_site.theme.stylesheets): each path is looked for in the vault, then in the site
   // folder, never outside the two. Each found .css is copied to css/extra/ under its own file name (a full build) and
-  // linked on every page. A missing file, one that is not a .css and a second file of the same name are warnings: the
+  // linked on every page (a sheets-only build copies them too: its pages link them). Each goes through scopeColorScheme,
+  // as every stylesheet the build writes does, so its light and dark rules answer to the reader's toggle. A missing file, one that is not a .css and a second file of the same name are warnings: the
   // build goes on without them. Returns the file names to link, in the order written.
   function copyExtraStylesheets() {
     const setting = nm('player_site.theme.stylesheets');
@@ -517,11 +519,11 @@ function buildSite(options) {
       }
       kept.set(name, { written, found });
     }
-    if (writes === 'all') {
+    if (writes !== 'none') {
       for (const [name, { found }] of kept) {
         const dest = path.join(outputDir, ...EXTRA_CSS_DIR.split('/'), name);
         ensureDir(dest);
-        fs.copyFileSync(found, dest);
+        fs.writeFileSync(dest, scopeColorScheme(fs.readFileSync(found, 'utf8')));
         console.log(`  wrote ${EXTRA_CSS_DIR}/${name}`);
       }
     }
