@@ -40,6 +40,11 @@ const INVESTIGATOR = `## Stat Sheet
 |---|---|---|---|---|
 | Spot Hidden | 25 | 62 | 31 | 12 |
 | Zither Playing | 05 | 41 | 20 | 8 |
+| Etiquette | INT/5 | | | |
+| Language (Own) | EDU | | | |
+| Dodge | DEX/2 | | | |
+| Omen Reading | SAN/3 | | | |
+| Weather Lore | POW/5 | 33 | | |
 `;
 
 function quiet(fn) {
@@ -102,20 +107,30 @@ for (const system of ['coc-7e', 'coc-7e-regency']) {
 
   test(`${system}: coc_skill_list off lists only the note's skills, with the values written there`, () => {
     const { html } = buildOne(system, INVESTIGATOR, { coc_skill_list: false });
-    assert.deepEqual(skillNames(html), ['Spot Hidden', 'Zither Playing']);
-    const row = (name) => (html.match(new RegExp(`<div class="skill(?: dev)?" data-skill="${name}"[\\s\\S]*?</div>`)) || [''])[0];
-    assert.match(row('Spot Hidden'), />62</);
-    assert.match(row('Zither Playing'), />41</);
+    // A base written as a characteristic share (the templates' INT/5, EDU, DEX/2) is worked out from the note's own
+    // characteristics; one that names no characteristic the sheet gives, left blank, is not guessed at.
+    assert.deepEqual(skillNames(html), ['Dodge', 'Etiquette', 'Language (Own)', 'Spot Hidden', 'Weather Lore', 'Zither Playing']);
+    const row = (name) => (html.match(new RegExp(`<div class="skill(?: dev)?" data-skill="${name.replace(/[()]/g, '\\$&')}"[\\s\\S]*?</div>`)) || [''])[0];
+    assert.match(row('Spot Hidden'), /class="reg">62</);
+    assert.match(row('Zither Playing'), /class="reg">41</);
+    assert.match(row('Etiquette'), /class="reg">14</);
+    assert.match(row('Language (Own)'), /class="reg">80</);
+    assert.match(row('Dodge'), /class="reg">30</);
+    assert.match(row('Weather Lore'), /^<div class="skill dev"/, 'above its worked-out base of 9');
+    assert.match(row('Weather Lore'), /class="reg">33</);
+    assert.doesNotMatch(row('Etiquette'), /^<div class="skill dev"/, 'at its base, not developed');
     assert.ok(!html.includes('all skills shown'), 'the hint does not claim the whole list is shown');
   });
 }
 
-test('CoC: the characteristics and the rest of the sheet do not change with the skill list off', () => {
+test('CoC: nothing on the page but the skill rows and the hint changes with the skill list off', () => {
   const on = buildOne('coc-7e', INVESTIGATOR).html;
   const off = buildOne('coc-7e', INVESTIGATOR, { coc_skill_list: false }).html;
-  const chars = (html) => (html.match(/<div class="char-list">[\s\S]*?<h2/) || [''])[0];
-  assert.ok(chars(on).length > 0);
-  assert.equal(chars(off), chars(on));
+  const rest = (html) => html.replace(/<div class="skills-wrap">[\s\S]*?<\/div><\/div><\/div>/, '')
+    .replace(' · all skills shown, untouched at base', '');
+  assert.ok(on.includes('<div class="skills-wrap">') && off.includes('<div class="skills-wrap">'));
+  assert.notEqual(rest(on), on);
+  assert.equal(rest(off), rest(on));
 });
 
 test('the GM site follows the player site unless it sets its own', () => {
@@ -134,7 +149,7 @@ test('in a browser, a live CoC sheet without the skill list and a GURPS sheet wi
   const live = { player: { features: { live_stats: true } }, buildOptions: { assumeKv: true } };
   const coc = buildOne('coc-7e-regency', INVESTIGATOR, { coc_skill_list: false }, live);
   const gurps = buildOne('gurps-4e', RONNIE, { gurps_reference_tables: false }, live);
-  for (const [root, want] of [[coc.root, 2], [gurps.root, 0]]) {
+  for (const [root, want] of [[coc.root, 6], [gurps.root, 0]]) {
     const r = measure(path.join(root, 'docs', 'characters', 'pcs', 'test-hero.html'), 1200, function (done) {
       setTimeout(function () { done({ skills: document.querySelectorAll('.skill[data-skill]').length }); }, 300);
     });

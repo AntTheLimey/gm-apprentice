@@ -98,7 +98,7 @@ function parseRawSkills(sections) {
   for (const row of parseTableRows(sec.html)) {
     const name = (row[0] || '').trim();
     if (!name || /^skill$/i.test(name)) continue;
-    out.push({ name, base: int(row[1]), reg: int(row[2]) });
+    out.push({ name, base: int(row[1]), baseText: (row[1] || '').trim(), reg: int(row[2]) });
   }
   return out;
 }

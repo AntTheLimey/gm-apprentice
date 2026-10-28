@@ -48,7 +48,23 @@ function baseFor(entry, chars) {
   return c && c.reg != null && Number.isFinite(v) ? Math.floor(v / entry.div) : null;
 }
 
-// pcSkills: [{ name, base, reg }] parsed from the sheet; chars: { DEX: { reg }, … } from its Characteristics table.
+// A base the note writes as a characteristic or a share of one ("EDU", "INT/5", as the templates do): { of, div }, or null.
+const SHARE_RE = /^\s*(STR|CON|DEX|INT|SIZ|POW|APP|EDU)\s*(?:\/\s*(\d+))?\s*$/i;
+function shareOf(text) {
+  const m = SHARE_RE.exec(String(text || ''));
+  return m ? { of: m[1].toUpperCase(), div: m[2] ? Number(m[2]) : 1 } : null;
+}
+// A base of the note's own, with no list to take it from: a characteristic share worked out from the PC's characteristics
+// (null when the sheet does not give that characteristic, or the text names one the tool does not know, such as SAN/3,
+// so it is never guessed at), else the number written.
+function ownBase(pc, chars) {
+  const share = shareOf(pc.baseText);
+  if (share) return share.div > 0 ? baseFor(share, chars) : null;
+  if (pc.baseText !== undefined && /^\s*[A-Za-z]{3}\s*\//.test(pc.baseText)) return null;
+  return Number(pc.base) || 0;
+}
+
+// pcSkills: [{ name, base, baseText, reg }] parsed from the sheet; chars: { DEX: { reg }, … } from its Characteristics table.
 // `variant` 'none' lays the note's skills over no list: only the skills it names, each with the base and value it writes.
 // A skill whose base cannot be worked out (no such characteristic on the sheet) is left off unless the PC lists it,
 // and a listed one shows its own value without a claim that it was developed: a flat guess would be wrong.
@@ -68,7 +84,8 @@ function mergeSkills(pcSkills, variant, chars) {
     const key = name.toLowerCase();
     listed.add(key);
     const existing = known.get(key);
-    const base = existing ? existing.base : (Number(pc.base) || 0);
+    // With no list (variant 'none') a base comes from the note alone, worked out as the list's own are.
+    const base = existing ? existing.base : (variant === 'none' ? ownBase(pc, chars) : (Number(pc.base) || 0));
     // A blank/absent Regular means the skill was never developed — keep it at its
     // base default. (Number(null) is 0, so guard the empty cell explicitly.)
     const blank = pc.reg == null || (typeof pc.reg === 'string' && pc.reg.trim() === '');

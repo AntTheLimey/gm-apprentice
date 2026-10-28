@@ -141,4 +141,17 @@ describe('mergeSkills', () => {
     const out = mergeSkills([{ name: 'Charm', base: 15, reg: 72 }, { name: 'Zither Playing', base: 5, reg: null }], 'none', { DEX: { reg: 50 } });
     assert.deepEqual(out.map(s => [s.name, s.reg, s.developed]), [['Charm', 72, true], ['Zither Playing', 5, false]]);
   });
+
+  it("with no list, a base written as a characteristic share is worked out from the note's characteristics", () => {
+    const chars = { INT: { reg: 70 }, EDU: { reg: 80 }, DEX: { reg: 60 } };
+    const out = mergeSkills([
+      { name: 'Etiquette', base: 5, baseText: 'INT/5', reg: null },
+      { name: 'Language (Own)', base: null, baseText: 'EDU', reg: null },
+      { name: 'Dodge', base: 2, baseText: 'DEX / 2', reg: 45 },
+      { name: 'Omen Reading', base: 3, baseText: 'SAN/3', reg: null },
+      { name: 'Luck Sense', base: 5, baseText: 'APP/5', reg: 20 },
+    ], 'none', chars);
+    assert.deepEqual(out.map(s => [s.name, s.reg, s.developed]),
+      [['Dodge', 45, true], ['Etiquette', 14, false], ['Language (Own)', 80, false], ['Luck Sense', 20, false]]);
+  });
 });
