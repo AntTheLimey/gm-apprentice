@@ -49,10 +49,11 @@ function baseFor(entry, chars) {
 }
 
 // pcSkills: [{ name, base, reg }] parsed from the sheet; chars: { DEX: { reg }, … } from its Characteristics table.
+// `variant` 'none' lays the note's skills over no list: only the skills it names, each with the base and value it writes.
 // A skill whose base cannot be worked out (no such characteristic on the sheet) is left off unless the PC lists it,
 // and a listed one shows its own value without a claim that it was developed: a flat guess would be wrong.
 function mergeSkills(pcSkills, variant, chars) {
-  const canonical = variant === 'base' ? BASE_SKILLS : REGENCY_SKILLS;
+  const canonical = variant === 'none' ? [] : (variant === 'base' ? BASE_SKILLS : REGENCY_SKILLS);
   const byName = new Map(); // keyed by lowercased canonical name
   const known = new Map();  // every canonical skill, with its base for this PC (null: unknown)
   for (const c of canonical) {

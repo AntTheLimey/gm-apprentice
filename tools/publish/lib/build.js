@@ -1500,6 +1500,9 @@ function buildSite(options) {
             .update(JSON.stringify({ f: page.frontmatter, s: sections })).digest('hex').slice(0, 12),
           live: publishConfig.live.stats === true,
           tohit: publishConfig.tohit_calculator === 'on',
+          // The tool's own rules lists on the sheet: each on unless the vault turned it off.
+          gurpsReference: !publishConfig.rules_lists || publishConfig.rules_lists.gurpsReference !== false,
+          cocSkillList: !publishConfig.rules_lists || publishConfig.rules_lists.cocSkillList !== false,
         };
         const rendered = systemRenderer ? systemRenderer(page.frontmatter, sections, meta) : null;
         // A renderer returns an object (CoC, GURPS, D&D), or (PF2e, FitD) the sheet as a string.

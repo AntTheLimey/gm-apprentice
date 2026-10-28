@@ -207,12 +207,13 @@ function skillRow(s) {
 
 const COLCAP = `<div class="colcap"><span></span><span>Skill</span><span>reg</span><span>½</span><span>⅕</span></div>`;
 
-function buildSkills(skills) {
+// `listed: false`: the skills are the note's own (no built-in list), so the hint does not say every skill is shown.
+function buildSkills(skills, listed = true) {
   const all = skills || [];
   const split = Math.ceil(all.length / 2);
   const col = rows => `<div>${COLCAP}${rows.map(skillRow).join('')}</div>`;
   return `<h2 class="section">Investigator Skills <span class="rule"></span>` +
-    `<span class="hint">○ tick on a successful roll · coloured value = above base · all skills shown, untouched at base</span></h2>` +
+    `<span class="hint">○ tick on a successful roll · coloured value = above base${listed ? ' · all skills shown, untouched at base' : ''}</span></h2>` +
     `<div class="skills-wrap">${col(all.slice(0, split))}${col(all.slice(split))}</div>`;
 }
 
@@ -240,7 +241,7 @@ function buildSheet(model, rowNotes) {
     buildIdentity(m.identity) +
     `<div class="grid-main">` +
       `<div>${buildChars(m.chars)}${buildCombatBox(m.combat)}</div>` +
-      `<div>${buildPortraitRow(m.backstory)}${buildSkills(m.skills)}${buildWeapons(m.weapons)}</div>` +
+      `<div>${buildPortraitRow(m.backstory)}${buildSkills(m.skills, m.skillList !== false)}${buildWeapons(m.weapons)}</div>` +
     `</div>` +
     buildRowNotes(rowNotes) +
     `</div>`;

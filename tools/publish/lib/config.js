@@ -226,6 +226,9 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   // `menu_extra`: a site that sets none builds as it did. Each is passed down to the code that uses it.
   Object.defineProperty(merged, 'limits', { value: { ...p.limits }, enumerable: false });
   Object.defineProperty(merged, 'header_facts', { value: [...p.sheets.header_facts], enumerable: false });
+  // The rules text a sheet carries from the tool's own lists (the GURPS reference tables, the CoC skill list). Not listed,
+  // like `header_facts`: a site that sets neither builds as it did.
+  Object.defineProperty(merged, 'rules_lists', { value: { gurpsReference: p.sheets.gurps_reference_tables, cocSkillList: p.sheets.coc_skill_list }, enumerable: false });
   // A blank word reads as unset. A word that would break the link it is printed in is refused, with a warning.
   const words = {};
   for (const key of ['person', 'place', 'thing']) {

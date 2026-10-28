@@ -440,6 +440,16 @@ const REGISTRY = [
     left_out: '`on`',
   },
   {
+    name: 'player_site.sheets.gurps_reference_tables', type: 'switch', default: true, group: 'sheets',
+    does: "The rules reference at the foot of a GURPS character's Combat tab (the Hit Location and Size and Speed/Range tables). Off, the tab has no reference block; the to-hit calculator is set on its own",
+    left_out: 'On',
+  },
+  {
+    name: 'player_site.sheets.coc_skill_list', type: 'switch', default: true, group: 'sheets',
+    does: "Whether a Call of Cthulhu character's skills are laid over the built-in skill list with its starting values (Regency Cthulhu's list on a Regency site). Off, the sheet lists only the skills the character's note has, with the values written there",
+    left_out: 'On',
+  },
+  {
     name: 'vault.dndbeyond_sync', was: [{ name: 'publish.dndbeyond_sync', in: 'vault' }], type: 'choice', values: ['build', 'manual'], default: 'manual', group: 'sheets',
     does: 'When D&D characters that carry a D&D Beyond link are brought up to date: `build` before each site update, or `manual` only when you ask',
     left_out: '`manual`',

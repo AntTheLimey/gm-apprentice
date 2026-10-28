@@ -136,4 +136,9 @@ describe('mergeSkills', () => {
     assert.equal(out.find(s => s.name === 'Charm').belowBase, undefined);
     assert.equal(out.find(s => s.name === 'Etiquette'), undefined, 'a skill left off has nothing to flag');
   });
+
+  it("with no list ('none'), keeps only the note's skills, each at the base and value it writes", () => {
+    const out = mergeSkills([{ name: 'Charm', base: 15, reg: 72 }, { name: 'Zither Playing', base: 5, reg: null }], 'none', { DEX: { reg: 50 } });
+    assert.deepEqual(out.map(s => [s.name, s.reg, s.developed]), [['Charm', 72, true], ['Zither Playing', 5, false]]);
+  });
 });

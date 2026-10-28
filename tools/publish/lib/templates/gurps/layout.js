@@ -53,8 +53,9 @@ function buildSheet(model, rowNotes) {
 }
 
 // `tohitHtml` (the to-hit calculator's container and data block, or '') goes after the last weapon,
-// chain and combat section and before the rules reference.
-function buildCombat(model, sections, tohitHtml) {
+// chain and combat section and before the rules reference, which `reference: false` leaves out
+// (player_site.sheets.gurps_reference_tables).
+function buildCombat(model, sections, tohitHtml, { reference = true } = {}) {
   const parts = [
     renderDefenses(model),
     renderMelee(model),
@@ -71,7 +72,7 @@ function buildCombat(model, sections, tohitHtml) {
   }
 
   if (parts.length === 0) return null;
-  return `<div class="gurps-combat">${parts.join('\n')}${tohitHtml ? '\n' + tohitHtml : ''}${renderReference()}</div>`;
+  return `<div class="gurps-combat">${parts.join('\n')}${tohitHtml ? '\n' + tohitHtml : ''}${reference ? renderReference() : ''}</div>`;
 }
 
 function buildEquipment(model) {

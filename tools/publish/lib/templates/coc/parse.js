@@ -143,7 +143,9 @@ function parseBackstory(sections) {
   return out;
 }
 
-function parseCoC(frontmatter, sections, system) {
+// `skillList: false` (player_site.sheets.coc_skill_list off): the skills are the note's alone, not laid over the
+// built-in list.
+function parseCoC(frontmatter, sections, system, { skillList = true } = {}) {
   const fm = frontmatter || {};
   const secs = sections || [];
   const variant = /regency/i.test(String(system || '')) ? 'regency' : 'base';
@@ -160,6 +162,7 @@ function parseCoC(frontmatter, sections, system) {
   }
   return {
     variant,
+    skillList,
     identity: {
       occupation: fm.occupation || '', nationality: fm.nationality || '',
       player: fm.player_name || '',
@@ -174,7 +177,7 @@ function parseCoC(frontmatter, sections, system) {
     combat,
     conditions: parseConditions(statHtml),
     backstory: parseBackstory(secs),
-    skills: mergeSkills(rawSkills, variant, chars),
+    skills: mergeSkills(rawSkills, skillList ? variant : 'none', chars),
     weapons: parseWeapons(secs),
   };
 }
