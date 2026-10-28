@@ -15,7 +15,18 @@ const FILES = {
   'Events/The Fog.md': '---\ntype: event\nevent_type: storm\nin_game_date: 1 March\n---\n\nThe fog came in at dusk.\n',
   'Sessions/Session 01.md': '---\ntype: session\nsession_number: 1\nstatus: played\n---\n\nThe party met at the harbour.\n\n## What the Party Learned\n\n- **The fog** is not natural.\n',
   'PCs/Ash.md': '---\ntype: pc\nplayer_name: Pat\nstatus: alive\n---\n\nA climber.\n\n## Background\n\nRaised in the hills.\n',
+  'Factions/Salt Guild.md': '---\ntype: faction\n---\n\nThe guild owns the salt works.\n',
+  'Items/Brass Key.md': '---\ntype: item\n---\n\nIt opens the lighthouse.\n',
+  'Creatures/Fog Eel.md': '---\ntype: creature\n---\n\nIt swims in the fog.\n',
+  'Heritages/Tidefolk.md': '---\ntype: heritage\n---\n\nPeople of the shore.\n',
+  'World/Tides.md': '---\ntype: world_domain\n---\n\nThe tides rule the town.\n',
+  'Documents/Harbour Ledger.md': '---\ntype: document\n---\n\nA ledger of every berth.\n',
 };
+
+// One note of each kind that has its own template (the plain-note template among them): each must carry the hooks.
+const NOTE_PAGES = ['npcs/mara-quill.html', 'locations/harbour.html', 'events/the-fog.html', 'sessions/session-01.html',
+  'factions/salt-guild.html', 'items/brass-key.html', 'creatures/fog-eel.html', 'heritages/tidefolk.html', 'world/tides.html',
+  'documents/harbour-ledger.html'];
 
 // The pages each hook must be found on, by their path in the site. Every listed hook needs an entry.
 const SEEN_ON = {
@@ -25,10 +36,10 @@ const SEEN_ON = {
   '.page-title': ['sessions/session-01.html', 'locations/index.html'],
   '.metadata-badge[data-field]': ['sessions/session-01.html'],
   '.landing-hero': ['index.html'],
-  'main[data-page-type]': ['index.html', 'npcs/mara-quill.html', 'pcs/ash.html', 'locations/index.html', 'sessions/session-01.html', 'timeline.html', '404.html'],
-  '[data-title-block]': ['index.html', 'npcs/mara-quill.html', 'locations/harbour.html', 'events/the-fog.html', 'pcs/ash.html', 'sessions/session-01.html', 'locations/index.html'],
-  'h1[data-page-title]': ['index.html', 'npcs/mara-quill.html', 'locations/harbour.html', 'events/the-fog.html', 'pcs/ash.html', 'sessions/session-01.html'],
-  'p[data-first-paragraph]': ['npcs/mara-quill.html', 'locations/harbour.html', 'events/the-fog.html', 'sessions/session-01.html'],
+  'main[data-page-type]': ['index.html', ...NOTE_PAGES, 'pcs/ash.html', 'locations/index.html', 'timeline.html', '404.html'],
+  '[data-title-block]': ['index.html', ...NOTE_PAGES, 'pcs/ash.html', 'locations/index.html'],
+  'h1[data-page-title]': ['index.html', ...NOTE_PAGES, 'pcs/ash.html'],
+  'p[data-first-paragraph]': NOTE_PAGES,
   'h2[data-section]': ['npcs/mara-quill.html', 'locations/harbour.html', 'sessions/session-01.html'],
 };
 
@@ -107,6 +118,18 @@ test('with the hooks off (or never set) no page carries an added hook, and the t
     const text = fs.readFileSync(f, 'utf8');
     assert.doesNotMatch(text, added, rel);
     assert.equal(text, unset.player.read(...rel.split(path.sep)), rel);
+  }
+});
+
+test('with the hooks on, taking the added attributes out gives the hooks-off page: nothing else moves', () => {
+  const strip = (html) => html.replace(/ data-page-type="[^"]*"| data-title-block| data-page-title| data-first-paragraph| data-section="[^"]*"/g, '');
+  for (const site of ['player', 'gm']) {
+    const pages = on[site].files().filter((f) => f.endsWith('.html'));
+    assert.ok(pages.length > 15);
+    for (const f of pages) {
+      const rel = path.relative(on[site].dir, f).split(path.sep);
+      assert.equal(strip(fs.readFileSync(f, 'utf8')), off[site].read(...rel), `${site}: ${rel.join('/')}`);
+    }
   }
 });
 
