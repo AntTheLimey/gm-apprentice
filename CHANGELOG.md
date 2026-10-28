@@ -23,7 +23,9 @@ A site that sets none of the new settings builds as before.
   the tool's own stylesheets and before `css/overrides.css`, in the
   order written. A missing file, a file that is not a `.css` and a
   second file of the same name are build warnings, never a stop. A path
-  outside the vault and the site folder is not read.
+  outside the vault and the site folder is not read. Each goes through
+  the same light/dark step as the tool's own stylesheets, so its
+  colour-scheme rules answer to the reader's toggle.
 - `docs/theme-hooks.md` (#360): the classes and attributes a theme may
   style, what each marks, an example, and the promise of a heads-up
   issue to downstream tools before a listed hook changes. Its tables
@@ -53,12 +55,20 @@ A site that sets none of the new settings builds as before.
   `_meta/publish-list.yaml` still publishes whose line in the old list
   (`_meta/publish-manifest.md.converted`) a `%%` or `<!-- -->` comment
   hid, by the comment rule of #498. `--decide` moves them to
-  `needs_decision`, the file's comments and order kept.
+  `needs_decision`, keeping the file's comments, order, indentation and
+  line ends. A page also under `excluded` leaves publishing and stays
+  excluded; one already under `needs_decision` just leaves publishing.
 - Migration check `publish-hidden` (#500): for a vault that has the
   `.converted` file, it names each such page. Your choice: move them to
   `needs_decision`, or leave them published. A page the old list also
   ticked with no comment around it is not named. Nothing found, no item.
 - Publish tool 1.54.0.
+
+### Changed
+
+- A sheets-only build (`--only sheets`) copies `css/overrides.css` and
+  the extra stylesheets too, so the pages it writes never link a file
+  the site does not have yet.
 
 ## [1.10.106] — 2026-10-27
 
