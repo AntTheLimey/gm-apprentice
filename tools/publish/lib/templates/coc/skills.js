@@ -92,7 +92,10 @@ function mergeSkills(pcSkills, variant, chars) {
     const regNum = Number(pc.reg);
     if (base === null && (blank || !Number.isFinite(regNum))) continue;   // nothing to show but a guess
     const reg = (blank || !Number.isFinite(regNum)) ? base : regNum;
-    byName.set(key, { name: existing ? existing.name : name, base, reg, worked: !!existing });
+    // Worked out: a list's base, or (no list) a characteristic share the sheet's characteristics gave a number. A value
+    // written below one is said in the note-faults audit (SKILL_BELOW_BASE), with the list or without.
+    const worked = !!existing || (variant === 'none' && base !== null && shareOf(pc.baseText) !== null);
+    byName.set(key, { name: existing ? existing.name : name, base, reg, worked });
     const p = parentOf(name);
     if (p && GENERIC_PARENTS.has(p.toLowerCase())) specParents.add(p.toLowerCase());
   }

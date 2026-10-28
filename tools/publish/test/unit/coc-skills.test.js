@@ -154,4 +154,13 @@ describe('mergeSkills', () => {
     assert.deepEqual(out.map(s => [s.name, s.reg, s.developed]),
       [['Dodge', 45, true], ['Etiquette', 14, false], ['Language (Own)', 80, false], ['Luck Sense', 20, false]]);
   });
+
+  it('with no list, a skill written below its worked-out share base is flagged, as with the list (Dodge DEX/2)', () => {
+    const out = mergeSkills([
+      { name: 'Dodge', base: 2, baseText: 'DEX/2', reg: 20 },
+      { name: 'Zither Playing', base: 5, baseText: '05', reg: 3 },
+    ], 'none', { DEX: { reg: 60 } });
+    assert.equal(out.find(s => s.name === 'Dodge').belowBase, 30);
+    assert.equal(out.find(s => s.name === 'Zither Playing').belowBase, undefined, 'a plain number is the note\'s own, not worked out');
+  });
 });
