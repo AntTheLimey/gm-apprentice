@@ -26,6 +26,7 @@ const GROUPS = [
   { id: 'surface', title: 'Pictures, buttons and small things', about: '' },
   { id: 'state', title: 'Statuses', about: 'The badges that say how a character, chapter or session stands.' },
   { id: 'lists', title: 'Bestiary, locations, factions and items', about: '' },
+  { id: 'notfound', title: 'The page-not-found page', about: 'Its styles are written into the page itself, after every stylesheet, so a theme reaches its Home button through these two names rather than `--on-accent`.' },
   { id: 'hero', title: 'Landing hero', about: 'Written by the build from `player_site.landing.hero.*` on a full-bleed hero; a theme may set them instead.' },
   { id: 'gurps', title: 'GURPS sheet', about: 'Each part of the sheet has its own hue, and a tint of it for row backgrounds. A sheet skin sets these.' },
   { id: 'live', title: 'Live party board', about: 'The GURPS and Call of Cthulhu party boards and their status badges.' },
@@ -105,6 +106,8 @@ const TOKENS = [
   T('lists', '--intel-canon-bg', 'rgba(139, 148, 158, 0.1)', 'A faction\'s leadership tag'),
   T('lists', '--armory-tl', '#9ab856', 'An item\'s tech-level tag: its words'),
   T('lists', '--armory-tl-bg', 'rgba(107, 142, 35, 0.2)', 'Its background'),
+  T('notfound', '--theme-accent', 'var(--accent)', 'The page-not-found message and its Home button\'s fill', { scope: 'unset' }),
+  T('notfound', '--white', 'white (`#fff`)', 'The words on the page-not-found Home button (the story page\'s Begin button reads it too, after `--on-accent`)', { scope: 'unset' }),
   T('hero', '--hero-focus', 'center', 'The part of the picture a full-bleed hero keeps in view', { scope: 'unset' }),
   T('hero', '--hero-focus-narrow', 'var(--hero-focus, center)', 'The same, on a screen narrower than 768 pixels', { scope: 'unset' }),
   ...[['attr', '#4ade80', 'rgba(22, 163, 74, 0.14)', '#15803d', '#eafaf0', 'Attributes'], ['social', '#fbbf24', 'rgba(217, 119, 6, 0.14)', '#b45309', '#fdf4e7', 'Social traits'],
@@ -154,7 +157,7 @@ const PRIVATE = [
   { match: /^--cat(-bg)?$/, why: 'A GURPS sheet block\'s hue, copied from its --gc-* pair' },
   { match: /^--(sk-[\w-]+|frame)$/, why: 'A sheet skin\'s own workings' },
   { match: /^--callout-color$/, why: 'A callout\'s colour, set per callout' },
-  { match: /^--(muted|white|surface|color-border|color-surface|color-accent)$/, why: 'Older names a rule still reads before its listed default; set the listed token instead' },
+  { match: /^--(muted|surface|color-border|color-surface|color-accent)$/, why: 'Older names a rule still reads before its listed default; set the listed token instead' },
 ];
 
 const isPrivate = (name) => PRIVATE.some((p) => p.match.test(name));

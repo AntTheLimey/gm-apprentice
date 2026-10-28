@@ -244,6 +244,17 @@ The badges that say how a character, chapter or session stands.
 
 <!-- /theme-tokens:lists -->
 
+<!-- theme-tokens:notfound -->
+
+Its styles are written into the page itself, after every stylesheet, so a theme reaches its Home button through these two names rather than `--on-accent`.
+
+| Token | What it sets | Default |
+|-------|--------------|---------|
+| `--theme-accent` | The page-not-found message and its Home button's fill | Unset: `var(--accent)` |
+| `--white` | The words on the page-not-found Home button (the story page's Begin button reads it too, after `--on-accent`) | Unset: white (`#fff`) |
+
+<!-- /theme-tokens:notfound -->
+
 <!-- theme-tokens:hero -->
 
 Written by the build from `player_site.landing.hero.*` on a full-bleed hero; a theme may set them instead.
@@ -364,9 +375,6 @@ the rule:
 - **The party board's pulse**, an animation of the live marker.
 - **A fallback after a token that is always declared**, such as the
   `#ccc` in `var(--border, #ccc)`: it is never used.
-- **The "page not found" page's Home button.** Its styles are written
-  into the page itself, so it reads `--white` (default white), not
-  `--on-accent`.
 - **Sizes, spacing and radii off the scale**, and every size inside the
   character sheets, which keep their own.
 - **Custom properties named private** in the list (the connections web's

@@ -48,7 +48,12 @@ const coc = declared(built, '.coc-sheet-root, .cr-modal-backdrop.coc');
 const allCss = () => {
   const files = ['style.css', 'gm.css', 'props.css', ...fs.readdirSync(path.join(CSS, 'skins')).map((f) => `skins/${f}`),
     ...fs.readdirSync(path.join(CSS, 'themes')).map((f) => `themes/${f}`)];
-  return files.map((f) => ({ f, text: noComments(fs.readFileSync(path.join(CSS, f), 'utf8')) }));
+  const sheets = files.map((f) => ({ f, text: noComments(fs.readFileSync(path.join(CSS, f), 'utf8')) }));
+  // The page-not-found page carries its own <style>: it reads custom properties too.
+  const page404 = fs.readFileSync(path.join(__dirname, '..', 'lib', 'templates', 'four-oh-four.js'), 'utf8');
+  const style404 = page404.slice(page404.indexOf('<style>'), page404.indexOf('</style>'));
+  assert.ok(style404.length > 20, 'the 404 page has its <style>');
+  return [...sheets, { f: 'lib/templates/four-oh-four.js', text: noComments(style404) }];
 };
 
 test('the list has no name twice, and every token sits in a group', () => {
