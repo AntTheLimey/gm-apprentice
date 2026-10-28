@@ -1,5 +1,5 @@
 const { scopeColorScheme, headScript, storageKey } = require('./color-mode');
-const { configureColorMode, configureLinkPreviews, configureConnections } = require('./templates/base');
+const { configureColorMode, configureLinkPreviews, configureConnections, configureExtraStylesheets, EXTRA_CSS_DIR } = require('./templates/base');
 const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
@@ -487,6 +487,45 @@ function buildSite(options) {
     fs.writeFileSync(dest, scopeColorScheme(fs.readFileSync(src, 'utf8')));
     console.log('  wrote css/overrides.css');
     return true;
+  }
+
+  // The vault's extra stylesheets (player_site.theme.stylesheets): each path is looked for in the vault, then in the site
+  // folder, never outside the two. Each found .css is copied to css/extra/ under its own file name (a full build) and
+  // linked on every page. A missing file, one that is not a .css and a second file of the same name are warnings: the
+  // build goes on without them. Returns the file names to link, in the order written.
+  function copyExtraStylesheets() {
+    const setting = nm('player_site.theme.stylesheets');
+    const vaultRoot = path.resolve(config.vaultPath);
+    const siteRoot = path.resolve(configDir);
+    const inside = (root, p) => p.startsWith(root + path.sep);
+    const kept = new Map();
+    for (const written of publishConfig.stylesheets || []) {
+      const found = [vaultRoot, siteRoot].map((root) => path.resolve(root, written))
+        .find((p, i) => inside([vaultRoot, siteRoot][i], p) && fs.existsSync(p) && fs.statSync(p).isFile());
+      if (!found) {
+        printWarning(`${setting} entry "${written}" was not found in the vault (${vaultRoot}) or the site folder (${siteRoot}); it is left out`);
+        continue;
+      }
+      if (path.extname(found).toLowerCase() !== '.css') {
+        printWarning(`${setting} entry "${written}" is not a .css file; it is left out`);
+        continue;
+      }
+      const name = path.basename(found);
+      if (kept.has(name)) {
+        printWarning(`${setting} entry "${written}" has the same file name as "${kept.get(name).written}"; only the first is used`);
+        continue;
+      }
+      kept.set(name, { written, found });
+    }
+    if (writes === 'all') {
+      for (const [name, { found }] of kept) {
+        const dest = path.join(outputDir, ...EXTRA_CSS_DIR.split('/'), name);
+        ensureDir(dest);
+        fs.copyFileSync(found, dest);
+        console.log(`  wrote ${EXTRA_CSS_DIR}/${name}`);
+      }
+    }
+    return [...kept.keys()];
   }
 
   // The to-hit calculator's script is copied after the pages are written, and only when one of them
@@ -1326,6 +1365,7 @@ function buildSite(options) {
   writeThemeCSS();
   copyThemeFonts();
   publishConfig._overridesCss = copyOverridesCSS();
+  configureExtraStylesheets(copyExtraStylesheets());
 
   const campaignImageSource = publishConfig.theme.campaign_image;
   let campaignImageCopied = false;

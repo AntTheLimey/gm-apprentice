@@ -79,6 +79,17 @@ function configureColorMode(head) { colorModeHead = head || ''; }
 function colorModeHeadHtml() { return colorModeHead ? `\n  ${colorModeHead}` : ''; }
 function colorModeEnabled() { return Boolean(colorModeHead); }
 
+// The vault's extra stylesheets (player_site.theme.stylesheets) the build copied, as file names under css/extra/, set
+// once per build by configureExtraStylesheets before any page renders, as the colour-mode script is. Every page links
+// them after the tool's own stylesheets and before css/overrides.css, in this order.
+const EXTRA_CSS_DIR = 'css/extra';
+let extraStylesheets = [];
+function configureExtraStylesheets(names) { extraStylesheets = Array.isArray(names) ? names.slice() : []; }
+// The extra stylesheets' <link> tags, each address made by `href` from its path from the site root ('' when none).
+function extraStylesheetTags(href) {
+  return extraStylesheets.map((name) => `\n  <link rel="stylesheet" href="${href(`${EXTRA_CSS_DIR}/${encodeURIComponent(name)}`)}">`).join('');
+}
+
 function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset, overridesCss, breadcrumbsHtml, scripts, mainAttrs, extraCss }) {
   const footerHtml = footer ? `<footer class="site-footer">${escapeHtml(footer)}</footer>` : '';
   const themeCssHref = cssHref.replace('style.css', 'theme.css');
@@ -94,7 +105,8 @@ function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, foot
   const overridesLinkTag = overridesCss
     ? `\n  <link rel="stylesheet" href="${cssHref.replace('style.css', 'overrides.css')}">`
     : '';
-  const extraLinks = (extraCss || []).map(h => `\n  <link rel="stylesheet" href="${h}">`).join('');
+  const extraLinks = (extraCss || []).map(h => `\n  <link rel="stylesheet" href="${h}">`).join('')
+    + extraStylesheetTags((rel) => cssHref.replace('css/style.css', rel));
   const breadcrumbs = breadcrumbsHtml || '';
   const scriptTags = scripts
     ? scripts.map(s => `<script src="${s}"></script>`).join('\n')
@@ -254,5 +266,8 @@ module.exports = {
   portraitImg,
   configureColorMode,
   colorModeHeadHtml,
+  configureExtraStylesheets,
+  extraStylesheetTags,
+  EXTRA_CSS_DIR,
   colorModeEnabled,
 };

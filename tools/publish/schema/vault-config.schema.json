@@ -748,6 +748,21 @@
                 "number",
                 "null"
               ]
+            },
+            "stylesheets": {
+              "description": "More stylesheets on every page, each a `.css` file's path in the vault (or, when the vault has no file there, in the site folder). Each is copied to the site's `css/extra/` and linked after the tool's own stylesheets and before `css/overrides.css`, in the order written. A file that is missing or is not a `.css`, or a second file of the same name, is reported and left out",
+              "default": [],
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
             }
           }
         },
@@ -1874,6 +1889,20 @@
                 "number",
                 "null"
               ]
+            },
+            "stylesheets": {
+              "description": "More stylesheets on every page, each a `.css` file's path in the vault (or, when the vault has no file there, in the site folder). Each is copied to the site's `css/extra/` and linked after the tool's own stylesheets and before `css/overrides.css`, in the order written. A file that is missing or is not a `.css`, or a second file of the same name, is reported and left out",
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
             }
           }
         },

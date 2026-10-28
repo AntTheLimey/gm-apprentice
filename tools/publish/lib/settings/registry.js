@@ -396,6 +396,11 @@ const REGISTRY = [
     left_out: 'No tagline',
   },
   {
+    name: 'player_site.theme.stylesheets', type: 'list', of: 'stylesheet paths', default: [], group: 'theme',
+    does: "More stylesheets on every page, each a `.css` file's path in the vault (or, when the vault has no file there, in the site folder). Each is copied to the site's `css/extra/` and linked after the tool's own stylesheets and before `css/overrides.css`, in the order written. A file that is missing or is not a `.css`, or a second file of the same name, is reported and left out",
+    left_out: 'None',
+  },
+  {
     name: 'player_site.lists.section_titles', was: [{ name: 'publish.section_titles', in: 'vault' }], type: 'map', default: {}, keys: ['locations', 'factions', 'items', 'creatures', 'documents'], group: 'theme',
     shape: '`locations`, `factions`, `items`, `creatures`, `documents`, each a title',
     does: 'Your own headings for the lists of locations, factions, items, creatures and documents',
