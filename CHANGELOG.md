@@ -41,10 +41,12 @@ they look the same.
   stylesheet) or sets its own.
 - `player_site.landing.hero.layout` (#530), `card` (today's look) or
   `full-bleed`: the campaign picture runs edge to edge under the menu,
-  with the title, tagline and dates over it on a shade mixed toward
-  `--bg-hero`, so it follows the palette in light and dark. The menu
-  sits over the picture on the landing page only and scrolls away with
-  it; the page never scrolls sideways, and every other section keeps its
+  with the title, tagline and dates over it in a light ink
+  (`--hero-title`, white unless a theme sets it) on a shade mixed toward
+  `--bg-hero`, so it follows the palette in light and dark and the words
+  read over any picture, a white one included. The menu sits over the
+  picture on the landing page only, on a near-solid band of the same
+  shade, and scrolls away with it; the page never scrolls sideways, and every other section keeps its
   width. On the GM site the menu stays a solid bar above the band.
   `player_site.landing.hero.focus` and `focus_narrow` (a screen under
   768 pixels) say which part of a cropped picture stays in view, as CSS

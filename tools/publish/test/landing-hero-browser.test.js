@@ -11,6 +11,12 @@ const { makePng } = require('./helpers/make-png');
 const { browserSkip, measure } = require('./helpers/browser');
 
 const skip = browserSkip();
+// The strength of the words' shade, as the stylesheet writes it (color-mix of --bg-hero at this share).
+const SHADE = (() => {
+  const css = require('node:fs').readFileSync(path.join(__dirname, '..', 'css', 'style.css'), 'utf8');
+  const rule = css.slice(css.indexOf('.landing-hero.landing-hero--full-bleed h1::before'));
+  return Number(/color-mix\(in srgb, var\(--bg-hero\) (\d+)%, transparent\) 3rem/.exec(rule)[1]) / 100;
+})();
 
 const FILES = {
   'Characters/Mara.md': '---\ntype: npc\n---\nA person.\n',
@@ -30,6 +36,11 @@ const probe = function (done) {
     section: section ? r(section) : null,
     imgFit: getComputedStyle(hero.querySelector('.landing-hero-img')).objectFit,
     imgPosition: getComputedStyle(hero.querySelector('.landing-hero-img')).objectPosition,
+    bgHero: getComputedStyle(hero).getPropertyValue('--bg-hero').trim(),
+    words: [h1, hero.querySelector('.hero-tagline'), hero.querySelector('.hero-dates'), hero.querySelector('.date-label')].map(function (el) {
+      var cs = getComputedStyle(el); return { color: cs.color, opacity: cs.opacity, size: parseFloat(cs.fontSize) };
+    }),
+    shade: (function () { var cs = getComputedStyle(h1, '::before'); return { content: cs.content, position: cs.position, image: cs.backgroundImage }; })(),
   });
 };
 
@@ -78,6 +89,20 @@ describe('the full-bleed landing hero, in a browser', { skip }, () => {
       assert.ok(card.section && bleed.section, 'the page has a section after the hero');
       assert.equal(bleed.section.left, card.section.left, 'a section keeps its place');
       assert.equal(bleed.section.width, card.section.width, 'a section keeps its width');
+      // The words read over any picture (review of #530): a light ink on the words' own shade, at least 80% of the hero
+      // colour from above the title to the hero's foot. Worst case, the picture behind is white: the title (large) needs
+      // 3:1, the tagline and dates 4.5:1. The shade's strength is read from the stylesheet; the inks from the page.
+      assert.equal(bleed.shade.content, '""');
+      assert.equal(bleed.shade.position, 'absolute');
+      assert.match(bleed.shade.image, /gradient/);
+      const channels = (c) => (c.startsWith('#') ? (c.length === 4 ? [...c.slice(1)].map((x) => parseInt(x + x, 16)) : [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16))) : c.match(/[\d.]+/g).slice(0, 3).map(Number));
+      const lum = (rgb) => { const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }; const [r, g, b] = rgb.map(f); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+      const backdrop = lum(channels(bleed.bgHero).map((h) => SHADE * h + (1 - SHADE) * 255));
+      bleed.words.forEach((word, i) => {
+        assert.equal(word.opacity, '1');
+        const ratio = (lum(channels(word.color)) + 0.05) / (backdrop + 0.05);
+        assert.ok(ratio >= (i === 0 ? 3 : 4.5), `${['the title', 'the tagline', 'the dates', 'a date label'][i]} is ${ratio.toFixed(2)}:1 over a white picture`);
+      });
       // The card is today's look: the menu is a sticky bar above it.
       assert.equal(card.navPosition, 'sticky');
       assert.ok(card.scrollWidth <= card.clientWidth);

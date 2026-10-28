@@ -1457,8 +1457,9 @@ body.landing-full-bleed > main.content > :not(.landing-hero) {
   object-position: var(--hero-focus, center);
   z-index: -2;
 }
-/* The shade behind the words: mixed toward the hero colour, so it follows the palette in light and dark. A browser
-   without color-mix() keeps the plain dark shade. */
+/* The shade over the picture, mixed toward the hero colour so it follows the palette in light and dark: nearly solid
+   behind the menu bar (its words read over a white picture too), fading out below it, and a soft rise from the foot.
+   A browser without color-mix() keeps the plain dark shade. */
 .landing-hero--full-bleed::after {
   content: "";
   position: absolute;
@@ -1466,22 +1467,45 @@ body.landing-full-bleed > main.content > :not(.landing-hero) {
   z-index: -1;
   pointer-events: none;
   background:
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.6) 0, transparent 7rem),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.9) 0, rgba(0, 0, 0, 0.9) 3.5rem, transparent 8rem),
     linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.3) 55%, transparent 85%);
   background:
-    linear-gradient(to bottom, color-mix(in srgb, var(--bg-hero) 75%, transparent) 0, transparent 7rem),
+    linear-gradient(to bottom, color-mix(in srgb, var(--bg-hero) 95%, transparent) 0, color-mix(in srgb, var(--bg-hero) 95%, transparent) 3.5rem, transparent 8rem),
     linear-gradient(to top, color-mix(in srgb, var(--bg-hero) 92%, transparent) 0%, color-mix(in srgb, var(--bg-hero) 35%, transparent) 55%, transparent 85%);
 }
 .landing-hero.landing-hero--full-bleed h1 {
+  position: relative;
   font-size: clamp(2.25rem, 6vw, 4.5rem);
   line-height: 1.05;
   margin-bottom: var(--space-750);
   overflow-wrap: anywhere;
+  color: var(--hero-title, var(--text-on-image));
+}
+/* The words' own shade: from 3rem above the title down to the foot of the hero and across its full width (it reaches
+   far past every edge and the hero, overflow: hidden, clips it), 80% of the hero colour, so a light ink reads over any
+   picture, even a white one. A browser without color-mix() keeps a plain dark shade. */
+.landing-hero.landing-hero--full-bleed h1::before {
+  content: "";
+  position: absolute;
+  top: -3rem;
+  bottom: -1000rem;
+  left: -1000rem;
+  right: -1000rem;
+  z-index: -1;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent 0, rgba(0, 0, 0, 0.8) 3rem);
+  background: linear-gradient(to bottom, transparent 0, color-mix(in srgb, var(--bg-hero) 80%, transparent) 3rem);
 }
 .landing-hero--full-bleed .hero-tagline {
   max-width: 46rem;
   margin-left: auto;
   margin-right: auto;
+}
+.landing-hero--full-bleed .hero-tagline,
+.landing-hero--full-bleed .hero-dates,
+.landing-hero--full-bleed .hero-dates .date-label {
+  color: var(--hero-title, var(--text-on-image));
+  opacity: 1;
 }
 .landing-hero--full-bleed .hero-dates {
   flex-wrap: wrap;

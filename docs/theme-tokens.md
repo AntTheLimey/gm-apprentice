@@ -257,10 +257,11 @@ Its styles are written into the page itself, after every stylesheet, so a theme 
 
 <!-- theme-tokens:hero -->
 
-Written by the build from `player_site.landing.hero.*` on a full-bleed hero; a theme may set them instead.
+A full-bleed hero's words sit on a shade of `--bg-hero` and take a light ink. The two focus values are written by the build from `player_site.landing.hero.*`; a theme may set them instead.
 
 | Token | What it sets | Default |
 |-------|--------------|---------|
+| `--hero-title` | A full-bleed hero's title, tagline and dates, over the shade behind them | Unset: `var(--text-on-image)` |
 | `--hero-focus` | The part of the picture a full-bleed hero keeps in view | Unset: `center` |
 | `--hero-focus-narrow` | The same, on a screen narrower than 768 pixels | Unset: `var(--hero-focus, center)` |
 
