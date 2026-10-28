@@ -7,6 +7,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.108] — 2026-10-28
+
+Three more asks from GM-Scriptorium: the look as named custom properties
+a theme can set, a built-in full-bleed landing hero, and a settings move
+an embedding tool can call without loading `child_process`. A site that
+sets none of the new settings builds byte for byte the same pages, and
+they look the same.
+
+### Added
+
+- `docs/theme-tokens.md` (#363): the custom properties a theme may set,
+  what each colours or sizes, and its default, with the same heads-up
+  promise as the theme hooks. Its tables are written from
+  `lib/theme-tokens.js`, the list a test checks against the built
+  `style.css`. The tool's own styles now read them: every colour that
+  was written into a rule (statuses, chapters, the bestiary, factions,
+  items, the GURPS sheet's encumbrance ramp and damage column, the live
+  party boards, the Call of Cthulhu sheet's other inks, words over a
+  picture, the GM band's ink) is a named token whose default is that
+  colour, and the type sizes, spacing and corner radii that recur
+  exactly in the site's own rules have a scale (`--text-875`,
+  `--space-1000`, `--radius-500`). The genre presets and sheet skins
+  already set these names, so they are the worked examples.
+- `--on-accent` (#363), unset by default: the words on a control filled
+  with the accent. Each control keeps today's colour until a theme sets
+  it, so a palette whose accent is light can now fix #529 in one line.
+- `--font-label` and `player_site.theme.fonts.label` (#363): a third
+  typeface for the menu, labels, table heads, badges, buttons, meta lines
+  and date labels, loaded the same three ways as the heading and body
+  faces. Unset, each of those keeps the body face it had.
+- `player_site.landing.hero.layout` (#530), `card` (today's look) or
+  `full-bleed`: the campaign picture runs edge to edge under the menu,
+  with the title, tagline and dates over it on a shade mixed toward
+  `--bg-hero`, so it follows the palette in light and dark. The menu
+  sits over the picture on the landing page only and scrolls away with
+  it; the page never scrolls sideways, and every other section keeps its
+  width. On the GM site the menu stays a solid bar above the band.
+  `player_site.landing.hero.focus` and `focus_narrow` (a screen under
+  768 pixels) say which part of a cropped picture stays in view, as CSS
+  writes a position; anything else is a settings fault and never
+  reaches the page. `player_site.landing.hero.align` sets the words
+  `left` or `center` (today's), card or full-bleed.
+- Theme hooks for the hero (#530): `.landing-hero--full-bleed`,
+  `body.landing-full-bleed` and `.landing-hero--align-left`, written
+  only when the setting asks for that layout, so neither the tool nor a
+  theme needs `:has()`.
+- `stripSiteKeys` and `movedSiteKeys` (#535) are exported from
+  `lib/settings/move.js`: the site-file keys the settings move takes
+  out, for a tool that stages a site file for a build on a moved vault.
+- Publish tool 1.55.0.
+
+### Changed
+
+- The settings move (#535) loads `child_process` only when it asks a
+  site's tool about its version, and the build-steps module only when a
+  step runs, so a host that answers with `deps.pinCheck` never loads it.
+  The README's library section says how.
+
 ## [1.10.107] — 2026-10-28
 
 Four asks from GM-Scriptorium, a tool that layers its own themes on the
