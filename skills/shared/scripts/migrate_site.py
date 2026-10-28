@@ -1232,9 +1232,6 @@ SITE_CHECKS: list[Check] = [
           find_settings_move),
     Check(PUBLISH_LIST, None, 2, "the publish list moves to its new file",
           find_publish_list),
-    Check(PUBLISH_HIDDEN, "1.10.107", 2, "published pages the old publish "
-          "list hid with a comment", find_publish_hidden,
-          choices=(f"{PUBLISH_HIDDEN}=",)),
     Check(FULL_MODE, None, 2, "a vault that published everything becomes a "
           "GM site", find_full_mode),
     Check("publish-site", None, 2, "the site switch",
@@ -1262,6 +1259,9 @@ SITE_CHECKS: list[Check] = [
           "notes the build cannot parse", find_unparseable, asks_site=True),
     Check("exclude-lists", "1.10.47", 2, "the built-in exclude lists, written "
           "into the vault file", find_exclude_lists, asks_site=True),
+    Check(PUBLISH_HIDDEN, "1.10.107", 2, "published pages the old publish "
+          "list hid with a comment", find_publish_hidden,
+          choices=(f"{PUBLISH_HIDDEN}=",)),
     Check("gm-leak", None, 4, "sections the site withholds are nested under "
           "GM Notes", find_gm_leak, asks_site=True),
     Check("props-move", "1.10.105", 4, "props kept by hand or by site scripts "

@@ -123,6 +123,31 @@ class PublishHiddenTests(unittest.TestCase):
         vault = make(self.tmp, listed="publishing:\n  - NPCs/Mara.md\n  - NPCs/Again.md\n")
         self.assertEqual(ms.find_publish_hidden(vault), [])
 
+    def test_the_update_offers_it_and_moves_the_pages_on_the_gms_choice(self):
+        import contextlib
+        import io
+        from unittest import mock
+        import migrate
+        vault = make(self.tmp)
+        (vault / "_meta" / "vault-config.md").write_text(
+            '---\ntype: meta\ngm_apprentice_version: "1.10.106"\npublish:\n  mode: player\n---\n', encoding="utf-8")
+
+        def update(*args):
+            out, err = io.StringIO(), io.StringIO()
+            with mock.patch.object(migrate, "plugin_version", return_value=("1.10.107", "test")), \
+                    contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+                code = migrate.main([str(vault), *args])
+            return code, out.getvalue(), err.getvalue()
+
+        code, plan, err = update("plan")
+        self.assertEqual(code, 0, err)
+        self.assertIn("publish-hidden", plan)
+        self.assertIn("NPCs/Secret One.md", plan)
+        self.assertIn("NPCs/Secret Two.md", plan)
+        code, did, err = update("apply", "--choose", "publish-hidden=move")
+        self.assertEqual(code, 0, err + did)
+        self.assertEqual(lists(vault)["needs_decision"], ["NPCs/Secret One.md", "NPCs/Secret Two.md"])
+
     def test_the_check_is_registered_for_this_release(self):
         check = next(c for c in ms.SITE_CHECKS if c.name == "publish-hidden")
         self.assertEqual((check.release, check.band, check.asks_site, check.choices),
