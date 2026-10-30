@@ -135,6 +135,53 @@ describe('image optimization', { skip: !hasCwebp }, () => {
     });
   });
 
+  // #532: the pictures a setting names are copied by their own steps, and were shipped full size.
+  describe('the campaign image and a section banner', () => {
+    let outputDir;
+    before(() => {
+      const siteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-images-'));
+      const vaultPath = path.join(siteDir, 'vault');
+      outputDir = path.join(siteDir, 'docs');
+      fs.mkdirSync(path.join(vaultPath, '_meta'), { recursive: true });
+      fs.mkdirSync(path.join(vaultPath, '_attachments'), { recursive: true });
+      fs.mkdirSync(path.join(vaultPath, 'Characters/NPCs'), { recursive: true });
+      fs.writeFileSync(path.join(vaultPath, '_meta/vault-config.md'), [
+        '---', 'publish:', '  images:', '    optimize: true', '  theme:', '    campaign_image: _attachments/Hero Shot.png',
+        '  banners:', '    characters/npcs:', '      image: _attachments/band.png', '      link: _attachments/full.png', '---', '',
+      ].join('\n'));
+      for (const name of ['Hero Shot.png', 'band.png', 'full.png']) fs.writeFileSync(path.join(vaultPath, '_attachments', name), makePng(1200, 600));
+      fs.writeFileSync(path.join(vaultPath, 'Characters/NPCs/Rock Lavey.md'), '---\ntype: npc\n---\n\n# Rock Lavey\n');
+      const configPath = path.join(siteDir, 'config.json');
+      fs.writeFileSync(configPath, JSON.stringify({
+        vaultPath, outputDir, attachmentsDir: '_attachments', siteTitle: 'Image Site',
+        siteUrl: 'https://example.github.io/image-site', excludeDirs: ['_meta'], folderMap: { 'Characters/NPCs': 'characters/npcs' },
+      }));
+      const saved = console.log;
+      console.log = () => {};
+      try { build({ configPath }); } finally { console.log = saved; }
+    });
+
+    it('encodes the campaign image, and the landing page and page-not-found page print the encoded file', () => {
+      assert.ok(fs.existsSync(path.join(outputDir, 'images/Hero Shot.webp')));
+      assert.ok(!fs.existsSync(path.join(outputDir, 'images/Hero Shot.png')));
+      assert.match(fs.readFileSync(path.join(outputDir, 'index.html'), 'utf8'), /<img class="landing-hero-img" src="images\/Hero%20Shot\.webp"/);
+      assert.match(fs.readFileSync(path.join(outputDir, '404.html'), 'utf8'), /Hero%20Shot\.webp/);
+    });
+
+    it('encodes a section banner\'s picture and copies the file its link opens as it is', () => {
+      const dir = path.join(outputDir, 'images/banners/characters-npcs');
+      assert.deepStrictEqual(fs.readdirSync(dir).sort(), ['band.webp', 'full.png']);
+      const html = fs.readFileSync(path.join(outputDir, 'characters/npcs/index.html'), 'utf8');
+      assert.ok(html.includes('images/banners/characters-npcs/band.webp'));
+      assert.ok(html.includes('images/banners/characters-npcs/full.png'));
+    });
+
+    it('leaves no scratch directory behind', () => {
+      const leaked = [...scratchDirs()].filter(n => !preexistingScratch.has(n));
+      assert.deepStrictEqual(leaked, []);
+    });
+  });
+
   describe('when optimization is off (the default)', () => {
     let outputDir;
     before(() => { ({ outputDir } = setupSite({ optimize: false })); });

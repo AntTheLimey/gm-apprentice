@@ -5,7 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, slugify } = require('./scanner');
-const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit } = require('./image-optimize');
+const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit, detectEncoder } = require('./image-optimize');
 const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
@@ -1282,6 +1282,19 @@ function buildSite(options) {
 
   console.log(`Found ${Object.keys(imageMap).length} image files`);
 
+  // A picture a setting names (the campaign image, a banner, the props cover) is copied by its own step, not with
+  // the attachments, and goes through the same encode: the landing hero is the first picture every visitor loads.
+  // Returns where the bytes come from and the address they are written to, which is the one the page prints.
+  function encodedAsset(sourceFull, outRel) {
+    if (!imagesEncoder) return { from: sourceFull, outRel };
+    const one = { [path.basename(sourceFull)]: { sourcePath: sourceFull, relPath: outRel } };
+    optimizeImages(one, publishConfig.images, imagesTmpDir, { cacheDir: imagesCacheDir, encoder: imagesEncoder });
+    const entry = Object.values(one)[0];
+    return { from: entry.encodedPath || sourceFull, outRel: entry.relPath };
+  }
+  // The address each such picture was written to, for the file-name audit.
+  const assetOutRel = new Map();
+
   // Re-encode before a single page renders. The tool owns both the image copy and every
   // `<img src>`, so converting here means the new extension flows into references at
   // emission time — no rewriting of generated HTML, and no string-matching URL-encoded
@@ -1293,14 +1306,17 @@ function buildSite(options) {
   // `src` before knowing the extension it will end up with. The image cache in the site
   // folder makes it one encode per picture, ever, not one per build.
   let imagesTmpDir = null;
+  let imagesCacheDir = null;
+  let imagesEncoder = null;
   if (!dry && resolveImageConfig(publishConfig.images).optimize) {
-    const cacheDir = imageCacheDir(configDir, {
+    const cacheDir = imagesCacheDir = imageCacheDir(configDir, {
       outputDirs: [outputDir, ...(playerOutputDir ? [playerOutputDir] : [])],
       vaultPath: config.vaultPath,
     });
     if (cacheDir) ignoreCacheInGit(configDir);
     else imagesTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-img-'));
-    const stats = optimizeImages(imageMap, publishConfig.images, imagesTmpDir, { cacheDir });
+    imagesEncoder = detectEncoder();
+    const stats = optimizeImages(imageMap, publishConfig.images, imagesTmpDir, { cacheDir, encoder: imagesEncoder });
     if (stats.reason) {
       console.warn(`  WARNING: image optimization requested but skipped — ${stats.reason}`);
     } else {
@@ -1395,12 +1411,13 @@ function buildSite(options) {
         throw new Error(`Refusing to copy campaign_image outside vault: ${imgVal}`);
       }
       if (fs.existsSync(vaultImgPath)) {
-        const basename = path.basename(imgVal);
-        const dest = path.join(outputDir, 'images', basename);
+        const { from, outRel } = encodedAsset(vaultImgPath, 'images/' + path.basename(imgVal));
+        const dest = path.join(outputDir, outRel);
         ensureDir(dest);
-        fs.copyFileSync(vaultImgPath, dest);
-        publishConfig.theme.campaign_image = 'images/' + basename;
-        console.log(`  copied campaign image → images/${basename}`);
+        fs.copyFileSync(from, dest);
+        assetOutRel.set(vaultImgPath, outRel);
+        publishConfig.theme.campaign_image = outRel;
+        console.log(`  copied campaign image → ${outRel}`);
         campaignImageCopied = true;
       }
     }
@@ -2012,10 +2029,6 @@ function buildSite(options) {
   const suffix = campaignImageCopied ? ' (+ campaign image)' : '';
   if (!onlySheets) console.log(`${gm ? 'GM site' : 'Player site'}: copied ${Object.keys(filteredMap).length} referenced images${suffix}`);
 
-  // The encoded bytes are now in the output tree. Scratch dir lives under os.tmpdir(), so a
-  // build that throws before reaching here leaks nothing the OS won't reclaim.
-  if (imagesTmpDir) fs.rmSync(imagesTmpDir, { recursive: true, force: true });
-
   // Generate index pages for each output directory
   const dirs = {};
   for (const page of pages) {
@@ -2048,11 +2061,14 @@ function buildSite(options) {
   // section folder: Locations/_banner.png and Creatures/_banner.png would otherwise both
   // land on images/banners/_banner.png, and whichever copied last would show on both pages.
   // The dir may itself contain a slash ("characters/npcs"), so flatten it to one segment.
-  function copyBannerAsset(sourceFull, dir) {
-    const outRel = `images/banners/${bannerSlug(dir)}/${path.basename(sourceFull)}`;
+  // A banner's picture is encoded as the campaign image is; a file its link points at is copied as it is.
+  function copyBannerAsset(sourceFull, dir, { picture = true } = {}) {
+    const asIs = `images/banners/${bannerSlug(dir)}/${path.basename(sourceFull)}`;
+    const { from, outRel } = picture ? encodedAsset(sourceFull, asIs) : { from: sourceFull, outRel: asIs };
     const dest = path.join(outputDir, outRel);
     ensureDir(dest);
-    fs.copyFileSync(sourceFull, dest);
+    fs.copyFileSync(from, dest);
+    if (picture) assetOutRel.set(sourceFull, outRel);
     return outRel;
   }
 
@@ -2080,7 +2096,7 @@ function buildSite(options) {
       let linkHref = null;
       if (entry.link) {
         const linkFull = resolveVaultAsset(entry.link, `banner link for "${dir}"`);
-        if (linkFull) linkHref = relativePath(dir, copyBannerAsset(linkFull, dir));
+        if (linkFull) linkHref = relativePath(dir, copyBannerAsset(linkFull, dir, { picture: false }));
       }
       rendered[dir] = renderBanner({
         imageHref: relativePath(dir, copyBannerAsset(imageFull, dir)),
@@ -2309,13 +2325,13 @@ function buildSite(options) {
     const there = (rel) => fs.existsSync(path.resolve(vaultRoot, rel));
     const rel = (p) => canonicalNfc(String(p).replace(/\\/g, '/'));
     if (!onlySheets && campaignImageSource && !isWebImageAddress(campaignImageSource) && there(campaignImageSource)) {
-      audit.readFileName(rel(campaignImageSource), `images/${path.basename(campaignImageSource)}`);
+      audit.readFileName(rel(campaignImageSource), assetOutRel.get(path.resolve(vaultRoot, campaignImageSource)) || `images/${path.basename(campaignImageSource)}`);
     }
     for (const dir of onlySheets ? [] : Object.keys(DIR_LABELS)) {
       const entry = resolveBanner(dir, { vaultPath: config.vaultPath, folderMap: config.folderMap, banners: publishConfig.banners });
       if (!entry) continue;
       for (const file of copiedBannerFiles(entry)) {
-        if (there(file)) audit.readFileName(rel(file), `images/banners/${bannerSlug(dir)}/${path.basename(file)}`);
+        if (there(file)) audit.readFileName(rel(file), assetOutRel.get(path.resolve(vaultRoot, file)) || `images/banners/${bannerSlug(dir)}/${path.basename(file)}`);
       }
     }
     const fonts = (publishConfig.theme.fonts && Array.isArray(publishConfig.theme.fonts.files)) ? publishConfig.theme.fonts.files : [];
@@ -2577,6 +2593,10 @@ function buildSite(options) {
   if (auditGaps > 0) {
     console.warn(`  WARNING: the note-faults check could not read ${auditGaps} page${auditGaps === 1 ? '' : 's'} a second time; a note named there with no page may be missing from its list.`);
   }
+  // The encoded bytes are now in the output tree, the banners' and props cover's too, which are written late.
+  // Scratch dir lives under os.tmpdir(), so a build that throws before reaching here leaks nothing the OS won't reclaim.
+  if (imagesTmpDir) fs.rmSync(imagesTmpDir, { recursive: true, force: true });
+
   // Every file is written: the after steps run, then the check of the notes and "Done!".
   if (runningSteps && errorCount === 0 && publishConfig.steps.after.length) runSteps(publishConfig.steps.after, { cwd: configDir, label: 'after_build', log: options.stepsLog, stdio: options.stepsStdio, extraEnv: stepEnv });
   if (!gm) for (const pc of tohitRows) audit.calculator(pc.rel, pc.rows);
