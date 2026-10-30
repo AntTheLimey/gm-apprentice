@@ -147,14 +147,19 @@ describe('image optimization', { skip: !hasCwebp }, () => {
       fs.mkdirSync(path.join(vaultPath, 'Characters/NPCs'), { recursive: true });
       fs.writeFileSync(path.join(vaultPath, '_meta/vault-config.md'), [
         '---', 'publish:', '  images:', '    optimize: true', '  theme:', '    campaign_image: _attachments/Hero Shot.png',
-        '  banners:', '    characters/npcs:', '      image: _attachments/band.png', '      link: _attachments/full.png', '---', '',
+        '  banners:', '    characters/npcs:', '      image: _attachments/band.png', '      link: _attachments/full.png',
+        '    locations:', '      image: _attachments/map.png', '      link: _attachments/map.webp', '---', '',
       ].join('\n'));
-      for (const name of ['Hero Shot.png', 'band.png', 'full.png']) fs.writeFileSync(path.join(vaultPath, '_attachments', name), makePng(1200, 600));
+      for (const name of ['Hero Shot.png', 'band.png', 'full.png', 'map.png']) fs.writeFileSync(path.join(vaultPath, '_attachments', name), makePng(1200, 600));
+      // The link opens a file named as the picture's encoded copy would be: the link's file keeps that name.
+      fs.writeFileSync(path.join(vaultPath, '_attachments/map.webp'), 'the big map');
+      fs.mkdirSync(path.join(vaultPath, 'Locations'));
+      fs.writeFileSync(path.join(vaultPath, 'Locations/Harbour.md'), '---\ntype: location\n---\n\n# Harbour\n');
       fs.writeFileSync(path.join(vaultPath, 'Characters/NPCs/Rock Lavey.md'), '---\ntype: npc\n---\n\n# Rock Lavey\n');
       const configPath = path.join(siteDir, 'config.json');
       fs.writeFileSync(configPath, JSON.stringify({
         vaultPath, outputDir, attachmentsDir: '_attachments', siteTitle: 'Image Site',
-        siteUrl: 'https://example.github.io/image-site', excludeDirs: ['_meta'], folderMap: { 'Characters/NPCs': 'characters/npcs' },
+        siteUrl: 'https://example.github.io/image-site', excludeDirs: ['_meta'], folderMap: { 'Characters/NPCs': 'characters/npcs', Locations: 'locations' },
       }));
       const saved = console.log;
       console.log = () => {};
@@ -174,6 +179,12 @@ describe('image optimization', { skip: !hasCwebp }, () => {
       const html = fs.readFileSync(path.join(outputDir, 'characters/npcs/index.html'), 'utf8');
       assert.ok(html.includes('images/banners/characters-npcs/band.webp'));
       assert.ok(html.includes('images/banners/characters-npcs/full.png'));
+    });
+
+    it('keeps a banner picture\'s own name when its link opens a file of the encoded name', () => {
+      const dir = path.join(outputDir, 'images/banners/locations');
+      assert.deepStrictEqual(fs.readdirSync(dir).sort(), ['map.png', 'map.webp']);
+      assert.strictEqual(fs.readFileSync(path.join(dir, 'map.webp'), 'utf8'), 'the big map');
     });
 
     it('leaves no scratch directory behind', () => {

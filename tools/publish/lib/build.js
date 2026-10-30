@@ -1288,11 +1288,11 @@ function buildSite(options) {
   // Without the cache each call gets its own scratch folder, since the encoder names its files 0.webp, 1.webp per
   // call and an attachment's encoded file waits in the scratch folder until the attachments are copied. The
   // attachments' addresses are claimed, so a campaign image hero.png never becomes an attachment's hero.webp.
-  function encodedAsset(sourceFull, outRel) {
+  function encodedAsset(sourceFull, outRel, alsoClaimed = []) {
     if (!imagesEncoder) return { from: sourceFull, outRel };
     const one = { [path.basename(sourceFull)]: { sourcePath: sourceFull, relPath: outRel } };
     const tmpDir = imagesTmpDir && fs.mkdtempSync(path.join(imagesTmpDir, 'asset-'));
-    const claimed = Object.values(imageMap).filter((e) => e.sourcePath !== sourceFull).map((e) => `images/${e.relPath}`);
+    const claimed = [...Object.values(imageMap).filter((e) => e.sourcePath !== sourceFull).map((e) => `images/${e.relPath}`), ...alsoClaimed];
     optimizeImages(one, publishConfig.images, tmpDir, { cacheDir: imagesCacheDir, encoder: imagesEncoder, claimed });
     const entry = Object.values(one)[0];
     return { from: entry.encodedPath || sourceFull, outRel: entry.relPath };
@@ -2066,10 +2066,11 @@ function buildSite(options) {
   // section folder: Locations/_banner.png and Creatures/_banner.png would otherwise both
   // land on images/banners/_banner.png, and whichever copied last would show on both pages.
   // The dir may itself contain a slash ("characters/npcs"), so flatten it to one segment.
-  // A banner's picture is encoded as the campaign image is; a file its link points at is copied as it is.
-  function copyBannerAsset(sourceFull, dir, { picture = true } = {}) {
+  // A banner's picture is encoded as the campaign image is; a file its link points at is copied as it is, and its
+  // address is `claimed`, so the picture's encoded name never lands on it.
+  function copyBannerAsset(sourceFull, dir, { picture = true, claimed = [] } = {}) {
     const asIs = `images/banners/${bannerSlug(dir)}/${path.basename(sourceFull)}`;
-    const { from, outRel } = picture ? encodedAsset(sourceFull, asIs) : { from: sourceFull, outRel: asIs };
+    const { from, outRel } = picture ? encodedAsset(sourceFull, asIs, claimed) : { from: sourceFull, outRel: asIs };
     const dest = path.join(outputDir, outRel);
     ensureDir(dest);
     fs.copyFileSync(from, dest);
@@ -2099,12 +2100,16 @@ function buildSite(options) {
       }
 
       let linkHref = null;
+      let linkOut = null;
       if (entry.link) {
         const linkFull = resolveVaultAsset(entry.link, `banner link for "${dir}"`);
-        if (linkFull) linkHref = relativePath(dir, copyBannerAsset(linkFull, dir, { picture: false }));
+        if (linkFull) {
+          linkOut = copyBannerAsset(linkFull, dir, { picture: false });
+          linkHref = relativePath(dir, linkOut);
+        }
       }
       rendered[dir] = renderBanner({
-        imageHref: relativePath(dir, copyBannerAsset(imageFull, dir)),
+        imageHref: relativePath(dir, copyBannerAsset(imageFull, dir, { claimed: linkOut ? [linkOut] : [] })),
         linkHref,
         alt: entry.alt || defaultAlt(imageFull),
       });
