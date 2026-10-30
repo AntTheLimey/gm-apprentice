@@ -34,11 +34,11 @@ function buildSheet(model, rowNotes) {
     renderAttributes(model), renderLiftingFeats(model), renderSlamTable(model),
     renderSenses(model), renderDefenses(model), renderEncumbrance(model),
     renderReactions(model), renderCultural(model), renderLanguages(model),
-    renderTraitList(model, 'templates', 'trait', 'Templates & Meta-Traits'),
-    renderTraitList(model, 'advantages', 'trait', 'Advantages'),
-    renderTraitList(model, 'perks', 'trait', 'Perks'),
-    renderTraitList(model, 'disadvantages', 'trait', 'Disadvantages'),
-    renderTraitList(model, 'quirks', 'trait', 'Quirks'),
+    renderTraitList(model, 'templates', 'trait', 'Templates & Meta-Traits', 'template'),
+    renderTraitList(model, 'advantages', 'trait', 'Advantages', 'adv'),
+    renderTraitList(model, 'perks', 'trait', 'Perks', 'perk'),
+    renderTraitList(model, 'disadvantages', 'trait', 'Disadvantages', 'disadv'),
+    renderTraitList(model, 'quirks', 'trait', 'Quirks', 'quirk'),
     renderSkills(model), renderTechniques(model), renderSpells(model), renderPoints(model),
   ].filter(Boolean);
   const wideBlocks = [renderMelee(model), renderRanged(model), renderGrimoire(model)].filter(Boolean);
