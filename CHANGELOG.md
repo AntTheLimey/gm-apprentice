@@ -40,7 +40,9 @@ Three fixes found while restyling Dead End's site. Publish tool 1.56.0.
   they were copied full size: Dead End's landing hero shipped as a
   2 MB PNG. A file a banner's link opens is still copied as it is. The
   encode keeps to `player_site.images.max_width` (1600 pixels unless
-  set), as other pictures do.
+  set), as other pictures do. A campaign image whose encoded name
+  another picture in `images/` already has keeps its own file and name,
+  and the build says so.
 
 ## [1.10.108] — 2026-10-28
 

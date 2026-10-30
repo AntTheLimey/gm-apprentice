@@ -1285,10 +1285,15 @@ function buildSite(options) {
   // A picture a setting names (the campaign image, a banner, the props cover) is copied by its own step, not with
   // the attachments, and goes through the same encode: the landing hero is the first picture every visitor loads.
   // Returns where the bytes come from and the address they are written to, which is the one the page prints.
+  // Without the cache each call gets its own scratch folder, since the encoder names its files 0.webp, 1.webp per
+  // call and an attachment's encoded file waits in the scratch folder until the attachments are copied. The
+  // attachments' addresses are claimed, so a campaign image hero.png never becomes an attachment's hero.webp.
   function encodedAsset(sourceFull, outRel) {
     if (!imagesEncoder) return { from: sourceFull, outRel };
     const one = { [path.basename(sourceFull)]: { sourcePath: sourceFull, relPath: outRel } };
-    optimizeImages(one, publishConfig.images, imagesTmpDir, { cacheDir: imagesCacheDir, encoder: imagesEncoder });
+    const tmpDir = imagesTmpDir && fs.mkdtempSync(path.join(imagesTmpDir, 'asset-'));
+    const claimed = Object.values(imageMap).filter((e) => e.sourcePath !== sourceFull).map((e) => `images/${e.relPath}`);
+    optimizeImages(one, publishConfig.images, tmpDir, { cacheDir: imagesCacheDir, encoder: imagesEncoder, claimed });
     const entry = Object.values(one)[0];
     return { from: entry.encodedPath || sourceFull, outRel: entry.relPath };
   }
