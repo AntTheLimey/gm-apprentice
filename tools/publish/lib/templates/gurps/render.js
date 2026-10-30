@@ -49,9 +49,10 @@ function footnoteRegistry() {
   };
 }
 
-function block(category, title, inner) {
+// `kind` names the list within a category (cat-adv, cat-disadv), so a theme can colour two lists of one category apart.
+function block(category, title, inner, kind) {
   if (!inner || !String(inner).trim()) return null;
-  return `<section class="blk cat-${category}"><h2>${escapeHtml(title)}</h2>${inner}</section>`;
+  return `<section class="blk cat-${category}${kind ? ` cat-${kind}` : ''}"><h2>${escapeHtml(title)}</h2>${inner}</section>`;
 }
 
 function cost(v) {

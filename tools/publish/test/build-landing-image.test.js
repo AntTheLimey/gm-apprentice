@@ -39,10 +39,13 @@ function heroSrc(optimize, image = `Art/${NAME}`, binary = true) {
   return { src: m && m[1], root };
 }
 
+// With optimising on (and cwebp here), the hero is the encoded file (#532).
+const { detectEncoder } = require('../lib/image-optimize');
+const encodes = detectEncoder() !== null;
 for (const optimize of [false, true]) {
   test(`the hero picture address is encoded when the name holds a space and a bracket (optimising ${optimize ? 'on' : 'off'})`, () => {
     const { src } = heroSrc(optimize);
-    assert.equal(src, 'images/Rock%20%5BLavey%5D%20Crest.png');
+    assert.equal(src, `images/Rock%20%5BLavey%5D%20Crest.${optimize && encodes ? 'webp' : 'png'}`);
   });
 }
 

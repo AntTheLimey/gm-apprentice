@@ -169,7 +169,7 @@ Corner radii that recur in the site's own rules. The number is thousandths of a 
 
 | Token | What it sets | Default |
 |-------|--------------|---------|
-| `--on-accent` | Words on a control filled with the accent (a hovered pill, menu link or prop button, Begin, Send, back to top) | Unset: white on the story page's Begin button and the change-request Send button; `var(--bg)` on the other accent-filled controls |
+| `--on-accent` | Words on a control filled with the accent (a hovered pill, menu link or prop button, Begin, Send, back to top) | Unset: `var(--bg)`, the page's background colour |
 | `--text-on-image` | Words laid over a picture: an entity page's banner, the lightbox | `#fff` |
 | `--on-warning` | Words on the GM site's band | `#1a1a1a` |
 | `--badge-draft` | The DRAFT badge | `#e8b84d` |
@@ -258,7 +258,7 @@ Its styles are written into the page itself, after every stylesheet, so a theme 
 | Token | What it sets | Default |
 |-------|--------------|---------|
 | `--theme-accent` | The page-not-found message and its Home button's fill | Unset: `var(--accent)` |
-| `--white` | The words on the page-not-found Home button (the story page's Begin button reads it too, after `--on-accent`) | Unset: white (`#fff`) |
+| `--white` | The words on the page-not-found Home button | Unset: white (`#fff`) |
 
 <!-- /theme-tokens:notfound -->
 
@@ -296,6 +296,8 @@ Each part of the sheet has its own hue, and a tint of it for row backgrounds. A 
 | `--gc-points-bg` | The points summary: row tint | `rgba(100, 116, 139, 0.12)`; light `#eef1f5` |
 | `--gc-def` | Defences: headings, labels and edges | `#f87171`; light `#b91c1c` |
 | `--gc-def-bg` | Defences: row tint | `rgba(220, 38, 38, 0.14)`; light `#fdecec` |
+| `--gc-disadv` | Disadvantages and quirks: headings, labels and edges | Unset: `var(--gc-trait)` |
+| `--gc-disadv-bg` | Disadvantages and quirks: row tint | Unset: `var(--gc-trait-bg)` |
 | `--gc-enc-0` | Encumbrance level 0 (level 1 has no tint) | `rgba(22, 163, 74, 0.10)`; light `#eafaf0` |
 | `--gc-enc-2` | Encumbrance level 2 | `rgba(217, 119, 6, 0.10)`; light `#fdf4e7` |
 | `--gc-enc-3` | Encumbrance level 3 | `rgba(234, 115, 23, 0.12)`; light `#fdf1e7` |

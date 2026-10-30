@@ -135,6 +135,135 @@ describe('image optimization', { skip: !hasCwebp }, () => {
     });
   });
 
+  // #532: the pictures a setting names are copied by their own steps, and were shipped full size.
+  describe('the campaign image and a section banner', () => {
+    let outputDir;
+    before(() => {
+      const siteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-images-'));
+      const vaultPath = path.join(siteDir, 'vault');
+      outputDir = path.join(siteDir, 'docs');
+      fs.mkdirSync(path.join(vaultPath, '_meta'), { recursive: true });
+      fs.mkdirSync(path.join(vaultPath, '_attachments'), { recursive: true });
+      fs.mkdirSync(path.join(vaultPath, 'Characters/NPCs'), { recursive: true });
+      fs.writeFileSync(path.join(vaultPath, '_meta/vault-config.md'), [
+        '---', 'publish:', '  images:', '    optimize: true', '  theme:', '    campaign_image: _attachments/Hero Shot.png',
+        '  banners:', '    characters/npcs:', '      image: _attachments/band.png', '      link: _attachments/full.png',
+        '    locations:', '      image: _attachments/map.png', '      link: _attachments/map.webp', '---', '',
+      ].join('\n'));
+      for (const name of ['Hero Shot.png', 'band.png', 'full.png', 'map.png']) fs.writeFileSync(path.join(vaultPath, '_attachments', name), makePng(1200, 600));
+      // The link opens a file named as the picture's encoded copy would be: the link's file keeps that name.
+      fs.writeFileSync(path.join(vaultPath, '_attachments/map.webp'), 'the big map');
+      fs.mkdirSync(path.join(vaultPath, 'Locations'));
+      fs.writeFileSync(path.join(vaultPath, 'Locations/Harbour.md'), '---\ntype: location\n---\n\n# Harbour\n');
+      fs.writeFileSync(path.join(vaultPath, 'Characters/NPCs/Rock Lavey.md'), '---\ntype: npc\n---\n\n# Rock Lavey\n');
+      const configPath = path.join(siteDir, 'config.json');
+      fs.writeFileSync(configPath, JSON.stringify({
+        vaultPath, outputDir, attachmentsDir: '_attachments', siteTitle: 'Image Site',
+        siteUrl: 'https://example.github.io/image-site', excludeDirs: ['_meta'], folderMap: { 'Characters/NPCs': 'characters/npcs', Locations: 'locations' },
+      }));
+      const saved = console.log;
+      console.log = () => {};
+      try { build({ configPath }); } finally { console.log = saved; }
+    });
+
+    it('encodes the campaign image, and the landing page and page-not-found page print the encoded file', () => {
+      assert.ok(fs.existsSync(path.join(outputDir, 'images/Hero Shot.webp')));
+      assert.ok(!fs.existsSync(path.join(outputDir, 'images/Hero Shot.png')));
+      assert.match(fs.readFileSync(path.join(outputDir, 'index.html'), 'utf8'), /<img class="landing-hero-img" src="images\/Hero%20Shot\.webp"/);
+      assert.match(fs.readFileSync(path.join(outputDir, '404.html'), 'utf8'), /Hero%20Shot\.webp/);
+    });
+
+    it('encodes a section banner\'s picture and copies the file its link opens as it is', () => {
+      const dir = path.join(outputDir, 'images/banners/characters-npcs');
+      assert.deepStrictEqual(fs.readdirSync(dir).sort(), ['band.webp', 'full.png']);
+      const html = fs.readFileSync(path.join(outputDir, 'characters/npcs/index.html'), 'utf8');
+      assert.ok(html.includes('images/banners/characters-npcs/band.webp'));
+      assert.ok(html.includes('images/banners/characters-npcs/full.png'));
+    });
+
+    it('keeps a banner picture\'s own name when its link opens a file of the encoded name', () => {
+      const dir = path.join(outputDir, 'images/banners/locations');
+      assert.deepStrictEqual(fs.readdirSync(dir).sort(), ['map.png', 'map.webp']);
+      assert.strictEqual(fs.readFileSync(path.join(dir, 'map.webp'), 'utf8'), 'the big map');
+    });
+
+    it('leaves no scratch directory behind', () => {
+      const leaked = [...scratchDirs()].filter(n => !preexistingScratch.has(n));
+      assert.deepStrictEqual(leaked, []);
+    });
+  });
+
+  // With the site's cache folder a link into the vault the cache cannot be used, so every encode goes to the scratch
+  // folder, where an attachment's encoded file waits until the attachments are copied.
+  function noCacheSite({ clash }) {
+    const siteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-images-'));
+    const vaultPath = path.join(siteDir, 'vault');
+    const outputDir = path.join(siteDir, 'docs');
+    for (const dir of ['_meta/cache', '_attachments/characters', 'Art', 'Characters/NPCs']) fs.mkdirSync(path.join(vaultPath, dir), { recursive: true });
+    fs.symlinkSync(path.join(vaultPath, '_meta/cache'), path.join(siteDir, '.gm-apprentice'), 'dir');
+    fs.writeFileSync(path.join(vaultPath, '_meta/vault-config.md'), [
+      '---', 'publish:', '  images:', '    optimize: true', '  theme:', '    campaign_image: Art/Hero Shot.png', '---', '',
+    ].join('\n'));
+    fs.writeFileSync(path.join(vaultPath, 'Art/Hero Shot.png'), makePng(1200, 600));
+    fs.writeFileSync(path.join(vaultPath, '_attachments/characters/Rock Lavey.png'), makePng(900, 900));
+    // Another picture whose encoded name is the campaign image's.
+    if (clash) fs.writeFileSync(path.join(vaultPath, '_attachments/Hero Shot.jpg'), makePng(700, 300));
+    fs.writeFileSync(path.join(vaultPath, 'Characters/NPCs/Rock Lavey.md'),
+      `---\ntype: npc\nportrait: _attachments/characters/Rock Lavey.png\n---\n\n# Rock Lavey\n${clash ? '\n![[Hero Shot.jpg]]\n' : ''}`);
+    const configPath = path.join(siteDir, 'config.json');
+    fs.writeFileSync(configPath, JSON.stringify({
+      vaultPath, outputDir, attachmentsDir: '_attachments', siteTitle: 'Image Site',
+      siteUrl: 'https://example.github.io/image-site', excludeDirs: ['_meta', 'Art'], folderMap: { 'Characters/NPCs': 'characters/npcs' },
+    }));
+    const warnings = [];
+    const saved = { log: console.log, warn: console.warn };
+    console.log = () => {};
+    console.warn = (...a) => warnings.push(a.join(' '));
+    try { build({ configPath }); } finally { Object.assign(console, saved); }
+    return { outputDir, warnings, cache: path.join(vaultPath, '_meta/cache') };
+  }
+
+  // A WebP's width, from its first chunk: lossy (VP8 ), lossless (VP8L) or extended (VP8X).
+  const webpWidth = (file) => {
+    const b = fs.readFileSync(file);
+    const chunk = b.toString('ascii', 12, 16);
+    if (chunk === 'VP8 ') return b.readUInt16LE(26) & 0x3fff;
+    if (chunk === 'VP8L') return (b.readUInt16LE(21) & 0x3fff) + 1;
+    if (chunk === 'VP8X') return b.readUIntLE(24, 3) + 1;
+    return null;
+  };
+
+  describe('the campaign image beside a portrait, without the image cache', () => {
+    let site;
+    before(() => { site = noCacheSite({ clash: false }); });
+
+    it('makes no image cache', () => {
+      assert.deepStrictEqual(fs.readdirSync(site.cache), []);
+    });
+
+    it('ships the portrait\'s own picture and the campaign image\'s own, each encoded', () => {
+      assert.strictEqual(webpWidth(path.join(site.outputDir, 'images/characters/Rock Lavey.webp')), 900);
+      assert.strictEqual(webpWidth(path.join(site.outputDir, 'images/Hero Shot.webp')), 1200);
+    });
+
+    it('leaves no scratch directory behind', () => {
+      const leaked = [...scratchDirs()].filter(n => !preexistingScratch.has(n));
+      assert.deepStrictEqual(leaked, []);
+    });
+  });
+
+  describe('a campaign image whose encoded name is an attachment\'s', () => {
+    let site;
+    before(() => { site = noCacheSite({ clash: true }); });
+
+    it('keeps its own name, leaves the attachment its picture, and says so', () => {
+      assert.strictEqual(webpWidth(path.join(site.outputDir, 'images/Hero Shot.webp')), 700);
+      assert.ok(fs.existsSync(path.join(site.outputDir, 'images/Hero Shot.png')));
+      assert.match(fs.readFileSync(path.join(site.outputDir, 'index.html'), 'utf8'), /<img class="landing-hero-img" src="images\/Hero%20Shot\.png"/);
+      assert.ok(site.warnings.some((w) => /Hero Shot\.png.*already taken/.test(w)), site.warnings.join('\n'));
+    });
+  });
+
   describe('when optimization is off (the default)', () => {
     let outputDir;
     before(() => { ({ outputDir } = setupSite({ optimize: false })); });

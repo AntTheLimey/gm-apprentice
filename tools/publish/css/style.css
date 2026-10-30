@@ -1078,7 +1078,7 @@ body:has(#tab-story.active) .pull-quote-backstory {
   display: inline-block;
   padding: 0.6rem var(--space-1250);
   background: var(--accent);
-  color: var(--on-accent, var(--white, #fff));
+  color: var(--on-accent, var(--bg));
   border-radius: var(--radius-375);
   font-weight: 600;
   text-decoration: none;
@@ -3759,6 +3759,8 @@ body.landing-full-bleed > main.content > :not(.landing-hero) {
 .cat-attr   { --cat: var(--gc-attr);   --cat-bg: var(--gc-attr-bg);   } .cat-attr   h2 { color: var(--gc-attr);   }
 .cat-social { --cat: var(--gc-social); --cat-bg: var(--gc-social-bg); } .cat-social h2 { color: var(--gc-social); }
 .cat-trait  { --cat: var(--gc-trait);  --cat-bg: var(--gc-trait-bg);  } .cat-trait  h2 { color: var(--gc-trait);  }
+/* Disadvantages and quirks, the trait lists that cost points back: the trait colour unless a theme sets their own */
+:is(.cat-disadv, .cat-quirk) { --cat: var(--gc-disadv, var(--gc-trait)); --cat-bg: var(--gc-disadv-bg, var(--gc-trait-bg)); } :is(.cat-disadv, .cat-quirk) h2 { color: var(--gc-disadv, var(--gc-trait)); }
 .cat-skill  { --cat: var(--gc-skill);  --cat-bg: var(--gc-skill-bg);  } .cat-skill  h2 { color: var(--gc-skill);  }
 .cat-spell  { --cat: var(--gc-spell);  --cat-bg: var(--gc-spell-bg);  } .cat-spell  h2 { color: var(--gc-spell);  }
 .cat-table  { --cat: var(--gc-table);  --cat-bg: var(--gc-table-bg);  } .cat-table  h2 { color: var(--gc-table);  }
@@ -4985,7 +4987,7 @@ svg.cx-web .cx-node.cx-sel text, svg.cx-web .cx-node:focus-visible text { fill: 
   align-self: flex-start; cursor: pointer; font: inherit; font-weight: 600;
   font-family: var(--font-label);   /* after the shorthand, no fallback: unset inherits, as font: inherit did */
   min-height: 44px; padding: .5rem 1.4rem; border-radius: 6px;
-  border: 1px solid var(--border, #ccc); background: var(--accent, #3b82f6); color: var(--on-accent, #fff);
+  border: 1px solid var(--border, #ccc); background: var(--accent, #3b82f6); color: var(--on-accent, var(--bg, #fff));
 }
 .cr-send:hover { filter: brightness(1.08); }
 .cr-log-btn {

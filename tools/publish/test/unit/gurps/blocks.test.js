@@ -798,5 +798,15 @@ describe('renderTraitList', () => {
   it('returns null when the list is empty', () => {
     assert.strictEqual(renderTraitList({ traits: { perks: [] } }, 'perks', 'trait', 'Perks'), null);
   });
+  // #531: one class for the category, one for the list, so a theme can colour disadvantages apart from advantages.
+  it('names each trait list on the sheet beside the category it shares', () => {
+    const { buildSheet } = require('../../../lib/templates/gurps/layout');
+    const t = (n) => [{ name: n, cost: '1', markers: [] }];
+    const html = [].concat(buildSheet({ traits: { templates: t('A'), advantages: t('B'), perks: t('C'), disadvantages: t('D'), quirks: t('E') } }, [])).join('');
+    assert.deepStrictEqual(html.match(/<section class="blk cat-trait[^"]*"/g), [
+      '<section class="blk cat-trait cat-template"', '<section class="blk cat-trait cat-adv"', '<section class="blk cat-trait cat-perk"',
+      '<section class="blk cat-trait cat-disadv"', '<section class="blk cat-trait cat-quirk"',
+    ]);
+  });
 });
 }

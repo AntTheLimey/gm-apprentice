@@ -200,8 +200,9 @@ function resolveImageConfig(cfg) {
  * @param {Record<string, {sourcePath: string, relPath: string, encodedPath?: string}>} imageMap
  * @param {object} imagesConfig - the `publish.images` block
  * @param {string|null} tmpDir - scratch directory the caller owns and cleans up; unused with a cache
- * @param {{encoder?: {name: string, version?: string, encode: Function}|null, cacheDir?: string|null}} [options]
- *   - inject an encoder (tests); the image cache folder (imageCacheDir)
+ * @param {{encoder?: {name: string, version?: string, encode: Function}|null, cacheDir?: string|null, claimed?: Iterable<string>}} [options]
+ *   - inject an encoder (tests); the image cache folder (imageCacheDir); addresses another copy step writes, which
+ *     an encoded name must not take (compared as `relPath` is, without case)
  * @returns {{converted: number, skipped: number, failed: number, encoded: number, bytesBefore: number, bytesAfter: number, encoder: string|null, reason?: string}}
  */
 function optimizeImages(imageMap, imagesConfig, tmpDir, options = {}) {
@@ -227,7 +228,7 @@ function optimizeImages(imageMap, imagesConfig, tmpDir, options = {}) {
   // Two sources with the same stem in the same directory (`a.png` and `a.jpg`) would both
   // want `a.webp`. First one wins; the loser keeps its original bytes rather than silently
   // clobbering a sibling that other pages already reference.
-  const claimedRelPaths = new Set(Object.values(imageMap).map(e => e.relPath.toLowerCase()));
+  const claimedRelPaths = new Set([...Object.values(imageMap).map(e => e.relPath), ...(options.claimed || [])].map(r => r.toLowerCase()));
   let counter = 0;
 
   for (const [basename, entry] of Object.entries(imageMap)) {

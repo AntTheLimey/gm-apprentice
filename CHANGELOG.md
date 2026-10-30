@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.109] — 2026-10-29
+
+Three fixes found while restyling Dead End's site. Publish tool 1.56.0.
+
+### Changed
+
+- The story page's "Begin reading" button and the change-request "Send"
+  button write their words in the page's background colour, as every
+  other control filled with the accent already does (#529). White on
+  the accent fell below 4.5:1 in the dark palette of the default look
+  and of every genre preset (2.1:1 on sci-fi); the background colour
+  reads at 4.6:1 or better in both palettes of all of them. A theme that wants white
+  sets `--on-accent: #fff`. `--white` now colours only the
+  page-not-found Home button.
+
+### Added
+
+- Each trait list on the GURPS sheet carries its own class beside
+  `cat-trait`: `cat-template`, `cat-adv`, `cat-perk`, `cat-disadv` and
+  `cat-quirk` (#531). Disadvantages and quirks read `--gc-disadv` and
+  `--gc-disadv-bg`, unset by default so they keep the trait colour, and
+  a theme can colour them apart without relying on the order of the
+  sections.
+
+### Fixed
+
+- With `player_site.images.optimize` on, the campaign image, a section
+  banner's picture, the landing banner's picture and the props page's
+  cover now go through the same WebP encode and image cache as every
+  other picture, and the pages print the encoded file (#532). Before,
+  they were copied full size: Dead End's landing hero shipped as a
+  2 MB PNG. A file a banner's link opens is still copied as it is. The
+  encode keeps to `player_site.images.max_width` (1600 pixels unless
+  set), as other pictures do. A campaign image whose encoded name
+  another picture in `images/` already has keeps its own file and name,
+  and the build says so.
+
 ## [1.10.108] — 2026-10-28
 
 Three more asks from GM-Scriptorium: the look as named custom properties
