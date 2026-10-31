@@ -2818,6 +2818,12 @@ def cmd_scene_paused(batch: Batch, args: argparse.Namespace,
             found = find_chapter(batch.vault, of, missing_ok=True) \
                 if of else None
             if found is None:
+                # The link names no chapter note: try the chapter whose
+                # folder holds the session note.
+                folder = vl.chapter_of(session_rel, {})
+                found = find_chapter(batch.vault, folder, missing_ok=True) \
+                    if folder and folder != of else None
+            if found is None:
                 raise WriteError(
                     f"session {session!r} has no chapter note to file the "
                     f"scene in: pass --chapter, or make the chapter with "

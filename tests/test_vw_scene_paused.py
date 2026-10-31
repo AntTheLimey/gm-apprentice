@@ -320,6 +320,15 @@ class NewSceneTests(unittest.TestCase):
         self.assertIn("NPCs/Mill Ghost.md", out)
         self.assertEqual(snapshot(self.vault), before)
 
+    def test_new_falls_back_to_the_sessions_folder_chapter(self):
+        path = self.vault / f"{CH}/Sessions/{S5}.md"
+        path.write_text(path.read_text("utf-8").replace(
+            "[[Chapter 1]]", "[[Chapter 1 - The Ashford Case]]"), "utf-8")
+        code, out = paused(self, "--new", "--write", scene="Fallback")
+        self.assertEqual(code, 0, out)
+        text = (self.vault / f"{CH}/Scenes/Fallback.md").read_text("utf-8")
+        self.assertIn('chapter: "[[Chapter 1]]"', text)
+
     def test_new_without_chapter_refused(self):
         before = snapshot(self.vault)
         code, out = paused(self, "--new", "--write", scene="Orphan",
