@@ -293,6 +293,27 @@ class PausedScenesPlayTests(unittest.TestCase):
                       out)
         self.assertNotIn("fork in the tunnel", out)
 
+    def twin_vault(self, pointer):
+        root = self.vault(self.plan(f"### [[{pointer}]]\n"), scene=False)
+        for ch in ("Chapter 1 - Harbour", "Chapter 2 - Other"):
+            path = root / "Chapters" / ch / "Scenes" / "The Fork.md"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(self.SCENE, encoding="utf-8")
+        return root
+
+    def test_path_pointer_does_not_hide_a_twin_stem(self):
+        for pointer in ("Chapters/Chapter 1 - Harbour/Scenes/The Fork",
+                        "Chapters/Chapter 1 - Harbour/Scenes/The Fork.md"):
+            out = run_cli(self.twin_vault(pointer), "--play").stdout
+            tail = out.split("## Paused, not in this Plan", 1)
+            self.assertEqual(len(tail), 2, out)
+            self.assertIn("[[The Fork]]", tail[1])
+            self.assertEqual(tail[1].count("[[The Fork]]"), 1, tail[1])
+
+    def test_bare_pointer_still_matches_by_stem(self):
+        out = run_cli(self.twin_vault("The Fork"), "--play").stdout
+        self.assertNotIn("not in this Plan", out)
+
     def test_no_paused_prints_nothing(self):
         for plan in (None, self.plan("### Scene 1: The Docks\n")):
             out = run_cli(self.vault(plan, scene=False), "--play").stdout

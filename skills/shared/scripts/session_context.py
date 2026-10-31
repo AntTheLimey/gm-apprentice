@@ -419,15 +419,26 @@ def _scene_note_text(files, name: str, chapter: str | None = None) -> str:
 
 def plan_pointers(plan_text: str) -> set[str]:
     """The scene notes a Plan points at (`### [[Note]]` under Planned and
-    Contingency Scenes), by `normalize(stem)`."""
+    Contingency Scenes): a bare `[[Note]]` by `normalize(stem)`, one
+    written as a path by its `normalize`d vault-relative path without
+    `.md` (it has a `/`, so the two kinds never collide)."""
     out: set[str] = set()
     for title in ("Planned Scenes", "Contingency Scenes"):
         body = section(plan_text, title)
         for heading, _b in (h3_blocks(body) if body is not None else []):
             target = _pointer_target(heading)
             if target:
-                out.add(normalize(Path(target.removesuffix(".md")).stem))
+                target = target.removesuffix(".md")
+                out.add(normalize(target if "/" in target
+                                  else Path(target).stem))
     return out
+
+
+def is_pointed_at(rel: str, pointed: set[str]) -> bool:
+    """Whether a Plan pointer in `pointed` (see `plan_pointers`) names
+    the scene note at `rel`."""
+    return (normalize(rel.removesuffix(".md")) in pointed
+            or normalize(Path(rel).stem) in pointed)
 
 
 class Paused(NamedTuple):
@@ -1345,7 +1356,7 @@ def main() -> int:
             pointed = plan_pointers(plan[1])
             block = paused_line_block(
                 [p for p in paused_scenes(args.vault, files)
-                 if normalize(Path(p.rel).stem) not in pointed],
+                 if not is_pointed_at(p.rel, pointed)],
                 "## Paused, not in this Plan")
         if block:
             print(f"\n{block}")
