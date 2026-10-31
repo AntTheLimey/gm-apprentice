@@ -309,7 +309,7 @@ These fields are read by all templates if present:
 | `superseded_by` | `[[wiki-link]]` — SUPERSEDED entities redirect links to this target |
 | `relationships` | List of `{ target, type, description, tone }` objects shown in the page's Connections, by kind, in both directions (the other end words it by the inverse). The tone shows as warm, hostile or neutral, never the word |
 | `tags` | Used for NPC importance scoring on the landing page; not rendered on entity pages |
-| `banner` | A picture across the top of the note's own page, from the attachments folder: a path, a bare file name, `"[[name.png]]"` or an embed, or `{ image, alt, link }` (`link` another attachment the picture opens). An SVG with no `link` is inlined. `false` leaves the page without the site's default (`player_site.theme.page_banner`). Absent: the site's default, or nothing. A name not in the attachments folder is a build warning |
+| `banner` | A picture across the top of the note's own page, from the attachments folder: a bare file name, a path (`_attachments/maps/x.png`, or from the attachments folder, `maps/x.png`), `"[[x.png]]"`, an embed `"![[x.png\|600]]"` (quote both: unquoted, an embed is invalid YAML and the whole note is skipped), a one-item list of any of these, or `{ image, alt, link }` (`link` another attachment the picture opens, copied as it is). A path must lead to the attachment; a web address is not one. An SVG with no `link` is inlined. `false` leaves the page without the site's default (`player_site.theme.page_banner`). Absent: the site's default, or nothing. A name not in the attachments folder is a build warning, and the site's default stands in |
 
 ### Canon Status Badges
 

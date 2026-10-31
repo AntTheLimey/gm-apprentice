@@ -80,9 +80,11 @@ A note's own `banner:` field puts a picture across the top of its page
 (`schema-reference.md` § Common fields). `player_site.theme.page_banner`
 is the picture every note's page shows when its note names none; it
 takes a section banner's forms, a vault path or `image`, `link` and
-`alt`. Section lists keep their own banners, and a note never takes its
-section's. The page banner carries the classes `section-banner` and
-`page-banner`.
+`alt`. Either may be written as `"[[name.png]]"` or `"![[name.png|600]]"`,
+quoted: unquoted, an embed is invalid YAML. A bare name that is not a file
+at the vault's top is looked up in the attachments folder. Section lists
+keep their own banners, and a note never takes its section's. The page
+banner carries the classes `section-banner` and `page-banner`.
 
 ### Locations index grouping
 
