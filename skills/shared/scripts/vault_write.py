@@ -2806,9 +2806,9 @@ def cmd_scene_paused(batch: Batch, args: argparse.Namespace,
         raise WriteError("nothing to write: send the snapshot on stdin")
     if (args.chapter or args.folder) and not args.new:
         raise WriteError("--chapter and --folder only go with --new")
-    name = clean_name(bare_link(args.scene), "--scene")
     created = False
     if args.new:
+        name = clean_name(bare_link(args.scene), "--scene")
         if scene_matches(batch, args.scene):
             where = find_scene(batch, args.scene)
             raise WriteError(f"scene {name!r} already exists at {where}; "
@@ -2845,7 +2845,7 @@ def cmd_scene_paused(batch: Batch, args: argparse.Namespace,
         created = True
     else:
         rel = find_scene(batch, args.scene, missing=(
-            f"no scene note named {name!r}; for a scene born at the "
+            f"no scene note named {args.scene!r}; for a scene born at the "
             f"table, add --new"))
         text = batch.read(rel)
     lines = text.splitlines(keepends=True)

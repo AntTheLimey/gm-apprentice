@@ -209,6 +209,26 @@ class ExistingSceneTests(PausedBase):
             self.assertIn(self.rel, out)
         self.assertEqual(snapshot(self.vault), before)
 
+    def test_path_names_one_of_several_scenes(self):
+        other = "Chapters/Chapter 2/Scenes/The Docks.md"
+        (self.vault / other).parent.mkdir(parents=True)
+        (self.vault / other).write_bytes((self.vault / self.rel).read_bytes())
+        for given in (other, other[:-3], f"[[{other[:-3]}]]"):
+            code, out = paused(self, "--write", scene=given)
+            self.assertEqual(code, 0, out)
+            self.assertIn(other, out)
+        fm = vl.extract_frontmatter(
+            (self.vault / other).read_bytes().decode("utf-8"))
+        self.assertEqual(fm["status"], "paused")
+        self.assertNotEqual(vl.extract_frontmatter(self.text()).get("status"),
+                            "paused")
+
+    def test_new_with_a_slash_in_the_name_refused(self):
+        before = snapshot(self.vault)
+        code, out = paused(self, "--write", "--new", scene="A/B")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(snapshot(self.vault), before)
+
     def test_chapter_and_folder_need_new(self):
         before = snapshot(self.vault)
         for extra in (("--chapter", "Chapter 2"), ("--folder", "X")):
