@@ -2755,6 +2755,11 @@ def paused_body(snapshot: str, batch: Batch, rel: str,
     fence: str | None = None
     for n, line in enumerate(snapshot.strip().splitlines(), 1):
         fence, is_fence = vl.fence_step(line, fence)
+        if fence is None and not is_fence and vl.PAUSED_END_RE.match(line):
+            batch.row("WARNING", rel, "", f"snapshot line {n} is an end "
+                      f"marker ({vl.PAUSED_END}); dropped, the section "
+                      f"gets its own")
+            continue
         m = H12_RE.match(line)
         if m and not is_fence:
             if fence is None:

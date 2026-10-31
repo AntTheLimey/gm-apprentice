@@ -190,6 +190,26 @@ class ExistingSceneTests(PausedBase):
             self.assertIn("--new", out)
         self.assertEqual(snapshot(self.vault), before)
 
+    def test_end_marker_typed_in_snapshot_is_dropped(self):
+        snap = "Before.\n<!-- /paused -->\nTail.\n```\n<!-- /paused -->\n```\n"
+        code, out = paused(self, "--write", snap=snap)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(any(r.startswith("WARNING") and "line 2" in r
+                            for r in out.splitlines()), out)
+        paused(self, "--write", session=S6, snap="Second.")
+        text = self.text()
+        self.assertEqual(text.count("## Paused"), 1)
+        self.assertNotIn("Tail.", text)
+        self.assertNotIn("Before.", text)
+        self.assertEqual(text.count("<!-- /paused -->"), 1)
+        self.assertIn("Second.\n<!-- /paused -->\n\n**Situation:**", text)
+        paused(self, "--write", snap=snap)
+        text = self.text()
+        self.assertIn("Tail.\n```\n<!-- /paused -->\n```\n<!-- /paused -->"
+                      "\n\n**Situation:**", text)
+        paused(self, "--write", session=S6, snap="Again.")
+        self.assertNotIn("Tail.", self.text())
+
     def test_headings_demoted(self):
         snap = "## Initiative\nMara first.\n\n```\n## x\n```\n# Top\n"
         code, out = paused(self, "--write", snap=snap)

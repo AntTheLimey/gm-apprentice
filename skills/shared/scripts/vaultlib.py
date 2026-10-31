@@ -816,7 +816,7 @@ def fence_step(line: str, fence_delim: str | None) -> tuple[str | None, bool]:
 
 PAUSED_END = "<!-- /paused -->"
 _PAUSED_HEADING_RE = re.compile(r"^##[ \t]+Paused[ \t]*$")
-_PAUSED_END_RE = re.compile(r"^[ \t]*<!--[ \t]*/paused[ \t]*-->[ \t]*$")
+PAUSED_END_RE = re.compile(r"^[ \t]*<!--[ \t]*/paused[ \t]*-->[ \t]*$")
 
 
 def paused_span(lines: list[str]) -> tuple[int, int] | None:
@@ -840,7 +840,7 @@ def paused_span(lines: list[str]) -> tuple[int, int] | None:
             if _PAUSED_HEADING_RE.match(bare):
                 start, last = i, i + 1
             continue
-        if _PAUSED_END_RE.match(bare):
+        if PAUSED_END_RE.match(bare):
             return start, i + 1
         if bare.startswith("## ") or markers_in(bare):
             break
@@ -860,7 +860,7 @@ def split_paused(text: str) -> tuple[str | None, str]:
         return None, text
     s, e = span
     inner = lines[s + 1:e]
-    if inner and _PAUSED_END_RE.match(inner[-1].rstrip("\r\n")):
+    if inner and PAUSED_END_RE.match(inner[-1].rstrip("\r\n")):
         inner = inner[:-1]
     return "".join(inner).strip(), "".join(lines[:s] + lines[e:])
 
