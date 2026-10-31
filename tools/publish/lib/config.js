@@ -247,6 +247,9 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   // The extra stylesheets' paths as written, blanks left out. Not listed, like `header_facts`: a site that sets none
   // builds as it did. build.js finds and copies each.
   Object.defineProperty(merged, 'stylesheets', { value: (p.theme.stylesheets || []).map((s) => s.trim()).filter(Boolean), enumerable: false });
+  // The picture at the top of a note's page that names none (#362). Not listed, like `stylesheets`: a site that sets
+  // none builds as it did. build.js finds and copies it.
+  Object.defineProperty(merged, 'page_banner', { value: p.theme.page_banner == null ? null : p.theme.page_banner, enumerable: false });
   // Whether pages carry the hooks a theme styles by (lib/theme-hooks.js). Not listed, like `stylesheets`.
   Object.defineProperty(merged, 'theme_hooks', { value: p.theme.hooks === true, enumerable: false });
   Object.defineProperty(merged, 'rules_lists', { value: { gurpsReference: p.sheets.gurps_reference_tables, cocSkillList: p.sheets.coc_skill_list }, enumerable: false });

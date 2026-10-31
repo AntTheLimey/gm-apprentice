@@ -34,6 +34,7 @@ function worldDomainTemplate(page, processedContent, navFor, config, imageMap, c
   const mainContent = [headerHtml, rulesHtml, bodyHook(processedContent.html)].filter(Boolean).join('\n');
   return baseShell({
     pageType: page.frontmatter.type,
+    banner: processedContent.bannerHtml,
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),

@@ -40,6 +40,8 @@ function readPosition(raw) {
   return ok(parts.join(' '));
 }
 
+const PICTURE_PARTS = ['image', 'link', 'alt'];
+
 const TYPES = {
   switch: {
     read: (raw) => { const b = readSwitch(raw); return typeof b === 'boolean' ? ok(b) : bad; },
@@ -131,6 +133,18 @@ const TYPES = {
   position: {
     read: (raw) => readPosition(raw),
     takes: () => 'a picture position: one to four of left, right, top, bottom, center, a percentage or a length (`20% center`)',
+  },
+  // A picture as a banner names it: its path in the vault or a [[link]] to it, `false` for none, or `image` with,
+  // optionally, `link` and `alt`, each text.
+  picture: {
+    read(raw) {
+      if (raw === false || typeof raw === 'string') return ok(raw);
+      const parts = isMap(raw) ? Object.keys(raw) : [];
+      const text = (v) => v === undefined || v === null || typeof v === 'string';
+      if (isMap(raw) && typeof raw.image === 'string' && raw.image.trim() && parts.every((k) => PICTURE_PARTS.includes(k)) && text(raw.link) && text(raw.alt)) return ok(raw);
+      return bad;
+    },
+    takes: () => "a picture's path in the vault or a [[link]] to it, `false`, or `image` with, optionally, `link` and `alt`",
   },
   // A value the registry lists so it is not "unknown", read by code that owns its shape.
   any: { read: (raw) => ok(raw), takes: (entry) => entry.shape || 'see the settings page' },

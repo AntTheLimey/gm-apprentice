@@ -101,7 +101,7 @@ function bodyHook(html) { return themeHooks ? markFirstParagraph(html) : html; }
 // The attribute that names the page's type on <main>, when the hooks are on ('' otherwise).
 function pageTypeAttr(pageType) { return themeHooks ? ` data-page-type="${escapeHtml(String(pageType || '').trim().toLowerCase() || 'page')}"` : ''; }
 
-function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset, overridesCss, breadcrumbsHtml, scripts, mainAttrs, extraCss, pageType, bodyAttrs = '' }) {
+function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, banner = '', footer, genrePreset, overridesCss, breadcrumbsHtml, scripts, mainAttrs, extraCss, pageType, bodyAttrs = '' }) {
   const footerHtml = footer ? `<footer class="site-footer">${escapeHtml(footer)}</footer>` : '';
   const themeCssHref = cssHref.replace('style.css', 'theme.css');
   const genreCssHref = genrePreset
@@ -137,7 +137,7 @@ ${navHtml}
 
 <main class="content"${pageTypeAttr(pageType)}${mainAttrs || ''}${previewsAttr()}>
 ${breadcrumbs}
-${themeHooks ? markPage(content) : content}
+${themeHooks ? markPage(banner + content) : banner + content}
 </main>
 
 ${footerHtml}

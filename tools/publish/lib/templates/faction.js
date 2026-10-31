@@ -43,6 +43,7 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
   const mainContent = `${headerCard}\n${badgeHtml}\n${leadershipHtml}\n${territoryHtml}\n${goals}\n${bodyHook(processedContent.html)}\n${graphHtml}`;
   return baseShell({
     pageType: page.frontmatter.type,
+    banner: processedContent.bannerHtml,
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),

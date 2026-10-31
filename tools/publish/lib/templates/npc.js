@@ -105,6 +105,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
 
   return baseShell({
     pageType: page.frontmatter.type,
+    banner: processedContent.bannerHtml,
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),
