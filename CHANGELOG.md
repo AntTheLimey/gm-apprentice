@@ -24,6 +24,10 @@ A scene that stops part-way is picked up cleanly next session. Publish tool unch
 - Session-prep reads snapshots from its bundle.
 - The reveal step never proposes from a scene note.
 
+### Removed
+
+- `vw scene-played --paused`: `vw scene-paused` writes the snapshot and sets the status.
+
 ## [1.10.110] — 2026-10-30
 
 A header picture for any page. Publish tool 1.57.0. No vault change is

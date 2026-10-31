@@ -22,8 +22,8 @@
     vault_write.py VAULT scene-paused --scene T --session S
                                [--new [--chapter C] [--folder SUB]]
                                [--write]                                < snapshot
-    vault_write.py VAULT scene-played --scene T (--session S [--paused]
-                               | --dropped) [--write]
+    vault_write.py VAULT scene-played --scene T (--session S | --dropped)
+                               [--write]
     vault_write.py VAULT prop-new --chapter C --title T [--kind K]
                                [--style S | --file F]
                                [--hand ID [--hand-font FAMILY]
@@ -2716,8 +2716,7 @@ def cmd_scene_played(batch: Batch, args: argparse.Namespace,
     eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
     fm = [ln.rstrip("\r\n") for ln in lines[1:end]]
     have = vl.extract_frontmatter(text) or {}
-    new_status = ("dropped" if args.dropped
-                  else "paused" if args.paused else "played")
+    new_status = "dropped" if args.dropped else "played"
     same = str(have.get("status") or "").strip() == new_status
     if args.dropped:
         if same:
@@ -3259,16 +3258,14 @@ def build_parser() -> argparse.ArgumentParser:
                     "chapter")
     pa.add_argument("--write", action="store_true")
     sp = sub.add_parser(
-        "scene-played", help="mark a scene played, paused or dropped",
-        description="Sets status to played, paused or dropped; played and "
-                    "paused add the session to played_in once. No other "
-                    "field changes.")
+        "scene-played", help="mark a scene played or dropped",
+        description="Sets status to played or dropped; played adds the "
+                    "session to played_in once. No other field changes.")
     sp.add_argument("--scene", required=True,
                     help="the scene note's name, or its vault-relative "
                          "path when several share the name")
     sp.add_argument("--session",
                     help="the session note's name (not with --dropped)")
-    sp.add_argument("--paused", action="store_true")
     sp.add_argument("--dropped", action="store_true",
                     help="the scene will not be played; no session")
     sp.add_argument("--write", action="store_true")
@@ -3385,8 +3382,8 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
     if args.command == "scene-played":
-        if args.dropped and args.paused:
-            ap.error("--dropped and --paused cannot go together")
+        if args.dropped and args.session:
+            ap.error("--session does not go with --dropped")
         if not args.dropped and not args.session:
             ap.error("--session is required unless --dropped")
     if not args.vault.is_dir():

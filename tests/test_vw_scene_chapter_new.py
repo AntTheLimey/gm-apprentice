@@ -244,10 +244,6 @@ class ScenePlayedTests(unittest.TestCase):
         self.assertEqual(fm["status"], "played")
         self.assertEqual(fm["played_in"], ["[[Session 05 - The Docks]]"])
 
-    def test_paused(self):
-        self.played("--paused", "--write")
-        self.assertEqual(self.fm()["status"], "paused")
-
     def test_dropped(self):
         self.played("--write")
         code, out = run(self.vault, "scene-played", "--scene", "The Docks",
@@ -263,15 +259,29 @@ class ScenePlayedTests(unittest.TestCase):
         self.assertIn(f"SKIP\t{self.rel}", out)
         self.assertEqual(snapshot(self.vault), before)
 
-    def test_dropped_with_paused_refused(self):
+    def test_paused_flag_is_unknown(self):
         before = snapshot(self.vault)
         err = io.StringIO()
         with mock.patch("sys.stderr", err), \
                 self.assertRaises(SystemExit) as cm:
             vw.main([str(self.vault), "scene-played", "--scene",
-                     "The Docks", "--dropped", "--paused", "--write"])
+                     "The Docks", "--session", "Session 05 - The Docks",
+                     "--paused", "--write"])
         self.assertEqual(cm.exception.code, 2)
-        self.assertIn("cannot go together", err.getvalue())
+        self.assertIn("unrecognized arguments: --paused", err.getvalue())
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_dropped_with_session_refused(self):
+        before = snapshot(self.vault)
+        err = io.StringIO()
+        with mock.patch("sys.stderr", err), \
+                self.assertRaises(SystemExit) as cm:
+            vw.main([str(self.vault), "scene-played", "--scene",
+                     "The Docks", "--session", "Session 05 - The Docks",
+                     "--dropped", "--write"])
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("--session does not go with --dropped",
+                      err.getvalue())
         self.assertEqual(snapshot(self.vault), before)
 
     def test_session_required_without_dropped(self):

@@ -329,5 +329,71 @@ class NewSceneTests(unittest.TestCase):
         self.assertEqual(snapshot(self.vault), before)
 
 
+GM_SNAP = ("Mara holds the door.\n\n<!-- gm-only -->\nThe ghost is her "
+           "mother.\n<!-- /gm-only -->\n\nRound 3, Mara next.\n")
+
+
+class GmOnlyInSnapshotTests(PausedBase):
+    """A snapshot may hold a balanced gm-only pair: its end marker, not
+    the inner marker, ends the section, for the writer and every reader."""
+
+    def sc(self, *args):
+        import subprocess
+        scripts = Path(__file__).resolve().parent.parent / "skills" / \
+            "shared" / "scripts"
+        return subprocess.run(
+            [sys.executable, str(scripts / "session_context.py"),
+             str(self.vault), *args], capture_output=True, text=True,
+            timeout=60)
+
+    def body(self):
+        return self.text().split("\n---\n", 1)[1]
+
+    def test_span_runs_to_the_end_marker(self):
+        paused(self, "--write", snap=GM_SNAP)
+        got, rest = vl.split_paused(self.body())
+        self.assertIn("The ghost is her mother.", got)
+        self.assertTrue(got.endswith("Round 3, Mara next."), got)
+        self.assertNotIn("/paused", rest)
+        self.assertNotIn("ghost", rest)
+
+    def test_prep_and_play_print_the_whole_snapshot(self):
+        paused(self, "--write", snap=GM_SNAP)
+        for flag in ("--prep", "--play"):
+            out = self.sc(flag).stdout
+            self.assertIn("Round 3, Mara next.", out, flag)
+            self.assertIn("The ghost is her mother.", out, flag)
+            self.assertNotIn("/paused", out, flag)
+
+    def test_pausing_twice_leaves_no_junk(self):
+        paused(self, "--write", snap=GM_SNAP)
+        first = vl.split_paused(self.body())[1]
+        paused(self, "--write", session=S6, snap="New snapshot.\n")
+        text = self.text()
+        self.assertEqual(text.count("## Paused"), 1)
+        self.assertEqual(text.count("<!-- /paused -->"), 1)
+        for gone in ("Round 3", "ghost is her mother"):
+            self.assertNotIn(gone, text)
+        self.assertEqual(text.count("<!-- gm-only -->"),
+                         text.count("<!-- /gm-only -->"))
+        got, second = vl.split_paused(self.body())
+        self.assertEqual(got, f"After [[{S6}]].\n\nNew snapshot.")
+        self.assertEqual(first, second)
+
+    def test_older_section_without_end_marker_keeps_the_old_rule(self):
+        lines = ["## Paused\n", "Old words.\n", "<!-- gm-only -->\n",
+                 "secret\n", "<!-- /gm-only -->\n"]
+        self.assertEqual(vl.paused_span(lines), (0, 2))
+        lines = ["## Paused\n", "Old.\n", "\n", "## Next\n", "x\n"]
+        self.assertEqual(vl.paused_span(lines), (0, 2))
+        lines = ["## Paused\n", "Old.\n", "## Next\n", "<!-- /paused -->\n"]
+        self.assertEqual(vl.paused_span(lines), (0, 2))
+
+    def test_end_marker_in_a_code_fence_does_not_count(self):
+        lines = ["## Paused\n", "Old.\n", "```\n", "<!-- /paused -->\n",
+                 "```\n", "## Next\n"]
+        self.assertEqual(vl.paused_span(lines), (0, 5))
+
+
 if __name__ == "__main__":
     unittest.main()

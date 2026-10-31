@@ -402,13 +402,18 @@ def _scene_note_text(files, name: str, chapter: str | None = None) -> str:
                 + ", ".join(f[0] for f in hits)
                 + "; write the pointer as the path of the one meant)")
     _rel, text, _fm = hits[0]
-    body = "\n".join(line for line in body_of(text).splitlines()
-                     if not GM_MARKER_RE.fullmatch(line.strip()))
-    body = re.sub(r"\n{3,}", "\n\n", body).strip()
-    paused, rest = split_paused(body)
+
+    def strip_markers(part: str) -> str:
+        part = "\n".join(line for line in part.splitlines()
+                         if not GM_MARKER_RE.fullmatch(line.strip()))
+        return re.sub(r"\n{3,}", "\n\n", part).strip()
+
+    # Split on the raw body so the span is the one prep and the writer
+    # see; only then drop the marker lines.
+    paused, rest = split_paused(body_of(text))
+    body = strip_markers(rest)
     if paused:
-        rest = re.sub(r"\n{3,}", "\n\n", rest).strip()
-        body = f"## Paused\n{paused}\n\n{rest}".strip()
+        body = f"## Paused\n{strip_markers(paused)}\n\n{body}".strip()
     return body or f"(scene note {name} is empty)"
 
 
@@ -1284,14 +1289,14 @@ def main() -> int:
 
     # session-wrapup reads the carry on any vault, a player's included.
     if args.carry:
-        error, report = carry_report(list(vault_files(args.vault)),
-                                     args.before)
+        files = list(vault_files(args.vault))
+        error, report = carry_report(files, args.before)
         if error:
             print(f"error: {error}", file=sys.stderr)
             return 2
         print(report)
         block = paused_line_block(
-            paused_scenes(args.vault, list(vault_files(args.vault))),
+            paused_scenes(args.vault, files),
             "===== Paused Scenes =====")
         if block:
             print(f"\n{block}")
