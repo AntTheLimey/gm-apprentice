@@ -1,0 +1,255 @@
+#!/usr/bin/env python3
+"""vault_write.py scene-paused: the snapshot of a scene stopped mid-play."""
+
+import sys
+import unittest
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "skills" / "shared" / "scripts"))
+sys.path.insert(0, str(REPO / "tests"))
+
+import schema_rules  # noqa: E402
+import vaultlib as vl  # noqa: E402
+from test_vw_scene_chapter_new import make_vault, run, snapshot  # noqa: E402
+
+CH = "Chapters/Chapter 1"
+S5 = "Session 05 - Beneath the Mill"
+S6 = "Session 06 - The Weir"
+FILES = {
+    f"{CH}/Chapter 1.md": "---\ntype: chapter\ntitle: One\n---\n",
+    "Chapters/Chapter 2/Chapter 2.md": "---\ntype: chapter\ntitle: Two\n---\n",
+    f"{CH}/Sessions/{S5}.md":
+        '---\ntype: session\nsession_number: 5\nchapter: "[[Chapter 1]]"\n'
+        "---\n",
+    f"{CH}/Sessions/{S6}.md":
+        '---\ntype: session\nsession_number: 6\nchapter: "[[Chapter 1]]"\n'
+        "---\n",
+    "Sessions/Session 07 - Loose.md":
+        "---\ntype: session\nsession_number: 7\n---\n",
+    "NPCs/Mill Ghost.md": "---\ntype: npc\n---\n",
+}
+SNAP = "Mara holds the door.\n\nThe ghost has not yet spoken.\n"
+
+
+def paused(case, *extra, scene="The Docks", session=S5, snap=SNAP):
+    return run_in(case.vault, "scene-paused", "--scene", scene,
+                  "--session", session, *extra, stdin=snap)
+
+
+def run_in(vault, *argv, stdin=""):
+    import io
+    from unittest import mock
+    import vault_write as vw
+    out = io.StringIO()
+    with mock.patch("sys.stdout", out), mock.patch("sys.stderr",
+                                                   io.StringIO()):
+        code = vw.main([str(vault), *argv], stdin=stdin)
+    return code, out.getvalue()
+
+
+class PausedBase(unittest.TestCase):
+    def setUp(self):
+        self.vault = make_vault(self, FILES)
+        run(self.vault, "scene-new", "--chapter", "Chapter 1", "--title",
+            "The Docks", "--write")
+        self.rel = f"{CH}/Scenes/The Docks.md"
+
+    def text(self):
+        return (self.vault / self.rel).read_bytes().decode("utf-8")
+
+
+class ExistingSceneTests(PausedBase):
+    def test_dry_run_changes_nothing(self):
+        before = snapshot(self.vault)
+        code, out = paused(self)
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"WOULD-ADD\t{self.rel}\t§Paused\t", out)
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_pause_existing_scene(self):
+        code, out = paused(self, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"ADDED\t{self.rel}", out)
+        text = self.text()
+        fm = vl.extract_frontmatter(text)
+        self.assertEqual(fm["status"], "paused")
+        self.assertEqual(fm["played_in"], [f"[[{S5}]]"])
+        body = text.split("\n---\n", 1)[1]
+        comment_end = body.index("-->") + 3
+        self.assertTrue(body[comment_end:].startswith(
+            f"\n\n## Paused\n\nAfter [[{S5}]].\n\nMara holds the door."))
+        self.assertLess(body.index("## Paused"), body.index("**Situation"))
+        self.assertIn("The ghost has not yet spoken.\n\n**Situation:**",
+                      body)
+
+    def test_only_status_played_in_and_paused_change(self):
+        before = self.text()
+        paused(self, "--write")
+        after = self.text()
+        sec_start = after.index("## Paused")
+        sec_end = after.index("**Situation")
+        rest = after[:sec_start] + after[sec_end:]
+        want = (before.replace("status: planned", "status: paused")
+                .replace("played_in: []",
+                         f'played_in:\n  - "[[{S5}]]"'))
+        self.assertEqual(rest, want)
+        for keep in ("**Starts it:**", "<!-- gm-only -->", "## GM Notes",
+                     "<!-- /gm-only -->", "entities: []",
+                     "scene_type:"):
+            self.assertIn(keep, after)
+
+    def test_second_pause_replaces_in_place(self):
+        # Part 1's overlay shape: the section sits at the end of the file,
+        # after the closing gm-only marker.
+        path = self.vault / self.rel
+        path.write_bytes(path.read_bytes() + (
+            f"\n## Paused\n\nAfter [[{S5}]].\n\nOld words.\n").encode())
+        code, _ = paused(self, "--write", session=S5, snap="Old words.")
+        before = self.text()
+        code, out = paused(self, "--write", session=S6, snap="New words.")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"replaces the snapshot after [[{S5}]]", out)
+        after = self.text()
+        self.assertEqual(after.count("## Paused"), 1)
+        self.assertTrue(after.endswith(
+            f"\n## Paused\n\nAfter [[{S6}]].\n\nNew words.\n"), after)
+        fm = vl.extract_frontmatter(after)
+        self.assertEqual(fm["played_in"], [f"[[{S5}]]", f"[[{S6}]]"])
+        head = before[:before.index("\n---\n", 4)]
+        body_before = before.split("\n---\n", 1)[1]
+        body_after = after.split("\n---\n", 1)[1]
+        self.assertEqual(body_after[:body_after.index("## Paused")],
+                         body_before[:body_before.index("## Paused")])
+        self.assertIn("status: paused", head)
+
+    def test_replace_keeps_what_follows_a_section_at_the_top(self):
+        paused(self, "--write", snap="One.")
+        paused(self, "--write", session=S6, snap="Two.")
+        after = self.text()
+        self.assertEqual(after.count("## Paused"), 1)
+        self.assertIn(f"After [[{S6}]].\n\nTwo.\n\n**Situation:**", after)
+        self.assertIn("<!-- gm-only -->\n\n## GM Notes", after)
+        self.assertNotIn("One.", after)
+
+    def test_headings_demoted(self):
+        snap = "## Initiative\nMara first.\n\n```\n## x\n```\n# Top\n"
+        code, out = paused(self, "--write", snap=snap)
+        self.assertEqual(code, 0, out)
+        text = self.text()
+        self.assertIn("\n### Initiative\nMara first.\n", text)
+        self.assertIn("\n```\n## x\n```\n### Top\n", text)
+        warnings = [r for r in out.splitlines() if r.startswith("WARNING")]
+        self.assertEqual(len(warnings), 3, out)
+        self.assertTrue(any("line 1" in w for w in warnings))
+        self.assertTrue(any("line 5" in w and "fence" in w
+                            for w in warnings))
+
+    def test_unknown_scene_without_new_refused(self):
+        before = snapshot(self.vault)
+        code, out = paused(self, "--write", scene="Nowhere")
+        self.assertEqual(code, 1, out)
+        self.assertIn("no scene note named 'Nowhere'", out)
+        self.assertIn("--new", out)
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_empty_stdin_refused(self):
+        before = snapshot(self.vault)
+        for snap in ("", "  \n\n"):
+            code, out = paused(self, "--write", snap=snap)
+            self.assertEqual(code, 1, out)
+            self.assertIn("nothing to write", out)
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_crlf_kept(self):
+        path = self.vault / self.rel
+        path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+        code, out = paused(self, "--write", snap="Line one.\nLine two.")
+        self.assertEqual(code, 0, out)
+        raw = path.read_bytes()
+        self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))
+        self.assertIn(b"## Paused\r\n\r\nAfter [[", raw)
+        paused(self, "--write", session=S6, snap="Again.")
+        raw = path.read_bytes()
+        self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))
+        self.assertEqual(raw.count(b"## Paused"), 1)
+
+    def test_identical_is_skip(self):
+        paused(self, "--write")
+        before = snapshot(self.vault)
+        for extra in ((), ("--write",)):
+            code, out = paused(self, *extra)
+            self.assertEqual(code, 0, out)
+            self.assertIn(f"SKIP\t{self.rel}", out)
+            self.assertNotIn("ADD", out)
+        self.assertEqual(snapshot(self.vault), before)
+
+
+class NewSceneTests(unittest.TestCase):
+    def setUp(self):
+        self.vault = make_vault(self, FILES)
+
+    def test_new_files_scene_in_session_chapter(self):
+        code, out = paused(self, "--new", "--write", scene="The Weir Fight")
+        self.assertEqual(code, 0, out)
+        rel = f"{CH}/Scenes/The Weir Fight.md"
+        self.assertIn(f"CREATED\t{rel}\t§Paused", out)
+        text = (self.vault / rel).read_text("utf-8")
+        fm = vl.extract_frontmatter(text)
+        self.assertEqual(fm["type"], "scene")
+        self.assertEqual(fm["status"], "paused")
+        self.assertEqual(fm["played_in"], [f"[[{S5}]]"])
+        self.assertIn('chapter: "[[Chapter 1]]"', text)
+        body = text.split("\n---\n", 1)[1]
+        self.assertTrue(body.startswith("\n## Paused\n\nAfter [["), body)
+        self.assertNotIn("Situation", body)
+        self.assertNotIn("gm-only", body)
+        self.assertEqual(
+            [m for lvl, m in schema_rules.frontmatter_findings(
+                fm, None, vl.raw_frontmatter(text)) if lvl == "ERROR"], [])
+        self.assertNotIn("WARNING", out)
+
+    def test_dry_run_creates_nothing(self):
+        before = snapshot(self.vault)
+        code, out = paused(self, "--new", scene="Fresh")
+        self.assertEqual(code, 0, out)
+        self.assertIn("WOULD-CREATE", out)
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_new_with_chapter_and_folder(self):
+        code, out = paused(self, "--new", "--chapter", "Chapter 2",
+                           "--folder", "Side_Adventures/X", "--write",
+                           scene="Detour")
+        self.assertEqual(code, 0, out)
+        rel = "Chapters/Chapter 2/Side_Adventures/X/Scenes/Detour.md"
+        text = (self.vault / rel).read_text("utf-8")
+        self.assertIn('chapter: "[[Chapter 2]]"', text)
+
+    def test_new_refused_when_scene_exists(self):
+        run(self.vault, "scene-new", "--chapter", "Chapter 1", "--title",
+            "Taken", "--write")
+        before = snapshot(self.vault)
+        code, out = paused(self, "--new", "--write", scene="Taken")
+        self.assertEqual(code, 1, out)
+        self.assertIn("already exists at", out)
+        self.assertIn("drop --new", out)
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_new_refused_on_stem_clash(self):
+        before = snapshot(self.vault)
+        code, out = paused(self, "--new", "--write", scene="Mill Ghost")
+        self.assertEqual(code, 1, out)
+        self.assertIn("NPCs/Mill Ghost.md", out)
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_new_without_chapter_refused(self):
+        before = snapshot(self.vault)
+        code, out = paused(self, "--new", "--write", scene="Orphan",
+                           session="Session 07 - Loose")
+        self.assertEqual(code, 1, out)
+        self.assertIn("chapter-new", out)
+        self.assertEqual(snapshot(self.vault), before)
+
+
+if __name__ == "__main__":
+    unittest.main()

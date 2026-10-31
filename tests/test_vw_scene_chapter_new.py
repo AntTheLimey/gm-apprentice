@@ -248,6 +248,37 @@ class ScenePlayedTests(unittest.TestCase):
         self.played("--paused", "--write")
         self.assertEqual(self.fm()["status"], "paused")
 
+    def test_dropped(self):
+        self.played("--write")
+        code, out = run(self.vault, "scene-played", "--scene", "The Docks",
+                        "--dropped", "--write")
+        self.assertEqual(code, 0, out)
+        fm = self.fm()
+        self.assertEqual(fm["status"], "dropped")
+        self.assertEqual(fm["played_in"], ["[[Session 05 - The Docks]]"])
+        before = snapshot(self.vault)
+        code, out = run(self.vault, "scene-played", "--scene", "The Docks",
+                        "--dropped", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"SKIP\t{self.rel}", out)
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_dropped_with_paused_refused(self):
+        before = snapshot(self.vault)
+        with self.assertRaises(SystemExit) as cm:
+            run(self.vault, "scene-played", "--scene", "The Docks",
+                "--dropped", "--paused", "--write")
+        self.assertEqual(cm.exception.code, 2)
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_session_required_without_dropped(self):
+        before = snapshot(self.vault)
+        with self.assertRaises(SystemExit) as cm:
+            run(self.vault, "scene-played", "--scene", "The Docks",
+                "--write")
+        self.assertEqual(cm.exception.code, 2)
+        self.assertEqual(snapshot(self.vault), before)
+
     def test_unknown_scene_or_session_writes_nothing(self):
         before = snapshot(self.vault)
         code, out = run(self.vault, "scene-played", "--scene", "Nope",

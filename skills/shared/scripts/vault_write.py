@@ -19,8 +19,11 @@
                                [--status S] [--write]
     vault_write.py VAULT scene-new --chapter C --title T [--set-piece]
                                [--folder SUB] [--write]
-    vault_write.py VAULT scene-played --scene T --session S [--paused]
-                               [--write]
+    vault_write.py VAULT scene-paused --scene T --session S
+                               [--new [--chapter C] [--folder SUB]]
+                               [--write]                                < snapshot
+    vault_write.py VAULT scene-played --scene T (--session S [--paused]
+                               | --dropped) [--write]
     vault_write.py VAULT prop-new --chapter C --title T [--kind K]
                                [--style S | --file F]
                                [--hand ID [--hand-font FAMILY]
@@ -2629,31 +2632,37 @@ def cmd_scene_new(batch: Batch, args: argparse.Namespace,
               + (", set piece" if args.set_piece else ""))
 
 
-def find_scene(batch: Batch, name: str) -> str:
-    """The one scene note `name` means: its name, or its vault-relative
-    path when several share the name."""
+def scene_matches(batch: Batch, name: str) -> list[str]:
+    """The scene notes `name` means: its name, or its vault-relative path."""
     raw = bare_link(name)
     scene_notes = [rel for rel, _t in notes_of_type(batch.vault, "scene")]
     if "/" in raw:
         # A vault-relative path names one of several scenes of a name.
         want = nfc(raw.removesuffix(".md")).casefold()
-        scenes = [rel for rel in scene_notes
-                  if nfc(rel[:-3]).casefold() == want]
-    else:
-        want = nfc(raw).casefold()
-        scenes = [rel for rel in scene_notes
-                  if nfc(Path(rel).stem).casefold() == want]
+        return [rel for rel in scene_notes
+                if nfc(rel[:-3]).casefold() == want]
+    want = nfc(raw).casefold()
+    return [rel for rel in scene_notes
+            if nfc(Path(rel).stem).casefold() == want]
+
+
+def find_scene(batch: Batch, name: str, *, missing: str | None = None) -> str:
+    """The one scene note `name` means: its name, or its vault-relative
+    path when several share the name. `missing` replaces the refusal for
+    no match."""
+    scenes = scene_matches(batch, name)
     if len(scenes) != 1:
         raise WriteError(
-            f"no scene note at or named {name!r}" if not scenes else
-            f"{len(scenes)} scene notes named {name!r}: "
+            (missing or f"no scene note at or named {name!r}") if not scenes
+            else f"{len(scenes)} scene notes named {name!r}: "
             + ", ".join(scenes) + "; pass its path as --scene")
     return scenes[0]
 
 
-def cmd_scene_played(batch: Batch, args: argparse.Namespace,
-                     _text: str) -> None:
-    session = clean_name(bare_link(args.session), "--session")
+def _session_note(batch: Batch, raw: str) -> tuple[str, str]:
+    """(the session's link name, its note's path); none or several are
+    refused."""
+    session = clean_name(bare_link(raw), "--session")
     sessions = [rel for rel in batch.with_stem(session)
                 if not is_record(rel)
                 and vl.entity_type(vl.extract_frontmatter(batch.read(rel))
@@ -2663,6 +2672,41 @@ def cmd_scene_played(batch: Batch, args: argparse.Namespace,
             f"no session note named {session!r}" if not sessions else
             f"{len(sessions)} session notes named {session!r}: "
             + ", ".join(sessions))
+    return session, sessions[0]
+
+
+def _played_links(have: dict[str, Any]) -> list[str]:
+    played = have.get("played_in") or []
+    if not isinstance(played, list):
+        played = [played]
+    return [vl.wikilink_target(str(x)) or bare_link(str(x))
+            for x in played]
+
+
+def _lists(have: dict[str, Any], session: str) -> bool:
+    return nfc(session).casefold() in {
+        nfc(x).casefold() for x in _played_links(have)}
+
+
+def _mark(fm: list[str], have: dict[str, Any], session: str,
+          status: str) -> bool:
+    """Set `status` in the frontmatter lines `fm` and add `session` to
+    played_in once; whether it was added."""
+    links = _played_links(have)
+    added = not _lists(have, session)
+    if added:
+        links.append(session)
+    set_block(fm, "status", status)
+    if added or "played_in" not in have:
+        set_block(fm, "played_in", *link_list(links))
+    return added
+
+
+def cmd_scene_played(batch: Batch, args: argparse.Namespace,
+                     _text: str) -> None:
+    session = ""
+    if not args.dropped:
+        session, _session_rel = _session_note(batch, args.session)
     rel = find_scene(batch, args.scene)
     text = batch.read(rel)
     lines = text.splitlines(keepends=True)
@@ -2672,24 +2716,23 @@ def cmd_scene_played(batch: Batch, args: argparse.Namespace,
     eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
     fm = [ln.rstrip("\r\n") for ln in lines[1:end]]
     have = vl.extract_frontmatter(text) or {}
-    played = have.get("played_in") or []
-    if not isinstance(played, list):
-        played = [played]
-    links = [vl.wikilink_target(str(x)) or bare_link(str(x))
-             for x in played]
-    new_status = "paused" if args.paused else "played"
-    added = nfc(session).casefold() not in {
-        nfc(x).casefold() for x in links}
-    if not added and "played_in" in have \
-            and str(have.get("status") or "").strip() == new_status:
+    new_status = ("dropped" if args.dropped
+                  else "paused" if args.paused else "played")
+    same = str(have.get("status") or "").strip() == new_status
+    if args.dropped:
+        if same:
+            batch.row("SKIP", rel, "", "already dropped")
+            return
+        set_block(fm, "status", "dropped")
+        batch.put(rel, "---" + eol + eol.join(fm) + eol + "---" + eol
+                  + "".join(lines[end + 1:]))
+        batch.row("WOULD-ADD", rel, "", "status dropped")
+        return
+    if _lists(have, session) and "played_in" in have and same:
         batch.row("SKIP", rel, "", f"already {new_status}; played_in "
                   f"already lists [[{session}]]")
         return
-    if added:
-        links.append(session)
-    set_block(fm, "status", new_status)
-    if added or "played_in" not in have:
-        set_block(fm, "played_in", *link_list(links))
+    added = _mark(fm, have, session, new_status)
     new = ("---" + eol + eol.join(fm) + eol + "---" + eol
            + "".join(lines[end + 1:]))
     batch.put(rel, new)
@@ -2697,6 +2740,182 @@ def cmd_scene_played(batch: Batch, args: argparse.Namespace,
               f"status {new_status}; played_in "
               + (f"+ [[{session}]]" if added else "already lists "
                  f"[[{session}]]"))
+
+
+PAUSED_HEADING_RE = re.compile(r"^##[ \t]+Paused[ \t]*$")
+H12_RE = re.compile(r"^ {0,3}#{1,2}(?:[ \t]+(.*))?$")
+# The scene template's two prompts: a section written above them ends there,
+# so a second pause never replaces the GM's prep.
+PROMPT_LABELS = ("**Situation:**", "**Starts it:**")
+AFTER_RE = re.compile(r"^After \[\[(.+?)\]\]\.\s*$")
+
+
+def paused_body(snapshot: str, batch: Batch, rel: str,
+                eol: str) -> tuple[list[str], int]:
+    """(the `## Paused` section's lines, each with its ending, no trailing
+    blank; the number of snapshot lines) for the stdin text, with #/##
+    headings outside code fences demoted to ###."""
+    out: list[str] = []
+    fence: str | None = None
+    for n, line in enumerate(snapshot.strip().splitlines(), 1):
+        fence, is_fence = vl.fence_step(line, fence)
+        m = H12_RE.match(line)
+        if m and not is_fence:
+            if fence is None:
+                line = ("### " + m.group(1)) if m.group(1) else "###"
+                batch.row("WARNING", rel, "", f"snapshot line {n} was a "
+                          f"heading above ###; demoted to {line!r}")
+            else:
+                batch.row("WARNING", rel, "", f"snapshot line {n} is a "
+                          f"#/## line inside a code fence: left alone, "
+                          f"but it would end the section for readers")
+        out.append(line.rstrip())
+    return [ln + eol for ln in out], len(out)
+
+
+def paused_span(body: list[str]) -> tuple[int, int] | None:
+    """(heading index, index after the section's last non-blank line) of
+    an existing `## Paused` section in `body`, or None. The section ends
+    at the next `## ` heading, a gm-only or spoiler marker, one of the
+    scene template's prompt labels, or the end."""
+    fence: str | None = None
+    start: int | None = None
+    last = 0
+    for i, line in enumerate(body):
+        bare = line.rstrip("\r\n")
+        fence, is_fence = vl.fence_step(bare, fence)
+        if is_fence or fence is not None:
+            if start is not None:
+                last = i + 1
+            continue
+        if start is None:
+            if PAUSED_HEADING_RE.match(bare):
+                start, last = i, i + 1
+            continue
+        if (bare.startswith(("## ", *PROMPT_LABELS))
+                or vl.markers_in(bare)):
+            return start, last
+        if bare.strip():
+            last = i + 1
+    return (start, last) if start is not None else None
+
+
+def top_insert_index(body: list[str]) -> int:
+    """Where a new section goes: 0, or after a leading HTML comment that
+    is not a gm-only or spoiler marker."""
+    i = 0
+    while i < len(body) and not body[i].strip():
+        i += 1
+    if i < len(body) and body[i].lstrip().startswith("<!--"):
+        for j in range(i, len(body)):
+            if vl.markers_in(body[j]):
+                return 0
+            if "-->" in body[j]:
+                return j + 1
+    return 0
+
+
+def cmd_scene_paused(batch: Batch, args: argparse.Namespace,
+                     snapshot: str) -> None:
+    session, session_rel = _session_note(batch, args.session)
+    if not snapshot.strip():
+        raise WriteError("nothing to write: send the snapshot on stdin")
+    if (args.chapter or args.folder) and not args.new:
+        raise WriteError("--chapter and --folder only go with --new")
+    name = clean_name(bare_link(args.scene), "--scene")
+    created = False
+    if args.new:
+        if scene_matches(batch, args.scene):
+            where = find_scene(batch, args.scene)
+            raise WriteError(f"scene {name!r} already exists at {where}; "
+                             f"drop --new")
+        if args.chapter:
+            found = find_chapter(batch.vault, args.chapter)
+        else:
+            fm_s = vl.extract_frontmatter(batch.read(session_rel)) or {}
+            of = vl.chapter_of(session_rel, fm_s)
+            found = find_chapter(batch.vault, of, missing_ok=True) \
+                if of else None
+            if found is None:
+                raise WriteError(
+                    f"session {session!r} has no chapter note to file the "
+                    f"scene in: pass --chapter, or make the chapter with "
+                    f"vault_write.py chapter-new")
+        assert found is not None
+        _crel, chapter_dir, chapter_name = found
+        rel = f"{chapter_dir}{chapter_subfolder(args.folder)}/Scenes/{name}.md"
+        clash = live_stem_clash(batch, name)
+        if clash:
+            raise WriteError(f"a note named {name!r} already exists: "
+                             + ", ".join(clash) + "; choose another title")
+        template = template_text(batch.vault, SCENE_TEMPLATES, "scene.md")
+        fm = template_frontmatter(template)
+        set_block(fm, "chapter", f'"[[{chapter_name}]]"')
+        text = "---\n" + "\n".join(fm) + "\n---\n"
+        created = True
+    else:
+        rel = find_scene(batch, args.scene, missing=(
+            f"no scene note named {name!r}; for a scene born at the "
+            f"table, add --new"))
+        text = batch.read(rel)
+    lines = text.splitlines(keepends=True)
+    end, error = vl.frontmatter_span(lines)
+    if error:
+        raise WriteError(f"{rel}: {error}")
+    eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
+    fm = [ln.rstrip("\r\n") for ln in lines[1:end]]
+    have = vl.extract_frontmatter(text) or {}
+    _mark(fm, have, session, "paused")
+    head = "---" + eol + eol.join(fm) + eol + "---" + eol
+    body = lines[end + 1:]
+    text_lines, count = paused_body(snapshot, batch, rel, eol)
+    section = [f"## Paused{eol}", eol, f"After [[{session}]].{eol}", eol,
+               *text_lines]
+    old_session = None
+    span = paused_span(body)
+    if created:
+        new_body = [eol, *section]
+    elif span:
+        s0, e0 = span
+        for ln in body[s0 + 1:e0]:
+            m = AFTER_RE.match(ln.strip())
+            if m:
+                old_session = m.group(1)
+                break
+        new_section = list(section)
+        if not body[e0 - 1].endswith(("\n", "\r")):
+            new_section[-1] = new_section[-1].rstrip("\r\n")
+        new_body = body[:s0] + new_section + body[e0:]
+    else:
+        at = top_insert_index(body)
+        before, rest = body[:at], body[at:]
+        while rest and not rest[0].strip():
+            rest = rest[1:]
+        while before and not before[-1].strip():
+            before = before[:-1]
+        new_body = [*before, eol, *section, *([eol] if rest else []), *rest]
+    if created:
+        new = head + "".join(new_body)
+        batch.create(rel, new)
+        schema_check(batch, rel, new)
+        batch.row("WOULD-CREATE", rel, "§Paused",
+                  f"scene born at the table, chapter {chapter_name}, "
+                  f"paused after [[{session}]]")
+        return
+    new = head + "".join(new_body)
+    if new == text:
+        batch.row("SKIP", rel, "§Paused", f"already paused after "
+                  f"[[{session}]] with this snapshot")
+        return
+    batch.put(rel, new)
+    detail = f"status paused; played_in + [[{session}]]; "
+    if not span:
+        detail += f"snapshot {count} lines"
+    elif old_session:
+        detail += f"replaces the snapshot after [[{old_session}]]"
+    else:
+        detail += "replaces the earlier snapshot"
+    batch.row("WOULD-ADD", rel, "§Paused", detail)
 
 
 # --- prop-new ----------------------------------------------------------------
@@ -3037,16 +3256,39 @@ def build_parser() -> argparse.ArgumentParser:
     sc.add_argument("--folder", help="a sub-folder of the chapter, e.g. "
                     "Side_Adventures/The Audition")
     sc.add_argument("--write", action="store_true")
+    pa = sub.add_parser(
+        "scene-paused", help="write a paused scene's snapshot",
+        formatter_class=raw, description=(
+            "Sets status to paused, adds the session to played_in once and\n"
+            "writes the snapshot on stdin as the scene's `## Paused`\n"
+            "section (replaced in place when there is one, else at the top\n"
+            "of the body). --new files a scene born at the table in the\n"
+            "session's chapter (or --chapter) as Scenes/<scene>.md."))
+    pa.add_argument("--scene", required=True,
+                    help="the scene note's name or path; with --new, "
+                         "its title")
+    pa.add_argument("--session", required=True,
+                    help="the session note's name")
+    pa.add_argument("--new", action="store_true",
+                    help="create the scene note")
+    pa.add_argument("--chapter", help="with --new: the chapter (default: "
+                    "the session's)")
+    pa.add_argument("--folder", help="with --new: a sub-folder of the "
+                    "chapter")
+    pa.add_argument("--write", action="store_true")
     sp = sub.add_parser(
-        "scene-played", help="mark a scene played and link its session",
-        description="Sets status to played (or paused) and adds the "
-                    "session to played_in once. No other field changes.")
+        "scene-played", help="mark a scene played, paused or dropped",
+        description="Sets status to played, paused or dropped; played and "
+                    "paused add the session to played_in once. No other "
+                    "field changes.")
     sp.add_argument("--scene", required=True,
                     help="the scene note's name, or its vault-relative "
                          "path when several share the name")
-    sp.add_argument("--session", required=True,
-                    help="the session note's name")
+    sp.add_argument("--session",
+                    help="the session note's name (not with --dropped)")
     sp.add_argument("--paused", action="store_true")
+    sp.add_argument("--dropped", action="store_true",
+                    help="the scene will not be played; no session")
     sp.add_argument("--write", action="store_true")
     pr = sub.add_parser(
         "prop-new", help="file a new prop in its chapter's Props folder",
@@ -3128,6 +3370,7 @@ COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "chapter-new": cmd_chapter_new,
                                 "scene-new": cmd_scene_new,
                                 "scene-played": cmd_scene_played,
+                                "scene-paused": cmd_scene_paused,
                                 "prop-new": cmd_prop_new,
                                 "prop-hand": cmd_prop_hand}
 NO_STDIN = frozenset({"wrapup-new", "session-new", "resolve",
@@ -3159,6 +3402,11 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
     utf8_output()
     ap = build_parser()
     args = ap.parse_args(argv)
+    if args.command == "scene-played":
+        if args.dropped and args.paused:
+            ap.error("--dropped and --paused cannot go together")
+        if not args.dropped and not args.session:
+            ap.error("--session is required unless --dropped")
     if not args.vault.is_dir():
         print(f"vault_write.py: {args.vault} is not a folder",
               file=sys.stderr)
