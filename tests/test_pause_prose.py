@@ -39,7 +39,9 @@ class WrapupPauseTests(unittest.TestCase):
         self.assertIn(cmd, self.text)
         before = self.text[:self.text.index(cmd)]
         para = before[before.rfind("\n\n"):]
-        self.assertRegex(para, r"\bconfirm")
+        self.assertRegex(para, r"confirm\s+with\s+the\s+GM\s+that\s+it"
+                               r"\s+paused")
+        self.assertRegex(para, r"dry\s+run")
 
     def test_new_dropped_and_carry_named(self):
         self.assertIn("--new", self.text)

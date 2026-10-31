@@ -24,9 +24,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
 ```
 
 Use `play_date`/`in_game_date`, never `planned_date`/`actual_date`.
-Account for each Plan-linked scene and each in step 1's `--carry`
-Paused Scenes. One the GM confirms ran to its end (a paused one
-finishing tonight too):
+After Step 1, account for each Plan-linked scene and each in its
+`--carry` Paused Scenes. One the GM confirms ran to its end (a
+paused one finishing tonight too):
 `vw scene-played --scene "<scene>" --session "<session index>" --write`.
 One the notes show stopped part-way (planned, resumed or born at the
 table): confirm with the GM that it paused, then write from the Play
@@ -35,7 +35,7 @@ fill: a fight's initiative order with NPCs and monsters, the round,
 each combatant's condition and position, PC vitals from step 1's
 `flush` summary if any; a social set piece's progress, conversations
 had, clues dropped, where everyone is, what each PC is in the middle
-of; a cliffhanger's who was there. Show the GM the dry run; on
+of; a cliffhanger: who was there. Show the GM the dry run; on
 their yes, place it with
 `vw scene-paused --scene "<scene>" --session "<session index>" --write <<'EOF'`
 … `EOF`; `--new` only for a scene with no note (it files one in the

@@ -15,8 +15,8 @@ files the Plan links included), NPC table, world state, contingencies
 and end objectives; a paused scene's `## Paused` snapshot comes first
 in its text, and paused scenes are listed (in full with no Plan).
 Open the Plan file only for a section the brief drops. With a paused
-scene, your first reply this session opens with where it stopped,
-in the usual 1-5 sentences.
+scene in the Plan (or no Plan), your first reply this session opens
+with where it stopped, in the usual 1-5 sentences.
 
 ## Behavior
 
