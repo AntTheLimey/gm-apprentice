@@ -164,6 +164,33 @@ class ExistingSceneTests(PausedBase):
         self.assertTrue(text.endswith("New.\n<!-- /paused -->\n"), text)
         self.assertIn("**Situation:**", text)
 
+    def test_marker_less_section_above_prep_is_left_and_warned(self):
+        # The reviewer's repro: the GM deletes the end line, then pauses
+        # again. The old section's fallback span runs over Situation and
+        # Starts it, so it must not be replaced.
+        paused(self, "--write", snap="Mara holds the door.")
+        path = self.vault / self.rel
+        text = self.text().replace("<!-- /paused -->\n", "")
+        path.write_bytes(text.encode())
+        code, out = paused(self, "--write", session=S6, snap="Round 3.")
+        self.assertEqual(code, 0, out)
+        after = self.text()
+        self.assertIn("**Situation:**", after)
+        self.assertIn("**Starts it:**", after)
+        self.assertIn("Mara holds the door.", after)
+        self.assertEqual(after.count("## Paused"), 2)
+        first = after.index("## Paused")
+        self.assertTrue(after[first:].startswith(
+            f"## Paused\n\nAfter [[{S6}]].\n\nRound 3.\n<!-- /paused -->\n"),
+            after)
+        self.assertIn(f"WARNING\t{self.rel}\t", out)
+        lines = after.splitlines()
+        old_line = lines.index("## Paused", lines.index("## Paused") + 1) + 1
+        self.assertIn(f"line {old_line}", out)
+        self.assertIn("no end line was left as it is", out)
+        self.assertEqual(vl.split_paused(after.split("\n---\n", 1)[1])[0],
+                         f"After [[{S6}]].\n\nRound 3.")
+
     def test_open_fence_in_snapshot_is_closed_with_a_warning(self):
         code, out = paused(self, "--write", snap="Look:\n```\nunclosed")
         self.assertEqual(code, 0, out)

@@ -245,18 +245,26 @@ class ScenePlayedTests(unittest.TestCase):
         self.assertEqual(fm["played_in"], ["[[Session 05 - The Docks]]"])
 
     def test_dropped(self):
-        self.played("--write")
         code, out = run(self.vault, "scene-played", "--scene", "The Docks",
                         "--dropped", "--write")
         self.assertEqual(code, 0, out)
         fm = self.fm()
         self.assertEqual(fm["status"], "dropped")
-        self.assertEqual(fm["played_in"], ["[[Session 05 - The Docks]]"])
+        self.assertFalse(fm.get("played_in"))
         before = snapshot(self.vault)
         code, out = run(self.vault, "scene-played", "--scene", "The Docks",
                         "--dropped", "--write")
         self.assertEqual(code, 0, out)
         self.assertIn(f"SKIP\t{self.rel}", out)
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_dropped_refused_on_a_played_scene(self):
+        self.played("--write")
+        before = snapshot(self.vault)
+        code, out = run(self.vault, "scene-played", "--scene", "The Docks",
+                        "--dropped", "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("already played", out)
         self.assertEqual(snapshot(self.vault), before)
 
     def test_paused_flag_is_unknown(self):

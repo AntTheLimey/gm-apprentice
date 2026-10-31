@@ -2722,6 +2722,9 @@ def cmd_scene_played(batch: Batch, args: argparse.Namespace,
         if same:
             batch.row("SKIP", rel, "", "already dropped")
             return
+        if str(have.get("status") or "").strip() == "played":
+            raise WriteError(f"{rel}: already played; --dropped is for a "
+                             f"scene that was not finished")
         set_block(fm, "status", "dropped")
         batch.put(rel, "---" + eol + eol.join(fm) + eol + "---" + eol
                   + "".join(lines[end + 1:]))
@@ -2860,6 +2863,14 @@ def cmd_scene_paused(batch: Batch, args: argparse.Namespace,
                *text_lines]
     old_session = None
     span = vl.paused_span(body)
+    left = None
+    if span and not created:
+        s0, e0 = span
+        if not vl.PAUSED_END_RE.match(body[e0 - 1].rstrip("\r\n")) \
+                and any(ln.strip() for ln in body[e0:]):
+            # No end line and text below: the guessed span may hold the
+            # GM's prep, so leave that section alone.
+            left, span = s0, None
     if created:
         new_body = [eol, *section]
     elif span:
@@ -2881,6 +2892,13 @@ def cmd_scene_paused(batch: Batch, args: argparse.Namespace,
         while before and not before[-1].strip():
             before = before[:-1]
         new_body = [*before, eol, *section, *([eol] if rest else []), *rest]
+        if left is not None:
+            at_new = left if left < at else \
+                left + len(new_body) - len(body)
+            batch.row("WARNING", rel, "", f"line {len(fm) + 3 + at_new}: "
+                      f"an older ## Paused section with no end line was "
+                      f"left as it is; delete it by hand once the new one "
+                      f"is right")
     if created:
         new = head + "".join(new_body)
         batch.create(rel, new)
