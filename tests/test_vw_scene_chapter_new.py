@@ -244,9 +244,65 @@ class ScenePlayedTests(unittest.TestCase):
         self.assertEqual(fm["status"], "played")
         self.assertEqual(fm["played_in"], ["[[Session 05 - The Docks]]"])
 
-    def test_paused(self):
-        self.played("--paused", "--write")
-        self.assertEqual(self.fm()["status"], "paused")
+    def test_dropped(self):
+        code, out = run(self.vault, "scene-played", "--scene", "The Docks",
+                        "--dropped", "--write")
+        self.assertEqual(code, 0, out)
+        fm = self.fm()
+        self.assertEqual(fm["status"], "dropped")
+        self.assertFalse(fm.get("played_in"))
+        before = snapshot(self.vault)
+        code, out = run(self.vault, "scene-played", "--scene", "The Docks",
+                        "--dropped", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"SKIP\t{self.rel}", out)
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_dropped_refused_on_a_played_scene(self):
+        self.played("--write")
+        before = snapshot(self.vault)
+        code, out = run(self.vault, "scene-played", "--scene", "The Docks",
+                        "--dropped", "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("already played", out)
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_paused_flag_is_unknown(self):
+        before = snapshot(self.vault)
+        err = io.StringIO()
+        with mock.patch("sys.stderr", err), \
+                self.assertRaises(SystemExit) as cm:
+            vw.main([str(self.vault), "scene-played", "--scene",
+                     "The Docks", "--session", "Session 05 - The Docks",
+                     "--paused", "--write"])
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("unrecognized arguments: --paused", err.getvalue())
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_dropped_with_session_refused(self):
+        before = snapshot(self.vault)
+        err = io.StringIO()
+        with mock.patch("sys.stderr", err), \
+                self.assertRaises(SystemExit) as cm:
+            vw.main([str(self.vault), "scene-played", "--scene",
+                     "The Docks", "--session", "Session 05 - The Docks",
+                     "--dropped", "--write"])
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("--session does not go with --dropped",
+                      err.getvalue())
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_session_required_without_dropped(self):
+        before = snapshot(self.vault)
+        err = io.StringIO()
+        with mock.patch("sys.stderr", err), \
+                self.assertRaises(SystemExit) as cm:
+            vw.main([str(self.vault), "scene-played", "--scene",
+                     "The Docks", "--write"])
+        self.assertEqual(cm.exception.code, 2)
+        self.assertIn("--session is required unless --dropped",
+                      err.getvalue())
+        self.assertEqual(snapshot(self.vault), before)
 
     def test_unknown_scene_or_session_writes_nothing(self):
         before = snapshot(self.vault)

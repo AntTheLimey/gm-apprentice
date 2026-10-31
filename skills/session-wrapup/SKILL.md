@@ -24,9 +24,26 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
 ```
 
 Use `play_date`/`in_game_date`, never `planned_date`/`actual_date`.
-For each Plan-linked scene the GM confirms ran: `vw scene-played
---scene "<scene>" --session "<session index>" --write` (`--paused` if
-it stopped mid-way). Unplayed ones go under Skipped Prep.
+After Step 1, account for each Plan-linked scene and each in its
+`--carry` Paused Scenes. One the GM confirms ran to its end (a
+paused one finishing tonight too):
+`vw scene-played --scene "<scene>" --session "<session index>" --write`.
+One the notes show stopped part-way (planned, resumed or born at the
+table): confirm with the GM that it paused, then write from the Play
+Notes what the GM needs to pick it up cold. Examples, not a list to
+fill: a fight's initiative order with NPCs and monsters, the round,
+each combatant's condition and position, PC vitals from step 1's
+`flush` summary if any; a social set piece's progress, conversations
+had, clues dropped, where everyone is, what each PC is in the middle
+of; a cliffhanger: who was there. Show the GM the snapshot text
+and the dry run (the command without `--write`); on their yes,
+place it with
+`vw scene-paused --scene "<scene>" --session "<session index>" --write <<'EOF'`
+… `EOF`; `--new` only for a scene with no note (it files one in the
+session's chapter). Others born at the table that finished get no
+file. One the GM says won't be finished:
+`vw scene-played --scene "<scene>" --dropped --write`. Unplayed ones
+go under Skipped Prep.
 Leave the index body alone: handoffs and notes for next session go in
 this Wrap-Up's GM Notes.
 
@@ -292,7 +309,8 @@ on "could not ask the publish tool", tell the GM the reason and skip.
 From the Play Notes, the Wrap-Up and the recap, propose one list of
 what came out: people, places and things met or learned of; secrets
 now known, by page, from the scan's hidden parts; clues found; props
-handed over or shown; places visited. Never propose from the Plan.
+handed over or shown; places visited. Never propose from the Plan or
+a scene note (a paused scene's unplayed part stays hidden).
 The GM picks all, some or none; nothing changes until they confirm.
 Then rewrite any Narrative Recap, Campaign Log or Timeline line this
 run wrote that states what they kept hidden, so it says only what came

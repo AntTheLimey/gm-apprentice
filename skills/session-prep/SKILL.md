@@ -242,8 +242,11 @@ alongside new ideas. The propose-before-write gate is the
    `entities`/`locations` links. In the Plan it, or a queued scene, is
    `### [[<title>]]` and a line each: purpose, who, how it starts;
    prep it needs (paused: where it picks up, what may come next) is
-   an edit to its note, for the GM's yes. A small beat may stay inline
-   in the skeleton from `references/session-templates.md`: **Situation** and **Starts it**
+   an edit to its note, for the GM's yes. Read a paused scene's
+   snapshot in the bundle's Paused Scenes, not the note; it is
+   wrap-up's, kept as written. One the GM drops:
+   `vault_write.py <vault> scene-played --scene "<scene>" --dropped --write`.
+   A small beat may stay inline in the skeleton from `references/session-templates.md`: **Situation** and **Starts it**
    are required; every other label is optional, and a two-line routing
    scene is finished.
 

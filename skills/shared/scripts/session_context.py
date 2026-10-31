@@ -70,7 +70,15 @@ output; nothing is worked out twice.
 `--carry` is session-wrapup's: from the Wrap-Up before session INDEX
 (chapter, then session order; the latest without --before) it prints
 only the Handoff, Unresolved Threads, Player-Stated Intentions,
-Pending Consequences and open Keeper Checklist items.
+Pending Consequences and open Keeper Checklist items, then a
+`Paused Scenes` block naming each paused scene and the session it
+paused after.
+
+`--prep` also prints a `Paused Scenes` block after the scene queue: each
+paused scene with its snapshot (the `## Paused` section, which ends at
+its `<!-- /paused -->` line). `--play` names the paused scenes the Plan
+does not point at, one line each; with no Plan it prints the same block
+`--prep` does. Nothing is printed when no scene is paused.
 """
 
 from __future__ import annotations
@@ -82,7 +90,9 @@ import sys
 from collections.abc import Callable
 from difflib import SequenceMatcher
 from pathlib import Path
+from typing import NamedTuple
 
+import scene_queue
 from schema_rules import (SESSION_PLAYED, chapter_key, chapter_of,
                           extract_frontmatter, parse_session_number,
                           wikilink_target)
@@ -92,7 +102,7 @@ from vaultlib import (GM_MARKER_RE, is_out_of_play, out_of_play,  # noqa: F401
                       fenced_headings, h3_blocks, nested_mapping,
                       normalize, raw_frontmatter, section,
                       session_ref_number, word_count)
-from vaultlib import link_name
+from vaultlib import link_name, split_paused
 from vaultlib import vault_files as _vault_files
 
 
@@ -392,15 +402,91 @@ def _scene_note_text(files, name: str, chapter: str | None = None) -> str:
                 + ", ".join(f[0] for f in hits)
                 + "; write the pointer as the path of the one meant)")
     _rel, text, _fm = hits[0]
-    body = "\n".join(line for line in body_of(text).splitlines()
-                     if not GM_MARKER_RE.fullmatch(line.strip()))
-    body = re.sub(r"\n{3,}", "\n\n", body).strip()
-    paused = section(body, "Paused")
+
+    def strip_markers(part: str) -> str:
+        part = "\n".join(line for line in part.splitlines()
+                         if not GM_MARKER_RE.fullmatch(line.strip()))
+        return re.sub(r"\n{3,}", "\n\n", part).strip()
+
+    # Split on the raw body so the span is the one prep and the writer
+    # see; only then drop the marker lines.
+    paused, rest = split_paused(body_of(text))
+    body = strip_markers(rest)
     if paused:
-        body = re.sub(r"(?ms)^## Paused[ \t]*\n.*?(?=^## |\Z)", "",
-                      body).strip()
-        body = f"## Paused\n{paused.strip()}\n\n{body}".strip()
+        body = f"## Paused\n{strip_markers(paused)}\n\n{body}".strip()
     return body or f"(scene note {name} is empty)"
+
+
+def plan_pointers(plan_text: str) -> set[str]:
+    """The scene notes a Plan points at (`### [[Note]]` under Planned and
+    Contingency Scenes): a bare `[[Note]]` by `normalize(stem)`, one
+    written as a path by its `normalize`d vault-relative path without
+    `.md` (it has a `/`, so the two kinds never collide)."""
+    out: set[str] = set()
+    for title in ("Planned Scenes", "Contingency Scenes"):
+        body = section(plan_text, title)
+        for heading, _b in (h3_blocks(body) if body is not None else []):
+            target = _pointer_target(heading)
+            if target:
+                target = target.removesuffix(".md")
+                out.add(normalize(target if "/" in target
+                                  else Path(target).stem))
+    return out
+
+
+def is_pointed_at(rel: str, pointed: set[str]) -> bool:
+    """Whether a Plan pointer in `pointed` (see `plan_pointers`) names
+    the scene note at `rel`."""
+    return (normalize(rel.removesuffix(".md")) in pointed
+            or normalize(Path(rel).stem) in pointed)
+
+
+class Paused(NamedTuple):
+    rel: str
+    title: str
+    after: str | None
+    snapshot: str | None
+
+
+def paused_scenes(vault: Path, files) -> list[Paused]:
+    """The paused scenes, in the scene queue's order (which owns what
+    `paused` means and where such a scene may sit). `after` is the last
+    session in the note's `played_in`; `snapshot` its `## Paused`
+    section as `split_paused` ends it, None when the note has none."""
+    by_rel = {rel: (text, fm) for rel, text, fm in files}
+    rows = []
+    for row in scene_queue.queue(vault):
+        if row.status != "paused":
+            continue
+        text, fm = by_rel.get(row.rel, ("", {}))
+        played = fm.get("played_in") or []
+        if not isinstance(played, list):
+            played = [played]
+        after = link_name(wikilink_target(played[-1])) if played else None
+        snapshot, _rest = split_paused(body_of(text))
+        rows.append(Paused(row.rel, row.title, after, snapshot or None))
+    return rows
+
+
+def _paused_head(p: Paused) -> str:
+    return (f"[[{p.title}]] (paused after [[{p.after}]])" if p.after
+            else f"[[{p.title}]] (paused)")
+
+
+def paused_line_block(paused: list[Paused], title: str) -> str:
+    """One line per paused scene under `title`; empty when none."""
+    if not paused:
+        return ""
+    return f"{title}\n" + "\n".join(_paused_head(p) for p in paused)
+
+
+def paused_snapshot_block(paused: list[Paused], title: str) -> str:
+    """Each paused scene with its snapshot in full; empty when none."""
+    if not paused:
+        return ""
+    return f"{title}\n" + "\n\n".join(
+        f"### {_paused_head(p)}\n{p.snapshot or '(no snapshot written)'}"
+        for p in paused)
 
 
 def play_brief(files, plan_rel: str, plan_text: str) -> str:
@@ -1118,6 +1204,10 @@ def print_prep_rest(vault: Path, files, chosen, wrap, current: int,
     label = (chosen or {}).get("chapter_label")
     where = ("--chapter", label) if label else ()
     print(run_script("scene_queue.py", vault, *where, title="Scene Queue"))
+    block = paused_snapshot_block(paused_scenes(vault, files),
+                                  "===== Paused Scenes =====")
+    if block:
+        print(f"\n{block}")
     names = wrapup_names(files, wrap[1]) if wrap else []
     print(run_script("plans_index.py", vault, *where,
                      *(("--against", *names) if names else ()),
@@ -1210,12 +1300,17 @@ def main() -> int:
 
     # session-wrapup reads the carry on any vault, a player's included.
     if args.carry:
-        error, report = carry_report(list(vault_files(args.vault)),
-                                     args.before)
+        files = list(vault_files(args.vault))
+        error, report = carry_report(files, args.before)
         if error:
             print(f"error: {error}", file=sys.stderr)
             return 2
         print(report)
+        block = paused_line_block(
+            paused_scenes(args.vault, files),
+            "===== Paused Scenes =====")
+        if block:
+            print(f"\n{block}")
         return 0
 
     # Session prep is the GM's job; a vault kept by a player has none.
@@ -1254,8 +1349,17 @@ def main() -> int:
         plan = _find_plan(files, chapter, target)
         if plan is None:
             print(f"(no plan for session {target})")
+            block = paused_snapshot_block(
+                paused_scenes(args.vault, files), "## Paused Scenes")
         else:
             print(play_brief(files, plan[0], plan[1]))
+            pointed = plan_pointers(plan[1])
+            block = paused_line_block(
+                [p for p in paused_scenes(args.vault, files)
+                 if not is_pointed_at(p.rel, pointed)],
+                "## Paused, not in this Plan")
+        if block:
+            print(f"\n{block}")
         return 0
 
     chosen, warnings = select_session(files, args.session)

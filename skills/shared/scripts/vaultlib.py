@@ -814,6 +814,76 @@ def fence_step(line: str, fence_delim: str | None) -> tuple[str | None, bool]:
     return fence_delim, False
 
 
+PAUSED_END = "<!-- /paused -->"
+_PAUSED_HEADING_RE = re.compile(r"^##[ \t]+Paused[ \t]*$")
+PAUSED_END_RE = re.compile(r"^[ \t]*<!--[ \t]*/paused[ \t]*-->[ \t]*$")
+
+
+def _paused_end_line(lines: list[str], first: int) -> int | None:
+    """Index of the `<!-- /paused -->` line outside code fences between
+    `first` and the next `## ` heading, or None."""
+    fence: str | None = None
+    for j in range(first, len(lines)):
+        bare = lines[j].rstrip("\r\n")
+        fence, is_fence = fence_step(bare, fence)
+        if is_fence or fence is not None:
+            continue
+        if PAUSED_END_RE.match(bare):
+            return j
+        if bare.startswith("## "):
+            return None
+    return None
+
+
+def paused_span(lines: list[str]) -> tuple[int, int] | None:
+    """(first, end) line indexes of a note body's `## Paused` section,
+    end exclusive, or None. The one place that says where the section
+    stops, for the writer and the readers: a heading outside code fences
+    starts it; it ends after its `<!-- /paused -->` line, found outside
+    code fences before the next `## ` heading, whatever gm-only or
+    spoiler markers sit inside. A section without one (older notes) ends
+    after its last non-blank line before the next `## ` heading, gm-only
+    or spoiler marker, or the end."""
+    fence: str | None = None
+    start: int | None = None
+    last = 0
+    for i, line in enumerate(lines):
+        bare = line.rstrip("\r\n")
+        fence, is_fence = fence_step(bare, fence)
+        if is_fence or fence is not None:
+            if start is not None:
+                last = i + 1
+            continue
+        if start is None:
+            if _PAUSED_HEADING_RE.match(bare):
+                start, last = i, i + 1
+                end = _paused_end_line(lines, i + 1)
+                if end is not None:
+                    return start, end + 1
+            continue
+        if bare.startswith("## ") or markers_in(bare):
+            break
+        if bare.strip():
+            last = i + 1
+    if start is None:
+        return None
+    return start, last
+
+
+def split_paused(text: str) -> tuple[str | None, str]:
+    """(the `## Paused` section's content, without heading and end
+    marker, stripped; the text without the section)."""
+    lines = text.splitlines(keepends=True)
+    span = paused_span(lines)
+    if span is None:
+        return None, text
+    s, e = span
+    inner = lines[s + 1:e]
+    if inner and PAUSED_END_RE.match(inner[-1].rstrip("\r\n")):
+        inner = inner[:-1]
+    return "".join(inner).strip(), "".join(lines[:s] + lines[e:])
+
+
 def fenced_headings(text: str) -> list[tuple[int, int, str]]:
     """(0-based line index, level, title) for every heading outside a
     code fence. Shared walk behind `sections` and `h3_blocks` — both need

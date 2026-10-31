@@ -260,6 +260,8 @@ tags: []
 ---
 ```
 
+`## Paused` in a scene's body is the snapshot wrap-up writes (`vault_write.py scene-paused`), latest only; prep and play read it.
+
 ## Type-Specific Fields
 
 Mirrored into each vault's `_meta/entity-types.md`; migrations diff

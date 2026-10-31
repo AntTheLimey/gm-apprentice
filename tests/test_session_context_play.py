@@ -204,6 +204,122 @@ class PointerBlockBriefTests(unittest.TestCase):
                       self.brief)
 
 
+class TopPausedSectionBriefTests(unittest.TestCase):
+    """A section written by scene-paused at the top ends at its marker:
+    the brief prints only the snapshot under Paused and leaves the prep
+    where it was."""
+
+    PLAN = PointerBlockBriefTests.PLAN
+    SCENE = ("---\ntype: scene\nstatus: paused\n---\n\n"
+             "<!-- prompt -->\n\n## Paused\n\nAfter [[S5]].\n\n"
+             "They left at the soup course.\n<!-- /paused -->\n\n"
+             "**Situation:** The table is laid for eleven.\n\n"
+             "<!-- gm-only -->\n\n## GM Notes\n\nPoisoned.\n\n"
+             "<!-- /gm-only -->\n")
+
+    def test_only_the_snapshot_is_under_paused(self):
+        files = [("Chapters/C/Scenes/Ashworth Dinner.md", self.SCENE,
+                  sc.extract_frontmatter(self.SCENE) or {})]
+        brief = sc.play_brief(files, "P.md", self.PLAN)
+        self.assertIn("## Paused\nAfter [[S5]].\n\nThey left at the soup "
+                      "course.\n\n", brief)
+        self.assertNotIn("/paused", brief)
+        snap = brief.index("They left at the soup course.")
+        sit = brief.index("**Situation:** The table is laid")
+        self.assertLess(snap, sit)
+        self.assertEqual(brief.count("**Situation:** The table"), 1)
+        self.assertIn("<!-- prompt -->\n\n**Situation:**", brief)
+        self.assertIn("## GM Notes\n\nPoisoned.", brief)
+
+
+class PausedScenesPlayTests(unittest.TestCase):
+    """Paused scenes in `--play`: all of them when there is no Plan, the
+    ones the Plan leaves out as a line each."""
+
+    CH = "Chapters/Chapter 1 - Harbour"
+    SCENE = ("---\ntype: scene\nstatus: paused\nplayed_in:\n"
+             "  - \"[[Session 05 - Beneath the Mill]]\"\n---\n\n"
+             "## Paused\n\nAfter [[Session 05 - Beneath the Mill]].\n\n"
+             "Stopped at the fork in the tunnel.\n<!-- /paused -->\n")
+    INDEX = ("---\ntype: session\nsession_number: 6\n"
+             "chapter: \"[[Chapter 1 - Harbour]]\"\n---\n\n# S6\n")
+
+    def vault(self, plan=None, scene=None):
+        root = Path(tempfile.mkdtemp(prefix="sc-play-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        files = {f"{self.CH}/Chapter 1 - Harbour.md": "---\ntype: chapter\n---\n",
+                 f"{self.CH}/Sessions/Session 05.md": self.INDEX.replace(
+                     "session_number: 6", "session_number: 5")}
+        if scene is not False:
+            files[f"{self.CH}/Scenes/Down the Mill Cellar.md"] = (
+                scene or self.SCENE)
+        if plan:
+            files[f"{self.CH}/Sessions/Session 06 Plan.md"] = plan
+        for rel, text in files.items():
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        return root
+
+    def plan(self, scenes):
+        return ("---\ntype: session-plan\nsession: 6\n"
+                "chapter: \"[[Chapter 1 - Harbour]]\"\n---\n\n"
+                "## Session Intent\n\nA dive.\n\n## Planned Scenes\n\n"
+                + scenes)
+
+    def test_no_plan_prints_snapshots(self):
+        out = run_cli(self.vault(), "--play").stdout
+        self.assertIn("(no plan for session 6)\n", out)
+        block = out.split("(no plan for session 6)", 1)[1]
+        self.assertIn("## Paused Scenes\n### [[Down the Mill Cellar]] "
+                      "(paused after [[Session 05 - Beneath the Mill]])\n"
+                      "After [[Session 05 - Beneath the Mill]].\n\n"
+                      "Stopped at the fork in the tunnel.", block)
+        self.assertNotIn("/paused", block)
+
+    def test_plan_pointing_at_paused_scene_prints_no_extra(self):
+        out = run_cli(self.vault(self.plan(
+            "### [[Down the Mill Cellar]]\n")), "--play").stdout
+        self.assertEqual(out.count("Stopped at the fork"), 1)
+        self.assertIn("## Paused\nAfter [[Session 05", out)
+        self.assertNotIn("not in this Plan", out)
+
+    def test_plan_without_paused_scene_names_it(self):
+        out = run_cli(self.vault(self.plan(
+            "### Scene 1: The Docks\n**Situation:** Rain.\n")),
+            "--play").stdout
+        self.assertIn("## Paused, not in this Plan\n[[Down the Mill Cellar]]"
+                      " (paused after [[Session 05 - Beneath the Mill]])",
+                      out)
+        self.assertNotIn("fork in the tunnel", out)
+
+    def twin_vault(self, pointer):
+        root = self.vault(self.plan(f"### [[{pointer}]]\n"), scene=False)
+        for ch in ("Chapter 1 - Harbour", "Chapter 2 - Other"):
+            path = root / "Chapters" / ch / "Scenes" / "The Fork.md"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(self.SCENE, encoding="utf-8")
+        return root
+
+    def test_path_pointer_does_not_hide_a_twin_stem(self):
+        for pointer in ("Chapters/Chapter 1 - Harbour/Scenes/The Fork",
+                        "Chapters/Chapter 1 - Harbour/Scenes/The Fork.md"):
+            out = run_cli(self.twin_vault(pointer), "--play").stdout
+            tail = out.split("## Paused, not in this Plan", 1)
+            self.assertEqual(len(tail), 2, out)
+            self.assertIn("[[The Fork]]", tail[1])
+            self.assertEqual(tail[1].count("[[The Fork]]"), 1, tail[1])
+
+    def test_bare_pointer_still_matches_by_stem(self):
+        out = run_cli(self.twin_vault("The Fork"), "--play").stdout
+        self.assertNotIn("not in this Plan", out)
+
+    def test_no_paused_prints_nothing(self):
+        for plan in (None, self.plan("### Scene 1: The Docks\n")):
+            out = run_cli(self.vault(plan, scene=False), "--play").stdout
+            self.assertNotIn("Paused", out)
+
+
 class PointerChoiceTests(unittest.TestCase):
     """Two scene notes share a name: the one in the Plan's own chapter is
     used; when that still leaves several, the brief says so."""
