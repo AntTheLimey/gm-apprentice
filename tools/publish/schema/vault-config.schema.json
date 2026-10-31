@@ -741,7 +741,42 @@
               ]
             },
             "page_banner": {
-              "description": "A picture at the top of every note's page that names none of its own in a `banner:` field. A note's `banner:` names a picture in the attachments folder for its own page, and `banner: false` leaves that page without one. Section lists keep their own banners. A file that is missing from the vault is reported and the pages show no banner"
+              "description": "A picture at the top of every note's page that names none of its own in a `banner:` field. It is a path in the vault, or a `[[link]]` to a picture there or in the attachments folder; `image`, `link` and `alt` work as a section banner's do. A note's `banner:` names a picture in the attachments folder for its own page, and `banner: false` leaves that page without one. Section lists keep their own banners. A file that is missing from the vault is reported and the pages show no banner",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "const": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "image": {
+                      "type": "string"
+                    },
+                    "link": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "alt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "image"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "default_mode": {
               "description": "Whether a reader starts in light or dark",
@@ -1966,7 +2001,42 @@
               ]
             },
             "page_banner": {
-              "description": "A picture at the top of every note's page that names none of its own in a `banner:` field. A note's `banner:` names a picture in the attachments folder for its own page, and `banner: false` leaves that page without one. Section lists keep their own banners. A file that is missing from the vault is reported and the pages show no banner"
+              "description": "A picture at the top of every note's page that names none of its own in a `banner:` field. It is a path in the vault, or a `[[link]]` to a picture there or in the attachments folder; `image`, `link` and `alt` work as a section banner's do. A note's `banner:` names a picture in the attachments folder for its own page, and `banner: false` leaves that page without one. Section lists keep their own banners. A file that is missing from the vault is reported and the pages show no banner",
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "const": false
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "image": {
+                      "type": "string"
+                    },
+                    "link": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "alt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "image"
+                  ],
+                  "additionalProperties": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "default_mode": {
               "description": "Whether a reader starts in light or dark",

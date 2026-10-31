@@ -96,6 +96,11 @@ const SCHEMAS = {
     const twice = (pair) => `(?!(?:.*\\b(?:${pair.map(caseless).join('|')})\\b){2})`;
     return { anyOf: [{ type: 'string', pattern: `^${twice(['left', 'right'])}${twice(['top', 'bottom'])}\\s*${part}(?:\\s+${part}){0,3}\\s*$` }, { const: 0 }] };
   },
+  picture: () => ({ anyOf: [
+    { type: 'string' },
+    { const: false },
+    { type: 'object', properties: { image: { type: 'string' }, link: { type: ['string', 'null'] }, alt: { type: ['string', 'null'] } }, required: ['image'], additionalProperties: false },
+  ] }),
   any: () => ({}),
 };
 

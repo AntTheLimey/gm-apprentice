@@ -11,18 +11,19 @@ function isSvg(p) {
 }
 
 /**
- * A banner is either a bare path or a { image, link, alt } object.
+ * A banner is either a bare path or a { image, link, alt } object. A path may be written as a wikilink or an embed
+ * (`[[Harbour.png]]`), which is read as the path inside it.
  * Anything else (a number, an object with no image) resolves to no banner.
  */
 function normalizeEntry(raw) {
   if (!raw) return null;
   if (typeof raw === 'string') {
-    return raw.trim() ? { image: raw.trim(), link: null, alt: null } : null;
+    return linkTarget(raw) ? { image: linkTarget(raw), link: null, alt: null } : null;
   }
-  if (typeof raw === 'object' && raw.image) {
+  if (typeof raw === 'object' && raw.image && linkTarget(raw.image)) {
     return {
-      image: String(raw.image).trim(),
-      link: raw.link ? String(raw.link).trim() : null,
+      image: linkTarget(raw.image),
+      link: raw.link ? linkTarget(raw.link) : null,
       alt: raw.alt ? String(raw.alt) : null,
     };
   }
@@ -109,22 +110,34 @@ function renderBanner({ svg, imageHref, linkHref, alt }, { page = false } = {}) 
   return `<figure class="section-banner${more}">${inner}</figure>`;
 }
 
-/**
- * The attachment a note's `banner:` names, as the attachments are keyed: its file name. Takes what a GM writes for a
- * picture: a path (`_attachments/maps/Harbour.png`), a bare name, a wikilink (`[[Harbour.png]]`) or an embed
- * (`![[Harbour.png|600]]`). null when there is no name in it.
- */
-function attachmentName(raw) {
-  let text = String(raw == null ? '' : raw).trim();
+// The inside of a wikilink or embed (`[[Harbour.png]]`, `![[maps/Harbour.png|600]]`, `[[x.png#y]]`): its path. Any
+// other text is returned trimmed. A banner may be written either way, in a note or in a setting.
+function linkTarget(raw) {
+  const text = String(raw == null ? '' : raw).trim();
   const link = /^!?\[\[([^\]]*)\]\]$/.exec(text);
-  if (link) text = link[1].split('|')[0].split('#')[0].trim();
-  const name = text.split('/').pop().trim();
-  return name || null;
+  return link ? link[1].split('|')[0].split('#')[0].trim() : text;
 }
+
+/**
+ * The attachment a note's `banner:` names: { name, path }. `name` is its file name, which the attachments are keyed
+ * by; `path` is the folder path as written, without a leading `./` (null for a bare name), which must lead to that
+ * attachment. Takes what a GM writes for a picture: a path (`_attachments/maps/Harbour.png`), a bare name, a wikilink
+ * (`[[Harbour.png]]`) or an embed (`![[Harbour.png|600]]`). null when there is no name in it.
+ */
+function attachmentRef(raw) {
+  const text = linkTarget(raw).replace(/^(?:\.\/)+/, '');
+  const name = text.split('/').pop().trim();
+  if (!name) return null;
+  return { name, path: text.includes('/') ? text : null };
+}
+
+// A web address (`https://…`, `//host/…`) or any other address with a scheme (`data:`, `file:`): never a file in the
+// vault.
+const isAddress = (raw) => /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(linkTarget(raw));
 
 module.exports = {
   bannerSlug,
   copiedBannerFiles,
   resolveBanner, renderBanner, normalizeEntry, sourceFolderFor,
-  findConventionBanner, defaultAlt, isSvg, attachmentName, BANNER_EXTS,
+  findConventionBanner, defaultAlt, isSvg, attachmentRef, linkTarget, isAddress, BANNER_EXTS,
 };

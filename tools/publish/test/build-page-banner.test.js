@@ -10,7 +10,7 @@ const { build } = require('../lib/build');
 const { writeNewConfig } = require('./helpers/settings-files');
 const { makePng } = require('./helpers/make-png');
 const { detectEncoder } = require('../lib/image-optimize');
-const { attachmentName, renderBanner } = require('../lib/banners');
+const { attachmentRef, isAddress, renderBanner } = require('../lib/banners');
 
 const encodes = detectEncoder() !== null;
 const roots = [];
@@ -193,15 +193,107 @@ test('optimising: the note banner and the default are the encoded files, and nev
   assert.equal(s.exists('images/Harbour.png'), false);
 });
 
-test('attachmentName reads every form a GM writes for a picture', () => {
-  assert.equal(attachmentName('_attachments/maps/Harbour.png'), 'Harbour.png');
-  assert.equal(attachmentName('[[Harbour.png]]'), 'Harbour.png');
-  assert.equal(attachmentName('![[maps/Harbour.png|600]]'), 'Harbour.png');
-  assert.equal(attachmentName(' '), null);
-  assert.equal(attachmentName('[[]]'), null);
+test('attachmentRef reads every form a GM writes for a picture, and isAddress knows a web address', () => {
+  assert.deepEqual(attachmentRef('_attachments/maps/Harbour.png'), { name: 'Harbour.png', path: '_attachments/maps/Harbour.png' });
+  assert.deepEqual(attachmentRef('[[Harbour.png]]'), { name: 'Harbour.png', path: null });
+  assert.deepEqual(attachmentRef('![[maps/Harbour.png|600]]'), { name: 'Harbour.png', path: 'maps/Harbour.png' });
+  assert.deepEqual(attachmentRef('./Harbour.png'), { name: 'Harbour.png', path: null });
+  assert.equal(attachmentRef(' '), null);
+  assert.equal(attachmentRef('[[]]'), null);
+  for (const a of ['https://x.example/a.png', '//cdn.example/a.png', 'data:image/png;base64,AA']) assert.equal(isAddress(a), true, a);
+  for (const a of ['Harbour.png', 'maps/Harbour.png', '[[Harbour.png]]']) assert.equal(isAddress(a), false, a);
 });
 
 test('renderBanner marks a page banner, and a section banner is as it was', () => {
   assert.equal(renderBanner({ imageHref: 'a.png', alt: 'A' }), '<figure class="section-banner"><img src="a.png" alt="A" class="section-banner-img"></figure>');
   assert.equal(renderBanner({ imageHref: 'a.png', alt: 'A' }, { page: true }), '<figure class="section-banner page-banner"><img src="a.png" alt="A" class="section-banner-img"></figure>');
+});
+
+// ---- Review fixes -----------------------------------------------------------------------------
+
+test('a banner path is matched by its folder too: a same-named attachment elsewhere is never shown', () => {
+  const s = site({
+    notes: {
+      'NPCs/Mara.md': npc('banner: _attachments/maps/Harbour.png\n'),
+      'NPCs/Ned.md': npc('banner: maps/Harbour.png\n'),
+      'NPCs/Ora.md': npc('banner: Art/Harbour.png\n'),
+      'NPCs/Pip.md': npc('banner: "[[maps/Harbour.png]]"\n'),
+      'NPCs/Quin.md': npc('banner: _attachments/other/Harbour.png\n'),
+    },
+    pictures: ['_attachments/maps/Harbour.png', 'Art/Harbour.png'],
+  });
+  for (const page of ['mara', 'ned', 'pip']) assert.match(banner(s.read(`npcs/${page}.html`)), /src="\.\.\/images\/maps\/Harbour\.png"/, page);
+  for (const page of ['ora', 'quin']) {
+    assert.equal(banner(s.read(`npcs/${page}.html`)), null, page);
+    assert.ok(s.warnings.some((w) => w.includes(`npcs/${page}.html: banner`) && w.includes('is not a picture in the attachments folder')), page);
+  }
+});
+
+test('a web address is not an attachment: a warning, and no same-named attachment is looked up', () => {
+  const s = site({ notes: { 'NPCs/Mara.md': npc('banner: https://example.com/pics/Harbour.png\n') }, pictures: ['_attachments/Harbour.png'] });
+  assert.equal(banner(s.read('npcs/mara.html')), null);
+  assert.equal(s.exists('images/Harbour.png'), false);
+  assert.ok(s.warnings.some((w) => /npcs\/mara\.html: banner "https:\/\/example\.com\/pics\/Harbour\.png" is a web address/.test(w)), s.warnings.join('\n'));
+});
+
+test('a one-item list (how Obsidian writes a list-typed property) is taken as its item; a longer list warns', () => {
+  const s = site({
+    notes: {
+      'NPCs/Mara.md': npc('banner:\n  - "[[Harbour.png]]"\n'),
+      'NPCs/Ned.md': npc('banner:\n  - Harbour.png\n'),
+      'NPCs/Ora.md': npc('banner:\n  - Harbour.png\n  - Harbour.png\n'),
+    },
+    pictures: ['_attachments/Harbour.png'],
+  });
+  for (const page of ['mara', 'ned']) assert.match(banner(s.read(`npcs/${page}.html`)), /src="\.\.\/images\/Harbour\.png"/, page);
+  assert.equal(banner(s.read('npcs/ora.html')), null);
+  assert.ok(s.warnings.some((w) => w.includes('npcs/ora.html: banner')));
+});
+
+test('the site default takes a wikilink: a vault path, or an attachment by its name', () => {
+  for (const [value, picture, src] of [
+    ['"[[Default.png]]"', '_attachments/Default.png', 'banners/page/Default.png'],
+    ['"[[Art/Default.png]]"', 'Art/Default.png', 'banners/page/Default.png'],
+    ['"![[Art/Default.png|600]]"', 'Art/Default.png', 'banners/page/Default.png'],
+  ]) {
+    const s = site({ notes: { 'NPCs/Mara.md': npc() }, pictures: [picture], player: { theme: { page_banner: JSON.parse(value) } } });
+    assert.match(banner(s.read('npcs/mara.html')) || '', new RegExp(`src="\\.\\./images/${src.replace(/\./g, '\\.')}"`), value);
+    assert.ok(s.exists(`images/${src}`), value);
+  }
+});
+
+test('a section banner written as a wikilink is found too', () => {
+  const s = site({
+    notes: { 'Locations/Harbour.md': '---\ntype: location\n---\n\nCold.\n' },
+    pictures: ['_attachments/Crowd.png'],
+    player: { lists: { banners: { locations: '[[Crowd.png]]' } } },
+  });
+  assert.match(s.read('locations/index.html'), /<img src="\.\.\/images\/banners\/locations\/Crowd\.png"/);
+});
+
+test('settings check refuses a page banner that is not a picture, and reads one that is', () => {
+  const { runSettings } = require('../lib/settings/cli.js');
+  const check = (yamlValue) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pb-check-'));
+    roots.push(root);
+    const vault = path.join(root, 'vault');
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.yaml'), `player_site:\n  theme:\n    page_banner: ${yamlValue}\n`);
+    const out = [];
+    runSettings({ verb: 'check', args: [], vault, json: true }, { out: (l) => out.push(l), err: () => {} });
+    return JSON.parse(out.join('\n')).faults.filter((f) => (f.use || f.name) === 'player_site.theme.page_banner');
+  };
+  for (const bad of ['[1, 2]', '{ alt: x }', '42', '{ image: a.png, size: big }', 'true']) assert.equal(check(bad).length, 1, bad);
+  for (const good of ['Art/a.png', '"[[a.png]]"', 'false', '{ image: a.png, link: b.png, alt: A }']) assert.deepEqual(check(good), [], good);
+});
+
+test('a note banner\'s link file is copied as it is, not encoded, as a section banner\'s is', { skip: !encodes && 'no WebP encoder here' }, () => {
+  const s = site({
+    notes: { 'NPCs/Mara.md': npc('banner:\n  image: Harbour.png\n  link: Big Harbour.png\n') },
+    pictures: ['_attachments/Harbour.png', '_attachments/Big Harbour.png'],
+    player: { images: { optimize: true } },
+  });
+  assert.match(banner(s.read('npcs/mara.html')), /<a class="section-banner-link" href="\.\.\/images\/Big%20Harbour\.png"><img src="\.\.\/images\/Harbour\.webp"/);
+  assert.ok(s.exists('images/Big Harbour.png'));
+  assert.equal(s.exists('images/Big Harbour.webp'), false);
 });

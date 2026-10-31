@@ -392,9 +392,8 @@ const REGISTRY = [
     left_out: 'No picture',
   },
   {
-    name: 'player_site.theme.page_banner', type: 'any', group: 'theme',
-    shape: "a picture's path in the vault, or `image`, `link` and `alt` as a section banner takes them",
-    does: "A picture at the top of every note's page that names none of its own in a `banner:` field. A note's `banner:` names a picture in the attachments folder for its own page, and `banner: false` leaves that page without one. Section lists keep their own banners. A file that is missing from the vault is reported and the pages show no banner",
+    name: 'player_site.theme.page_banner', type: 'picture', group: 'theme',
+    does: "A picture at the top of every note's page that names none of its own in a `banner:` field. It is a path in the vault, or a `[[link]]` to a picture there or in the attachments folder; `image`, `link` and `alt` work as a section banner's do. A note's `banner:` names a picture in the attachments folder for its own page, and `banner: false` leaves that page without one. Section lists keep their own banners. A file that is missing from the vault is reported and the pages show no banner",
     left_out: 'No picture: a note shows a banner only when it names one',
   },
   {

@@ -7,7 +7,7 @@ const path = require('path');
 const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, slugify } = require('./scanner');
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit, detectEncoder } = require('./image-optimize');
 const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
-const { resolveBanner, renderBanner, normalizeEntry, attachmentName, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
+const { resolveBanner, renderBanner, normalizeEntry, attachmentRef, isAddress, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
@@ -1049,6 +1049,10 @@ function buildSite(options) {
 
   // Scanned here, not later, because the keep-list stability check below reads it.
   const imageMap = scanAttachments(scanConfig);
+  // Each attachment's place under the attachments folder, as scanned: the image encoder later renames a picture it
+  // encodes. A banner written with a folder must lead here (#362).
+  const attachmentsFolder = String(scanConfig.attachmentsDir || require('./settings/registry').entry('vault.attachments').default).replace(/\\/g, '/').replace(/^\.\/|\/+$/g, '');
+  const scannedRel = new Map(Object.entries(imageMap).map(([key, e]) => [key, e.relPath]));
 
   const { buildBacklinks, backlinksOf } = require('./backlinks');
   const { buildSearchIndex } = require('./search-index');
@@ -1292,7 +1296,10 @@ function buildSite(options) {
     if (!imagesEncoder) return { from: sourceFull, outRel };
     const one = { [path.basename(sourceFull)]: { sourcePath: sourceFull, relPath: outRel } };
     const tmpDir = imagesTmpDir && fs.mkdtempSync(path.join(imagesTmpDir, 'asset-'));
-    const claimed = [...Object.values(imageMap).filter((e) => e.sourcePath !== sourceFull).map((e) => `images/${e.relPath}`), ...alsoClaimed];
+    // An attachment's own address is claimed too, where an encoded one used to be: a note banner's link is copied
+    // there as it is (#362).
+    const others = Object.entries(imageMap).filter(([, e]) => e.sourcePath !== sourceFull);
+    const claimed = [...others.map(([, e]) => `images/${e.relPath}`), ...others.map(([key]) => `images/${scannedRel.get(key)}`), ...alsoClaimed];
     optimizeImages(one, publishConfig.images, tmpDir, { cacheDir: imagesCacheDir, encoder: imagesEncoder, claimed });
     const entry = Object.values(one)[0];
     return { from: entry.encodedPath || sourceFull, outRel: entry.relPath };
@@ -1475,6 +1482,8 @@ function buildSite(options) {
 
   // Render each page
   const usedImages = new Set();
+  // The attachments a note banner's `link` names: copied as they are, at their own address, not encoded (#362).
+  const bannerLinks = new Set();
   // The CoC sheet masthead renders a campaign-level crest (publishConfig.sheet_crest);
   // register it so the image-manifest pruning below doesn't drop it from the output.
   if (publishConfig.sheet_crest) {
@@ -1536,35 +1545,58 @@ function buildSite(options) {
     }) : null;
     return defaultPageBanner;
   }
+  // The attachment a banner names: { key, name, entry }, or { why } when it names none. A bare name is looked up as a
+  // portrait's is; a name with a folder must lead to that attachment, from the vault or from the attachments folder,
+  // so a same-named picture elsewhere is never shown in its place. A web address is never looked up.
+  function attachmentOf(raw) {
+    if (isAddress(raw)) return { why: 'is a web address; a banner is a picture in the attachments folder' };
+    const ref = attachmentRef(raw);
+    if (!ref) return null;
+    const key = canonicalNfc(ref.name);
+    const found = imageMap[key];
+    if (!found) return null;
+    if (ref.path) {
+      const scanned = canonicalNfc(scannedRel.get(key) || '');
+      const written = canonicalNfc(ref.path);
+      if (written !== scanned && written !== canonicalNfc(`${attachmentsFolder}/${scanned}`)) return null;
+    }
+    return { key, name: ref.name, entry: found };
+  }
+  // A one-item list is its item: Obsidian writes a list-typed property as `banner:` then `- "[[Harbour.png]]"`, and an
+  // unquoted `banner: [[Harbour.png]]` reads as a list in a list. A longer list is left as it is (and names no picture).
+  function oneBanner(raw) {
+    if (!Array.isArray(raw) || raw.length !== 1) return raw;
+    const [item] = raw;
+    return Array.isArray(item) && item.length === 1 && typeof item[0] === 'string' ? `[[${item[0]}]]` : oneBanner(item);
+  }
   function pageBannerHtml(page, fx) {
     const raw = page.frontmatter.banner;
     const fromDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
     const site = () => { const placed = sitePageBanner(); return placed ? bannerAt(placed, fromDir, { page: true }) : ''; };
     if (raw === undefined || raw === null || raw === '') return site();
     if (raw === false) return '';
-    // An unquoted `banner: [[Harbour.png]]` reads as a list in a list.
-    const entry = normalizeEntry(Array.isArray(raw) && raw.length === 1 && Array.isArray(raw[0]) && raw[0].length === 1 ? `[[${raw[0][0]}]]` : raw);
-    const name = entry && attachmentName(entry.image);
-    const found = name && imageMap[canonicalNfc(name)];
-    if (!found) {
-      fx.warn(page.outputPath, [`banner "${entry ? entry.image : JSON.stringify(raw)}" is not a picture in the attachments folder — the page shows ${sitePageBanner() ? 'the site\'s page banner' : 'no banner'}`]);
+    const entry = normalizeEntry(oneBanner(raw));
+    const found = entry && attachmentOf(entry.image);
+    if (!found || found.why) {
+      const why = found && found.why ? found.why : 'is not a picture in the attachments folder';
+      fx.warn(page.outputPath, [`banner "${entry ? entry.image : JSON.stringify(raw)}" ${why} — the page shows ${sitePageBanner() ? 'the site\'s page banner' : 'no banner'}`]);
       return site();
     }
-    const key = canonicalNfc(name);
-    if (isSvg(name) && !entry.link) return renderBanner({ svg: fs.readFileSync(found.sourcePath, 'utf8') }, { page: true });
+    const { key, name } = found;
+    if (isSvg(name) && !entry.link) return renderBanner({ svg: fs.readFileSync(found.entry.sourcePath, 'utf8') }, { page: true });
     let linkHref = null;
     if (entry.link) {
-      const linkName = attachmentName(entry.link);
-      const linkFound = linkName && imageMap[canonicalNfc(linkName)];
-      if (linkFound) {
-        fx.usedImages.add(canonicalNfc(linkName));
-        linkHref = relativePath(fromDir, 'images/' + linkFound.relPath);
+      const linkFound = attachmentOf(entry.link);
+      if (linkFound && !linkFound.why) {
+        // As it is, as a section banner's link file is: the larger picture is not shrunk.
+        fx.bannerLinks.add(linkFound.key);
+        linkHref = relativePath(fromDir, 'images/' + scannedRel.get(linkFound.key));
       } else {
         fx.warn(page.outputPath, [`banner link "${entry.link}" is not a picture in the attachments folder — the banner is not a link`]);
       }
     }
     fx.usedImages.add(key);
-    return renderBanner({ imageHref: relativePath(fromDir, 'images/' + found.relPath), linkHref, alt: entry.alt || defaultAlt(name) }, { page: true });
+    return renderBanner({ imageHref: relativePath(fromDir, 'images/' + found.entry.relPath), linkHref, alt: entry.alt || defaultAlt(name) }, { page: true });
   }
 
   function renderPage(page, fx) {
@@ -1768,13 +1800,13 @@ function buildSite(options) {
   }
 
   const liveFx = {
-    usedImages, warn: logWarnings, partyEntries, sheetlessPcs, retiredFieldPcs, tohitRows, tableRows,
+    usedImages, bannerLinks, warn: logWarnings, partyEntries, sheetlessPcs, retiredFieldPcs, tohitRows, tableRows,
     onLook: (look, p) => {
       for (const n of look.notes) console.warn(`  WARNING: ${p.vaultPath ? p.vaultPath + '.md' : p.title}: ${n.key} ${JSON.stringify(clipValue(n.value))} ${n.problem}; ignored`);
       if (isDressed(look)) { anyDressed = true; dressedSkins.add(look.skin); }
     },
   };
-  const scratchFx = () => ({ usedImages: new Set(), warn: () => {}, partyEntries: [], sheetlessPcs: [], retiredFieldPcs: [], tohitRows: [], tableRows: [], onLook: () => {} });
+  const scratchFx = () => ({ usedImages: new Set(), bannerLinks: new Set(), warn: () => {}, partyEntries: [], sheetlessPcs: [], retiredFieldPcs: [], tohitRows: [], tableRows: [], onLook: () => {} });
 
   // The note-faults audit reads each page as it is written (`seen`), and at the end renders
   // again the pages that link a note with no page (`namedOnPages`). The GM build has none: on the GM site every
@@ -2080,6 +2112,13 @@ function buildSite(options) {
     if (usedImages.has(basename)) filteredMap[basename] = entry;
   }
   copyImages(filteredMap);
+  if (writes !== 'none') {
+    for (const key of bannerLinks) {
+      const dest = path.join(outputDir, 'images', scannedRel.get(key));
+      ensureDir(dest);
+      fs.copyFileSync(imageMap[key].sourcePath, dest);
+    }
+  }
   const suffix = campaignImageCopied ? ' (+ campaign image)' : '';
   if (!onlySheets) console.log(`${gm ? 'GM site' : 'Player site'}: copied ${Object.keys(filteredMap).length} referenced images${suffix}`);
 
@@ -2130,8 +2169,22 @@ function buildSite(options) {
   // A banner's files, found in the vault and copied to images/banners/<slug>/: { svg } for an SVG that is inlined,
   // { image, link, alt } with their addresses from the site root otherwise; null when its picture is not there
   // (reported). `copy` false finds the addresses without writing a file. Section lists and the page banner share it.
+  // A banner's file: a path in the vault, or, for a bare name that is no file at the vault's top, the attachment of that
+  // name (what a `[[Harbour.png]]` link means in Obsidian). null when there is none; `label` reports why, as a section
+  // banner always has, and with no label nothing is said.
+  function bannerFile(value, label) {
+    const vaultRoot = path.resolve(config.vaultPath);
+    if (!String(value).includes('/') && !fs.existsSync(path.resolve(vaultRoot, value))) {
+      const attachment = imageMap[canonicalNfc(String(value))];
+      if (attachment) return attachment.sourcePath;
+    }
+    if (label) return resolveVaultAsset(value, label);
+    const full = path.resolve(vaultRoot, value);
+    return full.startsWith(vaultRoot + path.sep) && fs.existsSync(full) && fs.statSync(full).isFile() ? full : null;
+  }
+
   function placeBanner(entry, slug, { label, linkLabel, copy = true }) {
-    const imageFull = resolveVaultAsset(entry.image, label);
+    const imageFull = bannerFile(entry.image, label);
     if (!imageFull) return null;
 
     // Inline SVG keeps its internal <a> links clickable; an <img> would not. A banner that
@@ -2141,7 +2194,7 @@ function buildSite(options) {
     const place = (full, opts) => (copy ? copyBannerAsset(full, slug, opts) : `images/banners/${bannerSlug(slug)}/${path.basename(full)}`);
     let link = null;
     if (entry.link) {
-      const linkFull = resolveVaultAsset(entry.link, linkLabel);
+      const linkFull = bannerFile(entry.link, linkLabel);
       if (linkFull) link = place(linkFull, { picture: false });
     }
     return { image: place(imageFull, { claimed: link ? [link] : [] }), link, alt: entry.alt || defaultAlt(imageFull) };
@@ -2387,6 +2440,7 @@ function buildSite(options) {
       if (!usedImages.has(name)) continue;
       audit.readFileName(canonicalNfc(vaultRelPathOf({ sourcePath: entry.sourcePath })), `images/${entry.relPath}`);
     }
+    for (const key of bannerLinks) audit.readFileName(canonicalNfc(vaultRelPathOf({ sourcePath: imageMap[key].sourcePath })), `images/${scannedRel.get(key)}`);
     const vaultRoot = path.resolve(config.vaultPath);
     const there = (rel) => fs.existsSync(path.resolve(vaultRoot, rel));
     const rel = (p) => canonicalNfc(String(p).replace(/\\/g, '/'));
@@ -2398,13 +2452,18 @@ function buildSite(options) {
       if (!entry) continue;
       for (const file of copiedBannerFiles(entry)) {
         if (there(file)) audit.readFileName(rel(file), assetOutRel.get(path.resolve(vaultRoot, file)) || `images/banners/${bannerSlug(dir)}/${path.basename(file)}`);
+        else readBannerFileName(file, dir);
       }
     }
     // The page banner's files, when a page printed it.
     if (defaultPageBanner) {
-      for (const file of copiedBannerFiles(normalizeEntry(publishConfig.page_banner))) {
-        if (there(file)) audit.readFileName(rel(file), assetOutRel.get(path.resolve(vaultRoot, file)) || `images/banners/page/${path.basename(file)}`);
-      }
+      for (const file of copiedBannerFiles(normalizeEntry(publishConfig.page_banner))) readBannerFileName(file, 'page');
+    }
+    // A banner's file found as bannerFile finds it (a path, or an attachment by its name), under the address it was
+    // copied to.
+    function readBannerFileName(file, slug) {
+      const full = bannerFile(file, null);
+      if (full) audit.readFileName(rel(path.relative(vaultRoot, full)), assetOutRel.get(full) || `images/banners/${bannerSlug(slug)}/${path.basename(full)}`);
     }
     const fonts = (publishConfig.theme.fonts && Array.isArray(publishConfig.theme.fonts.files)) ? publishConfig.theme.fonts.files : [];
     for (const f of onlySheets ? [] : fonts) {
