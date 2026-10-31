@@ -38,6 +38,7 @@ Everything else works as normal: new entities are created as DRAFT, templates ar
 - "Process these play notes into a recap"
 - "We just finished session 5, wrap it up"
 - "Here's what happened today — [paste raw notes]"
+- "We stopped mid-fight; save where everyone is"
 
 ### Entity Updates
 
@@ -70,6 +71,7 @@ Claude produces a structured package:
 - Updates to existing entity files showing what changed
 - A carry-forward summary (cliffhangers, consequences, ticking clocks)
 - A keeper checklist of things to prepare for next time
+- If a scene stopped part-way, a short snapshot of where everyone stood, written into that scene's file so the next session can pick it up
 
 The wrap-up's sections are a starting point, not a limit. Ask for a section of your own — "add a Letters Home section for the players", "keep a Ritual Clock under GM Notes" — and it goes where you say: above GM Notes for players, under it for you. Entity notes take any log section the same way. Before Claude adds a section of its own that players can read — one your templates don't have and you did not ask for — it tells you what they will see.
 

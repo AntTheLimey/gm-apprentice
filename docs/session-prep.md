@@ -62,6 +62,8 @@ Claude reads the last session's wrap-up note first — this is the primary conte
 
 If the last session doesn't have a wrap-up, Claude will let you know what you'd miss by skipping it (entity updates, carry-forward, etc.) and offer to run a full wrap-up first.
 
+A scene the last session stopped part-way through arrives with its snapshot in the opening reads, so prep starts from where it stood.
+
 ## Tips
 
 - Always run session-wrapup before session-prep. The wrap-up creates the handoff material that prep relies on.
