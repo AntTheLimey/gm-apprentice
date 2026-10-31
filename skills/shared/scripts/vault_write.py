@@ -2742,18 +2742,14 @@ def cmd_scene_played(batch: Batch, args: argparse.Namespace,
                  f"[[{session}]]"))
 
 
-PAUSED_HEADING_RE = re.compile(r"^##[ \t]+Paused[ \t]*$")
 H12_RE = re.compile(r"^ {0,3}#{1,2}(?:[ \t]+(.*))?$")
-# The scene template's two prompts: a section written above them ends there,
-# so a second pause never replaces the GM's prep.
-PROMPT_LABELS = ("**Situation:**", "**Starts it:**")
 AFTER_RE = re.compile(r"^After \[\[(.+?)\]\]\.\s*$")
 
 
 def paused_body(snapshot: str, batch: Batch, rel: str,
                 eol: str) -> tuple[list[str], int]:
-    """(the `## Paused` section's lines, each with its ending, no trailing
-    blank; the number of snapshot lines) for the stdin text, with #/##
+    """(the `## Paused` section's body lines, each with its ending, ending
+    with the `<!-- /paused -->` marker; the number of snapshot lines) for the stdin text, with #/##
     headings outside code fences demoted to ###."""
     out: list[str] = []
     fence: str | None = None
@@ -2770,34 +2766,15 @@ def paused_body(snapshot: str, batch: Batch, rel: str,
                           f"#/## line inside a code fence: left alone, "
                           f"but it would end the section for readers")
         out.append(line.rstrip())
-    return [ln + eol for ln in out], len(out)
-
-
-def paused_span(body: list[str]) -> tuple[int, int] | None:
-    """(heading index, index after the section's last non-blank line) of
-    an existing `## Paused` section in `body`, or None. The section ends
-    at the next `## ` heading, a gm-only or spoiler marker, one of the
-    scene template's prompt labels, or the end."""
-    fence: str | None = None
-    start: int | None = None
-    last = 0
-    for i, line in enumerate(body):
-        bare = line.rstrip("\r\n")
-        fence, is_fence = vl.fence_step(bare, fence)
-        if is_fence or fence is not None:
-            if start is not None:
-                last = i + 1
-            continue
-        if start is None:
-            if PAUSED_HEADING_RE.match(bare):
-                start, last = i, i + 1
-            continue
-        if (bare.startswith(("## ", *PROMPT_LABELS))
-                or vl.markers_in(bare)):
-            return start, last
-        if bare.strip():
-            last = i + 1
-    return (start, last) if start is not None else None
+    count = len(out)
+    if fence is not None:
+        # An open fence would swallow the end marker and the rest of the
+        # note for every reader.
+        out.append(fence)
+        batch.row("WARNING", rel, "", "the snapshot leaves a code fence "
+                  "open; closed it")
+    out.append(vl.PAUSED_END)
+    return [ln + eol for ln in out], count
 
 
 def top_insert_index(body: list[str]) -> int:
@@ -2872,7 +2849,7 @@ def cmd_scene_paused(batch: Batch, args: argparse.Namespace,
     section = [f"## Paused{eol}", eol, f"After [[{session}]].{eol}", eol,
                *text_lines]
     old_session = None
-    span = paused_span(body)
+    span = vl.paused_span(body)
     if created:
         new_body = [eol, *section]
     elif span:

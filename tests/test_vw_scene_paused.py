@@ -80,8 +80,8 @@ class ExistingSceneTests(PausedBase):
         self.assertTrue(body[comment_end:].startswith(
             f"\n\n## Paused\n\nAfter [[{S5}]].\n\nMara holds the door."))
         self.assertLess(body.index("## Paused"), body.index("**Situation"))
-        self.assertIn("The ghost has not yet spoken.\n\n**Situation:**",
-                      body)
+        self.assertIn("The ghost has not yet spoken.\n<!-- /paused -->"
+                      "\n\n**Situation:**", body)
 
     def test_only_status_played_in_and_paused_change(self):
         before = self.text()
@@ -113,7 +113,7 @@ class ExistingSceneTests(PausedBase):
         after = self.text()
         self.assertEqual(after.count("## Paused"), 1)
         self.assertTrue(after.endswith(
-            f"\n## Paused\n\nAfter [[{S6}]].\n\nNew words.\n"), after)
+            f"\n## Paused\n\nAfter [[{S6}]].\n\nNew words.\n<!-- /paused -->\n"), after)
         fm = vl.extract_frontmatter(after)
         self.assertEqual(fm["played_in"], [f"[[{S5}]]", f"[[{S6}]]"])
         head = before[:before.index("\n---\n", 4)]
@@ -128,9 +128,67 @@ class ExistingSceneTests(PausedBase):
         paused(self, "--write", session=S6, snap="Two.")
         after = self.text()
         self.assertEqual(after.count("## Paused"), 1)
-        self.assertIn(f"After [[{S6}]].\n\nTwo.\n\n**Situation:**", after)
+        self.assertIn(f"After [[{S6}]].\n\nTwo.\n<!-- /paused -->\n\n**Situation:**", after)
         self.assertIn("<!-- gm-only -->\n\n## GM Notes", after)
         self.assertNotIn("One.", after)
+
+    def test_prep_without_template_labels_survives_two_pauses(self):
+        path = self.vault / self.rel
+        head = path.read_bytes().split(b"\n---\n", 1)[0]
+        prep = "\nGM prose line.\n\n### Beats\n- one\n- two\n"
+        path.write_bytes(head + b"\n---\n" + prep.encode())
+        paused(self, "--write", snap="First.")
+        paused(self, "--write", session=S6, snap="Second.")
+        text = self.text()
+        self.assertEqual(text.count("## Paused"), 1)
+        tail = "\n<!-- /paused -->\n\nGM prose line.\n\n### Beats\n" \
+               "- one\n- two\n"
+        self.assertTrue(text.endswith(tail), text)
+        self.assertNotIn("First.", text)
+        self.assertIn("Second.", text)
+        paused(self, "--write", session=S5, snap="Third.")
+        self.assertTrue(self.text().endswith(tail))
+
+    def test_top_section_ends_at_its_marker_before_template_prep(self):
+        paused(self, "--write")
+        text = self.text()
+        self.assertIn("\n<!-- /paused -->\n\n**Situation:**", text)
+        self.assertIn("<!-- gm-only -->\n\n## GM Notes", text)
+
+    def test_marker_less_old_section_at_end_still_replaced(self):
+        path = self.vault / self.rel
+        path.write_bytes(path.read_bytes() + b"\n## Paused\n\nOld.\n")
+        paused(self, "--write", snap="New.")
+        text = self.text()
+        self.assertEqual(text.count("## Paused"), 1)
+        self.assertTrue(text.endswith("New.\n<!-- /paused -->\n"), text)
+        self.assertIn("**Situation:**", text)
+
+    def test_open_fence_in_snapshot_is_closed_with_a_warning(self):
+        code, out = paused(self, "--write", snap="Look:\n```\nunclosed")
+        self.assertEqual(code, 0, out)
+        self.assertIn("WARNING", out)
+        self.assertIn("unclosed\n```\n<!-- /paused -->\n", self.text())
+
+    def test_several_scenes_of_one_name_refused(self):
+        other = "Chapters/Chapter 2/Scenes/The Docks.md"
+        (self.vault / other).parent.mkdir(parents=True)
+        (self.vault / other).write_bytes((self.vault / self.rel).read_bytes())
+        before = snapshot(self.vault)
+        for extra in ((), ("--new",)):
+            code, out = paused(self, "--write", *extra)
+            self.assertEqual(code, 1, out)
+            self.assertIn(other, out)
+            self.assertIn(self.rel, out)
+        self.assertEqual(snapshot(self.vault), before)
+
+    def test_chapter_and_folder_need_new(self):
+        before = snapshot(self.vault)
+        for extra in (("--chapter", "Chapter 2"), ("--folder", "X")):
+            code, out = paused(self, "--write", *extra)
+            self.assertEqual(code, 1, out)
+            self.assertIn("--new", out)
+        self.assertEqual(snapshot(self.vault), before)
 
     def test_headings_demoted(self):
         snap = "## Initiative\nMara first.\n\n```\n## x\n```\n# Top\n"

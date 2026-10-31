@@ -92,7 +92,7 @@ from vaultlib import (GM_MARKER_RE, is_out_of_play, out_of_play,  # noqa: F401
                       fenced_headings, h3_blocks, nested_mapping,
                       normalize, raw_frontmatter, section,
                       session_ref_number, word_count)
-from vaultlib import link_name
+from vaultlib import link_name, split_paused
 from vaultlib import vault_files as _vault_files
 
 
@@ -395,11 +395,10 @@ def _scene_note_text(files, name: str, chapter: str | None = None) -> str:
     body = "\n".join(line for line in body_of(text).splitlines()
                      if not GM_MARKER_RE.fullmatch(line.strip()))
     body = re.sub(r"\n{3,}", "\n\n", body).strip()
-    paused = section(body, "Paused")
+    paused, rest = split_paused(body)
     if paused:
-        body = re.sub(r"(?ms)^## Paused[ \t]*\n.*?(?=^## |\Z)", "",
-                      body).strip()
-        body = f"## Paused\n{paused.strip()}\n\n{body}".strip()
+        rest = re.sub(r"\n{3,}", "\n\n", rest).strip()
+        body = f"## Paused\n{paused}\n\n{rest}".strip()
     return body or f"(scene note {name} is empty)"
 
 

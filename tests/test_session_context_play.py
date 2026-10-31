@@ -204,6 +204,34 @@ class PointerBlockBriefTests(unittest.TestCase):
                       self.brief)
 
 
+class TopPausedSectionBriefTests(unittest.TestCase):
+    """A section written by scene-paused at the top ends at its marker:
+    the brief prints only the snapshot under Paused and leaves the prep
+    where it was."""
+
+    PLAN = PointerBlockBriefTests.PLAN
+    SCENE = ("---\ntype: scene\nstatus: paused\n---\n\n"
+             "<!-- prompt -->\n\n## Paused\n\nAfter [[S5]].\n\n"
+             "They left at the soup course.\n<!-- /paused -->\n\n"
+             "**Situation:** The table is laid for eleven.\n\n"
+             "<!-- gm-only -->\n\n## GM Notes\n\nPoisoned.\n\n"
+             "<!-- /gm-only -->\n")
+
+    def test_only_the_snapshot_is_under_paused(self):
+        files = [("Chapters/C/Scenes/Ashworth Dinner.md", self.SCENE,
+                  sc.extract_frontmatter(self.SCENE) or {})]
+        brief = sc.play_brief(files, "P.md", self.PLAN)
+        self.assertIn("## Paused\nAfter [[S5]].\n\nThey left at the soup "
+                      "course.\n\n", brief)
+        self.assertNotIn("/paused", brief)
+        snap = brief.index("They left at the soup course.")
+        sit = brief.index("**Situation:** The table is laid")
+        self.assertLess(snap, sit)
+        self.assertEqual(brief.count("**Situation:** The table"), 1)
+        self.assertIn("<!-- prompt -->\n\n**Situation:**", brief)
+        self.assertIn("## GM Notes\n\nPoisoned.", brief)
+
+
 class PointerChoiceTests(unittest.TestCase):
     """Two scene notes share a name: the one in the Plan's own chapter is
     used; when that still leaves several, the brief says so."""

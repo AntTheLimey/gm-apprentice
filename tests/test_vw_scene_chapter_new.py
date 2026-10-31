@@ -265,18 +265,25 @@ class ScenePlayedTests(unittest.TestCase):
 
     def test_dropped_with_paused_refused(self):
         before = snapshot(self.vault)
-        with self.assertRaises(SystemExit) as cm:
-            run(self.vault, "scene-played", "--scene", "The Docks",
-                "--dropped", "--paused", "--write")
+        err = io.StringIO()
+        with mock.patch("sys.stderr", err), \
+                self.assertRaises(SystemExit) as cm:
+            vw.main([str(self.vault), "scene-played", "--scene",
+                     "The Docks", "--dropped", "--paused", "--write"])
         self.assertEqual(cm.exception.code, 2)
+        self.assertIn("cannot go together", err.getvalue())
         self.assertEqual(snapshot(self.vault), before)
 
     def test_session_required_without_dropped(self):
         before = snapshot(self.vault)
-        with self.assertRaises(SystemExit) as cm:
-            run(self.vault, "scene-played", "--scene", "The Docks",
-                "--write")
+        err = io.StringIO()
+        with mock.patch("sys.stderr", err), \
+                self.assertRaises(SystemExit) as cm:
+            vw.main([str(self.vault), "scene-played", "--scene",
+                     "The Docks", "--write"])
         self.assertEqual(cm.exception.code, 2)
+        self.assertIn("--session is required unless --dropped",
+                      err.getvalue())
         self.assertEqual(snapshot(self.vault), before)
 
     def test_unknown_scene_or_session_writes_nothing(self):
