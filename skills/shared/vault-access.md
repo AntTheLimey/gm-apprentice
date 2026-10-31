@@ -37,6 +37,7 @@ being open.
 | Session Plan conformance | `plan_check.py` |
 | Write a session's Plan (or `--section`s of it), stamp its index, check it | `vault_write.py plan` |
 | File a new prop in its chapter's `Props/`, in its writer's hand, linked from its scene (dry run first; `--write`) | `vault_write.py prop-new` |
+| A scene that stopped part-way: its snapshot as `## Paused`, status and `played_in`; `--new` files one born at the table (dry run first; `--write`) | `vault_write.py scene-paused` |
 | Narrative-plan discovery (`Planning/` + `_midwife/`) | `plans_index.py` |
 | Frontmatter writes (set/increment/promote/supersede/reconciled), legacy canon-key repair | `stamp_entities.py` |
 | Ingest source classification manifest | `ingest_survey.py` |
