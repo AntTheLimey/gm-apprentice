@@ -146,5 +146,46 @@ class WrapupNamesTests(unittest.TestCase):
                          ["Ma Barker", "The Docks", "Tide Men"])
 
 
+PAUSED = ("---\ntype: scene\nchapter: \"[[Chapter 1 - Harbour]]\"\n"
+          "status: paused\nplayed_in:\n  - \"[[Session 01 - Landfall]]\"\n"
+          "---\n\n<!-- prompt -->\n\n## Paused\n\n"
+          "After [[Session 01 - Landfall]].\n\n"
+          "Stopped at the fork in the tunnel.\n<!-- /paused -->\n\n"
+          "**Situation:** Prep that must not print as snapshot.\n")
+
+
+class PausedPrepTests(unittest.TestCase):
+    def vault(self, scene=PAUSED):
+        return make_vault(self, {**FILES,
+                                 f"{CHAPTER}/Scenes/Down the Cellar.md":
+                                 scene})
+
+    def test_paused_snapshot_printed(self) -> None:
+        out = run_cli(self.vault(), "--prep").stdout
+        self.assertLess(out.index("===== Scene Queue"),
+                        out.index("===== Paused Scenes ====="))
+        self.assertLess(out.index("===== Paused Scenes ====="),
+                        out.index("===== Narrative Plans"))
+        block = out.split("===== Paused Scenes =====", 1)[1].split(
+            "===== Narrative Plans", 1)[0]
+        self.assertIn("### [[Down the Cellar]] (paused after "
+                      "[[Session 01 - Landfall]])\nAfter [[Session 01 - "
+                      "Landfall]].\n\nStopped at the fork in the tunnel.",
+                      block)
+        self.assertNotIn("/paused", block)
+        self.assertNotIn("must not print", block)
+
+    def test_paused_without_snapshot(self) -> None:
+        scene = PAUSED.split("<!-- prompt -->")[0] + "Body.\n"
+        out = run_cli(self.vault(scene), "--prep").stdout
+        self.assertIn("### [[Down the Cellar]] (paused after "
+                      "[[Session 01 - Landfall]])\n(no snapshot written)",
+                      out)
+
+    def test_no_paused_prints_nothing(self) -> None:
+        out = run_cli(make_vault(self, FILES), "--prep").stdout
+        self.assertNotIn("Paused Scenes", out)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -258,5 +258,40 @@ class CarryTests(unittest.TestCase):
                 self.assertEqual(run(vault, *args).returncode, 2)
 
 
+PAUSED = ("---\ntype: scene\nstatus: paused\nplayed_in:\n"
+          "  - \"[[Session 04 - The Mill]]\"\n"
+          "  - \"[[Session 05 - Beneath the Mill]]\"\n---\n\n"
+          "## Paused\n\nAfter [[Session 05 - Beneath the Mill]].\n\n"
+          "Stopped at the fork in the tunnel.\n<!-- /paused -->\n")
+
+
+class PausedScenesTests(unittest.TestCase):
+    def test_paused_scenes_named(self):
+        vault = campaign(self)
+        (vault / CH2 / "Scenes").mkdir(parents=True)
+        (vault / CH2 / "Scenes" / "Down the Mill Cellar.md").write_text(
+            PAUSED, encoding="utf-8")
+        out = run(vault, "--carry").stdout
+        after = out.split("===== Keeper Checklist", 1)[1]
+        self.assertIn("===== Paused Scenes =====\n[[Down the Mill Cellar]] "
+                      "(paused after [[Session 05 - Beneath the Mill]])",
+                      after)
+        self.assertNotIn("fork in the tunnel", out)
+
+    def test_old_spelling_and_session_folder(self):
+        vault = campaign(self)
+        scenes = vault / CH2 / "Session 04" / "Scenes"
+        scenes.mkdir(parents=True)
+        (scenes / "Down the Mill Cellar.md").write_text(
+            PAUSED.replace("status: paused", "status: Paused"),
+            encoding="utf-8")
+        self.assertIn("[[Down the Mill Cellar]] (paused after",
+                      run(vault, "--carry").stdout)
+
+    def test_no_paused_prints_nothing(self):
+        out = run(campaign(self), "--carry").stdout
+        self.assertNotIn("Paused Scenes", out)
+
+
 if __name__ == "__main__":
     unittest.main()
