@@ -13,14 +13,14 @@ A scene that stops part-way is picked up cleanly next session. Publish tool unch
 
 ### Added
 
-- `vw scene-paused` writes where a scene stood into its own file as a `## Paused` section, sets its status and records `played_in`. The snapshot ends at a hidden `<!-- /paused -->` line, so the GM's prep below it is never touched. `--new` files a scene born at the table.
+- `vw scene-paused` writes where a scene stood into its own file as a `## Paused` section, sets its status and records `played_in`. The snapshot ends at a hidden `<!-- /paused -->` line, so the GM's prep below it is never touched. An older `## Paused` section with no end line above other text is left as it is, with a warning naming its line, and the new snapshot goes above it. `--new` files a scene born at the table.
 - Paused scenes appear in `session_context.py --carry`, `--prep` and `--play`.
 - `scene-played --dropped` ends a paused scene the GM will not return to.
 
 ### Changed
 
 - Wrap-up confirms a scene stopped part-way and writes the pause.
-- Session-play opens with the paused scene.
+- Session-play opens with the paused scene when the Plan points at it or there is no Plan; otherwise it names the scene in one line under "Paused, not in this Plan".
 - Session-prep reads snapshots from its bundle.
 - The reveal step never proposes from a scene note.
 

@@ -35,8 +35,9 @@ fill: a fight's initiative order with NPCs and monsters, the round,
 each combatant's condition and position, PC vitals from step 1's
 `flush` summary if any; a social set piece's progress, conversations
 had, clues dropped, where everyone is, what each PC is in the middle
-of; a cliffhanger: who was there. Show the GM the dry run; on
-their yes, place it with
+of; a cliffhanger: who was there. Show the GM the snapshot text
+and the dry run (the command without `--write`); on their yes,
+place it with
 `vw scene-paused --scene "<scene>" --session "<session index>" --write <<'EOF'`
 … `EOF`; `--new` only for a scene with no note (it files one in the
 session's chapter). Others born at the table that finished get no

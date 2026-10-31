@@ -55,7 +55,7 @@ Reach for session-play when you need to:
 
 Claude keeps responses to 1-5 sentences. No analysis, no unsolicited suggestions. When it generates content (NPCs, locations), it asks if you want to save it to the vault — you can defer that decision if players haven't chosen yet.
 
-If the last session stopped part-way through a scene, play opens on that scene and where it stood.
+If the last session stopped part-way through a scene, play opens on that scene and where it stood when your Plan points at it or there is no Plan. When your Plan leaves it out, play names it in one line under "Paused, not in this Plan".
 
 ## Tips
 

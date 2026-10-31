@@ -41,7 +41,9 @@ class WrapupPauseTests(unittest.TestCase):
         para = before[before.rfind("\n\n"):]
         self.assertRegex(para, r"confirm\s+with\s+the\s+GM\s+that\s+it"
                                r"\s+paused")
-        self.assertRegex(para, r"dry\s+run")
+        self.assertRegex(para, r"[Ss]how\s+the\s+GM\s+the\s+snapshot")
+        self.assertRegex(para, r"dry\s+run\s+\(the\s+command\s+without"
+                               r"\s+`--write`\)")
 
     def test_new_dropped_and_carry_named(self):
         self.assertIn("--new", self.text)
