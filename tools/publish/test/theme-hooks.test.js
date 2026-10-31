@@ -21,6 +21,7 @@ const FILES = {
   'Heritages/Tidefolk.md': '---\ntype: heritage\n---\n\nPeople of the shore.\n',
   'World/Tides.md': '---\ntype: world_domain\n---\n\nThe tides rule the town.\n',
   'Documents/Harbour Ledger.md': '---\ntype: document\n---\n\nA ledger of every berth.\n',
+  '_attachments/Fog Header.png': 'not-really-a-png',
 };
 
 // One note of each kind that has its own template (the plain-note template among them): each must carry the hooks.
@@ -44,6 +45,7 @@ const SEEN_ON = {
   '.landing-hero--full-bleed': ['index.html'],
   'body.landing-full-bleed': ['index.html'],
   '.landing-hero--align-left': ['index.html'],
+  '.page-banner': NOTE_PAGES,
 };
 
 // A regular expression that finds an element a simple selector (tag, one class, one attribute) names.
@@ -69,7 +71,7 @@ const on = built({ theme: { hooks: true } });
 const off = built({});
 const unset = built({ theme: { hooks: false } });
 // The layout settings each 'setting' hook is written with (the hooks switch stays off: they do not need it).
-const laidOut = built({ landing: { hero: { layout: 'full-bleed', align: 'left' } } });
+const laidOut = built({ landing: { hero: { layout: 'full-bleed', align: 'left' } }, theme: { page_banner: '_attachments/Fog Header.png' } });
 
 test('every listed hook has the pages it must be found on, and nothing else is listed there', () => {
   assert.deepEqual(Object.keys(SEEN_ON).sort(), HOOKS.map((h) => h.selector).sort());

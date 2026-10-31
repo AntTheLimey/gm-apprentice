@@ -91,6 +91,7 @@ style the layout through them without matching the page's structure.
 | `.landing-hero--full-bleed` | `player_site.landing.hero.layout: full-bleed` | The landing page's title area, laid out with the campaign picture edge to edge under the menu | `.landing-hero--full-bleed h1 { text-transform: uppercase; }` |
 | `body.landing-full-bleed` | `player_site.landing.hero.layout: full-bleed` | The landing page's `<body>` when its title area is full-bleed (the page whose menu sits over the picture) | `body.landing-full-bleed > .top-nav { backdrop-filter: blur(4px); }` |
 | `.landing-hero--align-left` | `player_site.landing.hero.align: left` | The landing page's title area with its title, tagline and dates set to the left | `.landing-hero--align-left h1 { margin-left: -0.05em; }` |
+| `.page-banner` | `player_site.theme.page_banner` | The picture at the top of a note's page: the site's default page banner, or the note's own `banner:` field, which needs no setting. A `<figure>` that also carries `section-banner`, as a section list's banner does | `.page-banner { max-height: 14rem; overflow: hidden; }` |
 
 <!-- /theme-hooks:setting -->
 

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.110] — 2026-10-30
+
+A header picture for any page. Publish tool 1.57.0. No vault change is
+needed: a note with no `banner:` and a site with no default build as
+they did.
+
+### Added
+
+- A note's `banner:` field puts a picture across the top of its own
+  page (#362). It names a picture in the attachments folder the way a
+  GM already writes one: a path, a bare file name, `"[[name.png]]"` or
+  an embed, or `image`, `alt` and `link` as a section banner takes
+  them. The picture is encoded like every other and goes out only with
+  a page that publishes, so a hidden or unpublished note takes none
+  with it. A name that is not in the attachments folder is a build
+  warning.
+- `player_site.theme.page_banner`: the picture every note's page shows
+  when its note names none. Off by default. `banner: false` leaves one
+  page without it. Section lists keep their own banners, and a note
+  never takes its section's.
+- The page banner carries `section-banner` and a new `page-banner`
+  class, listed in `docs/theme-hooks.md`.
+
 ## [1.10.109] — 2026-10-29
 
 Three fixes found while restyling Dead End's site. Publish tool 1.56.0.

@@ -7,7 +7,7 @@ const path = require('path');
 const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, slugify } = require('./scanner');
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit, detectEncoder } = require('./image-optimize');
 const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
-const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
+const { resolveBanner, renderBanner, normalizeEntry, attachmentName, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
@@ -1520,13 +1520,62 @@ function buildSite(options) {
     return gm ? unstableBodyMarked(strippedLines(String(page.markdown || ''), excludeCallouts, mark).lines.join('\n'), mark, { warn }) : '';
   }
 
+  // The picture at the top of a note's page (#362): the note's own `banner:`, or the site's default
+  // (player_site.theme.page_banner). A section's banner stays on its list. The note's picture is an attachment,
+  // found by name as a portrait or an embed is, and goes out with the page's other pictures, so a page that does
+  // not publish takes none with it. The default is the site's own, found and copied once, as a section banner is.
+  let defaultPageBanner;
+  function sitePageBanner() {
+    if (defaultPageBanner !== undefined) return defaultPageBanner;
+    const entry = normalizeEntry(publishConfig.page_banner);
+    if (publishConfig.page_banner != null && publishConfig.page_banner !== '' && !entry) {
+      console.warn(`  WARNING: ${nm('player_site.theme.page_banner')} names no picture — no page banner is shown`);
+    }
+    defaultPageBanner = entry ? placeBanner(entry, 'page', {
+      label: nm('player_site.theme.page_banner'), linkLabel: `the link of ${nm('player_site.theme.page_banner')}`, copy: writes !== 'none',
+    }) : null;
+    return defaultPageBanner;
+  }
+  function pageBannerHtml(page, fx) {
+    const raw = page.frontmatter.banner;
+    const fromDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
+    const site = () => { const placed = sitePageBanner(); return placed ? bannerAt(placed, fromDir, { page: true }) : ''; };
+    if (raw === undefined || raw === null || raw === '') return site();
+    if (raw === false) return '';
+    // An unquoted `banner: [[Harbour.png]]` reads as a list in a list.
+    const entry = normalizeEntry(Array.isArray(raw) && raw.length === 1 && Array.isArray(raw[0]) && raw[0].length === 1 ? `[[${raw[0][0]}]]` : raw);
+    const name = entry && attachmentName(entry.image);
+    const found = name && imageMap[canonicalNfc(name)];
+    if (!found) {
+      fx.warn(page.outputPath, [`banner "${entry ? entry.image : JSON.stringify(raw)}" is not a picture in the attachments folder — the page shows ${sitePageBanner() ? 'the site\'s page banner' : 'no banner'}`]);
+      return site();
+    }
+    const key = canonicalNfc(name);
+    if (isSvg(name) && !entry.link) return renderBanner({ svg: fs.readFileSync(found.sourcePath, 'utf8') }, { page: true });
+    let linkHref = null;
+    if (entry.link) {
+      const linkName = attachmentName(entry.link);
+      const linkFound = linkName && imageMap[canonicalNfc(linkName)];
+      if (linkFound) {
+        fx.usedImages.add(canonicalNfc(linkName));
+        linkHref = relativePath(fromDir, 'images/' + linkFound.relPath);
+      } else {
+        fx.warn(page.outputPath, [`banner link "${entry.link}" is not a picture in the attachments folder — the banner is not a link`]);
+      }
+    }
+    fx.usedImages.add(key);
+    return renderBanner({ imageHref: relativePath(fromDir, 'images/' + found.relPath), linkHref, alt: entry.alt || defaultAlt(name) }, { page: true });
+  }
+
   function renderPage(page, fx) {
     const usedImages = fx.usedImages;
+    const bannerHtml = pageBannerHtml(page, fx);
     if (page.frontmatter.portrait) {
       const basename = canonicalNfc(String(page.frontmatter.portrait).split('/').pop());
       if (basename && imageMap[basename]) usedImages.add(basename);
     }
     const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts, pcKeepSections, ...markOpt });
+    processed.bannerHtml = bannerHtml;
     fx.warn(page.outputPath, processed.warnings);
     if (processed.overwide.length) fx.tableRows.push({ rel: vaultRelPathOf(page), rows: processed.overwide });
     let html;
@@ -2078,6 +2127,36 @@ function buildSite(options) {
     return outRel;
   }
 
+  // A banner's files, found in the vault and copied to images/banners/<slug>/: { svg } for an SVG that is inlined,
+  // { image, link, alt } with their addresses from the site root otherwise; null when its picture is not there
+  // (reported). `copy` false finds the addresses without writing a file. Section lists and the page banner share it.
+  function placeBanner(entry, slug, { label, linkLabel, copy = true }) {
+    const imageFull = resolveVaultAsset(entry.image, label);
+    if (!imageFull) return null;
+
+    // Inline SVG keeps its internal <a> links clickable; an <img> would not. A banner that
+    // declares a link target is asking for the anchor instead, so it goes down the <img> path.
+    if (isSvg(imageFull) && !entry.link) return { svg: fs.readFileSync(imageFull, 'utf8') };
+
+    const place = (full, opts) => (copy ? copyBannerAsset(full, slug, opts) : `images/banners/${bannerSlug(slug)}/${path.basename(full)}`);
+    let link = null;
+    if (entry.link) {
+      const linkFull = resolveVaultAsset(entry.link, linkLabel);
+      if (linkFull) link = place(linkFull, { picture: false });
+    }
+    return { image: place(imageFull, { claimed: link ? [link] : [] }), link, alt: entry.alt || defaultAlt(imageFull) };
+  }
+
+  // A placed banner as the page at `fromDir` prints it.
+  function bannerAt(placed, fromDir, opts) {
+    if (placed.svg) return renderBanner({ svg: placed.svg }, opts);
+    return renderBanner({
+      imageHref: relativePath(fromDir, placed.image),
+      linkHref: placed.link ? relativePath(fromDir, placed.link) : null,
+      alt: placed.alt,
+    }, opts);
+  }
+
   function buildBanners(dirs) {
     const rendered = {};
     for (const dir of dirs) {
@@ -2087,33 +2166,10 @@ function buildSite(options) {
         banners: publishConfig.banners,
       });
       if (!entry) continue;
-
-      const imageFull = resolveVaultAsset(entry.image, `banner for "${dir}"`);
-      if (!imageFull) continue;
-
-      // Inline SVG keeps its internal <a> links clickable; an <img> would not. A banner that
-      // declares a link target is asking for the anchor instead, so it goes down the <img> path.
-      if (isSvg(imageFull) && !entry.link) {
-        rendered[dir] = renderBanner({ svg: fs.readFileSync(imageFull, 'utf8') });
-        console.log(`  inlined banner for ${dir}/index.html`);
-        continue;
-      }
-
-      let linkHref = null;
-      let linkOut = null;
-      if (entry.link) {
-        const linkFull = resolveVaultAsset(entry.link, `banner link for "${dir}"`);
-        if (linkFull) {
-          linkOut = copyBannerAsset(linkFull, dir, { picture: false });
-          linkHref = relativePath(dir, linkOut);
-        }
-      }
-      rendered[dir] = renderBanner({
-        imageHref: relativePath(dir, copyBannerAsset(imageFull, dir, { claimed: linkOut ? [linkOut] : [] })),
-        linkHref,
-        alt: entry.alt || defaultAlt(imageFull),
-      });
-      console.log(`  wrote banner for ${dir}/index.html`);
+      const placed = placeBanner(entry, dir, { label: `banner for "${dir}"`, linkLabel: `banner link for "${dir}"` });
+      if (!placed) continue;
+      rendered[dir] = bannerAt(placed, dir);
+      console.log(`  ${placed.svg ? 'inlined' : 'wrote'} banner for ${dir}/index.html`);
     }
     return rendered;
   }
@@ -2325,7 +2381,7 @@ function buildSite(options) {
 
   // The files copied to the site are named after the vault's files: a withheld name in one of
   // them is in the address of the file. Attachments, then the other files a site copies from
-  // the vault: the campaign image, a section banner and a font.
+  // the vault: the campaign image, a section banner, the page banner and a font.
   if (!gm) {
     for (const [name, entry] of Object.entries(imageMap)) {
       if (!usedImages.has(name)) continue;
@@ -2342,6 +2398,12 @@ function buildSite(options) {
       if (!entry) continue;
       for (const file of copiedBannerFiles(entry)) {
         if (there(file)) audit.readFileName(rel(file), assetOutRel.get(path.resolve(vaultRoot, file)) || `images/banners/${bannerSlug(dir)}/${path.basename(file)}`);
+      }
+    }
+    // The page banner's files, when a page printed it.
+    if (defaultPageBanner) {
+      for (const file of copiedBannerFiles(normalizeEntry(publishConfig.page_banner))) {
+        if (there(file)) audit.readFileName(rel(file), assetOutRel.get(path.resolve(vaultRoot, file)) || `images/banners/page/${path.basename(file)}`);
       }
     }
     const fonts = (publishConfig.theme.fonts && Array.isArray(publishConfig.theme.fonts.files)) ? publishConfig.theme.fonts.files : [];

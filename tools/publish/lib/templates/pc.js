@@ -655,6 +655,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     }) + cocIsland;
     return baseShell({
       pageType: page.frontmatter.type,
+      banner: processedContent.bannerHtml,
       title: page.displayTitle,
       siteTitle: config.siteTitle,
       cssHref: cssPath(page.outputPath),
@@ -696,6 +697,7 @@ ${tabScript(pageTabs(systemSpellsHtml, sheetsOff))}`;
 
   return baseShell({
     pageType: page.frontmatter.type,
+    banner: processedContent.bannerHtml,
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),

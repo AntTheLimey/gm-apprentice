@@ -94,9 +94,11 @@ function defaultAlt(imagePath) {
  * @param {{svg?: string, imageHref?: string, linkHref?: string|null, alt?: string}} banner
  * @returns {string}
  */
-function renderBanner({ svg, imageHref, linkHref, alt }) {
+function renderBanner({ svg, imageHref, linkHref, alt }, { page = false } = {}) {
+  // A note's own page carries the same markup as a section list's banner, plus `page-banner` (#362).
+  const more = page ? ' page-banner' : '';
   if (svg) {
-    return `<figure class="section-banner section-banner-inline">${svg}</figure>`;
+    return `<figure class="section-banner section-banner-inline${more}">${svg}</figure>`;
   }
   if (!imageHref) return '';
 
@@ -104,12 +106,25 @@ function renderBanner({ svg, imageHref, linkHref, alt }) {
   const inner = linkHref
     ? `<a class="section-banner-link" href="${encodeImageUrl(linkHref)}">${img}</a>`
     : img;
-  return `<figure class="section-banner">${inner}</figure>`;
+  return `<figure class="section-banner${more}">${inner}</figure>`;
+}
+
+/**
+ * The attachment a note's `banner:` names, as the attachments are keyed: its file name. Takes what a GM writes for a
+ * picture: a path (`_attachments/maps/Harbour.png`), a bare name, a wikilink (`[[Harbour.png]]`) or an embed
+ * (`![[Harbour.png|600]]`). null when there is no name in it.
+ */
+function attachmentName(raw) {
+  let text = String(raw == null ? '' : raw).trim();
+  const link = /^!?\[\[([^\]]*)\]\]$/.exec(text);
+  if (link) text = link[1].split('|')[0].split('#')[0].trim();
+  const name = text.split('/').pop().trim();
+  return name || null;
 }
 
 module.exports = {
   bannerSlug,
   copiedBannerFiles,
   resolveBanner, renderBanner, normalizeEntry, sourceFolderFor,
-  findConventionBanner, defaultAlt, isSvg, BANNER_EXTS,
+  findConventionBanner, defaultAlt, isSvg, attachmentName, BANNER_EXTS,
 };

@@ -109,6 +109,7 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
   const mainContent = `${headerCard}\n${badgeHtml}\n${outcomeHtml}\n${participantsHtml}\n${bodyHook(processedContent.html)}\n${graphHtml}`;
   return baseShell({
     pageType: page.frontmatter.type,
+    banner: processedContent.bannerHtml,
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),

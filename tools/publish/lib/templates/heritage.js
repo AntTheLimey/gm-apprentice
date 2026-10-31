@@ -44,6 +44,7 @@ function heritageTemplate(page, processedContent, navFor, config, imageMap, cont
   const mainContent = `${headerCard}\n${badgeHtml}\n${bodyHook(processedContent.html)}\n${graphHtml}`;
   return baseShell({
     pageType: page.frontmatter.type,
+    banner: processedContent.bannerHtml,
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),

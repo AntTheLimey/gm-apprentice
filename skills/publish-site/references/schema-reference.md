@@ -309,6 +309,7 @@ These fields are read by all templates if present:
 | `superseded_by` | `[[wiki-link]]` — SUPERSEDED entities redirect links to this target |
 | `relationships` | List of `{ target, type, description, tone }` objects shown in the page's Connections, by kind, in both directions (the other end words it by the inverse). The tone shows as warm, hostile or neutral, never the word |
 | `tags` | Used for NPC importance scoring on the landing page; not rendered on entity pages |
+| `banner` | A picture across the top of the note's own page, from the attachments folder: a path, a bare file name, `"[[name.png]]"` or an embed, or `{ image, alt, link }` (`link` another attachment the picture opens). An SVG with no `link` is inlined. `false` leaves the page without the site's default (`player_site.theme.page_banner`). Absent: the site's default, or nothing. A name not in the attachments folder is a build warning |
 
 ### Canon Status Badges
 
