@@ -28,6 +28,8 @@ function setupSite({ banners, conventionFile, linkFile }) {
 
   fs.writeFileSync(path.join(vaultPath, 'Locations/Corwin System.md'),
     '---\ntype: location\nlocation_type: system\n---\n\n# Corwin System\n\nA star system.\n');
+  fs.mkdirSync(path.join(vaultPath, 'Factions'), { recursive: true });
+  fs.writeFileSync(path.join(vaultPath, 'Factions/Guild.md'), '---\ntype: faction\n---\n\n# Guild\n\nA guild.\n');
 
   const configPath = path.join(siteDir, 'config.json');
   fs.writeFileSync(configPath, JSON.stringify({
@@ -36,7 +38,7 @@ function setupSite({ banners, conventionFile, linkFile }) {
     siteTitle: 'Banner Site',
     siteUrl: 'https://example.github.io/banner-site',
     excludeDirs: ['_meta'],
-    folderMap: { 'Locations': 'locations' },
+    folderMap: { 'Locations': 'locations', 'Factions': 'factions' },
   }, null, 2));
 
   build({ configPath });
@@ -67,8 +69,8 @@ describe('section index banners', () => {
     });
 
     it('does not put a banner on a section that has none', () => {
-      const characters = fs.readFileSync(path.join(outputDir, 'characters/index.html'), 'utf8');
-      assert.ok(!characters.includes('section-banner'));
+      const factions = fs.readFileSync(path.join(outputDir, 'factions/index.html'), 'utf8');
+      assert.ok(!factions.includes('section-banner'));
     });
   });
 

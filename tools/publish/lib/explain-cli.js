@@ -15,6 +15,8 @@ const { mapFolder, matchExcludedDir } = require('./scanner');
 const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, alwaysExcludedSegment } = require('./publish-decision');
 const { decideNoPage, listedOnly } = require('./previews');
 const { surveyVault, pairsWith } = require('./manifest-cli');
+const { buildStorySpine } = require('./story-spine');
+const { foldPlan } = require('./story-fold');
 const { assertNoStops, outputFolderOf } = require('./config');
 const { canonicalPath, loadPublishList } = require('./manifest');
 const { settledHeadingsOf } = require('./settled-headings');
@@ -158,10 +160,17 @@ async function runExplain(options, deps) {
   // Whether this is a session index whose body the site withholds (#276).
   // Paired the way the build pairs (GM aliases rewritten first); a file the scanner
   // produced no page for is no session index the build could pair.
-  const hubBodyUnpublished = !!page && pairsWith(survey, publishedPagesOf(survey)).has(page);
+  const publishedPages = publishedPagesOf(survey);
+  const sitePairs = pairsWith(survey, publishedPages);
+  const hubBodyUnpublished = !!page && sitePairs.has(page);
   // A story companion has no page of its own; its content is on the PC's page, so
   // that is the URL to name.
-  const mergedInto = verdict.code === 'STORY_COMPANION' ? storyCompanionPc(target, pagesByRel) : null;
+  // A wrap-up a Story unit claims folds into that unit's Story page (story-fold.js): the build writes no file for it.
+  // The probe spine is the build's own (no link map), built on the pages that publish with the pairs made above.
+  const folded = page && publishes && verdict.code !== 'STORY_COMPANION'
+    ? foldPlan(buildStorySpine(publishedPages, null, sitePairs)).get(page) : null;
+  const mergedInto = verdict.code === 'STORY_COMPANION' ? storyCompanionPc(target, pagesByRel)
+    : folded ? { outputPath: folded.outputPath, title: folded.title, storyPage: true } : null;
   // A prop its container lists with nothing of its own to show publishes with no page (previews.js listedOnly).
   if (page && publishes) decideNoPage([page], { excludeSections: publishConfig.exclude_sections, excludeCallouts: publishConfig.exclude_callouts });
   const pageless = !!page && publishes && listedOnly(page);
@@ -252,7 +261,7 @@ async function runExplain(options, deps) {
   out(`  canon status: ${canonStatus || 'none'} (exclude_drafts ${publishConfig.exclude_drafts ? 'on' : 'off'})`);
   out(`  publish list: ${manifest ? (section ? MANIFEST_LABEL[section] : 'not listed') : 'no publish list'}`);
   out(mergedInto
-    ? `  VERDICT: publishes as part of ${outputPath}`
+    ? `  VERDICT: publishes as part of ${outputPath}${mergedInto.storyPage ? ' (its Story page)' : ''}`
     : pageless
       ? '  VERDICT: listed by its container, with no page of its own (LISTED_ONLY) — it has nothing to show players; write words in its body, or a tie, to give it a page'
       : publishes

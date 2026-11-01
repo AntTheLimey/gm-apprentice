@@ -68,7 +68,7 @@ test('a vault file and a site-folder file are copied and linked on every page, i
       ['../css/style.css', '../css/theme.css', '../css/extra/paper.css', '../css/extra/ink.css', '../css/overrides.css']);
     assert.deepEqual(links(s.player.read('index.html')),
       ['css/style.css', 'css/theme.css', 'css/extra/paper.css', 'css/extra/ink.css', 'css/overrides.css']);
-    for (const page of [['characters', 'npcs', 'index.html'], ['locations', 'harbour.html'], ['404.html']]) {
+    for (const page of [['locations', 'index.html'], ['locations', 'harbour.html'], ['404.html']]) {
       const head = links(s.player.read(...page));
       const paper = head.findIndex((h) => h.endsWith('css/extra/paper.css'));
       const ink = head.findIndex((h) => h.endsWith('css/extra/ink.css'));

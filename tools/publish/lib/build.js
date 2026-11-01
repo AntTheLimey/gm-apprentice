@@ -2498,6 +2498,9 @@ function buildSite(options) {
         if (live) console.log(`  skipped ${dir}/index.html (authored index page)`);
         continue;
       }
+      // A section with nothing in it has no index (a Sessions folder holding only folded wrap-ups). The menu and the
+      // landing page's cards already leave it out, and a page that lists nothing is only a dead end.
+      if (dirPages.length === 0) continue;
       emit(`${dir}/index.html`, indexTemplate(dir, label, dirPages, navFor, config, publishConfig, imageMap, { cocFolio: require('./templates/pc').usesCocFolio(publishConfig, sheetsOff) }), `  wrote ${dir}/index.html`);
     }
 

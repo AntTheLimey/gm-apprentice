@@ -865,3 +865,53 @@ describe('explain --all (#276)', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 });
+
+// #543: a wrap-up a Story unit claims has no page of its own; explain names the Story page it is part of.
+describe('explain on a wrap-up folded into its Story page (#543)', () => {
+  const { buildBoth } = require('./helpers/gm-build');
+  const { storyVault } = require('./helpers/story-vault');
+  const CHAPTER_2 = (status) => `---\ntype: chapter\ntitle: Chapter 2 — Lighthouse\nsort_order: 2\nstatus: ${status}\n---\n\n# Chapter 2\n`;
+  const CHAPTER_WRAP = '---\ntype: session_wrap\nchapter: "[[Chapter 2 Overview]]"\n---\n\n# Chapter 2 Wrap-Up\n\n## Narrative Recap\n\nCHAPTER-TWO-RECAP: the lighthouse.\n';
+  const explain = async (files, target, extra = {}) => {
+    const site = buildBoth(files, { sites: [] });
+    try {
+      const c = capture();
+      assert.strictEqual(await runExplain({ configPath: site.configPath, target, ...extra }, c.deps), 0);
+      return c.text();
+    } finally { site.cleanup(); }
+  };
+
+  it('a session wrap-up publishes as part of its Story page, and the words "Story page" are there', async () => {
+    const text = await explain(storyVault(), 'Sessions/Session 1 Wrap-Up.md');
+    assert.match(text, /VERDICT: publishes as part of .*story\/chapter-1-docks-session-1\.html \(its Story page\)/);
+  });
+
+  it('--json names that path as outputPath and the session as mergedInto', async () => {
+    const payload = JSON.parse(await explain(storyVault(), 'Sessions/Session 1 Wrap-Up.md', { json: true }));
+    assert.match(payload.outputPath, /\/story\/chapter-1-docks-session-1\.html$/);
+    assert.strictEqual(payload.mergedInto, 'Session 1');
+    assert.strictEqual(payload.publishes, true);
+  });
+
+  it('a session note is no wrap-up: it keeps its own page and no Story page is named', async () => {
+    const text = await explain(storyVault(), 'Sessions/Session 1.md');
+    assert.doesNotMatch(text, /Story page/);
+  });
+
+  it('a complete chapter\'s wrap-up folds into the chapter\'s Story page', async () => {
+    const text = await explain(storyVault({
+      'Chapters/Chapter 2/Chapter 2 Overview.md': CHAPTER_2('complete'),
+      'Chapters/Chapter 2/Chapter 2 Wrap-Up.md': CHAPTER_WRAP,
+    }), 'Chapters/Chapter 2/Chapter 2 Wrap-Up.md');
+    assert.match(text, /VERDICT: publishes as part of .*story\/chapter-2-lighthouse\.html \(its Story page\)/);
+  });
+
+  it('a chapter that is not complete leaves its wrap-up its own page: no Story page is named', async () => {
+    const text = await explain(storyVault({
+      'Chapters/Chapter 2/Chapter 2 Overview.md': CHAPTER_2('active'),
+      'Chapters/Chapter 2/Chapter 2 Wrap-Up.md': CHAPTER_WRAP,
+    }), 'Chapters/Chapter 2/Chapter 2 Wrap-Up.md');
+    assert.doesNotMatch(text, /Story page|story\//);
+    assert.match(text, /VERDICT: publishes at .*chapter-2-wrap-up\.html/);
+  });
+});
