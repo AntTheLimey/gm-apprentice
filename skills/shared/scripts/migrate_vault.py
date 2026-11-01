@@ -1713,8 +1713,8 @@ def find_wrapup_source_fence(vault: Path) -> list[Item]:
         return done
 
     return [Item("wrapup-source-fence", WILL,
-                 [f"{rel}: put the Source callout inside a gm-only fence "
-                  f"(players can see it today)" for rel in todo], apply)]
+                 [f"{rel}: put the Source callout inside a gm-only fence, so "
+                  f"the player site never shows it" for rel in todo], apply)]
 
 
 VAULT_CHECKS: list[Check] = [
