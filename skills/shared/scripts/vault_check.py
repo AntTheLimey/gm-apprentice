@@ -3483,8 +3483,9 @@ ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 SESSION_IN_NAME_RE = re.compile(r"session[ _-]?(\d+)", re.IGNORECASE)
 WRAP_FILENAME_RE = re.compile(r"^Chapter_\d{2}_Session_\d{2}_Wrap_Up$")
 CHAPTER_WRAP_FILENAME_RE = re.compile(r"^Chapter_\d+(?:\.\d+)?_Wrap_Up$")
+# Up to three spaces may come before the `>`: markdown still reads a quote there.
 RECONSTRUCTION_NOTE_RE = re.compile(
-    r"^>\s*\[!\w[\w-]*\]\s*Reconstruction Note", re.IGNORECASE)
+    r"^ {0,3}>\s*\[!\w[\w-]*\]\s*Reconstruction Note", re.IGNORECASE)
 RECONCILED_LINE_RE = re.compile(
     r"\*\*Reconciled:?\*\*[^\n]*?(\d{4}-\d{2}-\d{2})", re.IGNORECASE)
 # MULTILINE, because the section text this is searched against starts

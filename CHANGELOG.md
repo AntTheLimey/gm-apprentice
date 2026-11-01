@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.119] — 2026-11-01
+
+Wrap-up asks the GM less and finds more, and vault-ingest's Reconstruction Note stops reaching the player site. Publish tool unchanged; the vault update `reconstruction-note-fence` fences existing Reconstruction Notes.
+
+### Added
+
+- `vault_write.py play-notes-new --session INDEX [--play-date D] [--export PATH]` files an export's Play Notes beside a session index that prep already filed. It sets the index's `documents.play_notes` and `play_date`, raises a planned or prepped status to played, leaves the Plan link alone, and checks the export's names as `session-new` does. It refuses a note that is not a session index, and a session that already has Play Notes anywhere in the vault. The wrap-up names it for a session with an index but no Play Notes.
+- `reveal_scan.py --also PATH` adds a note the wrap-up wrote to the notes it checks, so wrap-up step 4d offers spoilers on entities the Play Notes, Wrap-Up and recap do not link. Step 4d passes the paths Step 4 wrote and the notes `vw log` wrote to.
+
+### Changed
+
+- On an export, wrap-up no longer asks the GM about every clash with the vault. Clear prep the export contradicts is struck through as superseded and replaced, and noted in Quality Notes. What earlier play established (text naming an earlier session, an Event note, an ingested note), or anything it can't place, is still put to the GM. Hidden text is left alone, and a PC's details go to the Keeper Checklist for the GM to ask the player. A name spelled differently keeps the vault's spelling.
+- publish-site reads a build warning as written, and acts on the cause and fix it names, instead of explaining it from the guide.
+- The leak-findings guide says a held prop's linked files, copied into a kept folder, are findings too.
+
+### Fixed
+
+- `session-new --play-date` refuses a date that does not exist, such as `2026-02-31`.
+- vault-ingest now fences its Reconstruction Note gm-only, so a new one no longer shows on the player site. The vault update `reconstruction-note-fence` fences the ones already in a vault, indented ones included, so they stop publishing too.
+
+---
+
 ## [1.10.118] — 2026-11-01
 
 The benchmark campaign is a valid, current vault again, and the browser tests no longer race each other for Chrome. Publish tool unchanged (test code only); no vault change is needed.

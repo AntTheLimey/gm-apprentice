@@ -10,6 +10,7 @@ import contextlib
 import io
 import sys
 import tempfile
+import unicodedata
 import unittest
 from pathlib import Path
 from typing import Any
@@ -68,10 +69,11 @@ def tool(listed: bool = True, publishing: list[str] | None = None,
     return ask
 
 
-def run_scan(files: dict[str, str], **kw: Any) -> rv.ScanResult:
+def run_scan(files: dict[str, str], also: tuple[str, ...] = (), **kw: Any) -> rv.ScanResult:
     with tempfile.TemporaryDirectory() as tmp, \
             mock.patch.object(rv, "ask_publish_tool", tool(**kw)):
-        return rv.scan(make_vault(tmp, files), INDEX)
+        vault = make_vault(tmp, files)
+        return rv.scan(vault, INDEX, also=also) if also else rv.scan(vault, INDEX)
 
 
 VEX = "---\ntype: npc\nwithheld: true\n---\n\n# Vex\n"
@@ -268,6 +270,62 @@ class RevealScan(unittest.TestCase):
             "Handouts/Ledger.md\tunpublished\t",
             "# warning: section titles and prop marks unknown: explain --all timed out after 60s",
             "# notes: 1"])
+
+
+SPOILED = ("---\ntype: npc\n---\n\n# Ida\n\n"
+           "<!-- spoiler -->\nIda is the heir\n<!-- /spoiler -->\n")
+
+
+class RevealScanAlso(unittest.TestCase):
+    """`--also`: notes this run wrote that the session's notes do not link."""
+
+    def test_unlinked_note_listed_only_with_also(self) -> None:
+        files = {**base(), "NPCs/Vex.md": VEX, "NPCs/Ida.md": SPOILED}
+        pub = ["NPCs/Ida.md"]
+        self.assertEqual([r.path for r in run_scan(files, publishing=pub).rows],
+                         ["NPCs/Vex.md"])
+        res = run_scan(files, also=("NPCs/Ida.md",), publishing=pub)
+        self.assertEqual([(r.path, r.hidden) for r in res.rows],
+                         [("NPCs/Vex.md", []),
+                          ("NPCs/Ida.md", ["spoiler: Ida is the heir"])])
+
+    def test_also_path_forms_and_no_duplicates(self) -> None:
+        files = {**base(), "NPCs/Vex.md": VEX, "NPCs/Ida.md": SPOILED}
+        res = run_scan(files, also=("./NPCs/Ida", "NPCs/Vex.md", "NPCs\\Ida.md"))
+        self.assertEqual([r.path for r in res.rows], ["NPCs/Vex.md", "NPCs/Ida.md"])
+
+    def test_also_skips_structural_notes(self) -> None:
+        files = {**base(play="Nothing.\n"), f"{SESS}/Hall Scene.md": "---\ntype: scene\n---\n"}
+        res = run_scan(files, also=(f"{SESS}/Hall Scene.md", PLAN, INDEX))
+        self.assertEqual(res.rows, [])
+
+    def test_also_unknown_path_is_a_warning(self) -> None:
+        res = run_scan(base(play="Nothing.\n"), also=("NPCs/Nobody.md",))
+        self.assertEqual(rv.render(res), [
+            "reveals: Session 12 - Mill (sources: Play Notes, Wrap-Up)",
+            "# warning: --also NPCs/Nobody.md: no such note",
+            "# notes: 0"])
+
+    def test_also_finds_a_decomposed_file_name(self) -> None:
+        nfd = unicodedata.normalize("NFD", "NPCs/Zoë.md")
+        files = {**base(play="Nothing.\n"), nfd: SPOILED}
+        res = run_scan(files, also=(unicodedata.normalize("NFC", "NPCs/Zoë.md"),))
+        self.assertEqual(res.warnings, [])
+        self.assertEqual(len(res.rows), 1)
+
+    def test_cli_also_repeats(self) -> None:
+        files = {**base(play="Nothing.\n"), "NPCs/Vex.md": VEX, "NPCs/Ida.md": SPOILED}
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(rv, "ask_publish_tool", tool()):
+            vault = make_vault(tmp, files)
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                code = rv.main([str(vault), INDEX, "--also", "NPCs/Vex.md",
+                                "--also", "NPCs/Ida.md"])
+        self.assertEqual(code, 0)
+        self.assertEqual(out.getvalue().splitlines()[1:3], [
+            "NPCs/Vex.md\tunpublished withheld\t",
+            "NPCs/Ida.md\tunpublished\tspoiler: Ida is the heir"])
 
 
 if __name__ == "__main__":

@@ -21,10 +21,10 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
 from schema_rules import system_id as _system_id
 from schema_rules import STAGE_HIDES, TEMPLATE_NAMES
 from schema_rules import tone_families, without_generated_markers
-from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
+from vault_check import (RECONSTRUCTION_NOTE_RE, WRAP_TYPES, WrapDetail, check_wrapup,
                          configured_site, player_section_key, semver_below,
                          site_pin, wrapup_filename_findings)
-from vaultlib import (LEGACY_SETTINGS_FILE, SettingsUnavailable, entity_type, extract_frontmatter,
+from vaultlib import (LEGACY_SETTINGS_FILE, SKIP_DIRS, SettingsUnavailable, entity_type, extract_frontmatter,
                       delete_key, fence_step, frontmatter_span, opens_a_block,
                       parse_version, plugin_version,
                       read_stamp, scan_body, settings, settings_file,
@@ -1659,8 +1659,8 @@ BLOCK_START_RE = re.compile(
     r"^ {0,3}(?:#{1,6}(?:\s|$)|`{3,}|~{3,}|(?:[-*_][ \t]*){3,}$|[-*+](?:\s|$)|\d{1,9}[.)](?:\s|$)|<)")
 
 
-def _fence_source(text: str) -> str | None:
-    """The note with every Source callout players can see wrapped in a
+def _fence_callouts(text: str, callout_re: re.Pattern[str]) -> str | None:
+    """The note with every callout `callout_re` matches, that players can see, wrapped in a
     gm-only fence, or None when there is none. A callout already inside a
     gm-only or spoiler block, under `## GM Notes` (up to the next heading
     of level 1 or 2), or in a code fence is left as it is. Lazy continuation
@@ -1677,7 +1677,7 @@ def _fence_source(text: str) -> str | None:
         if s.heading and s.heading[0] <= 2:
             h2 = s.heading[1].strip().casefold()
         if (not s.in_code and s.gm_depth == 0 and s.spoiler_depth == 0
-                and h2 != "gm notes" and SOURCE_CALLOUT_RE.match(s.line)):
+                and h2 != "gm notes" and callout_re.match(s.line)):
             j = i + 1
             while (j < len(states) and not states[j].in_code
                    and states[j].line.lstrip().startswith(">")):
@@ -1703,6 +1703,11 @@ def _fence_source(text: str) -> str | None:
     return "".join(lines)
 
 
+def _fence_source(text: str) -> str | None:
+    """`_fence_callouts` for the wrap-up's Source callout."""
+    return _fence_callouts(text, SOURCE_CALLOUT_RE)
+
+
 def find_wrapup_source_fence(vault: Path) -> list[Item]:
     """1.10.114 (#542): a wrap-up's `> [!info] Source` callout is the GM's
     bookkeeping (which file, which skill), so it goes inside a gm-only
@@ -1726,6 +1731,31 @@ def find_wrapup_source_fence(vault: Path) -> list[Item]:
     return [Item("wrapup-source-fence", WILL,
                  [f"{rel}: put the Source callout inside a gm-only fence, so "
                   f"the player site never shows it" for rel in todo], apply)]
+
+
+def find_reconstruction_note_fence(vault: Path) -> list[Item]:
+    """1.10.119: a `> [!info] Reconstruction Note` callout (vault-ingest's
+    provenance note) goes inside a gm-only fence, as vault-ingest now writes
+    it, so it stops publishing. Any note may hold one. One players cannot
+    see already is left alone."""
+    todo = [rel for rel, text in vault_files(vault, newline="", skip_dirs=SKIP_DIRS | {"_meta"})
+            if _fence_callouts(text, RECONSTRUCTION_NOTE_RE) is not None]
+    if not todo:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        done = []
+        for rel in todo:
+            new = _fence_callouts(_read(vault / rel), RECONSTRUCTION_NOTE_RE)
+            if new is not None:
+                write_text_atomic(vault / rel, new)
+                done.append(f"{rel}: Reconstruction Note fenced gm-only")
+        return done
+
+    return [Item("reconstruction-note-fence", WILL,
+                 [f"{rel}: put the Reconstruction Note inside a gm-only "
+                  f"fence, so the player site never shows it"
+                  for rel in todo], apply)]
 
 
 VAULT_CHECKS: list[Check] = [
@@ -1780,4 +1810,6 @@ VAULT_CHECKS: list[Check] = [
           "backstory sections in D&D PC notes", find_dnd_background_sections),
     Check("wrapup-source-fence", "1.10.114", 3,
           "the Source callout in Wrap-Ups", find_wrapup_source_fence),
+    Check("reconstruction-note-fence", "1.10.119", 3,
+          "the Reconstruction Note callout", find_reconstruction_note_fence),
 ]

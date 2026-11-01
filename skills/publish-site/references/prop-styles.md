@@ -90,7 +90,9 @@ something hidden.
 
 A folder `_meta/prop-styles/<name>/` inside the vault (no link out)
 holds `layout.html` and `style.css`, and may add `sheet.html` (one
-sheet of the text), `style.json` (`title`, `about`, `fonts`, `fields`),
+sheet of the text), `style.json` (`title`, `about`, `fonts`, `fields`;
+`printout_toggle: true` when the layout has a button that shows the
+page as a printout, so the prop bar says that look uses less ink),
 `script.js` (runs in the reader's browser only) and `assets/`
 (pictures and fonts; `style.css` reaches them as `assets/<file>`). A
 vault style named like a plugin style replaces it whole; the build

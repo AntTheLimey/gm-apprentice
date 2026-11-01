@@ -89,7 +89,9 @@ skip.
 
 Read the session's Play Notes (`type: session-play-notes`). A
 session with no index or Play Notes: `vw session-new --number N
---title "T" --play-date D [--export PATH]` files both; without an
+--title "T" --play-date D [--export PATH]` files both; a session
+with an index but no Play Notes: `vw play-notes-new
+--session "<index>" --play-date D [--export PATH]`. Without an
 export, ask the GM for notes (paste, path, or dictation) for them.
 Read the PC roster and the session's Plan for planned-vs-actual.
 `plan_check.py <plan> --inventory` gives per-section status and
@@ -300,11 +302,14 @@ presents the three-state prompts.
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/reveal_scan.py" \
-  <vault> "<index>"
+  <vault> "<index>" --also <path> --also <path>
 ```
 
-It lists the notes this session touched that the site still hides,
-with what each hides. On "no publish list", skip this step silently;
+The scan lists the notes this session touched that the site still
+hides, with what each hides. Give one `--also` per path Step 4
+wrote: each `relationships --file` path and each path `vw log`
+wrote to. On a `# warning: --also` line, fix that path and run the
+scan again. On "no publish list", skip this step silently;
 on "could not ask the publish tool", tell the GM the reason and skip.
 From the Play Notes, the Wrap-Up and the recap, propose one list of
 what came out: people, places and things met or learned of; secrets
