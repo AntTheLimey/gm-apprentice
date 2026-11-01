@@ -90,6 +90,8 @@ for (const [folder, files, wants] of [
       assert.deepEqual(written, [], `written through the link: ${written.join(', ')}`);
       assert.ok(thrown && thrown.errorCount > 0, lines.join('\n'));
       assert.ok(lines.some((l) => l.includes(`was not written: a folder on its path in the site folder is a link`) && l.includes(wants)), lines.join('\n'));
+      // The count says what was copied, not what was asked for.
+      if (folder === 'images') assert.ok(lines.includes('Copied 0 images'), lines.join('\n'));
     } finally { s.cleanup(); }
   });
 }

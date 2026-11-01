@@ -815,12 +815,13 @@ function buildSite(options) {
 
   function copyImages(imageMap) {
     if (writes === 'none') return;   // a fast build copies the pictures its pages use, so an after_build step can convert them
+    let copied = 0;
     for (const entry of Object.values(imageMap)) {
       const dest = path.join(outputDir, 'images', entry.relPath);
       ensureDir(dest);
-      copyOut(entry.encodedPath || entry.sourcePath, dest);
+      if (copyOut(entry.encodedPath || entry.sourcePath, dest)) copied += 1;
     }
-    console.log(`Copied ${Object.keys(imageMap).length} images`);
+    console.log(`Copied ${copied} images`);
   }
 
   // Main build logic
@@ -2465,7 +2466,7 @@ function buildSite(options) {
         const replaced = live && !dry && collection.replacesKept && fs.existsSync(full);
         const html = collectionTemplate(collectionBuilt, navFor, config, publishConfig);
         emit(out, html, `  wrote ${out}`);
-        if (live && !dry && fs.existsSync(full)) keptWrote(out, html);
+        if (live && !dry && !linkOnPath(full) && fs.existsSync(full)) keptWrote(out, html);
         if (replaced) console.log(`  replaces kept file: ${out}`);
       }
     }
@@ -2646,13 +2647,16 @@ function buildSite(options) {
         console.warn(`  WARNING: ${row.rel}: ${row.detail} — ${row.fix}`);
         continue;
       }
-      written += 1;
-      if (typeof f.made === 'string') stylesWritten.add(f.made);
       const full = path.join(outputDir, ...f.out.split('/'));
       ensureDir(full);
       const replaced = f.replacesKept && fs.existsSync(full);
-      if (f.isPage) writeHtml(full, f.text, propPlan.props.find((p) => p.rel === f.rel).page, { gmCssHref: f.made ? encodeHref(relativeHref(f.out, 'css/gm.css')) : null });
-      else writeOut(full, f.text !== undefined ? f.text : f.bytes);
+      // A write the guard refuses (a link put there since the check above) is said there, counted and recorded as nothing.
+      const done = f.isPage
+        ? writeHtml(full, f.text, propPlan.props.find((p) => p.rel === f.rel).page, { gmCssHref: f.made ? encodeHref(relativeHref(f.out, 'css/gm.css')) : null })
+        : writeOut(full, f.text !== undefined ? f.text : f.bytes);
+      if (!done) continue;
+      written += 1;
+      if (typeof f.made === 'string') stylesWritten.add(f.made);
       keptWrote(f.out, f.text !== undefined ? f.text : f.bytes);
       console.log(`  wrote ${f.out}`);
       if (f.was) console.log(`  ${f.out}: written as UTF-8 (it was ${f.was})`);
@@ -2679,7 +2683,7 @@ function buildSite(options) {
       }
       const full = path.join(outputDir, ...out.split('/'));
       ensureDir(full);
-      writeOut(full, data);
+      if (!writeOut(full, data)) return;
       keptWrote(out, data);
       written += 1;
       console.log(`  wrote ${out}`);
