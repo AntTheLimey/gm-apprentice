@@ -698,8 +698,8 @@ def chapter_key(rel: str, fm: dict[str, Any]) -> str | None:
 def chapters_named(chapters: Iterable[tuple[str, dict[str, Any]]],
                    raw: str) -> list[tuple[str, dict[str, Any]]]:
     """The chapter notes (rel, frontmatter) that `raw` names: by file
-    name, else by `title`, else by folder; the first of those that
-    matches any note decides. `raw` may be a wikilink."""
+    name, else by `title`, else by folder, else by an alias; the first
+    of those that matches any note decides. `raw` may be a wikilink."""
     def key(text: str) -> str:
         return unicodedata.normalize("NFC", text).strip().casefold()
 
@@ -713,7 +713,8 @@ def chapters_named(chapters: Iterable[tuple[str, dict[str, Any]]],
                 if key(name_of(rel, fm)) == want]
         if hits:
             return hits
-    return []
+    return [(rel, fm) for rel, fm in notes
+            if want in {key(a) for a in link_aliases(fm)}]
 
 
 def chapter_link_name(rel: str, fm: dict[str, Any]) -> str:

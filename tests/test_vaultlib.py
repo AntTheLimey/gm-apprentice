@@ -1127,5 +1127,36 @@ class BuildLinesTests(unittest.TestCase):
         self.assertEqual(problems, ["line 2: <!-- /gm-only --> with no opener"])
 
 
+class ChaptersNamedAliasTests(unittest.TestCase):
+    """A chapter's aliases are the last tier of `chapters_named` (#491)."""
+
+    CHAPTERS = [
+        ("Chapters/Ch 4 - Calcutta Nights/Ch 4 - Calcutta Nights.md",
+         {"type": "chapter", "aliases": ["Calcutta"]}),
+        ("Chapters/Ch 5 - Home/Ch 5 - Home.md",
+         {"type": "chapter", "title": "Home", "aliases": ["Calcutta Redux"]}),
+    ]
+
+    def test_alias_names_the_chapter(self):
+        hits = vl.chapters_named(self.CHAPTERS, "Calcutta")
+        self.assertEqual([r for r, _ in hits], [self.CHAPTERS[0][0]])
+
+    def test_alias_via_wikilink(self):
+        hits = vl.chapters_named(self.CHAPTERS, "[[calcutta redux]]")
+        self.assertEqual([r for r, _ in hits], [self.CHAPTERS[1][0]])
+
+    def test_two_chapters_sharing_an_alias_are_both_returned(self):
+        shared = [(r, {**fm, "aliases": ["Calcutta"]})
+                  for r, fm in self.CHAPTERS]
+        self.assertEqual(len(vl.chapters_named(shared, "Calcutta")), 2)
+
+    def test_a_file_name_beats_an_alias(self):
+        chapters = self.CHAPTERS + [
+            ("Chapters/Calcutta/Calcutta.md", {"type": "chapter"})]
+        hits = vl.chapters_named(chapters, "Calcutta")
+        self.assertEqual([r for r, _ in hits],
+                         ["Chapters/Calcutta/Calcutta.md"])
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
