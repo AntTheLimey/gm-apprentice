@@ -544,9 +544,11 @@ function buildSite(options) {
     if (writes !== 'all' || !gm) return;
     const dest = path.join(outputDir, 'css/gm.css');
     ensureDir(dest);
-    writeOut(dest, scopeColorScheme(fs.readFileSync(path.join(__dirname, '../css/gm.css'), 'utf8')));
-    writeOut(path.join(outputDir, 'robots.txt'), ROBOTS_TXT);
-    console.log('  wrote css/gm.css and robots.txt');
+    const cssOk = writeOut(dest, scopeColorScheme(fs.readFileSync(path.join(__dirname, '../css/gm.css'), 'utf8')));
+    const robotsOk = writeOut(path.join(outputDir, 'robots.txt'), ROBOTS_TXT);
+    if (cssOk && robotsOk) console.log('  wrote css/gm.css and robots.txt');
+    else if (cssOk) console.log('  wrote css/gm.css');
+    else if (robotsOk) console.log('  wrote robots.txt');
   }
 
   // A genre preset's own CSS may hardcode a Google Fonts @import for its default look
@@ -572,8 +574,7 @@ function buildSite(options) {
         .filter((line) => !GOOGLE_FONTS_IMPORT_RE.test(line.trim()))
         .join('\n');
     }
-    writeOut(dest, scopeColorScheme(css));
-    console.log(`  wrote css/themes/${genrePreset}.css`);
+    if (writeOut(dest, scopeColorScheme(css))) console.log(`  wrote css/themes/${genrePreset}.css`);
   }
 
   // `gm-publish init` scaffolds css/overrides.css next to vault.config.json as the seam for
@@ -589,8 +590,7 @@ function buildSite(options) {
     // Output inside the site dir: never rewrite the GM's own source file.
     if (path.resolve(src) === path.resolve(dest)) return true;
     ensureDir(dest);
-    writeOut(dest, scopeColorScheme(fs.readFileSync(src, 'utf8')));
-    console.log('  wrote css/overrides.css');
+    if (writeOut(dest, scopeColorScheme(fs.readFileSync(src, 'utf8')))) console.log('  wrote css/overrides.css');
     return true;
   }
 
@@ -640,8 +640,7 @@ function buildSite(options) {
       for (const [name, { found }] of kept) {
         const dest = path.join(outputDir, ...EXTRA_CSS_DIR.split('/'), name);
         ensureDir(dest);
-        writeOut(dest, scopeColorScheme(fs.readFileSync(found, 'utf8')));
-        console.log(`  wrote ${EXTRA_CSS_DIR}/${name}`);
+        if (writeOut(dest, scopeColorScheme(fs.readFileSync(found, 'utf8')))) console.log(`  wrote ${EXTRA_CSS_DIR}/${name}`);
       }
     }
     return [...kept.keys()];
@@ -655,8 +654,7 @@ function buildSite(options) {
   function copyOneJS(file) {
     const dest = path.join(outputDir, 'js', file);
     ensureDir(dest);
-    copyOut(path.join(__dirname, '../js', file), dest);
-    console.log(`  wrote js/${file}`);
+    if (copyOut(path.join(__dirname, '../js', file), dest)) console.log(`  wrote js/${file}`);
   }
   function copyJS() {
     // A sheets-only build writes pages whose header leaves its menu clicks to js/nav.js, so it
@@ -717,7 +715,7 @@ function buildSite(options) {
       fontsWritten.add(f.rel);
       const dest = path.join(outputDir, 'fonts', f.rel);
       ensureDir(dest);
-      copyOut(f.from, dest);
+      if (!copyOut(f.from, dest)) continue;
       if (f.family && !servedGoogleFonts.has(f.family)) servedGoogleFonts.set(f.family, { folder: f.rel.split('/')[0], from: f.from });
       console.log(`  wrote fonts/${f.rel}`);
     }
@@ -733,8 +731,7 @@ function buildSite(options) {
     const css = scopeColorScheme(generateThemeCSS(publishConfig.theme, { selfHostCss: selfHostedFonts().css }));
     const dest = path.join(outputDir, 'css/theme.css');
     ensureDir(dest);
-    writeOut(dest, css);
-    console.log('  wrote css/theme.css');
+    if (writeOut(dest, css)) console.log('  wrote css/theme.css');
   }
 
   // theme.fonts.source: 'local' (#211): the @font-face rules theme.js writes into
@@ -780,7 +777,7 @@ function buildSite(options) {
         continue;
       }
       ensureDir(dest);
-      copyOut(vaultFontPath, dest);
+      if (!copyOut(vaultFontPath, dest)) continue;
       if (!servedLocalFonts.includes(outPath)) servedLocalFonts.push(outPath);
       console.log(`  wrote fonts/${outPath}`);
     }
@@ -1540,11 +1537,12 @@ function buildSite(options) {
         const { from, outRel } = encodedAsset(vaultImgPath, 'images/' + path.basename(imgVal));
         const dest = path.join(outputDir, outRel);
         ensureDir(dest);
-        copyOut(from, dest);
-        assetOutRel.set(vaultImgPath, outRel);
-        publishConfig.theme.campaign_image = outRel;
-        console.log(`  copied campaign image → ${outRel}`);
-        campaignImageCopied = true;
+        if (copyOut(from, dest)) {
+          assetOutRel.set(vaultImgPath, outRel);
+          publishConfig.theme.campaign_image = outRel;
+          console.log(`  copied campaign image → ${outRel}`);
+          campaignImageCopied = true;
+        }
       }
     }
   }
@@ -1557,11 +1555,11 @@ function buildSite(options) {
   } else if (searchData) {
     const searchDest = path.join(outputDir, 'search-index.json');
     const searchJson = jsonText(searchData);
-    writeOut(searchDest, searchJson);
-    console.log('  wrote search-index.json');
+    const searchOk = writeOut(searchDest, searchJson);
+    if (searchOk) console.log('  wrote search-index.json');
     // The text the player index is made from, kept beside the site for the leak gate (index-text.js). Not for a
     // preview's folder: the site's own index is the one deploy checks.
-    if (!gm && !options.outputDirOverride && imageCacheDir(configDir, { outputDirs: [outputDir], vaultPath: config.vaultPath })) {
+    if (searchOk && !gm && !options.outputDirOverride && imageCacheDir(configDir, { outputDirs: [outputDir], vaultPath: config.vaultPath })) {
       writeIndexText(indexTextPath(configDir), searchJson, searchData.records);
       ignoreCacheInGit(configDir);
     }
@@ -1570,8 +1568,7 @@ function buildSite(options) {
     const lunrSrc = require.resolve('lunr');
     const lunrDest = path.join(outputDir, 'js', 'lunr.js');
     ensureDir(lunrDest);
-    copyOut(lunrSrc, lunrDest);
-    console.log('  wrote js/lunr.js');
+    if (copyOut(lunrSrc, lunrDest)) console.log('  wrote js/lunr.js');
   } else {
     console.log('  search disabled — skipping search-index.json');
   }
@@ -2149,8 +2146,7 @@ function buildSite(options) {
       warned = true;
       console.warn(`  WARNING: the typefaces for the sheet skins are not in the vault's font cache and could not be downloaded; the skins use fallback type. ${fontsLib.missAdvice(options.offline === true)}`);
     }, { offline: options.offline === true });
-    writeOut(dest, faces.css + scopeColorScheme(skinsCss([...dressedSkins])));
-    console.log('  wrote css/skins.css');
+    if (writeOut(dest, faces.css + scopeColorScheme(skinsCss([...dressedSkins])))) console.log('  wrote css/skins.css');
     copyFontFiles(faces.files);
   }
 
@@ -2209,8 +2205,7 @@ function buildSite(options) {
     }
     if (writes === 'all') {
       const built = onlyBuiltPages(cards, (key) => fs.existsSync(path.join(outputDir, ...key.split('/'))));
-      writeOut(path.join(outputDir, 'previews.json'), jsonText(built));
-      console.log('  wrote previews.json');
+      if (writeOut(path.join(outputDir, 'previews.json'), jsonText(built))) console.log('  wrote previews.json');
     }
   }
 
@@ -2275,8 +2270,7 @@ function buildSite(options) {
     const { from, outRel } = picture ? encodedAsset(sourceFull, asIs, claimed) : { from: sourceFull, outRel: asIs };
     const dest = path.join(outputDir, outRel);
     ensureDir(dest);
-    copyOut(from, dest);
-    if (picture) assetOutRel.set(sourceFull, outRel);
+    if (copyOut(from, dest) && picture) assetOutRel.set(sourceFull, outRel);
     return outRel;
   }
 
@@ -2717,8 +2711,7 @@ function buildSite(options) {
       if (!licence) console.warn(`  WARNING: the licence of the font "${family}" (fonts/${folder}/) could not be read from its file; NOTICE.txt points to its licence page on Google Fonts instead`);
       return { family, folder, copyright: names ? names.copyright : null, licence };
     });
-    writeOut(path.join(outputDir, 'NOTICE.txt'), noticeText({ lunr: !!searchData, styles, googleFonts, localFonts: servedLocalFonts }));
-    console.log('  wrote NOTICE.txt');
+    if (writeOut(path.join(outputDir, 'NOTICE.txt'), noticeText({ lunr: !!searchData, styles, googleFonts, localFonts: servedLocalFonts }))) console.log('  wrote NOTICE.txt');
   }
 
   // Last thing before "Done", so it is the line the GM reads (#277). A session in Excluded

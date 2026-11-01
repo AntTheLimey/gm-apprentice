@@ -29,6 +29,8 @@ A tidy of the props feature: the build no longer writes through a linked folder 
 - A stray file in `_meta/prop-styles/` is no longer offered as a style to use.
 - When the props page's address is refused and both default addresses are taken, the warning now says why the asked address was refused.
 - The props tests no longer leave temporary folders behind.
+- A file the build refuses to write through a linked folder is no longer reported as "wrote ...", and the campaign image, search index record and font lists are updated only for files that were written.
+- `props compare` and `props move-check` also strip the bar an earlier version of the tool wrote, so a site built before the print hint compares equal to a new one. `props links` reads UTF-16 and windows-1252 files as the build does.
 
 ---
 

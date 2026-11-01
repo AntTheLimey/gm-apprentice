@@ -92,6 +92,11 @@ for (const [folder, files, wants] of [
       assert.ok(lines.some((l) => l.includes(`was not written: a folder on its path in the site folder is a link`) && l.includes(wants)), lines.join('\n'));
       // The count says what was copied, not what was asked for.
       if (folder === 'images') assert.ok(lines.includes('Copied 0 images'), lines.join('\n'));
+      // A refused file is not reported as written, and no state is kept as if it shipped.
+      if (folder !== 'images') {
+        const said = lines.filter((l) => new RegExp(`^\\s*wrote ${folder}/`).test(l));
+        assert.deepEqual(said, [], `a refused file reported as written: ${said.join(' | ')}`);
+      }
     } finally { s.cleanup(); }
   });
 }
