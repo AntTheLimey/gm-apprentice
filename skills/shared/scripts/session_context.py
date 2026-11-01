@@ -501,12 +501,13 @@ def scene_pointers(plan_text: str) -> list[str]:
 
 def pointer_key(target: str) -> str:
     """How `plan_pointers` keys one `scene_pointers` target."""
-    return normalize(target if "/" in target else Path(target).stem)
+    return normalize(target if "/" in target else target.removesuffix(".md"))
 
 
 def plan_pointers(plan_text: str) -> set[str]:
     """The scene notes a Plan points at (`### [[Note]]` under Planned and
-    Contingency Scenes): a bare `[[Note]]` by `normalize(stem)`, one
+    Contingency Scenes): a bare `[[Note]]` by its `normalize`d name without
+    `.md` (periods in the name kept), one
     written as a path by its `normalize`d vault-relative path without
     `.md` (it has a `/`, so the two kinds never collide)."""
     return {pointer_key(t) for t in scene_pointers(plan_text)}

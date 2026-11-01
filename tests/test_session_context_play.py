@@ -600,3 +600,15 @@ class ThreadReportTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PointerKeyPeriodTests(unittest.TestCase):
+    """A bare pointer keeps its periods: `[[Dr. Venn's Study]]` is not `Dr`."""
+
+    def test_bare_name_with_a_period_points_at_its_note(self):
+        pointed = {sc.pointer_key("Dr. Venn's Study")}
+        self.assertTrue(sc.is_pointed_at("Scenes/Dr. Venn's Study.md", pointed))
+        self.assertFalse(sc.is_pointed_at("Scenes/Dr.md", pointed))
+
+    def test_a_written_md_suffix_is_still_dropped(self):
+        self.assertEqual(sc.pointer_key("The Ball.md"), sc.pointer_key("The Ball"))
