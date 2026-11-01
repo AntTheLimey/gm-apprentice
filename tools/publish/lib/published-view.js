@@ -2,7 +2,7 @@
 // A page's published view: its markdown with the parts players do not see taken out (gm-only fences, hidden callouts,
 // excluded sections). The build and `explain` both read the Story spine from it, so a recap that is only inside a hidden
 // part is no recap in either. One source: nothing else computes it.
-const { strippedLines, sectionWithholder, noteFacts, keptFlags, filterSections } = require('./processor');
+const { strippedLines, sectionWithholder, noteFacts, keptFlags, filterSections, stubCut, publishMode } = require('./processor');
 const { withoutMarked } = require('./gm-marks');
 
 // Sets `page.publishedMarkdown` (and, on the GM site, `page.gmMarkedPublished`).
@@ -40,4 +40,36 @@ function publishView(page, rules, facts = null) {
     { pcKeepSections, storyMoments, restored: stripped.restored });   // its warnings are the page render's to print, once
 }
 
-module.exports = { publishView };
+// The player site's fold plan (story-fold.js), for a command that reads the vault without building it (explain, the
+// leak gate): the pages it publishes, read as the build reads them before it folds (a paired session note's body
+// withheld, a stub cut to its named sections, then the published view), each through a copy so no page is changed.
+// The plan is keyed by the pages given. `pairs`: the site's session pairs (session-hub.js pairHubs).
+function playerFoldPlan(pages, pairs, publishConfig) {
+  const { buildStorySpine } = require('./story-spine');
+  const { foldPlan } = require('./story-fold');
+  const { pcKeepList, storyMomentsOn } = require('./pc-prose');
+  const excludeSections = publishConfig.exclude_sections || [];
+  const excludeCallouts = publishConfig.exclude_callouts;
+  const rules = { gm: false, excludeCallouts, excludeSections, pcKeepSections: pcKeepList(publishConfig), storyMoments: storyMomentsOn(publishConfig) };
+  const original = new Map();
+  const views = pages.map((page) => {
+    const fm = page.sourceFrontmatter || page.frontmatter || {};
+    let markdown = pairs.has(page) ? '' : String(page.markdown || '');
+    if (publishMode(fm) === 'stub') {
+      const include = Array.isArray(fm.publish_include_sections) ? fm.publish_include_sections : [];
+      markdown = stubCut(markdown, include, { excludeSections, excludeCallouts, frontmatter: fm }).text;
+    }
+    const view = { ...page, markdown };
+    publishView(view, rules);
+    original.set(view, page);
+    return view;
+  });
+  const viewOf = new Map(views.map((v) => [original.get(v), v]));
+  const viewPairs = new Map([...pairs].filter(([hub, wrap]) => viewOf.has(hub) && viewOf.has(wrap)).map(([hub, wrap]) => [viewOf.get(hub), viewOf.get(wrap)]));
+  if (pairs.linked) viewPairs.linked = new Set([...pairs.linked].map((w) => viewOf.get(w) || w));
+  const plan = new Map();
+  for (const [view, unit] of foldPlan(buildStorySpine(views, null, viewPairs))) plan.set(original.get(view), unit);
+  return plan;
+}
+
+module.exports = { publishView, playerFoldPlan };

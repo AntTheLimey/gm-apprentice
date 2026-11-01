@@ -16,21 +16,34 @@ function foldPlan(spine) {
   return plan;
 }
 
+// Each link-map key that names a folded page's address, and the unit it now leads to. Pure: read before the pages move.
+function foldedKeys(plan, linkMap) {
+  const moved = new Map();   // old output path -> unit
+  for (const [page, unit] of plan) moved.set(page.foldedFrom || page.outputPath, unit);
+  const keys = new Map();
+  for (const key of Object.keys(linkMap)) {
+    const unit = moved.get(linkMap[key]);
+    if (unit) keys.set(key, unit);
+  }
+  return keys;
+}
+
+// The title each such key prints as, an unaliased link to it (the Story page's title), without moving any page: what
+// the leak gate reads a link by, as the page prints it.
+const foldLabelsOf = (plan, linkMap) => new Map([...foldedKeys(plan, linkMap)].map(([key, unit]) => [key, unit.title]));
+
 // Moves each folded page onto its unit's address and repoints every link-map key that named the old address.
 function applyFold(plan, linkMap) {
-  const moved = new Map();   // old output path -> unit
+  const keys = foldedKeys(plan, linkMap);
   for (const [page, unit] of plan) {
     page.foldedFrom = page.outputPath;
     page.outputPath = unit.outputPath;
     page.outputDir = 'story';
     page.displayTitle = unit.title;
     page.foldedInto = unit;
-    moved.set(page.foldedFrom, unit);
   }
   const labels = new Map();
-  for (const key of Object.keys(linkMap)) {
-    const unit = moved.get(linkMap[key]);
-    if (!unit) continue;
+  for (const [key, unit] of keys) {
     linkMap[key] = unit.outputPath;
     labels.set(key, unit.title);
   }
@@ -48,8 +61,25 @@ const isFolded = (page) => !!(page && page.foldedInto);
 // `|label` is added inside a line, so every line keeps its number (a fault's line stays the line in the note), and text
 // quoted from the heading (a finding's context) shows the session's title, as the page does.
 function labelFoldedHeadings(markdown, linkMap) {
+  return labelFoldedLinks(markdown, linkMap, { headingsOnly: true });
+}
+
+// Each unaliased link (not an embed) to a folded wrap-up given its label, the Story page's title: by `labels` (key ->
+// title, foldLabelsOf) when given, else by the link map's own fold. With `headingsOnly`, only heading lines outside a
+// code fence; otherwise every line. A link is named as resolveWikiLinks names it.
+function labelFoldedLinks(markdown, linkMap, { headingsOnly = false, labels = null } = {}) {
   const text = String(markdown == null ? '' : markdown);
   if (!text.includes('[[')) return text;
+  const labelOf = (key) => (labels ? labels.get(key) : foldLabel(linkMap, key));
+  const relabel = (line) => line.replace(wikilinkRe('g', true), (whole, body) => {
+    if (whole[0] === '!') return whole;
+    const parsed = parseWikilink(body);
+    if (parsed.display.trim()) return whole;
+    const key = linkMap[parsed.raw] ? parsed.raw : parsed.name;
+    const label = labelOf(key);
+    return label && !/[|\]\[]/.test(label) ? `[[${body}|${label}]]` : whole;
+  });
+  if (!headingsOnly) return relabel(text);
   let fence = null;
   return text.split('\n').map((line) => {
     const open = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
@@ -59,17 +89,10 @@ function labelFoldedHeadings(markdown, linkMap) {
       return line;
     }
     if (fence || !/^\s{0,3}#{1,6}\s/.test(line) || !line.includes('[[')) return line;
-    return line.replace(wikilinkRe('g', true), (whole, body) => {
-      if (whole[0] === '!') return whole;
-      const parsed = parseWikilink(body);
-      if (parsed.display.trim()) return whole;
-      const key = linkMap[parsed.raw] ? parsed.raw : parsed.name;
-      const label = foldLabel(linkMap, key);
-      return label && !/[|\]\[]/.test(label) ? `[[${body}|${label}]]` : whole;
-    });
+    return relabel(line);
   }).join('\n');
 }
 
 const foldLabel = (linkMap, key) => (FOLD_LABELS.get(linkMap) || new Map()).get(key);
 
-module.exports = { foldPlan, applyFold, isFolded, foldLabel, labelFoldedHeadings };
+module.exports = { foldPlan, applyFold, foldLabelsOf, isFolded, foldLabel, labelFoldedHeadings, labelFoldedLinks };

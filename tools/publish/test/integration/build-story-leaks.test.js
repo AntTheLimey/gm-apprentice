@@ -248,3 +248,35 @@ CHAPGM-1 the harbourmaster was the cook all along.
     assert.equal(found[0].page, OWN);
   });
 });
+
+// An unaliased link to a folded wrap-up prints the session's title (story-fold.js), so the gate reads such a link both
+// ways: by the note it names and by the label the page prints, in hidden text and in what players may already read.
+describe('Story page leaks: a link to a folded wrap-up, read as the page prints it', () => {
+  const NPC = (body) => `---\ntype: npc\ntitle: Mara Quill\nstatus: alive\n---\n\n# Mara Quill\n\n${body}\n`;
+  const MARA_PAGE = 'npcs/mara-quill.html';
+
+  it('a hidden sentence holding the link is found as the page prints it, and as it printed before the fold', () => {
+    const files = storyVault({ 'NPCs/Mara Quill.md': NPC('A fixer.\n\n## GM Notes\n\nThe cook in [[Session 1 Wrap-Up]] was the smuggler all along.') });
+    for (const label of ['Session 1', 'Session 1 Wrap-Up']) {
+      const s = buildBoth(files, { sites: ['player'] });
+      try {
+        assert.deepEqual(gate(s), []);
+        leakInto(s.player.dir, MARA_PAGE, `The cook in <a href="../story/chapter-1-docks-session-1.html">${label}</a> was the smuggler all along.`);
+        const found = gate(s);
+        assert.equal(found.length, 1, `${label}: ${JSON.stringify(found)}`);
+        assert.equal(found[0].page, MARA_PAGE);
+      } finally { s.cleanup(); }
+    }
+  });
+
+  it('a hidden note saying what a page already prints through the link is no finding', () => {
+    const s = buildBoth(storyVault({
+      'NPCs/Mara Quill.md': NPC('The cook in [[Session 1 Wrap-Up]] waited by the stove all night.'),
+      'Prep/Cook Prep.md': '---\ntype: npc\ntitle: Cook Prep\npublish: false\n---\n\n# Cook Prep\n\nThe cook in Session 1 waited by the stove all night.\n',
+    }), { sites: ['player'] });
+    try {
+      assert.ok(read(s.player, MARA_PAGE).includes('Session 1</a> waited by the stove'));
+      assert.deepEqual(gate(s), []);
+    } finally { s.cleanup(); }
+  });
+});
