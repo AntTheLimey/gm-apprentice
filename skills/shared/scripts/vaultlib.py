@@ -698,8 +698,8 @@ def chapter_key(rel: str, fm: dict[str, Any]) -> str | None:
 def chapters_named(chapters: Iterable[tuple[str, dict[str, Any]]],
                    raw: str) -> list[tuple[str, dict[str, Any]]]:
     """The chapter notes (rel, frontmatter) that `raw` names: by file
-    name, else by `title`, else by folder; the first of those that
-    matches any note decides. `raw` may be a wikilink."""
+    name, else by `title`, else by folder, else by an alias; the first
+    of those that matches any note decides. `raw` may be a wikilink."""
     def key(text: str) -> str:
         return unicodedata.normalize("NFC", text).strip().casefold()
 
@@ -713,7 +713,8 @@ def chapters_named(chapters: Iterable[tuple[str, dict[str, Any]]],
                 if key(name_of(rel, fm)) == want]
         if hits:
             return hits
-    return []
+    return [(rel, fm) for rel, fm in notes
+            if want in {key(a) for a in link_aliases(fm)}]
 
 
 def chapter_link_name(rel: str, fm: dict[str, Any]) -> str:
@@ -1364,6 +1365,19 @@ def vault_layout(vault: Path) -> Literal["new", "legacy", "none"]:
     if (vault / LEGACY_SETTINGS_FILE).is_file():
         return "legacy"
     return "none"
+
+
+def find_vault(path: Path) -> Path | None:
+    """The vault holding the note at `path`: the nearest folder above it
+    that has a settings file (either layout), a `_meta` folder or a
+    `_Templates` folder; None when there is none. The one rule every
+    script that starts from a single note uses."""
+    for folder in path.resolve().parents:
+        if (vault_layout(folder) != "none"
+                or (folder / "_meta").is_dir()
+                or (folder / "_Templates").is_dir()):
+            return folder
+    return None
 
 
 def settings_file(vault: Path) -> str:
@@ -2772,31 +2786,34 @@ def is_out_of_play(fm: dict[str, Any], words: frozenset[str]) -> bool:
     return str(status).strip().lower() in words
 
 
-def active_pcs(vault: Path) -> list[tuple[str, dict[str, Any]]]:
-    """(rel, frontmatter) for every playable PC sheet.
+def is_active_pc(rel: str, fm: dict[str, Any], gone: frozenset[str]) -> bool:
+    """Is the note at `rel` a playable PC sheet? `type: pc`, not a
+    `*_Story.md` companion (same type, but narrative history rather than a
+    sheet), not under an unchecked folder (an archived copy plays nobody),
+    not a `_Template_*` file, and status not on the out-of-play list `gone`.
+    The one rule every active-PC list uses (`pc-body` checks sheets of any
+    status, so it spells the file rules out and leaves status alone)."""
+    return (fm.get("type") == "pc"
+            and not rel.endswith("_Story.md")
+            and not is_unchecked_source(rel)
+            and not Path(rel).name.startswith("_Template_")
+            and not is_out_of_play(fm, gone))
 
-    `type: pc`, excluding the `*_Story.md` companion notes (same type,
-    but narrative history rather than a sheet) and anyone whose status
-    is on the vault's out-of-play list.
-    """
-    out: list[tuple[str, dict[str, Any]]] = []
+
+def active_pcs(vault: Path) -> list[tuple[str, dict[str, Any]]]:
+    """(rel, frontmatter) for every playable PC sheet (see `is_active_pc`)."""
     gone = out_of_play(vault)
+    out: list[tuple[str, dict[str, Any]]] = []
     for rel, text in vault_files(vault):
         fm = extract_frontmatter(text) or {}
-        if fm.get("type") != "pc" or rel.endswith("_Story.md"):
-            continue
-        if rel.split("/")[0] in UNCHECKED_DIRS:
-            continue  # an archived copy of a sheet or template plays nobody
-        if is_out_of_play(fm, gone):
-            continue
-        out.append((rel, fm))
+        if is_active_pc(rel, fm, gone):
+            out.append((rel, fm))
     return out
 
 
 def active_pc_names(vault: Path) -> set[str]:
-    """Active PCs, mirroring session_context.py: type: pc, not *_Story.md,
-    status not on the out-of-play list. Name set = filename stem, each
-    capitalised stem token (len >= 3), and each alias — for whole-word
+    """Names of the active PCs (`is_active_pc`). Name set = filename stem,
+    each capitalised stem token (len >= 3), and each alias — for whole-word
     matching of both 'Katherine Winslow' and 'Katherine'."""
     names: set[str] = set()
     for rel, fm in active_pcs(vault):

@@ -84,9 +84,9 @@ from dnd_note import (BARE, HALF, HEADING, PLACEHOLDER, REASONED, SEPARATOR, YES
 from dnd_sheet import to_weight  # noqa: E402
 from dnd_background import MEMORY, clean_text, memory_entries, memory_from, plan_background  # noqa: E402
 from migrate_core import StepFailed, write_text_atomic  # noqa: E402
-from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter, fence_step,  # noqa: E402
+from vaultlib import (SettingsUnavailable, find_vault, entity_type, extract_frontmatter, fence_step,  # noqa: E402
                       frontmatter_span, is_unchecked_source, set_key, settings, settings_file,
-                      vault_files, vault_layout, yaml_scalar)
+                      vault_files, yaml_scalar)
 
 REASON = re.compile(r"\(.+\)\s*$")
 HIT_DICE = re.compile(r"^(\d+)\s*/\s*(\d+)$")
@@ -1608,14 +1608,6 @@ def save_seen(path: Path, char_id: str, seen: Seen) -> None:
     """Write the memory whole or not at all, in a form a vault under version control diffs cleanly."""
     body = {"version": STATE_VERSION, "character": char_id, "lists": {k: sorted(set(v)) for k, v in seen.items()}}
     write_text_atomic(path, json.dumps(body, indent=1, sort_keys=True, ensure_ascii=False) + "\n")
-
-
-def find_vault(path: Path) -> Path | None:
-    """The first folder above the note that holds a settings file (either layout), None when there is none."""
-    for folder in path.resolve().parents:
-        if vault_layout(folder) != "none":
-            return folder
-    return None
 
 
 def note_character_id(text: str) -> str | None:

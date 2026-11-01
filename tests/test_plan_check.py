@@ -23,6 +23,7 @@ Run: python3 tests/test_plan_check.py
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -1002,3 +1003,150 @@ class SkeletonTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class MissingScenePointerTests(unittest.TestCase):
+    """A Plan pointer to a scene note the vault lacks is a WARNING (#490);
+    the vault is found by walking up from the plan."""
+
+    PLAN = ("---\ntype: session-plan\nsession: \"[[Session 04]]\"\n"
+            "chapter: \"[[Ch 1]]\"\n---\n\n## Planned Scenes\n\n"
+            "### [[Ashworth Dinner]]\n\n### [[Typo Scene]]\n\n"
+            "### [[Chapters/Ch 1/Scenes/Gala]]\n")
+
+    def make(self, with_meta=True):
+        root = Path(tempfile.mkdtemp(prefix="plan-check-ptr-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        if with_meta:
+            (root / "_meta").mkdir()
+        scenes = root / "Chapters" / "Ch 1" / "Scenes"
+        scenes.mkdir(parents=True)
+        (scenes / "Ashworth Dinner.md").write_text(
+            "---\ntype: scene\n---\n\nBody.\n", encoding="utf-8")
+        (scenes / "Gala.md").write_text(
+            "---\ntype: scene\n---\n\nBody.\n", encoding="utf-8")
+        plan = root / "Chapters" / "Ch 1" / "Planning" / "Plan.md"
+        plan.parent.mkdir(parents=True)
+        plan.write_text(self.PLAN, encoding="utf-8")
+        return root, plan
+
+    def rows(self, plan):
+        return [l for l in run_cli(plan).stdout.splitlines()
+                if "scene-pointer" in l]
+
+    def test_missing_scene_note_is_warned(self):
+        _root, plan = self.make()
+        rows = self.rows(plan)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith("WARNING\t"), rows)
+        self.assertIn("Typo Scene", rows[0])
+
+    def test_existing_notes_by_name_and_path_are_clean(self):
+        _root, plan = self.make()
+        rows = "\n".join(self.rows(plan))
+        self.assertNotIn("Ashworth Dinner", rows)
+        self.assertNotIn("Gala", rows)
+
+    def test_a_note_of_another_type_is_no_scene(self):
+        root, plan = self.make()
+        (root / "NPCs").mkdir()
+        (root / "NPCs" / "Typo Scene.md").write_text(
+            "---\ntype: npc\n---\n", encoding="utf-8")
+        self.assertEqual(len(self.rows(plan)), 1)
+
+    def test_no_vault_found_is_an_info_row_not_a_warning(self):
+        _root, plan = self.make(with_meta=False)
+        rows = self.rows(plan)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith("INFO\t"), rows)
+
+
+class ScenePointerFixRoundTests(unittest.TestCase):
+    """Wording and edge cases of the scene-pointer check (#490 review)."""
+
+    def vault(self, notes, plan_rel, plan_text, meta=True):
+        root = Path(tempfile.mkdtemp(prefix="plan-check-fix-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        if meta:
+            (root / "_meta").mkdir()
+        for rel, text in {**notes, plan_rel: plan_text}.items():
+            path = root / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+        return root / plan_rel
+
+    @staticmethod
+    def plan(*headings):
+        body = "".join(f"### {h}\n\n" for h in headings)
+        return ("---\ntype: session-plan\nchapter: \"[[Ch 1]]\"\n---\n\n"
+                f"## Planned Scenes\n\n{body}")
+
+    def rows(self, plan):
+        return [l for l in run_cli(plan).stdout.splitlines()
+                if "scene-pointer" in l]
+
+    def test_a_note_of_the_wrong_type_is_named_not_rewritten(self):
+        plan = self.vault(
+            {"Scenes/Gala.md": "---\ntype: Scene\n---\n"},
+            "Plans/P.md", self.plan("[[Gala]]"))
+        rows = self.rows(plan)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("exists", rows[0])
+        self.assertIn("isn't a scene note", rows[0])
+        self.assertNotIn("write the note", rows[0])
+
+    def test_a_bom_note_is_named_not_rewritten(self):
+        plan = self.vault(
+            {"Scenes/Gala.md": "\ufeff---\ntype: scene\n---\n"},
+            "Plans/P.md", self.plan("[[Gala]]"))
+        rows = self.rows(plan)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("isn't a scene note", rows[0])
+
+    def test_a_truly_missing_note_still_says_write_it(self):
+        plan = self.vault({}, "Plans/P.md", self.plan("[[Nope]]"))
+        self.assertIn("write the note", self.rows(plan)[0])
+
+    def test_no_vault_with_pointers_says_the_check_did_not_run(self):
+        root = Path(tempfile.mkdtemp(prefix="plan-check-novault-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        plan = root / "P.md"
+        plan.write_text(self.plan("[[Gala]]"), encoding="utf-8")
+        rows = self.rows(plan)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith("INFO\t"), rows)
+        self.assertIn("not run", rows[0])
+
+    def test_no_vault_and_no_pointers_stays_silent(self):
+        root = Path(tempfile.mkdtemp(prefix="plan-check-novault-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        plan = root / "P.md"
+        plan.write_text(self.plan("Scene 1: Docks"), encoding="utf-8")
+        self.assertEqual(self.rows(plan), [])
+
+    def test_a_bare_pointer_matching_two_chapters_is_flagged(self):
+        scene = "---\ntype: scene\n---\n"
+        plan = self.vault(
+            {"Chapters/A/Scenes/Gala.md": scene,
+             "Chapters/B/Scenes/Gala.md": scene},
+            "Plans/P.md", self.plan("[[Gala]]"))
+        rows = self.rows(plan)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("2 scene notes", rows[0])
+
+    def test_a_path_pointer_to_one_of_two_is_clean(self):
+        scene = "---\ntype: scene\n---\n"
+        plan = self.vault(
+            {"Chapters/A/Scenes/Gala.md": scene,
+             "Chapters/B/Scenes/Gala.md": scene},
+            "Plans/P.md", self.plan("[[Chapters/A/Scenes/Gala]]"))
+        self.assertEqual(self.rows(plan), [])
+
+    def test_a_template_plan_is_not_checked(self):
+        plan = self.vault({}, "_Templates/_Template_Plan.md",
+                          self.plan("[[Scene Note Title]]"))
+        self.assertEqual(self.rows(plan), [])
+
+    def test_the_alias_stays_in_the_location(self):
+        plan = self.vault({}, "Plans/P.md", self.plan("[[Nope|The Nope]]"))
+        self.assertIn("§[[Nope|The Nope]]", self.rows(plan)[0])

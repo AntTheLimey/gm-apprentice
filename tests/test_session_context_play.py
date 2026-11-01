@@ -204,6 +204,30 @@ class PointerBlockBriefTests(unittest.TestCase):
                       self.brief)
 
 
+class FencedBlankLinesTests(unittest.TestCase):
+    """Blank lines inside a code fence reach the brief as written (#549)."""
+
+    def brief(self, body):
+        scene = f"---\ntype: scene\n---\n\n{body}"
+        files = [("S/Dinner.md", scene, sc.extract_frontmatter(scene) or {})]
+        plan = ("---\ntype: session-plan\nsession: 4\n---\n\n"
+                "## Planned Scenes\n\n### [[Dinner]]\n")
+        return sc.play_brief(files, "P.md", plan)
+
+    def test_fence_keeps_its_blank_lines(self):
+        out = self.brief("Intro.\n\n```\nA\n\n\n\nB\n```\n\nEnd.\n")
+        self.assertIn("```\nA\n\n\n\nB\n```", out)
+
+    def test_tilde_fence_keeps_its_blank_lines(self):
+        out = self.brief("~~~\nA\n\n\n\nB\n~~~\n")
+        self.assertIn("~~~\nA\n\n\n\nB\n~~~", out)
+
+    def test_blank_runs_outside_a_fence_still_collapse(self):
+        out = self.brief("One.\n\n\n\nTwo.\n\n```\nx\n```\n\n\n\nThree.\n")
+        self.assertIn("One.\n\nTwo.", out)
+        self.assertIn("```\n\nThree.", out)
+
+
 class TopPausedSectionBriefTests(unittest.TestCase):
     """A section written by scene-paused at the top ends at its marker:
     the brief prints only the snapshot under Paused and leaves the prep
@@ -406,6 +430,80 @@ class FindPlanFallbackTests(unittest.TestCase):
         self.assertIsNone(sc._find_plan(files, "chapter five", 6))
 
 
+class ThreadSecondTierTests(unittest.TestCase):
+    """A rewritten sheet thread matches its Wrap-Up bullet on shared key
+    words when the ratio test misses (#537)."""
+
+    def test_the_venn_pair_matches(self):
+        self.assertTrue(sc.threads_related(
+            "Dr [[Venn]] was drugged in his study; someone knows the "
+            "cylinder is loose", "Venn drugged in study (by whom?)"))
+
+    def test_link_plus_two_words_matches(self):
+        self.assertTrue(sc.threads_related(
+            "[[Cylinder]] taken to the Calcutta warehouse by Roy",
+            "Who moved the [[Cylinder]] to the Calcutta warehouse?"))
+
+    def test_unrelated_threads_sharing_a_common_word_do_not(self):
+        self.assertFalse(sc.threads_related(
+            "Find the missing ledger before the audit",
+            "Repay Bram before the winter"))
+
+    def test_same_name_alone_does_not(self):
+        self.assertFalse(sc.threads_related(
+            "[[Venn]] owes the party a favour",
+            "[[Venn]] was seen leaving the quay at night"))
+
+    def test_a_the_link_still_counts_as_a_shared_name(self):
+        self.assertTrue(sc.threads_related(
+            "[[The Cylinder]] taken to Calcutta warehouse by Roy",
+            "Who moved [[Cylinder]] to Calcutta warehouse?"))
+
+    def test_label_words_are_not_key_words(self):
+        self.assertFalse(sc.threads_related(
+            "Resources: knows major session intent about the lantern",
+            "Knows: major session intent resources, and a lantern"))
+
+    def test_threads_help_explains_the_tilde(self):
+        done = run_cli(FIXTURE, "--help")
+        self.assertIn("~", done.stdout)
+        self.assertIn("likely", done.stdout)
+
+    def reworded_vault(self):
+        tmp = Path(tempfile.mkdtemp(prefix="thread-tier-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        (tmp / "Ada.md").write_text(
+            "---\ntype: pc\n---\n\n## Current Status\n\n**Open threads:**\n"
+            "- Dr [[Venn]] was drugged in his study; someone knows the "
+            "cylinder is loose\n", encoding="utf-8")
+        (tmp / "Wrap.md").write_text(
+            "---\ntype: session_wrap\nsession: 3\n---\n\n## GM Notes\n\n"
+            "### What Carries Forward\n\n#### Unresolved Threads\n\n"
+            "- Venn drugged in study (by whom?)\n", encoding="utf-8")
+        return tmp
+
+    def test_report_marks_a_reworded_thread_tentative(self):
+        tmp = self.reworded_vault()
+        report = sc.thread_report(load_files(tmp), 5, None, tmp)
+        self.assertIn("first~3\tlast~3\tage~2", report)
+        self.assertNotIn("first=", report)
+        self.assertNotIn("not in any wrap-up", report)
+        self.assertIn("~ means a likely match", report.splitlines()[1])
+
+    def test_tentative_match_leaves_the_bullet_in_the_orphan_list(self):
+        tmp = self.reworded_vault()
+        report = sc.thread_report(load_files(tmp), 5, None, tmp)
+        orphans = report.split(
+            "--- Wrap-up threads not on any PC sheet ---", 1)[1]
+        self.assertIn("session 3\tVenn drugged in study", orphans)
+
+    def test_no_legend_when_nothing_is_tentative(self):
+        report = sc.thread_report(
+            load_files(FIXTURE), 7, "chapter 4 - calcutta", FIXTURE)
+        self.assertNotIn("~", report.splitlines()[1])
+        self.assertNotIn("likely match", report)
+
+
 class ThreadReportTests(unittest.TestCase):
     """`thread_report(files, current, chapter, vault)` and `--threads`."""
 
@@ -502,3 +600,15 @@ class ThreadReportTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PointerKeyPeriodTests(unittest.TestCase):
+    """A bare pointer keeps its periods: `[[Dr. Venn's Study]]` is not `Dr`."""
+
+    def test_bare_name_with_a_period_points_at_its_note(self):
+        pointed = {sc.pointer_key("Dr. Venn's Study")}
+        self.assertTrue(sc.is_pointed_at("Scenes/Dr. Venn's Study.md", pointed))
+        self.assertFalse(sc.is_pointed_at("Scenes/Dr.md", pointed))
+
+    def test_a_written_md_suffix_is_still_dropped(self):
+        self.assertEqual(sc.pointer_key("The Ball.md"), sc.pointer_key("The Ball"))

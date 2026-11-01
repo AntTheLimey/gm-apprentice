@@ -1127,5 +1127,67 @@ class BuildLinesTests(unittest.TestCase):
         self.assertEqual(problems, ["line 2: <!-- /gm-only --> with no opener"])
 
 
+class ChaptersNamedAliasTests(unittest.TestCase):
+    """A chapter's aliases are the last tier of `chapters_named` (#491)."""
+
+    CHAPTERS = [
+        ("Chapters/Ch 4 - Calcutta Nights/Ch 4 - Calcutta Nights.md",
+         {"type": "chapter", "aliases": ["Calcutta"]}),
+        ("Chapters/Ch 5 - Home/Ch 5 - Home.md",
+         {"type": "chapter", "title": "Home", "aliases": ["Calcutta Redux"]}),
+    ]
+
+    def test_alias_names_the_chapter(self):
+        hits = vl.chapters_named(self.CHAPTERS, "Calcutta")
+        self.assertEqual([r for r, _ in hits], [self.CHAPTERS[0][0]])
+
+    def test_alias_via_wikilink(self):
+        hits = vl.chapters_named(self.CHAPTERS, "[[calcutta redux]]")
+        self.assertEqual([r for r, _ in hits], [self.CHAPTERS[1][0]])
+
+    def test_two_chapters_sharing_an_alias_are_both_returned(self):
+        shared = [(r, {**fm, "aliases": ["Calcutta"]})
+                  for r, fm in self.CHAPTERS]
+        self.assertEqual(len(vl.chapters_named(shared, "Calcutta")), 2)
+
+    def test_a_file_name_beats_an_alias(self):
+        chapters = self.CHAPTERS + [
+            ("Chapters/Calcutta/Calcutta.md", {"type": "chapter"})]
+        hits = vl.chapters_named(chapters, "Calcutta")
+        self.assertEqual([r for r, _ in hits],
+                         ["Chapters/Calcutta/Calcutta.md"])
+
+
+class FindVaultTests(unittest.TestCase):
+    """The one vault-finding rule (plan_check and dnd_ddb share it)."""
+
+    def tree(self, *dirs, files=()):
+        root = Path(tempfile.mkdtemp(prefix="find-vault-")).resolve()
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        for d in dirs:
+            (root / d).mkdir(parents=True, exist_ok=True)
+        for f in files:
+            (root / f).parent.mkdir(parents=True, exist_ok=True)
+            (root / f).write_text("x", encoding="utf-8")
+        (root / "Sub").mkdir(exist_ok=True)
+        return root
+
+    def test_settings_file_marks_a_vault(self):
+        root = self.tree(files=["_meta/vault-config.yaml"])
+        self.assertEqual(vl.find_vault(root / "Sub" / "n.md"), root)
+
+    def test_meta_folder_marks_a_vault(self):
+        root = self.tree("_meta")
+        self.assertEqual(vl.find_vault(root / "Sub" / "n.md"), root)
+
+    def test_templates_folder_marks_a_vault(self):
+        root = self.tree("_Templates")
+        self.assertEqual(vl.find_vault(root / "Sub" / "n.md"), root)
+
+    def test_no_marker_is_none(self):
+        root = self.tree()
+        self.assertIsNone(vl.find_vault(root / "Sub" / "n.md"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

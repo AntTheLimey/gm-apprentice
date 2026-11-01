@@ -96,13 +96,14 @@ import scene_queue
 from schema_rules import (SESSION_PLAYED, chapter_key, chapter_of,
                           extract_frontmatter, parse_session_number,
                           wikilink_target)
-from vaultlib import (GM_MARKER_RE, is_out_of_play, out_of_play,  # noqa: F401
+from vaultlib import (GM_MARKER_RE, is_active_pc,  # noqa: F401
+                      is_out_of_play, out_of_play,
                       report_unreadable_settings, setting_or_builtin,
                       SKIP_DIRS, WRAP_UP_TYPES, body_of, entity_type,
                       fenced_headings, h3_blocks, nested_mapping,
                       normalize, raw_frontmatter, section,
                       session_ref_number, word_count)
-from vaultlib import link_name, split_paused
+from vaultlib import fence_step, link_name, split_paused
 from vaultlib import vault_files as _vault_files
 
 
@@ -368,6 +369,53 @@ def _norm_thread(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().casefold()
 
 
+_THREAD_LINK_RE = re.compile(r"\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]")
+_THREAD_STOP = frozenset("""
+about after again also and any are away back because been before being but
+came can come could did does each even ever every few first for from gave get
+give got going gone good had has have her him his how into its last left let
+like made make many may more most much must never new next not now off one
+only other our out over own put said say she see seen should since still
+some such take taken than that the their them then there they this those too
+took told two under upon use very want was were what when where which while
+who whom why will with without would yet you your
+knows resources major session relationships intent moment carried""".split())
+
+
+def _thread_words(raw: str) -> tuple[set[str], set[str]]:
+    """(wikilink targets, significant words) of a thread line, both
+    casefolded. A word is significant when it has three or more letters
+    and is no stop word; a link target's own words count as words."""
+    links = {re.sub(r"^(the|a|an) ", "",
+                    m.group(1).rpartition("/")[2].replace("_", " ")
+                    .strip().casefold())
+             for m in _THREAD_LINK_RE.finditer(raw)}
+    words = {w for w in re.findall(r"[^\W\d_]{3,}", _norm_thread(raw))
+             if w not in _THREAD_STOP}
+    return links, words
+
+
+def threads_related(a: str, b: str) -> bool:
+    """The second matching tier for a PC thread and a Wrap-Up bullet the
+    ratio test missed (a rewritten sheet line keeps its key words, not
+    their order or length). They share a person, place or thing (a
+    wikilink target of one that the other links or names) and two further
+    significant words; or, with no such name, four significant words. Either
+    way those words must be half of the shorter line's, so a long thread
+    and a short bullet that only meet over a common name stay apart."""
+    links_a, words_a = _thread_words(a)
+    links_b, words_b = _thread_words(b)
+    shared = words_a & words_b
+    names = {t for t in links_a | links_b
+             if (t in links_a and t in links_b)
+             or set(t.split()) <= (words_b if t in links_a else words_a)}
+    named = {w for t in names for w in t.split()}
+    extra = len(shared - named)
+    need = 2 if names else 4
+    smaller = min(len(words_a), len(words_b))
+    return extra >= need and extra * 2 >= smaller
+
+
 _POINTER_RE = re.compile(r"\[\[([^\[\]|#]+)(?:[#|][^\[\]]*)?\]\]")
 
 
@@ -404,9 +452,23 @@ def _scene_note_text(files, name: str, chapter: str | None = None) -> str:
     _rel, text, _fm = hits[0]
 
     def strip_markers(part: str) -> str:
-        part = "\n".join(line for line in part.splitlines()
-                         if not GM_MARKER_RE.fullmatch(line.strip()))
-        return re.sub(r"\n{3,}", "\n\n", part).strip()
+        kept: list[str] = []
+        fence: str | None = None
+        blanks = 0
+        for line in part.splitlines():
+            if GM_MARKER_RE.fullmatch(line.strip()):
+                continue
+            fence, edge = fence_step(line, fence)
+            if fence is not None or edge:
+                blanks = 0  # fenced text stays exactly as written
+            elif line == "":
+                blanks += 1
+                if blanks > 1:
+                    continue  # a blank run outside a fence collapses
+            else:
+                blanks = 0
+            kept.append(line)
+        return "\n".join(kept).strip()
 
     # Split on the raw body so the span is the one prep and the writer
     # see; only then drop the marker lines.
@@ -417,21 +479,38 @@ def _scene_note_text(files, name: str, chapter: str | None = None) -> str:
     return body or f"(scene note {name} is empty)"
 
 
-def plan_pointers(plan_text: str) -> set[str]:
-    """The scene notes a Plan points at (`### [[Note]]` under Planned and
-    Contingency Scenes): a bare `[[Note]]` by `normalize(stem)`, one
-    written as a path by its `normalize`d vault-relative path without
-    `.md` (it has a `/`, so the two kinds never collide)."""
-    out: set[str] = set()
+def scene_pointer_titles(plan_text: str) -> list[tuple[str, str]]:
+    """(target, heading) for each `### [[Note]]` heading under Planned and
+    Contingency Scenes, in Plan order: the target as written (a path keeps
+    its folders, `.md` dropped) and the heading text, alias and all."""
+    out: list[tuple[str, str]] = []
     for title in ("Planned Scenes", "Contingency Scenes"):
         body = section(plan_text, title)
         for heading, _b in (h3_blocks(body) if body is not None else []):
             target = _pointer_target(heading)
             if target:
-                target = target.removesuffix(".md")
-                out.add(normalize(target if "/" in target
-                                  else Path(target).stem))
+                out.append((target.removesuffix(".md"), heading.strip()))
     return out
+
+
+def scene_pointers(plan_text: str) -> list[str]:
+    """The notes a Plan's scene pointers name, as written (see
+    `scene_pointer_titles`)."""
+    return [t for t, _h in scene_pointer_titles(plan_text)]
+
+
+def pointer_key(target: str) -> str:
+    """How `plan_pointers` keys one `scene_pointers` target."""
+    return normalize(target if "/" in target else target.removesuffix(".md"))
+
+
+def plan_pointers(plan_text: str) -> set[str]:
+    """The scene notes a Plan points at (`### [[Note]]` under Planned and
+    Contingency Scenes): a bare `[[Note]]` by its `normalize`d name without
+    `.md` (periods in the name kept), one
+    written as a path by its `normalize`d vault-relative path without
+    `.md` (it has a `/`, so the two kinds never collide)."""
+    return {pointer_key(t) for t in scene_pointers(plan_text)}
 
 
 def is_pointed_at(rel: str, pointed: set[str]) -> bool:
@@ -543,6 +622,10 @@ def play_brief(files, plan_rel: str, plan_text: str) -> str:
     return "\n\n".join(parts)
 
 
+def _ratio_match(norm: str, bullet: str) -> bool:
+    return SequenceMatcher(None, norm, _norm_thread(bullet)).ratio() >= 0.6
+
+
 def thread_report(files, current: int, chapter, vault: Path) -> str:
     """Per-PC Open-threads ages against Wrap-Up Unresolved Threads / PC
     Carry-Forward bullets, plus wrap-up bullets that never made it onto
@@ -579,12 +662,12 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
     not_playing = out_of_play(vault)
     stale_after = setting_or_builtin(vault, "vault.stale_after_sessions")
     pcs = [(rel, text) for rel, text, fm in files
-           if fm.get("type") == "pc" and not rel.endswith("_Story.md")
-           and not is_out_of_play(fm, not_playing)]
+           if is_active_pc(rel, fm, not_playing)]
 
     # Unresolved bullets a PC thread actually matched, keyed by (session,
     # bullet text) — everything else is reported as an orphan below.
     matched: set[tuple[int, str]] = set()
+    tentative = False
 
     if not pcs:
         lines.append("(no active PC entities found)")
@@ -601,23 +684,36 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
             hits: list[int] = []
             for n, unresolved, carry in wrap_ups:
                 for bullet in unresolved + carry:
-                    if SequenceMatcher(None, norm,
-                                      _norm_thread(bullet)).ratio() >= 0.6:
+                    if _ratio_match(norm, bullet):
                         hits.append(n)
                         if bullet in unresolved:
                             matched.add((n, bullet))
                         break
+            mark = "="
+            if not hits:
+                # The looser tier reads only what the first missed. Its
+                # matches are tentative: marked `~`, and they leave the
+                # orphan list alone.
+                mark = "~"
+                for n, unresolved, carry in wrap_ups:
+                    if any(threads_related(thread, bullet)
+                           for bullet in unresolved + carry):
+                        hits.append(n)
+                tentative = tentative or bool(hits)
             if hits:
                 first, last = min(hits), max(hits)
                 age = current - last
                 stale = "STALE" if age >= stale_after else ""
-                lines.append(f"{thread}\tfirst={first}\tlast={last}\t"
-                             f"age={age}\t{stale}")
+                lines.append(f"{thread}\tfirst{mark}{first}\tlast{mark}{last}"
+                             f"\tage{mark}{age}\t{stale}")
             else:
                 lines.append(
                     f"{thread}\tfirst=?\tlast=?\tage=?\t"
                     f"(not in any wrap-up — check it is still live)")
 
+    if tentative:
+        lines.insert(1, "(~ means a likely match by shared names and words, "
+                        "not the same text: check it)")
     lines.append("--- Wrap-up threads not on any PC sheet ---")
     orphans = [f"session {n}\t{bullet}"
               for n, unresolved, _carry in wrap_ups
@@ -808,8 +904,7 @@ def arcs_report(files, chapter, upcoming: int, vault: Path) -> str:
 
     not_playing = out_of_play(vault)
     pcs = [(rel, text, fm) for rel, text, fm in files
-           if fm.get("type") == "pc" and not rel.endswith("_Story.md")
-           and not is_out_of_play(fm, not_playing)]
+           if is_active_pc(rel, fm, not_playing)]
 
     def since(last: int | None, label: str) -> str:
         if last is None:
@@ -1232,7 +1327,9 @@ def main() -> int:
                            "the vault's stale-after number "
                            "(vault.stale_after_sessions; a candidate, not a "
                            "verdict — resolve, advance, or retire is the "
-                           "GM's call)")
+                           "GM's call). A thread read as first~N age~N (~ instead "
+                           "of =) is a likely match by shared names and "
+                           "words, not the same text: check it")
     mode.add_argument(
         "--arcs", action="store_true",
         help="print the Session Context header and the PC Arcs report "
@@ -1422,9 +1519,7 @@ def main() -> int:
     not_playing = out_of_play(args.vault)
     found_pc = False
     for rel, text, fm in files:
-        if fm.get("type") != "pc" or rel.endswith("_Story.md"):
-            continue
-        if is_out_of_play(fm, not_playing):
+        if not is_active_pc(rel, fm, not_playing):
             continue
         found_pc = True
         as_of = fm.get("asOfSession", "?")
