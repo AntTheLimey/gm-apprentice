@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.10.119] — 2026-11-01
 
-Wrap-up asks the GM less and finds more, and vault-ingest's Reconstruction Note stops reaching the player site. Publish tool unchanged; no vault change is needed.
+Wrap-up asks the GM less and finds more, and vault-ingest's Reconstruction Note stops reaching the player site. Publish tool unchanged; the vault update `reconstruction-note-fence` fences existing Reconstruction Notes.
 
 ### Added
 
@@ -25,7 +25,7 @@ Wrap-up asks the GM less and finds more, and vault-ingest's Reconstruction Note 
 ### Fixed
 
 - `session-new --play-date` refuses a date that does not exist, such as `2026-02-31`.
-- vault-ingest now fences its Reconstruction Note gm-only, so a new one no longer shows on the player site. Notes already in a vault are not changed.
+- vault-ingest now fences its Reconstruction Note gm-only, so a new one no longer shows on the player site. The vault update `reconstruction-note-fence` fences the ones already in a vault, so they stop publishing too.
 
 ---
 
