@@ -998,14 +998,20 @@ function siteNameOf(e, site) {
 // list, the stricter of two callout rules kept, a setting the vault's file lacks carried into it, and one the vault's
 // file sets differently left as the vault has it and listed as dropped. Carried and dropped settings go on `out` (the
 // mend's carry: { carried, dropped, lines }), so the plan says them before anything is written (#539).
-function foldInto(vault, site, out) {
+// `lists: false` leaves the hiding lists and the callout rule alone (the vault's already hold what the site file says)
+// and only accounts for the other settings, so that nothing leaves the site file unsaid.
+function foldInto(vault, site, out, { lists = true } = {}) {
   const nowRead = read.readSettings({ vaultPath: vault, siteConfig: {} });
   const now = nowRead.values;
   const siteOnly = read.readOldLayout({ vaultPath: vault, siteConfig: site, skipOldFile: true });
+  // A left-over old file that sets a setting beat the site folder's file on it, as it did in the move itself.
+  const beaten = fs.existsSync(at(vault, OLD_FILE)) ? read.readOldLayout({ vaultPath: vault, siteConfig: {} }).origins : {};
   const changes = [];
   const said = [];
   const before = { carried: out.carried.length, dropped: out.dropped.length };
-  for (const e of REGISTRY) {
+  for (const e of lists ? REGISTRY : []) {
+    // (A value that is not usable is listed as dropped below, never added.)
+    if (siteOnly.origins[e.name] === 'fault') continue;
     for (const w of (e.was || []).filter((x) => x.in === 'site' && x.read !== false)) {
       const segs = w.name.split('.');
       const value = getPath(site, segs);
@@ -1039,13 +1045,18 @@ function foldInto(vault, site, out) {
     }
     if ((e.type === 'list' && e.guards) || e.type === 'switchOrList') continue;   // (added to the vault's, above)
     const value = getPath(siteOnly.values, segs);
+    if (covers(getPath(now, segs), value)) continue;                    // the vault's settings already say it
     const mine = nowRead.origins[e.name];
     const vaultSets = mine !== undefined && mine !== 'default' && mine !== 'inherit';
-    if (!vaultSets) {
+    if (beaten[e.name] && beaten[e.name] !== 'default') {
+      out.dropped.push({ from, why: `the left-over ${OLD_FILE} set ${e.name}, so the site file's value was not in use` });
+      const unused = `\`${from}\` in the site folder's vault.config.json was not in use (the left-over ${OLD_FILE} set \`${e.name}\`), so it was removed and not carried over.`;
+      say(out, unused, unused.replace('so it was removed', 'so it is removed'));
+    } else if (!vaultSets) {
       out.carried.push({ from, to: e.name, value });
       changes.push({ op: 'set', name: e.name, value });
       say(out, `\`${from}\` moved to \`${e.name}\`.`, `\`${from}\` moves to \`${e.name}\`.`);
-    } else if (!covers(getPath(now, segs), value)) {
+    } else {
       const kept = getPath(now, segs);
       out.dropped.push({ from, why: `the vault already sets ${e.name} to ${showValue(kept)}` });
       const differs = `\`${from}\` in the site folder's vault.config.json (${showValue(value)}) differs from \`${e.name}\` in the vault's settings (${showValue(kept)}); the vault's is kept and the site file's was removed.`;
@@ -1057,7 +1068,7 @@ function foldInto(vault, site, out) {
     say(out, `\`${from}\` in the site folder's vault.config.json is not a setting, so it was removed and not carried over.`,
       `\`${from}\` in the site folder's vault.config.json is not a setting, so it is removed and not carried over.`);
   }
-  if (!said.length && out.carried.length === before.carried && out.dropped.length === before.dropped) {
+  if (lists && !said.length && out.carried.length === before.carried && out.dropped.length === before.dropped) {
     said.push('The vault\'s own values are the ones in use, so nothing was carried.');
   }
   return { changes, said };
@@ -1123,12 +1134,13 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
         const { siteAfter, siteOut, removedKeys } = hold ? stripSiteKeys(siteText, { carriedOnly: true, leaveFallback: keysHeld, only }) : all;
         const changes = [...carry.changes, ...stepsPlan.changes];
         let said = null;
-        if (differs.length && !hold) {
+        if (!hold && siteOut !== null) {
           // Fold what the site file says into the vault's file first: a hiding list's entries are added (built-ins
-          // kept), the stricter of two callout rules is kept, anything else is the vault's value already.
-          const folded = foldInto(vault, view, carry);
+          // kept), the stricter of two callout rules is kept, a setting the vault lacks is carried, and anything
+          // else is listed as dropped. With nothing differing, only what was not in use is listed.
+          const folded = foldInto(vault, view, carry, { lists: differs.length > 0 });
           changes.push(...folded.changes);
-          said = folded.said;
+          if (differs.length) said = folded.said;
         }
         if (changes.length) {
           const planned = planChanges(vault, changes);
@@ -1156,7 +1168,7 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
         } else if (said && siteOut !== null) {
           lines.push(`Will take the settings out of ${siteFile}: ${removedKeys.join(', ')}. ${[...said, 'The rest of that file is as it was.'].join(' ')}`);
         } else if (siteOut !== null) {
-          lines.push(`Will remove the settings from ${siteFile}: ${removedKeys.join(', ')}. ${carry.carried.length ? '' : 'The new file already holds them; '}The rest of that file is as it was.`);
+          lines.push(`Will remove the settings from ${siteFile}: ${removedKeys.join(', ')}. ${carry.carried.length || carry.dropped.length ? '' : 'The new file already holds them. '}The rest of that file is as it was.`);
         }
         if (siteOut !== null || stepsPlan.pkg || stepsPlan.changes.length) {
           try {

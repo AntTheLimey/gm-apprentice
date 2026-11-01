@@ -1159,6 +1159,33 @@ test('an unusable site value or a name that is not a setting is shown, left with
   assert.equal(p.images.max_width, 800);
 });
 
+test('a site value a left-over old file beat is listed as dropped, never carried, with or without other differences (#539)', () => {
+  for (const extra of [{ footer: 'SiteF' }, { footer: 'SiteF', siteTitle: 'T' }]) {
+    const { s, file, siteJson } = movedWithSiteFile('', extra);
+    fs.writeFileSync(at(s.vault, OLD_FILE), old('  footer: OldF\n'));       // a sync brings an old file back
+    for (const foldSiteFile of extra.siteTitle ? [true] : [false, true]) {
+      const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile }, { pinCheck: () => null });
+      assert.deepEqual(plan.dropped.map((d) => d.from), ['footer'], JSON.stringify(extra));
+      assert.match(plan.dropped[0].why, /left-over/);
+      assert.ok(!plan.carried.some((c) => c.from === 'footer'));
+      assert.doesNotMatch(plan.lines.join('\n'), /already holds them/);
+    }
+    applyMove(planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null }));
+    assert.equal(readSettings({ vaultPath: s.vault, siteConfig: {} }).values.player_site.footer, null);
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), siteJson);
+  }
+});
+
+test('a hiding list that is not usable is listed as dropped and adds nothing to the vault\'s list (#539)', () => {
+  const { s, file } = movedWithSiteFile('', { excludeSections: [1, { a: 2 }, 'X'] });
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null });
+  assert.deepEqual(plan.dropped.map((d) => d.from), ['excludeSections']);
+  assert.doesNotMatch(plan.lines.join('\n'), /entries were added/);
+  applyMove(plan);
+  const got = readSettings({ vaultPath: s.vault, siteConfig: {} }).values.player_site.hide.sections;
+  assert.ok(!got.includes('X') && !got.includes('1'), JSON.stringify(got));
+});
+
 // ---- What a site folder's vault.config.json still holds: carried into the vault, then taken out of the site file ----
 
 const SITE_ALL = {
