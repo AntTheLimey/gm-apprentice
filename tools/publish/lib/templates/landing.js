@@ -211,7 +211,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
     npcZone = `<div class="dashboard-section">
   <h2>NPCs in Play</h2>
   <div class="npc-grid"${noPreviewAttr()}>${npcCards}</div>
-  ${npcIndex ? `<a class="recap-link" href="characters/npcs/index.html">View all ${npcTotal} NPCs &rarr;</a>` : ''}
+  ${npcIndex ? `<a class="recap-link" href="characters/npcs/index.html">View all ${npcTotal} NPC${npcTotal === 1 ? '' : 's'} &rarr;</a>` : ''}
 </div>`;
   }
 

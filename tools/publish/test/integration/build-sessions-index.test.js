@@ -140,7 +140,7 @@ describe('empty section indexes are not written (#543)', () => {
     it(`${side}: "View all N NPCs" counts the NPCs the index lists, not every npc page`, () => {
       const mixed = buildBoth(storyVault({ ...NPC, 'NPCs/Other Fixer.md': '---\ntype: npc\ntitle: Other Fixer\nstatus: alive\n---\n\n# Other Fixer\n\nElsewhere.\n' }));
       try {
-        assert.match(mixed[side].read('index.html'), /View all 1 NPCs/);
+        assert.match(mixed[side].read('index.html'), /View all 1 NPC &rarr;/);
         assert.equal((mixed[side].read('characters', 'npcs', 'index.html').match(/Mara Quill|Other Fixer/g) || []).filter((n) => n === 'Other Fixer').length, 0);
       } finally { mixed.cleanup(); }
     });
