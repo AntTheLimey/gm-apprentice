@@ -6,6 +6,7 @@ const { markerRe: markerPattern } = require('./markers');
 const { blockLines, sanitize, marksAtHeadings, unmark } = require('./gm-marks');
 const { bareSectionTitle } = require('./pc-prose');
 const { wikilinkRe, parseWikilink, labelsForLinks, labelsForLinksFully } = require('./wikilink');
+const { WRAP_UP_TYPES } = require('./shared-lists');
 const { headingKey, headingKeys, squashedKeys, titleNamedIn } = require('./heading-key');
 const md = createRenderer();
 
@@ -140,9 +141,18 @@ function isDocumentPage(frontmatter) {
   return type === 'document' || type === 'handout' || type === 'prop';
 }
 
+const MOMENTS_KEY = 'memorable moments';
+// The walk's `by` for a section the story-moments setting withholds, and the label its mark carries.
+const STORY_MOMENTS_BY = '\u0000story-moments';
+const STORY_MOMENTS_LABEL = 'player_site.story.moments: off — Story pages show the recap only';
+function isWrapUpPage(frontmatter) {
+  return !!frontmatter && WRAP_UP_TYPES.has(String(frontmatter.type || '').trim().toLowerCase());
+}
+
 // Why a heading is withheld: 'excluded' (on the exclude list at any level, or a
 // document page's Keeper section at level 2), 'sheet' (a PC section that is not on
-// the keep-list, level 1-2 only), or null. isExcludedSection and the strip both
+// the keep-list, level 1-2 only), 'story' (a wrap-up's Memorable Moments while
+// `player_site.story.moments` is off), or null. isExcludedSection and the strip both
 // ask this, so the explanation cannot drift from the strip.
 function exclusionReason(title, excludeSections = [], frontmatter = null, level = 2, rules = {}) {
   // `## **GM Notes**`, `## GM Notes:` and `## GM Notes {#gm}` are the same section as
@@ -160,6 +170,11 @@ function exclusionReason(title, excludeSections = [], frontmatter = null, level 
       .map(bareSectionTitle)
       .filter(t => t !== '');
     if (!keep.includes(headingKey(title))) return 'sheet';
+  }
+  // `player_site.story.moments` off: a wrap-up's Memorable Moments section stays off the site (the Story page's cards).
+  if (rules.storyMoments === false && level <= 2 && isWrapUpPage(frontmatter)
+      && headingKeys(title).includes(MOMENTS_KEY)) {
+    return 'story';
   }
   return null;
 }
@@ -226,6 +241,7 @@ const BEFORE_FIRST_SECTION = 'text before the first section';
 
 // The mark's label for a walk's reason: a section title, the text before the first section, or a note no parser read.
 function sectionLabel(by) {
+  if (by === STORY_MOMENTS_BY) return STORY_MOMENTS_LABEL;
   if (by === '(unparsed note)') return 'note body (it could not be read)';
   return by === BEFORE_FIRST_SECTION ? by : `${by} section`;
 }
@@ -269,7 +285,7 @@ function markedSections(markdown, withheldBy, mark) {
 // Sections withheld only by the PC keep-list are sheetWithheldTitles' to report.
 function strippedSectionTitles(markdown, excludeSections = [], frontmatter = null, rules = {}) {
   return walkSections(markdown, excludeSections, frontmatter, rules).stripped
-    .filter(s => s.reason === 'excluded').map(s => s.title);
+    .filter(s => s.reason === 'excluded' || s.reason === 'story').map(s => s.title);
 }
 
 // The `##` titles withheld ONLY by the PC keep-list: not on the exclude list, not a
@@ -429,7 +445,7 @@ function walkExcludeList(lines, excludeSections, frontmatter, rules) {
     // one takes over the level, so a `# GM Notes` under `## GM Notes` is not ended
     // by the next `##`.
     for (const seen of [h, margin, h || margin || settled.has(i) ? null : looseHeading(lines, i)]) {
-      const reason = seen ? exclusionReason(seen.title, excludeSections, frontmatter, seen.level, {}) : null;
+      const reason = seen ? exclusionReason(seen.title, excludeSections, frontmatter, seen.level, { storyMoments: rules.storyMoments }) : null;
       if (!reason) continue;
       if (excluding) {
         excludeLevel = Math.min(excludeLevel, seen.level);
@@ -437,7 +453,7 @@ function walkExcludeList(lines, excludeSections, frontmatter, rules) {
       }
       excluding = true;
       excludeLevel = seen.level;
-      by = seen.title;
+      by = reason === 'story' ? STORY_MOMENTS_BY : seen.title;
       stripped.push({ title: seen.title, reason });
     }
 
@@ -1791,14 +1807,14 @@ function portraitBasename(frontmatter) {
 function playerSafeMarkdown(markdown, options = {}) {
   if (options.mark) return markedSafeMarkdown(markdown, options);
   const stripped = strippedLines(String(markdown == null ? '' : markdown).replace(/\r\n?/g, '\n'), options.excludeCallouts, null,
-    sectionWithholder(options.excludeSections, options.frontmatter, { pcKeepSections: options.pcKeepSections }));
+    sectionWithholder(options.excludeSections, options.frontmatter, { pcKeepSections: options.pcKeepSections, storyMoments: options.storyMoments }));
   const { warnings } = stripped;
   let text = stripped.lines.join('\n');
   text = filterSections(text, options.excludeSections, options.frontmatter,
-    { pcKeepSections: options.pcKeepSections, warn: (m) => warnings.push(m), restored: stripped.restored });
+    { pcKeepSections: options.pcKeepSections, storyMoments: options.storyMoments, warn: (m) => warnings.push(m), restored: stripped.restored });
   // The chain's faults that show on this page (noteFacts), by the same section rules.
   const { strays, openFence } = noteFacts(stripped, (lines, restored) => keptFlags(lines, options.excludeSections, options.frontmatter,
-    { pcKeepSections: options.pcKeepSections, restored }));
+    { pcKeepSections: options.pcKeepSections, storyMoments: options.storyMoments, restored }));
   return { text, warnings, strays, openFence };
 }
 
@@ -1814,10 +1830,10 @@ function cutLines(text, rules) {
     lines.forEach((line, i) => { cut[from[i]] = line; });
     return { cut, unbalanced };
   }
-  const { excludeSections, frontmatter, pcKeepSections, excludeCallouts } = rules;
+  const { excludeSections, frontmatter, pcKeepSections, storyMoments, excludeCallouts } = rules;
   const stripped = strippedLines(source.replace(/\r/g, ''), excludeCallouts, null,
-    sectionWithholder(excludeSections, frontmatter, { pcKeepSections }));
-  const walk = walkSections(stripped.lines.join('\n'), excludeSections, frontmatter, { pcKeepSections, inBlock: stripped.restored });
+    sectionWithholder(excludeSections, frontmatter, { pcKeepSections, storyMoments }));
+  const walk = walkSections(stripped.lines.join('\n'), excludeSections, frontmatter, { pcKeepSections, storyMoments, inBlock: stripped.restored });
   const withheldBy = cut.slice();
   stripped.lines.forEach((line, i) => {
     if (stripped.restored.has(i)) return;
@@ -1832,11 +1848,11 @@ function cutLines(text, rules) {
 // are filtered with the mark too, so the hidden sections are kept and marked.
 function markedSafeMarkdown(markdown, options) {
   const stripped = strippedLines(String(markdown == null ? '' : markdown).replace(/\r/g, ''), options.excludeCallouts, options.mark,
-    sectionWithholder(options.excludeSections, options.frontmatter, { pcKeepSections: options.pcKeepSections }));
+    sectionWithholder(options.excludeSections, options.frontmatter, { pcKeepSections: options.pcKeepSections, storyMoments: options.storyMoments }));
   const { warnings } = stripped;
   let text = stripped.lines.join('\n');
   text = filterSections(text, options.excludeSections, options.frontmatter,
-    { pcKeepSections: options.pcKeepSections, warn: (m) => warnings.push(m), mark: options.mark });
+    { pcKeepSections: options.pcKeepSections, storyMoments: options.storyMoments, warn: (m) => warnings.push(m), mark: options.mark });
   try { text = marksAtHeadings(text, findHeadings); } catch (err) { warnings.push('could not parse the note\'s headings; a mark may run across them'); }
   return { text, warnings, strays: [], openFence: null };
 }
@@ -2070,7 +2086,7 @@ function headingShape(text, titleFirst) {
 // sections' (title kept). Any failure to parse counts as unstable.
 function pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, options = {}) {
   const fm = page.sourceFrontmatter || page.frontmatter;
-  if (!pcKeepRuleApplies(fm, { pcKeepSections: options.pcKeepSections })) return false;
+  if (!pcKeepRuleApplies(fm, { pcKeepSections: options.pcKeepSections, storyMoments: options.storyMoments })) return false;
   const base = playerSafeMarkdown(page.markdown || '', { excludeCallouts: options.excludeCallouts }).text;
   const transform = (text) => {
     // A missing image embed warns; this is a dry run, so it must stay quiet and leave usedImages alone.
@@ -2131,7 +2147,7 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   const fm = page.sourceFrontmatter || page.frontmatter;
   // A withheld heading inside a hidden block comes back where the block ended (#447). The GM site's strips keep the
   // heading where it is; they are asked of the player strips only for the warning.
-  const withholds = sectionWithholder(excludeSections, fm, { pcKeepSections: options.pcKeepSections });
+  const withholds = sectionWithholder(excludeSections, fm, { pcKeepSections: options.pcKeepSections, storyMoments: options.storyMoments });
   const source = page.markdown.replace(/\r/g, '');
   const stripped = strippedLines(source, options.excludeCallouts, mark, withholds);
   warnings.push(...stripped.warnings);
@@ -2150,7 +2166,7 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   // The PC keep-list is decided here, on the raw note, before any transform: the same
   // text publishedMarkdown, explain and the doctor walk. A note whose headings the
   // transforms below would change is withheld whole (pcHeadingsUnstable).
-  const keepRules = { pcKeepSections: options.pcKeepSections, titleStripped: true, warn: (m) => warnings.push(m) };
+  const keepRules = { pcKeepSections: options.pcKeepSections, storyMoments: options.storyMoments, titleStripped: true, warn: (m) => warnings.push(m) };
   let unstable = false;
   if (options.pcKeepSections && page.headingsUnstable === undefined) {
     unstable = pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, options);

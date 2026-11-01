@@ -430,6 +430,21 @@ player_site:
     quick_links: ["Harbour_City_Map"]
 ```
 
+## Story pages
+
+A session's wrap-up is its Story page: the recap, the wrap-up's other
+sections, then the Memorable Moments as cards. One switch controls the cards.
+It belongs to the player site, and the GM site follows it: the GM site still
+shows the cards, marked as hidden from players.
+
+<!-- settings:story -->
+
+| Setting | What it does | Values | Left out |
+|---------|--------------|--------|----------|
+| `player_site.story.moments` | The Memorable Moments section of a session's wrap-up, shown as cards after the story on its Story page. Off, the section is left out of the site: no page, search entry, link preview or Connections text holds it. The GM site still shows the cards, marked | A switch | On |
+
+<!-- /settings:story -->
+
 ## Props
 
 When the site publishes a prop note, it gets one page listing every prop
@@ -593,6 +608,7 @@ mark always means hidden from players. The GM site's folder is
 - `player_site.never_show`
 - `player_site.features.live_stats`
 - `player_site.features.inbox`
+- `player_site.story.moments`
 
 <!-- /settings:gm-not-per-site -->
 

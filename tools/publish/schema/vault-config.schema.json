@@ -1238,6 +1238,30 @@
             }
           }
         },
+        "story": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "moments": {
+              "description": "The Memorable Moments section of a session's wrap-up, shown as cards after the story on its Story page. Off, the section is left out of the site: no page, search entry, link preview or Connections text holds it. The GM site still shows the cards, marked",
+              "default": true,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
         "props": {
           "type": [
             "object",
@@ -2473,6 +2497,12 @@
               ]
             }
           }
+        },
+        "story": {
+          "type": [
+            "object",
+            "null"
+          ]
         },
         "props": {
           "type": [

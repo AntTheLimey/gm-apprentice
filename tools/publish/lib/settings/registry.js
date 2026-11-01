@@ -41,6 +41,7 @@ const GROUPS = [
   { id: 'sheets', title: 'Character sheets' },
   { id: 'live', title: 'Live play' },
   { id: 'landing', title: 'The landing page' },
+  { id: 'story', title: 'Story pages' },
   { id: 'props', title: 'Props' },
   { id: 'lists', title: 'Lists and pictures' },
   { id: 'limits', title: 'Limits' },
@@ -577,6 +578,14 @@ const REGISTRY = [
     does: 'Where the title, tagline and dates sit in the landing page\'s title area, card or full-bleed',
   },
 
+  // The Story pages
+  { name: 'player_site.story', type: 'map', container: true },
+  {
+    name: 'player_site.story.moments', type: 'switch', default: true, group: 'story',
+    does: "The Memorable Moments section of a session's wrap-up, shown as cards after the story on its Story page. Off, the section is left out of the site: no page, search entry, link preview or Connections text holds it. The GM site still shows the cards, marked",
+    left_out: 'On',
+  },
+
   // The props page: one page listing every prop the site shows, and its box on the landing page
   { name: 'player_site.props', type: 'map', container: true },
   {
@@ -740,7 +749,7 @@ const NOT_PER_SITE = new Set(['player_site.publish', 'player_site.folder', 'play
   'player_site.output', 'player_site.cloudflare_project', 'player_site.keep',
   'player_site.hide.folders', 'player_site.hide.sections', 'player_site.hide.fields', 'player_site.hide.callouts',
   'player_site.hide.drafts', 'player_site.hide.field_exceptions', 'player_site.never_show',
-  'player_site.features.live_stats', 'player_site.features.inbox']);
+  'player_site.features.live_stats', 'player_site.features.inbox', 'player_site.story.moments']);
 // A twin that does not inherit when unset: the player site's build steps never run for the GM site.
 const GM_OWN_DEFAULT = { 'player_site.before_build': [], 'player_site.after_build': [] };
 // What a twin does not copy: it has no old names, no default of its own (unset, it takes the player site's value), and

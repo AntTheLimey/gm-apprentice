@@ -13,7 +13,7 @@ const { loadManifest } = require('../manifest');
 const { publishedPages } = require('../published-pages');
 const { ALWAYS_EXCLUDE_DIRS } = require('../publish-decision');
 const { getsNoPage, decideNoPage, listedOnly, rowsFor } = require('../previews');
-const { pcKeepList } = require('../pc-prose');
+const { pcKeepList, storyMomentsOn } = require('../pc-prose');
 const { pairHubs } = require('../session-hub');
 const { parseNote } = require('../frontmatter');
 const { canonicalNfc } = require('../unicode');
@@ -142,7 +142,7 @@ function collectHidden({ configPath, outputDir = null }) {
       add(piecesOfMarkdown(page.markdown), rel, 'note body (a link label changes its headings)');
       continue;
     }
-    const options = { excludeSections, excludeCallouts, frontmatter: fm, pcKeepSections };
+    const options = { excludeSections, excludeCallouts, frontmatter: fm, pcKeepSections, storyMoments: storyMomentsOn(playerConfig) };
     for (const source of [page.markdown, page.storyMarkdown].filter((t) => typeof t === 'string')) {
       let text = sanitize(source);
       let shownText = source;

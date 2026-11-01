@@ -8,7 +8,7 @@ const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllN
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit, detectEncoder, CACHE_FOLDER } = require('./image-optimize');
 const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
 const { resolveBanner, renderBanner, normalizeEntry, attachmentRef, isAddress, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
-const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
+const { pcKeepList, storyMomentsOn, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
@@ -387,6 +387,8 @@ function buildSite(options) {
   const excludeSections = hideFrom.exclude_sections;
   // The PC keep-list: null while character sheets are on, otherwise the sections a PC publishes.
   const pcKeepSections = pcKeepList(publishConfig);
+  // `player_site.story.moments`: the GM site reads the player site's value, as it does the hiding settings.
+  const storyMoments = storyMomentsOn(hideFrom);
   // The one derivation of "sheets off": the filter's own answer, handed to the page template.
   const sheetsOff = pcKeepSections !== null;
   const excludeCallouts = hideFrom.exclude_callouts;
@@ -1202,23 +1204,23 @@ function buildSite(options) {
       // the body, marked. No note-faults facts.
       const gmFm = page.sourceFrontmatter || page.frontmatter;
       page.gmMarkedPublished = page.headingsUnstable ? '' : filterSections(
-        strippedLines(source, excludeCallouts, mark, sectionWithholder(excludeSections, gmFm, { pcKeepSections })).lines.join('\n'),
-        excludeSections, gmFm, { pcKeepSections, mark });
+        strippedLines(source, excludeCallouts, mark, sectionWithholder(excludeSections, gmFm, { pcKeepSections, storyMoments })).lines.join('\n'),
+        excludeSections, gmFm, { pcKeepSections, storyMoments, mark });
       page.publishedMarkdown = withoutMarked(page.gmMarkedPublished, mark.marks);
       return;
     }
     const fm = page.sourceFrontmatter || page.frontmatter;
     // A withheld heading inside a hidden block comes back where the block ended, as on the page (#447).
-    const stripped = strippedLines(source, excludeCallouts, null, sectionWithholder(excludeSections, fm, { pcKeepSections }));
+    const stripped = strippedLines(source, excludeCallouts, null, sectionWithholder(excludeSections, fm, { pcKeepSections, storyMoments }));
     // A stub's facts were taken when it was cut. A fault that lies wholly in text the page
     // hides anyway (noteFacts) is none; a note withheld whole shows none.
     stripFacts.set(page, stubFacts.get(page) || {
       source, hidden: page.headingsUnstable ? [] : stripped.hidden,
-      ...noteFacts(stripped, (lines, restored) => (page.headingsUnstable ? lines.map(() => false) : keptFlags(lines, excludeSections, fm, { pcKeepSections, restored }))),
+      ...noteFacts(stripped, (lines, restored) => (page.headingsUnstable ? lines.map(() => false) : keptFlags(lines, excludeSections, fm, { pcKeepSections, storyMoments, restored }))),
     });
     const text = stripped.lines.join('\n');
     page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(text, excludeSections, fm,
-      { pcKeepSections, restored: stripped.restored });   // its warnings are the page render's to print, once
+      { pcKeepSections, storyMoments, restored: stripped.restored });   // its warnings are the page render's to print, once
   }
   // Every page but a PC's first: the Story spine reads the wrap-ups' published views to decide which wrap-up folds.
   const isPcPage = (page) => String((page.sourceFrontmatter || page.frontmatter || {}).type).trim().toLowerCase() === 'pc';
@@ -1747,7 +1749,7 @@ function buildSite(options) {
       const basename = canonicalNfc(String(page.frontmatter.portrait).split('/').pop());
       if (basename && imageMap[basename]) usedImages.add(basename);
     }
-    const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts, pcKeepSections, ...markOpt });
+    const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts, pcKeepSections, storyMoments, ...markOpt });
     processed.bannerHtml = bannerHtml;
     fx.warn(page.outputPath, processed.warnings);
     if (processed.overwide.length) fx.tableRows.push({ rel: vaultRelPathOf(page), rows: processed.overwide });
@@ -1759,7 +1761,7 @@ function buildSite(options) {
       case 'pc': {
         // Warnings are dropped here, not ignored: processContent above ran this same
         // strip chain over the same markdown and already reported them.
-        let filtered = page.headingsUnstable ? unstableBody(page) : playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, pcKeepSections, frontmatter: page.sourceFrontmatter || page.frontmatter, ...markOpt }).text;
+        let filtered = page.headingsUnstable ? unstableBody(page) : playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, pcKeepSections, storyMoments, frontmatter: page.sourceFrontmatter || page.frontmatter, ...markOpt }).text;
         // Images before wikilinks: resolveWikiLinks' `[[…]]` pattern also matches the inner
         // brackets of an `![[image.png]]` embed and would flatten it to literal text.
         filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath, usedImages, {

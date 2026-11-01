@@ -19,7 +19,7 @@ const { assertNoStops, outputFolderOf } = require('./config');
 const { canonicalPath, loadPublishList } = require('./manifest');
 const { settledHeadingsOf } = require('./settled-headings');
 const { strippedSectionTitles, sheetWithheldTitles, publishMode } = require('./processor');
-const { pcKeepList, retiredSheetFieldsFor } = require('./pc-prose');
+const { pcKeepList, storyMomentsOn, retiredSheetFieldsFor } = require('./pc-prose');
 const { getCanonStatus } = require('./templates/base');
 const { sheetSourceOf } = require('./sheet-source');
 const { parseNote } = require('./frontmatter');
@@ -42,7 +42,7 @@ function switchesOf(publishConfig) {
 // replicate (the build's own stability check owns that).
 function sheetWithheldOf(publishConfig, markdown, frontmatter) {
   return [...new Set(sheetWithheldTitles(markdown, publishConfig.exclude_sections || [], frontmatter,
-    { pcKeepSections: pcKeepList(publishConfig) }))];
+    { pcKeepSections: pcKeepList(publishConfig), storyMoments: storyMomentsOn(publishConfig) }))];
 }
 
 // Whether a note is a prop: read off the page the scanner made, or, when it made none (a folder the site does not
@@ -150,7 +150,7 @@ async function runExplain(options, deps) {
   const excludeSections = publishConfig.exclude_sections || [];
   // The strip's own walk, so a document's Keeper sections (#280) are named here too.
   const stripped = frontmatterError ? null
-    : [...new Set(strippedSectionTitles(markdown, excludeSections, frontmatter, { pcKeepSections: pcKeepList(publishConfig) }))];
+    : [...new Set(strippedSectionTitles(markdown, excludeSections, frontmatter, { pcKeepSections: pcKeepList(publishConfig), storyMoments: storyMomentsOn(publishConfig) }))];
   const sheetWithheld = frontmatterError || !page ? null : sheetWithheldOf(publishConfig, markdown, frontmatter);
   const gmOnlyBlocks = frontmatterError ? null : markersIn(markdown).filter((m) => m.name === 'gm-only' && !m.close).length;
 
@@ -414,7 +414,7 @@ async function runExplainAll(options, deps) {
       // the scanner produced no page for it. gm-leak reads these rather than keep a
       // second copy of the rules (#280).
       strippedSections: page
-        ? [...new Set(strippedSectionTitles(page.markdown || '', survey.publishConfig.exclude_sections || [], page.frontmatter, { pcKeepSections: pcKeepList(survey.publishConfig) }))]
+        ? [...new Set(strippedSectionTitles(page.markdown || '', survey.publishConfig.exclude_sections || [], page.frontmatter, { pcKeepSections: pcKeepList(survey.publishConfig), storyMoments: storyMomentsOn(survey.publishConfig) }))]
         : null,
       sheetWithheldSections: page ? sheetWithheldOf(survey.publishConfig, page.markdown || '', page.frontmatter) : null,
       // vault_check pc-body reads this rather than parse the field itself.

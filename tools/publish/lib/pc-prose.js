@@ -70,7 +70,13 @@ function pcKeepList(publishConfig) {
   return [...PC_PROSE_SECTIONS, ...extra];
 }
 
+// false while `player_site.story.moments` is off, otherwise true (an injected publishConfig without `story` means on).
+function storyMomentsOn(publishConfig) {
+  return !(publishConfig && publishConfig.story && publishConfig.story.moments === false);
+}
+
 module.exports = {
+  storyMomentsOn,
   PC_PROSE_SECTIONS, RETIRED_BY_SYSTEM, RETIRED_SHEET_FIELDS, retiredSheetFieldsFor, retiredSheetFieldsMessage,
   pcKeepList, bareSectionTitle,
 };

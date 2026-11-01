@@ -107,8 +107,9 @@ test('nothing reads the vault settings file but the settings package', () => {
 //   page_banner  player_site.theme.page_banner as written (not enumerable; build.js finds and copies it)
 //   theme_hooks  whether pages carry the hooks a theme styles by (not enumerable; build.js sets it for the templates)
 //   rules_lists  whether a sheet carries the tool's own rules lists, { gurpsReference, cocSkillList } (not enumerable; build.js passes them to the sheet renderers)
+//   story     { moments }: player_site.story.moments (not enumerable; the GM site reads the player site's value)
 //   gm        the GM site's switch, folder and show switches, { publish, folder, show } (not enumerable; the GM build reads it)
-const DERIVED = ['switches', 'live', 'legacy', 'faults', 'layout', 'site', 'steps', 'menu_extra', 'limits', 'header_facts', 'withheld_words', 'never_show', 'statuses', 'gm', 'rules_lists', 'stylesheets', 'theme_hooks', 'page_banner'];
+const DERIVED = ['switches', 'live', 'legacy', 'faults', 'layout', 'site', 'steps', 'menu_extra', 'limits', 'header_facts', 'withheld_words', 'never_show', 'statuses', 'gm', 'rules_lists', 'stylesheets', 'theme_hooks', 'page_banner', 'story'];
 
 // Only reads through the name `publishConfig` are checked (`publishConfig.x`, `publishConfig['x']`,
 // and one level further for the groups). A read through another name (`p.x`, `cfg.publish.x`)
