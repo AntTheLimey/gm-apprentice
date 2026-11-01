@@ -14,7 +14,7 @@ const { runLeakGate } = require('../../lib/leak-gate');
 
 const STORY_1 = 'story/chapter-1-docks-session-1.html';
 const INTRO = 'story/chapter-1-docks-intro.html';
-const TOKEN = /[-]/;
+const TOKEN = /[\uE000-\uE002]/;
 const rel = (site, f) => path.relative(site.dir, f).split(path.sep).join('/');
 const texts = (site) => site.files().filter((f) => /\.(?:html|json|js|xml|txt)$/.test(f)).map((f) => [rel(site, f), fs.readFileSync(f, 'utf8')]);
 const read = (site, p) => site.read(...p.split('/'));
@@ -192,6 +192,52 @@ describe('the GM Story page', () => {
         }
       } finally { s.cleanup(); }
     }
+  });
+});
+
+// The GM Story page shows what players see at its address, plus what they don't, marked.
+describe('the GM Story page where players see something else', () => {
+  it('a draft wrap-up held back from a Story page players have (the session\'s own recap): their recap unmarked, the wrap-up in one mark, no page banner', () => {
+    const hub = SESSION(1).replace('HUB-BODY-1: what the GM prepped.\n', '## Narrative Recap\n\nHUBRECAP-1 the hub.\n');
+    const s = buildBoth(storyVault({ 'Sessions/Session 1.md': hub }), { player: { hide: { drafts: true } } });
+    try {
+      const player = read(s.player, STORY_1);
+      assert.ok(player.includes('HUBRECAP-1'));
+      for (const [file, text] of texts(s.player)) {
+        for (const draft of ['The party reached the docks', 'LOOT-KEY-1', 'MOMENT-FUNNY-1', 'MOMENT-QUOTE-1', ...SECRETS]) assert.ok(!text.includes(draft), `${draft} in ${file}`);
+      }
+      assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.player.dir }).findings, []);
+      const page = read(s.gm, STORY_1);
+      assert.ok(!/gm-band--hidden/.test(page), 'players do see this page');
+      assert.equal(nestingFault(page), null);
+      assert.ok(ascending(at(page, ['HUBRECAP-1', 'The party reached the docks', 'LOOT-KEY-1', 'MOMENT-FUNNY-1', 'GMSECRET-NOTES-1'])));
+      const marks = markedTexts(page);
+      const held = marks.filter((m) => m.label.startsWith('This wrap-up is held back from players: '));
+      assert.equal(held.length, 1, JSON.stringify(marks.map((m) => m.label)));
+      assert.equal(held[0].kind, 'notes');
+      assert.match(held[0].label, /DRAFT/);
+      for (const w of ['The party reached the docks', 'LOOT-KEY-1', 'MOMENT-FUNNY-1', 'MOMENT-QUOTE-1', 'GMSECRET-NOTES-1']) assert.ok(held[0].text.includes(w), `${w} in the mark`);
+      for (const m of marks) assert.ok(!m.text.includes('HUBRECAP-1'), 'the players\' recap is marked');
+      assert.ok(page.includes('class="story-playnotes"'));
+      for (const [file, text] of texts(s.gm)) assert.ok(!TOKEN.test(text), `a mark token in ${file}`);
+    } finally { s.cleanup(); }
+  });
+
+  it('a session note players do not see, its wrap-up on its own page: the banner says where players read it', () => {
+    const hub = SESSION(1).replace('status: played\n', 'status: played\npublish: false\n');
+    const s = buildBoth(storyVault({ 'Sessions/Session 1.md': hub }));
+    try {
+      assert.ok(!s.player.exists(...STORY_1.split('/')));
+      assert.ok(read(s.player, 'sessions/session-1-wrap-up.html').includes('The party reached the docks'));
+      for (const [file, text] of texts(s.player)) {
+        for (const secret of [...SECRETS, 'HUB-BODY-1']) assert.ok(!text.includes(secret), `${secret} in ${file}`);
+      }
+      const page = read(s.gm, STORY_1);
+      const banner = /<div class="gm-band gm-band--hidden gm-mark"[^>]*>([^<]*)<\/div>/.exec(page);
+      assert.ok(banner, 'the banner');
+      assert.equal(banner[1], "Players don't see this page: players see this wrap-up on its own page (sessions/session-1-wrap-up.html), not here");
+      assert.equal(nestingFault(page), null);
+    } finally { s.cleanup(); }
   });
 });
 

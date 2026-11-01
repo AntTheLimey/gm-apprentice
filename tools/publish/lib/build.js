@@ -1230,6 +1230,11 @@ function buildSite(options) {
   // address, under the session's title, and every link-map key that named it now names the Story page; it stays in
   // `pages`, a source of links and words like any page (backlinks, Connections, recency, search, cards, landing).
   const probeSpine = buildStorySpine(pages, null, storyPairs);
+  // The GM site: the addresses of the player site's own Story pages, from its pages and its pairs, so each GM Story
+  // page can say what players see there (story-spine.js `players`). Before the fold, as the player site reads them.
+  const playerStory = gm ? new Set(buildStorySpine(pages.filter((p) => onPlayerSite.has(p)), null,
+    new Map([...hubWrapUps].filter(([hub, wrap]) => onPlayerSite.has(hub) && onPlayerSite.has(wrap)))).map((u) => u.outputPath)) : null;
+  const storyPlayers = gm ? { has: (out) => playerStory.has(out), shows: (page) => onPlayerSite.has(page) } : null;
   applyFold(foldPlan(probeSpine), linkMap);
   LOWER_KEYS.delete(linkMap);   // its folded spellings were read from the old addresses
 
@@ -2253,7 +2258,7 @@ function buildSite(options) {
   // from that filtered set regardless of whether a manifest exists, so gating this on
   // `manifest` just meant a manifest-less player build shipped every GM-only image.
   // A recap's picture counts as used: the story pages are rendered once here, for the set only.
-  if (!onlySheets) buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages, warn: true }, { marked: gm });
+  if (!onlySheets) buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages, warn: true }, { marked: gm, players: storyPlayers });
   const filteredMap = {};
   for (const [basename, entry] of Object.entries(imageMap)) {
     if (usedImages.has(basename)) filteredMap[basename] = entry;
@@ -2448,12 +2453,19 @@ function buildSite(options) {
   }
   // What the GM Story page shows after the cards: the wrap-up's parts that go there (its GM Notes, its Source
   // preamble), then a link to the session's Play Notes when they have a page.
-  function gmAfterHtml(unit) {
+  function gmAfter(unit) {
     const parts = (unit.after || []).map((a) => a.html).join('\n');
     const href = unit.kind === 'session' ? playNotesHrefOf(unit) : null;
     if (href) unit.playNotesHref = href;
-    return (parts ? `<section class="story-gm-after">\n${parts}\n</section>` : '')
-      + (href ? `\n<p class="story-playnotes"><a href="${encodeHref(relativeHref(unit.outputPath, href))}">Play Notes for this session →</a></p>` : '');
+    unit.afterHtml = parts ? `<section class="story-gm-after">\n${parts}\n</section>` : '';
+    unit.playNotesHtml = href ? `<p class="story-playnotes"><a href="${encodeHref(relativeHref(unit.outputPath, href))}">Play Notes for this session →</a></p>` : '';
+  }
+  // The GM Story page's banner: why players have no Story page at this address (its folded wrap-up held back, or
+  // shown on its own page; the unit's own note held back), or null when they have one.
+  function storyBanner(unit, folded) {
+    if (playerStory.has(unit.outputPath)) return null;
+    if (folded && onPlayerSite.has(folded)) return `players see this wrap-up on its own page (${folded.foldedFrom}), not here`;
+    return (folded && folded.gmHiddenBecause) || unit.sourcePage.gmHiddenBecause || 'the player site has no Story page here';
   }
   // A session's Play Notes: the note its `documents.play_notes` names, else its wrap-up's `source_document`; the
   // address of its page, or null when it has none.
@@ -2506,7 +2518,7 @@ function buildSite(options) {
 
     // The story: its chapters, each PC's own story, its contents page.
     // On the GM site each Story page reads its wrap-up's marked view: its GM-only parts in place, marked.
-    const spine = buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages }, { marked: gm });
+    const spine = buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages }, { marked: gm, players: storyPlayers });
     for (const unit of spine) {
       if (unit.moments) {
         const parsed = parseMoments(unit.moments.markdown);
@@ -2522,13 +2534,19 @@ function buildSite(options) {
           for (const tag of parsed.unknownTags) console.warn(`  WARNING: ${vaultRelPathOf(unit.wrapUpPage)}: Memorable Moments: "#moment/${tag}" is not a kind (${KINDS.join(', ')}); the moment shows with no kind`);
         }
       }
-      if (gm) unit.afterHtml = gmAfterHtml(unit);
-      const html = renderStoryUnit(unit, config, publishConfig, navFor);
-      // The GM site writes the page with its folded wrap-up's banner and hidden-fields panel: nothing the wrap-up's
-      // own page showed is lost.
       const folded = (foldedOnto.get(unit.outputPath) || [])[0];
+      if (gm) gmAfter(unit);
+      // A wrap-up players do not see, on a Story page they have: its parts in one mark, after their own recap.
+      if (gm && unit.heldBack) {
+        const why = (unit.wrapUpPage && unit.wrapUpPage.gmHiddenBecause) || 'the player site leaves it out';
+        unit.heldBack.open = mark.marks.open('notes', `This wrap-up is held back from players: ${why}`);
+        unit.heldBack.close = mark.marks.close();
+      }
+      const html = renderStoryUnit(unit, config, publishConfig, navFor);
+      // The GM site writes the page with its folded wrap-up's hidden-fields panel, and a banner when players have no
+      // Story page here (with the reason): nothing the wrap-up's own page showed is lost.
       emit(unit.outputPath, html, `  wrote ${unit.outputPath}`,
-        { outputPath: unit.outputPath, gmHiddenBecause: folded ? folded.gmHiddenBecause : null, gmHidden: folded ? folded.gmHidden : [] });
+        { outputPath: unit.outputPath, gmHiddenBecause: gm ? storyBanner(unit, folded) : null, gmHidden: folded ? folded.gmHidden : [] });
       // Each wrap-up folded into this page is read on it, as its own page was: its faults are its note's.
       if (live) for (const page of foldedOnto.get(unit.outputPath) || []) seen(vaultRelPathOf(page), html, page, false);
     }
