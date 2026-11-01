@@ -11,14 +11,12 @@
 // second reading of the same rules.
 const fs = require('fs');
 const path = require('path');
-const { mapFolder, matchExcludedDir } = require('./scanner');
+const { mapFolder, matchExcludedDir, scanAttachments } = require('./scanner');
 const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, alwaysExcludedSegment } = require('./publish-decision');
 const { decideNoPage, listedOnly } = require('./previews');
 const { surveyVault, pairsWith } = require('./manifest-cli');
-const { buildStorySpine } = require('./story-spine');
-const { foldPlan } = require('./story-fold');
-const { publishView } = require('./published-view');
-const { assertNoStops, outputFolderOf } = require('./config');
+const { playerFoldPlan } = require('./published-view');
+const { assertNoStops, outputFolderOf, scanConfigFor } = require('./config');
 const { canonicalPath, loadPublishList } = require('./manifest');
 const { settledHeadingsOf } = require('./settled-headings');
 const { strippedSectionTitles, sheetWithheldTitles, publishMode } = require('./processor');
@@ -167,15 +165,12 @@ async function runExplain(options, deps) {
   // A story companion has no page of its own; its content is on the PC's page, so
   // that is the URL to name.
   // A wrap-up a Story unit claims folds into that unit's Story page (story-fold.js): the build writes no file for it.
-  // The probe spine is the build's own (no link map), built on the pages that publish with the pairs made above.
-  // The spine reads each page's published view, as the build does (published-view.js): a recap only inside a gm-only
-  // fence or an excluded section is no recap, so the unit is not there to fold into.
-  if (page && publishes) {
-    const rules = { gm: false, excludeCallouts: publishConfig.exclude_callouts, excludeSections: publishConfig.exclude_sections || [], pcKeepSections: pcKeepList(publishConfig), storyMoments: storyMomentsOn(publishConfig) };
-    for (const p of publishedPages) publishView(p, rules);
-  }
+  // The plan is the player site's (published-view.js playerFoldPlan, which the leak gate reads too), made on the pages
+  // that publish with the pairs made above: each read as the build reads it (a paired session note's body withheld, a
+  // stub cut, the published view, the site's pictures), so a recap only in a hidden part, or only a missing picture, is
+  // no recap, and the unit is not there to fold into.
   const folded = page && publishes && verdict.code !== 'STORY_COMPANION'
-    ? foldPlan(buildStorySpine(publishedPages, null, sitePairs)).get(page) : null;
+    ? playerFoldPlan(publishedPages, sitePairs, publishConfig, scanAttachments(scanConfigFor(Object.assign({}, config, { vaultPath }), publishConfig))).get(page) : null;
   const mergedInto = verdict.code === 'STORY_COMPANION' ? storyCompanionPc(target, pagesByRel)
     : folded ? { outputPath: folded.outputPath, title: folded.title, storyPage: true } : null;
   // A prop its container lists with nothing of its own to show publishes with no page (previews.js listedOnly).

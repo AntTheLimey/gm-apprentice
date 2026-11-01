@@ -920,7 +920,7 @@ describe('explain on a wrap-up folded into its Story page (#543)', () => {
 // hidden part makes no Story page, so explain must not name one.
 describe('explain and the build agree on which wrap-ups fold (published view)', () => {
   const { buildBoth } = require('./helpers/gm-build');
-  const { storyVault, WRAP_1 } = require('./helpers/story-vault');
+  const { storyVault, WRAP_1, SESSION } = require('./helpers/story-vault');
   const S1 = 'Sessions/Session 1 Wrap-Up.md';
   const STORY_1 = ['story', 'chapter-1-docks-session-1.html'];
   const run = async (files, opts, target) => {
@@ -969,5 +969,24 @@ describe('explain and the build agree on which wrap-ups fold (published view)', 
     const hidden = await run(files('<!-- gm-only -->\n# Chapter 2\n\nINTRO-HIDDEN.\n<!-- /gm-only -->'), {}, target);
     assert.doesNotMatch(hidden.text, /Story page/);
     assert.match(hidden.text, /VERDICT: publishes at /);
+  });
+
+  it('(d) a paired session note with a recap of its own, its wrap-up\'s recap gm-only: the note\'s body is withheld, so no Story page, in both', async () => {
+    const r = await run(storyVault({
+      'Sessions/Session 1.md': SESSION(1).replace('HUB-BODY-1: what the GM prepped.', 'HUB-BODY-1: what the GM prepped.\n\n## Recap\n\nHUB-RECAP-1 they went.'),
+      [S1]: recapHidden,
+    }), {}, S1);
+    assert.doesNotMatch(r.text, /Story page/);
+    assert.match(r.text, /VERDICT: publishes at .*session-1-wrap-up\.html/);
+    assert.ok(!r.story && r.wrapPage);
+  });
+
+  it('(e) a recap that is only a picture the vault lacks: no Story page, in both', async () => {
+    const wrap = WRAP_1.replace(/## Narrative Recap\n\n[^\n]+\n/, '## Narrative Recap\n\n![[docks-at-dusk.png]]\n');
+    assert.notStrictEqual(wrap, WRAP_1);
+    const r = await run(storyVault({ [S1]: wrap }), {}, S1);
+    assert.doesNotMatch(r.text, /Story page/);
+    assert.match(r.text, /VERDICT: publishes at .*session-1-wrap-up\.html/);
+    assert.ok(!r.story && r.wrapPage);
   });
 });
