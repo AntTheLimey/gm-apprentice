@@ -120,7 +120,7 @@ def clean_text(text: str) -> str:
 def escape(text: str, legacy: bool = False) -> str:
     """Backslash-escape what markdown reads as syntax anywhere, and what it reads at a line's start.
 
-    `legacy`: as releases before 1.10.112 escaped, leaving what the site's typographer changes
+    `legacy`: as releases before 1.10.114 escaped, leaving what the site's typographer changes
     (dash runs, (c) (r) (tm), +-, ????, ,,). Only to recognise a fingerprint they remembered."""
     text = SYNTAX.sub(r"\\\1", text)
     text = "".join(ANGLES.get(c, c) for c in text)
@@ -279,7 +279,7 @@ def held(part: str, span: Span | None) -> str:
 
 def source_parts(player_text: PlayerText, legacy: bool = False) -> dict[str, str]:
     """Each part as the markdown sync would write it; "" for a part the source leaves empty.
-    `legacy`: as releases before 1.10.112 wrote it (see `escape`)."""
+    `legacy`: as releases before 1.10.114 wrote it (see `escape`)."""
     shown = {k.title(): one_line(v, legacy) for k, v in player_text.facts.items()}
     facts = ""
     if any(shown.get(label) for label in FACTS):

@@ -1702,7 +1702,7 @@ def _fence_source(text: str) -> str | None:
 
 
 def find_wrapup_source_fence(vault: Path) -> list[Item]:
-    """1.10.112 (#542): a wrap-up's `> [!info] Source` callout is the GM's
+    """1.10.114 (#542): a wrap-up's `> [!info] Source` callout is the GM's
     bookkeeping (which file, which skill), so it goes inside a gm-only
     fence, as the template and `vault_write.py` now write it. One players
     cannot see already is left alone."""
@@ -1776,6 +1776,6 @@ VAULT_CHECKS: list[Check] = [
           find_empty_scenes_lists),
     Check("dnd-background-sections", "1.10.94", 3,
           "backstory sections in D&D PC notes", find_dnd_background_sections),
-    Check("wrapup-source-fence", "1.10.112", 3,
+    Check("wrapup-source-fence", "1.10.114", 3,
           "the Source callout in Wrap-Ups", find_wrapup_source_fence),
 ]

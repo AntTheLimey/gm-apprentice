@@ -1,4 +1,4 @@
-"""`wrapup-source-fence` (1.10.112, #542): a wrap-up's `> [!info] Source`
+"""`wrapup-source-fence` (1.10.114, #542): a wrap-up's `> [!info] Source`
 callout is GM bookkeeping, so it goes inside a gm-only fence. One already
 hidden is left alone, and the step is idempotent."""
 
@@ -162,7 +162,7 @@ class SourceFenceTests(unittest.TestCase):
     def test_registered(self):
         by = {c.name: c for c in mv.VAULT_CHECKS}
         c = by["wrapup-source-fence"]
-        self.assertEqual((c.release, c.band, c.asks_site), ("1.10.112", 3, False))
+        self.assertEqual((c.release, c.band, c.asks_site), ("1.10.114", 3, False))
 
 
 class TemplateTests(unittest.TestCase):
