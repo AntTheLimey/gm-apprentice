@@ -28,13 +28,14 @@ wrap-ups; nothing else in a vault changes.
   does: the name on one line where it fits, the meta labels in the
   accent colour, and the initials centred beside them (#485).
 - Dash runs and symbol shorthands in a player's backstory, appearance
-  and personality text print as typed: `--` and `---` no longer turn
-  into an en or em dash, a typed `<!--` stays as it is, and `(c)`,
-  `(r)`, `(tm)` (any case) and `+-` no longer become ©, ®, ™ and ±
-  (#484). D&D Beyond sync escapes them. Curly quotes and `...` as an
-  ellipsis are left to the site's typography. A part an earlier sync wrote, still as it wrote
+  and personality text print as typed (#484): `--` and `---` no
+  longer turn into an en or em dash, a typed `<!--` stays as it is,
+  `(c)`, `(r)`, `(tm)` (any case) and `+-` no longer become ©, ®, ™
+  and ±, and `????` and `,,` are no longer shortened. D&D Beyond sync
+  escapes them. Curly quotes and `...` as an ellipsis are left to the
+  site's typography. A part an earlier sync wrote, still as it wrote
   it, is rewritten once in the new escaping (one WRITE row, the same
-  words); a part the GM wrote or edited is left alone.
+  words); a part the GM wrote or edited is left alone, with no CHECK.
 
 ---
 
