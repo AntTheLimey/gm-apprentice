@@ -30,7 +30,9 @@ function fixtureVaults() {
       out.push({ id: `vault-${slug(name)}`, dir });
     }
   }
-  for (const rel of ['tests/benchmark-campaign', 'tests/fixtures/slice-a/leak', 'tests/fixtures/slice-a/version-behind',
+  // tests/benchmark-campaign is not here: it was brought to the new settings layout in 1.10.118 (#489), and this
+  // matrix holds the vaults the old reader's golden answers were recorded for.
+  for (const rel of ['tests/fixtures/slice-a/leak', 'tests/fixtures/slice-a/version-behind',
     'tests/fixtures/slice-a/wrapup', 'tests/fixtures/slice-b/index']) {
     out.push({ id: `vault-${slug(rel.replace(/^tests\/(fixtures\/)?/, ''))}`, dir: path.join(REPO_ROOT, rel) });
   }
