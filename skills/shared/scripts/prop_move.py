@@ -377,9 +377,7 @@ def convert_build_props(c: Conversion) -> None:
 VOID = frozenset({"area", "base", "br", "col", "embed", "hr", "img", "input",
                   "link", "meta", "source", "track", "wbr"})
 EXTERNAL_RE = re.compile(r"^(?:[a-z][a-z0-9+.-]*:|//)", re.I)
-CSS_URL_RE = re.compile(r"""url\(\s*(['"]?)([^'")]+)\1\s*\)|@import\s+(['"])([^'"]+)\3""")
 PAGE_EXTS = (".html", ".htm")
-PICTURE_PATH_RE = re.compile(r"^[^\s:]+\.(?:png|jpe?g|gif|webp|svg|avif)(?:[?#].*)?$", re.I)
 GM_FENCE_RE = re.compile(r"<!--\s*(/?)gm-only\s*-->")
 CODE_TAG_RE = re.compile(r"<(/?)(script|style)\b", re.I)
 
@@ -412,9 +410,6 @@ class PageReader(HTMLParser):
         for key in ("href", "src"):
             if a.get(key):
                 self.refs.append(a[key])
-        # A picture named in a data- attribute, which the page's script shows
-        # (the publish tool copies it as it does an img src).
-        self.refs += [v for k, v in a.items() if k.startswith("data-") and PICTURE_PATH_RE.match(v.strip())]
         if tag == "img" and a.get("src"):
             self.imgs.append((a["src"], squash(a.get("alt", ""))))
         if tag == "script" and a.get("src"):
@@ -580,21 +575,47 @@ def target(page_rel: str, url: str) -> str | None:
     return nfc(joined)
 
 
+def tool_links(paths: list[Path]) -> list[list[str]]:
+    """The addresses each file names, as the publish tool reads them when it
+    copies a hand-made prop (`props links`: a picture in a data- attribute,
+    a stylesheet's url() and @import among them), one list per file. The
+    tool's rule is the one rule: the move keeps no copy of it."""
+    code, out, err = plugin_tool(["props", "links", "--json", *(str(p) for p in paths)])
+    if code != 0:
+        said = [ln for ln in err.splitlines() if ln.strip()]
+        raise StepFailed(f"props links failed: {said[-1] if said else f'exit {code}'}")
+    try:
+        data = json.loads(out)
+    except ValueError as e:
+        raise StepFailed("props links gave no answer; the publish tool is older than this script") from e
+    if not isinstance(data, list) or len(data) != len(paths) or not all(
+            isinstance(d, dict) and isinstance(d.get("refs"), list) and isinstance(d.get("rooted"), list) for d in data):
+        raise StepFailed("props links gave an answer this script cannot read; the publish tool is older than this script")
+    return [[str(r) for r in (*d["refs"], *d["rooted"])] for d in data]
+
+
 def linked_files(live: Path, page_rel: str, inside: str) -> list[str]:
     """The files (not pages) the page at `page_rel` names, and the files its
-    stylesheets name in turn, that exist under `inside` in the live output."""
+    stylesheets name in turn, that exist under `inside` in the live output:
+    every href and src on the page, and what the publish tool reads off the
+    page and each stylesheet (`tool_links`)."""
     found: list[str] = []
     todo = [(page_rel, url) for url in read_page(live / page_rel).refs]
+    todo += [(page_rel, url) for url in tool_links([live / page_rel])[0]]
     while todo:
-        at, url = todo.pop(0)
-        rel = target(at, url)
-        if (rel is None or rel in found or rel.lower().endswith(PAGE_EXTS)
-                or not rel.startswith(inside) or not (live / rel).is_file()):
-            continue
-        found.append(rel)
-        if rel.lower().endswith(".css"):
-            for m in CSS_URL_RE.finditer(read_text(live / rel)):
-                todo.append((rel, m.group(2) or m.group(4)))
+        sheets: list[str] = []
+        for at, url in todo:
+            rel = target(at, url)
+            if (rel is None or rel in found or rel.lower().endswith(PAGE_EXTS)
+                    or not rel.startswith(inside) or not (live / rel).is_file()):
+                continue
+            found.append(rel)
+            if rel.lower().endswith(".css"):
+                sheets.append(rel)
+        todo = []
+        if sheets:
+            for rel, urls in zip(sheets, tool_links([live / s for s in sheets])):
+                todo += [(rel, url) for url in urls]
     return found
 
 

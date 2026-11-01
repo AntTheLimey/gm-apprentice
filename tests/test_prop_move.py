@@ -1342,3 +1342,58 @@ def test_the_record_holds_only_the_pages_the_move_dealt_with(tmp_path: Path) -> 
     pages = json.loads((vault / prop_move.RECORD).read_text(encoding="utf-8"))["pages"]
     assert f"{CH4}/dinner-menu.html" in pages
     assert f"{CH4}/quay-notice.html" not in pages and f"{CH4}/gull-letter.html" not in pages
+
+
+# --- the files a page links: asked of the publish tool (#521) -------------------
+
+# `props links --json` output copied from a real run (publish tool 1.59.0) on the
+# page and stylesheet `_links_site` writes; only the echoed file path differs.
+REAL_LINKS_PAGE = {"refs": ["plate.css", "assets/plate-full.jpg"], "rooted": []}
+REAL_LINKS_CSS = {"refs": ["assets/paper.jpg"], "rooted": []}
+
+
+def _links_site(tmp_path: Path) -> Path:
+    live = tmp_path / "docs"
+    (live / "gazetteer" / "assets").mkdir(parents=True)
+    (live / "gazetteer" / "maps.html").write_text(
+        '<html><head><link rel="stylesheet" href="plate.css"></head><body><a class="plate-frame" '
+        'data-map="assets/plate-full.jpg" href="#">Open the plate</a><a href="guide.html">Guide</a></body></html>\n',
+        encoding="utf-8")
+    (live / "gazetteer" / "plate.css").write_text("body { background: url(assets/paper.jpg); }\n", encoding="utf-8")
+    (live / "gazetteer" / "assets" / "plate-full.jpg").write_text("J\n", encoding="utf-8")
+    (live / "gazetteer" / "assets" / "paper.jpg").write_text("P\n", encoding="utf-8")
+    return live
+
+
+def test_linked_files_asks_the_tool_for_pictures_and_stylesheet_refs(tmp_path: Path) -> None:
+    live = _links_site(tmp_path)
+    asked: list[list[str]] = []
+
+    def tool(args: list[str]) -> tuple[int, str, str]:
+        asked.append(list(args))
+        assert args[:3] == ["props", "links", "--json"]
+        answers = [{"file": f, **(REAL_LINKS_CSS if f.endswith(".css") else REAL_LINKS_PAGE)} for f in args[3:]]
+        return 0, json.dumps(answers, indent=2) + "\n", ""
+    with mock.patch.object(prop_move, "plugin_tool", tool):
+        found = prop_move.linked_files(live, "gazetteer/maps.html", "gazetteer/")
+    assert sorted(found) == ["gazetteer/assets/paper.jpg", "gazetteer/assets/plate-full.jpg", "gazetteer/plate.css"]
+    assert [a[3:] for a in asked] == [[str(live / "gazetteer" / "maps.html")], [str(live / "gazetteer" / "plate.css")]]
+
+
+def test_linked_files_with_the_real_tool_carries_a_data_picture(tmp_path: Path) -> None:
+    live = _links_site(tmp_path)
+    found = prop_move.linked_files(live, "gazetteer/maps.html", "gazetteer/")
+    assert sorted(found) == ["gazetteer/assets/paper.jpg", "gazetteer/assets/plate-full.jpg", "gazetteer/plate.css"]
+
+
+def test_linked_files_stops_when_the_tool_cannot_answer(tmp_path: Path) -> None:
+    import pytest
+    live = _links_site(tmp_path)
+    with mock.patch.object(prop_move, "plugin_tool", lambda args: (1, "", "Error: x could not be read (EACCES)\n")):
+        with pytest.raises(prop_move.StepFailed, match="props links failed: Error: x could not be read"):
+            prop_move.linked_files(live, "gazetteer/maps.html", "gazetteer/")
+
+
+def test_the_move_keeps_no_copy_of_the_picture_path_rule() -> None:
+    assert not hasattr(prop_move, "PICTURE_PATH_RE")
+    assert not hasattr(prop_move, "CSS_URL_RE")
