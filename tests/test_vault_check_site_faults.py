@@ -125,6 +125,22 @@ class SiteFaultRowsTests(unittest.TestCase):
             f'<command> --config "{site / "vault.config.json"}" '
             f'--vault "{vault.resolve()}"'), rows[0])
 
+    def test_a_note_with_no_type_is_a_no_type_row(self):
+        # The "No type" path of the Site Faults check (#342): the site cannot
+        # tell what the note is, so the row says "no type", not a kind.
+        vault, _site = make(self, {
+            MARA: npc("She met [[Odd_Note|a stranger]] at the quay."),
+            "Characters/Odd_Note.md": "No front matter at all.\n"},
+            excluded=["Characters/Odd_Note.md — not decided"])
+        rows = findings(vc.check_site_faults(vault))
+        self.assertEqual(len(rows), 1, rows)
+        self.assertEqual(rows[0].split("\t")[:2],
+                         ["WARNING", "Characters/Odd_Note.md"])
+        self.assertTrue(rows[0].split("\t")[2].startswith(
+            "NAMED_NO_PAGE: no type, named on 1 published page as "
+            "\"a stranger\""), rows)
+        self.assertNotIn("entity (", rows[0])
+
     def test_a_vault_file_the_tool_refused_stops_the_check_in_one_line(self):
         vault, _site = make(self, {MARA: npc("x")}, site=False)
         # The file is not valid YAML further down: the settings cannot be

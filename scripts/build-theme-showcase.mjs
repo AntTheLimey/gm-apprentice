@@ -11,6 +11,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const { build } = require(path.join(repoRoot, 'tools/publish/lib/build.js'));
+const YAML = require(path.join(repoRoot, 'tools/publish/node_modules/yaml'));
 
 const PRESETS = [
   { id: 'fantasy',  name: 'Fantasy',  blurb: 'D&D, Pathfinder, classic fantasy', swatches: ['#1a1a2e', '#fbbf24', '#c8d6e5'] },
@@ -30,35 +31,60 @@ if (outDir === path.parse(outDir).root) {
 fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(outDir, { recursive: true });
 
+// Build warnings that are known and accepted. Any other warning stops the showcase, so a preset that
+// quietly lost its theme (a mistyped genre, a missing image) is never deployed.
+const ALLOWED_WARNINGS = [/^Custom fonts .* are loaded from Google Fonts/];
+// The unresolved wikilinks the fixture plants on purpose (note + target), read by the fixture's own test too.
+const PLANTED_LINKS = new Set(JSON.parse(fs.readFileSync(path.join(repoRoot, 'scripts/benchmark-planted-links.json'), 'utf8')));
+const { runSiteDoctor } = require(path.join(repoRoot, 'tools/publish/lib/site-doctor.js'));
+const unexpected = [];
+
 for (const preset of PRESETS) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), `showcase-${preset.id}-`));
-  const vaultDir = path.join(work, 'vault');
-  fs.cpSync(sourceVault, vaultDir, { recursive: true });
-  fs.writeFileSync(path.join(vaultDir, '_meta', 'vault-config.md'),
-    `---\npublish:\n  theme:\n    genre: "${preset.id}"\n---\n\n# Showcase config\n`);
+  try {
+    const vaultDir = path.join(work, 'vault');
+    fs.cpSync(sourceVault, vaultDir, { recursive: true });
+    // The campaign's own settings (folder map, hidden folders) stay as the vault holds them;
+    // only what changes per preset is written over them, in the vault's settings file.
+    const settingsPath = path.join(vaultDir, '_meta', 'vault-config.yaml');
+    const settings = YAML.parse(fs.readFileSync(settingsPath, 'utf8'));
+    settings.player_site = {
+      ...settings.player_site,
+      title: `The Ashford Case — ${preset.name}`,
+      url: 'https://antthelimey.github.io/gm-apprentice',
+      theme: { genre: preset.id, tagline: `gm-apprentice publish theme: ${preset.name}` },
+    };
+    fs.writeFileSync(settingsPath, YAML.stringify(settings));
 
-  const configPath = path.join(work, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
-    siteTitle: `The Ashford Case — ${preset.name}`,
-    landingTagline: `gm-apprentice publish theme: ${preset.name}`,
-    siteUrl: 'https://antthelimey.github.io/gm-apprentice',
-    vaultPath: vaultDir,
-    outputDir: 'site',   // inside the work folder; copied to the showcase folder below
-    attachmentsDir: '_attachments',
-    folderMap: {
-      _Campaign: 'campaign', _World: 'world',
-      Adventures: 'adventures', Chapters: 'chapters', Clues: 'clues',
-      Factions: 'factions', Heritages: 'heritages',
-      Locations: 'locations', NPCs: 'characters/npcs',
-    },
-    excludeDirs: ['_meta', '_Templates', '_inbox'],
-    excludeSections: ['GM Notes', 'DM Notes', 'Player Notes', 'Source References'],
-  }, null, 2));
+    // The site folder's vault.config.json only says where the vault is.
+    const configPath = path.join(work, 'vault.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vaultDir }, null, 2));
 
-  console.log(`\n=== Building ${preset.name} showcase ===`);
-  build({ configPath });
-  fs.cpSync(path.join(work, 'site'), path.join(outDir, preset.id), { recursive: true });
-  fs.rmSync(work, { recursive: true, force: true });
+    console.log(`\n=== Building ${preset.name} showcase ===`);
+    const { warnings = [] } = build({ configPath });
+    for (const w of warnings) if (!ALLOWED_WARNINGS.some((re) => re.test(w))) unexpected.push(`${preset.name}: ${w}`);
+
+    // The site's own audit says which wikilinks match no published page; only the planted ones may remain.
+    let audit = '';
+    await runSiteDoctor({ configPath, json: true }, { out: (t) => { audit += t; } });
+    for (const f of JSON.parse(audit).findings) {
+      if (f.code === 'LINK_UNRESOLVED') {
+        const link = /^(\[\[[^\]]*\]\])/.exec(f.detail);
+        const id = `${f.path}: ${link ? link[1] : f.detail}`;
+        if (!PLANTED_LINKS.has(id)) unexpected.push(`${preset.name}: unresolved link ${id}`);
+      } else if (f.severity === 'error') {
+        unexpected.push(`${preset.name}: site audit ${f.code} ${f.path}: ${f.detail}`);
+      }
+    }
+    fs.cpSync(path.join(work, 'docs'), path.join(outDir, preset.id), { recursive: true });
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+  }
+}
+
+if (unexpected.length) {
+  console.error(`\nThe showcase build warned:\n${unexpected.map((w) => `  ${w}`).join('\n')}`);
+  process.exit(1);
 }
 
 const cards = PRESETS.map(p => `    <a class="theme-card" href="${p.id}/index.html">
@@ -91,7 +117,7 @@ fs.writeFileSync(path.join(outDir, 'index.html'), `<!DOCTYPE html>
 <main>
   <h1>gm-apprentice — Theme Showcase</h1>
   <p class="lead">The same benchmark campaign built once per theme preset.
-  Set <code>publish.theme.genre</code> in your vault's <code>_meta/vault-config.md</code>.</p>
+  Set <code>player_site.theme.genre</code> in your vault's <code>_meta/vault-config.yaml</code>.</p>
   <div class="grid">
 ${cards}
   </div>

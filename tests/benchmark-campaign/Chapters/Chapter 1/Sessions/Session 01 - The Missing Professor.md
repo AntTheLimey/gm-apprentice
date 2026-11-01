@@ -9,6 +9,5 @@ documents:
   plan: null
   play_notes: null
   wrap_up: "[[Session 01 - The Missing Professor - Wrap-Up]]"
-scenes: []
 tags: []
 ---

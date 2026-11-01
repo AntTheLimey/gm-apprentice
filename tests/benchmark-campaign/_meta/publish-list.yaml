@@ -1,0 +1,46 @@
+publishing:
+  - Adventures/The Darkened Pier.md
+  - Chapters/Chapter 1/Sessions/Session 01 - The Missing Professor - Wrap-Up.md
+  - Chapters/Chapter 1/Sessions/Session 01 - The Missing Professor.md
+  - Chapters/Chapter 1/Sessions/Session 02 - The Docks at Night - Play Notes.md
+  - Chapters/Chapter 1/Sessions/Session 02 - The Docks at Night - Wrap-Up.md
+  - Chapters/Chapter 1/Sessions/Session 02 - The Docks at Night.md
+  - Chapters/Chapter 1/Sessions/Session 04 - The Reckoning - Wrap-Up.md
+  - Chapters/Chapter 1/Sessions/Session 04 - The Reckoning.md
+  - Chapters/Chapter 1/chapter-overview.md
+  - Clues/Coded Letter.md
+  - Clues/Strange Symbol.md
+  - Clues/Witness Statement.md
+  - Factions/Order of the Silver Twilight.md
+  - Heritages/Human.md
+  - Locations/Ashford Study.md
+  - Locations/Kingsport Docks.md
+  - Locations/St Anselms Church.md
+  - Locations/The Old Mill.md
+  - NPCs/Brother Ezra.md
+  - NPCs/Father Blackwood v1.md
+  - NPCs/Father Blackwood.md
+  - NPCs/Inspector Crane.md
+  - NPCs/Mrs Whitmore.md
+  - NPCs/Professor Ashford.md
+  - NPCs/The Hooded Figure.md
+  - NPCs/Tommy Flanagan.md
+  - _Campaign/Player Characters.md
+  - _Campaign/Timeline.md
+  - _World/_flags.md
+  - _World/heritages.md
+  - _World/world-index.md
+excluded:
+  - path: Chapters/Chapter 1/Sessions/Scene - The Confrontation.md
+    reason: "prep: scenes and Plans stay off the player site"
+  - path: Chapters/Chapter 1/Sessions/Scene - The Cut Scene.md
+    reason: "prep: scenes and Plans stay off the player site"
+  - path: Chapters/Chapter 1/Sessions/Scene - The Modified Scene.md
+    reason: "prep: scenes and Plans stay off the player site"
+  - path: Chapters/Chapter 1/Sessions/Scene - The Skipped Scene.md
+    reason: "prep: scenes and Plans stay off the player site"
+  - path: Chapters/Chapter 1/Sessions/Session 03 - The Inner Sanctum - Plan.md
+    reason: "prep: scenes and Plans stay off the player site"
+  - path: Chapters/Chapter 1/Sessions/Session 03 - The Inner Sanctum.md
+    reason: "status: prepped"
+needs_decision: []
