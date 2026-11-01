@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.118] — 2026-11-01
+
+The benchmark campaign is a valid, current vault again, and the browser tests no longer race each other for Chrome. Publish tool unchanged (test code only); no vault change is needed.
+
+### Changed
+
+- The benchmark campaign (`tests/benchmark-campaign`, The Ashford Case) was brought from 1.9.10 to the current release with the update tool, so skill benchmarks no longer stop at the version gate. Its 16 note files were renamed to match the wikilinks that name them (`Brother_Ezra.md` is now `Brother Ezra.md`), it gained a publish list, and the theme showcase reads its settings from the vault's settings file instead of a site `vault.config.json` (#489, #496).
+- A new baseline starts here: results recorded before this change are not directly comparable (`tests/baselines/SUMMARY.md`). No note text changed, and the campaign's deliberate faults are untouched.
+- `validate_schema.py` skips the `_Templates` folder, as the freshness check already did.
+
+### Added
+
+- Tests that the campaign's stamp stays at or above the update floor and the update tool accepts it, that its deliberate faults survive, and that it passes the site audit with no unresolved wikilinks but the planted ones (#489, #496).
+- A test for the Site Faults "no type" row, and one for a batch answer in the tone walk (`tones.py shown --accept` with several places at once) (#342).
+
+### Fixed
+
+- Browser tests timed out under full-suite load because a dozen headless Chromes started at once. Every test browser launch now goes through one launcher in `test/helpers/browser.js` that takes a lock shared across the test processes, gives Chrome its own profile and uses one 120 second timeout (#516).
+
+---
+
 ## [1.10.117] — 2026-11-01
 
 A tidy of the props feature: the build no longer writes through a linked folder or leaves old prop copies behind, prop pages say how to print well, and the props move asks the publish tool which files a page links. Publish tool 1.59.0; no vault change is needed.

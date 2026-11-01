@@ -7,12 +7,10 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
-const os = require('os');
 const path = require('path');
-const { execFileSync } = require('child_process');
 const matter = require('gray-matter');
 const { buildPc } = require('./helpers/pc-vault');
-const { findChrome } = require('./helpers/browser');
+const { findChrome, runChrome } = require('./helpers/browser');
 
 // Runs in the outer page: opens the Combat tab in each frame and measures.
 const PROBE = `
@@ -62,21 +60,13 @@ test('the to-hit calculator on a phone, in a real browser', (t) => {
   fs.writeFileSync(path.join(out, 'probe.html'), `<!doctype html><meta charset="utf-8"><body>
 <iframe width="375" height="900" src="${page}"></iframe><iframe width="340" height="900" src="${page}"></iframe>
 <pre id="out"></pre><script>${PROBE}</script></body>`);
-  const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'tohit-chrome-'));
   let dom;
   try {
     // Chrome can exit non-zero on its way out under load after it has printed the page: what
     // counts is the measurements in the printed page.
-    try {
-      dom = execFileSync(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--allow-file-access-from-files',
-        `--user-data-dir=${profile}`, '--window-size=900,1000', '--virtual-time-budget=10000', '--dump-dom',
-        'file://' + path.join(out, 'probe.html').replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')], { encoding: 'utf8', timeout: 60000, stdio: ['ignore', 'pipe', 'ignore'] });
-    } catch (e) {
-      if (!e.stdout) throw e;
-      dom = String(e.stdout);
-    }
+    dom = runChrome(['--allow-file-access-from-files', '--window-size=900,1000', '--virtual-time-budget=10000', '--dump-dom',
+      'file://' + path.join(out, 'probe.html').replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')]).stdout || '';
   } finally {
-    fs.rmSync(profile, { recursive: true, force: true });
     fs.rmSync(path.dirname(out), { recursive: true, force: true, maxRetries: 3 });
   }
   const m = /<pre id="out">([^<]*)<\/pre>/.exec(dom);
