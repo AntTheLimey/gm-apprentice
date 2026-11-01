@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.113] — 2026-10-31
+
+The leak check reads more of the player site. Publish tool 1.58.0. No vault
+change is needed.
+
+### Fixed
+
+- The leak check reads a site file saved as windows-1252 or UTF-16 (with or
+  without a byte-order mark) the way the props code reads a prop file (one
+  decoder), so an edited hand-made copy of a held prop in any of them is found
+  by its words. A prop page saved as UTF-16 with no byte-order mark is now
+  copied as UTF-8 with its Keeper parts cut, as one with the mark is (#508).
+- The files a held hand-made prop page links (its stylesheet, its pictures,
+  those in its Keeper parts too) are known by their bytes: a hand copy of one
+  in a kept folder is a `PROP_UNREVEALED` finding. A file a shipping prop or
+  style also puts on the site, a font and an empty file are not. A linked file
+  that cannot be read stops the check, as the prop file does (#508).
+- A held SVG prop with no words is known by its bytes, as a picture is (#508).
+- A text file that still has NUL characters once decoded is a leak-check
+  warning that words in it may be missed; a prop page, or a stylesheet or SVG
+  it links, in that shape is not copied, with a row saying why (#508).
+- The leak check's link watch reads `<object data>`, `<video poster>`,
+  `srcset` candidates, CSS `url()` and `@import` (in a style attribute, a
+  `<style>` block or a stylesheet) and, on a project site, rooted links under
+  the site's path from `player_site.url` (#515).
+
+---
+
 ## [1.10.112] — 2026-10-31
 
 Three scripts now refuse to overwrite what the GM owns. Publish tool unchanged; no vault change is needed.

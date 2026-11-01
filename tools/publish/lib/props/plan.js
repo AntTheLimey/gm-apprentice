@@ -32,6 +32,11 @@ const LINKED_EXTS = new Set([
 // The pictures a container's state file may name in its items' fields, copied beside it.
 const STATE_PICTURE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif']);
 const LINK_FIX = 'put the file beside the prop file and link it by a relative path';
+// A page, SVG or stylesheet that still has NUL characters once decoded (textOf reads UTF-16 with no byte-order mark
+// when its NULs show it) cannot be read: its Keeper markers may not be found, so it is not copied (#508).
+const NUL_SAID = 'has NUL characters that no text encoding explains, so its Keeper parts may not be found';
+const NUL_FIX = 'save it again as UTF-8';
+const hasNul = (bytes) => textOf(bytes).text.includes('\u0000');
 const KIND_FIX = 'a prop page cannot carry this kind of file: a PDF can be published as its own prop (its own note with prop_file), a picture can take its place; otherwise leave it out (the site does not publish audio, video or other pages)';
 
 function sha1(buf) {
@@ -41,11 +46,26 @@ function sha1(buf) {
 // A markup file's or stylesheet's text, and the encoding it was read from when that is not
 // UTF-8 (`was`). The site writes it as UTF-8, as hosts serve it: after a UTF-16 byte-order
 // mark (a Word "Unicode" save) it is UTF-16, otherwise windows-1252 (an old Windows "Web page").
+// UTF-16 saved with no mark is known by its NULs: on every other byte (a high byte of 0 under
+// each Latin letter) and on few of the bytes between, in one order or the other.
 // A UTF-8 file's byte-order mark is kept, so its text writes back byte for byte.
 const UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+function bareUtf16(bytes) {
+  if (bytes.length < 2 || bytes.length % 2 || !bytes.includes(0)) return null;
+  let even = 0;
+  let odd = 0;
+  for (let i = 0; i < bytes.length; i++) if (bytes[i] === 0) { if (i % 2) odd++; else even++; }
+  const half = bytes.length / 2;
+  // A few NULs on the other byte are characters such as ─ (U+2500) or Ā (U+0100); the strict decode has the last word.
+  const order = odd >= half / 4 && even <= odd / 16 ? 'utf-16le' : even >= half / 4 && odd <= even / 16 ? 'utf-16be' : null;
+  if (!order) return null;
+  try { return new TextDecoder(order, { fatal: true }).decode(bytes); } catch (e) { return null; }
+}
 function textOf(bytes) {
   if (bytes[0] === 0xff && bytes[1] === 0xfe) return { text: new TextDecoder('utf-16le').decode(bytes), was: 'UTF-16' };
   if (bytes[0] === 0xfe && bytes[1] === 0xff) return { text: new TextDecoder('utf-16be').decode(bytes), was: 'UTF-16' };
+  const bare = bareUtf16(bytes);
+  if (bare !== null) return { text: bare, was: 'UTF-16' };
   try { return { text: UTF8.decode(bytes), was: null }; } catch (e) { return { text: new TextDecoder('windows-1252').decode(bytes), was: 'windows-1252' }; }
 }
 
@@ -113,7 +133,11 @@ function stateFileOf(p) {
 // is claimed for them and they never ship: the build compares them with what is in the folder.
 // A made page is never planned here: the build does not make a held prop's page, and the leak
 // check names a stale one at its address.
-function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup = false, styles = styleLoader({ vaultPath }) }) {
+//
+// `heldLinks: true` (the leak check) also plans, for a prop that does not ship whose file is a page or SVG, every file
+// that page links, its Keeper parts included (`heldLinked`; `heldUnread`, the links whose file cannot be read):
+// nothing is claimed for them and they never ship. The leak check knows a hand copy of one by its bytes.
+function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup = false, heldLinks = false, styles = styleLoader({ vaultPath }) }) {
   const problems = [];
   const vaultReal = realOrNull(path.resolve(vaultPath));
   const problem = (rel, detail, fix) => problems.push({ rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail, fix });
@@ -201,6 +225,7 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
       say(rel, `the prop file "${propFile}" could not be read (${read.error})`, 'make the file readable, or correct prop_file');
       continue;
     }
+    if (plan.ships && MARKUP_EXTS.has(ext) && hasNul(read.bytes)) { say(rel, `the prop file "${propFile}" ${NUL_SAID}`, NUL_FIX); continue; }
     plan.source = found.real;
     plan._full = found.full;
     plan._ext = ext;
@@ -237,8 +262,10 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
   // prop's page to one is that made file, not a file to copy (a container's items often load their shelf's state).
   // `outside`: when given, a link outside the prop's folder is held there, not reported, until every shipping prop's
   // files are planned (another prop may ship that very file at that address).
-  function planFiles(p, files, problem, claimed, stateOuts = new Set(), outside = null) {
-    const first = { source: p.source, out: p.address, cut: Boolean(cutKeeper) && markup(p._ext) };
+  // `cut`: whether a page's Keeper parts are cut before its links are read (the held pass reads them all). `unread`:
+  // told of a linked file that is there but cannot be read, with its link and the error.
+  function planFiles(p, files, problem, claimed, stateOuts = new Set(), outside = null, { cut = Boolean(cutKeeper), unread = null } = {}) {
+    const first = { source: p.source, out: p.address, cut: cut && markup(p._ext) };
     BYTES.set(first, p._bytes);
     files.push(first);
     if (!markup(p._ext)) return;
@@ -291,9 +318,11 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
         }
         const read = readOrError(hit.real);
         if (read.error) {
+          if (unread) unread(raw, read.error);
           problem(p.rel, `${shown} links "${raw}", which could not be read (${read.error})`, 'make the file readable');
           continue;
         }
+        if (p.ships && follows && hasNul(read.bytes)) { linkProblem(raw, NUL_SAID, NUL_FIX); continue; }
         const hash = sha1(read.bytes);
         const why = taken.has(out, { explicit: p._explicit });
         const prior = claimed.get(addressKey(out));
@@ -305,7 +334,7 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
           // bytes match, and a conflict when this prop's file there differs. Nothing of it is written for this prop.
           if (follows) {
             if (!firstOut.has(hit.real)) firstOut.set(hit.real, out);
-            queue.push({ entry: { source: hit.real, out, cut: Boolean(cutKeeper) && markup(lext) }, full: hit.full, at: joined.slice(0, -1).join('/'), ext: lext, bytes: read.bytes });
+            queue.push({ entry: { source: hit.real, out, cut: cut && markup(lext) }, full: hit.full, at: joined.slice(0, -1).join('/'), ext: lext, bytes: read.bytes });
           }
           continue;
         }
@@ -317,7 +346,7 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
         planned.add(addressKey(out));
         if (!firstOut.has(hit.real)) firstOut.set(hit.real, out);
         claimed.set(addressKey(out), { rel: p.rel, hash });
-        const next = { source: hit.real, out, cut: Boolean(cutKeeper) && markup(lext) };
+        const next = { source: hit.real, out, cut: cut && markup(lext) };
         BYTES.set(next, read.bytes);
         if (p._explicit && keptReplaced(out)) next.replacesKept = true;
         files.push(next);
@@ -406,6 +435,18 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
       const files = [];
       planFiles(p, files, () => {}, new Map());
       p.keptCopies = files.filter((f) => keptReplaced(f.out));
+    }
+  }
+
+  if (heldLinks) {
+    for (const p of props) {
+      if (p.ships || !p.source || !p.address || !markup(p._ext)) continue;
+      const files = [];
+      const unread = [];
+      // Read whole: a picture its Keeper block links is the most secret file it has.
+      planFiles(p, files, () => {}, new Map(), new Set(), null, { cut: false, unread: (link, error) => unread.push({ link, error }) });
+      p.heldLinked = files.slice(1);
+      p.heldUnread = unread;
     }
   }
 

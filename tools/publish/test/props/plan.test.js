@@ -495,3 +495,41 @@ test('Ruling 44: a link outside the folder that another shipping prop ships at t
   assert.deepStrictEqual(plan(root, [cover('G'), shelfPage], { ships: (p) => p.rel !== 'G/Cover.md' }).problems.map((p) => p.detail), OUTSIDE);
   assert.deepStrictEqual(plan(root, [cover('H'), shelfPage]).problems.map((p) => p.detail), OUTSIDE);
 });
+
+test('UTF-16 with no byte-order mark is read when its NULs show it, either byte order (#508)', () => {
+  const { textOf } = require('../../lib/props/plan');
+  const le = Buffer.from('<p>Zoë</p>', 'utf16le');
+  assert.deepStrictEqual(textOf(le), { text: '<p>Zoë</p>', was: 'UTF-16' });
+  assert.deepStrictEqual(textOf(Buffer.from(le).swap16()), { text: '<p>Zoë</p>', was: 'UTF-16' });
+  // A character such as ─ (U+2500) or Ā (U+0100) puts a NUL on the other byte: a few of those still read as UTF-16.
+  const border = 'The vicar knows ─ Ā the crypt is empty.\n';
+  assert.deepStrictEqual(textOf(Buffer.from(border, 'utf16le')), { text: border, was: 'UTF-16' });
+  assert.deepStrictEqual(textOf(Buffer.from(border, 'utf16le').swap16()), { text: border, was: 'UTF-16' });
+  // NULs that do not fall on every other byte are not UTF-16: read as before, NULs and all.
+  assert.deepStrictEqual(textOf(Buffer.from('ab\u0000\u0000cd')), { text: 'ab\u0000\u0000cd', was: null });
+});
+
+test('a page or stylesheet with NUL characters no encoding explains is not copied, with a row; one in bare UTF-16 is read and cut (#508)', (t) => {
+  const odd = (text) => Buffer.from(`${text}\u0000\u0000`);
+  const root = vault({
+    'A/Alpha.md': '', 'A/inv.html': odd('<html><body><!-- gm-only --><p>Keeper</p><!-- /gm-only --></body></html>'),
+    'B/Beta.md': '', 'B/inv.html': INV, 'B/props.css': odd('body { color: red; }'),
+    'C/Gamma.md': '', 'C/inv.html': INV, 'C/props.css': CSS, 'C/assets/paper.jpg': 'JPG',
+    'D/Delta.md': '', 'D/inv.html': Buffer.from('<html><body><p>Dear sir</p><!-- gm-only --><p>Keeper</p><!-- /gm-only --></body></html>', 'utf16le'),
+  });
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const note = (rel) => page(root, rel, { type: 'prop', prop_file: 'inv.html' });
+  const { props, problems } = plan(root, [note('A/Alpha.md'), note('B/Beta.md'), note('C/Gamma.md'), note('D/Delta.md')]);
+  const byRel = (rel) => props.find((p) => p.rel === rel);
+  assert.deepStrictEqual(outs(byRel('A/Alpha.md')), []);
+  assert.deepStrictEqual(outs(byRel('B/Beta.md')), [byRel('B/Beta.md').address]);
+  assert.strictEqual(outs(byRel('C/Gamma.md')).length, 3, 'an ordinary prop is copied whole');
+  assert.deepStrictEqual(outs(byRel('D/Delta.md')), [byRel('D/Delta.md').address], 'bare UTF-16 is read and ships');
+  assert.strictEqual(byRel('D/Delta.md').files[0].cut, true);
+  assert.deepStrictEqual(problems.map((p) => p.rel), ['A/Alpha.md', 'B/Beta.md']);
+  for (const p of problems) assert.match(p.detail, /NUL characters/);
+  // A prop that does not ship says nothing, and is still planned for the leak check to know it by its bytes.
+  const held = plan(root, [note('A/Alpha.md')], { ships: () => false });
+  assert.deepStrictEqual(held.problems, []);
+  assert.ok(held.props[0].hash);
+});

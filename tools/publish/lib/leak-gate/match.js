@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { pageText } = require('../note-faults');
 const { wordsOf, MIN_WORDS } = require('./text');
+const { textOf } = require('../props/plan');
 
 const TEXT_EXT = new Set(['.html', '.htm', '.json', '.webmanifest', '.js', '.mjs', '.css', '.txt', '.md', '.csv', '.xml', '.svg']);
 const MARKUP_EXT = new Set(['.xml', '.svg']);
@@ -143,7 +144,9 @@ function readOutput(dir) {
       if (e.isDirectory()) { walk(child, childRel); continue; }
       const ext = path.extname(e.name).toLowerCase();
       if (!e.isFile() || !TEXT_EXT.has(ext)) continue;
-      const raw = fs.readFileSync(child, 'utf8');
+      // Decoded as the props code decodes a prop file (one decoder): a hand-made copy saved as windows-1252 or UTF-16
+      // reads as the words it shows.
+      const raw = textOf(fs.readFileSync(child)).text;
       if (isToolScript(childRel, raw)) continue;
       const text = fileText(childRel, raw);
       out.push({ rel: childRel, ext, raw, text, words: wordsOf(text) });

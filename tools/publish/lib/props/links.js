@@ -65,4 +65,4 @@ function localRefs(text, ext) {
   return { refs, rooted };
 }
 
-module.exports = { localRefs };
+module.exports = { localRefs, cssRefs };
