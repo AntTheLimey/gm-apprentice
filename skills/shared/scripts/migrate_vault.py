@@ -27,7 +27,8 @@ from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
 from vaultlib import (LEGACY_SETTINGS_FILE, SettingsUnavailable, entity_type, extract_frontmatter,
                       delete_key, fence_step, frontmatter_span, opens_a_block,
                       parse_version, plugin_version,
-                      read_stamp, settings, settings_file, settings_raw,
+                      read_stamp, scan_body, settings, settings_file,
+                      settings_raw,
                       settings_unset, vault_files, vault_layout,
                       wrapup_filename)
 
@@ -1645,6 +1646,77 @@ def find_dnd_background_sections(vault: Path) -> list[Item]:
     return [Item("dnd-background-sections", WILL, lines, apply)]
 
 
+# --- The wrap-up's Source callout -------------------------------------------
+
+# The callout that says where a wrap-up came from, read as the publish tool's
+# excerpt.js `PROVENANCE_CALLOUT_RE` reads it: any callout kind, any fold mark.
+SOURCE_CALLOUT_RE = re.compile(
+    r"^\s*>\s*\[![A-Za-z][\w-]*\][-+]?\s*Source\s*$", re.I)
+GM_OPEN, GM_CLOSE = "<!-- gm-only -->", "<!-- /gm-only -->"
+
+
+def _fence_source(text: str) -> str | None:
+    """The note with every Source callout players can see wrapped in a
+    gm-only fence, or None when there is none. A callout already inside a
+    gm-only or spoiler block, under `## GM Notes`, or in a code fence is
+    left as it is."""
+    states, _problems = scan_body(text)
+    lines = text.splitlines(keepends=True)
+    eol = next((m.group(0) for raw in lines
+                if (m := re.search(r"\r\n|\n|\r", raw))), "\n")
+    spans: list[tuple[int, int]] = []
+    h2: str | None = None
+    i = 0
+    while i < len(states):
+        s = states[i]
+        if s.heading and s.heading[0] == 2:
+            h2 = s.heading[1].strip().casefold()
+        if (not s.in_code and s.gm_depth == 0 and s.spoiler_depth == 0
+                and h2 != "gm notes" and SOURCE_CALLOUT_RE.match(s.line)):
+            j = i + 1
+            while (j < len(states) and not states[j].in_code
+                   and states[j].line.lstrip().startswith(">")):
+                j += 1
+            spans.append((s.lineno - 1, states[j - 1].lineno - 1))
+            i = j
+            continue
+        i += 1
+    if not spans:
+        return None
+    for start, end in reversed(spans):
+        last = lines[end]
+        ended = last.endswith(("\n", "\r"))
+        lines[end] = (last if ended else last + eol) + GM_CLOSE + (
+            eol if ended else "")
+        lines[start] = GM_OPEN + eol + lines[start]
+    return "".join(lines)
+
+
+def find_wrapup_source_fence(vault: Path) -> list[Item]:
+    """1.10.112 (#542): a wrap-up's `> [!info] Source` callout is the GM's
+    bookkeeping (which file, which skill), so it goes inside a gm-only
+    fence, as the template and `vault_write.py` now write it. One players
+    cannot see already is left alone."""
+    todo = [rel for rel, text in vault_files(vault, newline="")
+            if entity_type(extract_frontmatter(text) or {}) in WRAP_TYPES
+            and _fence_source(text) is not None]
+    if not todo:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        done = []
+        for rel in todo:
+            new = _fence_source(_read(vault / rel))
+            if new is not None:
+                write_text_atomic(vault / rel, new)
+                done.append(f"{rel}: Source callout fenced gm-only")
+        return done
+
+    return [Item("wrapup-source-fence", WILL,
+                 [f"{rel}: put the Source callout inside a gm-only fence "
+                  f"(players can see it today)" for rel in todo], apply)]
+
+
 VAULT_CHECKS: list[Check] = [
     Check("skeleton", None, 3, "the vault skeleton", find_skeleton),
     Check("templates", None, 3, "templates", find_templates,
@@ -1695,4 +1767,6 @@ VAULT_CHECKS: list[Check] = [
           find_empty_scenes_lists),
     Check("dnd-background-sections", "1.10.94", 3,
           "backstory sections in D&D PC notes", find_dnd_background_sections),
+    Check("wrapup-source-fence", "1.10.112", 3,
+          "the Source callout in Wrap-Ups", find_wrapup_source_fence),
 ]
