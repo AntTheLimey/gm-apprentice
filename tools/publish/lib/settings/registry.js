@@ -213,7 +213,7 @@ const REGISTRY = [
   { name: 'gm_site.show', type: 'map', container: true },
   {
     name: 'gm_site.show.notes', type: 'switch', default: true, group: 'gm',
-    does: 'Notes the player site leaves out (prep, drafts, the ones held back by the publish list) get a page, marked',
+    does: "Notes the player site leaves out (prep, drafts, the ones held back by the publish list) get a page, marked. A session's Play Notes always get a page on the GM site, whatever this says",
     left_out: 'On',
   },
   {

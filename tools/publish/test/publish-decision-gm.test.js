@@ -238,3 +238,48 @@ describe('publishedPages with a site', () => {
     assert.ok(wrong.playerPublished.map(relOf).includes('Characters/NPCs/Draft.md'));
   });
 });
+
+// A session's Play Notes always get a page on the GM site (#543): the Story page links them, whatever show.notes says.
+describe('decideGmPage: a session\'s Play Notes', () => {
+  const { isPlayNotes } = require('../lib/publish-decision');
+  const OFF = new Set();
+
+  it('isPlayNotes reads both spellings of the type, and nothing else', () => {
+    assert.strictEqual(isPlayNotes({ type: 'session-play-notes' }), true);
+    assert.strictEqual(isPlayNotes({ type: 'session_play_notes' }), true);
+    assert.strictEqual(isPlayNotes({ type: 'session' }), false);
+    assert.strictEqual(isPlayNotes({ type: 'session_wrap' }), false);
+    assert.strictEqual(isPlayNotes(null), false);
+    assert.strictEqual(isPlayNotes({}), false);
+  });
+
+  it('a Play Notes note the player site keeps off is GM_SHOWN with show.notes off', () => {
+    for (const type of ['session-play-notes', 'session_play_notes']) {
+      const kept = gm({ type, publish: false }, { show: OFF, rel: 'Sessions/S1 Play Notes.md' });
+      assert.strictEqual(kept.player.code, 'PUBLISH_FALSE');
+      assert.strictEqual(kept.code, 'GM_SHOWN', type);
+      assert.strictEqual(kept.bucket, 'publish');
+      assert.strictEqual(kept.reason, kept.player.reason);
+      assert.ok(publishesPage(kept));
+      const folder = gm({ type }, { show: OFF, rel: '_play/S1 Play Notes.md', hiddenFolders: ['_play'] });
+      assert.strictEqual(folder.player.code, 'DIR_CONFIG_EXCLUDED');
+      assert.strictEqual(folder.code, 'GM_SHOWN', type);
+      assert.strictEqual(folder.reason, 'hide.folders: _play');
+    }
+  });
+
+  it('a Play Notes note in an always-excluded folder, or one the player site publishes, keeps its verdict', () => {
+    assert.strictEqual(gm({ type: 'session-play-notes', publish: false }, { show: OFF, rel: '_meta/x.md' }).code, 'DIR_ALWAYS_EXCLUDED');
+    assert.strictEqual(gm({ type: 'session-play-notes' }, { show: OFF, rel: 'Sessions/x.md' }).code, 'OK');
+  });
+
+  it('any other note is not: show.notes off keeps the player verdict', () => {
+    for (const type of ['session', 'session_wrap', 'npc', 'scene']) {
+      const v = gm({ type, publish: false }, { show: OFF, rel: 'Sessions/x.md' });
+      assert.notStrictEqual(v.code, 'GM_SHOWN', type);
+      assert.strictEqual(v.code, v.player.code);
+      const f = gm({ type }, { show: OFF, rel: '_play/x.md', hiddenFolders: ['_play'] });
+      assert.strictEqual(f.code, 'DIR_CONFIG_EXCLUDED', type);
+    }
+  });
+});

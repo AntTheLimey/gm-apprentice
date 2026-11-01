@@ -246,6 +246,12 @@ const NOTE_CODES = new Set([
   'PUBLISH_FALSE', 'PUBLISH_NONE',
 ]);
 
+// A session's Play Notes note (either spelling of its type).
+const PLAY_NOTES_TYPES = new Set(['session-play-notes', 'session_play_notes']);
+function isPlayNotes(frontmatter) {
+  return !!frontmatter && PLAY_NOTES_TYPES.has(frontmatter.type);
+}
+
 // The GM site's verdict for one page. `options` is decidePage's plus `show` (a Set of the kinds the GM
 // site shows), `hiddenFolders` (the player site's hide.folders) and `playerConfig` (the player site's
 // publishConfig: the `player` verdict is decided against the real player site, not the GM site's twins).
@@ -261,6 +267,8 @@ function decideGmPage(page, options) {
   if (alwaysExcludedSegment(rel)) return withPlayer(decidePage(page, { ...opts, publishConfig: opts.playerConfig }));
 
   const outputPath = (page && page.outputPath) || null;
+  // A session's Play Notes always get a page here, whatever the notes switch says: its Story page links them.
+  const playNotes = isPlayNotes(page && (page.sourceFrontmatter || page.frontmatter));
   const folder = matchExcludedDir(String(rel == null ? '' : rel), opts.hiddenFolders);
   if (folder !== undefined) {
     const publishConfig = opts.playerConfig;
@@ -270,13 +278,13 @@ function decideGmPage(page, options) {
       reason: `in ${folder}/ — listed in ${nameInFor(publishConfig.layout, 'player_site.hide.folders')}`,
       outputPath,
     };
-    if (!show.has('notes')) return withPlayer(player);
+    if (!show.has('notes') && !playNotes) return withPlayer(player);
     return { bucket: 'publish', code: 'GM_SHOWN', reason: `hide.folders: ${folder}`, outputPath, player };
   }
 
   const player = decidePage(page, { ...opts, publishConfig: opts.playerConfig });
   if (publishesPage(player)) return { ...player, player };
-  if (NOTE_CODES.has(player.code) && show.has('notes')) {
+  if (NOTE_CODES.has(player.code) && (show.has('notes') || playNotes)) {
     return { bucket: 'publish', code: 'GM_SHOWN', reason: player.reason, outputPath: player.outputPath, player };
   }
   return { ...player, player };
@@ -285,6 +293,7 @@ function decideGmPage(page, options) {
 module.exports = {
   decidePage,
   decideGmPage,
+  isPlayNotes,
   NOTE_CODES,
   storyCompanionPc,
   publishesPage,

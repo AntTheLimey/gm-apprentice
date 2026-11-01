@@ -565,7 +565,7 @@ mark, so do not read those places aloud as if players had them.
 |---------|--------------|--------|----------|
 | `gm_site.publish` | Whether this vault has a GM site: a second copy of the site with every note shown and the hidden parts marked (the `gm_site.show.*` switches choose which), for you at the table. It is never put online | A switch | Off |
 | `gm_site.folder` | The folder the GM site's pages are written to. It holds built pages only, and cannot be the player site's folder, inside it, or hold it. Turning the GM site on with this unset makes one beside the player site's folder | A folder path | A folder beside the player site's, made when the GM site is turned on |
-| `gm_site.show.notes` | Notes the player site leaves out (prep, drafts, the ones held back by the publish list) get a page, marked | A switch | On |
+| `gm_site.show.notes` | Notes the player site leaves out (prep, drafts, the ones held back by the publish list) get a page, marked. A session's Play Notes always get a page on the GM site, whatever this says | A switch | On |
 | `gm_site.show.sections` | Sections the player site hides (by heading) are shown, marked | A switch | On |
 | `gm_site.show.fields` | Frontmatter fields the player site hides are listed in a panel at the top of the page, marked | A switch | On |
 | `gm_site.show.relationships` | Relationships the player site hides (GM-only ones) are shown, marked | A switch | On |
