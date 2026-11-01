@@ -65,9 +65,9 @@ own. Never offer `leaks accept --note player_site.never_show`: it accepts
 every listed word on every page at once.
 
 A finding with the code `PROP_UNREVEALED` is a whole file: `page` is the
-file of a prop whose note (`note`) the site holds back, or a file its page
-links (its stylesheet, a picture), at its own address or as the same bytes
-elsewhere (a copy left in a kept folder, a picture a published note embeds). If the players already have the prop, offer to
+file of a prop whose note (`note`) the site holds back, at its own address
+or as the same bytes elsewhere (a copy left in a kept folder, a picture a
+published note embeds). If the players already have the prop, offer to
 publish its note: `node "$TOOL" explain "<note>" --config
 <dir>/vault.config.json` says what holds it back, and on a yes
 `manifest apply --publish "<note>"` (same `TOOL` and `--config`). Otherwise
