@@ -1145,7 +1145,7 @@ test('an unusable site value or a name that is not a setting is shown, left with
   const extra = { searchEnabled: 'maybe', landing: { bogus: 1, max_npcs: 2 }, images: { maxWidth: 800 } };
   const { s, file, siteJson } = movedWithSiteFile('', extra);
   const check = cliMove({ vault: s.vault }, { check: true });
-  assert.deepEqual(check.data.siteDiffers.sort(), ['landing.bogus', 'player_site.features.search', 'player_site.images.max_width', 'player_site.landing.max_npcs']);
+  assert.deepEqual(check.data.siteDiffers.sort(), ['player_site.features.search', 'player_site.images.max_width', 'player_site.landing', 'player_site.landing.max_npcs']);
   const before = hashes(s.root);
   applyMove(planMove({ vaultPath: s.vault, siteConfigPath: file }, { pinCheck: () => null }));
   assert.deepEqual(hashes(s.root), before, 'without the flag the site file is left');

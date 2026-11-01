@@ -778,6 +778,14 @@ function move(options) {
   }
   const only = Array.isArray(options.only) && options.only.length ? options.only : null;
   if (only && !options.foldSiteFile) return stopped(['--only goes with --fold-site-file.']);
+  // The fold reads the vault's settings to know what it holds: a file that does not parse is said, never "nothing to move".
+  if (options.foldSiteFile && layoutOf(vaultPath, options.deps) === 'new') {
+    try {
+      readSettings({ vaultPath, siteConfig: {} });
+    } catch (e) {
+      return stopped([`the vault's settings file (${NEW_FILE}) could not be read: ${firstLine(e.message)}. Fix it, then run --fold-site-file again.`]);
+    }
+  }
   const plan = planMove({ vaultPath, siteConfigPath, fill: fillOf(options.fill), discardOld: !!options.discardOld, siteToolUpdated: !!options.siteToolUpdated, foldSiteFile: !!options.foldSiteFile, only });
   const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files, ...(plan.carried ? { carried: plan.carried, dropped: plan.dropped || [] } : {}), ...(plan.stepsHeld ? { stepsHeld: plan.stepsHeld } : {}), ...(plan.keysHeld ? { keysHeld: plan.keysHeld } : {}), ...(plan.stepsDiffer ? { stepsDiffer: plan.stepsDiffer } : {}), ...(plan.leftover ? { leftover: plan.leftover } : {}), ...(plan.siteDiffers ? { siteDiffers: plan.siteDiffers } : {}), ...(plan.held ? { held: plan.held, spec: plan.spec, line: plan.line } : {}) });
   if (plan.held) {

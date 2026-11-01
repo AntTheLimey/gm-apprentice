@@ -190,6 +190,22 @@ function stripSiteKeys(siteText, { carriedOnly = false, leaveFallback = false, o
       }
     }
   }
+  // A setting inside one of the site file's old maps named on its own (`--only landing.max_npcs`): just that name
+  // comes out, and the map goes only when nothing is left in it.
+  for (const name of only || []) {
+    if (!SITE_BOXES.some((b) => name.startsWith(`${b.root}.`))) continue;
+    const segs = name.split('.');
+    const parent = getPath(siteAfter, segs.slice(0, -1));
+    if (!hasKey(parent, segs[segs.length - 1])) continue;
+    delete parent[segs[segs.length - 1]];
+    for (let i = segs.length - 1; i > 0; i -= 1) {
+      const up = i === 1 ? siteAfter : getPath(siteAfter, segs.slice(0, i - 1));
+      const here = getPath(siteAfter, segs.slice(0, i));
+      if (isMap(here) && Object.keys(here).length === 0) delete up[segs[i - 1]];
+      else break;
+    }
+    removedKeys.push(name);
+  }
   // What else sat under a carried name's parent is no longer used, and goes with it.
   for (const root of CARRIED_ROOTS) {
     if (!hasKey(siteAfter, root) || (only && !only.has(root))) continue;
@@ -217,6 +233,15 @@ const beforeMove = (lines, ...plans) => lines.map((l) => {
   return l;
 });
 
+// Whether a value read for setting `e` from the site file can be carried into the vault: { why } when it cannot be
+// used (a text setting takes text, not a number), { blank: true } when there is nothing to carry, else { ok: true }.
+// One rule for the carried names (planCarry) and for the fold (foldInto).
+function carryable(e, value) {
+  if (e.type === 'text' && value !== null && typeof value !== 'string' && !e.siteFallback) return { why: `it takes ${TYPES[e.type].takes(e)}` };
+  if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '') || (Array.isArray(value) && value.length === 0)) return { blank: true };
+  return { ok: true };
+}
+
 // Plans what the site file's carried keys do, against what the vault holds. `held(name)` says { set, value } for a
 // setting of the vault. Returns { carried: [{ from, to, value }], dropped: [{ from, why }], lines, values (by setting
 // name, the ones to write), changes (as write.js takes them) }.
@@ -232,7 +257,7 @@ function planCarry(site, held, siteDir, { holdKeys = false } = {}) {
     if (raw === undefined || raw === null) continue;
     if (holdKeys && e.siteFallback) { leftIn = true; continue; }
     let r =TYPES[e.type].read(raw, e);
-    if (r.ok && e.type === 'text' && typeof r.value !== 'string' && !e.siteFallback) r = { ok: false };
+    if (r.ok && carryable(e, r.value).why) r = { ok: false };
     const stops = e.siteFallback || e.stopOnFault;
     const why = !r.ok ? `it takes ${TYPES[e.type].takes(e)}` : (stops ? problemOf(e, r.value) : null);
     if (stops && why) {
@@ -245,7 +270,7 @@ function planCarry(site, held, siteDir, { holdKeys = false } = {}) {
       say(out, unusable, unusable.replace('so it was removed', 'so it is removed'));
       continue;
     }
-    if (r.value === null || (typeof r.value === 'string' && r.value.trim() === '') || (Array.isArray(r.value) && r.value.length === 0)) continue;
+    if (carryable(e, r.value).blank) continue;
     const mine = held(e.name);
     if (!mine.set) {
       out.carried.push({ from: w.name, to: e.name, value: r.value, ...(w.shows ? { shows: w.shows } : {}) });
@@ -938,14 +963,20 @@ function oldFileHolds(vault) {
 // The names under one of the site file's old maps (`landing`, `images`, `locations`) that are not settings, as the site
 // file writes them (`landing.bogus`), from the faults of a read of the site file alone.
 const SITE_BOXES = REGISTRY.filter((c) => c.container && (c.was || []).some((w) => w.in === 'site') && (c.was || []).some((w) => w.in === 'vault'))
-  .map((c) => ({ old: c.was.find((w) => w.in === 'vault').name, root: c.was.find((w) => w.in === 'site').name }));
-const unknownSiteNames = (siteOnly) => siteOnly.faults.filter((f) => f.kind === 'unknown-name').flatMap((f) => {
-  const box = SITE_BOXES.find((b) => String(f.name).startsWith(`${b.old}.`));
-  return box ? [`${box.root}.${f.name.slice(box.old.length + 1)}`] : [];
+  .map((c) => ({ name: c.name, old: c.was.find((w) => w.in === 'vault').name, root: c.was.find((w) => w.in === 'site').name }));
+// What a read of the site file alone found wrong in those maps: [{ from (the site file's name), setting (the map's
+// setting), why }] for a name in one that is not a setting, and for a map that is not a map at all.
+const siteBoxFaults = (siteOnly) => siteOnly.faults.flatMap((f) => {
+  const name = String(f.name);
+  const inside = f.kind === 'unknown-name' && SITE_BOXES.find((b) => name.startsWith(`${b.old}.`));
+  if (inside) return [{ from: `${inside.root}.${name.slice(inside.old.length + 1)}`, setting: inside.name, why: 'it is not a setting' }];
+  const whole = f.kind === 'not-allowed' && SITE_BOXES.find((b) => name === b.old);
+  return whole ? [{ from: whole.root, setting: whole.name, why: `it is not usable as ${whole.name}; it takes a map` }] : [];
 });
 
-// The settings in `site` (the site folder's file) that the new file resolves differently, by their names (and, by
-// the site file's name, anything under its old maps that is not a setting: it is shown, never taken out unsaid).
+// The settings in `site` (the site folder's file) that the new file resolves differently, by their names (a map the
+// site file holds with a name in it that is not a setting, or that is not a map, is named too: it is shown, never
+// taken out unsaid).
 function siteDiffers(vault, site) {
   const siteOnly = read.readOldLayout({ vaultPath: vault, siteConfig: site, skipOldFile: true });
   const now = read.readSettings({ vaultPath: vault, siteConfig: {} });
@@ -976,7 +1007,7 @@ function siteDiffers(vault, site) {
     const segs = e.name.split('.');
     if (!covers(getPath(now.values, segs), getPath(siteOnly.values, segs))) differs.push(e.name);
   }
-  differs.push(...unknownSiteNames(siteOnly));
+  for (const f of siteBoxFaults(siteOnly)) if (!differs.includes(f.setting)) differs.push(f.setting);
   return differs;
 }
 
@@ -1045,6 +1076,14 @@ function foldInto(vault, site, out, { lists = true } = {}) {
     }
     if ((e.type === 'list' && e.guards) || e.type === 'switchOrList') continue;   // (added to the vault's, above)
     const value = getPath(siteOnly.values, segs);
+    const can = carryable(e, value);
+    if (can.why) {
+      out.dropped.push({ from, why: `it is not usable as ${e.name}; ${can.why}` });
+      const unusable = `\`${from}\` in the site folder's vault.config.json is not usable as \`${e.name}\` (${can.why}), so it was removed and not carried over.`;
+      say(out, unusable, unusable.replace('so it was removed', 'so it is removed'));
+      continue;
+    }
+    if (can.blank) continue;                                            // nothing to carry
     if (covers(getPath(now, segs), value)) continue;                    // the vault's settings already say it
     const mine = nowRead.origins[e.name];
     const vaultSets = mine !== undefined && mine !== 'default' && mine !== 'inherit';
@@ -1063,10 +1102,10 @@ function foldInto(vault, site, out, { lists = true } = {}) {
       say(out, differs, differs.replace("site file's was removed", "site file's is removed"));
     }
   }
-  for (const from of unknownSiteNames(siteOnly)) {
-    out.dropped.push({ from, why: 'it is not a setting' });
-    say(out, `\`${from}\` in the site folder's vault.config.json is not a setting, so it was removed and not carried over.`,
-      `\`${from}\` in the site folder's vault.config.json is not a setting, so it is removed and not carried over.`);
+  for (const { from, why } of siteBoxFaults(siteOnly)) {
+    out.dropped.push({ from, why });
+    const what = `\`${from}\` in the site folder's vault.config.json ${why === 'it is not a setting' ? 'is not a setting' : `is not usable (${why.replace(/^it is not usable as [^;]+; /, '')})`}, so it was removed and not carried over.`;
+    say(out, what, what.replace('so it was removed', 'so it is removed'));
   }
   if (lists && !said.length && out.carried.length === before.carried && out.dropped.length === before.dropped) {
     said.push('The vault\'s own values are the ones in use, so nothing was carried.');
@@ -1095,7 +1134,9 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
       remove.push(oldPath);
       lines.push(held.redundant
         ? `${OLD_FILE} is left over from before the update and holds nothing the new file lacks; it will be removed.`
-        : `${OLD_FILE} is left over and holds ${held.keys.join(', ')} that the new file does not; you asked for it to be discarded, so it will be removed.`);
+        : held.why
+          ? `${OLD_FILE} is left over and could not be compared with the new file (${held.why}); you asked for it to be discarded, so it will be removed.`
+          : `${OLD_FILE} is left over and holds ${held.keys.join(', ')} that the new file does not; you asked for it to be discarded, so it will be removed.`);
     } else {
       lines.push(held.why
         ? `${OLD_FILE} is left over and could not be compared with the new file (${held.why}); it was left.`
@@ -1164,9 +1205,10 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
         if (stepsPlan.pkg) lines.push(packageLine(stepsPlan.pkg, stepsPlan.removed, false));
         mend.stepsLines = stepsPlan.lines;
         if (hold) {
-          lines.push(`${siteFile} still holds settings the new file has differently (${differs.join(', ')}); ${siteOut !== null ? 'they were left in it' : 'it was left as it is'}. The vault's own values are the ones in use.`);
+          lines.push(`${siteFile} still holds settings the vault's file does not say the same way (${differs.join(', ')}); ${siteOut !== null ? 'they were left in it' : 'it was left as it is'}. \`--fold-site-file\` carries the ones the vault does not set and keeps the vault's own.`);
         } else if (said && siteOut !== null) {
           lines.push(`Will take the settings out of ${siteFile}: ${removedKeys.join(', ')}. ${[...said, 'The rest of that file is as it was.'].join(' ')}`);
+          mend.saidLines = said;
         } else if (siteOut !== null) {
           lines.push(`Will remove the settings from ${siteFile}: ${removedKeys.join(', ')}. ${carry.carried.length || carry.dropped.length ? '' : 'The new file already holds them. '}The rest of that file is as it was.`);
         }
@@ -1181,7 +1223,7 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
     }
   }
   // "Nothing to move" is only true when nothing was carried, dropped, taken out of the site file or held.
-  const moved = carry.carried.length > 0 || carry.dropped.length > 0 || mend.siteOut !== null
+  const moved = carry.carried.length > 0 || carry.dropped.length > 0 || mend.siteOut !== null || siteDiffersNow.length > 0
     || (stepsPlan !== null && (stepsPlan.carried.length > 0 || stepsPlan.lines.length > 0 || stepsPlan.stepsHeld !== null));
   if (moved) lines[0] = `This vault is already on the new settings file (${NEW_FILE}).`;
   const done = plan({ lines, files: { write, remove }, carried: [...carry.carried, ...(stepsPlan ? stepsPlan.carried : [])], dropped: carry.dropped });
@@ -1229,19 +1271,24 @@ function applyMend(plan, mend, deps = {}) {
   if (mend.vaultAfter !== undefined) writeAtomic(mend.vaultFile, mend.vaultAfter, { rename: deps.rename });
   // One change across up to three files: when a later write fails, the earlier ones go back as they were.
   const undo = [];
-  if (mend.vaultAfter !== undefined) undo.push(() => writeAtomic(mend.vaultFile, mend.vaultBefore));
+  if (mend.vaultAfter !== undefined) undo.push([mend.vaultFile, () => writeAtomic(mend.vaultFile, mend.vaultBefore, { rename: deps.rename })]);
   const put = (file, text, back, what) => {
     try {
       writeAtomic(file, text, { rename: deps.rename });
     } catch (e) {
-      for (const step of undo.reverse()) step();
+      // Every undo step is tried; one that fails is named beside the first error, which is kept.
+      const failed = [];
+      for (const [name, step] of undo.reverse()) {
+        try { step(); } catch (u) { failed.push(`${name} could not be put back (${firstLine(u.message)})`); }
+      }
+      if (failed.length) throw new Error(`${what} (${firstLine(e.message)}); ${failed.join('; ')}. Check ${failed.length === 1 ? 'that file' : 'those files'} by hand`);
       throw new Error(`${what} (${firstLine(e.message)}); nothing was changed`);
     }
-    undo.push(() => writeAtomic(file, back));
+    undo.push([file, () => writeAtomic(file, back, { rename: deps.rename })]);
   };
   if (mend.siteOut !== null) {
     put(mend.siteFile, mend.siteOut, mend.siteText, 'the settings were not taken out of the site folder\'s file');
-    lines.push(`Removed the settings from ${mend.siteFile}: ${mend.removedKeys.join(', ')}. The rest of that file is as it was.`, ...mend.carryLines);
+    lines.push(`Removed the settings from ${mend.siteFile}: ${mend.removedKeys.join(', ')}. The rest of that file is as it was.`, ...mend.carryLines, ...(mend.saidLines || []));
   }
   if (mend.pkg) put(mend.pkg.file, mend.pkg.out, mend.pkg.text, 'the build steps were not taken out of the site folder\'s package.json');
   lines.push(...(mend.stepsLines || []));
