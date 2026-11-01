@@ -101,4 +101,39 @@ describe('storySections', () => {
     assert.match(out.after[0].html, /Aftermath[\s\S]*the cost/);
     assert.ok(balanced(out.after[0].html));
   });
+
+  it('ids are unique on the page: a hidden Loot beside a visible Loot gets its own anchor', () => {
+    const m = createMarks();
+    const run = m.open('sections', 'Loot');
+    const after = m.open('sections', 'Loot');
+    const text = [
+      '## Loot', 'A key.', '',
+      ...blockLines(run), '## Loot', 'secret loot', ...blockLines(CLOSE), '',
+      '## Memorable Moments', '- one', '',
+      ...blockLines(after), '## Loot', 'more', ...blockLines(CLOSE), '',
+    ].join('\n');
+    const out = storySections(text, { marks: m });
+    assert.deepEqual(out.sections.map((s) => s.id), ['loot', 'loot-2']);
+    assert.match(out.after[0].html, /<h2 id="loot-3">/);
+  });
+
+  it('a wrap-up whose headings cannot be read warns, naming the note, and the page keeps no body from it', () => {
+    const processor = require('../../lib/processor');
+    const real = processor.findHeadings;
+    const key = require.resolve('../../lib/story-sections');
+    delete require.cache[key];
+    processor.findHeadings = () => { throw new Error('parser broke'); };
+    const warned = [];
+    try {
+      const fresh = require('../../lib/story-sections');
+      const out = fresh.storySections(PLAYER, { recapTitle: 'Narrative Recap', warn: (msg) => warned.push(msg), name: 'Sessions/Session 1 Wrap-Up.md' });
+      assert.deepEqual(out, { recap: null, sections: [], moments: null, after: [] });
+    } finally {
+      processor.findHeadings = real;
+      delete require.cache[key];
+    }
+    assert.equal(warned.length, 1);
+    assert.match(warned[0], /Sessions\/Session 1 Wrap-Up\.md/);
+    assert.match(warned[0], /parser broke/);
+  });
 });

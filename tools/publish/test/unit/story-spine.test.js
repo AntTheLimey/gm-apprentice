@@ -312,3 +312,25 @@ describe('buildStorySpine pairs a session with its Wrap-Up through session-hub (
   });
 });
 
+describe('buildStorySpine: a wrap-up claimed by one unit', () => {
+  it("a chapter unit that falls back to a wrap-up folded into a session's Story page shows none of its sections", () => {
+    const { foldPlan, applyFold } = require('../../lib/story-fold');
+    const pages = [
+      { title: 'Ch1', displayTitle: 'Ch1', sourcePath: '/v/Ch1/Ch1.md', outputPath: 'chapters/ch1.html', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '## Overview\nx' },
+      { title: 'S1', displayTitle: 'S1', sourcePath: '/v/Ch1/S1.md', outputPath: 'sessions/s1.html', frontmatter: { type: 'session', session_number: 1 }, markdown: '## Overview\nx' },
+      { title: 'S1_Wrap_Up', sourcePath: '/v/Ch1/S1_Wrap_Up.md', outputPath: 'sessions/s1-wrap-up.html', frontmatter: { type: 'session-wrap-up', session: '[[S1]]' },
+        markdown: '## Narrative Recap\nThey came.\n\n## Loot\nA key.\n\n## Memorable Moments\n- one\n\n## Notes\nLater.' },
+    ];
+    applyFold(foldPlan(buildStorySpine(pages, null)), {});
+    const spine = buildStorySpine(pages, {});
+    const session = spine.find(u => u.kind === 'session');
+    const intro = spine.find(u => u.kind === 'chapter-intro');
+    assert.ok(session && intro, `units: ${spine.map(u => u.kind)}`);
+    assert.strictEqual(intro.wrapUpPage, session.wrapUpPage, 'the same-folder fallback hands the chapter the session wrap-up');
+    assert.deepStrictEqual(session.sections.map(s => s.title), ['Loot', 'Notes']);
+    assert.ok(session.moments);
+    assert.deepStrictEqual(intro.sections, []);
+    assert.strictEqual(intro.moments, null);
+    assert.deepStrictEqual(intro.after, []);
+  });
+});

@@ -61,27 +61,29 @@ function runSections(lines, run) {
 
 const EMPTY = () => ({ recap: null, sections: [], moments: null, after: [] });
 
-function storySections(text, { resolve = (md) => md, marks = null, recapTitle = null } = {}) {
+// `warn` (a function) is told, naming the note (`name`), when its headings cannot be read; the page then keeps no
+// body from it.
+function storySections(text, { resolve = (md) => md, marks = null, recapTitle = null, warn = null, name = 'a wrap-up' } = {}) {
   const lines = String(resolve(String(text == null ? '' : text)) || '').replace(/\r/g, '').split('\n');
-  const out = EMPTY();
-  let runs;
-  let rest;
-  let restHeads;
-  let rendered;
-  let momentsLine = -1;
   try {
-    runs = marks ? hiddenRuns(lines) : [];
-    const moments = topHeadings(lines).find((h) => isMoments(h.title));
-    if (moments) momentsLine = moments.line;
-    const kept = lines.map((_, i) => i).filter((i) => !runs.some((r) => i >= r.start && i <= r.end));
-    rest = kept.map((i) => lines[i]);
-    restHeads = topHeadings(rest).map((h) => ({ ...h, at: kept[h.line] }));
-    rendered = extractSections(rest.join('\n'), { preamble: !!marks });
+    return cut(lines, marks, recapTitle);
   } catch (err) {
-    return out;
+    if (warn) warn(`could not read the headings of ${name} (${err.message}); its sections are left off its Story page`);
+    return EMPTY();
   }
+}
+
+function cut(lines, marks, recapTitle) {
+  const out = EMPTY();
+  const runs = marks ? hiddenRuns(lines) : [];
+  const moments = topHeadings(lines).find((h) => isMoments(h.title));
+  const momentsLine = moments ? moments.line : -1;
+  const kept = lines.map((_, i) => i).filter((i) => !runs.some((r) => i >= r.start && i <= r.end));
+  const rest = kept.map((i) => lines[i]);
+  const restHeads = topHeadings(rest).map((h) => ({ ...h, at: kept[h.line] }));
+  const rendered = extractSections(rest.join('\n'), { preamble: !!marks });
   const placed = [];   // { at, section } for `sections`, in written order once sorted
-  const after = [];    // { at, html }
+  const after = [];    // { at, title, id, html }: a section after the cards (no title: the preamble)
   // The sections outside every hidden run, as extractSections renders them (its preamble first, when it has one).
   const offset = rendered.length - restHeads.length;
   if (offset > 0) after.push({ at: -1, html: rendered[0].html });
@@ -93,7 +95,7 @@ function storySections(text, { resolve = (md) => md, marks = null, recapTitle = 
       const next = restHeads[k + 1];
       out.moments = { title: unmark(h.title), markdown: bodyText(rest.slice(h.end, next ? next.line : rest.length)), hidden: null };
     } else {
-      placed.push({ at: h.at, section });
+      placed.push({ at: h.at, section: { ...section } });
     }
   });
   // The hidden runs: the heading and the body each wrapped in the run's own mark, so every piece is balanced.
@@ -106,15 +108,24 @@ function storySections(text, { resolve = (md) => md, marks = null, recapTitle = 
         out.moments = { title: unmark(p.title), markdown: bodyText(p.body), hidden: { open, close: CLOSE } };
         continue;
       }
-      const title = open + p.title + CLOSE;
-      const id = anchorOf(p.title);
-      const html = `<p>${open}</p>\n${renderMarkdown(p.body.join('\n'))}<p>${CLOSE}</p>\n`;
-      if (!holdsMoments && momentsLine >= 0 && p.at < momentsLine) placed.push({ at: p.at, section: { title, id, html } });
-      else after.push({ at: p.at, html: `<h2 id="${escapeHtml(id)}">${renderInline(title)}</h2>\n${html}` });
+      const section = { title: open + p.title + CLOSE, id: anchorOf(p.title),
+        html: `<p>${open}</p>\n${renderMarkdown(p.body.join('\n'))}<p>${CLOSE}</p>\n` };
+      if (!holdsMoments && momentsLine >= 0 && p.at < momentsLine) placed.push({ at: p.at, section });
+      else after.push({ at: p.at, ...section });
     }
   }
   out.sections = placed.sort((a, b) => a.at - b.at).map((p) => p.section);
-  out.after = after.sort((a, b) => a.at - b.at).map((a) => ({ html: a.html }));
+  after.sort((a, b) => a.at - b.at);
+  // One page, one anchor each: a second `loot` (a hidden Loot beside a visible one) becomes `loot-2`, in page order.
+  const used = new Map();
+  for (const s of [...out.sections, ...after.filter((a) => a.title !== undefined)]) {
+    const n = (used.get(s.id) || 0) + 1;
+    used.set(s.id, n);
+    if (n > 1) s.id = `${s.id}-${n}`;
+  }
+  out.after = after.map((a) => ({
+    html: a.title === undefined ? a.html : `<h2 id="${escapeHtml(a.id)}">${renderInline(a.title)}</h2>\n${a.html}`,
+  }));
   return out;
 }
 

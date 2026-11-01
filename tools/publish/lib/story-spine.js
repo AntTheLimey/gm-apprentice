@@ -213,11 +213,15 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false 
       : md, linkMap, outputPath)
     : () => undefined;
   // The wrap-up's sections on its unit's Story page, less the recap the page leads with when it came from the wrap-up.
-  const bodyOf = (wrapUp, recap, resolve) => {
-    if (!wrapUp) return { sections: [], moments: null, after: [] };
+  // A wrap-up folded into another unit's Story page (a chapter that falls back to its session's wrap-up) shows its
+  // sections there only. Its unreadable headings are reported on the build's one warning pass.
+  const bodyOf = (wrapUp, recap, resolve, ...outs) => {
+    if (!wrapUp || (wrapUp.foldedInto && !foldedInto(wrapUp, ...outs))) return { sections: [], moments: null, after: [] };
     const text = marked && typeof wrapUp.gmMarkedPublished === 'string' ? wrapUp.gmMarkedPublished : publishedOf(wrapUp);
     const recapTitle = recap && recap.sourcePage === wrapUp ? recap.title : null;
-    const { sections, moments, after } = storySections(text, { resolve, marks: marked || null, recapTitle });
+    const warn = images && images.warn ? (msg) => console.warn(`story: ${msg}`) : null;
+    const name = wrapUp.sourcePath ? path.basename(wrapUp.sourcePath) : wrapUp.title;
+    const { sections, moments, after } = storySections(text, { resolve, marks: marked || null, recapTitle, warn, name });
     return { sections, moments, after };
   };
   const foldedInto = (wrapUp, ...outs) => !!(wrapUp && wrapUp.foldedInto && outs.includes(wrapUp.foldedInto.outputPath));
@@ -254,7 +258,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false 
         chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
         // The recap text can come from the wrap-up; sourcePage is always the unit's own page.
         recapHtml: recap.html, sourcePage: s, wrapUpPage: wrapUp || null,
-        ...bodyOf(wrapUp, recap, wrapResolve),
+        ...bodyOf(wrapUp, recap, wrapResolve, unitOutputPath(id)),
       });
     }
 
@@ -266,7 +270,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false 
           title: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
           chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
           recapHtml: chapterRecap.html, sourcePage: chapter, wrapUpPage: chapterWrap || null,
-          ...bodyOf(chapterWrap, chapterRecap, chapterWrapResolve),
+          ...bodyOf(chapterWrap, chapterRecap, chapterWrapResolve, unitOutputPath(chSlug), unitOutputPath(`${chSlug}-intro`)),
         });
       }
       units.push(...sessionUnits);
@@ -277,7 +281,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false 
         title: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
         chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
         recapHtml: chapterRecap.html, sourcePage: chapter, wrapUpPage: chapterWrap || null,
-        ...bodyOf(chapterWrap, chapterRecap, chapterWrapResolve),
+        ...bodyOf(chapterWrap, chapterRecap, chapterWrapResolve, unitOutputPath(chSlug), unitOutputPath(`${chSlug}-intro`)),
       });
     }
   }
