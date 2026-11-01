@@ -28,6 +28,8 @@ const DASH = /^(—|–|--)(\s*)(\S.*)$/;
 // The GM site's marks (gm-marks.js): an open token alone on a line starts a span that runs to where its depth returns to 0.
 const OPEN_LINE = /^\uE000[0-9a-z]+\uE001$/;
 const MARK = /\uE000[0-9a-z]+\uE001|\uE002/g;
+// A marked span's text and the mark tokens (with the space between them) that end it.
+const SPAN_TAIL = /^([\s\S]*?)((?:\s*(?:\uE000[0-9a-z]+\uE001|\uE002))*)$/;
 
 // True when the inline markdown is one `type` span (`strong` or `em`) from its first character to its last.
 function wholly(text, type) {
@@ -100,10 +102,14 @@ function parseMoments(markdown) {
 
   for (const part of stretches(lines)) {
     if (part.marked) {
-      // A marked span is one card: its blocks, as written.
+      // A marked span is one card: its blocks, as written. A tag ending its last block is structure here too: taken off
+      // (the mark tokens after it stay), its kind the card's.
       card = null;
       const before = prior;
-      add(fresh('other', part.text.replace(/^\s+|\s+$/g, '')), {});
+      const tagged = {};
+      const [, body, tail] = SPAN_TAIL.exec(part.text.replace(/^\s+|\s+$/g, ''));
+      const untagged = strip(body, tagged);
+      add(fresh('other', untagged === body ? body + tail : untagged.replace(/\s+$/, '') + tail), tagged);
       prior = before;
       continue;
     }

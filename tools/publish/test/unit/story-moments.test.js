@@ -115,6 +115,24 @@ describe('parseMoments', () => {
     assert.equal(cards[2].kind, 'funny');
   });
 
+  it('a tag at the end of a marked span is structure there too: taken off, the kind set, an unknown word reported', () => {
+    const open = '\uE000a1\uE001';
+    for (const [md, main] of [
+      [`${open}\n**Hidden beat.** #moment/funny\n\uE002`, `${open}\n**Hidden beat.**\n\uE002`],
+      [`${open}\n**Hidden beat.**\n*Ctx.* #moment/funny\uE002`, `${open}\n**Hidden beat.**\n*Ctx.*\uE002`],
+      [`${open}\n**Hidden beat.**\n\n#moment/funny\n\uE002`, `${open}\n**Hidden beat.**\n\uE002`],
+    ]) {
+      const { cards, unknownTags } = parseMoments(md);
+      assert.deepEqual(cards.map((c) => [c.shape, c.main, c.kind]), [['other', main, 'funny']], md);
+      assert.deepEqual(unknownTags, []);
+    }
+    const unknown = parseMoments(`${open}\n**Hidden beat.** #moment/sad\n\uE002`);
+    assert.deepEqual(unknown.cards.map((c) => [c.main, c.kind]), [[`${open}\n**Hidden beat.**\n\uE002`, null]]);
+    assert.deepEqual(unknown.unknownTags, ['sad']);
+    // The card before the span keeps its own kind: the span's tag is the span's.
+    assert.deepEqual(parseMoments(`**B.**\n\n${open}\nhidden #moment/epic\n\uE002`).cards.map((c) => c.kind), [null, 'epic']);
+  });
+
   it('unknown tags are reported once however they are cased', () => {
     assert.deepEqual(parseMoments('**A.**\n\n*x* #moment/Sad\n\n**B.**\n\n*y* #moment/sad').unknownTags, ['Sad']);
   });
