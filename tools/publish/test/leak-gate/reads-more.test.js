@@ -15,6 +15,7 @@ const PAGE = (text = `<p>${HELD}</p>`) => `<!doctype html><html><head><link rel=
 const CSS = 'body { color: #432; }\n';
 // Bytes no text reader finds words in: a picture.
 const MAP = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+const SECRET = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7, 7, 7, 7, 7, 7]);
 const PAPER = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 9, 9, 9, 9, 9]);
 const LIST = (publishing) => ({ '_meta/publish-list.yaml': listFileText({ publishing }) });
 const OTHER = { 'Documents/Other.md': '---\ntype: document\n---\nOther.\n' };
@@ -44,18 +45,32 @@ describe('leak gate: a site file in another encoding (#508)', () => {
     assert.deepEqual(gate(s).warnings, []);
   }, HELD_VAULT()));
 
-  it('a page with NUL characters (UTF-16 with no byte-order mark) is a warning, and an ordinary page is not', () => within((s) => {
-    write(s, 'gazetteer/notes.html', Buffer.from(`<html><body><p>${HELD}</p></body></html>`, 'utf16le'));
+  it("a copy of a held prop's words in UTF-16 with no byte-order mark is read, in a page or any text file", () => within((s) => {
+    for (const [rel, le] of [['gazetteer/notes.html', true], ['gazetteer/notes.txt', true], ['gazetteer/be.txt', false]]) {
+      const text = rel.endsWith('.html') ? `<html><body><p>${HELD}</p></body></html>` : `${HELD}\n`;
+      write(s, rel, le ? Buffer.from(text, 'utf16le') : Buffer.from(text, 'utf16le').swap16());
+    }
+    const result = gate(s);
+    assert.deepEqual(result.findings.map(pick), ['gazetteer/be.txt', 'gazetteer/notes.html', 'gazetteer/notes.txt']
+      .map((page) => ({ code: 'HIDDEN_TEXT', page, note: 'Documents/Invitation.md' })));
+    assert.deepEqual(result.warnings, []);
+  }, HELD_VAULT()));
+
+  it('any text file left with NUL characters is a warning that words may be missed; an ordinary one is not', () => within((s) => {
+    // NULs side by side, not on alternate bytes: no UTF-16 to read.
+    write(s, 'gazetteer/odd.json', Buffer.from('{"a": "x\u0000\u0000yz"}'));
+    write(s, 'gazetteer/plain.txt', 'Nothing odd here at all.\n');
     const result = gate(s);
     assert.equal(result.warnings.length, 1, JSON.stringify(result.warnings));
-    assert.match(result.warnings[0], /gazetteer\/notes\.html/);
+    assert.match(result.warnings[0], /gazetteer\/odd\.json/);
     assert.match(result.warnings[0], /NUL/);
-    fs.rmSync(path.join(s.outputDir, 'gazetteer'), { recursive: true });
-    assert.deepEqual(gate(s).warnings, []);
+    assert.match(result.warnings[0], /may be missed/);
   }, HELD_VAULT()));
 });
 
 describe("leak gate: the files a held prop page links (#508)", () => {
+  // The build empties the site folder but its kept folders: only there can a hand copy outlive a build.
+  const KEPT = { player: { keep: ['gazetteer'] } };
   it('its picture and its stylesheet, copied by hand, are PROP_UNREVEALED', () => within((s) => {
     assert.deepEqual(gate(s).findings, []);
     write(s, 'gazetteer/m.png', MAP);
@@ -66,7 +81,44 @@ describe("leak gate: the files a held prop page links (#508)", () => {
       { code: 'PROP_UNREVEALED', page: 'gazetteer/m.png', note: 'Documents/Invitation.md' },
     ]);
     for (const f of found) assert.equal(f.reason, 'a file the prop page of a note the site does not publish links');
-  }, HELD_VAULT()));
+  }, HELD_VAULT(), KEPT));
+
+  it('outside a kept folder its bytes are not watched (the build writes everything there)', () => within((s) => {
+    write(s, 'loose/m.png', MAP);
+    assert.deepEqual(gate(s).findings, []);
+  }, HELD_VAULT(), KEPT));
+
+  it('a picture linked only inside its Keeper block is watched too', () => within((s) => {
+    write(s, 'gazetteer/s.png', SECRET);
+    assert.deepEqual(gate(s).findings.map(pick), [{ code: 'PROP_UNREVEALED', page: 'gazetteer/s.png', note: 'Documents/Invitation.md' }]);
+  }, HELD_VAULT({ 'Documents/inv.html': PAGE(`<p>${HELD}</p><!-- gm-only --><img src="secret.png" alt=""><!-- /gm-only -->`), 'Documents/secret.png': SECRET }), KEPT));
+
+  it('an empty file it links is not watched (every site has an empty .nojekyll)', () => within((s) => {
+    write(s, 'gazetteer/.keep', '');
+    assert.deepEqual(gate(s).findings, []);
+  }, HELD_VAULT({ 'Documents/inv.html': PAGE().replace('</body>', '<script src="extra.js"></script></body>'), 'Documents/extra.js': '' }), KEPT));
+
+  it('a file it links that cannot be read stops the check', (t) => {
+    if (process.getuid && process.getuid() === 0) { t.skip('root reads any file'); return; }
+    within((s) => {
+      const file = path.join(s.root, 'vault', 'Documents', 'keeper-map.png');
+      fs.chmodSync(file, 0o000);
+      try {
+        assert.throws(() => gate(s), /Leak check: .*keeper-map\.png.*could not be read/);
+      } finally { fs.chmodSync(file, 0o644); }
+    }, HELD_VAULT(), KEPT);
+  });
+
+  const PICTURES = [
+    ['a section banner', { 'Documents/_banner.png': MAP, 'Documents/inv.html': PAGE().replace('keeper-map.png', '_banner.png') }, {}],
+    ['the campaign image', {}, { theme: { campaign_image: 'Documents/keeper-map.png' } }],
+    ['the default page banner', { '_attachments/hdr.png': MAP }, { theme: { page_banner: '_attachments/hdr.png' } }],
+  ];
+  for (const [what, extra, player] of PICTURES) {
+    it(`the build's own copy of the same picture as ${what} is no finding`, () => within((s) => {
+      assert.deepEqual(gate(s).findings, []);
+    }, HELD_VAULT(extra), { player: { ...KEPT.player, ...player } }));
+  }
 
   it('a file a shipping prop also ships, with the same bytes, is no finding', () => within((s) => {
     assert.ok(fs.existsSync(path.join(s.outputDir, 'props', 'keeper-map.png')));
@@ -79,7 +131,7 @@ describe("leak gate: the files a held prop page links (#508)", () => {
     'Letters/Card.md': PROP('card.html'), 'Letters/card.html': '<html><head><link rel="stylesheet" href="props.css"></head><body><p>Hello.</p><img src="keeper-map.png" alt=""></body></html>',
     'Letters/props.css': CSS, 'Letters/keeper-map.png': MAP,
     ...LIST(['Documents/Other.md', 'Letters/Card.md']),
-  })));
+  }), KEPT));
 
   it("the build's own copy of the same picture, used by a published page, is no finding", () => within((s) => {
     assert.ok(fs.existsSync(path.join(s.outputDir, 'images', 'keeper-map.png')));
@@ -87,15 +139,15 @@ describe("leak gate: the files a held prop page links (#508)", () => {
   }, HELD_VAULT({
     '_attachments/keeper-map.png': MAP,
     'Documents/Other.md': '---\ntype: document\n---\nOther.\n\n![[keeper-map.png]]\n',
-  })));
+  }), KEPT));
 
   it("a font a held prop links is not watched", () => within((s) => {
-    write(s, 'fonts/hand.woff2', Buffer.from('wOF2 font bytes'));
+    write(s, 'gazetteer/hand.woff2', Buffer.from('wOF2 font bytes'));
     assert.deepEqual(gate(s).findings, []);
   }, HELD_VAULT({
     'Documents/inv.html': PAGE().replace('</head>', '<style>@font-face { font-family: H; src: url("hand.woff2"); }</style></head>'),
     'Documents/hand.woff2': Buffer.from('wOF2 font bytes'),
-  })));
+  }), KEPT));
 });
 
 describe('leak gate: a word-less SVG prop (#508)', () => {
@@ -118,6 +170,8 @@ describe('leak gate: more ways a page links a held prop (#515)', () => {
   const CASES = [
     ['a srcset candidate', '<img srcset="../props/other.png 1x, ../props/map.png 2x" alt="">', '<img srcset="../props/other.png 1x, ../props/also.png 2x" alt="">'],
     ['a style attribute url()', '<span style="background: url(\'../props/map.png\')">x</span>', '<span style="background: url(\'../props/paper.png\')">x</span>'],
+    ['an <object data>', '<object data="../props/map.png"></object>', '<object data="../props/paper.png"></object>'],
+    ['a <video poster>', '<video poster="../props/map.png"></video>', '<video poster="../props/paper.png"></video>'],
     ['a <style> block url()', '<style>.m { background: url(../props/map.png); }</style>', '<style>.m { background: url(../props/paper.png); }</style>'],
   ];
   for (const [what, held, harmless] of CASES) {

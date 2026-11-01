@@ -32,13 +32,14 @@ const acceptedKey = (a) => (a.note === NEVER_NOTE ? `never\n${keyOf(a.page, a.te
 const byPageText = (a, b) => (a.page < b.page ? -1 : a.page > b.page ? 1 : a.text < b.text ? -1 : a.text > b.text ? 1 : 0);
 
 // A file of a prop the site does not publish: one at the prop's address (unless a shipping prop or the site itself has
-// it), or any other file with the bytes of the prop file (a PDF, a picture, a word-less SVG copied by hand) or of a file
-// its page links (its stylesheet, its pictures). A prop file with words is found by its text. And a page, SVG or
+// it), or any other file with the bytes of the prop file (a PDF, a picture, a word-less SVG copied by hand), or a file
+// in a kept folder with the bytes of a file its page links (its stylesheet, its pictures). A prop file with words is
+// found by its text. And a page, SVG or
 // stylesheet that links that address, or the page its note would have (an old listing left in a kept folder, however
 // short the prop's title): no page the site builds links either.
 const UNREVEALED = 'the prop file of a note the site does not publish';
 const UNREVEALED_LINKED = 'a file the prop page of a note the site does not publish links';
-const LINK_ATTR = /\s(?:href|src|xlink:href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
+const LINK_ATTR = /\s(?:href|src|xlink:href|data|poster)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
 const SRCSET_ATTR = /\s(?:srcset|imagesrcset)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
 const STYLE_ATTR = /\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
 const STYLE_BLOCK = /<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi;
@@ -90,10 +91,12 @@ function propUnrevealed({ outputDir, hidden, files }) {
     if (!shipped.has(key) && !hidden.siteTakes(h.address) && !linkedOnly.has(key)) linkedOnly.set(key, h);
   }
   const bySize = new Map();
+  let hasUnlinked = false;
   for (const h of hidden.heldProps) {
     // A page the tool would make has no bytes to know it by: only its address is watched. A prop file with words is
     // found by them (collect.js byBytes).
     if (!h.byBytes) continue;
+    if (!h.linked) hasUnlinked = true;
     if (!bySize.has(h.size)) bySize.set(h.size, []);
     bySize.get(h.size).push(h);
   }
@@ -115,15 +118,16 @@ function propUnrevealed({ outputDir, hidden, files }) {
     const at = atAddress.get(addressKey(rel));
     if (at) { add(rel, at); continue; }
     if (!bySize.size) continue;
+    if (!hasUnlinked && !hidden.keeps(rel)) continue;
     const full = path.join(outputDir, ...rel.split('/'));
     let size;
     try { size = fs.statSync(full).size; } catch (e) { continue; }
     const same = bySize.get(size);
     if (!same) continue;
-    const bytes = fs.readFileSync(full);
-    const hash = crypto.createHash('sha1').update(bytes).digest('hex');
-    // A file a held page links is no finding where the build itself copies the same picture (a published page's).
-    const h = same.find((x) => x.hash === hash && !(x.linked && hidden.buildsPicture(rel, bytes)));
+    const hash = crypto.createHash('sha1').update(fs.readFileSync(full)).digest('hex');
+    // A file a held page links is watched only in a kept folder: the build empties the rest of the site folder and
+    // writes its own pictures there (banners, the campaign image), so only a hand copy in a kept folder outlives it.
+    const h = same.find((x) => x.hash === hash && (!x.linked || hidden.keeps(rel)));
     if (h) add(rel, h);
   }
   return found;
@@ -210,11 +214,11 @@ function runLeakGate({ configPath, outputDir }) {
     }
   }
   const warnings = [...(hidden.warnings || [])];
-  // A page or SVG with NUL characters is a UTF-16 file saved with no byte-order mark: no decoder reads its words, so its
-  // text is not checked. Said, so the GM can save it again.
+  // A text file that still has NUL characters once decoded (match.js reads UTF-16 with no byte-order mark when its NULs
+  // show it) may run words together: what it found stands, and the GM is told words may be missed.
   for (const file of files) {
-    if (MARKUP_PAGE.has(file.ext) && file.raw.includes('\u0000')) {
-      warnings.push(`Leak check: ${file.rel} has NUL characters (a UTF-16 file saved with no byte-order mark?), so its text cannot be read or checked. Save it as UTF-8.`);
+    if (file.raw.includes('\u0000')) {
+      warnings.push(`Leak check: ${file.rel} has NUL characters that no text encoding explains, so words in it may be missed. Save it as UTF-8.`);
     }
   }
   // The search index holds its entries' text as single terms, in no order: read as the build kept it, sentence by sentence,

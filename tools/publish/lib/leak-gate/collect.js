@@ -60,7 +60,7 @@ function collectHidden({ configPath, outputDir = null }) {
   const keptBy = player.vault.kept_by;
   // The GM's own words that must never reach players (player_site.never_show): looked for on every kind of vault.
   const neverShow = (player.site.never_show || []).filter((w) => typeof w === 'string' && w.trim());
-  const empty = { sitePath: '/', buildsPicture: () => false, vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), stateFiles: new Set(), heldProps: [], heldNotePages: [], heldTitles: [], sealedOn: new Map(), collectionAddress: null, siteTakes: () => false, keeps: () => false };
+  const empty = { sitePath: '/', vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), stateFiles: new Set(), heldProps: [], heldNotePages: [], heldTitles: [], sealedOn: new Map(), collectionAddress: null, siteTakes: () => false, keeps: () => false };
   if (keptBy === 'player') return empty;
 
   const quiet = () => {};
@@ -321,12 +321,16 @@ function collectHidden({ configPath, outputDir = null }) {
     const isText = TEXT_EXT.has(path.extname(p.source).toLowerCase());
     const texts = isText ? piecesOfHtml(textOf(bytes).text) : [];
     if (isText) add(texts, p.rel, `unpublished prop: ${why}`);
-    heldProps.push({ rel: p.rel, address: p.address, hash: p.hash, size: bytes.length, byBytes: !texts.some((x) => wordsOf(x).length >= MIN_WORDS) });
-    // The files its page links (its stylesheet, its pictures), known by their bytes wherever a hand copy lands. Not a
-    // font: a typeface is no secret.
+    // An empty file holds no secret (and every site has an empty .nojekyll).
+    heldProps.push({ rel: p.rel, address: p.address, hash: p.hash, size: bytes.length, byBytes: bytes.length > 0 && !texts.some((x) => wordsOf(x).length >= MIN_WORDS) });
+    // A file its page links that cannot be read stops the check, as the prop file does: a copy of it could be anywhere.
+    const unread = (p.heldUnread || [])[0];
+    if (unread) throw new Error(`Leak check: the file "${unread.link}" that the prop file of ${p.rel} links could not be read (${unread.error}), so a copy of it cannot be found. Fix the file and deploy again.`);
+    // The files its page links (its stylesheet, its pictures, its Keeper parts' too), known by their bytes in a kept
+    // folder (index.js). Not a font: a typeface is no secret. Not an empty file.
     for (const f of p.heldLinked || []) {
       const linkedBytes = bytesOf(f);
-      if (!linkedBytes || FONT_EXTS.has(path.extname(f.out).toLowerCase())) continue;
+      if (!linkedBytes || !linkedBytes.length || FONT_EXTS.has(path.extname(f.out).toLowerCase())) continue;
       heldLinked.push({ rel: p.rel, address: null, hash: sha1(linkedBytes), size: linkedBytes.length, byBytes: true, linked: true });
     }
   }
@@ -355,19 +359,6 @@ function collectHidden({ configPath, outputDir = null }) {
     sealedOn.set(canonicalNfc(address), new Set([...titles.values()].map((title) => wordsOf(title).join(' '))));
   }
 
-  // Whether `rel` is the build's own copy of a vault picture (images/<its path under the attachments folder>, the same
-  // bytes): a picture a published page shows. Read only when a held page's linked file matches a site file.
-  let attachments = null;
-  const buildsPicture = (rel, bytes) => {
-    if (!/^images\//.test(rel)) return false;
-    if (!attachments) {
-      attachments = new Map();
-      for (const entry of Object.values(scanAttachments(scanConfig))) attachments.set(canonicalNfc(entry.relPath), entry.sourcePath);
-    }
-    const source = attachments.get(canonicalNfc(rel.slice('images/'.length)));
-    try { return Boolean(source) && fs.readFileSync(source).equals(bytes); } catch (e) { return false; }
-  };
-
   // A note's outputs: its page, then its prop's files.
   const outOf = (rel) => [outputOf.get(rel), ...(propOuts.get(rel) || [])].filter(Boolean);
   return {
@@ -376,7 +367,6 @@ function collectHidden({ configPath, outputDir = null }) {
     keeps: (rel) => taken.keeps(rel),
     // The path the site is served under ('/', or '/campaign/' on a project site): a rooted link is read below it.
     sitePath: sitePathOf(config.siteUrl),
-    buildsPicture,
     collectionAddress: collection && collection.address ? canonicalNfc(collection.address) : null,
     // An address the site itself fills (a page, a file it needs, a tool folder): a held prop there is not what is there.
     siteTakes: (address) => Boolean(taken.has(address, { explicit: true })),
