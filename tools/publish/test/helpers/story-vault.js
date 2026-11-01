@@ -169,4 +169,4 @@ function storyVault(overrides = {}) {
   return files;
 }
 
-module.exports = { storyVault, SECRETS, SHOWN, WRAP_1, WRAP_2, SESSION, PLAY_NOTES };
+module.exports = { storyVault, SECRETS, SHOWN, CHAPTER, WRAP_1, WRAP_2, SESSION, PLAY_NOTES };

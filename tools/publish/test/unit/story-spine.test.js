@@ -80,7 +80,8 @@ describe('resolveUnitRecap', () => {
   });
 });
 
-function ch(title, sort) { return { title, displayTitle: title.replace(/_/g, ' '), frontmatter: { type: 'chapter', sort_order: sort } }; }
+// A chapter takes its recap from its wrap-up only once complete; `status` defaults to that.
+function ch(title, sort, status = 'complete') { return { title, displayTitle: title.replace(/_/g, ' '), frontmatter: { type: 'chapter', sort_order: sort, status } }; }
 function sess(title, chapterRef, n, recap) {
   return { title, displayTitle: title.replace(/_/g, ' '), frontmatter: { type: 'session', chapter: `[[${chapterRef}]]`, session_number: n }, markdown: recap ? `## Narrative Recap\n${recap}` : '## Overview\nx' };
 }
@@ -179,7 +180,7 @@ describe('buildStorySpine wrap-up sections', () => {
 describe('buildStorySpine folder-proximity pairing', () => {
   it('pairs a chapter wrap-up by folder even when its chapter ref is a free-form display title', () => {
     const pages = [
-      { title: 'Chapter 1 Overview', displayTitle: 'Chapter 1 — London', sourcePath: '/v/Chapters/Chapter 1 - London/Chapter 1 Overview.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '## Overview\nx' },
+      { title: 'Chapter 1 Overview', displayTitle: 'Chapter 1 — London', sourcePath: '/v/Chapters/Chapter 1 - London/Chapter 1 Overview.md', frontmatter: { type: 'chapter', sort_order: 1, status: 'complete' }, markdown: '## Overview\nx' },
       { title: 'Chapter_1_Wrap_Up', sourcePath: '/v/Chapters/Chapter 1 - London/Chapter_1_Wrap_Up.md', frontmatter: { type: 'session_wrap', chapter: 'Chapter 1 — London: The Orphean Society' }, markdown: '## Narrative Recap\nLondon happened.' },
     ];
     const spine = buildStorySpine(pages);
@@ -194,10 +195,10 @@ describe('buildStorySpine folder-proximity pairing', () => {
       { title: 'Session 01', displayTitle: 'Session 01', sourcePath: '/v/Chapters/Chapter 4 - Calcutta/Sessions/Session 01/Session 01.md', frontmatter: { type: 'session', session_number: 1, chapter: 'Chapter 4 — Calcutta' }, markdown: '## Overview\nx' },
       { title: 'Session 01 Wrap Up', sourcePath: '/v/Chapters/Chapter 4 - Calcutta/Sessions/Session 01/Session_01_Wrap_Up.md', frontmatter: { type: 'session_wrap', session: 'Session 01 - The Morning After', chapter: 'Chapter 4 — Calcutta' }, markdown: '## Narrative Recap\nCalcutta session one.' },
     ];
+    // The chapter (not complete) opens with its introduction; the session takes its wrap-up's recap.
     const spine = buildStorySpine(pages);
-    assert.strictEqual(spine.length, 1);
-    assert.strictEqual(spine[0].kind, 'session');
-    assert.match(spine[0].recapHtml, /Calcutta session one/);
+    assert.deepStrictEqual(spine.map(u => u.kind), ['chapter-intro', 'session']);
+    assert.match(spine[1].recapHtml, /Calcutta session one/);
   });
 });
 
@@ -285,8 +286,9 @@ describe('wrap-up matching in a flat Sessions/ folder', () => {
       { title: 'Session 01 Wrap Up', sourcePath: '/v/Chapters/Ch4/Sessions/Session 01/Session_01_Wrap_Up.md', frontmatter: { type: 'session_wrap', session: 'Session 01 - The Morning After' }, markdown: '## Narrative Recap\nSubfolder recap.' },
     ];
     const spine = buildStorySpine(nested);
-    assert.strictEqual(spine.length, 1);
-    assert.match(spine[0].recapHtml, /Subfolder recap/);
+    const sessions = spine.filter(u => u.kind === 'session');
+    assert.strictEqual(sessions.length, 1);
+    assert.match(sessions[0].recapHtml, /Subfolder recap/);
   });
 });
 
@@ -313,24 +315,61 @@ describe('buildStorySpine pairs a session with its Wrap-Up through session-hub (
 });
 
 describe('buildStorySpine: a wrap-up claimed by one unit', () => {
-  it("a chapter unit that falls back to a wrap-up folded into a session's Story page shows none of its sections", () => {
-    const { foldPlan, applyFold } = require('../../lib/story-fold');
-    const pages = [
-      { title: 'Ch1', displayTitle: 'Ch1', sourcePath: '/v/Ch1/Ch1.md', outputPath: 'chapters/ch1.html', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '## Overview\nx' },
-      { title: 'S1', displayTitle: 'S1', sourcePath: '/v/Ch1/S1.md', outputPath: 'sessions/s1.html', frontmatter: { type: 'session', session_number: 1 }, markdown: '## Overview\nx' },
-      { title: 'S1_Wrap_Up', sourcePath: '/v/Ch1/S1_Wrap_Up.md', outputPath: 'sessions/s1-wrap-up.html', frontmatter: { type: 'session-wrap-up', session: '[[S1]]' },
-        markdown: '## Narrative Recap\nThey came.\n\n## Loot\nA key.\n\n## Memorable Moments\n- one\n\n## Notes\nLater.' },
-    ];
+  const { foldPlan, applyFold } = require('../../lib/story-fold');
+  // Ch1/Ch1.md, Ch1/S1.md, Ch1/S1_Wrap_Up.md: the chapter's same-folder fallback finds the session's wrap-up.
+  const vault = (chapterMarkdown, status) => [
+    { title: 'Ch1', displayTitle: 'Ch1', sourcePath: '/v/Ch1/Ch1.md', outputPath: 'chapters/ch1.html', frontmatter: { type: 'chapter', sort_order: 1, ...(status ? { status } : {}) }, markdown: chapterMarkdown },
+    { title: 'S1', displayTitle: 'S1', sourcePath: '/v/Ch1/S1.md', outputPath: 'sessions/s1.html', frontmatter: { type: 'session', session_number: 1 }, markdown: '## Overview\nx' },
+    { title: 'S1_Wrap_Up', sourcePath: '/v/Ch1/S1_Wrap_Up.md', outputPath: 'sessions/s1-wrap-up.html', frontmatter: { type: 'session-wrap-up', session: '[[S1]]' },
+      markdown: '## Narrative Recap\nThey came.\n\n## Loot\nA key.\n\n## Memorable Moments\n- one\n\n## Notes\nLater.' },
+  ];
+  const folded = (pages) => {
     applyFold(foldPlan(buildStorySpine(pages, null)), {});
-    const spine = buildStorySpine(pages, {});
-    const session = spine.find(u => u.kind === 'session');
+    return buildStorySpine(pages, {});
+  };
+  for (const status of [undefined, 'active', 'Complete']) {
+    it(`(c) a chapter (status ${status}) takes nothing from a wrap-up its session claims: its introduction only`, () => {
+      const spine = folded(vault('# Ch1\n\n## Overview\nThe chapter opens.', status));
+      const session = spine.find(u => u.kind === 'session');
+      const intro = spine.find(u => u.kind === 'chapter-intro');
+      assert.ok(session && intro, `units: ${spine.map(u => u.kind)}`);
+      assert.match(session.recapHtml, /They came/);
+      assert.deepStrictEqual(session.sections.map(s => s.title), ['Loot', 'Notes']);
+      assert.match(intro.recapHtml, /The chapter opens/);
+      assert.doesNotMatch(intro.recapHtml, /They came|<h1/);
+      assert.strictEqual(intro.wrapUpPage, null);
+      assert.deepStrictEqual([intro.sections, intro.moments, intro.after], [[], null, []]);
+    });
+  }
+});
+
+describe('buildStorySpine: a chapter has a recap only once complete', () => {
+  const { foldPlan } = require('../../lib/story-fold');
+  const vault = (status) => [
+    { title: 'Ch1', displayTitle: 'Ch1', sourcePath: '/v/Ch1/Ch1.md', frontmatter: { type: 'chapter', sort_order: 1, status }, markdown: '# Ch1\n\n## Overview\nThe chapter opens.' },
+    { title: 'S1', displayTitle: 'S1', sourcePath: '/v/Ch1/S1/S1.md', frontmatter: { type: 'session', session_number: 1, chapter: '[[Ch1]]' }, markdown: '## Overview\nx' },
+    { title: 'S1 Wrap Up', sourcePath: '/v/Ch1/S1/S1_Wrap_Up.md', frontmatter: { type: 'session-wrap-up', session: '[[S1]]' }, markdown: '## Narrative Recap\nThey came.' },
+    { title: 'Ch1 Wrap Up', sourcePath: '/v/Ch1/Ch1_Wrap_Up.md', frontmatter: { type: 'session-wrap-up', chapter: '[[Ch1]]' },
+      markdown: '## Narrative Recap\nCHAPTER-RECAP.\n\n## Loot\nThe lighthouse key.' },
+  ];
+  it('(a) an active chapter shows its introduction only and claims no wrap-up', () => {
+    const pages = vault('active');
+    const spine = buildStorySpine(pages);
     const intro = spine.find(u => u.kind === 'chapter-intro');
-    assert.ok(session && intro, `units: ${spine.map(u => u.kind)}`);
-    assert.strictEqual(intro.wrapUpPage, session.wrapUpPage, 'the same-folder fallback hands the chapter the session wrap-up');
-    assert.deepStrictEqual(session.sections.map(s => s.title), ['Loot', 'Notes']);
-    assert.ok(session.moments);
+    assert.ok(intro, `units: ${spine.map(u => u.kind)}`);
+    assert.match(intro.recapHtml, /The chapter opens/);
+    assert.doesNotMatch(intro.recapHtml, /CHAPTER-RECAP/);
+    assert.strictEqual(intro.wrapUpPage, null);
     assert.deepStrictEqual(intro.sections, []);
-    assert.strictEqual(intro.moments, null);
-    assert.deepStrictEqual(intro.after, []);
+    assert.ok(![...foldPlan(spine).keys()].includes(pages[3]), 'the chapter wrap-up keeps its own page');
+  });
+  it('(b) a complete chapter takes its recap and sections from its own wrap-up, which folds in', () => {
+    const pages = vault('complete');
+    const spine = buildStorySpine(pages);
+    const intro = spine.find(u => u.kind === 'chapter-intro');
+    assert.match(intro.recapHtml, /CHAPTER-RECAP/);
+    assert.doesNotMatch(intro.recapHtml, /The chapter opens/);
+    assert.deepStrictEqual(intro.sections.map(s => s.title), ['Loot']);
+    assert.strictEqual(foldPlan(spine).get(pages[3]), intro);
   });
 });

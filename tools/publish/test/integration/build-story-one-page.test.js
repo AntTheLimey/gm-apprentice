@@ -9,7 +9,7 @@ const path = require('node:path');
 require('../helpers/quiet-legacy-warning.js');
 const { build } = require('../../lib/build');
 const { buildBoth } = require('../helpers/gm-build');
-const { storyVault, SECRETS, WRAP_1, SESSION } = require('../helpers/story-vault');
+const { storyVault, SECRETS, WRAP_1, SESSION, CHAPTER: CHAPTER_ONE } = require('../helpers/story-vault');
 const { brokenLinks } = require('../helpers/site-links');
 const { HEADINGS_UNSTABLE_WARNING } = require('../../lib/processor');
 
@@ -168,10 +168,11 @@ describe('wrap-ups no Story unit claims, and chapter wrap-ups', () => {
     } finally { site.cleanup(); }
   });
 
-  it('a chapter wrap-up folds into the chapter Story page; a session\'s claim wins', () => {
-    const CHAPTER_WRAP = '---\ntype: session_wrap\nchapter: "[[Chapter 2 Overview]]"\n---\n\n# Chapter 2 Wrap-Up\n\n## Narrative Recap\n\nCHAPTER-TWO-RECAP: the lighthouse.\n';
+  const CHAPTER_WRAP = '---\ntype: session_wrap\nchapter: "[[Chapter 2 Overview]]"\n---\n\n# Chapter 2 Wrap-Up\n\n## Narrative Recap\n\nCHAPTER-TWO-RECAP: the lighthouse.\n';
+
+  it('a complete chapter\'s wrap-up folds into the chapter Story page; a session\'s claim wins', () => {
     const site = buildBoth(storyVault({
-      'Chapters/Chapter 2/Chapter 2 Overview.md': '---\ntype: chapter\ntitle: Chapter 2 — Lighthouse\nsort_order: 2\n---\n\n# Chapter 2\n',
+      'Chapters/Chapter 2/Chapter 2 Overview.md': '---\ntype: chapter\ntitle: Chapter 2 — Lighthouse\nsort_order: 2\nstatus: complete\n---\n\n# Chapter 2\n',
       'Chapters/Chapter 2/Chapter 2 Wrap-Up.md': CHAPTER_WRAP,
       'NPCs/Mara Quill.md': `${MARA_LINKS}\nChapter: [[Chapter 2 Wrap-Up]].\n`,
     }));
@@ -189,9 +190,30 @@ describe('wrap-ups no Story unit claims, and chapter wrap-ups', () => {
     } finally { site.cleanup(); }
   });
 
+  it('an active chapter shows its introduction only; its wrap-up keeps its own page and links', () => {
+    const site = buildBoth(storyVault({
+      'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER_ONE.replace('sort_order: 1', 'sort_order: 1\nstatus: active'),
+      'Chapters/Chapter 1/Chapter 1 Wrap-Up.md': CHAPTER_WRAP.replace(/Chapter 2/g, 'Chapter 1').replace('CHAPTER-TWO-RECAP', 'CHAPTER-ONE-RECAP'),
+      'NPCs/Mara Quill.md': `${MARA_LINKS}\nChapter: [[Chapter 1 Wrap-Up]].\n`,
+    }));
+    try {
+      for (const side of ['player', 'gm']) {
+        const s = site[side];
+        const intro = s.read('story', 'chapter-1-docks-intro.html');
+        assert.match(intro, /CHAPTER-BODY-1/);
+        assert.doesNotMatch(intro, /CHAPTER-ONE-RECAP/);
+        assert.match(s.read('chapters', 'chapter 1', 'chapter-1-wrap-up.html'), /CHAPTER-ONE-RECAP/, `${side}: the wrap-up keeps its page`);
+        const html = s.read('npcs', 'mara-quill.html');
+        assert.ok(linkTo(html, /chapter-1-wrap-up\.html$/).length >= 1, `${side}: links still reach the wrap-up's own page`);
+        assert.deepEqual(brokenLinks(s.dir), [], side);
+      }
+    } finally { site.cleanup(); }
+  });
+
   it('a wrap-up both a session and its chapter claim folds into the session\'s Story page', () => {
-    // Session 1's wrap-up sits alone in the chapter's folder, so the chapter takes it as its own (the folder fallback)
-    // and gets an intro unit from its recap; Session 1 is paired with it by documents.wrap_up.
+    // Session 1's wrap-up sits alone in the chapter's folder, so the chapter's folder fallback finds it; Session 1 is
+    // paired with it by documents.wrap_up. A session's Story page is its wrap-up, one to one: the chapter takes
+    // nothing from it and shows its introduction.
     const site = buildBoth(storyVault({
       'Sessions/Session 1 Wrap-Up.md': null,
       'Chapters/Chapter 1/Session 1 Wrap-Up.md': WRAP_1,
@@ -200,7 +222,9 @@ describe('wrap-ups no Story unit claims, and chapter wrap-ups', () => {
     try {
       for (const side of ['player', 'gm']) {
         const s = site[side];
-        assert.ok(s.exists('story', 'chapter-1-docks-intro.html'), `${side}: the chapter claims the wrap-up too`);
+        const intro = s.read('story', 'chapter-1-docks-intro.html');
+        assert.match(intro, /CHAPTER-BODY-1/);
+        assert.doesNotMatch(intro, /The party reached|<h2 id="loot"/, `${side}: the chapter takes nothing from the session's wrap-up`);
         const model = island(s.read('npcs', 'mara-quill.html'));
         const items = (model.m || []).flatMap((group) => group.d);
         assert.ok(items.some(([title, href]) => title === 'Session 1' && href === `../${STORY_1}`), JSON.stringify(items));
@@ -267,7 +291,7 @@ describe('the note audit reads a folded wrap-up on its Story page', () => {
 
   it('a withheld name in a chapter wrap-up folded into the chapter\'s Story page', () => {
     const files = storyVault({ ...ZORN,
-      'Chapters/Chapter 2/Chapter 2 Overview.md': '---\ntype: chapter\ntitle: Chapter 2 — Lighthouse\nsort_order: 2\n---\n\n# Chapter 2\n',
+      'Chapters/Chapter 2/Chapter 2 Overview.md': '---\ntype: chapter\ntitle: Chapter 2 — Lighthouse\nsort_order: 2\nstatus: complete\n---\n\n# Chapter 2\n',
       'Chapters/Chapter 2/Chapter 2 Wrap-Up.md': '---\ntype: session_wrap\nchapter: "[[Chapter 2 Overview]]"\n---\n\n## Narrative Recap\n\nLord Zorn kept the light.\n' });
     const s = buildBoth(files, { sites: [] });
     let faults = [];
