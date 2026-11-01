@@ -107,6 +107,7 @@ fixed, so nothing extra is ever shown by a guess. These are:
 - `player_site.hide.callouts`
 - `player_site.hide.drafts`
 - `player_site.hide.field_exceptions`
+- `player_site.story.moments`
 - `player_site.never_show`
 
 <!-- /settings:hiding-list -->

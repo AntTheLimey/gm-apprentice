@@ -100,6 +100,12 @@ describe('player_site.story.moments', () => {
     } finally { site.cleanup(); }
   });
 
+  it('a value that cannot be read, or a misspelt name, stops the build (the setting hides moments)', () => {
+    for (const story of [{ moments: 'of' }, { momnets: false }]) {
+      assert.throws(() => buildBoth(storyVault(), { player: { story }, sites: ['player'] }), undefined, JSON.stringify(story));
+    }
+  });
+
   it('a note that is not a wrap-up keeps its Memorable Moments section', () => {
     const npc = buildBoth(storyVault({ 'NPCs/Mara Quill.md':
       '---\ntype: npc\ntitle: Mara Quill\nstatus: alive\n---\n\n# Mara Quill\n\nA fixer.\n\n## Memorable Moments\n\nNPC-MOMENTS-1: she paid in full.\n' }),

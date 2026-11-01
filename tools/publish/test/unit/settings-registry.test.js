@@ -84,7 +84,7 @@ test('the two settings the old file never had have no old name', () => {
 });
 
 test('the hiding side is marked', () => {
-  for (const n of ['player_site.hide.sections', 'player_site.hide.fields', 'player_site.hide.folders', 'player_site.hide.callouts', 'player_site.hide.drafts', 'player_site.hide.field_exceptions']) {
+  for (const n of ['player_site.hide.sections', 'player_site.hide.fields', 'player_site.hide.folders', 'player_site.hide.callouts', 'player_site.hide.drafts', 'player_site.hide.field_exceptions', 'player_site.story.moments']) {
     assert.equal(entry(n).guards, true, n);
   }
 });
@@ -110,6 +110,7 @@ test('a value that cannot be read falls back to the side that shows less', () =>
     'player_site.sheets.show': false,
     'player_site.features.live_stats': false,
     'player_site.features.inbox': false,
+    'player_site.story.moments': false,
     // Nothing to look for; an unreadable list is a stop (it guards), so no deploy gets past it.
     'player_site.never_show': [],
   };

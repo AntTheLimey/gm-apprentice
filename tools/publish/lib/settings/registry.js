@@ -581,7 +581,7 @@ const REGISTRY = [
   // The Story pages
   { name: 'player_site.story', type: 'map', container: true },
   {
-    name: 'player_site.story.moments', type: 'switch', default: true, group: 'story',
+    name: 'player_site.story.moments', type: 'switch', default: true, onFault: false, guards: true, group: 'story',
     does: "The Memorable Moments section of a session's wrap-up, shown as cards after the story on its Story page. Off, the section is left out of the site: no page, search entry, link preview or Connections text holds it. The GM site still shows the cards, marked",
     left_out: 'On',
   },
