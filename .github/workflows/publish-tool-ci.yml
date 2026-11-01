@@ -6,12 +6,16 @@ on:
     paths:
       - 'tools/publish/**'
       - 'tests/shared-cases/**'
+      - 'tests/benchmark-campaign/**'
+      - 'scripts/build-theme-showcase.mjs'
       - 'skills/shared/scripts/gurps_calc.py'
       - '.github/workflows/publish-tool-ci.yml'
   pull_request:
     paths:
       - 'tools/publish/**'
       - 'tests/shared-cases/**'
+      - 'tests/benchmark-campaign/**'
+      - 'scripts/build-theme-showcase.mjs'
       - 'skills/shared/scripts/gurps_calc.py'
       - '.github/workflows/publish-tool-ci.yml'
 

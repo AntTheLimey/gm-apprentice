@@ -13,7 +13,8 @@ const REPO = path.join(__dirname, '..', '..', '..');
 const BENCH = path.join(REPO, 'tests', 'benchmark-campaign');
 const CLI = path.join(__dirname, '..', 'bin', 'gm-publish.js');
 
-// Planted on purpose: old session titles in the chapter overview, an unwritten doctor, two unwritten NPCs.
+// Expected: `[[Dr. Marsh]]` is a planted broken link (commit 4acfb023); the rest are fixture state kept stable: stale
+// session titles in the chapter overview, and two NPCs from the-midwife fixture who have no note.
 const PLANTED = [
   'Adventures/The Darkened Pier.md: [[Martha Hale]]',
   'Adventures/The Darkened Pier.md: [[Silas Marsh]]',
@@ -45,15 +46,17 @@ test('the benchmark campaign has a publish list', () => {
   assert.ok(fs.existsSync(path.join(BENCH, '_meta', 'publish-list.yaml')));
 });
 
-test('the theme showcase builds from it with no settings warnings and working links', () => {
+test('the theme showcase builds from it with no warnings and working links', () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-showcase-'));
   try {
     const run = spawnSync(process.execPath, [path.join(REPO, 'scripts', 'build-theme-showcase.mjs'), '--out', out], { encoding: 'utf8' });
     assert.strictEqual(run.status, 0, run.stderr);
-    const said = run.stdout + run.stderr;
-    assert.ok(!/no longer read|left over|moves to/.test(said), `the build says its settings are out of date:\n${said}`);
+    // The script exits 1 on any build warning outside its allowed list, so status 0 means a clean build.
     for (const preset of ['fantasy', 'horror', 'military', 'noir', 'scifi']) {
       assert.ok(fs.existsSync(path.join(out, preset, 'index.html')), preset);
+    }
+    for (const preset of ['fantasy', 'horror', 'military', 'noir', 'scifi']) {
+      assert.ok(fs.readFileSync(path.join(out, preset, 'index.html'), 'utf8').includes(`css/themes/${preset}.css`), `${preset} page carries its theme`);
     }
     const page = fs.readFileSync(path.join(out, 'horror', 'characters', 'npcs', 'professor-ashford.html'), 'utf8');
     assert.ok(page.includes('href="brother-ezra.html"'), 'Professor Ashford links to Brother Ezra');

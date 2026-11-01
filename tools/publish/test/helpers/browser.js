@@ -25,28 +25,44 @@ function browserSkip({ platform = process.platform, env = process.env, chrome = 
 // launch goes through runChrome: it takes a lock shared by all the test processes, gives the browser its own profile
 // folder, and uses one timeout, so a test waits its turn instead of racing the rest for the machine. A test that
 // starts Chrome some other way (the `props pages` command) wraps the call in withChromeLock.
+// The lock lives in the OS temp folder, so test runs in parallel worktrees on one machine share it and queue for
+// Chrome too; that is wanted. A waiter gives up, loudly, after WAIT_MS.
 const CHROME_TIMEOUT_MS = 120000;
 const LOCK_DIR = path.join(os.tmpdir(), 'gm-publish-test-chrome.lock');
-// A lock older than a launch can last, or left by a process that is gone, is taken over.
-const LOCK_STALE_MS = CHROME_TIMEOUT_MS + 30000;
+const WAIT_MS = 600000;
 
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+// Folder errors that mean "another process is changing it right now" (Windows reports a pending delete as EPERM or
+// EACCES): wait and look again.
+const BUSY = new Set(['EEXIST', 'ENOENT', 'EPERM', 'EACCES', 'ENOTEMPTY', 'EBUSY']);
+const ageOf = (dir) => { try { return Date.now() - fs.statSync(dir).mtimeMs; } catch (_) { return 0; } };
 
+// A lock is stale when its holder is gone. A holder that is alive is waited for however long it takes (the waiter's
+// own WAIT_MS bounds that); a folder with no pid yet is its owner mid-write, stale only once it is old.
 function lockIsStale(dir) {
-  try {
-    const holder = Number(fs.readFileSync(path.join(dir, 'pid'), 'utf8'));
-    if (!alive(holder)) return true;
-    return Date.now() - fs.statSync(dir).mtimeMs > LOCK_STALE_MS;
-  } catch (e) {
-    // The lock folder is there but its pid file is not yet (its owner is writing it): stale only once old.
-    try { return Date.now() - fs.statSync(dir).mtimeMs > 10000; } catch (_) { return false; }
-  }
+  let pid;
+  try { pid = Number(fs.readFileSync(path.join(dir, 'pid'), 'utf8')); } catch (_) { return ageOf(dir) > 10000; }
+  return !alive(pid);
 }
 
-// Runs `fn` while holding the lock; when `fn` returns a promise the lock is held until it settles. `dir` is the lock
-// folder (the helper's own test gives it a private one).
-function withChromeLock(fn, { dir = LOCK_DIR, waitMs = LOCK_STALE_MS * 4 } = {}) {
+// Clears a stale lock. Takeovers are serialised by a second folder, and the verdict is read again inside it, so a
+// process that judged the lock stale a moment ago can never remove a fresh lock another process has since taken.
+function clearStale(dir) {
+  const reap = `${dir}.reap`;
+  try { fs.mkdirSync(reap); } catch (e) {
+    if (!BUSY.has(e.code)) throw e;
+    if (ageOf(reap) > 30000) fs.rmSync(reap, { recursive: true, force: true });   // its owner died inside the few lines below
+    return;
+  }
+  try { if (lockIsStale(dir)) fs.rmSync(dir, { recursive: true, force: true }); } finally { fs.rmSync(reap, { recursive: true, force: true }); }
+}
+
+// Runs `fn` while holding the lock; when `fn` returns a promise the lock is held until it settles. Called while this
+// process already holds the lock, it just runs `fn`. `dir` is the lock folder (the helper's own test gives it a private one).
+let held = null;
+function withChromeLock(fn, { dir = LOCK_DIR, waitMs = WAIT_MS } = {}) {
+  if (held === dir) return fn();
   const until = Date.now() + waitMs;
   for (;;) {
     try {
@@ -54,13 +70,14 @@ function withChromeLock(fn, { dir = LOCK_DIR, waitMs = LOCK_STALE_MS * 4 } = {})
       fs.writeFileSync(path.join(dir, 'pid'), String(process.pid));
       break;
     } catch (e) {
-      if (e.code !== 'EEXIST') throw e;
-      if (lockIsStale(dir)) { fs.rmSync(dir, { recursive: true, force: true }); continue; }
-      if (Date.now() > until) throw new Error(`waited ${waitMs} ms for another test's browser to finish`);
-      sleep(50);
+      if (!BUSY.has(e.code)) throw e;
+      if (lockIsStale(dir)) clearStale(dir);
+      else if (Date.now() > until) throw new Error(`waited ${waitMs} ms for another test's browser to finish`);
+      sleep(20);
     }
   }
-  const release = () => fs.rmSync(dir, { recursive: true, force: true });
+  held = dir;
+  const release = () => { held = null; fs.rmSync(dir, { recursive: true, force: true }); };
   let result;
   try { result = fn(); } catch (e) { release(); throw e; }
   if (result && typeof result.then === 'function') return result.finally(release);
@@ -69,8 +86,9 @@ function withChromeLock(fn, { dir = LOCK_DIR, waitMs = LOCK_STALE_MS * 4 } = {})
 }
 
 // Starts headless Chrome on `args` (flags and the address), alone and with a profile of its own, and returns the
-// spawnSync result: `stdout` is the printed page. Chrome can exit non-zero on its way out under load after it has
-// printed the page, so callers read `stdout` rather than trusting `status`; `timedOut` says the launch ran out of time.
+// spawnSync result: `stdout` is the printed page, `stderr` Chrome's complaints, `error` why it did not start.
+// Chrome can exit non-zero on its way out under load after it has printed the page, so callers read `stdout` rather
+// than trusting `status`; `timedOut` says the launch ran out of time. `whyNot(run)` words a failure for a message.
 function runChrome(args, { timeout = CHROME_TIMEOUT_MS } = {}) {
   const chrome = findChrome();
   if (!chrome) throw new Error('no browser');
@@ -78,13 +96,19 @@ function runChrome(args, { timeout = CHROME_TIMEOUT_MS } = {}) {
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-test-chrome-'));
     try {
       const run = spawnSync(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', `--user-data-dir=${profile}`, ...args],
-        { encoding: 'utf8', timeout, stdio: ['ignore', 'pipe', 'ignore'] });
+        { encoding: 'utf8', timeout, stdio: ['ignore', 'pipe', 'pipe'] });
       run.timedOut = Boolean(run.error && run.error.code === 'ETIMEDOUT');
       return run;
     } finally {
       fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
     }
   });
+}
+
+// Why a launch gave no answer: its exit status, a timeout, the spawn error, the last lines Chrome printed.
+function whyNot(run) {
+  const tail = String(run.stderr || '').trim().split('\n').slice(-3).join(' | ').slice(0, 300);
+  return `status ${run.status}${run.timedOut ? ', timed out' : ''}${run.error ? `, ${run.error.message}` : ''}${tail ? `; Chrome said: ${tail}` : ''}`;
 }
 
 // `script` runs in the page once it has loaded, with `done(result)` to call with a JSON-able answer. A page error
@@ -111,10 +135,10 @@ function measure(pagePaths, width, script, { height = 900, wait = 6000 } = {}) {
     + `if(got.every(Boolean)){document.getElementById('out').textContent='RESULT['+got.join(',')+']END';clearInterval(t);}}catch(e){document.getElementById('out').textContent='RESULT['+JSON.stringify({harnessError:String(e)})+']END';clearInterval(t);}},100);</script>`);
   const run = runChrome(['--allow-file-access-from-files', '--window-size=1200,1000', `--virtual-time-budget=${wait}`, '--dump-dom', fileUrl(harness)]);
   const m = /RESULT([\s\S]*?)END/.exec(run.stdout || '');
-  if (!m) throw new Error(`the browser gave no answer (status ${run.status}${run.timedOut ? ', timed out' : ''})`);
+  if (!m) throw new Error(`the browser gave no answer (${whyNot(run)})`);
   const text = m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
   const results = JSON.parse(text);
   return Array.isArray(pagePaths) ? results : results[0];
 }
 
-module.exports = { findChrome, browserSkip, measure, runChrome, withChromeLock, CHROME_TIMEOUT_MS };
+module.exports = { findChrome, browserSkip, measure, runChrome, whyNot, withChromeLock, CHROME_TIMEOUT_MS };

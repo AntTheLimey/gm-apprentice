@@ -10,7 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
 const { buildPc } = require('./helpers/pc-vault');
-const { findChrome, runChrome } = require('./helpers/browser');
+const { findChrome, runChrome, whyNot } = require('./helpers/browser');
 
 // Runs in the outer page: opens the Combat tab in each frame and measures.
 const PROBE = `
@@ -61,16 +61,18 @@ test('the to-hit calculator on a phone, in a real browser', (t) => {
 <iframe width="375" height="900" src="${page}"></iframe><iframe width="340" height="900" src="${page}"></iframe>
 <pre id="out"></pre><script>${PROBE}</script></body>`);
   let dom;
+  let run;
   try {
     // Chrome can exit non-zero on its way out under load after it has printed the page: what
     // counts is the measurements in the printed page.
-    dom = runChrome(['--allow-file-access-from-files', '--window-size=900,1000', '--virtual-time-budget=10000', '--dump-dom',
-      'file://' + path.join(out, 'probe.html').replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')]).stdout || '';
+    run = runChrome(['--allow-file-access-from-files', '--window-size=900,1000', '--virtual-time-budget=10000', '--dump-dom',
+      'file://' + path.join(out, 'probe.html').replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')]);
+    dom = run.stdout || '';
   } finally {
     fs.rmSync(path.dirname(out), { recursive: true, force: true, maxRetries: 3 });
   }
   const m = /<pre id="out">([^<]*)<\/pre>/.exec(dom);
-  assert.ok(m && m[1], 'the probe wrote its measurements');
+  assert.ok(m && m[1], `the probe wrote no measurements (${whyNot(run)})`);
   const got = JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&'));
   if (process.env.TOHIT_PROBE_DEBUG) console.log(JSON.stringify(got));
 
