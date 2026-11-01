@@ -59,7 +59,8 @@ function buildSearchIndex(allPages) {
     documents[refFor(i)] = {
       title: page.displayTitle || '',
       type: fm.type || '',
-      subtitle: getSubtitle(fm),
+      // A wrap-up folded into its Story page (story-fold.js) is found as that page: the session's title, "Story".
+      subtitle: page.foldedInto ? 'Story' : getSubtitle(fm),
       href: page.outputPath,
     };
   });

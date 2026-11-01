@@ -50,6 +50,11 @@ function wikiTargetLabel(target) {
   return humanizeName(String(target == null ? '' : target).split('/').pop());
 }
 
+// The title of the Story page a link-map key now leads to, when the build folded the wrap-up it named into that page
+// (story-fold.js); undefined otherwise. An unaliased link to a folded wrap-up prints it. Required when asked:
+// story-fold.js reads session-hub.js, which reads this file.
+const foldLabel = (linkMap, key) => require('./story-fold').foldLabel(linkMap, key);
+
 // Parse a wiki ref (`[[Target]]` or `[[Target|Alias]]`, brackets optional) into the raw
 // lookup target and a display label. The target keeps its underscores so it still matches
 // linkMap keys; the label is the explicit alias if given, otherwise the humanized target.
@@ -105,7 +110,7 @@ function resolveWikiLinks(markdown, linkMap, currentOutputPath) {
     // Without an explicit |alias, humanize the slug (Lord_Edric_Fenwick → Lord Edric
     // Fenwick) so neither resolved link text nor unresolved plain text shows raw underscores.
     const targetPath = linkMap[target];
-    const display = displayText || wikiTargetLabel(targetPath ? target : raw);
+    const display = displayText || (targetPath && foldLabel(linkMap, target)) || wikiTargetLabel(targetPath ? target : raw);
     if (!targetPath) return display;
     const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
     // A raw space (or other unsafe char) in the destination is not valid markdown link
@@ -1665,12 +1670,18 @@ function renderMetaValue(raw, linkMap = {}, currentOutputPath = '') {
     const { target, label } = parseWikiRef(match[0]);
     const targetPath = linkMap[target];
     out.push(targetPath
-      ? `<a href="${encodeHref(relativeHref(currentOutputPath, targetPath))}" class="entity-link">${escapeHtml(label)}</a>`
+      ? `<a href="${encodeHref(relativeHref(currentOutputPath, targetPath))}" class="entity-link">${escapeHtml(foldedRefLabel(match[0], linkMap, target) || label)}</a>`
       : escapeHtml(label));
     last = match.index + match[0].length;
   }
   out.push(escapeHtml(text.slice(last)));
   return out.join('');
+}
+
+// The Story page's title for a bracketed `[[link]]` with no |alias whose target was folded into it; undefined otherwise.
+function foldedRefLabel(link, linkMap, target) {
+  const body = String(link).replace(/^!?\[\[|\]\]$/g, '');
+  return parseWikilink(body).display.trim() ? undefined : foldLabel(linkMap, target);
 }
 
 // Plain-text form of the above, for values rendered inside an enclosing <a> (card
@@ -1723,7 +1734,7 @@ function refMetaValue(raw, linkMap = {}, currentOutputPath = '') {
   const { target, label } = referenceParts(text);
   const targetPath = (linkMap || {})[target];
   return targetPath
-    ? `<a href="${encodeHref(relativeHref(currentOutputPath, targetPath))}">${escapeHtml(label)}</a>`
+    ? `<a href="${encodeHref(relativeHref(currentOutputPath, targetPath))}">${escapeHtml((text.includes('[[') && foldedRefLabel(text, linkMap, target)) || label)}</a>`
     : escapeHtml(label);
 }
 
