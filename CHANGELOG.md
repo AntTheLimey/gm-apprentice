@@ -25,8 +25,8 @@ Each session is one page on both sites: its wrap-up folds into its Story page, w
 - Empty section indexes are not written.
 - `explain` names the Story page a wrap-up lives on, and reads the same published view as the build (one shared function, so the two cannot disagree).
 - The landing page's "View all N NPCs" counts what the NPC index lists, and reads "View all 1 NPC" for one.
-- campaign-qa's checks honour the moments setting.
-- In Canticle, the 34 wrap-up pages go at the next deploy, and the Story pages gain the wrap-ups' sections. Six wrap-ups have Memorable Moments (Ch3 S13, Ch4 S11 to S15), none tagged yet, so those cards come out plain. In Dead End, the 14 wrap-ups' pages go the same way and 13 have Memorable Moments (none tagged); its `scripts/story-one-page.mjs` does the same job after the build and is now a no-op, so it can be retired after this release.
+- In Canticle, the 34 wrap-up pages go at the next deploy, and the Story pages gain the wrap-ups' sections. Six wrap-ups have Memorable Moments (Ch3 S13, Ch4 S11 to S15), none tagged yet, so those cards come out plain.
+- In Dead End, the 14 wrap-ups' pages go the same way, and 13 have Memorable Moments (none tagged); its `scripts/story-one-page.mjs` does the same job after the build and is now a no-op, so it can be retired after this release.
 
 ### Fixed
 
