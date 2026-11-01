@@ -13,17 +13,18 @@ Wrap-up asks the GM less and finds more, and vault-ingest's Reconstruction Note 
 
 ### Added
 
-- `vault_write.py play-notes-new --session INDEX [--play-date D] [--export PATH]` files an export's Play Notes beside a session index that prep already filed. It sets the index's `documents.play_notes` and `play_date`, leaves the Plan link and status alone, and checks the export's names as `session-new` does. It refuses a session that already has Play Notes. The wrap-up names it for a prepped session.
-- `reveal_scan.py --also PATH` adds a note the wrap-up wrote to the notes it checks, so wrap-up step 4d offers spoilers on entities the Play Notes, Wrap-Up and recap do not link. Step 4d passes the paths Step 4 wrote.
+- `vault_write.py play-notes-new --session INDEX [--play-date D] [--export PATH]` files an export's Play Notes beside a session index that prep already filed. It sets the index's `documents.play_notes` and `play_date`, raises a planned or prepped status to played, leaves the Plan link alone, and checks the export's names as `session-new` does. It refuses a note that is not a session index, and a session that already has Play Notes anywhere in the vault. The wrap-up names it for a session with an index but no Play Notes.
+- `reveal_scan.py --also PATH` adds a note the wrap-up wrote to the notes it checks, so wrap-up step 4d offers spoilers on entities the Play Notes, Wrap-Up and recap do not link. Step 4d passes the paths Step 4 wrote and the notes `vw log` wrote to.
 
 ### Changed
 
-- On an export, wrap-up no longer asks the GM about every clash with the vault. Prep the export contradicts is struck through as superseded and replaced, and noted in Quality Notes. Only a contradiction of earlier play (a Campaign Log, Encounters or Behind the Scenes entry from an earlier session) is put to the GM. A name spelled differently keeps the vault's spelling.
+- On an export, wrap-up no longer asks the GM about every clash with the vault. Clear prep the export contradicts is struck through as superseded and replaced, and noted in Quality Notes. What earlier play established (text naming an earlier session, an Event note, an ingested note), or anything it can't place, is still put to the GM. Hidden text is left alone, and a PC's details go to the Keeper Checklist for the GM to ask the player. A name spelled differently keeps the vault's spelling.
 - publish-site reads a build warning as written, and acts on the cause and fix it names, instead of explaining it from the guide.
 - The leak-findings guide says a held prop's linked files, copied into a kept folder, are findings too.
 
 ### Fixed
 
+- `session-new --play-date` refuses a date that does not exist, such as `2026-02-31`.
 - vault-ingest now fences its Reconstruction Note gm-only, so a new one no longer shows on the player site. Notes already in a vault are not changed.
 
 ---
