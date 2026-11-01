@@ -8,7 +8,7 @@ const { performance } = require('perf_hooks');
 const { loadPublishList } = require('../manifest');
 const { collectHidden, HELD_TITLE } = require('./collect');
 const { foldQuotes } = require('../note-faults');
-const { createMatcher, readOutput, listFiles, stateFileText, TEXT_EXT } = require('./match');
+const { createMatcher, readOutput, listFiles, stateFileText } = require('./match');
 const { nameFindings, neverShowFindings } = require('./names');
 const { wordsOf, nameSet, onlyNames } = require('./text');
 const { isSettledHeading, settledHeadingGone } = require('../settled-headings');
@@ -17,6 +17,7 @@ const { indexTexts } = require('./index-text');
 const { addressKey } = require('../props/address');
 const { canonicalNfc } = require('../unicode');
 const { decodeEntities } = require('../templates/gurps/tables');
+const { cssRefs } = require('../props/links');
 
 const findingId = (page, text) => crypto.createHash('sha1').update(`${page}\n${text}`).digest('hex').slice(0, 6);
 const keyOf = (page, text) => `${page}\n${text}`;
@@ -31,21 +32,45 @@ const acceptedKey = (a) => (a.note === NEVER_NOTE ? `never\n${keyOf(a.page, a.te
 const byPageText = (a, b) => (a.page < b.page ? -1 : a.page > b.page ? 1 : a.text < b.text ? -1 : a.text > b.text ? 1 : 0);
 
 // A file of a prop the site does not publish: one at the prop's address (unless a shipping prop or the site itself has
-// it), or any other file that is not text and has the prop file's bytes (a PDF or picture copied by hand). A text prop
-// file is found by its text. And a page or SVG that links that address, or the page its note would have (an old listing
-// left in a kept folder, however short the prop's title): no page the site builds links either.
+// it), or any other file with the bytes of the prop file (a PDF, a picture, a word-less SVG copied by hand) or of a file
+// its page links (its stylesheet, its pictures). A prop file with words is found by its text. And a page, SVG or
+// stylesheet that links that address, or the page its note would have (an old listing left in a kept folder, however
+// short the prop's title): no page the site builds links either.
 const UNREVEALED = 'the prop file of a note the site does not publish';
+const UNREVEALED_LINKED = 'a file the prop page of a note the site does not publish links';
 const LINK_ATTR = /\s(?:href|src|xlink:href)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
+const SRCSET_ATTR = /\s(?:srcset|imagesrcset)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/gi;
+const STYLE_ATTR = /\sstyle\s*=\s*(?:"([^"]*)"|'([^']*)')/gi;
+const STYLE_BLOCK = /<style\b[^>]*>([\s\S]*?)<\/style\s*>/gi;
 const EXTERNAL = /^(?:[a-z][a-z0-9+.-]*:|\/\/)/i;
-// The site addresses a page or SVG at `rel` links: each href or src, read relative to the file, without its query or anchor.
-function linkedAddresses(rel, raw) {
+// The files whose links are read: a page or SVG, and a stylesheet.
+const MARKUP_PAGE = new Set(['.html', '.htm', '.svg']);
+const LINKING = new Set([...MARKUP_PAGE, '.css']);
+// The site addresses a page, SVG or stylesheet at `rel` links: each href or src, each srcset candidate, each CSS url()
+// (in a style attribute, a <style> block or a stylesheet) and @import, read relative to the file, without its query or
+// anchor. A rooted link is read from the site's top: on a project site (served under `sitePath`, '/campaign/') that
+// path is taken off first.
+function linkedAddresses(rel, raw, sitePath = '/') {
+  const values = [];
+  const attr = (m) => decodeEntities(m[1] ?? m[2] ?? m[3] ?? '');
+  if (path.posix.extname(rel).toLowerCase() === '.css') values.push(...cssRefs(raw));
+  else {
+    for (const m of raw.matchAll(LINK_ATTR)) values.push(attr(m));
+    for (const m of raw.matchAll(SRCSET_ATTR)) {
+      for (const cand of attr(m).split(',')) values.push(cand.trim().split(/\s+/)[0]);
+    }
+    for (const m of raw.matchAll(STYLE_ATTR)) values.push(...cssRefs(attr(m)));
+    for (const m of raw.matchAll(STYLE_BLOCK)) values.push(...cssRefs(m[1]));
+  }
   const out = [];
-  for (const m of raw.matchAll(LINK_ATTR)) {
-    let v = decodeEntities(m[1] ?? m[2] ?? m[3]).trim().replace(/[?#].*$/, '');
+  for (const value of values) {
+    let v = String(value || '').trim().replace(/[?#].*$/, '');
     if (!v || EXTERNAL.test(v)) continue;
     try { v = decodeURIComponent(v); } catch (e) { /* as written */ }
-    const joined = v.startsWith('/') ? path.posix.normalize(v.slice(1)) : path.posix.join(path.posix.dirname(rel), v);
-    if (joined && !joined.startsWith('..')) out.push(joined);
+    let joined;
+    if (v.startsWith('/')) joined = path.posix.normalize(sitePath !== '/' && v.startsWith(sitePath) ? v.slice(sitePath.length) : v.slice(1));
+    else joined = path.posix.join(path.posix.dirname(rel), v);
+    if (joined && joined !== '.' && !joined.startsWith('..')) out.push(joined);
   }
   return out;
 }
@@ -66,19 +91,20 @@ function propUnrevealed({ outputDir, hidden, files }) {
   }
   const bySize = new Map();
   for (const h of hidden.heldProps) {
-    // A page the tool would make has no bytes to know it by (hash null): only its address is watched.
-    if (h.hash === null || TEXT_EXT.has(path.extname(h.address || '').toLowerCase())) continue;
+    // A page the tool would make has no bytes to know it by: only its address is watched. A prop file with words is
+    // found by them (collect.js byBytes).
+    if (!h.byBytes) continue;
     if (!bySize.has(h.size)) bySize.set(h.size, []);
     bySize.get(h.size).push(h);
   }
   const add = (page, h) => {
     const text = wordsOf(h.rel).join(' ');
-    found.push({ id: findingId(page, text), kind: 'name', code: 'PROP_UNREVEALED', page, text, shown: page, note: h.rel, reason: UNREVEALED });
+    found.push({ id: findingId(page, text), kind: 'name', code: 'PROP_UNREVEALED', page, text, shown: page, note: h.rel, reason: h.linked ? UNREVEALED_LINKED : UNREVEALED });
   };
   if (linkedOnly.size) {
     for (const file of files) {
-      if (!['.html', '.htm', '.svg'].includes(file.ext)) continue;
-      for (const address of linkedAddresses(file.rel, file.raw)) {
+      if (!LINKING.has(file.ext)) continue;
+      for (const address of linkedAddresses(file.rel, file.raw, hidden.sitePath)) {
         const at = linkedOnly.get(addressKey(address));
         if (at) add(file.rel, at);
       }
@@ -88,14 +114,16 @@ function propUnrevealed({ outputDir, hidden, files }) {
     if (hidden.propFiles.has(canonicalNfc(rel))) continue;
     const at = atAddress.get(addressKey(rel));
     if (at) { add(rel, at); continue; }
-    if (TEXT_EXT.has(path.extname(rel).toLowerCase())) continue;
+    if (!bySize.size) continue;
     const full = path.join(outputDir, ...rel.split('/'));
     let size;
     try { size = fs.statSync(full).size; } catch (e) { continue; }
     const same = bySize.get(size);
     if (!same) continue;
-    const hash = crypto.createHash('sha1').update(fs.readFileSync(full)).digest('hex');
-    const h = same.find((x) => x.hash === hash);
+    const bytes = fs.readFileSync(full);
+    const hash = crypto.createHash('sha1').update(bytes).digest('hex');
+    // A file a held page links is no finding where the build itself copies the same picture (a published page's).
+    const h = same.find((x) => x.hash === hash && !(x.linked && hidden.buildsPicture(rel, bytes)));
     if (h) add(rel, h);
   }
   return found;
@@ -181,9 +209,16 @@ function runLeakGate({ configPath, outputDir }) {
       raw.set(key, { id: findingId(file.rel, piece.text), kind: 'text', code: 'HIDDEN_TEXT', page: file.rel, text: piece.text, shown: piece.shown, note: piece.note, reason: piece.reason });
     }
   }
+  const warnings = [...(hidden.warnings || [])];
+  // A page or SVG with NUL characters is a UTF-16 file saved with no byte-order mark: no decoder reads its words, so its
+  // text is not checked. Said, so the GM can save it again.
+  for (const file of files) {
+    if (MARKUP_PAGE.has(file.ext) && file.raw.includes('\u0000')) {
+      warnings.push(`Leak check: ${file.rel} has NUL characters (a UTF-16 file saved with no byte-order mark?), so its text cannot be read or checked. Save it as UTF-8.`);
+    }
+  }
   // The search index holds its entries' text as single terms, in no order: read as the build kept it, sentence by sentence,
   // entry by entry, each text of an entry on its own (index-text.js).
-  const warnings = [...(hidden.warnings || [])];
   for (const { file, entries } of indexTexts({ files, siteDir: hidden.siteDir, warnings })) {
     for (const { href, texts } of entries) {
       const page = `${file.rel}#${href}`;

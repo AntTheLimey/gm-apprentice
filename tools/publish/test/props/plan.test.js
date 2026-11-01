@@ -495,3 +495,25 @@ test('Ruling 44: a link outside the folder that another shipping prop ships at t
   assert.deepStrictEqual(plan(root, [cover('G'), shelfPage], { ships: (p) => p.rel !== 'G/Cover.md' }).problems.map((p) => p.detail), OUTSIDE);
   assert.deepStrictEqual(plan(root, [cover('H'), shelfPage]).problems.map((p) => p.detail), OUTSIDE);
 });
+
+test('a page or stylesheet with NUL characters (UTF-16 saved with no byte-order mark) is not copied, with a row (#508)', (t) => {
+  const bare = (text) => Buffer.from(text, 'utf16le');
+  const root = vault({
+    'A/Alpha.md': '', 'A/inv.html': bare('<html><body><!-- gm-only --><p>Keeper</p><!-- /gm-only --></body></html>'),
+    'B/Beta.md': '', 'B/inv.html': INV, 'B/props.css': bare('body { color: red; }'),
+    'C/Gamma.md': '', 'C/inv.html': INV, 'C/props.css': CSS, 'C/assets/paper.jpg': 'JPG',
+  });
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const note = (rel) => page(root, rel, { type: 'prop', prop_file: 'inv.html' });
+  const { props, problems } = plan(root, [note('A/Alpha.md'), note('B/Beta.md'), note('C/Gamma.md')]);
+  const byRel = (rel) => props.find((p) => p.rel === rel);
+  assert.deepStrictEqual(outs(byRel('A/Alpha.md')), []);
+  assert.deepStrictEqual(outs(byRel('B/Beta.md')), [byRel('B/Beta.md').address]);
+  assert.strictEqual(outs(byRel('C/Gamma.md')).length, 3, 'an ordinary prop is copied whole');
+  assert.deepStrictEqual(problems.map((p) => p.rel), ['A/Alpha.md', 'B/Beta.md']);
+  for (const p of problems) assert.match(p.detail, /NUL characters/);
+  // A prop that does not ship says nothing, and is still planned for the leak check to know it by its bytes.
+  const held = plan(root, [note('A/Alpha.md')], { ships: () => false });
+  assert.deepStrictEqual(held.problems, []);
+  assert.ok(held.props[0].hash);
+});

@@ -6,14 +6,19 @@ function previewsScriptTag(href) {
   return previewsAttr() ? `\n<script src="${href('js/previews.js')}"></script>\n` : '';
 }
 
+// The path a site is served under, from its address ('/' at the top of its host, '/campaign/' on a project site).
+function sitePathOf(siteUrl) {
+  if (siteUrl) {
+    try { return new URL(siteUrl).pathname.replace(/\/$/, '') + '/'; } catch (_) { /* not an address */ }
+  }
+  return '/';
+}
+
 function fourOhFourTemplate(config) {
   const message = escapeHtml(config.four_oh_four.message);
   const siteTitle = escapeHtml(config.siteTitle);
   const campaignImage = config.theme && config.theme.campaign_image;
-  let basePath = '/';
-  if (config.siteUrl) {
-    try { basePath = new URL(config.siteUrl).pathname.replace(/\/$/, '') + '/'; } catch (_) {}
-  }
+  const basePath = sitePathOf(config.siteUrl);
   const href = p => `${basePath}${p}`;
 
   // Match the rest of the site: load the genre theme overlay when one is configured,
@@ -100,4 +105,4 @@ ${previewsScriptTag(href)}
 </html>`;
 }
 
-module.exports = { fourOhFourTemplate };
+module.exports = { fourOhFourTemplate, sitePathOf };

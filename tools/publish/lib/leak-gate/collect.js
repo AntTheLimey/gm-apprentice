@@ -5,6 +5,7 @@
 // Also the player site's own source text: a hidden piece that a published note also says is not hidden.
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { scanVaultReport, scanAllNotes, buildLinkMap, scanAttachments, STORY_SUFFIX } = require('../scanner');
 const { resolveConfig, loadPublishConfig, loadVaultConfig, vaultRelPath } = require('../config');
 const { readSettings, forSite } = require('../settings');
@@ -20,7 +21,7 @@ const {
   playerSafeMarkdown, stubMarked, stubCut, hiddenFieldsOf, publishedFrontmatter, pcHeadingsUnstable, publishMode, isWithheld, stripLeadingH1,
 } = require('../processor');
 const { createMarks, markKinds, sanitize, markedSpans } = require('../gm-marks');
-const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf, stringsOfValue } = require('./text');
+const { piecesOfMarkdown, piecesOfValue, piecesOfHtml, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf, stringsOfValue, MIN_WORDS } = require('./text');
 const { TEXT_EXT, fileText } = require('./match');
 const { planProps, planStatePictures, stateFileOf, bytesOf, textOf } = require('../props/plan');
 const { placeCollection, propTaken, containerItems, propRow, sealedTitlesOn, stateFieldsOf, stateFieldsOfListed } = require('../props/collection');
@@ -28,6 +29,10 @@ const { cutHtml } = require('../props/html-cut');
 const { styledPageProblem } = require('../props/page');
 const { pathProblem } = require('../props/files');
 const { buildConnections } = require('../connections');
+const { sitePathOf } = require('../templates/four-oh-four');
+
+const sha1 = (bytes) => crypto.createHash('sha1').update(bytes).digest('hex');
+const FONT_EXTS = new Set(['.woff2', '.woff', '.ttf', '.otf']);
 
 const NEVER_SHOWN = ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase());
 const neverShown = (rel) => rel.split('/').slice(0, -1).some((s) => NEVER_SHOWN.includes(s.toLowerCase()));
@@ -55,7 +60,7 @@ function collectHidden({ configPath, outputDir = null }) {
   const keptBy = player.vault.kept_by;
   // The GM's own words that must never reach players (player_site.never_show): looked for on every kind of vault.
   const neverShow = (player.site.never_show || []).filter((w) => typeof w === 'string' && w.trim());
-  const empty = { vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), stateFiles: new Set(), heldProps: [], heldNotePages: [], heldTitles: [], sealedOn: new Map(), collectionAddress: null, siteTakes: () => false, keeps: () => false };
+  const empty = { sitePath: '/', buildsPicture: () => false, vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), stateFiles: new Set(), heldProps: [], heldNotePages: [], heldTitles: [], sealedOn: new Map(), collectionAddress: null, siteTakes: () => false, keeps: () => false };
   if (keptBy === 'player') return empty;
 
   const quiet = () => {};
@@ -207,6 +212,7 @@ function collectHidden({ configPath, outputDir = null }) {
     ships: (p) => publishedSet.has(p) && publishMode(p.sourceFrontmatter || p.frontmatter) !== 'stub',
     taken,
     cutKeeper: true,
+    heldLinks: true,
   });
   const { props } = propPlan;
   // What each container lists, as the build's listings show it: the pictures its state file names ship as its files
@@ -250,6 +256,8 @@ function collectHidden({ configPath, outputDir = null }) {
   // looked for whole, as written, in the kept folders (index.js), where an old listing can outlive the build.
   const heldTitles = [];
   const usedStyles = new Map();
+  const shippedHashes = new Set();
+  const heldLinked = [];
   for (const p of props) {
     // A prop whose note the site does not publish: the title a listing would print for it is hidden text (an old props
     // page naming it). Allowed only where a container lists it sealed (sealedOn, below). Not one in the plugin's working
@@ -278,12 +286,13 @@ function collectHidden({ configPath, outputDir = null }) {
         madeState(p);
       } else if (!p.ships && p.address) {
         // A held prop the tool would make a page for (its style may not have loaded): a page at its address is stale.
-        heldProps.push({ rel: p.rel, address: p.address, hash: null, size: null });
+        heldProps.push({ rel: p.rel, address: p.address, hash: null, size: null, byBytes: false });
       }
       continue;
     }
     if (p.ships && p.address && p.files.length) {
       madeState(p);
+      for (const f of p.files) if (bytesOf(f)) shippedHashes.add(sha1(bytesOf(f)));
       for (const f of p.files) {
         if (f.made === 'state') continue;
         own(f.out, p.rel);
@@ -308,9 +317,26 @@ function collectHidden({ configPath, outputDir = null }) {
     let bytes;
     // A prop file that cannot be read stops the check, as a note does: its text could be anywhere on the site.
     try { bytes = fs.readFileSync(p.source); } catch (e) { throw new Error(`Leak check: the prop file of ${p.rel} could not be read (${e.message}), so its text cannot be checked. Fix the file and deploy again.`); }
-    if (TEXT_EXT.has(path.extname(p.source).toLowerCase())) add(piecesOfHtml(textOf(bytes).text), p.rel, `unpublished prop: ${why}`);
-    heldProps.push({ rel: p.rel, address: p.address, hash: p.hash, size: bytes.length });
+    // A file with words is found by them; one with none (a map SVG of lines alone), or that is not text, by its bytes.
+    const isText = TEXT_EXT.has(path.extname(p.source).toLowerCase());
+    const texts = isText ? piecesOfHtml(textOf(bytes).text) : [];
+    if (isText) add(texts, p.rel, `unpublished prop: ${why}`);
+    heldProps.push({ rel: p.rel, address: p.address, hash: p.hash, size: bytes.length, byBytes: !texts.some((x) => wordsOf(x).length >= MIN_WORDS) });
+    // The files its page links (its stylesheet, its pictures), known by their bytes wherever a hand copy lands. Not a
+    // font: a typeface is no secret.
+    for (const f of p.heldLinked || []) {
+      const linkedBytes = bytesOf(f);
+      if (!linkedBytes || FONT_EXTS.has(path.extname(f.out).toLowerCase())) continue;
+      heldLinked.push({ rel: p.rel, address: null, hash: sha1(linkedBytes), size: linkedBytes.length, byBytes: true, linked: true });
+    }
   }
+  // A file a held page links with the bytes of one a shipping prop or style puts on the site is no secret: it is there.
+  for (const style of usedStyles.values()) {
+    for (const file of [style.css, style.script, ...(style.assets || []).map((a) => a.source)].filter(Boolean)) {
+      try { shippedHashes.add(sha1(fs.readFileSync(file))); } catch (e) { /* the build says so */ }
+    }
+  }
+  heldProps.push(...heldLinked.filter((h) => !shippedHashes.has(h.hash)));
 
   // The words a style's layout (and its sheet) writes around every page made with it are the build's own, on the site
   // for players: already visible, as a published page's words are. Only a style a page on this site is made with.
@@ -329,12 +355,28 @@ function collectHidden({ configPath, outputDir = null }) {
     sealedOn.set(canonicalNfc(address), new Set([...titles.values()].map((title) => wordsOf(title).join(' '))));
   }
 
+  // Whether `rel` is the build's own copy of a vault picture (images/<its path under the attachments folder>, the same
+  // bytes): a picture a published page shows. Read only when a held page's linked file matches a site file.
+  let attachments = null;
+  const buildsPicture = (rel, bytes) => {
+    if (!/^images\//.test(rel)) return false;
+    if (!attachments) {
+      attachments = new Map();
+      for (const entry of Object.values(scanAttachments(scanConfig))) attachments.set(canonicalNfc(entry.relPath), entry.sourcePath);
+    }
+    const source = attachments.get(canonicalNfc(rel.slice('images/'.length)));
+    try { return Boolean(source) && fs.readFileSync(source).equals(bytes); } catch (e) { return false; }
+  };
+
   // A note's outputs: its page, then its prop's files.
   const outOf = (rel) => [outputOf.get(rel), ...(propOuts.get(rel) || [])].filter(Boolean);
   return {
     vaultPath, siteDir, keptBy, neverShow, pieces, visible, warnings, notes, published, publishedRels, linkMap, outOf,
     propOwner, propFiles: new Set(propOwner.keys()), madeFiles, stateFiles, heldProps, heldNotePages, heldTitles, sealedOn,
     keeps: (rel) => taken.keeps(rel),
+    // The path the site is served under ('/', or '/campaign/' on a project site): a rooted link is read below it.
+    sitePath: sitePathOf(config.siteUrl),
+    buildsPicture,
     collectionAddress: collection && collection.address ? canonicalNfc(collection.address) : null,
     // An address the site itself fills (a page, a file it needs, a tool folder): a held prop there is not what is there.
     siteTakes: (address) => Boolean(taken.has(address, { explicit: true })),

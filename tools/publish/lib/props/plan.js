@@ -32,6 +32,11 @@ const LINKED_EXTS = new Set([
 // The pictures a container's state file may name in its items' fields, copied beside it.
 const STATE_PICTURE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.avif']);
 const LINK_FIX = 'put the file beside the prop file and link it by a relative path';
+// A page, SVG or stylesheet with NUL characters once decoded is UTF-16 saved with no byte-order mark: its Keeper
+// markers cannot be found, so it is not copied (#508).
+const NUL_SAID = 'has NUL characters: it looks like a UTF-16 file saved with no byte-order mark, so its Keeper parts cannot be found';
+const NUL_FIX = 'save it again as UTF-8 (or as Unicode, which writes the byte-order mark)';
+const hasNul = (bytes) => textOf(bytes).text.includes('\u0000');
 const KIND_FIX = 'a prop page cannot carry this kind of file: a PDF can be published as its own prop (its own note with prop_file), a picture can take its place; otherwise leave it out (the site does not publish audio, video or other pages)';
 
 function sha1(buf) {
@@ -113,7 +118,11 @@ function stateFileOf(p) {
 // is claimed for them and they never ship: the build compares them with what is in the folder.
 // A made page is never planned here: the build does not make a held prop's page, and the leak
 // check names a stale one at its address.
-function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup = false, styles = styleLoader({ vaultPath }) }) {
+//
+// `heldLinks: true` (the leak check) also plans, for a prop that does not ship whose file is a page or SVG, the files
+// that page links (`heldLinked`), as they would be found if it shipped: nothing is claimed for them and they never
+// ship. The leak check knows a hand copy of one by its bytes.
+function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup = false, heldLinks = false, styles = styleLoader({ vaultPath }) }) {
   const problems = [];
   const vaultReal = realOrNull(path.resolve(vaultPath));
   const problem = (rel, detail, fix) => problems.push({ rel, code: 'PROP_NOT_COPIED', severity: 'warning', detail, fix });
@@ -201,6 +210,7 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
       say(rel, `the prop file "${propFile}" could not be read (${read.error})`, 'make the file readable, or correct prop_file');
       continue;
     }
+    if (plan.ships && MARKUP_EXTS.has(ext) && hasNul(read.bytes)) { say(rel, `the prop file "${propFile}" ${NUL_SAID}`, NUL_FIX); continue; }
     plan.source = found.real;
     plan._full = found.full;
     plan._ext = ext;
@@ -294,6 +304,7 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
           problem(p.rel, `${shown} links "${raw}", which could not be read (${read.error})`, 'make the file readable');
           continue;
         }
+        if (p.ships && follows && hasNul(read.bytes)) { linkProblem(raw, NUL_SAID, NUL_FIX); continue; }
         const hash = sha1(read.bytes);
         const why = taken.has(out, { explicit: p._explicit });
         const prior = claimed.get(addressKey(out));
@@ -406,6 +417,15 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
       const files = [];
       planFiles(p, files, () => {}, new Map());
       p.keptCopies = files.filter((f) => keptReplaced(f.out));
+    }
+  }
+
+  if (heldLinks) {
+    for (const p of props) {
+      if (p.ships || !p.source || !p.address || !markup(p._ext)) continue;
+      const files = [];
+      planFiles(p, files, () => {}, new Map());
+      p.heldLinked = files.slice(1);
     }
   }
 
