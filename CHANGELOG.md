@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.119] — 2026-11-01
+
+Wrap-up asks the GM less and finds more, and vault-ingest's Reconstruction Note stops reaching the player site. Publish tool unchanged; no vault change is needed.
+
+### Added
+
+- `vault_write.py play-notes-new --session INDEX [--play-date D] [--export PATH]` files an export's Play Notes beside a session index that prep already filed. It sets the index's `documents.play_notes` and `play_date`, leaves the Plan link and status alone, and checks the export's names as `session-new` does. It refuses a session that already has Play Notes. The wrap-up names it for a prepped session.
+- `reveal_scan.py --also PATH` adds a note the wrap-up wrote to the notes it checks, so wrap-up step 4d offers spoilers on entities the Play Notes, Wrap-Up and recap do not link. Step 4d passes the paths Step 4 wrote.
+
+### Changed
+
+- On an export, wrap-up no longer asks the GM about every clash with the vault. Prep the export contradicts is struck through as superseded and replaced, and noted in Quality Notes. Only a contradiction of earlier play (a Campaign Log, Encounters or Behind the Scenes entry from an earlier session) is put to the GM. A name spelled differently keeps the vault's spelling.
+- publish-site reads a build warning as written, and acts on the cause and fix it names, instead of explaining it from the guide.
+- The leak-findings guide says a held prop's linked files, copied into a kept folder, are findings too.
+
+### Fixed
+
+- vault-ingest now fences its Reconstruction Note gm-only, so a new one no longer shows on the player site. Notes already in a vault are not changed.
+
+---
+
 ## [1.10.118] — 2026-11-01
 
 The benchmark campaign is a valid, current vault again, and the browser tests no longer race each other for Chrome. Publish tool unchanged (test code only); no vault change is needed.
