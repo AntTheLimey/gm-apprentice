@@ -99,7 +99,7 @@ describe("leak gate: the files a held prop page links (#508)", () => {
   }, HELD_VAULT({ 'Documents/inv.html': PAGE().replace('</body>', '<script src="extra.js"></script></body>'), 'Documents/extra.js': '' }), KEPT));
 
   it('a file it links that cannot be read stops the check', (t) => {
-    if (process.getuid && process.getuid() === 0) { t.skip('root reads any file'); return; }
+    if (process.platform === 'win32' || (process.getuid && process.getuid() === 0)) { t.skip('file permissions do not stop this user'); return; }
     within((s) => {
       const file = path.join(s.root, 'vault', 'Documents', 'keeper-map.png');
       fs.chmodSync(file, 0o000);
