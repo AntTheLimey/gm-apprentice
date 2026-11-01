@@ -66,6 +66,7 @@ BULLET = re.compile(r"^\s*[-*+]\s+\*\*(Traits|Ideals|Bonds|Flaws):\*\*\s*(.*?)\s
 LIST_ITEM = re.compile(r"^\s*[-*]\s+(\S.*)$")
 SYNTAX = re.compile(r"([\\`*_\[\]#|!~{}&%=$^])")
 ANGLES = {"<": "&lt;", ">": "&gt;"}      # an entity, not a backslash: `\<` would still spell `<`
+DASH_RUN = re.compile(r"-{2,}")    # the site's typographer makes `--` and `---` dashes unless every one is escaped
 LEAD_MARK = re.compile(r"^([+\-])")
 LEAD_NUMBER = re.compile(r"^(\d+)([.)])")
 EOL = re.compile(r"\r\n|\n|\r")
@@ -115,6 +116,7 @@ def escape(text: str) -> str:
     """Backslash-escape what markdown reads as syntax anywhere, and what it reads at a line's start."""
     text = SYNTAX.sub(r"\\\1", text)
     text = "".join(ANGLES.get(c, c) for c in text)
+    text = DASH_RUN.sub(lambda m: "\\-" * len(m.group(0)), text)
     text = LEAD_MARK.sub(r"\\\1", text)
     return LEAD_NUMBER.sub(r"\1\\\2", text)
 
@@ -379,6 +381,12 @@ def plan_background(text: str, player_text: PlayerText, last: dict[str, tuple[st
             else:
                 fresh[part] = source_fp
         elif same:
+            if entry[0] == entry[1] == note_fp != source_fp:
+                # Still exactly what sync wrote (source and note were one text), but escaped by an older
+                # release (bare dash runs, #484): the same words, rewritten so they print as typed. A
+                # hand copy that reads the same (its two fingerprints differ) is left as the GM wrote it.
+                rows.append(("WRITE", locus, "the same words, escaped so they print as typed"))
+                edits.append((span.start, span.end, _replacement(part, span, want, lines, eol)))
             fresh[part] = source_fp                 # the note already says what the source says: settled
         elif entry[0] == source_fp:
             keep[part] = entry                      # nothing new at the source; the note is the GM's
