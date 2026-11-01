@@ -69,6 +69,13 @@ describe('labelFoldedHeadings', () => {
     assert.equal(labelFoldedHeadings(text, map), '```\n## [[S1 Wrap]]\n```\n## [[S1 Wrap|Session 1]]');
   });
 
+  it('a fence closes as CommonMark closes it: same character, at least as long, nothing after', () => {
+    const map = folded();
+    const text = '````\n```\n## [[S1 Wrap]]\n```js\n## [[S1 Wrap]]\n````\n## [[S1 Wrap]]';
+    assert.equal(labelFoldedHeadings(text, map), '````\n```\n## [[S1 Wrap]]\n```js\n## [[S1 Wrap]]\n````\n## [[S1 Wrap|Session 1]]');
+    assert.equal(labelFoldedHeadings('```\r\n## [[S1 Wrap]]\r\n```\r\n## [[S1 Wrap]]', map), '```\r\n## [[S1 Wrap]]\r\n```\r\n## [[S1 Wrap|Session 1]]');
+  });
+
   it('returns text with no links, or a map with no fold, unchanged', () => {
     assert.equal(labelFoldedHeadings('## Plain', {}), '## Plain');
     assert.equal(labelFoldedHeadings('## [[S1 Wrap]]', { 'S1 Wrap': 'sessions/s1-wrap.html' }), '## [[S1 Wrap]]');

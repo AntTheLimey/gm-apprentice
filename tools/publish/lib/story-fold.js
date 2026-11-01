@@ -3,6 +3,7 @@
 // (the same rule `storyPagesFor` uses). Only pages whose type is a wrap-up type are ever folded.
 const { isWrapUp } = require('./session-hub');
 const { wikilinkRe, parseWikilink } = require('./wikilink');
+const { fenceStep } = require('./processor');
 
 const FOLD_LABELS = new WeakMap();   // link map -> Map of patched key -> title of the Story page it now points at
 
@@ -82,13 +83,10 @@ function labelFoldedLinks(markdown, linkMap, { headingsOnly = false, labels = nu
   if (!headingsOnly) return relabel(text);
   let fence = null;
   return text.split('\n').map((line) => {
-    const open = /^\s{0,3}(`{3,}|~{3,})/.exec(line);
-    if (open) {
-      if (!fence) fence = open[1][0];
-      else if (open[1][0] === fence) fence = null;
-      return line;
-    }
-    if (fence || !/^\s{0,3}#{1,6}\s/.test(line) || !line.includes('[[')) return line;
+    const step = fenceStep(line.replace(/\r$/, ''), fence);   // a CRLF note's line ends in \r
+    fence = step.fenceDelim;
+    if (step.isFenceLine) return line;
+    if (fence !== null || !/^\s{0,3}#{1,6}\s/.test(line) || !line.includes('[[')) return line;
     return relabel(line);
   }).join('\n');
 }
