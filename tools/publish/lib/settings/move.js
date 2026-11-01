@@ -935,7 +935,17 @@ function oldFileHolds(vault) {
   }
 }
 
-// The settings in `site` (the site folder's file) that the new file resolves differently, by their names.
+// The names under one of the site file's old maps (`landing`, `images`, `locations`) that are not settings, as the site
+// file writes them (`landing.bogus`), from the faults of a read of the site file alone.
+const SITE_BOXES = REGISTRY.filter((c) => c.container && (c.was || []).some((w) => w.in === 'site') && (c.was || []).some((w) => w.in === 'vault'))
+  .map((c) => ({ old: c.was.find((w) => w.in === 'vault').name, root: c.was.find((w) => w.in === 'site').name }));
+const unknownSiteNames = (siteOnly) => siteOnly.faults.filter((f) => f.kind === 'unknown-name').flatMap((f) => {
+  const box = SITE_BOXES.find((b) => String(f.name).startsWith(`${b.old}.`));
+  return box ? [`${box.root}.${f.name.slice(box.old.length + 1)}`] : [];
+});
+
+// The settings in `site` (the site folder's file) that the new file resolves differently, by their names (and, by
+// the site file's name, anything under its old maps that is not a setting: it is shown, never taken out unsaid).
 function siteDiffers(vault, site) {
   const siteOnly = read.readOldLayout({ vaultPath: vault, siteConfig: site, skipOldFile: true });
   const now = read.readSettings({ vaultPath: vault, siteConfig: {} });
@@ -945,6 +955,8 @@ function siteDiffers(vault, site) {
   for (const e of LEAVES) {
     const beat = beaten[e.name] && beaten[e.name] !== 'default';
     if (siteOnly.origins[e.name] === 'default' || e.siteFallback) continue;   // (the folder settings are carried, not compared)
+    // A value the site file holds that is not usable is still something the GM wrote: it is shown, never taken out unsaid.
+    if (siteOnly.origins[e.name] === 'fault' && !beat) { differs.push(e.name); continue; }
     if (beat && e.guards) {
       // A hiding list: the old layout merged both files, so a left-over old file never beat the site's entries. The
       // new file differs when it lacks one of them (never skipped, or an entry would be dropped by the tidy).
@@ -964,16 +976,22 @@ function siteDiffers(vault, site) {
     const segs = e.name.split('.');
     if (!covers(getPath(now.values, segs), getPath(siteOnly.values, segs))) differs.push(e.name);
   }
+  differs.push(...unknownSiteNames(siteOnly));
   return differs;
 }
 
-// The name a leaf setting had in the site folder's file: its own site-file name, or its old container's name and the
-// rest of its own (`landing.max_npcs`); null when the site file never held it.
-function siteNameOf(e) {
+// The name a leaf setting has in the site folder's file `site`: its own site-file name, or its old container's name and
+// the rest of its old name as the site file writes it (`images.maxWidth`); null when the site file never held it.
+function siteNameOf(e, site) {
   const own = (e.was || []).find((w) => w.in === 'site');
   if (own) return own.read === false ? null : own.name;
   const box = REGISTRY.find((c) => c.container && e.name.startsWith(`${c.name}.`) && (c.was || []).some((w) => w.in === 'site'));
-  return box ? `${box.was.find((w) => w.in === 'site').name}.${e.name.slice(box.name.length + 1)}` : null;
+  if (!box) return null;
+  const root = box.was.find((w) => w.in === 'site').name;
+  const boxOld = (box.was.find((w) => w.in === 'vault') || {}).name;
+  const rests = (e.was || []).filter((w) => w.in === 'vault' && boxOld && w.name.startsWith(`${boxOld}.`)).map((w) => w.name.slice(boxOld.length + 1));
+  const written = rests.find((r) => getPath(site, [root, ...r.split('.')]) !== undefined);
+  return `${root}.${written || e.name.slice(box.name.length + 1)}`;
 }
 
 // What the site folder's file says, as changes to the vault's new file: a hiding list's entries added to the vault's
@@ -1007,8 +1025,8 @@ function foldInto(vault, site, out) {
   }
   // Every other setting the site file holds (the carried names and the site folder's own five are planCarry's).
   for (const e of LEAVES) {
-    if (e.siteFallback || (e.type === 'list' && e.guards) || e.type === 'switchOrList') continue;
-    const from = siteNameOf(e);
+    if (e.siteFallback) continue;
+    const from = siteNameOf(e, site);
     if (!from || CARRIED_NAMES.has(from)) continue;
     const origin = siteOnly.origins[e.name];
     if (origin === undefined || origin === 'default' || origin === 'inherit') continue;
@@ -1019,6 +1037,7 @@ function foldInto(vault, site, out) {
       say(out, unusable, unusable.replace('so it was removed', 'so it is removed'));
       continue;
     }
+    if ((e.type === 'list' && e.guards) || e.type === 'switchOrList') continue;   // (added to the vault's, above)
     const value = getPath(siteOnly.values, segs);
     const mine = nowRead.origins[e.name];
     const vaultSets = mine !== undefined && mine !== 'default' && mine !== 'inherit';
@@ -1032,6 +1051,11 @@ function foldInto(vault, site, out) {
       const differs = `\`${from}\` in the site folder's vault.config.json (${showValue(value)}) differs from \`${e.name}\` in the vault's settings (${showValue(kept)}); the vault's is kept and the site file's was removed.`;
       say(out, differs, differs.replace("site file's was removed", "site file's is removed"));
     }
+  }
+  for (const from of unknownSiteNames(siteOnly)) {
+    out.dropped.push({ from, why: 'it is not a setting' });
+    say(out, `\`${from}\` in the site folder's vault.config.json is not a setting, so it was removed and not carried over.`,
+      `\`${from}\` in the site folder's vault.config.json is not a setting, so it is removed and not carried over.`);
   }
   if (!said.length && out.carried.length === before.carried && out.dropped.length === before.dropped) {
     said.push('The vault\'s own values are the ones in use, so nothing was carried.');

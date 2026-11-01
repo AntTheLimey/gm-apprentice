@@ -1141,6 +1141,24 @@ test('--fold-site-file accounts for every setting it takes out of the site file:
   assert.ok(p.hide.sections.includes('Z'));
 });
 
+test('an unusable site value or a name that is not a setting is shown, left without the flag, and listed as dropped with it (#539)', () => {
+  const extra = { searchEnabled: 'maybe', landing: { bogus: 1, max_npcs: 2 }, images: { maxWidth: 800 } };
+  const { s, file, siteJson } = movedWithSiteFile('', extra);
+  const check = cliMove({ vault: s.vault }, { check: true });
+  assert.deepEqual(check.data.siteDiffers.sort(), ['landing.bogus', 'player_site.features.search', 'player_site.images.max_width', 'player_site.landing.max_npcs']);
+  const before = hashes(s.root);
+  applyMove(planMove({ vaultPath: s.vault, siteConfigPath: file }, { pinCheck: () => null }));
+  assert.deepEqual(hashes(s.root), before, 'without the flag the site file is left');
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null });
+  assert.deepEqual(plan.dropped.map((d) => d.from).sort(), ['landing.bogus', 'searchEnabled']);
+  assert.deepEqual(plan.carried.map((c) => c.from).sort(), ['images.maxWidth', 'landing.max_npcs'], 'named as the site file writes them');
+  applyMove(plan);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), siteJson);
+  const p = readSettings({ vaultPath: s.vault, siteConfig: {} }).values.player_site;
+  assert.equal(p.features.search, true, 'the unusable value was not carried');
+  assert.equal(p.images.max_width, 800);
+});
+
 // ---- What a site folder's vault.config.json still holds: carried into the vault, then taken out of the site file ----
 
 const SITE_ALL = {
