@@ -34,32 +34,48 @@ fs.mkdirSync(outDir, { recursive: true });
 // Build warnings that are known and accepted. Any other warning stops the showcase, so a preset that
 // quietly lost its theme (a mistyped genre, a missing image) is never deployed.
 const ALLOWED_WARNINGS = [/^Custom fonts .* are loaded from Google Fonts/];
+// The unresolved wikilinks the fixture plants on purpose (note + target), read by the fixture's own test too.
+const PLANTED_LINKS = new Set(JSON.parse(fs.readFileSync(path.join(repoRoot, 'scripts/benchmark-planted-links.json'), 'utf8')));
+const { runSiteDoctor } = require(path.join(repoRoot, 'tools/publish/lib/site-doctor.js'));
 const unexpected = [];
 
 for (const preset of PRESETS) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), `showcase-${preset.id}-`));
-  const vaultDir = path.join(work, 'vault');
-  fs.cpSync(sourceVault, vaultDir, { recursive: true });
-  // The campaign's own settings (folder map, hidden folders) stay as the vault holds them;
-  // only what changes per preset is written over them, in the vault's settings file.
-  const settingsPath = path.join(vaultDir, '_meta', 'vault-config.yaml');
-  const settings = YAML.parse(fs.readFileSync(settingsPath, 'utf8'));
-  settings.player_site = {
-    ...settings.player_site,
-    title: `The Ashford Case — ${preset.name}`,
-    url: 'https://antthelimey.github.io/gm-apprentice',
-    theme: { genre: preset.id, tagline: `gm-apprentice publish theme: ${preset.name}` },
-  };
-  fs.writeFileSync(settingsPath, YAML.stringify(settings));
-
-  // The site folder's vault.config.json only says where the vault is.
-  const configPath = path.join(work, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vaultDir }, null, 2));
-
-  console.log(`\n=== Building ${preset.name} showcase ===`);
   try {
+    const vaultDir = path.join(work, 'vault');
+    fs.cpSync(sourceVault, vaultDir, { recursive: true });
+    // The campaign's own settings (folder map, hidden folders) stay as the vault holds them;
+    // only what changes per preset is written over them, in the vault's settings file.
+    const settingsPath = path.join(vaultDir, '_meta', 'vault-config.yaml');
+    const settings = YAML.parse(fs.readFileSync(settingsPath, 'utf8'));
+    settings.player_site = {
+      ...settings.player_site,
+      title: `The Ashford Case — ${preset.name}`,
+      url: 'https://antthelimey.github.io/gm-apprentice',
+      theme: { genre: preset.id, tagline: `gm-apprentice publish theme: ${preset.name}` },
+    };
+    fs.writeFileSync(settingsPath, YAML.stringify(settings));
+
+    // The site folder's vault.config.json only says where the vault is.
+    const configPath = path.join(work, 'vault.config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vaultDir }, null, 2));
+
+    console.log(`\n=== Building ${preset.name} showcase ===`);
     const { warnings = [] } = build({ configPath });
     for (const w of warnings) if (!ALLOWED_WARNINGS.some((re) => re.test(w))) unexpected.push(`${preset.name}: ${w}`);
+
+    // The site's own audit says which wikilinks match no published page; only the planted ones may remain.
+    let audit = '';
+    await runSiteDoctor({ configPath, json: true }, { out: (t) => { audit += t; } });
+    for (const f of JSON.parse(audit).findings) {
+      if (f.code === 'LINK_UNRESOLVED') {
+        const link = /^(\[\[[^\]]*\]\])/.exec(f.detail);
+        const id = `${f.path}: ${link ? link[1] : f.detail}`;
+        if (!PLANTED_LINKS.has(id)) unexpected.push(`${preset.name}: unresolved link ${id}`);
+      } else if (f.severity === 'error') {
+        unexpected.push(`${preset.name}: site audit ${f.code} ${f.path}: ${f.detail}`);
+      }
+    }
     fs.cpSync(path.join(work, 'docs'), path.join(outDir, preset.id), { recursive: true });
   } finally {
     fs.rmSync(work, { recursive: true, force: true });

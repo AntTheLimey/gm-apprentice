@@ -15,14 +15,7 @@ const CLI = path.join(__dirname, '..', 'bin', 'gm-publish.js');
 
 // Expected: `[[Dr. Marsh]]` is a planted broken link (commit 4acfb023); the rest are fixture state kept stable: stale
 // session titles in the chapter overview, and two NPCs from the-midwife fixture who have no note.
-const PLANTED = [
-  'Adventures/The Darkened Pier.md: [[Martha Hale]]',
-  'Adventures/The Darkened Pier.md: [[Silas Marsh]]',
-  'Chapters/Chapter 1/Sessions/Session 02 - The Docks at Night - Play Notes.md: [[Dr. Marsh]]',
-  'Chapters/Chapter 1/chapter-overview.md: [[Session 1 - The Missing Professor]]',
-  'Chapters/Chapter 1/chapter-overview.md: [[Session 2 - The Docks at Night]]',
-  'Chapters/Chapter 1/chapter-overview.md: [[Session 3 - The Inner Sanctum]]',
-];
+const PLANTED = JSON.parse(fs.readFileSync(path.join(REPO, 'scripts', 'benchmark-planted-links.json'), 'utf8'));
 
 test('the benchmark campaign has no unresolved wikilinks but the planted ones', () => {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'bench-links-'));
