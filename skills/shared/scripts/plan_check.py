@@ -82,6 +82,10 @@ Checks, by id, level, and the rule they mechanise:
                          GM supplied: those sections may be settled, the
                          rest of the guard still runs
                          (SKILL.md, Hard Guard)
+  scene-pointer WARNING  a `### [[Scene]]` pointer names no `type: scene`
+                         note in the vault (found by walking up from the
+                         plan to a folder with `_Templates` or `_meta`;
+                         skipped when there is none)
   prep-state    INFO/    a resumable prep-state marker exists and parses
                 WARNING  (SKILL.md, Resumable prep)
 """
@@ -911,10 +915,43 @@ def check_prep_state(rel: str, text: str) -> list[Finding]:
 # --------------------------------------------------------------------------
 
 
+def find_vault(plan: Path) -> Path | None:
+    """The vault holding `plan`: the nearest folder above it with a
+    `_Templates` or `_meta` folder, else None."""
+    for folder in plan.resolve().parents:
+        if (folder / "_Templates").is_dir() or (folder / "_meta").is_dir():
+            return folder
+    return None
+
+
+def check_scene_pointers(rel: str, text: str, vault: Path
+                         ) -> list[Finding]:
+    """A WARNING for each `### [[Scene]]` pointer that no scene note
+    answers to (matched as `session_context` matches them)."""
+    import session_context as sc
+    pointed = set()
+    for r, t in vl.vault_files(vault):
+        if vl.entity_type(vl.extract_frontmatter(t)) != "scene":
+            continue
+        pointed.add(sc.normalize(r.removesuffix(".md")))
+        pointed.add(sc.normalize(Path(r).stem))
+    findings: list[Finding] = []
+    for target in dict.fromkeys(sc.scene_pointers(text)):
+        if sc.pointer_key(target) in pointed:
+            continue
+        findings.append(Finding(
+            "scene-pointer", "WARNING", f"{rel}:§[[{target}]]",
+            f"scene-pointer: no scene note is named '{target}' — write "
+            f"the note, or fix the pointer"))
+    return findings
+
+
 def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool,
-               gm_input: bool | frozenset[str] = False) -> list[Finding]:
+               gm_input: bool | frozenset[str] = False,
+               vault: Path | None = None) -> list[Finding]:
     """`gm_input`: True when the GM supplied the whole spine, or the guard
-    sections the GM's request settled."""
+    sections the GM's request settled. `vault`, when given, is checked for
+    the scene notes the Plan points at."""
     by_norm = _by_norm_title(text)
     states, _problems = vl.scan_body(text)
     findings: list[Finding] = []
@@ -934,6 +971,8 @@ def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool,
     findings.extend(check_table(rel, text))
     findings.extend(check_guess(rel, states))
     findings.extend(check_prep_state(rel, text))
+    if vault is not None:
+        findings.extend(check_scene_pointers(rel, text, vault))
     supplied = (frozenset(GUARD_SECTIONS) if gm_input is True
                  else gm_input or frozenset())
     if headless and supplied == frozenset(GUARD_SECTIONS):
@@ -997,7 +1036,8 @@ def main() -> int:
     gm_input: bool | frozenset[str] = (
         False if args.gm_input is None else
         frozenset(GM_INPUT_PARTS[p] for p in args.gm_input) or True)
-    findings = run_checks(rel, text, fm, args.headless, gm_input)
+    findings = run_checks(rel, text, fm, args.headless, gm_input,
+                          find_vault(args.plan))
     has_error = any(f.level == "ERROR" for f in findings)
 
     if args.json:

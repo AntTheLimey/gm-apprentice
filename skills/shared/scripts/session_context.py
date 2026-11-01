@@ -432,21 +432,31 @@ def _scene_note_text(files, name: str, chapter: str | None = None) -> str:
     return body or f"(scene note {name} is empty)"
 
 
-def plan_pointers(plan_text: str) -> set[str]:
-    """The scene notes a Plan points at (`### [[Note]]` under Planned and
-    Contingency Scenes): a bare `[[Note]]` by `normalize(stem)`, one
-    written as a path by its `normalize`d vault-relative path without
-    `.md` (it has a `/`, so the two kinds never collide)."""
-    out: set[str] = set()
+def scene_pointers(plan_text: str) -> list[str]:
+    """The notes a Plan's `### [[Note]]` headings under Planned and
+    Contingency Scenes name, as written (a path keeps its folders), `.md`
+    dropped, in Plan order."""
+    out: list[str] = []
     for title in ("Planned Scenes", "Contingency Scenes"):
         body = section(plan_text, title)
         for heading, _b in (h3_blocks(body) if body is not None else []):
             target = _pointer_target(heading)
             if target:
-                target = target.removesuffix(".md")
-                out.add(normalize(target if "/" in target
-                                  else Path(target).stem))
+                out.append(target.removesuffix(".md"))
     return out
+
+
+def pointer_key(target: str) -> str:
+    """How `plan_pointers` keys one `scene_pointers` target."""
+    return normalize(target if "/" in target else Path(target).stem)
+
+
+def plan_pointers(plan_text: str) -> set[str]:
+    """The scene notes a Plan points at (`### [[Note]]` under Planned and
+    Contingency Scenes): a bare `[[Note]]` by `normalize(stem)`, one
+    written as a path by its `normalize`d vault-relative path without
+    `.md` (it has a `/`, so the two kinds never collide)."""
+    return {pointer_key(t) for t in scene_pointers(plan_text)}
 
 
 def is_pointed_at(rel: str, pointed: set[str]) -> bool:

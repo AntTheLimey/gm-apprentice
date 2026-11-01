@@ -23,6 +23,7 @@ Run: python3 tests/test_plan_check.py
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -1002,3 +1003,57 @@ class SkeletonTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class MissingScenePointerTests(unittest.TestCase):
+    """A Plan pointer to a scene note the vault lacks is a WARNING (#490);
+    the vault is found by walking up from the plan."""
+
+    PLAN = ("---\ntype: session-plan\nsession: \"[[Session 04]]\"\n"
+            "chapter: \"[[Ch 1]]\"\n---\n\n## Planned Scenes\n\n"
+            "### [[Ashworth Dinner]]\n\n### [[Typo Scene]]\n\n"
+            "### [[Chapters/Ch 1/Scenes/Gala]]\n")
+
+    def make(self, with_meta=True):
+        root = Path(tempfile.mkdtemp(prefix="plan-check-ptr-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        if with_meta:
+            (root / "_meta").mkdir()
+        scenes = root / "Chapters" / "Ch 1" / "Scenes"
+        scenes.mkdir(parents=True)
+        (scenes / "Ashworth Dinner.md").write_text(
+            "---\ntype: scene\n---\n\nBody.\n", encoding="utf-8")
+        (scenes / "Gala.md").write_text(
+            "---\ntype: scene\n---\n\nBody.\n", encoding="utf-8")
+        plan = root / "Chapters" / "Ch 1" / "Planning" / "Plan.md"
+        plan.parent.mkdir(parents=True)
+        plan.write_text(self.PLAN, encoding="utf-8")
+        return root, plan
+
+    def rows(self, plan):
+        return [l for l in run_cli(plan).stdout.splitlines()
+                if "scene-pointer" in l]
+
+    def test_missing_scene_note_is_warned(self):
+        _root, plan = self.make()
+        rows = self.rows(plan)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith("WARNING\t"), rows)
+        self.assertIn("Typo Scene", rows[0])
+
+    def test_existing_notes_by_name_and_path_are_clean(self):
+        _root, plan = self.make()
+        rows = "\n".join(self.rows(plan))
+        self.assertNotIn("Ashworth Dinner", rows)
+        self.assertNotIn("Gala", rows)
+
+    def test_a_note_of_another_type_is_no_scene(self):
+        root, plan = self.make()
+        (root / "NPCs").mkdir()
+        (root / "NPCs" / "Typo Scene.md").write_text(
+            "---\ntype: npc\n---\n", encoding="utf-8")
+        self.assertEqual(len(self.rows(plan)), 1)
+
+    def test_no_vault_found_is_silent(self):
+        _root, plan = self.make(with_meta=False)
+        self.assertEqual(self.rows(plan), [])
