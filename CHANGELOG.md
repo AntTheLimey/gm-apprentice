@@ -15,7 +15,7 @@ The prep tools read the vault more truthfully. Publish tool unchanged; no vault 
 
 - `session_context.py --prep` no longer lists an archived PC or a `_Template_*` note as an active PC in Active PCs, Threads or PC Arcs. All three lists, and `vaultlib.active_pcs`, now use one rule, `vaultlib.is_active_pc`.
 - The play brief keeps blank lines inside a code block exactly as written; blank runs outside code blocks still collapse.
-- The Threads report matches far more PC threads to their Wrap-Up bullets. When the text match misses, a thread and a bullet that share a person, place or thing plus two key words (or four key words with no shared name) count as the same thread, so their age shows instead of `first=?`.
+- The Threads report matches far more PC threads to their Wrap-Up bullets. When the text match misses, a thread and a bullet that share a person, place or thing plus two key words (or four key words with no shared name) count as a likely match. Its age shows with a `~` (`first~13 age~2`) and a legend line, instead of `first=?`; a `=` still means the text matched. A likely match never removes a Wrap-Up thread from the "not on any PC sheet" list.
 - `plan_check.py` warns (`scene-pointer`) when a `### [[Scene]]` pointer in a Plan names no scene note. It finds the vault by walking up from the plan to a folder with `_Templates` or `_meta`, and says nothing when there is none.
 
 ### Changed
