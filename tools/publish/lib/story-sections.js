@@ -9,13 +9,12 @@
 // before the recap on both sites, as written, its hidden parts marked on the GM site.
 const { extractSections, findHeadings, renderMarkdown, renderInline, escapeHtml, stripLeadingH1Marked } = require('./processor');
 const { unmark, withoutMarked } = require('./gm-marks');
+const { isMomentsHeading } = require('./heading-key');
 
 const OPEN_LINE = /^\uE000[0-9a-z]+\uE001$/;
 const TOKEN = /\uE000[0-9a-z]+\uE001|\uE002/g;
 const CLOSE = '\uE002';
-const MOMENTS = 'memorable moments';
-
-const isMoments = (title) => unmark(title).toLowerCase().includes(MOMENTS);
+const isMoments = (title) => isMomentsHeading(unmark(title));
 // The anchor extractSections gives a section: the title's own words.
 const anchorOf = (title) => unmark(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 // A section body's markdown without the blank lines around it.

@@ -7,7 +7,7 @@ const { blockLines, sanitize, marksAtHeadings, unmark } = require('./gm-marks');
 const { bareSectionTitle } = require('./pc-prose');
 const { wikilinkRe, parseWikilink, labelsForLinks, labelsForLinksFully } = require('./wikilink');
 const { WRAP_UP_TYPES } = require('./shared-lists');
-const { headingKey, headingKeys, squashedKeys, titleNamedIn } = require('./heading-key');
+const { headingKey, headingKeys, squashedKeys, titleNamedIn, isMomentsHeading } = require('./heading-key');
 const md = createRenderer();
 
 function renderMarkdown(markdown) {
@@ -141,7 +141,6 @@ function isDocumentPage(frontmatter) {
   return type === 'document' || type === 'handout' || type === 'prop';
 }
 
-const MOMENTS_KEY = 'memorable moments';
 // The walk's `by` for a section the story-moments setting withholds, and the label its mark carries.
 const STORY_MOMENTS_BY = '\u0000story-moments';
 const STORY_MOMENTS_LABEL = 'player_site.story.moments: off — Story pages show the recap only';
@@ -173,7 +172,7 @@ function exclusionReason(title, excludeSections = [], frontmatter = null, level 
   }
   // `player_site.story.moments` off: a wrap-up's Memorable Moments section stays off the site (the Story page's cards).
   if (rules.storyMoments === false && level <= 2 && isWrapUpPage(frontmatter)
-      && headingKeys(title).includes(MOMENTS_KEY)) {
+      && isMomentsHeading(title)) {
     return 'story';
   }
   return null;

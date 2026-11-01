@@ -88,6 +88,18 @@ describe('player_site.story.moments', () => {
     assert.equal(entry('player_site.story.moments').default, true);
   });
 
+  it('off: a moments heading with more words after it (the cards read it as moments) is withheld too', () => {
+    const vault = storyVault({ 'Sessions/Session 1 Wrap-Up.md': WRAP_1.replace('## Memorable Moments', '## Memorable Moments — Highlights') });
+    const site = buildBoth(vault, { player: { story: { moments: false } }, sites: ['player'] });
+    try {
+      for (const [file, text] of texts(site.player)) {
+        for (const m of MOMENTS) assert.ok(!html(text).includes(m), `${m} in ${file}`);
+        assert.ok(!/class="story-moments"/.test(text), `a moments block in ${file}`);
+      }
+      assert.deepEqual(runLeakGate({ configPath: site.configPath, outputDir: site.player.dir }).findings, []);
+    } finally { site.cleanup(); }
+  });
+
   it('a note that is not a wrap-up keeps its Memorable Moments section', () => {
     const npc = buildBoth(storyVault({ 'NPCs/Mara Quill.md':
       '---\ntype: npc\ntitle: Mara Quill\nstatus: alive\n---\n\n# Mara Quill\n\nA fixer.\n\n## Memorable Moments\n\nNPC-MOMENTS-1: she paid in full.\n' }),
