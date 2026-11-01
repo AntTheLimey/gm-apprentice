@@ -74,7 +74,7 @@ When scanning play notes for new entities, categorize:
 | NEW-ITEM | Item introduced, may need vault entry |
 | NEW-EVENT | Significant event — create Event entity file and add linked entry to timeline. Must meet at least 2 of: changes entity state, multiple named participants, creates forward consequences, referenced from multiple entities. Minor events stay as inline timeline entries |
 | UPDATE | Existing entity needs information update |
-| CONFLICT | Contradicts what earlier play established — flag (contradicted prep is an UPDATE) |
+| CONFLICT | Contradicts what earlier play established — flag. Prep it contradicts is an UPDATE: strike it through `superseded YYYY-MM-DD` and log it in Quality Notes. Prep vs. play: `gmassistant-export.md` § Step 4 |
 
 ## Campaign Journal Format
 
