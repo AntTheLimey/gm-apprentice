@@ -79,34 +79,71 @@ const runsText = (label, runs) => {
   return `${label}: ${shown}${runs.length > RUNS_SHOWN ? ` and ${runs.length - RUNS_SHOWN} more` : ''}`;
 };
 
+// A sentence number for each of a page's words (pageWords), read from the same text: a new block (a line) or the end of
+// a sentence starts the next one. null when the two readings disagree on the words (then a `rest` phrase takes nothing).
+const SENTENCE_END = /(?<=[.!?…]["'”’)\]]*)\s+/;
+function sentencesOf(rel, raw, words) {
+  const ids = [];
+  let n = 0;
+  for (const line of fileText(rel, withoutPropBar(raw), { scripts: false }).split('\n')) {
+    for (const sentence of line.split(SENTENCE_END)) {
+      const count = wordsOf(sentence).length;
+      if (!count) continue;
+      for (let i = 0; i < count; i++) ids.push(n);
+      n += 1;
+    }
+  }
+  return ids.length === words.length ? ids : null;
+}
+
+// An --expect-gone phrase: its words, and `rest` when it ends "..." or "…" (the phrase and the rest of its sentence).
+function expectedPhrase(text) {
+  const rest = /(?:\.\.\.|…)\s*$/.test(String(text));
+  return { words: wordsOf(String(text).replace(/(?:\.\.\.|…)\s*$/, '')), rest };
+}
+
 // Whether a removed run is nothing but expected-gone phrases, one after another (a crumb and a footer the old page
-// carried, side by side once the words between them are matched).
-function onlyExpected(words, phrases) {
+// carried, side by side once the words between them are matched). A `rest` phrase also takes the words after it up to
+// the end of its sentence (`sentence`: each word's sentence number; none taken without it), never further back or on.
+function onlyExpected(words, phrases, sentence = null) {
   if (!phrases.length) return false;
+  const at = (p, j) => p.length <= words.length - j && p.every((w, k) => words[j + k] === w);
   const ok = [true];
   for (let i = 1; i <= words.length; i++) {
-    ok[i] = phrases.some((p) => p.length <= i && ok[i - p.length] && p.every((w, k) => words[i - p.length + k] === w));
+    ok[i] = phrases.some(({ words: p }) => p.length <= i && ok[i - p.length] && at(p, i - p.length));
+    if (ok[i] || !sentence) continue;
+    // A rest phrase starting at j whose sentence runs at least to word i - 1.
+    for (let j = i - 1; j >= 0 && !ok[i] && sentence[j] === sentence[i - 1]; j--) {
+      ok[i] = ok[j] && phrases.some((ph) => ph.rest && ph.words.length <= i - j && at(ph.words, j));
+    }
   }
   return ok[words.length];
 }
 
 // The old page's words beside the new page's: { removed, added } runs of words.
+// `removedAt`: where each removed run starts among the old words.
 function wordRuns(oldWords, newWords) {
   const removed = [];
   const added = [];
+  const removedAt = [];
+  let at = 0;
   for (const part of diffArrays(oldWords, newWords)) {
-    if (part.removed) removed.push(part.value);
+    if (part.removed) { removed.push(part.value); removedAt.push(at); }
     else if (part.added) added.push(part.value);
+    if (!part.added) at += part.value.length;
   }
-  return { removed, added };
+  return { removed, added, removedAt };
 }
 
 function servedPageRow(address, oldRaw, newRaw, expected) {
   if (oldRaw.equals(newRaw)) return { kind: 'same', address, detail: '' };
-  const { removed, added } = wordRuns(pageWords(address, oldRaw.toString('utf8')), pageWords(address, newRaw.toString('utf8')));
+  const oldWords = pageWords(address, oldRaw.toString('utf8'));
+  const { removed, added, removedAt } = wordRuns(oldWords, pageWords(address, newRaw.toString('utf8')));
   const addedText = runsText('added', added);
   if (!removed.length) return { kind: 'same-words', address, detail: addedText || 'other markup, the same words' };
-  if (removed.every((run) => onlyExpected(run, expected))) {
+  const sentences = expected.some((p) => p.rest) ? sentencesOf(address, oldRaw.toString('utf8'), oldWords) : null;
+  const sentenceOf = (i, run) => (sentences ? sentences.slice(removedAt[i], removedAt[i] + run.length) : null);
+  if (removed.every((run, i) => onlyExpected(run, expected, sentenceOf(i, run)))) {
     return { kind: 'same-words', address, detail: [runsText('expected gone', removed), addedText].filter(Boolean).join('; ') };
   }
   return { kind: 'words-differ', address, detail: [runsText('removed', removed), addedText].filter(Boolean).join('; ') };
@@ -162,7 +199,7 @@ function compareSites({ oldDir, newDir, serves, listings = [], expectGone = [] }
   const prefixes = serves.map(prefixOf);
   const isServed = (address) => prefixes.some((p) => address.startsWith(p));
   const listingSet = new Set(listings.map(addressOf));
-  const expected = expectGone.map((p) => wordsOf(p)).filter((w) => w.length);
+  const expected = expectGone.map(expectedPhrase).filter((p) => p.words.length);
   // Each site's files by their address in one Unicode form.
   const filesOf = (dir) => new Map(listFiles(dir).map((rel) => [canonicalNfc(rel), path.join(dir, ...rel.split('/'))]));
   const oldFiles = filesOf(oldDir);

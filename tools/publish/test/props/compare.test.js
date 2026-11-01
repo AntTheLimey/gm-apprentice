@@ -302,3 +302,33 @@ test('a link inside a comment or a script is not a kept link', (t) => {
     assert.match(row.detail, /gazetteer\/papers\/bill\.html/);
   }
 });
+
+// #534: a phrase ending "..." stands for itself and the rest of its sentence; without the marker the whole-phrase rule
+// above holds exactly.
+test('an expected-gone phrase ending ... takes the rest of its sentence', (t) => {
+  const old = page('<p>Meet me at the old mill.</p><p>Keeper prop: half-sheet, fold in three.</p>');
+  const now = page('<p>Meet me at the old mill.</p>');
+  const dirs = sites(t, { 'props/letter.html': old }, { 'props/letter.html': now });
+  assert.equal(rowOf(run(dirs, { expectGone: ['Keeper prop'] }), 'props/letter.html').kind, 'words-differ', 'no marker: the rest still blocks');
+  for (const marked of ['Keeper prop...', 'keeper prop …', 'Keeper prop…']) {
+    const r = run(dirs, { expectGone: [marked] });
+    const row = rowOf(r, 'props/letter.html');
+    assert.equal(row.kind, 'same-words', marked);
+    assert.match(row.detail, /expected gone: "keeper prop half-sheet fold in three"/);
+    assert.equal(r.blockers, 0);
+  }
+});
+
+test('a phrase ending ... never takes the next sentence or an unrelated run', (t) => {
+  const old = page('<p>Meet me at the old mill.</p><p>Keeper prop: fold in three. Burn after reading.</p><p>Signed, a friend.</p>');
+  const nextGone = sites(t, { 'props/letter.html': old }, { 'props/letter.html': page('<p>Meet me at the old mill.</p><p>Signed, a friend.</p>') });
+  const row = rowOf(run(nextGone, { expectGone: ['keeper prop...'] }), 'props/letter.html');
+  assert.equal(row.kind, 'words-differ');
+  assert.match(row.detail, /burn after reading/);
+  assert.equal(rowOf(run(nextGone, { expectGone: ['keeper prop...', 'burn after reading'] }), 'props/letter.html').kind, 'same-words');
+  const otherGone = sites(t, { 'props/letter.html': old }, { 'props/letter.html': page('<p>Keeper prop: fold in three. Burn after reading.</p><p>Signed, a friend.</p>') });
+  assert.equal(rowOf(run(otherGone, { expectGone: ['keeper prop...'] }), 'props/letter.html').kind, 'words-differ');
+  // The marker reaches no further back than its phrase: words before it in the sentence still block.
+  const before = sites(t, { 'props/letter.html': page('<p>Meet me.</p><p>Note: keeper prop, fold.</p>') }, { 'props/letter.html': page('<p>Meet me.</p>') });
+  assert.equal(rowOf(run(before, { expectGone: ['keeper prop...'] }), 'props/letter.html').kind, 'words-differ');
+});
