@@ -74,7 +74,9 @@ function cleanJson(name, raw) {
       if (/^prop_[a-z0-9_]+$/.test(key) && typeof value === 'string') fields[key] = value;
     }
   }
-  return { title, about, fonts, fields };
+  // printout_toggle: the style has a button that shows its page as a printout, which uses less ink (the prop bar says so).
+  const printoutToggle = obj.printout_toggle === true;
+  return { title, about, fonts, fields, printoutToggle };
 }
 
 function loadStyle(name, { vaultPath, pluginDir = PLUGIN_STYLES_DIR }) {

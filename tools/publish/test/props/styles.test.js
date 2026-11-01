@@ -55,7 +55,7 @@ test('a plugin style is found', () => {
   assert.strictEqual(style.dir, fs.realpathSync(path.join(pluginDir, 'terminal')));
   assert.strictEqual(style.layout, LAYOUT);
   assert.strictEqual(style.sheet, SHEET);
-  assert.deepStrictEqual(style.json, { title: 'Terminal', about: 'Green on black', fonts: ['VT323'], fields: { prop_screen: 'green' } });
+  assert.deepStrictEqual(style.json, { title: 'Terminal', about: 'Green on black', fonts: ['VT323'], fields: { prop_screen: 'green' }, printoutToggle: false });
   assert.strictEqual(style.css, path.join(style.dir, 'style.css'));
   assert.strictEqual(style.script, path.join(style.dir, 'script.js'));
   assert.deepStrictEqual(style.assets, []);
@@ -69,7 +69,7 @@ test('a vault style of the same name replaces it whole', () => {
   assert.strictEqual(style.replaces, true);
   assert.strictEqual(style.layout, '<p>{{{body}}}</p>');
   assert.strictEqual(style.sheet, '<section class="sheet">{{{text}}}</section>');
-  assert.deepStrictEqual(style.json, { title: 'terminal', about: '', fonts: [], fields: {} });
+  assert.deepStrictEqual(style.json, { title: 'terminal', about: '', fonts: [], fields: {}, printoutToggle: false });
   assert.strictEqual(style.script, null);
   assert.ok(style.css.startsWith(fs.realpathSync(root)));
 });

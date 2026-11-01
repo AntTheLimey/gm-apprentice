@@ -61,6 +61,48 @@ describe('the prop bar and link', () => {
   });
 });
 
+// #524: the bar says how to print the prop well; a style that says it has a printout toggle (style.json printout_toggle)
+// adds that the printout look uses less ink. The hint is the bar's, hidden in print, and never a word of the page.
+describe('the print hint on the prop bar', () => {
+  const HINT = '<span class="gma-prop-hint">To print: tick Background graphics, set margins to None.</span>';
+  const INK = '<span class="gma-prop-hint">To print: tick Background graphics, set margins to None. The printout look uses less ink.</span>';
+  it('every bar carries the hint; the ink clause only when asked', () => {
+    const bar = propBar({ noteHref: 'a.html', noteTitle: 'A', collectionHref: null });
+    assert.ok(bar.includes(HINT), bar);
+    assert.ok(!bar.includes('less ink'), bar);
+    assert.ok(propBar({ noteHref: 'a.html', noteTitle: 'A', collectionHref: 'p.html', printout: true }).includes(INK));
+    assert.match(bar, /@media print\{\.gma-prop-bar\{display:none\}\}/);
+  });
+  it('withoutPropBar takes the hint out with the bar', () => {
+    const { withoutPropBar } = require('../../lib/templates/prop-bar');
+    const page = '<html><body class="x"><p>Words</p></body></html>';
+    for (const printout of [false, true]) {
+      const bar = propBar({ noteHref: 'a.html', noteTitle: 'A', collectionHref: 'p.html', printout });
+      assert.equal(withoutPropBar(withPropBar(page, bar)), page);
+    }
+  });
+  it('a terminal page says the printout look saves ink; a letter page and a hand-made page do not', () => {
+    const s = buildBoth({
+      'Documents/Invitation.md': PROP(), ...PROP_FILES,
+      'Documents/Log.md': '---\ntype: prop\nprop_style: terminal\n---\n## The Text\n```\nLOG 1\n```\n',
+      'Documents/Note.md': '---\ntype: prop\nprop_style: letter\n---\n## The Text\nDear sir.\n',
+    }, { sites: ['player'] });
+    try {
+      assert.ok(s.player.read('props', 'log.html').includes(INK));
+      assert.ok(s.player.read('props', 'note.html').includes(HINT));
+      assert.ok(s.player.read('props', 'invitation.html').includes(HINT));
+    } finally { s.cleanup(); }
+  });
+  it("the terminal style's style.json says it has a printout toggle; letter's does not", () => {
+    const { loadStyle } = require('../../lib/props/styles');
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'hint-vault-'));
+    try {
+      assert.equal(loadStyle('terminal', { vaultPath: empty }).style.json.printoutToggle, true);
+      assert.equal(loadStyle('letter', { vaultPath: empty }).style.json.printoutToggle, false);
+    } finally { fs.rmSync(empty, { recursive: true, force: true }); }
+  });
+});
+
 describe('a published prop', () => {
   const s = buildBoth({ 'Documents/Invitation.md': PROP(), ...PROP_FILES }, { sites: ['player'] });
   after(() => s.cleanup());
