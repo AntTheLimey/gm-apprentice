@@ -2086,7 +2086,7 @@ function headingShape(text, titleFirst) {
 // sections' (title kept). Any failure to parse counts as unstable.
 function pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, options = {}) {
   const fm = page.sourceFrontmatter || page.frontmatter;
-  if (!pcKeepRuleApplies(fm, { pcKeepSections: options.pcKeepSections, storyMoments: options.storyMoments })) return false;
+  if (!pcKeepRuleApplies(fm, { pcKeepSections: options.pcKeepSections })) return false;
   const base = playerSafeMarkdown(page.markdown || '', { excludeCallouts: options.excludeCallouts }).text;
   const transform = (text) => {
     // A missing image embed warns; this is a dry run, so it must stay quiet and leave usedImages alone.

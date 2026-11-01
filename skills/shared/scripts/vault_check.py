@@ -2762,6 +2762,8 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
     # line the site cuts or withholds for either is not called published.
     callouts = (site_settings.get("player_site.hide.callouts")
                 if site_settings is not None else False)
+    story_moments = (site_settings.get("player_site.story.moments")
+                     if site_settings is not None else True)
     pc_keep: list[str] | None = None
     match = {s.casefold() for s in excludes}
     writes: list[tuple[str, str, list[str]]] = []
@@ -2828,7 +2830,8 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
         states, problems = build_lines(
             text, excludes,
             note_type=note_type if isinstance(note_type, str) else None,
-            pc_keep=pc_keep, callouts=callouts)
+            pc_keep=pc_keep, callouts=callouts,
+            story_moments=story_moments is not False)
         kept = _published_linenos(states, fm)
         # With character sheets off the tool withholds a PC's sheet sections
         # whatever they are called; their lines are no more published than a

@@ -548,11 +548,7 @@ Confirm each fix with `site-faults --file "<note>"`.
 
 ## MOMENT_KIND_UNKNOWN
 
-A Memorable Moments line in a session wrap-up is tagged `#moment/<tag>`
-and the tag is none of the five kinds: dramatic, intriguing, funny,
-epic, tragic. The Story page still shows the moment, with no kind. The
-row names the wrap-up and the tag. Per tag, show the line and ask which
-kind it is, or whether to drop the tag. Edit only on an answer.
+Per tag, ask the GM which of the five kinds the moment is, or whether to drop the tag; edit only on an answer.
 
 ## Reporting
 

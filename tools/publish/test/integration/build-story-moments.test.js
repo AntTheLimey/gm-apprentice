@@ -8,7 +8,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 require('../helpers/quiet-legacy-warning.js');
 const { buildBoth, markedTexts } = require('../helpers/gm-build');
-const { storyVault, SECRETS } = require('../helpers/story-vault');
+const { storyVault, SECRETS, WRAP_1 } = require('../helpers/story-vault');
+const { runSiteDoctor } = require('../../lib/site-doctor');
+const { runLeakGate } = require('../../lib/leak-gate');
+const { collectHidden } = require('../../lib/leak-gate/collect');
 const { entry } = require('../../lib/settings/registry');
 const { playerSafeMarkdown } = require('../../lib/processor');
 const { createMarks, unmark, withoutMarked } = require('../../lib/gm-marks');
@@ -83,5 +86,47 @@ describe('player_site.story.moments', () => {
   it('the setting has no gm_site twin, and defaults on', () => {
     assert.equal(entry('gm_site.story.moments'), undefined);
     assert.equal(entry('player_site.story.moments').default, true);
+  });
+
+  it('a note that is not a wrap-up keeps its Memorable Moments section', () => {
+    const npc = buildBoth(storyVault({ 'NPCs/Mara Quill.md':
+      '---\ntype: npc\ntitle: Mara Quill\nstatus: alive\n---\n\n# Mara Quill\n\nA fixer.\n\n## Memorable Moments\n\nNPC-MOMENTS-1: she paid in full.\n' }),
+    { player: { story: { moments: false } }, sites: ['player'] });
+    try {
+      assert.ok(npc.player.read('npcs', 'mara-quill.html').includes('NPC-MOMENTS-1'));
+    } finally { npc.cleanup(); }
+  });
+});
+
+// The doctor and the leak gate read the same rule as the build: with the setting off, the moments are not published,
+// so neither reports on them and the gate's view of what players see holds none of their text.
+describe('player_site.story.moments: doctor --site and the leak gate agree with the build', () => {
+  const GHOST = 'Ghost Person';
+  const withLink = storyVault({ 'Sessions/Session 1 Wrap-Up.md': WRAP_1.replace('MOMENT-CONTEXT-1', `MOMENT-CONTEXT-1 [[${GHOST}]]`) });
+  const unresolved = async (configPath) => {
+    const out = [];
+    await runSiteDoctor({ configPath, json: true }, { out: (line) => out.push(String(line)), detect: () => null });
+    const { findings } = JSON.parse(out.join('\n'));
+    return findings.filter((f) => f.code === 'LINK_UNRESOLVED' && f.detail.includes(GHOST));
+  };
+
+  it('on: the doctor reports a dead link in a moment, and the gate sees the text as visible', async () => {
+    const site = buildBoth(withLink, { sites: ['player'] });
+    try {
+      assert.equal((await unresolved(site.configPath)).length, 1);
+      const hidden = collectHidden({ configPath: site.configPath, outputDir: site.player.dir });
+      assert.ok(hidden.visible.join('\n').includes('MOMENT-QUOTE-1'));
+    } finally { site.cleanup(); }
+  });
+
+  it('off: the doctor reports nothing about moment text, and the gate finds none and shows none', async () => {
+    const site = buildBoth(withLink, { player: { story: { moments: false } }, sites: ['player'] });
+    try {
+      assert.deepEqual(await unresolved(site.configPath), []);
+      const hidden = collectHidden({ configPath: site.configPath, outputDir: site.player.dir });
+      for (const m of MOMENTS) assert.ok(!hidden.visible.join('\n').includes(m), `${m} is visible to the gate`);
+      const r = runLeakGate({ configPath: site.configPath, outputDir: site.player.dir });
+      assert.deepEqual(r.findings, []);
+    } finally { site.cleanup(); }
   });
 });

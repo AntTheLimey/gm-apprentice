@@ -1057,6 +1057,19 @@ class BuildLinesTests(unittest.TestCase):
              (9, "hidden", False, "GM Notes", None)])
         self.assertEqual(states[3].written, "<!-- /gm-only -->## Public")
 
+    def test_story_moments_off_withholds_a_wrap_ups_memorable_moments(self):
+        text = ("---\ntype: session_wrap\n---\n# W\n## Narrative Recap\nhi\n"
+                "## Memorable Moments\nMOMENT\n## Loot\nkey\n")
+        on, _ = vl.build_lines(text, ["GM Notes"], note_type="session_wrap")
+        off, _ = vl.build_lines(text, ["GM Notes"], note_type="session_wrap",
+                                story_moments=False)
+        self.assertEqual([s.excluded_by for s in on], [None] * 7)
+        self.assertEqual([s.excluded_by is not None for s in off],
+                         [False, False, False, True, True, False, False])
+        npc, _ = vl.build_lines(text, ["GM Notes"], note_type="npc",
+                                story_moments=False)
+        self.assertEqual([s.excluded_by for s in npc], [None] * 7)
+
     def test_one_answer_holds_the_put_back_heading_and_an_old_tool_asks_twice(self):
         # #447: a withheld heading in a hidden block withholds the text
         # after the block, in the tool's one `cut` answer. A tool whose
