@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const matter = require('gray-matter');
-const { planMove, applyMove, isBoilerplate } = require('../lib/settings/move');
+const { planMove, applyMove, isBoilerplate, stripSiteKeys } = require('../lib/settings/move');
 const { runSettings } = require('../lib/settings/cli');
 const { readSettings } = require('../lib/settings/read');
 const { readState } = require('../lib/settings/state');
@@ -1188,14 +1188,14 @@ test('a hiding list that is not usable is listed as dropped and adds nothing to 
 
 // ---- #539 fix round ----
 
-test('a number or a blank in a text setting is not carried by the fold: the number is dropped as unusable, the blank is not carried (#539)', () => {
-  for (const [title, isDropped] of [[5, true], ['', false]]) {
+test('a number or a blank in a text setting is not carried by the fold: both are dropped and said so, neither is carried (#539)', () => {
+  for (const [title, why] of [[5, /not usable/], ['', /blank/]]) {
     const { s, file, siteJson } = movedWithSiteFile('', { siteTitle: title, folderMap: { P: 'p' } });
     const r = cliMove({ vault: s.vault }, { foldSiteFile: true });
     assert.equal(r.rc, 0, JSON.stringify(r.data && r.data.blockers));
     assert.deepEqual(r.data.carried.map((c) => c.from), ['folderMap']);
-    assert.deepEqual(r.data.dropped.map((d) => d.from), isDropped ? ['siteTitle'] : []);
-    if (isDropped) assert.match(r.data.dropped[0].why, /not usable/);
+    assert.deepEqual(r.data.dropped.map((d) => d.from), ['siteTitle']);
+    assert.match(r.data.dropped[0].why, why);
     assert.equal(readSettings({ vaultPath: s.vault, siteConfig: {} }).values.player_site.title, null);
     assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), siteJson);
   }
@@ -1262,6 +1262,24 @@ test('--only takes one setting inside a site map and leaves the rest of the map 
   assert.deepEqual(r.data.carried.map((c) => c.from), ['landing.max_npcs']);
   assert.equal(readSettings({ vaultPath: s.vault, siteConfig: {} }).values.player_site.landing.max_npcs, 3);
   assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), { ...siteJson, landing: { max_locations: 2 }, siteTitle: 'T' });
+});
+
+test('a held fold with --only leaves the named key in the site file (#539)', () => {
+  const text = JSON.stringify({ vaultPath: './Vault', landing: { max_npcs: 3, max_locations: 2 }, siteTitle: 'T' });
+  const held = stripSiteKeys(text, { carriedOnly: true, only: new Set(['landing.max_npcs']) });
+  assert.equal(held.siteOut, null);
+  assert.deepEqual(held.removedKeys, []);
+  assert.deepEqual(held.siteAfter.landing, { max_npcs: 3, max_locations: 2 });
+  const folded = stripSiteKeys(text, { only: new Set(['landing.max_npcs']) });
+  assert.deepEqual(folded.removedKeys, ['landing.max_npcs']);
+  assert.deepEqual(folded.siteAfter.landing, { max_locations: 2 });
+});
+
+test('a blank site value is listed as dropped and the report says it was removed (#539)', () => {
+  const { s, file } = movedWithSiteFile('', { siteTitle: '', excludeSections: ['Z'] });
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null });
+  assert.ok((plan.dropped || []).some((d) => d.from === 'siteTitle'), JSON.stringify(plan.dropped));
+  assert.match(plan.lines.join('\n'), /siteTitle.*(removed|is removed).*not carried over/);
 });
 
 // ---- What a site folder's vault.config.json still holds: carried into the vault, then taken out of the site file ----

@@ -192,7 +192,7 @@ function stripSiteKeys(siteText, { carriedOnly = false, leaveFallback = false, o
   }
   // A setting inside one of the site file's old maps named on its own (`--only landing.max_npcs`): just that name
   // comes out, and the map goes only when nothing is left in it.
-  for (const name of only || []) {
+  for (const name of carriedOnly ? [] : only || []) {   // (a held fold takes nothing out of the file: the fold never ran)
     if (!SITE_BOXES.some((b) => name.startsWith(`${b.root}.`))) continue;
     const segs = name.split('.');
     const parent = getPath(siteAfter, segs.slice(0, -1));
@@ -1083,7 +1083,12 @@ function foldInto(vault, site, out, { lists = true } = {}) {
       say(out, unusable, unusable.replace('so it was removed', 'so it is removed'));
       continue;
     }
-    if (can.blank) continue;                                            // nothing to carry
+    if (can.blank) {                                                    // nothing to carry, but it is taken out of the site file
+      out.dropped.push({ from, why: 'it is blank, so there is nothing to carry' });
+      const blank = `\`${from}\` in the site folder's vault.config.json is blank, so it was removed and not carried over.`;
+      say(out, blank, blank.replace('so it was removed', 'so it is removed'));
+      continue;
+    }
     if (covers(getPath(now, segs), value)) continue;                    // the vault's settings already say it
     const mine = nowRead.origins[e.name];
     const vaultSets = mine !== undefined && mine !== 'default' && mine !== 'inherit';
