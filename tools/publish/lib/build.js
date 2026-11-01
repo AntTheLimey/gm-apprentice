@@ -1207,8 +1207,10 @@ function buildSite(options) {
   const storyProbe = probeSpine(pages, storyPairs, imageMap);
   // The GM site: the addresses of the player site's own Story pages, from its pages and its pairs, so each GM Story
   // page can say what players see there (story-spine.js `players`). Before the fold, as the player site reads them.
-  const playerStory = gm ? new Set(probeSpine(pages.filter((p) => onPlayerSite.has(p)),
-    new Map([...hubWrapUps].filter(([hub, wrap]) => onPlayerSite.has(hub) && onPlayerSite.has(wrap))),
+  // Its pairs keep `linked`: a wrap-up linked to a session players do not see never stands in for another session.
+  const playerPairs = gm ? Object.assign(new Map([...hubWrapUps].filter(([hub, wrap]) => onPlayerSite.has(hub) && onPlayerSite.has(wrap))),
+    { linked: hubWrapUps.linked }) : null;
+  const playerStory = gm ? new Set(probeSpine(pages.filter((p) => onPlayerSite.has(p)), playerPairs,
     show.has('notes') ? scanAttachments(scanConfigFor(config, hideFrom)) : imageMap).map((u) => u.outputPath)) : null;
   const storyPlayers = gm ? { has: (out) => playerStory.has(out), shows: (page) => onPlayerSite.has(page) } : null;
   applyFold(foldPlan(storyProbe), linkMap);

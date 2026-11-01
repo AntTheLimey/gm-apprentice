@@ -241,6 +241,23 @@ describe('the GM Story page where players see something else', () => {
   });
 });
 
+// A wrap-up linked only through a session players do not see (its `documents.wrap_up`) never stands in for another
+// session, on the player site or in the GM site's reading of it.
+describe('the GM Story page: a wrap-up linked only to a session players do not see', () => {
+  it('a session whose own wrap-up is hidden: the banner says players have no page, not another one', () => {
+    const hidden = (t) => t.replace('---\n', '---\npublish: false\n');
+    const other = '---\ntype: session_wrap\n---\n\n# Other Wrap-Up\n\n## Narrative Recap\n\nOTHER-RECAP-1: another night.\n';
+    const s = buildBoth(storyVault({ 'Sessions/Session 1.md': null, 'Sessions/S1/Session 1.md': SESSION(1), 'Sessions/S1/Other Wrap-Up.md': other,
+      'Sessions/Session 1 Wrap-Up.md': hidden(WRAP_1), 'Sessions/Session 9.md': hidden(SESSION(9).replace('Session 9 Wrap-Up', 'Other Wrap-Up')) }));
+    try {
+      assert.ok(!s.player.exists(...STORY_1.split('/')), 'players have no Story page for session 1');
+      const banner = /<div class="gm-band gm-band--hidden gm-mark"[^>]*>([^<]*)<\/div>/.exec(read(s.gm, STORY_1));
+      assert.ok(banner, 'the banner');
+      assert.equal(banner[1], "Players don't see this page: publish: false");
+    } finally { s.cleanup(); }
+  });
+});
+
 // A held-back wrap-up with no recap of its own: the unit's recap falls back to the players' own, which shows once,
 // unmarked, and the mark holds only the wrap-up's parts.
 describe('the GM Story page: a held-back wrap-up with no recap of its own', () => {
