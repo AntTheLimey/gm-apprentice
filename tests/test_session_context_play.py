@@ -430,6 +430,47 @@ class FindPlanFallbackTests(unittest.TestCase):
         self.assertIsNone(sc._find_plan(files, "chapter five", 6))
 
 
+class ThreadSecondTierTests(unittest.TestCase):
+    """A rewritten sheet thread matches its Wrap-Up bullet on shared key
+    words when the ratio test misses (#537)."""
+
+    def test_the_venn_pair_matches(self):
+        self.assertTrue(sc.threads_related(
+            "Dr [[Venn]] was drugged in his study; someone knows the "
+            "cylinder is loose", "Venn drugged in study (by whom?)"))
+
+    def test_link_plus_two_words_matches(self):
+        self.assertTrue(sc.threads_related(
+            "[[Cylinder]] taken to the Calcutta warehouse by Roy",
+            "Who moved the [[Cylinder]] to the Calcutta warehouse?"))
+
+    def test_unrelated_threads_sharing_a_common_word_do_not(self):
+        self.assertFalse(sc.threads_related(
+            "Find the missing ledger before the audit",
+            "Repay Bram before the winter"))
+
+    def test_same_name_alone_does_not(self):
+        self.assertFalse(sc.threads_related(
+            "[[Venn]] owes the party a favour",
+            "[[Venn]] was seen leaving the quay at night"))
+
+    def test_report_ages_a_reworded_thread(self):
+        tmp = Path(tempfile.mkdtemp(prefix="thread-tier-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        (tmp / "Ada.md").write_text(
+            "---\ntype: pc\n---\n\n## Current Status\n\n**Open threads:**\n"
+            "- Dr [[Venn]] was drugged in his study; someone knows the "
+            "cylinder is loose\n", encoding="utf-8")
+        (tmp / "Wrap.md").write_text(
+            "---\ntype: session_wrap\nsession: 3\n---\n\n## GM Notes\n\n"
+            "### What Carries Forward\n\n#### Unresolved Threads\n\n"
+            "- Venn drugged in study (by whom?)\n",
+            encoding="utf-8")
+        report = sc.thread_report(load_files(tmp), 5, None, tmp)
+        self.assertIn("first=3\tlast=3\tage=2", report)
+        self.assertNotIn("not in any wrap-up", report)
+
+
 class ThreadReportTests(unittest.TestCase):
     """`thread_report(files, current, chapter, vault)` and `--threads`."""
 

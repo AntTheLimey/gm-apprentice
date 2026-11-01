@@ -369,6 +369,50 @@ def _norm_thread(text: str) -> str:
     return re.sub(r"\s+", " ", text).strip().casefold()
 
 
+_THREAD_LINK_RE = re.compile(r"\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]")
+_THREAD_STOP = frozenset("""
+about after again also and any are because been before being but can could
+did does for from had has have her him his how into its not now off one our
+out over she should some than that the their them then there they this those
+too under was were what when where which who whom why will with would you
+your also away back came come each even ever every few first get gave get
+give got going gone good last left let like made make many may more most much
+must never new next only other own put said say see seen she since still such
+take taken took told two upon use very want went while without yet""".split())
+
+
+def _thread_words(raw: str) -> tuple[set[str], set[str]]:
+    """(wikilink targets, significant words) of a thread line, both
+    casefolded. A word is significant when it has three or more letters
+    and is no stop word; a link target's own words count as words."""
+    links = {m.group(1).rpartition("/")[2].replace("_", " ").strip()
+             .casefold() for m in _THREAD_LINK_RE.finditer(raw)}
+    words = {w for w in re.findall(r"[^\W\d_]{3,}", _norm_thread(raw))
+             if w not in _THREAD_STOP}
+    return links, words
+
+
+def threads_related(a: str, b: str) -> bool:
+    """The second matching tier for a PC thread and a Wrap-Up bullet the
+    ratio test missed (a rewritten sheet line keeps its key words, not
+    their order or length). They share a person, place or thing (a
+    wikilink target of one that the other links or names) and two further
+    significant words; or, with no such name, four significant words. Either
+    way those words must be half of the shorter line's, so a long thread
+    and a short bullet that only meet over a common name stay apart."""
+    links_a, words_a = _thread_words(a)
+    links_b, words_b = _thread_words(b)
+    shared = words_a & words_b
+    names = {t for t in links_a | links_b
+             if (t in links_a and t in links_b)
+             or set(t.split()) <= (words_b if t in links_a else words_a)}
+    named = {w for t in names for w in t.split()}
+    extra = len(shared - named)
+    need = 2 if names else 4
+    smaller = min(len(words_a), len(words_b))
+    return extra >= need and extra * 2 >= smaller
+
+
 _POINTER_RE = re.compile(r"\[\[([^\[\]|#]+)(?:[#|][^\[\]]*)?\]\]")
 
 
@@ -568,6 +612,14 @@ def play_brief(files, plan_rel: str, plan_text: str) -> str:
     return "\n\n".join(parts)
 
 
+def _ratio_match(thread: str, norm: str, bullet: str) -> bool:
+    return SequenceMatcher(None, norm, _norm_thread(bullet)).ratio() >= 0.6
+
+
+def _words_match(thread: str, _norm: str, bullet: str) -> bool:
+    return threads_related(thread, bullet)
+
+
 def thread_report(files, current: int, chapter, vault: Path) -> str:
     """Per-PC Open-threads ages against Wrap-Up Unresolved Threads / PC
     Carry-Forward bullets, plus wrap-up bullets that never made it onto
@@ -623,14 +675,16 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
         for thread in thread_bullets:
             norm = _norm_thread(thread)
             hits: list[int] = []
-            for n, unresolved, carry in wrap_ups:
-                for bullet in unresolved + carry:
-                    if SequenceMatcher(None, norm,
-                                      _norm_thread(bullet)).ratio() >= 0.6:
-                        hits.append(n)
-                        if bullet in unresolved:
-                            matched.add((n, bullet))
-                        break
+            for tier in (_ratio_match, _words_match):
+                for n, unresolved, carry in wrap_ups:
+                    for bullet in unresolved + carry:
+                        if tier(thread, norm, bullet):
+                            hits.append(n)
+                            if bullet in unresolved:
+                                matched.add((n, bullet))
+                            break
+                if hits:
+                    break  # the looser tier only reads what the first missed
             if hits:
                 first, last = min(hits), max(hits)
                 age = current - last
