@@ -158,9 +158,9 @@ path>"`. Then use `references/troubleshooting.md`: name the failure
 mode, explain the cause plainly, guide the fix step by step, and
 offer to apply it. A build warning that ends "campaign-qa's Site
 Faults check fixes these" is a fault in the notes: hand it to
-campaign-qa. Any other warning (a prop's, say) names its own cause
-and fix: read it as written and act on that, rather than explaining
-it from this guide.
+campaign-qa. Read any other warning (a prop's, say) as written and
+act on the cause and fix it names, rather than explaining it from
+`references/troubleshooting.md`.
 
 ### 4. Schema migrations
 ("I added a new entity type", "campaign-organizer was updated",
