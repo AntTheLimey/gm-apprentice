@@ -468,7 +468,7 @@ function buildSite(options) {
   // is left and stays recorded. A record that could not be read is left as it is, and removes nothing.
   function cleanKeptRecord() {
     if (keptRecordProblem) {
-      printWarning(`${path.join(CACHE_FOLDER, 'kept-writes.json')} in the site folder could not be read (${keptRecordProblem}); it is left as it is, so no kept-folder copy it names is removed this build. Delete it to start a new record (copies it named then stay in the kept folders until removed by hand).`);
+      printWarning(`${CACHE_FOLDER}/kept-writes.json in the site folder could not be read (${keptRecordProblem}); it is left as it is, so no kept-folder copy it names is removed this build. Delete it to start a new record (copies it named then stay in the kept folders until removed by hand).`);
       return;
     }
     const next = {};
@@ -494,7 +494,7 @@ function buildSite(options) {
     for (const [out, hash] of keptWritten.values()) next[out] = hash;
     try { writeKeptRecord(keptRecord, next); } catch (e) {
       if (!e.code) throw e;
-      printWarning(`could not write ${path.join(CACHE_FOLDER, 'kept-writes.json')} in the site folder (${e.code}); the kept-folder files this build wrote are not recorded`);
+      printWarning(`could not write ${CACHE_FOLDER}/kept-writes.json in the site folder (${e.code}); the kept-folder files this build wrote are not recorded`);
       return;
     }
     ignoreCacheInGit(configDir);

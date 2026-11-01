@@ -604,7 +604,8 @@ describe('a kept-folder prop that stops shipping', () => {
   });
 
   for (const which of ['the record', 'the older clean-up']) {
-    it(`a copy ${which} cannot remove is a warning naming it; the build carries on and the record keeps it`, () => {
+    it(`a copy ${which} cannot remove is a warning naming it; the build carries on and the record keeps it`, (t) => {
+      if (process.platform === 'win32' || (process.getuid && process.getuid() === 0)) { t.skip('file permissions do not stop this user'); return; }
       const s = setup();
       const dir = path.join(s.player.dir, 'gazetteer');
       try {
