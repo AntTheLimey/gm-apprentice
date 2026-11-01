@@ -79,45 +79,51 @@ const runsText = (label, runs) => {
   return `${label}: ${shown}${runs.length > RUNS_SHOWN ? ` and ${runs.length - RUNS_SHOWN} more` : ''}`;
 };
 
-// A sentence number for each of a page's words (pageWords), read from the same text: a new block (a line) or the end of
-// a sentence starts the next one. null when the two readings disagree on the words (then a `rest` phrase takes nothing).
-const SENTENCE_END = /(?<=[.!?…]["'”’)\]]*)\s+/;
-function sentencesOf(rel, raw, words) {
+// A block number for each of a page's words (pageWords), read from the same text: each line of it is a block (a
+// paragraph, a list item, a table cell, a line a <br> ends). null when the two readings disagree on the words; then a
+// `rest` phrase takes nothing past its own words, and the row says why.
+function blocksOfWords(rel, raw, words) {
   const ids = [];
   let n = 0;
   for (const line of fileText(rel, withoutPropBar(raw), { scripts: false }).split('\n')) {
-    for (const sentence of line.split(SENTENCE_END)) {
-      const count = wordsOf(sentence).length;
-      if (!count) continue;
-      for (let i = 0; i < count; i++) ids.push(n);
-      n += 1;
-    }
+    const count = wordsOf(line).length;
+    if (!count) continue;
+    for (let i = 0; i < count; i++) ids.push(n);
+    n += 1;
   }
   return ids.length === words.length ? ids : null;
 }
 
-// An --expect-gone phrase: its words, and `rest` when it ends "..." or "…" (the phrase and the rest of its sentence).
+const MARKER = /(?:\.\.\.|…)\s*$/;
+// An --expect-gone phrase: its words, and `rest` when it ends "..." or "…" (the phrase and the rest of its block).
 function expectedPhrase(text) {
-  const rest = /(?:\.\.\.|…)\s*$/.test(String(text));
-  return { words: wordsOf(String(text).replace(/(?:\.\.\.|…)\s*$/, '')), rest };
+  const rest = MARKER.test(String(text));
+  return { words: wordsOf(String(text).replace(MARKER, '')), rest };
 }
 
-// Whether a removed run is nothing but expected-gone phrases, one after another (a crumb and a footer the old page
-// carried, side by side once the words between them are matched). A `rest` phrase also takes the words after it up to
-// the end of its sentence (`sentence`: each word's sentence number; none taken without it), never further back or on.
-function onlyExpected(words, phrases, sentence = null) {
-  if (!phrases.length) return false;
+// How many words past their own a removed run's `rest` phrases took, when the run is nothing but expected-gone
+// phrases one after another (a crumb and a footer the old page carried, side by side once the words between them are
+// matched); else null. A `rest` phrase also takes the words after it to the end of its block (`block`: each word's
+// block number; none taken without it), never further back or on. The fewest words taken wins.
+function onlyExpected(words, phrases, block = null) {
+  if (!phrases.length) return null;
   const at = (p, j) => p.length <= words.length - j && p.every((w, k) => words[j + k] === w);
-  const ok = [true];
+  const took = [0];
   for (let i = 1; i <= words.length; i++) {
-    ok[i] = phrases.some(({ words: p }) => p.length <= i && ok[i - p.length] && at(p, i - p.length));
-    if (ok[i] || !sentence) continue;
-    // A rest phrase starting at j whose sentence runs at least to word i - 1.
-    for (let j = i - 1; j >= 0 && !ok[i] && sentence[j] === sentence[i - 1]; j--) {
-      ok[i] = ok[j] && phrases.some((ph) => ph.rest && ph.words.length <= i - j && at(ph.words, j));
+    let best = Infinity;
+    for (const { words: p } of phrases) {
+      if (p.length <= i && took[i - p.length] !== Infinity && at(p, i - p.length)) best = Math.min(best, took[i - p.length]);
     }
+    // A rest phrase starting at j whose block runs at least to word i - 1.
+    for (let j = i - 1; block && j >= 0 && block[j] === block[i - 1]; j--) {
+      if (took[j] === Infinity) continue;
+      for (const ph of phrases) {
+        if (ph.rest && ph.words.length < i - j && at(ph.words, j)) best = Math.min(best, took[j] + (i - j - ph.words.length));
+      }
+    }
+    took[i] = best;
   }
-  return ok[words.length];
+  return took[words.length] === Infinity ? null : took[words.length];
 }
 
 // The old page's words beside the new page's: { removed, added } runs of words.
@@ -141,12 +147,17 @@ function servedPageRow(address, oldRaw, newRaw, expected) {
   const { removed, added, removedAt } = wordRuns(oldWords, pageWords(address, newRaw.toString('utf8')));
   const addedText = runsText('added', added);
   if (!removed.length) return { kind: 'same-words', address, detail: addedText || 'other markup, the same words' };
-  const sentences = expected.some((p) => p.rest) ? sentencesOf(address, oldRaw.toString('utf8'), oldWords) : null;
-  const sentenceOf = (i, run) => (sentences ? sentences.slice(removedAt[i], removedAt[i] + run.length) : null);
-  if (removed.every((run, i) => onlyExpected(run, expected, sentenceOf(i, run)))) {
-    return { kind: 'same-words', address, detail: [runsText('expected gone', removed), addedText].filter(Boolean).join('; ') };
+  const marked = expected.some((p) => p.rest);
+  const blocks = marked ? blocksOfWords(address, oldRaw.toString('utf8'), oldWords) : null;
+  const blockOf = (i, run) => (blocks ? blocks.slice(removedAt[i], removedAt[i] + run.length) : null);
+  const took = removed.map((run, i) => onlyExpected(run, expected, blockOf(i, run)));
+  if (took.every((n) => n !== null)) {
+    const extra = took.reduce((a, b) => a + b, 0);
+    const said = extra ? `the ... marker took ${extra} more word${extra === 1 ? '' : 's'}` : '';
+    return { kind: 'same-words', address, detail: [runsText('expected gone', removed), said, addedText].filter(Boolean).join('; ') };
   }
-  return { kind: 'words-differ', address, detail: [runsText('removed', removed), addedText].filter(Boolean).join('; ') };
+  const unread = marked && !blocks ? "the ... marker could not read this page's blocks, so it took only its own words" : '';
+  return { kind: 'words-differ', address, detail: [runsText('removed', removed), addedText, unread].filter(Boolean).join('; ') };
 }
 
 function listingRow(address, oldRaw, newRaw, isServed, asFolder) {

@@ -297,9 +297,11 @@ an error.
   --serves <folder>      A folder the live site serves that the move replaces (repeatable)
   --listing <address>    An old index page the move replaces with a listing (repeatable)
   --expect-gone <phrase> Words the move takes off a page on purpose (repeatable).
-                         Ending it with ... ("Keeper prop...") also takes the
-                         rest of that sentence, never the words before it or
-                         the next sentence
+                         Ending it with ... ("Keeper prop...") also takes every
+                         word after it to the end of its block (its paragraph,
+                         list item, table cell, or line ended by <br>), never
+                         the words before it or the next block; the row says
+                         how many more words it took
   --old, --new <dir>     compare: the two site folders
   --json                 { rows: [{ kind, address, detail, blocker }], blockers, served, pages, same }
                          (move-check adds leaks: [{ code, page, text, note, reason }])

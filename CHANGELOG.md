@@ -15,7 +15,7 @@ A tidy of the props feature: the build no longer writes through a linked folder 
 
 - Every prop page's bar now says how to print it well: tick Background graphics and set margins to None. A style whose `style.json` says `"printout_toggle": true` (the plugin's terminal style does) adds that the printout look uses less ink. The hint is hidden when the page prints, and `props compare` never counts it as page words.
 - `gm-apprentice-publish props links <file>...` prints the local files a page or stylesheet names, as the build reads them when it copies a hand-made prop.
-- `props compare --expect-gone` takes a phrase ending in `...` to mean the phrase and the rest of its sentence. A phrase without it still has to match whole.
+- `props compare --expect-gone` takes a phrase ending in `...` to mean the phrase and the rest of its block (its paragraph, list item, table cell or line), and the row says how many more words it took. A phrase without it still has to match whole.
 
 ### Changed
 

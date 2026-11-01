@@ -303,32 +303,37 @@ test('a link inside a comment or a script is not a kept link', (t) => {
   }
 });
 
-// #534: a phrase ending "..." stands for itself and the rest of its sentence; without the marker the whole-phrase rule
-// above holds exactly.
-test('an expected-gone phrase ending ... takes the rest of its sentence', (t) => {
-  const old = page('<p>Meet me at the old mill.</p><p>Keeper prop: half-sheet, fold in three.</p>');
-  const now = page('<p>Meet me at the old mill.</p>');
+// #534: a phrase ending "..." stands for itself and the rest of its block (a paragraph, a list item, a table cell, a line
+// ended by <br>); without the marker the whole-phrase rule above holds exactly.
+// A real line from the Canticle site before the props move (three sentences in one paragraph).
+const CANTICLE_CREDITS = '<p class="credits">Keeper prop — Canticle of the End. Half-sheet; print with &ldquo;Background graphics&rdquo; ticked and trim to the paper. Fold once around the Ghosh letter.</p>';
+
+test('an expected-gone phrase ending ... takes the rest of its block: the real Canticle credits line clears', (t) => {
+  const old = page(`<h1>A letter</h1><p>Meet me at the old mill.</p>${CANTICLE_CREDITS}`);
+  const now = page('<h1>A letter</h1><p>Meet me at the old mill.</p>');
   const dirs = sites(t, { 'props/letter.html': old }, { 'props/letter.html': now });
   assert.equal(rowOf(run(dirs, { expectGone: ['Keeper prop'] }), 'props/letter.html').kind, 'words-differ', 'no marker: the rest still blocks');
   for (const marked of ['Keeper prop...', 'keeper prop …', 'Keeper prop…']) {
     const r = run(dirs, { expectGone: [marked] });
     const row = rowOf(r, 'props/letter.html');
     assert.equal(row.kind, 'same-words', marked);
-    assert.match(row.detail, /expected gone: "keeper prop half-sheet fold in three"/);
+    assert.match(row.detail, /expected gone: "keeper prop canticle of the end half-sheet/);
+    assert.match(row.detail, /the \.\.\. marker took 21 more words/, row.detail);
     assert.equal(r.blockers, 0);
   }
 });
 
-test('a phrase ending ... never takes the next sentence or an unrelated run', (t) => {
-  const old = page('<p>Meet me at the old mill.</p><p>Keeper prop: fold in three. Burn after reading.</p><p>Signed, a friend.</p>');
-  const nextGone = sites(t, { 'props/letter.html': old }, { 'props/letter.html': page('<p>Meet me at the old mill.</p><p>Signed, a friend.</p>') });
-  const row = rowOf(run(nextGone, { expectGone: ['keeper prop...'] }), 'props/letter.html');
-  assert.equal(row.kind, 'words-differ');
-  assert.match(row.detail, /burn after reading/);
-  assert.equal(rowOf(run(nextGone, { expectGone: ['keeper prop...', 'burn after reading'] }), 'props/letter.html').kind, 'same-words');
-  const otherGone = sites(t, { 'props/letter.html': old }, { 'props/letter.html': page('<p>Keeper prop: fold in three. Burn after reading.</p><p>Signed, a friend.</p>') });
-  assert.equal(rowOf(run(otherGone, { expectGone: ['keeper prop...'] }), 'props/letter.html').kind, 'words-differ');
-  // The marker reaches no further back than its phrase: words before it in the sentence still block.
-  const before = sites(t, { 'props/letter.html': page('<p>Meet me.</p><p>Note: keeper prop, fold.</p>') }, { 'props/letter.html': page('<p>Meet me.</p>') });
-  assert.equal(rowOf(run(before, { expectGone: ['keeper prop...'] }), 'props/letter.html').kind, 'words-differ');
+test('a phrase ending ... stops at the end of its block, never before its phrase', (t) => {
+  const kept = '<p>Meet me at the old mill.</p>';
+  const check = (oldBody, newBody, gone, kind, label) => {
+    const dirs = sites(t, { 'props/letter.html': page(oldBody) }, { 'props/letter.html': page(newBody) });
+    assert.equal(rowOf(run(dirs, { expectGone: gone }), 'props/letter.html').kind, kind, label);
+  };
+  check(`${kept}<p>Keeper prop: fold.</p><p>Burn after reading.</p>`, kept, ['keeper prop...'], 'words-differ', 'the next paragraph');
+  check(`${kept}<p>Keeper prop: fold.</p><p>Burn after reading.</p>`, kept, ['keeper prop...', 'burn after reading'], 'same-words', 'both named');
+  check(`${kept}<p>Keeper prop: fold.<br>Burn after reading.</p>`, kept, ['keeper prop...'], 'words-differ', 'a <br>');
+  check(`${kept}<ul><li>Keeper prop: fold.</li><li>Burn after reading.</li></ul>`, kept, ['keeper prop...'], 'words-differ', 'the next list item');
+  check(`${kept}<table><tr><td>Keeper prop: fold.</td><td>Burn after reading.</td></tr></table>`, kept, ['keeper prop...'], 'words-differ', 'the next cell');
+  check(`${kept}<p>Note: keeper prop, fold.</p>`, kept, ['keeper prop...'], 'words-differ', 'words before the phrase');
+  check(`<p>Keeper prop: fold.</p>${kept}`, `<p>Keeper prop: fold.</p><p>Meet me at the mill.</p>`, ['keeper prop...'], 'words-differ', 'an unrelated run');
 });
