@@ -351,3 +351,20 @@ test("a ... phrase on a page whose blocks cannot be read says so on the row", ()
   // Read as usual, the same page clears.
   assert.equal(servedPageRow('props/letter.html', old, now, [expectedPhrase('Keeper prop...')]).kind, 'same-words');
 });
+
+test('a page with the bar an older tool wrote compares equal to the same page with today\'s bar', (t) => {
+  const OLD_BAR = '<nav class="gma-prop-bar" aria-label="Back to the campaign site"><style>'
+    + '.gma-prop-bar{display:flex;gap:1rem;align-items:center;margin:0;padding:.5rem 1rem;'
+    + 'background:#0d1117;color:#c9d1d9;font:14px/1.4 system-ui,-apple-system,sans-serif}'
+    + '.gma-prop-bar a{color:#58a6ff;text-decoration:none}.gma-prop-bar a:hover{text-decoration:underline}'
+    + '@media print{.gma-prop-bar{display:none}}</style>'
+    + '<a href="../documents/letter.html">&larr; The Letter</a><a href="../props.html">All props</a></nav>';
+  const r = run(sites(t, { 'props/letter.html': withPropBar(LETTER, OLD_BAR) }, { 'props/letter.html': withPropBar(LETTER, BAR) }));
+  const row = rowOf(r, 'props/letter.html');
+  assert.equal(row.kind, 'same-words', JSON.stringify(row));
+  assert.equal(row.blocker, false);
+  assert.doesNotMatch(row.detail, /letter|props/i);
+  assert.equal(r.blockers, 0);
+  // A bar that only looks like the older one is page words.
+  assert.ok(pageWords('a.html', OLD_BAR.replace('display:flex', 'display:block')).includes('props'));
+});

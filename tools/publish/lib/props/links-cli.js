@@ -5,6 +5,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const links = require('./links');
+const { textOf } = require('./plan');
 
 // A file that cannot be read: the one error said as a line; any other is the tool's own fault and is thrown.
 class UnreadableFile extends Error {}
@@ -13,7 +14,8 @@ class UnreadableFile extends Error {}
 function linksOf(files) {
   return files.map((file) => {
     let text;
-    try { text = fs.readFileSync(file, 'utf8'); } catch (e) {
+    // The build's one decoder (#508): UTF-16 and windows-1252 pages read as the build reads them.
+    try { text = textOf(fs.readFileSync(file)).text; } catch (e) {
       if (!e.code) throw e;
       throw new UnreadableFile(`${file} could not be read (${e.code})`);
     }

@@ -56,3 +56,24 @@ test('runLinks rethrows an internal error', (t) => {
   console.error = () => {};
   try { assert.throws(() => cli.runLinks({ files: [page], json: true }), /a bug/); } finally { console.error = saved; }
 });
+
+test('props links reads a page and a stylesheet as the build does: UTF-16 with or without a mark, windows-1252', (t) => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'props-links-enc-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const html = '<link rel="stylesheet" href="map.css"><img src="assets/caf\u00e9.png">';
+  const css = 'body { background: url("assets/caf\u00e9.jpg"); }';
+  const bom = Buffer.from([0xff, 0xfe]);
+  const files = {
+    'le-bom.html': Buffer.concat([bom, Buffer.from(html, 'utf16le')]),
+    'le-bare.html': Buffer.from(html, 'utf16le'),
+    'be-bare.html': Buffer.from(html, 'utf16le').swap16(),
+    'le.css': Buffer.concat([bom, Buffer.from(css, 'utf16le')]),
+    'w1252.html': Buffer.from(html, 'latin1'),
+  };
+  for (const [name, bytes] of Object.entries(files)) fs.writeFileSync(path.join(dir, name), bytes);
+  const r = run('--json', ...Object.keys(files).map((n) => path.join(dir, n)));
+  assert.equal(r.status, 0, r.stderr);
+  const got = Object.fromEntries(JSON.parse(r.stdout).map((f) => [path.basename(f.file), f.refs]));
+  for (const n of ['le-bom.html', 'le-bare.html', 'be-bare.html', 'w1252.html']) assert.deepEqual(got[n], ['map.css', 'assets/caf\u00e9.png'], n);
+  assert.deepEqual(got['le.css'], ['assets/caf\u00e9.jpg']);
+});

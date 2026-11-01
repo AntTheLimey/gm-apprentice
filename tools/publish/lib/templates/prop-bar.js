@@ -5,6 +5,12 @@
 // own style, and it is hidden when the page is printed: a printed prop is the prop alone.
 const { escapeHtml } = require('../processor');
 
+// The style an earlier tool wrote (before the print hint, #524): still read, so a site built by it compares with a new one.
+const OLD_BAR_STYLE = '.gma-prop-bar{display:flex;gap:1rem;align-items:center;margin:0;padding:.5rem 1rem;'
+  + 'background:#0d1117;color:#c9d1d9;font:14px/1.4 system-ui,-apple-system,sans-serif}'
+  + '.gma-prop-bar a{color:#58a6ff;text-decoration:none}.gma-prop-bar a:hover{text-decoration:underline}'
+  + '@media print{.gma-prop-bar{display:none}}';
+
 const BAR_STYLE = '.gma-prop-bar{display:flex;flex-wrap:wrap;gap:.25rem 1rem;align-items:center;margin:0;padding:.5rem 1rem;'
   + 'background:#0d1117;color:#c9d1d9;font:14px/1.4 system-ui,-apple-system,sans-serif}'
   + '.gma-prop-bar a{color:#58a6ff;text-decoration:none}.gma-prop-bar a:hover{text-decoration:underline}'
@@ -15,13 +21,18 @@ const BAR_STYLE = '.gma-prop-bar{display:flex;flex-wrap:wrap;gap:.25rem 1rem;ali
 const HINT = 'To print: tick Background graphics, set margins to None.';
 const INK = ' The printout look uses less ink.';
 
-const BAR_OPEN = `<nav class="gma-prop-bar" aria-label="Back to the campaign site"><style>${BAR_STYLE}</style>`;
+const barOpen = (style) => `<nav class="gma-prop-bar" aria-label="Back to the campaign site"><style>${style}</style>`;
+const BAR_OPEN = barOpen(BAR_STYLE);
+const OLD_BAR_OPEN = barOpen(OLD_BAR_STYLE);
 const BAR_CLOSE = '</nav>';
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // The bar as propBar writes it, and only that: its exact opening, its links (each escaped, so no '<' inside), its print
 // hint as written (either form), its close. props/compare.js reads a page without it, so the hint is never page words.
 const HINT_WRITTEN = `(?:<span class="gma-prop-hint">${escapeRe(HINT)}(?:${escapeRe(INK)})?</span>)?`;
-const BAR_WRITTEN = new RegExp(`${escapeRe(BAR_OPEN)}(?:<a href="[^"<]*">[^<]*</a>)*${HINT_WRITTEN}${escapeRe(BAR_CLOSE)}`, 'g');
+// The older bar had no print hint, so its opening takes none.
+const LINKS_WRITTEN = '(?:<a href="[^"<]*">[^<]*</a>)*';
+const BAR_WRITTEN = new RegExp(`${escapeRe(BAR_OPEN)}${LINKS_WRITTEN}${HINT_WRITTEN}${escapeRe(BAR_CLOSE)}`
+  + `|${escapeRe(OLD_BAR_OPEN)}${LINKS_WRITTEN}${escapeRe(BAR_CLOSE)}`, 'g');
 
 function propBar({ noteHref = null, noteTitle = '', collectionHref = null, printout = false } = {}) {
   const links = [];
