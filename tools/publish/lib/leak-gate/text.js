@@ -47,6 +47,10 @@ function blocksOf(markdown, { headings = false } = {}) {
     // A callout's first line is its title: a block of its own, so it does not run into the text below it.
     if (/^\s*\[![\w-]+\]/.test(quoted)) { flush(); const title = quoted.replace(/^\s*\[![\w-]+\][+-]?\s*/, '').trim(); if (title) blocks.push(title); continue; }
     const line = quoted.trim();
+    // A line that is one HTML comment (a gm-only fence's edge) ends a paragraph on the page, and is no words of it: its
+    // own text, if any, is a block of its own.
+    const comment = /^<!--([\s\S]*?)-->$/.exec(line);
+    if (comment) { flush(); if (comment[1].trim()) blocks.push(comment[1].trim()); continue; }
     if (headings && /^#{1,6}\s/.test(line)) { flush(); blocks.push(line.replace(/^#{1,6}\s+/, '').replace(/\s#+$/, '')); continue; }
     if (!line || /^(?:```|~~~)/.test(line) || /^#{1,6}\s/.test(line) || TABLE_RULE.test(line)) { flush(); continue; }
     if (line.startsWith('|')) {
