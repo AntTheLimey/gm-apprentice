@@ -171,10 +171,26 @@ describe('pcTemplate header with no portrait (#485)', () => {
       { html: '' }, [], noop, cfg, {}, undefined, look);
     const header = html.slice(html.indexOf('<div class="hero-cinematic hero-cinematic-no-img">'));
     assert.ok(header.length > 0 && html.includes('hero-cinematic-no-img'), 'the no-portrait header is used');
-    const overlay = header.indexOf('<div class="hero-cinematic-overlay">');
+    const open = '<div class="hero-cinematic-overlay">';
+    const overlay = header.indexOf(open);
     assert.ok(overlay > 0, 'the header has an overlay');
-    assert.ok(header.indexOf('<h1>Hero</h1>') > overlay, 'the name sits inside the overlay');
-    assert.ok(header.indexOf('<div class="meta">') > overlay, 'the meta line sits inside the overlay');
-    assert.ok(header.indexOf('class="pc-portrait"') < overlay, 'the initials stay beside it');
+    // Walk the divs from the overlay's opening tag to the one that closes it.
+    let depth = 0;
+    let close = -1;
+    for (const m of header.slice(overlay).matchAll(/<div\b|<\/div>/g)) {
+      depth += m[0] === '</div>' ? -1 : 1;
+      if (depth === 0) { close = overlay + m.index; break; }
+    }
+    assert.ok(close > overlay, 'the overlay closes');
+    const inside = (needle, what) => {
+      const at = header.indexOf(needle);
+      assert.ok(at >= 0, `${what} is in the header`);
+      assert.ok(at > overlay && at < close, `${what} sits inside the overlay`);
+    };
+    inside('<h1>Hero</h1>', 'the name');
+    inside('<div class="meta">', 'the meta line');
+    for (const label of ['Player', 'Occupation', 'Status']) inside(`<span class="label">${label}</span>`, `the ${label} label`);
+    const initials = header.indexOf('class="pc-portrait"');
+    assert.ok(initials >= 0 && initials < overlay, 'the initials stay beside it');
   });
 });
