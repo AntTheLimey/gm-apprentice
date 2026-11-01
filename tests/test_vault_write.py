@@ -683,6 +683,22 @@ class WrapupAddTests(unittest.TestCase):
         self.assertNotIn("- old", text)
         self.assertIn("### World State\n\n- new\n\n### Quality Notes", text)
 
+    def test_replace_refuses_on_a_reviewed_authoritative_wrapup(self):
+        vault = wrap_vault(self)
+        add(vault, "### World State\n\n- old\n")
+        write_text = (vault / WRAP_REL).read_text(encoding="utf-8").replace(
+            "canon_status: DRAFT", "canon_status: AUTHORITATIVE")
+        (vault / WRAP_REL).write_text(write_text, encoding="utf-8")
+        before = read(vault, WRAP_REL)
+        code, out = add(vault, "### World State\n\n- new\n", "--replace")
+        self.assertEqual(code, 1)
+        self.assertIn("AUTHORITATIVE", out)
+        self.assertIn("Ask the GM", out)
+        self.assertEqual(read(vault, WRAP_REL), before)
+        # Adding a section it does not have still works.
+        code, out = add(vault, "### Quality Notes\n\nFine.\n", "--replace")
+        self.assertEqual(code, 0, out)
+
     def test_a_decorated_heading_is_the_same_section(self):
         vault = wrap_vault(self, WRAP.replace(
             "## GM Notes\n", "## GM Notes\n\n### **world state**\n\n- old\n"))

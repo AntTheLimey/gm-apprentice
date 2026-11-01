@@ -527,6 +527,36 @@ class RevealTests(unittest.TestCase):
                       "for it (SOMETHING_ELSE)", out)
         self.assertNotIn("revealed_in not written", out)
 
+    def _never(self, code: str) -> ToolAnswer:
+        return ToolAnswer(data={"pages": [
+            {"path": LEDGER, "code": code, "strippedSections": None, "prop": True,
+             "publishes": False}]})
+
+    def test_publish_false_note_is_refused_not_published(self) -> None:
+        for code in ("PUBLISH_FALSE", "PUBLISH_NONE"):
+            with self.subTest(code=code):
+                self._props()
+                before = (self.root / LEDGER).read_bytes()
+                code_, out, ap = run(self.root, "--publish", LEDGER, "--write",
+                                     explain=self._never(code))
+                self.assertEqual(code_, 1, out)
+                ap.assert_not_called()
+                self.assertEqual((self.root / LEDGER).read_bytes(), before)
+                self.assertIn(f"ERROR\t{LEDGER}\t", out)
+                self.assertIn("publish: false", out)
+                self.assertNotIn("PUBLISHED", out)
+                self.assertFalse((self.root / "_meta" / "reveals.json").exists())
+
+    def test_publish_false_note_already_listed_and_withheld_is_refused(self) -> None:
+        self._props()
+        before = (self.root / LEDGER).read_bytes()
+        code, out, _ = run(self.root, "--publish", LEDGER, "--write", state=({LEDGER}, None),
+                           explain=self._never("PUBLISH_FALSE"))
+        self.assertEqual(code, 1, out)
+        self.assertEqual((self.root / LEDGER).read_bytes(), before)
+        self.assertIn(f"ERROR\t{LEDGER}\t", out)
+        self.assertNotIn("PUBLISHED", out)
+
     def test_session_with_quote_and_backslash_stays_valid(self) -> None:
         self._props()
         odd = 'Session "5" \\ x'

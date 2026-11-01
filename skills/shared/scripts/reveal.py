@@ -24,7 +24,9 @@ path that does not end up publishing keeps its `withheld` and gets no
 `revealed_in`. When `explain` cannot be asked, a WARNING row says so and
 nothing is stamped; publishing goes ahead. A WARNING row also names each
 note the site makes no page for (a folder outside the folder map); a prop
-there is stamped all the same, and the row says so. Prep notes
+there is stamped all the same, and the row says so. A note that says
+`publish: false` (or `none`) is refused with an ERROR row: not published,
+stamped or logged. Prep notes
 (sessions, plans, scenes, play notes, wrap-ups, chapters, `_meta/`) are
 never published here. With no site to publish through, `--publish` is
 refused; `--released` still logs.
@@ -122,6 +124,9 @@ def prop_paths(vault: Path) -> tuple[set[str] | None, dict[str, str], str | None
     except (KeyError, TypeError, AttributeError):
         return None, {}, "the publish tool's explain answer is not understood"
     return props, no_page, None
+
+
+NEVER_PUBLISH_CODES = ("PUBLISH_FALSE", "PUBLISH_NONE")
 
 
 def _no_page_why(rel: str, code: str) -> str:
@@ -315,6 +320,15 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                     row("WARNING", "-", f"revealed_in not written: {why}")
                 else:
                     props = found
+            # A note whose own frontmatter says publish: false (or none) never
+            # gets a page; it is refused, not published, stamped or logged.
+            for rel in [*fresh, *lifted]:
+                if no_page.get(_nfc(rel)) in NEVER_PUBLISH_CODES:
+                    error(rel, "not published, nothing changed: the note says "
+                               "publish: false, so the site would never show it; "
+                               "clear publish: false in the note first, then reveal it")
+                    wanted.remove(rel)
+                    (fresh if rel in fresh else lifted).remove(rel)
             # Know the edit can be done before anything is published: the
             # clear, and on a prop revealed now with no arrival yet, the stamp,
             # one write per note. A note published before is never stamped.

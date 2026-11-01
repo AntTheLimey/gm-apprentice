@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.114] — 2026-10-31
+
+Three scripts now refuse to overwrite what the GM owns. Publish tool unchanged; no vault change is needed.
+
+### Fixed
+
+- `reveal.py` no longer reports a note that says `publish: false` as published. It gives an ERROR row telling the GM to clear `publish: false` first, and the note is not published, stamped or logged.
+- `index_build.py --write` no longer replaces a `_meta/index.md` it did not make. It leaves the file alone and says how to go on; `--force` replaces it anyway.
+- `vault_write.py wrapup-add --replace` no longer rewrites a section of a reviewed (`canon_status: AUTHORITATIVE`) Wrap-Up. It stops and says to ask the GM.
+
+---
+
 ## [1.10.111] — 2026-10-31
 
 A scene that stops part-way is picked up cleanly next session. Publish tool unchanged; no vault change is needed.

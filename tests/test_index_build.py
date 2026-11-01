@@ -290,6 +290,41 @@ class RoundTripTests(unittest.TestCase):
         self.assertEqual(rows, [])
 
 
+class HandWrittenIndexTests(unittest.TestCase):
+    HAND = "---\ntype: meta\n---\n# My own index\nGM prose here\n"
+
+    def _hand_written(self) -> Path:
+        copy = copy_fixture(self)
+        write(copy, "_meta/index.md", self.HAND)
+        return copy
+
+    def test_write_refuses_and_keeps_the_gms_file(self):
+        copy = self._hand_written()
+        result = run_cli(copy, "--write", "--date", TODAY)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((copy / "_meta" / "index.md").read_text(encoding="utf-8"), self.HAND)
+        self.assertIn("--force", result.stderr)
+        self.assertIn("not made by this tool", result.stderr)
+
+    def test_dry_run_says_the_same(self):
+        copy = self._hand_written()
+        result = run_cli(copy, "--date", TODAY)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("--force", result.stderr)
+
+    def test_force_overwrites(self):
+        copy = self._hand_written()
+        result = run_cli(copy, "--write", "--force", "--date", TODAY)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("purpose: vault-index",
+                      (copy / "_meta" / "index.md").read_text(encoding="utf-8"))
+
+    def test_tool_made_index_still_rewrites(self):
+        copy = copy_fixture(self)
+        self.assertEqual(run_cli(copy, "--write", "--date", TODAY).returncode, 0)
+        self.assertEqual(run_cli(copy, "--write", "--date", TODAY).returncode, 0)
+
+
 class FlatVaultTests(unittest.TestCase):
     """C2: a flat vault — no `Chapters/` folder, no `chapter:` link on
     its sessions/scenes — must not silently drop them. They surface in

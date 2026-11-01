@@ -992,6 +992,13 @@ def cmd_wrapup_add(batch: Batch, args: argparse.Namespace, text: str) -> None:
         before = note
         landed = add_section(note, rel, tmap, level, title, unit, mode,
                              args.after, prev, n == 0, made)
+        if mode == "replace" and landed.detail.startswith("replaced") \
+                and raw_value(before, "canon_status") == "AUTHORITATIVE":
+            raise WriteError(
+                f"{rel}: this Wrap-Up is reviewed (canon_status: AUTHORITATIVE), "
+                f"so '{'#' * level} {title}' was not replaced. Ask the GM; "
+                f"if they say yes, set canon_status back to DRAFT in the note "
+                f"and run this again")
         note = landed.text
         if level != 2:
             require_hidden(before, note, rel, level, title)

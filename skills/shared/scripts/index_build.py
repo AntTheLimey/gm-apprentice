@@ -23,7 +23,7 @@ against `check_index` holds even for content the generator can't file
 anywhere sensible.
 
 Usage:
-  index_build.py VAULT [--write] [--date YYYY-MM-DD]
+  index_build.py VAULT [--write] [--force] [--date YYYY-MM-DD]
 
 Default prints a unified diff between the current `_meta/index.md` and
 the freshly rendered text (or the whole rendered text if no index exists
@@ -611,11 +611,22 @@ def _read_existing(index_path: Path) -> tuple[str, str]:
     return text, eol
 
 
+def _is_generated(text: str) -> bool:
+    """True when `text` carries the `purpose: vault-index` marker `render`
+    always writes into the frontmatter."""
+    if not text.startswith("---\n"):
+        return False
+    head = text[4:].split("\n---", 1)[0]
+    return any(ln.strip() == "purpose: vault-index" for ln in head.splitlines())
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("vault", type=Path)
     parser.add_argument("--write", action="store_true",
                         help="apply the rendered index (default: dry run)")
+    parser.add_argument("--force", action="store_true",
+                        help="replace an _meta/index.md this tool did not make")
     parser.add_argument("--date", help="override today's date (YYYY-MM-DD)")
     args = parser.parse_args(argv)
 
@@ -627,6 +638,12 @@ def main(argv: list[str] | None = None) -> int:
     eol = "\n"
     if index_path.is_file():
         previous, eol = _read_existing(index_path)
+        if not args.force and not _is_generated(previous):
+            print(f"{index_path} was not made by this tool (it has no "
+                  "`purpose: vault-index` line), so it was left alone. If it "
+                  "is the GM's own index, keep it; to replace it with a "
+                  "generated one, run again with --force.", file=sys.stderr)
+            return 1
 
     rendered = render(vault, today=today, previous=previous)
     entity_count, narrative_count, stub_count = _counts_from_rendered(rendered)
