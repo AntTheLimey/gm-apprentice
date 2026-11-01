@@ -64,6 +64,7 @@ import sys
 import unicodedata
 from collections.abc import Callable, Collection, Iterable
 from dataclasses import dataclass
+from datetime import date
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -2122,7 +2123,39 @@ def read_export(path: str) -> str:
     except (OSError, UnicodeDecodeError) as e:
         raise WriteError(f"{path}: unreadable "
                          f"({e.__class__.__name__})") from e
-    return text.replace("\r\n", "\n")
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def check_play_date(value: str | None) -> None:
+    """Refuse a --play-date that is not a real YYYY-MM-DD date."""
+    if not value:
+        return
+    try:
+        ok = bool(ISO_DATE_RE.fullmatch(value)) and bool(date.fromisoformat(value))
+    except ValueError:
+        ok = False
+    if not ok:
+        raise WriteError("--play-date must be a real date, YYYY-MM-DD")
+
+
+def play_notes_naming(batch: Batch, stem: str) -> list[str]:
+    """Vault-relative paths (without .md) of the Play Notes notes anywhere
+    in the vault whose `session:` link names the index `stem`."""
+    types = vc.SESSION_DOC_TYPES["play_notes"][1]
+    want = vl.normalize(stem)
+    out = []
+    for rel, text in vl.vault_files(batch.vault):
+        if is_record(rel):
+            continue
+        fm = vl.extract_frontmatter(text) or {}
+        if (vl.entity_type(fm) in types and vl.normalize(
+                vl.wikilink_target(fm.get("session"))) == want):
+            out.append(rel.removesuffix(".md"))
+    return sorted(out)
+
+
+# A session index's status before play: play-notes-new raises it to played.
+BEFORE_PLAY = frozenset({"", "planned", "prepped"})
 
 
 def cmd_resolve(batch: Batch, args: argparse.Namespace, _text: str) -> None:
@@ -2154,23 +2187,33 @@ def play_notes_text(stem: str, n: int, chapter_raw: str | None,
 
 def cmd_play_notes_new(batch: Batch, args: argparse.Namespace,
                        _text: str) -> None:
-    """Play Notes beside an index prep already filed: the note, and the
-    index's documents.play_notes (and play_date, when given). The Plan
-    link and status stay as they are."""
-    if args.play_date and not ISO_DATE_RE.fullmatch(args.play_date):
-        raise WriteError("--play-date must be YYYY-MM-DD")
+    """Play Notes beside an index already filed: the note, and on the
+    index documents.play_notes, play_date (when given) and status played
+    (from planned or prepped only). The Plan link stays as it is."""
+    check_play_date(args.play_date)
     export = read_export(args.export) if args.export else ""
     index = batch.note_named(args.session, {"session"}, "--session")
     text = batch.read(index)
     fm = vl.extract_frontmatter(text) or {}
+    if vl.entity_type(fm) != "session":
+        raise WriteError(f"{index}: not a session index (type: session)")
     stem = Path(index).stem
     documents = vl.nested_mapping(text, "documents")
     link = vl.wikilink_target(documents.get("play_notes"))
-    have = []
+    replaced = ""
     if link and not is_blank(link):
-        have = batch.with_stem(re.split(r"[#^|]", link, maxsplit=1)[0]
-                               .replace("\\", "/").rsplit("/", 1)[-1].strip())
-    have = have or find_play_notes(batch, index, stem)
+        linked = batch.with_stem(re.split(r"[#^|]", link, maxsplit=1)[0]
+                                 .replace("\\", "/").rsplit("/", 1)[-1].strip())
+        types = vc.SESSION_DOC_TYPES["play_notes"][1]
+        for rel in linked:
+            if vl.entity_type(vl.extract_frontmatter(batch.read(rel))
+                              or {}) not in types:
+                raise WriteError(
+                    f"{index}: documents.play_notes links {rel}, which is "
+                    f"not Play Notes: fix that link first")
+            raise WriteError(f"{index}: already has Play Notes: {rel}")
+        replaced = f" (replaces [[{link}]], which names no note)"
+    have = play_notes_naming(batch, stem)
     if have:
         raise WriteError(f"{index}: already has Play Notes: {have[0]}")
     n = vl.parse_session_number(fm.get("session_number"))
@@ -2183,7 +2226,13 @@ def cmd_play_notes_new(batch: Batch, args: argparse.Namespace,
         folder_chapter = vl.chapter_of(index, fm)
         chapter_raw = f'"[[{folder_chapter}]]"' if folder_chapter else None
     campaign_raw = raw_value(text, "campaign")
-    played = args.play_date or (raw_value(text, "play_date") or "").strip("\"'")
+    old_date = (raw_value(text, "play_date") or "").strip("\"'")
+    if is_blank(old_date):
+        old_date = ""
+    played = args.play_date or old_date
+    if played and not ISO_DATE_RE.fullmatch(played):
+        batch.row("WARNING", index, "", f"play_date {played!r} is not "
+                  "YYYY-MM-DD, so the Play Notes do not copy it")
     folder = index.rpartition("/")[0]
     notes_stem = f"{stem} - Play Notes"
     notes_rel = f"{folder}/{notes_stem}.md" if folder else f"{notes_stem}.md"
@@ -2205,14 +2254,29 @@ def cmd_play_notes_new(batch: Batch, args: argparse.Namespace,
                           f'"[[{notes_stem}]]"', eol)
     except ValueError as e:
         raise WriteError(f"{index}: {e}") from None
-    changes = [f"documents.play_notes [[{notes_stem}]]"]
-    if args.play_date:
+    changes = [f"documents.play_notes [[{notes_stem}]]{replaced}"]
+    if args.play_date and args.play_date != old_date:
         vl.set_key(fm_lines, "play_date", f'"{args.play_date}"', eol)
-        changes.append(f"play_date {args.play_date}")
+        changes.append(f"play_date {old_date} -> {args.play_date}"
+                       if old_date else f"play_date {args.play_date}")
+    status = (raw_value(text, "status") or "").strip("\"'").casefold()
+    if status in BEFORE_PLAY:
+        at = next((i for i, ln in enumerate(fm_lines)
+                   if ln.startswith("status:")), None)
+        if at is None:
+            fm_lines.append(f"status: played{eol}")
+        else:
+            # The value alone: a trailing comment stays.
+            fm_lines[at] = re.sub(
+                r"""^status:[ \t]*("[^"]*"|'[^']*'|[^\s#]*)""",
+                "status: played", fm_lines[at])
+        changes.append(f"status {status or '(none)'} -> played")
     batch.put(index, "".join([lines[0], *fm_lines, *lines[end:]]))
     batch.row("WOULD-CREATE", notes_rel, "",
               f"export {Path(args.export).name} under ## Narrative Record"
               if args.export else "no export: the notes are empty")
+    if args.export and not export.strip():
+        batch.row("WARNING", notes_rel, "", "the export is empty")
     batch.row("WOULD-ADD", index, "", ", ".join(changes))
     if args.export:
         resolve_export(batch, export_entries(export))
@@ -2227,8 +2291,7 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
     if not title or BAD_NAME_RE.search(title):
         raise WriteError(f"title {args.title!r} cannot be a file name "
                          f"(none of \\ / : * ? \" < > | # ^ [ ])")
-    if args.play_date and not ISO_DATE_RE.fullmatch(args.play_date):
-        raise WriteError("--play-date must be YYYY-MM-DD")
+    check_play_date(args.play_date)
     upcoming = args.upcoming
     if upcoming and args.export:
         raise WriteError("--upcoming has no Play Notes to place an export in")
@@ -2279,7 +2342,8 @@ def cmd_session_new(batch: Batch, args: argparse.Namespace,
                                  == (chapter or "").casefold()
                                  or found is not None and in_chapter(rel, ch))]
     if taken:
-        raise WriteError(f"session {n} already has an index: {taken[0]}")
+        raise WriteError(f"session {n} already has an index: {taken[0]}; "
+                         "play-notes-new files Play Notes beside it")
     prev_text = batch.read(prev[0]) if prev else ""
     if prev:
         folder = prev[0].rpartition("/")[0]
@@ -3315,9 +3379,10 @@ def build_parser() -> argparse.ArgumentParser:
         "play-notes-new", help="Play Notes beside a session index prep "
         "already filed", formatter_class=raw, description=(
             "Files <index> - Play Notes beside the index and sets its\n"
-            "documents.play_notes (and play_date, with --play-date); the\n"
-            "Plan link and status stay. Refused when the session already\n"
-            "has Play Notes. --export works as in session-new."))
+            "documents.play_notes, play_date (with --play-date) and a\n"
+            "planned or prepped status to played; the Plan link stays.\n"
+            "Refused when Play Notes anywhere name the session. --export\n"
+            "works as in session-new."))
     pn.add_argument("--session", required=True,
                     help="the session index: path or name")
     pn.add_argument("--play-date", dest="play_date", help="YYYY-MM-DD")
