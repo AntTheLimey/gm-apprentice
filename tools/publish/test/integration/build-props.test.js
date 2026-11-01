@@ -582,6 +582,75 @@ describe('a kept-folder prop that stops shipping', () => {
     } finally { s.cleanup(); }
   });
 
+  const hashOf = (data) => require('node:crypto').createHash('sha256').update(data).digest('hex');
+  const record = (s) => JSON.parse(fs.readFileSync(RECORD(s), 'utf8'));
+
+  it('an unpublished prop whose copy holds bytes an older build recorded is removed, never "differs"', () => {
+    const s = setup();
+    try {
+      // What an older tool wrote there (another bar), with the record that build kept.
+      const page = path.join(s.player.dir, 'gazetteer', 'invitation.html');
+      const older = fs.readFileSync(page, 'utf8').replace(/<span class="gma-prop-hint">[^<]*<\/span>/, '');
+      fs.writeFileSync(page, older);
+      const rec = record(s);
+      rec.files['gazetteer/invitation.html'] = hashOf(older);
+      fs.writeFileSync(RECORD(s), JSON.stringify(rec));
+      unlist(s);
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(!s.player.exists('gazetteer', 'invitation.html'));
+      assert.ok(lines.includes('  removed from kept folder: gazetteer/invitation.html (its prop is not published)'), lines.join('\n'));
+      assert.ok(!lines.some((l) => /differs/.test(l)), lines.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  for (const which of ['the record', 'the older clean-up']) {
+    it(`a copy ${which} cannot remove is a warning naming it; the build carries on and the record keeps it`, () => {
+      const s = setup();
+      const dir = path.join(s.player.dir, 'gazetteer');
+      try {
+        if (which === 'the record') fs.rmSync(noteOf(s)); else unlist(s);
+        fs.chmodSync(dir, 0o555);
+        const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+        fs.chmodSync(dir, 0o755);
+        assert.ok(s.player.exists('gazetteer', 'invitation.html'));
+        assert.ok(lines.some((l) => l.includes('WARNING: could not remove the kept-folder copy gazetteer/invitation.html (EACCES); remove it by hand')), lines.join('\n'));
+        assert.ok('gazetteer/invitation.html' in record(s).files);
+        assert.ok(s.player.exists('NOTICE.txt'), 'the build finished');
+      } finally { fs.chmodSync(dir, 0o755); s.cleanup(); }
+    });
+  }
+
+  it('a record that cannot be read is said, kept as it is, and removes nothing', () => {
+    const s = setup();
+    try {
+      fs.writeFileSync(RECORD(s), '{ not json');
+      fs.rmSync(noteOf(s));
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      for (const f of KEPT) assert.ok(s.player.exists(...f.split('/')), f);
+      assert.equal(fs.readFileSync(RECORD(s), 'utf8'), '{ not json');
+      assert.ok(lines.some((l) => /WARNING: .*kept-writes\.json in the site folder could not be read \(it is not JSON\); it is left as it is/.test(l)), lines.join('\n'));
+      // A missing record (a site built before there was one) is silent.
+      fs.rmSync(RECORD(s));
+      const again = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(!again.some((l) => /kept-writes/.test(l)), again.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  it('a record entry that climbs out of its folder is never followed', () => {
+    const s = setup();
+    try {
+      const outside = path.join(s.root, 'outside.html');
+      fs.writeFileSync(outside, 'X');
+      const rel = path.relative(s.player.dir, outside).split(path.sep).join('/');
+      const rec = record(s);
+      rec.files[`gazetteer/../${rel}`] = hashOf('X');
+      fs.writeFileSync(RECORD(s), JSON.stringify(rec));
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(fs.existsSync(outside));
+      assert.ok(!Object.keys(record(s).files).some((k) => k.includes('..')));
+    } finally { s.cleanup(); }
+  });
+
   it('a published prop leaves props/ when it is unpublished', () => {
     const s = buildBoth({
       'Documents/Invitation.md': PROP(), ...PROP_FILES, 'Documents/Other.md': '---\ntype: document\n---\nOther.\n',

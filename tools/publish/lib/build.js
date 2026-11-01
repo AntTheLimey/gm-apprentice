@@ -5,7 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, slugify } = require('./scanner');
-const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit, detectEncoder } = require('./image-optimize');
+const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit, detectEncoder, CACHE_FOLDER } = require('./image-optimize');
 const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
 const { resolveBanner, renderBanner, normalizeEntry, attachmentRef, isAddress, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
@@ -439,15 +439,38 @@ function buildSite(options) {
   // own folder keeps one, and only where the image cache may live (never in the output folder or the vault).
   const keptRecord = (!gm && !dry && writes === 'all' && !options.outputDirOverride
     && imageCacheDir(configDir, { outputDirs: [outputDir], vaultPath: config.vaultPath })) ? keptRecordPath(configDir) : null;
-  const keptRecorded = keptRecord ? readKeptRecord(keptRecord) : {};
+  const { files: keptRecorded, problem: keptRecordProblem } = keptRecord ? readKeptRecord(keptRecord) : { files: {}, problem: null };
+  // Recorded hashes by lower-case path, for the plan's own clean-up below.
+  const keptRecordedHash = new Map(Object.entries(keptRecorded).map(([out, hash]) => [out.toLowerCase(), hash]));
   const keptWritten = new Map();   // lower-case out -> [out, hash]
   const inKeptFolder = (out) => config.preserveDirs.some((d) => out.toLowerCase().startsWith(`${d.toLowerCase().replace(/\/+$/, '')}/`));
   function keptWrote(out, data) {
     if (keptRecord && inKeptFolder(out)) keptWritten.set(out.toLowerCase(), [out, hashOf(data)]);
   }
+  // A kept-folder copy's bytes, or its removal; an error the file system gives is said with the path, and the build
+  // carries on (null / false). An error with no code is a fault of the tool's and is thrown.
+  function keptBytes(full, out) {
+    try { return fs.readFileSync(full); } catch (e) {
+      if (!e.code) throw e;
+      printWarning(`could not read the kept-folder copy ${out} (${e.code}); it is left`);
+      return null;
+    }
+  }
+  function keptRemove(full, out) {
+    try { fs.unlinkSync(full); return true; } catch (e) {
+      if (!e.code) throw e;
+      printWarning(`could not remove the kept-folder copy ${out} (${e.code}); remove it by hand`);
+      return false;
+    }
+  }
   // A recorded file this build did not write again goes while it holds the bytes the tool wrote; one the GM has
-  // changed stays, is said once, and leaves the record. One behind a link is left and stays recorded.
+  // changed stays, is said once, and leaves the record. One behind a link, or one that could not be read or removed,
+  // is left and stays recorded. A record that could not be read is left as it is, and removes nothing.
   function cleanKeptRecord() {
+    if (keptRecordProblem) {
+      printWarning(`${path.join(CACHE_FOLDER, 'kept-writes.json')} in the site folder could not be read (${keptRecordProblem}); it is left as it is, so no kept-folder copy it names is removed this build. Delete it to start a new record (copies it named then stay in the kept folders until removed by hand).`);
+      return;
+    }
     const next = {};
     for (const [out, hash] of Object.entries(keptRecorded)) {
       const key = out.toLowerCase();
@@ -460,14 +483,20 @@ function buildSite(options) {
         continue;
       }
       if (why || !fs.existsSync(full)) continue;
-      const same = hashOf(fs.readFileSync(full)) === hash;
+      const have = keptBytes(full, out);
+      if (have === null) { next[out] = hash; continue; }
+      const same = hashOf(have) === hash;
       if (keptHandled.has(key)) { if (same) next[out] = hash; continue; }
       if (!same) { console.log(`  left in kept folder: ${out} (it differs from what the tool wrote)`); continue; }
-      fs.unlinkSync(full);
+      if (!keptRemove(full, out)) { next[out] = hash; continue; }
       console.log(`  removed from kept folder: ${out} (the tool wrote it, and no prop writes it now)`);
     }
     for (const [out, hash] of keptWritten.values()) next[out] = hash;
-    writeKeptRecord(keptRecord, next);
+    try { writeKeptRecord(keptRecord, next); } catch (e) {
+      if (!e.code) throw e;
+      printWarning(`could not write ${path.join(CACHE_FOLDER, 'kept-writes.json')} in the site folder (${e.code}); the kept-folder files this build wrote are not recorded`);
+      return;
+    }
     ignoreCacheInGit(configDir);
   }
 
@@ -2591,9 +2620,12 @@ function buildSite(options) {
         const why = pathProblem(outputDir, f.out);
         if (why === 'link') { console.log(`  left in kept folder: ${f.out} (a folder on its path is a link)`); continue; }
         if (why) continue;
-        const have = fs.readFileSync(full);
-        if (!f.wants.some((want) => have.equals(want))) { console.log(`  left in kept folder: ${f.out} (it differs from what the tool would write)`); continue; }
-        fs.unlinkSync(full);
+        const have = keptBytes(full, f.out);
+        if (have === null) continue;
+        // What the tool would write now, or what an earlier build recorded writing there (#506): either is the tool's.
+        const ours = f.wants.some((want) => have.equals(want)) || (keptRecordedHash.has(key) && keptRecordedHash.get(key) === hashOf(have));
+        if (!ours) { console.log(`  left in kept folder: ${f.out} (it differs from what the tool would write)`); continue; }
+        if (!keptRemove(full, f.out)) continue;
         console.log(`  removed from kept folder: ${f.out} (its prop is not published)`);
       }
     }

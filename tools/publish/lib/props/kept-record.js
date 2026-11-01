@@ -11,24 +11,43 @@ const crypto = require('crypto');
 const { CACHE_FOLDER } = require('../image-optimize');
 
 const FILE = 'kept-writes.json';
+const VERSION = 1;
 const keptRecordPath = (siteDir) => path.join(siteDir, CACHE_FOLDER, FILE);
 const hashOf = (data) => crypto.createHash('sha256').update(data).digest('hex');
+// A site path the record may name: forward slashes, no empty, '.' or '..' part, not from the root.
+const plainOut = (out) => typeof out === 'string' && !out.includes('\\') && out.split('/').every((p) => p && p !== '.' && p !== '..');
 
-// The recorded files: { out: hash }. A missing or unreadable record is an empty one (a site built before the record).
+// { files: { out: hash }, problem }. A missing record (a site built before there was one) is empty, with no problem;
+// one that cannot be read, is not JSON, or is of another version is empty with `problem` saying why. An entry that is
+// not a plain site path with a hash is left out.
 function readKeptRecord(file) {
-  try {
-    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-    const files = data && typeof data.files === 'object' && !Array.isArray(data.files) ? data.files : {};
-    return Object.fromEntries(Object.entries(files).filter(([out, h]) => typeof out === 'string' && typeof h === 'string'));
-  } catch (e) {
-    return {};
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); } catch (e) {
+    if (e.code === 'ENOENT') return { files: {}, problem: null };
+    if (!e.code) throw e;
+    return { files: {}, problem: e.code };
   }
+  let data;
+  try { data = JSON.parse(text); } catch (e) { return { files: {}, problem: 'it is not JSON' }; }
+  if (!data || typeof data !== 'object' || data.version !== VERSION) {
+    return { files: {}, problem: `it is not a version ${VERSION} record` };
+  }
+  const files = data.files && typeof data.files === 'object' && !Array.isArray(data.files) ? data.files : {};
+  return { files: Object.fromEntries(Object.entries(files).filter(([out, h]) => plainOut(out) && typeof h === 'string')), problem: null };
 }
 
+// Written whole or not at all: to a temporary file beside it, then renamed over it.
 function writeKeptRecord(file, files) {
   const sorted = Object.fromEntries(Object.entries(files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, JSON.stringify({ version: 1, files: sorted }, null, 2) + '\n');
+  const tmp = `${file}.${process.pid}.tmp`;
+  try {
+    fs.writeFileSync(tmp, JSON.stringify({ version: VERSION, files: sorted }, null, 2) + '\n');
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    fs.rmSync(tmp, { force: true });
+    throw e;
+  }
 }
 
 module.exports = { keptRecordPath, readKeptRecord, writeKeptRecord, hashOf };
