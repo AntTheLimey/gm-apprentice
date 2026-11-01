@@ -972,6 +972,26 @@ class AcceptTests(VaultCase):
         self.assertEqual(rows[-1],
                          "# 1 hostile tie shown on 1 note (1 accepted)")
 
+    def test_a_batch_answer_accepts_several_ties_in_one_command(self):
+        # "Leave these two" in a walk-through is one command with two places
+        # (#342): both are recorded, the tie not named stays listed.
+        note = self.NOTE.replace(
+            "---\nBody.\n",
+            "  - target: \"[[Wren]]\"\n    type: knows\n    tone: hostile\n"
+            "---\nBody.\n")
+        self.put("NPCs/Emma.md", note)
+        wren = "NPCs/Emma.md:20"
+        code, rows, _ = self.tones("shown", "--accept", self.HALLAM, wren,
+                                   "--write")
+        self.assertEqual(code, 0)
+        self.assertEqual([r.split("\t")[:2] for r in rows[:-1]],
+                         [["ACCEPTED", self.HALLAM], ["ACCEPTED", wren]])
+        self.assertEqual(rows[-1], "# 2 hostile tie(s) accepted")
+        _, rows, _ = self.tones("shown")
+        self.assertEqual(rows[0].split("\t")[:2], [self.TOM, "Cold"])
+        self.assertEqual(rows[-1],
+                         "# 1 hostile tie shown on 1 note (2 accepted)")
+
     def test_an_edited_tie_is_raised_again(self):
         self.tones("shown", "--accept", "--write")
         self.put("NPCs/Emma.md", self.NOTE.replace(
