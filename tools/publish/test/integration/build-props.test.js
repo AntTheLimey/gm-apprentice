@@ -636,6 +636,25 @@ describe('a kept-folder prop that stops shipping', () => {
     } finally { s.cleanup(); }
   });
 
+  it('a record that cannot be written is a warning; the old one stays whole and the build finishes', (t) => {
+    const s = setup();
+    try {
+      const before = fs.readFileSync(RECORD(s), 'utf8');
+      fs.writeFileSync(noteOf(s), fs.readFileSync(noteOf(s), 'utf8').replace('gazetteer/invitation.html', 'gazetteer/moved/invitation.html'));
+      const real = fs.renameSync;
+      t.mock.method(fs, 'renameSync', (from, to) => {
+        if (String(to).endsWith('kept-writes.json')) throw Object.assign(new Error('EIO: i/o error'), { code: 'EIO' });
+        return real(from, to);
+      });
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      t.mock.restoreAll();
+      assert.ok(lines.some((l) => l.includes('WARNING: could not write .gm-apprentice/kept-writes.json in the site folder (EIO)')), lines.join('\n'));
+      assert.equal(fs.readFileSync(RECORD(s), 'utf8'), before);
+      assert.deepEqual(fs.readdirSync(path.dirname(RECORD(s))).filter((n) => n.startsWith('kept-writes')), ['kept-writes.json']);
+      assert.ok(s.player.exists('NOTICE.txt'));
+    } finally { s.cleanup(); }
+  });
+
   it('a record entry that climbs out of its folder is never followed', () => {
     const s = setup();
     try {

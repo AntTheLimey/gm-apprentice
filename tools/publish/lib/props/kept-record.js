@@ -39,7 +39,11 @@ function readKeptRecord(file) {
 // Written whole or not at all: to a temporary file beside it, then renamed over it.
 function writeKeptRecord(file, files) {
   const sorted = Object.fromEntries(Object.entries(files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
-  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const dir = path.dirname(file);
+  fs.mkdirSync(dir, { recursive: true });
+  // A temporary file a write that never finished left behind is cleared first.
+  const stale = new RegExp(`^${path.basename(file).replace(/\./g, '\\.')}\\.\\d+\\.tmp$`);
+  for (const name of fs.readdirSync(dir)) if (stale.test(name)) fs.rmSync(path.join(dir, name), { force: true });
   const tmp = `${file}.${process.pid}.tmp`;
   try {
     fs.writeFileSync(tmp, JSON.stringify({ version: VERSION, files: sorted }, null, 2) + '\n');
