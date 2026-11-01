@@ -750,7 +750,8 @@ class SiteFileKeyTests(NewFileBase):
                          ["excludeCallouts", "excludeSections", "siteTitle"])
         self.assertTrue(all(r.kind == "certain" for r in rows))
         by = {r.fault["name"]: r for r in rows}
-        self.assertIn("already the value in use", by["siteTitle"].fix)
+        self.assertIn("the vault already sets player_site.title to Mine",
+                      by["siteTitle"].fix)
         self.assertIn("add its entries", by["excludeSections"].fix)
         self.assertNotIn("run the vault update", " ".join(str(r.fix) + str(r.note) for r in rows))
         buf = io.StringIO()
@@ -767,6 +768,71 @@ class SiteFileKeyTests(NewFileBase):
         self.assertNotIn("excludeSections", text)
         self.assertIn('\n    "vaultPath"', text)     # its indentation kept
         self.assertEqual(self.rows(vault), [])
+
+    def test_a_key_the_vault_does_not_set_is_moved_not_called_in_use(self):
+        """#539: the fold carries a setting the vault lacks; the row says so."""
+        import json
+        vault, site_file = self.moved_vault_with_site_keys(
+            footer="Theirs", landing={"max_npcs": 2})
+        rows = {r.fault["name"]: r for r in self.rows(vault) if r.site}
+        self.assertEqual(sorted(rows), ["footer", "landing"])
+        self.assertIn("move it to player_site.footer", rows["footer"].fix)
+        self.assertNotIn("already the value in use", rows["footer"].fix)
+        self.assertIn("player_site.footer", rows["footer"].done)
+        self.assertIn("the vault does not set", rows["landing"].fix)
+        code, out = self.fix_output(vault)
+        self.assertEqual(code, 0, out)
+        got = vc.settings(vault)
+        self.assertEqual(got.get("player_site.footer"), "Theirs")
+        self.assertEqual(got.get("player_site.landing.max_npcs"), 2)
+        left = json.loads(site_file.read_text())
+        self.assertNotIn("footer", left)
+        self.assertNotIn("landing", left)
+        self.assertEqual(self.rows(vault), [])
+
+    def test_an_unusable_site_value_is_not_said_to_be_moved(self):
+        """#539: the row follows the tool's plan, which drops this value."""
+        vault, site_file = self.moved_vault_with_site_keys(searchEnabled="maybe")
+        rows = {r.fault["name"]: r for r in self.rows(vault) if r.site}
+        row = rows["searchEnabled"]
+        self.assertNotIn("move it to", row.fix)
+        self.assertIn("not usable", row.fix)
+        self.assertNotIn("moving", row.done)
+        code, out = self.fix_output(vault)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("moved searchEnabled", out)
+        self.assertTrue(vc.settings(vault).get("player_site.features.search"))
+        self.assertNotIn("searchEnabled", site_file.read_text())
+
+    def test_a_value_not_carried_is_named_in_the_fixed_line(self):
+        """#539: what the fix leaves behind is said after it, as before it."""
+        vault, site_file = self.moved_vault_with_site_keys(siteTitle="Theirs")
+        (row,) = [r for r in self.rows(vault) if r.site]
+        self.assertIn("not carried", row.done)
+        self.assertIn("the vault already sets player_site.title", row.done)
+        code, out = self.fix_output(vault)
+        self.assertEqual(code, 0, out)
+        self.assertIn("not carried: siteTitle", out)
+
+    def test_a_blocked_fold_shows_the_tools_blocker_and_offers_no_fix(self):
+        """#539: a fold the tool refuses is never worded as nothing to carry."""
+        vault, site_file = self.moved_vault_with_site_keys(siteTitle="Theirs")
+        real = vc._site_move_plan
+
+        def blocked(v, *, fold=False, only=None):
+            if fold:
+                return {"ok": False, "blockers": ["player_site.title would not come out the same"]}
+            return real(v)
+
+        vc._site_move_plan = blocked
+        try:
+            (row,) = [r for r in self.rows(vault) if r.site]
+        finally:
+            vc._site_move_plan = real
+        self.assertEqual(row.ops, [])
+        self.assertNotEqual(row.kind, "certain")
+        self.assertIn("would not come out the same", row.note)
+        self.assertNotIn("already says the same", str(row.fix))
 
     def fix_output(self, vault):
         buf = io.StringIO()

@@ -278,8 +278,8 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
                                    on a vault already moved it tidies up after a stopped move, and --discard-old-file removes a left-over
                                    old file that holds more than the new one; --site-tool-updated says the caller is bringing the site's tool up to date first;
                                    --fold-site-file, on a moved vault, takes the settings a site folder's vault.config.json still holds out of it,
-                                   adding a hiding list's entries to the vault's list and keeping the stricter callout rule;
-                                   --only names the site-file keys to take (siteUrl, preserveDirs, ...; package.json, or package.json postbuild, for the
+                                   adding a hiding list's entries to the vault's list, keeping the stricter callout rule, carrying a setting the vault does not set and keeping the vault's own where it does;
+                                   --only names the site-file keys to take (siteUrl, preserveDirs, landing.max_npcs, ...; package.json, or package.json postbuild, for the
                                    site's build steps) and every other key is left where it is)
                                    The plugin's update normally runs the move for you. Running it by hand is safe:
                                    it refuses when the site's publish tool cannot read the new file.
@@ -778,6 +778,14 @@ function move(options) {
   }
   const only = Array.isArray(options.only) && options.only.length ? options.only : null;
   if (only && !options.foldSiteFile) return stopped(['--only goes with --fold-site-file.']);
+  // The fold reads the vault's settings to know what it holds: a file that does not parse is said, never "nothing to move".
+  if (options.foldSiteFile && layoutOf(vaultPath, options.deps) === 'new') {
+    try {
+      readSettings({ vaultPath, siteConfig: {} });
+    } catch (e) {
+      return stopped([`the vault's settings file (${NEW_FILE}) could not be read: ${firstLine(e.message)}. Fix it, then run --fold-site-file again.`]);
+    }
+  }
   const plan = planMove({ vaultPath, siteConfigPath, fill: fillOf(options.fill), discardOld: !!options.discardOld, siteToolUpdated: !!options.siteToolUpdated, foldSiteFile: !!options.foldSiteFile, only });
   const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files, ...(plan.carried ? { carried: plan.carried, dropped: plan.dropped || [] } : {}), ...(plan.stepsHeld ? { stepsHeld: plan.stepsHeld } : {}), ...(plan.keysHeld ? { keysHeld: plan.keysHeld } : {}), ...(plan.stepsDiffer ? { stepsDiffer: plan.stepsDiffer } : {}), ...(plan.leftover ? { leftover: plan.leftover } : {}), ...(plan.siteDiffers ? { siteDiffers: plan.siteDiffers } : {}), ...(plan.held ? { held: plan.held, spec: plan.spec, line: plan.line } : {}) });
   if (plan.held) {

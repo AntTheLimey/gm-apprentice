@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const matter = require('gray-matter');
-const { planMove, applyMove, isBoilerplate } = require('../lib/settings/move');
+const { planMove, applyMove, isBoilerplate, stripSiteKeys } = require('../lib/settings/move');
 const { runSettings } = require('../lib/settings/cli');
 const { readSettings } = require('../lib/settings/read');
 const { readState } = require('../lib/settings/state');
@@ -1047,6 +1047,239 @@ test('a left-over old file that also hides a heading does not hide the site file
   assert.ok((check.data.siteDiffers || []).includes('player_site.hide.sections'), JSON.stringify(check.data));
   assert.equal(cliMove({ vault: s.vault }, { foldSiteFile: true }).rc, 0);
   assert.ok(readSettings({ vaultPath: s.vault }).values.player_site.hide.sections.includes('Site Secret'));
+});
+
+// A moved vault, its site folder's file then given `extra`: { s, file, siteJson } (#539).
+function movedWithSiteFile(publishLines, extra) {
+  const s = scratch(old(`  site_dir: ../Site\n${publishLines}`));
+  const siteDir = path.join(s.root, 'Site');
+  fs.mkdirSync(siteDir);
+  const file = path.join(siteDir, 'vault.config.json');
+  const siteJson = { vaultPath: '../Vault' };
+  fs.writeFileSync(file, JSON.stringify(siteJson, null, 2) + '\n');
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  fs.writeFileSync(file, JSON.stringify({ ...siteJson, ...extra }, null, 2) + '\n');
+  return { s, file, siteJson };
+}
+
+test('--fold-site-file carries a title and folder map the vault lacks, and says so before anything is written (#539)', () => {
+  const { s, file, siteJson } = movedWithSiteFile('', { siteTitle: 'Pack Title Only', folderMap: { People: 'people' } });
+  const before = hashes(s.root);
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null });
+  assert.deepEqual(plan.blockers, []);
+  assert.deepEqual(hashes(s.root), before, 'planning writes nothing');
+  const carried = Object.fromEntries(plan.carried.map((c) => [c.from, c]));
+  assert.equal(carried.siteTitle && carried.siteTitle.to, 'player_site.title');
+  assert.equal(carried.siteTitle.value, 'Pack Title Only');
+  assert.equal(carried.folderMap && carried.folderMap.to, 'player_site.folder_map');
+  assert.deepEqual(carried.folderMap.value, { People: 'people' });
+  assert.deepEqual(plan.dropped, []);
+  const text = plan.lines.join('\n');
+  assert.match(text, /`siteTitle` moves to `player_site.title`/);
+  assert.match(text, /`folderMap` moves to `player_site.folder_map`/);
+  assert.doesNotMatch(text, /nothing was carried/);
+  applyMove(plan);
+  const got = readSettings({ vaultPath: s.vault, siteConfig: {} }).values.player_site;
+  assert.equal(got.title, 'Pack Title Only');
+  assert.deepEqual(got.folder_map, { People: 'people' });
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), siteJson);
+});
+
+test('--fold-site-file keeps the vault\'s own title over the site file\'s and lists the site file\'s as dropped (#539)', () => {
+  const { s, file } = movedWithSiteFile('  site_title: Mine\n', { siteTitle: 'Theirs', folderMap: { People: 'people' } });
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null });
+  assert.deepEqual(plan.dropped.map((d) => d.from), ['siteTitle']);
+  assert.match(plan.dropped[0].why, /the vault already sets player_site.title to/);
+  assert.deepEqual(plan.carried.map((c) => c.from), ['folderMap']);
+  assert.doesNotMatch(plan.lines.join('\n'), /  /, 'no gap where a sentence was left out');
+  assert.match(plan.lines.join('\n'), /`siteTitle` in the site folder's vault.config.json \(Theirs\) differs from `player_site.title`/);
+  applyMove(plan);
+  const got = readSettings({ vaultPath: s.vault, siteConfig: {} }).values.player_site;
+  assert.equal(got.title, 'Mine');
+  assert.deepEqual(got.folder_map, { People: 'people' });
+});
+
+test('without --fold-site-file a title and folder map the vault lacks stay in the site file (#539)', () => {
+  const { s, file } = movedWithSiteFile('', { siteTitle: 'Pack Title Only', folderMap: { People: 'people' } });
+  const before = hashes(s.root);
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file }, { pinCheck: () => null });
+  applyMove(plan);
+  assert.deepEqual(hashes(s.root), before);
+});
+
+test('--fold-site-file accounts for every setting it takes out of the site file: carried, dropped, or added to a list (#539)', () => {
+  const extra = {
+    siteTitle: 'T', footer: 'F', searchEnabled: false, folderMap: { People: 'people' }, attachmentsDir: 'att', system: 'gurps',
+    sheet_crest: 'crest.png', backend: { statusBar: true, inbox: true }, landing: { max_npcs: 3 }, images: { optimize: true },
+    banners: { npcs: 'b.png' }, locations: { group_by: 'system' }, excludeSections: ['Z'],
+  };
+  const { s, file, siteJson } = movedWithSiteFile('', extra);
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null });
+  assert.deepEqual(plan.blockers, []);
+  assert.deepEqual(plan.dropped, []);
+  assert.deepEqual(plan.carried.map((c) => c.from).sort(), [
+    'attachmentsDir', 'backend.inbox', 'backend.statusBar', 'banners', 'folderMap', 'footer', 'images.optimize', 'landing.max_npcs',
+    'locations.group_by', 'searchEnabled', 'sheet_crest', 'siteTitle', 'system',
+  ]);
+  applyMove(plan);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), siteJson, 'every setting left the site file');
+  const v = readSettings({ vaultPath: s.vault, siteConfig: {} }).values;
+  const p = v.player_site;
+  assert.equal(p.title, 'T');
+  assert.equal(p.footer, 'F');
+  assert.equal(p.features.search, false);
+  assert.deepEqual(p.folder_map, { People: 'people' });
+  assert.equal(v.vault.attachments, 'att');
+  assert.equal(v.vault.system, 'gurps-4e', 'the alias is read as the system it names');
+  assert.equal(p.sheets.crest, 'crest.png');
+  assert.equal(p.features.live_stats, true);
+  assert.equal(p.features.inbox, true);
+  assert.equal(p.landing.max_npcs, 3);
+  assert.equal(p.images.optimize, true);
+  assert.deepEqual(p.lists.banners, { npcs: 'b.png' });
+  assert.equal(p.lists.locations.group_by, 'system');
+  assert.ok(p.hide.sections.includes('Z'));
+});
+
+test('an unusable site value or a name that is not a setting is shown, left without the flag, and listed as dropped with it (#539)', () => {
+  const extra = { searchEnabled: 'maybe', landing: { bogus: 1, max_npcs: 2 }, images: { maxWidth: 800 } };
+  const { s, file, siteJson } = movedWithSiteFile('', extra);
+  const check = cliMove({ vault: s.vault }, { check: true });
+  assert.deepEqual(check.data.siteDiffers.sort(), ['player_site.features.search', 'player_site.images.max_width', 'player_site.landing', 'player_site.landing.max_npcs']);
+  const before = hashes(s.root);
+  applyMove(planMove({ vaultPath: s.vault, siteConfigPath: file }, { pinCheck: () => null }));
+  assert.deepEqual(hashes(s.root), before, 'without the flag the site file is left');
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null });
+  assert.deepEqual(plan.dropped.map((d) => d.from).sort(), ['landing.bogus', 'searchEnabled']);
+  assert.deepEqual(plan.carried.map((c) => c.from).sort(), ['images.maxWidth', 'landing.max_npcs'], 'named as the site file writes them');
+  applyMove(plan);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), siteJson);
+  const p = readSettings({ vaultPath: s.vault, siteConfig: {} }).values.player_site;
+  assert.equal(p.features.search, true, 'the unusable value was not carried');
+  assert.equal(p.images.max_width, 800);
+});
+
+test('a site value a left-over old file beat is listed as dropped, never carried, with or without other differences (#539)', () => {
+  for (const extra of [{ footer: 'SiteF' }, { footer: 'SiteF', siteTitle: 'T' }]) {
+    const { s, file, siteJson } = movedWithSiteFile('', extra);
+    fs.writeFileSync(at(s.vault, OLD_FILE), old('  footer: OldF\n'));       // a sync brings an old file back
+    for (const foldSiteFile of extra.siteTitle ? [true] : [false, true]) {
+      const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile }, { pinCheck: () => null });
+      assert.deepEqual(plan.dropped.map((d) => d.from), ['footer'], JSON.stringify(extra));
+      assert.match(plan.dropped[0].why, /left-over/);
+      assert.ok(!plan.carried.some((c) => c.from === 'footer'));
+      assert.doesNotMatch(plan.lines.join('\n'), /already holds them/);
+    }
+    applyMove(planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null }));
+    assert.equal(readSettings({ vaultPath: s.vault, siteConfig: {} }).values.player_site.footer, null);
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), siteJson);
+  }
+});
+
+test('a hiding list that is not usable is listed as dropped and adds nothing to the vault\'s list (#539)', () => {
+  const { s, file } = movedWithSiteFile('', { excludeSections: [1, { a: 2 }, 'X'] });
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null });
+  assert.deepEqual(plan.dropped.map((d) => d.from), ['excludeSections']);
+  assert.doesNotMatch(plan.lines.join('\n'), /entries were added/);
+  applyMove(plan);
+  const got = readSettings({ vaultPath: s.vault, siteConfig: {} }).values.player_site.hide.sections;
+  assert.ok(!got.includes('X') && !got.includes('1'), JSON.stringify(got));
+});
+
+// ---- #539 fix round ----
+
+test('a number or a blank in a text setting is not carried by the fold: both are dropped and said so, neither is carried (#539)', () => {
+  for (const [title, why] of [[5, /not usable/], ['', /blank/]]) {
+    const { s, file, siteJson } = movedWithSiteFile('', { siteTitle: title, folderMap: { P: 'p' } });
+    const r = cliMove({ vault: s.vault }, { foldSiteFile: true });
+    assert.equal(r.rc, 0, JSON.stringify(r.data && r.data.blockers));
+    assert.deepEqual(r.data.carried.map((c) => c.from), ['folderMap']);
+    assert.deepEqual(r.data.dropped.map((d) => d.from), ['siteTitle']);
+    assert.match(r.data.dropped[0].why, why);
+    assert.equal(readSettings({ vaultPath: s.vault, siteConfig: {} }).values.player_site.title, null);
+    assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), siteJson);
+  }
+});
+
+test('siteDiffers names settings only, and a site map that is not a map is dropped as unusable (#539)', () => {
+  const { s, file, siteJson } = movedWithSiteFile('', { landing: { bogus: 1 }, images: [1] });
+  const check = cliMove({ vault: s.vault }, { check: true });
+  assert.deepEqual(check.data.siteDiffers.sort(), ['player_site.images', 'player_site.landing']);
+  const r = cliMove({ vault: s.vault }, { foldSiteFile: true });
+  assert.equal(r.rc, 0);
+  const why = Object.fromEntries(r.data.dropped.map((d) => [d.from, d.why]));
+  assert.match(why['landing.bogus'], /not a setting/);
+  assert.match(why.images, /not usable as player_site.images/);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), siteJson);
+});
+
+test('settings held back in the site file are not "nothing to move", and the line points at --fold-site-file (#539)', () => {
+  const { s } = movedWithSiteFile('', { siteTitle: 'Pack Title', folderMap: { P: 'p' } });
+  const text = cliMove({ vault: s.vault }, { check: true }).data.lines.join('\n');
+  assert.doesNotMatch(text, /nothing to move/);
+  assert.doesNotMatch(text, /The vault's own values are the ones in use/);
+  assert.match(text, /--fold-site-file/);
+});
+
+test('after the fold, the lines say what was added to a hiding list (#539)', () => {
+  const { s } = movedWithSiteFile('', { excludeSections: ['Z'] });
+  const r = cliMove({ vault: s.vault }, { foldSiteFile: true });
+  assert.equal(r.rc, 0);
+  assert.match(r.data.lines.join('\n'), /excludeSections entries were added to player_site.hide.sections/);
+});
+
+test('--fold-site-file on a vault whose settings file does not parse is refused, not "nothing to move" (#539)', () => {
+  const { s, file } = movedWithSiteFile('', { siteTitle: 'T' });
+  fs.writeFileSync(at(s.vault, NEW_FILE), 'version: 1\nplayer_site: [unclosed\n');
+  const before = fs.readFileSync(file, 'utf8');
+  const r = cliMove({ vault: s.vault }, { foldSiteFile: true });
+  assert.notEqual(r.rc, 0);
+  assert.match(r.data.blockers.join('\n'), /could not be read/);
+  assert.equal(fs.readFileSync(file, 'utf8'), before);
+});
+
+test('a failing undo keeps the first error and names the undo\'s too (#539)', () => {
+  const { s, file } = movedWithSiteFile('', { siteTitle: 'T', excludeSections: ['Z'] });
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null });
+  let n = 0;
+  const rename = (a, b) => { n += 1; if (n >= 2) throw new Error(`disk said no ${n}`); fs.renameSync(a, b); };
+  assert.throws(() => applyMove(plan, { rename }), (e) => /disk said no 2/.test(e.message) && /put back/.test(e.message));
+});
+
+test('a discarded left-over file that could not be compared says so, with no empty list (#539)', () => {
+  const { s, file } = movedWithSiteFile('', {});
+  fs.writeFileSync(at(s.vault, OLD_FILE), old('  footer_text: x\n'));
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, discardOld: true }, { pinCheck: () => null });
+  const text = plan.lines.join('\n');
+  assert.doesNotMatch(text, /holds  that/);
+  assert.match(text, /discarded/);
+});
+
+test('--only takes one setting inside a site map and leaves the rest of the map (#539)', () => {
+  const { s, file, siteJson } = movedWithSiteFile('', { landing: { max_npcs: 3, max_locations: 2 }, siteTitle: 'T' });
+  const r = cliMove({ vault: s.vault }, { foldSiteFile: true, only: ['landing.max_npcs'] });
+  assert.equal(r.rc, 0, r.err.join('\n'));
+  assert.deepEqual(r.data.carried.map((c) => c.from), ['landing.max_npcs']);
+  assert.equal(readSettings({ vaultPath: s.vault, siteConfig: {} }).values.player_site.landing.max_npcs, 3);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), { ...siteJson, landing: { max_locations: 2 }, siteTitle: 'T' });
+});
+
+test('a held fold with --only leaves the named key in the site file (#539)', () => {
+  const text = JSON.stringify({ vaultPath: './Vault', landing: { max_npcs: 3, max_locations: 2 }, siteTitle: 'T' });
+  const held = stripSiteKeys(text, { carriedOnly: true, only: new Set(['landing.max_npcs']) });
+  assert.equal(held.siteOut, null);
+  assert.deepEqual(held.removedKeys, []);
+  assert.deepEqual(held.siteAfter.landing, { max_npcs: 3, max_locations: 2 });
+  const folded = stripSiteKeys(text, { only: new Set(['landing.max_npcs']) });
+  assert.deepEqual(folded.removedKeys, ['landing.max_npcs']);
+  assert.deepEqual(folded.siteAfter.landing, { max_locations: 2 });
+});
+
+test('a blank site value is listed as dropped and the report says it was removed (#539)', () => {
+  const { s, file } = movedWithSiteFile('', { siteTitle: '', excludeSections: ['Z'] });
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null });
+  assert.ok((plan.dropped || []).some((d) => d.from === 'siteTitle'), JSON.stringify(plan.dropped));
+  assert.match(plan.lines.join('\n'), /siteTitle.*(removed|is removed).*not carried over/);
 });
 
 // ---- What a site folder's vault.config.json still holds: carried into the vault, then taken out of the site file ----

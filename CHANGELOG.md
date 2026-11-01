@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.115] — 2026-10-31
+
+Tidying a moved vault's site file no longer loses settings. Publish tool 1.58.2; no vault change is needed.
+
+### Fixed
+
+- `settings move --fold-site-file` on a vault already on the new settings file no longer drops the site title, folder map or any other setting the site folder's `vault.config.json` still holds. A setting the vault does not set is carried into the vault's file; where the vault sets it differently, the vault's value stays and the site file's is listed as dropped. Both are named in the plan before anything is written.
+- The same tidy now names, and lists as dropped, a site-file value it cannot use and a name under `landing`, `images` or `locations` that is not a setting, instead of taking them out unsaid. Without `--fold-site-file` they are reported and left in the site file. A hiding list it cannot use no longer has its entries added to the vault's list.
+- A site-file value that a left-over old settings file overrode is listed as dropped, never carried into the vault, whether or not anything else differs.
+- A setting carried from an old site file's map is named as that file writes it (`images.maxWidth`, not `images.max_width`).
+- A number or a blank in a site-file text setting is no longer carried by `--fold-site-file`: a number is listed as dropped (it takes text), a blank is left behind. One rule now decides this for every carried setting.
+- A `landing`, `images` or `locations` entry in the site file that is not a map is listed as dropped, and `siteDiffers` names settings only.
+- A moved vault whose site file still holds settings no longer says "nothing to move"; the line points at `--fold-site-file`.
+- After the fold, the lines say which hiding-list entries were added to the vault's lists.
+- `--fold-site-file` on a vault whose settings file does not parse stops with a message instead of reporting nothing to move.
+- When a write fails and putting a file back fails too, both errors are named.
+- A discarded left-over settings file that could not be compared says so, instead of naming an empty list.
+- `--only landing.max_npcs` (a name inside a site-file map) takes just that setting.
+- campaign-qa's Settings check now words each site-file row from the publish tool's own plan: what moves into the vault, and what is left behind and why. It no longer says a setting the vault does not set is already in use. Its `fixed:` lines name what was not carried and why, and a fold the tool refuses shows the tool's reason and offers no fix.
+
+---
+
 ## [1.10.114] — 2026-10-31
 
 Four things the player site showed wrongly. Publish tool 1.58.1. The

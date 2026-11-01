@@ -1806,12 +1806,18 @@ def settings_carry(vault: Path, written: str, name: str) -> list[str]:
     return [str(answer["into"])]
 
 
-def settings_move_plan(vault: Path) -> dict[str, Any]:
+def settings_move_plan(vault: Path, *, fold_site_file: bool = False,
+                       only: list[str] | None = None) -> dict[str, Any]:
     """What `settings move --check` says of a vault: `ok`, `lines`,
     `blockers`, `files`, and for a moved vault with an old file left beside
-    the new one, `leftover` (`redundant`, `keys`). Writes nothing."""
+    the new one, `leftover` (`redundant`, `keys`). With `fold_site_file`,
+    what `--fold-site-file` would do, its `carried` and `dropped` naming
+    each site-file key; `only` limits that fold to the named keys. Writes
+    nothing."""
     _check_vault(vault)
-    answer = _run_settings(["move", *_target_args(vault), "--check"],
+    fold = ["--fold-site-file"] if fold_site_file else []
+    fold += [a for k in only or [] for a in ("--only", k)] if fold else []
+    answer = _run_settings(["move", *_target_args(vault), "--check", *fold],
                            blockable=True)
     if not isinstance(answer, dict):
         raise SettingsUnavailable(
@@ -1839,8 +1845,9 @@ def settings_fold_site_file(vault: Path,
     """On a vault already on the new file, take the settings its site
     folder's vault.config.json still holds out of that file, in one change
     across both files: a hiding list's entries are added to the vault's list,
-    the stricter callout rule is kept, any other value is the vault's own
-    already. With `keys` (site-file key names, `package.json` or
+    the stricter callout rule is kept, a setting the vault does not set is
+    carried into its file, and one it sets differently keeps the vault's
+    value (the tool lists it as dropped). With `keys` (site-file key names, `package.json` or
     `package.json <script>`) only those are taken and every other key is
     left where it is. The lines the tool reports."""
     _check_vault(vault)
