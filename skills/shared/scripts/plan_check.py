@@ -82,10 +82,13 @@ Checks, by id, level, and the rule they mechanise:
                          GM supplied: those sections may be settled, the
                          rest of the guard still runs
                          (SKILL.md, Hard Guard)
-  scene-pointer WARNING  a `### [[Scene]]` pointer names no `type: scene`
-                         note in the vault (found by walking up from the
-                         plan to a folder with `_Templates` or `_meta`;
-                         skipped when there is none)
+  scene-pointer WARNING  a `### [[Scene]]` pointer the play brief could not
+                         follow: no note of that name, a note that is
+                         not `type: scene`, or a bare name two chapters
+                         share. The vault is the nearest folder above the
+                         plan with `_meta`, `_Templates` or a settings
+                         file; with none, one INFO row says the check did
+                         not run. A plan under `_Templates` is skipped
   prep-state    INFO/    a resumable prep-state marker exists and parses
                 WARNING  (SKILL.md, Resumable prep)
 """
@@ -915,35 +918,78 @@ def check_prep_state(rel: str, text: str) -> list[Finding]:
 # --------------------------------------------------------------------------
 
 
-def find_vault(plan: Path) -> Path | None:
-    """The vault holding `plan`: the nearest folder above it with a
-    `_Templates` or `_meta` folder, else None."""
-    for folder in plan.resolve().parents:
-        if (folder / "_Templates").is_dir() or (folder / "_meta").is_dir():
-            return folder
-    return None
+def _name_hits(target: str, notes: list[tuple[str, Any]]) -> list[str]:
+    """The vault-relative paths of the notes a Plan pointer names: a bare
+    name by file stem, one written as a path by that path (as
+    `session_context._scene_note_text` finds them)."""
+    import session_context as sc
+    want = sc.pointer_key(target)
+    if "/" in target:
+        return [rel for rel, _ in notes
+                if sc.normalize(rel.removesuffix(".md")) == want]
+    return [rel for rel, _ in notes if sc.normalize(Path(rel).stem) == want]
 
 
 def check_scene_pointers(rel: str, text: str, vault: Path
                          ) -> list[Finding]:
-    """A WARNING for each `### [[Scene]]` pointer that no scene note
-    answers to (matched as `session_context` matches them)."""
+    """A WARNING for each `### [[Scene]]` pointer the play brief could not
+    follow: no note of that name, a note that does not read as
+    `type: scene`, or a bare name that two chapters' scenes share."""
     import session_context as sc
-    pointed = set()
+    try:
+        plan_rel = Path(rel).resolve().relative_to(vault.resolve()).as_posix()
+    except ValueError:
+        plan_rel = rel
+    if vl.is_skipped_path(plan_rel):
+        return []  # a template's placeholder pointer points nowhere
+    notes: list[tuple[str, dict[str, Any]]] = []
+    seen: set[str] = set()
     for r, t in vl.vault_files(vault):
-        if vl.entity_type(vl.extract_frontmatter(t)) != "scene":
-            continue
-        pointed.add(sc.normalize(r.removesuffix(".md")))
-        pointed.add(sc.normalize(Path(r).stem))
+        seen.add(r)
+        notes.append((r, vl.extract_frontmatter(t) or {}))
+    for path in sorted(vault.rglob("*.md")):  # unreadable ones too
+        r = path.relative_to(vault).as_posix()
+        if r not in seen and not vl.is_skipped_path(r):
+            notes.append((r, {"type": "(unreadable)"}))
+    scenes = [(r, fm) for r, fm in notes if vl.entity_type(fm) == "scene"]
+    chapter = sc.chapter_key(plan_rel, vl.extract_frontmatter(text) or {})
     findings: list[Finding] = []
-    for target in dict.fromkeys(sc.scene_pointers(text)):
-        if sc.pointer_key(target) in pointed:
+    for target, heading in dict.fromkeys(sc.scene_pointer_titles(text)):
+        locus = f"{rel}:§{heading}"
+        hits = _name_hits(target, scenes)
+        if len(hits) > 1:
+            in_chapter = [r for r in hits
+                          if sc.chapter_key(r, dict(notes).get(r, {}))
+                          == chapter]
+            hits = in_chapter or hits
+        if len(hits) == 1:
             continue
-        findings.append(Finding(
-            "scene-pointer", "WARNING", f"{rel}:§[[{target}]]",
-            f"scene-pointer: no scene note is named '{target}' — write "
-            f"the note, or fix the pointer"))
+        if hits:
+            findings.append(Finding(
+                "scene-pointer", "WARNING", locus,
+                f"scene-pointer: '{target}' names {len(hits)} scene notes "
+                f"({', '.join(hits)}) — write the pointer as the path of "
+                f"the one meant"))
+            continue
+        other = _name_hits(target, notes)
+        if other:
+            kind = vl.entity_type(dict(notes)[other[0]]) or "none readable"
+            findings.append(Finding(
+                "scene-pointer", "WARNING", locus,
+                f"scene-pointer: a note named '{target}' exists "
+                f"({other[0]}) but isn't a scene note (type: {kind}) — "
+                f"fix its type; don't write a second note"))
+        else:
+            findings.append(Finding(
+                "scene-pointer", "WARNING", locus,
+                f"scene-pointer: no note is named '{target}' — write the "
+                f"note, or fix the pointer"))
     return findings
+
+
+def _has_pointers(text: str) -> bool:
+    import session_context as sc
+    return bool(sc.scene_pointers(text))
 
 
 def run_checks(rel: str, text: str, fm: dict[str, Any], headless: bool,
@@ -1036,8 +1082,13 @@ def main() -> int:
     gm_input: bool | frozenset[str] = (
         False if args.gm_input is None else
         frozenset(GM_INPUT_PARTS[p] for p in args.gm_input) or True)
-    findings = run_checks(rel, text, fm, args.headless, gm_input,
-                          find_vault(args.plan))
+    vault = vl.find_vault(args.plan)
+    findings = run_checks(rel, text, fm, args.headless, gm_input, vault)
+    if vault is None and _has_pointers(text):
+        findings.append(Finding(
+            "scene-pointer", "INFO", f"{rel}:1",
+            "scene-pointer: not run — no vault (a folder with _meta, "
+            "_Templates or a settings file) above this plan"))
     has_error = any(f.level == "ERROR" for f in findings)
 
     if args.json:

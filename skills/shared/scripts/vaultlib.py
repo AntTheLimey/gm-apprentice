@@ -1367,6 +1367,19 @@ def vault_layout(vault: Path) -> Literal["new", "legacy", "none"]:
     return "none"
 
 
+def find_vault(path: Path) -> Path | None:
+    """The vault holding the note at `path`: the nearest folder above it
+    that has a settings file (either layout), a `_meta` folder or a
+    `_Templates` folder; None when there is none. The one rule every
+    script that starts from a single note uses."""
+    for folder in path.resolve().parents:
+        if (vault_layout(folder) != "none"
+                or (folder / "_meta").is_dir()
+                or (folder / "_Templates").is_dir()):
+            return folder
+    return None
+
+
 def settings_file(vault: Path) -> str:
     """The vault-relative name of the file the vault's settings are in, for
     a message: the new file, unless the vault is still on the old one."""
@@ -2778,7 +2791,8 @@ def is_active_pc(rel: str, fm: dict[str, Any], gone: frozenset[str]) -> bool:
     `*_Story.md` companion (same type, but narrative history rather than a
     sheet), not under an unchecked folder (an archived copy plays nobody),
     not a `_Template_*` file, and status not on the out-of-play list `gone`.
-    The one rule every PC list in the scripts uses."""
+    The one rule every active-PC list uses (`pc-body` checks sheets of any
+    status, so it spells the file rules out and leaves status alone)."""
     return (fm.get("type") == "pc"
             and not rel.endswith("_Story.md")
             and not is_unchecked_source(rel)
@@ -2798,8 +2812,8 @@ def active_pcs(vault: Path) -> list[tuple[str, dict[str, Any]]]:
 
 
 def active_pc_names(vault: Path) -> set[str]:
-    """Active PCs (`is_active_pc`, the rule session_context shares). Name set = filename stem, each
-    capitalised stem token (len >= 3), and each alias — for whole-word
+    """Names of the active PCs (`is_active_pc`). Name set = filename stem,
+    each capitalised stem token (len >= 3), and each alias — for whole-word
     matching of both 'Katherine Winslow' and 'Katherine'."""
     names: set[str] = set()
     for rel, fm in active_pcs(vault):

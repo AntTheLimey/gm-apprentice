@@ -371,22 +371,25 @@ def _norm_thread(text: str) -> str:
 
 _THREAD_LINK_RE = re.compile(r"\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]")
 _THREAD_STOP = frozenset("""
-about after again also and any are because been before being but can could
-did does for from had has have her him his how into its not now off one our
-out over she should some than that the their them then there they this those
-too under was were what when where which who whom why will with would you
-your also away back came come each even ever every few first get gave get
-give got going gone good last left let like made make many may more most much
-must never new next only other own put said say see seen she since still such
-take taken took told two upon use very want went while without yet""".split())
+about after again also and any are away back because been before being but
+came can come could did does each even ever every few first for from gave get
+give got going gone good had has have her him his how into its last left let
+like made make many may more most much must never new next not now off one
+only other our out over own put said say she see seen should since still
+some such take taken than that the their them then there they this those too
+took told two under upon use very want was were what when where which while
+who whom why will with without would yet you your
+knows resources major session relationships intent moment carried""".split())
 
 
 def _thread_words(raw: str) -> tuple[set[str], set[str]]:
     """(wikilink targets, significant words) of a thread line, both
     casefolded. A word is significant when it has three or more letters
     and is no stop word; a link target's own words count as words."""
-    links = {m.group(1).rpartition("/")[2].replace("_", " ").strip()
-             .casefold() for m in _THREAD_LINK_RE.finditer(raw)}
+    links = {re.sub(r"^(the|a|an) ", "",
+                    m.group(1).rpartition("/")[2].replace("_", " ")
+                    .strip().casefold())
+             for m in _THREAD_LINK_RE.finditer(raw)}
     words = {w for w in re.findall(r"[^\W\d_]{3,}", _norm_thread(raw))
              if w not in _THREAD_STOP}
     return links, words
@@ -476,18 +479,24 @@ def _scene_note_text(files, name: str, chapter: str | None = None) -> str:
     return body or f"(scene note {name} is empty)"
 
 
-def scene_pointers(plan_text: str) -> list[str]:
-    """The notes a Plan's `### [[Note]]` headings under Planned and
-    Contingency Scenes name, as written (a path keeps its folders), `.md`
-    dropped, in Plan order."""
-    out: list[str] = []
+def scene_pointer_titles(plan_text: str) -> list[tuple[str, str]]:
+    """(target, heading) for each `### [[Note]]` heading under Planned and
+    Contingency Scenes, in Plan order: the target as written (a path keeps
+    its folders, `.md` dropped) and the heading text, alias and all."""
+    out: list[tuple[str, str]] = []
     for title in ("Planned Scenes", "Contingency Scenes"):
         body = section(plan_text, title)
         for heading, _b in (h3_blocks(body) if body is not None else []):
             target = _pointer_target(heading)
             if target:
-                out.append(target.removesuffix(".md"))
+                out.append((target.removesuffix(".md"), heading.strip()))
     return out
+
+
+def scene_pointers(plan_text: str) -> list[str]:
+    """The notes a Plan's scene pointers name, as written (see
+    `scene_pointer_titles`)."""
+    return [t for t, _h in scene_pointer_titles(plan_text)]
 
 
 def pointer_key(target: str) -> str:
@@ -612,7 +621,7 @@ def play_brief(files, plan_rel: str, plan_text: str) -> str:
     return "\n\n".join(parts)
 
 
-def _ratio_match(thread: str, norm: str, bullet: str) -> bool:
+def _ratio_match(norm: str, bullet: str) -> bool:
     return SequenceMatcher(None, norm, _norm_thread(bullet)).ratio() >= 0.6
 
 
@@ -674,7 +683,7 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
             hits: list[int] = []
             for n, unresolved, carry in wrap_ups:
                 for bullet in unresolved + carry:
-                    if _ratio_match(thread, norm, bullet):
+                    if _ratio_match(norm, bullet):
                         hits.append(n)
                         if bullet in unresolved:
                             matched.add((n, bullet))
@@ -1317,7 +1326,9 @@ def main() -> int:
                            "the vault's stale-after number "
                            "(vault.stale_after_sessions; a candidate, not a "
                            "verdict — resolve, advance, or retire is the "
-                           "GM's call)")
+                           "GM's call). A thread read as first~N age~N (~ instead "
+                           "of =) is a likely match by shared names and "
+                           "words, not the same text: check it")
     mode.add_argument(
         "--arcs", action="store_true",
         help="print the Session Context header and the PC Arcs report "

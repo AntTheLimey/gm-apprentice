@@ -454,6 +454,21 @@ class ThreadSecondTierTests(unittest.TestCase):
             "[[Venn]] owes the party a favour",
             "[[Venn]] was seen leaving the quay at night"))
 
+    def test_a_the_link_still_counts_as_a_shared_name(self):
+        self.assertTrue(sc.threads_related(
+            "[[The Cylinder]] taken to Calcutta warehouse by Roy",
+            "Who moved [[Cylinder]] to Calcutta warehouse?"))
+
+    def test_label_words_are_not_key_words(self):
+        self.assertFalse(sc.threads_related(
+            "Resources: knows major session intent about the lantern",
+            "Knows: major session intent resources, and a lantern"))
+
+    def test_threads_help_explains_the_tilde(self):
+        done = run_cli(FIXTURE, "--help")
+        self.assertIn("~", done.stdout)
+        self.assertIn("likely", done.stdout)
+
     def reworded_vault(self):
         tmp = Path(tempfile.mkdtemp(prefix="thread-tier-"))
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)

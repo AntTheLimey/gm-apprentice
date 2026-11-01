@@ -1158,5 +1158,36 @@ class ChaptersNamedAliasTests(unittest.TestCase):
                          ["Chapters/Calcutta/Calcutta.md"])
 
 
+class FindVaultTests(unittest.TestCase):
+    """The one vault-finding rule (plan_check and dnd_ddb share it)."""
+
+    def tree(self, *dirs, files=()):
+        root = Path(tempfile.mkdtemp(prefix="find-vault-")).resolve()
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        for d in dirs:
+            (root / d).mkdir(parents=True, exist_ok=True)
+        for f in files:
+            (root / f).parent.mkdir(parents=True, exist_ok=True)
+            (root / f).write_text("x", encoding="utf-8")
+        (root / "Sub").mkdir(exist_ok=True)
+        return root
+
+    def test_settings_file_marks_a_vault(self):
+        root = self.tree(files=["_meta/vault-config.yaml"])
+        self.assertEqual(vl.find_vault(root / "Sub" / "n.md"), root)
+
+    def test_meta_folder_marks_a_vault(self):
+        root = self.tree("_meta")
+        self.assertEqual(vl.find_vault(root / "Sub" / "n.md"), root)
+
+    def test_templates_folder_marks_a_vault(self):
+        root = self.tree("_Templates")
+        self.assertEqual(vl.find_vault(root / "Sub" / "n.md"), root)
+
+    def test_no_marker_is_none(self):
+        root = self.tree()
+        self.assertIsNone(vl.find_vault(root / "Sub" / "n.md"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
