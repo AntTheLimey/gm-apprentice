@@ -191,9 +191,10 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   const recentNPCs = (publishConfig && publishConfig._recentNPCs) || [];
   let npcZone = '';
   if (recentNPCs.length > 0) {
-    const npcTotal = pages.filter(p => p.frontmatter.type === 'npc').length;
-    // The NPCs index is written only when a page sits in its folder; NPCs filed elsewhere have no index to link.
-    const npcIndex = pages.some(p => p.outputDir === 'characters/npcs' || String(p.outputDir).startsWith('characters/npcs/'));
+    // The count is what the NPCs index lists: the npc pages in its folder, and that index is linked only when there are some.
+    const inIndex = (p) => p.outputDir === 'characters/npcs' || String(p.outputDir).startsWith('characters/npcs/');
+    const npcTotal = pages.filter(p => p.frontmatter.type === 'npc' && inIndex(p)).length;
+    const npcIndex = npcTotal > 0;
     const npcCards = recentNPCs.map(({ page }) => {
       const fm = page.frontmatter;
       const initials = getInitials(page.displayTitle);

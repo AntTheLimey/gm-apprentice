@@ -17,6 +17,7 @@ const { decideNoPage, listedOnly } = require('./previews');
 const { surveyVault, pairsWith } = require('./manifest-cli');
 const { buildStorySpine } = require('./story-spine');
 const { foldPlan } = require('./story-fold');
+const { publishView } = require('./published-view');
 const { assertNoStops, outputFolderOf } = require('./config');
 const { canonicalPath, loadPublishList } = require('./manifest');
 const { settledHeadingsOf } = require('./settled-headings');
@@ -167,6 +168,12 @@ async function runExplain(options, deps) {
   // that is the URL to name.
   // A wrap-up a Story unit claims folds into that unit's Story page (story-fold.js): the build writes no file for it.
   // The probe spine is the build's own (no link map), built on the pages that publish with the pairs made above.
+  // The spine reads each page's published view, as the build does (published-view.js): a recap only inside a gm-only
+  // fence or an excluded section is no recap, so the unit is not there to fold into.
+  if (page && publishes) {
+    const rules = { gm: false, excludeCallouts: publishConfig.exclude_callouts, excludeSections: publishConfig.exclude_sections || [], pcKeepSections: pcKeepList(publishConfig), storyMoments: storyMomentsOn(publishConfig) };
+    for (const p of publishedPages) publishView(p, rules);
+  }
   const folded = page && publishes && verdict.code !== 'STORY_COMPANION'
     ? foldPlan(buildStorySpine(publishedPages, null, sitePairs)).get(page) : null;
   const mergedInto = verdict.code === 'STORY_COMPANION' ? storyCompanionPc(target, pagesByRel)

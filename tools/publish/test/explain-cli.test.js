@@ -915,3 +915,59 @@ describe('explain on a wrap-up folded into its Story page (#543)', () => {
     assert.match(text, /VERDICT: publishes at .*chapter-2-wrap-up\.html/);
   });
 });
+
+// The Story spine reads each page's published view, in the build and in explain alike: a recap that sits only in a
+// hidden part makes no Story page, so explain must not name one.
+describe('explain and the build agree on which wrap-ups fold (published view)', () => {
+  const { buildBoth } = require('./helpers/gm-build');
+  const { storyVault, WRAP_1 } = require('./helpers/story-vault');
+  const S1 = 'Sessions/Session 1 Wrap-Up.md';
+  const STORY_1 = ['story', 'chapter-1-docks-session-1.html'];
+  const run = async (files, opts, target) => {
+    const site = buildBoth(files, opts);
+    try {
+      const c = capture();
+      await runExplain({ configPath: site.configPath, target }, c.deps);
+      return { text: c.text(), story: site.player.exists(...STORY_1), wrapPage: site.player.exists('sessions', 'session-1-wrap-up.html') };
+    } finally { site.cleanup(); }
+  };
+  const recapHidden = WRAP_1.replace('## Narrative Recap\n\nThe party reached the docks at dusk, where [[Mara Quill]] waited with a lantern and a ledger.',
+    '<!-- gm-only -->\n## Narrative Recap\n\nThe party reached the docks at dusk.\n<!-- /gm-only -->');
+
+  it('control: a visible recap folds, in explain and in the build', async () => {
+    const r = await run(storyVault(), {}, S1);
+    assert.match(r.text, /publishes as part of .*session-1\.html \(its Story page\)/);
+    assert.ok(r.story && !r.wrapPage);
+  });
+
+  it('(a) a recap only inside a gm-only fence: no Story page, the wrap-up keeps its own page, in both', async () => {
+    assert.notStrictEqual(recapHidden, WRAP_1);
+    const r = await run(storyVault({ [S1]: recapHidden }), {}, S1);
+    assert.doesNotMatch(r.text, /Story page/);
+    assert.match(r.text, /VERDICT: publishes at .*session-1-wrap-up\.html/);
+    assert.ok(!r.story && r.wrapPage);
+  });
+
+  it('(b) a recap section named in hide.sections: the same', async () => {
+    const r = await run(storyVault(), { player: { hide: { sections: ['Narrative Recap'] } } }, S1);
+    assert.doesNotMatch(r.text, /Story page/);
+    assert.match(r.text, /VERDICT: publishes at .*session-1-wrap-up\.html/);
+    assert.ok(!r.story && r.wrapPage);
+  });
+
+  it('(c) a complete chapter whose introduction is wholly gm-only and whose wrap-up has no recap: no chapter Story page, in both', async () => {
+    const chapter = (body) => `---\ntype: chapter\ntitle: Chapter 2 — Lighthouse\nsort_order: 2\nstatus: complete\n---\n\n${body}\n`;
+    const wrap = '---\ntype: session_wrap\nchapter: "[[Chapter 2 Overview]]"\n---\n\n# Chapter 2 Wrap-Up\n\nLoose notes, no recap heading.\n';
+    const files = (body) => storyVault({
+      'Chapters/Chapter 2/Chapter 2 Overview.md': chapter(body),
+      'Chapters/Chapter 2/Chapter 2 Wrap-Up.md': wrap,
+      'Sessions/Session 3.md': '---\ntype: session\ntitle: Session 3\nsession_number: 3\nchapter: "[[Chapter 2 Overview]]"\nstatus: played\n---\n\n# Session 3\n\n## Narrative Recap\n\nThey climbed the lighthouse.\n',
+    });
+    const target = 'Chapters/Chapter 2/Chapter 2 Wrap-Up.md';
+    const shown = await run(files('# Chapter 2\n\nINTRO-VISIBLE.'), {}, target);
+    assert.match(shown.text, /publishes as part of .*story\/chapter-2-lighthouse-intro\.html \(its Story page\)/);
+    const hidden = await run(files('<!-- gm-only -->\n# Chapter 2\n\nINTRO-HIDDEN.\n<!-- /gm-only -->'), {}, target);
+    assert.doesNotMatch(hidden.text, /Story page/);
+    assert.match(hidden.text, /VERDICT: publishes at /);
+  });
+});

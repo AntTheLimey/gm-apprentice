@@ -26,6 +26,7 @@ const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { real, resolveGmFolder, gmFolderProblem, insideGitWorkTree, gmPage, writeMarker, ROBOTS_TXT } = require('./gm-site');
+const { publishView: sharedPublishView } = require('./published-view');
 const { createMarks, markKinds, sanitize, unmark, withoutMarked } = require('./gm-marks');
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
@@ -1194,34 +1195,8 @@ function buildSite(options) {
   // What the strip chain reports as it runs (a stray %%, an unclosed fence), kept for the
   // note-faults audit at the end: the chain is not run a second time for it.
   const stripFacts = new Map();
-  function publishView(page) {
-    const source = String(page.markdown || '');
-    if (gm) {
-      // The GM site keeps two published views. The marked one (every hidden part kept and marked) is the search
-      // index's. `publishedMarkdown`, which every excerpt reads (pull-quotes, cards, link previews, listings, recaps),
-      // is that text with each marked span dropped, as players see it: an excerpt that cut a mark open would wrap the
-      // rest of its page. A PC whose headings a link label changes has neither, as on the player site: its page shows
-      // the body, marked. No note-faults facts.
-      const gmFm = page.sourceFrontmatter || page.frontmatter;
-      page.gmMarkedPublished = page.headingsUnstable ? '' : filterSections(
-        strippedLines(source, excludeCallouts, mark, sectionWithholder(excludeSections, gmFm, { pcKeepSections, storyMoments })).lines.join('\n'),
-        excludeSections, gmFm, { pcKeepSections, storyMoments, mark });
-      page.publishedMarkdown = withoutMarked(page.gmMarkedPublished, mark.marks);
-      return;
-    }
-    const fm = page.sourceFrontmatter || page.frontmatter;
-    // A withheld heading inside a hidden block comes back where the block ended, as on the page (#447).
-    const stripped = strippedLines(source, excludeCallouts, null, sectionWithholder(excludeSections, fm, { pcKeepSections, storyMoments }));
-    // A stub's facts were taken when it was cut. A fault that lies wholly in text the page
-    // hides anyway (noteFacts) is none; a note withheld whole shows none.
-    stripFacts.set(page, stubFacts.get(page) || {
-      source, hidden: page.headingsUnstable ? [] : stripped.hidden,
-      ...noteFacts(stripped, (lines, restored) => (page.headingsUnstable ? lines.map(() => false) : keptFlags(lines, excludeSections, fm, { pcKeepSections, storyMoments, restored }))),
-    });
-    const text = stripped.lines.join('\n');
-    page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(text, excludeSections, fm,
-      { pcKeepSections, storyMoments, restored: stripped.restored });   // its warnings are the page render's to print, once
-  }
+  const publishView = (page) => sharedPublishView(page, { gm, mark, excludeCallouts, excludeSections, pcKeepSections, storyMoments }, { stubFacts, stripFacts });
+
   // Every page but a PC's first: the Story spine reads the wrap-ups' published views to decide which wrap-up folds.
   const isPcPage = (page) => String((page.sourceFrontmatter || page.frontmatter || {}).type).trim().toLowerCase() === 'pc';
   for (const page of pages) if (!isPcPage(page)) publishView(page);

@@ -137,6 +137,14 @@ describe('empty section indexes are not written (#543)', () => {
       } finally { elsewhere.cleanup(); }
     });
 
+    it(`${side}: "View all N NPCs" counts the NPCs the index lists, not every npc page`, () => {
+      const mixed = buildBoth(storyVault({ ...NPC, 'NPCs/Other Fixer.md': '---\ntype: npc\ntitle: Other Fixer\nstatus: alive\n---\n\n# Other Fixer\n\nElsewhere.\n' }));
+      try {
+        assert.match(mixed[side].read('index.html'), /View all 1 NPCs/);
+        assert.equal((mixed[side].read('characters', 'npcs', 'index.html').match(/Mara Quill|Other Fixer/g) || []).filter((n) => n === 'Other Fixer').length, 0);
+      } finally { mixed.cleanup(); }
+    });
+
     it(`${side}: with a session note there, the index and the menu link both stay`, () => {
       const s = withHubs[side];
       assert.ok(s.exists('sessions', 'index.html'));
