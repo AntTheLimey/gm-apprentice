@@ -170,7 +170,7 @@ async function runExplain(options, deps) {
   // stub cut, the published view, the site's pictures), so a recap only in a hidden part, or only a missing picture, is
   // no recap, and the unit is not there to fold into.
   const folded = page && publishes && verdict.code !== 'STORY_COMPANION'
-    ? playerFoldPlan(publishedPages, sitePairs, publishConfig, scanAttachments(scanConfigFor(Object.assign({}, config, { vaultPath }), publishConfig))).get(page) : null;
+    ? playerFoldPlan(publishedPages, sitePairs, publishConfig, scanAttachments(scanConfigFor(Object.assign({}, config, { vaultPath }), publishConfig)), vaultPath).get(page) : null;
   const mergedInto = verdict.code === 'STORY_COMPANION' ? storyCompanionPc(target, pagesByRel)
     : folded ? { outputPath: folded.outputPath, title: folded.title, storyPage: true } : null;
   // A prop its container lists with nothing of its own to show publishes with no page (previews.js listedOnly).

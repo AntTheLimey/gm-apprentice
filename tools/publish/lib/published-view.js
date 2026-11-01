@@ -2,7 +2,8 @@
 // A page's published view: its markdown with the parts players do not see taken out (gm-only fences, hidden callouts,
 // excluded sections). The build and `explain` both read the Story spine from it, so a recap that is only inside a hidden
 // part is no recap in either. One source: nothing else computes it.
-const { strippedLines, sectionWithholder, noteFacts, keptFlags, filterSections, stubCut, publishMode } = require('./processor');
+const { strippedLines, sectionWithholder, noteFacts, keptFlags, filterSections, stubCut, publishMode, publishedFrontmatter } = require('./processor');
+const { vaultRelPath } = require('./config');
 const { withoutMarked } = require('./gm-marks');
 
 // Sets `page.publishedMarkdown` (and, on the GM site, `page.gmMarkedPublished`).
@@ -45,22 +46,27 @@ function publishView(page, rules, facts = null) {
 // withheld, a stub cut to its named sections, then the published view), each through a copy so no page is changed.
 // The plan is keyed by the pages given. `pairs`: the site's session pairs (session-hub.js pairHubs); `imageMap`: the
 // site's pictures (scanner.js scanAttachments), so a recap that is only a missing picture is none, as on the page.
-function playerFoldPlan(pages, pairs, publishConfig, imageMap = null) {
+// `vaultPath` finds each note's field overrides: the plan reads the frontmatter the site publishes, as the build does,
+// so a `status` that hide.fields takes off leaves a chapter not complete here too.
+function playerFoldPlan(pages, pairs, publishConfig, imageMap = null, vaultPath = null) {
   const { probeSpine } = require('./story-spine');
   const { foldPlan } = require('./story-fold');
   const { pcKeepList, storyMomentsOn } = require('./pc-prose');
   const excludeSections = publishConfig.exclude_sections || [];
   const excludeCallouts = publishConfig.exclude_callouts;
   const rules = { gm: false, excludeCallouts, excludeSections, pcKeepSections: pcKeepList(publishConfig), storyMoments: storyMomentsOn(publishConfig) };
+  const fieldOverrides = (publishConfig.overrides && publishConfig.overrides.fields) || {};
   const original = new Map();
   const views = pages.map((page) => {
     const fm = page.sourceFrontmatter || page.frontmatter || {};
+    const rel = vaultPath && page.sourcePath ? vaultRelPath(vaultPath, page.sourcePath) : null;
+    const frontmatter = publishedFrontmatter(fm, publishConfig.exclude_fields, (rel && fieldOverrides[rel]) || {});
     let markdown = pairs.has(page) ? '' : String(page.markdown || '');
     if (publishMode(fm) === 'stub') {
       const include = Array.isArray(fm.publish_include_sections) ? fm.publish_include_sections : [];
       markdown = stubCut(markdown, include, { excludeSections, excludeCallouts, frontmatter: fm }).text;
     }
-    const view = { ...page, markdown };
+    const view = { ...page, markdown, sourceFrontmatter: fm, frontmatter };
     publishView(view, rules);
     original.set(view, page);
     return view;

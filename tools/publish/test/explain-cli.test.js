@@ -989,4 +989,18 @@ describe('explain and the build agree on which wrap-ups fold (published view)', 
     assert.match(r.text, /VERDICT: publishes at .*session-1-wrap-up\.html/);
     assert.ok(!r.story && r.wrapPage);
   });
+
+  it('(f) a complete chapter whose `status` hide.fields takes off: the chapter reads as not complete, in both', async () => {
+    const wrap = '---\ntype: session_wrap\nchapter: "[[Chapter 2 Overview]]"\n---\n\n# Chapter 2 Wrap-Up\n\n## Narrative Recap\n\nCHAPTER-RECAP-2 the lighthouse went dark.\n';
+    const files = storyVault({
+      'Chapters/Chapter 2/Chapter 2 Overview.md': '---\ntype: chapter\ntitle: Chapter 2 — Lighthouse\nsort_order: 2\nstatus: complete\n---\n\n# Chapter 2\n\nINTRO-VISIBLE.\n',
+      'Chapters/Chapter 2/Chapter 2 Wrap-Up.md': wrap,
+    });
+    const target = 'Chapters/Chapter 2/Chapter 2 Wrap-Up.md';
+    const shown = await run(files, {}, target);
+    assert.match(shown.text, /publishes as part of .*\(its Story page\)/);
+    const hidden = await run(files, { player: { hide: { fields: ['status'] } } }, target);
+    assert.doesNotMatch(hidden.text, /Story page/);
+    assert.match(hidden.text, /VERDICT: publishes at /);
+  });
 });
