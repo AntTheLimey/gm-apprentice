@@ -31,6 +31,11 @@ if (outDir === path.parse(outDir).root) {
 fs.rmSync(outDir, { recursive: true, force: true });
 fs.mkdirSync(outDir, { recursive: true });
 
+// Build warnings that are known and accepted. Any other warning stops the showcase, so a preset that
+// quietly lost its theme (a mistyped genre, a missing image) is never deployed.
+const ALLOWED_WARNINGS = [/^Custom fonts .* are loaded from Google Fonts/];
+const unexpected = [];
+
 for (const preset of PRESETS) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), `showcase-${preset.id}-`));
   const vaultDir = path.join(work, 'vault');
@@ -52,9 +57,18 @@ for (const preset of PRESETS) {
   fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vaultDir }, null, 2));
 
   console.log(`\n=== Building ${preset.name} showcase ===`);
-  build({ configPath });
-  fs.cpSync(path.join(work, 'docs'), path.join(outDir, preset.id), { recursive: true });
-  fs.rmSync(work, { recursive: true, force: true });
+  try {
+    const { warnings = [] } = build({ configPath });
+    for (const w of warnings) if (!ALLOWED_WARNINGS.some((re) => re.test(w))) unexpected.push(`${preset.name}: ${w}`);
+    fs.cpSync(path.join(work, 'docs'), path.join(outDir, preset.id), { recursive: true });
+  } finally {
+    fs.rmSync(work, { recursive: true, force: true });
+  }
+}
+
+if (unexpected.length) {
+  console.error(`\nThe showcase build warned:\n${unexpected.map((w) => `  ${w}`).join('\n')}`);
+  process.exit(1);
 }
 
 const cards = PRESETS.map(p => `    <a class="theme-card" href="${p.id}/index.html">
@@ -87,7 +101,7 @@ fs.writeFileSync(path.join(outDir, 'index.html'), `<!DOCTYPE html>
 <main>
   <h1>gm-apprentice — Theme Showcase</h1>
   <p class="lead">The same benchmark campaign built once per theme preset.
-  Set <code>publish.theme.genre</code> in your vault's <code>_meta/vault-config.md</code>.</p>
+  Set <code>player_site.theme.genre</code> in your vault's <code>_meta/vault-config.yaml</code>.</p>
   <div class="grid">
 ${cards}
   </div>

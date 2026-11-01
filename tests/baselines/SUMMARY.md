@@ -3,7 +3,20 @@
 **Date:** 2026-04-10 (original 4 skills), 2026-04-20 (session split)
 **Purpose:** Establish quality baselines before refactors
 **Methodology:** 3 runs per skill, 2 agents per run (sonnet), blind evaluation (opus), 5-dimension rubric (15 pts/question, 75 pts max)
-**Campaign data:** tests/benchmark-campaign/ (synthetic CoC 7e campaign, 19 files, 6 deliberate problems)
+**Campaign data:** tests/benchmark-campaign/ (synthetic CoC 7e campaign, 19 files, 6 deliberate problems, listed below)
+
+## The six deliberate problems
+
+Named in the message of commit 4acfb023, which added the campaign, and lined
+up with campaign-qa questions Q1 to Q5. `tests/test_benchmark_campaign.py`
+pins all six.
+
+1. Timeline contradiction: the Timeline has Ashford lecturing on Oct 16 while he is missing.
+2. Name confusion: Rev. Silas Marsh and Dr. Eleanor Voss (the PCs) beside an unplaced Dr. Marsh.
+3. Broken link: `[[Dr. Marsh]]` has no note.
+4. Three-clue violation: one letter is the only lead to the cult's hideout.
+5. Orphaned entity: St Anselms Church, which nothing links to.
+6. Stale thread: Inspector Crane's file on unusual incidents, never followed up.
 
 ## Benchmark campaign v2 (1.10.118): a new baseline starts here
 
@@ -18,9 +31,16 @@ problems are untouched.
 
 Results from before this change are not directly comparable with results from
 after it: the files an agent lists and reads differ in name and in number.
-Nothing was deleted or edited here; the old campaign is in git history before
-1.10.118, and the scores below stand as recorded. Start any new comparison from
-a run on the new campaign.
+Nothing was deleted or edited here, and the scores below stand as recorded.
+The last commit with the old campaign is d85acc04. A harness that needs the
+old files (underscore names, `_meta/vault-config.md`) should copy them from
+there with `git archive d85acc04 tests/benchmark-campaign`. Start any new
+comparison from a run on the new campaign.
+
+The `_Templates/` folder and `_meta/entity-types.md` and
+`relationship-types.md` are scaffolding the update added. Their placeholder
+links (`[[{Name}]]` and the like) are not broken links in the campaign, and a
+broken-link answer should leave them out.
 
 ## Results
 

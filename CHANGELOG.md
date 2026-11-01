@@ -15,7 +15,10 @@ The benchmark campaign is a valid, current vault again, and the browser tests no
 
 - The benchmark campaign (`tests/benchmark-campaign`, The Ashford Case) was brought from 1.9.10 to the current release with the update tool, so skill benchmarks no longer stop at the version gate. Its 16 note files were renamed to match the wikilinks that name them (`Brother_Ezra.md` is now `Brother Ezra.md`), it gained a publish list, and the theme showcase reads its settings from the vault's settings file instead of a site `vault.config.json` (#489, #496).
 - A new baseline starts here: results recorded before this change are not directly comparable (`tests/baselines/SUMMARY.md`). No note text changed, and the campaign's deliberate faults are untouched.
-- `validate_schema.py` skips the `_Templates` folder, as the freshness check already did.
+- `validate_schema.py` skips the `_Templates` folder (judged inside the vault), as the freshness check already did.
+- The old-layout settings case for the benchmark campaign left the settings equivalence matrix: it no longer has the old layout, and the same case lives on in `moved-system-vault`.
+- The showcase build exits 1 on any build warning outside a short allowed list, and its gallery page names `player_site.theme.genre` in `_meta/vault-config.yaml`.
+- The publish tool's CI also runs when the benchmark campaign or the showcase script changes.
 
 ### Added
 
@@ -24,7 +27,7 @@ The benchmark campaign is a valid, current vault again, and the browser tests no
 
 ### Fixed
 
-- Browser tests timed out under full-suite load because a dozen headless Chromes started at once. Every test browser launch now goes through one launcher in `test/helpers/browser.js` that takes a lock shared across the test processes, gives Chrome its own profile and uses one 120 second timeout (#516).
+- Browser tests timed out under full-suite load because a dozen headless Chromes started at once. Every test browser launch now goes through one launcher in `test/helpers/browser.js` that takes a lock shared across the test processes (taking over a dead process's lock is serialised, so two never hold it), gives Chrome its own profile and uses one 120 second timeout. A failed launch now says its exit status, timeout, spawn error and what Chrome printed (#516).
 
 ---
 

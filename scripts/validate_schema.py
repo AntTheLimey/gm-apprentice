@@ -97,10 +97,13 @@ def relationship_rows(campaign_dir: Path) -> dict[str, list[str]]:
     return found
 
 
-def _is_template(filepath: Path) -> bool:
+def _is_template(filepath: Path, root: Path) -> bool:
     """Template scaffolding carries placeholder fields by design; a vault the
-    update has run holds a _Templates folder, and it is not content to check."""
-    return "_Templates" in filepath.parts or filepath.stem.startswith("_Template")
+    update has run holds a _Templates folder, and it is not content to check.
+    Judged on the path inside the vault, so a vault that happens to sit under
+    a folder of that name is not skipped whole."""
+    return ("_Templates" in filepath.relative_to(root).parts
+            or filepath.stem.startswith("_Template"))
 
 
 # Content filtering: a scene is prep by type. It never publishes to the player site,
@@ -112,7 +115,7 @@ def validate_filtering(campaign_dir: Path) -> int:
     errors = 0
 
     for filepath in sorted(campaign_dir.rglob("*.md")):
-        if _is_template(filepath):
+        if _is_template(filepath, campaign_dir):
             continue
         try:
             content = filepath.read_text(encoding="utf-8")
@@ -186,7 +189,7 @@ def find_stale_pcs(campaign_dir: Path) -> FreshnessResult:
     for filepath in sorted(campaign_dir.rglob("*.md")):
         # Skip template scaffolding — templates carry empty temporal
         # fields by design and are never "stale".
-        if _is_template(filepath):
+        if _is_template(filepath, campaign_dir):
             continue
         try:
             content = filepath.read_text(encoding="utf-8")
@@ -254,7 +257,7 @@ def validate_freshness(campaign_dir: Path) -> int:
 
 def validate_campaign(campaign_dir: Path) -> int:
     """Validate campaign entity schemas. Returns exit code."""
-    md_files = [f for f in campaign_dir.rglob("*.md") if not _is_template(f)]
+    md_files = [f for f in campaign_dir.rglob("*.md") if not _is_template(f, campaign_dir)]
 
     if not md_files:
         print(f"Warning: No markdown files found in {campaign_dir}")
