@@ -119,6 +119,38 @@ describe('parseMoments', () => {
     assert.deepEqual(parseMoments('**A.**\n\n*x* #moment/Sad\n\n**B.**\n\n*y* #moment/sad').unknownTags, ['Sad']);
   });
 
+  it('a paragraph that is only a tag is structure: it sets the kind of the card before it, and prints nothing', () => {
+    const { cards, unknownTags } = parseMoments('**Beat.**\n*Context.*\n\n#moment/funny');
+    assert.deepEqual(cards, [{ shape: 'narration', main: '**Beat.**', context: '*Context.*', kind: 'funny', speaker: null }]);
+    assert.deepEqual(unknownTags, []);
+    assert.doesNotMatch(html('**Beat.**\n*Context.*\n\n#moment/funny'), /#moment/);
+    const quote = parseMoments('> "Run."\n> — Mara\n\n#moment/epic').cards;
+    assert.deepEqual(quote.map((c) => [c.shape, c.kind]), [['speech', 'epic']]);
+  });
+
+  it('a tag paragraph leaves a kind the card already has; an unknown word is reported and sets none', () => {
+    assert.deepEqual(parseMoments('**Beat.** #moment/epic\n\n#moment/funny').cards.map((c) => c.kind), ['epic']);
+    const unknown = parseMoments('**Beat.**\n\n#moment/sad');
+    assert.deepEqual(unknown.cards.map((c) => [c.main, c.kind]), [['**Beat.**', null]]);
+    assert.deepEqual(unknown.unknownTags, ['sad']);
+    assert.deepEqual(parseMoments('**Beat.** #moment/epic\n\n#moment/sad').unknownTags, ['sad']);
+  });
+
+  it('a tag paragraph with no card before it is dropped, and reported when it names no kind', () => {
+    for (const md of ['#moment/funny\n\n**Beat.**', '**B.**\n\n---\n\n#moment/funny\n\n**Beat.**']) {
+      const { cards, unknownTags } = parseMoments(md);
+      assert.ok(cards.every((c) => c.kind === null && !c.main.includes('#moment')), JSON.stringify(cards));
+      assert.deepEqual(unknownTags, []);
+    }
+    assert.deepEqual(parseMoments('#moment/sad\n\n**Beat.**').unknownTags, ['sad']);
+  });
+
+  it('a tag paragraph after a marked span names the card before the span, as on the player site', () => {
+    const open = '\uE000a1\uE001';
+    const { cards } = parseMoments(`**B.**\n\n${open}\nhidden\n\uE002\n\n#moment/funny`);
+    assert.deepEqual(cards.map((c) => [c.main, c.kind]), [['**B.**', 'funny'], [`${open}\nhidden\n\uE002`, null]]);
+  });
+
   it('empty text has no cards', () => {
     assert.deepEqual(parseMoments('').cards, []);
     assert.equal(html(''), '');

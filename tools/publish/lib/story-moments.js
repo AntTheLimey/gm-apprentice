@@ -1,8 +1,9 @@
 'use strict';
 // Memorable Moments as cards on the Story page. The wrap-up template writes each moment as a bold beat line with an
 // italic context line under it, or a block-quote of table dialogue ending in a `— Speaker` line; a moment may end with
-// a `#moment/<kind>` tag. The build shows the note as written: a card adds no quote marks and drops none, a quote in
-// the note is a quote card and a bold line is narration. The only text taken out is the tag, which is structure.
+// a `#moment/<kind>` tag, at its end or in a paragraph of its own under it. The build shows the note as written: a card
+// adds no quote marks and drops none, a quote in the note is a quote card and a bold line is narration. The only text
+// taken out is the tag, which is structure.
 const { createRenderer } = require('./markdown');
 const { renderMarkdown, renderInline, escapeHtml } = require('./processor');
 
@@ -20,6 +21,8 @@ const ICONS = {
 const LABEL = (kind) => kind[0].toUpperCase() + kind.slice(1);
 
 const TAG = /\s#moment\/([\p{L}\p{N}_-]+)([*_]*)\s*$/u;
+// A paragraph that is the tag alone.
+const LONE_TAG = /^#moment\/([\p{L}\p{N}_-]+)$/u;
 // The speaker line of a quote: its dash (as written, with the space after it) and the name.
 const DASH = /^(—|–|--)(\s*)(\S.*)$/;
 // The GM site's marks (gm-marks.js): an open token alone on a line starts a span that runs to where its depth returns to 0.
@@ -72,10 +75,13 @@ function parseMoments(markdown) {
   const cards = [];
   const unknownTags = [];
   let card = null;   // the last card, while a context line may still follow it
+  // The last card outside a marked span since the last rule: the one a paragraph that is only a tag names. A marked
+  // span (the GM site's) is passed over, so the tag names the card the player site, which has no such span, names.
+  let prior = null;
 
   // The block's text with its trailing tag taken off; the tag is noted on `tagged`.
-  // Only the tag goes. Not touched on purpose: the renderer's typographer still curls straight quotes when a card is
-  // drawn, and a paragraph that is only a tag leaves an empty block behind (both are rulings, not oversights).
+  // Only the tag goes. Not touched on purpose (a ruling, not an oversight): the renderer's typographer still curls
+  // straight quotes when a card is drawn.
   const strip = (text, tagged) => {
     const m = TAG.exec(text);
     if (!m) return text;
@@ -89,20 +95,31 @@ function parseMoments(markdown) {
     if (KINDS.includes(kind)) c.kind = kind;
     else if (!unknownTags.some((w) => w.toLowerCase() === kind)) unknownTags.push(tagged.word);
   };
-  const add = (c, tagged) => { kindOf(c, tagged); cards.push(c); return c; };
+  const add = (c, tagged) => { kindOf(c, tagged); cards.push(c); prior = c; return c; };
   const fresh = (shape, main, speaker = null, context = null) => ({ shape, main, speaker, context, kind: null });
 
   for (const part of stretches(lines)) {
     if (part.marked) {
       // A marked span is one card: its blocks, as written.
       card = null;
+      const before = prior;
       add(fresh('other', part.text.replace(/^\s+|\s+$/g, '')), {});
+      prior = before;
       continue;
     }
     card = null;
     for (const block of blocksOf(part.text)) {
       // A `---` rule divides the section; it is no moment, and no context line reaches back across it.
-      if (block.type === 'rule') { card = null; continue; }
+      if (block.type === 'rule') { card = null; prior = null; continue; }
+      // A paragraph that is only a tag is no card: it names the kind of the card before it, when that card has none. A
+      // word that is no kind is reported wherever it stands; with no card before it, the tag is dropped.
+      const lone = block.type === 'paragraph' ? LONE_TAG.exec(block.text.trim()) : null;
+      if (lone) {
+        const word = lone[1];
+        if (prior && prior.kind === null) kindOf(prior, { word });
+        else if (!KINDS.includes(word.toLowerCase())) kindOf({}, { word });
+        continue;
+      }
       const tagged = {};
       const text = strip(block.text, tagged);
       const last = card;
