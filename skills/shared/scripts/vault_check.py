@@ -1294,6 +1294,18 @@ def configured_site(vault: Path) -> tuple[Path | None, bool]:
     return _site_of(settings(vault), vault)
 
 
+def story_moments_on(site_settings: Settings | None) -> bool:
+    """Whether the site shows a wrap-up's Memorable Moments. A site pinned
+    to a publish tool from before the setting does not list it: that reads
+    as on, the default."""
+    if site_settings is None:
+        return True
+    try:
+        return site_settings.get("player_site.story.moments") is not False
+    except KeyError:
+        return True
+
+
 def vault_settings(vault: Path) -> Settings:
     """Every setting of the vault, with the site folder's own
     vault.config.json taking part when the vault has one (its old keys are
@@ -2762,8 +2774,7 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
     # line the site cuts or withholds for either is not called published.
     callouts = (site_settings.get("player_site.hide.callouts")
                 if site_settings is not None else False)
-    story_moments = (site_settings.get("player_site.story.moments")
-                     if site_settings is not None else True)
+    story_moments = story_moments_on(site_settings)
     pc_keep: list[str] | None = None
     match = {s.casefold() for s in excludes}
     writes: list[tuple[str, str, list[str]]] = []
@@ -2831,7 +2842,7 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
             text, excludes,
             note_type=note_type if isinstance(note_type, str) else None,
             pc_keep=pc_keep, callouts=callouts,
-            story_moments=story_moments is not False)
+            story_moments=story_moments)
         kept = _published_linenos(states, fm)
         # With character sheets off the tool withholds a PC's sheet sections
         # whatever they are called; their lines are no more published than a
