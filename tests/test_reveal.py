@@ -555,6 +555,15 @@ class RevealTests(unittest.TestCase):
                     self.assertNotIn("LOGGED", out)
                     self.assertFalse((self.root / "_meta" / "reveals.json").exists())
 
+    def test_released_item_for_a_refused_note_is_dropped_whatever_its_spelling(self) -> None:
+        self._never_vault("false")
+        code, out, _ = run(self.root, "--publish", "Handouts/../" + LEDGER, "--write",
+                           "--released", f"./{LEDGER}=the ledger",
+                           state=(set(), None), asked=[])
+        self.assertEqual(code, 1, out)
+        self.assertNotIn("LOGGED", out)
+        self.assertFalse((self.root / "_meta" / "reveals.json").exists())
+
     def test_publish_false_refused_when_explain_fails_too(self) -> None:
         self._never_vault("false")
         broken = ToolAnswer(why="the publish tool did not answer")

@@ -337,6 +337,17 @@ class HandWrittenIndexTests(unittest.TestCase):
                 result = run_cli(copy, "--write", "--date", TODAY)
                 self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_nested_or_unclosed_marker_is_not_the_tools(self):
+        for label, text in (
+                ("nested", "---\nmeta:\n  purpose: vault-index\n---\n# Mine\nGM prose\n"),
+                ("unclosed", "---\ntitle: Mine\npurpose: vault-index\n# Mine\nGM prose\n")):
+            with self.subTest(label=label):
+                copy = copy_fixture(self)
+                write(copy, "_meta/index.md", text)
+                result = run_cli(copy, "--write", "--date", TODAY)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual((copy / "_meta" / "index.md").read_text(encoding="utf-8"), text)
+
     def test_tool_made_index_still_rewrites(self):
         copy = copy_fixture(self)
         self.assertEqual(run_cli(copy, "--write", "--date", TODAY).returncode, 0)

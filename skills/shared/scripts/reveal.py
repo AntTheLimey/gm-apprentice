@@ -404,8 +404,9 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                     row("SKIP", rel, unstamped[rel])
 
     # What came out on a page that was refused is not logged either.
+    refused_paths = {os.path.normpath(r) for r in refused}
     items = [{"page": normalize_file_arg(p), "what": w} for p, w in released
-             if normalize_file_arg(p) not in refused]
+             if os.path.normpath(normalize_file_arg(p)) not in refused_paths]
     if published or items:
         counts["log"] = 1
         row("LOGGED" if write else "WOULD-LOG", LOG,

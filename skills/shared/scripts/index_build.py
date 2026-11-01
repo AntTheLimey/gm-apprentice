@@ -45,6 +45,7 @@ from typing import TypedDict
 
 from schema_rules import SESSION_NOT_YET_RUN
 from vaultlib import (
+    FRONTMATTER_RE,
     WRAP_UP_TYPES,
     chapter_key,
     chapter_of,
@@ -614,17 +615,18 @@ def _read_existing(index_path: Path) -> tuple[str, str]:
 
 def _is_generated(text: str) -> bool:
     """True when `text` is safe to rewrite: empty, or carrying the
-    `purpose: vault-index` marker `render` writes into the frontmatter
-    (quoted or not, with or without a byte-order mark)."""
+    `purpose: vault-index` marker `render` writes as a top-level field of a
+    closed frontmatter block (quoted or not, with or without a byte-order
+    mark)."""
     text = text.removeprefix("\ufeff")
     if not text.strip():
         return True
-    if not text.startswith("---\n"):
+    fm = FRONTMATTER_RE.match(text)
+    if fm is None:
         return False
-    head = text[4:].split("\n---", 1)[0]
-    for ln in head.splitlines():
+    for ln in fm.group(1).splitlines():
         key, _, value = ln.partition(":")
-        if key.strip() == "purpose" and scalar_value(value) == "vault-index":
+        if key.rstrip() == "purpose" and scalar_value(value) == "vault-index":
             return True
     return False
 
