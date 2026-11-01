@@ -992,8 +992,11 @@ def cmd_wrapup_add(batch: Batch, args: argparse.Namespace, text: str) -> None:
         before = note
         landed = add_section(note, rel, tmap, level, title, unit, mode,
                              args.after, prev, n == 0, made)
+        # Only --replace is stopped: --append adds and destroys nothing (the
+        # reconcile step adds to a reviewed Wrap-Up that way).
         if mode == "replace" and landed.detail.startswith("replaced") \
-                and raw_value(before, "canon_status") == "AUTHORITATIVE":
+                and vl.scalar_value(raw_value(before, "canon_status") or "").upper() \
+                == "AUTHORITATIVE":
             raise WriteError(
                 f"{rel}: this Wrap-Up is reviewed (canon_status: AUTHORITATIVE), "
                 f"so '{'#' * level} {title}' was not replaced. Ask the GM; "

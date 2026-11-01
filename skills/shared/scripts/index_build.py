@@ -50,6 +50,7 @@ from vaultlib import (
     chapter_of,
     entity_type,
     extract_frontmatter,
+    scalar_value,
     nested_mapping,
     normalize,
     parse_session_number,
@@ -612,12 +613,20 @@ def _read_existing(index_path: Path) -> tuple[str, str]:
 
 
 def _is_generated(text: str) -> bool:
-    """True when `text` carries the `purpose: vault-index` marker `render`
-    always writes into the frontmatter."""
+    """True when `text` is safe to rewrite: empty, or carrying the
+    `purpose: vault-index` marker `render` writes into the frontmatter
+    (quoted or not, with or without a byte-order mark)."""
+    text = text.removeprefix("\ufeff")
+    if not text.strip():
+        return True
     if not text.startswith("---\n"):
         return False
     head = text[4:].split("\n---", 1)[0]
-    return any(ln.strip() == "purpose: vault-index" for ln in head.splitlines())
+    for ln in head.splitlines():
+        key, _, value = ln.partition(":")
+        if key.strip() == "purpose" and scalar_value(value) == "vault-index":
+            return True
+    return False
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -641,8 +650,8 @@ def main(argv: list[str] | None = None) -> int:
         if not args.force and not _is_generated(previous):
             print(f"{index_path} was not made by this tool (it has no "
                   "`purpose: vault-index` line), so it was left alone. If it "
-                  "is the GM's own index, keep it; to replace it with a "
-                  "generated one, run again with --force.", file=sys.stderr)
+                  "is the GM's own index, keep it. Ask the GM before using "
+                  "--force: it replaces their text with a generated index.", file=sys.stderr)
             return 1
 
     rendered = render(vault, today=today, previous=previous)

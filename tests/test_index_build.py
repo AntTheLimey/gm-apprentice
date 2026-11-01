@@ -319,6 +319,24 @@ class HandWrittenIndexTests(unittest.TestCase):
         self.assertIn("purpose: vault-index",
                       (copy / "_meta" / "index.md").read_text(encoding="utf-8"))
 
+    def test_message_says_to_ask_the_gm_before_force(self):
+        result = run_cli(self._hand_written(), "--write", "--date", TODAY)
+        self.assertIn("Ask the GM before using --force", result.stderr)
+
+    def test_quoted_marker_bom_and_empty_file_count_as_safe(self):
+        generated = ib.render(FIX, today=TODAY, previous=None)
+        for label, text in (
+                ("quoted", generated.replace("purpose: vault-index",
+                                             'purpose: "vault-index"')),
+                ("bom", "\ufeff" + generated),
+                ("empty", ""),
+                ("blank", "\n\n")):
+            with self.subTest(label=label):
+                copy = copy_fixture(self)
+                (copy / "_meta" / "index.md").write_bytes(text.encode("utf-8"))
+                result = run_cli(copy, "--write", "--date", TODAY)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_tool_made_index_still_rewrites(self):
         copy = copy_fixture(self)
         self.assertEqual(run_cli(copy, "--write", "--date", TODAY).returncode, 0)

@@ -527,35 +527,48 @@ class RevealTests(unittest.TestCase):
                       "for it (SOMETHING_ELSE)", out)
         self.assertNotIn("revealed_in not written", out)
 
-    def _never(self, code: str) -> ToolAnswer:
-        return ToolAnswer(data={"pages": [
-            {"path": LEDGER, "code": code, "strippedSections": None, "prop": True,
-             "publishes": False}]})
-
-    def test_publish_false_note_is_refused_not_published(self) -> None:
-        for code in ("PUBLISH_FALSE", "PUBLISH_NONE"):
-            with self.subTest(code=code):
-                self._props()
-                before = (self.root / LEDGER).read_bytes()
-                code_, out, ap = run(self.root, "--publish", LEDGER, "--write",
-                                     explain=self._never(code))
-                self.assertEqual(code_, 1, out)
-                ap.assert_not_called()
-                self.assertEqual((self.root / LEDGER).read_bytes(), before)
-                self.assertIn(f"ERROR\t{LEDGER}\t", out)
-                self.assertIn("publish: false", out)
-                self.assertNotIn("PUBLISHED", out)
-                self.assertFalse((self.root / "_meta" / "reveals.json").exists())
-
-    def test_publish_false_note_already_listed_and_withheld_is_refused(self) -> None:
+    def _never_vault(self, value: str, withheld: bool = False) -> None:
         self._props()
-        before = (self.root / LEDGER).read_bytes()
-        code, out, _ = run(self.root, "--publish", LEDGER, "--write", state=({LEDGER}, None),
-                           explain=self._never("PUBLISH_FALSE"))
+        (self.root / LEDGER).write_text(
+            f"---\ntype: handout\npublish: {value}\n"
+            + ("withheld: true\n" if withheld else "") + "---\n\nL.\n", encoding="utf-8")
+
+    def test_publish_false_or_none_note_is_refused_before_any_tool_call(self) -> None:
+        for value in ("false", "none", "False", "[false]"):
+            for listed in (False, True):
+                with self.subTest(value=value, listed=listed):
+                    self._never_vault(value, withheld=listed)
+                    before = (self.root / LEDGER).read_bytes()
+                    asked: list[list[str]] = []
+                    code, out, ap = run(self.root, "--publish", LEDGER, "--write",
+                                        "--released", f"{LEDGER}=the ledger",
+                                        state=({LEDGER} if listed else set(), None),
+                                        asked=asked)
+                    self.assertEqual(code, 1, out)
+                    ap.assert_not_called()
+                    self.assertEqual((self.root / LEDGER).read_bytes(), before)
+                    rows = [ln for ln in out.splitlines() if ln.startswith(("ERROR", "WARNING"))]
+                    self.assertEqual(len(rows), 1, out)
+                    self.assertTrue(rows[0].startswith(f"ERROR\t{LEDGER}\t"), out)
+                    self.assertIn(f"publish: {'none' if value == 'none' else 'false'}", rows[0])
+                    self.assertNotIn("PUBLISHED", out)
+                    self.assertNotIn("LOGGED", out)
+                    self.assertFalse((self.root / "_meta" / "reveals.json").exists())
+
+    def test_publish_false_refused_when_explain_fails_too(self) -> None:
+        self._never_vault("false")
+        broken = ToolAnswer(why="the publish tool did not answer")
+        code, out, ap = run(self.root, "--publish", LEDGER, "--write", explain=broken)
         self.assertEqual(code, 1, out)
-        self.assertEqual((self.root / LEDGER).read_bytes(), before)
-        self.assertIn(f"ERROR\t{LEDGER}\t", out)
-        self.assertNotIn("PUBLISHED", out)
+        ap.assert_not_called()
+        self.assertEqual(sum(ln.startswith(("ERROR", "WARNING")) for ln in out.splitlines()), 1)
+
+    def test_publish_false_beside_a_fine_note_only_refuses_the_one(self) -> None:
+        self._never_vault("false")
+        code, out, ap = run(self.root, "--publish", LEDGER, "--publish", PELL, "--write")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(ap.call_args.args[1], [PELL])
+        self.assertEqual(log_of(self.root)["entries"][-1]["published"], [PELL])
 
     def test_session_with_quote_and_backslash_stays_valid(self) -> None:
         self._props()
@@ -671,6 +684,24 @@ class ApplyPublishRealTool(unittest.TestCase):
         self.assertIn("leaves out", why or "")
         state, _ = reveal.publish_state(self.vault)
         self.assertEqual(state, set())
+
+    def test_publish_false_refused_against_the_real_tool(self) -> None:
+        self._list("publishing:\n  - NPCs/Listed.md\nexcluded: []\nneeds_decision: []\n")
+        (self.vault / "NPCs" / "Secret.md").write_text(
+            "---\ntype: npc\npublish: false\n---\n\nS.\n", encoding="utf-8")
+        (self.vault / "NPCs" / "Listed.md").write_text(
+            "---\ntype: npc\npublish: none\nwithheld: true\n---\n\nL.\n", encoding="utf-8")
+        for rel in ("NPCs/Secret.md", "NPCs/Listed.md"):
+            with self.subTest(rel=rel):
+                buf = io.StringIO()
+                with contextlib.redirect_stdout(buf):
+                    code = reveal.main([str(self.vault), "--session", "S1",
+                                        "--publish", rel, "--write"])
+                self.assertEqual(code, 1, buf.getvalue())
+                self.assertIn(f"ERROR\t{rel}\t", buf.getvalue())
+        state, _ = reveal.publish_state(self.vault)
+        self.assertEqual(state, {"NPCs/Listed.md"})
+        self.assertFalse((self.vault / "_meta" / "reveals.json").exists())
 
 
 if __name__ == "__main__":

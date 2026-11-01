@@ -54,7 +54,7 @@ from vault_check import _site_config, ask_publish_tool  # noqa: E402
 from vault_write import set_block  # noqa: E402
 from vaultlib import (  # noqa: E402
     WITHHELD_KEY_RE, PublishToolUnavailable, entity_type, extract_frontmatter,
-    frontmatter_span, normalize_file_arg, note_withheld, scalar_value)
+    frontmatter_span, normalize_file_arg, note_withheld, publish_mode, scalar_value)
 
 LOG = "_meta/reveals.json"
 EMPTY_VALUES = ("", "[]", "null", "~")     # YAML's empty values, as scalar_value reads them
@@ -126,9 +126,6 @@ def prop_paths(vault: Path) -> tuple[set[str] | None, dict[str, str], str | None
     return props, no_page, None
 
 
-NEVER_PUBLISH_CODES = ("PUBLISH_FALSE", "PUBLISH_NONE")
-
-
 def _no_page_why(rel: str, code: str) -> str:
     if code == "DIR_UNMAPPED":
         folder = Path(rel).parent.as_posix()
@@ -149,9 +146,17 @@ def _refusal(vault: Path, rel: str) -> str | None:
         full.resolve().relative_to(vault.resolve())
     except ValueError:
         return "outside the vault"
-    kind = entity_type(extract_frontmatter(full.read_text(encoding="utf-8")))
+    fm = extract_frontmatter(full.read_text(encoding="utf-8"))
+    kind = entity_type(fm)
     if kind in NEVER_CANDIDATES:
         return f"a {kind} note is prep or structure; it never publishes"
+    # Decided from the note itself, before any tool call: the tool's verdict
+    # for such a note can read MANIFEST_UNLISTED, or fail altogether.
+    if publish_mode(fm) == "none":
+        said = "none" if "none" in str((fm or {}).get("publish")).lower() else "false"
+        return (f"not published, nothing changed: the note says publish: {said}, "
+                f"so the site would never show it. Clear it in the note first "
+                f"(the GM's own mark), then reveal it")
     return None
 
 
@@ -276,11 +281,13 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
         row("ERROR", path, why)
 
     wanted: list[str] = []
+    refused: set[str] = set()
     for raw in publish:
         rel = normalize_file_arg(raw)
         why = _refusal(vault, rel)
         if why:
             error(rel, why)
+            refused.add(rel)
         elif rel not in wanted:
             wanted.append(rel)
     if wanted and _site_config(vault)[0] is None:
@@ -320,15 +327,6 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                     row("WARNING", "-", f"revealed_in not written: {why}")
                 else:
                     props = found
-            # A note whose own frontmatter says publish: false (or none) never
-            # gets a page; it is refused, not published, stamped or logged.
-            for rel in [*fresh, *lifted]:
-                if no_page.get(_nfc(rel)) in NEVER_PUBLISH_CODES:
-                    error(rel, "not published, nothing changed: the note says "
-                               "publish: false, so the site would never show it; "
-                               "clear publish: false in the note first, then reveal it")
-                    wanted.remove(rel)
-                    (fresh if rel in fresh else lifted).remove(rel)
             # Know the edit can be done before anything is published: the
             # clear, and on a prop revealed now with no arrival yet, the stamp,
             # one write per note. A note published before is never stamped.
@@ -405,7 +403,9 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                 if rel in unstamped:
                     row("SKIP", rel, unstamped[rel])
 
-    items = [{"page": normalize_file_arg(p), "what": w} for p, w in released]
+    # What came out on a page that was refused is not logged either.
+    items = [{"page": normalize_file_arg(p), "what": w} for p, w in released
+             if normalize_file_arg(p) not in refused]
     if published or items:
         counts["log"] = 1
         row("LOGGED" if write else "WOULD-LOG", LOG,

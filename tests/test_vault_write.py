@@ -699,6 +699,29 @@ class WrapupAddTests(unittest.TestCase):
         code, out = add(vault, "### Quality Notes\n\nFine.\n", "--replace")
         self.assertEqual(code, 0, out)
 
+    def test_replace_refusal_reads_canon_status_quoted_or_any_case(self):
+        for spelled in ('"AUTHORITATIVE"', "'AUTHORITATIVE'", "authoritative",
+                        "AUTHORITATIVE  # reviewed"):
+            with self.subTest(spelled=spelled):
+                vault = wrap_vault(self)
+                add(vault, "### World State\n\n- old\n")
+                (vault / WRAP_REL).write_text((vault / WRAP_REL).read_text(
+                    encoding="utf-8").replace("canon_status: DRAFT",
+                                              f"canon_status: {spelled}"), encoding="utf-8")
+                before = read(vault, WRAP_REL)
+                code, out = add(vault, "### World State\n\n- new\n", "--replace")
+                self.assertEqual(code, 1, out)
+                self.assertEqual(read(vault, WRAP_REL), before)
+
+    def test_append_is_allowed_on_a_reviewed_wrapup(self):
+        vault = wrap_vault(self)
+        add(vault, "### World State\n\n- old\n")
+        (vault / WRAP_REL).write_text((vault / WRAP_REL).read_text(encoding="utf-8").replace(
+            "canon_status: DRAFT", "canon_status: AUTHORITATIVE"), encoding="utf-8")
+        code, out = add(vault, "### World State\n\n- more\n", "--append")
+        self.assertEqual(code, 0, out)
+        self.assertIn("- more", read(vault, WRAP_REL))
+
     def test_a_decorated_heading_is_the_same_section(self):
         vault = wrap_vault(self, WRAP.replace(
             "## GM Notes\n", "## GM Notes\n\n### **world state**\n\n- old\n"))
