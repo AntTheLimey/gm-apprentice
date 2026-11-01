@@ -1659,8 +1659,8 @@ BLOCK_START_RE = re.compile(
     r"^ {0,3}(?:#{1,6}(?:\s|$)|`{3,}|~{3,}|(?:[-*_][ \t]*){3,}$|[-*+](?:\s|$)|\d{1,9}[.)](?:\s|$)|<)")
 
 
-def _fence_source(text: str) -> str | None:
-    """The note with every Source callout players can see wrapped in a
+def _fence_callouts(text: str, callout_re: re.Pattern[str]) -> str | None:
+    """The note with every callout `callout_re` matches, that players can see, wrapped in a
     gm-only fence, or None when there is none. A callout already inside a
     gm-only or spoiler block, under `## GM Notes` (up to the next heading
     of level 1 or 2), or in a code fence is left as it is. Lazy continuation
@@ -1677,7 +1677,7 @@ def _fence_source(text: str) -> str | None:
         if s.heading and s.heading[0] <= 2:
             h2 = s.heading[1].strip().casefold()
         if (not s.in_code and s.gm_depth == 0 and s.spoiler_depth == 0
-                and h2 != "gm notes" and SOURCE_CALLOUT_RE.match(s.line)):
+                and h2 != "gm notes" and callout_re.match(s.line)):
             j = i + 1
             while (j < len(states) and not states[j].in_code
                    and states[j].line.lstrip().startswith(">")):
@@ -1701,6 +1701,11 @@ def _fence_source(text: str) -> str | None:
             eol if ended else "")
         lines[start] = GM_OPEN + eol + lines[start]
     return "".join(lines)
+
+
+def _fence_source(text: str) -> str | None:
+    """`_fence_callouts` for the wrap-up's Source callout."""
+    return _fence_callouts(text, SOURCE_CALLOUT_RE)
 
 
 def find_wrapup_source_fence(vault: Path) -> list[Item]:
