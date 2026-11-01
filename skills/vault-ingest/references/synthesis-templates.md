@@ -26,10 +26,12 @@ created_by: vault-ingest
 ### Required Body Sections
 
 ```markdown
+<!-- gm-only -->
 > [!info] Reconstruction Note
 > Reconstructed from [list source documents with classifications]
 > on [date]. Keeper interview filled [N] gaps. [N] items remain
 > unresolved.
+<!-- /gm-only -->
 
 ## Play Events
 
@@ -72,6 +74,7 @@ session-wrapup (and future readers) that this is reconstructed
 content, not live capture.
 
 ```markdown
+<!-- gm-only -->
 > [!info] Reconstruction Note
 > Reconstructed from:
 > - old-session-notes.md (play fragments, scenario prep)
@@ -81,6 +84,7 @@ content, not live capture.
 > Limitations: No play transcript exists. Events reconstructed
 > from prep documents and keeper memory. 2 items remain
 > unresolved (see Unresolved Items below).
+<!-- /gm-only -->
 ```
 
 ## Synthesis Rules

@@ -165,7 +165,8 @@ Keeper-facing subsection at `###`. Keeper-facing content never gets
 its own top-level H2: it would publish to player sites.
 
 A reconstructed session (vault-ingest) opens with a
-`> [!info] Reconstruction Note` callout naming sources, date and gaps.
+`> [!info] Reconstruction Note` callout naming sources, date and gaps,
+fenced `<!-- gm-only -->`.
 
 ## Skill Ownership
 

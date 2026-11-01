@@ -141,9 +141,10 @@ fabricated Gregorian date or a time of day). Per bucket, run
 `shared/vault-access.md`) and fix every ERROR before the next
 bucket.
 
-Include a `> [!info] Reconstruction Note` (sources, limitations);
-mark uncertain items `<!-- UNVERIFIED (S{n}) -->`, tagged with
-the session ingested (`Ch{c} S{n}` if it has a chapter).
+Include a `> [!info] Reconstruction Note` (sources, limitations)
+between `<!-- gm-only -->` and `<!-- /gm-only -->` lines; mark
+uncertain items `<!-- UNVERIFIED (S{n}) -->`, tagged with the
+session ingested (`Ch{c} S{n}` if it has a chapter).
 
 **Planning documents** (arc structures, investigation flows)
 become `type: plan` entities in `Chapters/{chapter}/Planning/` per
