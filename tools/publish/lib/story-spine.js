@@ -269,7 +269,10 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
     if (!players || !wrapUp || players.shows(wrapUp) || !players.has(outputPath)) return {};
     const shown = playersRecap();
     if (!shown) return {};
-    return { heldBack: { recapHtml: shown, wrapRecapTitle: recap && recap.sourcePage === wrapUp ? recap.title : null } };
+    // The unit's recap is the wrap-up's own only when it came from the wrap-up; otherwise it is the players' (the
+    // fallback), already shown once.
+    const own = !!recap && recap.sourcePage === wrapUp;
+    return { heldBack: { recapHtml: shown, wrapHasRecap: own, wrapRecapTitle: own ? recap.title : null } };
   };
   const chapters = sortedChapters(pages);
   const sessions = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session');
@@ -352,6 +355,23 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
   return units;
 }
 
+// What the GM site marks on a Story page, from the player site's side: `banner`, the reason players have no Story
+// page here (the page-level banner), or null; `held`, the unit's `heldBack` when its wrap-up is shown in one mark
+// after the players' recap, or null. `playerHas`: the player site has a Story page at this address; `shows(page)`:
+// it publishes that page; `folded`: the wrap-up folded into this page. A wrap-up players do not see on a page they
+// have, with no recap of theirs to lead it, gets the banner: held-back text is never shown unmarked.
+function gmStoryNotes(unit, { playerHas, shows, folded = null }) {
+  const held = unit.heldBack && unit.heldBack.recapHtml ? unit.heldBack : null;
+  if (!playerHas) {
+    if (folded && shows(folded)) return { banner: `players see this wrap-up on its own page (${folded.foldedFrom}), not here`, held: null };
+    return { banner: (folded && folded.gmHiddenBecause) || (unit.sourcePage && unit.sourcePage.gmHiddenBecause) || 'the player site has no Story page here', held: null };
+  }
+  if (!held && unit.wrapUpPage && !shows(unit.wrapUpPage)) {
+    return { banner: `players see another Story page here; this wrap-up is held back: ${unit.wrapUpPage.gmHiddenBecause || 'the player site leaves it out'}`, held: null };
+  }
+  return { banner: null, held };
+}
+
 // The Story page that tells each page's part of the saga: a Map from a session or chapter page, and from the
 // wrap-up its Story page was made from, to that Story page's outputPath. Built once from the spine and handed to
 // whatever links "the session" (the landing page's Read full session, #541). A session's own Story page wins over
@@ -375,4 +395,4 @@ function characterStoryGroup(frontmatter, fallen) {
   return 'current';
 }
 
-module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOfSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, storyPagesFor, orderedSessions, characterStoryGroup };
+module.exports = { gmStoryNotes, findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOfSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, storyPagesFor, orderedSessions, characterStoryGroup };

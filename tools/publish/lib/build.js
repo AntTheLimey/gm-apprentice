@@ -30,7 +30,7 @@ const { createMarks, markKinds, sanitize, unmark, withoutMarked } = require('./g
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
 const { KINDS, parseMoments, momentsHtml } = require('./story-moments');
-const { buildStorySpine, storyPagesFor, chapterOfSession, characterStoryGroup } = require('./story-spine');
+const { buildStorySpine, gmStoryNotes, storyPagesFor, chapterOfSession, characterStoryGroup } = require('./story-spine');
 const { foldPlan, applyFold, isFolded, labelFoldedHeadings } = require('./story-fold');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
@@ -2460,13 +2460,6 @@ function buildSite(options) {
     unit.afterHtml = parts ? `<section class="story-gm-after">\n${parts}\n</section>` : '';
     unit.playNotesHtml = href ? `<p class="story-playnotes"><a href="${encodeHref(relativeHref(unit.outputPath, href))}">Play Notes for this session →</a></p>` : '';
   }
-  // The GM Story page's banner: why players have no Story page at this address (its folded wrap-up held back, or
-  // shown on its own page; the unit's own note held back), or null when they have one.
-  function storyBanner(unit, folded) {
-    if (playerStory.has(unit.outputPath)) return null;
-    if (folded && onPlayerSite.has(folded)) return `players see this wrap-up on its own page (${folded.foldedFrom}), not here`;
-    return (folded && folded.gmHiddenBecause) || unit.sourcePage.gmHiddenBecause || 'the player site has no Story page here';
-  }
   // A session's Play Notes: the note its `documents.play_notes` names, else its wrap-up's `source_document`; the
   // address of its page, or null when it has none.
   function playNotesHrefOf(unit) {
@@ -2537,16 +2530,18 @@ function buildSite(options) {
       const folded = (foldedOnto.get(unit.outputPath) || [])[0];
       if (gm) gmAfter(unit);
       // A wrap-up players do not see, on a Story page they have: its parts in one mark, after their own recap.
-      if (gm && unit.heldBack) {
+      // Otherwise, where players have no Story page here (or no recap of theirs to lead one), the page's banner says why.
+      const notes = gm ? gmStoryNotes(unit, { playerHas: playerStory.has(unit.outputPath), shows: (p) => onPlayerSite.has(p), folded }) : { banner: null, held: null };
+      if (notes.held) {
         const why = (unit.wrapUpPage && unit.wrapUpPage.gmHiddenBecause) || 'the player site leaves it out';
-        unit.heldBack.open = mark.marks.open('notes', `This wrap-up is held back from players: ${why}`);
-        unit.heldBack.close = mark.marks.close();
-      }
+        notes.held.open = mark.marks.open('notes', `This wrap-up is held back from players: ${why}`);
+        notes.held.close = mark.marks.close();
+      } else delete unit.heldBack;
       const html = renderStoryUnit(unit, config, publishConfig, navFor);
       // The GM site writes the page with its folded wrap-up's hidden-fields panel, and a banner when players have no
       // Story page here (with the reason): nothing the wrap-up's own page showed is lost.
       emit(unit.outputPath, html, `  wrote ${unit.outputPath}`,
-        { outputPath: unit.outputPath, gmHiddenBecause: gm ? storyBanner(unit, folded) : null, gmHidden: folded ? folded.gmHidden : [] });
+        { outputPath: unit.outputPath, gmHiddenBecause: notes.banner, gmHidden: folded ? folded.gmHidden : [] });
       // Each wrap-up folded into this page is read on it, as its own page was: its faults are its note's.
       if (live) for (const page of foldedOnto.get(unit.outputPath) || []) seen(vaultRelPathOf(page), html, page, false);
     }

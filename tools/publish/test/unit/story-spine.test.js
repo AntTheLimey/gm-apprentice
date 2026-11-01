@@ -373,3 +373,37 @@ describe('buildStorySpine: a chapter has a recap only once complete', () => {
     assert.strictEqual(foldPlan(spine).get(pages[3]), intro);
   });
 });
+
+// The GM Story page's notes from the player site's side (#543): never held-back text unmarked with no banner.
+describe('gmStoryNotes', () => {
+  const { gmStoryNotes } = require('../../lib/story-spine');
+  const wrap = { gmHiddenBecause: 'canon_status: DRAFT and exclude_drafts is on', foldedFrom: 'sessions/w.html' };
+  const hub = { gmHiddenBecause: 'publish: false' };
+  const hiddenFrom = (...ps) => (p) => !ps.includes(p);
+
+  it('players have the page and see the wrap-up: no banner, nothing held', () => {
+    assert.deepStrictEqual(gmStoryNotes({ sourcePage: hub, wrapUpPage: wrap }, { playerHas: true, shows: () => true, folded: wrap }), { banner: null, held: null });
+  });
+
+  it('players have the page, the wrap-up is held back and their recap leads it: held in one mark, no banner', () => {
+    const heldBack = { recapHtml: '<p>theirs</p>', wrapHasRecap: true, wrapRecapTitle: 'Narrative Recap' };
+    const out = gmStoryNotes({ sourcePage: hub, wrapUpPage: wrap, heldBack }, { playerHas: true, shows: hiddenFrom(wrap), folded: wrap });
+    assert.deepStrictEqual(out, { banner: null, held: heldBack });
+  });
+
+  it('players have the page, the wrap-up is held back, and there is no recap of theirs: the banner gives the reason', () => {
+    for (const heldBack of [undefined, { recapHtml: null }, { recapHtml: '' }]) {
+      const out = gmStoryNotes({ sourcePage: hub, wrapUpPage: wrap, heldBack }, { playerHas: true, shows: hiddenFrom(wrap), folded: wrap });
+      assert.strictEqual(out.held, null);
+      assert.strictEqual(out.banner, 'players see another Story page here; this wrap-up is held back: canon_status: DRAFT and exclude_drafts is on');
+    }
+  });
+
+  it('players have no page: the banner says where they read the wrap-up, or why it is held back', () => {
+    assert.strictEqual(gmStoryNotes({ sourcePage: hub, wrapUpPage: wrap }, { playerHas: false, shows: () => true, folded: wrap }).banner,
+      'players see this wrap-up on its own page (sessions/w.html), not here');
+    assert.strictEqual(gmStoryNotes({ sourcePage: hub, wrapUpPage: wrap }, { playerHas: false, shows: hiddenFrom(wrap), folded: wrap }).banner, wrap.gmHiddenBecause);
+    assert.strictEqual(gmStoryNotes({ sourcePage: hub, wrapUpPage: null }, { playerHas: false, shows: () => false }).banner, 'publish: false');
+    assert.strictEqual(gmStoryNotes({ sourcePage: {}, wrapUpPage: null }, { playerHas: false, shows: () => false }).banner, 'the player site has no Story page here');
+  });
+});

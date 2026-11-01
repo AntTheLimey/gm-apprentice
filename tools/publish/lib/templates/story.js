@@ -27,8 +27,9 @@ function storyPage(unit, config, publishConfig, navFor) {
   const story = held
     ? `${held.recapHtml}
       <p>${held.open}</p>
-      ${held.wrapRecapTitle ? `<h2>${renderInline(held.wrapRecapTitle)}</h2>` : ''}
-      ${wrapUp}
+      ${held.wrapHasRecap ? `${held.wrapRecapTitle ? `<h2>${renderInline(held.wrapRecapTitle)}</h2>` : ''}
+      ${unit.recapHtml}` : ''}
+      ${(unit.sections || []).map(sectionHtml).join('\n')}
       ${unit.momentsHtml || ''}
       ${unit.afterHtml || ''}
       <p>${held.close}</p>`
