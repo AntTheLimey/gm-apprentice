@@ -45,6 +45,7 @@ const { sheetSourceOf } = require('./sheet-source');
 const { pcIdentity } = require('./templates/pc-identity');
 const { planProps, planStatePictures } = require('./props/plan');
 const { propHrefFor, propOutputs, keptCopyOutputs, pathProblem } = require('./props/files');
+const { keptRecordPath, readKeptRecord, writeKeptRecord, hashOf } = require('./props/kept-record');
 const { HANDS_FILE } = require('./props/hands');
 const { styleFontFamilies, FONTS_CSS, BASE_CSS } = require('./props/page');
 const { COLLECTION_ADDRESS, COLLECTION_FALLBACK, collectionSettingsOf, placeCollection, propTaken, latestProps, shownRows, containerItems, stateFieldsOfListed } = require('./props/collection');
@@ -435,6 +436,42 @@ function buildSite(options) {
   function linkOnPath(full) {
     const rel = outRel(full);
     return !rel.startsWith('../') && !path.isAbsolute(rel) && pathProblem(outputDir, rel) === 'link';
+  }
+
+  // The record of the files this build writes into kept folders (#506): only a full build of the player site into its
+  // own folder keeps one, and only where the image cache may live (never in the output folder or the vault).
+  const keptRecord = (!gm && !dry && writes === 'all' && !options.outputDirOverride
+    && imageCacheDir(configDir, { outputDirs: [outputDir], vaultPath: config.vaultPath })) ? keptRecordPath(configDir) : null;
+  const keptRecorded = keptRecord ? readKeptRecord(keptRecord) : {};
+  const keptWritten = new Map();   // lower-case out -> [out, hash]
+  const inKeptFolder = (out) => config.preserveDirs.some((d) => out.toLowerCase().startsWith(`${d.toLowerCase().replace(/\/+$/, '')}/`));
+  function keptWrote(out, data) {
+    if (keptRecord && inKeptFolder(out)) keptWritten.set(out.toLowerCase(), [out, hashOf(data)]);
+  }
+  // A recorded file this build did not write again goes while it holds the bytes the tool wrote; one the GM has
+  // changed stays, is said once, and leaves the record. One behind a link is left and stays recorded.
+  function cleanKeptRecord() {
+    const next = {};
+    for (const [out, hash] of Object.entries(keptRecorded)) {
+      const key = out.toLowerCase();
+      if (keptWritten.has(key) || !inKeptFolder(out)) continue;
+      const full = path.join(outputDir, ...out.split('/'));
+      const why = pathProblem(outputDir, out);
+      if (why === 'link') {
+        if (fs.existsSync(full)) next[out] = hash;
+        if (!keptHandled.has(key)) console.log(`  left in kept folder: ${out} (a folder on its path is a link)`);
+        continue;
+      }
+      if (why || !fs.existsSync(full)) continue;
+      const same = hashOf(fs.readFileSync(full)) === hash;
+      if (keptHandled.has(key)) { if (same) next[out] = hash; continue; }
+      if (!same) { console.log(`  left in kept folder: ${out} (it differs from what the tool wrote)`); continue; }
+      fs.unlinkSync(full);
+      console.log(`  removed from kept folder: ${out} (the tool wrote it, and no prop writes it now)`);
+    }
+    for (const [out, hash] of keptWritten.values()) next[out] = hash;
+    writeKeptRecord(keptRecord, next);
+    ignoreCacheInGit(configDir);
   }
 
   // No folder is made through a link in the site folder: what is written there next is refused.
@@ -2368,7 +2405,9 @@ function buildSite(options) {
         console.warn(`  WARNING: ${out} was not written: its path in the site folder is not a plain folder`);
       } else {
         const replaced = live && !dry && collection.replacesKept && fs.existsSync(full);
-        emit(out, collectionTemplate(collectionBuilt, navFor, config, publishConfig), `  wrote ${out}`);
+        const html = collectionTemplate(collectionBuilt, navFor, config, publishConfig);
+        emit(out, html, `  wrote ${out}`);
+        if (live && !dry && fs.existsSync(full)) keptWrote(out, html);
         if (replaced) console.log(`  replaces kept file: ${out}`);
       }
     }
@@ -2502,6 +2541,7 @@ function buildSite(options) {
   // Each prop's files, read by the note-faults audit as they are written: a withheld name in a
   // prop page, or in the name of any file a prop puts on the site, is a fault of its note.
   const stylesWritten = new Set();   // the styles of the styled pages written
+  const keptHandled = new Set();     // kept-folder copies the plan's own clean-up looked at (lower case)
   if (propPlan) {
     const { outputs, failed } = propOutputs(propPlan, { collectionAddress: collection && collection.address });
     propPlan.problems.push(...failed);
@@ -2516,6 +2556,7 @@ function buildSite(options) {
       for (const f of keptCopyOutputs(propPlan, { collectionAddresses })) {
         const key = f.out.toLowerCase();
         if (writing.has(key) || !kept.some((d) => key.startsWith(`${d}/`))) continue;
+        keptHandled.add(key);
         const full = path.join(outputDir, ...f.out.split('/'));
         if (!fs.existsSync(full)) continue;
         const why = pathProblem(outputDir, f.out);
@@ -2551,6 +2592,7 @@ function buildSite(options) {
       const replaced = f.replacesKept && fs.existsSync(full);
       if (f.isPage) writeHtml(full, f.text, propPlan.props.find((p) => p.rel === f.rel).page, { gmCssHref: f.made ? encodeHref(relativeHref(f.out, 'css/gm.css')) : null });
       else fs.writeFileSync(full, f.text !== undefined ? f.text : f.bytes);
+      keptWrote(f.out, f.text !== undefined ? f.text : f.bytes);
       console.log(`  wrote ${f.out}`);
       if (f.was) console.log(`  ${f.out}: written as UTF-8 (it was ${f.was})`);
       shipped.add(f.rel);
@@ -2577,6 +2619,7 @@ function buildSite(options) {
       const full = path.join(outputDir, ...out.split('/'));
       ensureDir(full);
       fs.writeFileSync(full, data);
+      keptWrote(out, data);
       written += 1;
       console.log(`  wrote ${out}`);
     };
@@ -2595,6 +2638,7 @@ function buildSite(options) {
     }
     if (writes === 'all' && propPlan.props.length > 0) console.log(`Props: ${shipped.size} published (${written} files)`);
   }
+  if (keptRecord) cleanKeptRecord();
 
   // The licence notices for what the site ships (#428): written once everything else is, so it
   // names every style and typeface the build put on the site.
