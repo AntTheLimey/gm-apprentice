@@ -300,10 +300,11 @@ presents the three-state prompts.
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/reveal_scan.py" \
-  <vault> "<index>"
+  <vault> "<index>" --also <path> --also <path>
 ```
 
-It lists the notes this session touched that the site still hides,
+Give one `--also` per path in Step 4's Validate `--file` list. It
+lists the notes this session touched that the site still hides,
 with what each hides. On "no publish list", skip this step silently;
 on "could not ask the publish tool", tell the GM the reason and skip.
 From the Play Notes, the Wrap-Up and the recap, propose one list of

@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """reveal_scan.py: what is still hidden in the notes a session touched.
 
-    reveal_scan.py VAULT SESSION_INDEX
+    reveal_scan.py VAULT SESSION_INDEX [--also PATH ...]
 
 Reads only; writes nothing. SESSION_INDEX is the session index's path
 (vault-relative, with or without `.md`) or its file name. The notes that
 count as "touched" are those the session's Play Notes, Wrap-Up and recap
-(when it has a separate one) link to; the Plan never counts, since it
-holds what was meant to happen, not what was played. Scenes, Plans,
-session notes, chapters and other structural notes are never listed.
+(when it has a separate one) link to, plus each `--also` path (vault-
+relative: the notes a wrap-up wrote that none of those link); the Plan
+never counts, since it holds what was meant to happen, not what was
+played. Scenes, Plans, session notes, chapters and other structural notes
+are never listed. An `--also` path that names no note gets a `# warning:`.
 
 Each listed note is one tab-separated row:
 
@@ -77,12 +79,17 @@ class ScanResult:
     warnings: list[str] = field(default_factory=list)
 
 
-def _session_note(notes: list[Note], arg: str) -> Note:
+def _note_at(notes: list[Note], arg: str) -> Note | None:
     rel = normalize_file_arg(arg)
     wanted = {rel, rel + ".md"}
-    for n in notes:
-        if n.rel in wanted:
-            return n
+    return next((n for n in notes if n.rel in wanted), None)
+
+
+def _session_note(notes: list[Note], arg: str) -> Note:
+    found = _note_at(notes, arg)
+    if found is not None:
+        return found
+    rel = normalize_file_arg(arg)
     stems = [n for n in notes if Path(n.rel).stem == Path(rel).stem and n.type == "session"]
     if len(stems) > 1:
         raise LookupError(f"{rel} matches several session indexes, give the path: "
@@ -152,7 +159,7 @@ def _stripped_by_path(vault: Path) -> tuple[dict[str, list[str]], set[str], str 
     return out, props, None
 
 
-def scan(vault: Path, session: str) -> ScanResult:
+def scan(vault: Path, session: str, also: tuple[str, ...] | list[str] = ()) -> ScanResult:
     result = ScanResult()
     listing = ask_publish_tool(vault, ["manifest", "list"], site_optional=True)
     data = listing.data
@@ -173,16 +180,24 @@ def scan(vault: Path, session: str) -> ScanResult:
     result.sources = [label for label, _ in sources]
     candidates: list[Note] = []
     seen: set[str] = set()
+
+    def add(note: Note | None) -> None:
+        if note is not None and note.type not in NEVER_CANDIDATES \
+                and note is not index and note.rel not in seen:
+            seen.add(note.rel)
+            candidates.append(note)
+
     for _, doc in sources:
         for ll in link_lines(doc.text):
             if ll.in_code:
                 continue
             for m in live_wikilinks(ll.line, ll.spans):
-                note = _resolve(m.group(1), by_name, doc.rel)
-                if note is not None and note.type not in NEVER_CANDIDATES \
-                        and note is not index and note.rel not in seen:
-                    seen.add(note.rel)
-                    candidates.append(note)
+                add(_resolve(m.group(1), by_name, doc.rel))
+    for arg in also:
+        found = _note_at(notes, arg)
+        if found is None:
+            result.warnings.append(f"--also {normalize_file_arg(arg)}: no such note")
+        add(found)
     if not candidates:
         return result
 
@@ -230,9 +245,11 @@ def main(argv: list[str] | None = None) -> int:
                     "Writes nothing.")
     parser.add_argument("vault", type=Path)
     parser.add_argument("session", help="the session index's path or file name")
+    parser.add_argument("--also", action="append", default=[], metavar="PATH",
+                        help="a vault-relative note this run wrote; repeat for each")
     args = parser.parse_args(argv)
     try:
-        result = scan(args.vault, args.session)
+        result = scan(args.vault, args.session, also=args.also)
     except LookupError as e:
         print(f"ERROR: {e}", file=sys.stderr)
         return 2

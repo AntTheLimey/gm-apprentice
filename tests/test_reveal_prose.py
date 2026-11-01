@@ -49,6 +49,11 @@ class WrapupStep4dTests(unittest.TestCase):
         for flag in ("--session", "--publish", "--released", "--write"):
             self.assertIn(flag, self.step)
 
+    def test_scan_gets_the_paths_step_4_wrote(self):
+        self.assertIn("--also <path>", self.step)
+        self.assertIn("one `--also` per path in Step 4's Validate `--file` list",
+                      " ".join(self.step.split()))
+
     def test_no_publish_list_skips(self):
         self.assertIn("no publish list", self.step)
 
