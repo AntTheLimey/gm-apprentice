@@ -6,6 +6,7 @@
 const { stripMarkdown } = require('../search-index');
 const { foldQuotes, pageText } = require('../note-faults');
 const { labelsForLinks, splitTableRow } = require('../wikilink');
+const { uncommentedLines } = require('../processor');
 
 const MIN_WORDS = 4;
 const WORD = /[\p{L}\p{N}]+(?:['-][\p{L}\p{N}]+)*/gu;
@@ -47,10 +48,6 @@ function blocksOf(markdown, { headings = false } = {}) {
     // A callout's first line is its title: a block of its own, so it does not run into the text below it.
     if (/^\s*\[![\w-]+\]/.test(quoted)) { flush(); const title = quoted.replace(/^\s*\[![\w-]+\][+-]?\s*/, '').trim(); if (title) blocks.push(title); continue; }
     const line = quoted.trim();
-    // A line that is one HTML comment (a gm-only fence's edge) ends a paragraph on the page, and is no words of it: its
-    // own text, if any, is a block of its own.
-    const comment = /^<!--([\s\S]*?)-->$/.exec(line);
-    if (comment) { flush(); if (comment[1].trim()) blocks.push(comment[1].trim()); continue; }
     if (headings && /^#{1,6}\s/.test(line)) { flush(); blocks.push(line.replace(/^#{1,6}\s+/, '').replace(/\s#+$/, '')); continue; }
     if (!line || /^(?:```|~~~)/.test(line) || /^#{1,6}\s/.test(line) || TABLE_RULE.test(line)) { flush(); continue; }
     if (line.startsWith('|')) {
@@ -120,8 +117,31 @@ function piecesOfHtml(html) {
   return [...pageText(shown).split('\n'), ...read].flatMap(piecesOfText);
 }
 
+// A note's comments: `<!-- … -->` (one comment runs to the next `-->`), then `%% … %%` in what is left, each running to
+// the end of the note when never closed, as the build reads them. `texts`: each comment's own text. `cut`: the note with
+// each comment an edge between blocks (a blank line).
+const HTML_COMMENT = /<!--((?:(?!-->)[\s\S])*)(?:-->|$)/g;
+const PERCENT_COMMENT = /%%([\s\S]*?)(?:%%|$)/g;
+function commentsOf(markdown) {
+  const texts = [];
+  const edge = (_, inside) => { texts.push(inside); return '\n\n'; };
+  const cut = String(markdown == null ? '' : markdown).replace(HTML_COMMENT, edge).replace(PERCENT_COMMENT, edge);
+  return { cut, texts };
+}
+
+// The hidden pieces of a note's text. Words that never print must not join a piece: a comment glued into the sentence
+// around it makes a piece no page holds, and a leak of the sentence alone would go unfound. So the text is read with its
+// comments gone, as the page reads it (the build's own strip: the sentence around a comment joined); with each comment
+// an edge (the text on each side, as a fenced part leaks alone); and each comment's own text. The note as written is
+// read too, so no piece it gave before is lost. Each piece once.
 function piecesOfMarkdown(markdown) {
-  return textsOfMarkdown(markdown).flatMap(piecesOfText);
+  const text = String(markdown == null ? '' : markdown);
+  const of = (md) => textsOfMarkdown(md).flatMap(piecesOfText);
+  if (!/<!--|%%/.test(text)) return of(text);
+  const { cut, texts } = commentsOf(text);
+  const all = [...of(uncommentedLines(text).lines.join('\n')), ...of(cut), ...texts.flatMap(of), ...of(text)];
+  const seen = new Set();
+  return all.filter((p) => { const key = wordsOf(p).join(' '); return seen.has(key) ? false : seen.add(key); });
 }
 
 // Every string in a value, a labelled link as its label, whole (a published value is compared as it stands).
@@ -181,4 +201,4 @@ function piecesOfValue(value) {
   return stringsOfValue(value).flatMap(piecesOfText);
 }
 
-module.exports = { MIN_WORDS, normalize, wordsOf, textsOfMarkdown, piecesOfText, piecesOfHtml, piecesOfMarkdown, stringsOfValue, piecesOfValue, fieldRunsOf, tableRunsOf, nameSet, onlyNames };
+module.exports = { MIN_WORDS, normalize, wordsOf, textsOfMarkdown, piecesOfText, piecesOfHtml, piecesOfMarkdown, commentsOf, stringsOfValue, piecesOfValue, fieldRunsOf, tableRunsOf, nameSet, onlyNames };
