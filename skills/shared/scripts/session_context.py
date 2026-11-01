@@ -103,7 +103,7 @@ from vaultlib import (GM_MARKER_RE, is_active_pc,  # noqa: F401
                       fenced_headings, h3_blocks, nested_mapping,
                       normalize, raw_frontmatter, section,
                       session_ref_number, word_count)
-from vaultlib import link_name, split_paused
+from vaultlib import fence_step, link_name, split_paused
 from vaultlib import vault_files as _vault_files
 
 
@@ -405,9 +405,23 @@ def _scene_note_text(files, name: str, chapter: str | None = None) -> str:
     _rel, text, _fm = hits[0]
 
     def strip_markers(part: str) -> str:
-        part = "\n".join(line for line in part.splitlines()
-                         if not GM_MARKER_RE.fullmatch(line.strip()))
-        return re.sub(r"\n{3,}", "\n\n", part).strip()
+        kept: list[str] = []
+        fence: str | None = None
+        blanks = 0
+        for line in part.splitlines():
+            if GM_MARKER_RE.fullmatch(line.strip()):
+                continue
+            fence, edge = fence_step(line, fence)
+            if fence is not None or edge:
+                blanks = 0  # fenced text stays exactly as written
+            elif line == "":
+                blanks += 1
+                if blanks > 1:
+                    continue  # a blank run outside a fence collapses
+            else:
+                blanks = 0
+            kept.append(line)
+        return "\n".join(kept).strip()
 
     # Split on the raw body so the span is the one prep and the writer
     # see; only then drop the marker lines.

@@ -204,6 +204,30 @@ class PointerBlockBriefTests(unittest.TestCase):
                       self.brief)
 
 
+class FencedBlankLinesTests(unittest.TestCase):
+    """Blank lines inside a code fence reach the brief as written (#549)."""
+
+    def brief(self, body):
+        scene = f"---\ntype: scene\n---\n\n{body}"
+        files = [("S/Dinner.md", scene, sc.extract_frontmatter(scene) or {})]
+        plan = ("---\ntype: session-plan\nsession: 4\n---\n\n"
+                "## Planned Scenes\n\n### [[Dinner]]\n")
+        return sc.play_brief(files, "P.md", plan)
+
+    def test_fence_keeps_its_blank_lines(self):
+        out = self.brief("Intro.\n\n```\nA\n\n\n\nB\n```\n\nEnd.\n")
+        self.assertIn("```\nA\n\n\n\nB\n```", out)
+
+    def test_tilde_fence_keeps_its_blank_lines(self):
+        out = self.brief("~~~\nA\n\n\n\nB\n~~~\n")
+        self.assertIn("~~~\nA\n\n\n\nB\n~~~", out)
+
+    def test_blank_runs_outside_a_fence_still_collapse(self):
+        out = self.brief("One.\n\n\n\nTwo.\n\n```\nx\n```\n\n\n\nThree.\n")
+        self.assertIn("One.\n\nTwo.", out)
+        self.assertIn("```\n\nThree.", out)
+
+
 class TopPausedSectionBriefTests(unittest.TestCase):
     """A section written by scene-paused at the top ends at its marker:
     the brief prints only the snapshot under Paused and leaves the prep
