@@ -56,13 +56,13 @@ function stretches(lines) {
   return out;
 }
 
-// The top-level blocks of unmarked text: { type, text } (type: paragraph, quote or other), each as written.
+// The top-level blocks of unmarked text: { type, text } (type: paragraph, quote, rule or other), each as written.
 function blocksOf(text) {
   const lines = text.split('\n');
   return md.parse(text, {})
     .filter((t) => t.level === 0 && t.map && t.nesting !== -1)
     .map((t) => ({
-      type: t.type === 'paragraph_open' ? 'paragraph' : t.type === 'blockquote_open' ? 'quote' : 'other',
+      type: t.type === 'paragraph_open' ? 'paragraph' : t.type === 'blockquote_open' ? 'quote' : t.type === 'hr' ? 'rule' : 'other',
       text: lines.slice(t.map[0], t.map[1]).join('\n').replace(/\s+$/, ''),
     }));
 }
@@ -101,6 +101,8 @@ function parseMoments(markdown) {
     }
     card = null;
     for (const block of blocksOf(part.text)) {
+      // A `---` rule divides the section; it is no moment, and no context line reaches back across it.
+      if (block.type === 'rule') { card = null; continue; }
       const tagged = {};
       const text = strip(block.text, tagged);
       const last = card;

@@ -5056,6 +5056,9 @@ svg.cx-web .cx-node.cx-sel text, svg.cx-web .cx-node:focus-visible text { fill: 
 .npc-row-avatar img.portrait { width: 100%; height: 100%; object-fit: cover; }
 .npc-row-initials { font-size: 0.65rem; font-weight: 700; color: var(--accent); }
 
+/* A long inline code word (a file name in a Source callout) breaks at the edge on a phone rather than running past it. */
+:not(pre) > code { overflow-wrap: anywhere; }
+
 /* --- Obsidian callouts (> [!type] Title) --- */
 .callout {
   --callout-color: var(--accent);

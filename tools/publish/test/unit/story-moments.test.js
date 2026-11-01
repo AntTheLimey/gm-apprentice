@@ -123,6 +123,12 @@ describe('parseMoments', () => {
     assert.deepEqual(parseMoments('').cards, []);
     assert.equal(html(''), '');
   });
+
+  it('a `---` rule divides the section and is no card (Canticle Ch3 S13 ends its moments with one)', () => {
+    const { cards } = parseMoments('**Varrio grabbed her arm.**\n\n---\n\n*Not his context.*\n\n---\n');
+    assert.deepEqual(cards.map((c) => [c.main, c.context]), [['**Varrio grabbed her arm.**', null], ['*Not his context.*', null]]);
+    assert.match(html('**A.**\n\n---\n'), /<p>1 from this session<\/p>/);
+  });
 });
 
 describe('momentsHtml', () => {

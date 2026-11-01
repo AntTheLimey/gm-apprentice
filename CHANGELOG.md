@@ -31,6 +31,7 @@ Each session is one page on both sites: its wrap-up folds into its Story page, w
 ### Fixed
 
 - Wrap-up pages that nothing linked (#543).
+- A long inline code word, such as a file name in a Source callout, now breaks at the edge of a phone screen instead of running past its box.
 - The leak gate no longer lets a comment hide a leak of the sentence around it. A comment on a line of its own (`<!-- -->` or `%% %%`), in the middle of a line, or over several lines, is read as gone, both as the edge between the words around it and as its own text. A gm-only fence written tight to its text no longer hides the words beside it, and words that never print join no hidden piece.
 
 ---
