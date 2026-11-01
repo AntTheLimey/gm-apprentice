@@ -213,7 +213,11 @@ function once(resolve) {
 // the unreduced frontmatter; without it no session pairs with a Wrap-Up.
 // Each unit carries its wrap-up's other sections (story-sections.js): `sections`, `moments`, `after`, cut from the
 // wrap-up's published view, or with `marked` (the GM site) from its marked view.
-function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false } = {}) {
+// `players` (the GM site): `has(outputPath)`, whether the player site has a Story page at that address, and
+// `shows(page)`, whether it publishes that page. A unit whose wrap-up players do not see, on a page they do have (made
+// from the session's own recap, or the chapter's introduction), carries `heldBack`: { recapHtml, wrapRecapTitle }, the
+// players' own recap and the title of the wrap-up's, for the build to show the wrap-up's parts apart, marked.
+function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false, players = null } = {}) {
   // Recap markdown renders to HTML inside findRecap, so wiki-links must resolve here —
   // downstream has no markdown left to work with. Resolution is relative to the unit's
   // own output path under story/. Without a linkMap (the hasStory probe), skip it.
@@ -260,6 +264,13 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false 
     const shown = fromMarks === null ? text : stripLeadingH1Marked(fromMarks);
     return { title: null, html: renderMarkdown(resolve ? resolve(shown) : shown), sourcePage: chapter };
   };
+  // What the players' own Story page at `outputPath` leads with, when the unit's wrap-up is one they do not see.
+  const heldBackOf = (outputPath, wrapUp, recap, playersRecap) => {
+    if (!players || !wrapUp || players.shows(wrapUp) || !players.has(outputPath)) return {};
+    const shown = playersRecap();
+    if (!shown) return {};
+    return { heldBack: { recapHtml: shown, wrapRecapTitle: recap && recap.sourcePage === wrapUp ? recap.title : null } };
+  };
   const chapters = sortedChapters(pages);
   const sessions = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session');
   const wrapUps = pages.filter(p => p.frontmatter && WRAP_UP_TYPES.has(p.frontmatter.type));
@@ -300,6 +311,10 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false 
         // The recap text can come from the wrap-up; sourcePage is always the unit's own page.
         recapHtml: recap.sourcePage === wrapUp ? recap.html : ownRecapHtml(recap, ownResolve), sourcePage: s, wrapUpPage: wrapUp || null,
         ...bodyOf(wrapUp, recap, wrapResolve),
+        ...heldBackOf(unitOutputPath(id), wrapUp, recap, () => {
+          const own = findRecap(s, ownResolve, { marked });
+          return own ? ownRecapHtml({ ...own, sourcePage: s }, ownResolve) : null;
+        }),
       });
     }
 
@@ -312,6 +327,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false 
           chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
           recapHtml: chapterRecap.html, sourcePage: chapter, wrapUpPage: chapterWrap || null,
           ...bodyOf(chapterWrap, chapterRecap, chapterWrapResolve),
+          ...heldBackOf(unitOutputPath(id), chapterWrap, chapterRecap, () => (chapterIntro(chapter, resolverFor(unitOutputPath(id))) || {}).html),
         });
       }
       units.push(...sessionUnits);
@@ -324,6 +340,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false 
         chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
         recapHtml: chapterRecap.html, sourcePage: chapter, wrapUpPage: chapterWrap || null,
         ...bodyOf(chapterWrap, chapterRecap, chapterWrapResolve),
+        ...heldBackOf(unitOutputPath(id), chapterWrap, chapterRecap, () => (chapterIntro(chapter, resolverFor(unitOutputPath(id))) || {}).html),
       });
     }
   }
