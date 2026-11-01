@@ -1,7 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { entry } = require('../../lib/settings');
-const { findRecap, publishedOf, buildWrapUpIndex, resolveUnitRecap, buildStorySpine: spineWith, unitRefs, characterStoryGroup } = require('../../lib/story-spine');
+const { findRecap, publishedOf, buildWrapUpIndex, resolveUnitRecap, buildStorySpine: spineWith, characterStoryGroup } = require('../../lib/story-spine');
 const { pairHubs } = require('../../lib/session-hub');
 const WORDS = require('../helpers/settings-files').defaultWithheldWords();
 
@@ -141,8 +141,8 @@ describe('buildStorySpine output-path namespacing', () => {
   });
 });
 
-describe('buildStorySpine ref-metadata source', () => {
-  it('uses the unit page (not the wrap-up) as sourcePage, so refs read the right frontmatter', () => {
+describe('buildStorySpine sourcePage', () => {
+  it('uses the unit page (not the wrap-up) as sourcePage', () => {
     const chapter = { title: 'Ch', displayTitle: 'Ch', sourcePath: '/v/Ch/Ch.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '## Overview\nx' };
     const session = { title: 'S1', displayTitle: 'S1', sourcePath: '/v/Ch/S1/S1.md', frontmatter: { type: 'session', session_number: 1, participants: ['[[Alice]]'], location: '[[Vienna]]' }, markdown: '## Overview\nno recap here' };
     const wrap = { title: 'S1 Wrap Up', sourcePath: '/v/Ch/S1/S1_Wrap_Up.md', frontmatter: { type: 'session-wrap-up', session: '[[S1]]' }, markdown: '## Narrative Recap\nRecap prose from the wrap-up.' };
@@ -151,8 +151,28 @@ describe('buildStorySpine ref-metadata source', () => {
     assert.ok(u, 'session unit exists');
     assert.match(u.recapHtml, /Recap prose from the wrap-up/); // text still from the wrap-up
     assert.strictEqual(u.sourcePage, session, 'sourcePage is the session page, not the wrap-up');
-    assert.deepStrictEqual(unitRefs(u).participants.map(r => r.label), ['Alice']);
-    assert.strictEqual(unitRefs(u).location.target, 'Vienna');
+  });
+});
+
+describe('buildStorySpine wrap-up sections', () => {
+  const chapter = { title: 'Ch', displayTitle: 'Ch', sourcePath: '/v/Ch/Ch.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '## Overview\nx' };
+  const session = (markdown) => ({ title: 'S1', displayTitle: 'S1', sourcePath: '/v/Ch/S1/S1.md', frontmatter: { type: 'session', session_number: 1 }, markdown });
+  const wrap = { title: 'S1 Wrap Up', sourcePath: '/v/Ch/S1/S1_Wrap_Up.md', frontmatter: { type: 'session-wrap-up', session: '[[S1]]' },
+    markdown: '## Narrative Recap\nThey came.\n\n## Loot\nA key.\n\n## Memorable Moments\n> "Hi."\n\n## GM Notes\nsecret',
+    publishedMarkdown: '## Narrative Recap\nThey came.\n\n## Loot\nA key.\n\n## Memorable Moments\n> "Hi."\n' };
+  it("a session unit carries its wrap-up's sections (published view), less the recap, and the moments apart", () => {
+    const u = buildStorySpine([chapter, session('## Overview\nx'), wrap]).find(x => x.kind === 'session');
+    assert.deepStrictEqual(u.sections.map(s => s.title), ['Loot']);
+    assert.strictEqual(u.moments.title, 'Memorable Moments');
+    assert.match(u.moments.markdown, /"Hi\."/);
+    assert.deepStrictEqual(u.after, []);
+    assert.ok(!JSON.stringify([u.sections, u.moments, u.after]).includes('secret'), 'the published view only');
+  });
+  it("a recap from the session's own page leaves the wrap-up's recap section in", () => {
+    const pages = [chapter, session('## Narrative Recap\nOwn recap.'), { ...wrap, publishedMarkdown: '## Notes\nA.\n\n## Narrative Recap\n\n' }];
+    const u = buildStorySpine(pages).find(x => x.kind === 'session');
+    assert.match(u.recapHtml, /Own recap/);
+    assert.deepStrictEqual(u.sections.map(s => s.title), ['Notes', 'Narrative Recap']);
   });
 });
 
@@ -178,15 +198,6 @@ describe('buildStorySpine folder-proximity pairing', () => {
     assert.strictEqual(spine.length, 1);
     assert.strictEqual(spine[0].kind, 'session');
     assert.match(spine[0].recapHtml, /Calcutta session one/);
-  });
-});
-
-describe('unitRefs', () => {
-  it('collects participants and location from the source page frontmatter', () => {
-    const unit = { sourcePage: { frontmatter: { participants: ['[[Adrien_de_Montferrand]]'], location: '[[Vienna]]' } } };
-    const refs = unitRefs(unit);
-    assert.deepStrictEqual(refs.participants.map(r => r.label), ['Adrien de Montferrand']);
-    assert.strictEqual(refs.location.target, 'Vienna');
   });
 });
 

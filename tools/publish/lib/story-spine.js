@@ -1,11 +1,12 @@
 const path = require('path');
 const { refTarget } = require('./wikilink');
-const { extractSections, parseWikiRef, resolveWikiLinks, resolveImageEmbeds, publishedSource } = require('./processor');
+const { extractSections, resolveWikiLinks, resolveImageEmbeds, publishedSource } = require('./processor');
 const { slugify } = require('./scanner');
 const { canonicalNfc } = require('./unicode');
 const { parseWikilink } = require('./wikilink');
 const { isLinkedWrapUp, WRAP_UP_TYPES } = require('./session-hub');
 const { isSessionHub } = require('./processor');
+const { storySections } = require('./story-sections');
 
 const RECAP_TITLES = ['narrative recap', 'recap'];
 
@@ -139,17 +140,6 @@ function wrapUpForUnit(unitPage, wrapUps, idx, pairs) {
 
 function unitOutputPath(id) { return `story/${id}.html`; }
 
-function asList(v) { return Array.isArray(v) ? v : (v == null ? [] : [v]); }
-
-// Reference metadata for a unit, parsed from its source page frontmatter.
-function unitRefs(unit) {
-  const fm = (unit.sourcePage && unit.sourcePage.frontmatter) || {};
-  return {
-    participants: asList(fm.participants).map(parseWikiRef).filter(r => r.target),
-    location: fm.location ? parseWikiRef(fm.location) : null,
-  };
-}
-
 function sortedChapters(pages) {
   return pages
     .filter(p => p.frontmatter && p.frontmatter.type === 'chapter')
@@ -192,9 +182,23 @@ function orderedSessions(pages) {
   return order;
 }
 
+// The resolver, asked again of the text it was last given, answers from that answer: the recap and the Story page's
+// sections read the same wrap-up text, and its missing pictures are reported once.
+function once(resolve) {
+  if (!resolve) return resolve;
+  let lastIn;
+  let lastOut;
+  return (md) => {
+    if (md !== lastIn) { lastIn = md; lastOut = resolve(md); }
+    return lastOut;
+  };
+}
+
 // `pairs` is the build's hub -> Wrap-Up map (session-hub.js pairHubs), computed once on
 // the unreduced frontmatter; without it no session pairs with a Wrap-Up.
-function buildStorySpine(pages, linkMap, pairs, images = null) {
+// Each unit carries its wrap-up's other sections (story-sections.js): `sections`, `moments`, `after`, cut from the
+// wrap-up's published view, or with `marked` (the GM site) from its marked view.
+function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false } = {}) {
   // Recap markdown renders to HTML inside findRecap, so wiki-links must resolve here —
   // downstream has no markdown left to work with. Resolution is relative to the unit's
   // own output path under story/. Without a linkMap (the hasStory probe), skip it.
@@ -208,6 +212,14 @@ function buildStorySpine(pages, linkMap, pairs, images = null) {
       ? resolveImageEmbeds(md, images.imageMap, outputPath, images.usedImages, { warn: !!(images.warn && owns) })
       : md, linkMap, outputPath)
     : () => undefined;
+  // The wrap-up's sections on its unit's Story page, less the recap the page leads with when it came from the wrap-up.
+  const bodyOf = (wrapUp, recap, resolve) => {
+    if (!wrapUp) return { sections: [], moments: null, after: [] };
+    const text = marked && typeof wrapUp.gmMarkedPublished === 'string' ? wrapUp.gmMarkedPublished : publishedOf(wrapUp);
+    const recapTitle = recap && recap.sourcePage === wrapUp ? recap.title : null;
+    const { sections, moments, after } = storySections(text, { resolve, marks: marked || null, recapTitle });
+    return { sections, moments, after };
+  };
   const foldedInto = (wrapUp, ...outs) => !!(wrapUp && wrapUp.foldedInto && outs.includes(wrapUp.foldedInto.outputPath));
   const chapters = sortedChapters(pages);
   const sessions = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session');
@@ -222,8 +234,8 @@ function buildStorySpine(pages, linkMap, pairs, images = null) {
     const chapterWrap = wrapUpForUnit(chapter, wrapUps, idx, pairs);
     // The chapter recap lands on either story/<chSlug>-intro.html or story/<chSlug>.html;
     // both live in story/, so either path yields the same relative link resolution.
-    const chapterRecap = resolveUnitRecap(chapter, chapterWrap, resolverFor(unitOutputPath(chSlug)),
-      resolverFor(unitOutputPath(chSlug), foldedInto(chapterWrap, unitOutputPath(chSlug), unitOutputPath(`${chSlug}-intro`))));
+    const chapterWrapResolve = once(resolverFor(unitOutputPath(chSlug), foldedInto(chapterWrap, unitOutputPath(chSlug), unitOutputPath(`${chSlug}-intro`))));
+    const chapterRecap = resolveUnitRecap(chapter, chapterWrap, resolverFor(unitOutputPath(chSlug)), chapterWrapResolve);
 
     const chapterSessions = sessions
       .filter(s => chapterOfSession(s, pages) === chapter)
@@ -233,15 +245,16 @@ function buildStorySpine(pages, linkMap, pairs, images = null) {
     for (const s of chapterSessions) {
       const id = `${chSlug}-${slugify(s.title)}`;
       const wrapUp = wrapUpForUnit(s, wrapUps, idx, pairs);
-      const recap = resolveUnitRecap(s, wrapUp, resolverFor(unitOutputPath(id)), resolverFor(unitOutputPath(id), foldedInto(wrapUp, unitOutputPath(id))));
+      const wrapResolve = once(resolverFor(unitOutputPath(id), foldedInto(wrapUp, unitOutputPath(id))));
+      const recap = resolveUnitRecap(s, wrapUp, resolverFor(unitOutputPath(id)), wrapResolve);
       if (!recap) continue;
       sessionUnits.push({
         kind: 'session', id, outputPath: unitOutputPath(id),
         title: s.displayTitle || s.title.replace(/_/g, ' '),
         chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
-        // recap TEXT can come from a wrap-up, but ref metadata (participants/location) is
-        // read from the unit's OWN page — the wrap-up typically doesn't carry those fields.
+        // The recap text can come from the wrap-up; sourcePage is always the unit's own page.
         recapHtml: recap.html, sourcePage: s, wrapUpPage: wrapUp || null,
+        ...bodyOf(wrapUp, recap, wrapResolve),
       });
     }
 
@@ -253,6 +266,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null) {
           title: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
           chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
           recapHtml: chapterRecap.html, sourcePage: chapter, wrapUpPage: chapterWrap || null,
+          ...bodyOf(chapterWrap, chapterRecap, chapterWrapResolve),
         });
       }
       units.push(...sessionUnits);
@@ -263,6 +277,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null) {
         title: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
         chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
         recapHtml: chapterRecap.html, sourcePage: chapter, wrapUpPage: chapterWrap || null,
+        ...bodyOf(chapterWrap, chapterRecap, chapterWrapResolve),
       });
     }
   }
@@ -297,4 +312,4 @@ function characterStoryGroup(frontmatter, fallen) {
   return 'current';
 }
 
-module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOfSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, storyPagesFor, orderedSessions, unitRefs, characterStoryGroup };
+module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOfSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, storyPagesFor, orderedSessions, characterStoryGroup };

@@ -1,0 +1,104 @@
+'use strict';
+// #543: the Story page's body, cut from the wrap-up's published view (player) or marked view (GM).
+const { describe, it } = require('node:test');
+const assert = require('node:assert/strict');
+const { storySections } = require('../../lib/story-sections');
+const { createMarks, blockLines, unmark } = require('../../lib/gm-marks');
+
+const OPEN = '\uE000';
+const CLOSE = '\uE002';
+const count = (s, c) => s.split(c).length - 1;
+const balanced = (html) => count(html, OPEN) === count(html, CLOSE);
+
+const PLAYER = [
+  '## Narrative Recap', 'The party reached the docks.', '',
+  '## Loot', '- a brass key', '',
+  '## Memorable Moments', '> "Not today." — [[Mara Quill]]', '',
+  '## Notes', 'Written later.', '',
+].join('\n');
+
+describe('storySections', () => {
+  it('player text: recap, then Loot, then Notes in written order; moments separate; nothing after', () => {
+    const resolve = (md) => md.replace('[[Mara Quill]]', '[Mara Quill](../npcs/mara-quill.html)');
+    const out = storySections(PLAYER, { resolve, recapTitle: 'Narrative Recap' });
+    assert.deepEqual(out.sections.map((s) => s.title), ['Loot', 'Notes']);
+    assert.equal(out.sections[0].id, 'loot');
+    assert.match(out.sections[0].html, /a brass key/);
+    assert.equal(out.moments.title, 'Memorable Moments');
+    assert.equal(out.moments.hidden, null);
+    assert.match(out.moments.markdown, /\[Mara Quill\]\(\.\.\/npcs\/mara-quill\.html\)/, 'the moments markdown is resolved');
+    assert.doesNotMatch(out.moments.markdown, /Memorable Moments|Written later/, 'only the section body');
+    assert.deepEqual(out.after, []);
+  });
+
+  it('the recap section is not repeated', () => {
+    const out = storySections(PLAYER, { recapTitle: 'Narrative Recap' });
+    assert.ok(out.sections.every((s) => !/reached the docks/.test(s.html)));
+    assert.equal(out.recap.title, 'Narrative Recap');
+    assert.match(out.recap.html, /reached the docks/);
+  });
+
+  it("a recap from the unit's own page leaves every wrap-up section in", () => {
+    const out = storySections(PLAYER, { recapTitle: null });
+    assert.deepEqual(out.sections.map((s) => s.title), ['Narrative Recap', 'Loot', 'Notes']);
+    assert.equal(out.recap, null);
+  });
+
+  it('no moments section: moments is null', () => {
+    const out = storySections('## Narrative Recap\nx\n\n## Loot\ny\n', { recapTitle: 'Narrative Recap' });
+    assert.equal(out.moments, null);
+    assert.deepEqual(out.sections.map((s) => s.title), ['Loot']);
+  });
+
+  it('marked text: a fenced GM Notes after the moments goes after; a hidden Loot before them stays in place; the Source preamble goes first after', () => {
+    const m = createMarks();
+    const source = m.open('callouts', 'source');
+    const gmOnly = m.open('gm_only', 'gm-only');
+    const loot = m.open('sections', 'Loot');
+    const notes = m.open('sections', 'GM Notes');
+    // The shape the build's marked view has: each token on a line of its own between blank lines.
+    const text = [
+      ...blockLines(source), '> [!info] Source', '> Written from the Play Notes', ...blockLines(CLOSE), '',
+      '## Narrative Recap', 'The party reached the docks.', '',
+      ...blockLines(loot), '## Loot', 'secret loot', ...blockLines(CLOSE), '',
+      '## Visible', 'Seen by all.', '',
+      '## Memorable Moments', '- one', '',
+      ...blockLines(notes), '## GM Notes', 'the twist', ...blockLines(gmOnly), 'deeper', ...blockLines(CLOSE), ...blockLines(CLOSE), '',
+      '## Epilogue', 'After all.', '',
+    ].join('\n');
+    const out = storySections(text, { marks: m, recapTitle: 'Narrative Recap' });
+    assert.deepEqual(out.sections.map((s) => unmark(s.title)),
+      ['Loot', 'Visible', 'Epilogue'], 'player sections and the hidden Loot in written order');
+    const hiddenLoot = out.sections[0];
+    assert.equal(hiddenLoot.id, 'loot');
+    assert.ok(hiddenLoot.html.includes(loot) && hiddenLoot.html.includes('secret loot') && balanced(hiddenLoot.html));
+    assert.ok(hiddenLoot.title.startsWith(loot) && hiddenLoot.title.endsWith(CLOSE), 'the hidden heading is marked');
+    assert.equal(out.moments.title, 'Memorable Moments');
+    assert.equal(out.moments.hidden, null);
+    assert.doesNotMatch(out.moments.markdown, /the twist|After all/);
+    assert.equal(out.after.length, 2);
+    assert.match(out.after[0].html, /Written from the Play Notes/, 'the Source preamble goes first');
+    assert.match(out.after[1].html, /<h2 id="gm-notes">/);
+    assert.match(out.after[1].html, /the twist[\s\S]*deeper/);
+    for (const a of out.after) assert.ok(balanced(a.html), `balanced: ${JSON.stringify(a.html)}`);
+    assert.ok(out.sections.every((s) => !/the twist|Written from the Play Notes/.test(s.html)));
+  });
+
+  it('a hidden run holding the moments heading: moments.hidden carries its tokens; its other sections go after', () => {
+    const m = createMarks();
+    const run = m.open('gm_only', 'gm-only');
+    const text = [
+      '## Narrative Recap', 'They came.', '',
+      ...blockLines(run), '## Memorable Moments', '- one', '', '## Aftermath', 'the cost', ...blockLines(CLOSE), '',
+    ].join('\n');
+    const out = storySections(text, { marks: m, recapTitle: 'Narrative Recap' });
+    assert.equal(out.moments.title, 'Memorable Moments');
+    assert.deepEqual(out.moments.hidden, { open: run, close: CLOSE });
+    assert.match(out.moments.markdown, /- one/);
+    assert.doesNotMatch(out.moments.markdown, /the cost|[\uE000-\uE002]/);
+    assert.deepEqual(out.sections, []);
+    assert.equal(out.after.length, 1);
+    assert.match(out.after[0].html, /Aftermath[\s\S]*the cost/);
+    assert.ok(balanced(out.after[0].html));
+  });
+});

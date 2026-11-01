@@ -1055,22 +1055,8 @@ body:has(#tab-story.active) .pull-quote-backstory {
   margin: var(--space-500) 0 var(--space-1500);
   font-size: var(--font-size-950);
 }
-.story-refs {
-  max-width: 42rem;
-  margin: 2.5rem auto 0;
-  padding: var(--space-1000) var(--space-1250);
-  border-top: 1px solid var(--border);
-  font-size: var(--font-size-950);
-}
-.story-refs h2 {
-  font-size: var(--font-size-850);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted, var(--story-muted));
-  margin: 0 0 var(--space-500);
-  border: 0;
-}
-.story-refs ul { margin: 0; padding-left: 1.1rem; }
+/* A wrap-up section after the recap (Loot, Notes ...): part of the same prose, set off by its heading. */
+.story-section { margin-top: var(--space-1500); }
 
 /* Story landing */
 .story-branch { max-width: 46rem; margin: 0 auto 2.5rem; }

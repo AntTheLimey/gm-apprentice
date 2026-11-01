@@ -29,7 +29,7 @@ const { real, resolveGmFolder, gmFolderProblem, insideGitWorkTree, gmPage, write
 const { createMarks, markKinds, sanitize, unmark, withoutMarked } = require('./gm-marks');
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
-const { buildStorySpine, storyPagesFor, chapterOfSession, unitRefs, characterStoryGroup } = require('./story-spine');
+const { buildStorySpine, storyPagesFor, chapterOfSession, characterStoryGroup } = require('./story-spine');
 const { foldPlan, applyFold, isFolded, labelFoldedHeadings } = require('./story-fold');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
@@ -2483,7 +2483,6 @@ function buildSite(options) {
     // The story: its chapters, each PC's own story, its contents page.
     const spine = buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages });
     for (const unit of spine) {
-      unit.refsHtml = renderRefsHtml(unit);
       const html = renderStoryUnit(unit, config, publishConfig, navFor);
       emit(unit.outputPath, html, `  wrote ${unit.outputPath}`);
       // Each wrap-up folded into this page is read on it, as its own page was: its faults are its note's.
@@ -2515,22 +2514,6 @@ function buildSite(options) {
     emit('index.html', landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus, hubWrapUps, storyPagesFor(spine)), '  wrote index.html');
   }
   let characterStories = [];
-
-  function renderRefsHtml(unit) {
-    const refs = unitRefs(unit);
-    const items = [];
-    for (const p of refs.participants) {
-      const out = linkMap[p.target];
-      items.push(out ? `<li><a href="${encodeHref(relativeHref(unit.outputPath, out))}">${escapeHtml(p.label)}</a></li>`
-                     : `<li>${escapeHtml(p.label)}</li>`);
-    }
-    if (refs.location) {
-      const out = linkMap[refs.location.target];
-      items.push(out ? `<li>Location: <a href="${encodeHref(relativeHref(unit.outputPath, out))}">${escapeHtml(refs.location.label)}</a></li>`
-                     : `<li>Location: ${escapeHtml(refs.location.label)}</li>`);
-    }
-    return items.length ? `<ul>${items.join('')}</ul>` : '';
-  }
 
   // A PC's story page (its `_Story.md` companion), as it is written. `fx` as for renderPage.
   function renderCharacterStory(pc, fx) {
