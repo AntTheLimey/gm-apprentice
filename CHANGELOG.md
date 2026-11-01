@@ -25,7 +25,7 @@ Wrap-up asks the GM less and finds more, and vault-ingest's Reconstruction Note 
 ### Fixed
 
 - `session-new --play-date` refuses a date that does not exist, such as `2026-02-31`.
-- vault-ingest now fences its Reconstruction Note gm-only, so a new one no longer shows on the player site. The vault update `reconstruction-note-fence` fences the ones already in a vault, so they stop publishing too.
+- vault-ingest now fences its Reconstruction Note gm-only, so a new one no longer shows on the player site. The vault update `reconstruction-note-fence` fences the ones already in a vault, indented ones included, so they stop publishing too.
 
 ---
 

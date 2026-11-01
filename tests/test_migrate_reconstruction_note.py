@@ -65,6 +65,19 @@ class ReconstructionFenceTests(unittest.TestCase):
         run(FIND(v))
         self.assertEqual(raw(v, "NPCs/Bob.md"), npc.replace(CALLOUT, OPEN + CALLOUT + CLOSE))
 
+    def test_indented_callout_is_fenced(self):
+        # Markdown reads a quote marker after up to three spaces, so the site shows these too.
+        indented = "".join("   " + ln for ln in CALLOUT.splitlines(keepends=True))
+        note = FM + HEAD + indented + RECAP + GM
+        v = make_vault(self, {NOTE: note})
+        run(FIND(v))
+        self.assertEqual(raw(v, NOTE), FM + HEAD + OPEN + indented + CLOSE + RECAP + GM)
+
+    def test_four_spaces_is_code_not_a_callout(self):
+        coded = "".join("    " + ln for ln in CALLOUT.splitlines(keepends=True))
+        v = make_vault(self, {NOTE: FM + HEAD + coded + RECAP})
+        self.assertEqual(FIND(v), [])
+
     def test_already_fenced_is_left_alone(self):
         v = make_vault(self, {NOTE: FENCED})
         self.assertEqual(FIND(v), [])
