@@ -2773,7 +2773,7 @@ def is_out_of_play(fm: dict[str, Any], words: frozenset[str]) -> bool:
     return str(status).strip().lower() in words
 
 
-def is_active_pc(rel: str, fm: dict[str, Any], gone: Iterable[str]) -> bool:
+def is_active_pc(rel: str, fm: dict[str, Any], gone: frozenset[str]) -> bool:
     """Is the note at `rel` a playable PC sheet? `type: pc`, not a
     `*_Story.md` companion (same type, but narrative history rather than a
     sheet), not under an unchecked folder (an archived copy plays nobody),
