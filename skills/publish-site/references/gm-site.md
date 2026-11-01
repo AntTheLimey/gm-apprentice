@@ -11,3 +11,5 @@ give the GM the addresses it prints to open on a phone or tablet at home
 (it runs until stopped). Tell them it never goes online (`deploy` refuses
 its folder) and that the site's build steps don't run for it: any it
 needs go under `gm_site.before_build` or `gm_site.after_build`.
+The GM site's Story page shows the hidden parts in place, marked, and a
+session's Play Notes always get a page there.

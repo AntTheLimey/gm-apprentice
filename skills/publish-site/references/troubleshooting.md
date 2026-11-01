@@ -373,8 +373,8 @@ empty — even though `session-wrapup` ran and wrap-up files exist.
 ### Cause
 
 Recap surfacing keys off *published* `type: session` and `type: chapter`
-pages. The wrap-up (`type: session_wrap`) supplies the recap text, but it
-only surfaces when its paired session index — and for the Campaign Saga,
+pages. The wrap-up (`type: session_wrap`) supplies the recap text and is folded into the
+session's Story page (it has no page of its own), but it only surfaces when its paired session index — and for the Campaign Saga,
 a chapter page — are published too. Two common breakdowns:
 
 1. The vault's `Chapters/` folder is missing from `player_site.folder_map`,
