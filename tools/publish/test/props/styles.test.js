@@ -1,4 +1,4 @@
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -6,9 +6,14 @@ const path = require('path');
 const { listStyles, loadStyle, styleLoader, PLUGIN_STYLES_DIR, VAULT_STYLES_DIR } = require('../../lib/props/styles');
 const { propStyleOf, PROP_STYLE_RE } = require('../../lib/props/note');
 
+// Every temp folder a test here makes is removed when the file's tests end (#512).
+const made = [];
+after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: true }); });
+const tempDir = (prefix) => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix)); made.push(dir); return dir; };
+
 // A temp folder of real files; `files` maps rel -> text.
 function tree(prefix, files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const root = tempDir(prefix);
   for (const [rel, body] of Object.entries(files)) {
     const full = path.join(root, rel);
     fs.mkdirSync(path.dirname(full), { recursive: true });
@@ -255,7 +260,7 @@ test('a wrongly spelled assets folder names the spelling it should have', () => 
 });
 
 test('with no styles at all, the fix says where to add one', () => {
-  const pluginDir = fs.mkdtempSync(path.join(os.tmpdir(), 'props-plugin-'));
+  const pluginDir = tempDir('props-plugin-');
   assert.deepStrictEqual(loadStyle('fax', { vaultPath: vault(), pluginDir }).problem, {
     detail: 'the style "fax" is not one the plugin has or the vault adds in _meta/prop-styles/',
     fix: 'add the style in _meta/prop-styles/fax/',

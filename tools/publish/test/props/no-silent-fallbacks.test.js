@@ -2,7 +2,7 @@
 // What a style, a prop_style or a prop_kind gets wrong is said, never passed over: a style folder that cannot be read,
 // assets left out, a style file that cannot be read or is not UTF-8, a prop_style that is not text, a prop_kind the tool
 // does not know. And the build and the leak gate ask one question of whether a styled page is made.
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -13,8 +13,13 @@ const { planProps } = require('../../lib/props/plan');
 const { takenAddresses } = require('../../lib/props/address');
 const { styledPageProblem } = require('../../lib/props/page');
 
+// Every temp folder a test here makes is removed when the file's tests end (#512).
+const made = [];
+after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: true }); });
+
 function tree(prefix, files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  made.push(root);
   for (const [rel, body] of Object.entries(files)) {
     const full = path.join(root, rel);
     fs.mkdirSync(path.dirname(full), { recursive: true });

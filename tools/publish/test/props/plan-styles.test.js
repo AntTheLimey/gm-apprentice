@@ -1,4 +1,4 @@
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -8,9 +8,14 @@ const { takenAddresses } = require('../../lib/props/address');
 const { styleLoader } = require('../../lib/props/styles');
 const { propContainerOf, showSealedOf } = require('../../lib/props/note');
 
+// Every temp folder a test here makes is removed when the file's tests end (#512).
+const made = [];
+after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: true }); });
+const tempDir = (prefix) => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix)); made.push(dir); return dir; };
+
 // A temp folder of real files; `files` maps rel -> text.
 function tree(prefix, files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const root = tempDir(prefix);
   for (const [rel, body] of Object.entries(files)) {
     const full = path.join(root, rel);
     fs.mkdirSync(path.dirname(full), { recursive: true });
