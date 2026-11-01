@@ -80,9 +80,10 @@ class ScanResult:
 
 
 def _note_at(notes: list[Note], arg: str) -> Note | None:
-    rel = normalize_file_arg(arg)
+    rel = unicodedata.normalize("NFC", normalize_file_arg(arg))
     wanted = {rel, rel + ".md"}
-    return next((n for n in notes if n.rel in wanted), None)
+    return next((n for n in notes
+                 if unicodedata.normalize("NFC", n.rel) in wanted), None)
 
 
 def _session_note(notes: list[Note], arg: str) -> Note:

@@ -10,6 +10,7 @@ import contextlib
 import io
 import sys
 import tempfile
+import unicodedata
 import unittest
 from pathlib import Path
 from typing import Any
@@ -304,6 +305,13 @@ class RevealScanAlso(unittest.TestCase):
             "reveals: Session 12 - Mill (sources: Play Notes, Wrap-Up)",
             "# warning: --also NPCs/Nobody.md: no such note",
             "# notes: 0"])
+
+    def test_also_finds_a_decomposed_file_name(self) -> None:
+        nfd = unicodedata.normalize("NFD", "NPCs/Zoë.md")
+        files = {**base(play="Nothing.\n"), nfd: SPOILED}
+        res = run_scan(files, also=(unicodedata.normalize("NFC", "NPCs/Zoë.md"),))
+        self.assertEqual(res.warnings, [])
+        self.assertEqual(len(res.rows), 1)
 
     def test_cli_also_repeats(self) -> None:
         files = {**base(play="Nothing.\n"), "NPCs/Vex.md": VEX, "NPCs/Ida.md": SPOILED}
