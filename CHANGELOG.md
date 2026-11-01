@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.116] — 2026-10-31
+
+The prep tools read the vault more truthfully. Publish tool unchanged; no vault change is needed.
+
+### Fixed
+
+- `session_context.py --prep` no longer lists an archived PC or a `_Template_*` note as an active PC in Active PCs, Threads or PC Arcs. All three lists, and `vaultlib.active_pcs`, now use one rule, `vaultlib.is_active_pc`.
+- The play brief keeps blank lines inside a code block exactly as written; blank runs outside code blocks still collapse.
+- The Threads report matches far more PC threads to their Wrap-Up bullets. When the text match misses, a thread and a bullet that share a person, place or thing plus two key words (or four key words with no shared name) count as the same thread, so their age shows instead of `first=?`.
+- `plan_check.py` warns (`scene-pointer`) when a `### [[Scene]]` pointer in a Plan names no scene note. It finds the vault by walking up from the plan to a folder with `_Templates` or `_meta`, and says nothing when there is none.
+
+### Changed
+
+- `--chapter` (scene-new, session-new, scene queue) also matches a chapter's aliases, as the last choice after file name, title and folder. Two chapters sharing an alias are still refused with the list of candidates.
+
+---
+
 ## [1.10.115] — 2026-10-31
 
 Tidying a moved vault's site file no longer loses settings. Publish tool 1.58.2; no vault change is needed.
