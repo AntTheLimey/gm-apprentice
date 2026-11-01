@@ -41,3 +41,18 @@ test('props links: a file that cannot be read is an error line and exit 1', () =
   assert.equal(none.status, 1);
   assert.match(none.stderr, /props links needs at least one file/);
 });
+
+// An error that is not a file that cannot be read is the tool's own fault: it is thrown with its stack, never passed
+// off as a one-line answer.
+test('runLinks rethrows an internal error', (t) => {
+  const links = require('../../lib/props/links');
+  const cli = require('../../lib/props/links-cli');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'props-links-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const page = path.join(dir, 'p.html');
+  fs.writeFileSync(page, '<img src="a.png">');
+  t.mock.method(links, 'localRefs', () => { throw new TypeError('a bug'); });
+  const saved = console.error;
+  console.error = () => {};
+  try { assert.throws(() => cli.runLinks({ files: [page], json: true }), /a bug/); } finally { console.error = saved; }
+});
