@@ -1091,7 +1091,8 @@ test('--fold-site-file keeps the vault\'s own title over the site file\'s and li
   assert.deepEqual(plan.dropped.map((d) => d.from), ['siteTitle']);
   assert.match(plan.dropped[0].why, /the vault already sets player_site.title to/);
   assert.deepEqual(plan.carried.map((c) => c.from), ['folderMap']);
-  assert.match(plan.lines.join('\n'), /`siteTitle` in the site folder's vault.config.json \("Theirs"\) differs from `player_site.title`/);
+  assert.doesNotMatch(plan.lines.join('\n'), /  /, 'no gap where a sentence was left out');
+  assert.match(plan.lines.join('\n'), /`siteTitle` in the site folder's vault.config.json \(Theirs\) differs from `player_site.title`/);
   applyMove(plan);
   const got = readSettings({ vaultPath: s.vault, siteConfig: {} }).values.player_site;
   assert.equal(got.title, 'Mine');
@@ -1129,7 +1130,7 @@ test('--fold-site-file accounts for every setting it takes out of the site file:
   assert.equal(p.features.search, false);
   assert.deepEqual(p.folder_map, { People: 'people' });
   assert.equal(v.vault.attachments, 'att');
-  assert.equal(v.vault.system, 'gurps');
+  assert.equal(v.vault.system, 'gurps-4e', 'the alias is read as the system it names');
   assert.equal(p.sheets.crest, 'crest.png');
   assert.equal(p.features.live_stats, true);
   assert.equal(p.features.inbox, true);
