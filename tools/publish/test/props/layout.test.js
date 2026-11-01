@@ -208,3 +208,17 @@ test('the tool names and the HTML ones', () => {
 test('partials are never read', () => {
   assert.strictEqual(fillLayout('{{> x}}', {}), '');
 });
+
+// #511: every attribute whose name starts with "on" is refused (it may be an event handler), harmless ones
+// such as one= and only= included; the rule stays strict, and the message says why and what to do.
+test('an on-named attribute is refused with the reason and the fix', () => {
+  for (const name of ['one', 'only', 'onclick']) {
+    const rows = checkLayout(`<div ${name}="{{prop_x}}">`, { file: 'layout.html' });
+    assert.strictEqual(rows.length, 1, name);
+    const said = rows[0];
+    assert.match(said, new RegExp(`${name}=`), said);
+    assert.match(said, /any attribute whose name starts with "on" is refused, since it may run as script/, said);
+    assert.match(said, /rename the attribute|data-/, said);
+  }
+  assert.doesNotMatch(JSON.stringify(checkLayout('<a href="{{prop_x}}">', { file: 'f' })), /starts with "on"/);
+});

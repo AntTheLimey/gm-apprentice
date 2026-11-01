@@ -263,6 +263,10 @@ function nameProblem(token, ctx) {
   const attr = ctx.split(':').slice(1, -1).join(':');
   if (!dangerousAttr(attr)) return null;
   if (attr.includes('?')) return 'is the value of an attribute whose name a section changes, which may not hold a field';
+  // The rule is broad on purpose (#511): a list of known handlers would go stale, so harmless names (one=, only=) are refused too.
+  if (attr.startsWith('on') && !DANGEROUS_ATTRS.has(attr)) {
+    return `is the value of ${attr}="…": any attribute whose name starts with "on" is refused, since it may run as script; rename the attribute (a data- name works) or put the field in the element's text`;
+  }
   return `is the value of ${attr || 'an unnamed attribute'}="…", which may not hold a field`;
 }
 
