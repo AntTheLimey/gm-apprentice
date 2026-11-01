@@ -1,6 +1,6 @@
 'use strict';
 // The GM site's Story page (#543): the folded wrap-up's marked view in place (its GM-only parts shown, marked), GM
-// Notes after the cards, the Source preamble first after them, a link to the session's Play Notes (always built on
+// Notes after the cards, the Source preamble first on the page, a link to the session's Play Notes (always built on
 // the GM site), and the wrap-up's own banner and hidden-fields panel. The player page holds none of it.
 const { describe, it, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -80,9 +80,9 @@ describe('the GM Story page', () => {
       assert.deepEqual(brokenLinks(site.gm.dir), []);
     });
 
-    it(`${name}: the Source preamble shows first after the cards, marked`, () => {
+    it(`${name}: the Source preamble shows first, before the recap, marked`, () => {
       const page = read(site.gm, STORY_1);
-      assert.ok(ascending(at(page, ['MOMENT-CONTEXT-1', 'GMSECRET-SOURCE-1', 'GMSECRET-NOTES-1'])));
+      assert.ok(ascending(at(page, ['GMSECRET-SOURCE-1', 'The party reached the docks', 'MOMENT-CONTEXT-1', 'GMSECRET-NOTES-1'])));
       assert.ok(markedTexts(page).some((m) => m.kind === 'gm_only_blocks' && m.text.includes('GMSECRET-SOURCE-1')));
     });
 
@@ -300,7 +300,7 @@ describe('the GM Story page with player_site.story.moments off', () => {
     const marks = markedTexts(page);
     const notes = marks.filter((m) => m.text.includes('GMSECRET-NOTES-1'));
     assert.deepEqual(notes.map((m) => m.kind), ['gm_only_blocks'], JSON.stringify(marks.map((m) => [m.kind, m.label])));
-    assert.ok(ascending(at(page, ['MOMENT-CONTEXT-1', 'GMSECRET-SOURCE-1', 'GMSECRET-NOTES-1', 'class="story-playnotes"'])));
+    assert.ok(ascending(at(page, ['GMSECRET-SOURCE-1', 'MOMENT-CONTEXT-1', 'GMSECRET-NOTES-1', 'class="story-playnotes"'])));
     for (const [file, text] of texts(s.gm)) assert.ok(!TOKEN.test(text), `a mark token in ${file}`);
     assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.player.dir }).findings, []);
   });
@@ -325,5 +325,54 @@ describe('the GM Story page: a chapter\'s introduction', () => {
     assert.ok(page.includes('CHAPTER-BODY-1') && page.includes('CHAPTER-BODY-2'));
     for (const [file, text] of texts(s.player)) assert.ok(!text.includes('GMSECRET-CHAPTER-1'), file);
     assert.ok(!main(page).includes('gm-mark'));
+  });
+});
+
+// Text above a wrap-up's first `##` heading shows on its Story page on both sites, as written, before the recap (the
+// note's own order). The usual hiding rules decide what players see of it; the GM site prints it in the same place,
+// with only its hidden parts marked. Its link preview reads what the page shows.
+describe('a wrap-up\'s text above its first heading', () => {
+  const PRE = [
+    'PREAMBLE-VISIBLE the night the docks burned, told plainly.',
+    '',
+    '%% PREAMBLE-COMMENT the GM keeps an aside here. %%',
+    '',
+    '> [!secret] Keeper',
+    '> PREAMBLE-CALLOUT the fire was set on purpose.',
+    '',
+  ].join('\n');
+  const wrap = WRAP_1.replace('## Narrative Recap\n', `${PRE}\n## Narrative Recap\n`);
+  const s = buildBoth(storyVault({ 'Sessions/Session 1 Wrap-Up.md': wrap }), { player: { hide: { callouts: ['secret'] } }, gm: { show: { comments: true } } });
+  after(() => s.cleanup());
+
+  it('the player Story page shows the visible text before the recap, and none of the hidden parts', () => {
+    assert.notStrictEqual(wrap, WRAP_1);
+    const page = read(s.player, STORY_1);
+    assert.ok(ascending(at(page, ['PREAMBLE-VISIBLE', 'The party reached the docks', 'LOOT-KEY-1'])));
+    for (const [file, text] of texts(s.player)) {
+      for (const x of ['PREAMBLE-COMMENT', 'PREAMBLE-CALLOUT', ...SECRETS]) assert.ok(!text.includes(x), `${x} in ${file}`);
+    }
+    assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.player.dir }).findings, []);
+  });
+
+  it('the GM Story page prints it in the same place: the visible text unmarked, each hidden part marked', () => {
+    const page = read(s.gm, STORY_1);
+    assert.ok(ascending(at(page, ['GMSECRET-SOURCE-1', 'PREAMBLE-VISIBLE', 'PREAMBLE-COMMENT', 'PREAMBLE-CALLOUT', 'The party reached the docks'])));
+    const marks = markedTexts(page);
+    assert.ok(!marks.some((m) => m.text.includes('PREAMBLE-VISIBLE')), 'the visible text is marked');
+    for (const x of ['GMSECRET-SOURCE-1', 'PREAMBLE-COMMENT', 'PREAMBLE-CALLOUT']) assert.ok(marks.some((m) => m.text.includes(x)), `${x} is not marked`);
+    assert.equal(nestingFault(page), null);
+    assert.equal(markedAfterMain(page), '');
+  });
+
+  it('the link preview of the Story page shows only words the page shows', () => {
+    for (const side of ['player', 'gm']) {
+      const card = JSON.parse(s[side].read('previews.json'))[STORY_1];
+      assert.ok(card, side);
+      const words = JSON.stringify(card).match(/PREAMBLE-[A-Z]+/g) || [];
+      const page = read(s[side], STORY_1);
+      for (const w of words) assert.ok(page.includes(w), `${side}: the preview shows ${w}, the page does not`);
+      assert.ok(!words.includes('PREAMBLE-COMMENT') && !words.includes('PREAMBLE-CALLOUT'), `${side}: ${words}`);
+    }
   });
 });

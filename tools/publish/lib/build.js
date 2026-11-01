@@ -2427,8 +2427,8 @@ function buildSite(options) {
   for (const page of pages) {
     if (isFolded(page)) foldedOnto.set(page.outputPath, (foldedOnto.get(page.outputPath) || []).concat(page));
   }
-  // What the GM Story page shows after the cards: the wrap-up's parts that go there (its GM Notes, its Source
-  // preamble), then a link to the session's Play Notes when they have a page.
+  // What the GM Story page shows after the cards: the wrap-up's parts that go there (its GM Notes), then a link to the
+  // session's Play Notes when they have a page.
   function gmAfter(unit) {
     const parts = (unit.after || []).map((a) => a.html).join('\n');
     const href = unit.kind === 'session' ? playNotesHrefOf(unit) : null;

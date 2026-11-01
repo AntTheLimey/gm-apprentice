@@ -22,6 +22,7 @@ Each session is one page on both sites: its wrap-up folds into its Story page, w
 - One page per session on both sites. A wrap-up no longer has a page of its own: its player sections (the recap, then its other sections that are not under GM Notes) and its Memorable Moments cards sit on the session's Story page, and every link to the wrap-up goes there, as do search results, link previews and the menu. The "In this session" box is gone, so a theme that styled `aside.story-refs` loses it.
 - A chapter shows only its introduction until its note says `status: complete`. Only then does the chapter's own wrap-up fold in. A chapter never takes anything from a session's wrap-up, so the recap it used to borrow from the latest session is gone.
 - The GM Story page shows the hidden parts in place, marked, with GM Notes after the cards. Where players see the session's own recap, a held-back draft wrap-up sits inside one mark. A session's Play Notes are always built and linked on the GM site, whatever `gm_site.show.notes` says.
+- A wrap-up's text above its first heading shows first on its Story page, before the recap, on both sites. The usual hiding rules decide what players see of it, and the GM site marks its hidden parts in place, such as the Source callout.
 - Empty section indexes are not written.
 - `explain` names the Story page a wrap-up lives on, and reads the same published view as the build (one shared function, so the two cannot disagree).
 - The landing page's "View all N NPCs" counts what the NPC index lists, and reads "View all 1 NPC" for one.

@@ -5,8 +5,9 @@
 // opened on a line of its own whose span holds a `##` heading: a fenced GM Notes, a `hide.sections` section) is lifted
 // out whole, its tokens kept: written before the moments it stays in place among the sections; after them, or in a
 // wrap-up with no moments, it goes after the cards; a run that holds the moments heading marks the moments, and its
-// other sections go after. The marked preamble (a Source callout above the first heading) goes first after.
-const { extractSections, findHeadings, renderMarkdown, renderInline, escapeHtml } = require('./processor');
+// other sections go after. The text above the first heading (the preamble) is handed back apart: the page prints it
+// before the recap on both sites, as written, its hidden parts marked on the GM site.
+const { extractSections, findHeadings, renderMarkdown, renderInline, escapeHtml, stripLeadingH1Marked } = require('./processor');
 const { unmark, withoutMarked } = require('./gm-marks');
 
 const OPEN_LINE = /^\uE000[0-9a-z]+\uE001$/;
@@ -112,7 +113,7 @@ function runSections(lines, run, open) {
   });
 }
 
-const EMPTY = () => ({ recap: null, sections: [], moments: null, after: [] });
+const EMPTY = () => ({ preamble: null, recap: null, sections: [], moments: null, after: [] });
 
 // `warn` (a function) is told, naming the note (`name`), when its headings cannot be read; the page then keeps no
 // body from it.
@@ -134,14 +135,16 @@ function cut(lines, marks, recapTitle) {
   const kept = lines.map((_, i) => i).filter((i) => !runs.some((r) => i >= r.start && i <= r.end));
   const rest = kept.map((i) => lines[i]);
   const restHeads = topHeadings(rest).map((h) => ({ ...h, at: kept[h.line] }));
-  const rendered = extractSections(rest.join('\n'), { preamble: !!marks });
+  const rendered = extractSections(rest.join('\n'));
   const placed = [];   // { at, section } for `sections`, in written order once sorted
-  const after = [];    // { at, title, id, html }: a section after the cards (no title: the preamble)
-  // The sections outside every hidden run, as extractSections renders them (its preamble first, when it has one).
-  const offset = rendered.length - restHeads.length;
-  if (offset > 0) after.push({ at: -1, html: rendered[0].html });
+  const after = [];    // { at, title, id, html }: a section after the cards
+  // The text above the first heading outside every hidden run, less the note's own title: what players see of it, or
+  // on the GM site all of it, its hidden parts marked.
+  const top = stripLeadingH1Marked(rest.slice(0, restHeads.length ? restHeads[0].line : rest.length).join('\n'));
+  if (unmark(top).trim()) out.preamble = { html: renderMarkdown(top) };
+  // The sections outside every hidden run, as extractSections renders them.
   restHeads.forEach((h, k) => {
-    const section = rendered[k + offset];
+    const section = rendered[k];
     // The recap's title as found in the text players see (story-spine.js findRecap): on the GM site a name marked in
     // the heading is dropped there.
     if (!out.recap && recapTitle != null && (unmark(h.title) === recapTitle || withoutMarked(h.title).trim() === recapTitle.trim())) {
@@ -176,14 +179,12 @@ function cut(lines, marks, recapTitle) {
   after.sort((a, b) => a.at - b.at);
   // One page, one anchor each: a second `loot` (a hidden Loot beside a visible one) becomes `loot-2`, in page order.
   const used = new Map();
-  for (const s of [...out.sections, ...after.filter((a) => a.title !== undefined)]) {
+  for (const s of [...out.sections, ...after]) {
     const n = (used.get(s.id) || 0) + 1;
     used.set(s.id, n);
     if (n > 1) s.id = `${s.id}-${n}`;
   }
-  out.after = after.map((a) => ({
-    html: a.title === undefined ? a.html : `<h2 id="${escapeHtml(a.id)}">${renderInline(a.title)}</h2>\n${a.html}`,
-  }));
+  out.after = after.map((a) => ({ html: `<h2 id="${escapeHtml(a.id)}">${renderInline(a.title)}</h2>\n${a.html}` }));
   return out;
 }
 

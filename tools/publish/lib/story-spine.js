@@ -242,13 +242,13 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
   // The wrap-up's sections on its unit's Story page, less the recap the page leads with when it came from the wrap-up.
   // Its unreadable headings are reported on the build's one warning pass.
   const bodyOf = (wrapUp, recap, resolve) => {
-    if (!wrapUp) return { sections: [], moments: null, after: [] };
+    if (!wrapUp) return { preambleHtml: null, sections: [], moments: null, after: [] };
     const text = (marked ? markedOf(wrapUp) : null) ?? publishedOf(wrapUp);
     const recapTitle = recap && recap.sourcePage === wrapUp ? recap.title : null;
     const warn = images && images.warn ? (msg) => console.warn(`story: ${msg}`) : null;
     const name = wrapUp.sourcePath ? path.basename(wrapUp.sourcePath) : wrapUp.title;
-    const { sections, moments, after, recap: shown } = storySections(text, { resolve, marks: marked || null, recapTitle, warn, name });
-    return { sections, moments, after, ...(shown ? { recapHtml: shown.html } : {}) };
+    const { preamble, sections, moments, after, recap: shown } = storySections(text, { resolve, marks: marked || null, recapTitle, warn, name });
+    return { preambleHtml: preamble ? preamble.html : null, sections, moments, after, ...(shown ? { recapHtml: shown.html } : {}) };
   };
   // On the GM site, a recap from the unit's own page (no wrap-up gave one) is shown from its marked view, as the
   // wrap-up's is: the same section, its GM-only parts in place.

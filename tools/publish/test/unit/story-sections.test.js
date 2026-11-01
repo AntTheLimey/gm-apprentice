@@ -44,13 +44,20 @@ describe('storySections', () => {
     assert.equal(out.recap, null);
   });
 
+  it('text above the first heading comes back as the preamble, without the note\'s own title; none when there is none', () => {
+    const out = storySections('# Session 1 Wrap-Up\n\nA plain lead line.\n\n## Narrative Recap\nx\n', { recapTitle: 'Narrative Recap' });
+    assert.match(out.preamble.html, /<p>A plain lead line\.<\/p>/);
+    assert.doesNotMatch(out.preamble.html, /Session 1 Wrap-Up/);
+    assert.equal(storySections('# Session 1 Wrap-Up\n\n## Narrative Recap\nx\n', { recapTitle: 'Narrative Recap' }).preamble, null);
+  });
+
   it('no moments section: moments is null', () => {
     const out = storySections('## Narrative Recap\nx\n\n## Loot\ny\n', { recapTitle: 'Narrative Recap' });
     assert.equal(out.moments, null);
     assert.deepEqual(out.sections.map((s) => s.title), ['Loot']);
   });
 
-  it('marked text: a fenced GM Notes after the moments goes after; a hidden Loot before them stays in place; the Source preamble goes first after', () => {
+  it('marked text: a fenced GM Notes after the moments goes after; a hidden Loot before them stays in place; the Source preamble comes back apart, marked', () => {
     const m = createMarks();
     const source = m.open('callouts', 'source');
     const gmOnly = m.open('gm_only', 'gm-only');
@@ -76,10 +83,11 @@ describe('storySections', () => {
     assert.equal(out.moments.title, 'Memorable Moments');
     assert.equal(out.moments.hidden, null);
     assert.doesNotMatch(out.moments.markdown, /the twist|After all/);
-    assert.equal(out.after.length, 2);
-    assert.match(out.after[0].html, /Written from the Play Notes/, 'the Source preamble goes first');
-    assert.match(out.after[1].html, /<h2 id="gm-notes">/);
-    assert.match(out.after[1].html, /the twist[\s\S]*deeper/);
+    assert.match(out.preamble.html, /Written from the Play Notes/, 'the Source preamble, for the page to print first');
+    assert.ok(out.preamble.html.includes(source) && balanced(out.preamble.html), 'the preamble keeps its mark');
+    assert.equal(out.after.length, 1);
+    assert.match(out.after[0].html, /<h2 id="gm-notes">/);
+    assert.match(out.after[0].html, /the twist[\s\S]*deeper/);
     for (const a of out.after) assert.ok(balanced(a.html), `balanced: ${JSON.stringify(a.html)}`);
     assert.ok(out.sections.every((s) => !/the twist|Written from the Play Notes/.test(s.html)));
   });
@@ -173,7 +181,7 @@ describe('storySections', () => {
     try {
       const fresh = require('../../lib/story-sections');
       const out = fresh.storySections(PLAYER, { recapTitle: 'Narrative Recap', warn: (msg) => warned.push(msg), name: 'Sessions/Session 1 Wrap-Up.md' });
-      assert.deepEqual(out, { recap: null, sections: [], moments: null, after: [] });
+      assert.deepEqual(out, { preamble: null, recap: null, sections: [], moments: null, after: [] });
     } finally {
       processor.findHeadings = real;
       delete require.cache[key];
