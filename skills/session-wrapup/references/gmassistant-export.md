@@ -25,8 +25,14 @@ moments name the PCs in them: use them for each PC's Moment.
   row each:
   EXACT/ALIAS → update that note, NEAR → check its candidates,
   NONE → new.
-- An export description that conflicts with existing vault content
-  → flag the entity CONFLICT for GM review.
+- An export description that contradicts a note: if the note
+  records it from earlier play (a bullet naming an earlier session,
+  not `(projected)`: Campaign Log, Encounters or Behind the Scenes),
+  flag the entity CONFLICT for GM review. Anything else in a note is
+  prep: apply what played, strike the old text through with
+  `superseded YYYY-MM-DD`, and record it in Quality Notes; don't
+  ask. A name spelled differently is neither: keep the vault's
+  spelling.
 - Record every export-vs-vault name correction made anywhere in
   the wrap-up in the Wrap-Up's `### Name Conflicts (export vs.
   vault canon)` table (Export said | Vault canon | Applied). The
