@@ -616,10 +616,6 @@ def _ratio_match(thread: str, norm: str, bullet: str) -> bool:
     return SequenceMatcher(None, norm, _norm_thread(bullet)).ratio() >= 0.6
 
 
-def _words_match(thread: str, _norm: str, bullet: str) -> bool:
-    return threads_related(thread, bullet)
-
-
 def thread_report(files, current: int, chapter, vault: Path) -> str:
     """Per-PC Open-threads ages against Wrap-Up Unresolved Threads / PC
     Carry-Forward bullets, plus wrap-up bullets that never made it onto
@@ -661,6 +657,7 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
     # Unresolved bullets a PC thread actually matched, keyed by (session,
     # bullet text) — everything else is reported as an orphan below.
     matched: set[tuple[int, str]] = set()
+    tentative = False
 
     if not pcs:
         lines.append("(no active PC entities found)")
@@ -675,27 +672,38 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
         for thread in thread_bullets:
             norm = _norm_thread(thread)
             hits: list[int] = []
-            for tier in (_ratio_match, _words_match):
+            for n, unresolved, carry in wrap_ups:
+                for bullet in unresolved + carry:
+                    if _ratio_match(thread, norm, bullet):
+                        hits.append(n)
+                        if bullet in unresolved:
+                            matched.add((n, bullet))
+                        break
+            mark = "="
+            if not hits:
+                # The looser tier reads only what the first missed. Its
+                # matches are tentative: marked `~`, and they leave the
+                # orphan list alone.
+                mark = "~"
                 for n, unresolved, carry in wrap_ups:
-                    for bullet in unresolved + carry:
-                        if tier(thread, norm, bullet):
-                            hits.append(n)
-                            if bullet in unresolved:
-                                matched.add((n, bullet))
-                            break
-                if hits:
-                    break  # the looser tier only reads what the first missed
+                    if any(threads_related(thread, bullet)
+                           for bullet in unresolved + carry):
+                        hits.append(n)
+                tentative = tentative or bool(hits)
             if hits:
                 first, last = min(hits), max(hits)
                 age = current - last
                 stale = "STALE" if age >= stale_after else ""
-                lines.append(f"{thread}\tfirst={first}\tlast={last}\t"
-                             f"age={age}\t{stale}")
+                lines.append(f"{thread}\tfirst{mark}{first}\tlast{mark}{last}"
+                             f"\tage{mark}{age}\t{stale}")
             else:
                 lines.append(
                     f"{thread}\tfirst=?\tlast=?\tage=?\t"
                     f"(not in any wrap-up — check it is still live)")
 
+    if tentative:
+        lines.insert(1, "(~ means a likely match by shared names and words, "
+                        "not the same text: check it)")
     lines.append("--- Wrap-up threads not on any PC sheet ---")
     orphans = [f"session {n}\t{bullet}"
               for n, unresolved, _carry in wrap_ups

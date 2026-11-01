@@ -454,7 +454,7 @@ class ThreadSecondTierTests(unittest.TestCase):
             "[[Venn]] owes the party a favour",
             "[[Venn]] was seen leaving the quay at night"))
 
-    def test_report_ages_a_reworded_thread(self):
+    def reworded_vault(self):
         tmp = Path(tempfile.mkdtemp(prefix="thread-tier-"))
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
         (tmp / "Ada.md").write_text(
@@ -464,11 +464,29 @@ class ThreadSecondTierTests(unittest.TestCase):
         (tmp / "Wrap.md").write_text(
             "---\ntype: session_wrap\nsession: 3\n---\n\n## GM Notes\n\n"
             "### What Carries Forward\n\n#### Unresolved Threads\n\n"
-            "- Venn drugged in study (by whom?)\n",
-            encoding="utf-8")
+            "- Venn drugged in study (by whom?)\n", encoding="utf-8")
+        return tmp
+
+    def test_report_marks_a_reworded_thread_tentative(self):
+        tmp = self.reworded_vault()
         report = sc.thread_report(load_files(tmp), 5, None, tmp)
-        self.assertIn("first=3\tlast=3\tage=2", report)
+        self.assertIn("first~3\tlast~3\tage~2", report)
+        self.assertNotIn("first=", report)
         self.assertNotIn("not in any wrap-up", report)
+        self.assertIn("~ means a likely match", report.splitlines()[1])
+
+    def test_tentative_match_leaves_the_bullet_in_the_orphan_list(self):
+        tmp = self.reworded_vault()
+        report = sc.thread_report(load_files(tmp), 5, None, tmp)
+        orphans = report.split(
+            "--- Wrap-up threads not on any PC sheet ---", 1)[1]
+        self.assertIn("session 3\tVenn drugged in study", orphans)
+
+    def test_no_legend_when_nothing_is_tentative(self):
+        report = sc.thread_report(
+            load_files(FIXTURE), 7, "chapter 4 - calcutta", FIXTURE)
+        self.assertNotIn("~", report.splitlines()[1])
+        self.assertNotIn("likely match", report)
 
 
 class ThreadReportTests(unittest.TestCase):
