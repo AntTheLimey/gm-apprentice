@@ -278,7 +278,7 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
                                    on a vault already moved it tidies up after a stopped move, and --discard-old-file removes a left-over
                                    old file that holds more than the new one; --site-tool-updated says the caller is bringing the site's tool up to date first;
                                    --fold-site-file, on a moved vault, takes the settings a site folder's vault.config.json still holds out of it,
-                                   adding a hiding list's entries to the vault's list and keeping the stricter callout rule;
+                                   adding a hiding list's entries to the vault's list, keeping the stricter callout rule, carrying a setting the vault does not set and keeping the vault's own where it does;
                                    --only names the site-file keys to take (siteUrl, preserveDirs, ...; package.json, or package.json postbuild, for the
                                    site's build steps) and every other key is left where it is)
                                    The plugin's update normally runs the move for you. Running it by hand is safe:

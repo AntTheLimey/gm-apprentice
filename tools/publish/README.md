@@ -470,8 +470,11 @@ vault's. Without it the command only reports them and changes nothing.
 With it, those settings come out of the site file and what they say goes
 into the vault: a hiding list's entries are added to the vault's list
 (the built-in entries stay), the stricter of two callout rules is kept,
-and for any other setting the vault's own value stays. The two files
-change together or not at all. Add `--only <key>` (repeatable) to take just the named keys of the
+any other setting the vault does not set is carried into it, and where
+the vault sets one differently its own value stays and the site file's
+is listed as dropped, as is a value that cannot be used or a name that
+is not a setting. The plan names each before anything is written. The
+two files change together or not at all. Add `--only <key>` (repeatable) to take just the named keys of the
 site file, or `package.json` for its build steps; every other key is
 left where it is.
 If both

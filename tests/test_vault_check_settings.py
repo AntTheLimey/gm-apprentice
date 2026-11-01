@@ -768,6 +768,27 @@ class SiteFileKeyTests(NewFileBase):
         self.assertIn('\n    "vaultPath"', text)     # its indentation kept
         self.assertEqual(self.rows(vault), [])
 
+    def test_a_key_the_vault_does_not_set_is_moved_not_called_in_use(self):
+        """#539: the fold carries a setting the vault lacks; the row says so."""
+        import json
+        vault, site_file = self.moved_vault_with_site_keys(
+            footer="Theirs", landing={"max_npcs": 2})
+        rows = {r.fault["name"]: r for r in self.rows(vault) if r.site}
+        self.assertEqual(sorted(rows), ["footer", "landing"])
+        self.assertIn("move it to player_site.footer", rows["footer"].fix)
+        self.assertNotIn("already the value in use", rows["footer"].fix)
+        self.assertIn("player_site.footer", rows["footer"].done)
+        self.assertIn("the vault does not set", rows["landing"].fix)
+        code, out = self.fix_output(vault)
+        self.assertEqual(code, 0, out)
+        got = vc.settings(vault)
+        self.assertEqual(got.get("player_site.footer"), "Theirs")
+        self.assertEqual(got.get("player_site.landing.max_npcs"), 2)
+        left = json.loads(site_file.read_text())
+        self.assertNotIn("footer", left)
+        self.assertNotIn("landing", left)
+        self.assertEqual(self.rows(vault), [])
+
     def fix_output(self, vault):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):

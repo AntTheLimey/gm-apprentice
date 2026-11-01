@@ -1839,8 +1839,9 @@ def settings_fold_site_file(vault: Path,
     """On a vault already on the new file, take the settings its site
     folder's vault.config.json still holds out of that file, in one change
     across both files: a hiding list's entries are added to the vault's list,
-    the stricter callout rule is kept, any other value is the vault's own
-    already. With `keys` (site-file key names, `package.json` or
+    the stricter callout rule is kept, a setting the vault does not set is
+    carried into its file, and one it sets differently keeps the vault's
+    value (the tool lists it as dropped). With `keys` (site-file key names, `package.json` or
     `package.json <script>`) only those are taken and every other key is
     left where it is. The lines the tool reports."""
     _check_vault(vault)

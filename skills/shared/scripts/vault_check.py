@@ -5515,9 +5515,10 @@ def _site_key_row(fault: dict[str, Any], own: Any,
                   site_value: Any = None) -> SettingsRow:
     """A setting the site folder's vault.config.json still holds, on a vault
     already on the new file. That file is not read now, so the vault's own
-    value is the one in use; the fix takes the key out of the site file, in
-    one change with the vault's file (the tool does it). Certain: it hides
-    the same or more."""
+    value is the one in use where it sets one; where it does not, the value
+    moves into the vault's file. The fix takes the key out of the site file,
+    in one change with the vault's file (the tool does it). Certain: it hides
+    the same or more, and loses nothing the vault does not set."""
     row = SettingsRow(fault, site=True)
     target = str(fault.get("use") or fault.get("setting") or "")
     try:
@@ -5530,6 +5531,7 @@ def _site_key_row(fault: dict[str, Any], own: Any,
         and any(isinstance(x, str) and x.strip() for x in site_value))
     nothing = (info.get("guards") and info.get("kind") in ("list", "switchOrList")
                and not carries)
+    done = f"took {key} out of vault.config.json"
     if nothing:
         # Not a list of entries: the old layout ignored it too, so nothing it
         # hid is shown, and nothing is carried over.
@@ -5542,20 +5544,33 @@ def _site_key_row(fault: dict[str, Any], own: Any,
         what = (f"keep the stricter of the two rules in {target} and remove "
                 "it from vault.config.json")
     else:
-        shown = ""
-        try:
-            shown = f" ({_short(own.get(target))})"
-        except KeyError:
-            pass
-        what = (f"remove it from vault.config.json; the vault's {target}"
-                f"{shown} is already the value in use, because that file "
-                "is not read now")
+        # The tool carries a value the vault's file does not set into it,
+        # and keeps the vault's own where it sets one (#539).
+        origin = own.origins.get(target)
+        if origin is None:
+            what = (f"move what it sets that the vault does not set into "
+                    f"{target} (the vault's own values stay) and remove it "
+                    "from vault.config.json")
+            done = (f"took {key} out of vault.config.json, moving what the "
+                    f"vault did not set into {target}")
+        elif origin in ("default", "inherit"):
+            what = (f"move it to {target}, which the vault does not set, "
+                    "and remove it from vault.config.json")
+            done = f"moved {key} to {target}"
+        else:
+            shown = ""
+            try:
+                shown = f" ({_short(own.get(target))})"
+            except KeyError:
+                pass
+            what = (f"remove it from vault.config.json; the vault's {target}"
+                    f"{shown} is already the value in use, because that file "
+                    "is not read now")
     row.kind = "certain"
     row.ops = [{"op": "fold-site", "keys": [key]}]
     row.fix = what
     row.done = (f"took {key} out of vault.config.json; it held no list of "
-                "entries, so nothing was carried" if nothing
-                else f"took {key} out of vault.config.json")
+                "entries, so nothing was carried" if nothing else done)
     return row
 
 
