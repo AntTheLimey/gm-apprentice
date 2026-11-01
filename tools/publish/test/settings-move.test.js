@@ -1049,6 +1049,97 @@ test('a left-over old file that also hides a heading does not hide the site file
   assert.ok(readSettings({ vaultPath: s.vault }).values.player_site.hide.sections.includes('Site Secret'));
 });
 
+// A moved vault, its site folder's file then given `extra`: { s, file, siteJson } (#539).
+function movedWithSiteFile(publishLines, extra) {
+  const s = scratch(old(`  site_dir: ../Site\n${publishLines}`));
+  const siteDir = path.join(s.root, 'Site');
+  fs.mkdirSync(siteDir);
+  const file = path.join(siteDir, 'vault.config.json');
+  const siteJson = { vaultPath: '../Vault' };
+  fs.writeFileSync(file, JSON.stringify(siteJson, null, 2) + '\n');
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  fs.writeFileSync(file, JSON.stringify({ ...siteJson, ...extra }, null, 2) + '\n');
+  return { s, file, siteJson };
+}
+
+test('--fold-site-file carries a title and folder map the vault lacks, and says so before anything is written (#539)', () => {
+  const { s, file, siteJson } = movedWithSiteFile('', { siteTitle: 'Pack Title Only', folderMap: { People: 'people' } });
+  const before = hashes(s.root);
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null });
+  assert.deepEqual(plan.blockers, []);
+  assert.deepEqual(hashes(s.root), before, 'planning writes nothing');
+  const carried = Object.fromEntries(plan.carried.map((c) => [c.from, c]));
+  assert.equal(carried.siteTitle && carried.siteTitle.to, 'player_site.title');
+  assert.equal(carried.siteTitle.value, 'Pack Title Only');
+  assert.equal(carried.folderMap && carried.folderMap.to, 'player_site.folder_map');
+  assert.deepEqual(carried.folderMap.value, { People: 'people' });
+  assert.deepEqual(plan.dropped, []);
+  const text = plan.lines.join('\n');
+  assert.match(text, /`siteTitle` moves to `player_site.title`/);
+  assert.match(text, /`folderMap` moves to `player_site.folder_map`/);
+  assert.doesNotMatch(text, /nothing was carried/);
+  applyMove(plan);
+  const got = readSettings({ vaultPath: s.vault, siteConfig: {} }).values.player_site;
+  assert.equal(got.title, 'Pack Title Only');
+  assert.deepEqual(got.folder_map, { People: 'people' });
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), siteJson);
+});
+
+test('--fold-site-file keeps the vault\'s own title over the site file\'s and lists the site file\'s as dropped (#539)', () => {
+  const { s, file } = movedWithSiteFile('  site_title: Mine\n', { siteTitle: 'Theirs', folderMap: { People: 'people' } });
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null });
+  assert.deepEqual(plan.dropped.map((d) => d.from), ['siteTitle']);
+  assert.match(plan.dropped[0].why, /the vault already sets player_site.title to/);
+  assert.deepEqual(plan.carried.map((c) => c.from), ['folderMap']);
+  assert.match(plan.lines.join('\n'), /`siteTitle` in the site folder's vault.config.json \("Theirs"\) differs from `player_site.title`/);
+  applyMove(plan);
+  const got = readSettings({ vaultPath: s.vault, siteConfig: {} }).values.player_site;
+  assert.equal(got.title, 'Mine');
+  assert.deepEqual(got.folder_map, { People: 'people' });
+});
+
+test('without --fold-site-file a title and folder map the vault lacks stay in the site file (#539)', () => {
+  const { s, file } = movedWithSiteFile('', { siteTitle: 'Pack Title Only', folderMap: { People: 'people' } });
+  const before = hashes(s.root);
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file }, { pinCheck: () => null });
+  applyMove(plan);
+  assert.deepEqual(hashes(s.root), before);
+});
+
+test('--fold-site-file accounts for every setting it takes out of the site file: carried, dropped, or added to a list (#539)', () => {
+  const extra = {
+    siteTitle: 'T', footer: 'F', searchEnabled: false, folderMap: { People: 'people' }, attachmentsDir: 'att', system: 'gurps',
+    sheet_crest: 'crest.png', backend: { statusBar: true, inbox: true }, landing: { max_npcs: 3 }, images: { optimize: true },
+    banners: { npcs: 'b.png' }, locations: { group_by: 'system' }, excludeSections: ['Z'],
+  };
+  const { s, file, siteJson } = movedWithSiteFile('', extra);
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null });
+  assert.deepEqual(plan.blockers, []);
+  assert.deepEqual(plan.dropped, []);
+  assert.deepEqual(plan.carried.map((c) => c.from).sort(), [
+    'attachmentsDir', 'backend.inbox', 'backend.statusBar', 'banners', 'folderMap', 'footer', 'images.optimize', 'landing.max_npcs',
+    'locations.group_by', 'searchEnabled', 'sheet_crest', 'siteTitle', 'system',
+  ]);
+  applyMove(plan);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), siteJson, 'every setting left the site file');
+  const v = readSettings({ vaultPath: s.vault, siteConfig: {} }).values;
+  const p = v.player_site;
+  assert.equal(p.title, 'T');
+  assert.equal(p.footer, 'F');
+  assert.equal(p.features.search, false);
+  assert.deepEqual(p.folder_map, { People: 'people' });
+  assert.equal(v.vault.attachments, 'att');
+  assert.equal(v.vault.system, 'gurps');
+  assert.equal(p.sheets.crest, 'crest.png');
+  assert.equal(p.features.live_stats, true);
+  assert.equal(p.features.inbox, true);
+  assert.equal(p.landing.max_npcs, 3);
+  assert.equal(p.images.optimize, true);
+  assert.deepEqual(p.lists.banners, { npcs: 'b.png' });
+  assert.equal(p.lists.locations.group_by, 'system');
+  assert.ok(p.hide.sections.includes('Z'));
+});
+
 // ---- What a site folder's vault.config.json still holds: carried into the vault, then taken out of the site file ----
 
 const SITE_ALL = {
