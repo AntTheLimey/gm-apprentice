@@ -79,6 +79,16 @@ function cleanJson(name, raw) {
   return { title, about, fonts, fields, printoutToggle };
 }
 
+// What style.json says that cleanJson cannot use, as { detail, fix } (the build says each once per style).
+function jsonProblemsOf(name, raw) {
+  const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  if (!('printout_toggle' in obj) || typeof obj.printout_toggle === 'boolean') return [];
+  return [{
+    detail: `the style "${name}" has printout_toggle: ${JSON.stringify(obj.printout_toggle)} in style.json, which is not true or false; it is read as false`,
+    fix: 'write printout_toggle: true (no quotes) for a style with a printout toggle, or leave it out',
+  }];
+}
+
 function loadStyle(name, { vaultPath, pluginDir = PLUGIN_STYLES_DIR }) {
   if (typeof name !== 'string' || !PROP_STYLE_RE.test(name)) {
     return {
@@ -215,6 +225,7 @@ function loadStyle(name, { vaultPath, pluginDir = PLUGIN_STYLES_DIR }) {
       layout,
       sheet,
       json: cleanJson(name, raw),
+      jsonProblems: jsonProblemsOf(name, raw),
       css: files['style.css'],
       script: files['script.js'],
       assets,

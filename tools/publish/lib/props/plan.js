@@ -196,6 +196,11 @@ function planProps({ vaultPath, pages, relOf, ships, taken, cutKeeper, cleanup =
           skipSaid.add(loaded.style.name);
           say(rel, `the style "${loaded.style.name}" leaves out ${loaded.style.skipped.join(', ')}`, `put only pictures and fonts directly in the style's assets/ folder (${[...STYLE_ASSET_EXTS].map((x) => x.slice(1)).join(', ')})`);
         }
+        // What its style.json says that the tool cannot use, likewise once per style.
+        if (plan.ships && (loaded.style.jsonProblems || []).length && !skipSaid.has(`json:${loaded.style.name}`)) {
+          skipSaid.add(`json:${loaded.style.name}`);
+          for (const p of loaded.style.jsonProblems) say(rel, p.detail, p.fix);
+        }
       }
       plan.made = plan.style ? 'style' : 'container';
       placeAt('.html');
