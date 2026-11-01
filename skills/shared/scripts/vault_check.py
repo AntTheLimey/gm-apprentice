@@ -5349,12 +5349,14 @@ def _classify_move(fault_kind: str, name: str, value: Any, target: str,
 SITE_FILE_PLACE = "in the site folder's vault.config.json"
 
 
-def _site_move_plan(vault: Path, *, fold: bool = False) -> dict[str, Any]:
+def _site_move_plan(vault: Path, *, fold: bool = False,
+                    only: list[str] | None = None) -> dict[str, Any]:
     """What the tool's move would do with the site folder's files (with
-    `fold`, what its --fold-site-file would do), or {} when it cannot say (a
-    blocked move exits 1; its words are the fault's)."""
+    `fold`, what its --fold-site-file would do, for the `only` keys when
+    given), or {} when it cannot say. A blocked plan comes back as the tool
+    gave it, `ok` false with its `blockers`."""
     try:
-        return settings_move_plan(vault, fold_site_file=fold)
+        return settings_move_plan(vault, fold_site_file=fold, only=only)
     except SettingsUnavailable:
         return {}
 
@@ -5514,7 +5516,8 @@ def _package_step_rows(plan: dict[str, Any]) -> list[SettingsRow]:
 
 def _site_key_row(fault: dict[str, Any], own: Any,
                   site_value: Any = None,
-                  fold: dict[str, Any] | None = None) -> SettingsRow:
+                  fold: dict[str, Any] | None = None,
+                  vault: Path | None = None) -> SettingsRow:
     """A setting the site folder's vault.config.json still holds, on a vault
     already on the new file. That file is not read now. The fix takes the key
     out of the site file, in one change with the vault's file (the tool does
@@ -5536,6 +5539,17 @@ def _site_key_row(fault: dict[str, Any], own: Any,
                 and (str(x.get("from")) == key
                      or str(x.get("from")).startswith(key + "."))]
 
+    if fold and fold.get("ok") is False and vault is not None:
+        # The whole fold is refused, maybe for another key: this row's fix
+        # folds its own key alone, so ask the tool about that.
+        fold = _site_move_plan(vault, fold=True, only=[key])
+    if fold and fold.get("ok") is False:
+        # The tool refuses the fold: say why, and offer nothing to apply.
+        said = "; ".join(str(b) for b in fold.get("blockers") or []) \
+            or "the publish tool would not take it out"
+        row.note = (f"Nothing is changed automatically: the publish tool "
+                    f"will not take it out yet ({said}).")
+        return row
     moved = mine((fold or {}).get("carried"))
     gone = mine((fold or {}).get("dropped"))
     carries = (info.get("kind") == "switchOrList" and site_value is True) or (
@@ -5566,8 +5580,9 @@ def _site_key_row(fault: dict[str, Any], own: Any,
         what = ((parts[0] + ", and remove it from vault.config.json")
                 if parts else "remove it from vault.config.json")
         if gone:
-            what += "; the site file's value is not carried: " + "; ".join(
-                f"{d['from']} ({d.get('why')})" for d in gone)
+            left = "; ".join(f"{d['from']} ({d.get('why')})" for d in gone)
+            what += "; the site file's value is not carried: " + left
+            done += "; not carried: " + left
     elif info.get("guards") and info.get("kind") == "list":
         what = (f"add its entries to {target} (the built-in entries stay) "
                 "and remove it from vault.config.json")
@@ -5850,7 +5865,7 @@ def plan_settings(vault: Path) -> tuple[list[SettingsRow], bool]:
                         fault, own,
                         site_json.get(f["name"])
                         if isinstance(site_json, dict) else None,
-                        fold_plan))
+                        fold_plan, vault))
                 continue
             if f.get("siteLeft"):
                 continue    # the update moves it; the legacy file reads it

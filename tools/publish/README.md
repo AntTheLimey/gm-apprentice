@@ -475,8 +475,9 @@ the vault sets one differently its own value stays and the site file's
 is listed as dropped, as is a value that cannot be used or a name that
 is not a setting. The plan names each before anything is written. The
 two files change together or not at all. Add `--only <key>` (repeatable) to take just the named keys of the
-site file, or `package.json` for its build steps; every other key is
-left where it is.
+site file (a name inside one of its maps, such as `landing.max_npcs`,
+takes just that one), or `package.json` for its build steps; every other
+key is left where it is.
 If both
 files exist the new one is read, and the old one is reported as left over.
 

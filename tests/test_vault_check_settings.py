@@ -804,6 +804,36 @@ class SiteFileKeyTests(NewFileBase):
         self.assertTrue(vc.settings(vault).get("player_site.features.search"))
         self.assertNotIn("searchEnabled", site_file.read_text())
 
+    def test_a_value_not_carried_is_named_in_the_fixed_line(self):
+        """#539: what the fix leaves behind is said after it, as before it."""
+        vault, site_file = self.moved_vault_with_site_keys(siteTitle="Theirs")
+        (row,) = [r for r in self.rows(vault) if r.site]
+        self.assertIn("not carried", row.done)
+        self.assertIn("the vault already sets player_site.title", row.done)
+        code, out = self.fix_output(vault)
+        self.assertEqual(code, 0, out)
+        self.assertIn("not carried: siteTitle", out)
+
+    def test_a_blocked_fold_shows_the_tools_blocker_and_offers_no_fix(self):
+        """#539: a fold the tool refuses is never worded as nothing to carry."""
+        vault, site_file = self.moved_vault_with_site_keys(siteTitle="Theirs")
+        real = vc._site_move_plan
+
+        def blocked(v, *, fold=False, only=None):
+            if fold:
+                return {"ok": False, "blockers": ["player_site.title would not come out the same"]}
+            return real(v)
+
+        vc._site_move_plan = blocked
+        try:
+            (row,) = [r for r in self.rows(vault) if r.site]
+        finally:
+            vc._site_move_plan = real
+        self.assertEqual(row.ops, [])
+        self.assertNotEqual(row.kind, "certain")
+        self.assertIn("would not come out the same", row.note)
+        self.assertNotIn("already says the same", str(row.fix))
+
     def fix_output(self, vault):
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
