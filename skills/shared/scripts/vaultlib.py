@@ -1806,12 +1806,16 @@ def settings_carry(vault: Path, written: str, name: str) -> list[str]:
     return [str(answer["into"])]
 
 
-def settings_move_plan(vault: Path) -> dict[str, Any]:
+def settings_move_plan(vault: Path, *,
+                       fold_site_file: bool = False) -> dict[str, Any]:
     """What `settings move --check` says of a vault: `ok`, `lines`,
     `blockers`, `files`, and for a moved vault with an old file left beside
-    the new one, `leftover` (`redundant`, `keys`). Writes nothing."""
+    the new one, `leftover` (`redundant`, `keys`). With `fold_site_file`,
+    what `--fold-site-file` would do, its `carried` and `dropped` naming
+    each site-file key. Writes nothing."""
     _check_vault(vault)
-    answer = _run_settings(["move", *_target_args(vault), "--check"],
+    fold = ["--fold-site-file"] if fold_site_file else []
+    answer = _run_settings(["move", *_target_args(vault), "--check", *fold],
                            blockable=True)
     if not isinstance(answer, dict):
         raise SettingsUnavailable(

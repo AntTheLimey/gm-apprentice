@@ -5349,11 +5349,12 @@ def _classify_move(fault_kind: str, name: str, value: Any, target: str,
 SITE_FILE_PLACE = "in the site folder's vault.config.json"
 
 
-def _site_move_plan(vault: Path) -> dict[str, Any]:
-    """What the tool's move would do with the site folder's files, or {}
-    when it cannot say (a blocked move exits 1; its words are the fault's)."""
+def _site_move_plan(vault: Path, *, fold: bool = False) -> dict[str, Any]:
+    """What the tool's move would do with the site folder's files (with
+    `fold`, what its --fold-site-file would do), or {} when it cannot say (a
+    blocked move exits 1; its words are the fault's)."""
     try:
-        return settings_move_plan(vault)
+        return settings_move_plan(vault, fold_site_file=fold)
     except SettingsUnavailable:
         return {}
 
@@ -5512,13 +5513,16 @@ def _package_step_rows(plan: dict[str, Any]) -> list[SettingsRow]:
 
 
 def _site_key_row(fault: dict[str, Any], own: Any,
-                  site_value: Any = None) -> SettingsRow:
+                  site_value: Any = None,
+                  fold: dict[str, Any] | None = None) -> SettingsRow:
     """A setting the site folder's vault.config.json still holds, on a vault
-    already on the new file. That file is not read now, so the vault's own
-    value is the one in use where it sets one; where it does not, the value
-    moves into the vault's file. The fix takes the key out of the site file,
-    in one change with the vault's file (the tool does it). Certain: it hides
-    the same or more, and loses nothing the vault does not set."""
+    already on the new file. That file is not read now. The fix takes the key
+    out of the site file, in one change with the vault's file (the tool does
+    it): a setting the vault does not set moves into the vault's file, and
+    the vault's own value stays where it sets one. `fold` is the tool's
+    `--fold-site-file` check, whose `carried` and `dropped` say which, so the
+    row says what the tool will do (#539). Certain: it hides the same or
+    more, and loses nothing the vault does not already say."""
     row = SettingsRow(fault, site=True)
     target = str(fault.get("use") or fault.get("setting") or "")
     try:
@@ -5526,6 +5530,14 @@ def _site_key_row(fault: dict[str, Any], own: Any,
     except SettingsUnavailable:
         info = {}
     key = fault["name"]
+
+    def mine(entries: Any) -> list[dict[str, Any]]:
+        return [x for x in entries or [] if isinstance(x, dict)
+                and (str(x.get("from")) == key
+                     or str(x.get("from")).startswith(key + "."))]
+
+    moved = mine((fold or {}).get("carried"))
+    gone = mine((fold or {}).get("dropped"))
     carries = (info.get("kind") == "switchOrList" and site_value is True) or (
         isinstance(site_value, list)
         and any(isinstance(x, str) and x.strip() for x in site_value))
@@ -5537,40 +5549,50 @@ def _site_key_row(fault: dict[str, Any], own: Any,
         # hid is shown, and nothing is carried over.
         what = ("remove it from vault.config.json; it holds no list of "
                 f"entries, so nothing is added to {target}")
+        done += "; it held no list of entries, so nothing was carried"
+    elif moved or gone:
+        # The tool's own plan: what it carries and what it leaves behind.
+        parts = []
+        if moved:
+            if len(moved) == 1 and moved[0]["from"] == key:
+                parts.append(f"move it to {moved[0]['to']}, which the vault "
+                             "does not set")
+            else:
+                parts.append("move " + ", ".join(
+                    f"{c['from']} to {c['to']}" for c in moved)
+                    + ", which the vault does not set")
+            done += ", moving " + ", ".join(
+                f"{c['from']} to {c['to']}" for c in moved)
+        what = ((parts[0] + ", and remove it from vault.config.json")
+                if parts else "remove it from vault.config.json")
+        if gone:
+            what += "; the site file's value is not carried: " + "; ".join(
+                f"{d['from']} ({d.get('why')})" for d in gone)
     elif info.get("guards") and info.get("kind") == "list":
         what = (f"add its entries to {target} (the built-in entries stay) "
                 "and remove it from vault.config.json")
     elif info.get("guards"):
         what = (f"keep the stricter of the two rules in {target} and remove "
                 "it from vault.config.json")
+    elif not fold:
+        # The tool could not say what it would carry.
+        what = ("remove it from vault.config.json; the tool carries what the "
+                f"vault does not set into {target} and keeps the vault's own "
+                "values")
     else:
-        # The tool carries a value the vault's file does not set into it,
-        # and keeps the vault's own where it sets one (#539).
-        origin = own.origins.get(target)
-        if origin is None:
-            what = (f"move what it sets that the vault does not set into "
-                    f"{target} (the vault's own values stay) and remove it "
-                    "from vault.config.json")
-            done = (f"took {key} out of vault.config.json, moving what the "
-                    f"vault did not set into {target}")
-        elif origin in ("default", "inherit"):
-            what = (f"move it to {target}, which the vault does not set, "
-                    "and remove it from vault.config.json")
-            done = f"moved {key} to {target}"
-        else:
-            shown = ""
-            try:
-                shown = f" ({_short(own.get(target))})"
-            except KeyError:
-                pass
-            what = (f"remove it from vault.config.json; the vault's {target}"
-                    f"{shown} is already the value in use, because that file "
-                    "is not read now")
+        # Nothing to carry and nothing lost: the vault already says it.
+        shown = ""
+        try:
+            shown = f" ({_short(own.get(target))})"
+        except KeyError:
+            pass
+        what = (f"remove it from vault.config.json; the vault's {target}"
+                f"{shown} already says the same, and that file is not read "
+                "now")
     row.kind = "certain"
     row.ops = [{"op": "fold-site", "keys": [key]}]
     row.fix = what
-    row.done = (f"took {key} out of vault.config.json; it held no list of "
-                "entries, so nothing was carried" if nothing else done)
+    row.done = done
     return row
 
 
@@ -5775,6 +5797,7 @@ def plan_settings(vault: Path) -> tuple[list[SettingsRow], bool]:
             site_json = {}
         moved = vault_layout(vault) == "new"
         move_plan = _site_move_plan(vault) if moved else {}
+        fold_plan: dict[str, Any] | None = None   # asked once, when needed
         left_names = {f["name"] for f in merged.faults if f.get("siteLeft")}
         # A value the tool cannot use blocks the move; the tool names the key
         # first in its blocker, whatever the vault holds.
@@ -5821,10 +5844,13 @@ def plan_settings(vault: Path) -> tuple[list[SettingsRow], bool]:
                         site_json.get(f["name"])
                         if isinstance(site_json, dict) else None))
                 else:
+                    if fold_plan is None:
+                        fold_plan = _site_move_plan(vault, fold=True)
                     rows.append(_site_key_row(
                         fault, own,
                         site_json.get(f["name"])
-                        if isinstance(site_json, dict) else None))
+                        if isinstance(site_json, dict) else None,
+                        fold_plan))
                 continue
             if f.get("siteLeft"):
                 continue    # the update moves it; the legacy file reads it

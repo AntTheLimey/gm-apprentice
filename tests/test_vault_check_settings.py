@@ -750,7 +750,8 @@ class SiteFileKeyTests(NewFileBase):
                          ["excludeCallouts", "excludeSections", "siteTitle"])
         self.assertTrue(all(r.kind == "certain" for r in rows))
         by = {r.fault["name"]: r for r in rows}
-        self.assertIn("already the value in use", by["siteTitle"].fix)
+        self.assertIn("the vault already sets player_site.title to Mine",
+                      by["siteTitle"].fix)
         self.assertIn("add its entries", by["excludeSections"].fix)
         self.assertNotIn("run the vault update", " ".join(str(r.fix) + str(r.note) for r in rows))
         buf = io.StringIO()
@@ -788,6 +789,20 @@ class SiteFileKeyTests(NewFileBase):
         self.assertNotIn("footer", left)
         self.assertNotIn("landing", left)
         self.assertEqual(self.rows(vault), [])
+
+    def test_an_unusable_site_value_is_not_said_to_be_moved(self):
+        """#539: the row follows the tool's plan, which drops this value."""
+        vault, site_file = self.moved_vault_with_site_keys(searchEnabled="maybe")
+        rows = {r.fault["name"]: r for r in self.rows(vault) if r.site}
+        row = rows["searchEnabled"]
+        self.assertNotIn("move it to", row.fix)
+        self.assertIn("not usable", row.fix)
+        self.assertNotIn("moving", row.done)
+        code, out = self.fix_output(vault)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("moved searchEnabled", out)
+        self.assertTrue(vc.settings(vault).get("player_site.features.search"))
+        self.assertNotIn("searchEnabled", site_file.read_text())
 
     def fix_output(self, vault):
         buf = io.StringIO()

@@ -14,9 +14,10 @@ Tidying a moved vault's site file no longer loses settings. Publish tool 1.58.2;
 ### Fixed
 
 - `settings move --fold-site-file` on a vault already on the new settings file no longer drops the site title, folder map or any other setting the site folder's `vault.config.json` still holds. A setting the vault does not set is carried into the vault's file; where the vault sets it differently, the vault's value stays and the site file's is listed as dropped. Both are named in the plan before anything is written.
-- The same tidy now names, and lists as dropped, a site-file value it cannot use and a name under `landing`, `images` or `locations` that is not a setting, instead of taking them out unsaid. Without `--fold-site-file` they are reported and left in the site file.
+- The same tidy now names, and lists as dropped, a site-file value it cannot use and a name under `landing`, `images` or `locations` that is not a setting, instead of taking them out unsaid. Without `--fold-site-file` they are reported and left in the site file. A hiding list it cannot use no longer has its entries added to the vault's list.
+- A site-file value that a left-over old settings file overrode is listed as dropped, never carried into the vault, whether or not anything else differs.
 - A setting carried from an old site file's map is named as that file writes it (`images.maxWidth`, not `images.max_width`).
-- campaign-qa's Settings check says a site-file setting the vault does not set is moved into the vault, not that the vault's value is already in use.
+- campaign-qa's Settings check now words each site-file row from the publish tool's own plan: what moves into the vault, and what is left behind and why. It no longer says a setting the vault does not set is already in use.
 
 ---
 
