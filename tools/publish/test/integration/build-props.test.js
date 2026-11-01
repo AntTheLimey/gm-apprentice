@@ -61,6 +61,48 @@ describe('the prop bar and link', () => {
   });
 });
 
+// #524: the bar says how to print the prop well; a style that says it has a printout toggle (style.json printout_toggle)
+// adds that the printout look uses less ink. The hint is the bar's, hidden in print, and never a word of the page.
+describe('the print hint on the prop bar', () => {
+  const HINT = '<span class="gma-prop-hint">To print: tick Background graphics, set margins to None.</span>';
+  const INK = '<span class="gma-prop-hint">To print: tick Background graphics, set margins to None. The printout look uses less ink.</span>';
+  it('every bar carries the hint; the ink clause only when asked', () => {
+    const bar = propBar({ noteHref: 'a.html', noteTitle: 'A', collectionHref: null });
+    assert.ok(bar.includes(HINT), bar);
+    assert.ok(!bar.includes('less ink'), bar);
+    assert.ok(propBar({ noteHref: 'a.html', noteTitle: 'A', collectionHref: 'p.html', printout: true }).includes(INK));
+    assert.match(bar, /@media print\{\.gma-prop-bar\{display:none\}\}/);
+  });
+  it('withoutPropBar takes the hint out with the bar', () => {
+    const { withoutPropBar } = require('../../lib/templates/prop-bar');
+    const page = '<html><body class="x"><p>Words</p></body></html>';
+    for (const printout of [false, true]) {
+      const bar = propBar({ noteHref: 'a.html', noteTitle: 'A', collectionHref: 'p.html', printout });
+      assert.equal(withoutPropBar(withPropBar(page, bar)), page);
+    }
+  });
+  it('a terminal page says the printout look saves ink; a letter page and a hand-made page do not', () => {
+    const s = buildBoth({
+      'Documents/Invitation.md': PROP(), ...PROP_FILES,
+      'Documents/Log.md': '---\ntype: prop\nprop_style: terminal\n---\n## The Text\n```\nLOG 1\n```\n',
+      'Documents/Note.md': '---\ntype: prop\nprop_style: letter\n---\n## The Text\nDear sir.\n',
+    }, { sites: ['player'] });
+    try {
+      assert.ok(s.player.read('props', 'log.html').includes(INK));
+      assert.ok(s.player.read('props', 'note.html').includes(HINT));
+      assert.ok(s.player.read('props', 'invitation.html').includes(HINT));
+    } finally { s.cleanup(); }
+  });
+  it("the terminal style's style.json says it has a printout toggle; letter's does not", () => {
+    const { loadStyle } = require('../../lib/props/styles');
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'hint-vault-'));
+    try {
+      assert.equal(loadStyle('terminal', { vaultPath: empty }).style.json.printoutToggle, true);
+      assert.equal(loadStyle('letter', { vaultPath: empty }).style.json.printoutToggle, false);
+    } finally { fs.rmSync(empty, { recursive: true, force: true }); }
+  });
+});
+
 describe('a published prop', () => {
   const s = buildBoth({ 'Documents/Invitation.md': PROP(), ...PROP_FILES }, { sites: ['player'] });
   after(() => s.cleanup());
@@ -461,6 +503,171 @@ describe('a kept-folder prop that stops shipping', () => {
       for (const f of KEPT) assert.ok(!s.player.exists(...f.split('/')), f);
       assert.ok(lines.includes('  removed from kept folder: gazetteer/invitation.html (its prop is not published)'), lines.join('\n'));
       assert.ok(s.player.exists('documents', 'invitation.html'));
+    } finally { s.cleanup(); }
+  });
+
+  // #506: the build keeps a record of the kept-folder files it wrote, beside the site (never in it), so a copy whose
+  // note is gone, or whose address moved, is removed too. Only a file the record names and that still holds the
+  // bytes the tool wrote goes: a GM's own file in the kept folder is never touched.
+  const RECORD = (s) => path.join(path.dirname(s.player.dir), '.gm-apprentice', 'kept-writes.json');
+  const noteOf = (s) => path.join(s.root, 'vault', 'Documents', 'Invitation.md');
+
+  it('a kept-folder prop whose note is deleted is removed on the next build', () => {
+    const s = setup();
+    try {
+      fs.writeFileSync(path.join(s.player.dir, 'gazetteer', 'mine.html'), 'THE GM OWN PAGE');
+      assert.ok(fs.existsSync(RECORD(s)), 'the record is kept beside the site');
+      assert.ok(!s.player.files().some((f) => /kept-writes/.test(f)), 'the record is never in the site');
+      fs.rmSync(noteOf(s));
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      for (const f of KEPT) {
+        assert.ok(!s.player.exists(...f.split('/')), f);
+        assert.ok(lines.includes(`  removed from kept folder: ${f} (the tool wrote it, and no prop writes it now)`), lines.join('\n'));
+      }
+      assert.equal(s.player.read('gazetteer', 'mine.html'), 'THE GM OWN PAGE');
+      assert.deepEqual(JSON.parse(fs.readFileSync(RECORD(s), 'utf8')).files, {});
+    } finally { s.cleanup(); }
+  });
+
+  it('a kept-folder prop whose address changes leaves nothing at the old one', () => {
+    const s = setup();
+    try {
+      fs.writeFileSync(noteOf(s), fs.readFileSync(noteOf(s), 'utf8').replace('gazetteer/invitation.html', 'gazetteer/moved/invitation.html'));
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      for (const f of KEPT) assert.ok(!s.player.exists(...f.split('/')), f);
+      assert.ok(s.player.exists('gazetteer', 'moved', 'invitation.html'));
+      assert.ok(s.player.exists('gazetteer', 'moved', 'assets', 'paper.jpg'));
+      assert.ok(lines.includes('  removed from kept folder: gazetteer/invitation.html (the tool wrote it, and no prop writes it now)'), lines.join('\n'));
+      assert.deepEqual(Object.keys(JSON.parse(fs.readFileSync(RECORD(s), 'utf8')).files).sort(),
+        ['gazetteer/moved/assets/paper.jpg', 'gazetteer/moved/invitation.html', 'gazetteer/moved/props.css']);
+    } finally { s.cleanup(); }
+  });
+
+  it('a recorded copy the GM has since changed is left, and the build says so once', () => {
+    const s = setup();
+    try {
+      fs.writeFileSync(path.join(s.player.dir, 'gazetteer', 'invitation.html'), 'EDITED BY THE GM');
+      fs.rmSync(noteOf(s));
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.equal(s.player.read('gazetteer', 'invitation.html'), 'EDITED BY THE GM');
+      assert.ok(lines.includes('  left in kept folder: gazetteer/invitation.html (it differs from what the tool wrote)'), lines.join('\n'));
+      assert.ok(!s.player.exists('gazetteer', 'props.css'));
+      const again = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.equal(s.player.read('gazetteer', 'invitation.html'), 'EDITED BY THE GM');
+      assert.ok(!again.some((l) => /kept folder: gazetteer\/invitation\.html/.test(l)), again.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  it('with no record (a site built before the tool kept one) a deleted note\'s copy stays', () => {
+    const s = setup();
+    try {
+      fs.rmSync(RECORD(s));
+      fs.rmSync(noteOf(s));
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      for (const f of KEPT) assert.ok(s.player.exists(...f.split('/')), f);
+    } finally { s.cleanup(); }
+  });
+
+  it('a recorded copy behind a link is not deleted, and stays recorded', () => {
+    const s = setup();
+    try {
+      const outside = path.join(s.root, 'outside');
+      fs.renameSync(path.join(s.player.dir, 'gazetteer'), outside);
+      fs.symlinkSync(outside, path.join(s.player.dir, 'gazetteer'));
+      fs.rmSync(noteOf(s));
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(fs.existsSync(path.join(outside, 'invitation.html')));
+      assert.ok(lines.includes('  left in kept folder: gazetteer/invitation.html (a folder on its path is a link)'), lines.join('\n'));
+      assert.ok('gazetteer/invitation.html' in JSON.parse(fs.readFileSync(RECORD(s), 'utf8')).files);
+    } finally { s.cleanup(); }
+  });
+
+  const hashOf = (data) => require('node:crypto').createHash('sha256').update(data).digest('hex');
+  const record = (s) => JSON.parse(fs.readFileSync(RECORD(s), 'utf8'));
+
+  it('an unpublished prop whose copy holds bytes an older build recorded is removed, never "differs"', () => {
+    const s = setup();
+    try {
+      // What an older tool wrote there (another bar), with the record that build kept.
+      const page = path.join(s.player.dir, 'gazetteer', 'invitation.html');
+      const older = fs.readFileSync(page, 'utf8').replace(/<span class="gma-prop-hint">[^<]*<\/span>/, '');
+      fs.writeFileSync(page, older);
+      const rec = record(s);
+      rec.files['gazetteer/invitation.html'] = hashOf(older);
+      fs.writeFileSync(RECORD(s), JSON.stringify(rec));
+      unlist(s);
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(!s.player.exists('gazetteer', 'invitation.html'));
+      assert.ok(lines.includes('  removed from kept folder: gazetteer/invitation.html (its prop is not published)'), lines.join('\n'));
+      assert.ok(!lines.some((l) => /differs/.test(l)), lines.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  for (const which of ['the record', 'the older clean-up']) {
+    it(`a copy ${which} cannot remove is a warning naming it; the build carries on and the record keeps it`, (t) => {
+      if (process.platform === 'win32' || (process.getuid && process.getuid() === 0)) { t.skip('file permissions do not stop this user'); return; }
+      const s = setup();
+      const dir = path.join(s.player.dir, 'gazetteer');
+      try {
+        if (which === 'the record') fs.rmSync(noteOf(s)); else unlist(s);
+        fs.chmodSync(dir, 0o555);
+        const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+        fs.chmodSync(dir, 0o755);
+        assert.ok(s.player.exists('gazetteer', 'invitation.html'));
+        assert.ok(lines.some((l) => l.includes('WARNING: could not remove the kept-folder copy gazetteer/invitation.html (EACCES); remove it by hand')), lines.join('\n'));
+        assert.ok('gazetteer/invitation.html' in record(s).files);
+        assert.ok(s.player.exists('NOTICE.txt'), 'the build finished');
+      } finally { fs.chmodSync(dir, 0o755); s.cleanup(); }
+    });
+  }
+
+  it('a record that cannot be read is said, kept as it is, and removes nothing', () => {
+    const s = setup();
+    try {
+      fs.writeFileSync(RECORD(s), '{ not json');
+      fs.rmSync(noteOf(s));
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      for (const f of KEPT) assert.ok(s.player.exists(...f.split('/')), f);
+      assert.equal(fs.readFileSync(RECORD(s), 'utf8'), '{ not json');
+      assert.ok(lines.some((l) => /WARNING: .*kept-writes\.json in the site folder could not be read \(it is not JSON\); it is left as it is/.test(l)), lines.join('\n'));
+      // A missing record (a site built before there was one) is silent.
+      fs.rmSync(RECORD(s));
+      const again = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(!again.some((l) => /kept-writes/.test(l)), again.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  it('a record that cannot be written is a warning; the old one stays whole and the build finishes', (t) => {
+    const s = setup();
+    try {
+      const before = fs.readFileSync(RECORD(s), 'utf8');
+      fs.writeFileSync(noteOf(s), fs.readFileSync(noteOf(s), 'utf8').replace('gazetteer/invitation.html', 'gazetteer/moved/invitation.html'));
+      const real = fs.renameSync;
+      t.mock.method(fs, 'renameSync', (from, to) => {
+        if (String(to).endsWith('kept-writes.json')) throw Object.assign(new Error('EIO: i/o error'), { code: 'EIO' });
+        return real(from, to);
+      });
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      t.mock.restoreAll();
+      assert.ok(lines.some((l) => l.includes('WARNING: could not write .gm-apprentice/kept-writes.json in the site folder (EIO)')), lines.join('\n'));
+      assert.equal(fs.readFileSync(RECORD(s), 'utf8'), before);
+      assert.deepEqual(fs.readdirSync(path.dirname(RECORD(s))).filter((n) => n.startsWith('kept-writes')), ['kept-writes.json']);
+      assert.ok(s.player.exists('NOTICE.txt'));
+    } finally { s.cleanup(); }
+  });
+
+  it('a record entry that climbs out of its folder is never followed', () => {
+    const s = setup();
+    try {
+      const outside = path.join(s.root, 'outside.html');
+      fs.writeFileSync(outside, 'X');
+      const rel = path.relative(s.player.dir, outside).split(path.sep).join('/');
+      const rec = record(s);
+      rec.files[`gazetteer/../${rel}`] = hashOf('X');
+      fs.writeFileSync(RECORD(s), JSON.stringify(rec));
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(fs.existsSync(outside));
+      assert.ok(!Object.keys(record(s).files).some((k) => k.includes('..')));
     } finally { s.cleanup(); }
   });
 

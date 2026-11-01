@@ -1,4 +1,4 @@
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -7,9 +7,14 @@ const crypto = require('crypto');
 const { planProps } = require('../../lib/props/plan');
 const { takenAddresses } = require('../../lib/props/address');
 
+// Every temp folder a test here makes is removed when the file's tests end (#512).
+const made = [];
+after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: true }); });
+const tempDir = (prefix) => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix)); made.push(dir); return dir; };
+
 // A temp vault of real files; `files` maps vault rel -> text (or Buffer).
 function vault(files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'props-plan-'));
+  const root = tempDir('props-plan-');
   for (const [rel, body] of Object.entries(files)) {
     const full = path.join(root, rel);
     fs.mkdirSync(path.dirname(full), { recursive: true });

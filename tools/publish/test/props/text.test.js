@@ -84,3 +84,19 @@ test('no The Text, no text', () => {
   assert.strictEqual(propTextOf('## Description\nx'), null);
   assert.strictEqual(propTextOf('## The Text\n\n  \n## Related\nx'), null);
 });
+
+// #512: the fence fallbacks to prose mode, pinned.
+test('a shorter closing fence leaves the text prose', () => {
+  const note = '## The Text\n````\nDEAR SIR\n```\n';
+  assert.strictEqual(propTextOf(note).mode, 'prose');
+});
+
+test('an unclosed fence leaves the text prose', () => {
+  const note = '## The Text\n```\nDEAR SIR\nPay up.\n';
+  assert.strictEqual(propTextOf(note).mode, 'prose');
+});
+
+test('a fence followed by other text leaves the text prose', () => {
+  const note = '## The Text\n```\nDEAR SIR\n```\nSigned, a friend.\n';
+  assert.strictEqual(propTextOf(note).mode, 'prose');
+});

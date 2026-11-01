@@ -74,7 +74,19 @@ function cleanJson(name, raw) {
       if (/^prop_[a-z0-9_]+$/.test(key) && typeof value === 'string') fields[key] = value;
     }
   }
-  return { title, about, fonts, fields };
+  // printout_toggle: the style has a button that shows its page as a printout, which uses less ink (the prop bar says so).
+  const printoutToggle = obj.printout_toggle === true;
+  return { title, about, fonts, fields, printoutToggle };
+}
+
+// What style.json says that cleanJson cannot use, as { detail, fix } (the build says each once per style).
+function jsonProblemsOf(name, raw) {
+  const obj = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  if (!('printout_toggle' in obj) || typeof obj.printout_toggle === 'boolean') return [];
+  return [{
+    detail: `the style "${name}" has printout_toggle: ${JSON.stringify(obj.printout_toggle)} in style.json, which is not true or false; it is read as false`,
+    fix: 'write printout_toggle: true (no quotes) for a style with a printout toggle, or leave it out',
+  }];
 }
 
 function loadStyle(name, { vaultPath, pluginDir = PLUGIN_STYLES_DIR }) {
@@ -100,7 +112,12 @@ function loadStyle(name, { vaultPath, pluginDir = PLUGIN_STYLES_DIR }) {
   }
   const entry = styles.find((s) => s.name === name);
   if (!entry) {
-    const names = styles.map((s) => s.name);
+    // A vault entry that is not a folder still loads (to report it), but is never offered as a style to use (#513).
+    const isFolder = (s) => {
+      if (s.from !== 'vault') return true;
+      try { return fs.statSync(path.join(vaultPath, VAULT_STYLES_DIR, s.name)).isDirectory(); } catch { return false; }
+    };
+    const names = styles.filter(isFolder).map((s) => s.name);
     return {
       problem: {
         detail: `the style "${name}" is not one the plugin has or the vault adds in _meta/prop-styles/`,
@@ -208,6 +225,7 @@ function loadStyle(name, { vaultPath, pluginDir = PLUGIN_STYLES_DIR }) {
       layout,
       sheet,
       json: cleanJson(name, raw),
+      jsonProblems: jsonProblemsOf(name, raw),
       css: files['style.css'],
       script: files['script.js'],
       assets,

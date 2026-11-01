@@ -90,7 +90,7 @@ function styledPage({ prop, style, page, fields: given = null, linkMap, imageMap
 
   const rel = (out) => escapeHtml(encodeHref(relativeHref(at, out)));
   const own = (file) => rel(`${STYLES_DIR}/${style.name}/${file}`);
-  const bar = propBar({ noteHref: encodeHref(relativeHref(at, page.outputPath)), noteTitle, collectionHref });
+  const bar = propBar({ noteHref: encodeHref(relativeHref(at, page.outputPath)), noteTitle, collectionHref, printout: Boolean(style.json && style.json.printoutToggle) });
   const head = [
     '<!DOCTYPE html>',
     '<html lang="en">',

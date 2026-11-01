@@ -1,4 +1,4 @@
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -8,9 +8,14 @@ const { takenAddresses } = require('../../lib/props/address');
 const { styleLoader } = require('../../lib/props/styles');
 const { propContainerOf, showSealedOf } = require('../../lib/props/note');
 
+// Every temp folder a test here makes is removed when the file's tests end (#512).
+const made = [];
+after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: true }); });
+const tempDir = (prefix) => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix)); made.push(dir); return dir; };
+
 // A temp folder of real files; `files` maps rel -> text.
 function tree(prefix, files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const root = tempDir(prefix);
   for (const [rel, body] of Object.entries(files)) {
     const full = path.join(root, rel);
     fs.mkdirSync(path.dirname(full), { recursive: true });
@@ -266,4 +271,21 @@ test('a default held by something other than a page does not move', () => {
   const { props, problems } = plan(root, [page(root, 'Props/Index.md', styled())]);
   assert.deepStrictEqual(props.map((p) => p.address), [null]);
   assert.deepStrictEqual(problems.map((p) => p.detail), ['its address props/index.html is taken by a file the site needs']);
+});
+
+// #524: printout_toggle is true or false; any other value is read as false, and the build says so once, naming it.
+test('a printout_toggle that is not true or false is a warning naming its value', () => {
+  for (const value of ['"true"', '1', '"yes"']) {
+    const plugin = pluginDir({ 'plain-test/style.json': `{ "printout_toggle": ${value} }` });
+    const root = tree('props-vault-', { 'Props/Letter.md': '', 'Props/Note.md': '' });
+    const result = plan(root, [page(root, 'Props/Letter.md', styled()), page(root, 'Props/Note.md', styled())], { plugin });
+    const rows = result.problems.filter((r) => /printout_toggle/.test(r.detail));
+    assert.strictEqual(rows.length, 1, JSON.stringify(result.problems));
+    assert.strictEqual(rows[0].detail, `the style "plain-test" has printout_toggle: ${value} in style.json, which is not true or false; it is read as false`);
+    assert.strictEqual(rows[0].fix, 'write printout_toggle: true (no quotes) for a style with a printout toggle, or leave it out');
+    assert.strictEqual(result.props[0].style.json.printoutToggle, false);
+  }
+  const okRoot = tree('props-vault-', { 'Props/Letter.md': '' });
+  const ok = plan(okRoot, [page(okRoot, 'Props/Letter.md', styled())], { plugin: pluginDir({ 'plain-test/style.json': '{ "printout_toggle": false }' }) });
+  assert.deepStrictEqual(ok.problems, []);
 });

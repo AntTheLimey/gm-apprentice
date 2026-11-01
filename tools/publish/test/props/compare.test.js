@@ -302,3 +302,69 @@ test('a link inside a comment or a script is not a kept link', (t) => {
     assert.match(row.detail, /gazetteer\/papers\/bill\.html/);
   }
 });
+
+// #534: a phrase ending "..." stands for itself and the rest of its block (a paragraph, a list item, a table cell, a line
+// ended by <br>); without the marker the whole-phrase rule above holds exactly.
+// A real line from the Canticle site before the props move (three sentences in one paragraph).
+const CANTICLE_CREDITS = '<p class="credits">Keeper prop — Canticle of the End. Half-sheet; print with &ldquo;Background graphics&rdquo; ticked and trim to the paper. Fold once around the Ghosh letter.</p>';
+
+test('an expected-gone phrase ending ... takes the rest of its block: the real Canticle credits line clears', (t) => {
+  const old = page(`<h1>A letter</h1><p>Meet me at the old mill.</p>${CANTICLE_CREDITS}`);
+  const now = page('<h1>A letter</h1><p>Meet me at the old mill.</p>');
+  const dirs = sites(t, { 'props/letter.html': old }, { 'props/letter.html': now });
+  assert.equal(rowOf(run(dirs, { expectGone: ['Keeper prop'] }), 'props/letter.html').kind, 'words-differ', 'no marker: the rest still blocks');
+  for (const marked of ['Keeper prop...', 'keeper prop …', 'Keeper prop…']) {
+    const r = run(dirs, { expectGone: [marked] });
+    const row = rowOf(r, 'props/letter.html');
+    assert.equal(row.kind, 'same-words', marked);
+    assert.match(row.detail, /expected gone: "keeper prop canticle of the end half-sheet/);
+    assert.match(row.detail, /the \.\.\. marker took 21 more words/, row.detail);
+    assert.equal(r.blockers, 0);
+  }
+});
+
+test('a phrase ending ... stops at the end of its block, never before its phrase', (t) => {
+  const kept = '<p>Meet me at the old mill.</p>';
+  const check = (oldBody, newBody, gone, kind, label) => {
+    const dirs = sites(t, { 'props/letter.html': page(oldBody) }, { 'props/letter.html': page(newBody) });
+    assert.equal(rowOf(run(dirs, { expectGone: gone }), 'props/letter.html').kind, kind, label);
+  };
+  check(`${kept}<p>Keeper prop: fold.</p><p>Burn after reading.</p>`, kept, ['keeper prop...'], 'words-differ', 'the next paragraph');
+  check(`${kept}<p>Keeper prop: fold.</p><p>Burn after reading.</p>`, kept, ['keeper prop...', 'burn after reading'], 'same-words', 'both named');
+  check(`${kept}<p>Keeper prop: fold.<br>Burn after reading.</p>`, kept, ['keeper prop...'], 'words-differ', 'a <br>');
+  check(`${kept}<ul><li>Keeper prop: fold.</li><li>Burn after reading.</li></ul>`, kept, ['keeper prop...'], 'words-differ', 'the next list item');
+  check(`${kept}<table><tr><td>Keeper prop: fold.</td><td>Burn after reading.</td></tr></table>`, kept, ['keeper prop...'], 'words-differ', 'the next cell');
+  check(`${kept}<p>Note: keeper prop, fold.</p>`, kept, ['keeper prop...'], 'words-differ', 'words before the phrase');
+  check(`<p>Keeper prop: fold.</p>${kept}`, `<p>Keeper prop: fold.</p><p>Meet me at the mill.</p>`, ['keeper prop...'], 'words-differ', 'an unrelated run');
+});
+
+// When the page's blocks cannot be read the same way as its words (a fallback the leak gate's reading should never
+// need), a ... phrase takes only its own words, and the blocking row says why.
+test("a ... phrase on a page whose blocks cannot be read says so on the row", () => {
+  const { servedPageRow, expectedPhrase } = require('../../lib/props/compare');
+  const old = Buffer.from(page(`<p>Meet me at the old mill.</p>${CANTICLE_CREDITS}`));
+  const now = Buffer.from(page('<p>Meet me at the old mill.</p>'));
+  const unread = () => null;
+  const row = servedPageRow('props/letter.html', old, now, [expectedPhrase('Keeper prop...')], { readBlocks: unread });
+  assert.equal(row.kind, 'words-differ');
+  assert.match(row.detail, /the \.\.\. marker could not read this page's blocks, so it took only its own words/);
+  // Read as usual, the same page clears.
+  assert.equal(servedPageRow('props/letter.html', old, now, [expectedPhrase('Keeper prop...')]).kind, 'same-words');
+});
+
+test('a page with the bar an older tool wrote compares equal to the same page with today\'s bar', (t) => {
+  const OLD_BAR = '<nav class="gma-prop-bar" aria-label="Back to the campaign site"><style>'
+    + '.gma-prop-bar{display:flex;gap:1rem;align-items:center;margin:0;padding:.5rem 1rem;'
+    + 'background:#0d1117;color:#c9d1d9;font:14px/1.4 system-ui,-apple-system,sans-serif}'
+    + '.gma-prop-bar a{color:#58a6ff;text-decoration:none}.gma-prop-bar a:hover{text-decoration:underline}'
+    + '@media print{.gma-prop-bar{display:none}}</style>'
+    + '<a href="../documents/letter.html">&larr; The Letter</a><a href="../props.html">All props</a></nav>';
+  const r = run(sites(t, { 'props/letter.html': withPropBar(LETTER, OLD_BAR) }, { 'props/letter.html': withPropBar(LETTER, BAR) }));
+  const row = rowOf(r, 'props/letter.html');
+  assert.equal(row.kind, 'same-words', JSON.stringify(row));
+  assert.equal(row.blocker, false);
+  assert.doesNotMatch(row.detail, /letter|props/i);
+  assert.equal(r.blockers, 0);
+  // A bar that only looks like the older one is page words.
+  assert.ok(pageWords('a.html', OLD_BAR.replace('display:flex', 'display:block')).includes('props'));
+});

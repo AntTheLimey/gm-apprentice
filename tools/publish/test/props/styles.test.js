@@ -1,4 +1,4 @@
-const { test } = require('node:test');
+const { test, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -6,9 +6,14 @@ const path = require('path');
 const { listStyles, loadStyle, styleLoader, PLUGIN_STYLES_DIR, VAULT_STYLES_DIR } = require('../../lib/props/styles');
 const { propStyleOf, PROP_STYLE_RE } = require('../../lib/props/note');
 
+// Every temp folder a test here makes is removed when the file's tests end (#512).
+const made = [];
+after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: true }); });
+const tempDir = (prefix) => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix)); made.push(dir); return dir; };
+
 // A temp folder of real files; `files` maps rel -> text.
 function tree(prefix, files) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const root = tempDir(prefix);
   for (const [rel, body] of Object.entries(files)) {
     const full = path.join(root, rel);
     fs.mkdirSync(path.dirname(full), { recursive: true });
@@ -50,7 +55,7 @@ test('a plugin style is found', () => {
   assert.strictEqual(style.dir, fs.realpathSync(path.join(pluginDir, 'terminal')));
   assert.strictEqual(style.layout, LAYOUT);
   assert.strictEqual(style.sheet, SHEET);
-  assert.deepStrictEqual(style.json, { title: 'Terminal', about: 'Green on black', fonts: ['VT323'], fields: { prop_screen: 'green' } });
+  assert.deepStrictEqual(style.json, { title: 'Terminal', about: 'Green on black', fonts: ['VT323'], fields: { prop_screen: 'green' }, printoutToggle: false });
   assert.strictEqual(style.css, path.join(style.dir, 'style.css'));
   assert.strictEqual(style.script, path.join(style.dir, 'script.js'));
   assert.deepStrictEqual(style.assets, []);
@@ -64,7 +69,7 @@ test('a vault style of the same name replaces it whole', () => {
   assert.strictEqual(style.replaces, true);
   assert.strictEqual(style.layout, '<p>{{{body}}}</p>');
   assert.strictEqual(style.sheet, '<section class="sheet">{{{text}}}</section>');
-  assert.deepStrictEqual(style.json, { title: 'terminal', about: '', fonts: [], fields: {} });
+  assert.deepStrictEqual(style.json, { title: 'terminal', about: '', fonts: [], fields: {}, printoutToggle: false });
   assert.strictEqual(style.script, null);
   assert.ok(style.css.startsWith(fs.realpathSync(root)));
 });
@@ -255,7 +260,7 @@ test('a wrongly spelled assets folder names the spelling it should have', () => 
 });
 
 test('with no styles at all, the fix says where to add one', () => {
-  const pluginDir = fs.mkdtempSync(path.join(os.tmpdir(), 'props-plugin-'));
+  const pluginDir = tempDir('props-plugin-');
   assert.deepStrictEqual(loadStyle('fax', { vaultPath: vault(), pluginDir }).problem, {
     detail: 'the style "fax" is not one the plugin has or the vault adds in _meta/prop-styles/',
     fix: 'add the style in _meta/prop-styles/fax/',
@@ -265,4 +270,15 @@ test('with no styles at all, the fix says where to add one', () => {
 test('a style.json with a byte-order mark reads', () => {
   const pluginDir = plugin({ 'f/layout.html': LAYOUT, 'f/style.css': CSS, 'f/style.json': '\uFEFF{"title":"F"}' });
   assert.strictEqual(loadStyle('f', { vaultPath: vault(), pluginDir }).style.json.title, 'F');
+});
+
+// #513: a stray file in _meta/prop-styles/ is still a name that loads (to report an override the GM got wrong), but it
+// is never offered as a style to use.
+test('an unknown style lists only folders, never a stray vault file', () => {
+  const pluginDir = plugin({ 'ledger/layout.html': LAYOUT, 'ledger/style.css': CSS });
+  const root = vault({ [vs('memo/layout.html')]: LAYOUT, [vs('memo/style.css')]: CSS });
+  fs.writeFileSync(path.join(root, VAULT_STYLES_DIR, 'readme'), 'notes');
+  const { problem } = loadStyle('fax', { vaultPath: root, pluginDir });
+  assert.strictEqual(problem.fix, 'use one of: ledger, memo, terminal, or add the style');
+  assert.match(loadStyle('readme', { vaultPath: root, pluginDir }).problem.detail, /readme is not a folder/);
 });

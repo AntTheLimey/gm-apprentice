@@ -79,37 +79,86 @@ const runsText = (label, runs) => {
   return `${label}: ${shown}${runs.length > RUNS_SHOWN ? ` and ${runs.length - RUNS_SHOWN} more` : ''}`;
 };
 
-// Whether a removed run is nothing but expected-gone phrases, one after another (a crumb and a footer the old page
-// carried, side by side once the words between them are matched).
-function onlyExpected(words, phrases) {
-  if (!phrases.length) return false;
-  const ok = [true];
-  for (let i = 1; i <= words.length; i++) {
-    ok[i] = phrases.some((p) => p.length <= i && ok[i - p.length] && p.every((w, k) => words[i - p.length + k] === w));
+// A block number for each of a page's words (pageWords), read from the same text: each line of it is a block (a
+// paragraph, a list item, a table cell, a line a <br> ends). null when the two readings disagree on the words; then a
+// `rest` phrase takes nothing past its own words, and the row says why.
+function blocksOfWords(rel, raw, words) {
+  const ids = [];
+  let n = 0;
+  for (const line of fileText(rel, withoutPropBar(raw), { scripts: false }).split('\n')) {
+    const count = wordsOf(line).length;
+    if (!count) continue;
+    for (let i = 0; i < count; i++) ids.push(n);
+    n += 1;
   }
-  return ok[words.length];
+  return ids.length === words.length ? ids : null;
+}
+
+const MARKER = /(?:\.\.\.|…)\s*$/;
+// An --expect-gone phrase: its words, and `rest` when it ends "..." or "…" (the phrase and the rest of its block).
+function expectedPhrase(text) {
+  const rest = MARKER.test(String(text));
+  return { words: wordsOf(String(text).replace(MARKER, '')), rest };
+}
+
+// How many words past their own a removed run's `rest` phrases took, when the run is nothing but expected-gone
+// phrases one after another (a crumb and a footer the old page carried, side by side once the words between them are
+// matched); else null. A `rest` phrase also takes the words after it to the end of its block (`block`: each word's
+// block number; none taken without it), never further back or on. The fewest words taken wins.
+function onlyExpected(words, phrases, block = null) {
+  if (!phrases.length) return null;
+  const at = (p, j) => p.length <= words.length - j && p.every((w, k) => words[j + k] === w);
+  const took = [0];
+  for (let i = 1; i <= words.length; i++) {
+    let best = Infinity;
+    for (const { words: p } of phrases) {
+      if (p.length <= i && took[i - p.length] !== Infinity && at(p, i - p.length)) best = Math.min(best, took[i - p.length]);
+    }
+    // A rest phrase starting at j whose block runs at least to word i - 1.
+    for (let j = i - 1; block && j >= 0 && block[j] === block[i - 1]; j--) {
+      if (took[j] === Infinity) continue;
+      for (const ph of phrases) {
+        if (ph.rest && ph.words.length < i - j && at(ph.words, j)) best = Math.min(best, took[j] + (i - j - ph.words.length));
+      }
+    }
+    took[i] = best;
+  }
+  return took[words.length] === Infinity ? null : took[words.length];
 }
 
 // The old page's words beside the new page's: { removed, added } runs of words.
+// `removedAt`: where each removed run starts among the old words.
 function wordRuns(oldWords, newWords) {
   const removed = [];
   const added = [];
+  const removedAt = [];
+  let at = 0;
   for (const part of diffArrays(oldWords, newWords)) {
-    if (part.removed) removed.push(part.value);
+    if (part.removed) { removed.push(part.value); removedAt.push(at); }
     else if (part.added) added.push(part.value);
+    if (!part.added) at += part.value.length;
   }
-  return { removed, added };
+  return { removed, added, removedAt };
 }
 
-function servedPageRow(address, oldRaw, newRaw, expected) {
+// `readBlocks`: how the old page's blocks are read (blocksOfWords; a test hands one that cannot read them).
+function servedPageRow(address, oldRaw, newRaw, expected, { readBlocks = blocksOfWords } = {}) {
   if (oldRaw.equals(newRaw)) return { kind: 'same', address, detail: '' };
-  const { removed, added } = wordRuns(pageWords(address, oldRaw.toString('utf8')), pageWords(address, newRaw.toString('utf8')));
+  const oldWords = pageWords(address, oldRaw.toString('utf8'));
+  const { removed, added, removedAt } = wordRuns(oldWords, pageWords(address, newRaw.toString('utf8')));
   const addedText = runsText('added', added);
   if (!removed.length) return { kind: 'same-words', address, detail: addedText || 'other markup, the same words' };
-  if (removed.every((run) => onlyExpected(run, expected))) {
-    return { kind: 'same-words', address, detail: [runsText('expected gone', removed), addedText].filter(Boolean).join('; ') };
+  const marked = expected.some((p) => p.rest);
+  const blocks = marked ? readBlocks(address, oldRaw.toString('utf8'), oldWords) : null;
+  const blockOf = (i, run) => (blocks ? blocks.slice(removedAt[i], removedAt[i] + run.length) : null);
+  const took = removed.map((run, i) => onlyExpected(run, expected, blockOf(i, run)));
+  if (took.every((n) => n !== null)) {
+    const extra = took.reduce((a, b) => a + b, 0);
+    const said = extra ? `the ... marker took ${extra} more word${extra === 1 ? '' : 's'}` : '';
+    return { kind: 'same-words', address, detail: [runsText('expected gone', removed), said, addedText].filter(Boolean).join('; ') };
   }
-  return { kind: 'words-differ', address, detail: [runsText('removed', removed), addedText].filter(Boolean).join('; ') };
+  const unread = marked && !blocks ? "the ... marker could not read this page's blocks, so it took only its own words" : '';
+  return { kind: 'words-differ', address, detail: [runsText('removed', removed), addedText, unread].filter(Boolean).join('; ') };
 }
 
 function listingRow(address, oldRaw, newRaw, isServed, asFolder) {
@@ -162,7 +211,7 @@ function compareSites({ oldDir, newDir, serves, listings = [], expectGone = [] }
   const prefixes = serves.map(prefixOf);
   const isServed = (address) => prefixes.some((p) => address.startsWith(p));
   const listingSet = new Set(listings.map(addressOf));
-  const expected = expectGone.map((p) => wordsOf(p)).filter((w) => w.length);
+  const expected = expectGone.map(expectedPhrase).filter((p) => p.words.length);
   // Each site's files by their address in one Unicode form.
   const filesOf = (dir) => new Map(listFiles(dir).map((rel) => [canonicalNfc(rel), path.join(dir, ...rel.split('/'))]));
   const oldFiles = filesOf(oldDir);
@@ -249,4 +298,4 @@ function formatRows(result) {
   ];
 }
 
-module.exports = { compareSites, pageWords, formatRows, linkTarget, orderMoves };
+module.exports = { compareSites, pageWords, formatRows, linkTarget, orderMoves, servedPageRow, expectedPhrase };

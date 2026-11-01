@@ -41,6 +41,7 @@ Usage:
   gm-apprentice-publish leaks <cmd>          Check the built player site for hidden text (list, check, accept, prune, settle)
   gm-apprentice-publish props pages <address>...  Count a prop page's printed pages (headless Chrome; --note: before it publishes)
   gm-apprentice-publish props read-state <file>   Print what a container's state script sets (--json: { global, items })
+  gm-apprentice-publish props links <file>...     Print the local files a page or stylesheet names, as the build reads them
   gm-apprentice-publish props compare             Compare two site folders' served pages (--old, --new, --serves)
   gm-apprentice-publish props move-check          Build from the vault alone and compare it with the live site's served pages
   gm-apprentice-publish relationships <cmd>  The relationship words, short (words); every relationship rule checked (check); the tones listed (list); the certain repairs (fix)
@@ -240,6 +241,16 @@ so and exits 0; open the page and use print preview instead.
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
 
+gm-apprentice-publish props links [--json] <file>...
+
+Prints the local files each page or stylesheet names, as the build reads them
+when it copies a hand-made prop: src, poster, srcset, a stylesheet or SVG link,
+CSS url() and @import, and a data- attribute whose value is a picture's path.
+A link to another page (<a href>) and an address off the site are not read. A
+file ending .css is read as a stylesheet, any other as HTML. --json prints
+[{ file, refs, rooted }] (rooted: the addresses starting /); else
+"file<TAB>address" rows. A file that cannot be read is an error line, exit 1.
+
 gm-apprentice-publish props read-state [--json] <file>
 
 Runs a container's state script (window.NAME = { ... };) with only an empty
@@ -285,7 +296,12 @@ an error.
 
   --serves <folder>      A folder the live site serves that the move replaces (repeatable)
   --listing <address>    An old index page the move replaces with a listing (repeatable)
-  --expect-gone <phrase> Words the move takes off a page on purpose (repeatable)
+  --expect-gone <phrase> Words the move takes off a page on purpose (repeatable).
+                         Ending it with ... ("Keeper prop...") also takes every
+                         word after it to the end of its block (its paragraph,
+                         list item, table cell, or line ended by <br>), never
+                         the words before it or the next block; the row says
+                         how many more words it took
   --old, --new <dir>     compare: the two site folders
   --json                 { rows: [{ kind, address, detail, blocker }], blockers, served, pages, same }
                          (move-check adds leaks: [{ code, page, text, note, reason }])
@@ -1174,6 +1190,18 @@ if (command === 'props') {
     exitAfterFlush(require('../lib/props/state-cli.js').runReadState({ file: files[0], json: rest.includes('--json') }));
     return;
   }
+  if (args[1] === 'links') {
+    const rest = args.slice(2);
+    const files = rest.filter((w) => !w.startsWith('--'));
+    const unknown = rest.filter((w) => w.startsWith('--') && w !== '--json');
+    if (unknown.length || !files.length) {
+      console.error(`Error: ${unknown.length ? `Unknown option: ${unknown[0]}` : 'props links needs at least one file'}`);
+      printSubcommandHelp('props');
+      process.exit(1);
+    }
+    exitAfterFlush(require('../lib/props/links-cli.js').runLinks({ files, json: rest.includes('--json') }));
+    return;
+  }
   if (args[1] === 'compare' || args[1] === 'move-check') {
     const check = args[1] === 'move-check';
     const parsed = parseSubcommandArgs(args.slice(2), { '--json': 'json' }, check ? { '--keep-build': 'keepBuild' } : { '--old': 'oldDir', '--new': 'newDir' },
@@ -1192,7 +1220,7 @@ if (command === 'props') {
     return;
   }
   if (args[1] !== 'pages') {
-    console.error(args[1] ? `Error: Unknown props command: ${args[1]}` : 'Error: props needs a command (pages, read-state, compare, move-check)');
+    console.error(args[1] ? `Error: Unknown props command: ${args[1]}` : 'Error: props needs a command (pages, read-state, links, compare, move-check)');
     printSubcommandHelp('props');
     process.exit(1);
   }
