@@ -314,11 +314,18 @@ function buildSite(options) {
   if (off && !dry) throw new Error(off);
   // Every HTML file goes through here: on the GM site it is marked (gmPage); on the player site it is written as made.
   // `gmCssHref`: where a page the tool makes with no style.css link (a styled prop page) finds css/gm.css.
+  // A page is never written through a link in the site folder (a kept folder that is a link may lead
+  // into the vault): such a page is skipped with a warning, and false is returned (#507).
   function writeHtml(full, html, page, { gmCssHref = null } = {}) {
+    if (linkOnPath(full)) {
+      printWarning(`${outRel(full)} was not written: a folder on its path in the site folder is a link`);
+      return false;
+    }
     fs.writeFileSync(full, gm ? gmPage(html, {
       marks: mark.marks, hiddenBecause: page && page.gmHiddenBecause, hidden: page && page.gmHidden,
       linkMap: publishConfig._linkMap || {}, from: (page && page.outputPath) || '', gmCssHref,
     }) : html);
+    return true;
   }
   // A JSON file the GM site writes holds no mark: the words between them are kept.
   const jsonText = (data) => (gm ? unmark(JSON.stringify(data)) : JSON.stringify(data));
@@ -420,7 +427,19 @@ function buildSite(options) {
     }
   }
 
+  // A file's path below the site folder, with forward slashes.
+  function outRel(full) {
+    return path.relative(outputDir, full).split(path.sep).join('/');
+  }
+  // Whether a folder on a file's path below the site folder is a link (the props' guard, pathProblem).
+  function linkOnPath(full) {
+    const rel = outRel(full);
+    return !rel.startsWith('../') && !path.isAbsolute(rel) && pathProblem(outputDir, rel) === 'link';
+  }
+
+  // No folder is made through a link in the site folder: what is written there next is refused.
   function ensureDir(filePath) {
+    if (linkOnPath(filePath)) return;
     const dir = path.dirname(filePath);
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -697,8 +716,7 @@ function buildSite(options) {
       genrePreset: publishConfig._genrePreset,
       overridesCss: publishConfig._overridesCss,
     });
-    writeHtml(path.join(outputDir, '404.html'), html);
-    console.log('  wrote 404.html');
+    if (writeHtml(path.join(outputDir, '404.html'), html)) console.log('  wrote 404.html');
   }
 
   // An unclosed <!-- comment -->, gm-only or spoiler marker strips the rest of the file to
@@ -1976,7 +1994,7 @@ function buildSite(options) {
       const outPath = path.join(outputDir, page.outputPath);
       const isNew = onlySheets && !fs.existsSync(outPath);
       ensureDir(outPath);
-      writeHtml(outPath, out.html, page);
+      if (!writeHtml(outPath, out.html, page)) continue;
       if (onlySheets) sheetsWritten.push({ rel: page.outputPath, isNew });
       console.log(`  wrote ${page.outputPath}`);
     } catch (e) {
@@ -2010,9 +2028,10 @@ function buildSite(options) {
         const { story, html } = renderCharacterStory(pc, liveFx);
         const full = path.join(outputDir, story.outputPath);
         ensureDir(full);
-        writeHtml(full, html, { gmHiddenBecause: pc.gmHiddenBecause });
-        storiesWritten.push(story.outputPath);
-        console.log(`  wrote ${story.outputPath}`);
+        if (writeHtml(full, html, { gmHiddenBecause: pc.gmHiddenBecause })) {
+          storiesWritten.push(story.outputPath);
+          console.log(`  wrote ${story.outputPath}`);
+        }
       } catch (e) {
         errorCount++;
         renderErrors.push(`${pc.title} story: ${e.message}`);
@@ -2065,8 +2084,7 @@ function buildSite(options) {
         if (writes !== 'all') continue;
         const outPath = path.join(outputDir, deferredRoster.page.outputPath);
         ensureDir(outPath);
-        writeHtml(outPath, html, deferredRoster.page);
-        console.log(`  wrote ${deferredRoster.page.outputPath} (party board)`);
+        if (writeHtml(outPath, html, deferredRoster.page)) console.log(`  wrote ${deferredRoster.page.outputPath} (party board)`);
       } catch (e) {
         errorCount++;
         renderErrors.push(`${deferredRoster.page.outputPath}: ${e.message}`);
@@ -2402,8 +2420,7 @@ function buildSite(options) {
       if (writes !== 'all') continue;
       const full = path.join(outputDir, story.outputPath);
       ensureDir(full);
-      writeHtml(full, html, { gmHiddenBecause: pc.gmHiddenBecause });
-      console.log(`  wrote ${story.outputPath}`);
+      if (writeHtml(full, html, { gmHiddenBecause: pc.gmHiddenBecause })) console.log(`  wrote ${story.outputPath}`);
     }
     return stories;
   }
@@ -2479,8 +2496,7 @@ function buildSite(options) {
     if (dry) return;
     const full = path.join(outputDir, out);
     ensureDir(full);
-    writeHtml(full, html);
-    console.log(said);
+    if (writeHtml(full, html)) console.log(said);
   }, true);
 
   // Each prop's files, read by the note-faults audit as they are written: a withheld name in a
