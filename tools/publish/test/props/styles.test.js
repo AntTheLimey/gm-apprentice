@@ -266,3 +266,14 @@ test('a style.json with a byte-order mark reads', () => {
   const pluginDir = plugin({ 'f/layout.html': LAYOUT, 'f/style.css': CSS, 'f/style.json': '\uFEFF{"title":"F"}' });
   assert.strictEqual(loadStyle('f', { vaultPath: vault(), pluginDir }).style.json.title, 'F');
 });
+
+// #513: a stray file in _meta/prop-styles/ is still a name that loads (to report an override the GM got wrong), but it
+// is never offered as a style to use.
+test('an unknown style lists only folders, never a stray vault file', () => {
+  const pluginDir = plugin({ 'ledger/layout.html': LAYOUT, 'ledger/style.css': CSS });
+  const root = vault({ [vs('memo/layout.html')]: LAYOUT, [vs('memo/style.css')]: CSS });
+  fs.writeFileSync(path.join(root, VAULT_STYLES_DIR, 'readme'), 'notes');
+  const { problem } = loadStyle('fax', { vaultPath: root, pluginDir });
+  assert.strictEqual(problem.fix, 'use one of: ledger, memo, terminal, or add the style');
+  assert.match(loadStyle('readme', { vaultPath: root, pluginDir }).problem.detail, /readme is not a folder/);
+});

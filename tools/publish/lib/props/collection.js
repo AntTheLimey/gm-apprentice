@@ -284,7 +284,8 @@ function collectionAddress(asked, taken, { name = 'player_site.props.address' } 
   }
   const fallback = taken.has(COLLECTION_ADDRESS) === PAGE_TAKER ? COLLECTION_FALLBACK : COLLECTION_ADDRESS;
   if (fallback !== COLLECTION_ADDRESS && taken.has(fallback, { explicit: true })) {
-    return placed(null, `${name}: ${COLLECTION_ADDRESS} and ${COLLECTION_FALLBACK} are both taken by pages the site builds, so the site has no props page`);
+    const refused = why ? `${name} "${asked}" ${why}, and ` : `${name}: `;
+    return placed(null, `${refused}${COLLECTION_ADDRESS} and ${COLLECTION_FALLBACK} are both taken by pages the site builds, so the site has no props page`);
   }
   if (why) return placed(fallback, `${name} "${asked}" ${why}; the props page is at ${fallback}`);
   return placed(fallback, fallback === COLLECTION_ADDRESS ? null : `${name} "${asked}" is taken by ${PAGE_TAKER}; the props page is at ${fallback}`);

@@ -100,7 +100,12 @@ function loadStyle(name, { vaultPath, pluginDir = PLUGIN_STYLES_DIR }) {
   }
   const entry = styles.find((s) => s.name === name);
   if (!entry) {
-    const names = styles.map((s) => s.name);
+    // A vault entry that is not a folder still loads (to report it), but is never offered as a style to use (#513).
+    const isFolder = (s) => {
+      if (s.from !== 'vault') return true;
+      try { return fs.statSync(path.join(vaultPath, VAULT_STYLES_DIR, s.name)).isDirectory(); } catch { return false; }
+    };
+    const names = styles.filter(isFolder).map((s) => s.name);
     return {
       problem: {
         detail: `the style "${name}" is not one the plugin has or the vault adds in _meta/prop-styles/`,

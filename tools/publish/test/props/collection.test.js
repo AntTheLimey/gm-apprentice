@@ -222,3 +222,14 @@ test('a flat listing has no headings', () => {
   const { rows } = listing([container(), prop('Props/Diary.md', { prop_container: IN })]);
   assert.doesNotMatch(propListHtml(rows, 'props/bookshelf.html'), /prop-group/);
 });
+
+// #513: when the asked address is refused and both defaults are taken, the warning still says why the asked one was.
+test('a refused props-page address is named, with why, when both defaults are taken', () => {
+  const { collectionAddress } = require('../../lib/props/collection');
+  const { takenAddresses } = require('../../lib/props/address');
+  const taken = takenAddresses({ pageOutputs: ['props/index.html', 'props/collection.html', 'documents/a.html'] });
+  const placed = collectionAddress('documents/a.html', taken);
+  assert.equal(placed.address, null);
+  assert.match(placed.warning, /player_site\.props\.address "documents\/a\.html" is taken by /, placed.warning);
+  assert.match(placed.warning, /props\/index\.html and props\/collection\.html are both taken by pages the site builds, so the site has no props page/, placed.warning);
+});
