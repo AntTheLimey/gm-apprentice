@@ -46,3 +46,32 @@ describe('story fold', () => {
     assert.equal(foldLabel({}, 'x'), undefined);
   });
 });
+
+describe('labelFoldedHeadings', () => {
+  const { labelFoldedHeadings } = require('../../lib/story-fold');
+  const folded = () => {
+    const w = wrap('S1 Wrap', 'sessions/s1-wrap.html');
+    const map = { 'S1 Wrap': 'sessions/s1-wrap.html', Other: 'npcs/x.html' };
+    applyFold(new Map([[w, unit]]), map);
+    return map;
+  };
+
+  it('labels an unaliased heading link to a folded wrap-up with the Story page title, and nothing else', () => {
+    const map = folded();
+    const text = '## Seen in [[S1 Wrap]]\nBody [[S1 Wrap]].\n### [[S1 Wrap#Loot]] and [[Other]]\n## [[S1 Wrap|mine]] ![[S1 Wrap]]';
+    assert.equal(labelFoldedHeadings(text, map),
+      '## Seen in [[S1 Wrap|Session 1]]\nBody [[S1 Wrap]].\n### [[S1 Wrap#Loot|Session 1]] and [[Other]]\n## [[S1 Wrap|mine]] ![[S1 Wrap]]');
+  });
+
+  it('leaves a heading inside a code fence as written', () => {
+    const map = folded();
+    const text = '```\n## [[S1 Wrap]]\n```\n## [[S1 Wrap]]';
+    assert.equal(labelFoldedHeadings(text, map), '```\n## [[S1 Wrap]]\n```\n## [[S1 Wrap|Session 1]]');
+  });
+
+  it('returns text with no links, or a map with no fold, unchanged', () => {
+    assert.equal(labelFoldedHeadings('## Plain', {}), '## Plain');
+    assert.equal(labelFoldedHeadings('## [[S1 Wrap]]', { 'S1 Wrap': 'sessions/s1-wrap.html' }), '## [[S1 Wrap]]');
+    assert.equal(labelFoldedHeadings(undefined, {}), '');
+  });
+});
