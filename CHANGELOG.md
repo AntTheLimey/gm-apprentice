@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.115] — 2026-10-31
+
+Tidying a moved vault's site file no longer loses settings. Publish tool 1.58.2; no vault change is needed.
+
+### Fixed
+
+- `settings move --fold-site-file` on a vault already on the new settings file no longer drops the site title, folder map or any other setting the site folder's `vault.config.json` still holds. A setting the vault does not set is carried into the vault's file; where the vault sets it differently, the vault's value stays and the site file's is listed as dropped. Both are named in the plan before anything is written.
+- The same tidy now names, and lists as dropped, a site-file value it cannot use and a name under `landing`, `images` or `locations` that is not a setting, instead of taking them out unsaid. Without `--fold-site-file` they are reported and left in the site file.
+- A setting carried from an old site file's map is named as that file writes it (`images.maxWidth`, not `images.max_width`).
+- campaign-qa's Settings check says a site-file setting the vault does not set is moved into the vault, not that the vault's value is already in use.
+
+---
+
 ## [1.10.114] — 2026-10-31
 
 Four things the player site showed wrongly. Publish tool 1.58.1. The
