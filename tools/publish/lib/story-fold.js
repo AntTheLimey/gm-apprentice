@@ -44,6 +44,9 @@ const isFolded = (page) => !!(page && page.foldedInto);
 // that title before it prints too: each such link in a heading line (outside a code fence) is given the title as its
 // label. The keep-list of a PC's sections (sheets off) then reads the heading the page shows. Other lines, embeds and
 // links with a label of their own are left as written. A link is named as resolveWikiLinks names it.
+// The build rewrites a PC page's `markdown` (and `storyMarkdown`) with it in place, before anything reads them: only a
+// `|label` is added inside a line, so every line keeps its number (a fault's line stays the line in the note), and text
+// quoted from the heading (a finding's context) shows the session's title, as the page does.
 function labelFoldedHeadings(markdown, linkMap) {
   const text = String(markdown == null ? '' : markdown);
   if (!text.includes('[[')) return text;

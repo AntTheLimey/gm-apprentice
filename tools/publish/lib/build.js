@@ -1979,6 +1979,9 @@ function buildSite(options) {
     audit.read(rel, html);
     audit.readAddresses(rel, html);
     if (page === shownPage) shown[isStory ? 'story' : 'page'] = html;
+    // A folded wrap-up's page is its Story page, read here: the audit's marked pass renders it again with the other
+    // listings (eachListing), not as a page of its own.
+    if (isFolded(page)) return;
     if (toRender.has(page)) return;
     if (!markedOf.has(page)) markedOf.set(page, audit.mark(page));
     const marked = markedOf.get(page);
@@ -2433,6 +2436,11 @@ function buildSite(options) {
   // page's path on the site, its HTML and the line the build prints for it. `live` is the
   // build's own pass; the audit's pass (every note marked) asks for the pages again and
   // skips what holds no note's words (a redirect) and what is a note's own page (a PC's story).
+  // The wrap-ups folded into each Story page (story-fold.js), by its address.
+  const foldedOnto = new Map();
+  for (const page of pages) {
+    if (isFolded(page)) foldedOnto.set(page.outputPath, (foldedOnto.get(page.outputPath) || []).concat(page));
+  }
   function eachListing(emit, live) {
     for (const [dir, label] of Object.entries(DIR_LABELS)) {
       if (dir === 'characters/pcs' && pcRedirectTarget) {
@@ -2476,7 +2484,10 @@ function buildSite(options) {
     const spine = buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages });
     for (const unit of spine) {
       unit.refsHtml = renderRefsHtml(unit);
-      emit(unit.outputPath, renderStoryUnit(unit, config, publishConfig, navFor), `  wrote ${unit.outputPath}`);
+      const html = renderStoryUnit(unit, config, publishConfig, navFor);
+      emit(unit.outputPath, html, `  wrote ${unit.outputPath}`);
+      // Each wrap-up folded into this page is read on it, as its own page was: its faults are its note's.
+      if (live) for (const page of foldedOnto.get(unit.outputPath) || []) seen(vaultRelPathOf(page), html, page, false);
     }
     if (live) characterStories = buildCharacterStories();
     if (spine.length || characterStories.length || npcStories.length) {

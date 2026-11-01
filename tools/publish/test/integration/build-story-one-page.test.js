@@ -72,7 +72,7 @@ describe('one page per session (#543)', () => {
     const at = ['The party reached', '<h2 id="loot"', 'class="story-moments"'].map((s) => html.indexOf(s));
     assert.ok(at.every((i) => i >= 0), `all three present: ${at}`);
     assert.ok(at[0] < at[1] && at[1] < at[2], `in order: ${at}`);
-    assert.doesNotMatch(html, /GMSECRET-NOTES-1|\[!info\]|Source/);
+    assert.doesNotMatch(html, /GMSECRET-NOTES-1|\[!info\]|GMSECRET-SOURCE-1|Written from the Play Notes/);
   });
 
   for (const side of ['player', 'gm']) {
@@ -240,5 +240,48 @@ describe('sheets-only builds and PC headings', () => {
       assert.match(html, /SEEN-SECTION-1/, 'the kept section shows');
       assert.ok(!site.logs.some((l) => l.includes(HEADINGS_UNSTABLE_WARNING)), site.logs.filter((l) => /pcs\//.test(l)).join('\n'));
     } finally { site.cleanup(); }
+  });
+});
+
+describe('the note audit reads a folded wrap-up on its Story page', () => {
+  // A withheld note's name in a folded wrap-up is the wrap-up's fault, found on the page that prints it, as it was
+  // when the wrap-up had a page of its own.
+  const ZORN = { 'NPCs/Lord Zorn.md': '---\ntype: npc\npublish: false\nwithheld: true\n---\n\nThe hidden hand.\n' };
+  const faultsFor = (recap) => {
+    const files = storyVault({ ...ZORN,
+      'Sessions/Session 1 Wrap-Up.md': WRAP_1.replace(/## Narrative Recap\n\n[^\n]*\n/, `## Narrative Recap\n\n${recap}\n`) });
+    const s = buildBoth(files, { sites: [] });
+    let faults = [];
+    const saved = { log: console.log, warn: console.warn };
+    console.log = () => {}; console.warn = () => {};
+    try { build({ configPath: s.configPath, site: 'player', onNoteFaults: (f) => { faults = f; } }); } finally { Object.assign(console, saved); s.cleanup(); }
+    // The session page quotes the recap's opening too: that finding is the session note's own.
+    return faults.filter((f) => f.code === 'WITHHELD_IN_PROSE' && /Lord Zorn/.test(f.detail) && f.path === 'Sessions/Session 1 Wrap-Up.md');
+  };
+
+  it('a withheld name in the address of a link in the recap', () => {
+    const found = faultsFor('The party read [the dossier](https://example.com/wiki/Lord_Zorn) at the docks.');
+    assert.equal(found.length, 1, JSON.stringify(found));
+    assert.match(found[0].detail, /in the address of a link on the page/);
+  });
+
+  it('a withheld name in a chapter wrap-up folded into the chapter\'s Story page', () => {
+    const files = storyVault({ ...ZORN,
+      'Chapters/Chapter 2/Chapter 2 Overview.md': '---\ntype: chapter\ntitle: Chapter 2 — Lighthouse\nsort_order: 2\n---\n\n# Chapter 2\n',
+      'Chapters/Chapter 2/Chapter 2 Wrap-Up.md': '---\ntype: session_wrap\nchapter: "[[Chapter 2 Overview]]"\n---\n\n## Narrative Recap\n\nLord Zorn kept the light.\n' });
+    const s = buildBoth(files, { sites: [] });
+    let faults = [];
+    const saved = { log: console.log, warn: console.warn };
+    console.log = () => {}; console.warn = () => {};
+    try { build({ configPath: s.configPath, site: 'player', onNoteFaults: (f) => { faults = f; } }); } finally { Object.assign(console, saved); s.cleanup(); }
+    const found = faults.filter((f) => f.code === 'WITHHELD_IN_PROSE' && f.path === 'Chapters/Chapter 2/Chapter 2 Wrap-Up.md');
+    assert.equal(found.length, 1, JSON.stringify(faults));
+    assert.match(found[0].detail, /printed on the page/);
+  });
+
+  it('a withheld name in the recap prose', () => {
+    const found = faultsFor('They met Lord Zorn by the crane.');
+    assert.equal(found.length, 1, JSON.stringify(found));
+    assert.match(found[0].detail, /printed on the page/);
   });
 });
