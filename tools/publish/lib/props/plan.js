@@ -47,7 +47,7 @@ function sha1(buf) {
 // UTF-8 (`was`). The site writes it as UTF-8, as hosts serve it: after a UTF-16 byte-order
 // mark (a Word "Unicode" save) it is UTF-16, otherwise windows-1252 (an old Windows "Web page").
 // UTF-16 saved with no mark is known by its NULs: on every other byte (a high byte of 0 under
-// each Latin letter) and on none of the bytes between, in one order or the other.
+// each Latin letter) and on few of the bytes between, in one order or the other.
 // A UTF-8 file's byte-order mark is kept, so its text writes back byte for byte.
 const UTF8 = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 function bareUtf16(bytes) {
@@ -56,7 +56,8 @@ function bareUtf16(bytes) {
   let odd = 0;
   for (let i = 0; i < bytes.length; i++) if (bytes[i] === 0) { if (i % 2) odd++; else even++; }
   const half = bytes.length / 2;
-  const order = odd >= half / 4 && even === 0 ? 'utf-16le' : even >= half / 4 && odd === 0 ? 'utf-16be' : null;
+  // A few NULs on the other byte are characters such as ─ (U+2500) or Ā (U+0100); the strict decode has the last word.
+  const order = odd >= half / 4 && even <= odd / 16 ? 'utf-16le' : even >= half / 4 && odd <= even / 16 ? 'utf-16be' : null;
   if (!order) return null;
   try { return new TextDecoder(order, { fatal: true }).decode(bytes); } catch (e) { return null; }
 }

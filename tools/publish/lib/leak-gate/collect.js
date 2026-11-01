@@ -256,7 +256,6 @@ function collectHidden({ configPath, outputDir = null }) {
   // looked for whole, as written, in the kept folders (index.js), where an old listing can outlive the build.
   const heldTitles = [];
   const usedStyles = new Map();
-  const shippedHashes = new Set();
   const heldLinked = [];
   for (const p of props) {
     // A prop whose note the site does not publish: the title a listing would print for it is hidden text (an old props
@@ -292,7 +291,6 @@ function collectHidden({ configPath, outputDir = null }) {
     }
     if (p.ships && p.address && p.files.length) {
       madeState(p);
-      for (const f of p.files) if (bytesOf(f)) shippedHashes.add(sha1(bytesOf(f)));
       for (const f of p.files) {
         if (f.made === 'state') continue;
         own(f.out, p.rel);
@@ -334,13 +332,8 @@ function collectHidden({ configPath, outputDir = null }) {
       heldLinked.push({ rel: p.rel, address: null, hash: sha1(linkedBytes), size: linkedBytes.length, byBytes: true, linked: true });
     }
   }
-  // A file a held page links with the bytes of one a shipping prop or style puts on the site is no secret: it is there.
-  for (const style of usedStyles.values()) {
-    for (const file of [style.css, style.script, ...(style.assets || []).map((a) => a.source)].filter(Boolean)) {
-      try { shippedHashes.add(sha1(fs.readFileSync(file))); } catch (e) { /* the build says so */ }
-    }
-  }
-  heldProps.push(...heldLinked.filter((h) => !shippedHashes.has(h.hash)));
+  // Excused where the built site already shows the same bytes (index.js propUnrevealed).
+  heldProps.push(...heldLinked);
 
   // The words a style's layout (and its sheet) writes around every page made with it are the build's own, on the site
   // for players: already visible, as a published page's words are. Only a style a page on this site is made with.

@@ -141,6 +141,34 @@ describe("leak gate: the files a held prop page links (#508)", () => {
     'Documents/Other.md': '---\ntype: document\n---\nOther.\n\n![[keeper-map.png]]\n',
   }), KEPT));
 
+  // A stylesheet or letterhead reused across props: in a kept folder, the same bytes as a held page's own copy.
+  const ASSETS = { player: { keep: ['assets'] } };
+  it('a kept file with the bytes a held page links is PROP_UNREVEALED when nothing published shows those bytes', () => within((s) => {
+    write(s, 'assets/props.css', CSS);
+    write(s, 'assets/paper.png', MAP);
+    assert.deepEqual(gate(s).findings.map(pick), [
+      { code: 'PROP_UNREVEALED', page: 'assets/paper.png', note: 'Documents/Invitation.md' },
+      { code: 'PROP_UNREVEALED', page: 'assets/props.css', note: 'Documents/Invitation.md' },
+    ]);
+  }, HELD_VAULT(), ASSETS));
+
+  it('a kept file with bytes a shipping prop also ships is no finding', () => within((s) => {
+    write(s, 'assets/props.css', CSS);
+    assert.deepEqual(gate(s).findings, []);
+  }, HELD_VAULT({
+    'Letters/Card.md': PROP('card.html'), 'Letters/card.html': '<html><head><link rel="stylesheet" href="props.css"></head><body><p>Hello.</p></body></html>',
+    'Letters/props.css': CSS, ...LIST(['Documents/Other.md', 'Letters/Card.md']),
+  }), ASSETS));
+
+  it('a kept file with the bytes of a picture a published page shows is no finding', () => within((s) => {
+    assert.ok(fs.existsSync(path.join(s.outputDir, 'images', 'keeper-map.png')));
+    write(s, 'assets/paper.png', MAP);
+    assert.deepEqual(gate(s).findings, []);
+  }, HELD_VAULT({
+    '_attachments/keeper-map.png': MAP,
+    'Documents/Other.md': '---\ntype: document\n---\nOther.\n\n![[keeper-map.png]]\n',
+  }), ASSETS));
+
   it("a font a held prop links is not watched", () => within((s) => {
     write(s, 'gazetteer/hand.woff2', Buffer.from('wOF2 font bytes'));
     assert.deepEqual(gate(s).findings, []);

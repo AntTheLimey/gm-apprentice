@@ -91,12 +91,10 @@ function propUnrevealed({ outputDir, hidden, files }) {
     if (!shipped.has(key) && !hidden.siteTakes(h.address) && !linkedOnly.has(key)) linkedOnly.set(key, h);
   }
   const bySize = new Map();
-  let hasUnlinked = false;
   for (const h of hidden.heldProps) {
     // A page the tool would make has no bytes to know it by: only its address is watched. A prop file with words is
     // found by them (collect.js byBytes).
     if (!h.byBytes) continue;
-    if (!h.linked) hasUnlinked = true;
     if (!bySize.has(h.size)) bySize.set(h.size, []);
     bySize.get(h.size).push(h);
   }
@@ -113,23 +111,36 @@ function propUnrevealed({ outputDir, hidden, files }) {
       }
     }
   }
+  // A file a held page links is watched only in a kept folder: the build empties the rest of the site folder and writes
+  // its own files there (a shipping prop's, a style's, the pictures a published page shows, banners). Bytes the build
+  // put on the site are shown to players already, as text a published page says is: a kept copy of them is no finding
+  // (a stylesheet or letterhead reused across props).
+  const onSite = new Set();
+  const keptHits = [];
   for (const rel of listFiles(outputDir)) {
-    if (hidden.propFiles.has(canonicalNfc(rel))) continue;
-    const at = atAddress.get(addressKey(rel));
-    if (at) { add(rel, at); continue; }
+    const shipped = hidden.propFiles.has(canonicalNfc(rel));
+    if (!shipped) {
+      const at = atAddress.get(addressKey(rel));
+      if (at) { add(rel, at); continue; }
+    }
     if (!bySize.size) continue;
-    if (!hasUnlinked && !hidden.keeps(rel)) continue;
+    const kept = !shipped && hidden.keeps(rel);
     const full = path.join(outputDir, ...rel.split('/'));
     let size;
     try { size = fs.statSync(full).size; } catch (e) { continue; }
     const same = bySize.get(size);
     if (!same) continue;
     const hash = crypto.createHash('sha1').update(fs.readFileSync(full)).digest('hex');
-    // A file a held page links is watched only in a kept folder: the build empties the rest of the site folder and
-    // writes its own pictures there (banners, the campaign image), so only a hand copy in a kept folder outlives it.
-    const h = same.find((x) => x.hash === hash && (!x.linked || hidden.keeps(rel)));
-    if (h) add(rel, h);
+    if (!kept) for (const x of same) if (x.linked && x.hash === hash) onSite.add(hash);
+    if (shipped) continue;
+    const h = same.find((x) => x.hash === hash && !x.linked);
+    if (h) { add(rel, h); continue; }
+    if (kept) {
+      const l = same.find((x) => x.hash === hash && x.linked);
+      if (l) keptHits.push([rel, l]);
+    }
   }
+  for (const [rel, h] of keptHits) if (!onSite.has(h.hash)) add(rel, h);
   return found;
 }
 

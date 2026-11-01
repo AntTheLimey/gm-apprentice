@@ -501,6 +501,10 @@ test('UTF-16 with no byte-order mark is read when its NULs show it, either byte 
   const le = Buffer.from('<p>Zoë</p>', 'utf16le');
   assert.deepStrictEqual(textOf(le), { text: '<p>Zoë</p>', was: 'UTF-16' });
   assert.deepStrictEqual(textOf(Buffer.from(le).swap16()), { text: '<p>Zoë</p>', was: 'UTF-16' });
+  // A character such as ─ (U+2500) or Ā (U+0100) puts a NUL on the other byte: a few of those still read as UTF-16.
+  const border = 'The vicar knows ─ Ā the crypt is empty.\n';
+  assert.deepStrictEqual(textOf(Buffer.from(border, 'utf16le')), { text: border, was: 'UTF-16' });
+  assert.deepStrictEqual(textOf(Buffer.from(border, 'utf16le').swap16()), { text: border, was: 'UTF-16' });
   // NULs that do not fall on every other byte are not UTF-16: read as before, NULs and all.
   assert.deepStrictEqual(textOf(Buffer.from('ab\u0000\u0000cd')), { text: 'ab\u0000\u0000cd', was: null });
 });
