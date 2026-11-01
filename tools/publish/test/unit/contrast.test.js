@@ -32,7 +32,7 @@ function looks(css) {
   return { dark: tokens(root), light: at < 0 ? null : tokens(css.slice(at, css.indexOf('}', css.indexOf('}', at) + 1))) };
 }
 const plain = looks(read('style.css'));
-const MODES = [['plain', 'dark', plain.dark]];
+const MODES = [['plain', 'dark', plain.dark], ['plain', 'light', plain.dark]];  // the plain look has no light card: its dark palette serves both schemes
 for (const f of fs.readdirSync(path.join(CSS, 'themes')).filter((n) => n.endsWith('.css')).sort()) {
   const t = looks(read('themes', f));
   const dark = { ...plain.dark, ...t.dark };
@@ -78,19 +78,11 @@ describe('gm.css: the marks can be read in every look', () => {
 
 // The Story page's moment cards print each kind in its own colour on the card (--bg-card): every look reads them at 4.5:1.
 const KIND_NAMES = ['dramatic', 'intriguing', 'funny', 'epic', 'tragic'];
-const momentLight = (() => {
-  const css = read('style.css');
-  const at = css.indexOf('--moment-dramatic', css.indexOf(LIGHT));
-  assert.ok(at > 0, 'style.css has a light block with the moment colours');
-  return tokens(css.slice(css.lastIndexOf('{', at), css.indexOf('}', at)));
-})();
-
 describe('story-moments: kind colours', () => {
   for (const [look, mode, t] of MODES) {
     it(`${look} ${mode}`, () => {
-      const colours = mode === 'light' ? { ...t, ...momentLight } : t;
-      for (const k of KIND_NAMES) {
-        const c = colours[`--moment-${k}`];
+            for (const k of KIND_NAMES) {
+        const c = t[`--moment-${k}`];
         assert.ok(c, `--moment-${k} is declared`);
         const r = ratio(c, t['--bg-card']);
         assert.ok(r >= 4.5, `${k} is ${r.toFixed(2)}:1 on the card`);

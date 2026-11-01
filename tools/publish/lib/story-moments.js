@@ -20,10 +20,11 @@ const ICONS = {
 const LABEL = (kind) => kind[0].toUpperCase() + kind.slice(1);
 
 const TAG = /\s#moment\/([\p{L}\p{N}_-]+)([*_]*)\s*$/u;
-const DASH = /^(?:—|–|--)\s*(\S.*)$/;
+// The speaker line of a quote: its dash (as written, with the space after it) and the name.
+const DASH = /^(—|–|--)(\s*)(\S.*)$/;
 // The GM site's marks (gm-marks.js): an open token alone on a line starts a span that runs to where its depth returns to 0.
-const OPEN_LINE = /^[0-9a-z]+$/;
-const MARK = /[0-9a-z]+|/g;
+const OPEN_LINE = /^\uE000[0-9a-z]+\uE001$/;
+const MARK = /\uE000[0-9a-z]+\uE001|\uE002/g;
 
 // True when the inline markdown is one `type` span (`strong` or `em`) from its first character to its last.
 function wholly(text, type) {
@@ -73,6 +74,8 @@ function parseMoments(markdown) {
   let card = null;   // the last card, while a context line may still follow it
 
   // The block's text with its trailing tag taken off; the tag is noted on `tagged`.
+  // Only the tag goes. Not touched on purpose: the renderer's typographer still curls straight quotes when a card is
+  // drawn, and a paragraph that is only a tag leaves an empty block behind (both are rulings, not oversights).
   const strip = (text, tagged) => {
     const m = TAG.exec(text);
     if (!m) return text;
@@ -84,7 +87,7 @@ function parseMoments(markdown) {
     if (tagged.word === undefined) return;
     const kind = tagged.word.toLowerCase();
     if (KINDS.includes(kind)) c.kind = kind;
-    else if (!unknownTags.includes(tagged.word)) unknownTags.push(tagged.word);
+    else if (!unknownTags.some((w) => w.toLowerCase() === kind)) unknownTags.push(tagged.word);
   };
   const add = (c, tagged) => { kindOf(c, tagged); cards.push(c); return c; };
   const fresh = (shape, main, speaker = null, context = null) => ({ shape, main, speaker, context, kind: null });
@@ -113,7 +116,8 @@ function parseMoments(markdown) {
         while (body.length && !body[body.length - 1].trim()) body.pop();
         const m = body.length ? DASH.exec(body[body.length - 1].trim()) : null;
         if (m) body.pop();
-        card = add(fresh('speech', body.join('\n').trim(), m ? m[1].trim() : null), tagged);
+        card = add(fresh('speech', body.join('\n').trim(), m ? m[3].trim() : null), tagged);
+        if (m) card.speakerDash = m[1] + m[2];
       } else if (block.type === 'paragraph' && wholly(text, 'strong')) {
         card = add(fresh('narration', text.trim()), tagged);
       } else if (block.type === 'paragraph' && text.includes('\n')) {
@@ -144,7 +148,7 @@ function cardHtml(c) {
   parts.push(c.shape === 'narration'
     ? `<p class="moment-main">${renderInline(c.main)}</p>`
     : `<div class="moment-main">${renderMarkdown(c.main)}</div>`);
-  if (c.speaker) parts.push(`<p class="moment-speaker">— ${renderInline(c.speaker)}</p>`);
+  if (c.speaker) parts.push(`<p class="moment-speaker">${escapeHtml(c.speakerDash || '— ')}${renderInline(c.speaker)}</p>`);
   if (c.context) parts.push(`<hr class="moment-rule">`, `<p class="moment-context">${renderInline(c.context)}</p>`);
   return `<article class="moment-card">${parts.join('')}</article>`;
 }

@@ -276,15 +276,15 @@ A full-bleed hero's words sit on a shade of `--bg-hero` and take a light ink. Th
 
 <!-- theme-tokens:story -->
 
-The Memorable Moments cards: the colour of each kind's row. The card itself takes `--bg-card` and `--border`.
+The Memorable Moments cards: the colour of each kind's row. The card itself takes `--bg-card` and `--border`. The plain look keeps these in both colour schemes (its card stays dark); a genre preset with a light card sets deeper ones for it.
 
 | Token | What it sets | Default |
 |-------|--------------|---------|
-| `--moment-dramatic` | A Dramatic moment's kind row | `#ff8f80`; light `#b42318` |
-| `--moment-intriguing` | An Intriguing moment's kind row | `#7fc8ff`; light `#0b5cad` |
-| `--moment-funny` | A Funny moment's kind row | `#ffc857`; light `#7a4f00` |
-| `--moment-epic` | An Epic moment's kind row | `#c9a7ff`; light `#6b3fb5` |
-| `--moment-tragic` | A Tragic moment's kind row | `#b8c2d1`; light `#475569` |
+| `--moment-dramatic` | A Dramatic moment's kind row | `#ff8f80` |
+| `--moment-intriguing` | An Intriguing moment's kind row | `#7fc8ff` |
+| `--moment-funny` | A Funny moment's kind row | `#ffc857` |
+| `--moment-epic` | An Epic moment's kind row | `#c9a7ff` |
+| `--moment-tragic` | A Tragic moment's kind row | `#b8c2d1` |
 
 <!-- /theme-tokens:story -->
 

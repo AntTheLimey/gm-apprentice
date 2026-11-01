@@ -74,7 +74,8 @@
   --live-unconscious: #d4a017; --live-unconscious-bg: rgba(212,160,23,0.18);
   --live-dying: #ff6b6b; --live-dying-bg: rgba(192,57,43,0.28);
   --live-row-mad: rgba(157,123,216,0.14); --live-row-hurt: rgba(192,57,43,0.15);
-  /* the Story page's Memorable Moments: the colour of each kind's row */
+  /* the Story page's Memorable Moments: the colour of each kind's row. The plain look keeps its dark card in the light
+     scheme, so these stay; a genre preset with a light card sets deeper ones in its light block. */
   --moment-dramatic: #ff8f80; --moment-intriguing: #7fc8ff; --moment-funny: #ffc857; --moment-epic: #c9a7ff; --moment-tragic: #b8c2d1;
 
   /* Fonts */
@@ -100,7 +101,6 @@
 @media (prefers-color-scheme: light) {
   :root {
     color-scheme: light;
-    --moment-dramatic: #b42318; --moment-intriguing: #0b5cad; --moment-funny: #7a4f00; --moment-epic: #6b3fb5; --moment-tragic: #475569;
   }
 }
 

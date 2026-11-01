@@ -81,9 +81,12 @@ describe('parseMoments', () => {
     assert.equal(cards[0].main, '"Just this."');
   });
 
-  it('a double hyphen and an en dash also open a speaker line', () => {
-    assert.equal(parseMoments('> "A."\n> -- Tim').cards[0].speaker, 'Tim');
-    assert.equal(parseMoments('> "A."\n> – Tim').cards[0].speaker, 'Tim');
+  it('the speaker line keeps its dash exactly as written; only the name is split off', () => {
+    for (const dash of ['-- ', '– ', '— ', '—', '--']) {
+      const card = parseMoments(`> "A."\n> ${dash}Tim`).cards[0];
+      assert.equal(card.speaker, 'Tim', dash);
+      assert.equal(card.speakerDash, dash, dash);
+    }
   });
 
   it('CRLF input reads the same', () => {
@@ -98,6 +101,22 @@ describe('parseMoments', () => {
     assert.equal(cards[0].shape, 'other');
     assert.match(cards[0].main, /Hidden beat[\s\S]*Hidden context/);
     assert.equal(cards[1].main, '**Shown beat.**');
+  });
+
+  it('a lone lowercase word on its own line is ordinary text, not a marked span', () => {
+    const { cards } = parseMoments('**B.**\n\nyes\n\n*ctx.* #moment/funny');
+    assert.deepEqual(cards.map((c) => [c.shape, c.main]), [['narration', '**B.**'], ['other', 'yes'], ['other', '*ctx.*']]);
+  });
+
+  it('a real marked span between a beat and its context is a card of its own; the context is not taken from beyond it', () => {
+    const open = '\uE000a1\uE001';
+    const { cards } = parseMoments(`**B.**\n\n${open}\nhidden\n\uE002\n\n*ctx.* #moment/funny`);
+    assert.deepEqual(cards.map((c) => [c.shape, c.main, c.context]), [['narration', '**B.**', null], ['other', `${open}\nhidden\n\uE002`, null], ['other', '*ctx.*', null]]);
+    assert.equal(cards[2].kind, 'funny');
+  });
+
+  it('unknown tags are reported once however they are cased', () => {
+    assert.deepEqual(parseMoments('**A.**\n\n*x* #moment/Sad\n\n**B.**\n\n*y* #moment/sad').unknownTags, ['Sad']);
   });
 
   it('empty text has no cards', () => {
@@ -141,8 +160,13 @@ describe('momentsHtml', () => {
   it('a quote card prints its speaker, with no blockquote and its links kept', () => {
     const out = html('> "Said aloud."\n> — [Mara](../npcs/mara.html)');
     assert.doesNotMatch(out, /<blockquote/);
-    assert.match(out, /class="moment-speaker"[^>]*>— <a href="\.\.\/npcs\/mara\.html">Mara<\/a>/);
+    assert.match(out, /class="moment-speaker">— <a href="\.\.\/npcs\/mara\.html">Mara<\/a>/);
     assert.match(out, /Said aloud/);
+  });
+
+  it('the speaker line prints as written', () => {
+    assert.match(html('> "A."\n> -- Tim'), /class="moment-speaker">-- Tim</);
+    assert.match(html('> "A."\n> –Tim'), /class="moment-speaker">–Tim</);
   });
 
   it('a link in the beat is kept', () => {

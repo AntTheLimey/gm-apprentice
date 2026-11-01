@@ -41,5 +41,7 @@
     --danger: #c0392b;
     --warning: #b8860b;
     --success: #4a7c2e;
+    /* the Story page's Memorable Moments: deeper kind colours for the light card */
+    --moment-dramatic: #b42318; --moment-intriguing: #0b5cad; --moment-funny: #7a4f00; --moment-epic: #6b3fb5; --moment-tragic: #475569;
   }
 }
