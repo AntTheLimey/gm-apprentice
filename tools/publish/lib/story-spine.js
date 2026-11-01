@@ -1,6 +1,7 @@
 const path = require('path');
 const { refTarget } = require('./wikilink');
-const { extractSections, resolveWikiLinks, resolveImageEmbeds, publishedSource, renderMarkdown, stripLeadingH1 } = require('./processor');
+const { extractSections, resolveWikiLinks, resolveImageEmbeds, publishedSource, renderMarkdown, stripLeadingH1, stripLeadingH1Marked } = require('./processor');
+const { withoutMarked } = require('./gm-marks');
 const { slugify } = require('./scanner');
 const { canonicalNfc } = require('./unicode');
 const { parseWikilink } = require('./wikilink');
@@ -13,13 +14,21 @@ const RECAP_TITLES = ['narrative recap', 'recap'];
 // The gm-only/excluded-stripped view if present (set by build.js), else raw markdown.
 const publishedOf = publishedSource;
 
+// The marked view of a page (the GM site's: every hidden part kept, marked), or null when the build made none.
+const markedOf = (page) => (page && typeof page.gmMarkedPublished === 'string' ? page.gmMarkedPublished : null);
+
 // Find the recap section of a page. Returns { title, html } or null.
 // Heading match is a case-insensitive CONTAINS, because real vaults decorate the title
 // (e.g. "What Happened — Narrative Recap"). "narrative recap" is tried before the looser
 // "recap" so the more specific heading wins when both are present.
-function findRecap(page, resolve) {
-  const text = publishedOf(page);
-  const sections = extractSections(resolve ? resolve(text) : text);
+// With `marked` (the GM site) the page's marked view is resolved, so the Story page's sections later read the same
+// text from the same resolver, and its missing pictures are reported once; the recap is still found in that text as
+// players see it (each marked span dropped), so both sites find the same one.
+function findRecap(page, resolve, { marked = false } = {}) {
+  const fromMarks = marked ? markedOf(page) : null;
+  const text = fromMarks === null ? publishedOf(page) : fromMarks;
+  const resolved = resolve ? resolve(text) : text;
+  const sections = extractSections(fromMarks === null ? resolved : withoutMarked(resolved));
   for (const wanted of RECAP_TITLES) {
     const hit = sections.find(s => s.title.trim().toLowerCase().includes(wanted));
     if (hit && hit.html && hit.html.trim()) return { title: hit.title, html: hit.html };
@@ -55,12 +64,12 @@ function buildWrapUpIndex(pages) {
 // Recap for a unit: try its wrap-up first (the deliberate post-session/chapter recap),
 // then the unit's own file. Returns { title, html, sourcePage } or null.
 // `wrapResolve` reads the wrap-up's text (by default `resolve`).
-function resolveUnitRecap(unitPage, wrapUpPage, resolve, wrapResolve = resolve) {
+function resolveUnitRecap(unitPage, wrapUpPage, resolve, wrapResolve = resolve, { marked = false } = {}) {
   if (wrapUpPage) {
-    const r = findRecap(wrapUpPage, wrapResolve);
+    const r = findRecap(wrapUpPage, wrapResolve, { marked });
     if (r) return { ...r, sourcePage: wrapUpPage };
   }
-  const own = findRecap(unitPage, resolve);
+  const own = findRecap(unitPage, resolve, { marked });
   if (own) return { ...own, sourcePage: unitPage };
   return null;
 }
@@ -226,18 +235,30 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false 
   // Its unreadable headings are reported on the build's one warning pass.
   const bodyOf = (wrapUp, recap, resolve) => {
     if (!wrapUp) return { sections: [], moments: null, after: [] };
-    const text = marked && typeof wrapUp.gmMarkedPublished === 'string' ? wrapUp.gmMarkedPublished : publishedOf(wrapUp);
+    const text = (marked && markedOf(wrapUp)) ?? publishedOf(wrapUp);
     const recapTitle = recap && recap.sourcePage === wrapUp ? recap.title : null;
     const warn = images && images.warn ? (msg) => console.warn(`story: ${msg}`) : null;
     const name = wrapUp.sourcePath ? path.basename(wrapUp.sourcePath) : wrapUp.title;
-    const { sections, moments, after } = storySections(text, { resolve, marks: marked || null, recapTitle, warn, name });
-    return { sections, moments, after };
+    const { sections, moments, after, recap: shown } = storySections(text, { resolve, marks: marked || null, recapTitle, warn, name });
+    return { sections, moments, after, ...(shown ? { recapHtml: shown.html } : {}) };
+  };
+  // On the GM site, a recap from the unit's own page (no wrap-up gave one) is shown from its marked view, as the
+  // wrap-up's is: the same section, its GM-only parts in place.
+  const ownRecapHtml = (recap, resolve) => {
+    const text = marked && recap && recap.sourcePage ? markedOf(recap.sourcePage) : null;
+    if (text === null) return recap.html;
+    const shown = storySections(text, { resolve, marks: true, recapTitle: recap.title }).recap;
+    return shown ? shown.html : recap.html;
   };
   // The chapter note's introduction: its published body under the page's own title, or null when that is empty.
+  // On the GM site the body shown is its marked view: its GM-only parts in place, marked. Whether it is empty is
+  // decided as players see it, so both sites give the chapter the same page.
   const chapterIntro = (chapter, resolve) => {
     const text = stripLeadingH1(publishedOf(chapter));
     if (!text.trim()) return null;
-    return { title: null, html: renderMarkdown(resolve ? resolve(text) : text), sourcePage: chapter };
+    const fromMarks = marked ? markedOf(chapter) : null;
+    const shown = fromMarks === null ? text : stripLeadingH1Marked(fromMarks);
+    return { title: null, html: renderMarkdown(resolve ? resolve(shown) : shown), sourcePage: chapter };
   };
   const chapters = sortedChapters(pages);
   const sessions = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session');
@@ -257,7 +278,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false 
     // The chapter's Story page is either story/<chSlug>-intro.html or story/<chSlug>.html;
     // both live in story/, so either path yields the same relative link resolution.
     const chapterWrapResolve = once(resolverFor(unitOutputPath(chSlug), foldedInto(chapterWrap, unitOutputPath(chSlug), unitOutputPath(`${chSlug}-intro`))));
-    const fromWrap = chapterWrap ? findRecap(chapterWrap, chapterWrapResolve) : null;
+    const fromWrap = chapterWrap ? findRecap(chapterWrap, chapterWrapResolve, { marked }) : null;
     const chapterRecap = fromWrap ? { ...fromWrap, sourcePage: chapterWrap } : chapterIntro(chapter, resolverFor(unitOutputPath(chSlug)));
 
     const chapterSessions = sessions
@@ -269,14 +290,15 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false 
       const id = `${chSlug}-${slugify(s.title)}`;
       const wrapUp = ownWrapUp(wrapUpForUnit(s, wrapUps, idx, pairs), unitOutputPath(id));
       const wrapResolve = once(resolverFor(unitOutputPath(id), foldedInto(wrapUp, unitOutputPath(id))));
-      const recap = resolveUnitRecap(s, wrapUp, resolverFor(unitOutputPath(id)), wrapResolve);
+      const ownResolve = resolverFor(unitOutputPath(id));
+      const recap = resolveUnitRecap(s, wrapUp, ownResolve, wrapResolve, { marked });
       if (!recap) continue;
       sessionUnits.push({
         kind: 'session', id, outputPath: unitOutputPath(id),
         title: s.displayTitle || s.title.replace(/_/g, ' '),
         chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
         // The recap text can come from the wrap-up; sourcePage is always the unit's own page.
-        recapHtml: recap.html, sourcePage: s, wrapUpPage: wrapUp || null,
+        recapHtml: recap.sourcePage === wrapUp ? recap.html : ownRecapHtml(recap, ownResolve), sourcePage: s, wrapUpPage: wrapUp || null,
         ...bodyOf(wrapUp, recap, wrapResolve),
       });
     }
