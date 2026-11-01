@@ -44,19 +44,72 @@ function hiddenRuns(lines) {
   return runs.filter((r) => topHeadings(lines.slice(r.start, r.end + 1).map(unmark)).length > 0);
 }
 
-// A hidden run's sections, each with its line in the text: { at, title, body } (body: markdown lines). The run's
-// open line, and its close line when that is the token alone, are taken off; any text above its first heading joins
-// that section's body.
-function runSections(lines, run) {
+// The marks open as these lines are read: `before[i]`, the open tokens before line i (and `before[n]`, after the last);
+// `events`, in order, each stretch of a line between tokens ({ line, open, words: whether it holds any }) and each
+// state after a token ({ line, open, words: false }), `open` being the tokens open there.
+function marksThrough(lines) {
+  const open = [];
+  const before = [];
+  const events = [];
+  const stretch = (i, text) => events.push({ line: i, open: open.slice(), words: text.trim() !== '' });
+  lines.forEach((line, i) => {
+    before.push(open.slice());
+    let at = 0;
+    for (const m of line.matchAll(TOKEN)) {
+      stretch(i, line.slice(at, m.index));
+      at = m.index + m[0].length;
+      if (m[0] === CLOSE) open.pop(); else open.push(m[0]);
+      events.push({ line: i, open: open.slice(), words: false });
+    }
+    stretch(i, line.slice(at));
+  });
+  before.push(open.slice());
+  return { before, events };
+}
+
+// A hidden run's sections, each with its line in the text: { at, title, body, marks, titleMarks } (body: markdown
+// lines). The run's open line, and its close line when that is the token alone, are taken off; any text above its
+// first heading joins that section's body. A mark opened inside the run may cross a heading (a gm-only fence opened in
+// a hidden Memorable Moments and closed after the GM Notes below it): each section gets its words and the marks round
+// them, balanced. `marks` are the open tokens a section stands in: those held from its heading to its last words, or,
+// when none is, the run's own (`open`). `titleMarks` are any others open at its heading.
+function runSections(lines, run, open) {
   let last = run.end;
   if (last > run.start && lines[last].trim() === CLOSE) last--;
   const inner = lines.slice(run.start + 1, last + 1);
   const heads = topHeadings(inner.map(unmark));
-  return heads.map((h, k) => ({
-    at: run.start + 1 + h.line,
-    title: h.title,
-    body: [...(k === 0 ? inner.slice(0, h.line) : []), ...inner.slice(h.end, k + 1 < heads.length ? heads[k + 1].line : inner.length)],
-  }));
+  const { before, events } = marksThrough(inner);
+  return heads.map((h, k) => {
+    const to = k + 1 < heads.length ? heads[k + 1].line : inner.length;
+    const ranges = [...(k === 0 ? [[0, h.line]] : []), [h.end, to]];
+    // From the heading's words to the section's last words: the depth held all the way.
+    const inPiece = (e) => (e.line >= h.line && e.line < to) || ranges.some(([a, b]) => e.line >= a && e.line < b);
+    const mine = events.filter(inPiece);
+    const first = mine.findIndex((e) => e.words);
+    let lastWords = mine.length - 1;
+    while (lastWords > first && !mine[lastWords].words) lastWords--;
+    const held = Math.min(...mine.slice(first, lastWords + 1).map((e) => e.open.length));
+    const marks = held > 0 ? mine[first].open.slice(0, held) : [open];
+    const atHeading = events.find((e) => e.line === h.line && e.words) || { open: [] };
+    const extra = held > 0 ? held : 0;
+    // Each stretch of the body as written, from its first line with words to its last, with the marks open at its
+    // start opened again and the ones left open at its end closed: balanced inside `marks`.
+    const body = [];
+    for (const [a, b] of ranges) {
+      let from = a;
+      let end = b - 1;
+      while (from <= end && unmark(inner[from]).trim() === '') from++;
+      while (end >= from && unmark(inner[end]).trim() === '') end--;
+      if (from > end) continue;
+      const reopen = before[from].slice(extra);
+      const left = before[end + 1].length - extra;
+      if (body.length) body.push('');
+      for (const t of reopen) body.push(t, '');
+      body.push(...inner.slice(from, end + 1));
+      for (let i = 0; i < left; i++) body.push('', CLOSE);
+    }
+    return { at: run.start + 1 + h.line, title: h.title, body, marks, titleMarks: atHeading.open.slice(extra) };
+  });
 }
 
 const EMPTY = () => ({ recap: null, sections: [], moments: null, after: [] });
@@ -101,15 +154,18 @@ function cut(lines, marks, recapTitle) {
   // The hidden runs: the heading and the body each wrapped in the run's own mark, so every piece is balanced.
   for (const run of runs) {
     const open = lines[run.start].trim();
-    const pieces = runSections(lines, run);
+    const pieces = runSections(lines, run, open);
     const holdsMoments = pieces.some((p) => p.at === momentsLine);
     for (const p of pieces) {
+      const opens = p.marks.join('');
+      const closes = CLOSE.repeat(p.marks.length);
       if (p.at === momentsLine && !out.moments) {
-        out.moments = { title: unmark(p.title), markdown: bodyText(p.body), hidden: { open, close: CLOSE } };
+        out.moments = { title: unmark(p.title), markdown: bodyText(p.body), hidden: { open: opens, close: closes } };
         continue;
       }
-      const section = { title: open + p.title + CLOSE, id: anchorOf(p.title),
-        html: `<p>${open}</p>\n${renderMarkdown(p.body.join('\n'))}<p>${CLOSE}</p>\n` };
+      const titleMarks = p.titleMarks.join('');
+      const section = { title: opens + titleMarks + p.title + CLOSE.repeat(p.titleMarks.length) + closes, id: anchorOf(p.title),
+        html: `${p.marks.map((t) => `<p>${t}</p>\n`).join('')}${renderMarkdown(p.body.join('\n'))}${`<p>${CLOSE}</p>\n`.repeat(p.marks.length)}` };
       if (!holdsMoments && momentsLine >= 0 && p.at < momentsLine) placed.push({ at: p.at, section });
       else after.push({ at: p.at, ...section });
     }

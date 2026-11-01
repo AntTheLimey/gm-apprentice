@@ -235,7 +235,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false 
   // Its unreadable headings are reported on the build's one warning pass.
   const bodyOf = (wrapUp, recap, resolve) => {
     if (!wrapUp) return { sections: [], moments: null, after: [] };
-    const text = (marked && markedOf(wrapUp)) ?? publishedOf(wrapUp);
+    const text = (marked ? markedOf(wrapUp) : null) ?? publishedOf(wrapUp);
     const recapTitle = recap && recap.sourcePage === wrapUp ? recap.title : null;
     const warn = images && images.warn ? (msg) => console.warn(`story: ${msg}`) : null;
     const name = wrapUp.sourcePath ? path.basename(wrapUp.sourcePath) : wrapUp.title;

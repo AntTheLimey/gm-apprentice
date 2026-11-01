@@ -117,6 +117,43 @@ describe('storySections', () => {
     assert.match(out.after[0].html, /<h2 id="loot-3">/);
   });
 
+  it('a mark opened inside a hidden moments run and closed after the next heading: each piece balanced, GM Notes under its own mark', () => {
+    // The build's marked view with player_site.story.moments off: the moments section's mark opens before its heading,
+    // the template's gm-only fence opens inside it (before GM Notes) and both close at the end.
+    const m = createMarks();
+    const run = m.open('sections', 'player_site.story.moments: off');
+    const fence = m.open('gm_only_blocks', 'gm-only block');
+    const text = [
+      '## Narrative Recap', 'They came.', '',
+      ...blockLines(run), '## Memorable Moments', '**One.**', '', ...blockLines(fence), '',
+      '## GM Notes', '- the secret', '', ...blockLines(CLOSE), '', ...blockLines(CLOSE), '',
+    ].join('\n');
+    const out = storySections(text, { marks: m, recapTitle: 'Narrative Recap' });
+    assert.deepEqual(out.moments.hidden, { open: run, close: CLOSE });
+    assert.equal(out.moments.markdown, '**One.**');
+    assert.equal(out.after.length, 1);
+    const gmNotes = out.after[0].html;
+    assert.ok(balanced(gmNotes), gmNotes);
+    assert.ok(gmNotes.includes(fence) && !gmNotes.includes(run), 'GM Notes stand in the fence\'s mark, not the moments\'');
+    assert.match(gmNotes, /the secret/);
+  });
+
+  it('a mark that closes inside a piece leaves the run\'s own mark round it, and the piece balanced', () => {
+    const m = createMarks();
+    const run = m.open('sections', 'Aftermath');
+    const inner = m.open('gm_only_blocks', 'gm-only block');
+    const text = [
+      ...blockLines(run), '## Aftermath', ...blockLines(inner), 'inner words', ...blockLines(CLOSE), 'outer words', '',
+      '## Debts', 'owed', ...blockLines(CLOSE), '',
+    ].join('\n');
+    const out = storySections(text, { marks: m });
+    assert.equal(out.after.length, 2);
+    for (const a of out.after) assert.ok(balanced(a.html), a.html);
+    assert.ok(out.after[0].html.startsWith(`<h2 id="aftermath">${run}`) || out.after[0].html.includes(`<p>${run}</p>`));
+    assert.ok(out.after[0].html.includes(inner) && out.after[0].html.includes('outer words'));
+    assert.ok(out.after[1].html.includes(`<p>${run}</p>`) && !out.after[1].html.includes(inner));
+  });
+
   it('a wrap-up whose headings cannot be read warns, naming the note, and the page keeps no body from it', () => {
     const processor = require('../../lib/processor');
     const real = processor.findHeadings;

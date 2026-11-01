@@ -46,7 +46,7 @@ describe('player_site.story.moments', () => {
     assert.ok(page.includes('The party reached the docks') && page.includes('LOOT-KEY-1'));
   });
 
-  it('off: the GM Story page shows the cards inside one mark labelled for the setting', { todo: 'Task 7' }, () => {
+  it('off: the GM Story page shows the cards inside one mark labelled for the setting', () => {
     const page = off.gm.read(...STORY_1.split('/'));
     const marks = markedTexts(page).filter((m) => m.kind === 'sections');
     assert.equal(marks.length, 1, `sections marks: ${JSON.stringify(marks.map((m) => m.label))}`);
@@ -65,7 +65,7 @@ describe('player_site.story.moments', () => {
     for (const [file, text] of texts(both.player)) for (const m of MOMENTS) assert.ok(!html(text).includes(m), `${m} in ${file}`);
   });
 
-  it('moments off and hide.sections naming Memorable Moments: one mark on the GM page', { todo: 'Task 7' }, () => {
+  it('moments off and hide.sections naming Memorable Moments: one mark on the GM page', () => {
     const marks = markedTexts(both.gm.read(...STORY_1.split('/'))).filter((m) => m.kind === 'sections' && /moments/i.test(m.label + m.text));
     assert.equal(marks.length, 1, JSON.stringify(marks.map((m) => m.label)));
     for (const m of MOMENTS) assert.ok(html(marks[0].text).includes(m), `${m} in the mark`);

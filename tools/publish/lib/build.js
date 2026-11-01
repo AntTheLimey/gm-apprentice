@@ -2253,7 +2253,7 @@ function buildSite(options) {
   // from that filtered set regardless of whether a manifest exists, so gating this on
   // `manifest` just meant a manifest-less player build shipped every GM-only image.
   // A recap's picture counts as used: the story pages are rendered once here, for the set only.
-  if (!onlySheets) buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages, warn: true });
+  if (!onlySheets) buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages, warn: true }, { marked: gm });
   const filteredMap = {};
   for (const [basename, entry] of Object.entries(imageMap)) {
     if (usedImages.has(basename)) filteredMap[basename] = entry;
@@ -2438,11 +2438,32 @@ function buildSite(options) {
   // landing page. Each prints words taken from many notes. `emit(out, html, said)` gets the
   // page's path on the site, its HTML and the line the build prints for it. `live` is the
   // build's own pass; the audit's pass (every note marked) asks for the pages again and
-  // skips what holds no note's words (a redirect) and what is a note's own page (a PC's story).
+  // skips what holds no note's words (a redirect) and what is a note's own page (a PC's story). A Story page also hands
+  // `emit` a 4th argument: the page it is written as (its address, and on the GM site the folded wrap-up's banner and
+  // hidden-fields panel).
   // The wrap-ups folded into each Story page (story-fold.js), by its address.
   const foldedOnto = new Map();
   for (const page of pages) {
     if (isFolded(page)) foldedOnto.set(page.outputPath, (foldedOnto.get(page.outputPath) || []).concat(page));
+  }
+  // What the GM Story page shows after the cards: the wrap-up's parts that go there (its GM Notes, its Source
+  // preamble), then a link to the session's Play Notes when they have a page.
+  function gmAfterHtml(unit) {
+    const parts = (unit.after || []).map((a) => a.html).join('\n');
+    const href = unit.kind === 'session' ? playNotesHrefOf(unit) : null;
+    if (href) unit.playNotesHref = href;
+    return (parts ? `<section class="story-gm-after">\n${parts}\n</section>` : '')
+      + (href ? `\n<p class="story-playnotes"><a href="${encodeHref(relativeHref(unit.outputPath, href))}">Play Notes for this session →</a></p>` : '');
+  }
+  // A session's Play Notes: the note its `documents.play_notes` names, else its wrap-up's `source_document`; the
+  // address of its page, or null when it has none.
+  function playNotesHrefOf(unit) {
+    const fmOf = (p) => (p && (p.sourceFrontmatter || p.frontmatter)) || {};
+    const docs = fmOf(unit.sourcePage).documents;
+    const ref = [docs && docs.play_notes, fmOf(unit.wrapUpPage).source_document].find((r) => typeof r === 'string' && r.trim());
+    if (!ref) return null;
+    const found = resolveSiteLink(ref.trim(), { linkMap });
+    return found.kind === 'page' ? found.href : null;
   }
   function eachListing(emit, live) {
     for (const [dir, label] of Object.entries(DIR_LABELS)) {
@@ -2484,19 +2505,30 @@ function buildSite(options) {
     }
 
     // The story: its chapters, each PC's own story, its contents page.
-    const spine = buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages });
+    // On the GM site each Story page reads its wrap-up's marked view: its GM-only parts in place, marked.
+    const spine = buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages }, { marked: gm });
     for (const unit of spine) {
       if (unit.moments) {
         const parsed = parseMoments(unit.moments.markdown);
-        unit.momentsHtml = momentsHtml(parsed, { title: unit.moments.title, unitKind: unit.kind });
+        const cards = momentsHtml(parsed, { title: unit.moments.title, unitKind: unit.kind });
+        // Moments the player site hides (the setting, hide.sections, a gm-only fence) are the GM site's cards inside
+        // the hiding run's own mark, a panel round the block (one per token: a panel's token stands alone).
+        const { hidden } = unit.moments;
+        const panels = (tokens) => (tokens.match(/\uE000[0-9a-z]+\uE001|\uE002/g) || []).map((t) => `<p>${t}</p>\n`).join('');
+        unit.momentsHtml = hidden && cards ? `${panels(hidden.open)}${cards}\n${panels(hidden.close)}` : cards;
         // A tag that names no kind is said once per note, on the player site's live pass.
         if (live && !gm && unit.wrapUpPage) {
           audit.momentKinds(vaultRelPathOf(unit.wrapUpPage), parsed.unknownTags, KINDS);
           for (const tag of parsed.unknownTags) console.warn(`  WARNING: ${vaultRelPathOf(unit.wrapUpPage)}: Memorable Moments: "#moment/${tag}" is not a kind (${KINDS.join(', ')}); the moment shows with no kind`);
         }
       }
+      if (gm) unit.afterHtml = gmAfterHtml(unit);
       const html = renderStoryUnit(unit, config, publishConfig, navFor);
-      emit(unit.outputPath, html, `  wrote ${unit.outputPath}`);
+      // The GM site writes the page with its folded wrap-up's banner and hidden-fields panel: nothing the wrap-up's
+      // own page showed is lost.
+      const folded = (foldedOnto.get(unit.outputPath) || [])[0];
+      emit(unit.outputPath, html, `  wrote ${unit.outputPath}`,
+        { outputPath: unit.outputPath, gmHiddenBecause: folded ? folded.gmHiddenBecause : null, gmHidden: folded ? folded.gmHidden : [] });
       // Each wrap-up folded into this page is read on it, as its own page was: its faults are its note's.
       if (live) for (const page of foldedOnto.get(unit.outputPath) || []) seen(vaultRelPathOf(page), html, page, false);
     }
@@ -2623,12 +2655,12 @@ function buildSite(options) {
   // Written, and read by the note-faults audit for a secret name. In memory nothing is
   // written, and every one of them is still made: what they print is part of the site.
   // A fast build writes none of them, and the audit's second pass over them is left out.
-  if (!onlySheets) eachListing((out, html, said) => {
+  if (!onlySheets) eachListing((out, html, said, page) => {
     if (!gm) audit.read(null, html, out);
     if (dry) return;
     const full = path.join(outputDir, out);
     ensureDir(full);
-    if (writeHtml(full, html)) console.log(said);
+    if (writeHtml(full, html, page)) console.log(said);
   }, true);
 
   // Each prop's files, read by the note-faults audit as they are written: a withheld name in a

@@ -1000,6 +1000,11 @@ article.moment-card a {
   border-bottom: 1px dotted var(--accent);
   text-decoration: none;
 }
+/* GM site only: the wrap-up's GM-only parts that follow the cards (its GM Notes, its Source), then its Play Notes. */
+section.story-gm-after {
+  max-width: 52rem;
+  margin: 1.5rem auto 0;
+}
 p.story-playnotes {
   max-width: 52rem;
   margin: 1.25rem auto 0;

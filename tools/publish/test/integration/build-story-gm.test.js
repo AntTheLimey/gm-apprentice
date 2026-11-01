@@ -49,8 +49,11 @@ describe('the GM Story page', () => {
       const page = read(site.gm, STORY_1);
       assert.ok(ascending(at(page, ['The party reached the docks', 'LOOT-KEY-1', 'class="story-moments"', 'MOMENT-FUNNY-1', 'GMSECRET-NOTES-1', 'Handoff to session-prep'])));
       const marks = markedTexts(page);
-      assert.ok(marks.some((m) => m.kind === 'gm_only_blocks' && m.text.includes('GMSECRET-NOTES-1') && m.text.includes('GM Notes')),
+      // The heading and its body each sit in the fence's own mark (story-sections.js), so every piece is balanced.
+      assert.ok(marks.some((m) => m.kind === 'gm_only_blocks' && m.text.includes('GMSECRET-NOTES-1')),
         JSON.stringify(marks.map((m) => [m.kind, m.text.slice(0, 60)])));
+      assert.ok(marks.some((m) => m.kind === 'gm_only_blocks' && m.text.trim() === 'GM Notes'));
+      assert.match(page, /<h2 id="gm-notes"><span class="gm-mark gm-mark--gm_only_blocks"/);
       // Nothing but the GM-only parts is marked: the recap, Loot and the cards are player text.
       for (const m of marks) for (const s of ['The party reached the docks', 'LOOT-KEY-1', 'MOMENT-FUNNY-1']) assert.ok(!m.text.includes(s), `${s} is marked`);
     });
@@ -118,6 +121,21 @@ describe('the GM Story page', () => {
     } finally { s.cleanup(); }
   });
 
+  it('a session\'s own recap (no wrap-up) shows its gm-only line in place, marked', () => {
+    const hub = SESSION(2).replace('HUB-BODY-2: what the GM prepped.\n',
+      '## Narrative Recap\n\nHUB-RECAP-2 opens.\n\n<!-- gm-only -->\nGMSECRET-HUB-2: the boat leaks.\n<!-- /gm-only -->\n\nHUB-RECAP-2 closes.\n');
+    const s = buildBoth(storyVault({ 'Sessions/Session 2 Wrap-Up.md': null, 'Sessions/Session 2.md': hub }));
+    try {
+      const p = 'story/chapter-1-docks-session-2.html';
+      const page = read(s.gm, p);
+      assert.ok(ascending(at(page, ['HUB-RECAP-2 opens.', 'GMSECRET-HUB-2', 'HUB-RECAP-2 closes.'])));
+      assert.ok(markedTexts(page).some((m) => m.kind === 'gm_only_blocks' && m.text.includes('GMSECRET-HUB-2') && !m.text.includes('closes')));
+      assert.equal(nestingFault(page), null);
+      assert.ok(read(s.player, p).includes('HUB-RECAP-2 closes.'));
+      for (const [file, text] of texts(s.player)) assert.ok(!text.includes('GMSECRET-HUB-2'), file);
+    } finally { s.cleanup(); }
+  });
+
   it('with no play_notes in the session, the wrap-up\'s source_document names the Play Notes', () => {
     const s = buildBoth(storyVault({ 'Sessions/Session 1.md': SESSION(1).replace(/\n {2}play_notes:[^\n]*/, '') }), { gm: { show: { notes: false } } });
     try {
@@ -174,6 +192,23 @@ describe('the GM Story page', () => {
         }
       } finally { s.cleanup(); }
     }
+  });
+});
+
+describe('the GM Story page with player_site.story.moments off', () => {
+  const s = buildBoth(storyVault(), { player: { story: { moments: false } } });
+  after(() => s.cleanup());
+
+  it('the cards sit in the setting\'s mark, GM Notes in the fence\'s alone, every mark balanced', () => {
+    const page = read(s.gm, STORY_1);
+    assert.equal(nestingFault(page), null);
+    assert.equal((page.match(/<article class="moment-card"/g) || []).length, 2);
+    const marks = markedTexts(page);
+    const notes = marks.filter((m) => m.text.includes('GMSECRET-NOTES-1'));
+    assert.deepEqual(notes.map((m) => m.kind), ['gm_only_blocks'], JSON.stringify(marks.map((m) => [m.kind, m.label])));
+    assert.ok(ascending(at(page, ['MOMENT-CONTEXT-1', 'GMSECRET-SOURCE-1', 'GMSECRET-NOTES-1', 'class="story-playnotes"'])));
+    for (const [file, text] of texts(s.gm)) assert.ok(!TOKEN.test(text), `a mark token in ${file}`);
+    assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.player.dir }).findings, []);
   });
 });
 
