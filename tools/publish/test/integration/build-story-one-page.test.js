@@ -67,7 +67,7 @@ describe('one page per session (#543)', () => {
     }
   });
 
-  it('the Story page carries the recap, then Loot, then the moments; no GM Notes text and no Source callout', { todo: 'Task 3/4: the Story page renders the wrap-up sections and the moments cards' }, () => {
+  it('the Story page carries the recap, then Loot, then the moments; no GM Notes text and no Source callout', () => {
     const html = site.player.read(...STORY_1.split('/'));
     const at = ['The party reached', '<h2 id="loot"', 'class="story-moments"'].map((s) => html.indexOf(s));
     assert.ok(at.every((i) => i >= 0), `all three present: ${at}`);
@@ -307,5 +307,26 @@ describe('the note audit reads a folded wrap-up on its Story page', () => {
     const found = faultsFor('They met Lord Zorn by the crane.');
     assert.equal(found.length, 1, JSON.stringify(found));
     assert.match(found[0].detail, /printed on the page/);
+  });
+});
+
+describe('Memorable Moments cards on the Story page', () => {
+  const wrap = WRAP_1.replace('#moment/epic*', '#moment/sad*').replace('#moment/funny*', '#moment/Funny*');
+  const site = buildBoth(storyVault({ 'Sessions/Session 1 Wrap-Up.md': wrap }));
+  after(() => site.cleanup());
+
+  it('cards show the moments as written, with the kind from the tag and the tag itself never printed', () => {
+    const html = site.player.read(...STORY_1.split('/'));
+    assert.match(html, /<p class="moment-kind" data-kind="funny">/);
+    assert.match(html, /2 from this session/);
+    assert.match(html, /MOMENT-QUOTE-1/);
+    assert.doesNotMatch(html, /#moment\//);
+  });
+
+  it('a tag that names no kind is warned once, with the note and the tag, and the card has no kind', () => {
+    const warned = site.logs.filter((l) => /Memorable Moments: "#moment\/sad"/.test(l));
+    assert.equal(warned.length, 1, site.logs.join('\n'));
+    assert.match(warned[0], /Session 1 Wrap-Up\.md: Memorable Moments: "#moment\/sad" is not a kind \(dramatic, intriguing, funny, epic, tragic\); the moment shows with no kind/);
+    assert.equal((site.player.read(...STORY_1.split('/')).match(/class="moment-kind"/g) || []).length, 1);
   });
 });

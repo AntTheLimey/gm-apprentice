@@ -29,6 +29,7 @@ const { real, resolveGmFolder, gmFolderProblem, insideGitWorkTree, gmPage, write
 const { createMarks, markKinds, sanitize, unmark, withoutMarked } = require('./gm-marks');
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
+const { KINDS, parseMoments, momentsHtml } = require('./story-moments');
 const { buildStorySpine, storyPagesFor, chapterOfSession, characterStoryGroup } = require('./story-spine');
 const { foldPlan, applyFold, isFolded, labelFoldedHeadings } = require('./story-fold');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
@@ -2483,6 +2484,14 @@ function buildSite(options) {
     // The story: its chapters, each PC's own story, its contents page.
     const spine = buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages });
     for (const unit of spine) {
+      if (unit.moments) {
+        const parsed = parseMoments(unit.moments.markdown);
+        unit.momentsHtml = momentsHtml(parsed, { title: unit.moments.title, unitKind: unit.kind });
+        // A tag that names no kind is said once per note, on the player site's live pass.
+        if (live && !gm && unit.wrapUpPage) {
+          for (const tag of parsed.unknownTags) console.warn(`  WARNING: ${vaultRelPathOf(unit.wrapUpPage)}: Memorable Moments: "#moment/${tag}" is not a kind (${KINDS.join(', ')}); the moment shows with no kind`);
+        }
+      }
       const html = renderStoryUnit(unit, config, publishConfig, navFor);
       emit(unit.outputPath, html, `  wrote ${unit.outputPath}`);
       // Each wrap-up folded into this page is read on it, as its own page was: its faults are its note's.

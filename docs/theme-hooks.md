@@ -47,6 +47,9 @@ These classes are on every site's pages, with nothing to turn on.
 | `.page-title` | The title of a section list, a story page or a plain note page (an `<h1>`) | `h1.page-title { letter-spacing: 0.05em; }` |
 | `.metadata-badge[data-field]` | One fact in a note's header; `data-field` names the field it shows (`event_type`, `in_game_date`, `session_number` ...) | `.metadata-badge[data-field="in_game_date"] { font-style: italic; }` |
 | `.landing-hero` | The landing page's title area: the campaign picture, title, tagline and dates | `.landing-hero h1 { font-size: 3rem; }` |
+| `section.story-moments` | The Memorable Moments block under a Story page's story, while `player_site.story.moments` is on, the default | `section.story-moments { border-top-style: dashed; }` |
+| `article.moment-card` | One moment's card in that block, while `player_site.story.moments` is on, the default | `article.moment-card { border-radius: 4px; }` |
+| `p.moment-kind[data-kind]` | A card's kind row (icon and label); `data-kind` is `dramatic`, `intriguing`, `funny`, `epic` or `tragic`. A card with no kind has none. While `player_site.story.moments` is on, the default | `p.moment-kind[data-kind="funny"] { letter-spacing: 0.2em; }` |
 
 <!-- /theme-hooks:always -->
 
