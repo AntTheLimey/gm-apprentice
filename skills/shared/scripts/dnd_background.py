@@ -70,6 +70,8 @@ DASH_RUN = re.compile(r"-{2,}")    # the site's typographer makes `--` and `---`
 # The typographer's symbols that change what a player meant: (c) (r) (tm) as © ® ™, any case, and +- as ±.
 SYMBOL = re.compile(r"\((?=(?:c|r|tm)\))", re.I)
 PLUS_MINUS = re.compile(r"\+-")
+QUESTION_RUN = re.compile(r"\?{4,}")   # the typographer makes ???? into ??? and ,, into ,
+COMMA_RUN = re.compile(r",{2,}")
 LEAD_MARK = re.compile(r"^([+\-])")
 LEAD_NUMBER = re.compile(r"^(\d+)([.)])")
 EOL = re.compile(r"\r\n|\n|\r")
@@ -115,18 +117,23 @@ def clean_text(text: str) -> str:
     return "".join(c for c in text if c == "\n" or unicodedata.category(c) != "Cc")
 
 
-def escape(text: str) -> str:
-    """Backslash-escape what markdown reads as syntax anywhere, and what it reads at a line's start."""
+def escape(text: str, legacy: bool = False) -> str:
+    """Backslash-escape what markdown reads as syntax anywhere, and what it reads at a line's start.
+
+    `legacy`: as releases before 1.10.112 escaped, leaving what the site's typographer changes
+    (dash runs, (c) (r) (tm), +-, ????, ,,). Only to recognise a fingerprint they remembered."""
     text = SYNTAX.sub(r"\\\1", text)
     text = "".join(ANGLES.get(c, c) for c in text)
-    text = DASH_RUN.sub(lambda m: "\\-" * len(m.group(0)), text)
-    text = SYMBOL.sub(r"\\(", text)
-    text = PLUS_MINUS.sub(r"+\\-", text)
+    if not legacy:
+        for run in (DASH_RUN, QUESTION_RUN, COMMA_RUN):
+            text = run.sub(lambda m: "".join("\\" + c for c in m.group(0)), text)
+        text = SYMBOL.sub(r"\\(", text)
+        text = PLUS_MINUS.sub(r"+\\-", text)
     text = LEAD_MARK.sub(r"\\\1", text)
     return LEAD_NUMBER.sub(r"\1\\\2", text)
 
 
-def from_plain(text: str) -> str:
+def from_plain(text: str, legacy: bool = False) -> str:
     """Plain source text as markdown that prints as typed.
 
     Blank lines split paragraphs; a line starting `-` or `*` and a space is a list item;
@@ -141,7 +148,7 @@ def from_plain(text: str) -> str:
         kind, shown = ("li", item.group(1).strip()) if item else ("p", line)
         if not blocks or blocks[-1][0] != kind:
             blocks.append((kind, []))
-        blocks[-1][1].append(escape(shown))
+        blocks[-1][1].append(escape(shown, legacy))
     out: list[str] = []
     for kind, lines in blocks:
         if kind == "li":
@@ -151,9 +158,9 @@ def from_plain(text: str) -> str:
     return "\n\n".join(out)
 
 
-def one_line(text: str) -> str:
+def one_line(text: str, legacy: bool = False) -> str:
     """Player text on a single line (for a bullet, a fact or a frontmatter value), escaped."""
-    return escape(" ".join(clean_text(text).split()))
+    return escape(" ".join(clean_text(text).split()), legacy)
 
 
 def fingerprint(text: str) -> str:
@@ -270,15 +277,17 @@ def held(part: str, span: Span | None) -> str:
 
 # --- what sync would write -----------------------------------------------------------------
 
-def source_parts(player_text: PlayerText) -> dict[str, str]:
-    """Each part as the markdown sync would write it; "" for a part the source leaves empty."""
-    shown = {k.title(): one_line(v) for k, v in player_text.facts.items()}
+def source_parts(player_text: PlayerText, legacy: bool = False) -> dict[str, str]:
+    """Each part as the markdown sync would write it; "" for a part the source leaves empty.
+    `legacy`: as releases before 1.10.112 wrote it (see `escape`)."""
+    shown = {k.title(): one_line(v, legacy) for k, v in player_text.facts.items()}
     facts = ""
     if any(shown.get(label) for label in FACTS):
         facts = " · ".join(f"**{label}:** {shown.get(label) or DASH}" for label in FACTS)
-    out = {"backstory": from_plain(player_text.backstory), "appearance": from_plain(player_text.appearance), "facts": facts}
+    out = {"backstory": from_plain(player_text.backstory, legacy),
+           "appearance": from_plain(player_text.appearance, legacy), "facts": facts}
     for p in BULLETS:
-        out[p] = one_line(getattr(player_text, p))
+        out[p] = one_line(getattr(player_text, p), legacy)
     return out
 
 
@@ -351,6 +360,8 @@ def plan_background(text: str, player_text: PlayerText, last: dict[str, tuple[st
     parts = note_parts(text)
     subs = _subsections(lines)
     source = source_parts(player_text)
+    # The same source as an earlier release escaped it: a remembered fingerprint of that is no player change.
+    legacy = source_parts(player_text, legacy=True)
     rows: list[tuple[str, str, str]] = []
     edits: list[tuple[int, int, list[str]]] = []
     fresh: dict[str, str] = {}                      # part -> the source fingerprint to record
@@ -371,6 +382,7 @@ def plan_background(text: str, player_text: PlayerText, last: dict[str, tuple[st
                 rows.append(("CHECK", locus, f"{gap}; run the vault upgrade (migrate.py), nothing was written"))
             continue
         now, source_fp, note_fp = held(part, span), fingerprint(want), fingerprint(held(part, span))
+        legacy_fp = fingerprint(legacy[part])
         same = reading(now) == reading(want)        # the note says what the player wrote, escaped or not
         entry = memory.get(part)
         if entry is None:
@@ -387,14 +399,19 @@ def plan_background(text: str, player_text: PlayerText, last: dict[str, tuple[st
                 fresh[part] = source_fp
         elif same:
             if entry[0] == entry[1] == note_fp != source_fp:
-                # Still exactly what sync wrote (source and note were one text), but escaped by an older
-                # release (bare dash runs and (c) (r) (tm) +-, #484): the same words, rewritten so they print as typed. A
-                # hand copy that reads the same (its two fingerprints differ) is left as the GM wrote it.
-                rows.append(("WRITE", locus, "the same words, escaped so they print as typed"))
+                # Still exactly what sync wrote (source and note were one text), and the source now reads the
+                # same but is written differently: escaped by an older release (#484), or the player changed
+                # only the layout. Rewritten as the source has it; a hand copy that reads the same (its two
+                # fingerprints differ) is left as the GM wrote it.
+                escaped = entry[0] == legacy_fp
+                rows.append(("WRITE", locus, "the same words, escaped so they print as typed" if escaped
+                             else _wrote(part, want)))
                 edits.append((span.start, span.end, _replacement(part, span, want, lines, eol)))
             fresh[part] = source_fp                 # the note already says what the source says: settled
         elif entry[0] == source_fp:
             keep[part] = entry                      # nothing new at the source; the note is the GM's
+        elif entry[0] == legacy_fp:
+            keep[part] = (source_fp, entry[1])      # the same source, remembered in an older release's escaping
         elif entry[1] == note_fp:
             if want:
                 rows.append(("WRITE", locus, _wrote(part, want)))
