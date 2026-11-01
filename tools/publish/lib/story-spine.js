@@ -226,7 +226,8 @@ function buildStorySpine(pages, linkMap, pairs, images = null) {
     const sessionUnits = [];
     for (const s of chapterSessions) {
       const id = `${chSlug}-${slugify(s.title)}`;
-      const recap = resolveUnitRecap(s, wrapUpForUnit(s, wrapUps, idx, pairs), resolverFor(unitOutputPath(id)));
+      const wrapUp = wrapUpForUnit(s, wrapUps, idx, pairs);
+      const recap = resolveUnitRecap(s, wrapUp, resolverFor(unitOutputPath(id)));
       if (!recap) continue;
       sessionUnits.push({
         kind: 'session', id, outputPath: unitOutputPath(id),
@@ -234,7 +235,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null) {
         chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
         // recap TEXT can come from a wrap-up, but ref metadata (participants/location) is
         // read from the unit's OWN page — the wrap-up typically doesn't carry those fields.
-        recapHtml: recap.html, sourcePage: s,
+        recapHtml: recap.html, sourcePage: s, wrapUpPage: wrapUp || null,
       });
     }
 
@@ -245,7 +246,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null) {
           kind: 'chapter-intro', id, outputPath: unitOutputPath(id),
           title: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
           chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
-          recapHtml: chapterRecap.html, sourcePage: chapter,
+          recapHtml: chapterRecap.html, sourcePage: chapter, wrapUpPage: chapterWrap || null,
         });
       }
       units.push(...sessionUnits);
@@ -255,7 +256,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null) {
         kind: 'chapter', id, outputPath: unitOutputPath(id),
         title: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
         chapterTitle: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
-        recapHtml: chapterRecap.html, sourcePage: chapter,
+        recapHtml: chapterRecap.html, sourcePage: chapter, wrapUpPage: chapterWrap || null,
       });
     }
   }
@@ -267,6 +268,21 @@ function buildStorySpine(pages, linkMap, pairs, images = null) {
   return units;
 }
 
+// The Story page that tells each page's part of the saga: a Map from a session or chapter page, and from the
+// wrap-up its Story page was made from, to that Story page's outputPath. Built once from the spine and handed to
+// whatever links "the session" (the landing page's Read full session, #541). A session's own Story page wins over
+// a chapter's when one wrap-up feeds both.
+function storyPagesFor(spine) {
+  const out = new Map();
+  for (const unit of spine || []) {
+    out.set(unit.sourcePage, unit.outputPath);
+    if (unit.wrapUpPage && (unit.kind === 'session' || !out.has(unit.wrapUpPage))) {
+      out.set(unit.wrapUpPage, unit.outputPath);
+    }
+  }
+  return out;
+}
+
 // `fallen` is `vault.statuses.fallen` (config.js); a missing list throws rather than meaning "nobody".
 function characterStoryGroup(frontmatter, fallen) {
   const s = String((frontmatter || {}).status || '').trim().toLowerCase();
@@ -275,4 +291,4 @@ function characterStoryGroup(frontmatter, fallen) {
   return 'current';
 }
 
-module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOfSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, orderedSessions, unitRefs, characterStoryGroup };
+module.exports = { findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOfSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, storyPagesFor, orderedSessions, unitRefs, characterStoryGroup };

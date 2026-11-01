@@ -52,3 +52,20 @@ describe('landingTemplate — campaign overview metadata', () => {
     assert.ok(/Sessions<\/span>\s*1/.test(html), 'session count falls back to counting played/reviewed pages');
   });
 });
+
+describe('landingTemplate — Read full session (#541)', () => {
+  const linkOf = (html) => (html.match(/<a class="recap-link" href="([^"]+)"/) || [])[1];
+
+  it('goes to the Story page the lookup gives for the latest session', () => {
+    const session = sessionPage();
+    const html = landingTemplate([session], navFor, config, publishConfig, {}, [overviewPage(), session], null,
+      new Map([[session, 'story/c4-give-rest.html']]));
+    assert.equal(linkOf(html), 'story/c4-give-rest.html');
+  });
+
+  it('goes to the session note when the lookup has no Story page for it', () => {
+    const session = sessionPage();
+    const html = landingTemplate([session], navFor, config, publishConfig, {}, [overviewPage(), session], null, new Map());
+    assert.equal(linkOf(html), 'chapters/c4/session-03-give-rest.html');
+  });
+});
