@@ -125,6 +125,14 @@ class SourceFenceTests(unittest.TestCase):
         run(mv.find_wrapup_source_fence(v))
         self.assertEqual(raw(v, WRAP), note.replace(lazy, OPEN + lazy + CLOSE))
 
+    def test_a_paragraph_after_a_blank_quoted_line_is_player_text(self):
+        for blank in (">\n", ">   \n"):
+            quoted = CALLOUT + blank
+            note = FM + HEAD + quoted + "Player paragraph.\n" + RECAP
+            v = make_vault(self, {WRAP: note})
+            run(mv.find_wrapup_source_fence(v))
+            self.assertEqual(raw(v, WRAP), note.replace(quoted, OPEN + quoted + CLOSE), repr(blank))
+
     def test_a_heading_or_list_right_after_is_not_swallowed(self):
         for after in ("## Narrative Recap\n", "- a list\n", "---\n", "```\ncode\n```\n",
                       "<!-- gm-only -->\nx\n<!-- /gm-only -->\n"):

@@ -1683,7 +1683,9 @@ def _fence_source(text: str) -> str | None:
                    and states[j].line.lstrip().startswith(">")):
                 j += 1
             # Lazy continuation: markdown keeps a plain line after a quote inside it, up to a blank line.
-            while (j < len(states) and not states[j].in_code and states[j].line.strip()
+            # A blank quoted line ends the paragraph inside the quote, so nothing continues lazily after it.
+            ended = states[j - 1].line.lstrip()[1:].strip() == ""
+            while (not ended and j < len(states) and not states[j].in_code and states[j].line.strip()
                    and not BLOCK_START_RE.match(states[j].line)):
                 j += 1
             spans.append((s.lineno - 1, states[j - 1].lineno - 1))
