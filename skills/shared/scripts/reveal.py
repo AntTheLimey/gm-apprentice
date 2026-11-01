@@ -24,7 +24,9 @@ path that does not end up publishing keeps its `withheld` and gets no
 `revealed_in`. When `explain` cannot be asked, a WARNING row says so and
 nothing is stamped; publishing goes ahead. A WARNING row also names each
 note the site makes no page for (a folder outside the folder map); a prop
-there is stamped all the same, and the row says so. Prep notes
+there is stamped all the same, and the row says so. A note that says
+`publish: false` (or `none`) is refused with an ERROR row: not published,
+stamped or logged. Prep notes
 (sessions, plans, scenes, play notes, wrap-ups, chapters, `_meta/`) are
 never published here. With no site to publish through, `--publish` is
 refused; `--released` still logs.
@@ -52,7 +54,7 @@ from vault_check import _site_config, ask_publish_tool  # noqa: E402
 from vault_write import set_block  # noqa: E402
 from vaultlib import (  # noqa: E402
     WITHHELD_KEY_RE, PublishToolUnavailable, entity_type, extract_frontmatter,
-    frontmatter_span, normalize_file_arg, note_withheld, scalar_value)
+    frontmatter_span, normalize_file_arg, note_withheld, publish_mode, scalar_value)
 
 LOG = "_meta/reveals.json"
 EMPTY_VALUES = ("", "[]", "null", "~")     # YAML's empty values, as scalar_value reads them
@@ -144,9 +146,17 @@ def _refusal(vault: Path, rel: str) -> str | None:
         full.resolve().relative_to(vault.resolve())
     except ValueError:
         return "outside the vault"
-    kind = entity_type(extract_frontmatter(full.read_text(encoding="utf-8")))
+    fm = extract_frontmatter(full.read_text(encoding="utf-8"))
+    kind = entity_type(fm)
     if kind in NEVER_CANDIDATES:
         return f"a {kind} note is prep or structure; it never publishes"
+    # Decided from the note itself, before any tool call: the tool's verdict
+    # for such a note can read MANIFEST_UNLISTED, or fail altogether.
+    if publish_mode(fm) == "none":
+        said = "none" if "none" in str((fm or {}).get("publish")).lower() else "false"
+        return (f"not published, nothing changed: the note says publish: {said}, "
+                f"so the site would never show it. Clear it in the note first "
+                f"(the GM's own mark), then reveal it")
     return None
 
 
@@ -271,11 +281,13 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
         row("ERROR", path, why)
 
     wanted: list[str] = []
+    refused: set[str] = set()
     for raw in publish:
         rel = normalize_file_arg(raw)
         why = _refusal(vault, rel)
         if why:
             error(rel, why)
+            refused.add(rel)
         elif rel not in wanted:
             wanted.append(rel)
     if wanted and _site_config(vault)[0] is None:
@@ -391,7 +403,10 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
                 if rel in unstamped:
                     row("SKIP", rel, unstamped[rel])
 
-    items = [{"page": normalize_file_arg(p), "what": w} for p, w in released]
+    # What came out on a page that was refused is not logged either.
+    refused_paths = {os.path.normpath(r) for r in refused}
+    items = [{"page": normalize_file_arg(p), "what": w} for p, w in released
+             if os.path.normpath(normalize_file_arg(p)) not in refused_paths]
     if published or items:
         counts["log"] = 1
         row("LOGGED" if write else "WOULD-LOG", LOG,

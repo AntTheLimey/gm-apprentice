@@ -23,7 +23,7 @@ against `check_index` holds even for content the generator can't file
 anywhere sensible.
 
 Usage:
-  index_build.py VAULT [--write] [--date YYYY-MM-DD]
+  index_build.py VAULT [--write] [--force] [--date YYYY-MM-DD]
 
 Default prints a unified diff between the current `_meta/index.md` and
 the freshly rendered text (or the whole rendered text if no index exists
@@ -45,11 +45,13 @@ from typing import TypedDict
 
 from schema_rules import SESSION_NOT_YET_RUN
 from vaultlib import (
+    FRONTMATTER_RE,
     WRAP_UP_TYPES,
     chapter_key,
     chapter_of,
     entity_type,
     extract_frontmatter,
+    scalar_value,
     nested_mapping,
     normalize,
     parse_session_number,
@@ -611,11 +613,31 @@ def _read_existing(index_path: Path) -> tuple[str, str]:
     return text, eol
 
 
+def _is_generated(text: str) -> bool:
+    """True when `text` is safe to rewrite: empty, or carrying the
+    `purpose: vault-index` marker `render` writes as a top-level field of a
+    closed frontmatter block (quoted or not, with or without a byte-order
+    mark)."""
+    text = text.removeprefix("\ufeff")
+    if not text.strip():
+        return True
+    fm = FRONTMATTER_RE.match(text)
+    if fm is None:
+        return False
+    for ln in fm.group(1).splitlines():
+        key, _, value = ln.partition(":")
+        if key.rstrip() == "purpose" and scalar_value(value) == "vault-index":
+            return True
+    return False
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("vault", type=Path)
     parser.add_argument("--write", action="store_true",
                         help="apply the rendered index (default: dry run)")
+    parser.add_argument("--force", action="store_true",
+                        help="replace an _meta/index.md this tool did not make")
     parser.add_argument("--date", help="override today's date (YYYY-MM-DD)")
     args = parser.parse_args(argv)
 
@@ -627,6 +649,12 @@ def main(argv: list[str] | None = None) -> int:
     eol = "\n"
     if index_path.is_file():
         previous, eol = _read_existing(index_path)
+        if not args.force and not _is_generated(previous):
+            print(f"{index_path} was not made by this tool (it has no "
+                  "`purpose: vault-index` line), so it was left alone. If it "
+                  "is the GM's own index, keep it. Ask the GM before using "
+                  "--force: it replaces their text with a generated index.", file=sys.stderr)
+            return 1
 
     rendered = render(vault, today=today, previous=previous)
     entity_count, narrative_count, stub_count = _counts_from_rendered(rendered)

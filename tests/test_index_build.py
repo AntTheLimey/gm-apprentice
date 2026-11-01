@@ -290,6 +290,70 @@ class RoundTripTests(unittest.TestCase):
         self.assertEqual(rows, [])
 
 
+class HandWrittenIndexTests(unittest.TestCase):
+    HAND = "---\ntype: meta\n---\n# My own index\nGM prose here\n"
+
+    def _hand_written(self) -> Path:
+        copy = copy_fixture(self)
+        write(copy, "_meta/index.md", self.HAND)
+        return copy
+
+    def test_write_refuses_and_keeps_the_gms_file(self):
+        copy = self._hand_written()
+        result = run_cli(copy, "--write", "--date", TODAY)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual((copy / "_meta" / "index.md").read_text(encoding="utf-8"), self.HAND)
+        self.assertIn("--force", result.stderr)
+        self.assertIn("not made by this tool", result.stderr)
+
+    def test_dry_run_says_the_same(self):
+        copy = self._hand_written()
+        result = run_cli(copy, "--date", TODAY)
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("--force", result.stderr)
+
+    def test_force_overwrites(self):
+        copy = self._hand_written()
+        result = run_cli(copy, "--write", "--force", "--date", TODAY)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("purpose: vault-index",
+                      (copy / "_meta" / "index.md").read_text(encoding="utf-8"))
+
+    def test_message_says_to_ask_the_gm_before_force(self):
+        result = run_cli(self._hand_written(), "--write", "--date", TODAY)
+        self.assertIn("Ask the GM before using --force", result.stderr)
+
+    def test_quoted_marker_bom_and_empty_file_count_as_safe(self):
+        generated = ib.render(FIX, today=TODAY, previous=None)
+        for label, text in (
+                ("quoted", generated.replace("purpose: vault-index",
+                                             'purpose: "vault-index"')),
+                ("bom", "\ufeff" + generated),
+                ("empty", ""),
+                ("blank", "\n\n")):
+            with self.subTest(label=label):
+                copy = copy_fixture(self)
+                (copy / "_meta" / "index.md").write_bytes(text.encode("utf-8"))
+                result = run_cli(copy, "--write", "--date", TODAY)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_nested_or_unclosed_marker_is_not_the_tools(self):
+        for label, text in (
+                ("nested", "---\nmeta:\n  purpose: vault-index\n---\n# Mine\nGM prose\n"),
+                ("unclosed", "---\ntitle: Mine\npurpose: vault-index\n# Mine\nGM prose\n")):
+            with self.subTest(label=label):
+                copy = copy_fixture(self)
+                write(copy, "_meta/index.md", text)
+                result = run_cli(copy, "--write", "--date", TODAY)
+                self.assertEqual(result.returncode, 1, result.stderr)
+                self.assertEqual((copy / "_meta" / "index.md").read_text(encoding="utf-8"), text)
+
+    def test_tool_made_index_still_rewrites(self):
+        copy = copy_fixture(self)
+        self.assertEqual(run_cli(copy, "--write", "--date", TODAY).returncode, 0)
+        self.assertEqual(run_cli(copy, "--write", "--date", TODAY).returncode, 0)
+
+
 class FlatVaultTests(unittest.TestCase):
     """C2: a flat vault — no `Chapters/` folder, no `chapter:` link on
     its sessions/scenes — must not silently drop them. They surface in
