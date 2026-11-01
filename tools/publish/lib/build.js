@@ -318,10 +318,7 @@ function buildSite(options) {
   // A page is never written through a link in the site folder (a kept folder that is a link may lead
   // into the vault): such a page is skipped with a warning, and false is returned (#507).
   function writeHtml(full, html, page, { gmCssHref = null } = {}) {
-    if (linkOnPath(full)) {
-      printWarning(`${outRel(full)} was not written: a folder on its path in the site folder is a link`);
-      return false;
-    }
+    if (linkOnPath(full)) { refuseLinked(full); return false; }
     fs.writeFileSync(full, gm ? gmPage(html, {
       marks: mark.marks, hiddenBecause: page && page.gmHiddenBecause, hidden: page && page.gmHidden,
       linkMap: publishConfig._linkMap || {}, from: (page && page.outputPath) || '', gmCssHref,
@@ -474,7 +471,29 @@ function buildSite(options) {
     ignoreCacheInGit(configDir);
   }
 
-  // No folder is made through a link in the site folder: what is written there next is refused.
+  // Every file the build writes into the site folder goes through writeHtml, writeOut or copyOut (#507): one whose path
+  // leads through a link in the site folder (a kept folder that is a link may lead into the vault) is not written, is
+  // said, and is an error of the build, so the deploy waits until the link is replaced with a real folder.
+  const linkRefusals = [];
+  function refuseLinked(full) {
+    const rel = outRel(full);
+    printWarning(`${rel} was not written: a folder on its path in the site folder is a link`);
+    linkRefusals.push(`${rel}: not written, a folder on its path in the site folder is a link (replace the link with a real folder)`);
+  }
+  function writeOut(full, data) {
+    if (linkOnPath(full)) { refuseLinked(full); return false; }
+    ensureDir(full);
+    fs.writeFileSync(full, data);
+    return true;
+  }
+  function copyOut(from, full) {
+    if (linkOnPath(full)) { refuseLinked(full); return false; }
+    ensureDir(full);
+    fs.copyFileSync(from, full);
+    return true;
+  }
+
+  // No folder is made through a link in the site folder: the write that follows is refused by the writers above.
   function ensureDir(filePath) {
     if (linkOnPath(filePath)) return;
     const dir = path.dirname(filePath);
@@ -488,7 +507,7 @@ function buildSite(options) {
     const src = path.join(__dirname, '../css/style.css');
     const dest = path.join(outputDir, 'css/style.css');
     ensureDir(dest);
-    fs.writeFileSync(dest, scopeColorScheme(fs.readFileSync(src, 'utf8')));
+    writeOut(dest, scopeColorScheme(fs.readFileSync(src, 'utf8')));
   }
 
   // The GM site's own files: the band and mark styles, and a robots.txt that asks every crawler to stay out.
@@ -496,8 +515,8 @@ function buildSite(options) {
     if (writes !== 'all' || !gm) return;
     const dest = path.join(outputDir, 'css/gm.css');
     ensureDir(dest);
-    fs.writeFileSync(dest, scopeColorScheme(fs.readFileSync(path.join(__dirname, '../css/gm.css'), 'utf8')));
-    fs.writeFileSync(path.join(outputDir, 'robots.txt'), ROBOTS_TXT);
+    writeOut(dest, scopeColorScheme(fs.readFileSync(path.join(__dirname, '../css/gm.css'), 'utf8')));
+    writeOut(path.join(outputDir, 'robots.txt'), ROBOTS_TXT);
     console.log('  wrote css/gm.css and robots.txt');
   }
 
@@ -524,7 +543,7 @@ function buildSite(options) {
         .filter((line) => !GOOGLE_FONTS_IMPORT_RE.test(line.trim()))
         .join('\n');
     }
-    fs.writeFileSync(dest, scopeColorScheme(css));
+    writeOut(dest, scopeColorScheme(css));
     console.log(`  wrote css/themes/${genrePreset}.css`);
   }
 
@@ -541,7 +560,7 @@ function buildSite(options) {
     // Output inside the site dir: never rewrite the GM's own source file.
     if (path.resolve(src) === path.resolve(dest)) return true;
     ensureDir(dest);
-    fs.writeFileSync(dest, scopeColorScheme(fs.readFileSync(src, 'utf8')));
+    writeOut(dest, scopeColorScheme(fs.readFileSync(src, 'utf8')));
     console.log('  wrote css/overrides.css');
     return true;
   }
@@ -592,7 +611,7 @@ function buildSite(options) {
       for (const [name, { found }] of kept) {
         const dest = path.join(outputDir, ...EXTRA_CSS_DIR.split('/'), name);
         ensureDir(dest);
-        fs.writeFileSync(dest, scopeColorScheme(fs.readFileSync(found, 'utf8')));
+        writeOut(dest, scopeColorScheme(fs.readFileSync(found, 'utf8')));
         console.log(`  wrote ${EXTRA_CSS_DIR}/${name}`);
       }
     }
@@ -607,7 +626,7 @@ function buildSite(options) {
   function copyOneJS(file) {
     const dest = path.join(outputDir, 'js', file);
     ensureDir(dest);
-    fs.copyFileSync(path.join(__dirname, '../js', file), dest);
+    copyOut(path.join(__dirname, '../js', file), dest);
     console.log(`  wrote js/${file}`);
   }
   function copyJS() {
@@ -669,7 +688,7 @@ function buildSite(options) {
       fontsWritten.add(f.rel);
       const dest = path.join(outputDir, 'fonts', f.rel);
       ensureDir(dest);
-      fs.copyFileSync(f.from, dest);
+      copyOut(f.from, dest);
       if (f.family && !servedGoogleFonts.has(f.family)) servedGoogleFonts.set(f.family, { folder: f.rel.split('/')[0], from: f.from });
       console.log(`  wrote fonts/${f.rel}`);
     }
@@ -685,7 +704,7 @@ function buildSite(options) {
     const css = scopeColorScheme(generateThemeCSS(publishConfig.theme, { selfHostCss: selfHostedFonts().css }));
     const dest = path.join(outputDir, 'css/theme.css');
     ensureDir(dest);
-    fs.writeFileSync(dest, css);
+    writeOut(dest, css);
     console.log('  wrote css/theme.css');
   }
 
@@ -732,7 +751,7 @@ function buildSite(options) {
         continue;
       }
       ensureDir(dest);
-      fs.copyFileSync(vaultFontPath, dest);
+      copyOut(vaultFontPath, dest);
       if (!servedLocalFonts.includes(outPath)) servedLocalFonts.push(outPath);
       console.log(`  wrote fonts/${outPath}`);
     }
@@ -740,7 +759,7 @@ function buildSite(options) {
 
   function writeNoJekyll() {
     if (writes !== 'all') return;
-    fs.writeFileSync(path.join(outputDir, '.nojekyll'), '');
+    writeOut(path.join(outputDir, '.nojekyll'), '');
   }
 
   function write404() {
@@ -770,7 +789,7 @@ function buildSite(options) {
     for (const entry of Object.values(imageMap)) {
       const dest = path.join(outputDir, 'images', entry.relPath);
       ensureDir(dest);
-      fs.copyFileSync(entry.encodedPath || entry.sourcePath, dest);
+      copyOut(entry.encodedPath || entry.sourcePath, dest);
     }
     console.log(`Copied ${Object.keys(imageMap).length} images`);
   }
@@ -948,6 +967,16 @@ function buildSite(options) {
   // Which notes get no page is decided once, for this site: a listed-only prop is judged on the body this site shows.
   decideNoPage(published, gm ? { gm: true, show, excludeSections, excludeCallouts } : { excludeSections, excludeCallouts });
   pages = published.filter(p => !getsNoPage(p));
+  // A page whose address leads through a link in a kept folder (a full build's clean leaves only those; a fast build
+  // cleans nothing) is never written (#507). It leaves the list here, like an unpublished note, so no link, index or
+  // search entry names a page the site does not have; the build counts it an error.
+  const linkedOut = (out) => (writes === 'sheets' || (!gm && config.preserveDirs.some((d) => d.toLowerCase() === String(out).split('/')[0].toLowerCase())))
+    && linkOnPath(path.join(outputDir, ...String(out).split('/')));
+  pages = pages.filter((p) => {
+    if (!p.outputPath || !linkedOut(p.outputPath)) return true;
+    refuseLinked(path.join(outputDir, ...p.outputPath.split('/')));
+    return false;
+  });
   // The props a container lists with no page of their own (previews.js listedOnly): its listing and state file show
   // them, from their published frontmatter (reduced with the pages' below).
   const listedOnlyPages = published.filter((p) => listedOnly(p));
@@ -1481,7 +1510,7 @@ function buildSite(options) {
         const { from, outRel } = encodedAsset(vaultImgPath, 'images/' + path.basename(imgVal));
         const dest = path.join(outputDir, outRel);
         ensureDir(dest);
-        fs.copyFileSync(from, dest);
+        copyOut(from, dest);
         assetOutRel.set(vaultImgPath, outRel);
         publishConfig.theme.campaign_image = outRel;
         console.log(`  copied campaign image → ${outRel}`);
@@ -1498,7 +1527,7 @@ function buildSite(options) {
   } else if (searchData) {
     const searchDest = path.join(outputDir, 'search-index.json');
     const searchJson = jsonText(searchData);
-    fs.writeFileSync(searchDest, searchJson);
+    writeOut(searchDest, searchJson);
     console.log('  wrote search-index.json');
     // The text the player index is made from, kept beside the site for the leak gate (index-text.js). Not for a
     // preview's folder: the site's own index is the one deploy checks.
@@ -1511,7 +1540,7 @@ function buildSite(options) {
     const lunrSrc = require.resolve('lunr');
     const lunrDest = path.join(outputDir, 'js', 'lunr.js');
     ensureDir(lunrDest);
-    fs.copyFileSync(lunrSrc, lunrDest);
+    copyOut(lunrSrc, lunrDest);
     console.log('  wrote js/lunr.js');
   } else {
     console.log('  search disabled — skipping search-index.json');
@@ -2090,7 +2119,7 @@ function buildSite(options) {
       warned = true;
       console.warn(`  WARNING: the typefaces for the sheet skins are not in the vault's font cache and could not be downloaded; the skins use fallback type. ${fontsLib.missAdvice(options.offline === true)}`);
     }, { offline: options.offline === true });
-    fs.writeFileSync(dest, faces.css + scopeColorScheme(skinsCss([...dressedSkins])));
+    writeOut(dest, faces.css + scopeColorScheme(skinsCss([...dressedSkins])));
     console.log('  wrote css/skins.css');
     copyFontFiles(faces.files);
   }
@@ -2150,7 +2179,7 @@ function buildSite(options) {
     }
     if (writes === 'all') {
       const built = onlyBuiltPages(cards, (key) => fs.existsSync(path.join(outputDir, ...key.split('/'))));
-      fs.writeFileSync(path.join(outputDir, 'previews.json'), jsonText(built));
+      writeOut(path.join(outputDir, 'previews.json'), jsonText(built));
       console.log('  wrote previews.json');
     }
   }
@@ -2171,7 +2200,7 @@ function buildSite(options) {
     for (const key of bannerLinks) {
       const dest = path.join(outputDir, 'images', scannedRel.get(key));
       ensureDir(dest);
-      fs.copyFileSync(imageMap[key].sourcePath, dest);
+      copyOut(imageMap[key].sourcePath, dest);
     }
   }
   const suffix = campaignImageCopied ? ' (+ campaign image)' : '';
@@ -2216,7 +2245,7 @@ function buildSite(options) {
     const { from, outRel } = picture ? encodedAsset(sourceFull, asIs, claimed) : { from: sourceFull, outRel: asIs };
     const dest = path.join(outputDir, outRel);
     ensureDir(dest);
-    fs.copyFileSync(from, dest);
+    copyOut(from, dest);
     if (picture) assetOutRel.set(sourceFull, outRel);
     return outRel;
   }
@@ -2591,7 +2620,7 @@ function buildSite(options) {
       ensureDir(full);
       const replaced = f.replacesKept && fs.existsSync(full);
       if (f.isPage) writeHtml(full, f.text, propPlan.props.find((p) => p.rel === f.rel).page, { gmCssHref: f.made ? encodeHref(relativeHref(f.out, 'css/gm.css')) : null });
-      else fs.writeFileSync(full, f.text !== undefined ? f.text : f.bytes);
+      else writeOut(full, f.text !== undefined ? f.text : f.bytes);
       keptWrote(f.out, f.text !== undefined ? f.text : f.bytes);
       console.log(`  wrote ${f.out}`);
       if (f.was) console.log(`  ${f.out}: written as UTF-8 (it was ${f.was})`);
@@ -2618,7 +2647,7 @@ function buildSite(options) {
       }
       const full = path.join(outputDir, ...out.split('/'));
       ensureDir(full);
-      fs.writeFileSync(full, data);
+      writeOut(full, data);
       keptWrote(out, data);
       written += 1;
       console.log(`  wrote ${out}`);
@@ -2652,7 +2681,7 @@ function buildSite(options) {
       if (!licence) console.warn(`  WARNING: the licence of the font "${family}" (fonts/${folder}/) could not be read from its file; NOTICE.txt points to its licence page on Google Fonts instead`);
       return { family, folder, copyright: names ? names.copyright : null, licence };
     });
-    fs.writeFileSync(path.join(outputDir, 'NOTICE.txt'), noticeText({ lunr: !!searchData, styles, googleFonts, localFonts: servedLocalFonts }));
+    writeOut(path.join(outputDir, 'NOTICE.txt'), noticeText({ lunr: !!searchData, styles, googleFonts, localFonts: servedLocalFonts }));
     console.log('  wrote NOTICE.txt');
   }
 
@@ -2789,6 +2818,9 @@ function buildSite(options) {
   if (imagesTmpDir) fs.rmSync(imagesTmpDir, { recursive: true, force: true });
 
   // Every file is written: the after steps run, then the check of the notes and "Done!".
+  // What was not written through a link is an error of the build: the deploy waits (#507).
+  errorCount += linkRefusals.length;
+  renderErrors.push(...linkRefusals);
   if (runningSteps && errorCount === 0 && publishConfig.steps.after.length) runSteps(publishConfig.steps.after, { cwd: configDir, label: 'after_build', log: options.stepsLog, stdio: options.stepsStdio, extraEnv: stepEnv });
   if (!gm) for (const pc of tohitRows) audit.calculator(pc.rel, pc.rows);
   if (!gm) for (const t of tableRows) audit.calculator(t.rel, t.rows);
