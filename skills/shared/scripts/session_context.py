@@ -96,7 +96,8 @@ import scene_queue
 from schema_rules import (SESSION_PLAYED, chapter_key, chapter_of,
                           extract_frontmatter, parse_session_number,
                           wikilink_target)
-from vaultlib import (GM_MARKER_RE, is_out_of_play, out_of_play,  # noqa: F401
+from vaultlib import (GM_MARKER_RE, is_active_pc,  # noqa: F401
+                      is_out_of_play, out_of_play,
                       report_unreadable_settings, setting_or_builtin,
                       SKIP_DIRS, WRAP_UP_TYPES, body_of, entity_type,
                       fenced_headings, h3_blocks, nested_mapping,
@@ -579,8 +580,7 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
     not_playing = out_of_play(vault)
     stale_after = setting_or_builtin(vault, "vault.stale_after_sessions")
     pcs = [(rel, text) for rel, text, fm in files
-           if fm.get("type") == "pc" and not rel.endswith("_Story.md")
-           and not is_out_of_play(fm, not_playing)]
+           if is_active_pc(rel, fm, not_playing)]
 
     # Unresolved bullets a PC thread actually matched, keyed by (session,
     # bullet text) — everything else is reported as an orphan below.
@@ -808,8 +808,7 @@ def arcs_report(files, chapter, upcoming: int, vault: Path) -> str:
 
     not_playing = out_of_play(vault)
     pcs = [(rel, text, fm) for rel, text, fm in files
-           if fm.get("type") == "pc" and not rel.endswith("_Story.md")
-           and not is_out_of_play(fm, not_playing)]
+           if is_active_pc(rel, fm, not_playing)]
 
     def since(last: int | None, label: str) -> str:
         if last is None:
@@ -1422,9 +1421,7 @@ def main() -> int:
     not_playing = out_of_play(args.vault)
     found_pc = False
     for rel, text, fm in files:
-        if fm.get("type") != "pc" or rel.endswith("_Story.md"):
-            continue
-        if is_out_of_play(fm, not_playing):
+        if not is_active_pc(rel, fm, not_playing):
             continue
         found_pc = True
         as_of = fm.get("asOfSession", "?")

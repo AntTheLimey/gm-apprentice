@@ -189,3 +189,28 @@ class PausedPrepTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ArchivedPcTests(unittest.TestCase):
+    """An archived or template PC note is no active PC (#536)."""
+
+    def test_archived_template_pc_is_in_no_section(self) -> None:
+        files = dict(FILES)
+        files["Characters/Ada Quill.md"] = note(
+            "type: pc\nstatus: active\nasOfSession: 1",
+            "## Current Status\n\nWell.\n\n## Open threads\n- Find Ma\n")
+        files["_archive/templates/_Template_PC_x.md"] = note(
+            "type: pc\nstatus: active\nasOfSession: 1",
+            "## Current Status\n\nPLACEHOLDER\n\n## Open threads\n"
+            "- {unresolved, forward-looking item}\n")
+        out = run_cli(make_vault(self, files), "--prep").stdout
+        self.assertIn("Ada Quill", out)
+        self.assertNotIn("_Template_PC_x", out)
+        self.assertNotIn("PLACEHOLDER", out)
+
+    def test_template_named_pc_outside_archive_is_skipped(self) -> None:
+        files = dict(FILES)
+        files["Characters/_Template_PC_y.md"] = note(
+            "type: pc\nstatus: active", "## Current Status\n\nPLACEHOLDER\n")
+        out = run_cli(make_vault(self, files), "--prep").stdout
+        self.assertNotIn("PLACEHOLDER", out)

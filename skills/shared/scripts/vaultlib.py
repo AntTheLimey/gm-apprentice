@@ -2772,30 +2772,32 @@ def is_out_of_play(fm: dict[str, Any], words: frozenset[str]) -> bool:
     return str(status).strip().lower() in words
 
 
-def active_pcs(vault: Path) -> list[tuple[str, dict[str, Any]]]:
-    """(rel, frontmatter) for every playable PC sheet.
+def is_active_pc(rel: str, fm: dict[str, Any], gone: Iterable[str]) -> bool:
+    """Is the note at `rel` a playable PC sheet? `type: pc`, not a
+    `*_Story.md` companion (same type, but narrative history rather than a
+    sheet), not under an unchecked folder (an archived copy plays nobody),
+    not a `_Template_*` file, and status not on the out-of-play list `gone`.
+    The one rule every PC list in the scripts uses."""
+    return (fm.get("type") == "pc"
+            and not rel.endswith("_Story.md")
+            and not is_unchecked_source(rel)
+            and not Path(rel).name.startswith("_Template_")
+            and not is_out_of_play(fm, gone))
 
-    `type: pc`, excluding the `*_Story.md` companion notes (same type,
-    but narrative history rather than a sheet) and anyone whose status
-    is on the vault's out-of-play list.
-    """
-    out: list[tuple[str, dict[str, Any]]] = []
+
+def active_pcs(vault: Path) -> list[tuple[str, dict[str, Any]]]:
+    """(rel, frontmatter) for every playable PC sheet (see `is_active_pc`)."""
     gone = out_of_play(vault)
+    out: list[tuple[str, dict[str, Any]]] = []
     for rel, text in vault_files(vault):
         fm = extract_frontmatter(text) or {}
-        if fm.get("type") != "pc" or rel.endswith("_Story.md"):
-            continue
-        if rel.split("/")[0] in UNCHECKED_DIRS:
-            continue  # an archived copy of a sheet or template plays nobody
-        if is_out_of_play(fm, gone):
-            continue
-        out.append((rel, fm))
+        if is_active_pc(rel, fm, gone):
+            out.append((rel, fm))
     return out
 
 
 def active_pc_names(vault: Path) -> set[str]:
-    """Active PCs, mirroring session_context.py: type: pc, not *_Story.md,
-    status not on the out-of-play list. Name set = filename stem, each
+    """Active PCs (`is_active_pc`, the rule session_context shares). Name set = filename stem, each
     capitalised stem token (len >= 3), and each alias — for whole-word
     matching of both 'Katherine Winslow' and 'Katherine'."""
     names: set[str] = set()
