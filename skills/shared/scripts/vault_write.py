@@ -640,8 +640,10 @@ def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
     body = ["", f"# Chapter {chapter_no} \u00b7 Session {session_no} \u2014 "
                 f"{title} \u2014 Wrap-Up", ""]
     if args.source:
-        body += ["> [!info] Source",
-                 *[f"> {ln}".rstrip() for ln in args.source.splitlines()], ""]
+        # GM bookkeeping (which file, which skill): never on the player site.
+        body += ["<!-- gm-only -->", "> [!info] Source",
+                 *[f"> {ln}".rstrip() for ln in args.source.splitlines()],
+                 "<!-- /gm-only -->", ""]
     body += ["<!-- gm-only -->", "", "## GM Notes", "", "<!-- /gm-only -->"]
     batch.create(rel, "---\n" + "".join(fm_lines) + "---\n"
                  + "\n".join(body) + "\n")

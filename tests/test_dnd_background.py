@@ -148,8 +148,41 @@ def test_line_breaks_inside_a_paragraph_stay():
 
 
 def test_a_dash_without_a_space_is_text():
-    assert from_plain("---") == "\\---"
+    assert from_plain("---") == "\\-\\-\\-"
     assert from_plain("-quick") == "\\-quick"
+
+
+SITE_MARKDOWN = ROOT / "tools" / "publish" / "lib" / "markdown.js"
+
+
+def render_site(markdown: str) -> str:
+    """The text the site prints for this markdown: the publish tool's own renderer, typographer on (#484)."""
+    script = ("const md = require(process.argv[1]).createRenderer();"
+              "process.stdout.write(md.render(require('fs').readFileSync(0, 'utf8')));")
+    html = subprocess.run(["node", "-e", script, str(SITE_MARKDOWN)], input=markdown, capture_output=True,
+                          text=True, check=True, encoding="utf-8").stdout
+    tags = Tags()
+    tags.feed(html)
+    return "".join(tags.text)
+
+
+def test_dash_runs_are_escaped_every_dash():
+    assert from_plain("a -- b --- c - d") == "a \\-\\- b \\-\\-\\- c - d"
+    assert ds.one_line("x---y") == "x\\-\\-\\-y"
+
+
+def test_dash_runs_print_as_typed_on_the_site():
+    # The site's renderer turns `--` into an en dash and `---` into an em dash unless each dash is escaped.
+    if shutil.which("node") is None or not MARKDOWN_IT.is_dir():
+        pytest.skip("node or the publish tool's markdown-it is not available")
+    src = "Then --- a scene break.\n\n---\n\nA <!-- and a -- b and ---- four. A -lone- dash."
+    shown = render_site(from_plain(src))
+    assert " ".join(shown.split()) == " ".join(src.split())
+
+
+def test_dash_escapes_read_the_same():
+    # A note synced before dash runs were escaped reads as the new copy does, so it is not "changed".
+    assert ds.reading(from_plain("a --- b")) == ds.reading("a --- b") == "a --- b"
 
 
 def test_control_characters_dropped():
@@ -529,3 +562,122 @@ def test_missing_place_wording():
             "run the vault upgrade (migrate.py), nothing was written") in plan.rows
     assert ("CHECK", "Background / Personality / Bonds", "the note has no **Bonds:** bullet under Personality; "
             "run the vault upgrade (migrate.py), nothing was written") in plan.rows
+
+
+def test_a_note_synced_before_dash_escapes_is_brought_up_to_date_once():
+    # Synced by a release that left dash runs bare: the note is still exactly what sync wrote, so sync
+    # rewrites it in today's escaping, says so once, and is quiet after.
+    tale = PlayerText(**{**BACKGROUND.__dict__, "backstory": "Born -- in a forge.\n\n---\n\nLeft it."})
+    first = synced(note(), tale)
+    old = first.text.replace("\\-\\-\\-", "\\---").replace("\\-\\-", "--")
+    assert "\\-" not in body(old, "backstory").replace("\\---", "")
+    was = fingerprint(ds.held("backstory", note_parts(old)["backstory"]))
+    old_memory = {**first.remember, "backstory": (was, was)}     # the old release's source and note were one text
+    again = plan_background(old, tale, old_memory)
+    assert rows_of(again) == [("WRITE", "Background / Backstory")]
+    assert again.text == first.text
+    assert plan_background(again.text, tale, again.remember).rows == []
+
+
+def test_a_gm_copy_with_bare_dashes_is_left_alone():
+    # Text sync did not write (the GM's own copy of the player's words) is never rewritten for escaping.
+    tale = PlayerText(**{**BACKGROUND.__dict__, "backstory": "Born -- in a forge."})
+    first = synced(note(), tale)
+    gm = first.text.replace("Born \\-\\- in a forge.", "Born -- in a forge.")
+    memory = {**first.remember, "backstory": (first.remember["backstory"][0], "0" * 16)}
+    again = plan_background(gm, tale, memory)
+    assert again.rows == [] and again.text == gm
+
+
+def test_symbol_replacements_are_escaped():
+    # (c) (r) (tm) and +- would become © ® ™ ± on the site and change what the player meant.
+    assert from_plain("options (a) (b) (c), (R) and (Tm); 5 +- 1") == \
+        "options (a) (b) \\(c), \\(R) and \\(Tm); 5 +\\- 1"
+    assert from_plain("+-x") == "\\+\\-x"
+
+
+def test_symbol_replacements_print_as_typed_on_the_site():
+    if shutil.which("node") is None or not MARKDOWN_IT.is_dir():
+        pytest.skip("node or the publish tool's markdown-it is not available")
+    src = "Options (a) (b) (c), (C) (r) (R) (tm) (TM); 5 +- 1, a+-b and +--- c.\n\n+- line\n\n- (c) item"
+    shown = render_site(from_plain(src))
+    assert " ".join(shown.split()) == " ".join(src.replace("- (c) item", "(c) item").split())
+
+
+def test_a_note_synced_before_symbol_escapes_is_brought_up_to_date_once():
+    tale = PlayerText(**{**BACKGROUND.__dict__, "backstory": "Options (a) (b) (c), give or take +- 1."})
+    first = synced(note(), tale)
+    old = first.text.replace("\\(c)", "(c)").replace("+\\-", "+-")
+    was = fingerprint(ds.held("backstory", note_parts(old)["backstory"]))
+    again = plan_background(old, tale, {**first.remember, "backstory": (was, was)})
+    assert rows_of(again) == [("WRITE", "Background / Backstory")]
+    assert again.text == first.text
+    assert plan_background(again.text, tale, again.remember).rows == []
+
+
+# --- notes synced before the #484 escapes (fix round) ---------------------------------------
+
+def _old_release(tale):
+    """A first sync as 1.10.111 wrote it (no #484 escapes), and its memory."""
+    text = plan_background(note(), tale, None).text
+    old = text
+    for new, was in (("\\-\\-\\-", "\\---"), ("\\-\\-", "--"), ("\\(c)", "(c)"), ("+\\-", "+-")):
+        old = old.replace(new, was)
+    was = fingerprint(ds.held("backstory", note_parts(old)["backstory"]))
+    return old, was
+
+
+def test_a_gm_edited_part_is_not_a_false_player_change_after_the_escaping_change():
+    tale = PlayerText(**{**BACKGROUND.__dict__, "backstory": "Born -- in a forge (c) +- 1."})
+    old, was = _old_release(tale)
+    edited = old.replace("in a forge (c) +- 1.", "in a forge (c) +- 1.\n\nGM: she lies about this.")
+    memory = {**plan_background(note(), tale, None).remember, "backstory": (was, was)}
+    plan = plan_background(edited, tale, memory)
+    assert plan.rows == [] and plan.text == edited
+    assert plan.remember["backstory"] == (fingerprint(source_parts(tale)["backstory"]), was)
+    assert plan_background(edited, tale, plan.remember).rows == []
+
+
+def test_the_gms_own_text_is_not_a_false_player_change_after_the_escaping_change():
+    tale = PlayerText(**{**BACKGROUND.__dict__, "backstory": "Born -- in a forge."})
+    old, was = _old_release(tale)
+    own = old.replace("Born -- in a forge.", "My own words.")
+    memory = {**plan_background(note(), tale, None).remember, "backstory": (was, ds.GM_TEXT)}
+    plan = plan_background(own, tale, memory)
+    assert plan.rows == [] and plan.text == own
+    assert plan.remember["backstory"] == (fingerprint(source_parts(tale)["backstory"]), ds.GM_TEXT)
+
+
+def test_a_real_player_change_still_checks_after_the_escaping_change():
+    tale = PlayerText(**{**BACKGROUND.__dict__, "backstory": "Born -- in a forge."})
+    old, was = _old_release(tale)
+    edited = old.replace("Born -- in a forge.", "Born -- in a forge. GM aside.")
+    memory = {**plan_background(note(), tale, None).remember, "backstory": (was, was)}
+    changed = PlayerText(**{**tale.__dict__, "backstory": "Born -- in a smithy."})
+    assert ("CHECK", "Background / Backstory") in rows_of(plan_background(edited, changed, memory))
+
+
+def test_the_escaping_rewrite_says_so():
+    tale = PlayerText(**{**BACKGROUND.__dict__, "backstory": "Born -- in a forge."})
+    old, was = _old_release(tale)
+    memory = {**plan_background(note(), tale, None).remember, "backstory": (was, was)}
+    said = {locus: msg for _, locus, msg in plan_background(old, tale, memory).rows}
+    assert said == {"Background / Backstory": "the same words, escaped so they print as typed"}
+
+
+def test_a_layout_only_player_change_says_it_is_from_dnd_beyond():
+    one = PlayerText(**{**BACKGROUND.__dict__, "backstory": "Born in a forge.\nLeft it."})
+    two = PlayerText(**{**BACKGROUND.__dict__, "backstory": "Born in a forge.\n\nLeft it."})
+    first = synced(note(), one)
+    plan = plan_background(first.text, two, first.remember)
+    said = {locus: msg for _, locus, msg in plan.rows}
+    assert said == {"Background / Backstory": "from D&D Beyond (2 paragraphs)"}
+    assert body(plan.text, "backstory") == "Born in a forge.\n\nLeft it."
+
+
+def test_question_and_comma_runs_print_as_typed_on_the_site():
+    assert from_plain("Really???? a,, b ??? c, d") == "Really\\?\\?\\?\\? a\\,\\, b ??? c, d"
+    if shutil.which("node") is None or not MARKDOWN_IT.is_dir():
+        pytest.skip("node or the publish tool's markdown-it is not available")
+    src = "Really???? a,, b,,, c ??? d ?????! e, f"
+    assert " ".join(render_site(from_plain(src)).split()) == src

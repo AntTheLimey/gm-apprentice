@@ -29,7 +29,7 @@ const { real, resolveGmFolder, gmFolderProblem, insideGitWorkTree, gmPage, write
 const { createMarks, markKinds, sanitize, unmark, withoutMarked } = require('./gm-marks');
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
-const { buildStorySpine, chapterOfSession, unitRefs, characterStoryGroup } = require('./story-spine');
+const { buildStorySpine, storyPagesFor, chapterOfSession, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
 const { isSessionStory, sessionLines } = require('./story-sessions');
@@ -2357,7 +2357,7 @@ function buildSite(options) {
 
     // Landing page
     resolveLandingBanner();
-    emit('index.html', landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus, hubWrapUps), '  wrote index.html');
+    emit('index.html', landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus, hubWrapUps, storyPagesFor(spine)), '  wrote index.html');
   }
   let characterStories = [];
 

@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.114] — 2026-10-31
+
+Four things the player site showed wrongly. Publish tool 1.58.1. The
+vault update `wrapup-source-fence` hides the Source callout in existing
+wrap-ups; nothing else in a vault changes.
+
+### Fixed
+
+- A wrap-up's `> [!info] Source` callout (which file the wrap-up came
+  from, which skill wrote it) no longer shows on the player site
+  (#542). The wrap-up template and `vw wrapup-new` put it inside a
+  gm-only fence, and the vault update `wrapup-source-fence` fences an
+  unfenced one in existing wrap-ups. One already hidden (in a gm-only
+  or spoiler block, or under `## GM Notes`) is left as it is.
+- The landing page's "Read full session" goes to the session's Story
+  page when it has one, not to its wrap-up (#541). A session with no
+  Story page links to its wrap-up, then its session note, as before.
+- A PC page with no portrait lays out its header as the portrait one
+  does: the name on one line where it fits, the meta labels in the
+  accent colour, and the initials centred beside them (#485).
+- Dash runs and symbol shorthands in a player's backstory, appearance
+  and personality text print as typed (#484): `--` and `---` no
+  longer turn into an en or em dash, a typed `<!--` stays as it is,
+  `(c)`, `(r)`, `(tm)` (any case) and `+-` no longer become ©, ®, ™
+  and ±, and `????` and `,,` are no longer shortened. D&D Beyond sync
+  escapes them. Curly quotes and `...` as an ellipsis are left to the
+  site's typography. A part an earlier sync wrote, still as it wrote
+  it, is rewritten once in the new escaping (one WRITE row, the same
+  words); a part the GM wrote or edited is left alone, with no CHECK.
+
+---
+
 ## [1.10.113] — 2026-10-31
 
 The leak check reads more of the player site. Publish tool 1.58.0. No vault

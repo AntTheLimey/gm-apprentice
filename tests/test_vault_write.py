@@ -271,8 +271,10 @@ class WrapupNewTests(unittest.TestCase):
         body = text.split("---\n", 2)[2]
         self.assertEqual(body, (
             "\n# Chapter 01 \u00b7 Session 02 \u2014 The Docks \u2014 Wrap-Up\n\n"
+            "<!-- gm-only -->\n"
             "> [!info] Source\n"
-            "> Play notes, session ended mid-scene.\n\n"
+            "> Play notes, session ended mid-scene.\n"
+            "<!-- /gm-only -->\n\n"
             "<!-- gm-only -->\n\n## GM Notes\n\n<!-- /gm-only -->\n"))
 
     def test_frontmatter_carries_no_template_comments(self):
@@ -318,7 +320,8 @@ class WrapupNewTests(unittest.TestCase):
         vault = make_vault(self, {INDEX_REL: INDEX})
         run(vault, "wrapup-new", "--session", INDEX_REL, "--source",
             "one\n\ntwo", "--write")
-        self.assertIn("> [!info] Source\n> one\n>\n> two\n\n",
+        self.assertIn("<!-- gm-only -->\n> [!info] Source\n> one\n>\n> two\n"
+                      "<!-- /gm-only -->\n\n",
                       read(vault, WRAP_REL))
 
     def test_refusals(self):

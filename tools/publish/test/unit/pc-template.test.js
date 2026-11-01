@@ -163,3 +163,34 @@ describe('pcTemplate pull quote', () => {
     assert.strictEqual(quote(quoted({}, sheet, '## Background\n\n**Jacob** was the coachman. He said little.\n')), 'Jacob was the coachman.');
   });
 });
+
+describe('pcTemplate header with no portrait (#485)', () => {
+  it('puts the name and the meta line in the overlay, as the portrait headers do', () => {
+    const look = { publishConfig: { sheetLook: { skin: 'plain', frame: 'none' } } };
+    const html = pcTemplate({ ...page, frontmatter: { ...page.frontmatter, occupation: 'Knight-errant' } },
+      { html: '' }, [], noop, cfg, {}, undefined, look);
+    const header = html.slice(html.indexOf('<div class="hero-cinematic hero-cinematic-no-img">'));
+    assert.ok(header.length > 0 && html.includes('hero-cinematic-no-img'), 'the no-portrait header is used');
+    const open = '<div class="hero-cinematic-overlay">';
+    const overlay = header.indexOf(open);
+    assert.ok(overlay > 0, 'the header has an overlay');
+    // Walk the divs from the overlay's opening tag to the one that closes it.
+    let depth = 0;
+    let close = -1;
+    for (const m of header.slice(overlay).matchAll(/<div\b|<\/div>/g)) {
+      depth += m[0] === '</div>' ? -1 : 1;
+      if (depth === 0) { close = overlay + m.index; break; }
+    }
+    assert.ok(close > overlay, 'the overlay closes');
+    const inside = (needle, what) => {
+      const at = header.indexOf(needle);
+      assert.ok(at >= 0, `${what} is in the header`);
+      assert.ok(at > overlay && at < close, `${what} sits inside the overlay`);
+    };
+    inside('<h1>Hero</h1>', 'the name');
+    inside('<div class="meta">', 'the meta line');
+    for (const label of ['Player', 'Occupation', 'Status']) inside(`<span class="label">${label}</span>`, `the ${label} label`);
+    const initials = header.indexOf('class="pc-portrait"');
+    assert.ok(initials >= 0 && initials < overlay, 'the initials stay beside it');
+  });
+});
