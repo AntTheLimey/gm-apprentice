@@ -7,7 +7,7 @@
 // wrap-up with no moments, it goes after the cards; a run that holds the moments heading marks the moments, and its
 // other sections go after. The marked preamble (a Source callout above the first heading) goes first after.
 const { extractSections, findHeadings, renderMarkdown, renderInline, escapeHtml } = require('./processor');
-const { unmark } = require('./gm-marks');
+const { unmark, withoutMarked } = require('./gm-marks');
 
 const OPEN_LINE = /^\uE000[0-9a-z]+\uE001$/;
 const TOKEN = /\uE000[0-9a-z]+\uE001|\uE002/g;
@@ -142,7 +142,9 @@ function cut(lines, marks, recapTitle) {
   if (offset > 0) after.push({ at: -1, html: rendered[0].html });
   restHeads.forEach((h, k) => {
     const section = rendered[k + offset];
-    if (!out.recap && recapTitle != null && unmark(h.title) === recapTitle) {
+    // The recap's title as found in the text players see (story-spine.js findRecap): on the GM site a name marked in
+    // the heading is dropped there.
+    if (!out.recap && recapTitle != null && (unmark(h.title) === recapTitle || withoutMarked(h.title).trim() === recapTitle.trim())) {
       out.recap = { title: section.title, html: section.html };
     } else if (!out.moments && h.at === momentsLine) {
       const next = restHeads[k + 1];

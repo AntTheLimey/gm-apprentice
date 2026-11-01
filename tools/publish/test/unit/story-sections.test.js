@@ -154,6 +154,15 @@ describe('storySections', () => {
     assert.ok(out.after[1].html.includes(`<p>${run}</p>`) && !out.after[1].html.includes(inner));
   });
 
+  it('a recap heading holding a marked name is found by its title as players see it', () => {
+    const m = createMarks();
+    const name = m.open('withheld_names', 'withheld');
+    const text = [`## Recap: ${name}Vex${CLOSE}`, 'They came.', '', '## Loot', 'a key', ''].join('\n');
+    const out = storySections(text, { marks: m, recapTitle: 'Recap:' });
+    assert.match(out.recap.html, /They came/);
+    assert.deepEqual(out.sections.map((x) => unmark(x.title)), ['Loot']);
+  });
+
   it('a wrap-up whose headings cannot be read warns, naming the note, and the page keeps no body from it', () => {
     const processor = require('../../lib/processor');
     const real = processor.findHeadings;
