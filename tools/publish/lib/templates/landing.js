@@ -127,7 +127,8 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
     const recap = extractRecapHtml(recapSource, publishConfig.limits.recap_chars);
     const dateStr = formatDate(overviewFm.last_play_date || latestSession.frontmatter.play_date || latestSession.frontmatter.actual_date);
     const dateBadge = dateStr ? ` <span style="opacity:0.7;font-size:0.85rem"> — ${escapeHtml(dateStr)}</span>` : '';
-    const story = storyPages && (storyPages.get(latestSession) || (latestWrapUp && storyPages.get(latestWrapUp)));
+    // Only the session's own Story page: a wrap-up can belong to a chapter page the session is not part of.
+    const story = storyPages && storyPages.get(latestSession);
     const linkPath = story || (latestWrapUp || latestSession).outputPath;
     const recapLink = `<a class="recap-link" href="${escapeHtml(encodeHref(linkPath))}">Read full session &rarr;</a>`;
     recapZone = `<div class="dashboard-section">

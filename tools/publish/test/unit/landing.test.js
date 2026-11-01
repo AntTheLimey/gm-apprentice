@@ -68,4 +68,13 @@ describe('landingTemplate — Read full session (#541)', () => {
     const html = landingTemplate([session], navFor, config, publishConfig, {}, [overviewPage(), session], null, new Map());
     assert.equal(linkOf(html), 'chapters/c4/session-03-give-rest.html');
   });
+
+  it('never takes a chapter Story page through the wrap-up: the session has none of its own', () => {
+    const session = sessionPage();
+    const wrapUp = { frontmatter: { type: 'session_wrap', session_number: 3 }, title: 'Wrap-Up', outputDir: 'chapters/c4', outputPath: 'chapters/c4/wrap-up.html', markdown: '## Narrative Recap\n\nIt ended.' };
+    // The chapter's Story page is reached only through the wrap-up the chapter uses.
+    const html = landingTemplate([session, wrapUp], navFor, config, publishConfig, {}, [overviewPage(), session, wrapUp],
+      new Map([[session, wrapUp]]), new Map([[wrapUp, 'story/chapter-4.html']]));
+    assert.equal(linkOf(html), 'chapters/c4/wrap-up.html');
+  });
 });
