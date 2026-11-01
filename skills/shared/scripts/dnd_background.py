@@ -67,6 +67,9 @@ LIST_ITEM = re.compile(r"^\s*[-*]\s+(\S.*)$")
 SYNTAX = re.compile(r"([\\`*_\[\]#|!~{}&%=$^])")
 ANGLES = {"<": "&lt;", ">": "&gt;"}      # an entity, not a backslash: `\<` would still spell `<`
 DASH_RUN = re.compile(r"-{2,}")    # the site's typographer makes `--` and `---` dashes unless every one is escaped
+# The typographer's symbols that change what a player meant: (c) (r) (tm) as © ® ™, any case, and +- as ±.
+SYMBOL = re.compile(r"\((?=(?:c|r|tm)\))", re.I)
+PLUS_MINUS = re.compile(r"\+-")
 LEAD_MARK = re.compile(r"^([+\-])")
 LEAD_NUMBER = re.compile(r"^(\d+)([.)])")
 EOL = re.compile(r"\r\n|\n|\r")
@@ -117,6 +120,8 @@ def escape(text: str) -> str:
     text = SYNTAX.sub(r"\\\1", text)
     text = "".join(ANGLES.get(c, c) for c in text)
     text = DASH_RUN.sub(lambda m: "\\-" * len(m.group(0)), text)
+    text = SYMBOL.sub(r"\\(", text)
+    text = PLUS_MINUS.sub(r"+\\-", text)
     text = LEAD_MARK.sub(r"\\\1", text)
     return LEAD_NUMBER.sub(r"\1\\\2", text)
 
@@ -383,7 +388,7 @@ def plan_background(text: str, player_text: PlayerText, last: dict[str, tuple[st
         elif same:
             if entry[0] == entry[1] == note_fp != source_fp:
                 # Still exactly what sync wrote (source and note were one text), but escaped by an older
-                # release (bare dash runs, #484): the same words, rewritten so they print as typed. A
+                # release (bare dash runs and (c) (r) (tm) +-, #484): the same words, rewritten so they print as typed. A
                 # hand copy that reads the same (its two fingerprints differ) is left as the GM wrote it.
                 rows.append(("WRITE", locus, "the same words, escaped so they print as typed"))
                 edits.append((span.start, span.end, _replacement(part, span, want, lines, eol)))

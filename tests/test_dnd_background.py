@@ -587,3 +587,29 @@ def test_a_gm_copy_with_bare_dashes_is_left_alone():
     memory = {**first.remember, "backstory": (first.remember["backstory"][0], "0" * 16)}
     again = plan_background(gm, tale, memory)
     assert again.rows == [] and again.text == gm
+
+
+def test_symbol_replacements_are_escaped():
+    # (c) (r) (tm) and +- would become © ® ™ ± on the site and change what the player meant.
+    assert from_plain("options (a) (b) (c), (R) and (Tm); 5 +- 1") == \
+        "options (a) (b) \\(c), \\(R) and \\(Tm); 5 +\\- 1"
+    assert from_plain("+-x") == "\\+\\-x"
+
+
+def test_symbol_replacements_print_as_typed_on_the_site():
+    if shutil.which("node") is None or not MARKDOWN_IT.is_dir():
+        pytest.skip("node or the publish tool's markdown-it is not available")
+    src = "Options (a) (b) (c), (C) (r) (R) (tm) (TM); 5 +- 1, a+-b and +--- c.\n\n+- line\n\n- (c) item"
+    shown = render_site(from_plain(src))
+    assert " ".join(shown.split()) == " ".join(src.replace("- (c) item", "(c) item").split())
+
+
+def test_a_note_synced_before_symbol_escapes_is_brought_up_to_date_once():
+    tale = PlayerText(**{**BACKGROUND.__dict__, "backstory": "Options (a) (b) (c), give or take +- 1."})
+    first = synced(note(), tale)
+    old = first.text.replace("\\(c)", "(c)").replace("+\\-", "+-")
+    was = fingerprint(ds.held("backstory", note_parts(old)["backstory"]))
+    again = plan_background(old, tale, {**first.remember, "backstory": (was, was)})
+    assert rows_of(again) == [("WRITE", "Background / Backstory")]
+    assert again.text == first.text
+    assert plan_background(again.text, tale, again.remember).rows == []
