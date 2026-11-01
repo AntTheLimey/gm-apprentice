@@ -329,4 +329,18 @@ describe('Memorable Moments cards on the Story page', () => {
     assert.match(warned[0], /Session 1 Wrap-Up\.md: Memorable Moments: "#moment\/sad" is not a kind \(dramatic, intriguing, funny, epic, tragic\); the moment shows with no kind/);
     assert.equal((site.player.read(...STORY_1.split('/')).match(/class="moment-kind"/g) || []).length, 1);
   });
+
+  it('a tag that names no kind is a Site Faults finding on the wrap-up note, once, in the tool\'s words', () => {
+    const s = buildBoth(storyVault({ 'Sessions/Session 1 Wrap-Up.md': wrap }), { sites: [] });
+    let faults = [];
+    const saved = { log: console.log, warn: console.warn };
+    console.log = () => {}; console.warn = () => {};
+    try { build({ configPath: s.configPath, site: 'player', inMemory: true, onNoteFaults: (f) => { faults = f; } }); } finally { Object.assign(console, saved); s.cleanup(); }
+    const found = faults.filter((f) => f.code === 'MOMENT_KIND_UNKNOWN');
+    assert.equal(found.length, 1, JSON.stringify(faults));
+    assert.equal(found[0].severity, 'warning');
+    assert.equal(found[0].path, 'Sessions/Session 1 Wrap-Up.md');
+    assert.equal(found[0].detail, 'Memorable Moments: "#moment/sad" is not a kind (dramatic, intriguing, funny, epic, tragic)');
+    assert.equal(found[0].fix, 'Change the tag to one of the five kinds, or remove it');
+  });
 });

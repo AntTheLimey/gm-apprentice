@@ -76,6 +76,7 @@ every page that names it. Use it to confirm each fix.
 | `SKILL_BELOW_BASE` (`INFO`) | Info | A CoC skill is written below the base its characteristics give |
 | `HEADING_IN_HIDDEN_BLOCK` (`INFO`) | Info | A hidden heading sits inside a hidden block, so the text after it is withheld |
 | `TABLE_OVERWIDE` (`INFO`) | Info | A table row has more cells than its header, so the site widened the table |
+| `MOMENT_KIND_UNKNOWN` | Warning | A moment's `#moment/` tag names no kind, so the card shows with none |
 | `PROP_NOT_COPIED` | Warning | A prop's file, styled page, address or a file it links to is not on the site, or a prop sits outside its container |
 
 A row is raised only where the site shows the fault. A stray `%%` or
@@ -544,6 +545,14 @@ publish-site's `references/prop-styles.md`.
   replace the link with a real folder.
 
 Confirm each fix with `site-faults --file "<note>"`.
+
+## MOMENT_KIND_UNKNOWN
+
+A Memorable Moments line in a session wrap-up is tagged `#moment/<tag>`
+and the tag is none of the five kinds: dramatic, intriguing, funny,
+epic, tragic. The Story page still shows the moment, with no kind. The
+row names the wrap-up and the tag. Per tag, show the line and ask which
+kind it is, or whether to drop the tag. Edit only on an answer.
 
 ## Reporting
 

@@ -2489,6 +2489,7 @@ function buildSite(options) {
         unit.momentsHtml = momentsHtml(parsed, { title: unit.moments.title, unitKind: unit.kind });
         // A tag that names no kind is said once per note, on the player site's live pass.
         if (live && !gm && unit.wrapUpPage) {
+          audit.momentKinds(vaultRelPathOf(unit.wrapUpPage), parsed.unknownTags, KINDS);
           for (const tag of parsed.unknownTags) console.warn(`  WARNING: ${vaultRelPathOf(unit.wrapUpPage)}: Memorable Moments: "#moment/${tag}" is not a kind (${KINDS.join(', ')}); the moment shows with no kind`);
         }
       }

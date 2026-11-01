@@ -27,6 +27,8 @@
 //                     after the block is withheld with it (information; the build says so per page)
 //   TABLE_OVERWIDE  a table with a row wider than its header, which the renderer widens so no cell
 //                     is lost (information; the build says so per page)
+//   MOMENT_KIND_UNKNOWN  a Memorable Moments tag, `#moment/<tag>`, that names none of the five kinds
+//                     (the moment shows with no kind; the build says so per note)
 //   PROP_NOT_COPIED  a prop note's file, its address or a file it links that the site cannot
 //                     publish (missing, outside the note's folder, a kind it does not copy, an
 //                     address taken or not a path, a link in the site folder), or a prop's
@@ -58,7 +60,7 @@ const { STORY_SUFFIX } = require('./scanner');
 const { NO_PAGE_TYPES } = require('./excluding-values');
 const { decodeEntities } = require('./templates/gurps/tables');
 
-const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE', 'PROP_NOT_COPIED'];
+const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE', 'PROP_NOT_COPIED', 'MOMENT_KIND_UNKNOWN'];
 const WORST = 3;
 // The human report names this many of the pages that link a note with no page.
 const PAGES_SHOWN = 3;
@@ -958,6 +960,7 @@ function startNoteAudit(input) {
     }
 
     for (const c of calcRows) found.push({ code: c.code || 'TOHIT_UNREAD', severity: c.severity === 'info' ? 'info' : 'warning', path: c.rel, detail: c.detail, fix: c.fix });
+    for (const m of momentTags) found.push({ code: 'MOMENT_KIND_UNKNOWN', severity: 'warning', path: m.rel, detail: `Memorable Moments: "#moment/${m.tag}" is not a kind (${m.kinds.join(', ')})`, fix: 'Change the tag to one of the five kinds, or remove it' });
     const sorted = sortFindings(found);
     // The targets that name a note with no page, printed or not, settled or not: the
     // dead-link check leaves them out (a link to a note that exists is not a dead link).
@@ -971,7 +974,13 @@ function startNoteAudit(input) {
     for (const r of rows || []) if (r && r.detail) calcRows.push({ rel, code: r.code, severity: r.severity, detail: r.detail, fix: r.fix || '' });
   }
 
-  return { read, readAddresses, readFileName, mark, mayPrint, printed, listing, calculator, findings, storyRelOf };
+  // A Memorable Moments tag that names no kind: `rel` is the wrap-up note, `tag` the word after `#moment/`.
+  const momentTags = [];
+  function momentKinds(rel, tags, kinds) {
+    for (const tag of tags || []) momentTags.push({ rel, tag, kinds });
+  }
+
+  return { read, readAddresses, readFileName, mark, mayPrint, printed, listing, calculator, momentKinds, findings, storyRelOf };
 }
 
 // A no-page note's `type`: from its scanned page, else from its file (the scan never read a
@@ -1055,6 +1064,10 @@ function summaryLines(findings) {
       const worst = [...byPc].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, WORST).map(([p, k]) => `${baseName(p)} ${k}`);
       const m = unread.length;
       lines.push(`${m} ${plural(m, 'row of a PC sheet is', 'rows of PC sheets are')} not fully read by the to-hit calculator (${worst.join(', ')}) — ${where} ${plural(m, 'it', 'these')}.`);
+    } else if (code === 'MOMENT_KIND_UNKNOWN') {
+      const notes = [...new Set(rows.map((f) => f.path))];
+      const k = rows.length;
+      lines.push(`${k} moment ${plural(k, 'tag names', 'tags name')} no kind (${notes.slice(0, WORST).map((p) => baseName(p)).join(', ')}) — ${where} ${plural(k, 'it', 'these')}.`);
     } else if (code === 'SKILL_BELOW_BASE') {
       continue;   // information for campaign-qa; the build has nothing to say about it
     } else if (code === 'HEADING_IN_HIDDEN_BLOCK' || code === 'TABLE_OVERWIDE') {

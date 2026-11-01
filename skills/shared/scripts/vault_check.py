@@ -1808,7 +1808,8 @@ NOTE_FAULT_CODES = ("ALIAS_IN_PROSE", "NEVER_SHOW_IN_PROSE",
                     "WITHHELD_FLAG_UNREADABLE", "FENCE_UNCLOSED",
                     "COMMENT_STRAY", "NAMED_NO_PAGE", "TOHIT_UNREAD",
                     "SKILL_BELOW_BASE", "HEADING_IN_HIDDEN_BLOCK",
-                    "TABLE_OVERWIDE", "PROP_NOT_COPIED")
+                    "TABLE_OVERWIDE", "PROP_NOT_COPIED",
+                    "MOMENT_KIND_UNKNOWN")
 # How many of the pages naming a note a row lists; `--file` lists them all.
 SITE_FAULT_PAGES = 3
 
@@ -1854,7 +1855,7 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
         msg = f"FENCE_UNCLOSED: {_one_line(f.get('detail'))}"
     elif code in ("TOHIT_UNREAD", "SKILL_BELOW_BASE",
                   "HEADING_IN_HIDDEN_BLOCK", "TABLE_OVERWIDE",
-                  "PROP_NOT_COPIED"):
+                  "PROP_NOT_COPIED", "MOMENT_KIND_UNKNOWN"):
         msg = (f"{code}: {_one_line(f.get('detail'))} — "
                f"{_one_line(f.get('fix'))}")
     elif code in ("WITHHELD_NAME_PUBLIC", "WITHHELD_PUBLISHED",
