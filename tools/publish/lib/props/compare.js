@@ -141,14 +141,15 @@ function wordRuns(oldWords, newWords) {
   return { removed, added, removedAt };
 }
 
-function servedPageRow(address, oldRaw, newRaw, expected) {
+// `readBlocks`: how the old page's blocks are read (blocksOfWords; a test hands one that cannot read them).
+function servedPageRow(address, oldRaw, newRaw, expected, { readBlocks = blocksOfWords } = {}) {
   if (oldRaw.equals(newRaw)) return { kind: 'same', address, detail: '' };
   const oldWords = pageWords(address, oldRaw.toString('utf8'));
   const { removed, added, removedAt } = wordRuns(oldWords, pageWords(address, newRaw.toString('utf8')));
   const addedText = runsText('added', added);
   if (!removed.length) return { kind: 'same-words', address, detail: addedText || 'other markup, the same words' };
   const marked = expected.some((p) => p.rest);
-  const blocks = marked ? blocksOfWords(address, oldRaw.toString('utf8'), oldWords) : null;
+  const blocks = marked ? readBlocks(address, oldRaw.toString('utf8'), oldWords) : null;
   const blockOf = (i, run) => (blocks ? blocks.slice(removedAt[i], removedAt[i] + run.length) : null);
   const took = removed.map((run, i) => onlyExpected(run, expected, blockOf(i, run)));
   if (took.every((n) => n !== null)) {
@@ -297,4 +298,4 @@ function formatRows(result) {
   ];
 }
 
-module.exports = { compareSites, pageWords, formatRows, linkTarget, orderMoves };
+module.exports = { compareSites, pageWords, formatRows, linkTarget, orderMoves, servedPageRow, expectedPhrase };

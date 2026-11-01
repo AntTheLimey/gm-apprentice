@@ -337,3 +337,17 @@ test('a phrase ending ... stops at the end of its block, never before its phrase
   check(`${kept}<p>Note: keeper prop, fold.</p>`, kept, ['keeper prop...'], 'words-differ', 'words before the phrase');
   check(`<p>Keeper prop: fold.</p>${kept}`, `<p>Keeper prop: fold.</p><p>Meet me at the mill.</p>`, ['keeper prop...'], 'words-differ', 'an unrelated run');
 });
+
+// When the page's blocks cannot be read the same way as its words (a fallback the leak gate's reading should never
+// need), a ... phrase takes only its own words, and the blocking row says why.
+test("a ... phrase on a page whose blocks cannot be read says so on the row", () => {
+  const { servedPageRow, expectedPhrase } = require('../../lib/props/compare');
+  const old = Buffer.from(page(`<p>Meet me at the old mill.</p>${CANTICLE_CREDITS}`));
+  const now = Buffer.from(page('<p>Meet me at the old mill.</p>'));
+  const unread = () => null;
+  const row = servedPageRow('props/letter.html', old, now, [expectedPhrase('Keeper prop...')], { readBlocks: unread });
+  assert.equal(row.kind, 'words-differ');
+  assert.match(row.detail, /the \.\.\. marker could not read this page's blocks, so it took only its own words/);
+  // Read as usual, the same page clears.
+  assert.equal(servedPageRow('props/letter.html', old, now, [expectedPhrase('Keeper prop...')]).kind, 'same-words');
+});
