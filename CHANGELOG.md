@@ -13,7 +13,7 @@ A tidy of the props feature: the build no longer writes through a linked folder 
 
 ### Added
 
-- Every prop page's bar now says how to print it well: tick Background graphics and set margins to None. A style whose `style.json` says `"printout_toggle": true` (the plugin's terminal style does) adds that the printout look uses less ink. The hint is hidden when the page prints, and `props compare` never counts it as page words.
+- Every prop page's bar now says how to print it well: tick Background graphics and set margins to None. A style whose `style.json` says `"printout_toggle": true` (the plugin's terminal style does) adds that the printout look uses less ink. The hint is hidden when the page prints, and `props compare` never counts it as page words. A `printout_toggle` that is not `true` or `false` is a build warning naming its value.
 - `gm-apprentice-publish props links <file>...` prints the local files a page or stylesheet names, as the build reads them when it copies a hand-made prop.
 - `props compare --expect-gone` takes a phrase ending in `...` to mean the phrase and the rest of its block (its paragraph, list item, table cell or line), and the row says how many more words it took. A phrase without it still has to match whole.
 
@@ -24,8 +24,8 @@ A tidy of the props feature: the build no longer writes through a linked folder 
 
 ### Fixed
 
-- The build no longer writes a page through a kept folder that is a link (for example back into the vault). The page is skipped with a warning.
-- A prop copy the build wrote into a kept folder is removed once its note is deleted, stops being a prop, or moves its `prop_address`, while the file still holds what the build wrote. The build keeps a record of those files in the site folder's `.gm-apprentice/` folder. A file the GM put there, or changed, is never removed. A site built before this version has no record, so copies left behind earlier stay.
+- The build no longer writes anything (a page, a picture, a stylesheet, a font) through a kept folder that is a link, for example back into the vault. Each such file is skipped with a warning and counts as a build error, so the build ends "Done with N error(s)" and the deploy waits until the link is replaced with a real folder. A page skipped this way is left out of the search index and of other pages' links.
+- A prop copy the build wrote into a kept folder is removed once its note is deleted, stops being a prop, or moves its `prop_address`, while the file still holds what the build wrote. The build keeps a record of those files in the site folder's `.gm-apprentice/` folder. A file the GM put there, or changed, is never removed. A copy the build cannot read or remove is a warning naming it, and the build carries on. A record that cannot be read is said and left as it is, and removes nothing. A site built before this version has no record, so copies left behind earlier stay.
 - A stray file in `_meta/prop-styles/` is no longer offered as a style to use.
 - When the props page's address is refused and both default addresses are taken, the warning now says why the asked address was refused.
 - The props tests no longer leave temporary folders behind.
