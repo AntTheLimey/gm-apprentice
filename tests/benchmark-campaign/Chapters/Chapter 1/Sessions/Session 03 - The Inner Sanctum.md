@@ -9,6 +9,5 @@ documents:
   plan: "[[Session 03 - The Inner Sanctum - Plan]]"
   play_notes: null
   wrap_up: null
-scenes: []
 tags: []
 ---

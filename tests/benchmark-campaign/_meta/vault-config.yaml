@@ -1,0 +1,21 @@
+version: 1
+
+vault:
+  system: "coc-7e"
+  campaign: The Ashford Case
+player_site:
+  folder_map:
+    _Campaign: campaign
+    _World: world
+    Adventures: adventures
+    Chapters: chapters
+    Clues: clues
+    Factions: factions
+    Heritages: heritages
+    Locations: locations
+    NPCs: characters/npcs
+  hide:
+    folders:
+      - _meta
+      - _Templates
+      - _inbox

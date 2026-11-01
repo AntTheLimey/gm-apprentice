@@ -97,6 +97,12 @@ def relationship_rows(campaign_dir: Path) -> dict[str, list[str]]:
     return found
 
 
+def _is_template(filepath: Path) -> bool:
+    """Template scaffolding carries placeholder fields by design; a vault the
+    update has run holds a _Templates folder, and it is not content to check."""
+    return "_Templates" in filepath.parts or filepath.stem.startswith("_Template")
+
+
 # Content filtering: a scene is prep by type. It never publishes to the player site,
 # whatever its status or the publish list says.
 
@@ -106,6 +112,8 @@ def validate_filtering(campaign_dir: Path) -> int:
     errors = 0
 
     for filepath in sorted(campaign_dir.rglob("*.md")):
+        if _is_template(filepath):
+            continue
         try:
             content = filepath.read_text(encoding="utf-8")
         except (OSError, UnicodeError):
@@ -178,7 +186,7 @@ def find_stale_pcs(campaign_dir: Path) -> FreshnessResult:
     for filepath in sorted(campaign_dir.rglob("*.md")):
         # Skip template scaffolding — templates carry empty temporal
         # fields by design and are never "stale".
-        if "_Templates" in filepath.parts or filepath.stem.startswith("_Template"):
+        if _is_template(filepath):
             continue
         try:
             content = filepath.read_text(encoding="utf-8")
@@ -246,7 +254,7 @@ def validate_freshness(campaign_dir: Path) -> int:
 
 def validate_campaign(campaign_dir: Path) -> int:
     """Validate campaign entity schemas. Returns exit code."""
-    md_files = list(campaign_dir.rglob("*.md"))
+    md_files = [f for f in campaign_dir.rglob("*.md") if not _is_template(f)]
 
     if not md_files:
         print(f"Warning: No markdown files found in {campaign_dir}")

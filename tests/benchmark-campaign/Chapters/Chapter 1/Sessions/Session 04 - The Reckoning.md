@@ -9,6 +9,5 @@ documents:
   plan: null
   play_notes: null
   wrap_up: "[[Session 04 - The Reckoning - Wrap-Up]]"
-scenes: []
 tags: []
 ---

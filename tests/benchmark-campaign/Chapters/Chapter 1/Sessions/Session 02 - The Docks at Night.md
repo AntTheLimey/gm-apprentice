@@ -9,6 +9,5 @@ documents:
   plan: null
   play_notes: "[[Session 02 - The Docks at Night - Play Notes]]"
   wrap_up: "[[Session 02 - The Docks at Night - Wrap-Up]]"
-scenes: []
 tags: []
 ---

@@ -5,6 +5,23 @@
 **Methodology:** 3 runs per skill, 2 agents per run (sonnet), blind evaluation (opus), 5-dimension rubric (15 pts/question, 75 pts max)
 **Campaign data:** tests/benchmark-campaign/ (synthetic CoC 7e campaign, 19 files, 6 deliberate problems)
 
+## Benchmark campaign v2 (1.10.118): a new baseline starts here
+
+Every result below was scored against the campaign as it stood in 2026-04
+(stamped 1.9.10, 19 files at the time, notes named with underscores, no
+publish list). In 1.10.118 the campaign was brought to the current schema
+with the update tool (`migrate.py`), its 16 note files were renamed to match
+the wikilinks that name them (`Brother_Ezra.md` is now `Brother Ezra.md`), and
+it gained the settings file, a publish list, the `_Templates` folder and the
+other folders the update adds. No note text was changed. The deliberate
+problems are untouched.
+
+Results from before this change are not directly comparable with results from
+after it: the files an agent lists and reads differ in name and in number.
+Nothing was deleted or edited here; the old campaign is in git history before
+1.10.118, and the scores below stand as recorded. Start any new comparison from
+a run on the new campaign.
+
 ## Results
 
 | Skill | Median | Mean | Range | Variance | Pass Threshold |

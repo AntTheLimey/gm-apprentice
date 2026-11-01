@@ -11,6 +11,7 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const { build } = require(path.join(repoRoot, 'tools/publish/lib/build.js'));
+const YAML = require(path.join(repoRoot, 'tools/publish/node_modules/yaml'));
 
 const PRESETS = [
   { id: 'fantasy',  name: 'Fantasy',  blurb: 'D&D, Pathfinder, classic fantasy', swatches: ['#1a1a2e', '#fbbf24', '#c8d6e5'] },
@@ -34,30 +35,25 @@ for (const preset of PRESETS) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), `showcase-${preset.id}-`));
   const vaultDir = path.join(work, 'vault');
   fs.cpSync(sourceVault, vaultDir, { recursive: true });
-  fs.writeFileSync(path.join(vaultDir, '_meta', 'vault-config.md'),
-    `---\npublish:\n  theme:\n    genre: "${preset.id}"\n---\n\n# Showcase config\n`);
+  // The campaign's own settings (folder map, hidden folders) stay as the vault holds them;
+  // only what changes per preset is written over them, in the vault's settings file.
+  const settingsPath = path.join(vaultDir, '_meta', 'vault-config.yaml');
+  const settings = YAML.parse(fs.readFileSync(settingsPath, 'utf8'));
+  settings.player_site = {
+    ...settings.player_site,
+    title: `The Ashford Case — ${preset.name}`,
+    url: 'https://antthelimey.github.io/gm-apprentice',
+    theme: { genre: preset.id, tagline: `gm-apprentice publish theme: ${preset.name}` },
+  };
+  fs.writeFileSync(settingsPath, YAML.stringify(settings));
 
+  // The site folder's vault.config.json only says where the vault is.
   const configPath = path.join(work, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
-    siteTitle: `The Ashford Case — ${preset.name}`,
-    landingTagline: `gm-apprentice publish theme: ${preset.name}`,
-    siteUrl: 'https://antthelimey.github.io/gm-apprentice',
-    vaultPath: vaultDir,
-    outputDir: 'site',   // inside the work folder; copied to the showcase folder below
-    attachmentsDir: '_attachments',
-    folderMap: {
-      _Campaign: 'campaign', _World: 'world',
-      Adventures: 'adventures', Chapters: 'chapters', Clues: 'clues',
-      Factions: 'factions', Heritages: 'heritages',
-      Locations: 'locations', NPCs: 'characters/npcs',
-    },
-    excludeDirs: ['_meta', '_Templates', '_inbox'],
-    excludeSections: ['GM Notes', 'DM Notes', 'Player Notes', 'Source References'],
-  }, null, 2));
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vaultDir }, null, 2));
 
   console.log(`\n=== Building ${preset.name} showcase ===`);
   build({ configPath });
-  fs.cpSync(path.join(work, 'site'), path.join(outDir, preset.id), { recursive: true });
+  fs.cpSync(path.join(work, 'docs'), path.join(outDir, preset.id), { recursive: true });
   fs.rmSync(work, { recursive: true, force: true });
 }
 
