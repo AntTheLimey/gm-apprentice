@@ -33,6 +33,8 @@ const WAIT_MS = 600000;
 
 const alive = (pid) => { try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; } };
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+// Windows and busy disks refuse a removal for a moment; rmSync retries these itself.
+const RM_RETRY = { maxRetries: 5, retryDelay: 50 };
 // Folder errors that mean "another process is changing it right now" (Windows reports a pending delete as EPERM or
 // EACCES): wait and look again.
 const BUSY = new Set(['EEXIST', 'ENOENT', 'EPERM', 'EACCES', 'ENOTEMPTY', 'EBUSY']);
@@ -49,13 +51,15 @@ function lockIsStale(dir) {
 // Clears a stale lock. Takeovers are serialised by a second folder, and the verdict is read again inside it, so a
 // process that judged the lock stale a moment ago can never remove a fresh lock another process has since taken.
 function clearStale(dir) {
+  // A removal that still fails after its retries leaves the folder for the next pass of the wait loop.
+  const rm = (target) => { try { fs.rmSync(target, { recursive: true, force: true, ...RM_RETRY }); } catch { /* retried next pass */ } };
   const reap = `${dir}.reap`;
   try { fs.mkdirSync(reap); } catch (e) {
     if (!BUSY.has(e.code)) throw e;
-    if (ageOf(reap) > 30000) fs.rmSync(reap, { recursive: true, force: true });   // its owner died inside the few lines below
+    if (ageOf(reap) > 30000) rm(reap);   // its owner died inside the few lines below
     return;
   }
-  try { if (lockIsStale(dir)) fs.rmSync(dir, { recursive: true, force: true }); } finally { fs.rmSync(reap, { recursive: true, force: true }); }
+  try { if (lockIsStale(dir)) rm(dir); } finally { rm(reap); }
 }
 
 // Runs `fn` while holding the lock; when `fn` returns a promise the lock is held until it settles. Called while this
@@ -77,7 +81,11 @@ function withChromeLock(fn, { dir = LOCK_DIR, waitMs = WAIT_MS } = {}) {
     }
   }
   held = dir;
-  const release = () => { held = null; fs.rmSync(dir, { recursive: true, force: true }); };
+  const release = () => {
+    held = null;
+    // A removal that keeps failing must not replace what `fn` returned or threw; the next waiter reaps a stale lock.
+    try { fs.rmSync(dir, { recursive: true, force: true, ...RM_RETRY }); } catch { /* left for clearStale */ }
+  };
   let result;
   try { result = fn(); } catch (e) { release(); throw e; }
   if (result && typeof result.then === 'function') return result.finally(release);

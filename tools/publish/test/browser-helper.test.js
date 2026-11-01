@@ -69,6 +69,23 @@ test('the lock is held while the work runs and let go after, even when the work 
   assert.ok(!fs.existsSync(dir));
 });
 
+test('a lock folder that will not go away does not replace the work\'s result or its error', (t) => {
+  const dir = privateLock(t);
+  const other = privateLock(t);
+  const real = fs.rmSync;
+  fs.rmSync = (target, ...rest) => {
+    if (target === dir || target === other) throw Object.assign(new Error('busy'), { code: 'EBUSY' });
+    return real(target, ...rest);
+  };
+  try {
+    assert.equal(withChromeLock(() => 'answer', { dir }), 'answer');
+    assert.throws(() => withChromeLock(() => { throw new Error('boom'); }, { dir: other }), /boom/);
+  } finally {
+    fs.rmSync = real;
+    for (const d of [dir, other]) real(d, { recursive: true, force: true });
+  }
+});
+
 test('the lock is held until a promise the work returns settles', async (t) => {
   const dir = privateLock(t);
   const run = withChromeLock(() => new Promise((resolve) => setTimeout(resolve, 30)), { dir });
