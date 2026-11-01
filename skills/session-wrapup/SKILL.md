@@ -89,7 +89,9 @@ skip.
 
 Read the session's Play Notes (`type: session-play-notes`). A
 session with no index or Play Notes: `vw session-new --number N
---title "T" --play-date D [--export PATH]` files both; without an
+--title "T" --play-date D [--export PATH]` files both; a prepped
+session with an index but no Play Notes: `vw play-notes-new
+--session "<index>" --play-date D [--export PATH]`. Without an
 export, ask the GM for notes (paste, path, or dictation) for them.
 Read the PC roster and the session's Plan for planned-vs-actual.
 `plan_check.py <plan> --inventory` gives per-section status and
