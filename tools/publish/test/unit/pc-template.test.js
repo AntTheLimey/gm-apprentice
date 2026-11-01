@@ -163,3 +163,18 @@ describe('pcTemplate pull quote', () => {
     assert.strictEqual(quote(quoted({}, sheet, '## Background\n\n**Jacob** was the coachman. He said little.\n')), 'Jacob was the coachman.');
   });
 });
+
+describe('pcTemplate header with no portrait (#485)', () => {
+  it('puts the name and the meta line in the overlay, as the portrait headers do', () => {
+    const look = { publishConfig: { sheetLook: { skin: 'plain', frame: 'none' } } };
+    const html = pcTemplate({ ...page, frontmatter: { ...page.frontmatter, occupation: 'Knight-errant' } },
+      { html: '' }, [], noop, cfg, {}, undefined, look);
+    const header = html.slice(html.indexOf('<div class="hero-cinematic hero-cinematic-no-img">'));
+    assert.ok(header.length > 0 && html.includes('hero-cinematic-no-img'), 'the no-portrait header is used');
+    const overlay = header.indexOf('<div class="hero-cinematic-overlay">');
+    assert.ok(overlay > 0, 'the header has an overlay');
+    assert.ok(header.indexOf('<h1>Hero</h1>') > overlay, 'the name sits inside the overlay');
+    assert.ok(header.indexOf('<div class="meta">') > overlay, 'the meta line sits inside the overlay');
+    assert.ok(header.indexOf('class="pc-portrait"') < overlay, 'the initials stay beside it');
+  });
+});

@@ -453,12 +453,14 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   } else {
     const initials = getInitials(page.displayTitle);
     heroBanner = `<div class="hero-cinematic hero-cinematic-no-img">
-  <div class="pc-portrait" style="width:5rem;height:5rem;font-size:2rem;margin-bottom:1rem">${escapeHtml(initials)}</div>
-  <h1>${escapeHtml(page.displayTitle)}</h1>
-  <div class="meta">
-    <span><span class="label">Player</span> ${escapeHtml(fm.player_name || '')}</span>
-    ${metaSpans}
-    <span><span class="label">Status</span> ${escapeHtml(fm.status || 'active')}</span>
+  <div class="pc-portrait" style="width:5rem;height:5rem;font-size:2rem">${escapeHtml(initials)}</div>
+  <div class="hero-cinematic-overlay">
+    <h1>${escapeHtml(page.displayTitle)}</h1>
+    <div class="meta">
+      <span><span class="label">Player</span> ${escapeHtml(fm.player_name || '')}</span>
+      ${metaSpans}
+      <span><span class="label">Status</span> ${escapeHtml(fm.status || 'active')}</span>
+    </div>
   </div>
 </div>`;
   }
