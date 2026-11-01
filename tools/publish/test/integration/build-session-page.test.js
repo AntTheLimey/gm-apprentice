@@ -151,7 +151,9 @@ The coach left before dawn with [[Mrs Hale]] waving from the INNYARDWAVE porch.
     it('shows the Wrap-Up recap opening with a link to the full session', () => {
       const html = find('session-01-arrival.html');
       assert.ok(html.includes('reached the town at dusk'), 'missing recap');
-      assert.match(html, /<a class="recap-link" href="[^"]*chapter-01-session-01-wrap-up\.html">Read the full session/);
+      // The Wrap-Up folds into the session's Story page (#543): the full session is read there.
+      assert.match(html, /<a class="recap-link" href="(?:\.\.\/)+story\/chapter-1-opening-session-01-arrival\.html">Read the full session/);
+      assert.ok(fs.existsSync(path.join(docs, 'story', 'chapter-1-opening-session-01-arrival.html')));
       assert.ok(!html.includes('Prep the ball'), 'Wrap-Up GM Notes leaked');
     });
 

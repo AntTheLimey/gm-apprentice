@@ -53,9 +53,10 @@ function buildWrapUpIndex(pages) {
 
 // Recap for a unit: try its wrap-up first (the deliberate post-session/chapter recap),
 // then the unit's own file. Returns { title, html, sourcePage } or null.
-function resolveUnitRecap(unitPage, wrapUpPage, resolve) {
+// `wrapResolve` reads the wrap-up's text (by default `resolve`).
+function resolveUnitRecap(unitPage, wrapUpPage, resolve, wrapResolve = resolve) {
   if (wrapUpPage) {
-    const r = findRecap(wrapUpPage, resolve);
+    const r = findRecap(wrapUpPage, wrapResolve);
     if (r) return { ...r, sourcePage: wrapUpPage };
   }
   const own = findRecap(unitPage, resolve);
@@ -199,11 +200,15 @@ function buildStorySpine(pages, linkMap, pairs, images = null) {
   // own output path under story/. Without a linkMap (the hasStory probe), skip it.
   // With `images` ({ imageMap, usedImages }) the recap's `![[x.png]]` embeds show too; the
   // recap text is the published view, so a picture only in a hidden part is never added.
+  // A missing picture is reported by the page that shows the text. A wrap-up folded into this Story page
+  // (story-fold.js) has no page of its own, so its text's missing pictures are reported here when `images.warn` asks
+  // (the build's one image pass), and never for text another page shows too.
   const resolverFor = linkMap
-    ? (outputPath) => (md) => resolveWikiLinks(images
-      ? resolveImageEmbeds(md, images.imageMap, outputPath, images.usedImages, { warn: false })
+    ? (outputPath, owns = false) => (md) => resolveWikiLinks(images
+      ? resolveImageEmbeds(md, images.imageMap, outputPath, images.usedImages, { warn: !!(images.warn && owns) })
       : md, linkMap, outputPath)
     : () => undefined;
+  const foldedInto = (wrapUp, ...outs) => !!(wrapUp && wrapUp.foldedInto && outs.includes(wrapUp.foldedInto.outputPath));
   const chapters = sortedChapters(pages);
   const sessions = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session');
   const wrapUps = pages.filter(p => p.frontmatter && WRAP_UP_TYPES.has(p.frontmatter.type));
@@ -217,7 +222,8 @@ function buildStorySpine(pages, linkMap, pairs, images = null) {
     const chapterWrap = wrapUpForUnit(chapter, wrapUps, idx, pairs);
     // The chapter recap lands on either story/<chSlug>-intro.html or story/<chSlug>.html;
     // both live in story/, so either path yields the same relative link resolution.
-    const chapterRecap = resolveUnitRecap(chapter, chapterWrap, resolverFor(unitOutputPath(chSlug)));
+    const chapterRecap = resolveUnitRecap(chapter, chapterWrap, resolverFor(unitOutputPath(chSlug)),
+      resolverFor(unitOutputPath(chSlug), foldedInto(chapterWrap, unitOutputPath(chSlug), unitOutputPath(`${chSlug}-intro`))));
 
     const chapterSessions = sessions
       .filter(s => chapterOfSession(s, pages) === chapter)
@@ -227,7 +233,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null) {
     for (const s of chapterSessions) {
       const id = `${chSlug}-${slugify(s.title)}`;
       const wrapUp = wrapUpForUnit(s, wrapUps, idx, pairs);
-      const recap = resolveUnitRecap(s, wrapUp, resolverFor(unitOutputPath(id)));
+      const recap = resolveUnitRecap(s, wrapUp, resolverFor(unitOutputPath(id)), resolverFor(unitOutputPath(id), foldedInto(wrapUp, unitOutputPath(id))));
       if (!recap) continue;
       sessionUnits.push({
         kind: 'session', id, outputPath: unitOutputPath(id),
