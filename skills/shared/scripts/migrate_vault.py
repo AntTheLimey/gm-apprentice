@@ -1653,13 +1653,18 @@ def find_dnd_background_sections(vault: Path) -> list[Item]:
 SOURCE_CALLOUT_RE = re.compile(
     r"^\s*>\s*\[![A-Za-z][\w-]*\][-+]?\s*Source\s*$", re.I)
 GM_OPEN, GM_CLOSE = "<!-- gm-only -->", "<!-- /gm-only -->"
+# A line that starts a block of its own, so it never continues a callout lazily: a heading, a code
+# fence, a rule, a list item, or HTML (a gm-only marker among it).
+BLOCK_START_RE = re.compile(
+    r"^ {0,3}(?:#{1,6}(?:\s|$)|`{3,}|~{3,}|(?:[-*_][ \t]*){3,}$|[-*+](?:\s|$)|\d{1,9}[.)](?:\s|$)|<)")
 
 
 def _fence_source(text: str) -> str | None:
     """The note with every Source callout players can see wrapped in a
     gm-only fence, or None when there is none. A callout already inside a
-    gm-only or spoiler block, under `## GM Notes`, or in a code fence is
-    left as it is."""
+    gm-only or spoiler block, under `## GM Notes` (up to the next heading
+    of level 1 or 2), or in a code fence is left as it is. Lazy continuation
+    lines after the quote go inside the fence with it."""
     states, _problems = scan_body(text)
     lines = text.splitlines(keepends=True)
     eol = next((m.group(0) for raw in lines
@@ -1669,13 +1674,17 @@ def _fence_source(text: str) -> str | None:
     i = 0
     while i < len(states):
         s = states[i]
-        if s.heading and s.heading[0] == 2:
+        if s.heading and s.heading[0] <= 2:
             h2 = s.heading[1].strip().casefold()
         if (not s.in_code and s.gm_depth == 0 and s.spoiler_depth == 0
                 and h2 != "gm notes" and SOURCE_CALLOUT_RE.match(s.line)):
             j = i + 1
             while (j < len(states) and not states[j].in_code
                    and states[j].line.lstrip().startswith(">")):
+                j += 1
+            # Lazy continuation: markdown keeps a plain line after a quote inside it, up to a blank line.
+            while (j < len(states) and not states[j].in_code and states[j].line.strip()
+                   and not BLOCK_START_RE.match(states[j].line)):
                 j += 1
             spans.append((s.lineno - 1, states[j - 1].lineno - 1))
             i = j

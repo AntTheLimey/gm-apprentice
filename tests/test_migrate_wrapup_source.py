@@ -110,6 +110,39 @@ class SourceFenceTests(unittest.TestCase):
             v = make_vault(self, {WRAP: note})
             self.assertEqual(mv.find_wrapup_source_fence(v), [], note)
 
+    def test_a_heading_after_gm_notes_ends_it(self):
+        # `# Public` after `## GM Notes` is out of that section; the site shows what follows.
+        for heading in ("# Public", "## Public"):
+            note = FM + HEAD + "## GM Notes\n\nx\n\n" + heading + "\n\n" + CALLOUT
+            v = make_vault(self, {WRAP: note})
+            run(mv.find_wrapup_source_fence(v))
+            self.assertEqual(raw(v, WRAP), note.replace(CALLOUT, OPEN + CALLOUT + CLOSE), heading)
+
+    def test_lazy_continuation_lines_go_inside_the_fence(self):
+        lazy = CALLOUT + "and this lazy line\nand another\n"
+        note = FM + HEAD + lazy + "\nAfter.\n" + RECAP
+        v = make_vault(self, {WRAP: note})
+        run(mv.find_wrapup_source_fence(v))
+        self.assertEqual(raw(v, WRAP), note.replace(lazy, OPEN + lazy + CLOSE))
+
+    def test_a_heading_or_list_right_after_is_not_swallowed(self):
+        for after in ("## Narrative Recap\n", "- a list\n", "---\n", "```\ncode\n```\n",
+                      "<!-- gm-only -->\nx\n<!-- /gm-only -->\n"):
+            note = FM + HEAD + CALLOUT + after + "\nMore.\n"
+            v = make_vault(self, {WRAP: note})
+            run(mv.find_wrapup_source_fence(v))
+            self.assertEqual(raw(v, WRAP), note.replace(CALLOUT, OPEN + CALLOUT + CLOSE, 1), after)
+
+    @unittest.skipUnless(HAS_NODE or os.environ.get("VAULT_CHECK_REQUIRE_NODE"),
+                         "needs node for the publish tool")
+    def test_the_player_site_drops_lazy_lines_too(self):
+        note = FM + HEAD + CALLOUT + "lazy SECRET2\n" + RECAP
+        v = make_vault(self, {WRAP: note})
+        run(mv.find_wrapup_source_fence(v))
+        shown = "\n".join(publisher_lines(raw(v, WRAP), [], {}))
+        self.assertNotIn("SECRET2", shown)
+        self.assertIn("The party reached the docks.", shown)
+
     def test_other_notes_and_other_callouts_untouched(self):
         npc = "---\ntype: npc\n---\n\n# Bob\n\n" + CALLOUT
         ref = ("---\ntype: reference\n---\n\n# Ref\n\n"
