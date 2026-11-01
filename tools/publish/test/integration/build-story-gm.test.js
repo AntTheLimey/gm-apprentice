@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 require('../helpers/quiet-legacy-warning.js');
 const { buildBoth, markedTexts, markedAfterMain } = require('../helpers/gm-build');
-const { storyVault, SECRETS, WRAP_1, SESSION, CHAPTER } = require('../helpers/story-vault');
+const { storyVault, SECRETS, WRAP_1, WRAP_2, SESSION, CHAPTER } = require('../helpers/story-vault');
 const { brokenLinks } = require('../helpers/site-links');
 const { runLeakGate } = require('../../lib/leak-gate');
 
@@ -236,6 +236,54 @@ describe('the GM Story page where players see something else', () => {
       const banner = /<div class="gm-band gm-band--hidden gm-mark"[^>]*>([^<]*)<\/div>/.exec(page);
       assert.ok(banner, 'the banner');
       assert.equal(banner[1], "Players don't see this page: players see this wrap-up on its own page (sessions/session-1-wrap-up.html), not here");
+      assert.equal(nestingFault(page), null);
+    } finally { s.cleanup(); }
+  });
+});
+
+// A held-back wrap-up with no recap of its own: the unit's recap falls back to the players' own, which shows once,
+// unmarked, and the mark holds only the wrap-up's parts.
+describe('the GM Story page: a held-back wrap-up with no recap of its own', () => {
+  const count = (html, s) => html.split(s).length - 1;
+  const heldMarks = (page) => markedTexts(page).filter((m) => m.label.startsWith('This wrap-up is held back from players: '));
+
+  it('a session: the players\' recap once, unmarked; the wrap-up\'s sections in the mark', () => {
+    const hub = SESSION(1).replace('HUB-BODY-1: what the GM prepped.\n', '## Narrative Recap\n\nHUBRECAP-1 the hub.\n');
+    const wrap = WRAP_1.replace('## Narrative Recap\n\nThe party reached the docks at dusk', '## Other\n\nThe party reached the docks at dusk');
+    const s = buildBoth(storyVault({ 'Sessions/Session 1.md': hub, 'Sessions/Session 1 Wrap-Up.md': wrap }), { player: { hide: { drafts: true } } });
+    try {
+      const page = read(s.gm, STORY_1);
+      assert.equal(count(page, 'HUBRECAP-1'), 1);
+      for (const m of markedTexts(page)) assert.ok(!m.text.includes('HUBRECAP-1'), `the players' recap in ${m.label}`);
+      const held = heldMarks(page);
+      assert.equal(held.length, 1);
+      for (const w of ['The party reached the docks', 'LOOT-KEY-1', 'MOMENT-FUNNY-1']) assert.ok(held[0].text.includes(w), w);
+      assert.ok(!/gm-band--hidden/.test(page));
+      assert.equal(nestingFault(page), null);
+      for (const [file, text] of texts(s.player)) {
+        for (const w of ['The party reached the docks', 'LOOT-KEY-1', 'MOMENT-FUNNY-1']) assert.ok(!text.includes(w), `${w} in ${file}`);
+      }
+    } finally { s.cleanup(); }
+  });
+
+  it('a chapter: the introduction once, unmarked; the chapter wrap-up\'s sections in the mark', () => {
+    const chapter = CHAPTER.replace('sort_order: 1', 'sort_order: 1\nstatus: complete');
+    const chWrap = '---\ntype: session_wrap\nchapter: "[[Chapter 1 Overview]]"\ncanon_status: DRAFT\n---\n\n# Chapter 1 Wrap-Up\n\n## Aftermath\n\nCHWRAP-AFTER-1: the docks burned.\n';
+    // The session wrap-ups publish, so both sites give the chapter its introduction page.
+    const canon = (w) => w.replace('canon_status: DRAFT', 'canon_status: CANON');
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': chapter, 'Chapters/Chapter 1/Chapter 1 Wrap-Up.md': chWrap,
+      'Sessions/Session 1 Wrap-Up.md': canon(WRAP_1), 'Sessions/Session 2 Wrap-Up.md': canon(WRAP_2) }),
+      { player: { hide: { drafts: true } } });
+    try {
+      assert.ok(read(s.player, INTRO).includes('CHAPTER-BODY-1'));
+      for (const [file, text] of texts(s.player)) assert.ok(!text.includes('CHWRAP-AFTER-1'), file);
+      const page = read(s.gm, INTRO);
+      assert.equal(count(page, 'CHAPTER-BODY-1'), 1);
+      for (const m of markedTexts(page)) assert.ok(!m.text.includes('CHAPTER-BODY-1'), `the introduction in ${m.label}`);
+      const held = heldMarks(page);
+      assert.equal(held.length, 1, JSON.stringify(markedTexts(page).map((m) => m.label)));
+      assert.ok(held[0].text.includes('CHWRAP-AFTER-1'));
+      assert.ok(!/gm-band--hidden/.test(page));
       assert.equal(nestingFault(page), null);
     } finally { s.cleanup(); }
   });
