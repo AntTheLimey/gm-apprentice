@@ -226,11 +226,15 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
   // A missing picture is reported by the page that shows the text. A wrap-up folded into this Story page
   // (story-fold.js) has no page of its own, so its text's missing pictures are reported here when `images.warn` asks
   // (the build's one image pass), and never for text another page shows too.
+  // The probe (no link map) given `images` resolves the pictures alone, so a recap that is only a picture the vault lacks
+  // is no recap there either: the fold it plans and the Story pages the build makes agree (probeSpine).
   const resolverFor = linkMap
     ? (outputPath, owns = false) => (md) => resolveWikiLinks(images
       ? resolveImageEmbeds(md, images.imageMap, outputPath, images.usedImages, { warn: !!(images.warn && owns) })
       : md, linkMap, outputPath)
-    : () => undefined;
+    : images
+      ? (outputPath) => (md) => resolveImageEmbeds(md, images.imageMap, outputPath, null, { warn: false })
+      : () => undefined;
   const foldedInto = (wrapUp, ...outs) => !!(wrapUp && wrapUp.foldedInto && outs.includes(wrapUp.foldedInto.outputPath));
   // A session's Story page is its wrap-up, one to one: a wrap-up folded into another unit's Story page (a chapter that
   // falls back to its session's wrap-up) gives this unit nothing, no recap and no sections.
@@ -355,6 +359,13 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
   return units;
 }
 
+// The spine the fold is planned from, before the link map is folded (story-fold.js): no links resolved, pictures
+// resolved against `imageMap` as the build's Story pages resolve them, nothing recorded and nothing said. The build,
+// explain and the leak gate plan with it.
+function probeSpine(pages, pairs, imageMap, options = {}) {
+  return buildStorySpine(pages, null, pairs, imageMap ? { imageMap, usedImages: null } : null, options);
+}
+
 // What the GM site marks on a Story page, from the player site's side: `banner`, the reason players have no Story
 // page here (the page-level banner), or null; `held`, the unit's `heldBack` when its wrap-up is shown in one mark
 // after the players' recap, or null. `playerHas`: the player site has a Story page at this address; `shows(page)`:
@@ -395,4 +406,4 @@ function characterStoryGroup(frontmatter, fallen) {
   return 'current';
 }
 
-module.exports = { gmStoryNotes, findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOfSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, storyPagesFor, orderedSessions, characterStoryGroup };
+module.exports = { gmStoryNotes, findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOfSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, probeSpine, storyPagesFor, orderedSessions, characterStoryGroup };

@@ -344,3 +344,25 @@ describe('Memorable Moments cards on the Story page', () => {
     assert.equal(found[0].fix, 'Change the tag to one of the five kinds, or remove it');
   });
 });
+
+// The fold is planned before the build resolves pictures; the Story page is made after. Both read a recap that is only
+// a picture the vault lacks the same way (no recap), so no wrap-up folds into a Story page that is never written.
+describe('a wrap-up whose recap is only a missing picture keeps its own page', () => {
+  const S1 = 'Sessions/Session 1 Wrap-Up.md';
+  const wrap = WRAP_1.replace(/## Narrative Recap\n\n[^\n]+\n/, '## Narrative Recap\n\n![[docks-at-dusk.png]]\n');
+  const mara = '---\ntype: npc\ntitle: Mara Quill\nstatus: alive\n---\n\n# Mara Quill\n\nSee [[Session 1 Wrap-Up]].\n';
+  const site = buildBoth(storyVault({ [S1]: wrap, 'NPCs/Mara Quill.md': mara }));
+  after(() => site.cleanup());
+
+  for (const side of ['player', 'gm']) {
+    it(`${side}: no Story page for session 1, the wrap-up on its own page, every link resolves`, () => {
+      assert.notStrictEqual(wrap, WRAP_1);
+      assert.ok(!site[side].exists(...STORY_1.split('/')), 'no Story page');
+      const own = site[side].read('sessions', 'session-1-wrap-up.html');
+      assert.ok(own.includes('LOOT-KEY-1') && own.includes('MOMENT-FUNNY-1'), 'the wrap-up shows on its own page');
+      assert.deepEqual(brokenLinks(site[side].dir), []);
+      const cards = JSON.parse(site[side].read('previews.json'));
+      assert.ok(!Object.keys(cards).some((k) => k.includes('chapter-1-docks-session-1')), Object.keys(cards).join(' '));
+    });
+  }
+});

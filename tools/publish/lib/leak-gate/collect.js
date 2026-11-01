@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { scanVaultReport, scanAllNotes, buildLinkMap, scanAttachments, STORY_SUFFIX } = require('../scanner');
-const { resolveConfig, loadPublishConfig, loadVaultConfig, vaultRelPath } = require('../config');
+const { resolveConfig, loadPublishConfig, loadVaultConfig, vaultRelPath, scanConfigFor } = require('../config');
 const { readSettings, forSite } = require('../settings');
 const { loadManifest } = require('../manifest');
 const { publishedPages } = require('../published-pages');
@@ -92,7 +92,7 @@ function collectHidden({ configPath, outputDir = null }) {
   // A wrap-up the player site folds into a Story page (story-fold.js) is linked, unaliased, by that page's title: the
   // build prints the label. So such a link is read both ways, by the note it names and by the label, in hidden text
   // and in what players may already read. The plan is the one explain reads (published-view.js playerFoldPlan).
-  const foldPlanned = playerFoldPlan(published, hubs, playerConfig);
+  const foldPlanned = playerFoldPlan(published, hubs, playerConfig, scanAttachments(scanConfigFor(Object.assign({}, config, { vaultPath }), playerConfig)));
   const foldLabels = foldLabelsOf(foldPlanned, linkMap);
   const relabel = (md) => (foldLabels.size ? labelFoldedLinks(md, linkMap, { labels: foldLabels }) : md);
   const bothWays = (md) => { const r = relabel(md); return r === md ? [md] : [md, r]; };

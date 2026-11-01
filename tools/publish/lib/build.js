@@ -31,7 +31,7 @@ const { createMarks, markKinds, sanitize, unmark, withoutMarked } = require('./g
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
 const { KINDS, parseMoments, momentsHtml } = require('./story-moments');
-const { buildStorySpine, gmStoryNotes, storyPagesFor, chapterOfSession, characterStoryGroup } = require('./story-spine');
+const { buildStorySpine, probeSpine, gmStoryNotes, storyPagesFor, chapterOfSession, characterStoryGroup } = require('./story-spine');
 const { foldPlan, applyFold, isFolded, labelFoldedHeadings } = require('./story-fold');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
@@ -1204,13 +1204,14 @@ function buildSite(options) {
   // One page per session (#543): a wrap-up a Story unit claims has no page of its own. It moves onto its Story page's
   // address, under the session's title, and every link-map key that named it now names the Story page; it stays in
   // `pages`, a source of links and words like any page (backlinks, Connections, recency, search, cards, landing).
-  const probeSpine = buildStorySpine(pages, null, storyPairs);
+  const storyProbe = probeSpine(pages, storyPairs, imageMap);
   // The GM site: the addresses of the player site's own Story pages, from its pages and its pairs, so each GM Story
   // page can say what players see there (story-spine.js `players`). Before the fold, as the player site reads them.
-  const playerStory = gm ? new Set(buildStorySpine(pages.filter((p) => onPlayerSite.has(p)), null,
-    new Map([...hubWrapUps].filter(([hub, wrap]) => onPlayerSite.has(hub) && onPlayerSite.has(wrap)))).map((u) => u.outputPath)) : null;
+  const playerStory = gm ? new Set(probeSpine(pages.filter((p) => onPlayerSite.has(p)),
+    new Map([...hubWrapUps].filter(([hub, wrap]) => onPlayerSite.has(hub) && onPlayerSite.has(wrap))),
+    show.has('notes') ? scanAttachments(scanConfigFor(config, hideFrom)) : imageMap).map((u) => u.outputPath)) : null;
   const storyPlayers = gm ? { has: (out) => playerStory.has(out), shows: (page) => onPlayerSite.has(page) } : null;
-  applyFold(foldPlan(probeSpine), linkMap);
+  applyFold(foldPlan(storyProbe), linkMap);
   LOWER_KEYS.delete(linkMap);   // its folded spellings were read from the old addresses
 
   // A PC note whose link or embed labels would change its headings is withheld whole
@@ -1230,7 +1231,7 @@ function buildSite(options) {
   // Whether a Story section will exist. Computed early (pure function of pages) so the
   // top nav — threaded into every page, including story pages built later — can point
   // the Story group at story.html. Must match what buildStory() emits below.
-  const hasStory = probeSpine.length > 0
+  const hasStory = storyProbe.length > 0
     || pages.some(p => p.frontmatter && p.frontmatter.type === 'pc' && p.storyMarkdown);
 
   // Build-time data pipeline
@@ -2490,6 +2491,15 @@ function buildSite(options) {
     // The story: its chapters, each PC's own story, its contents page.
     // On the GM site each Story page reads its wrap-up's marked view: its GM-only parts in place, marked.
     const spine = buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages }, { marked: gm, players: storyPlayers });
+    // The fold was planned on the probe spine (probeSpine), which reads recaps as this one does. Should the two ever
+    // disagree, a folded wrap-up would be on no page: said, never silent.
+    if (live) {
+      const written = new Set(spine.map((u) => u.outputPath));
+      for (const [out, wraps] of foldedOnto) {
+        if (written.has(out)) continue;
+        for (const w of wraps) console.warn(`  WARNING: ${vaultRelPathOf(w)}: its Story page (${out}) was not written, so this wrap-up shows on no page and links to it are broken; please report this as a bug`);
+      }
+    }
     for (const unit of spine) {
       if (unit.moments) {
         const parsed = parseMoments(unit.moments.markdown);
