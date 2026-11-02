@@ -259,6 +259,24 @@ describe('Story pictures: longest match wins', () => {
   });
 });
 
+describe('Story pictures: a name inside the words of a link to another page', () => {
+  const s = buildBoth(storyVault({ ...PEOPLE,
+    '_attachments/station.png': png(40, 30),
+    'Locations/MacMillian Station IV.md': note('location', 'MacMillian Station IV', 'station.png', 'aliases: ["MacMillian Station"]\n'),
+    'Locations/Station Security HQ.md': note('location', 'Station Security HQ', null),
+    'Sessions/Session 1 Wrap-Up.md': withRecap('Six went to [[Station Security HQ|MacMillian Station security HQ]].\n\nNobody slept.\n\n'
+      + 'Then [[MacMillian Station IV|MacMillian Station]] itself.') }));
+  after(() => s.cleanup());
+
+  it('is not a mention of the named page; a link to the page itself is, on both sites', () => {
+    for (const site of [s.player, s.gm]) {
+      const page = read(site, STORY_1);
+      assert.deepEqual(captions(page), ['MacMillian Station IV']);
+      assert.match(page, /<\/figure><\/div><p>Then /);
+    }
+  });
+});
+
 // A scene note never publishes; only its picture may, beside the paragraph that names one of its places or people.
 const SCENE_AT = 'Chapters/Chapter 1/Sessions/Session 1/Scenes/Scene_Docks.md';
 const scene = ({ played = '["[[Session 1]]"]', status = 'played', locations = '["[[The Docks]]"]', entities = '[]', picture = '![[scene-docks.png]]', tag = '1' } = {}) => `---

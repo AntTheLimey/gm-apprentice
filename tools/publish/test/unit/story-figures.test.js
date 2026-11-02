@@ -129,6 +129,22 @@ describe('mentionsOf', () => {
     assert.deepEqual(mentions(cand(page("O'Hara")), '<p>‘Quiet,’ said O’Hara.</p>'), [{ para: 0, at: 14 }]);
   });
 
+  it('a name inside the words of a link to another page is not a mention; inside a link to the page itself it is', () => {
+    const station = cand(page('MacMillian Station IV', { type: 'location', aliases: ['MacMillian Station'] }));
+    const hq = '<a href="../locations/macmillian-station-security-hq.html">MacMillian Station security HQ</a>';
+    assert.deepEqual(mentions(station, `<p>Six went to ${hq}.</p>`), []);
+    assert.deepEqual(mentions(station, `<p>Six went to <em>${hq}</em>.</p>`), []);
+    // Outside the link, in the same paragraph, the name still counts.
+    assert.deepEqual(mentions(station, `<p>Six went to ${hq} on MacMillian Station.</p>`), [{ para: 0, at: 46 }]);
+    // A link to the page itself counts, by its words and as a link.
+    assert.deepEqual(mentions(station, '<p>Six went to <a href="../npcs/macmillian-station-iv.html">MacMillian Station</a>.</p>'), [{ para: 0, at: 12 }]);
+    // A link off the site is not a page: a name in its words still counts.
+    assert.deepEqual(mentions(station, '<p>See <a href="https://example.com/">MacMillian Station</a>.</p>'), [{ para: 0, at: 4 }]);
+    // A scene is linked by any of its pages: one of its names inside a link to another of them still counts for it.
+    const scene = { ...station, outputPath: null, hrefs: new Set(['npcs/macmillian-station-iv.html', 'locations/macmillian-station-security-hq.html']), scene: true };
+    assert.deepEqual(mentions(scene, `<p>Six went to ${hq}.</p>`), [{ para: 0, at: 12 }]);
+  });
+
   it('a candidate with a set of hrefs is linked by any of them', () => {
     const c = { terms: [], hrefs: new Set(['places/a.html', 'places/b.html']) };
     assert.deepEqual(mentions(c, '<p>x</p><p><a href="../places/b.html">B</a></p>'), [{ para: 1, at: 0 }]);

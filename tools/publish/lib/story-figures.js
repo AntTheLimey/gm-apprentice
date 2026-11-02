@@ -257,17 +257,23 @@ function resolveHref(href, fromPath) {
 const straightQuotes = (s) => s.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
 
 // The text and links of one paragraph's HTML, its quotes read straight. `linkAt` maps each link's site path to where
-// its words start in the text.
+// its words start in the text; `linkSpans` is each link's words, as { start, end, target }.
 function readParagraph(html, fromPath) {
   const hrefs = new Set();
   const linkAt = new Map();
+  const linkSpans = [];
+  let link = null;   // the site link whose words are being read
   let text = '';
   let last = 0;
   for (const m of html.matchAll(TAG)) {
     text += decodeEntities(html.slice(last, m.index));
     last = m.index + m[0].length;
-    if (m[0].startsWith('<!--') || m[1] === '/') continue;
+    if (m[0].startsWith('<!--')) continue;
     const name = m[2].toLowerCase();
+    if (m[1] === '/') {
+      if (name === 'a' && link) { linkSpans.push({ ...link, end: text.length }); link = null; }
+      continue;
+    }
     if (name === 'br') text += ' ';
     if (name !== 'a') continue;
     const href = /\shref\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(m[3]);
@@ -275,9 +281,11 @@ function readParagraph(html, fromPath) {
     if (!target) continue;
     hrefs.add(target);
     if (!linkAt.has(target)) linkAt.set(target, text.length);
+    link = { start: text.length, target };
   }
   text += decodeEntities(html.slice(last));
-  return { text: straightQuotes(canonicalNfc(text)), hrefs, linkAt };
+  if (link) linkSpans.push({ ...link, end: text.length });
+  return { text: straightQuotes(canonicalNfc(text)), hrefs, linkAt, linkSpans };
 }
 
 // The recap's paragraphs: its top-level `<p>` blocks, one entry each. Where `marks` is given (the GM site) the HTML
@@ -291,9 +299,10 @@ function paragraphsOf(recapHtml, { fromPath, marks = null } = {}) {
     const kept = withoutMarked(html, marks);
     open = openMarks(html);
     if (el.tag !== 'p') return;
-    const { text, hrefs, linkAt } = readParagraph(kept, fromPath);
+    const { text, hrefs, linkAt, linkSpans } = readParagraph(kept, fromPath);
     const paragraph = { block, text, hrefs, hasImage: /<img\b/i.test(kept) };
-    Object.defineProperty(paragraph, 'linkAt', { value: linkAt });   // not part of the shape callers compare
+    // Not part of the shape callers compare.
+    Object.defineProperties(paragraph, { linkAt: { value: linkAt }, linkSpans: { value: linkSpans } });
     out.push(paragraph);
   });
   return out;
@@ -353,7 +362,8 @@ function readSpans(candidate, p) {
 // the offset of the first such link or name. The candidate's link targets are `hrefs` when it has them, else its
 // `outputPath`. Longest match wins: a name lying wholly inside a longer name of one of `others` (the other
 // candidates, and nameHolders' pages but the candidate's own) does not count there, so "Pelham" is not read inside
-// "Lady Anne Pelham"; a link always counts.
+// "Lady Anne Pelham". A name lying wholly inside the words of a link to another page does not count either: those
+// words name where the link goes. A link always counts.
 function mentionsOf(candidate, paragraphs, others = []) {
   const targets = candidate.hrefs ? [...candidate.hrefs] : [candidate.outputPath];
   const rivals = others.filter((o) => o !== candidate && !targets.includes(o.outputPath));
@@ -366,8 +376,10 @@ function mentionsOf(candidate, paragraphs, others = []) {
     }
     const spans = nameSpans(candidate, p);
     const longer = spans.length ? rivals.flatMap((o) => nameSpans(o, p)) : [];
+    const elsewhere = spans.length && p.linkSpans ? p.linkSpans.filter((l) => !targets.includes(l.target)) : [];
+    const within = (n) => (l) => l.start <= n.start && n.end <= l.end;
     for (const n of spans) {
-      const inside = longer.some((l) => l.end - l.start > n.end - n.start && l.start <= n.start && n.end <= l.end);
+      const inside = longer.some((l) => l.end - l.start > n.end - n.start && within(n)(l)) || elsewhere.some(within(n));
       if (!inside) at = Math.min(at, n.start);
     }
     if (at !== Infinity) out.push({ para, at });
