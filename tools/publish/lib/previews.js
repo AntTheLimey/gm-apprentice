@@ -126,6 +126,7 @@ function shownBody(page, { gm = false, show = null, excludeSections = DEFAULT_HI
   return playerSafeMarkdown(page.markdown, { excludeSections, excludeCallouts, frontmatter: fm }).text;
 }
 
+// Whether `page` gets no page on `site`, deciding nothing: the GM site's build asks it for the player site too.
 function noPageFor(page, site) {
   const fm = page.sourceFrontmatter || page.frontmatter || {};
   if (NO_PAGE_TYPES.has(fm.type)) return true;
@@ -165,4 +166,4 @@ function onlyBuiltPages(cards, isBuilt) {
   return out;
 }
 
-module.exports = { cardFor, rowsFor, buildPreviews, getsNoPage, decideNoPage, listedOnly, onlyBuiltPages };
+module.exports = { cardFor, rowsFor, buildPreviews, getsNoPage, decideNoPage, noPageFor, listedOnly, onlyBuiltPages };

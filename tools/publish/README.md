@@ -577,7 +577,7 @@ The `type` frontmatter field determines which template renders each page.
 | `item` | Item | Stat block + body |
 | `faction` / `organization` | Faction | Goals, leadership, auto-generated member list |
 | `event`, `clue`, `document`, `chapter`, `scene` | Smart wiki | Frontmatter badges + body |
-| `session` | Smart wiki | Frontmatter badges + body; once the session's Wrap-Up publishes, the body is withheld everywhere and replaced by the chapter, in-game date and the opening of the Wrap-Up's recap, linked to its Story page |
+| `session` | Smart wiki | Frontmatter badges + body; once the session's Wrap-Up publishes, the body is withheld everywhere and replaced by the chapter, in-game date and the opening of the Wrap-Up's recap, linked to its Story page, where pictures of the people and places the recap names sit beside the first paragraph that mentions each (`player_site.story.pictures`) |
 | anything else | Smart wiki | All frontmatter shown as badges |
 
 Pages with `canon_status: SUPERSEDED` resolve wiki-links to the

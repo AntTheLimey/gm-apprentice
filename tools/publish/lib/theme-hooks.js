@@ -35,6 +35,8 @@ const HOOKS = [
   { selector: 'section.story-moments', when: 'always', marks: "The Memorable Moments block under a Story page's story, while `player_site.story.moments` is on, the default", example: 'section.story-moments { border-top-style: dashed; }' },
   { selector: 'article.moment-card', when: 'always', marks: "One moment's card in that block, while `player_site.story.moments` is on, the default", example: 'article.moment-card { border-radius: 4px; }' },
   { selector: 'p.moment-kind[data-kind]', when: 'always', marks: "A card's kind row (icon and label); `data-kind` is `dramatic`, `intriguing`, `funny`, `epic` or `tragic`. A card with no kind has none. While `player_site.story.moments` is on, the default", example: 'p.moment-kind[data-kind="funny"] { letter-spacing: 0.2em; }' },
+  { selector: 'div.story-figures', when: 'always', marks: "The pictures set beside one paragraph of a Story page's story, floated to the right or left in turn, while `player_site.story.pictures` is on, the default. Also `story-figures--left` and, for a pair, `story-figures--two`", example: 'div.story-figures { width: 220px; }' },
+  { selector: 'figure.story-figure', when: 'always', marks: "One picture in that block (its link, the picture, the expand mark and, for a person or place, its name). A location, faction or item also carries `story-figure--place`", example: 'figure.story-figure figcaption { font-style: italic; }' },
 ];
 
 // The classes of the blocks that hold a page's title, outermost first where they nest.

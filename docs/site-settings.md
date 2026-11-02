@@ -434,15 +434,18 @@ player_site:
 ## Story pages
 
 A session's wrap-up is its Story page: any text above its first heading,
-the recap, the wrap-up's other sections, then the Memorable Moments as cards. One switch controls the cards.
-It belongs to the player site, and the GM site follows it: the GM site still
-shows the cards, marked as hidden from players.
+the recap, the wrap-up's other sections, then the Memorable Moments as cards.
+The recap also gets pictures of the people and places it names. One switch
+controls the cards and one the pictures. Both belong to the player site, and
+the GM site follows them: the GM site still shows the cards, marked as hidden
+from players.
 
 <!-- settings:story -->
 
 | Setting | What it does | Values | Left out |
 |---------|--------------|--------|----------|
 | `player_site.story.moments` | The Memorable Moments section of a session's wrap-up, shown as cards after the story on its Story page. Off, the section is left out of the site: no page, search entry, link preview or Connections text holds it. The GM site still shows the cards, marked | A switch | On |
+| `player_site.story.pictures` | Pictures of the people and places a Story page's recap names, set in the text beside the first paragraph that mentions each (two at most beside one paragraph). A picture comes from the page's `portrait`, or from a scene played that session, beside the paragraph naming the most of its places and people; player characters are left out. Off, no pictures are added; pictures you put in the recap stay | A switch | On |
 
 <!-- /settings:story -->
 
@@ -610,6 +613,7 @@ mark always means hidden from players. The GM site's folder is
 - `player_site.features.live_stats`
 - `player_site.features.inbox`
 - `player_site.story.moments`
+- `player_site.story.pictures`
 
 <!-- /settings:gm-not-per-site -->
 

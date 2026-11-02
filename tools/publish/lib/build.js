@@ -8,14 +8,14 @@ const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllN
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit, detectEncoder, CACHE_FOLDER } = require('./image-optimize');
 const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
 const { resolveBanner, renderBanner, normalizeEntry, attachmentRef, isAddress, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
-const { pcKeepList, storyMomentsOn, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
+const { pcKeepList, storyMomentsOn, storyPicturesOn, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
 const { noticeText } = require('./notice');
 const { fontNamesOfFile, licenceOf } = require('./font-names');
-const { getsNoPage, decideNoPage, listedOnly } = require('./previews');
+const { getsNoPage, decideNoPage, noPageFor, listedOnly } = require('./previews');
 const { runSteps, packageScripts, packageNotes } = require('./settings/steps');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
 const { ignoringMark } = require('./heading-key');
@@ -32,6 +32,7 @@ const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = requ
 const fontsLib = require('./fonts');
 const { KINDS, parseMoments, momentsHtml } = require('./story-moments');
 const { buildStorySpine, probeSpine, gmStoryNotes, storyPagesFor, chapterOfSession, characterStoryGroup } = require('./story-spine');
+const { figureCandidates, pageNames, nameHolders, sceneCandidates } = require('./story-figures');
 const { foldPlan, applyFold, isFolded, labelFoldedHeadings } = require('./story-fold');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
@@ -390,6 +391,8 @@ function buildSite(options) {
   const pcKeepSections = pcKeepList(publishConfig);
   // `player_site.story.moments`: the GM site reads the player site's value, as it does the hiding settings.
   const storyMoments = storyMomentsOn(hideFrom);
+  // `player_site.story.pictures`: read the same way, so both sites picture the same (an injected config without `story` means on).
+  const storyPictures = storyPicturesOn(hideFrom);
   // The one derivation of "sheets off": the filter's own answer, handed to the page template.
   const sheetsOff = pcKeepSections !== null;
   const excludeCallouts = hideFrom.exclude_callouts;
@@ -998,6 +1001,9 @@ function buildSite(options) {
   // `pages`, so none of them can name it or link to a file that is not built.
   // Which notes get no page is decided once, for this site: a listed-only prop is judged on the body this site shows.
   decideNoPage(published, gm ? { gm: true, show, excludeSections, excludeCallouts } : { excludeSections, excludeCallouts });
+  // The GM site: the pages the player site writes a page for, judged as the player site judges them (a listed-only prop
+  // whose words are all the GM's has a page here and none there), for the pictures a Story page may show.
+  const playerPaged = gm ? new Set(playerPublished.filter((p) => !noPageFor(p, { excludeSections, excludeCallouts }))) : null;
   pages = published.filter(p => !getsNoPage(p));
   // A page whose address leads through a link in a kept folder (a full build's clean leaves only those; a fast build
   // cleans nothing) is never written (#507). It leaves the list here, like an unpublished note, so no link, index or
@@ -1210,11 +1216,28 @@ function buildSite(options) {
   // Its pairs keep `linked`: a wrap-up linked to a session players do not see never stands in for another session.
   const playerPairs = gm ? Object.assign(new Map([...hubWrapUps].filter(([hub, wrap]) => onPlayerSite.has(hub) && onPlayerSite.has(wrap))),
     { linked: hubWrapUps.linked }) : null;
-  const playerStory = gm ? new Set(probeSpine(pages.filter((p) => onPlayerSite.has(p)), playerPairs,
-    show.has('notes') ? scanAttachments(scanConfigFor(config, hideFrom)) : imageMap).map((u) => u.outputPath)) : null;
+  // The pictures the player site has: a folder it hides is not scanned there.
+  const playerImages = gm && show.has('notes') ? scanAttachments(scanConfigFor(config, hideFrom)) : imageMap;
+  const playerStory = gm ? new Set(probeSpine(pages.filter((p) => onPlayerSite.has(p)), playerPairs, playerImages).map((u) => u.outputPath)) : null;
   const storyPlayers = gm ? { has: (out) => playerStory.has(out), shows: (page) => onPlayerSite.has(page) } : null;
   applyFold(foldPlan(storyProbe), linkMap);
   LOWER_KEYS.delete(linkMap);   // its folded spellings were read from the old addresses
+  // The pages a Story page may picture beside its recap (story-figures.js), read once, after the fold has given each
+  // page its final address. On the GM site only those the player site writes a page for, with a portrait the player
+  // site has (and this one too), by their names as players read them, so both sites picture the same pages under the
+  // same captions. Both spine calls below take this one list. A session's Story page also pictures the scenes played
+  // in it: the scene notes never publish, and their pictures are named by the pages their places and people link, by
+  // the same rules, with a picture both sites have. A name counts only where it is not inside a longer name of any
+  // page players see (nameHolders, the same pages, PCs too). With `player_site.story.pictures` off there is none, and
+  // no picture is copied for a Story page.
+  const figureRules = { onPlayerSite: playerPaged, excludeFields, overridesOf: (page) => fieldOverrides[vaultRelPathOf(page)] || {},
+    marks: mark ? mark.marks : null };
+  const scenesOf = storyPictures ? sceneCandidates(allNotes, { names: pageNames(pages, figureRules), imageMap: playerImages, linkMap,
+    folded: (name) => foldedPagePath(linkMap, name) }) : null;
+  const storyFigures = storyPictures ? { candidates: figureCandidates(pages, { imageMap: playerImages, ...figureRules })
+    .filter((c) => c.key in imageMap),
+    blockers: nameHolders(pages, figureRules),
+    scenesFor: (unit) => scenesOf(unit).filter((c) => c.key in imageMap) } : null;
 
   // A PC note whose link or embed labels would change its headings is withheld whole
   // while character sheets are off. Decided once, here, so the page, its sections and
@@ -2236,7 +2259,7 @@ function buildSite(options) {
   // from that filtered set regardless of whether a manifest exists, so gating this on
   // `manifest` just meant a manifest-less player build shipped every GM-only image.
   // A recap's picture counts as used: the story pages are rendered once here, for the set only.
-  if (!onlySheets) buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages, warn: true }, { marked: gm, marks: mark ? mark.marks : null, players: storyPlayers });
+  if (!onlySheets) buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages, warn: true }, { marked: gm, marks: mark ? mark.marks : null, players: storyPlayers, figures: storyFigures });
   const filteredMap = {};
   for (const [basename, entry] of Object.entries(imageMap)) {
     if (usedImages.has(basename)) filteredMap[basename] = entry;
@@ -2492,7 +2515,7 @@ function buildSite(options) {
 
     // The story: its chapters, each PC's own story, its contents page.
     // On the GM site each Story page reads its wrap-up's marked view: its GM-only parts in place, marked.
-    const spine = buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages }, { marked: gm, marks: mark ? mark.marks : null, players: storyPlayers });
+    const spine = buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages }, { marked: gm, marks: mark ? mark.marks : null, players: storyPlayers, figures: storyFigures });
     // The fold was planned on the probe spine (probeSpine), which reads recaps as this one does. Should the two ever
     // disagree, a folded wrap-up would be on no page: said, never silent.
     if (live) {
