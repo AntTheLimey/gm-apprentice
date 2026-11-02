@@ -323,17 +323,38 @@ const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // One whole-word pattern per name, its quotes read straight. A name of several words matches in any case; a one-word
 // name only where it starts with a capital as written, so "Six" is found and "six guards" is not. A name under two
 // characters never matches. Each is compiled once and kept (PATTERNS, by name): every candidate is read against every
-// recap of the site.
+// recap of the site. The pattern is the name alone; whole words are checked around each match (wholeWords), as a
+// pattern holding the check (`(?<![\p{L}\p{N}])` and `(?![\p{L}\p{N}])`) would, which costs far more to build.
 const PATTERNS = new Map();
 function termPattern(term) {
   if (!PATTERNS.has(term)) PATTERNS.set(term, compileTerm(term));
   return PATTERNS.get(term);
 }
+const tooShort = (term) => Array.from(term).length < 2;
 function compileTerm(term) {
-  if (Array.from(term).length < 2) return null;
-  const words = straightQuotes(term).split(/\s+/).map(escapeRegExp);
-  const source = `(?<![\\p{L}\\p{N}])${words.join('\\s+')}(?![\\p{L}\\p{N}])`;
-  return { regex: new RegExp(source, words.length > 1 ? 'giu' : 'gu'), single: words.length === 1 };
+  if (tooShort(term)) return null;
+  const words = straightQuotes(term).split(/\s+/).filter(Boolean).map(escapeRegExp);
+  if (words.length === 0) return null;
+  return { regex: new RegExp(words.join('\\s+'), words.length > 1 ? 'giu' : 'gu'), single: words.length === 1 };
+}
+
+// Each match of `pattern` in `text` with no letter or digit just before or after it, as `matchAll` would find them
+// with the check in the pattern: a match that fails it is tried again one character on. From any one place a name can
+// match only one way (its words hold no spaces, and the spaces between them are all taken), so nothing is missed.
+const LETTER_BEFORE = /[\p{L}\p{N}]$/u;
+const LETTER_AFTER = /^[\p{L}\p{N}]/u;
+function* wholeWords(pattern, text) {
+  const re = pattern.regex;
+  re.lastIndex = 0;
+  let m;
+  while ((m = re.exec(text))) {
+    const start = m.index;
+    const end = start + m[0].length;
+    if (!LETTER_BEFORE.test(text.slice(Math.max(0, start - 2), start)) && !LETTER_AFTER.test(text.slice(end, end + 2))) {
+      yield m;
+      re.lastIndex = end;
+    } else re.lastIndex = start + (text.codePointAt(start) > 0xFFFF ? 2 : 1);
+  }
 }
 
 // Where a candidate's names stand in one paragraph's text: each whole-word match of one of its names, as
@@ -347,14 +368,71 @@ function nameSpans(candidate, p) {
 }
 function readSpans(candidate, p) {
   const out = [];
-  for (const pattern of (candidate.terms || []).map(termPattern)) {
+  const words = wordsOf(p);
+  for (const term of candidate.terms || []) {
+    const runs = termRuns(term);
+    if (runs !== null && !runs.every((w) => words.has(w))) continue;
+    const pattern = termPattern(term);
     if (!pattern) continue;
-    pattern.regex.lastIndex = 0;
-    for (const m of p.text.matchAll(pattern.regex)) {
+    for (const m of wholeWords(pattern, p.text)) {
       if (pattern.single && !/^\p{Lu}/u.test(m[0])) continue;
       out.push({ start: m.index, end: m.index + m[0].length });
     }
   }
+  return out;
+}
+
+// The word index, so a paragraph is read only for the names whose words it holds: every site page's names are
+// rivals in every paragraph (mentionsOf), and most of them are in none. A name's runs are its runs of letters and
+// digits, lowercased; a name that matches holds each of them as a whole word of the paragraph (wordsOf, read the same
+// way), and is indexed by its first. Only a name wholly in ASCII has runs: there lowercasing reads case as the
+// patterns do (with "ſ" read as "s", the one other letter that matches an ASCII one in any case but "K", which
+// lowercases to "k"). Any other name has none (null) and is always read. Each is worked out once (RUNS, WORDS, INDEX).
+const RUN = /[\p{L}\p{N}]+/gu;
+const RUNS = new Map();
+function termRuns(term) {
+  if (!RUNS.has(term)) {
+    const plain = straightQuotes(term);
+    const runs = /^[\x00-\x7F]*$/.test(plain) ? (plain.match(RUN) || []).map((w) => w.toLowerCase()) : [];
+    RUNS.set(term, runs.length ? runs : null);
+  }
+  return RUNS.get(term);
+}
+const WORDS = new WeakMap();
+function wordsOf(p) {
+  if (!WORDS.has(p)) WORDS.set(p, new Set((p.text.match(RUN) || []).map((w) => w.toLowerCase().replace(/\u017F/g, 's'))));
+  return WORDS.get(p);
+}
+// `list` (mentionsOf's `others`) by key: { byWord: Map(key -> entries), always: entries with a name that has none }.
+// An entry with no name that can match is in neither.
+const INDEX = new WeakMap();
+function indexOf(list) {
+  if (INDEX.has(list)) return INDEX.get(list);
+  const byWord = new Map();
+  const always = [];
+  for (const o of list) {
+    const keys = (o.terms || []).filter((t) => !tooShort(t)).map((t) => { const runs = termRuns(t); return runs && runs[0]; });
+    if (keys.includes(null)) { always.push(o); continue; }
+    for (const key of new Set(keys)) {
+      if (!byWord.has(key)) byWord.set(key, []);
+      byWord.get(key).push(o);
+    }
+  }
+  const index = { byWord, always };
+  INDEX.set(list, index);
+  return index;
+}
+// The entries of `list` that may name something in paragraph `p`, a Set; an entry not in it names nothing there.
+// Kept per paragraph (MAY).
+const MAY = new WeakMap();
+function inParagraph(list, p) {
+  if (!MAY.has(p)) MAY.set(p, new WeakMap());
+  const known = MAY.get(p);
+  if (known.has(list)) return known.get(list);
+  const { byWord, always } = indexOf(list);
+  const out = new Set(always);
+  for (const word of wordsOf(p)) for (const o of byWord.get(word) || []) out.add(o);
+  known.set(list, out);
   return out;
 }
 
@@ -366,7 +444,9 @@ function readSpans(candidate, p) {
 // words name where the link goes. A link always counts.
 function mentionsOf(candidate, paragraphs, others = []) {
   const targets = candidate.hrefs ? [...candidate.hrefs] : [candidate.outputPath];
-  const rivals = others.filter((o) => o !== candidate && !targets.includes(o.outputPath));
+  const rival = (o) => o !== candidate && !targets.includes(o.outputPath);
+  // A candidate among `others` (placeFigures) is read only in the paragraphs the index says may name it.
+  const indexed = others.includes(candidate);
   const out = [];
   paragraphs.forEach((p, para) => {
     let at = Infinity;
@@ -374,8 +454,8 @@ function mentionsOf(candidate, paragraphs, others = []) {
       if (!p.hrefs.has(t)) continue;
       at = Math.min(at, p.linkAt && p.linkAt.has(t) ? p.linkAt.get(t) : 0);
     }
-    const spans = nameSpans(candidate, p);
-    const longer = spans.length ? rivals.flatMap((o) => nameSpans(o, p)) : [];
+    const spans = !indexed || inParagraph(others, p).has(candidate) ? nameSpans(candidate, p) : [];
+    const longer = spans.length ? [...inParagraph(others, p)].filter(rival).flatMap((o) => nameSpans(o, p)) : [];
     const elsewhere = spans.length && p.linkSpans ? p.linkSpans.filter((l) => !targets.includes(l.target)) : [];
     const within = (n) => (l) => l.start <= n.start && n.end <= l.end;
     for (const n of spans) {
