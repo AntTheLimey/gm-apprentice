@@ -111,12 +111,14 @@ function firstImage(line) {
 const NOT_PLAYED = new Set(['dropped', 'paused']);
 const linksOf = (value) => (Array.isArray(value) ? value : value == null || value === '' ? [] : [value]).map(linkTarget).filter(Boolean);
 const folderOf = (note) => path.dirname(note.sourcePath || '');
+const statusOf = (fm) => String(fm.status == null ? '' : fm.status).trim().toLowerCase();
 
 // The session notes (index or wrap-up, by sourcePath) a scene counts for. `played_in` decides when it names
-// anything; otherwise its `session:` link (to the index, or to a Plan, which names its index) and the session folder
-// whose `Scenes/` it sits in, when that folder holds one session index. A link resolves as the site resolves links
-// among every session note of the vault, the nearest when several share a name (session-hub.js), and a wrap-up counts
-// for its own index as well.
+// anything. Otherwise only a scene marked `status: played` counts (prep for a session not yet played is linked to its
+// Plan too), by its `session:` link (to the index, or to a Plan, which names its index); a played scene with no
+// `session:` link counts by the session folder whose `Scenes/` it sits in, when that folder holds one session index.
+// A link resolves as the site resolves links among every session note of the vault, the nearest when several share a
+// name (session-hub.js), and a wrap-up counts for its own index as well. The caller drops a dropped or paused scene.
 function sessionsOfScene(scene, vault) {
   const out = new Set();
   const add = (note) => {
@@ -133,11 +135,15 @@ function sessionsOfScene(scene, vault) {
     for (const target of played) add(nearest(scene, named(target, vault.hubs.concat(vault.wrapUps))));
     return out;
   }
-  for (const target of linksOf(fm.session)) {
+  if (statusOf(fm) !== 'played') return out;
+  const sessions = linksOf(fm.session);
+  for (const target of sessions) {
     const hit = nearest(scene, named(target, vault.hubs.concat(vault.plans)));
     if (hit && hit.frontmatter.type === 'session-plan') add(nearest(hit, named(linkTarget(hit.frontmatter.session), vault.hubs)));
     else add(hit);
   }
+  // An explicit link beats the folder: a scene moved to another session keeps the folder it was written in.
+  if (sessions.length > 0) return out;
   // A flat Sessions folder holds several indexes beside one Scenes/: its scenes belong to none of them by folder.
   const folder = folderOf(scene);
   if (path.basename(folder) === 'Scenes') {
@@ -159,7 +165,7 @@ function sceneCandidates(notes, { names, imageMap, linkMap }) {
   const scenes = [];
   for (const scene of typed(new Set(['scene']))) {
     const fm = scene.frontmatter;
-    if (NOT_PLAYED.has(String(fm.status || '').trim().toLowerCase())) continue;
+    if (NOT_PLAYED.has(statusOf(fm))) continue;
     const key = scenePicture(scene.body);
     if (!key || !imageMap || !(key in imageMap)) continue;
     const seen = new Set();

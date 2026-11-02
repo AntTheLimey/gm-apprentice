@@ -296,6 +296,7 @@ describe('sceneCandidates', () => {
   const hub2 = note(`${S}/Session 2/Session 2`, { type: 'session', chapter: '[[C1]]' }, '');
   const wrap2 = note(`${S}/Session 2/Session 2 Wrap-Up`, { type: 'session_wrap', session: '[[Session 2]]' }, '');
   const plan1 = note(`${S}/Session 1/Session 1 Plan`, { type: 'session-plan', session: '[[Session 1]]' }, '');
+  const plan2 = note(`${S}/Session 2/Session 2 Plan`, { type: 'session-plan', session: '[[Session 2]]' }, '');
   const docks = { outputPath: 'locations/the-docks.html', displayTitle: 'The Docks', frontmatter: { type: 'location', aliases: ['Docks Quarter', 'Smugglers Row'], gm_aliases: ['Smugglers Row'] } };
   const six = { outputPath: 'pcs/six.html', displayTitle: 'Six', frontmatter: { type: 'pc' } };
   const hidden = { outputPath: 'locations/vault.html', displayTitle: 'The Vault', frontmatter: { type: 'location' } };
@@ -303,9 +304,10 @@ describe('sceneCandidates', () => {
   const linkMap = { 'The Docks': docks.outputPath, 'Smugglers Row': docks.outputPath, Six: six.outputPath, 'The Vault': hidden.outputPath };
   const unit1 = { kind: 'session', sourcePage: { sourcePath: hub1.sourcePath }, wrapUpPage: null };
   const unit2 = { kind: 'session', sourcePage: { sourcePath: hub2.sourcePath }, wrapUpPage: { sourcePath: wrap2.sourcePath } };
-  const scene = (rel, fm, body) => note(rel, { type: 'scene', locations: ['[[The Docks]]'], ...fm }, body);
+  // A scene marked played, as a played scene in a real vault is; a test about its status sets its own.
+  const scene = (rel, fm, body) => note(rel, { type: 'scene', status: 'played', locations: ['[[The Docks]]'], ...fm }, body);
   const forUnits = (notes) => {
-    const of = sceneCandidates([hub1, hub2, wrap2, plan1, ...notes], { names, imageMap, linkMap });
+    const of = sceneCandidates([hub1, hub2, wrap2, plan1, plan2, ...notes], { names, imageMap, linkMap });
     return [of(unit1).length, of(unit2).length];
   };
 
@@ -325,17 +327,34 @@ describe('sceneCandidates', () => {
     assert.deepEqual(forUnits([scene('Chapters/C1/Scenes/Docks', { played_in: ['[[Session 1]]', '[[Session 2]]'] })]), [1, 1]);
   });
 
-  it('with no played_in: its session folder\'s Scenes/, or a session: link to the index or its Plan', () => {
-    assert.deepEqual(forUnits([scene(`${S}/Session 1/Scenes/Docks`, {})]), [1, 0]);
-    assert.deepEqual(forUnits([scene(`${S}/Session 1/Scenes/Docks`, { played_in: [] })]), [1, 0]);
-    assert.deepEqual(forUnits([scene('Chapters/C1/Scenes/Docks', { session: '[[Session 2]]' })]), [0, 1]);
-    assert.deepEqual(forUnits([scene('Chapters/C1/Scenes/Docks', { session: '[[Session 1 Plan]]' })]), [1, 0]);
-    assert.deepEqual(forUnits([scene('Chapters/C1/Scenes/Docks', {})]), [0, 0]);
+  it('with no played_in, a played scene: a session: link to the index or its Plan, else its session folder\'s Scenes/', () => {
+    const played = { status: 'played' };
+    assert.deepEqual(forUnits([scene(`${S}/Session 1/Scenes/Docks`, played)]), [1, 0]);
+    assert.deepEqual(forUnits([scene(`${S}/Session 1/Scenes/Docks`, { ...played, played_in: [] })]), [1, 0]);
+    assert.deepEqual(forUnits([scene(`${S}/Session 1/Scenes/Docks`, { status: ' Played ' })]), [1, 0]);
+    assert.deepEqual(forUnits([scene('Chapters/C1/Scenes/Docks', { ...played, session: '[[Session 2]]' })]), [0, 1]);
+    assert.deepEqual(forUnits([scene('Chapters/C1/Scenes/Docks', { ...played, session: '[[Session 1 Plan]]' })]), [1, 0]);
+    assert.deepEqual(forUnits([scene('Chapters/C1/Scenes/Docks', played)]), [0, 0]);
+  });
+
+  it('a session: link beats the Scenes/ folder: a played scene re-linked to another session counts only there', () => {
+    assert.deepEqual(forUnits([scene(`${S}/Session 1/Scenes/Docks`, { status: 'played', session: '[[Session 2]]' })]), [0, 1]);
   });
 
   it('a dropped or paused scene counts for no session', () => {
     assert.deepEqual(forUnits([scene(`${S}/Session 1/Scenes/Docks`, { status: 'dropped', played_in: ['[[Session 1]]'] })]), [0, 0]);
     assert.deepEqual(forUnits([scene(`${S}/Session 1/Scenes/Docks`, { status: 'Paused' })]), [0, 0]);
+  });
+
+  it('with no played_in, a scene not marked played counts for no session: prep linked to a Plan, or in a Scenes/ folder', () => {
+    assert.deepEqual(forUnits([scene('Chapters/C1/Scenes/Docks', { status: 'ready', session: '[[Session 2 Plan]]' })]), [0, 0]);
+    assert.deepEqual(forUnits([scene(`${S}/Session 2/Scenes/Docks`, { status: 'ready', session: '[[Session 2 Plan]]' })]), [0, 0]);
+    for (const status of ['planned', 'modified', 'ready', '']) {
+      assert.deepEqual(forUnits([scene(`${S}/Session 1/Scenes/Docks`, { status, session: '[[Session 1]]' })]), [0, 0], status);
+    }
+    assert.deepEqual(forUnits([scene(`${S}/Session 1/Scenes/Docks`, { status: undefined })]), [0, 0]);
+    // played_in still decides for a scene whose status was never updated.
+    assert.deepEqual(forUnits([scene(`${S}/Session 1/Scenes/Docks`, { status: 'ready', played_in: ['[[Session 1]]'] })]), [1, 0]);
   });
 
   it('no page players see among its places and people, no picture, or a picture the build lacks: nothing', () => {

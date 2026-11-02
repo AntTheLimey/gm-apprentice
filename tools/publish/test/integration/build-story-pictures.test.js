@@ -9,12 +9,13 @@ const fs = require('node:fs');
 const path = require('node:path');
 require('../helpers/quiet-legacy-warning.js');
 const { buildBoth } = require('../helpers/gm-build');
-const { storyVault, WRAP_1, SESSION } = require('../helpers/story-vault');
+const { storyVault, WRAP_1, WRAP_2, SESSION } = require('../helpers/story-vault');
 const { brokenLinks } = require('../helpers/site-links');
 const { makePng } = require('../helpers/make-png');
 const { runLeakGate } = require('../../lib/leak-gate');
 
 const STORY_1 = 'story/chapter-1-docks-session-1.html';
+const STORY_2 = 'story/chapter-1-docks-session-2.html';
 const read = (site, p) => site.read(...p.split('/'));
 const png = (w = 30, h = 40) => makePng(w, h);
 
@@ -323,13 +324,30 @@ describe('Story pictures: a scene whose picture is the portrait of a page the re
 });
 
 describe('Story pictures: scenes that give no picture', () => {
-  const pics = {};
-  for (const n of ['dropped', 'paused', 'other', 'callout', 'gmnotes', 'unnamed']) pics[`_attachments/${n}.png`] = png(40, 30);
+  const NONE = ['dropped', 'paused', 'other', 'callout', 'gmnotes', 'unnamed', 'ready', 'planned', 'modified', 'unmarked', 'moved'];
+  const pics = { '_attachments/bay.png': png(40, 30) };
+  for (const n of NONE) pics[`_attachments/${n}.png`] = png(40, 30);
   const at = (n) => `Chapters/Chapter 1/Scenes/Scene_${n}.md`;
+  // Session 1's index sits in its own folder, beside the Scenes/ folder the prep for it was written in, with its Plan.
+  const S1 = 'Chapters/Chapter 1/Sessions/Session 1';
+  const linked = (text, link) => text.replace('played_in:', `session: "${link}"\nplayed_in:`);
+  // Prep not yet played (as a real vault keeps it): no played_in, a status other than played, linked to the Plan.
+  const prep = (status, tag) => linked(scene({ played: '[]', status, picture: `![[${tag}.png]]`, tag }), '[[Session 1 Plan]]');
   const s = buildBoth(storyVault({
     ...SCENE_FILES,
     ...pics,
     [SCENE_AT]: null,
+    'Sessions/Session 1.md': null,
+    [`${S1}/Session 1.md`]: SESSION(1),
+    [`${S1}/Session 1 Plan.md`]: '---\ntype: session-plan\nsession: "[[Session 1]]"\npublish: false\n---\n\n# Session 1 Plan\n',
+    [`${S1}/Scenes/Scene_Ready.md`]: prep('ready', 'ready'),
+    [`${S1}/Scenes/Scene_Planned.md`]: prep('planned', 'planned'),
+    [`${S1}/Scenes/Scene_Modified.md`]: prep('modified', 'modified'),
+    [`${S1}/Scenes/Scene_Unmarked.md`]: scene({ played: '[]', status: 'ready', picture: '![[unmarked.png]]', tag: 'unmarked' }),
+    // Played, with no played_in, and re-linked to Session 2 though it still sits in Session 1's Scenes/: Session 2 only.
+    [`${S1}/Scenes/Scene_Moved.md`]: linked(scene({ played: '[]', locations: '["[[The Docks]]", "[[The Bay]]"]', picture: '![[moved.png]]', tag: 'moved' }), '[[Session 2]]'),
+    'Locations/The Bay.md': note('location', 'The Bay', null),
+    'Sessions/Session 2 Wrap-Up.md': WRAP_2.replace('crossed the bay at night', 'crossed [[The Bay]] at night'),
     'Locations/Salt Row.md': note('location', 'Salt Row', null),
     [at('Dropped')]: scene({ status: 'dropped', picture: '![[dropped.png]]', tag: 'D' }),
     [at('Paused')]: scene({ status: 'paused', picture: '![[paused.png]]', tag: 'P' }),
@@ -342,15 +360,18 @@ describe('Story pictures: scenes that give no picture', () => {
   }));
   after(() => s.cleanup());
 
-  it('a dropped or paused scene, one played in another session, a picture in a callout or under GM Notes, and a scene whose places the recap never names: no picture on either site', () => {
+  it('a dropped or paused scene, one played in another session, prep not marked played, a picture in a callout or under GM Notes, and a scene whose places the recap never names: no picture on either site', () => {
     for (const site of [s.player, s.gm]) {
-      for (const story of [STORY_1, 'story/chapter-1-docks-session-2.html']) {
+      for (const story of [STORY_1, STORY_2]) {
         const page = read(site, story);
-        for (const n of ['dropped', 'paused', 'other', 'callout', 'gmnotes', 'unnamed']) assert.ok(!page.includes(`images/${n}.`), `${n} on ${story}`);
+        for (const n of NONE) if (!(n === 'moved' && story === STORY_2)) assert.ok(!page.includes(`images/${n}.`), `${n} on ${story}`);
       }
       assert.deepEqual(captions(read(site, STORY_1)), ['Captain Rook']);
+      // The played scene re-linked to Session 2 is pictured there, by the place Session 2's recap names.
+      assert.equal(figures(read(site, STORY_2)).length, 1);
+      assert.match(read(site, STORY_2), /images\/moved\.(png|webp)" alt="" loading="lazy">[\s\S]*?<\/figure><\/div><p>The party crossed/);
       for (const [file, text] of builtText(site, { gm: site === s.gm })) {
-        for (const tag of ['D', 'P', 'O', 'C', 'G', 'U']) {
+        for (const tag of ['D', 'P', 'O', 'C', 'G', 'U', 'ready', 'planned', 'modified', 'unmarked', 'moved']) {
           assert.ok(!text.includes(`SCENESECRET-${tag}`) && !text.includes(`SCENETITLE-${tag}`), `scene ${tag} text in ${file}`);
         }
       }
