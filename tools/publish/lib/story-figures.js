@@ -4,7 +4,7 @@
 // is ever touched; the build adds a figure before the paragraph it chose.
 
 const path = require('node:path');
-const { portraitBasename, nameList, isWebImageAddress, publishedFrontmatter } = require('./processor');
+const { portraitBasename, nameList, isWebImageAddress, publishedFrontmatter, relativeHref, encodeImageUrl } = require('./processor');
 const { canonicalNfc } = require('./unicode');
 const { withoutMarked } = require('./gm-marks');
 const { decodeEntities } = require('./templates/gurps/tables');
@@ -13,13 +13,14 @@ const PLACE_TYPES = new Set(['location', 'faction', 'item']);
 const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
 // A tag (quoted attribute values may hold a `>`) or a comment.
 const TAG = /<!--[\s\S]*?-->|<(\/?)([a-zA-Z][\w:-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
-const OPEN_MARK = '' + '0' + '';
 
 // The pages a recap may be pictured with, in `pages` order. `onPlayerSite` (the GM site: a Set of the pages the
 // player site publishes) keeps only those; `exclude` is a Set of the unit's own pages. A page counts when it is not
 // a PC and its portrait names an attachment the build has. Its names are its published title and published
-// `aliases`: a hidden field is not a name, and `gm_aliases` is never read.
-function figureCandidates(pages, { imageMap, onPlayerSite = null, exclude = new Set(), excludeFields = [], overridesOf = null } = {}) {
+// `aliases`: a hidden field is not a name, and `gm_aliases` is never read. On the GM site (`marks`, the build's marks) a
+// title or alias can hold a marked name (a withheld note's, kept for the GM): each is read as players see it, so a
+// caption never prints the GM's name and the names match the words the player page has.
+function figureCandidates(pages, { imageMap, onPlayerSite = null, exclude = new Set(), excludeFields = [], overridesOf = null, marks = null } = {}) {
   const out = [];
   for (const page of pages) {
     if (exclude.has(page) || (onPlayerSite && !onPlayerSite.has(page))) continue;
@@ -30,11 +31,11 @@ function figureCandidates(pages, { imageMap, onPlayerSite = null, exclude = new 
     if (!base || isWebImageAddress(published.portrait)) continue;
     const key = canonicalNfc(base);
     if (!imageMap || !(key in imageMap)) continue;
-    const title = page.displayTitle || page.title || '';
+    const title = withoutMarked(page.displayTitle || page.title || '', marks).trim();
     const seen = new Set();
     const terms = [];
     for (const raw of [title, ...nameList(published.aliases)]) {
-      const term = canonicalNfc(raw).trim();
+      const term = canonicalNfc(withoutMarked(raw, marks)).trim();
       if (term && !seen.has(term.toLowerCase())) { seen.add(term.toLowerCase()); terms.push(term); }
     }
     out.push({ page, key, outputPath: page.outputPath, title, terms, place: PLACE_TYPES.has(source.type) });
@@ -42,7 +43,8 @@ function figureCandidates(pages, { imageMap, onPlayerSite = null, exclude = new 
   return out;
 }
 
-// The recap's top-level elements, as { tag, html } in order. Comments and loose text between them are not elements.
+// The recap's top-level elements, as { tag, html, start } in order (`start`: where it begins in the recap). Comments
+// and loose text between them are not elements.
 function topLevelElements(html) {
   const blocks = [];
   let depth = 0;
@@ -56,9 +58,9 @@ function topLevelElements(html) {
     if (closing) {
       if (depth === 0) continue;
       depth--;
-      if (depth === 0) blocks.push({ tag, html: html.slice(start, m.index + m[0].length) });
+      if (depth === 0) blocks.push({ tag, html: html.slice(start, m.index + m[0].length), start });
     } else if (depth === 0) {
-      if (selfClosed) blocks.push({ tag: name, html: m[0] });
+      if (selfClosed) blocks.push({ tag: name, html: m[0], start: m.index });
       else { depth = 1; start = m.index; tag = name; }
     } else if (!selfClosed) depth++;
   }
@@ -182,4 +184,61 @@ function placeFigures(candidates, paragraphs, { perParagraph = 2, taken = new Se
   return slots;
 }
 
-module.exports = { figureCandidates, paragraphsOf, mentionsOf, placeFigures };
+const ZOOM = '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>';
+const escapeText = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// The picture's address from the page at `fromPath`: under images/, encoded as the recap's own pictures are.
+const imageSrc = (entry, fromPath) => encodeImageUrl(relativeHref(fromPath, `images/${entry.relPath}`));
+
+// The recap with each placed paragraph's float put just before its `<p>`: sides alternate from the right, one per
+// paragraph that has pictures, in reading order. Nothing else in the recap changes. `paragraphs` is what `placement`
+// was made from (paragraphsOf), so its `block` numbers count the same top-level elements.
+function figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs }) {
+  const html = String(recapHtml || '');
+  if (!placement || placement.size === 0) return html;
+  const starts = topLevelElements(html).map((el) => el.start);
+  let out = '';
+  let last = 0;
+  [...placement.keys()].sort((a, b) => a - b).forEach((para, n) => {
+    const at = starts[paragraphs[para].block];
+    const shown = placement.get(para);
+    const classes = ['story-figures', ...(n % 2 ? ['story-figures--left'] : []), ...(shown.length > 1 ? ['story-figures--two'] : [])];
+    const figs = shown.map((c) => {
+      const src = escapeText(imageSrc(imageMap[c.key], fromPath));
+      const title = escapeText(c.title);
+      return `<figure class="story-figure${c.place ? ' story-figure--place' : ''}"><a class="story-figure__open" href="${src}">`
+        + `<img src="${src}" alt="${title}" loading="lazy"><span class="story-figure__zoom" aria-hidden="true">${ZOOM}</span></a>`
+        + `<figcaption>${title}</figcaption></figure>`;
+    }).join('');
+    out += `${html.slice(last, at)}<div class="${classes.join(' ')}">${figs}</div>`;
+    last = at;
+  });
+  return out + html.slice(last);
+}
+
+// The image keys of the pictures a recap already shows, as players see it: each `<img>` whose address is a picture in
+// `imageMap`. A picture the GM placed stays where it is, and its page gets no second one.
+function shownImages(recapHtml, { fromPath, imageMap, marks = null }) {
+  const byPath = new Map(Object.entries(imageMap || {}).map(([key, e]) => [canonicalNfc(`images/${e.relPath}`), key]));
+  const out = new Set();
+  for (const m of withoutMarked(String(recapHtml || ''), marks).matchAll(/<img\b(?:"[^"]*"|'[^']*'|[^>"'])*>/gi)) {
+    const src = /\ssrc\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(m[0]);
+    const target = src && resolveHref(src[1] !== undefined ? src[1] : src[2], fromPath);
+    if (target && byPath.has(target)) out.add(byPath.get(target));
+  }
+  return out;
+}
+
+// One recap with its pictures: where `candidates` (less the unit's own pages, `exclude`) are mentioned, read as
+// players see the recap (`marks`, the GM site), placed and drawn. Each picture placed is added to `usedImages` so the
+// build copies it.
+function withFigures(recapHtml, { candidates, exclude = new Set(), fromPath, imageMap, usedImages = null, marks = null }) {
+  if (!recapHtml || !candidates || candidates.length === 0) return recapHtml;
+  const paragraphs = paragraphsOf(recapHtml, { fromPath, marks });
+  const taken = shownImages(recapHtml, { fromPath, imageMap, marks });
+  const placement = placeFigures(candidates.filter((c) => !exclude.has(c.page)), paragraphs, { taken });
+  if (usedImages) for (const shown of placement.values()) for (const c of shown) usedImages.add(c.key);
+  return figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs });
+}
+
+module.exports = { figureCandidates, paragraphsOf, mentionsOf, placeFigures, figuresHtml, shownImages, withFigures };

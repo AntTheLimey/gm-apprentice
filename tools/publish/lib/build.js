@@ -32,6 +32,7 @@ const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = requ
 const fontsLib = require('./fonts');
 const { KINDS, parseMoments, momentsHtml } = require('./story-moments');
 const { buildStorySpine, probeSpine, gmStoryNotes, storyPagesFor, chapterOfSession, characterStoryGroup } = require('./story-spine');
+const { figureCandidates } = require('./story-figures');
 const { foldPlan, applyFold, isFolded, labelFoldedHeadings } = require('./story-fold');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
@@ -1210,11 +1211,19 @@ function buildSite(options) {
   // Its pairs keep `linked`: a wrap-up linked to a session players do not see never stands in for another session.
   const playerPairs = gm ? Object.assign(new Map([...hubWrapUps].filter(([hub, wrap]) => onPlayerSite.has(hub) && onPlayerSite.has(wrap))),
     { linked: hubWrapUps.linked }) : null;
-  const playerStory = gm ? new Set(probeSpine(pages.filter((p) => onPlayerSite.has(p)), playerPairs,
-    show.has('notes') ? scanAttachments(scanConfigFor(config, hideFrom)) : imageMap).map((u) => u.outputPath)) : null;
+  // The pictures the player site has: a folder it hides is not scanned there.
+  const playerImages = gm && show.has('notes') ? scanAttachments(scanConfigFor(config, hideFrom)) : imageMap;
+  const playerStory = gm ? new Set(probeSpine(pages.filter((p) => onPlayerSite.has(p)), playerPairs, playerImages).map((u) => u.outputPath)) : null;
   const storyPlayers = gm ? { has: (out) => playerStory.has(out), shows: (page) => onPlayerSite.has(page) } : null;
   applyFold(foldPlan(storyProbe), linkMap);
   LOWER_KEYS.delete(linkMap);   // its folded spellings were read from the old addresses
+  // The pages a Story page may picture beside its recap (story-figures.js), read once, after the fold has given each
+  // page its final address. On the GM site only those the player site publishes, with a portrait the player site has
+  // (and this one too), by their names as players read them, so both sites picture the same pages under the same
+  // captions. Both spine calls below take this one list.
+  const storyFigures = { candidates: figureCandidates(pages, { imageMap: playerImages, onPlayerSite, excludeFields,
+    overridesOf: (page) => fieldOverrides[vaultRelPathOf(page)] || {}, marks: mark ? mark.marks : null })
+    .filter((c) => c.key in imageMap) };
 
   // A PC note whose link or embed labels would change its headings is withheld whole
   // while character sheets are off. Decided once, here, so the page, its sections and
@@ -2236,7 +2245,7 @@ function buildSite(options) {
   // from that filtered set regardless of whether a manifest exists, so gating this on
   // `manifest` just meant a manifest-less player build shipped every GM-only image.
   // A recap's picture counts as used: the story pages are rendered once here, for the set only.
-  if (!onlySheets) buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages, warn: true }, { marked: gm, marks: mark ? mark.marks : null, players: storyPlayers });
+  if (!onlySheets) buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages, warn: true }, { marked: gm, marks: mark ? mark.marks : null, players: storyPlayers, figures: storyFigures });
   const filteredMap = {};
   for (const [basename, entry] of Object.entries(imageMap)) {
     if (usedImages.has(basename)) filteredMap[basename] = entry;
@@ -2492,7 +2501,7 @@ function buildSite(options) {
 
     // The story: its chapters, each PC's own story, its contents page.
     // On the GM site each Story page reads its wrap-up's marked view: its GM-only parts in place, marked.
-    const spine = buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages }, { marked: gm, marks: mark ? mark.marks : null, players: storyPlayers });
+    const spine = buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages }, { marked: gm, marks: mark ? mark.marks : null, players: storyPlayers, figures: storyFigures });
     // The fold was planned on the probe spine (probeSpine), which reads recaps as this one does. Should the two ever
     // disagree, a folded wrap-up would be on no page: said, never silent.
     if (live) {

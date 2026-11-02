@@ -8,6 +8,7 @@ const { parseWikilink } = require('./wikilink');
 const { isLinkedWrapUp, WRAP_UP_TYPES } = require('./session-hub');
 const { isSessionHub } = require('./processor');
 const { storySections } = require('./story-sections');
+const { withFigures } = require('./story-figures');
 
 const RECAP_TITLES = ['narrative recap', 'recap'];
 
@@ -218,7 +219,11 @@ function once(resolve) {
 // `shows(page)`, whether it publishes that page. A unit whose wrap-up players do not see, on a page they do have (made
 // from the session's own recap, or the chapter's introduction), carries `heldBack`: { recapHtml, wrapRecapTitle }, the
 // players' own recap and the title of the wrap-up's, for the build to show the wrap-up's parts apart, marked.
-function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false, marks = null, players = null } = {}) {
+// `figures` ({ candidates }, story-figures.js figureCandidates) pictures the people and places each recap names, beside
+// the paragraph that first names them, in the recap the player page shows (on the GM site, the players' own recap of
+// a held-back unit). Each placed picture is added to `images.usedImages`; the build's two spine calls place the same
+// pictures, so the image pass copies exactly the files the pages use.
+function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false, marks = null, players = null, figures = null } = {}) {
   // Recap markdown renders to HTML inside findRecap, so wiki-links must resolve here —
   // downstream has no markdown left to work with. Resolution is relative to the unit's
   // own output path under story/. Without a linkMap (the hasStory probe), skip it.
@@ -349,6 +354,16 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
         recapHtml: chapterRecap.html, sourcePage: chapter, wrapUpPage: chapterWrap || null,
         ...bodyOf(chapterWrap, chapterRecap, chapterWrapResolve),
         ...heldBackOf(unitOutputPath(id), chapterWrap, chapterRecap, () => (chapterIntro(chapter, resolverFor(unitOutputPath(id))) || {}).html),
+      });
+    }
+  }
+
+  if (figures && images) {
+    for (const unit of units) {
+      const target = unit.heldBack || unit;
+      target.recapHtml = withFigures(target.recapHtml, {
+        candidates: figures.candidates, exclude: new Set([unit.sourcePage, unit.wrapUpPage].filter(Boolean)),
+        fromPath: unit.outputPath, imageMap: images.imageMap, usedImages: images.usedImages, marks,
       });
     }
   }
