@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { figureCandidates, paragraphsOf, mentionsOf, placeFigures, figuresHtml } = require('../../lib/story-figures');
+const { figureCandidates, paragraphsOf, mentionsOf, placeFigures, figuresHtml, withFigures, pageNames, scenePicture, sceneCandidates } = require('../../lib/story-figures');
 const { createMarks, renderMarks, withoutMarked } = require('../../lib/gm-marks');
 
 const imageMap = { 'a.png': { relPath: 'a.png' }, 'b.png': { relPath: 'b.png' } };
@@ -252,5 +252,124 @@ describe('figuresHtml', () => {
     const paragraphs = paras(recap);
     const out = figuresHtml(recap, placeFigures([cand(page('Alpha'))], paragraphs), { fromPath: 'story/s1.html', imageMap, paragraphs });
     assert.match(out, /^<div class="story-figures"><figure[\s\S]*<\/figure><\/div><p>Alpha came\.<\/p>$/);
+  });
+});
+
+describe('scenePicture', () => {
+  it('the first embed after the H1, before the first heading', () => {
+    assert.equal(scenePicture('# Docks\n\nThe tide ![[a.png]] and ![[b.png]].\n\n## GM Notes\n\n![[c.png]]\n'), 'a.png');
+    assert.equal(scenePicture('# Docks\n\n![[a.png|The pier]]\n'), 'a.png');
+    assert.equal(scenePicture('\n\n# Docks\n\n![[a.png]]\n'), 'a.png');
+    assert.equal(scenePicture('# Docks\n\n![[Some note]] ![[a.svg]]\n'), 'a.svg');
+  });
+
+  it('skips one in a gm-only fence, a %% comment or a callout', () => {
+    assert.equal(scenePicture('# D\n\n<!-- gm-only -->\n![[x.png]]\n<!-- /gm-only -->\n\n![[a.png]]\n'), 'a.png');
+    assert.equal(scenePicture('# D\n\n%% ![[x.png]] %%\n\n![](a.png)\n'), 'a.png');
+    assert.equal(scenePicture('# D\n\n%%\n![[x.png]]\n%%\n\n![[a.png]]\n'), 'a.png');
+    assert.equal(scenePicture('# D\n\n> [!note] Keeper\n> ![[x.png]]\n\n![[a.png]]\n'), 'a.png');
+  });
+
+  it('a scene whose only picture is under GM Notes, or in a gm-only GM Notes, has none', () => {
+    assert.equal(scenePicture('# D\n\n**Situation:** words.\n\n## GM Notes\n\n![[x.png]]\n'), null);
+    assert.equal(scenePicture('# D\n\nWords.\n\n<!-- gm-only -->\n\n## GM Notes\n\n![[x.png]]\n\n<!-- /gm-only -->\n'), null);
+    assert.equal(scenePicture(''), null);
+    assert.equal(scenePicture(null), null);
+  });
+
+  it('a scene with no H1 (the template shape) reads from the top; a markdown image by its file name', () => {
+    assert.equal(scenePicture('**Situation:** ![[a.png]]\n\n## GM Notes\n'), 'a.png');
+    assert.equal(scenePicture('# D\n\n![x](../_attachments/my%20pic.png)\n'), 'my pic.png');
+    assert.equal(scenePicture('# D\n\n![x](https://example.com/a.png)\n'), null);
+    assert.equal(scenePicture('# D\n\n```\n![[x.png]]\n```\n'), null);
+  });
+});
+
+describe('sceneCandidates', () => {
+  const V = '/vault';
+  const note = (rel, frontmatter, body = '# Scene\n\n![[a.png]]\n') => {
+    const title = rel.split('/').pop();
+    return { title, displayTitle: title, vaultPath: rel, sourcePath: `${V}/${rel}.md`, frontmatter, body };
+  };
+  const S = 'Chapters/C1/Sessions';
+  const hub1 = note(`${S}/Session 1/Session 1`, { type: 'session', chapter: '[[C1]]' }, '');
+  const hub2 = note(`${S}/Session 2/Session 2`, { type: 'session', chapter: '[[C1]]' }, '');
+  const wrap2 = note(`${S}/Session 2/Session 2 Wrap-Up`, { type: 'session_wrap', session: '[[Session 2]]' }, '');
+  const plan1 = note(`${S}/Session 1/Session 1 Plan`, { type: 'session-plan', session: '[[Session 1]]' }, '');
+  const docks = { outputPath: 'locations/the-docks.html', displayTitle: 'The Docks', frontmatter: { type: 'location', aliases: ['Docks Quarter'], gm_aliases: ['Smugglers Row'] } };
+  const six = { outputPath: 'pcs/six.html', displayTitle: 'Six', frontmatter: { type: 'pc' } };
+  const hidden = { outputPath: 'locations/vault.html', displayTitle: 'The Vault', frontmatter: { type: 'location' } };
+  const names = pageNames([docks, six, hidden], { onPlayerSite: new Set([docks, six]) });
+  const linkMap = { 'The Docks': docks.outputPath, Six: six.outputPath, 'The Vault': hidden.outputPath };
+  const unit1 = { kind: 'session', sourcePage: { sourcePath: hub1.sourcePath }, wrapUpPage: null };
+  const unit2 = { kind: 'session', sourcePage: { sourcePath: hub2.sourcePath }, wrapUpPage: { sourcePath: wrap2.sourcePath } };
+  const scene = (rel, fm, body) => note(rel, { type: 'scene', locations: ['[[The Docks]]'], ...fm }, body);
+  const forUnits = (notes) => {
+    const of = sceneCandidates([hub1, hub2, wrap2, plan1, ...notes], { names, imageMap, linkMap });
+    return [of(unit1).length, of(unit2).length];
+  };
+
+  it('pageNames: player-site pages that are not PCs, by published title and aliases, never gm_aliases', () => {
+    assert.deepEqual([...names], [['locations/the-docks.html', ['The Docks', 'Docks Quarter']]]);
+  });
+
+  it('a scene is pictured by its places: no caption, a place, keyed by its picture', () => {
+    const of = sceneCandidates([hub1, hub2, scene(`${S}/Session 1/Scenes/Docks`, { played_in: ['[[Session 1]]'] })], { names, imageMap, linkMap });
+    const [c] = of(unit1);
+    assert.deepEqual({ ...c, hrefs: [...c.hrefs] }, { key: 'a.png', outputPath: null, title: '', terms: ['The Docks', 'Docks Quarter'], hrefs: ['locations/the-docks.html'], place: true, scene: true });
+  });
+
+  it('played_in decides first: the session it names (index or wrap-up), even from another session\'s Scenes folder', () => {
+    assert.deepEqual(forUnits([scene(`${S}/Session 1/Scenes/Docks`, { played_in: ['[[Session 2]]'] })]), [0, 1]);
+    assert.deepEqual(forUnits([scene('Chapters/C1/Scenes/Docks', { played_in: ['[[Session 2 Wrap-Up]]'] })]), [0, 1]);
+    assert.deepEqual(forUnits([scene('Chapters/C1/Scenes/Docks', { played_in: ['[[Session 1]]', '[[Session 2]]'] })]), [1, 1]);
+  });
+
+  it('with no played_in: its session folder\'s Scenes/, or a session: link to the index or its Plan', () => {
+    assert.deepEqual(forUnits([scene(`${S}/Session 1/Scenes/Docks`, {})]), [1, 0]);
+    assert.deepEqual(forUnits([scene(`${S}/Session 1/Scenes/Docks`, { played_in: [] })]), [1, 0]);
+    assert.deepEqual(forUnits([scene('Chapters/C1/Scenes/Docks', { session: '[[Session 2]]' })]), [0, 1]);
+    assert.deepEqual(forUnits([scene('Chapters/C1/Scenes/Docks', { session: '[[Session 1 Plan]]' })]), [1, 0]);
+    assert.deepEqual(forUnits([scene('Chapters/C1/Scenes/Docks', {})]), [0, 0]);
+  });
+
+  it('a dropped or paused scene counts for no session', () => {
+    assert.deepEqual(forUnits([scene(`${S}/Session 1/Scenes/Docks`, { status: 'dropped', played_in: ['[[Session 1]]'] })]), [0, 0]);
+    assert.deepEqual(forUnits([scene(`${S}/Session 1/Scenes/Docks`, { status: 'Paused' })]), [0, 0]);
+  });
+
+  it('no page players see among its places and people, no picture, or a picture the build lacks: nothing', () => {
+    const at = `${S}/Session 1/Scenes/Docks`;
+    assert.deepEqual(forUnits([scene(at, { locations: ['[[The Vault]]'], entities: ['[[Six]]'] })]), [0, 0]);
+    assert.deepEqual(forUnits([scene(at, { locations: ['[[Smugglers Row]]'] })]), [0, 0]);
+    assert.deepEqual(forUnits([scene(at, {}, '# Docks\n\nNo picture.\n')]), [0, 0]);
+    assert.deepEqual(forUnits([scene(at, {}, '# Docks\n\n![[nope.png]]\n')]), [0, 0]);
+    assert.deepEqual(forUnits([note(at, { type: 'npc', locations: ['[[The Docks]]'] })]), [0, 0]);
+  });
+
+  it('its people count as well as its places; a chapter unit takes no scene', () => {
+    const of = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, { locations: [], entities: ['[[Six]]', '[[The Docks]]'] })], { names, imageMap, linkMap });
+    assert.equal(of(unit1).length, 1);
+    assert.deepEqual(of({ kind: 'chapter-intro', sourcePage: { sourcePath: hub1.sourcePath } }), []);
+  });
+
+  it('the scene\'s mention is a link to or a name of one of its pages; it renders with no caption and an empty alt', () => {
+    const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, {})], { names, imageMap, linkMap })(unit1);
+    assert.deepEqual(mentions(c, '<p>Then to Docks Quarter.</p>'), [{ para: 0, at: 8 }]);
+    const html = withFigures('<p>Off to <a href="../locations/the-docks.html">the pier</a>.</p>', { candidates: [], scenes: [c], fromPath: 'story/s1.html', imageMap });
+    assert.match(html, /<figure class="story-figure story-figure--place"><a class="story-figure__open" href="\.\.\/images\/a\.png"><img src="\.\.\/images\/a\.png" alt="" loading="lazy">/);
+    assert.ok(!html.includes('<figcaption>'));
+  });
+
+  it('a scene whose picture is a portrait already offered, or already shown, adds nothing', () => {
+    const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, {})], { names, imageMap, linkMap })(unit1);
+    const portrait = cand({ ...docks, frontmatter: { ...docks.frontmatter, portrait: 'a.png' } });
+    const html = withFigures('<p>The Docks.</p>', { candidates: [portrait], scenes: [c], fromPath: 'story/s1.html', imageMap });
+    assert.equal((html.match(/<figure /g) || []).length, 1);
+    assert.ok(html.includes('<figcaption>The Docks</figcaption>'));
+    const shown = withFigures('<p>The Docks.</p><p><img src="../images/a.png"></p>', { candidates: [], scenes: [c], fromPath: 'story/s1.html', imageMap });
+    assert.ok(!shown.includes('<figure'));
+    const twice = withFigures('<p>The Docks.</p>', { candidates: [], scenes: [c, { ...c }], fromPath: 'story/s1.html', imageMap });
+    assert.equal((twice.match(/<figure /g) || []).length, 1);
   });
 });

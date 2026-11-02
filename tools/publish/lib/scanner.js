@@ -436,6 +436,8 @@ function pairStoryFiles(pages, vaultPath, deps) {
 // GM-only folder the site never scans is the likeliest home for a secret.
 const HOUSEKEEPING_TYPE_LINE = /^type[ \t]*:\s*["']?(meta|template)["']?\s*$/m;
 const SESSION_TYPE_LINE = new RegExp(`^type[ \\t]*:\\s*["']?(session|${[...WRAP_UP_TYPES].join('|')})["']?\\s*$`, 'm');
+// A scene and a session Plan: the Story page reads which session a scene was played in, and a scene's picture.
+const PREP_TYPE_LINE = /^type[ \t]*:\s*["']?(scene|session-plan)["']?\s*$/m;
 
 function scanAllNotes(vaultPath, deps) {
   const rd = readerFrom(deps);
@@ -450,6 +452,7 @@ function scanAllNotes(vaultPath, deps) {
       if (!e.isFile() || !e.name.toLowerCase().endsWith('.md')) continue;
       const title = e.name.slice(0, -3);
       let frontmatter = {};
+      let body;
       // A note that cannot be read stops the scan; one that reads but does not parse keeps its name below.
       const text = reading(rd, vaultPath, full);
       try {
@@ -459,7 +462,12 @@ function scanAllNotes(vaultPath, deps) {
         // A note directly in _meta is read too: its type says whether it is the plugin's own (publish-decision.js).
         // A key written `withheld :` or `"withheld":` is the same key to YAML, so it is looked for so too (#352).
         const inMeta = path.relative(vaultPath, full).split(path.sep)[0] === '_meta';
-        if (inMeta || /^["']?(?:(?:gm_)?aliases|withheld|title|publish)["']?[ \t]*:/m.test(text) || HOUSEKEEPING_TYPE_LINE.test(text) || SESSION_TYPE_LINE.test(text)) frontmatter = parseNote(text).data || {};
+        // A scene or a session Plan is read too (story-figures.js sceneCandidates), and a scene keeps its body.
+        if (inMeta || /^["']?(?:(?:gm_)?aliases|withheld|title|publish)["']?[ \t]*:/m.test(text) || HOUSEKEEPING_TYPE_LINE.test(text) || SESSION_TYPE_LINE.test(text) || PREP_TYPE_LINE.test(text)) {
+          const note = parseNote(text);
+          frontmatter = note.data || {};
+          if (frontmatter.type === 'scene') body = note.content;
+        }
       } catch (err) {
         // Its name still counts. A secret that silently stops being
         // protected is the one failure that must not be quiet.
@@ -475,6 +483,7 @@ function scanAllNotes(vaultPath, deps) {
       out.push({
         title, displayTitle: title.replace(/_/g, ' '), frontmatter, sourcePath: full,
         vaultPath: toPosix(path.relative(vaultPath, full)).replace(/\.md$/i, ''),
+        ...(body === undefined ? {} : { body }),
       });
     }
   })(vaultPath);

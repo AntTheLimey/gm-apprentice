@@ -223,4 +223,4 @@ function isLinkedWrapUp(wrapUp, pairs) {
   return !!linkTarget(wrapUp && wrapUp.frontmatter && wrapUp.frontmatter.session);
 }
 
-module.exports = { suppressHubBody, publishedWrapUpFor, pairHubs, isLinkedWrapUp, WRAP_UP_TYPES, isWrapUp, PLAYED_SESSION_STATUSES, isPlayedStatus, isPlayedSession, REGISTRABLE_TYPES };
+module.exports = { named, nearest, linkTarget, suppressHubBody, publishedWrapUpFor, pairHubs, isLinkedWrapUp, WRAP_UP_TYPES, isWrapUp, PLAYED_SESSION_STATUSES, isPlayedStatus, isPlayedSession, REGISTRABLE_TYPES };

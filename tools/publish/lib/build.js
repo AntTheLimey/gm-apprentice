@@ -32,7 +32,7 @@ const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = requ
 const fontsLib = require('./fonts');
 const { KINDS, parseMoments, momentsHtml } = require('./story-moments');
 const { buildStorySpine, probeSpine, gmStoryNotes, storyPagesFor, chapterOfSession, characterStoryGroup } = require('./story-spine');
-const { figureCandidates } = require('./story-figures');
+const { figureCandidates, pageNames, sceneCandidates } = require('./story-figures');
 const { foldPlan, applyFold, isFolded, labelFoldedHeadings } = require('./story-fold');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
@@ -1220,10 +1220,15 @@ function buildSite(options) {
   // The pages a Story page may picture beside its recap (story-figures.js), read once, after the fold has given each
   // page its final address. On the GM site only those the player site publishes, with a portrait the player site has
   // (and this one too), by their names as players read them, so both sites picture the same pages under the same
-  // captions. Both spine calls below take this one list.
-  const storyFigures = { candidates: figureCandidates(pages, { imageMap: playerImages, onPlayerSite, excludeFields,
-    overridesOf: (page) => fieldOverrides[vaultRelPathOf(page)] || {}, marks: mark ? mark.marks : null })
-    .filter((c) => c.key in imageMap) };
+  // captions. Both spine calls below take this one list. A session's Story page also pictures the scenes played in it:
+  // the scene notes never publish, and their pictures are named by the pages their places and people link, by the
+  // same rules, with a picture both sites have.
+  const figureRules = { onPlayerSite, excludeFields, overridesOf: (page) => fieldOverrides[vaultRelPathOf(page)] || {},
+    marks: mark ? mark.marks : null };
+  const scenesOf = sceneCandidates(allNotes, { names: pageNames(pages, figureRules), imageMap: playerImages, linkMap });
+  const storyFigures = { candidates: figureCandidates(pages, { imageMap: playerImages, ...figureRules })
+    .filter((c) => c.key in imageMap),
+    scenesFor: (unit) => scenesOf(unit).filter((c) => c.key in imageMap) };
 
   // A PC note whose link or embed labels would change its headings is withheld whole
   // while character sheets are off. Decided once, here, so the page, its sections and

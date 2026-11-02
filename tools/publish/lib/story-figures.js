@@ -4,43 +4,176 @@
 // is ever touched; the build adds a figure before the paragraph it chose.
 
 const path = require('node:path');
-const { portraitBasename, nameList, isWebImageAddress, publishedFrontmatter, relativeHref, encodeImageUrl } = require('./processor');
+const { portraitBasename, nameList, isWebImageAddress, publishedFrontmatter, relativeHref, encodeImageUrl, strippedLines, fenceStep, IMAGE_EXT_REGEX } = require('./processor');
 const { canonicalNfc } = require('./unicode');
 const { withoutMarked } = require('./gm-marks');
 const { decodeEntities } = require('./templates/gurps/tables');
+const { parseWikilink, wikilinkRe } = require('./wikilink');
+const { named, nearest, linkTarget } = require('./session-hub');
+const { WRAP_UP_TYPES } = require('./shared-lists');
 
 const PLACE_TYPES = new Set(['location', 'faction', 'item']);
 const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
 // A tag (quoted attribute values may hold a `>`) or a comment.
 const TAG = /<!--[\s\S]*?-->|<(\/?)([a-zA-Z][\w:-]*)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
 
-// The pages a recap may be pictured with, in `pages` order. `onPlayerSite` (the GM site: a Set of the pages the
-// player site publishes) keeps only those; `exclude` is a Set of the unit's own pages. A page counts when it is not
-// a PC and its portrait names an attachment the build has. Its names are its published title and published
-// `aliases`: a hidden field is not a name, and `gm_aliases` is never read. On the GM site (`marks`, the build's marks) a
-// title or alias can hold a marked name (a withheld note's, kept for the GM): each is read as players see it, so a
-// caption never prints the GM's name and the names match the words the player page has.
-function figureCandidates(pages, { imageMap, onPlayerSite = null, exclude = new Set(), excludeFields = [], overridesOf = null, marks = null } = {}) {
-  const out = [];
+// A page's names as players read them: its published title and published `aliases` (a hidden field is not a name,
+// and `gm_aliases` is never read), each read as players see it on the GM site (`marks`): a title or alias can hold a
+// marked name (a withheld note's, kept for the GM), so a caption never prints the GM's name and the names match the
+// words the player page has.
+function namesOf(page, published, marks) {
+  const title = withoutMarked(page.displayTitle || page.title || '', marks).trim();
+  const seen = new Set();
+  const terms = [];
+  for (const raw of [title, ...nameList(published.aliases)]) {
+    const term = canonicalNfc(withoutMarked(raw, marks)).trim();
+    if (term && !seen.has(term.toLowerCase())) { seen.add(term.toLowerCase()); terms.push(term); }
+  }
+  return { title, terms };
+}
+
+// The pages that may be named for a picture, each with its published frontmatter: not a PC, not one of `exclude`,
+// and on the GM site (`onPlayerSite`, a Set of the pages the player site publishes) only those.
+function* namedPages(pages, { onPlayerSite = null, exclude = new Set(), excludeFields = [], overridesOf = null } = {}) {
   for (const page of pages) {
     if (exclude.has(page) || (onPlayerSite && !onPlayerSite.has(page))) continue;
     const source = page.sourceFrontmatter || page.frontmatter || {};
     if (source.type === 'pc') continue;
-    const published = publishedFrontmatter(page.frontmatter || {}, excludeFields, (overridesOf && overridesOf(page)) || {});
+    yield { page, source, published: publishedFrontmatter(page.frontmatter || {}, excludeFields, (overridesOf && overridesOf(page)) || {}) };
+  }
+}
+
+// The pages a recap may be pictured with, in `pages` order. `onPlayerSite` (the GM site: a Set of the pages the
+// player site publishes) keeps only those; `exclude` is a Set of the unit's own pages. A page counts when it is not
+// a PC and its portrait names an attachment the build has. Its names are namesOf's.
+function figureCandidates(pages, { imageMap, marks = null, ...options } = {}) {
+  const out = [];
+  for (const { page, source, published } of namedPages(pages, options)) {
     const base = portraitBasename(published);
     if (!base || isWebImageAddress(published.portrait)) continue;
     const key = canonicalNfc(base);
     if (!imageMap || !(key in imageMap)) continue;
-    const title = withoutMarked(page.displayTitle || page.title || '', marks).trim();
-    const seen = new Set();
-    const terms = [];
-    for (const raw of [title, ...nameList(published.aliases)]) {
-      const term = canonicalNfc(withoutMarked(raw, marks)).trim();
-      if (term && !seen.has(term.toLowerCase())) { seen.add(term.toLowerCase()); terms.push(term); }
-    }
+    const { title, terms } = namesOf(page, published, marks);
     out.push({ page, key, outputPath: page.outputPath, title, terms, place: PLACE_TYPES.has(source.type) });
   }
   return out;
+}
+
+// The names of every page a scene's places and people can be, portrait or not: a Map from a page's outputPath to its
+// names (namesOf), with figureCandidates' rules for which pages count.
+function pageNames(pages, { marks = null, ...options } = {}) {
+  const out = new Map();
+  for (const { page, published } of namedPages(pages, options)) out.set(page.outputPath, namesOf(page, published, marks).terms);
+  return out;
+}
+
+// A scene's picture: the file name of the first image embed (`![[x.png]]` or `![](x.png)`) after its H1 (from the top
+// when it has none) and before its next heading, read with gm-only and spoiler fences, comments and callouts taken
+// out and code left alone; null when there is none. Any other picture in the scene is never used.
+function scenePicture(body) {
+  const lines = strippedLines(String(body == null ? '' : body).replace(/\r\n?/g, '\n'), true).lines;
+  let fence = null;
+  let started = false;
+  for (const line of lines) {
+    const step = fenceStep(line, fence);
+    const inCode = fence !== null || step.isFenceLine;
+    fence = step.fenceDelim;
+    if (inCode) continue;
+    if (/^ {0,3}#{1,6}(\s|$)/.test(line)) {
+      if (!started && /^ {0,3}#(\s|$)/.test(line)) { started = true; continue; }
+      return null;
+    }
+    if (!started && !line.trim()) continue;
+    started = true;
+    const found = firstImage(line);
+    if (found) return found;
+  }
+  return null;
+}
+
+// The file name of the first image embed on one line, or null.
+function firstImage(line) {
+  const embeds = [];
+  for (const m of line.matchAll(new RegExp('!' + wikilinkRe().source, 'g'))) {
+    embeds.push({ at: m.index, name: parseWikilink(m[1]).raw.trim() });
+  }
+  for (const m of line.matchAll(/!\[[^\]]*\]\(\s*<?([^)>\s]+)>?(?:\s+"[^"]*")?\s*\)/g)) {
+    if (isWebImageAddress(m[1])) continue;
+    let name = m[1].split(/[?#]/)[0];
+    try { name = decodeURIComponent(name); } catch { /* an address that is not encoded stays as written */ }
+    embeds.push({ at: m.index, name });
+  }
+  embeds.sort((a, b) => a.at - b.at);
+  const hit = embeds.find((e) => IMAGE_EXT_REGEX.test(e.name));
+  return hit ? canonicalNfc(hit.name.split('/').pop()) : null;
+}
+
+const NOT_PLAYED = new Set(['dropped', 'paused']);
+const linksOf = (value) => (Array.isArray(value) ? value : value == null || value === '' ? [] : [value]).map(linkTarget).filter(Boolean);
+const folderOf = (note) => path.dirname(note.sourcePath || '');
+
+// The session notes (index or wrap-up, by sourcePath) a scene counts for. `played_in` decides when it names
+// anything; otherwise its `session:` link (to the index, or to a Plan, which names its index) and the session folder
+// whose `Scenes/` it sits in. A link resolves as the site resolves links among every session note of the vault, the
+// nearest when several share a name (session-hub.js), and a wrap-up counts for its own index as well.
+function sessionsOfScene(scene, vault) {
+  const out = new Set();
+  const add = (note) => {
+    if (!note) return;
+    out.add(note.sourcePath);
+    if (WRAP_UP_TYPES.has(note.frontmatter.type)) {
+      const hub = nearest(note, named(linkTarget(note.frontmatter.session), vault.hubs));
+      if (hub) out.add(hub.sourcePath);
+    }
+  };
+  const fm = scene.frontmatter;
+  const played = linksOf(fm.played_in);
+  if (played.length > 0) {
+    for (const target of played) add(nearest(scene, named(target, vault.hubs.concat(vault.wrapUps))));
+    return out;
+  }
+  for (const target of linksOf(fm.session)) {
+    const hit = nearest(scene, named(target, vault.hubs.concat(vault.plans)));
+    if (hit && hit.frontmatter.type === 'session-plan') add(nearest(hit, named(linkTarget(hit.frontmatter.session), vault.hubs)));
+    else add(hit);
+  }
+  const folder = folderOf(scene);
+  if (path.basename(folder) === 'Scenes') for (const hub of vault.hubs) if (folderOf(hub) === path.dirname(folder)) add(hub);
+  return out;
+}
+
+// The scene pictures of each session unit, from `notes` (every vault note, scanAllNotes: a scene and a Plan carry
+// their frontmatter, a scene its `body`). Returns `(unit) => candidates`. A scene counts for a session unit by
+// sessionsOfScene, never when dropped or paused; its picture is scenePicture's, an attachment the build has
+// (`imageMap`); and it is named by the pages its `locations` and `entities` link (resolved by `linkMap`) that are in
+// `names` (pageNames: player-site pages, not PCs). Its candidate has those pages' names and addresses and nothing of
+// the scene's own: no title, no words. A scene with no picture or no such page gives none.
+function sceneCandidates(notes, { names, imageMap, linkMap }) {
+  const typed = (types) => notes.filter((n) => n.frontmatter && types.has(String(n.frontmatter.type)));
+  const vault = { hubs: typed(new Set(['session'])), wrapUps: typed(WRAP_UP_TYPES), plans: typed(new Set(['session-plan'])) };
+  const scenes = [];
+  for (const scene of typed(new Set(['scene']))) {
+    const fm = scene.frontmatter;
+    if (NOT_PLAYED.has(String(fm.status || '').trim().toLowerCase())) continue;
+    const key = scenePicture(scene.body);
+    if (!key || !imageMap || !(key in imageMap)) continue;
+    const seen = new Set();
+    const terms = [];
+    const hrefs = new Set();
+    for (const target of [...linksOf(fm.locations), ...linksOf(fm.entities)]) {
+      const at = linkMap[target];
+      if (!at || !names.has(at)) continue;
+      hrefs.add(canonicalNfc(at));
+      for (const term of names.get(at)) if (!seen.has(term.toLowerCase())) { seen.add(term.toLowerCase()); terms.push(term); }
+    }
+    if (hrefs.size === 0) continue;
+    scenes.push({ sessions: sessionsOfScene(scene, vault), candidate: { key, outputPath: null, title: '', terms, hrefs, place: true, scene: true } });
+  }
+  return (unit) => {
+    if (!unit || unit.kind !== 'session') return [];
+    const own = [unit.sourcePage, unit.wrapUpPage].filter(Boolean).map((p) => p.sourcePath);
+    return scenes.filter((s) => own.some((at) => s.sessions.has(at))).map((s) => s.candidate);
+  };
 }
 
 // The recap's top-level elements, as { tag, html, start } in order (`start`: where it begins in the recap). Comments
@@ -207,10 +340,11 @@ function figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs }) {
     const classes = ['story-figures', ...(n % 2 ? ['story-figures--left'] : []), ...(shown.length > 1 ? ['story-figures--two'] : [])];
     const figs = shown.map((c) => {
       const src = escapeText(imageSrc(imageMap[c.key], fromPath));
-      const title = escapeText(c.title);
+      // A scene's picture has no caption and an empty alt: nothing of the scene note reaches the page.
+      const title = c.scene ? '' : escapeText(c.title);
       return `<figure class="story-figure${c.place ? ' story-figure--place' : ''}"><a class="story-figure__open" href="${src}">`
         + `<img src="${src}" alt="${title}" loading="lazy"><span class="story-figure__zoom" aria-hidden="true">${ZOOM}</span></a>`
-        + `<figcaption>${title}</figcaption></figure>`;
+        + `${c.scene ? '' : `<figcaption>${title}</figcaption>`}</figure>`;
     }).join('');
     const open = openMarks(html.slice(0, at));
     if (open.length === 0) {
@@ -238,16 +372,24 @@ function shownImages(recapHtml, { fromPath, imageMap, marks = null }) {
   return out;
 }
 
-// One recap with its pictures: where `candidates` (less the unit's own pages, `exclude`) are mentioned, read as
-// players see the recap (`marks`, the GM site), placed and drawn. Each picture placed is added to `usedImages` so the
-// build copies it.
-function withFigures(recapHtml, { candidates, exclude = new Set(), fromPath, imageMap, usedImages = null, marks = null }) {
-  if (!recapHtml || !candidates || candidates.length === 0) return recapHtml;
+// One recap with its pictures: where `candidates` (less the unit's own pages, `exclude`) and the unit's `scenes`
+// (sceneCandidates) are mentioned, read as players see the recap (`marks`, the GM site), placed and drawn. A scene
+// whose picture is already a candidate's (a page's portrait), or another scene's, adds nothing. Each picture placed
+// is added to `usedImages` so the build copies it.
+function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), fromPath, imageMap, usedImages = null, marks = null }) {
+  const keys = new Set();
+  const all = [];
+  for (const c of [...(candidates || []).filter((x) => !exclude.has(x.page)), ...scenes]) {
+    if (c.scene && keys.has(c.key)) continue;
+    keys.add(c.key);
+    all.push(c);
+  }
+  if (!recapHtml || all.length === 0) return recapHtml;
   const paragraphs = paragraphsOf(recapHtml, { fromPath, marks });
   const taken = shownImages(recapHtml, { fromPath, imageMap, marks });
-  const placement = placeFigures(candidates.filter((c) => !exclude.has(c.page)), paragraphs, { taken });
+  const placement = placeFigures(all, paragraphs, { taken });
   if (usedImages) for (const shown of placement.values()) for (const c of shown) usedImages.add(c.key);
   return figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs });
 }
 
-module.exports = { figureCandidates, paragraphsOf, mentionsOf, placeFigures, figuresHtml, shownImages, withFigures };
+module.exports = { figureCandidates, pageNames, scenePicture, sceneCandidates, paragraphsOf, mentionsOf, placeFigures, figuresHtml, shownImages, withFigures };

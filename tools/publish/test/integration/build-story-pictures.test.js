@@ -201,3 +201,138 @@ describe('Story pictures: a wrap-up the player site holds back', () => {
     assert.deepEqual(brokenLinks(s.gm.dir), []);
   });
 });
+
+// A scene note never publishes; only its picture may, beside the paragraph that names one of its places or people.
+const SCENE_AT = 'Chapters/Chapter 1/Sessions/Session 1/Scenes/Scene_Docks.md';
+const scene = ({ played = '["[[Session 1]]"]', status = 'played', locations = '["[[The Docks]]"]', entities = '[]', picture = '![[scene-docks.png]]', tag = '1' } = {}) => `---
+type: scene
+chapter: "[[Chapter 1 Overview]]"
+status: ${status}
+played_in: ${played}
+locations: ${locations}
+entities: ${entities}
+---
+
+# Scene Docks SCENETITLE-${tag}
+
+${picture}
+
+**Situation:** SCENESECRET-${tag}: the smugglers unload at midnight.
+
+<!-- gm-only -->
+
+## GM Notes
+
+SCENESECRET-${tag} again, and the GM's own picture. ![[scene-gm.png]]
+
+<!-- /gm-only -->
+`;
+const SCENE_FILES = {
+  ...PEOPLE,
+  '_attachments/scene-docks.png': png(40, 30),
+  '_attachments/scene-gm.png': png(40, 30),
+  'Locations/The Docks.md': note('location', 'The Docks', null),
+  [SCENE_AT]: scene(),
+};
+const SCENE_RECAP = 'The party reached [[The Docks]] at dusk and waited.\n\nLater Captain Rook bought a round.';
+// Every built file of a site, as text. The GM site shows whole notes, scenes among them, so the files it builds from a
+// scene note itself (its page, and that page's link preview and search entry) are left out there: everywhere else, on
+// either site, no word of a scene may appear.
+const SCENE_OWN = /\/scenes\/scene-[a-z]+\.html$|\/previews\.json$|\/search-index\.json$/;
+const builtText = (site, { gm = false } = {}) => site.files()
+  .filter((f) => !(gm && SCENE_OWN.test(f.split(path.sep).join('/'))))
+  .map((f) => [f, fs.readFileSync(f, 'latin1')]);
+
+describe('Story pictures: the scenes played that session', () => {
+  const s = buildBoth(storyVault({ ...SCENE_FILES, 'Sessions/Session 1 Wrap-Up.md': withRecap(SCENE_RECAP) }));
+  after(() => s.cleanup());
+
+  it('the scene\'s picture is beside the paragraph naming its place, with no caption and an empty alt', () => {
+    const page = read(s.player, STORY_1);
+    const figs = figures(page);
+    assert.equal(figs.length, 2);
+    assert.equal(figs[0].srcs.length, 1);
+    assert.match(figs[0].srcs[0], /^\.\.\/images\/scene-docks\.(png|webp)$/);
+    assert.deepEqual(figs[0].captions, []);
+    assert.deepEqual(figs[0].places, [true]);
+    assert.match(page, /<img src="\.\.\/images\/scene-docks\.(png|webp)" alt="" loading="lazy">/);
+    assert.match(page, /<\/figure><\/div><p>The party reached/);
+    assert.deepEqual(figs[1].captions, ['Captain Rook']);
+  });
+
+  it('the GM Notes picture is in no built file and not copied; no text of the scene is in any built file', () => {
+    // The GM site's own page of the scene shows its GM Notes picture; no other GM file names it.
+    assert.ok(!s.player.files().some((f) => /scene-gm/.test(f)), 'not copied to the player site');
+    assert.ok(read(s.gm, 'chapters/chapter 1/sessions/session 1/scenes/scene-docks.html').includes('SCENESECRET-1'), 'the GM site still has the scene\'s own page');
+    for (const site of [s.player, s.gm]) {
+      for (const [file, text] of builtText(site, { gm: site === s.gm })) {
+        for (const needle of ['scene-gm', 'SCENESECRET-1', 'SCENETITLE-1', 'Scene_Docks', 'Scene Docks', 'smugglers unload']) {
+          assert.ok(!text.includes(needle), `${needle} in ${file}`);
+        }
+      }
+    }
+  });
+
+  it('every link resolves, the leak gate finds nothing, and the GM page shows the same pictures', () => {
+    assert.deepEqual(brokenLinks(s.player.dir), []);
+    assert.deepEqual(brokenLinks(s.gm.dir), []);
+    assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.player.dir }).findings, []);
+    const shape = (html) => figures(html).map((f) => ({ ...f, srcs: f.srcs.map((x) => x.replace(/\.webp$/, '.png')) }));
+    assert.deepEqual(shape(read(s.gm, STORY_1)), shape(read(s.player, STORY_1)));
+  });
+});
+
+describe('Story pictures: a scene whose picture is a page\'s portrait', () => {
+  const s = buildBoth(storyVault({
+    ...SCENE_FILES,
+    'Locations/The Docks.md': note('location', 'The Docks', 'scene-docks.png'),
+    'Sessions/Session 1 Wrap-Up.md': withRecap(SCENE_RECAP),
+  }));
+  after(() => s.cleanup());
+
+  it('gives one picture, the portrait, not two', () => {
+    for (const site of [s.player, s.gm]) {
+      const page = read(site, STORY_1);
+      assert.equal((page.match(/images\/scene-docks\./g) || []).length, 2, 'one figure: its link and its img');
+      assert.deepEqual(captions(page), ['The Docks', 'Captain Rook']);
+    }
+  });
+});
+
+describe('Story pictures: scenes that give no picture', () => {
+  const pics = {};
+  for (const n of ['dropped', 'paused', 'other', 'callout', 'gmnotes', 'unnamed']) pics[`_attachments/${n}.png`] = png(40, 30);
+  const at = (n) => `Chapters/Chapter 1/Scenes/Scene_${n}.md`;
+  const s = buildBoth(storyVault({
+    ...SCENE_FILES,
+    ...pics,
+    [SCENE_AT]: null,
+    'Locations/Salt Row.md': note('location', 'Salt Row', null),
+    [at('Dropped')]: scene({ status: 'dropped', picture: '![[dropped.png]]', tag: 'D' }),
+    [at('Paused')]: scene({ status: 'paused', picture: '![[paused.png]]', tag: 'P' }),
+    // Not played in Session 1, though it sits in Session 1's folder: Session 2's recap never names the docks.
+    'Chapters/Chapter 1/Sessions/Session 1/Scenes/Scene_Other.md': scene({ played: '["[[Session 2]]"]', picture: '![[other.png]]', tag: 'O' }),
+    [at('Callout')]: scene({ picture: '> [!note] Keeper\n> ![[callout.png]]', tag: 'C' }),
+    [at('Gmnotes')]: scene({ picture: '', tag: 'G' }).replace('![[scene-gm.png]]', '![[gmnotes.png]]'),
+    [at('Unnamed')]: scene({ locations: '["[[Salt Row]]"]', picture: '![[unnamed.png]]', tag: 'U' }),
+    'Sessions/Session 1 Wrap-Up.md': withRecap(SCENE_RECAP),
+  }));
+  after(() => s.cleanup());
+
+  it('a dropped or paused scene, one played in another session, a picture in a callout or under GM Notes, and a scene whose places the recap never names: no picture on either site', () => {
+    for (const site of [s.player, s.gm]) {
+      for (const story of [STORY_1, 'story/chapter-1-docks-session-2.html']) {
+        const page = read(site, story);
+        for (const n of ['dropped', 'paused', 'other', 'callout', 'gmnotes', 'unnamed']) assert.ok(!page.includes(`images/${n}.`), `${n} on ${story}`);
+      }
+      assert.deepEqual(captions(read(site, STORY_1)), ['Captain Rook']);
+      for (const [file, text] of builtText(site, { gm: site === s.gm })) {
+        for (const tag of ['D', 'P', 'O', 'C', 'G', 'U']) {
+          assert.ok(!text.includes(`SCENESECRET-${tag}`) && !text.includes(`SCENETITLE-${tag}`), `scene ${tag} text in ${file}`);
+        }
+      }
+    }
+    assert.deepEqual(brokenLinks(s.player.dir), []);
+    assert.deepEqual(brokenLinks(s.gm.dir), []);
+  });
+});
