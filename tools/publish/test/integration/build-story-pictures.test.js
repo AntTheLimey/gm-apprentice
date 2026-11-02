@@ -225,6 +225,25 @@ describe('Story pictures: a prop listed in its container with no page of its own
   });
 });
 
+describe('Story pictures: longest match wins', () => {
+  const s = buildBoth(storyVault({
+    ...PEOPLE,
+    '_attachments/james.png': png(),
+    '_attachments/anne.png': png(),
+    'NPCs/James Pelham.md': note('npc', 'James Pelham', 'james.png', 'aliases: ["Pelham"]\n'),
+    'NPCs/Lady Anne Pelham.md': note('npc', 'Lady Anne Pelham', 'anne.png'),
+    'Sessions/Session 1 Wrap-Up.md': withRecap('Lady Anne Pelham poured the tea.\n\nLater Pelham came home.'),
+  }));
+  after(() => s.cleanup());
+
+  it('an alias inside another page\'s longer title is not a mention there; both sites agree', () => {
+    for (const site of [s.player, s.gm]) {
+      const figs = figures(read(site, STORY_1));
+      assert.deepEqual(figs.map((f) => f.captions), [['Lady Anne Pelham'], ['James Pelham']]);
+    }
+  });
+});
+
 // A scene note never publishes; only its picture may, beside the paragraph that names one of its places or people.
 const SCENE_AT = 'Chapters/Chapter 1/Sessions/Session 1/Scenes/Scene_Docks.md';
 const scene = ({ played = '["[[Session 1]]"]', status = 'played', locations = '["[[The Docks]]"]', entities = '[]', picture = '![[scene-docks.png]]', tag = '1' } = {}) => `---

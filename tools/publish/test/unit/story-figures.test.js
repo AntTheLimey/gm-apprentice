@@ -212,12 +212,27 @@ describe('placeFigures', () => {
     assert.deepEqual(titles(place([A, B, C], '<p>Alpha Bravo Charlie.</p>', { perParagraph: 3 })), { 0: ['Alpha', 'Bravo', 'Charlie'] });
   });
 
-  it('a title inside another page\'s title: both are placed once, never twice', () => {
+  it('longest match wins: a name lying wholly inside a longer name of another page does not count there', () => {
     const goodwin = cand(page('Goodwin'));
     const peter = cand(page('Peter Goodwin'));
-    const out = place([goodwin, peter], '<p>Peter Goodwin smiled.</p>');
-    assert.deepEqual(titles(out), { 0: ['Peter Goodwin', 'Goodwin'] });
-    assert.equal([...out.values()].flat().length, 2);
+    assert.deepEqual(titles(place([goodwin, peter], '<p>Peter Goodwin smiled.</p>')), { 0: ['Peter Goodwin'] });
+    // Elsewhere in the paragraph, or in another paragraph, the shorter name still counts.
+    assert.deepEqual(titles(place([goodwin, peter], '<p>Peter Goodwin smiled at Goodwin.</p>')), { 0: ['Peter Goodwin', 'Goodwin'] });
+    assert.deepEqual(titles(place([goodwin, peter], '<p>Peter Goodwin smiled.</p><p>Goodwin left.</p>')), { 0: ['Peter Goodwin'], 1: ['Goodwin'] });
+    // The real case: an alias inside another page's title.
+    const james = cand(page('James Pelham', { aliases: ['Pelham'] }));
+    const anne = cand(page('Lady Anne Pelham', { portrait: 'b.png' }));
+    assert.deepEqual(titles(place([james, anne], '<p>Lady Anne Pelham poured.</p>')), { 0: ['Lady Anne Pelham'] });
+    // A link always counts.
+    assert.deepEqual(titles(place([james, anne], '<p>Lady Anne Pelham poured for <a href="../npcs/james-pelham.html">him</a>.</p>')), { 0: ['Lady Anne Pelham', 'James Pelham'] });
+    // Without the longer page among the candidates, the shorter name counts.
+    assert.deepEqual(titles(place([james], '<p>Lady Anne Pelham poured.</p>')), { 0: ['James Pelham'] });
+  });
+
+  it('two pages with the same name both count', () => {
+    const x = cand(page('Xavier'));
+    const y = cand(page('Yves', { aliases: ['Xavier'] }));
+    assert.deepEqual(titles(place([x, y], '<p>Xavier.</p>')), { 0: ['Xavier', 'Yves'] });
   });
 
   it('a recap with no paragraph places nothing', () => {
@@ -473,6 +488,15 @@ describe('sceneCandidates', () => {
       assert.ok(html.includes('<figcaption>Old Smith</figcaption>') && html.includes('alt="Old Smith"'), html);
       assert.ok(!html.includes('story-figure--place') && !html.includes('aria-label'), html);
     }
+  });
+
+  it('a merged picture whose page is named only inside another page\'s longer name is drawn as the scene\'s', () => {
+    const james = { outputPath: 'npcs/james-pelham.html', displayTitle: 'James Pelham', frontmatter: { type: 'npc', portrait: 'a.png', aliases: ['Pelham'] } };
+    const anne = cand({ outputPath: 'npcs/lady-anne-pelham.html', displayTitle: 'Lady Anne Pelham', frontmatter: { type: 'npc', portrait: 'b.png' } });
+    const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, {})], { names, imageMap, linkMap })(unit1);
+    const html = withFigures('<p>Lady Anne Pelham at the Docks Quarter.</p>', { candidates: [cand(james), anne], scenes: [c], fromPath: 'story/s1.html', imageMap });
+    assert.equal((html.match(/<figure /g) || []).length, 2, html);
+    assert.ok(!html.includes('James Pelham') && html.includes('<figcaption>Lady Anne Pelham</figcaption>'), html);
   });
 
   it('a scene whose picture is a portrait already offered, or already shown, adds nothing', () => {
