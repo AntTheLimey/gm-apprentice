@@ -508,6 +508,16 @@ describe('sceneCandidates', () => {
     assert.ok(!html.includes('James Pelham') && html.includes('<figcaption>Lady Anne Pelham</figcaption>'), html);
   });
 
+  it('scene pictures claim after every page picture; each group keeps its own order', () => {
+    const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, {})], { names, imageMap, linkMap })(unit1);
+    const two = { ...c, key: 'b.png' };
+    const [A, B] = ['Alpha', 'Bravo'].map((t) => cand(page(t)));
+    const at = (recap, cs) => [...placeFigures(cs, paras(recap))].map(([k, v]) => [k, v.map((x) => x.title || x.key)]);
+    assert.deepEqual(at('<p>The Docks Quarter, then Alpha and Bravo.</p><p>Docks Quarter again.</p>', [c, A, B]), [[0, ['Alpha', 'Bravo']], [1, ['a.png']]]);
+    assert.deepEqual(at('<p>The Docks Quarter, then Alpha and Bravo.</p>', [c, A, B]), [[0, ['Alpha', 'Bravo']]]);
+    assert.deepEqual(at('<p>Docks Quarter and Alpha.</p>', [two, c, A]), [[0, ['Alpha', 'b.png']]]);
+  });
+
   it('a scene whose picture is a portrait already offered, or already shown, adds nothing', () => {
     const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, {})], { names, imageMap, linkMap })(unit1);
     const portrait = cand({ ...docks, frontmatter: { ...docks.frontmatter, portrait: 'a.png' } });
