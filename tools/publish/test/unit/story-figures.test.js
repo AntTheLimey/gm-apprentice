@@ -600,6 +600,17 @@ describe('sceneCandidates', () => {
     });
   });
 
+  it('a scene joining a portrait whose address is decomposed counts the page once', () => {
+    const nfc = 'locations/zoë-hall.html';
+    const zoe = { ...cand(page('Zoë Hall', { type: 'location' })), outputPath: nfc.normalize('NFD') };
+    const pagesOf = [['Zoë Hall', nfc], ['Docks Quarter', 'locations/the-docks.html'], ['Captain Rook', 'npcs/captain-rook.html']]
+      .map(([t, href]) => ({ href, terms: [t] }));
+    const sc = { key: 'a.png', outputPath: null, title: '', terms: pagesOf.flatMap((x) => x.terms), hrefs: new Set(pagesOf.map((x) => x.href)), pages: pagesOf, place: true, scene: true };
+    // Counted twice, the hall alone would tie the paragraph naming two of the scene's pages, and the earlier would win.
+    const html = withFigures('<p>Zoë Hall.</p><p>Captain Rook at the Docks Quarter.</p>', { candidates: [zoe], scenes: [sc], fromPath: 'story/s1.html', imageMap });
+    assert.ok(html.indexOf('<figure') > html.indexOf('Hall.</p>'), html);
+  });
+
   it('a scene whose picture is a portrait already offered, or already shown, adds nothing', () => {
     const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, {})], { names, imageMap, linkMap })(unit1);
     const portrait = cand({ ...docks, frontmatter: { ...docks.frontmatter, portrait: 'a.png' } });

@@ -602,10 +602,12 @@ function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), 
     const held = all[at];
     const seen = new Set((held.terms || []).map((t) => t.toLowerCase()));
     const terms = [...(held.terms || []), ...c.terms.filter((t) => !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase()))];
-    const own = held.own || (held.scene ? null : { terms: held.terms || [], hrefs: new Set(held.hrefs || [held.outputPath]) });
-    const pages = [...(held.pages || [{ href: held.outputPath, terms: held.terms || [] }])];
-    for (const pg of c.pages || []) if (!pages.some((x) => x.href === pg.href)) pages.push(pg);
-    all[at] = { ...held, terms, hrefs: new Set([...(held.hrefs || [held.outputPath]), ...c.hrefs]), pages, own };
+    // A page's address is compared in NFC, as a scene's are (sceneCandidates), so a page both list is counted once.
+    const heldHrefs = held.hrefs ? [...held.hrefs] : [canonicalNfc(held.outputPath)];
+    const own = held.own || (held.scene ? null : { terms: held.terms || [], hrefs: new Set(heldHrefs) });
+    const pages = [...(held.pages || [{ href: heldHrefs[0], terms: held.terms || [] }])];
+    for (const pg of c.pages || []) if (!pages.some((x) => canonicalNfc(x.href) === canonicalNfc(pg.href))) pages.push(pg);
+    all[at] = { ...held, terms, hrefs: new Set([...heldHrefs, ...c.hrefs]), pages, own };
   }
   if (!recapHtml || all.length === 0) return recapHtml;
   const paragraphs = paragraphsOf(recapHtml, { fromPath, marks });
