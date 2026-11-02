@@ -257,7 +257,9 @@ function resolveHref(href, fromPath) {
 const straightQuotes = (s) => s.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
 
 // The text and links of one paragraph's HTML, its quotes read straight. `linkAt` maps each link's site path to where
-// its words start in the text; `linkSpans` is each link's words, as { start, end, target }.
+// its words start in the text; `linkSpans` is each link's words, as { start, end, target }. Each run of text is put in
+// NFC as it is added, so every offset counts in the text the names are read in: composing a decomposed letter makes
+// the text shorter, and offsets taken before it would point past the words they mean.
 function readParagraph(html, fromPath) {
   const hrefs = new Set();
   const linkAt = new Map();
@@ -266,7 +268,7 @@ function readParagraph(html, fromPath) {
   let text = '';
   let last = 0;
   for (const m of html.matchAll(TAG)) {
-    text += decodeEntities(html.slice(last, m.index));
+    text += canonicalNfc(decodeEntities(html.slice(last, m.index)));
     last = m.index + m[0].length;
     if (m[0].startsWith('<!--')) continue;
     const name = m[2].toLowerCase();
@@ -283,9 +285,9 @@ function readParagraph(html, fromPath) {
     if (!linkAt.has(target)) linkAt.set(target, text.length);
     link = { start: text.length, target };
   }
-  text += decodeEntities(html.slice(last));
+  text += canonicalNfc(decodeEntities(html.slice(last)));
   if (link) linkSpans.push({ ...link, end: text.length });
-  return { text: straightQuotes(canonicalNfc(text)), hrefs, linkAt, linkSpans };
+  return { text: straightQuotes(text), hrefs, linkAt, linkSpans };
 }
 
 // The recap's paragraphs: its top-level `<p>` blocks, one entry each. Where `marks` is given (the GM site) the HTML

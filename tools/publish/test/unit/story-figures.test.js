@@ -145,6 +145,18 @@ describe('mentionsOf', () => {
     assert.deepEqual(mentions(scene, `<p>Six went to ${hq}.</p>`), [{ para: 0, at: 12 }]);
   });
 
+  it('link words are found where they stand in the text the names are read in, after decomposed letters are composed', () => {
+    const station = cand(page('MacMillian Station IV', { type: 'location', aliases: ['MacMillian Station'] }));
+    const decomposed = (n) => 'Café '.repeat(n);   // "Café", the accent a mark of its own: one letter fewer once composed
+    const hq = '<a href="../locations/macmillian-station-security-hq.html">MacMillian Station security HQ</a>';
+    assert.deepEqual(mentions(station, `<p>${decomposed(3)}${hq}.</p>`), []);
+    // A plain mention just after a link to another page still counts.
+    const office = '<a href="../locations/office.html">the security office of the station</a>';
+    assert.deepEqual(mentions(station, `<p>${decomposed(20)}${office} MacMillian Station.</p>`), [{ para: 0, at: 135 }]);
+    // A link's offset is where its words start in the same text.
+    assert.deepEqual(mentions(station, `<p>${decomposed(3)}<a href="../npcs/macmillian-station-iv.html">it</a>.</p>`), [{ para: 0, at: 15 }]);
+  });
+
   it('a candidate with a set of hrefs is linked by any of them', () => {
     const c = { terms: [], hrefs: new Set(['places/a.html', 'places/b.html']) };
     assert.deepEqual(mentions(c, '<p>x</p><p><a href="../places/b.html">B</a></p>'), [{ para: 1, at: 0 }]);
