@@ -405,8 +405,9 @@ function wordsOf(p) {
   if (!WORDS.has(p)) WORDS.set(p, new Set((p.text.match(RUN) || []).map((w) => w.toLowerCase().replace(/\u017F/g, 's'))));
   return WORDS.get(p);
 }
-// `list` (mentionsOf's `others`) by key: { byWord: Map(key -> entries), always: entries with a name that has none }.
-// An entry with no name that can match is in neither.
+// `list` (one of mentionsOf's `others` lists) by key: { byWord: Map(key -> entries), always: entries with a name that
+// has none }. An entry with no name that can match is in neither. Kept per list, so the list every recap shares
+// (nameHolders) is indexed once a build.
 const INDEX = new WeakMap();
 function indexOf(list) {
   if (INDEX.has(list)) return INDEX.get(list);
@@ -437,18 +438,28 @@ function inParagraph(list, p) {
   known.set(list, out);
   return out;
 }
+// The entries of `list`, a Set kept per list (MEMBERS).
+const MEMBERS = new WeakMap();
+function membersOf(list) {
+  if (!MEMBERS.has(list)) MEMBERS.set(list, new Set(list));
+  return MEMBERS.get(list);
+}
+// mentionsOf's `others`: one list, or { lists, except }, several lists read as one, less `except`. Each list is
+// indexed on its own, so one shared by every recap is never indexed again with a recap's own candidates.
+const poolOf = (others) => (Array.isArray(others) ? { lists: [others], except: null } : { lists: others.lists, except: others.except || null });
 
 // Where a candidate is mentioned: each paragraph (index into `paragraphs`) that links it or names it, in order, with
 // the offset of the first such link or name. The candidate's link targets are `hrefs` when it has them, else its
 // `outputPath`. Longest match wins: a name lying wholly inside a longer name of one of `others` (the other
 // candidates, and nameHolders' pages but the candidate's own) does not count there, so "Pelham" is not read inside
 // "Lady Anne Pelham". A name lying wholly inside the words of a link to another page does not count either: those
-// words name where the link goes. A link always counts.
+// words name where the link goes. A link always counts. `others` is one list or several (poolOf).
 function mentionsOf(candidate, paragraphs, others = []) {
+  const { lists, except } = poolOf(others);
   const targets = candidate.hrefs ? [...candidate.hrefs] : [candidate.outputPath];
-  const rival = (o) => o !== candidate && !targets.includes(o.outputPath);
+  const rival = (o) => o !== candidate && o !== except && !targets.includes(o.outputPath);
   // A candidate among `others` (placeFigures) is read only in the paragraphs the index says may name it.
-  const indexed = others.includes(candidate);
+  const indexed = lists.some((list) => membersOf(list).has(candidate));
   const out = [];
   paragraphs.forEach((p, para) => {
     let at = Infinity;
@@ -456,8 +467,9 @@ function mentionsOf(candidate, paragraphs, others = []) {
       if (!p.hrefs.has(t)) continue;
       at = Math.min(at, p.linkAt && p.linkAt.has(t) ? p.linkAt.get(t) : 0);
     }
-    const spans = !indexed || inParagraph(others, p).has(candidate) ? nameSpans(candidate, p) : [];
-    const longer = spans.length ? [...inParagraph(others, p)].filter(rival).flatMap((o) => nameSpans(o, p)) : [];
+    const may = lists.map((list) => inParagraph(list, p));
+    const spans = !indexed || may.some((s) => s.has(candidate)) ? nameSpans(candidate, p) : [];
+    const longer = spans.length ? may.flatMap((s) => [...s]).filter(rival).flatMap((o) => nameSpans(o, p)) : [];
     const elsewhere = spans.length && p.linkSpans ? p.linkSpans.filter((l) => !targets.includes(l.target)) : [];
     const within = (n) => (l) => l.start <= n.start && n.end <= l.end;
     for (const n of spans) {
@@ -484,7 +496,7 @@ function placeFigures(candidates, paragraphs, { perParagraph = 2, taken = new Se
     const spot = spots.find((m) => open(m.para));
     if (spot) slots.set(spot.para, [...(slots.get(spot.para) || []), c]);
   };
-  const others = [...candidates, ...blockers];
+  const others = { lists: [candidates, blockers] };
   const live = candidates.filter((c) => !taken.has(c.key));
   live.filter((c) => c.pages)
     .map((c, n) => ({ c, n, spots: sceneSpots(c, paragraphs, others) }))
@@ -542,7 +554,7 @@ function figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs, can
       // A scene's picture has no caption and an empty alt, and its link a name that says nothing of it: nothing of the
       // scene note reaches the page. A page's picture that a scene joined (withFigures) is drawn as the scene's beside
       // a paragraph that never names the page.
-      const scene = c.scene || (c.own && mentionsOf(c.own, [paragraphs[para]], [...candidates.filter((o) => o !== c), ...blockers]).length === 0);
+      const scene = c.scene || (c.own && mentionsOf(c.own, [paragraphs[para]], { lists: [candidates, blockers], except: c }).length === 0);
       const title = scene ? '' : escapeText(c.title);
       return `<figure class="story-figure${c.place || scene ? ' story-figure--place' : ''}">`
         + `<a class="story-figure__open" href="${src}"${scene ? ' aria-label="Open picture"' : ''}>`
