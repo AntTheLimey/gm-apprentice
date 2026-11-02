@@ -392,7 +392,8 @@ describe('sceneCandidates', () => {
   it('a scene is pictured by its places: no caption, a place, keyed by its picture', () => {
     const of = sceneCandidates([hub1, hub2, scene(`${S}/Session 1/Scenes/Docks`, { played_in: ['[[Session 1]]'] })], { names, imageMap, linkMap });
     const [c] = of(unit1);
-    assert.deepEqual({ ...c, hrefs: [...c.hrefs] }, { key: 'a.png', outputPath: null, title: '', terms: ['The Docks', 'Docks Quarter'], hrefs: ['locations/the-docks.html'], place: true, scene: true });
+    assert.deepEqual({ ...c, hrefs: [...c.hrefs] }, { key: 'a.png', outputPath: null, title: '', terms: ['The Docks', 'Docks Quarter'], hrefs: ['locations/the-docks.html'],
+      pages: [{ href: 'locations/the-docks.html', terms: ['The Docks', 'Docks Quarter'] }], place: true, scene: true });
   });
 
   it('played_in decides first: the session it names (index or wrap-up), even from another session\'s Scenes folder', () => {
@@ -489,7 +490,7 @@ describe('sceneCandidates', () => {
     assert.ok(!html.includes('<figcaption>'));
   });
 
-  it('a scene whose picture is a portrait offered: one picture, at the first mention of the page or the scene\'s places', () => {
+  it('a scene whose picture is a portrait offered: one picture, beside the paragraph naming the most of the page and the scene\'s places', () => {
     const smith = { outputPath: 'npcs/old-smith.html', displayTitle: 'Old Smith', frontmatter: { type: 'npc', portrait: 'a.png' } };
     const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, {})], { names, imageMap, linkMap })(unit1);
     const portrait = cand(smith);
@@ -533,14 +534,42 @@ describe('sceneCandidates', () => {
     assert.ok(!html.includes('James Pelham') && html.includes('<figcaption>Lady Anne Pelham</figcaption>'), html);
   });
 
-  it('scene pictures claim after every page picture; each group keeps its own order', () => {
-    const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, {})], { names, imageMap, linkMap })(unit1);
-    const two = { ...c, key: 'b.png' };
+  describe('where a scene\'s picture goes', () => {
+    const rook = { outputPath: 'npcs/captain-rook.html', displayTitle: 'Captain Rook', frontmatter: { type: 'npc' } };
+    const bay = { outputPath: 'locations/the-bay.html', displayTitle: 'The Bay', frontmatter: { type: 'location' } };
+    const more = pageNames([docks, rook, bay], {});
+    const links = { ...linkMap, 'Captain Rook': rook.outputPath, 'The Bay': bay.outputPath };
+    const sceneWith = (key, ...places) => {
+      const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/${key}`, { locations: places.map((t) => `[[${t}]]`) }, `# S\n\n![[${key}]]\n`)],
+        { names: more, imageMap: { ...imageMap, 'c.png': { relPath: 'c.png' } }, linkMap: links })(unit1);
+      return c;
+    };
+    const three = sceneWith('a.png', 'The Docks', 'Captain Rook', 'The Bay');
     const [A, B] = ['Alpha', 'Bravo'].map((t) => cand(page(t)));
     const at = (recap, cs) => [...placeFigures(cs, paras(recap))].map(([k, v]) => [k, v.map((x) => x.title || x.key)]);
-    assert.deepEqual(at('<p>The Docks Quarter, then Alpha and Bravo.</p><p>Docks Quarter again.</p>', [c, A, B]), [[0, ['Alpha', 'Bravo']], [1, ['a.png']]]);
-    assert.deepEqual(at('<p>The Docks Quarter, then Alpha and Bravo.</p>', [c, A, B]), [[0, ['Alpha', 'Bravo']]]);
-    assert.deepEqual(at('<p>Docks Quarter and Alpha.</p>', [two, c, A]), [[0, ['Alpha', 'b.png']]]);
+
+    it('beside the paragraph that mentions the most of its places and people, not the first', () => {
+      assert.deepEqual(at('<p>At the Docks Quarter.</p><p>Captain Rook waited.</p><p>The Bay, the Docks Quarter and Captain Rook.</p>', [three]), [[2, ['a.png']]]);
+      // A link counts as a mention, as for a page.
+      assert.deepEqual(at('<p>The Bay.</p><p>To <a href="../npcs/captain-rook.html">him</a> at the Docks Quarter.</p>', [three]), [[1, ['a.png']]]);
+    });
+
+    it('a tie goes to the earliest of those paragraphs; a paragraph that mentions none is never chosen', () => {
+      assert.deepEqual(at('<p>Nobody yet.</p><p>Captain Rook at The Bay.</p><p>The Docks and Captain Rook.</p>', [three]), [[1, ['a.png']]]);
+      assert.deepEqual(at('<p>Nobody yet.</p>', [three]), []);
+    });
+
+    it('a scene claims first; page pictures fill what is left', () => {
+      assert.deepEqual(at('<p>Alpha and Bravo at the Docks Quarter.</p>', [A, B, three]), [[0, ['a.png', 'Alpha']]]);
+      assert.deepEqual(at('<p>Alpha and Bravo at the Docks Quarter.</p><p>Bravo again.</p>', [A, B, three]), [[0, ['a.png', 'Alpha']], [1, ['Bravo']]]);
+    });
+
+    it('two scenes choosing one paragraph both take a slot there, in the order the paragraph names them; a third takes its next best', () => {
+      const docksOnly = sceneWith('b.png', 'The Docks');
+      const bayOnly = sceneWith('c.png', 'The Bay');
+      assert.deepEqual(at('<p>The Bay, then the Docks and Alpha.</p>', [docksOnly, bayOnly, A]), [[0, ['c.png', 'b.png']]]);
+      assert.deepEqual(at('<p>The Bay, Captain Rook, the Docks.</p><p>Later the Docks.</p>', [docksOnly, bayOnly, three]), [[0, ['c.png', 'a.png']], [1, ['b.png']]]);
+    });
   });
 
   it('a scene whose picture is a portrait already offered, or already shown, adds nothing', () => {

@@ -185,8 +185,9 @@ function sessionsOfScene(scene, vault) {
 // sessionsOfScene, never when dropped or paused; its picture is scenePicture's, an attachment the build has
 // (`imageMap`); and it is named by the pages its `locations` and `entities` link (resolved by `linkMap`, else by
 // `folded`, the build's reading of a name in another letter case or with underscores) that are in
-// `names` (pageNames: player-site pages, not PCs). Its candidate has those pages' names and addresses and nothing of
-// the scene's own: no title, no words. A scene with no picture or no such page gives none.
+// `names` (pageNames: player-site pages, not PCs). Its candidate has those pages' names and addresses, together
+// (`terms`, `hrefs`) and one by one (`pages`: [{ href, terms }], which placeFigures counts), and nothing of the scene's
+// own: no title, no words. A scene with no picture or no such page gives none.
 function sceneCandidates(notes, { names, imageMap, linkMap, folded = () => undefined }) {
   const typed = (types) => notes.filter((n) => n.frontmatter && types.has(String(n.frontmatter.type)));
   const vault = { hubs: typed(new Set(['session'])), wrapUps: typed(WRAP_UP_TYPES), plans: typed(new Set(['session-plan'])) };
@@ -199,14 +200,17 @@ function sceneCandidates(notes, { names, imageMap, linkMap, folded = () => undef
     const seen = new Set();
     const terms = [];
     const hrefs = new Set();
+    const pages = [];
     for (const target of [...linksOf(fm.locations), ...linksOf(fm.entities)]) {
       const at = linkMap[target] || folded(target);
       if (!at || !names.has(at)) continue;
-      hrefs.add(canonicalNfc(at));
+      const href = canonicalNfc(at);
+      if (!hrefs.has(href)) pages.push({ href, terms: names.get(at) });
+      hrefs.add(href);
       for (const term of names.get(at)) if (!seen.has(term.toLowerCase())) { seen.add(term.toLowerCase()); terms.push(term); }
     }
     if (hrefs.size === 0) continue;
-    scenes.push({ sessions: sessionsOfScene(scene, vault), candidate: { key, outputPath: null, title: '', terms, hrefs, place: true, scene: true } });
+    scenes.push({ sessions: sessionsOfScene(scene, vault), candidate: { key, outputPath: null, title: '', terms, hrefs, pages, place: true, scene: true } });
   }
   return (unit) => {
     if (!unit || unit.kind !== 'session') return [];
@@ -372,24 +376,49 @@ function mentionsOf(candidate, paragraphs, others = []) {
 }
 
 // Which paragraph each picture goes beside: a Map from paragraph index to the candidates shown there, at most
-// `perParagraph` each. Page pictures claim first, then scenes' (`scene`); within each, candidates claim in the order
-// of their first mention (paragraph, then position, then title), read with mentionsOf against all the others and
-// `blockers` (nameHolders). Each takes the first paragraph that names it and has room, and is left
-// out if none does. A paragraph that already holds an image takes none, and a candidate whose key is in `taken` (a
-// picture the recap already shows) is skipped.
+// `perParagraph` each. Mentions are read with mentionsOf against all the others and `blockers` (nameHolders). A scene's
+// picture (a candidate with `pages`, sceneSpots) claims first, beside the paragraph that mentions the most of its pages,
+// the earliest on a tie; scenes claim in the order of the paragraphs they choose (then position, then as given), and
+// one whose paragraph is full takes the next best that has room. Page pictures then fill what is left, in the order of
+// their first mention (paragraph, then position, then title), each at the first paragraph that names it and has room.
+// A candidate with no room anywhere it is mentioned is left out. A paragraph that already holds an image takes none,
+// and a candidate whose key is in `taken` (a picture the recap already shows) is skipped.
 function placeFigures(candidates, paragraphs, { perParagraph = 2, taken = new Set(), blockers = [] } = {}) {
   const slots = new Map();
   const open = (i) => !paragraphs[i].hasImage && (slots.get(i) || []).length < perParagraph;
-  const ranked = candidates
-    .filter((c) => !taken.has(c.key))
-    .map((c) => ({ c, ms: mentionsOf(c, paragraphs, [...candidates, ...blockers]) }))
-    .filter((x) => x.ms.length > 0)
-    .sort((a, b) => Number(!!a.c.scene) - Number(!!b.c.scene) || a.ms[0].para - b.ms[0].para || a.ms[0].at - b.ms[0].at || a.c.title.localeCompare(b.c.title));
-  for (const { c, ms } of ranked) {
-    const spot = ms.find((m) => open(m.para));
+  const claim = (spots, c) => {
+    const spot = spots.find((m) => open(m.para));
     if (spot) slots.set(spot.para, [...(slots.get(spot.para) || []), c]);
-  }
+  };
+  const others = [...candidates, ...blockers];
+  const live = candidates.filter((c) => !taken.has(c.key));
+  live.filter((c) => c.pages)
+    .map((c, n) => ({ c, n, spots: sceneSpots(c, paragraphs, others) }))
+    .filter((x) => x.spots.length > 0)
+    .sort((a, b) => a.spots[0].para - b.spots[0].para || a.spots[0].at - b.spots[0].at || a.n - b.n)
+    .forEach(({ c, spots }) => claim(spots, c));
+  live.filter((c) => !c.pages)
+    .map((c) => ({ c, ms: mentionsOf(c, paragraphs, others) }))
+    .filter((x) => x.ms.length > 0)
+    .sort((a, b) => a.ms[0].para - b.ms[0].para || a.ms[0].at - b.ms[0].at || a.c.title.localeCompare(b.c.title))
+    .forEach(({ c, ms }) => claim(ms, c));
   return slots;
+}
+
+// The paragraphs a scene's picture may go beside, best first: each that mentions at least one of its `pages` (by
+// mentionsOf's rules, each page read on its own against `others`), by how many of them it mentions, most first, then
+// earliest. `at`: where the first of them stands in it.
+function sceneSpots(scene, paragraphs, others) {
+  const byPara = new Map();
+  for (const { href, terms } of scene.pages) {
+    for (const { para, at } of mentionsOf({ outputPath: href, terms }, paragraphs, others)) {
+      const spot = byPara.get(para) || { para, at, count: 0 };
+      spot.count++;
+      spot.at = Math.min(spot.at, at);
+      byPara.set(para, spot);
+    }
+  }
+  return [...byPara.values()].sort((a, b) => b.count - a.count || a.para - b.para);
 }
 
 const ZOOM = '<svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/></svg>';
@@ -455,7 +484,7 @@ function shownImages(recapHtml, { fromPath, imageMap, marks = null }) {
 // One recap with its pictures: where `candidates` (less the unit's own pages, `exclude`) and the unit's `scenes`
 // (sceneCandidates) are mentioned, read as players see the recap (`marks`, the GM site), placed and drawn. A scene
 // whose picture is already a candidate's (a page's portrait, or another scene's) joins that candidate: one picture,
-// placed at the first mention of any of their pages. It is drawn as that candidate is where the paragraph names the
+// placed as a scene's (placeFigures), its pages all of theirs, the page's own among them. It is drawn as that candidate is where the paragraph names the
 // candidate's own page (`own`: its names and links), and as a scene's picture where only the scene's pages are named,
 // so a caption never names someone the paragraph does not. `blockers` (nameHolders) are the names of every page
 // players see, for mentionsOf. Each picture placed is added to `usedImages` so the build copies it.
@@ -468,7 +497,9 @@ function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), 
     const seen = new Set((held.terms || []).map((t) => t.toLowerCase()));
     const terms = [...(held.terms || []), ...c.terms.filter((t) => !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase()))];
     const own = held.own || (held.scene ? null : { terms: held.terms || [], hrefs: new Set(held.hrefs || [held.outputPath]) });
-    all[at] = { ...held, terms, hrefs: new Set([...(held.hrefs || [held.outputPath]), ...c.hrefs]), own };
+    const pages = [...(held.pages || [{ href: held.outputPath, terms: held.terms || [] }])];
+    for (const pg of c.pages || []) if (!pages.some((x) => x.href === pg.href)) pages.push(pg);
+    all[at] = { ...held, terms, hrefs: new Set([...(held.hrefs || [held.outputPath]), ...c.hrefs]), pages, own };
   }
   if (!recapHtml || all.length === 0) return recapHtml;
   const paragraphs = paragraphsOf(recapHtml, { fromPath, marks });
