@@ -257,6 +257,9 @@ describe('Story pictures: the scenes played that session', () => {
     assert.deepEqual(figs[0].captions, []);
     assert.deepEqual(figs[0].places, [true]);
     assert.match(page, /<img src="\.\.\/images\/scene-docks\.(png|webp)" alt="" loading="lazy">/);
+    // Its link has a name of its own that says nothing of the scene; a page's picture is named by its alt.
+    assert.match(page, /<a class="story-figure__open" href="\.\.\/images\/scene-docks\.(png|webp)" aria-label="Open picture"><img/);
+    assert.equal((page.match(/aria-label="Open picture"/g) || []).length, 1);
     assert.match(page, /<\/figure><\/div><p>The party reached/);
     assert.deepEqual(figs[1].captions, ['Captain Rook']);
   });

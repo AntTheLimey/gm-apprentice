@@ -436,7 +436,7 @@ describe('sceneCandidates', () => {
     const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, {})], { names, imageMap, linkMap })(unit1);
     assert.deepEqual(mentions(c, '<p>Then to Docks Quarter.</p>'), [{ para: 0, at: 8 }]);
     const html = withFigures('<p>Off to <a href="../locations/the-docks.html">the pier</a>.</p>', { candidates: [], scenes: [c], fromPath: 'story/s1.html', imageMap });
-    assert.match(html, /<figure class="story-figure story-figure--place"><a class="story-figure__open" href="\.\.\/images\/a\.png"><img src="\.\.\/images\/a\.png" alt="" loading="lazy">/);
+    assert.match(html, /<figure class="story-figure story-figure--place"><a class="story-figure__open" href="\.\.\/images\/a\.png" aria-label="Open picture"><img src="\.\.\/images\/a\.png" alt="" loading="lazy">/);
     assert.ok(!html.includes('<figcaption>'));
   });
 
@@ -465,12 +465,13 @@ describe('sceneCandidates', () => {
       assert.equal((html.match(/<figure /g) || []).length, 1, html);
       assert.ok(!html.includes('Old Smith</figcaption>') && !html.includes('alt="Old Smith"'), html);
       assert.ok(!html.includes('<figcaption>') && html.includes('alt=""') && html.includes('story-figure--place'), html);
+      assert.ok(html.includes('aria-label="Open picture"'), html);
     }
     // Beside a paragraph that names the page itself, it is the page's picture, under its name.
     for (const recap of ['<p>Old Smith at the Docks Quarter.</p>', '<p>Then <a href="../npcs/old-smith.html">he</a> came.</p><p>The Docks Quarter.</p>']) {
       const html = draw(recap);
       assert.ok(html.includes('<figcaption>Old Smith</figcaption>') && html.includes('alt="Old Smith"'), html);
-      assert.ok(!html.includes('story-figure--place'), html);
+      assert.ok(!html.includes('story-figure--place') && !html.includes('aria-label'), html);
     }
   });
 

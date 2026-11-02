@@ -46,6 +46,9 @@ describe('Story page pictures in a browser', { skip }, () => {
       pair: pair && { w: rect(pair).w, float: getComputedStyle(pair).cssFloat, imgs: [].map.call(figs, function (f) { return rect(f.querySelector('img')); }),
         second: figs[1] ? getComputedStyle(figs[1]).display : null, first: figs[0] ? getComputedStyle(figs[0]).display : null },
       zoomOpacity: getComputedStyle(document.querySelector('.story-figure__zoom')).opacity,
+      // Where the last float ends and the first wrap-up section after the recap starts.
+      floatsEnd: Math.max.apply(null, [].map.call(document.querySelectorAll('.story-figures'), function (f) { return f.getBoundingClientRect().bottom; })),
+      sectionTop: document.querySelector('.story-section').getBoundingClientRect().top,
       hasLeft: !!document.querySelector('.story-figures--left'),
     });
   };
@@ -94,6 +97,11 @@ describe('Story page pictures in a browser', { skip }, () => {
     assert.equal(phone.pair.second, 'none');
     assert.notEqual(phone.pair.first, 'none');
     assert.ok(Math.abs(phone.pair.imgs[0].w - phone.pair.imgs[0].h) <= 1, 'the first picture keeps its square crop');
+    assert.ok(Math.abs(phone.pair.imgs[0].w - 108) <= 1, `the first picture fills the box (${phone.pair.imgs[0].w}px)`);
+  });
+
+  it('a float never runs into the wrap-up section after the recap', () => {
+    for (const at of [wide, phone]) assert.ok(at.sectionTop >= at.floatsEnd, `section at ${at.sectionTop}, floats end at ${at.floatsEnd}`);
   });
 
   it('clicking a picture opens the lightbox on the full image, once', () => {

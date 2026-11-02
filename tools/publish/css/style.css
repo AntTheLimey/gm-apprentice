@@ -981,6 +981,7 @@ body:has(#tab-story.active) .pull-quote-backstory {
   }
   .story-figures--two {
     width: 110px;
+    grid-template-columns: 1fr;
   }
   .story-figures--two .story-figure:nth-child(2) {
     display: none;
@@ -1001,6 +1002,7 @@ body:has(#tab-story.active) .pull-quote-backstory {
    A grid of cards under the story: the kind, the moment (narration or speech, one style), its speaker, then the
    context. The note is shown as written: no quote marks are added. */
 section.story-moments {
+  clear: both;
   max-width: 52rem;
   margin: 1rem auto 0;
   padding: 2.5rem 0 1rem;
@@ -1294,8 +1296,9 @@ p.story-playnotes a {
   margin: var(--space-500) 0 var(--space-1500);
   font-size: var(--font-size-950);
 }
-/* A wrap-up section after the recap (Loot, Notes ...): part of the same prose, set off by its heading. */
-.story-section { margin-top: var(--space-1500); }
+/* A wrap-up section after the recap (Loot, Notes ...): part of the same prose, set off by its heading, and below any
+   picture floated beside the recap. */
+.story-section { margin-top: var(--space-1500); clear: both; }
 
 /* Story landing */
 .story-branch { max-width: 46rem; margin: 0 auto 2.5rem; }

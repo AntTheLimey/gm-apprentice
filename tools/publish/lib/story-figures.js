@@ -369,11 +369,13 @@ function figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs }) {
     const classes = ['story-figures', ...(n % 2 ? ['story-figures--left'] : []), ...(shown.length > 1 ? ['story-figures--two'] : [])];
     const figs = shown.map((c) => {
       const src = escapeText(imageSrc(imageMap[c.key], fromPath));
-      // A scene's picture has no caption and an empty alt: nothing of the scene note reaches the page. A page's
-      // picture that a scene joined (withFigures) is drawn as the scene's beside a paragraph that never names the page.
+      // A scene's picture has no caption and an empty alt, and its link a name that says nothing of it: nothing of the
+      // scene note reaches the page. A page's picture that a scene joined (withFigures) is drawn as the scene's beside
+      // a paragraph that never names the page.
       const scene = c.scene || (c.own && mentionsOf(c.own, [paragraphs[para]]).length === 0);
       const title = scene ? '' : escapeText(c.title);
-      return `<figure class="story-figure${c.place || scene ? ' story-figure--place' : ''}"><a class="story-figure__open" href="${src}">`
+      return `<figure class="story-figure${c.place || scene ? ' story-figure--place' : ''}">`
+        + `<a class="story-figure__open" href="${src}"${scene ? ' aria-label="Open picture"' : ''}>`
         + `<img src="${src}" alt="${title}" loading="lazy"><span class="story-figure__zoom" aria-hidden="true">${ZOOM}</span></a>`
         + `${scene ? '' : `<figcaption>${title}</figcaption>`}</figure>`;
     }).join('');
