@@ -18,6 +18,15 @@ describe('figureCandidates', () => {
     assert.equal(cand(page('The Rook', { type: 'item' })).place, true);
   });
 
+  it('an alias beginning with "The" is a description: a link counts, the words do not; a title beginning with "The" still counts', () => {
+    const p = page('Hooghly', { type: 'location', aliases: ['The River', 'the capital', 'THE STATION', 'Theodora', 'Ganga'] });
+    assert.deepEqual(cand(p).terms, ['Hooghly', 'Theodora', 'Ganga']);
+    assert.deepEqual(mentions(cand(p), '<p>They crossed The River.</p>'), []);
+    assert.deepEqual(mentions(cand(p), '<p>They crossed <a href="../npcs/hooghly.html">The River</a>.</p>'), [{ para: 0, at: 13 }]);
+    assert.deepEqual(mentions(cand(page('The Auberge')), '<p>At The Auberge.</p>'), [{ para: 0, at: 3 }]);
+    assert.deepEqual(pageNames([p], {}).get(p.outputPath), ['Hooghly', 'Theodora', 'Ganga']);
+  });
+
   it('gm_aliases never count; an alias hidden by hide.fields never counts', () => {
     const p = page('Mara', { aliases: ['Meg'], gm_aliases: ['The Widow'] });
     assert.deepEqual(cand(p).terms, ['Mara', 'Meg']);

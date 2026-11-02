@@ -20,13 +20,14 @@ const TAG = /<!--[\s\S]*?-->|<(\/?)([a-zA-Z][\w:-]*)((?:"[^"]*"|'[^']*'|[^>"'])*
 // A page's names as players read them: its published title and published `aliases` (a hidden field is not a name,
 // and `gm_aliases` is never read), each read as players see it on the GM site (`marks`): a title or alias can hold a
 // marked name (a withheld note's, kept for the GM), so a caption never prints the GM's name and the names match the
-// words the player page has.
+// words the player page has. An alias beginning with "The" ("The River", "the capital") is a description, not a name:
+// it is not one of the names, so only a link counts for it. The title always is, "The" or not.
 function namesOf(page, published, marks) {
   const title = withoutMarked(page.displayTitle || page.title || '', marks).trim();
   const seen = new Set();
   const terms = [];
-  for (const raw of [title, ...nameList(published.aliases)]) {
-    const term = canonicalNfc(withoutMarked(raw, marks)).trim();
+  const aliases = nameList(published.aliases).map((raw) => canonicalNfc(withoutMarked(raw, marks)).trim()).filter((a) => !/^the\s/i.test(a));
+  for (const term of [canonicalNfc(title), ...aliases]) {
     if (term && !seen.has(term.toLowerCase())) { seen.add(term.toLowerCase()); terms.push(term); }
   }
   return { title, terms };
