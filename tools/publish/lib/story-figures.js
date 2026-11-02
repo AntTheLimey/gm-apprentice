@@ -296,7 +296,13 @@ const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // One whole-word pattern per name, its quotes read straight. A name of several words matches in any case; a one-word
 // name only where it starts with a capital as written, so "Six" is found and "six guards" is not. A name under two
 // characters never matches.
+// Each is compiled once and kept (PATTERNS, by name): every candidate is read against every recap of the site.
+const PATTERNS = new Map();
 function termPattern(term) {
+  if (!PATTERNS.has(term)) PATTERNS.set(term, compileTerm(term));
+  return PATTERNS.get(term);
+}
+function compileTerm(term) {
   if (Array.from(term).length < 2) return null;
   const words = straightQuotes(term).split(/\s+/).map(escapeRegExp);
   const source = `(?<![\\p{L}\\p{N}])${words.join('\\s+')}(?![\\p{L}\\p{N}])`;
