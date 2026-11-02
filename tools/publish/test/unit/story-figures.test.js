@@ -327,6 +327,13 @@ describe('scenePicture: setext headings, avif and single-quoted titles', () => {
     assert.equal(scenePicture('# D\n\nWords.\n\n---\n\n![[a.png]]\n'), 'a.png');
   });
 
+  it('an HTML heading line is a heading: a picture under it is not the scene\'s; an HTML h1 starts the scene', () => {
+    assert.equal(scenePicture('# D\n\nWords.\n\n<h2>GM Notes</h2>\n![[x.png]]\n'), null);
+    assert.equal(scenePicture('# D\n\n<H3 class="gm">Keeper</H3>\n\n![[x.png]]\n'), null);
+    assert.equal(scenePicture('<h1>Docks</h1>\n\n![[a.png]]\n'), 'a.png');
+    assert.equal(scenePicture('# D\n\n<hr>\n![[a.png]]\n'), 'a.png');
+  });
+
   it('an avif picture counts, and a markdown image with a title in single quotes', () => {
     assert.equal(scenePicture('# D\n\n![[a.avif]]\n'), 'a.avif');
     assert.equal(scenePicture("# D\n\n![x](a.png 'The pier')\n"), 'a.png');

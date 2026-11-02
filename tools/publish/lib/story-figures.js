@@ -69,9 +69,9 @@ function pageNames(pages, { marks = null, ...options } = {}) {
 }
 
 // A scene's picture: the file name of the first image embed (`![[x.png]]` or `![](x.png)`) after its H1 (from the top
-// when it has none) and before its next heading (`#`, or text underlined with `===` or `---`), read with gm-only and
-// spoiler fences, comments and callouts taken out and code left alone; null when there is none. Any other picture in
-// the scene is never used.
+// when it has none) and before its next heading (`#`, an HTML `<h1>`-`<h6>` line, or text underlined with `===` or
+// `---`), read with gm-only and spoiler fences, comments and callouts taken out and code left alone; null when there
+// is none. Any other picture in the scene is never used.
 function scenePicture(body) {
   const lines = strippedLines(String(body == null ? '' : body).replace(/\r\n?/g, '\n'), true).lines;
   // Each line outside code as { line, level }: a heading's level, 0 for any other line. A setext heading's text lines
@@ -84,10 +84,12 @@ function scenePicture(body) {
     const inCode = fence !== null || step.isFenceLine;
     fence = step.fenceDelim;
     if (inCode) { para = []; continue; }
-    const atx = /^ {0,3}(#{1,6})(\s|$)/.exec(line);
+    const hashes = /^ {0,3}(#{1,6})(\s|$)/.exec(line);
+    const tag = /^ {0,3}<h([1-6])[\s>]/i.exec(line);
+    const atx = hashes ? hashes[1].length : tag ? Number(tag[1]) : 0;
     const under = /^ {0,3}(=+|-+)\s*$/.exec(line);
     if (under && para.length) { read.splice(para[0]); read.push({ line: '', level: under[1][0] === '=' ? 1 : 2 }); para = []; continue; }
-    if (atx || under || !line.trim()) { read.push({ line, level: atx ? atx[1].length : 0 }); para = []; continue; }
+    if (atx || under || !line.trim()) { read.push({ line, level: atx }); para = []; continue; }
     if (!para.length) para = [read.length];
     read.push({ line, level: 0 });
   }

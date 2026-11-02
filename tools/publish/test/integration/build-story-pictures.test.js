@@ -444,6 +444,30 @@ describe('Story pictures: scenes that give no picture', () => {
   });
 });
 
+describe('Story pictures: a scene picture the player site cannot have', () => {
+  const s = buildBoth(storyVault({
+    ...SCENE_FILES,
+    '_attachments/gm/secret-map.png': png(40, 30),
+    '_attachments/html-gm.png': png(40, 30),
+    // Its picture sits in a folder the player site hides.
+    [SCENE_AT]: scene({ picture: '![[_attachments/gm/secret-map.png]]' }),
+    // Its only picture is under an HTML heading, as GM Notes written in HTML.
+    'Chapters/Chapter 1/Scenes/Scene_Html.md': scene({ picture: '<h2>GM Notes</h2>\n![[html-gm.png]]', tag: 'H' }),
+    'Sessions/Session 1 Wrap-Up.md': withRecap(SCENE_RECAP),
+  }), { player: { hide: { folders: ['_attachments/gm'] } } });
+  after(() => s.cleanup());
+
+  it('a picture in a hidden folder, or under an HTML heading, is on neither Story page and not copied to the player site', () => {
+    for (const site of [s.player, s.gm]) {
+      const page = read(site, STORY_1);
+      assert.ok(!page.includes('secret-map'), `hidden folder, ${site === s.gm ? 'gm' : 'player'}`);
+      assert.ok(!page.includes('html-gm'), `HTML heading, ${site === s.gm ? 'gm' : 'player'}`);
+      assert.deepEqual(captions(page), ['Captain Rook']);
+    }
+    assert.ok(!s.player.files().some((f) => /secret-map|html-gm/.test(f)), 'not copied to the player site');
+  });
+});
+
 describe('Story pictures: player_site.story.pictures off', () => {
   const recap = 'Captain Rook came aboard.\n\n![[rook.png]]\n\nAt dawn [[Mara Quill]] waved from [[The Docks]].';
   const s = buildBoth(storyVault({
