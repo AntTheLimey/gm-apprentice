@@ -68,19 +68,32 @@ function pageNames(pages, { marks = null, ...options } = {}) {
 }
 
 // A scene's picture: the file name of the first image embed (`![[x.png]]` or `![](x.png)`) after its H1 (from the top
-// when it has none) and before its next heading, read with gm-only and spoiler fences, comments and callouts taken
-// out and code left alone; null when there is none. Any other picture in the scene is never used.
+// when it has none) and before its next heading (`#`, or text underlined with `===` or `---`), read with gm-only and
+// spoiler fences, comments and callouts taken out and code left alone; null when there is none. Any other picture in
+// the scene is never used.
 function scenePicture(body) {
   const lines = strippedLines(String(body == null ? '' : body).replace(/\r\n?/g, '\n'), true).lines;
+  // Each line outside code as { line, level }: a heading's level, 0 for any other line. A setext heading's text lines
+  // become one heading when its underline is reached; an underline after a blank line is a rule.
+  const read = [];
+  let para = [];   // where the paragraph so far starts in `read`, while it has lines
   let fence = null;
-  let started = false;
   for (const line of lines) {
     const step = fenceStep(line, fence);
     const inCode = fence !== null || step.isFenceLine;
     fence = step.fenceDelim;
-    if (inCode) continue;
-    if (/^ {0,3}#{1,6}(\s|$)/.test(line)) {
-      if (!started && /^ {0,3}#(\s|$)/.test(line)) { started = true; continue; }
+    if (inCode) { para = []; continue; }
+    const atx = /^ {0,3}(#{1,6})(\s|$)/.exec(line);
+    const under = /^ {0,3}(=+|-+)\s*$/.exec(line);
+    if (under && para.length) { read.splice(para[0]); read.push({ line: '', level: under[1][0] === '=' ? 1 : 2 }); para = []; continue; }
+    if (atx || under || !line.trim()) { read.push({ line, level: atx ? atx[1].length : 0 }); para = []; continue; }
+    if (!para.length) para = [read.length];
+    read.push({ line, level: 0 });
+  }
+  let started = false;
+  for (const { line, level } of read) {
+    if (level) {
+      if (!started && level === 1) { started = true; continue; }
       return null;
     }
     if (!started && !line.trim()) continue;
@@ -97,7 +110,7 @@ function firstImage(line) {
   for (const m of line.matchAll(new RegExp('!' + wikilinkRe().source, 'g'))) {
     embeds.push({ at: m.index, name: parseWikilink(m[1]).raw.trim() });
   }
-  for (const m of line.matchAll(/!\[[^\]]*\]\(\s*<?([^)>\s]+)>?(?:\s+"[^"]*")?\s*\)/g)) {
+  for (const m of line.matchAll(/!\[[^\]]*\]\(\s*<?([^)>\s]+)>?(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)/g)) {
     if (isWebImageAddress(m[1])) continue;
     let name = m[1].split(/[?#]/)[0];
     try { name = decodeURIComponent(name); } catch { /* an address that is not encoded stays as written */ }
@@ -156,10 +169,11 @@ function sessionsOfScene(scene, vault) {
 // The scene pictures of each session unit, from `notes` (every vault note, scanAllNotes: a scene and a Plan carry
 // their frontmatter, a scene its `body`). Returns `(unit) => candidates`. A scene counts for a session unit by
 // sessionsOfScene, never when dropped or paused; its picture is scenePicture's, an attachment the build has
-// (`imageMap`); and it is named by the pages its `locations` and `entities` link (resolved by `linkMap`) that are in
+// (`imageMap`); and it is named by the pages its `locations` and `entities` link (resolved by `linkMap`, else by
+// `folded`, the build's reading of a name in another letter case or with underscores) that are in
 // `names` (pageNames: player-site pages, not PCs). Its candidate has those pages' names and addresses and nothing of
 // the scene's own: no title, no words. A scene with no picture or no such page gives none.
-function sceneCandidates(notes, { names, imageMap, linkMap }) {
+function sceneCandidates(notes, { names, imageMap, linkMap, folded = () => undefined }) {
   const typed = (types) => notes.filter((n) => n.frontmatter && types.has(String(n.frontmatter.type)));
   const vault = { hubs: typed(new Set(['session'])), wrapUps: typed(WRAP_UP_TYPES), plans: typed(new Set(['session-plan'])) };
   const scenes = [];
@@ -172,7 +186,7 @@ function sceneCandidates(notes, { names, imageMap, linkMap }) {
     const terms = [];
     const hrefs = new Set();
     for (const target of [...linksOf(fm.locations), ...linksOf(fm.entities)]) {
-      const at = linkMap[target];
+      const at = linkMap[target] || folded(target);
       if (!at || !names.has(at)) continue;
       hrefs.add(canonicalNfc(at));
       for (const term of names.get(at)) if (!seen.has(term.toLowerCase())) { seen.add(term.toLowerCase()); terms.push(term); }
@@ -220,7 +234,11 @@ function resolveHref(href, fromPath) {
   return canonicalNfc(path.posix.normalize(path.posix.join(path.posix.dirname(fromPath || ''), decoded)));
 }
 
-// The text and links of one paragraph's HTML. `linkAt` maps each link's site path to where its words start in the text.
+// Curled quotes read as straight ones, one character for one so offsets stay true: the recap is typeset with curled
+// quotes (markdown.js) and a name may be written with either.
+const straightQuotes = (s) => s.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
+
+// The text and links of one paragraph's HTML. Its quotes are straightQuotes'. `linkAt` maps each link's site path to where its words start in the text.
 function readParagraph(html, fromPath) {
   const hrefs = new Set();
   const linkAt = new Map();
@@ -240,7 +258,7 @@ function readParagraph(html, fromPath) {
     if (!linkAt.has(target)) linkAt.set(target, text.length);
   }
   text += decodeEntities(html.slice(last));
-  return { text: canonicalNfc(text), hrefs, linkAt };
+  return { text: straightQuotes(canonicalNfc(text)), hrefs, linkAt };
 }
 
 // The recap's paragraphs: its top-level `<p>` blocks, one entry each. Where `marks` is given (the GM site) the HTML
@@ -274,11 +292,11 @@ function openMarks(text) {
 
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// One whole-word pattern per name. A name of several words matches in any case; a one-word name only where it starts
+// One whole-word pattern per name, its quotes read straight. A name of several words matches in any case; a one-word name only where it starts
 // with a capital as written, so "Six" is found and "six guards" is not. A name under two characters never matches.
 function termPattern(term) {
   if (Array.from(term).length < 2) return null;
-  const words = term.split(/\s+/).map(escapeRegExp);
+  const words = straightQuotes(term).split(/\s+/).map(escapeRegExp);
   const source = `(?<![\\p{L}\\p{N}])${words.join('\\s+')}(?![\\p{L}\\p{N}])`;
   return { regex: new RegExp(source, words.length > 1 ? 'giu' : 'gu'), single: words.length === 1 };
 }

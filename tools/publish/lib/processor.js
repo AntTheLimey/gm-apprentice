@@ -1589,7 +1589,7 @@ function leadingH1Withheld(markdown, excludeSections, frontmatter) {
   return walkExcludeList(lines.slice(0, end + 1), excludeSections, frontmatter, {}).withheldBy[first] !== null;
 }
 
-const IMAGE_EXT_REGEX = /\.(jpe?g|png|webp|gif|svg)$/i;
+const IMAGE_EXT_REGEX = /\.(jpe?g|png|webp|gif|svg|avif)$/i;
 
 // Percent-encode each path segment of an output-path-derived href/src. A destination
 // containing a raw space — which vault attachments and subfolder names routinely do

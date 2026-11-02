@@ -112,6 +112,14 @@ describe('mentionsOf', () => {
     assert.deepEqual(mentions(c, '<p>&amp; <strong>O&#39;Neil</strong> &amp; co</p>'), [{ para: 0, at: 2 }]);
   });
 
+  it('straight and curled quotes match each other (the recap is typeset with curled ones), at the same offsets', () => {
+    assert.deepEqual(mentions(cand(page("O'Hara")), '<p>Then O’Hara came.</p>'), [{ para: 0, at: 5 }]);
+    assert.deepEqual(mentions(cand(page('O’Hara')), "<p>Then O'Hara came.</p>"), [{ para: 0, at: 5 }]);
+    assert.deepEqual(mentions(cand(page('The “Rook” Inn')), '<p>At the "Rook" Inn.</p>'), [{ para: 0, at: 3 }]);
+    assert.deepEqual(mentions(cand(page('The "Rook" Inn')), '<p>At the “Rook” Inn.</p>'), [{ para: 0, at: 3 }]);
+    assert.deepEqual(mentions(cand(page("O'Hara")), '<p>‘Quiet,’ said O’Hara.</p>'), [{ para: 0, at: 14 }]);
+  });
+
   it('a candidate with a set of hrefs is linked by any of them', () => {
     const c = { terms: [], hrefs: new Set(['places/a.html', 'places/b.html']) };
     assert.deepEqual(mentions(c, '<p>x</p><p><a href="../places/b.html">B</a></p>'), [{ para: 1, at: 0 }]);
@@ -285,6 +293,23 @@ describe('scenePicture', () => {
   });
 });
 
+describe('scenePicture: setext headings, avif and single-quoted titles', () => {
+  it('a heading underlined with --- or === is a heading: a picture under it is not the scene\'s', () => {
+    assert.equal(scenePicture('# D\n\nWords.\n\nGM Notes\n--------\n\n![[x.png]]\n'), null);
+    assert.equal(scenePicture('# D\n\nWords.\n\nGM Notes\n===\n\n![[x.png]]\n'), null);
+    assert.equal(scenePicture('# D\n\nGM Notes ![[x.png]]\n---\n'), null);
+    // An H1 written with === starts the scene; a --- after a blank line is a rule, not a heading.
+    assert.equal(scenePicture('Docks\n=====\n\n![[a.png]]\n'), 'a.png');
+    assert.equal(scenePicture('# D\n\nWords.\n\n---\n\n![[a.png]]\n'), 'a.png');
+  });
+
+  it('an avif picture counts, and a markdown image with a title in single quotes', () => {
+    assert.equal(scenePicture('# D\n\n![[a.avif]]\n'), 'a.avif');
+    assert.equal(scenePicture("# D\n\n![x](a.png 'The pier')\n"), 'a.png');
+    assert.equal(scenePicture('# D\n\n![x](a.png "The pier")\n'), 'a.png');
+  });
+});
+
 describe('sceneCandidates', () => {
   const V = '/vault';
   const note = (rel, frontmatter, body = '# Scene\n\n![[a.png]]\n') => {
@@ -375,6 +400,17 @@ describe('sceneCandidates', () => {
   it('a scene linking by a gm_alias the link map lacks gives no candidate', () => {
     const { 'Smugglers Row': _gone, ...bare } = linkMap;
     assert.deepEqual(sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, { locations: ['[[Smugglers Row]]'], entities: [] })], { names, imageMap, linkMap: bare })(unit1), []);
+  });
+
+  it('a place linked in another case or with underscores is read by the folded name the build resolves links with', () => {
+    const fold = (n) => n.toLowerCase().replace(/_/g, ' ');
+    const folded = (n) => Object.entries(linkMap).find(([k]) => fold(k) === fold(n))?.[1];
+    for (const link of ['[[the docks]]', '[[The_Docks]]']) {
+      const notes = [hub1, scene(`${S}/Session 1/Scenes/Docks`, { locations: [link] })];
+      assert.deepEqual(sceneCandidates(notes, { names, imageMap, linkMap })(unit1), [], 'without the resolver');
+      const [c] = sceneCandidates(notes, { names, imageMap, linkMap, folded })(unit1);
+      assert.deepEqual([...c.hrefs], ['locations/the-docks.html'], link);
+    }
   });
 
   it('a flat Sessions folder: the Scenes/ folder rule counts only when one session index sits beside it', () => {

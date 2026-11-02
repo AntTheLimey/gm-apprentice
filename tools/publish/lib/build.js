@@ -1228,7 +1228,8 @@ function buildSite(options) {
   // copied for a Story page.
   const figureRules = { onPlayerSite, excludeFields, overridesOf: (page) => fieldOverrides[vaultRelPathOf(page)] || {},
     marks: mark ? mark.marks : null };
-  const scenesOf = storyPictures ? sceneCandidates(allNotes, { names: pageNames(pages, figureRules), imageMap: playerImages, linkMap }) : null;
+  const scenesOf = storyPictures ? sceneCandidates(allNotes, { names: pageNames(pages, figureRules), imageMap: playerImages, linkMap,
+    folded: (name) => foldedPagePath(linkMap, name) }) : null;
   const storyFigures = storyPictures ? { candidates: figureCandidates(pages, { imageMap: playerImages, ...figureRules })
     .filter((c) => c.key in imageMap),
     scenesFor: (unit) => scenesOf(unit).filter((c) => c.key in imageMap) } : null;

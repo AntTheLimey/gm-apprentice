@@ -283,6 +283,24 @@ describe('Story pictures: the scenes played that session', () => {
   });
 });
 
+describe('Story pictures: a scene linking its place in another case, or with underscores', () => {
+  const s = buildBoth(storyVault({
+    ...SCENE_FILES,
+    [SCENE_AT]: scene({ locations: '["[[the docks]]"]' }),
+    'Chapters/Chapter 1/Scenes/Scene_Rook.md': scene({ locations: '[]', entities: '["[[captain_rook]]"]', picture: '![[scene-gm.png]]', tag: 'R' }),
+    'Sessions/Session 1 Wrap-Up.md': withRecap(SCENE_RECAP),
+  }));
+  after(() => s.cleanup());
+
+  it('is pictured as if linked by the page\'s own name', () => {
+    for (const site of [s.player, s.gm]) {
+      const page = read(site, STORY_1);
+      assert.match(page, /images\/scene-docks\.(png|webp)" alt="" loading="lazy">[\s\S]*?<\/figure><\/div><p>The party reached/);
+      assert.match(page, /images\/scene-gm\.(png|webp)" alt="" loading="lazy">[\s\S]*?<\/figure><\/div><p>Later Captain Rook/);
+    }
+  });
+});
+
 describe('Story pictures: a scene whose picture is a page\'s portrait', () => {
   const s = buildBoth(storyVault({
     ...SCENE_FILES,
