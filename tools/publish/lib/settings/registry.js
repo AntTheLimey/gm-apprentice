@@ -587,7 +587,7 @@ const REGISTRY = [
   },
   {
     name: 'player_site.story.pictures', type: 'switch', default: true, group: 'story',
-    does: "Pictures of the people and places a Story page's recap names, set in the text beside the first paragraph that mentions each (two at most beside one paragraph). A picture comes from the page's `portrait`, or from a scene played that session; player characters are left out. Off, no pictures are added; pictures you put in the recap stay",
+    does: "Pictures of the people and places a Story page's recap names, set in the text beside the first paragraph that mentions each (two at most beside one paragraph). A picture comes from the page's `portrait`, or from a scene played that session, beside the paragraph naming the most of its places and people; player characters are left out. Off, no pictures are added; pictures you put in the recap stay",
     left_out: 'On',
   },
 
