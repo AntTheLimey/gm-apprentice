@@ -443,6 +443,7 @@ shows the cards, marked as hidden from players.
 | Setting | What it does | Values | Left out |
 |---------|--------------|--------|----------|
 | `player_site.story.moments` | The Memorable Moments section of a session's wrap-up, shown as cards after the story on its Story page. Off, the section is left out of the site: no page, search entry, link preview or Connections text holds it. The GM site still shows the cards, marked | A switch | On |
+| `player_site.story.pictures` | Pictures of the people and places a session's story names, set in the text beside the first paragraph that mentions each (two at most beside one paragraph). A picture comes from the page's `portrait`; player characters are left out. Off, no pictures are added; pictures you put in the recap stay | A switch | On |
 
 <!-- /settings:story -->
 
@@ -610,6 +611,7 @@ mark always means hidden from players. The GM site's folder is
 - `player_site.features.live_stats`
 - `player_site.features.inbox`
 - `player_site.story.moments`
+- `player_site.story.pictures`
 
 <!-- /settings:gm-not-per-site -->
 

@@ -1256,6 +1256,22 @@
                   "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
                 }
               ]
+            },
+            "pictures": {
+              "description": "Pictures of the people and places a session's story names, set in the text beside the first paragraph that mentions each (two at most beside one paragraph). A picture comes from the page's `portrait`; player characters are left out. Off, no pictures are added; pictures you put in the recap stay",
+              "default": true,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           }
         },

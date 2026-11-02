@@ -391,6 +391,8 @@ function buildSite(options) {
   const pcKeepSections = pcKeepList(publishConfig);
   // `player_site.story.moments`: the GM site reads the player site's value, as it does the hiding settings.
   const storyMoments = storyMomentsOn(hideFrom);
+  // `player_site.story.pictures`: read the same way, so both sites picture the same (an injected config without `story` means on).
+  const storyPictures = !(hideFrom.story && hideFrom.story.pictures === false);
   // The one derivation of "sheets off": the filter's own answer, handed to the page template.
   const sheetsOff = pcKeepSections !== null;
   const excludeCallouts = hideFrom.exclude_callouts;
@@ -1222,13 +1224,14 @@ function buildSite(options) {
   // (and this one too), by their names as players read them, so both sites picture the same pages under the same
   // captions. Both spine calls below take this one list. A session's Story page also pictures the scenes played in it:
   // the scene notes never publish, and their pictures are named by the pages their places and people link, by the
-  // same rules, with a picture both sites have.
+  // same rules, with a picture both sites have. With `player_site.story.pictures` off there is none, and no picture is
+  // copied for a Story page.
   const figureRules = { onPlayerSite, excludeFields, overridesOf: (page) => fieldOverrides[vaultRelPathOf(page)] || {},
     marks: mark ? mark.marks : null };
-  const scenesOf = sceneCandidates(allNotes, { names: pageNames(pages, figureRules), imageMap: playerImages, linkMap });
-  const storyFigures = { candidates: figureCandidates(pages, { imageMap: playerImages, ...figureRules })
+  const scenesOf = storyPictures ? sceneCandidates(allNotes, { names: pageNames(pages, figureRules), imageMap: playerImages, linkMap }) : null;
+  const storyFigures = storyPictures ? { candidates: figureCandidates(pages, { imageMap: playerImages, ...figureRules })
     .filter((c) => c.key in imageMap),
-    scenesFor: (unit) => scenesOf(unit).filter((c) => c.key in imageMap) };
+    scenesFor: (unit) => scenesOf(unit).filter((c) => c.key in imageMap) } : null;
 
   // A PC note whose link or embed labels would change its headings is withheld whole
   // while character sheets are off. Decided once, here, so the page, its sections and

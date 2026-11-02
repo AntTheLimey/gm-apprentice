@@ -359,3 +359,32 @@ describe('Story pictures: scenes that give no picture', () => {
     assert.deepEqual(brokenLinks(s.gm.dir), []);
   });
 });
+
+describe('Story pictures: player_site.story.pictures off', () => {
+  const recap = 'Captain Rook came aboard.\n\n![[rook.png]]\n\nAt dawn [[Mara Quill]] waved from [[The Docks]].';
+  const s = buildBoth(storyVault({
+    ...SCENE_FILES,
+    'Locations/The Docks.md': note('location', 'The Docks', 'docks.png'),
+    'Sessions/Session 1 Wrap-Up.md': withRecap(recap),
+  }), { player: { story: { pictures: false } } });
+  after(() => s.cleanup());
+
+  it('off: no story-figures on either site; a GM-placed picture stays; the portrait file is not copied for the Story page alone', () => {
+    for (const site of [s.player, s.gm]) {
+      const page = read(site, STORY_1);
+      assert.ok(!page.includes('story-figure'), 'no story figure');
+      assert.equal((page.match(/images\/rook\./g) || []).length, 1, 'the picture the GM placed stays');
+      assert.ok(!page.includes('scene-docks'), 'no scene picture either');
+    }
+    assert.ok(!s.player.files().some((f) => /scene-docks/.test(f)), 'the scene picture is not copied');
+    assert.deepEqual(brokenLinks(s.player.dir), []);
+    assert.deepEqual(brokenLinks(s.gm.dir), []);
+  });
+
+  it('the setting has no gm_site twin', () => {
+    const { entry, NOT_PER_SITE } = require('../../lib/settings/registry');
+    assert.equal(entry('player_site.story.pictures').default, true);
+    assert.ok(NOT_PER_SITE.has('player_site.story.pictures'));
+    assert.equal(entry('gm_site.story.pictures'), undefined);
+  });
+});
