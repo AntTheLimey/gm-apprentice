@@ -592,6 +592,27 @@ describe('sceneCandidates', () => {
       assert.deepEqual(at('<p>Alpha and Bravo at the Docks Quarter.</p><p>Bravo again.</p>', [A, B, three]), [[0, ['a.png', 'Alpha']], [1, ['Bravo']]]);
     });
 
+    it('an unplayed scene linked to a Plan is never pictured, even where a paragraph names the most of its pages', () => {
+      const recap = '<p>Bravo arrives.</p><p>The Bay, the Docks Quarter and Captain Rook.</p>';
+      const draw = (fm) => {
+        const notes = [hub1, plan1, scene(`${S}/Session 1/Scenes/Prep`, { locations: ['[[The Docks]]', '[[Captain Rook]]', '[[The Bay]]'], ...fm }, '# S\n\n![[b.png]]\n')];
+        const scenes = sceneCandidates(notes, { names: more, imageMap, linkMap: links })(unit1);
+        const used = new Set();
+        const html = withFigures(recap, { candidates: [B], scenes, fromPath: 'story/s1.html', imageMap, usedImages: used });
+        return { html, used: [...used].sort() };
+      };
+      for (const status of ['ready', 'planned', 'modified']) {
+        const { html, used } = draw({ status, session: '[[Session 1 Plan]]', played_in: undefined });
+        assert.deepEqual(used, ['a.png'], status);
+        assert.equal((html.match(/<figure /g) || []).length, 1, status);
+        assert.ok(html.includes('<figcaption>Bravo</figcaption>') && !html.includes('b.png'), html);
+      }
+      // Played, the same scene is pictured, beside that paragraph.
+      const { html, used } = draw({ status: 'played', session: '[[Session 1 Plan]]' });
+      assert.deepEqual(used, ['a.png', 'b.png']);
+      assert.ok(html.indexOf('b.png') > html.indexOf('Bravo arrives.'), html);
+    });
+
     it('two scenes choosing one paragraph both take a slot there, in the order the paragraph names them; a third takes its next best', () => {
       const docksOnly = sceneWith('b.png', 'The Docks');
       const bayOnly = sceneWith('c.png', 'The Bay');
