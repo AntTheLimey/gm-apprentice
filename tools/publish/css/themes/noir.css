@@ -37,5 +37,7 @@
     --accent-on-header: #c084fc;
     --accent-dim: rgba(124, 58, 237, 0.08);
     --border: #d0d0d0;
+    /* the Story page's Memorable Moments: deeper kind colours for the light card */
+    --moment-dramatic: #b42318; --moment-intriguing: #0b5cad; --moment-funny: #7a4f00; --moment-epic: #6b3fb5; --moment-tragic: #475569;
   }
 }

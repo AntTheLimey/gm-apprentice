@@ -373,9 +373,10 @@ empty — even though `session-wrapup` ran and wrap-up files exist.
 ### Cause
 
 Recap surfacing keys off *published* `type: session` and `type: chapter`
-pages. The wrap-up (`type: session_wrap`) supplies the recap text, but it
-only surfaces when its paired session index — and for the Campaign Saga,
-a chapter page — are published too. Two common breakdowns:
+pages. The wrap-up (`type: session_wrap`) supplies the recap text and is folded into the
+session's Story page (it keeps its own page only when none takes it), but it only surfaces
+when its paired session index — and for the Campaign Saga, a chapter
+page — are published too. Two common breakdowns:
 
 1. The vault's `Chapters/` folder is missing from `player_site.folder_map`,
    so every chapter, session, scene, and wrap-up file is skipped. Builds from tool 1.6.0 print a
@@ -396,8 +397,9 @@ missing — exactly the two breakdowns above.
 
 Add the missing folder to `player_site.folder_map`, publish the session index and a
 player-safe chapter page alongside the wrap-up, and rebuild. To show a
-recap, all three must publish: the session index (`type: session`), its
-chapter (`type: chapter`), and the wrap-up (`type: session_wrap`).
+recap, the session index (`type: session`) and the wrap-up
+(`type: session_wrap`) must publish; the Campaign Saga also needs its
+chapter (`type: chapter`).
 
 ---
 

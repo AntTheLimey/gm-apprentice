@@ -95,3 +95,66 @@ describe('the Sessions nav link is hidden when no session pages exist (#214)', (
     assert.ok(!npc.includes('>Sessions<'), npc);
   });
 });
+
+// #543: a wrap-up folded into its Story page leaves no page of its own, so a Sessions folder holding only wrap-ups
+// has nothing to list. A section with nothing in it writes no index, and nothing links to one.
+describe('empty section indexes are not written (#543)', () => {
+  const { buildBoth } = require('../helpers/gm-build');
+  const { storyVault } = require('../helpers/story-vault');
+  const { brokenLinks } = require('../helpers/site-links');
+  // The NPC sits where the site files NPCs, so the landing page's link to that index is a real one.
+  const NPC = { 'NPCs/Mara Quill.md': null, 'Characters/NPCs/Mara Quill.md': storyVault()['NPCs/Mara Quill.md'] };
+  // Session notes and play notes (the GM site lists those) moved out of Sessions: only the wrap-ups are left there.
+  const hubsMoved = { ...NPC };
+  for (const n of [1, 2]) {
+    for (const name of [`Session ${n}`, `Session ${n} Play Notes`]) {
+      hubsMoved[`Sessions/${name}.md`] = null;
+      hubsMoved[`Chapters/Chapter 1/${name}.md`] = storyVault()[`Sessions/${name}.md`];
+    }
+  }
+  const nothingHere = buildBoth(storyVault(hubsMoved));
+  const withHubs = buildBoth(storyVault(NPC));
+  after(() => { nothingHere.cleanup(); withHubs.cleanup(); });
+
+  for (const side of ['player', 'gm']) {
+    it(`${side}: a Sessions folder holding only folded wrap-ups writes no sessions/index.html, and nothing links to it`, () => {
+      const s = nothingHere[side];
+      assert.ok(!s.exists('sessions', 'index.html'));
+      assert.ok(s.exists('story', 'chapter-1-docks-session-1.html'));
+      for (const f of s.files().filter((x) => /\.(?:html|json|js|xml)$/.test(x))) {
+        assert.ok(!/sessions\/index\.html|"\/sessions\/"/.test(fs.readFileSync(f, 'utf8')), `${path.relative(s.dir, f)} links sessions/index.html`);
+      }
+      assert.ok(!/<a [^>]*>Sessions<\/a>/.test(s.read('index.html')), 'no Sessions link in the menu');
+      assert.deepEqual(brokenLinks(s.dir), []);
+    });
+
+    it(`${side}: the landing page links the NPC index only when NPCs are filed where it lists them`, () => {
+      assert.match(withHubs[side].read('index.html'), /href="characters\/npcs\/index\.html">View all/);
+      const elsewhere = buildBoth(storyVault());
+      try {
+        assert.doesNotMatch(elsewhere[side].read('index.html'), /View all \d+ NPCs/);
+        assert.deepEqual(brokenLinks(elsewhere[side].dir), []);
+      } finally { elsewhere.cleanup(); }
+    });
+
+    it(`${side}: "View all N NPCs" counts the NPCs the index lists, not every npc page`, () => {
+      const mixed = buildBoth(storyVault({ ...NPC, 'NPCs/Other Fixer.md': '---\ntype: npc\ntitle: Other Fixer\nstatus: alive\n---\n\n# Other Fixer\n\nElsewhere.\n' }));
+      try {
+        assert.match(mixed[side].read('index.html'), /View all 1 NPC &rarr;/);
+        assert.equal((mixed[side].read('characters', 'npcs', 'index.html').match(/Mara Quill|Other Fixer/g) || []).filter((n) => n === 'Other Fixer').length, 0);
+      } finally { mixed.cleanup(); }
+    });
+
+    it(`${side}: with a session note there, the index and the menu link both stay`, () => {
+      const s = withHubs[side];
+      assert.ok(s.exists('sessions', 'index.html'));
+      assert.match(s.read('index.html'), /<a [^>]*>Sessions<\/a>/);
+      assert.deepEqual(brokenLinks(s.dir), []);
+    });
+
+    it(`${side}: any empty section writes no index (no factions, no factions/index.html)`, () => {
+      assert.ok(!withHubs[side].exists('factions', 'index.html'));
+      assert.ok(withHubs[side].exists('characters', 'npcs', 'index.html'));
+    });
+  }
+});

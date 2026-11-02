@@ -234,6 +234,13 @@ class SiteFaultRowsTests(unittest.TestCase):
         self.assertEqual(info, "INFO\ta.md\tTOHIT_UNREAD: d — f")
         self.assertIn("TOHIT_UNREAD", vc.NOTE_FAULT_CODES)
 
+    def test_an_unknown_moment_kind_is_a_row(self):
+        row = vc._site_fault_row({
+            "code": "MOMENT_KIND_UNKNOWN", "severity": "warning",
+            "path": "S/W.md", "detail": "d", "fix": "f"}, False)
+        self.assertEqual(row, "WARNING\tS/W.md\tMOMENT_KIND_UNKNOWN: d — f")
+        self.assertIn("MOMENT_KIND_UNKNOWN", vc.NOTE_FAULT_CODES)
+
     def test_the_real_tool_reports_a_sheet_row_the_calculator_cannot_read(self):
         pc = ("---\ntype: pc\nstatus: alive\n---\n\n## Skills\n\n"
               "| Name | Difficulty | Relative Level | Points | Effective |\n"

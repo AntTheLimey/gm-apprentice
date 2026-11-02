@@ -1,6 +1,7 @@
 const { TOGGLE_BUTTON, MOBILE_TOGGLE } = require('../color-mode');
 const { relativePath, escapeHtml, encodeHref } = require('../processor');
 const { DIR_LABELS, colorModeEnabled } = require('./base');
+const { isFolded } = require('../story-fold');
 
 // A link reads as base.js's DIR_LABELS names its folder; `labels` holds only a word the menu
 // says differently.
@@ -34,6 +35,8 @@ const isRoster = (page) => !!page.frontmatter && ROSTER_TYPES.has(page.frontmatt
 function generateNavGroups(pages, options = {}) {
   const populated = new Set();
   for (const page of pages) {
+    // A wrap-up folded into its Story page has no page in its folder.
+    if (isFolded(page)) continue;
     populated.add(page.outputDir);
   }
 

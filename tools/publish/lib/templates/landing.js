@@ -191,7 +191,10 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   const recentNPCs = (publishConfig && publishConfig._recentNPCs) || [];
   let npcZone = '';
   if (recentNPCs.length > 0) {
-    const npcTotal = pages.filter(p => p.frontmatter.type === 'npc').length;
+    // The count is what the NPCs index lists: the npc pages in its folder, and that index is linked only when there are some.
+    const inIndex = (p) => p.outputDir === 'characters/npcs' || String(p.outputDir).startsWith('characters/npcs/');
+    const npcTotal = pages.filter(p => p.frontmatter.type === 'npc' && inIndex(p)).length;
+    const npcIndex = npcTotal > 0;
     const npcCards = recentNPCs.map(({ page }) => {
       const fm = page.frontmatter;
       const initials = getInitials(page.displayTitle);
@@ -208,7 +211,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
     npcZone = `<div class="dashboard-section">
   <h2>NPCs in Play</h2>
   <div class="npc-grid"${noPreviewAttr()}>${npcCards}</div>
-  <a class="recap-link" href="characters/npcs/index.html">View all ${npcTotal} NPCs &rarr;</a>
+  ${npcIndex ? `<a class="recap-link" href="characters/npcs/index.html">View all ${npcTotal} NPC${npcTotal === 1 ? '' : 's'} &rarr;</a>` : ''}
 </div>`;
   }
 

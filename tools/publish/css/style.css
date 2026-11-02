@@ -74,6 +74,9 @@
   --live-unconscious: #d4a017; --live-unconscious-bg: rgba(212,160,23,0.18);
   --live-dying: #ff6b6b; --live-dying-bg: rgba(192,57,43,0.28);
   --live-row-mad: rgba(157,123,216,0.14); --live-row-hurt: rgba(192,57,43,0.15);
+  /* the Story page's Memorable Moments: the colour of each kind's row. The plain look keeps its dark card in the light
+     scheme, so these stay; a genre preset with a light card sets deeper ones in its light block. */
+  --moment-dramatic: #ff8f80; --moment-intriguing: #7fc8ff; --moment-funny: #ffc857; --moment-epic: #c9a7ff; --moment-tragic: #b8c2d1;
 
   /* Fonts */
   --font-heading: system-ui, -apple-system, sans-serif;
@@ -96,7 +99,9 @@
 }
 
 @media (prefers-color-scheme: light) {
-  :root { color-scheme: light; }
+  :root {
+    color-scheme: light;
+  }
 }
 
 html {
@@ -887,6 +892,136 @@ body:has(#tab-story.active) .pull-quote-backstory {
 .story-prose a:hover {
   border-bottom-style: solid;
 }
+
+/* ===== STORY MEMORABLE MOMENTS =====
+   A grid of cards under the story: the kind, the moment (narration or speech, one style), its speaker, then the
+   context. The note is shown as written: no quote marks are added. */
+section.story-moments {
+  max-width: 52rem;
+  margin: 1rem auto 0;
+  padding: 2.5rem 0 1rem;
+  border-top: 1px solid var(--border);
+}
+.story-moments__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 1.5rem;
+}
+.story-moments__head h2 {
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
+  letter-spacing: .02em;
+  margin: 0;
+}
+.story-moments__head p {
+  font-family: var(--font-label, var(--font-body));
+  font-size: 13px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0;
+}
+.story-moments__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: stretch;
+}
+article.moment-card {
+  box-sizing: border-box;
+  height: 100%;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 22px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+p.moment-kind {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  font-family: var(--font-label, var(--font-body));
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+p.moment-kind[data-kind="dramatic"] { color: var(--moment-dramatic); }
+p.moment-kind[data-kind="intriguing"] { color: var(--moment-intriguing); }
+p.moment-kind[data-kind="funny"] { color: var(--moment-funny); }
+p.moment-kind[data-kind="epic"] { color: var(--moment-epic); }
+p.moment-kind[data-kind="tragic"] { color: var(--moment-tragic); }
+.moment-main {
+  font-family: var(--font-serif);
+  font-size: 18.5px;
+  line-height: 1.5;
+  font-weight: 400;
+  margin: 0;
+  color: var(--text);
+}
+.moment-main p, .moment-main blockquote {
+  font: inherit;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.moment-main p + p { margin-top: .6em; }
+.moment-main p::before, .moment-main p::after, .moment-main blockquote::before, .moment-main blockquote::after { content: none; }
+.moment-speaker {
+  font-family: var(--font-label, var(--font-body));
+  font-size: 12px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: -4px 0 0;
+}
+hr.moment-rule {
+  height: 1px;
+  background: var(--border);
+  border: 0;
+  margin: 2px 0 0;
+}
+.moment-context {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--text-muted);
+  margin: 0;
+}
+article.moment-card a {
+  color: inherit;
+  border-bottom: 1px dotted var(--accent);
+  text-decoration: none;
+}
+/* GM site only: the wrap-up's GM-only parts that follow the cards (its GM Notes, its Source), then its Play Notes. */
+section.story-gm-after {
+  max-width: 52rem;
+  margin: 1.5rem auto 0;
+}
+p.story-playnotes {
+  max-width: 52rem;
+  margin: 1.25rem auto 0;
+  font-family: var(--font-label, var(--font-body));
+  font-size: 15px;
+}
+p.story-playnotes a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid var(--accent);
+}
+@media (max-width: 600px) {
+  .story-moments__grid { grid-template-columns: 1fr; gap: 14px; }
+  article.moment-card { padding: 16px 18px 18px; }
+  .moment-main { font-size: 17px; }
+  .story-moments__head { flex-direction: column; gap: 4px; }
+}
 /* ===== PC STORY TAB =====
    The backstory as a prologue (eyebrow, title, byline, reading face, drop capital), then
    how they look, what drives them and the story so far. The sheet tab opens on a teaser. */
@@ -1055,22 +1190,8 @@ body:has(#tab-story.active) .pull-quote-backstory {
   margin: var(--space-500) 0 var(--space-1500);
   font-size: var(--font-size-950);
 }
-.story-refs {
-  max-width: 42rem;
-  margin: 2.5rem auto 0;
-  padding: var(--space-1000) var(--space-1250);
-  border-top: 1px solid var(--border);
-  font-size: var(--font-size-950);
-}
-.story-refs h2 {
-  font-size: var(--font-size-850);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted, var(--story-muted));
-  margin: 0 0 var(--space-500);
-  border: 0;
-}
-.story-refs ul { margin: 0; padding-left: 1.1rem; }
+/* A wrap-up section after the recap (Loot, Notes ...): part of the same prose, set off by its heading. */
+.story-section { margin-top: var(--space-1500); }
 
 /* Story landing */
 .story-branch { max-width: 46rem; margin: 0 auto 2.5rem; }
@@ -4934,6 +5055,9 @@ svg.cx-web .cx-node.cx-sel text, svg.cx-web .cx-node:focus-visible text { fill: 
 }
 .npc-row-avatar img.portrait { width: 100%; height: 100%; object-fit: cover; }
 .npc-row-initials { font-size: 0.65rem; font-weight: 700; color: var(--accent); }
+
+/* A long inline code word (a file name in a Source callout) breaks at the edge on a phone rather than running past it. */
+:not(pre) > code { overflow-wrap: anywhere; }
 
 /* --- Obsidian callouts (> [!type] Title) --- */
 .callout {

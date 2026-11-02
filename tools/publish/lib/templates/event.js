@@ -3,6 +3,7 @@ const { baseShell, bodyHook, cssPath, rootPath, clientScripts, canonStatusBadge,
 const { WIKILINK_SOURCE, parseWikilink, wikilinkSpans } = require('../wikilink');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { participantsOf, targetRef } = require('../connections');
+const { foldLabel } = require('../story-fold');
 
 function parseParticipant(raw) {
   const str = String(raw).trim();
@@ -14,7 +15,7 @@ function parseParticipant(raw) {
     // don't show raw underscores (Adrien_de_Montferrand → Adrien de Montferrand).
     const display = link.display.trim() ? link.display.trim() : wikiTargetLabel(target);
     const annotation = wikiMatch[2] ? wikiMatch[2].trim() : '';
-    return { target, display, annotation, isLink: true };
+    return { target, display, annotation, isLink: true, aliased: !!link.display.trim() };
   }
   const plainMatch = str.match(/^(.+?)\s*\((.+)\)$/);
   if (plainMatch) {
@@ -85,7 +86,8 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
         const resolved = linkMap?.[p.target];
         if (resolved) {
           const href = encodeHref(relativePath(currentDir, resolved));
-          nameHtml = `<a href="${href}">${escapeHtml(p.display)}</a>`;
+          // A wrap-up folded into its Story page is named by that page's title, as a body link names it.
+          nameHtml = `<a href="${href}">${escapeHtml((!p.aliased && foldLabel(linkMap, p.target)) || p.display)}</a>`;
         } else {
           nameHtml = escapeHtml(p.display);
         }

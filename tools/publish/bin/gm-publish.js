@@ -604,6 +604,9 @@ change what the site shows:
   WITHHELD_FLAG_UNREADABLE
                   a withheld: value that is not true or false, read as not
                   withheld
+  MOMENT_KIND_UNKNOWN
+                  a Memorable Moments tag (#moment/<tag>) that names none of
+                  the five kinds; the moment shows with no kind
   TOHIT_UNREAD    a row of a GURPS PC sheet the to-hit calculator cannot fully
                   read (a skill not in the Skills table, a bare number, a
                   technique that finds no skill); a row it reads but that is

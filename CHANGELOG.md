@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.120] — 2026-11-01
+
+Each session is one page on both sites: its wrap-up folds into its Story page, with the Memorable Moments as cards. Publish tool 1.60.0. No vault change is needed.
+
+### Added
+
+- Memorable Moments cards. A wrap-up's `## Memorable Moments` section shows on the session's Story page as one card per moment. Tag a moment `#moment/<kind>` (`dramatic`, `intriguing`, `funny`, `epic` or `tragic`) and its card gets a kind row with an icon and a colour. A moment with no tag is a plain card. Themes can style `section.story-moments`, `article.moment-card` and `p.moment-kind[data-kind]`, and the colours through the `--moment-*` tokens.
+- `player_site.story.moments` (on by default) turns the cards off. Off, the section is left out of the site: no page, search entry, link preview or Connections text holds it. The GM site still shows the cards, marked, and campaign-qa's checks follow the setting. A site pinned to an older tool reads it as on.
+- `MOMENT_KIND_UNKNOWN`: a `#moment/` tag that names no known kind is a build warning and a Site Faults finding, with the tag and the kinds it could be.
+
+### Changed
+
+- One page per session on both sites. A wrap-up no longer has a page of its own: its player sections (the recap, then its other sections that are not under GM Notes) and its Memorable Moments cards sit on the session's Story page, and every link to the wrap-up goes there, as do search results, link previews and the menu. The "In this session" box is gone, so a theme that styled `aside.story-refs` loses it.
+- A chapter shows only its introduction until its note says `status: complete`. Only then does the chapter's own wrap-up fold in. A chapter never takes anything from a session's wrap-up, so the recap it used to borrow from the latest session is gone.
+- The GM Story page shows the hidden parts in place, marked, with GM Notes after the cards. Where players see the session's own recap, a held-back draft wrap-up sits inside one mark. A session's Play Notes are always built and linked on the GM site, whatever `gm_site.show.notes` says.
+- A wrap-up's text above its first heading shows first on its Story page, before the recap, on both sites. The usual hiding rules decide what players see of it, and the GM site marks its hidden parts in place, such as the Source callout.
+- Empty section indexes are not written.
+- `explain` names the Story page a wrap-up lives on, and reads the same published view as the build (one shared function, so the two cannot disagree).
+- The landing page's "View all N NPCs" counts what the NPC index lists, and reads "View all 1 NPC" for one.
+- In Canticle, the 34 wrap-up pages go at the next deploy, and the Story pages gain the wrap-ups' sections. Six wrap-ups have Memorable Moments (Ch3 S13, Ch4 S11 to S15), none tagged yet, so those cards come out plain.
+- In Dead End, the 14 wrap-ups' pages go the same way, and 13 have Memorable Moments (none tagged); its `scripts/story-one-page.mjs` does the same job after the build and is now a no-op, so it can be retired after this release.
+
+### Fixed
+
+- Wrap-up pages that nothing linked (#543).
+- A long inline code word, such as a file name in a Source callout, now breaks at the edge of a phone screen instead of running past its box.
+- The leak gate no longer lets a comment hide a leak of the sentence around it. A comment on a line of its own (`<!-- -->` or `%% %%`), in the middle of a line, or over several lines, is read as gone, both as the edge between the words around it and as its own text. A gm-only fence written tight to its text no longer hides the words beside it, and words that never print join no hidden piece.
+
+---
+
 ## [1.10.119] — 2026-11-01
 
 Wrap-up asks the GM less and finds more, and vault-ingest's Reconstruction Note stops reaching the player site. Publish tool unchanged; the vault update `reconstruction-note-fence` fences existing Reconstruction Notes.

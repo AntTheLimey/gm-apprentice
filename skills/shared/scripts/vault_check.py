@@ -1294,6 +1294,18 @@ def configured_site(vault: Path) -> tuple[Path | None, bool]:
     return _site_of(settings(vault), vault)
 
 
+def story_moments_on(site_settings: Settings | None) -> bool:
+    """Whether the site shows a wrap-up's Memorable Moments. A site pinned
+    to a publish tool from before the setting does not list it: that reads
+    as on, the default."""
+    if site_settings is None:
+        return True
+    try:
+        return site_settings.get("player_site.story.moments") is not False
+    except KeyError:
+        return True
+
+
 def vault_settings(vault: Path) -> Settings:
     """Every setting of the vault, with the site folder's own
     vault.config.json taking part when the vault has one (its old keys are
@@ -1808,7 +1820,8 @@ NOTE_FAULT_CODES = ("ALIAS_IN_PROSE", "NEVER_SHOW_IN_PROSE",
                     "WITHHELD_FLAG_UNREADABLE", "FENCE_UNCLOSED",
                     "COMMENT_STRAY", "NAMED_NO_PAGE", "TOHIT_UNREAD",
                     "SKILL_BELOW_BASE", "HEADING_IN_HIDDEN_BLOCK",
-                    "TABLE_OVERWIDE", "PROP_NOT_COPIED")
+                    "TABLE_OVERWIDE", "PROP_NOT_COPIED",
+                    "MOMENT_KIND_UNKNOWN")
 # How many of the pages naming a note a row lists; `--file` lists them all.
 SITE_FAULT_PAGES = 3
 
@@ -1854,7 +1867,7 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
         msg = f"FENCE_UNCLOSED: {_one_line(f.get('detail'))}"
     elif code in ("TOHIT_UNREAD", "SKILL_BELOW_BASE",
                   "HEADING_IN_HIDDEN_BLOCK", "TABLE_OVERWIDE",
-                  "PROP_NOT_COPIED"):
+                  "PROP_NOT_COPIED", "MOMENT_KIND_UNKNOWN"):
         msg = (f"{code}: {_one_line(f.get('detail'))} — "
                f"{_one_line(f.get('fix'))}")
     elif code in ("WITHHELD_NAME_PUBLIC", "WITHHELD_PUBLISHED",
@@ -2761,6 +2774,7 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
     # line the site cuts or withholds for either is not called published.
     callouts = (site_settings.get("player_site.hide.callouts")
                 if site_settings is not None else False)
+    story_moments = story_moments_on(site_settings)
     pc_keep: list[str] | None = None
     match = {s.casefold() for s in excludes}
     writes: list[tuple[str, str, list[str]]] = []
@@ -2827,7 +2841,8 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
         states, problems = build_lines(
             text, excludes,
             note_type=note_type if isinstance(note_type, str) else None,
-            pc_keep=pc_keep, callouts=callouts)
+            pc_keep=pc_keep, callouts=callouts,
+            story_moments=story_moments)
         kept = _published_linenos(states, fm)
         # With character sheets off the tool withholds a PC's sheet sections
         # whatever they are called; their lines are no more published than a

@@ -8,7 +8,7 @@ const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllN
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit, detectEncoder, CACHE_FOLDER } = require('./image-optimize');
 const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
 const { resolveBanner, renderBanner, normalizeEntry, attachmentRef, isAddress, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
-const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
+const { pcKeepList, storyMomentsOn, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
@@ -26,10 +26,13 @@ const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { real, resolveGmFolder, gmFolderProblem, insideGitWorkTree, gmPage, writeMarker, ROBOTS_TXT } = require('./gm-site');
+const { publishView: sharedPublishView } = require('./published-view');
 const { createMarks, markKinds, sanitize, unmark, withoutMarked } = require('./gm-marks');
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
-const { buildStorySpine, storyPagesFor, chapterOfSession, unitRefs, characterStoryGroup } = require('./story-spine');
+const { KINDS, parseMoments, momentsHtml } = require('./story-moments');
+const { buildStorySpine, probeSpine, gmStoryNotes, storyPagesFor, chapterOfSession, characterStoryGroup } = require('./story-spine');
+const { foldPlan, applyFold, isFolded, labelFoldedHeadings } = require('./story-fold');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
 const { isSessionStory, sessionLines } = require('./story-sessions');
@@ -385,6 +388,8 @@ function buildSite(options) {
   const excludeSections = hideFrom.exclude_sections;
   // The PC keep-list: null while character sheets are on, otherwise the sections a PC publishes.
   const pcKeepSections = pcKeepList(publishConfig);
+  // `player_site.story.moments`: the GM site reads the player site's value, as it does the hiding settings.
+  const storyMoments = storyMomentsOn(hideFrom);
   // The one derivation of "sheets off": the filter's own answer, handed to the page template.
   const sheetsOff = pcKeepSections !== null;
   const excludeCallouts = hideFrom.exclude_callouts;
@@ -1086,6 +1091,18 @@ function buildSite(options) {
   }
   const stubFacts = new Map();
   hubWrapUps.linked = hubPairs.linked;
+  // The pairs the Story spine reads (#543), paired here on the unreduced frontmatter as hubWrapUps is: the player
+  // site's own; the GM site pairs hubs with every wrap-up it shows (a second, read-only pairing) for the Story pages
+  // only, while which hub bodies are withheld still follows the player site.
+  const storyPairs = gm
+    ? (() => {
+      const all = pairHubs(corpus, pages, { vaultPath: config.vaultPath, allNotes, withheldWords: publishConfig.withheld_words, mark });
+      const onSite = new Set(pages);
+      const out = new Map([...all].filter(([hub, wrap]) => onSite.has(hub) && onSite.has(wrap)));
+      out.linked = all.linked;
+      return out;
+    })()
+    : hubWrapUps;
   for (const page of pages) {
     if (hubWrapUps.has(page)) page.markdown = '';
     // `publish: stub` — emit the page shell so navigation and links still work,
@@ -1175,50 +1192,48 @@ function buildSite(options) {
   // (B6 spoiler leak). Spoiler blocks are unrevealed narrative content, not permanent
   // secrets, but they're just as unpublished until reconcile's reveal step strips the
   // fence — until then they must never surface in a derived widget either.
-  // A PC note whose link or embed labels would change its headings is withheld whole
-  // while character sheets are off. Decided once, here, so the page, its sections and
-  // the search/backlink text all get the same answer.
-  for (const page of pages) {
-    if (!pcKeepSections) break;
-    page.headingsUnstable = pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, { excludeCallouts, pcKeepSections });
-    if (page.headingsUnstable) console.warn(`  WARNING: ${page.outputPath}: ${HEADINGS_UNSTABLE_WARNING}`);
-  }
   // What the strip chain reports as it runs (a stray %%, an unclosed fence), kept for the
   // note-faults audit at the end: the chain is not run a second time for it.
   const stripFacts = new Map();
+  const publishView = (page) => sharedPublishView(page, { gm, mark, excludeCallouts, excludeSections, pcKeepSections, storyMoments }, { stubFacts, stripFacts });
+
+  // Every page but a PC's first: the Story spine reads the wrap-ups' published views to decide which wrap-up folds.
+  const isPcPage = (page) => String((page.sourceFrontmatter || page.frontmatter || {}).type).trim().toLowerCase() === 'pc';
+  for (const page of pages) if (!isPcPage(page)) publishView(page);
+
+  // One page per session (#543): a wrap-up a Story unit claims has no page of its own. It moves onto its Story page's
+  // address, under the session's title, and every link-map key that named it now names the Story page; it stays in
+  // `pages`, a source of links and words like any page (backlinks, Connections, recency, search, cards, landing).
+  const storyProbe = probeSpine(pages, storyPairs, imageMap);
+  // The GM site: the addresses of the player site's own Story pages, from its pages and its pairs, so each GM Story
+  // page can say what players see there (story-spine.js `players`). Before the fold, as the player site reads them.
+  // Its pairs keep `linked`: a wrap-up linked to a session players do not see never stands in for another session.
+  const playerPairs = gm ? Object.assign(new Map([...hubWrapUps].filter(([hub, wrap]) => onPlayerSite.has(hub) && onPlayerSite.has(wrap))),
+    { linked: hubWrapUps.linked }) : null;
+  const playerStory = gm ? new Set(probeSpine(pages.filter((p) => onPlayerSite.has(p)), playerPairs,
+    show.has('notes') ? scanAttachments(scanConfigFor(config, hideFrom)) : imageMap).map((u) => u.outputPath)) : null;
+  const storyPlayers = gm ? { has: (out) => playerStory.has(out), shows: (page) => onPlayerSite.has(page) } : null;
+  applyFold(foldPlan(storyProbe), linkMap);
+  LOWER_KEYS.delete(linkMap);   // its folded spellings were read from the old addresses
+
+  // A PC note whose link or embed labels would change its headings is withheld whole
+  // while character sheets are off. Decided once, here, so the page, its sections and
+  // the search/backlink text all get the same answer. A heading's link to a folded wrap-up is read by the title it
+  // prints (labelFoldedHeadings), so the keep-list and the page agree on it.
   for (const page of pages) {
-    const source = String(page.markdown || '');
-    if (gm) {
-      // The GM site keeps two published views. The marked one (every hidden part kept and marked) is the search
-      // index's. `publishedMarkdown`, which every excerpt reads (pull-quotes, cards, link previews, listings, recaps),
-      // is that text with each marked span dropped, as players see it: an excerpt that cut a mark open would wrap the
-      // rest of its page. A PC whose headings a link label changes has neither, as on the player site: its page shows
-      // the body, marked. No note-faults facts.
-      const gmFm = page.sourceFrontmatter || page.frontmatter;
-      page.gmMarkedPublished = page.headingsUnstable ? '' : filterSections(
-        strippedLines(source, excludeCallouts, mark, sectionWithholder(excludeSections, gmFm, { pcKeepSections })).lines.join('\n'),
-        excludeSections, gmFm, { pcKeepSections, mark });
-      page.publishedMarkdown = withoutMarked(page.gmMarkedPublished, mark.marks);
-      continue;
-    }
-    const fm = page.sourceFrontmatter || page.frontmatter;
-    // A withheld heading inside a hidden block comes back where the block ended, as on the page (#447).
-    const stripped = strippedLines(source, excludeCallouts, null, sectionWithholder(excludeSections, fm, { pcKeepSections }));
-    // A stub's facts were taken when it was cut. A fault that lies wholly in text the page
-    // hides anyway (noteFacts) is none; a note withheld whole shows none.
-    stripFacts.set(page, stubFacts.get(page) || {
-      source, hidden: page.headingsUnstable ? [] : stripped.hidden,
-      ...noteFacts(stripped, (lines, restored) => (page.headingsUnstable ? lines.map(() => false) : keptFlags(lines, excludeSections, fm, { pcKeepSections, restored }))),
-    });
-    const text = stripped.lines.join('\n');
-    page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(text, excludeSections, fm,
-      { pcKeepSections, restored: stripped.restored });   // its warnings are the page render's to print, once
+    if (!isPcPage(page)) continue;
+    page.markdown = labelFoldedHeadings(page.markdown, linkMap);
+    if (page.storyMarkdown) page.storyMarkdown = labelFoldedHeadings(page.storyMarkdown, linkMap);
+    if (!pcKeepSections) continue;
+    page.headingsUnstable = pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, { excludeCallouts, pcKeepSections });
+    if (page.headingsUnstable) console.warn(`  WARNING: ${page.outputPath}: ${HEADINGS_UNSTABLE_WARNING}`);
   }
+  for (const page of pages) if (isPcPage(page)) publishView(page);
 
   // Whether a Story section will exist. Computed early (pure function of pages) so the
   // top nav — threaded into every page, including story pages built later — can point
   // the Story group at story.html. Must match what buildStory() emits below.
-  const hasStory = buildStorySpine(pages, null, hubWrapUps).length > 0
+  const hasStory = storyProbe.length > 0
     || pages.some(p => p.frontmatter && p.frontmatter.type === 'pc' && p.storyMarkdown);
 
   // Build-time data pipeline
@@ -1717,7 +1732,7 @@ function buildSite(options) {
       const basename = canonicalNfc(String(page.frontmatter.portrait).split('/').pop());
       if (basename && imageMap[basename]) usedImages.add(basename);
     }
-    const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts, pcKeepSections, ...markOpt });
+    const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts, pcKeepSections, storyMoments, ...markOpt });
     processed.bannerHtml = bannerHtml;
     fx.warn(page.outputPath, processed.warnings);
     if (processed.overwide.length) fx.tableRows.push({ rel: vaultRelPathOf(page), rows: processed.overwide });
@@ -1729,7 +1744,7 @@ function buildSite(options) {
       case 'pc': {
         // Warnings are dropped here, not ignored: processContent above ran this same
         // strip chain over the same markdown and already reported them.
-        let filtered = page.headingsUnstable ? unstableBody(page) : playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, pcKeepSections, frontmatter: page.sourceFrontmatter || page.frontmatter, ...markOpt }).text;
+        let filtered = page.headingsUnstable ? unstableBody(page) : playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, pcKeepSections, storyMoments, frontmatter: page.sourceFrontmatter || page.frontmatter, ...markOpt }).text;
         // Images before wikilinks: resolveWikiLinks' `[[…]]` pattern also matches the inner
         // brackets of an `![[image.png]]` embed and would flatten it to literal text.
         filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath, usedImages, {
@@ -1950,6 +1965,9 @@ function buildSite(options) {
     audit.read(rel, html);
     audit.readAddresses(rel, html);
     if (page === shownPage) shown[isStory ? 'story' : 'page'] = html;
+    // A folded wrap-up's page is its Story page, read here: the audit's marked pass renders it again with the other
+    // listings (eachListing), not as a page of its own.
+    if (isFolded(page)) return;
     if (toRender.has(page)) return;
     if (!markedOf.has(page)) markedOf.set(page, audit.mark(page));
     const marked = markedOf.get(page);
@@ -2074,7 +2092,8 @@ function buildSite(options) {
   const backstoryOf = new WeakMap();
   for (const page of pages) {
     try {
-      if (getsNoPage(page)) continue;
+      // A wrap-up folded into its Story page is written as part of that page.
+      if (getsNoPage(page) || isFolded(page)) continue;
       // A fast build renders the PC pages and no others.
       if (onlySheets && page.frontmatter.type !== 'pc') continue;
       const out = renderPage(page, liveFx);
@@ -2204,7 +2223,9 @@ function buildSite(options) {
       if (page && text && (!onlySheets || page.frontmatter.type === 'pc')) audit.read(vaultRelPathOf(page), `<main><p>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p></main>`, null, 'the link previews', 'withheld');
     }
     if (writes === 'all') {
-      const built = onlyBuiltPages(cards, (key) => fs.existsSync(path.join(outputDir, ...key.split('/'))));
+      // A folded wrap-up's card is its Story page's, which the story pages below write.
+      const storyBound = new Set(pages.filter(isFolded).map((p) => p.outputPath));
+      const built = onlyBuiltPages(cards, (key) => storyBound.has(key) || fs.existsSync(path.join(outputDir, ...key.split('/'))));
       if (writeOut(path.join(outputDir, 'previews.json'), jsonText(built))) console.log('  wrote previews.json');
     }
   }
@@ -2215,7 +2236,7 @@ function buildSite(options) {
   // from that filtered set regardless of whether a manifest exists, so gating this on
   // `manifest` just meant a manifest-less player build shipped every GM-only image.
   // A recap's picture counts as used: the story pages are rendered once here, for the set only.
-  if (!onlySheets) buildStorySpine(pages, linkMap, hubWrapUps, { imageMap, usedImages });
+  if (!onlySheets) buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages, warn: true }, { marked: gm, marks: mark ? mark.marks : null, players: storyPlayers });
   const filteredMap = {};
   for (const [basename, entry] of Object.entries(imageMap)) {
     if (usedImages.has(basename)) filteredMap[basename] = entry;
@@ -2234,6 +2255,8 @@ function buildSite(options) {
   // Generate index pages for each output directory
   const dirs = {};
   for (const page of pages) {
+    // A folded wrap-up has no page in a folder: its words are its Story page's.
+    if (isFolded(page)) continue;
     const dir = page.outputDir;
     if (!dirs[dir]) dirs[dir] = [];
     dirs[dir].push(page);
@@ -2398,7 +2421,33 @@ function buildSite(options) {
   // landing page. Each prints words taken from many notes. `emit(out, html, said)` gets the
   // page's path on the site, its HTML and the line the build prints for it. `live` is the
   // build's own pass; the audit's pass (every note marked) asks for the pages again and
-  // skips what holds no note's words (a redirect) and what is a note's own page (a PC's story).
+  // skips what holds no note's words (a redirect) and what is a note's own page (a PC's story). A Story page also hands
+  // `emit` a 4th argument: the page it is written as (its address, and on the GM site the folded wrap-up's banner and
+  // hidden-fields panel).
+  // The wrap-ups folded into each Story page (story-fold.js), by its address.
+  const foldedOnto = new Map();
+  for (const page of pages) {
+    if (isFolded(page)) foldedOnto.set(page.outputPath, (foldedOnto.get(page.outputPath) || []).concat(page));
+  }
+  // What the GM Story page shows after the cards: the wrap-up's parts that go there (its GM Notes), then a link to the
+  // session's Play Notes when they have a page.
+  function gmAfter(unit) {
+    const parts = (unit.after || []).map((a) => a.html).join('\n');
+    const href = unit.kind === 'session' ? playNotesHrefOf(unit) : null;
+    if (href) unit.playNotesHref = href;
+    unit.afterHtml = parts ? `<section class="story-gm-after">\n${parts}\n</section>` : '';
+    unit.playNotesHtml = href ? `<p class="story-playnotes"><a href="${encodeHref(relativeHref(unit.outputPath, href))}">Play Notes for this session →</a></p>` : '';
+  }
+  // A session's Play Notes: the note its `documents.play_notes` names, else its wrap-up's `source_document`; the
+  // address of its page, or null when it has none.
+  function playNotesHrefOf(unit) {
+    const fmOf = (p) => (p && (p.sourceFrontmatter || p.frontmatter)) || {};
+    const docs = fmOf(unit.sourcePage).documents;
+    const ref = [docs && docs.play_notes, fmOf(unit.wrapUpPage).source_document].find((r) => typeof r === 'string' && r.trim());
+    if (!ref) return null;
+    const found = resolveSiteLink(ref.trim(), { linkMap });
+    return found.kind === 'page' ? found.href : null;
+  }
   function eachListing(emit, live) {
     for (const [dir, label] of Object.entries(DIR_LABELS)) {
       if (dir === 'characters/pcs' && pcRedirectTarget) {
@@ -2427,6 +2476,9 @@ function buildSite(options) {
         if (live) console.log(`  skipped ${dir}/index.html (authored index page)`);
         continue;
       }
+      // A section with nothing in it has no index (a Sessions folder holding only folded wrap-ups). The menu and the
+      // landing page's cards already leave it out, and a page that lists nothing is only a dead end.
+      if (dirPages.length === 0) continue;
       emit(`${dir}/index.html`, indexTemplate(dir, label, dirPages, navFor, config, publishConfig, imageMap, { cocFolio: require('./templates/pc').usesCocFolio(publishConfig, sheetsOff) }), `  wrote ${dir}/index.html`);
     }
 
@@ -2439,10 +2491,49 @@ function buildSite(options) {
     }
 
     // The story: its chapters, each PC's own story, its contents page.
-    const spine = buildStorySpine(pages, linkMap, hubWrapUps, { imageMap, usedImages });
+    // On the GM site each Story page reads its wrap-up's marked view: its GM-only parts in place, marked.
+    const spine = buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages }, { marked: gm, marks: mark ? mark.marks : null, players: storyPlayers });
+    // The fold was planned on the probe spine (probeSpine), which reads recaps as this one does. Should the two ever
+    // disagree, a folded wrap-up would be on no page: said, never silent.
+    if (live) {
+      const written = new Set(spine.map((u) => u.outputPath));
+      for (const [out, wraps] of foldedOnto) {
+        if (written.has(out)) continue;
+        for (const w of wraps) console.warn(`  WARNING: ${vaultRelPathOf(w)}: its Story page (${out}) was not written, so this wrap-up shows on no page and links to it are broken; please report this as a bug`);
+      }
+    }
     for (const unit of spine) {
-      unit.refsHtml = renderRefsHtml(unit);
-      emit(unit.outputPath, renderStoryUnit(unit, config, publishConfig, navFor), `  wrote ${unit.outputPath}`);
+      if (unit.moments) {
+        const parsed = parseMoments(unit.moments.markdown);
+        const cards = momentsHtml(parsed, { title: unit.moments.title, unitKind: unit.kind });
+        // Moments the player site hides (the setting, hide.sections, a gm-only fence) are the GM site's cards inside
+        // the hiding run's own mark, a panel round the block (one per token: a panel's token stands alone).
+        const { hidden } = unit.moments;
+        const panels = (tokens) => (tokens.match(/\uE000[0-9a-z]+\uE001|\uE002/g) || []).map((t) => `<p>${t}</p>\n`).join('');
+        unit.momentsHtml = hidden && cards ? `${panels(hidden.open)}${cards}\n${panels(hidden.close)}` : cards;
+        // A tag that names no kind is said once per note, on the player site's live pass.
+        if (live && !gm && unit.wrapUpPage) {
+          audit.momentKinds(vaultRelPathOf(unit.wrapUpPage), parsed.unknownTags, KINDS);
+          for (const tag of parsed.unknownTags) console.warn(`  WARNING: ${vaultRelPathOf(unit.wrapUpPage)}: Memorable Moments: "#moment/${tag}" is not a kind (${KINDS.join(', ')}); the moment shows with no kind`);
+        }
+      }
+      const folded = (foldedOnto.get(unit.outputPath) || [])[0];
+      if (gm) gmAfter(unit);
+      // A wrap-up players do not see, on a Story page they have: its parts in one mark, after their own recap.
+      // Otherwise, where players have no Story page here (or no recap of theirs to lead one), the page's banner says why.
+      const notes = gm ? gmStoryNotes(unit, { playerHas: playerStory.has(unit.outputPath), shows: (p) => onPlayerSite.has(p), folded }) : { banner: null, held: null };
+      if (notes.held) {
+        const why = (unit.wrapUpPage && unit.wrapUpPage.gmHiddenBecause) || 'the player site leaves it out';
+        notes.held.open = mark.marks.open('notes', `This wrap-up is held back from players: ${why}`);
+        notes.held.close = mark.marks.close();
+      } else delete unit.heldBack;
+      const html = renderStoryUnit(unit, config, publishConfig, navFor);
+      // The GM site writes the page with its folded wrap-up's hidden-fields panel, and a banner when players have no
+      // Story page here (with the reason): nothing the wrap-up's own page showed is lost.
+      emit(unit.outputPath, html, `  wrote ${unit.outputPath}`,
+        { outputPath: unit.outputPath, gmHiddenBecause: notes.banner, gmHidden: folded ? folded.gmHidden : [] });
+      // Each wrap-up folded into this page is read on it, as its own page was: its faults are its note's.
+      if (live) for (const page of foldedOnto.get(unit.outputPath) || []) seen(vaultRelPathOf(page), html, page, false);
     }
     if (live) characterStories = buildCharacterStories();
     if (spine.length || characterStories.length || npcStories.length) {
@@ -2470,22 +2561,6 @@ function buildSite(options) {
     emit('index.html', landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus, hubWrapUps, storyPagesFor(spine)), '  wrote index.html');
   }
   let characterStories = [];
-
-  function renderRefsHtml(unit) {
-    const refs = unitRefs(unit);
-    const items = [];
-    for (const p of refs.participants) {
-      const out = linkMap[p.target];
-      items.push(out ? `<li><a href="${encodeHref(relativeHref(unit.outputPath, out))}">${escapeHtml(p.label)}</a></li>`
-                     : `<li>${escapeHtml(p.label)}</li>`);
-    }
-    if (refs.location) {
-      const out = linkMap[refs.location.target];
-      items.push(out ? `<li>Location: <a href="${encodeHref(relativeHref(unit.outputPath, out))}">${escapeHtml(refs.location.label)}</a></li>`
-                     : `<li>Location: ${escapeHtml(refs.location.label)}</li>`);
-    }
-    return items.length ? `<ul>${items.join('')}</ul>` : '';
-  }
 
   // A PC's story page (its `_Story.md` companion), as it is written. `fx` as for renderPage.
   function renderCharacterStory(pc, fx) {
@@ -2583,12 +2658,12 @@ function buildSite(options) {
   // Written, and read by the note-faults audit for a secret name. In memory nothing is
   // written, and every one of them is still made: what they print is part of the site.
   // A fast build writes none of them, and the audit's second pass over them is left out.
-  if (!onlySheets) eachListing((out, html, said) => {
+  if (!onlySheets) eachListing((out, html, said, page) => {
     if (!gm) audit.read(null, html, out);
     if (dry) return;
     const full = path.join(outputDir, out);
     ensureDir(full);
-    if (writeHtml(full, html)) console.log(said);
+    if (writeHtml(full, html, page)) console.log(said);
   }, true);
 
   // Each prop's files, read by the note-faults audit as they are written: a withheld name in a

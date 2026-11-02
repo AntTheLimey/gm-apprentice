@@ -11,3 +11,8 @@ give the GM the addresses it prints to open on a phone or tablet at home
 (it runs until stopped). Tell them it never goes online (`deploy` refuses
 its folder) and that the site's build steps don't run for it: any it
 needs go under `gm_site.before_build` or `gm_site.after_build`.
+A session's Story page shows its wrap-up's Memorable Moments as cards
+after the story, and on the GM site GM Notes follow the cards, with the
+other hidden parts in place, marked. `player_site.story.moments` off
+keeps the cards from players; the GM page still shows them, marked. A
+session's Play Notes always get a page on the GM site.

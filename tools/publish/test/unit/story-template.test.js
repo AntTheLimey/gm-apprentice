@@ -8,7 +8,8 @@ const pub = {};
 describe('storyPage', () => {
   const unit = {
     kind: 'session', outputPath: 'story/s1.html', title: 'Session 1', chapterTitle: 'Chapter 1',
-    recapHtml: '<p>The party arrived.</p>', prevHref: null, nextHref: 'story/s2.html', refsHtml: '',
+    recapHtml: '<p>The party arrived.</p>', prevHref: null, nextHref: 'story/s2.html',
+    sections: [{ title: 'Loot', id: 'loot', html: '<p>A brass key.</p>' }, { title: 'Notes on [Mara](../npcs/mara.html)', id: 'notes-on-mara', html: '<p>Later.</p>' }],
   };
   it('leads with the recap prose and the unit title', () => {
     const html = storyPage(unit, cfg, pub, () => '');
@@ -19,6 +20,19 @@ describe('storyPage', () => {
     const html = storyPage(unit, cfg, pub, () => '');
     assert.match(html, /href="s2\.html"/);
     assert.ok(!/&larr;/.test(html), 'no prev arrow at the start');
+  });
+  it('the recap, then each wrap-up section in order, inside the article and before Previous/Next; no In this session box', () => {
+    const html = storyPage({ ...unit, kind: 'session' }, cfg, pub, () => '');
+    const at = ['The party arrived.', '<section class="story-section"><h2 id="loot">Loot</h2><p>A brass key.</p></section>',
+      '<h2 id="notes-on-mara">Notes on <a href="../npcs/mara.html">Mara</a></h2>', '</article>', 'class="story-nav"'].map((s) => html.lastIndexOf(s));
+    assert.ok(at.every((i) => i >= 0), `all present: ${at}`);
+    assert.ok(at[0] < at[1] && at[1] < at[2] && at[2] < at[3] && at[3] < at[4], `in order: ${at}`);
+    assert.doesNotMatch(html, /story-refs|In this session/);
+  });
+  it('the moments and what goes after them follow Previous/Next', () => {
+    const html = storyPage({ ...unit, momentsHtml: '<div class="story-moments">M</div>', afterHtml: '<section class="story-gm-after">A</section>' }, cfg, pub, () => '');
+    const nav = html.lastIndexOf('class="story-nav"');
+    assert.ok(nav < html.indexOf('story-moments') && html.indexOf('story-moments') < html.indexOf('story-gm-after'));
   });
 });
 

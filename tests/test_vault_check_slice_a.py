@@ -5779,5 +5779,26 @@ class UnderGmNotesOrNotTests(unittest.TestCase):
         self.assertEqual(results[0], results[1])
 
 
+class StoryMomentsSettingOldToolTests(unittest.TestCase):
+    """A site pinned to a publish tool from before `player_site.story.moments`
+    has no such name: the check reads it as on and does not crash."""
+
+    @staticmethod
+    def _settings(values):
+        return vc.Settings(values=values, origins={}, faults=[],
+                           has_site_block=True, inline=False)
+
+    def test_a_registry_without_the_name_counts_as_on(self):
+        old = self._settings({"player_site.hide.sections": ["GM Notes"]})
+        self.assertIs(vc.story_moments_on(old), True)
+
+    def test_the_value_is_read_when_the_tool_lists_it(self):
+        self.assertIs(vc.story_moments_on(self._settings(
+            {"player_site.story.moments": False})), False)
+        self.assertIs(vc.story_moments_on(self._settings(
+            {"player_site.story.moments": True})), True)
+        self.assertIs(vc.story_moments_on(None), True)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -16,7 +16,7 @@ const { scanVaultReport, buildLinkMap, scanAttachments, scanAllNotes, pairStoryF
 const { resolveConfig, vaultRelPath, scanConfigFor } = require('./config');
 const { formatFault, entry: settingEntry, fileLabel, nameIn, layoutOf, siteFolderKeys } = require('./settings');
 const { packageScripts, packageNotes } = require('./settings/steps');
-const { pcKeepList } = require('./pc-prose');
+const { pcKeepList, storyMomentsOn } = require('./pc-prose');
 const { loadManifest } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
 const {
@@ -156,6 +156,7 @@ function readerView(page, publishConfig, { bodyWithheld = false, rel = '', pcKee
     excludeCallouts: publishConfig.exclude_callouts,
     excludeSections: publishConfig.exclude_sections,
     pcKeepSections,
+    storyMoments: storyMomentsOn(publishConfig),
     frontmatter: page.frontmatter,
   });
   const fieldOverrides = (publishConfig.overrides && publishConfig.overrides.fields) || {};

@@ -35,7 +35,7 @@
 //                            gm-only or spoiler marker the block strips found unbalanced:
 //                            {line (of `text`), marker, close}, a closer with nothing open
 //                            or an opener never closed (a tool older than #441 leaves it out).
-//   {"op":"cut","text":…,"excludeSections":[…],"type":…,"pcKeepSections":[…]|null,"excludeCallouts":…}
+//   {"op":"cut","text":…,"excludeSections":[…],"type":…,"pcKeepSections":[…]|null,"storyMoments":false,"excludeCallouts":…}
 //       -> also {"withheldBy":[…]}  with the page's section rules (`excludeSections` given; `type`, the note's
 //                            `type:`; `pcKeepSections` while sheets are off; `excludeCallouts`, the hidden callouts,
 //                            true or a list of types): the hidden callouts are cut too, and per line of `text` the
@@ -182,6 +182,7 @@ function answer(request) {
         excludeSections: list(request, 'excludeSections'),
         frontmatter: type ? { type } : null,
         pcKeepSections: request.pcKeepSections === undefined || request.pcKeepSections === null ? null : list(request, 'pcKeepSections'),
+        storyMoments: request.storyMoments === false ? false : undefined,
         excludeCallouts: callouts,
       });
     }

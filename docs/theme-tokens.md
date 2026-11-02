@@ -274,6 +274,20 @@ A full-bleed hero's words sit on a shade of `--bg-hero` and take a light ink. Th
 
 <!-- /theme-tokens:hero -->
 
+<!-- theme-tokens:story -->
+
+The Memorable Moments cards: the colour of each kind's row. The card itself takes `--bg-card` and `--border`. The plain look keeps these in both colour schemes (its card stays dark); a genre preset with a light card sets deeper ones for it.
+
+| Token | What it sets | Default |
+|-------|--------------|---------|
+| `--moment-dramatic` | A Dramatic moment's kind row | `#ff8f80` |
+| `--moment-intriguing` | An Intriguing moment's kind row | `#7fc8ff` |
+| `--moment-funny` | A Funny moment's kind row | `#ffc857` |
+| `--moment-epic` | An Epic moment's kind row | `#c9a7ff` |
+| `--moment-tragic` | A Tragic moment's kind row | `#b8c2d1` |
+
+<!-- /theme-tokens:story -->
+
 <!-- theme-tokens:gurps -->
 
 Each part of the sheet has its own hue, and a tint of it for row backgrounds. A sheet skin sets these.

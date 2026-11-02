@@ -8,6 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { buildBoth } = require('./helpers/gm-build');
 const { HOOKS } = require('../lib/theme-hooks');
+const { CHAPTER, WRAP_1, SESSION } = require('./helpers/story-vault');
 
 const FILES = {
   'NPCs/Mara Quill.md': '---\ntype: npc\noccupation: Ferry pilot\n---\n\nShe has run the north channel for twenty years.\n\nShe knows every buoy.\n\n## Current Status\n\nWaiting out the fog.\n\n## GM Notes\n\nShe carries letters for the smugglers.\n',
@@ -22,7 +23,12 @@ const FILES = {
   'World/Tides.md': '---\ntype: world_domain\n---\n\nThe tides rule the town.\n',
   'Documents/Harbour Ledger.md': '---\ntype: document\n---\n\nA ledger of every berth.\n',
   '_attachments/Fog Header.png': 'not-really-a-png',
+  // A chapter with one played session and its wrap-up, whose Memorable Moments make the Story page's cards.
+  'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER,
+  'Sessions/Session 2.md': SESSION(2),
+  'Sessions/Session 2 Wrap-Up.md': WRAP_1.replace(/Session 1/g, 'Session 2').replace('session_number: 1', 'session_number: 2'),
 };
+const STORY = 'story/chapter-1-docks-session-2.html';
 
 // One note of each kind that has its own template (the plain-note template among them): each must carry the hooks.
 const NOTE_PAGES = ['npcs/mara-quill.html', 'locations/harbour.html', 'events/the-fog.html', 'sessions/session-01.html',
@@ -46,6 +52,9 @@ const SEEN_ON = {
   'body.landing-full-bleed': ['index.html'],
   '.landing-hero--align-left': ['index.html'],
   '.page-banner': NOTE_PAGES,
+  'section.story-moments': [STORY],
+  'article.moment-card': [STORY],
+  'p.moment-kind[data-kind]': [STORY],
 };
 
 // A regular expression that finds an element a simple selector (tag, one class, one attribute) names.

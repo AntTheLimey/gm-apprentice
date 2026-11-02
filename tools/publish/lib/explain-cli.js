@@ -11,15 +11,16 @@
 // second reading of the same rules.
 const fs = require('fs');
 const path = require('path');
-const { mapFolder, matchExcludedDir } = require('./scanner');
+const { mapFolder, matchExcludedDir, scanAttachments } = require('./scanner');
 const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, alwaysExcludedSegment } = require('./publish-decision');
 const { decideNoPage, listedOnly } = require('./previews');
 const { surveyVault, pairsWith } = require('./manifest-cli');
-const { assertNoStops, outputFolderOf } = require('./config');
+const { playerFoldPlan } = require('./published-view');
+const { assertNoStops, outputFolderOf, scanConfigFor } = require('./config');
 const { canonicalPath, loadPublishList } = require('./manifest');
 const { settledHeadingsOf } = require('./settled-headings');
 const { strippedSectionTitles, sheetWithheldTitles, publishMode } = require('./processor');
-const { pcKeepList, retiredSheetFieldsFor } = require('./pc-prose');
+const { pcKeepList, storyMomentsOn, retiredSheetFieldsFor } = require('./pc-prose');
 const { getCanonStatus } = require('./templates/base');
 const { sheetSourceOf } = require('./sheet-source');
 const { parseNote } = require('./frontmatter');
@@ -42,7 +43,7 @@ function switchesOf(publishConfig) {
 // replicate (the build's own stability check owns that).
 function sheetWithheldOf(publishConfig, markdown, frontmatter) {
   return [...new Set(sheetWithheldTitles(markdown, publishConfig.exclude_sections || [], frontmatter,
-    { pcKeepSections: pcKeepList(publishConfig) }))];
+    { pcKeepSections: pcKeepList(publishConfig), storyMoments: storyMomentsOn(publishConfig) }))];
 }
 
 // Whether a note is a prop: read off the page the scanner made, or, when it made none (a folder the site does not
@@ -150,7 +151,7 @@ async function runExplain(options, deps) {
   const excludeSections = publishConfig.exclude_sections || [];
   // The strip's own walk, so a document's Keeper sections (#280) are named here too.
   const stripped = frontmatterError ? null
-    : [...new Set(strippedSectionTitles(markdown, excludeSections, frontmatter, { pcKeepSections: pcKeepList(publishConfig) }))];
+    : [...new Set(strippedSectionTitles(markdown, excludeSections, frontmatter, { pcKeepSections: pcKeepList(publishConfig), storyMoments: storyMomentsOn(publishConfig) }))];
   const sheetWithheld = frontmatterError || !page ? null : sheetWithheldOf(publishConfig, markdown, frontmatter);
   const gmOnlyBlocks = frontmatterError ? null : markersIn(markdown).filter((m) => m.name === 'gm-only' && !m.close).length;
 
@@ -158,10 +159,20 @@ async function runExplain(options, deps) {
   // Whether this is a session index whose body the site withholds (#276).
   // Paired the way the build pairs (GM aliases rewritten first); a file the scanner
   // produced no page for is no session index the build could pair.
-  const hubBodyUnpublished = !!page && pairsWith(survey, publishedPagesOf(survey)).has(page);
+  const publishedPages = publishedPagesOf(survey);
+  const sitePairs = pairsWith(survey, publishedPages);
+  const hubBodyUnpublished = !!page && sitePairs.has(page);
   // A story companion has no page of its own; its content is on the PC's page, so
   // that is the URL to name.
-  const mergedInto = verdict.code === 'STORY_COMPANION' ? storyCompanionPc(target, pagesByRel) : null;
+  // A wrap-up a Story unit claims folds into that unit's Story page (story-fold.js): the build writes no file for it.
+  // The plan is the player site's (published-view.js playerFoldPlan, which the leak gate reads too), made on the pages
+  // that publish with the pairs made above: each read as the build reads it (a paired session note's body withheld, a
+  // stub cut, the published view, the site's pictures), so a recap only in a hidden part, or only a missing picture, is
+  // no recap, and the unit is not there to fold into.
+  const folded = page && publishes && verdict.code !== 'STORY_COMPANION'
+    ? playerFoldPlan(publishedPages, sitePairs, publishConfig, scanAttachments(scanConfigFor(Object.assign({}, config, { vaultPath }), publishConfig)), vaultPath).get(page) : null;
+  const mergedInto = verdict.code === 'STORY_COMPANION' ? storyCompanionPc(target, pagesByRel)
+    : folded ? { outputPath: folded.outputPath, title: folded.title, storyPage: true } : null;
   // A prop its container lists with nothing of its own to show publishes with no page (previews.js listedOnly).
   if (page && publishes) decideNoPage([page], { excludeSections: publishConfig.exclude_sections, excludeCallouts: publishConfig.exclude_callouts });
   const pageless = !!page && publishes && listedOnly(page);
@@ -252,7 +263,7 @@ async function runExplain(options, deps) {
   out(`  canon status: ${canonStatus || 'none'} (exclude_drafts ${publishConfig.exclude_drafts ? 'on' : 'off'})`);
   out(`  publish list: ${manifest ? (section ? MANIFEST_LABEL[section] : 'not listed') : 'no publish list'}`);
   out(mergedInto
-    ? `  VERDICT: publishes as part of ${outputPath}`
+    ? `  VERDICT: publishes as part of ${outputPath}${mergedInto.storyPage ? ' (its Story page)' : ''}`
     : pageless
       ? '  VERDICT: listed by its container, with no page of its own (LISTED_ONLY) — it has nothing to show players; write words in its body, or a tie, to give it a page'
       : publishes
@@ -414,7 +425,7 @@ async function runExplainAll(options, deps) {
       // the scanner produced no page for it. gm-leak reads these rather than keep a
       // second copy of the rules (#280).
       strippedSections: page
-        ? [...new Set(strippedSectionTitles(page.markdown || '', survey.publishConfig.exclude_sections || [], page.frontmatter, { pcKeepSections: pcKeepList(survey.publishConfig) }))]
+        ? [...new Set(strippedSectionTitles(page.markdown || '', survey.publishConfig.exclude_sections || [], page.frontmatter, { pcKeepSections: pcKeepList(survey.publishConfig), storyMoments: storyMomentsOn(survey.publishConfig) }))]
         : null,
       sheetWithheldSections: page ? sheetWithheldOf(survey.publishConfig, page.markdown || '', page.frontmatter) : null,
       // vault_check pc-body reads this rather than parse the field itself.

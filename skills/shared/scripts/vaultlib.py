@@ -2223,6 +2223,7 @@ def build_lines(text: str, exclude_sections: Iterable[str] = (), *,
                 note_type: str | None = None,
                 pc_keep: list[str] | None = None,
                 callouts: Any = False,
+                story_moments: bool = True,
                 ) -> tuple[list[BuildLine], list[str]]:
     """Every body line of a note as the build reads it, and the gm-only and
     spoiler markers its block strips find unbalanced, as `scan_body`'s
@@ -2235,8 +2236,9 @@ def build_lines(text: str, exclude_sections: Iterable[str] = (), *,
     hidden callouts) and which an excluded section withholds is the
     publish tool's one `cut` answer, given the page's section rules: the
     exclude list, the note's `type:` (`note_type`), the PC keep-list while
-    sheets are off (`pc_keep`) and `player_site.hide.callouts`
-    (`callouts`). So a withheld heading inside a hidden block withholds
+    sheets are off (`pc_keep`), `player_site.hide.callouts`
+    (`callouts`) and `player_site.story.moments` (`story_moments`: off,
+    a wrap-up's Memorable Moments section is withheld). So a withheld heading inside a hidden block withholds
     the text after the block, as on the site (#447). A tool older than
     that answers without `withheldBy`: the section filter is then asked
     about the lines left. Headings and code fences are read from what is
@@ -2259,6 +2261,8 @@ def build_lines(text: str, exclude_sections: Iterable[str] = (), *,
         "type": note_type, "pcKeepSections": pc_keep,
         "excludeCallouts": callouts if isinstance(callouts, (bool, list))
         else False}
+    if story_moments is False:
+        request["storyMoments"] = False
     try:
         answer = PUBLISH_LINES.ask(request)
     except PublishToolUnavailable as e:

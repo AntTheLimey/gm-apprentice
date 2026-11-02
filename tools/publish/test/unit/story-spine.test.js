@@ -1,7 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { entry } = require('../../lib/settings');
-const { findRecap, publishedOf, buildWrapUpIndex, resolveUnitRecap, buildStorySpine: spineWith, unitRefs, characterStoryGroup } = require('../../lib/story-spine');
+const { findRecap, publishedOf, buildWrapUpIndex, resolveUnitRecap, buildStorySpine: spineWith, characterStoryGroup } = require('../../lib/story-spine');
 const { pairHubs } = require('../../lib/session-hub');
 const WORDS = require('../helpers/settings-files').defaultWithheldWords();
 
@@ -80,7 +80,8 @@ describe('resolveUnitRecap', () => {
   });
 });
 
-function ch(title, sort) { return { title, displayTitle: title.replace(/_/g, ' '), frontmatter: { type: 'chapter', sort_order: sort } }; }
+// A chapter takes its recap from its wrap-up only once complete; `status` defaults to that.
+function ch(title, sort, status = 'complete') { return { title, displayTitle: title.replace(/_/g, ' '), frontmatter: { type: 'chapter', sort_order: sort, status } }; }
 function sess(title, chapterRef, n, recap) {
   return { title, displayTitle: title.replace(/_/g, ' '), frontmatter: { type: 'session', chapter: `[[${chapterRef}]]`, session_number: n }, markdown: recap ? `## Narrative Recap\n${recap}` : '## Overview\nx' };
 }
@@ -141,8 +142,8 @@ describe('buildStorySpine output-path namespacing', () => {
   });
 });
 
-describe('buildStorySpine ref-metadata source', () => {
-  it('uses the unit page (not the wrap-up) as sourcePage, so refs read the right frontmatter', () => {
+describe('buildStorySpine sourcePage', () => {
+  it('uses the unit page (not the wrap-up) as sourcePage', () => {
     const chapter = { title: 'Ch', displayTitle: 'Ch', sourcePath: '/v/Ch/Ch.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '## Overview\nx' };
     const session = { title: 'S1', displayTitle: 'S1', sourcePath: '/v/Ch/S1/S1.md', frontmatter: { type: 'session', session_number: 1, participants: ['[[Alice]]'], location: '[[Vienna]]' }, markdown: '## Overview\nno recap here' };
     const wrap = { title: 'S1 Wrap Up', sourcePath: '/v/Ch/S1/S1_Wrap_Up.md', frontmatter: { type: 'session-wrap-up', session: '[[S1]]' }, markdown: '## Narrative Recap\nRecap prose from the wrap-up.' };
@@ -151,15 +152,35 @@ describe('buildStorySpine ref-metadata source', () => {
     assert.ok(u, 'session unit exists');
     assert.match(u.recapHtml, /Recap prose from the wrap-up/); // text still from the wrap-up
     assert.strictEqual(u.sourcePage, session, 'sourcePage is the session page, not the wrap-up');
-    assert.deepStrictEqual(unitRefs(u).participants.map(r => r.label), ['Alice']);
-    assert.strictEqual(unitRefs(u).location.target, 'Vienna');
+  });
+});
+
+describe('buildStorySpine wrap-up sections', () => {
+  const chapter = { title: 'Ch', displayTitle: 'Ch', sourcePath: '/v/Ch/Ch.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '## Overview\nx' };
+  const session = (markdown) => ({ title: 'S1', displayTitle: 'S1', sourcePath: '/v/Ch/S1/S1.md', frontmatter: { type: 'session', session_number: 1 }, markdown });
+  const wrap = { title: 'S1 Wrap Up', sourcePath: '/v/Ch/S1/S1_Wrap_Up.md', frontmatter: { type: 'session-wrap-up', session: '[[S1]]' },
+    markdown: '## Narrative Recap\nThey came.\n\n## Loot\nA key.\n\n## Memorable Moments\n> "Hi."\n\n## GM Notes\nsecret',
+    publishedMarkdown: '## Narrative Recap\nThey came.\n\n## Loot\nA key.\n\n## Memorable Moments\n> "Hi."\n' };
+  it("a session unit carries its wrap-up's sections (published view), less the recap, and the moments apart", () => {
+    const u = buildStorySpine([chapter, session('## Overview\nx'), wrap]).find(x => x.kind === 'session');
+    assert.deepStrictEqual(u.sections.map(s => s.title), ['Loot']);
+    assert.strictEqual(u.moments.title, 'Memorable Moments');
+    assert.match(u.moments.markdown, /"Hi\."/);
+    assert.deepStrictEqual(u.after, []);
+    assert.ok(!JSON.stringify([u.sections, u.moments, u.after]).includes('secret'), 'the published view only');
+  });
+  it("a recap from the session's own page leaves the wrap-up's recap section in", () => {
+    const pages = [chapter, session('## Narrative Recap\nOwn recap.'), { ...wrap, publishedMarkdown: '## Notes\nA.\n\n## Narrative Recap\n\n' }];
+    const u = buildStorySpine(pages).find(x => x.kind === 'session');
+    assert.match(u.recapHtml, /Own recap/);
+    assert.deepStrictEqual(u.sections.map(s => s.title), ['Notes', 'Narrative Recap']);
   });
 });
 
 describe('buildStorySpine folder-proximity pairing', () => {
   it('pairs a chapter wrap-up by folder even when its chapter ref is a free-form display title', () => {
     const pages = [
-      { title: 'Chapter 1 Overview', displayTitle: 'Chapter 1 — London', sourcePath: '/v/Chapters/Chapter 1 - London/Chapter 1 Overview.md', frontmatter: { type: 'chapter', sort_order: 1 }, markdown: '## Overview\nx' },
+      { title: 'Chapter 1 Overview', displayTitle: 'Chapter 1 — London', sourcePath: '/v/Chapters/Chapter 1 - London/Chapter 1 Overview.md', frontmatter: { type: 'chapter', sort_order: 1, status: 'complete' }, markdown: '## Overview\nx' },
       { title: 'Chapter_1_Wrap_Up', sourcePath: '/v/Chapters/Chapter 1 - London/Chapter_1_Wrap_Up.md', frontmatter: { type: 'session_wrap', chapter: 'Chapter 1 — London: The Orphean Society' }, markdown: '## Narrative Recap\nLondon happened.' },
     ];
     const spine = buildStorySpine(pages);
@@ -174,19 +195,10 @@ describe('buildStorySpine folder-proximity pairing', () => {
       { title: 'Session 01', displayTitle: 'Session 01', sourcePath: '/v/Chapters/Chapter 4 - Calcutta/Sessions/Session 01/Session 01.md', frontmatter: { type: 'session', session_number: 1, chapter: 'Chapter 4 — Calcutta' }, markdown: '## Overview\nx' },
       { title: 'Session 01 Wrap Up', sourcePath: '/v/Chapters/Chapter 4 - Calcutta/Sessions/Session 01/Session_01_Wrap_Up.md', frontmatter: { type: 'session_wrap', session: 'Session 01 - The Morning After', chapter: 'Chapter 4 — Calcutta' }, markdown: '## Narrative Recap\nCalcutta session one.' },
     ];
+    // The chapter (not complete) opens with its introduction; the session takes its wrap-up's recap.
     const spine = buildStorySpine(pages);
-    assert.strictEqual(spine.length, 1);
-    assert.strictEqual(spine[0].kind, 'session');
-    assert.match(spine[0].recapHtml, /Calcutta session one/);
-  });
-});
-
-describe('unitRefs', () => {
-  it('collects participants and location from the source page frontmatter', () => {
-    const unit = { sourcePage: { frontmatter: { participants: ['[[Adrien_de_Montferrand]]'], location: '[[Vienna]]' } } };
-    const refs = unitRefs(unit);
-    assert.deepStrictEqual(refs.participants.map(r => r.label), ['Adrien de Montferrand']);
-    assert.strictEqual(refs.location.target, 'Vienna');
+    assert.deepStrictEqual(spine.map(u => u.kind), ['chapter-intro', 'session']);
+    assert.match(spine[1].recapHtml, /Calcutta session one/);
   });
 });
 
@@ -274,8 +286,9 @@ describe('wrap-up matching in a flat Sessions/ folder', () => {
       { title: 'Session 01 Wrap Up', sourcePath: '/v/Chapters/Ch4/Sessions/Session 01/Session_01_Wrap_Up.md', frontmatter: { type: 'session_wrap', session: 'Session 01 - The Morning After' }, markdown: '## Narrative Recap\nSubfolder recap.' },
     ];
     const spine = buildStorySpine(nested);
-    assert.strictEqual(spine.length, 1);
-    assert.match(spine[0].recapHtml, /Subfolder recap/);
+    const sessions = spine.filter(u => u.kind === 'session');
+    assert.strictEqual(sessions.length, 1);
+    assert.match(sessions[0].recapHtml, /Subfolder recap/);
   });
 });
 
@@ -301,3 +314,96 @@ describe('buildStorySpine pairs a session with its Wrap-Up through session-hub (
   });
 });
 
+describe('buildStorySpine: a wrap-up claimed by one unit', () => {
+  const { foldPlan, applyFold } = require('../../lib/story-fold');
+  // Ch1/Ch1.md, Ch1/S1.md, Ch1/S1_Wrap_Up.md: the chapter's same-folder fallback finds the session's wrap-up.
+  const vault = (chapterMarkdown, status) => [
+    { title: 'Ch1', displayTitle: 'Ch1', sourcePath: '/v/Ch1/Ch1.md', outputPath: 'chapters/ch1.html', frontmatter: { type: 'chapter', sort_order: 1, ...(status ? { status } : {}) }, markdown: chapterMarkdown },
+    { title: 'S1', displayTitle: 'S1', sourcePath: '/v/Ch1/S1.md', outputPath: 'sessions/s1.html', frontmatter: { type: 'session', session_number: 1 }, markdown: '## Overview\nx' },
+    { title: 'S1_Wrap_Up', sourcePath: '/v/Ch1/S1_Wrap_Up.md', outputPath: 'sessions/s1-wrap-up.html', frontmatter: { type: 'session-wrap-up', session: '[[S1]]' },
+      markdown: '## Narrative Recap\nThey came.\n\n## Loot\nA key.\n\n## Memorable Moments\n- one\n\n## Notes\nLater.' },
+  ];
+  const folded = (pages) => {
+    applyFold(foldPlan(buildStorySpine(pages, null)), {});
+    return buildStorySpine(pages, {});
+  };
+  for (const status of [undefined, 'active', 'Complete']) {
+    it(`(c) a chapter (status ${status}) takes nothing from a wrap-up its session claims: its introduction only`, () => {
+      const spine = folded(vault('# Ch1\n\n## Overview\nThe chapter opens.', status));
+      const session = spine.find(u => u.kind === 'session');
+      const intro = spine.find(u => u.kind === 'chapter-intro');
+      assert.ok(session && intro, `units: ${spine.map(u => u.kind)}`);
+      assert.match(session.recapHtml, /They came/);
+      assert.deepStrictEqual(session.sections.map(s => s.title), ['Loot', 'Notes']);
+      assert.match(intro.recapHtml, /The chapter opens/);
+      assert.doesNotMatch(intro.recapHtml, /They came|<h1/);
+      assert.strictEqual(intro.wrapUpPage, null);
+      assert.deepStrictEqual([intro.sections, intro.moments, intro.after], [[], null, []]);
+    });
+  }
+});
+
+describe('buildStorySpine: a chapter has a recap only once complete', () => {
+  const { foldPlan } = require('../../lib/story-fold');
+  const vault = (status) => [
+    { title: 'Ch1', displayTitle: 'Ch1', sourcePath: '/v/Ch1/Ch1.md', frontmatter: { type: 'chapter', sort_order: 1, status }, markdown: '# Ch1\n\n## Overview\nThe chapter opens.' },
+    { title: 'S1', displayTitle: 'S1', sourcePath: '/v/Ch1/S1/S1.md', frontmatter: { type: 'session', session_number: 1, chapter: '[[Ch1]]' }, markdown: '## Overview\nx' },
+    { title: 'S1 Wrap Up', sourcePath: '/v/Ch1/S1/S1_Wrap_Up.md', frontmatter: { type: 'session-wrap-up', session: '[[S1]]' }, markdown: '## Narrative Recap\nThey came.' },
+    { title: 'Ch1 Wrap Up', sourcePath: '/v/Ch1/Ch1_Wrap_Up.md', frontmatter: { type: 'session-wrap-up', chapter: '[[Ch1]]' },
+      markdown: '## Narrative Recap\nCHAPTER-RECAP.\n\n## Loot\nThe lighthouse key.' },
+  ];
+  it('(a) an active chapter shows its introduction only and claims no wrap-up', () => {
+    const pages = vault('active');
+    const spine = buildStorySpine(pages);
+    const intro = spine.find(u => u.kind === 'chapter-intro');
+    assert.ok(intro, `units: ${spine.map(u => u.kind)}`);
+    assert.match(intro.recapHtml, /The chapter opens/);
+    assert.doesNotMatch(intro.recapHtml, /CHAPTER-RECAP/);
+    assert.strictEqual(intro.wrapUpPage, null);
+    assert.deepStrictEqual(intro.sections, []);
+    assert.ok(![...foldPlan(spine).keys()].includes(pages[3]), 'the chapter wrap-up keeps its own page');
+  });
+  it('(b) a complete chapter takes its recap and sections from its own wrap-up, which folds in', () => {
+    const pages = vault('complete');
+    const spine = buildStorySpine(pages);
+    const intro = spine.find(u => u.kind === 'chapter-intro');
+    assert.match(intro.recapHtml, /CHAPTER-RECAP/);
+    assert.doesNotMatch(intro.recapHtml, /The chapter opens/);
+    assert.deepStrictEqual(intro.sections.map(s => s.title), ['Loot']);
+    assert.strictEqual(foldPlan(spine).get(pages[3]), intro);
+  });
+});
+
+// The GM Story page's notes from the player site's side (#543): never held-back text unmarked with no banner.
+describe('gmStoryNotes', () => {
+  const { gmStoryNotes } = require('../../lib/story-spine');
+  const wrap = { gmHiddenBecause: 'canon_status: DRAFT and exclude_drafts is on', foldedFrom: 'sessions/w.html' };
+  const hub = { gmHiddenBecause: 'publish: false' };
+  const hiddenFrom = (...ps) => (p) => !ps.includes(p);
+
+  it('players have the page and see the wrap-up: no banner, nothing held', () => {
+    assert.deepStrictEqual(gmStoryNotes({ sourcePage: hub, wrapUpPage: wrap }, { playerHas: true, shows: () => true, folded: wrap }), { banner: null, held: null });
+  });
+
+  it('players have the page, the wrap-up is held back and their recap leads it: held in one mark, no banner', () => {
+    const heldBack = { recapHtml: '<p>theirs</p>', wrapHasRecap: true, wrapRecapTitle: 'Narrative Recap' };
+    const out = gmStoryNotes({ sourcePage: hub, wrapUpPage: wrap, heldBack }, { playerHas: true, shows: hiddenFrom(wrap), folded: wrap });
+    assert.deepStrictEqual(out, { banner: null, held: heldBack });
+  });
+
+  it('players have the page, the wrap-up is held back, and there is no recap of theirs: the banner gives the reason', () => {
+    for (const heldBack of [undefined, { recapHtml: null }, { recapHtml: '' }]) {
+      const out = gmStoryNotes({ sourcePage: hub, wrapUpPage: wrap, heldBack }, { playerHas: true, shows: hiddenFrom(wrap), folded: wrap });
+      assert.strictEqual(out.held, null);
+      assert.strictEqual(out.banner, 'players see another Story page here; this wrap-up is held back: canon_status: DRAFT and exclude_drafts is on');
+    }
+  });
+
+  it('players have no page: the banner says where they read the wrap-up, or why it is held back', () => {
+    assert.strictEqual(gmStoryNotes({ sourcePage: hub, wrapUpPage: wrap }, { playerHas: false, shows: () => true, folded: wrap }).banner,
+      'players see this wrap-up on its own page (sessions/w.html), not here');
+    assert.strictEqual(gmStoryNotes({ sourcePage: hub, wrapUpPage: wrap }, { playerHas: false, shows: hiddenFrom(wrap), folded: wrap }).banner, wrap.gmHiddenBecause);
+    assert.strictEqual(gmStoryNotes({ sourcePage: hub, wrapUpPage: null }, { playerHas: false, shows: () => false }).banner, 'publish: false');
+    assert.strictEqual(gmStoryNotes({ sourcePage: {}, wrapUpPage: null }, { playerHas: false, shows: () => false }).banner, 'the player site has no Story page here');
+  });
+});

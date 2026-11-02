@@ -184,4 +184,13 @@ function titleNamedIn(title, names) {
   return loose.some(k => squashed.has(k));
 }
 
-module.exports = { headingKey, headingKeys, squashedKeys, titleNamedIn, SPACE_RANGES, INVISIBLE_RANGES, ignoringMark };
+// Whether a heading is a wrap-up's Memorable Moments section: any reading of the title holds the two words (`## Memorable
+// Moments — Highlights` too). The ONE rule: the Story page's cards and the `player_site.story.moments` strip both ask
+// it, so no heading can render as cards that the setting does not withhold.
+const MOMENTS_WORDS = 'memorable moments';
+function isMomentsHeading(title) {
+  return headingKeys(title).some(k => k.includes(MOMENTS_WORDS))
+    || squashedKeys(title).some(k => k.includes(squash(MOMENTS_WORDS)));
+}
+
+module.exports = { headingKey, headingKeys, squashedKeys, titleNamedIn, isMomentsHeading, SPACE_RANGES, INVISIBLE_RANGES, ignoringMark };

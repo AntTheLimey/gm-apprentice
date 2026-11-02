@@ -32,6 +32,9 @@ const HOOKS = [
   { selector: 'body.landing-full-bleed', when: 'setting', setting: 'player_site.landing.hero.layout: full-bleed', marks: "The landing page's `<body>` when its title area is full-bleed (the page whose menu sits over the picture)", example: 'body.landing-full-bleed > .top-nav { backdrop-filter: blur(4px); }' },
   { selector: '.landing-hero--align-left', when: 'setting', setting: 'player_site.landing.hero.align: left', marks: "The landing page's title area with its title, tagline and dates set to the left", example: '.landing-hero--align-left h1 { margin-left: -0.05em; }' },
   { selector: '.page-banner', when: 'setting', setting: 'player_site.theme.page_banner', marks: "The picture at the top of a note's page: the site's default page banner, or the note's own `banner:` field, which needs no setting. A `<figure>` that also carries `section-banner`, as a section list's banner does", example: '.page-banner { max-height: 14rem; overflow: hidden; }' },
+  { selector: 'section.story-moments', when: 'always', marks: "The Memorable Moments block under a Story page's story, while `player_site.story.moments` is on, the default", example: 'section.story-moments { border-top-style: dashed; }' },
+  { selector: 'article.moment-card', when: 'always', marks: "One moment's card in that block, while `player_site.story.moments` is on, the default", example: 'article.moment-card { border-radius: 4px; }' },
+  { selector: 'p.moment-kind[data-kind]', when: 'always', marks: "A card's kind row (icon and label); `data-kind` is `dramatic`, `intriguing`, `funny`, `epic` or `tragic`. A card with no kind has none. While `player_site.story.moments` is on, the default", example: 'p.moment-kind[data-kind="funny"] { letter-spacing: 0.2em; }' },
 ];
 
 // The classes of the blocks that hold a page's title, outermost first where they nest.

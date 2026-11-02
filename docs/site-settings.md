@@ -107,6 +107,7 @@ fixed, so nothing extra is ever shown by a guess. These are:
 - `player_site.hide.callouts`
 - `player_site.hide.drafts`
 - `player_site.hide.field_exceptions`
+- `player_site.story.moments`
 - `player_site.never_show`
 
 <!-- /settings:hiding-list -->
@@ -430,6 +431,21 @@ player_site:
     quick_links: ["Harbour_City_Map"]
 ```
 
+## Story pages
+
+A session's wrap-up is its Story page: any text above its first heading,
+the recap, the wrap-up's other sections, then the Memorable Moments as cards. One switch controls the cards.
+It belongs to the player site, and the GM site follows it: the GM site still
+shows the cards, marked as hidden from players.
+
+<!-- settings:story -->
+
+| Setting | What it does | Values | Left out |
+|---------|--------------|--------|----------|
+| `player_site.story.moments` | The Memorable Moments section of a session's wrap-up, shown as cards after the story on its Story page. Off, the section is left out of the site: no page, search entry, link preview or Connections text holds it. The GM site still shows the cards, marked | A switch | On |
+
+<!-- /settings:story -->
+
 ## Props
 
 When the site publishes a prop note, it gets one page listing every prop
@@ -550,7 +566,7 @@ mark, so do not read those places aloud as if players had them.
 |---------|--------------|--------|----------|
 | `gm_site.publish` | Whether this vault has a GM site: a second copy of the site with every note shown and the hidden parts marked (the `gm_site.show.*` switches choose which), for you at the table. It is never put online | A switch | Off |
 | `gm_site.folder` | The folder the GM site's pages are written to. It holds built pages only, and cannot be the player site's folder, inside it, or hold it. Turning the GM site on with this unset makes one beside the player site's folder | A folder path | A folder beside the player site's, made when the GM site is turned on |
-| `gm_site.show.notes` | Notes the player site leaves out (prep, drafts, the ones held back by the publish list) get a page, marked | A switch | On |
+| `gm_site.show.notes` | Notes the player site leaves out (prep, drafts, the ones held back by the publish list) get a page, marked. A session's Play Notes always get a page on the GM site, whatever this says | A switch | On |
 | `gm_site.show.sections` | Sections the player site hides (by heading) are shown, marked | A switch | On |
 | `gm_site.show.fields` | Frontmatter fields the player site hides are listed in a panel at the top of the page, marked | A switch | On |
 | `gm_site.show.relationships` | Relationships the player site hides (GM-only ones) are shown, marked | A switch | On |
@@ -593,6 +609,7 @@ mark always means hidden from players. The GM site's folder is
 - `player_site.never_show`
 - `player_site.features.live_stats`
 - `player_site.features.inbox`
+- `player_site.story.moments`
 
 <!-- /settings:gm-not-per-site -->
 

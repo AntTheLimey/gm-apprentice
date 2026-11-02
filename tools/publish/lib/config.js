@@ -238,6 +238,10 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   delete merged.landing.latest_props_title;
   Object.defineProperty(merged.landing, 'latest_props_title', { value: bannerText(latestTitle), enumerable: false });
 
+  // Whether a session's Memorable Moments show as cards on its Story page. Not listed, like `limits`. Not per site:
+  // the GM site reads the player site's value, so a mark on it always means "hidden from players".
+  Object.defineProperty(merged, 'story', { value: { moments: p.story.moments !== false }, enumerable: false });
+
   // The numbers, the header facts and the withheld words the build used to fix in code. Not listed, like
   // `menu_extra`: a site that sets none builds as it did. Each is passed down to the code that uses it.
   Object.defineProperty(merged, 'limits', { value: { ...p.limits }, enumerable: false });

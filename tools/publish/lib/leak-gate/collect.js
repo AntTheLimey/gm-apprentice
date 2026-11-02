@@ -7,14 +7,16 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { scanVaultReport, scanAllNotes, buildLinkMap, scanAttachments, STORY_SUFFIX } = require('../scanner');
-const { resolveConfig, loadPublishConfig, loadVaultConfig, vaultRelPath } = require('../config');
+const { resolveConfig, loadPublishConfig, loadVaultConfig, vaultRelPath, scanConfigFor } = require('../config');
 const { readSettings, forSite } = require('../settings');
 const { loadManifest } = require('../manifest');
 const { publishedPages } = require('../published-pages');
 const { ALWAYS_EXCLUDE_DIRS } = require('../publish-decision');
 const { getsNoPage, decideNoPage, listedOnly, rowsFor } = require('../previews');
-const { pcKeepList } = require('../pc-prose');
+const { pcKeepList, storyMomentsOn } = require('../pc-prose');
 const { pairHubs } = require('../session-hub');
+const { playerFoldPlan } = require('../published-view');
+const { foldLabelsOf, labelFoldedLinks } = require('../story-fold');
 const { parseNote } = require('../frontmatter');
 const { canonicalNfc } = require('../unicode');
 const {
@@ -87,6 +89,19 @@ function collectHidden({ configPath, outputDir = null }) {
   const linkMap = buildLinkMap(published);
   const notes = scanAllNotes(vaultPath);
   const hubs = pairHubs(corpus, published, { vaultPath, allNotes: notes, withheldWords: playerConfig.withheld_words });
+  // A wrap-up the player site folds into a Story page (story-fold.js) is linked, unaliased, by that page's title: the
+  // build prints the label. So such a link is read both ways, by the note it names and by the label, in hidden text
+  // and in what players may already read. The plan is the one explain reads (published-view.js playerFoldPlan).
+  const foldPlanned = playerFoldPlan(published, hubs, playerConfig, scanAttachments(scanConfigFor(Object.assign({}, config, { vaultPath }), playerConfig)), vaultPath);
+  const foldLabels = foldLabelsOf(foldPlanned, linkMap);
+  const relabel = (md) => (foldLabels.size ? labelFoldedLinks(md, linkMap, { labels: foldLabels }) : md);
+  const bothWays = (md) => { const r = relabel(md); return r === md ? [md] : [md, r]; };
+  const relabelValue = (v) => (typeof v === 'string' ? relabel(v)
+    : Array.isArray(v) ? v.map(relabelValue)
+      : v && typeof v === 'object' && !(v instanceof Date) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, relabelValue(x)])) : v);
+  const once = (pieces) => { const seen = new Set(); return pieces.filter((p) => { const key = wordsOf(p).join(' '); return seen.has(key) ? false : seen.add(key); }); };
+  const hiddenOf = (md) => once(bothWays(md).flatMap(piecesOfMarkdown));
+  const hiddenOfValue = (v) => (foldLabels.size ? once([...piecesOfValue(v), ...piecesOfValue(relabelValue(v))]) : piecesOfValue(v));
 
   const excludeSections = playerConfig.exclude_sections;
   const excludeCallouts = playerConfig.exclude_callouts;
@@ -106,7 +121,7 @@ function collectHidden({ configPath, outputDir = null }) {
     }
   };
   const addMarked = (markdown, note) => {
-    for (const span of markedSpans(markdown, mark.marks)) add(piecesOfMarkdown(span.text), note, span.label);
+    for (const span of markedSpans(markdown, mark.marks)) add(hiddenOf(span.text), note, span.label);
   };
 
   const publishedRels = new Set();
@@ -122,7 +137,7 @@ function collectHidden({ configPath, outputDir = null }) {
     if (page.storyMarkdown) publishedRels.add(rel.replace(/\.md$/i, STORY_SUFFIX));
     const fm = page.frontmatter || {};
     const overrides = fieldOverrides[rel] || {};
-    for (const h of hiddenFieldsOf(fm, excludeFields, overrides)) add(piecesOfValue(h.value), rel, h.label);
+    for (const h of hiddenFieldsOf(fm, excludeFields, overrides)) add(hiddenOfValue(h.value), rel, h.label);
     const shownFields = publishedFrontmatter(fm, excludeFields, overrides);
     if (listedSet.has(page)) {
       // No page of its own: only what its listing row and its container's state entry print is visible (its title,
@@ -130,19 +145,20 @@ function collectHidden({ configPath, outputDir = null }) {
       visible.push(String(page.displayTitle || ''), ...stringsOfValue([shownFields.prop_title, shownFields.prop_line, ...Object.values(stateFieldsOf(shownFields))]));
     } else {
       visible.push(String(page.displayTitle || ''), ...fieldRunsOf(shownFields, page.displayTitle), ...printedRows({ ...page, frontmatter: shownFields }));
+      if (foldLabels.size) visible.push(...fieldRunsOf(relabelValue(shownFields), page.displayTitle));
     }
     if (hubs.has(page)) {
-      add(piecesOfMarkdown(page.markdown), rel, 'session index body (its Wrap-Up publishes)');
+      add(hiddenOf(page.markdown), rel, 'session index body (its Wrap-Up publishes)');
       continue;
     }
     // The page as the build holds it when it asks: the note's own frontmatter apart, the published one in its place (the
     // portrait named there decides which image embed the headings check drops).
     const asBuilt = { ...page, sourceFrontmatter: fm, frontmatter: publishedFrontmatter(fm, excludeFields, overrides) };
     if (pcKeepSections && pcHeadingsUnstable(asBuilt, linkMap, excludeSections, imageMap, { excludeCallouts, pcKeepSections })) {
-      add(piecesOfMarkdown(page.markdown), rel, 'note body (a link label changes its headings)');
+      add(hiddenOf(page.markdown), rel, 'note body (a link label changes its headings)');
       continue;
     }
-    const options = { excludeSections, excludeCallouts, frontmatter: fm, pcKeepSections };
+    const options = { excludeSections, excludeCallouts, frontmatter: fm, pcKeepSections, storyMoments: storyMomentsOn(playerConfig) };
     for (const source of [page.markdown, page.storyMarkdown].filter((t) => typeof t === 'string')) {
       let text = sanitize(source);
       let shownText = source;
@@ -157,11 +173,16 @@ function collectHidden({ configPath, outputDir = null }) {
       // one run, in order, as the page shows them (a table row's cells, a callout's title and its text, a heading).
       const shownMarkdown = playerSafeMarkdown(shownText, options).text;
       if (source === page.markdown) shownBodyOf.set(page, shownMarkdown);
-      visible.push(textsOfMarkdown(shownMarkdown, { headings: true }).join('\n'));
-      // The page's title heads its body in place of the note's own leading H1 (the build drops it), so the title runs on
-      // into the first words under it: "[[Wrap Up]] — narrative recap" is a page title and the heading players see next.
-      if (source === page.markdown) visible.push([String(page.displayTitle || ''), ...textsOfMarkdown(stripLeadingH1(shownMarkdown), { headings: true })].join('\n'));
-      visible.push(...tableRunsOf(shownMarkdown));
+      // A folded wrap-up's page is its Story page, under the unit's title.
+      const titles = [String(page.displayTitle || ''), ...(foldPlanned.has(page) ? [foldPlanned.get(page).title] : [])];
+      for (const shownMd of bothWays(shownMarkdown)) {
+        visible.push(textsOfMarkdown(shownMd, { headings: true }).join('\n'));
+        // The page's title heads its body in place of the note's own leading H1 (the build drops it), so the title runs
+        // on into the first words under it: "[[Wrap Up]] — narrative recap" is a page title and the heading players see
+        // next.
+        if (source === page.markdown) for (const title of titles) visible.push([title, ...textsOfMarkdown(stripLeadingH1(shownMd), { headings: true })].join('\n'));
+        visible.push(...tableRunsOf(shownMd));
+      }
     }
   }
 
@@ -186,7 +207,7 @@ function collectHidden({ configPath, outputDir = null }) {
       }
     }
     const why = verdict && verdict.player ? verdict.player.reason : 'not on the site';
-    add(piecesOfMarkdown(body), rel, `unpublished note: ${why}`);
+    add(hiddenOf(body), rel, `unpublished note: ${why}`);
   }
 
   // What a page's Connections section prints (lib/connections.js), made as the build makes it from the published
