@@ -238,7 +238,8 @@ function resolveHref(href, fromPath) {
 // quotes (markdown.js) and a name may be written with either.
 const straightQuotes = (s) => s.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"');
 
-// The text and links of one paragraph's HTML. Its quotes are straightQuotes'. `linkAt` maps each link's site path to where its words start in the text.
+// The text and links of one paragraph's HTML, its quotes read straight. `linkAt` maps each link's site path to where
+// its words start in the text.
 function readParagraph(html, fromPath) {
   const hrefs = new Set();
   const linkAt = new Map();
@@ -292,8 +293,9 @@ function openMarks(text) {
 
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// One whole-word pattern per name, its quotes read straight. A name of several words matches in any case; a one-word name only where it starts
-// with a capital as written, so "Six" is found and "six guards" is not. A name under two characters never matches.
+// One whole-word pattern per name, its quotes read straight. A name of several words matches in any case; a one-word
+// name only where it starts with a capital as written, so "Six" is found and "six guards" is not. A name under two
+// characters never matches.
 function termPattern(term) {
   if (Array.from(term).length < 2) return null;
   const words = straightQuotes(term).split(/\s+/).map(escapeRegExp);

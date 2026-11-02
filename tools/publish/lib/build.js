@@ -15,7 +15,7 @@ const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate
 const { isRoster } = require('./templates/nav');
 const { noticeText } = require('./notice');
 const { fontNamesOfFile, licenceOf } = require('./font-names');
-const { getsNoPage, decideNoPage, listedOnly } = require('./previews');
+const { getsNoPage, decideNoPage, noPageFor, listedOnly } = require('./previews');
 const { runSteps, packageScripts, packageNotes } = require('./settings/steps');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
 const { ignoringMark } = require('./heading-key');
@@ -1001,6 +1001,9 @@ function buildSite(options) {
   // `pages`, so none of them can name it or link to a file that is not built.
   // Which notes get no page is decided once, for this site: a listed-only prop is judged on the body this site shows.
   decideNoPage(published, gm ? { gm: true, show, excludeSections, excludeCallouts } : { excludeSections, excludeCallouts });
+  // The GM site: the pages the player site writes a page for, judged as the player site judges them (a listed-only prop
+  // whose words are all the GM's has a page here and none there), for the pictures a Story page may show.
+  const playerPaged = gm ? new Set(playerPublished.filter((p) => !noPageFor(p, { excludeSections, excludeCallouts }))) : null;
   pages = published.filter(p => !getsNoPage(p));
   // A page whose address leads through a link in a kept folder (a full build's clean leaves only those; a fast build
   // cleans nothing) is never written (#507). It leaves the list here, like an unpublished note, so no link, index or
@@ -1220,13 +1223,13 @@ function buildSite(options) {
   applyFold(foldPlan(storyProbe), linkMap);
   LOWER_KEYS.delete(linkMap);   // its folded spellings were read from the old addresses
   // The pages a Story page may picture beside its recap (story-figures.js), read once, after the fold has given each
-  // page its final address. On the GM site only those the player site publishes, with a portrait the player site has
-  // (and this one too), by their names as players read them, so both sites picture the same pages under the same
-  // captions. Both spine calls below take this one list. A session's Story page also pictures the scenes played in it:
+  // page its final address. On the GM site only those the player site writes a page for, with a portrait the player
+  // site has (and this one too), by their names as players read them, so both sites picture the same pages under the
+  // same captions. Both spine calls below take this one list. A session's Story page also pictures the scenes played in it:
   // the scene notes never publish, and their pictures are named by the pages their places and people link, by the
   // same rules, with a picture both sites have. With `player_site.story.pictures` off there is none, and no picture is
   // copied for a Story page.
-  const figureRules = { onPlayerSite, excludeFields, overridesOf: (page) => fieldOverrides[vaultRelPathOf(page)] || {},
+  const figureRules = { onPlayerSite: playerPaged, excludeFields, overridesOf: (page) => fieldOverrides[vaultRelPathOf(page)] || {},
     marks: mark ? mark.marks : null };
   const scenesOf = storyPictures ? sceneCandidates(allNotes, { names: pageNames(pages, figureRules), imageMap: playerImages, linkMap,
     folded: (name) => foldedPagePath(linkMap, name) }) : null;

@@ -132,6 +132,8 @@ function noPageFor(page, site) {
   return isListedOnly(fm, '') && isListedOnly(fm, shownBody(page, site));
 }
 
+// `noPageFor(page, site)` asks for another site without deciding anything: the GM site asks it for the player site.
+
 // Decide, for one site's build (`site`: { gm, show, excludeSections, excludeCallouts }), which of `pages` get no page.
 function decideNoPage(pages, site = {}) {
   for (const page of pages) noPage.set(page, noPageFor(page, site));
@@ -165,4 +167,4 @@ function onlyBuiltPages(cards, isBuilt) {
   return out;
 }
 
-module.exports = { cardFor, rowsFor, buildPreviews, getsNoPage, decideNoPage, listedOnly, onlyBuiltPages };
+module.exports = { cardFor, rowsFor, buildPreviews, getsNoPage, decideNoPage, noPageFor, listedOnly, onlyBuiltPages };

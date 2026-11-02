@@ -203,6 +203,28 @@ describe('Story pictures: a wrap-up the player site holds back', () => {
   });
 });
 
+describe('Story pictures: a prop listed in its container with no page of its own on the player site', () => {
+  const s = buildBoth(storyVault({
+    ...PEOPLE,
+    '_attachments/key.png': png(),
+    'Documents/Bookshelf.md': '---\ntype: prop\nprop_kind: container\n---\nA tall shelf in the study.\n',
+    // Everything it says is the GM's: the player site lists it in the bookshelf with no page; the GM site gives it one.
+    'Documents/Brass Key.md': '---\ntype: prop\nprop_kind: object\nprop_container: "[[Bookshelf]]"\nportrait: key.png\n---\n<!-- gm-only -->\nIt opens the crypt.\n<!-- /gm-only -->\n',
+    'Sessions/Session 1 Wrap-Up.md': withRecap('The party found the Brass Key on a shelf.\n\nLater Captain Rook bought a round.'),
+  }));
+  after(() => s.cleanup());
+
+  it('is pictured on neither site: the GM page shows what the player page shows', () => {
+    assert.ok(!s.player.files().some((f) => /brass-key\.html$/.test(f)), 'no page on the player site');
+    assert.ok(s.gm.files().some((f) => /brass-key\.html$/.test(f)), 'a page on the GM site');
+    for (const site of [s.player, s.gm]) {
+      const page = read(site, STORY_1);
+      assert.ok(!page.includes('images/key.'), site === s.gm ? 'gm' : 'player');
+      assert.deepEqual(captions(page), ['Captain Rook']);
+    }
+  });
+});
+
 // A scene note never publishes; only its picture may, beside the paragraph that names one of its places or people.
 const SCENE_AT = 'Chapters/Chapter 1/Sessions/Session 1/Scenes/Scene_Docks.md';
 const scene = ({ played = '["[[Session 1]]"]', status = 'played', locations = '["[[The Docks]]"]', entities = '[]', picture = '![[scene-docks.png]]', tag = '1' } = {}) => `---
