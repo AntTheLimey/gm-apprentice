@@ -145,7 +145,8 @@ template keeps under GM Notes (`## World State`, `## Skipped Prep`),
 back under it. It also renames a recap under another title to
 `## Narrative Recap`, and notes a second recap-titled section without
 touching it. No setting lists player-facing sections. Those sections show on
-the session's Story page; a wrap-up has no page of its own.
+the session's Story page, or on the wrap-up's own page when no Story page
+takes it (it has no usable recap).
 
 ## Switches
 
