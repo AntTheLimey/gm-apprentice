@@ -4,6 +4,7 @@
 const { isWrapUp } = require('./session-hub');
 const { wikilinkRe, parseWikilink } = require('./wikilink');
 const { fenceStep } = require('./processor');
+const { canonicalNfc } = require('./unicode');
 
 const FOLD_LABELS = new WeakMap();   // link map -> Map of patched key -> title of the Story page it now points at
 
@@ -71,7 +72,7 @@ function labelFoldedHeadings(markdown, linkMap) {
 function labelFoldedLinks(markdown, linkMap, { headingsOnly = false, labels = null } = {}) {
   const text = String(markdown == null ? '' : markdown);
   if (!text.includes('[[')) return text;
-  const labelOf = (key) => (labels ? labels.get(key) : foldLabel(linkMap, key));
+  const labelOf = (key) => (labels ? labels.get(canonicalNfc(key)) : foldLabel(linkMap, key));
   const relabel = (line) => line.replace(wikilinkRe('g', true), (whole, body) => {
     if (whole[0] === '!') return whole;
     const parsed = parseWikilink(body);
@@ -91,6 +92,7 @@ function labelFoldedLinks(markdown, linkMap, { headingsOnly = false, labels = nu
   }).join('\n');
 }
 
-const foldLabel = (linkMap, key) => (FOLD_LABELS.get(linkMap) || new Map()).get(key);
+// Its keys are the link map's own, in NFC (unicode.js), so a key is read in NFC however its accents were typed.
+const foldLabel = (linkMap, key) => (FOLD_LABELS.get(linkMap) || new Map()).get(canonicalNfc(key));
 
 module.exports = { foldPlan, applyFold, foldLabelsOf, isFolded, foldLabel, labelFoldedHeadings, labelFoldedLinks };

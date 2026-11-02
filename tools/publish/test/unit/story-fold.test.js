@@ -37,6 +37,22 @@ describe('story fold', () => {
     assert.equal(labels.size, 2);
   });
 
+  it('a folded key is found however its accents are typed (NFC or NFD)', () => {
+    const { nfcLookupTable } = require('../../lib/unicode');
+    const { eventTemplate } = require('../../lib/templates/event');
+    const nfc = 'Sesión 1 Wrap'.normalize('NFC');
+    const nfd = nfc.normalize('NFD');
+    const w = wrap(nfc, 'sessions/s1-wrap.html');
+    const map = nfcLookupTable({ [nfc]: 'sessions/s1-wrap.html' });
+    applyFold(new Map([[w, unit]]), map);
+    assert.equal(foldLabel(map, nfd), 'Session 1');
+    const { labelFoldedHeadings } = require('../../lib/story-fold');
+    assert.equal(labelFoldedHeadings(`## [[${nfd}]]`, map), `## [[${nfd}|Session 1]]`);
+    const page = { title: 'E', displayTitle: 'E', outputPath: 'events/e.html', frontmatter: { type: 'event', participants: [`[[${nfd}]]`] } };
+    const html = eventTemplate(page, { html: '' }, () => '<nav></nav>', { siteTitle: 'T', footer: '', attachmentsDir: '_attachments' }, {}, map);
+    assert.match(html, /<a href="[^"]*ch-s1\.html">Session 1<\/a>/);
+  });
+
   it('a unit with no wrap-up and a non-wrap-up page fold nothing', () => {
     const notWrap = { frontmatter: { type: 'npc' }, outputPath: 'npcs/a.html' };
     const bare = { kind: 'session', outputPath: 'story/a.html', title: 'A', sourcePage: {} };
