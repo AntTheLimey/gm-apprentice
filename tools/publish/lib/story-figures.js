@@ -192,7 +192,9 @@ const imageSrc = (entry, fromPath) => encodeImageUrl(relativeHref(fromPath, `ima
 
 // The recap with each placed paragraph's float put just before its `<p>`: sides alternate from the right, one per
 // paragraph that has pictures, in reading order. Nothing else in the recap changes. `paragraphs` is what `placement`
-// was made from (paragraphsOf), so its `block` numbers count the same top-level elements.
+// was made from (paragraphsOf), so its `block` numbers count the same top-level elements. On the GM site a mark still
+// open where the paragraph starts is closed before the float and opened again just inside the `<p>`, so a picture
+// players also see is never drawn inside a GM mark.
 function figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs }) {
   const html = String(recapHtml || '');
   if (!placement || placement.size === 0) return html;
@@ -210,8 +212,15 @@ function figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs }) {
         + `<img src="${src}" alt="${title}" loading="lazy"><span class="story-figure__zoom" aria-hidden="true">${ZOOM}</span></a>`
         + `<figcaption>${title}</figcaption></figure>`;
     }).join('');
-    out += `${html.slice(last, at)}<div class="${classes.join(' ')}">${figs}</div>`;
-    last = at;
+    const open = openMarks(html.slice(0, at));
+    if (open.length === 0) {
+      out += `${html.slice(last, at)}<div class="${classes.join(' ')}">${figs}</div>`;
+      last = at;
+      return;
+    }
+    const tag = /^<p\b(?:"[^"]*"|'[^']*'|[^>"'])*>/i.exec(html.slice(at))[0];
+    out += `${html.slice(last, at)}${'\uE002'.repeat(open.length)}<div class="${classes.join(' ')}">${figs}</div>${tag}${open.join('')}`;
+    last = at + tag.length;
   });
   return out + html.slice(last);
 }

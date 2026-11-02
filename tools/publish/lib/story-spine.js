@@ -360,6 +360,8 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
 
   if (figures && images) {
     for (const unit of units) {
+      // A GM unit whose banner says players see another Story page here, with no heldBack, has no player page at this
+      // address to equal; its pictures still come from player-site pages only.
       const target = unit.heldBack || unit;
       target.recapHtml = withFigures(target.recapHtml, {
         candidates: figures.candidates, exclude: new Set([unit.sourcePage, unit.wrapUpPage].filter(Boolean)),

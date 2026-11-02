@@ -1,7 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { figureCandidates, paragraphsOf, mentionsOf, placeFigures } = require('../../lib/story-figures');
-const { createMarks } = require('../../lib/gm-marks');
+const { figureCandidates, paragraphsOf, mentionsOf, placeFigures, figuresHtml } = require('../../lib/story-figures');
+const { createMarks, renderMarks, withoutMarked } = require('../../lib/gm-marks');
 
 const imageMap = { 'a.png': { relPath: 'a.png' }, 'b.png': { relPath: 'b.png' } };
 const page = (title, fm = {}, extra = {}) => ({ displayTitle: title, outputPath: `npcs/${title.toLowerCase().replace(/\W+/g, '-')}.html`, frontmatter: { type: 'npc', portrait: 'a.png', ...fm }, ...extra });
@@ -24,6 +24,16 @@ describe('figureCandidates', () => {
     assert.deepEqual(cand(p, { excludeFields: ['aliases'] }).terms, ['Mara']);
     assert.deepEqual(cand(p, { excludeFields: ['aliases'], overridesOf: () => ({ include: ['aliases'] }) }).terms, ['Mara', 'Meg']);
     assert.deepEqual(cand(page('Mara', { aliases: 'Meg', publish_exclude_fields: ['aliases'] })).terms, ['Mara']);
+  });
+
+  it('a hidden alias names nothing in the recap; a hidden portrait gives no picture', () => {
+    const p = page('Mara', { aliases: ['Meg'] });
+    assert.deepEqual(mentions(cand(p, { excludeFields: ['aliases'] }), '<p>Then Meg left.</p>'), []);
+    assert.deepEqual(mentions(cand(page('Mara', { aliases: ['Meg'], publish_exclude_fields: ['aliases'] })), '<p>Then Meg left.</p>'), []);
+    assert.deepEqual(figureCandidates([p], { imageMap, excludeFields: ['portrait'] }), []);
+    assert.deepEqual(figureCandidates([page('Mara', { publish_exclude_fields: ['portrait'] })], { imageMap }), []);
+    // A field override that re-admits the field brings it back.
+    assert.equal(figureCandidates([p], { imageMap, excludeFields: ['portrait'], overridesOf: () => ({ include: ['portrait'] }) }).length, 1);
   });
 
   it('PCs, pages with no portrait, a portrait the build has no file for, a web-address portrait and excluded pages are not candidates', () => {
@@ -204,5 +214,43 @@ describe('placeFigures', () => {
 
   it('a recap with no paragraph places nothing', () => {
     assert.equal(place([A], '<ul><li>Alpha</li></ul><blockquote><p>Alpha</p></blockquote>').size, 0);
+  });
+});
+
+describe('figuresHtml', () => {
+  // How deep inside GM marks each `story-figures` float sits in the rendered GM page.
+  const markDepthAtFloats = (html) => {
+    const out = [];
+    const stack = [];
+    for (const m of html.matchAll(/<(\/?)(div|span)\b([^>]*)>/g)) {
+      if (m[1]) { stack.pop(); continue; }
+      if (/class="story-figures/.test(m[3])) out.push(stack.filter(Boolean).length);
+      stack.push(/gm-mark/.test(m[3]));
+    }
+    return out;
+  };
+
+  it('a GM mark still open at the placed paragraph is closed before the float and opened again inside the paragraph', () => {
+    const marks = createMarks();
+    const open = marks.open('gm_only', 'gm only');
+    const recap = `<p>${open}</p><p>Hidden words${marks.close()} and Alpha came.</p>`;
+    const paragraphs = paras(recap, { marks });
+    const A = cand(page('Alpha'));
+    const placement = placeFigures([A], paragraphs);
+    assert.deepEqual([...placement.keys()], [1]);
+    const out = figuresHtml(recap, placement, { fromPath: 'story/s1.html', imageMap, paragraphs });
+    assert.ok(out.includes(`\uE002<div class="story-figures">`), out);
+    assert.ok(out.includes(`</div><p>${open}Hidden words`), out);
+    assert.deepEqual(markDepthAtFloats(renderMarks(out, marks)), [0]);
+    // Players see the same words, with nothing left over from the mark.
+    const words = (html) => withoutMarked(html, marks).replace(/<div class="story-figures">[\s\S]*<\/div>/, '').replace(/<[^>]*>/g, '');
+    assert.equal(words(out), words(recap));
+  });
+
+  it('with no mark open the float goes straight before the paragraph', () => {
+    const recap = '<p>Alpha came.</p>';
+    const paragraphs = paras(recap);
+    const out = figuresHtml(recap, placeFigures([cand(page('Alpha'))], paragraphs), { fromPath: 'story/s1.html', imageMap, paragraphs });
+    assert.match(out, /^<div class="story-figures"><figure[\s\S]*<\/figure><\/div><p>Alpha came\.<\/p>$/);
   });
 });
