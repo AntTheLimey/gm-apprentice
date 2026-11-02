@@ -1225,10 +1225,10 @@ function buildSite(options) {
   // The pages a Story page may picture beside its recap (story-figures.js), read once, after the fold has given each
   // page its final address. On the GM site only those the player site writes a page for, with a portrait the player
   // site has (and this one too), by their names as players read them, so both sites picture the same pages under the
-  // same captions. Both spine calls below take this one list. A session's Story page also pictures the scenes played in it:
-  // the scene notes never publish, and their pictures are named by the pages their places and people link, by the
-  // same rules, with a picture both sites have. With `player_site.story.pictures` off there is none, and no picture is
-  // copied for a Story page.
+  // same captions. Both spine calls below take this one list. A session's Story page also pictures the scenes played
+  // in it: the scene notes never publish, and their pictures are named by the pages their places and people link, by
+  // the same rules, with a picture both sites have. With `player_site.story.pictures` off there is none, and no
+  // picture is copied for a Story page.
   const figureRules = { onPlayerSite: playerPaged, excludeFields, overridesOf: (page) => fieldOverrides[vaultRelPathOf(page)] || {},
     marks: mark ? mark.marks : null };
   const scenesOf = storyPictures ? sceneCandidates(allNotes, { names: pageNames(pages, figureRules), imageMap: playerImages, linkMap,
