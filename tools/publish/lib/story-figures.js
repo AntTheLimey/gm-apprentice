@@ -102,10 +102,11 @@ function readParagraph(html, fromPath) {
 // block to the next and what is marked is dropped before anything is read. `block` counts all top-level elements.
 function paragraphsOf(recapHtml, { fromPath, marks = null } = {}) {
   const out = [];
-  let depth = 0;
+  let open = [];   // the open tokens of marks still open, outermost first
   topLevelElements(recapHtml).forEach((el, block) => {
-    const kept = withoutMarked(OPEN_MARK.repeat(depth) + el.html, marks);
-    depth = markDepth(OPEN_MARK.repeat(depth) + el.html);
+    const html = open.join('') + el.html;
+    const kept = withoutMarked(html, marks);
+    open = openMarks(html);
     if (el.tag !== 'p') return;
     const { text, hrefs, linkAt } = readParagraph(kept, fromPath);
     const paragraph = { block, text, hrefs, hasImage: /<img\b/i.test(kept) };
@@ -115,11 +116,14 @@ function paragraphsOf(recapHtml, { fromPath, marks = null } = {}) {
   return out;
 }
 
-// How many marks are still open at the end of the text.
-function markDepth(text) {
-  let depth = 0;
-  for (const m of String(text).matchAll(/[0-9a-z]*|/g)) depth = m[0] === '' ? Math.max(0, depth - 1) : depth + 1;
-  return depth;
+// The open tokens of the marks still open at the end of the text, outermost first.
+function openMarks(text) {
+  const stack = [];
+  for (const m of String(text).matchAll(/\uE000[0-9a-z]*\uE001|\uE002/g)) {
+    if (m[0] === '\uE002') stack.pop();
+    else stack.push(m[0]);
+  }
+  return stack;
 }
 
 const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

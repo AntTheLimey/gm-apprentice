@@ -140,6 +140,14 @@ describe('paragraphsOf', () => {
     assert.deepEqual(mentionsOf(cand(page('Vex')), out), [{ para: 4, at: 0 }]);
   });
 
+  it('a mark carried across blocks keeps its own label, not another mark\'s', () => {
+    const marks = createMarks();
+    const seen = marks.open('gm_aliases', 'gm_aliases; players see: Vex');
+    const gm = marks.open('gm_only', 'gm only');
+    const html = `<p>The ${seen}Elias${marks.close()} came.</p><p>${gm}</p><p>Hidden.</p><p>${marks.close()}</p><p>After.</p>`;
+    assert.deepEqual(paras(html, { marks }).map((p) => p.text), ['The Vex came.', '', '', '', 'After.']);
+  });
+
   it('a mark labelled with what players see leaves those words', () => {
     const marks = createMarks();
     const open = marks.open('gm_aliases', 'gm_aliases; players see: Vex');
