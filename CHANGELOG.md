@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.121] — 2026-11-02
+
+A session's Story page now shows pictures of the people and places its recap names. Publish tool 1.61.0. No vault change is needed. Every published Story page gains pictures at the next deploy of both campaigns.
+
+### Added
+
+- Pictures on Story pages. A picture is set beside the first paragraph that mentions the page it belongs to, taken from that page's `portrait`. Who gets one: any page players can see (on the GM site, one players can also see) except player characters, the session's own page and its chapter. A mention is a link to the page, or its title or a public alias written in the text; a one-word name counts only when it starts with a capital, and `gm_aliases` never count. At most two pictures sit beside one paragraph; a page whose first mention is full takes the next, and is left out if none has room. A paragraph that already holds a picture you placed takes none, and a page whose picture you placed gets no second one. No word of the recap changes.
+- Scene pictures. A scene's picture shows beside the paragraph that names its places or people, with no caption. Scene text never publishes, and a scene marked `dropped` or `paused` never counts. A scene counts for a session through `played_in`, or without it through its `session:` link or its session folder's `Scenes/`.
+- `player_site.story.pictures` (on by default) turns the pictures off. Off, none are added; pictures you put in the recap stay. The GM site follows the player site's value. A site pinned to an older tool reads it as on.
+- Themes can style `div.story-figures` and `figure.story-figure`.
+
+### Changed
+
+- The lightbox opens a Story picture's full image. With JavaScript off, the picture links to the image.
+- In Canticle and Dead End, every published Story page gains pictures at the next deploy.
+
+---
+
 ## [1.10.120] — 2026-11-01
 
 Each session is one page on both sites: its wrap-up folds into its Story page, with the Memorable Moments as cards. Publish tool 1.60.0. No vault change is needed.
