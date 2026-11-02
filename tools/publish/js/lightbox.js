@@ -28,11 +28,20 @@
     if (e.key === 'Escape' && overlay.classList.contains('open')) close();
   });
 
-  document.querySelectorAll('.content img, .hero-banner-img, .hero-cinematic-img').forEach(function(el) {
+  document.querySelectorAll('.content img:not(.story-figure img), .hero-banner-img, .hero-cinematic-img').forEach(function(el) {
     el.style.cursor = 'pointer';
     el.addEventListener('click', function() {
       open(el.src, el.alt);
     });
+  });
+
+  // A Story page picture is a link to the full image: with this script on, the link opens the lightbox instead.
+  document.addEventListener('click', function(e) {
+    var a = e.target.closest && e.target.closest('a.story-figure__open');
+    if (!a) return;
+    e.preventDefault();
+    var pic = a.querySelector('img');
+    open(a.href, pic ? pic.alt : '');
   });
 
   window._lightbox = { open: open, close: close };

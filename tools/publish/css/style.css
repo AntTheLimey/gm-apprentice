@@ -893,6 +893,110 @@ body:has(#tab-story.active) .pull-quote-backstory {
   border-bottom-style: solid;
 }
 
+/* Pictures of the people and places a recap names, floated beside the paragraph that first names them. */
+.story-prose::after {
+  content: "";
+  display: block;
+  clear: both;
+}
+.story-figures {
+  float: right;
+  clear: right;
+  width: 184px;
+  margin: 8px 0 12px 24px;
+}
+.story-figures--left {
+  float: left;
+  clear: left;
+  margin: 8px 24px 12px 0;
+}
+.story-figures--two {
+  width: 204px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.story-figure {
+  margin: 0;
+}
+.story-figure__open {
+  display: block;
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-card);
+  color: var(--text);
+}
+.story-prose .story-figure__open {
+  border-bottom: 1px solid var(--border);
+}
+.story-figure__open img {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+  aspect-ratio: 3 / 4;
+  margin: 0;
+  border-radius: 0;
+}
+.story-figure--place .story-figure__open img {
+  aspect-ratio: 4 / 3;
+}
+.story-figures--two .story-figure__open img {
+  aspect-ratio: 1 / 1;
+}
+.story-figure figcaption {
+  font-family: var(--font-label, var(--font-body));
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--text-muted);
+  margin-top: 5px;
+}
+.story-figure__zoom {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, .35);
+  color: rgb(244, 244, 244);
+  opacity: .45;
+}
+.story-figure__open:hover .story-figure__zoom, .story-figure__open:focus-visible .story-figure__zoom {
+  opacity: 1;
+  background: rgba(0, 0, 0, .55);
+}
+@media (max-width: 600px) {
+  .story-figures {
+    width: 110px;
+    margin: 6px 0 8px 14px;
+  }
+  .story-figures--left {
+    margin: 6px 14px 8px 0;
+  }
+  .story-figures--two {
+    width: 110px;
+  }
+  .story-figures--two .story-figure:nth-child(2) {
+    display: none;
+  }
+  .story-figure figcaption {
+    font-size: 11px;
+  }
+  .story-figure__zoom {
+    width: 16px;
+    height: 16px;
+    top: 4px;
+    right: 4px;
+    opacity: .4;
+  }
+}
+
 /* ===== STORY MEMORABLE MOMENTS =====
    A grid of cards under the story: the kind, the moment (narration or speech, one style), its speaker, then the
    context. The note is shown as written: no quote marks are added. */

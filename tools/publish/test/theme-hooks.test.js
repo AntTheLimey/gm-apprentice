@@ -9,6 +9,7 @@ const path = require('node:path');
 const { buildBoth } = require('./helpers/gm-build');
 const { HOOKS } = require('../lib/theme-hooks');
 const { CHAPTER, WRAP_1, SESSION } = require('./helpers/story-vault');
+const { makePng } = require('./helpers/make-png');
 
 const FILES = {
   'NPCs/Mara Quill.md': '---\ntype: npc\noccupation: Ferry pilot\n---\n\nShe has run the north channel for twenty years.\n\nShe knows every buoy.\n\n## Current Status\n\nWaiting out the fog.\n\n## GM Notes\n\nShe carries letters for the smugglers.\n',
@@ -22,11 +23,14 @@ const FILES = {
   'Heritages/Tidefolk.md': '---\ntype: heritage\n---\n\nPeople of the shore.\n',
   'World/Tides.md': '---\ntype: world_domain\n---\n\nThe tides rule the town.\n',
   'Documents/Harbour Ledger.md': '---\ntype: document\n---\n\nA ledger of every berth.\n',
+  // A portrait NPC the Session 2 recap names, so the Story page carries a picture.
+  '_attachments/rook.png': makePng(30, 40),
+  'NPCs/Captain Rook.md': '---\ntype: npc\ntitle: Captain Rook\nportrait: rook.png\n---\n\nCaptain of the night ferry.\n',
   '_attachments/Fog Header.png': 'not-really-a-png',
   // A chapter with one played session and its wrap-up, whose Memorable Moments make the Story page's cards.
   'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER,
   'Sessions/Session 2.md': SESSION(2),
-  'Sessions/Session 2 Wrap-Up.md': WRAP_1.replace(/Session 1/g, 'Session 2').replace('session_number: 1', 'session_number: 2'),
+  'Sessions/Session 2 Wrap-Up.md': WRAP_1.replace(/Session 1/g, 'Session 2').replace('session_number: 1', 'session_number: 2').replace('where [[Mara Quill]] waited', 'where Captain Rook waited'),
 };
 const STORY = 'story/chapter-1-docks-session-2.html';
 
@@ -55,6 +59,8 @@ const SEEN_ON = {
   'section.story-moments': [STORY],
   'article.moment-card': [STORY],
   'p.moment-kind[data-kind]': [STORY],
+  'div.story-figures': [STORY],
+  'figure.story-figure': [STORY],
 };
 
 // A regular expression that finds an element a simple selector (tag, one class, one attribute) names.
