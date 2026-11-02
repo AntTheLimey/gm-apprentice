@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { figureCandidates, paragraphsOf, mentionsOf } = require('../../lib/story-figures');
+const { figureCandidates, paragraphsOf, mentionsOf, placeFigures } = require('../../lib/story-figures');
 const { createMarks } = require('../../lib/gm-marks');
 
 const imageMap = { 'a.png': { relPath: 'a.png' }, 'b.png': { relPath: 'b.png' } };
@@ -144,5 +144,57 @@ describe('paragraphsOf', () => {
     const marks = createMarks();
     const open = marks.open('gm_aliases', 'gm_aliases; players see: Vex');
     assert.equal(paras(`<p>The ${open}Elias${marks.close()} came.</p>`, { marks })[0].text, 'The Vex came.');
+  });
+});
+
+describe('placeFigures', () => {
+  const [A, B, C] = ['Alpha', 'Bravo', 'Charlie'].map((t) => cand(page(t)));
+  const place = (cs, html, options) => placeFigures(cs, paras(html), options);
+  const titles = (map) => Object.fromEntries([...map].map(([k, v]) => [k, v.map((c) => c.title)]));
+
+  it('two per paragraph; the third goes to its next mention', () => {
+    const out = place([A, B, C], '<p>Alpha, Bravo and Charlie.</p><p>Nobody.</p><p>Charlie again.</p>');
+    assert.deepEqual(titles(out), { 0: ['Alpha', 'Bravo'], 2: ['Charlie'] });
+  });
+
+  it('left out when no mention has room; never beside a paragraph that does not name it', () => {
+    const out = place([A, B, C], '<p>Alpha, Bravo and Charlie.</p><p>Nobody.</p>');
+    assert.deepEqual(titles(out), { 0: ['Alpha', 'Bravo'] });
+    assert.ok(![...out.values()].flat().includes(C));
+  });
+
+  it('first mention order decides, then position in the paragraph, then title', () => {
+    assert.deepEqual(titles(place([A, B], '<p>Bravo met Alpha.</p>')), { 0: ['Bravo', 'Alpha'] });
+    assert.deepEqual(titles(place([B, A, C], '<p>Charlie later.</p><p>Bravo and Alpha.</p>')), { 0: ['Charlie'], 1: ['Bravo', 'Alpha'] });
+    const x = cand(page('Xavier'));
+    const y = cand(page('Yves', { aliases: ['Xavier'] }));
+    assert.deepEqual(titles(place([y, x], '<p>Xavier.</p>')), { 0: ['Xavier', 'Yves'] });
+  });
+
+  it('a paragraph with an <img> takes none', () => {
+    const out = place([A], '<p>Alpha <img src="a.png"></p><p>Alpha.</p>');
+    assert.deepEqual(titles(out), { 1: ['Alpha'] });
+  });
+
+  it('a taken key is skipped', () => {
+    assert.equal(place([A], '<p>Alpha.</p>', { taken: new Set(['a.png']) }).size, 0);
+    const other = cand(page('Other', { portrait: 'b.png' }));
+    assert.deepEqual(titles(place([A, other], '<p>Alpha and Other.</p>', { taken: new Set(['a.png']) })), { 0: ['Other'] });
+  });
+
+  it('perParagraph can be changed', () => {
+    assert.deepEqual(titles(place([A, B, C], '<p>Alpha Bravo Charlie.</p>', { perParagraph: 3 })), { 0: ['Alpha', 'Bravo', 'Charlie'] });
+  });
+
+  it('a title inside another page\'s title: both are placed once, never twice', () => {
+    const goodwin = cand(page('Goodwin'));
+    const peter = cand(page('Peter Goodwin'));
+    const out = place([goodwin, peter], '<p>Peter Goodwin smiled.</p>');
+    assert.deepEqual(titles(out), { 0: ['Peter Goodwin', 'Goodwin'] });
+    assert.equal([...out.values()].flat().length, 2);
+  });
+
+  it('a recap with no paragraph places nothing', () => {
+    assert.equal(place([A], '<ul><li>Alpha</li></ul><blockquote><p>Alpha</p></blockquote>').size, 0);
   });
 });

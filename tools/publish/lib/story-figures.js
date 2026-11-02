@@ -159,4 +159,23 @@ function mentionsOf(candidate, paragraphs) {
   return out;
 }
 
-module.exports = { figureCandidates, paragraphsOf, mentionsOf };
+// Which paragraph each picture goes beside: a Map from paragraph index to the candidates shown there, at most
+// `perParagraph` each. Candidates claim in the order of their first mention (paragraph, then position, then title);
+// each takes the first paragraph that names it and has room, and is left out if none does. A paragraph that already
+// holds an image takes none, and a candidate whose key is in `taken` (a picture the recap already shows) is skipped.
+function placeFigures(candidates, paragraphs, { perParagraph = 2, taken = new Set() } = {}) {
+  const slots = new Map();
+  const open = (i) => !paragraphs[i].hasImage && (slots.get(i) || []).length < perParagraph;
+  const ranked = candidates
+    .filter((c) => !taken.has(c.key))
+    .map((c) => ({ c, ms: mentionsOf(c, paragraphs) }))
+    .filter((x) => x.ms.length > 0)
+    .sort((a, b) => a.ms[0].para - b.ms[0].para || a.ms[0].at - b.ms[0].at || a.c.title.localeCompare(b.c.title));
+  for (const { c, ms } of ranked) {
+    const spot = ms.find((m) => open(m.para));
+    if (spot) slots.set(spot.para, [...(slots.get(spot.para) || []), c]);
+  }
+  return slots;
+}
+
+module.exports = { figureCandidates, paragraphsOf, mentionsOf, placeFigures };
