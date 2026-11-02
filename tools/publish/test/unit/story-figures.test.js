@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { figureCandidates, paragraphsOf, mentionsOf, placeFigures, figuresHtml, withFigures, pageNames, scenePicture, sceneCandidates } = require('../../lib/story-figures');
+const { figureCandidates, paragraphsOf, mentionsOf, placeFigures, figuresHtml, withFigures, pageNames, nameHolders, scenePicture, sceneCandidates } = require('../../lib/story-figures');
 const { createMarks, renderMarks, withoutMarked } = require('../../lib/gm-marks');
 
 const imageMap = { 'a.png': { relPath: 'a.png' }, 'b.png': { relPath: 'b.png' } };
@@ -236,6 +236,24 @@ describe('placeFigures', () => {
     assert.deepEqual(titles(place([james, anne], '<p>Lady Anne Pelham poured for <a href="../npcs/james-pelham.html">him</a>.</p>')), { 0: ['Lady Anne Pelham', 'James Pelham'] });
     // Without the longer page among the candidates, the shorter name counts.
     assert.deepEqual(titles(place([james], '<p>Lady Anne Pelham poured.</p>')), { 0: ['James Pelham'] });
+  });
+
+  it('longest match wins against the name of every page players see, portrait or not, PCs too', () => {
+    const james = cand(page('James Pelham', { aliases: ['Pelham'] }));
+    const anne = page('Lady Anne Pelham', { portrait: undefined });
+    const pc = page('Ned Pelham Junior', { type: 'pc', portrait: undefined });
+    const hidden = page('Mrs Pelham Smith', { portrait: undefined });
+    const holders = nameHolders([anne, pc, hidden, james.page], { onPlayerSite: new Set([anne, pc, james.page]) });
+    assert.deepEqual(holders.map((h) => h.terms), [['Lady Anne Pelham'], ['Ned Pelham Junior'], ['James Pelham', 'Pelham']]);
+    const draw = (recap) => withFigures(recap, { candidates: [james], blockers: holders, fromPath: 'story/s1.html', imageMap });
+    assert.ok(!draw('<p>Lady Anne Pelham arrived.</p>').includes('<figure'));
+    assert.ok(!draw('<p>Ned Pelham Junior arrived.</p>').includes('<figure'));
+    // A page players do not see names nothing; the candidate's own names never block it.
+    assert.ok(draw('<p>Mrs Pelham Smith arrived.</p>').includes('<figcaption>James Pelham</figcaption>'));
+    assert.ok(draw('<p>James Pelham arrived.</p>').includes('<figcaption>James Pelham</figcaption>'));
+    // An alias beginning with "The" names nothing here either.
+    const desc = nameHolders([page('Gatehouse', { aliases: ['The Pelham Arms'], portrait: undefined })]);
+    assert.ok(withFigures('<p>The Pelham Arms.</p>', { candidates: [james], blockers: desc, fromPath: 'story/s1.html', imageMap }).includes('<figure'));
   });
 
   it('two pages with the same name both count', () => {

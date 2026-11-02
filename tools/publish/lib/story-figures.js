@@ -33,13 +33,13 @@ function namesOf(page, published, marks) {
   return { title, terms };
 }
 
-// The pages that may be named for a picture, each with its published frontmatter: not a PC, not one of `exclude`,
-// and on the GM site (`onPlayerSite`, a Set of the pages the player site publishes) only those.
-function* namedPages(pages, { onPlayerSite = null, exclude = new Set(), excludeFields = [], overridesOf = null } = {}) {
+// The pages that may be named for a picture, each with its published frontmatter: not a PC (unless `pcs`), not one
+// of `exclude`, and on the GM site (`onPlayerSite`, a Set of the pages the player site publishes) only those.
+function* namedPages(pages, { onPlayerSite = null, exclude = new Set(), excludeFields = [], overridesOf = null, pcs = false } = {}) {
   for (const page of pages) {
     if (exclude.has(page) || (onPlayerSite && !onPlayerSite.has(page))) continue;
     const source = page.sourceFrontmatter || page.frontmatter || {};
-    if (source.type === 'pc') continue;
+    if (source.type === 'pc' && !pcs) continue;
     yield { page, source, published: publishedFrontmatter(page.frontmatter || {}, excludeFields, (overridesOf && overridesOf(page)) || {}) };
   }
 }
@@ -65,6 +65,17 @@ function figureCandidates(pages, { imageMap, marks = null, ...options } = {}) {
 function pageNames(pages, { marks = null, ...options } = {}) {
   const out = new Map();
   for (const { page, published } of namedPages(pages, options)) out.set(page.outputPath, namesOf(page, published, marks).terms);
+  return out;
+}
+
+// The names of every page players see, PCs too, portrait or not: [{ outputPath, terms }] in `pages` order, with
+// namesOf's names and namedPages' rules otherwise. A name of a candidate inside a longer one of these is not a mention
+// (mentionsOf): "Lady Anne Pelham" names Lady Anne, never James Pelham by his alias "Pelham".
+function nameHolders(pages, { marks = null, ...options } = {}) {
+  const out = [];
+  for (const { page, published } of namedPages(pages, { ...options, pcs: true })) {
+    out.push({ outputPath: page.outputPath, terms: namesOf(page, published, marks).terms });
+  }
   return out;
 }
 
@@ -337,10 +348,11 @@ function readSpans(candidate, p) {
 // Where a candidate is mentioned: each paragraph (index into `paragraphs`) that links it or names it, in order, with
 // the offset of the first such link or name. The candidate's link targets are `hrefs` when it has them, else its
 // `outputPath`. Longest match wins: a name lying wholly inside a longer name of one of `others` (the other
-// candidates) does not count there, so "Pelham" is not read inside "Lady Anne Pelham"; a link always counts.
+// candidates, and nameHolders' pages but the candidate's own) does not count there, so "Pelham" is not read inside
+// "Lady Anne Pelham"; a link always counts.
 function mentionsOf(candidate, paragraphs, others = []) {
   const targets = candidate.hrefs ? [...candidate.hrefs] : [candidate.outputPath];
-  const rivals = others.filter((o) => o !== candidate);
+  const rivals = others.filter((o) => o !== candidate && !targets.includes(o.outputPath));
   const out = [];
   paragraphs.forEach((p, para) => {
     let at = Infinity;
@@ -361,15 +373,16 @@ function mentionsOf(candidate, paragraphs, others = []) {
 
 // Which paragraph each picture goes beside: a Map from paragraph index to the candidates shown there, at most
 // `perParagraph` each. Page pictures claim first, then scenes' (`scene`); within each, candidates claim in the order
-// of their first mention (paragraph, then position, then title), read with mentionsOf against all the others. Each takes the first paragraph that names it and has room, and is left
+// of their first mention (paragraph, then position, then title), read with mentionsOf against all the others and
+// `blockers` (nameHolders). Each takes the first paragraph that names it and has room, and is left
 // out if none does. A paragraph that already holds an image takes none, and a candidate whose key is in `taken` (a
 // picture the recap already shows) is skipped.
-function placeFigures(candidates, paragraphs, { perParagraph = 2, taken = new Set() } = {}) {
+function placeFigures(candidates, paragraphs, { perParagraph = 2, taken = new Set(), blockers = [] } = {}) {
   const slots = new Map();
   const open = (i) => !paragraphs[i].hasImage && (slots.get(i) || []).length < perParagraph;
   const ranked = candidates
     .filter((c) => !taken.has(c.key))
-    .map((c) => ({ c, ms: mentionsOf(c, paragraphs, candidates) }))
+    .map((c) => ({ c, ms: mentionsOf(c, paragraphs, [...candidates, ...blockers]) }))
     .filter((x) => x.ms.length > 0)
     .sort((a, b) => Number(!!a.c.scene) - Number(!!b.c.scene) || a.ms[0].para - b.ms[0].para || a.ms[0].at - b.ms[0].at || a.c.title.localeCompare(b.c.title));
   for (const { c, ms } of ranked) {
@@ -389,9 +402,9 @@ const imageSrc = (entry, fromPath) => encodeImageUrl(relativeHref(fromPath, `ima
 // paragraph that has pictures, in reading order. Nothing else in the recap changes. `paragraphs` is what `placement`
 // was made from (paragraphsOf), so its `block` numbers count the same top-level elements. On the GM site a mark still
 // open where the paragraph starts is closed before the float and opened again just inside the `<p>`, so a picture
-// players also see is never drawn inside a GM mark. `candidates`: all that were placed from, read as mentionsOf reads
-// them.
-function figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs, candidates = [] }) {
+// players also see is never drawn inside a GM mark. `candidates` and `blockers`: what placement was read against, read
+// as mentionsOf reads them.
+function figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs, candidates = [], blockers = [] }) {
   const html = String(recapHtml || '');
   if (!placement || placement.size === 0) return html;
   const starts = topLevelElements(html).map((el) => el.start);
@@ -406,7 +419,7 @@ function figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs, can
       // A scene's picture has no caption and an empty alt, and its link a name that says nothing of it: nothing of the
       // scene note reaches the page. A page's picture that a scene joined (withFigures) is drawn as the scene's beside
       // a paragraph that never names the page.
-      const scene = c.scene || (c.own && mentionsOf(c.own, [paragraphs[para]], candidates.filter((o) => o !== c)).length === 0);
+      const scene = c.scene || (c.own && mentionsOf(c.own, [paragraphs[para]], [...candidates.filter((o) => o !== c), ...blockers]).length === 0);
       const title = scene ? '' : escapeText(c.title);
       return `<figure class="story-figure${c.place || scene ? ' story-figure--place' : ''}">`
         + `<a class="story-figure__open" href="${src}"${scene ? ' aria-label="Open picture"' : ''}>`
@@ -444,9 +457,9 @@ function shownImages(recapHtml, { fromPath, imageMap, marks = null }) {
 // whose picture is already a candidate's (a page's portrait, or another scene's) joins that candidate: one picture,
 // placed at the first mention of any of their pages. It is drawn as that candidate is where the paragraph names the
 // candidate's own page (`own`: its names and links), and as a scene's picture where only the scene's pages are named,
-// so a caption never names someone the paragraph does not. Each picture placed is added to `usedImages` so the build
-// copies it.
-function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), fromPath, imageMap, usedImages = null, marks = null }) {
+// so a caption never names someone the paragraph does not. `blockers` (nameHolders) are the names of every page
+// players see, for mentionsOf. Each picture placed is added to `usedImages` so the build copies it.
+function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), blockers = [], fromPath, imageMap, usedImages = null, marks = null }) {
   const all = [];
   for (const c of [...(candidates || []).filter((x) => !exclude.has(x.page)), ...scenes]) {
     const at = c.scene ? all.findIndex((x) => x.key === c.key) : -1;
@@ -460,9 +473,9 @@ function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), 
   if (!recapHtml || all.length === 0) return recapHtml;
   const paragraphs = paragraphsOf(recapHtml, { fromPath, marks });
   const taken = shownImages(recapHtml, { fromPath, imageMap, marks });
-  const placement = placeFigures(all, paragraphs, { taken });
+  const placement = placeFigures(all, paragraphs, { taken, blockers });
   if (usedImages) for (const shown of placement.values()) for (const c of shown) usedImages.add(c.key);
-  return figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs, candidates: all });
+  return figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs, candidates: all, blockers });
 }
 
-module.exports = { figureCandidates, pageNames, scenePicture, sceneCandidates, paragraphsOf, mentionsOf, placeFigures, figuresHtml, shownImages, withFigures };
+module.exports = { figureCandidates, pageNames, nameHolders, scenePicture, sceneCandidates, paragraphsOf, mentionsOf, placeFigures, figuresHtml, shownImages, withFigures };

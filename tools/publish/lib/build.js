@@ -32,7 +32,7 @@ const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = requ
 const fontsLib = require('./fonts');
 const { KINDS, parseMoments, momentsHtml } = require('./story-moments');
 const { buildStorySpine, probeSpine, gmStoryNotes, storyPagesFor, chapterOfSession, characterStoryGroup } = require('./story-spine');
-const { figureCandidates, pageNames, sceneCandidates } = require('./story-figures');
+const { figureCandidates, pageNames, nameHolders, sceneCandidates } = require('./story-figures');
 const { foldPlan, applyFold, isFolded, labelFoldedHeadings } = require('./story-fold');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
@@ -1227,14 +1227,16 @@ function buildSite(options) {
   // site has (and this one too), by their names as players read them, so both sites picture the same pages under the
   // same captions. Both spine calls below take this one list. A session's Story page also pictures the scenes played
   // in it: the scene notes never publish, and their pictures are named by the pages their places and people link, by
-  // the same rules, with a picture both sites have. With `player_site.story.pictures` off there is none, and no
-  // picture is copied for a Story page.
+  // the same rules, with a picture both sites have. A name counts only where it is not inside a longer name of any
+  // page players see (nameHolders, the same pages, PCs too). With `player_site.story.pictures` off there is none, and
+  // no picture is copied for a Story page.
   const figureRules = { onPlayerSite: playerPaged, excludeFields, overridesOf: (page) => fieldOverrides[vaultRelPathOf(page)] || {},
     marks: mark ? mark.marks : null };
   const scenesOf = storyPictures ? sceneCandidates(allNotes, { names: pageNames(pages, figureRules), imageMap: playerImages, linkMap,
     folded: (name) => foldedPagePath(linkMap, name) }) : null;
   const storyFigures = storyPictures ? { candidates: figureCandidates(pages, { imageMap: playerImages, ...figureRules })
     .filter((c) => c.key in imageMap),
+    blockers: nameHolders(pages, figureRules),
     scenesFor: (unit) => scenesOf(unit).filter((c) => c.key in imageMap) } : null;
 
   // A PC note whose link or embed labels would change its headings is withheld whole

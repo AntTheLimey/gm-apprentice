@@ -225,6 +225,21 @@ describe('Story pictures: a prop listed in its container with no page of its own
   });
 });
 
+describe('Story pictures: longest match wins against a page with no portrait', () => {
+  const s = buildBoth(storyVault({
+    ...PEOPLE,
+    '_attachments/james.png': png(),
+    'NPCs/James Pelham.md': note('npc', 'James Pelham', 'james.png', 'aliases: ["Pelham"]\n'),
+    'NPCs/Lady Anne Pelham.md': note('npc', 'Lady Anne Pelham', null),
+    'Sessions/Session 1 Wrap-Up.md': withRecap('Lady Anne Pelham arrived.\n\nLater Captain Rook bought a round.'),
+  }));
+  after(() => s.cleanup());
+
+  it('"Pelham" inside "Lady Anne Pelham" pictures nothing on either site', () => {
+    for (const site of [s.player, s.gm]) assert.deepEqual(captions(read(site, STORY_1)), ['Captain Rook']);
+  });
+});
+
 describe('Story pictures: longest match wins', () => {
   const s = buildBoth(storyVault({
     ...PEOPLE,
