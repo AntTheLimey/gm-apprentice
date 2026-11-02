@@ -258,6 +258,22 @@ describe('the GM Story page: a wrap-up linked only to a session players do not s
   });
 });
 
+// A recap that players read as the words standing in for a withheld name is the same recap on the GM site.
+describe('the GM Story page: a recap that is only a withheld name', () => {
+  it('both sites pick the wrap-up\'s recap; the GM page exists where players have one', () => {
+    const wrap = WRAP_1.replace('The party reached the docks at dusk, where [[Mara Quill]] waited with a lantern and a ledger.', '[[Lord Zorn]]');
+    const s = buildBoth(storyVault({ 'Sessions/Session 1 Wrap-Up.md': wrap,
+      '_meta/Lord Zorn.md': '---\ntype: npc\npublish: false\nwithheld: true\n---\n\nThe hidden hand.\n' }));
+    try {
+      assert.ok(read(s.player, STORY_1).includes('someone'));
+      assert.ok(s.gm.exists(...STORY_1.split('/')), 'the GM site has the Story page players have');
+      const page = read(s.gm, STORY_1);
+      assert.ok(page.includes('Lord Zorn') && page.includes('LOOT-KEY-1'));
+      assert.equal(nestingFault(page), null);
+    } finally { s.cleanup(); }
+  });
+});
+
 // A held-back wrap-up with no recap of its own: the unit's recap falls back to the players' own, which shows once,
 // unmarked, and the mark holds only the wrap-up's parts.
 describe('the GM Story page: a held-back wrap-up with no recap of its own', () => {

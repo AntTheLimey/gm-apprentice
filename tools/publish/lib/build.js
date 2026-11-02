@@ -2236,7 +2236,7 @@ function buildSite(options) {
   // from that filtered set regardless of whether a manifest exists, so gating this on
   // `manifest` just meant a manifest-less player build shipped every GM-only image.
   // A recap's picture counts as used: the story pages are rendered once here, for the set only.
-  if (!onlySheets) buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages, warn: true }, { marked: gm, players: storyPlayers });
+  if (!onlySheets) buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages, warn: true }, { marked: gm, marks: mark ? mark.marks : null, players: storyPlayers });
   const filteredMap = {};
   for (const [basename, entry] of Object.entries(imageMap)) {
     if (usedImages.has(basename)) filteredMap[basename] = entry;
@@ -2492,7 +2492,7 @@ function buildSite(options) {
 
     // The story: its chapters, each PC's own story, its contents page.
     // On the GM site each Story page reads its wrap-up's marked view: its GM-only parts in place, marked.
-    const spine = buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages }, { marked: gm, players: storyPlayers });
+    const spine = buildStorySpine(pages, linkMap, storyPairs, { imageMap, usedImages }, { marked: gm, marks: mark ? mark.marks : null, players: storyPlayers });
     // The fold was planned on the probe spine (probeSpine), which reads recaps as this one does. Should the two ever
     // disagree, a folded wrap-up would be on no page: said, never silent.
     if (live) {
