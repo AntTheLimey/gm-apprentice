@@ -308,12 +308,13 @@ describe('Story pictures: a scene whose picture is the portrait of a page the re
   }));
   after(() => s.cleanup());
 
-  it('is placed at the first mention of the scene\'s places, as the page\'s picture; both sites agree and no scene text shows', () => {
+  it('is placed at the first mention of the scene\'s places, as the scene\'s picture: no name of a page the paragraph never names; both sites agree and no scene text shows', () => {
     for (const site of [s.player, s.gm]) {
       const page = read(site, STORY_1);
       assert.equal((page.match(/images\/scene-docks\./g) || []).length, 2, 'one figure: its link and its img');
-      assert.match(page, /alt="Mara Quill" loading="lazy">[\s\S]*?<\/figure><\/div><p>The party reached/);
-      assert.deepEqual(captions(page), ['Mara Quill', 'Captain Rook']);
+      assert.match(page, /images\/scene-docks\.(png|webp)" alt="" loading="lazy">[\s\S]*?<\/figure><\/div><p>The party reached/);
+      assert.ok(!page.includes('alt="Mara Quill"'));
+      assert.deepEqual(captions(page), ['Captain Rook']);
       for (const [file, text] of builtText(site, { gm: site === s.gm })) {
         for (const needle of ['SCENESECRET-1', 'SCENETITLE-1', 'smugglers unload']) assert.ok(!text.includes(needle), `${needle} in ${file}`);
       }

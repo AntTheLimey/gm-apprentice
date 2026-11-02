@@ -404,7 +404,7 @@ describe('sceneCandidates', () => {
     assert.ok(!html.includes('<figcaption>'));
   });
 
-  it('a scene whose picture is a portrait offered: one picture, at the first mention of the page or the scene\'s places, with the page\'s caption', () => {
+  it('a scene whose picture is a portrait offered: one picture, at the first mention of the page or the scene\'s places', () => {
     const smith = { outputPath: 'npcs/old-smith.html', displayTitle: 'Old Smith', frontmatter: { type: 'npc', portrait: 'a.png' } };
     const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, {})], { names, imageMap, linkMap })(unit1);
     const portrait = cand(smith);
@@ -413,14 +413,29 @@ describe('sceneCandidates', () => {
     const html = withFigures('<p>Nothing yet.</p><p>Off to the Docks Quarter.</p><p>Old Smith waits.</p>', { candidates: [portrait], scenes: [c], fromPath: 'story/s1.html', imageMap, usedImages: used });
     assert.equal((html.match(/<figure /g) || []).length, 1);
     assert.ok(html.indexOf('<figure') < html.indexOf('Off to'), html);
-    assert.ok(html.includes('<figcaption>Old Smith</figcaption>') && html.includes('alt="Old Smith"'));
-    assert.ok(!html.includes('story-figure--place'));
     assert.deepEqual([...used], ['a.png']);
     assert.deepEqual(portrait, before);
-    const linked = withFigures('<p>To <a href="../locations/the-docks.html">the pier</a>.</p>', { candidates: [portrait], scenes: [c], fromPath: 'story/s1.html', imageMap });
-    assert.ok(linked.includes('<figcaption>Old Smith</figcaption>'));
     const own = withFigures('<p>Old Smith at the Docks Quarter.</p>', { candidates: [portrait], scenes: [c], exclude: new Set([smith]), fromPath: 'story/s1.html', imageMap });
     assert.ok(!own.includes('<figcaption>') && own.includes('alt=""'), own);
+  });
+
+  it('a merged picture beside a paragraph that names only the scene\'s pages is drawn as the scene\'s: no name of the page', () => {
+    const smith = { outputPath: 'npcs/old-smith.html', displayTitle: 'Old Smith', frontmatter: { type: 'npc', portrait: 'a.png' } };
+    const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, {})], { names, imageMap, linkMap })(unit1);
+    const portrait = cand(smith);
+    const draw = (recap) => withFigures(recap, { candidates: [portrait], scenes: [c], fromPath: 'story/s1.html', imageMap });
+    for (const recap of ['<p>Nothing yet.</p><p>Off to the Docks Quarter.</p><p>Old Smith waits.</p>', '<p>To <a href="../locations/the-docks.html">the pier</a>.</p>']) {
+      const html = draw(recap);
+      assert.equal((html.match(/<figure /g) || []).length, 1, html);
+      assert.ok(!html.includes('Old Smith</figcaption>') && !html.includes('alt="Old Smith"'), html);
+      assert.ok(!html.includes('<figcaption>') && html.includes('alt=""') && html.includes('story-figure--place'), html);
+    }
+    // Beside a paragraph that names the page itself, it is the page's picture, under its name.
+    for (const recap of ['<p>Old Smith at the Docks Quarter.</p>', '<p>Then <a href="../npcs/old-smith.html">he</a> came.</p><p>The Docks Quarter.</p>']) {
+      const html = draw(recap);
+      assert.ok(html.includes('<figcaption>Old Smith</figcaption>') && html.includes('alt="Old Smith"'), html);
+      assert.ok(!html.includes('story-figure--place'), html);
+    }
   });
 
   it('a scene whose picture is a portrait already offered, or already shown, adds nothing', () => {

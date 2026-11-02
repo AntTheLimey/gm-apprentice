@@ -351,11 +351,13 @@ function figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs }) {
     const classes = ['story-figures', ...(n % 2 ? ['story-figures--left'] : []), ...(shown.length > 1 ? ['story-figures--two'] : [])];
     const figs = shown.map((c) => {
       const src = escapeText(imageSrc(imageMap[c.key], fromPath));
-      // A scene's picture has no caption and an empty alt: nothing of the scene note reaches the page.
-      const title = c.scene ? '' : escapeText(c.title);
-      return `<figure class="story-figure${c.place ? ' story-figure--place' : ''}"><a class="story-figure__open" href="${src}">`
+      // A scene's picture has no caption and an empty alt: nothing of the scene note reaches the page. A page's
+      // picture that a scene joined (withFigures) is drawn as the scene's beside a paragraph that never names the page.
+      const scene = c.scene || (c.own && mentionsOf(c.own, [paragraphs[para]]).length === 0);
+      const title = scene ? '' : escapeText(c.title);
+      return `<figure class="story-figure${c.place || scene ? ' story-figure--place' : ''}"><a class="story-figure__open" href="${src}">`
         + `<img src="${src}" alt="${title}" loading="lazy"><span class="story-figure__zoom" aria-hidden="true">${ZOOM}</span></a>`
-        + `${c.scene ? '' : `<figcaption>${title}</figcaption>`}</figure>`;
+        + `${scene ? '' : `<figcaption>${title}</figcaption>`}</figure>`;
     }).join('');
     const open = openMarks(html.slice(0, at));
     if (open.length === 0) {
@@ -386,8 +388,10 @@ function shownImages(recapHtml, { fromPath, imageMap, marks = null }) {
 // One recap with its pictures: where `candidates` (less the unit's own pages, `exclude`) and the unit's `scenes`
 // (sceneCandidates) are mentioned, read as players see the recap (`marks`, the GM site), placed and drawn. A scene
 // whose picture is already a candidate's (a page's portrait, or another scene's) joins that candidate: one picture,
-// placed at the first mention of any of their pages, drawn as that candidate is. Each picture placed is added to
-// `usedImages` so the build copies it.
+// placed at the first mention of any of their pages. It is drawn as that candidate is where the paragraph names the
+// candidate's own page (`own`: its names and links), and as a scene's picture where only the scene's pages are named,
+// so a caption never names someone the paragraph does not. Each picture placed is added to `usedImages` so the build
+// copies it.
 function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), fromPath, imageMap, usedImages = null, marks = null }) {
   const all = [];
   for (const c of [...(candidates || []).filter((x) => !exclude.has(x.page)), ...scenes]) {
@@ -396,7 +400,8 @@ function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), 
     const held = all[at];
     const seen = new Set((held.terms || []).map((t) => t.toLowerCase()));
     const terms = [...(held.terms || []), ...c.terms.filter((t) => !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase()))];
-    all[at] = { ...held, terms, hrefs: new Set([...(held.hrefs || [held.outputPath]), ...c.hrefs]) };
+    const own = held.own || (held.scene ? null : { terms: held.terms || [], hrefs: new Set(held.hrefs || [held.outputPath]) });
+    all[at] = { ...held, terms, hrefs: new Set([...(held.hrefs || [held.outputPath]), ...c.hrefs]), own };
   }
   if (!recapHtml || all.length === 0) return recapHtml;
   const paragraphs = paragraphsOf(recapHtml, { fromPath, marks });
