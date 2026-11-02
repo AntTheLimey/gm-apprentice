@@ -157,6 +157,12 @@ describe('mentionsOf', () => {
     assert.deepEqual(mentions(station, `<p>${decomposed(3)}<a href="../npcs/macmillian-station-iv.html">it</a>.</p>`), [{ para: 0, at: 15 }]);
   });
 
+  it('a page whose address is decomposed is still linked by its own links', () => {
+    const nfc = 'locations/château-noir.html';
+    const chateau = { ...cand(page('Château Noir', { type: 'location' })), outputPath: nfc.normalize('NFD') };
+    assert.deepEqual(mentions(chateau, '<p>Six went to <a href="../locations/château-noir.html">the house</a>.</p>'), [{ para: 0, at: 12 }]);
+  });
+
   it('a candidate with a set of hrefs is linked by any of them', () => {
     const c = { terms: [], hrefs: new Set(['places/a.html', 'places/b.html']) };
     assert.deepEqual(mentions(c, '<p>x</p><p><a href="../places/b.html">B</a></p>'), [{ para: 1, at: 0 }]);

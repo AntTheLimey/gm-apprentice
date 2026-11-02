@@ -456,8 +456,8 @@ const poolOf = (others) => (Array.isArray(others) ? { lists: [others], except: n
 // words name where the link goes. A link always counts. `others` is one list or several (poolOf).
 function mentionsOf(candidate, paragraphs, others = []) {
   const { lists, except } = poolOf(others);
-  const targets = candidate.hrefs ? [...candidate.hrefs] : [candidate.outputPath];
-  const rival = (o) => o !== candidate && o !== except && !targets.includes(o.outputPath);
+  const targets = (candidate.hrefs ? [...candidate.hrefs] : [candidate.outputPath]).filter(Boolean).map(canonicalNfc);
+  const rival = (o) => o !== candidate && o !== except && !(o.outputPath && targets.includes(canonicalNfc(o.outputPath)));
   // A candidate among `others` (placeFigures) is read only in the paragraphs the index says may name it.
   const indexed = lists.some((list) => membersOf(list).has(candidate));
   const out = [];
