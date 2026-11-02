@@ -2,7 +2,7 @@
 // Story page 9b, Task 4: how the pictures beside a recap look and behave, measured in a real browser (headless
 // Chrome). A single picture is 184px and floats right; a pair is 204px with two square crops; on a phone (390px) the
 // float is 110px and a pair shows only its first picture. A click opens the full image in the lightbox, once, and
-// the page does not navigate. The browser helper cannot hold a pointer over an element, so the expand mark's hover
+// the page does not navigate; a click with a modifier key or the middle button is left to the browser. The browser helper cannot hold a pointer over an element, so the expand mark's hover
 // look is checked by the stylesheet's rules, and its resting look by the computed opacity. Skipped without Chrome or
 // Chromium (set GM_TEST_CHROME to point at one), except on CI.
 const { describe, it, before, after } = require('node:test');
@@ -64,9 +64,15 @@ describe('Story page pictures in a browser', { skip }, () => {
       var prevented = null;
       // Added after the page's own handlers: it notes whether they cancelled the navigation, then cancels it so a missing handler fails the test instead of leaving the page.
       document.addEventListener('click', function (e) { prevented = e.defaultPrevented; e.preventDefault(); });
-      a.querySelector('img').click();
       var overlay = document.querySelector('.lightbox-overlay');
-      done({ open: overlay.classList.contains('open'), same: li.src === a.href, sets: sets, href: a.href, unchanged: location.href === before, prevented: prevented });
+      // A modifier or middle-button click is left to the browser (a new tab or window): not cancelled, no lightbox.
+      var modified = [{ metaKey: true }, { ctrlKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }].map(function (o) {
+        prevented = null;
+        a.querySelector('img').dispatchEvent(new MouseEvent('click', Object.assign({ bubbles: true, cancelable: true }, o)));
+        return { prevented: prevented, open: overlay.classList.contains('open') };
+      });
+      a.querySelector('img').click();
+      done({ open: overlay.classList.contains('open'), same: li.src === a.href, sets: sets, href: a.href, unchanged: location.href === before, prevented: prevented, modified: modified });
     });
   });
   after(() => { if (s) s.cleanup(); });
@@ -97,6 +103,10 @@ describe('Story page pictures in a browser', { skip }, () => {
     assert.equal(click.sets, 1, 'the lightbox was opened once');
     assert.equal(click.prevented, true, 'the link does not navigate');
     assert.equal(click.unchanged, true);
+  });
+
+  it('a click with a modifier key or the middle button is left to the browser', () => {
+    assert.deepEqual(click.modified, Array(5).fill({ prevented: false, open: false }));
   });
 
   it('the expand mark is faint at rest and full on hover', () => {

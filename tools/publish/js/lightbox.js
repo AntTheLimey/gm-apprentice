@@ -36,7 +36,9 @@
   });
 
   // A Story page picture is a link to the full image: with this script on, the link opens the lightbox instead.
+  // A click with a modifier key or another button is left to the browser (a new tab or window).
   document.addEventListener('click', function(e) {
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return;
     var a = e.target.closest && e.target.closest('a.story-figure__open');
     if (!a) return;
     e.preventDefault();

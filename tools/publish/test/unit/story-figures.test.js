@@ -300,7 +300,7 @@ describe('sceneCandidates', () => {
   const six = { outputPath: 'pcs/six.html', displayTitle: 'Six', frontmatter: { type: 'pc' } };
   const hidden = { outputPath: 'locations/vault.html', displayTitle: 'The Vault', frontmatter: { type: 'location' } };
   const names = pageNames([docks, six, hidden], { onPlayerSite: new Set([docks, six]) });
-  const linkMap = { 'The Docks': docks.outputPath, Six: six.outputPath, 'The Vault': hidden.outputPath };
+  const linkMap = { 'The Docks': docks.outputPath, 'Smugglers Row': docks.outputPath, Six: six.outputPath, 'The Vault': hidden.outputPath };
   const unit1 = { kind: 'session', sourcePage: { sourcePath: hub1.sourcePath }, wrapUpPage: null };
   const unit2 = { kind: 'session', sourcePage: { sourcePath: hub2.sourcePath }, wrapUpPage: { sourcePath: wrap2.sourcePath } };
   const scene = (rel, fm, body) => note(rel, { type: 'scene', locations: ['[[The Docks]]'], ...fm }, body);
@@ -341,10 +341,29 @@ describe('sceneCandidates', () => {
   it('no page players see among its places and people, no picture, or a picture the build lacks: nothing', () => {
     const at = `${S}/Session 1/Scenes/Docks`;
     assert.deepEqual(forUnits([scene(at, { locations: ['[[The Vault]]'], entities: ['[[Six]]'] })]), [0, 0]);
-    assert.deepEqual(forUnits([scene(at, { locations: ['[[Smugglers Row]]'] })]), [0, 0]);
     assert.deepEqual(forUnits([scene(at, {}, '# Docks\n\nNo picture.\n')]), [0, 0]);
     assert.deepEqual(forUnits([scene(at, {}, '# Docks\n\n![[nope.png]]\n')]), [0, 0]);
     assert.deepEqual(forUnits([note(at, { type: 'npc', locations: ['[[The Docks]]'] })]), [0, 0]);
+  });
+
+  it('a scene linking a page by its gm_alias is named by the page\'s published names, never the gm_alias', () => {
+    const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, { locations: ['[[Smugglers Row]]'] })], { names, imageMap, linkMap })(unit1);
+    assert.deepEqual(c.terms, ['The Docks', 'Docks Quarter']);
+    assert.deepEqual([...c.hrefs], ['locations/the-docks.html']);
+    assert.ok(![...names.values()].flat().includes('Smugglers Row'));
+  });
+
+  it('a flat Sessions folder: the Scenes/ folder rule counts only when one session index sits beside it', () => {
+    const flat1 = note('Sessions/Session 1', { type: 'session' }, '');
+    const flat2 = note('Sessions/Session 2', { type: 'session' }, '');
+    const u = (h) => ({ kind: 'session', sourcePage: { sourcePath: h.sourcePath }, wrapUpPage: null });
+    const loose = scene('Sessions/Scenes/Docks', {});
+    const two = sceneCandidates([flat1, flat2, loose], { names, imageMap, linkMap });
+    assert.deepEqual([two(u(flat1)).length, two(u(flat2)).length], [0, 0]);
+    const one = sceneCandidates([flat1, loose], { names, imageMap, linkMap });
+    assert.equal(one(u(flat1)).length, 1);
+    const linked = sceneCandidates([flat1, flat2, scene('Sessions/Scenes/Docks', { session: '[[Session 2]]' })], { names, imageMap, linkMap });
+    assert.deepEqual([linked(u(flat1)).length, linked(u(flat2)).length], [0, 1]);
   });
 
   it('its people count as well as its places; a chapter unit takes no scene', () => {
@@ -359,6 +378,25 @@ describe('sceneCandidates', () => {
     const html = withFigures('<p>Off to <a href="../locations/the-docks.html">the pier</a>.</p>', { candidates: [], scenes: [c], fromPath: 'story/s1.html', imageMap });
     assert.match(html, /<figure class="story-figure story-figure--place"><a class="story-figure__open" href="\.\.\/images\/a\.png"><img src="\.\.\/images\/a\.png" alt="" loading="lazy">/);
     assert.ok(!html.includes('<figcaption>'));
+  });
+
+  it('a scene whose picture is a portrait offered: one picture, at the first mention of the page or the scene\'s places, with the page\'s caption', () => {
+    const smith = { outputPath: 'npcs/old-smith.html', displayTitle: 'Old Smith', frontmatter: { type: 'npc', portrait: 'a.png' } };
+    const [c] = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, {})], { names, imageMap, linkMap })(unit1);
+    const portrait = cand(smith);
+    const before = { ...portrait, terms: [...portrait.terms] };
+    const used = new Set();
+    const html = withFigures('<p>Nothing yet.</p><p>Off to the Docks Quarter.</p><p>Old Smith waits.</p>', { candidates: [portrait], scenes: [c], fromPath: 'story/s1.html', imageMap, usedImages: used });
+    assert.equal((html.match(/<figure /g) || []).length, 1);
+    assert.ok(html.indexOf('<figure') < html.indexOf('Off to'), html);
+    assert.ok(html.includes('<figcaption>Old Smith</figcaption>') && html.includes('alt="Old Smith"'));
+    assert.ok(!html.includes('story-figure--place'));
+    assert.deepEqual([...used], ['a.png']);
+    assert.deepEqual(portrait, before);
+    const linked = withFigures('<p>To <a href="../locations/the-docks.html">the pier</a>.</p>', { candidates: [portrait], scenes: [c], fromPath: 'story/s1.html', imageMap });
+    assert.ok(linked.includes('<figcaption>Old Smith</figcaption>'));
+    const own = withFigures('<p>Old Smith at the Docks Quarter.</p>', { candidates: [portrait], scenes: [c], exclude: new Set([smith]), fromPath: 'story/s1.html', imageMap });
+    assert.ok(!own.includes('<figcaption>') && own.includes('alt=""'), own);
   });
 
   it('a scene whose picture is a portrait already offered, or already shown, adds nothing', () => {

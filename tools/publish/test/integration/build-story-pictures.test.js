@@ -299,6 +299,29 @@ describe('Story pictures: a scene whose picture is a page\'s portrait', () => {
   });
 });
 
+describe('Story pictures: a scene whose picture is the portrait of a page the recap never names', () => {
+  const s = buildBoth(storyVault({
+    ...SCENE_FILES,
+    'NPCs/Mara Quill.md': note('npc', 'Mara Quill', 'scene-docks.png'),
+    'Sessions/Session 1 Wrap-Up.md': withRecap(SCENE_RECAP),
+  }));
+  after(() => s.cleanup());
+
+  it('is placed at the first mention of the scene\'s places, as the page\'s picture; both sites agree and no scene text shows', () => {
+    for (const site of [s.player, s.gm]) {
+      const page = read(site, STORY_1);
+      assert.equal((page.match(/images\/scene-docks\./g) || []).length, 2, 'one figure: its link and its img');
+      assert.match(page, /alt="Mara Quill" loading="lazy">[\s\S]*?<\/figure><\/div><p>The party reached/);
+      assert.deepEqual(captions(page), ['Mara Quill', 'Captain Rook']);
+      for (const [file, text] of builtText(site, { gm: site === s.gm })) {
+        for (const needle of ['SCENESECRET-1', 'SCENETITLE-1', 'smugglers unload']) assert.ok(!text.includes(needle), `${needle} in ${file}`);
+      }
+    }
+    const shape = (html) => figures(html).map((f) => ({ ...f, srcs: f.srcs.map((x) => x.replace(/\.webp$/, '.png')) }));
+    assert.deepEqual(shape(read(s.gm, STORY_1)), shape(read(s.player, STORY_1)));
+  });
+});
+
 describe('Story pictures: scenes that give no picture', () => {
   const pics = {};
   for (const n of ['dropped', 'paused', 'other', 'callout', 'gmnotes', 'unnamed']) pics[`_attachments/${n}.png`] = png(40, 30);

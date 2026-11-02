@@ -114,7 +114,7 @@ const folderOf = (note) => path.dirname(note.sourcePath || '');
 
 // The session notes (index or wrap-up, by sourcePath) a scene counts for. `played_in` decides when it names
 // anything; otherwise its `session:` link (to the index, or to a Plan, which names its index) and the session folder
-// whose `Scenes/` it sits in. A link resolves as the site resolves links among every session note of the vault, the
+// whose `Scenes/` it sits in, when that folder holds one session index. A link resolves as the site resolves links among every session note of the vault, the
 // nearest when several share a name (session-hub.js), and a wrap-up counts for its own index as well.
 function sessionsOfScene(scene, vault) {
   const out = new Set();
@@ -137,8 +137,12 @@ function sessionsOfScene(scene, vault) {
     if (hit && hit.frontmatter.type === 'session-plan') add(nearest(hit, named(linkTarget(hit.frontmatter.session), vault.hubs)));
     else add(hit);
   }
+  // A flat Sessions folder holds several indexes beside one Scenes/: its scenes belong to none of them by folder.
   const folder = folderOf(scene);
-  if (path.basename(folder) === 'Scenes') for (const hub of vault.hubs) if (folderOf(hub) === path.dirname(folder)) add(hub);
+  if (path.basename(folder) === 'Scenes') {
+    const beside = vault.hubs.filter((hub) => folderOf(hub) === path.dirname(folder));
+    if (beside.length === 1) add(beside[0]);
+  }
   return out;
 }
 
@@ -374,15 +378,18 @@ function shownImages(recapHtml, { fromPath, imageMap, marks = null }) {
 
 // One recap with its pictures: where `candidates` (less the unit's own pages, `exclude`) and the unit's `scenes`
 // (sceneCandidates) are mentioned, read as players see the recap (`marks`, the GM site), placed and drawn. A scene
-// whose picture is already a candidate's (a page's portrait), or another scene's, adds nothing. Each picture placed
-// is added to `usedImages` so the build copies it.
+// whose picture is already a candidate's (a page's portrait, or another scene's) joins that candidate: one picture,
+// placed at the first mention of any of their pages, drawn as that candidate is. Each picture placed is added to
+// `usedImages` so the build copies it.
 function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), fromPath, imageMap, usedImages = null, marks = null }) {
-  const keys = new Set();
   const all = [];
   for (const c of [...(candidates || []).filter((x) => !exclude.has(x.page)), ...scenes]) {
-    if (c.scene && keys.has(c.key)) continue;
-    keys.add(c.key);
-    all.push(c);
+    const at = c.scene ? all.findIndex((x) => x.key === c.key) : -1;
+    if (at < 0) { all.push(c); continue; }
+    const held = all[at];
+    const seen = new Set((held.terms || []).map((t) => t.toLowerCase()));
+    const terms = [...(held.terms || []), ...c.terms.filter((t) => !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase()))];
+    all[at] = { ...held, terms, hrefs: new Set([...(held.hrefs || [held.outputPath]), ...c.hrefs]) };
   }
   if (!recapHtml || all.length === 0) return recapHtml;
   const paragraphs = paragraphsOf(recapHtml, { fromPath, marks });
