@@ -296,7 +296,7 @@ describe('sceneCandidates', () => {
   const hub2 = note(`${S}/Session 2/Session 2`, { type: 'session', chapter: '[[C1]]' }, '');
   const wrap2 = note(`${S}/Session 2/Session 2 Wrap-Up`, { type: 'session_wrap', session: '[[Session 2]]' }, '');
   const plan1 = note(`${S}/Session 1/Session 1 Plan`, { type: 'session-plan', session: '[[Session 1]]' }, '');
-  const docks = { outputPath: 'locations/the-docks.html', displayTitle: 'The Docks', frontmatter: { type: 'location', aliases: ['Docks Quarter'], gm_aliases: ['Smugglers Row'] } };
+  const docks = { outputPath: 'locations/the-docks.html', displayTitle: 'The Docks', frontmatter: { type: 'location', aliases: ['Docks Quarter', 'Smugglers Row'], gm_aliases: ['Smugglers Row'] } };
   const six = { outputPath: 'pcs/six.html', displayTitle: 'Six', frontmatter: { type: 'pc' } };
   const hidden = { outputPath: 'locations/vault.html', displayTitle: 'The Vault', frontmatter: { type: 'location' } };
   const names = pageNames([docks, six, hidden], { onPlayerSite: new Set([docks, six]) });
@@ -351,6 +351,11 @@ describe('sceneCandidates', () => {
     assert.deepEqual(c.terms, ['The Docks', 'Docks Quarter']);
     assert.deepEqual([...c.hrefs], ['locations/the-docks.html']);
     assert.ok(![...names.values()].flat().includes('Smugglers Row'));
+  });
+
+  it('a scene linking by a gm_alias the link map lacks gives no candidate', () => {
+    const { 'Smugglers Row': _gone, ...bare } = linkMap;
+    assert.deepEqual(sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, { locations: ['[[Smugglers Row]]'], entities: [] })], { names, imageMap, linkMap: bare })(unit1), []);
   });
 
   it('a flat Sessions folder: the Scenes/ folder rule counts only when one session index sits beside it', () => {

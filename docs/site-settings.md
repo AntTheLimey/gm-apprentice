@@ -434,9 +434,11 @@ player_site:
 ## Story pages
 
 A session's wrap-up is its Story page: any text above its first heading,
-the recap, the wrap-up's other sections, then the Memorable Moments as cards. One switch controls the cards.
-It belongs to the player site, and the GM site follows it: the GM site still
-shows the cards, marked as hidden from players.
+the recap, the wrap-up's other sections, then the Memorable Moments as cards.
+The recap also gets pictures of the people and places it names. One switch
+controls the cards and one the pictures. Both belong to the player site, and
+the GM site follows them: the GM site still shows the cards, marked as hidden
+from players.
 
 <!-- settings:story -->
 

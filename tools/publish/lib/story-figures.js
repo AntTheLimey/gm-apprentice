@@ -114,8 +114,9 @@ const folderOf = (note) => path.dirname(note.sourcePath || '');
 
 // The session notes (index or wrap-up, by sourcePath) a scene counts for. `played_in` decides when it names
 // anything; otherwise its `session:` link (to the index, or to a Plan, which names its index) and the session folder
-// whose `Scenes/` it sits in, when that folder holds one session index. A link resolves as the site resolves links among every session note of the vault, the
-// nearest when several share a name (session-hub.js), and a wrap-up counts for its own index as well.
+// whose `Scenes/` it sits in, when that folder holds one session index. A link resolves as the site resolves links
+// among every session note of the vault, the nearest when several share a name (session-hub.js), and a wrap-up counts
+// for its own index as well.
 function sessionsOfScene(scene, vault) {
   const out = new Set();
   const add = (note) => {

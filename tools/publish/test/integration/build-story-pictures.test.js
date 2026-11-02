@@ -376,6 +376,7 @@ describe('Story pictures: player_site.story.pictures off', () => {
       assert.equal((page.match(/images\/rook\./g) || []).length, 1, 'the picture the GM placed stays');
       assert.ok(!page.includes('scene-docks'), 'no scene picture either');
     }
+    // Player site only: the GM site builds the scene's own page, which shows the picture, so it copies the file anyway.
     assert.ok(!s.player.files().some((f) => /scene-docks/.test(f)), 'the scene picture is not copied');
     assert.deepEqual(brokenLinks(s.player.dir), []);
     assert.deepEqual(brokenLinks(s.gm.dir), []);

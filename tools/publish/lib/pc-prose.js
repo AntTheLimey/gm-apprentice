@@ -75,8 +75,13 @@ function storyMomentsOn(publishConfig) {
   return !(publishConfig && publishConfig.story && publishConfig.story.moments === false);
 }
 
+// false while `player_site.story.pictures` is off, otherwise true (an injected publishConfig without `story` means on).
+function storyPicturesOn(publishConfig) {
+  return !(publishConfig && publishConfig.story && publishConfig.story.pictures === false);
+}
+
 module.exports = {
-  storyMomentsOn,
+  storyMomentsOn, storyPicturesOn,
   PC_PROSE_SECTIONS, RETIRED_BY_SYSTEM, RETIRED_SHEET_FIELDS, retiredSheetFieldsFor, retiredSheetFieldsMessage,
   pcKeepList, bareSectionTitle,
 };

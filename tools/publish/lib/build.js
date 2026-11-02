@@ -8,7 +8,7 @@ const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllN
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit, detectEncoder, CACHE_FOLDER } = require('./image-optimize');
 const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
 const { resolveBanner, renderBanner, normalizeEntry, attachmentRef, isAddress, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
-const { pcKeepList, storyMomentsOn, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
+const { pcKeepList, storyMomentsOn, storyPicturesOn, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
 const { pairHubs, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
@@ -392,7 +392,7 @@ function buildSite(options) {
   // `player_site.story.moments`: the GM site reads the player site's value, as it does the hiding settings.
   const storyMoments = storyMomentsOn(hideFrom);
   // `player_site.story.pictures`: read the same way, so both sites picture the same (an injected config without `story` means on).
-  const storyPictures = !(hideFrom.story && hideFrom.story.pictures === false);
+  const storyPictures = storyPicturesOn(hideFrom);
   // The one derivation of "sheets off": the filter's own answer, handed to the page template.
   const sheetsOff = pcKeepSections !== null;
   const excludeCallouts = hideFrom.exclude_callouts;
