@@ -1,6 +1,6 @@
 {
   "name": "gm-apprentice-publish",
-  "version": "1.61.0",
+  "version": "1.61.1",
   "private": true,
   "description": "Static site generator for gm-apprentice campaign vaults",
   "main": "lib/index.js",
@@ -8,7 +8,7 @@
     "gm-apprentice-publish": "bin/gm-publish.js"
   },
   "scripts": {
-    "test": "node --test \"test/**/*.test.js\"",
+    "test": "node --test --require ./test/helpers/temp-cleanup.js \"test/**/*.test.js\"",
     "build": "node lib/build.js"
   },
   "engines": {

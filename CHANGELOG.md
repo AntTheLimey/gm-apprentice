@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.122] — 2026-11-02
+
+Test runs no longer fill the disk, and a Chrome that runs out of time is stopped completely. Publish tool 1.61.1. No vault or site change.
+
+### Fixed
+
+- `props pages` no longer leaves Chrome running. When printing a page ran out of time, only the browser process was killed, and killed outright, so its helper processes lived on and Chrome could not clean up its temp files. It is now asked to quit, and every process still on its profile folder is ended.
+- The tests remove the temp folders they make (#565). Every run left about 1,600 folders in the system temp folder (1.37 million, about 199 GB, over a few weeks). The publish tool's tests and the Python tests now remove each folder a test makes when its process ends. The browser checks end any Chrome left running after a launch that timed out, including one whose test was stopped mid-launch. CI fails a run that leaves anything in the temp folder, and names what it left.
+
+---
+
 ## [1.10.121] — 2026-11-02
 
 A session's Story page now shows pictures of the people and places its recap names. Publish tool 1.61.0. No vault change is needed. Every published Story page gains pictures at the next deploy of both campaigns.

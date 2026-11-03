@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { findChrome: defaultFindChrome, fileUrl } = require('../chrome');
+const { findChrome: defaultFindChrome, fileUrl, stopChrome } = require('../chrome');
 const { loadVaultConfig, siteConfigFor, outputFolderOf } = require('../config');
 
 const NO_CHROME = 'no Chrome or Chromium found; open the page and use print preview';
@@ -26,9 +26,13 @@ function countPdfPages(bytes) {
 // Print one file to PDF and count its pages. Throws if Chrome fails.
 function printedPages(binary, file, work) {
   const pdf = path.join(work, 'page.pdf');
+  const profile = path.join(work, 'profile');
+  // A launch that runs out of time is asked to quit (SIGTERM lets Chrome clean up after itself), and stopChrome ends
+  // whatever of it is still running, helpers included (#565).
   const run = spawnSync(binary, ['--headless', '--disable-gpu', '--no-pdf-header-footer', '--no-first-run',
-    '--no-default-browser-check', `--user-data-dir=${path.join(work, 'profile')}`, '--virtual-time-budget=6000',
-    `--print-to-pdf=${pdf}`, fileUrl(file)], { stdio: 'pipe', timeout: 60000, killSignal: 'SIGKILL' });
+    '--no-default-browser-check', `--user-data-dir=${profile}`, '--virtual-time-budget=6000',
+    `--print-to-pdf=${pdf}`, fileUrl(file)], { stdio: 'pipe', timeout: 60000 });
+  stopChrome(profile);
   if (run.status !== 0 || !fs.existsSync(pdf)) throw new Error(`Chrome failed (${run.status}): ${String(run.stderr).slice(0, 200)}`);
   return countPdfPages(fs.readFileSync(pdf));
 }

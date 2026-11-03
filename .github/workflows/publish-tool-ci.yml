@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'tools/publish/**'
+      - 'scripts/temp_guard.py'
       - 'tests/shared-cases/**'
       - 'tests/benchmark-campaign/**'
       - 'scripts/build-theme-showcase.mjs'
@@ -13,6 +14,7 @@ on:
   pull_request:
     paths:
       - 'tools/publish/**'
+      - 'scripts/temp_guard.py'
       - 'tests/shared-cases/**'
       - 'tests/benchmark-campaign/**'
       - 'scripts/build-theme-showcase.mjs'
@@ -39,6 +41,20 @@ jobs:
         working-directory: tools/publish
         run: npm ci
 
+      # The tests remove the temp folders they make (#565); the guard fails the
+      # job, naming them, if anything is left behind in the temp folder.
+      - name: Note what the temp folder holds
+        shell: bash
+        run: |
+          PY=$(command -v python3 || command -v python)
+          "$PY" scripts/temp_guard.py snapshot "$RUNNER_TEMP/temp-before.txt"
+
       - name: Run tests
         working-directory: tools/publish
         run: npm test
+
+      - name: The tests left nothing in the temp folder
+        shell: bash
+        run: |
+          PY=$(command -v python3 || command -v python)
+          "$PY" scripts/temp_guard.py check "$RUNNER_TEMP/temp-before.txt"

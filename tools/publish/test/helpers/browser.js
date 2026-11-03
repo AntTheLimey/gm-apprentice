@@ -9,7 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const { findChrome, fileUrl } = require('../../lib/chrome');
+const { findChrome, fileUrl, stopChrome } = require('../../lib/chrome');
 
 // The `skip` for a browser check: a reason without a browser, but never on CI, where the check runs and fails;
 // except on the Windows CI runner, where it is always skipped. The checks test Chrome's layout, which is the same
@@ -59,7 +59,15 @@ function clearStale(dir) {
     if (ageOf(reap) > 30000) rm(reap);   // its owner died inside the few lines below
     return;
   }
-  try { if (lockIsStale(dir)) rm(dir); } finally { rm(reap); }
+  try {
+    if (lockIsStale(dir)) {
+      // Its holder died mid-launch (a test process killed on a timeout): end the Chrome it left running (#565).
+      let profile = '';
+      try { profile = fs.readFileSync(path.join(dir, 'profile'), 'utf8'); } catch (_) { /* never launched */ }
+      if (profile) { stopChrome(profile); rm(profile); }
+      rm(dir);
+    }
+  } finally { rm(reap); }
 }
 
 // Runs `fn` while holding the lock; when `fn` returns a promise the lock is held until it settles. Called while this
@@ -102,12 +110,15 @@ function runChrome(args, { timeout = CHROME_TIMEOUT_MS } = {}) {
   if (!chrome) throw new Error('no browser');
   return withChromeLock(() => {
     const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-test-chrome-'));
+    // Recorded beside the lock, so whoever finds the lock stale can end this Chrome if this process dies (#565).
+    try { fs.writeFileSync(path.join(LOCK_DIR, 'profile'), profile); } catch (_) { /* a test's private lock folder */ }
     try {
       const run = spawnSync(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', `--user-data-dir=${profile}`, ...args],
         { encoding: 'utf8', timeout, stdio: ['ignore', 'pipe', 'pipe'] });
       run.timedOut = Boolean(run.error && run.error.code === 'ETIMEDOUT');
       return run;
     } finally {
+      stopChrome(profile);   // a launch that timed out leaves the browser's helpers running (#565)
       fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
     }
   });
