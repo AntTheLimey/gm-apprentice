@@ -1,6 +1,8 @@
 'use strict';
 // An installed Chrome or Chromium, found by path or on PATH. The tests' browser helper and `props pages` both ask here.
 const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { pathToFileURL } = require('node:url');
 
@@ -30,6 +32,22 @@ const fileUrl = (p) => pathToFileURL(p).href;
 // Chrome that is killed, so a launch that finishes leaves none.)
 function chromeEnv(dir) {
   return { ...process.env, TMPDIR: dir, TMP: dir, TEMP: dir };
+}
+
+// Chrome on a Mac writes `.com.google.Chrome.*` and `com.google.Chrome.*` files (components and extension packages
+// it fetches) straight into the system temp folder, whatever TMPDIR says, and leaves some there (#565). A launch notes what is there before it
+// starts (chromeTempNow) and removes what is new once it is over (removeNewChromeTemp). Launches take turns, so what
+// appears in between is the launch's own; a file a Chrome of the user's wrote in that moment is only a temp file it
+// fetches again.
+const CHROME_TEMP = /^\.?com\.google\.Chrome\./;
+function chromeTempNow(dir = os.tmpdir()) {
+  try { return new Set(fs.readdirSync(dir).filter((name) => CHROME_TEMP.test(name))); } catch (_) { return new Set(); }
+}
+function removeNewChromeTemp(before, dir = os.tmpdir()) {
+  for (const name of chromeTempNow(dir)) {
+    if (before.has(name)) continue;
+    try { fs.rmSync(path.join(dir, name), { recursive: true, force: true }); } catch (_) { /* gone, or held: left */ }
+  }
 }
 
 // Ends every Chrome process still running on the profile folder `profile` (#565). A launch that runs out of time is
@@ -64,4 +82,4 @@ function stopChrome(profile, { graceMs = 3000, platform = process.platform } = {
   return found;
 }
 
-module.exports = { findChrome, fileUrl, chromeEnv, stopChrome };
+module.exports = { findChrome, fileUrl, chromeEnv, stopChrome, chromeTempNow, removeNewChromeTemp };

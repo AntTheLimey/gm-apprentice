@@ -9,7 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const { findChrome, fileUrl, chromeEnv, stopChrome } = require('../../lib/chrome');
+const { findChrome, fileUrl, chromeEnv, stopChrome, chromeTempNow, removeNewChromeTemp } = require('../../lib/chrome');
 
 // The `skip` for a browser check: a reason without a browser, but never on CI, where the check runs and fails;
 // except on the Windows CI runner, where it is always skipped. The checks test Chrome's layout, which is the same
@@ -121,6 +121,7 @@ function runChrome(args, { timeout = CHROME_TIMEOUT_MS } = {}) {
       fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
       throw e;
     }
+    const chromeTemp = chromeTempNow();
     try {
       // Out of time, it is killed outright, so a stuck browser can never hang the test; stopChrome then ends its
       // helpers. Its temp files are kept in the profile folder, which goes with it.
@@ -130,6 +131,7 @@ function runChrome(args, { timeout = CHROME_TIMEOUT_MS } = {}) {
       return run;
     } finally {
       stopChrome(profile);   // a launch that timed out leaves the browser's helpers running (#565)
+      removeNewChromeTemp(chromeTemp);
       fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
     }
   });

@@ -100,3 +100,17 @@ test('a stale lock naming a folder that is not a launch profile leaves that fold
   assert.equal(fs.existsSync(planted), true, 'the folder named is not removed');
   assert.equal(running(bystander), true, 'the process on it runs on');
 });
+
+test('the Chrome temp files that appear during a launch are removed after it, and earlier ones stay', (t) => {
+  const { chromeTempNow, removeNewChromeTemp } = require('../lib/chrome');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chrome-temp-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(dir, '.com.google.Chrome.before'), 'x');
+  const before = chromeTempNow(dir);
+  fs.writeFileSync(path.join(dir, '.com.google.Chrome.during'), 'x');
+  fs.mkdirSync(path.join(dir, '.com.google.Chrome.dir'));
+  fs.mkdirSync(path.join(dir, 'com.google.Chrome.chrome_chrome_url_fetcher_.abc123'));
+  fs.writeFileSync(path.join(dir, 'not-chrome'), 'x');
+  removeNewChromeTemp(before, dir);
+  assert.deepEqual(fs.readdirSync(dir).sort(), ['.com.google.Chrome.before', 'not-chrome']);
+});

@@ -9,8 +9,10 @@ and tests/conftest.py remove every temp folder a test process makes); this
 catches what gets past them, such as a folder made by a process a test starts.
 Weeks of runs before that clean-up left over a million folders behind.
 
-Two names are allowed to appear: Node's compile cache and pytest's own base
-folder for `tmp_path`, which are each made once and reused, not one per run.
+Some names are allowed to appear: Node's compile cache and pytest's own base
+folder for `tmp_path`, which are each made once and reused, not one per run,
+and the `com.apple.*` folders macOS's own services make in the same folder
+while the tests run.
 """
 
 import fnmatch
@@ -18,7 +20,7 @@ import os
 import sys
 import tempfile
 
-ALLOWED = ("node-compile-cache", "pytest-of-*")
+ALLOWED = ("node-compile-cache", "pytest-of-*", "com.apple.*")
 
 
 def entries() -> set[str]:
