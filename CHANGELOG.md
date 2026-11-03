@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.126] — 2026-11-03
+
+Two kept-folder clean-up fixes, a `props pages` fix, and browser tests that no longer fail as a vague "cancelled" on a busy machine. Publish tool 1.62.1. No vault or site change.
+
+### Fixed
+
+- A prop in a kept folder whose `prop_address` changes only in letter case (`gazetteer/Invitation.html` to `gazetteer/invitation.html`) no longer leaves its old file behind on a disk that tells case apart (Linux, and so a CI build). The build removes the old name, while it still holds what the tool wrote, and says `removed from kept folder: … (its address is now …)`. On a Mac or Windows disk the two names are one file, and it is left alone (#560).
+- When a removed kept-folder copy had once replaced a file of your own, the `removed from kept folder` line now says "it had replaced a file of yours; see the site repo's history", so you know where to find the original. A copy that only replaced the tool's own earlier copy is not marked. A site built before this reads as no copy marked (#560).
+- `props pages` no longer reports "Chrome failed (2)" on a busy Mac when Chrome printed the PDF and then exited with an error. A whole PDF is counted whatever Chrome's exit status; one cut short still fails (#561).
+- Browser tests on a busy machine (#561). A browser check whose measuring failed showed its tests as "cancelled" ("test did not finish before its parent"), counted no failure, and printed the reason far below. Each test now fails with the reason, including how long it waited for the browser and how long Chrome ran. A launch that gives no answer is tried once more. A test waits out a queue for the shared browser however long it is, and gives up only on one test that has kept the browser longer than a turn can take (five minutes), where before it gave up after ten minutes of queueing in all, which parallel test runs on one machine can reach.
+- Four tests that checked the system temp folder for leftovers by name no longer fail when another test run on the machine has a folder of that name at the time. Each now runs the step it checks with a temp folder of its own.
+
+---
+
 ## [1.10.125] — 2026-11-03
 
 campaign-qa's Site Faults check reads less. No vault change is needed.
