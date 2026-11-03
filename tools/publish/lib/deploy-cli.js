@@ -143,6 +143,7 @@ async function runDeploy(options, deps) {
   const now = d.now || (() => new Date());
   const { formatFindings, gateSummary } = leakGateLib;
   const leakGate = d.leakGate || leakGateLib.runLeakGate;
+  const staleCaseSpellings = d.staleCaseSpellings || ((root, dir) => require('./git-case').staleCaseSpellings(root, dir, runCommand));
 
   const configPath = path.resolve(opts.configPath || './vault.config.json');
   const siteRoot = path.dirname(configPath);
@@ -377,6 +378,34 @@ async function runDeploy(options, deps) {
       commands.push(`git ${args.join(' ')}`);
       return runCommand('git', args, { cwd: siteRoot });
     };
+    // A file or folder whose letter case changed on a Mac or Windows disk keeps its old spelling in git's index
+    // (core.ignorecase), so `git add` alone would deploy the old address (#576). Its old spelling leaves the index
+    // first, and the commit takes the whole index, since `--only` would add the old name back. Anything else staged
+    // would ride along, so that stops the deploy.
+    const stale = staleCaseSpellings(siteRoot, outDir);
+    if (stale.error) {
+      say(`Deploy failed: ${failureDetail(stale.error)}`);
+      return finish({}, 1);
+    }
+    if (stale.paths.length > 0) {
+      const others = git(['diff', '--cached', '--name-only', '--', '.', `:(exclude)${outDir}`]);
+      if (others.code !== 0) {
+        say(`Deploy failed: ${failureDetail(others)}`);
+        return finish({}, 1);
+      }
+      const staged = String(others.stdout || '').split('\n').filter(Boolean);
+      if (staged.length > 0) {
+        say(`Deploy stopped: files outside ${outDir} are staged (${staged.slice(0, 5).join(', ')}${staged.length > 5 ? ', …' : ''}), and a letter-case change under ${outDir} needs a commit of everything staged. Commit or unstage them (git restore --staged <file>), then deploy again.`);
+        return finish({}, 1);
+      }
+      const rm = git(['rm', '--cached', '-q', '--', ...stale.paths.map((p) => `:(literal)${p}`)]);
+      if (rm.code !== 0) {
+        say(`Deploy failed: ${failureDetail(rm)}`);
+        return finish({}, 1);
+      }
+      const n = stale.paths.length;
+      say(`${n} file${n === 1 ? '' : 's'} under ${outDir} changed only in letter case; git records ${n === 1 ? 'it' : 'them'} under ${n === 1 ? 'its' : 'their'} new spelling`);
+    }
     const add = git(['add', outDir]);
     if (add.code !== 0) {
       say(`Deploy failed: ${failureDetail(add)}`);
@@ -391,7 +420,7 @@ async function runDeploy(options, deps) {
       // Still push: the build may be unchanged while an earlier commit is unpushed.
       say(`nothing to commit — ${outDir} unchanged`);
     } else {
-      const commit = git(['commit', '-m', 'Rebuild site', '--only', '--', outDir]);
+      const commit = git(stale.paths.length > 0 ? ['commit', '-m', 'Rebuild site'] : ['commit', '-m', 'Rebuild site', '--only', '--', outDir]);
       if (commit.code !== 0) {
         say(`Commit failed: ${failureDetail(commit)}`);
         return finish({}, 1);
