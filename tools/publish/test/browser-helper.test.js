@@ -8,7 +8,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { describe, it } = require('node:test');
-const { browserSkip, withChromeLock, whyNot, runChrome, browserBefore, CHROME_TIMEOUT_MS, HOLD_MS } = require('./helpers/browser');
+const { browserSkip, withChromeLock, whyNot, runChrome, measure, browserBefore, CHROME_TIMEOUT_MS, HOLD_MS } = require('./helpers/browser');
 
 const found = () => '/usr/bin/chromium';
 const none = () => null;
@@ -190,6 +190,19 @@ describe('a launch that gives no answer', { skip: process.platform === 'win32' &
     const once = fake(t, 'echo ANSWER');
     assert.equal(runChrome(['--dump-dom'], { chrome: once.file, answered }).tries, 1);
     assert.equal(once.count(), 1);
+  });
+
+  // Review: the harness's own script holds the text 'RESULT['+got.join(',')+']END', and --dump-dom prints it. A page
+  // whose probes never finished (an empty <pre id="out">) is no answer: tried again, then said with its timings.
+  it('a printed harness whose answer is empty is no answer, tried again and said with its timings', (t) => {
+    const page = `<html><body><pre id="out"></pre><script>var t=setInterval(function(){document.getElementById('out').textContent='RESULT['+got.join(',')+']END';},100);</script></body></html>`;
+    const c = fake(t, `echo '${page.replace(/'/g, "'\\''")}'`);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'measure-page-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    fs.writeFileSync(path.join(dir, 'p.html'), '<html><head></head><body></body></html>');
+    assert.throws(() => measure(path.join(dir, 'p.html'), 400, 'function (done) { done({}); }', { chrome: c.file }),
+      /^Error: the browser gave no answer \(status 0, 2 launches, after \d+ s waiting for another test's browser and \d+ s launching/);
+    assert.equal(c.count(), 2);
   });
 
   it('that ran out of time is not tried again', (t) => {

@@ -194,9 +194,13 @@ function browserBefore(fn) {
 
 // `script` runs in the page once it has loaded, with `done(result)` to call with a JSON-able answer. A page error
 // raised at any time is added to the result as `errors`. Returns the result. Given a list of pages (all in one
-// folder), one launch of the browser measures each, side by side, and the results come back as a list.
-function measure(pagePaths, width, script, { height = 900, wait = 6000 } = {}) {
-  if (!findChrome()) throw new Error('no browser');
+// folder), one launch of the browser measures each, side by side, and the results come back as a list. `chrome` is
+// given to the helper's own test.
+// The answer is read only from the filled <pre id="out">: the harness's own script, which --dump-dom prints too,
+// holds the words RESULT and END.
+const ANSWER = /<pre id="out">RESULT([\s\S]*?)END<\/pre>/;
+function measure(pagePaths, width, script, { height = 900, wait = 6000, chrome = findChrome() } = {}) {
+  if (!chrome) throw new Error('no browser');
   const pages = [].concat(pagePaths);
   const dir = path.dirname(pages[0]);
   // A phone's scrollbars overlay the page; a desktop Chrome's (Linux, Windows) take 15px of the width.
@@ -215,8 +219,8 @@ function measure(pagePaths, width, script, { height = 900, wait = 6000 } = {}) {
     + `<pre id="out"></pre><script>var t=setInterval(function(){try{var got=[].map.call(document.querySelectorAll('iframe'),function(f){var p=f.contentDocument.getElementById('probe');return p&&p.textContent;});`
     + `if(got.every(Boolean)){document.getElementById('out').textContent='RESULT['+got.join(',')+']END';clearInterval(t);}}catch(e){document.getElementById('out').textContent='RESULT['+JSON.stringify({harnessError:String(e)})+']END';clearInterval(t);}},100);</script>`);
   const run = runChrome(['--allow-file-access-from-files', '--window-size=1200,1000', `--virtual-time-budget=${wait}`, '--dump-dom', fileUrl(harness)],
-    { answered: (out) => /RESULT[\s\S]*?END/.test(out) });
-  const m = /RESULT([\s\S]*?)END/.exec(run.stdout || '');
+    { answered: (out) => ANSWER.test(out), chrome });
+  const m = ANSWER.exec(run.stdout || '');
   if (!m) throw new Error(`the browser gave no answer (${whyNot(run)})`);
   const text = m[1].replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
   const results = JSON.parse(text);

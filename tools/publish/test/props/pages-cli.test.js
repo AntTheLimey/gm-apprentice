@@ -94,3 +94,18 @@ test('a PDF cut short is Chrome failing, with its status and what it said', { sk
   assert.equal(row.pages, null);
   assert.match(row.why, /^Chrome failed \(2\): ERROR: CVDisplayLink/);
 });
+
+// Review: every target prints to the same work folder. A later target whose Chrome exits non-zero and writes nothing
+// must never be counted from the earlier target's PDF.
+test("a target whose Chrome writes nothing is never counted from the target before it", { skip: process.platform === 'win32' && 'a shell script stands in for Chrome' }, async (t) => {
+  const v = site(t);
+  fs.writeFileSync(path.join(v.out, 'a.html'), '<p>x</p>');
+  fs.writeFileSync(path.join(v.out, 'b.html'), '<p>y</p>');
+  const fake = path.join(v.root, 'fake-chrome');
+  fs.writeFileSync(fake, `#!/bin/sh\nn=$(cat "${v.root}/count" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "${v.root}/count"\nif [ $n -gt 1 ]; then echo 'ERROR: CVDisplayLink' >&2; exit 2; fi\nfor a; do case "$a" in --print-to-pdf=*) printf '${TWO_PAGES}' > "\${a#--print-to-pdf=}";; esac; done\n`);
+  fs.chmodSync(fake, 0o755);
+  const rows = await rowsFor(v.configPath, [{ address: 'a.html' }, { address: 'b.html' }], { findChrome: () => fake });
+  assert.deepEqual(rows[0], { address: 'a.html', pages: 2, why: null });
+  assert.equal(rows[1].pages, null);
+  assert.match(rows[1].why, /^Chrome failed \(2\)/);
+});

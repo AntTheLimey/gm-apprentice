@@ -28,6 +28,8 @@ function printedPages(binary, file, work) {
   const pdf = path.join(work, 'page.pdf');
   const profile = path.join(work, 'profile');
   fs.mkdirSync(profile, { recursive: true });
+  // Every target prints here: a PDF an earlier target left must never be counted as this one's.
+  fs.rmSync(pdf, { force: true });
   const chromeTemp = chromeTempNow();
   // Out of time, Chrome is killed outright, so a stuck browser can never hang the command, and stopChrome ends the
   // helpers it leaves running (#565). Its temp files go in its profile folder, removed with the work folder.
