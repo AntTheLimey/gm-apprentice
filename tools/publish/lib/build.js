@@ -488,10 +488,10 @@ function buildSite(options) {
     return mine;
   }
   const REPLACED_MINE = "it had replaced a file of yours; see the site repo's history";
-  // Whether two spellings of a path, differing only in letter case, are two files. In doubt they are one, and nothing
-  // is removed: only when every folder on both paths lists each spelling as its own entry (compared in NFC), and the
-  // two have different inodes, are they two. A disk that does not tell case apart (macOS, Windows) lists one name; a
-  // network share may give each spelling an inode of its own; any error is doubt.
+  // Whether two spellings of a path, differing only in letter case, are two files: 'two', 'one', or 'unknown' when a
+  // folder or file could not be read. Only 'two' lets the old one be removed: every folder on both paths lists each
+  // spelling as its own entry (compared in NFC), and the two have different inodes. A disk that does not tell case
+  // apart (macOS, Windows) lists one name; a network share may give each spelling an inode of its own.
   function twoFiles(oldOut, newOut) {
     try {
       const listed = (out) => {
@@ -503,11 +503,11 @@ function buildSite(options) {
         }
         return true;
       };
-      if (!listed(oldOut) || !listed(newOut)) return false;
+      if (!listed(oldOut) || !listed(newOut)) return 'one';
       const x = fs.statSync(path.join(outputDir, ...oldOut.split('/')), { bigint: true });
       const y = fs.statSync(path.join(outputDir, ...newOut.split('/')), { bigint: true });
-      return x.dev !== y.dev || x.ino !== y.ino;
-    } catch (e) { return false; }
+      return x.dev !== y.dev || x.ino !== y.ino ? 'two' : 'one';
+    } catch (e) { return 'unknown'; }
   }
   // A kept-folder copy's bytes, or its removal; an error the file system gives is said with the path, and the build
   // carries on (null / false). An error with no code is a fault of the tool's and is thrown.
@@ -541,9 +541,17 @@ function buildSite(options) {
       // Written again, perhaps in another letter case (#560): on a disk that tells case apart the old name is a file
       // of its own, and is looked at as any other recorded file is.
       const again = keptWritten.get(key);
-      if (again && (again[0] === out || !twoFiles(out, again[0]))) {
+      if (again && again[0] === out) continue;
+      const files = again ? twoFiles(out, again[0]) : null;
+      if (files === 'one') {
         // One file under both spellings: it is still the copy that replaced the GM's.
-        if (again[0] !== out && keptWasMine.has(out)) keptMineNow.add(again[0]);
+        if (keptWasMine.has(out)) keptMineNow.add(again[0]);
+        continue;
+      }
+      if (files === 'unknown') {
+        // In doubt it is left, said, and kept in the record with its mark, for a later build to settle.
+        console.log(`  left in kept folder: ${out} (could not tell whether it is ${again[0]})`);
+        next[out] = hash;
         continue;
       }
       const why = pathProblem(outputDir, out);
@@ -564,7 +572,7 @@ function buildSite(options) {
     }
     for (const [out, hash] of keptWritten.values()) next[out] = hash;
     // A copy written this build is marked as its write said; one carried over keeps the mark it had.
-    const mine = Object.keys(next).filter((out) => keptMineNow.has(out) || (!keptWritten.has(out.toLowerCase()) && keptWasMine.has(out)));
+    const mine = Object.keys(next).filter((out) => keptMineNow.has(out) || keptWasMine.has(out));
     try { writeKeptRecord(keptRecord, next, mine); } catch (e) {
       if (!e.code) throw e;
       printWarning(`could not write ${CACHE_FOLDER}/kept-writes.json in the site folder (${e.code}); the kept-folder files this build wrote are not recorded`);

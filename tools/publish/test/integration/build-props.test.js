@@ -771,6 +771,29 @@ describe('a kept-folder prop that stops shipping', () => {
     } finally { s.cleanup(); }
   });
 
+  // Review C of #560: when the build cannot tell whether the two spellings are one file, it says so, keeps the old
+  // name in the record and keeps its mark there. The same on any disk, since the folder cannot be read either way.
+  it('a case-only address change whose folder cannot be read leaves the old name, says so, and keeps its mark', (t) => {
+    const s = setupOverMine();
+    try {
+      recase(s);
+      const folder = path.join(s.player.dir, 'gazetteer');
+      const real = fs.readdirSync;
+      t.mock.method(fs, 'readdirSync', function (p, ...rest) {
+        if (String(p) === folder) throw Object.assign(new Error('EIO: i/o error'), { code: 'EIO' });
+        return real.call(fs, p, ...rest);
+      });
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      t.mock.restoreAll();
+      assert.ok(lines.includes('  left in kept folder: gazetteer/invitation.html (could not tell whether it is gazetteer/Invitation.html)'), lines.join('\n'));
+      assert.ok(named(s).length >= 1);
+      const rec = record(s);
+      assert.ok('gazetteer/invitation.html' in rec.files, JSON.stringify(rec));
+      assert.ok('gazetteer/Invitation.html' in rec.files, JSON.stringify(rec));
+      assert.deepEqual(rec.replaced, ['gazetteer/invitation.html']);
+    } finally { t.mock.restoreAll(); s.cleanup(); }
+  });
+
   // Review of #560: a build that stops after the GM's file is overwritten still has it marked.
   it("a build that stops after replacing a GM's file keeps the mark", () => {
     const s = setup('', false);
