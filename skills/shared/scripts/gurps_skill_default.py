@@ -60,6 +60,9 @@ UNARMED_RE = re.compile(r"^(?:punch|kick|bite|slam|grapple|grab|head ?butt|"
                         r"elbow|knee|shove|trip|unarmed)\b", re.I)
 HEADING_RE = re.compile(r"^(#{2,3})\s+(.+?)\s*$")
 NO_DEFAULT = {"", "—", "-", "–", "none"}
+# Skills whose specialties give no default to each other (Artillery, B178),
+# so a bought specialty is no reason to ask.
+NO_SPECIALTY_DEFAULTS = {"artillery"}
 
 
 class Refused(Exception):
@@ -222,7 +225,7 @@ def plan(text: str, skill: str, difficulty: str | None = None,
         difficulty = difficulty or found[0]
         defaults = defaults if defaults is not None else found[1]
         page = found[2]
-        if " (" in _key(skill) and not any(
+        if " (" in _key(skill) and _stem(skill) not in NO_SPECIALTY_DEFAULTS and not any(
                 _stem(t) == _stem(skill) for t in _terms(defaults)):
             others = sorted(n for n in bought
                             if n != _key(skill) and _stem(n) == _stem(skill))

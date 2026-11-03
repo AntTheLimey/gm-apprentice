@@ -4,7 +4,7 @@
 
 | Skill | Diff | Page | Defaults | Notes |
 |-------|------|------|----------|-------|
-| Axe/Mace | DX/A | B208 | DX-5, Flail-4 | Covers axes, maces, picks |
+| Axe/Mace | DX/A | B208 | DX-5, Flail-4, Two-Handed Axe/Mace-3 | Covers axes, maces, picks |
 | Boxing | DX/A | B182 | — | +1/die damage, Parry = Skill/2+3 |
 | Brawling | DX/E | B182 | — | +1/die above skill 2, Parry = Skill/2+3 |
 | Broadsword | DX/A | B208 | DX-5, Force Sword-4, Rapier-4, Saber-4, Shortsword-2, Two-Handed Sword-4 | Parry = Skill/2+3 |
@@ -15,10 +15,10 @@
 | Fast-Draw (Sword) | DX/E | B194 | — | |
 | Fast-Draw (Two-Handed Sword) | DX/E | B194 | — | |
 | Flail | DX/H | B208 | DX-6 | Cannot be parried; no Parry |
-| Force Sword | DX/A | B208 | DX-5 | Sci-fi; Parry = Skill/2+3 |
+| Force Sword | DX/A | B208 | DX-5, Broadsword-3, Jitte/Sai-3, Knife-3, Main-Gauche-3, Rapier-3, Saber-3, Shortsword-3, Smallsword-3, Two-Handed Sword-3 | Sci-fi; Parry = Skill/2+3 |
 | Force Whip | DX/A | B209 | DX-5, Whip-3 | Sci-fi flexible weapon |
 | Garrote | DX/E | B197 | DX-4 | Grappling attack from behind |
-| Jitte/Sai | DX/A | B208 | DX-5 | Parry = Skill/2+3; good disarm |
+| Jitte/Sai | DX/A | B208 | DX-5, Force Sword-4, Main-Gauche-4, Shortsword-3 | Parry = Skill/2+3; good disarm |
 | Judo | DX/H | B203 | — | Can parry weapons at -3; grapple |
 | Karate | DX/H | B203 | — | +1/die at DX+1, +2/die at DX+2 |
 | Knife | DX/E | B208 | DX-4, Force Sword-3, Main-Gauche-3, Shortsword-3 | Parry = Skill/2+3; Fast Draw common |
@@ -33,15 +33,15 @@
 | Shield (Shield) | DX/E | B220 | DX-4 | Block = Skill/2+3 |
 | Shield (Buckler) | DX/E | B220 | DX-4 | Smaller shield variant |
 | Shield (Force) | DX/E | B220 | DX-4 | Sci-fi shield |
-| Shortsword | DX/A | B209 | DX-5, Broadsword-2 | Shorter blade |
+| Shortsword | DX/A | B209 | DX-5, Broadsword-2, Force Sword-4, Jitte/Sai-3, Knife-4, Saber-4, Smallsword-4, Tonfa-3 | Shorter blade |
 | Smallsword | DX/A | B208 | DX-5, Main-Gauche-3, Rapier-3, Saber-3, Shortsword-4 | Light thrusting weapon |
 | Spear | DX/A | B208 | DX-5, Polearm-4, Staff-2 | Reach 1-2; can be thrown |
 | Staff | DX/A | B208 | DX-5, Polearm-4, Spear-2 | Reach 1-2; Parry = Skill/2+3 |
 | Sumo Wrestling | DX/A | B223 | — | Shoves and slams |
-| Tonfa | DX/A | B209 | DX-5 | Parry = Skill/2+3 |
-| Two-Handed Axe/Mace | DX/A | B208 | DX-5, Axe/Mace-3 | Two-handed; high damage |
+| Tonfa | DX/A | B209 | DX-5, Shortsword-3 | Parry = Skill/2+3 |
+| Two-Handed Axe/Mace | DX/A | B208 | DX-5, Axe/Mace-3, Polearm-4, Two-Handed Flail-4 | Two-handed; high damage |
 | Two-Handed Flail | DX/H | B208 | DX-6, Flail-3 | Cannot be parried |
-| Two-Handed Sword | DX/A | B209 | DX-5, Broadsword-4 | Reach 1-2 |
+| Two-Handed Sword | DX/A | B209 | DX-5, Broadsword-4, Force Sword-4 | Reach 1-2 |
 | Whip | DX/A | B209 | DX-5 | Reach 1-7; flexible |
 | Wrestling | DX/A | B228 | — | Grappling; +1 per 2 pts of ST |
 
@@ -67,11 +67,11 @@
 | Fast-Draw (Ammo) | DX/E | B194 | — | Quick reload |
 | Fast-Draw (Long Arm) | DX/E | B194 | — | Quick unsling rifle |
 | Fast-Draw (Pistol) | DX/E | B194 | — | Quick draw sidearm |
-| Gunner (Beams) | DX/E | B198 | DX-4 | TL. Vehicle-mounted energy |
-| Gunner (Cannon) | DX/E | B198 | DX-4 | TL. Vehicle-mounted gun |
-| Gunner (Catapult) | DX/E | B198 | DX-4 | TL. Vehicle-mounted siege |
-| Gunner (Machine Gun) | DX/E | B198 | DX-4 | TL. Vehicle-mounted MG |
-| Gunner (Rockets) | DX/E | B198 | DX-4 | TL. Vehicle-mounted rockets |
+| Gunner (Beams) | DX/E | B198 | DX-4, Gunner (Cannon or Catapult or Machine Gun or Rockets)-4 | TL. Vehicle-mounted energy |
+| Gunner (Cannon) | DX/E | B198 | DX-4, Gunner (Beams or Catapult or Machine Gun or Rockets)-4 | TL. Vehicle-mounted gun |
+| Gunner (Catapult) | DX/E | B198 | DX-4, Gunner (Beams or Cannon or Machine Gun or Rockets)-4 | TL. Vehicle-mounted siege |
+| Gunner (Machine Gun) | DX/E | B198 | DX-4, Gunner (Beams or Cannon or Catapult or Rockets)-4 | TL. Vehicle-mounted MG |
+| Gunner (Rockets) | DX/E | B198 | DX-4, Gunner (Beams or Cannon or Catapult or Machine Gun)-4 | TL. Vehicle-mounted rockets |
 | Guns (Grenade Launcher) | DX/E | B198 | DX-4, Guns (Light Machine Gun or Musket or Pistol or Rifle or Shotgun or Submachine Gun or Gyroc or Light Anti-Armor Weapon)-4 | TL. |
 | Guns (Gyroc) | DX/E | B198 | DX-4, Guns (Light Machine Gun or Musket or Pistol or Rifle or Shotgun or Submachine Gun or Grenade Launcher or Light Anti-Armor Weapon)-4 | TL. Gyrojet firearms |
 | Guns (Light Anti-Armor Weapon) | DX/E | B198 | DX-4, Guns (Light Machine Gun or Musket or Pistol or Rifle or Shotgun or Submachine Gun or Grenade Launcher or Gyroc)-4 | TL. LAW, RPG |
@@ -157,11 +157,11 @@ to -4. Key cross-defaults:
 
 - Broadsword defaults to Shortsword-2, Two-Handed Sword-4,
   Force Sword-4, Rapier-4, Saber-4
-- Shortsword defaults to Broadsword-2, Knife-4
+- Shortsword defaults to Broadsword-2, Jitte/Sai-3, Tonfa-3, Knife-4 and others (B208)
 - Knife defaults to Force Sword-3, Main-Gauche-3, Shortsword-3 (B208)
 - Staff defaults to Spear-2, Polearm-4
 - Spear defaults to Staff-2, Polearm-4
-- Axe/Mace defaults to Two-Handed Axe/Mace-3, Flail-4
+- Axe/Mace defaults to Two-Handed Axe/Mace-3, Flail-4 (B208)
 - Judo has no default (B203)
 - Wrestling has no default (B228); nor has Sumo Wrestling (B223)
 - Boxing has no default (B182)
@@ -174,6 +174,7 @@ Key defaults (the table above lists each specialty's):
 
 - All Guns specializations default to DX-4
 - Between Guns specs: -2; to or from Grenade Launcher, Gyroc or LAW: -4 (B198)
+- Between Gunner specs: -4 (B198)
 - Beam Weapons specs default to DX-4, other specs at -4; Pistol and Rifle to the same Guns spec at -4 (B179)
 - Crossbow defaults to DX-4
 - Bow defaults to DX-5

@@ -84,24 +84,24 @@ include one as a build centerpiece.
 
 | Skill | Diff | Page | Defaults | Notes |
 |-------|------|------|----------|-------|
-| Axe/Mace | DX/A | B208 | DX-5, Flail-4 | Axes, maces, picks |
+| Axe/Mace | DX/A | B208 | DX-5, Flail-4, Two-Handed Axe/Mace-3 | Axes, maces, picks |
 | Boxing | DX/A | B182 | — | +1/die dmg; Parry Skill/2+3 |
 | Brawling | DX/E | B182 | — | +1/die above 2; Parry Skill/2+3 |
-| Broadsword | DX/A | B208 | DX-5, Shortsword-2 | |
+| Broadsword | DX/A | B208 | DX-5, Force Sword-4, Rapier-4, Saber-4, Shortsword-2, Two-Handed Sword-4 | |
 | Fast-Draw (var) | DX/E | B194 | — | Knife, Sword, Pistol, etc. |
 | Flail | DX/H | B208 | DX-6 | Can't be parried; no Parry |
 | Judo | DX/H | B203 | — | Parry weapons at -3; grapple |
 | Karate | DX/H | B203 | — | +1/die at DX+1, +2/die at DX+2 |
-| Knife | DX/E | B208 | DX-4 | |
-| Polearm | DX/A | B208 | DX-5, Spear-4 | Reach 2-3; two-handed |
-| Rapier | DX/A | B208 | DX-5 | Fencing parry (0F) |
+| Knife | DX/E | B208 | DX-4, Force Sword-3, Main-Gauche-3, Shortsword-3 | |
+| Polearm | DX/A | B208 | DX-5, Spear-4, Staff-4, Two-Handed Axe/Mace-4 | Reach 2-3; two-handed |
+| Rapier | DX/A | B208 | DX-5, Broadsword-4, Main-Gauche-3, Saber-3, Smallsword-3 | Fencing parry (0F) |
 | Shield | DX/E | B220 | DX-4 | Block = Skill/2+3 |
-| Shortsword | DX/A | B209 | DX-5, Broadsword-2 | |
-| Spear | DX/A | B208 | DX-5, Staff-2 | Reach 1-2; throwable |
-| Staff | DX/A | B208 | DX-5, Spear-2 | Reach 1-2; Parry +2 |
-| Two-Handed Sword | DX/A | B209 | DX-5, Broadsword-4 | Reach 1-2 |
-| Two-Handed Axe/Mace | DX/A | B208 | DX-5, Axe/Mace-3 | High damage |
-| Wrestling | DX/A | B228 | DX-5 | Grapple; +1 per 2 ST |
+| Shortsword | DX/A | B209 | DX-5, Broadsword-2, Force Sword-4, Jitte/Sai-3, Knife-4, Saber-4, Smallsword-4, Tonfa-3 | |
+| Spear | DX/A | B208 | DX-5, Polearm-4, Staff-2 | Reach 1-2; throwable |
+| Staff | DX/A | B208 | DX-5, Polearm-4, Spear-2 | Reach 1-2; Parry +2 |
+| Two-Handed Sword | DX/A | B209 | DX-5, Broadsword-4, Force Sword-4 | Reach 1-2 |
+| Two-Handed Axe/Mace | DX/A | B208 | DX-5, Axe/Mace-3, Polearm-4, Two-Handed Flail-4 | High damage |
+| Wrestling | DX/A | B228 | — | Grapple; +1 per 2 ST |
 
 ## Combat Skills — Ranged
 
@@ -109,13 +109,13 @@ include one as a build centerpiece.
 |-------|------|------|----------|-------|
 | Bow | DX/A | B182 | DX-5 | ST-based damage |
 | Crossbow | DX/E | B186 | DX-4 | Fixed ST; slow reload |
-| Guns (Pistol) | DX/E | B198 | DX-4 | TL. Handguns |
-| Guns (Rifle) | DX/E | B198 | DX-4 | TL. Rifles |
-| Guns (Shotgun) | DX/E | B198 | DX-4 | TL. Shotguns |
-| Guns (SMG) | DX/E | B198 | DX-4 | TL. Submachine guns |
-| Guns (LMG) | DX/E | B198 | DX-4 | TL. Squad automatic |
-| Guns (LAW) | DX/E | B198 | DX-4 | TL. LAW, RPG |
-| Gunner (Machine Gun) | DX/E | B198 | DX-4 | TL. Vehicle-mounted |
+| Guns (Pistol) | DX/E | B198 | DX-4, Guns (Light Machine Gun or Musket or Rifle or Shotgun or Submachine Gun)-2, Guns (Grenade Launcher or Gyroc or Light Anti-Armor Weapon)-4 | TL. Handguns |
+| Guns (Rifle) | DX/E | B198 | DX-4, Guns (Light Machine Gun or Musket or Pistol or Shotgun or Submachine Gun)-2, Guns (Grenade Launcher or Gyroc or Light Anti-Armor Weapon)-4 | TL. Rifles |
+| Guns (Shotgun) | DX/E | B198 | DX-4, Guns (Light Machine Gun or Musket or Pistol or Rifle or Submachine Gun)-2, Guns (Grenade Launcher or Gyroc or Light Anti-Armor Weapon)-4 | TL. Shotguns |
+| Guns (SMG) | DX/E | B198 | DX-4, Guns (Light Machine Gun or Musket or Pistol or Rifle or Shotgun)-2, Guns (Grenade Launcher or Gyroc or Light Anti-Armor Weapon)-4 | TL. Submachine guns |
+| Guns (LMG) | DX/E | B198 | DX-4, Guns (Musket or Pistol or Rifle or Shotgun or Submachine Gun)-2, Guns (Grenade Launcher or Gyroc or Light Anti-Armor Weapon)-4 | TL. Squad automatic |
+| Guns (LAW) | DX/E | B198 | DX-4, Guns (Light Machine Gun or Musket or Pistol or Rifle or Shotgun or Submachine Gun or Grenade Launcher or Gyroc)-4 | TL. LAW, RPG |
+| Gunner (Machine Gun) | DX/E | B198 | DX-4, Gunner (Beams or Cannon or Catapult or Rockets)-4 | TL. Vehicle-mounted |
 | Thrown Weapon (var) | DX/E | B226 | DX-4 | Knife, Spear, Axe, etc. |
 | Throwing | DX/A | B226 | DX-3 | General throwing; grenades |
 

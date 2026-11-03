@@ -243,19 +243,34 @@ class SkillDefaultTests(unittest.TestCase):
             self.assertIn(f"(default {source},", msg)
 
     def test_a_specialty_the_tables_give_no_sibling_default_asks(self):
-        # Gunner's defaults between specialties are not in the tables.
+        # Thrown Weapon's defaults between most specialties are not in the
+        # tables (only Harpoon and Spear, B226).
         sheet = SHEET.replace("| Guns (Pistol) |",
-                              "| Gunner (Beams) | DX/E | DX+0 | [1] | 14 | 14 |\n"
+                              "| Thrown Weapon (Axe/Mace) | DX/E | DX+0 | [1] | 14 | 14 |\n"
                               "| Guns (Pistol) |")
-        got, after = run(sheet, "Gunner (Cannon)", "--write")
+        got, after = run(sheet, "Thrown Weapon (Knife)", "--write")
         self.assertEqual(got.returncode, 1)
         self.assertTrue(got.stdout.startswith("CHECK-DEFAULT\t"), got.stdout)
-        self.assertIn("gunner (beams) at 14", got.stdout)
+        self.assertIn("thrown weapon (axe/mace) at 14", got.stdout)
         self.assertEqual(after, sheet)
-        got, after = run(sheet, "Gunner (Cannon)", "--difficulty", "DX/E",
-                         "--default", "DX-4, Gunner (Beams)-4", "--write")
+        got, after = run(sheet, "Thrown Weapon (Knife)", "--difficulty", "DX/E",
+                         "--default", "DX-4", "--write")
         self.assertEqual(got.returncode, 0, got.stderr)
-        self.assertIn("| Gunner (Cannon) | DX/E | DX-4 | [0] | 10 | 10 |", after)
+        self.assertIn("| Thrown Weapon (Knife) | DX/E | DX-4 | [0] | 10 | 10 |", after)
+
+    def test_gunner_specialties_and_artillery(self):
+        # B198: Gunner specialties at -4 from each other. B178: Artillery's
+        # specialties give no default to each other, so nothing is asked.
+        sheet = SHEET.replace("| Guns (Pistol) |",
+                              "| Artillery (Cannon) | IQ/A | IQ+0 | [2] | 12 | 12 |\n"
+                              "| Gunner (Beams) | DX/E | DX+0 | [1] | 14 | 14 |\n"
+                              "| Guns (Pistol) |")
+        self.assertIn("(default DX-4, level 10)", gsd.plan(sheet, "Gunner (Cannon)")[1])
+        sheet = sheet.replace("| Gunner (Beams) | DX/E | DX+0 | [1] | 14 | 14 |", "| Gunner (Beams) | DX/E | DX+3 | [8] | 17 | 17 |")
+        self.assertIn("(default Gunner (Beams)-4, level 13)", gsd.plan(sheet, "Gunner (Cannon)")[1])
+        kind, msg, _new = gsd.plan(sheet, "Artillery (Bombs)")
+        self.assertEqual(kind, "WOULD-ADD", msg)
+        self.assertIn("(default IQ-5, level 7)", msg)
 
     def test_a_list_of_specialties_is_one_default_each(self):
         self.assertEqual(gsd._terms("DX-4, Guns (Pistol or Rifle)-2, Axe/Mace-3"),
