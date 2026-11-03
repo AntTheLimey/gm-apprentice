@@ -68,6 +68,21 @@ class NoteFaultCodeTests(unittest.TestCase):
             split += bool(named)
         self.assertGreaterEqual(split, 3)
 
+    def test_the_list_and_the_stubs_name_the_same_files(self):
+        # The list after the code table and each code's own section must
+        # send the agent to the same file.
+        listed = dict(re.findall(
+            r"(?m)^- `([A-Z_]+)`: `site-faults/([a-z0-9-]+\.md)`$", QA))
+        stubs = {}
+        for code in CODES:
+            section = re.search(rf"(?ms)^## {code}\n(.*?)(?=^## |\Z)", QA)
+            named = re.findall(r"`site-faults/([a-z0-9-]+\.md)`",
+                               section.group(1))
+            if named:
+                stubs[code] = named[0]
+        self.assertTrue(stubs)
+        self.assertEqual(listed, stubs)
+
     def test_every_split_file_is_named_from_site_faults(self):
         # A file nobody points at is never read.
         files = sorted(p.name for p in SPLIT.glob("*.md"))

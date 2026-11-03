@@ -33,8 +33,10 @@ Offer each row's fix as it reads. Where the fix is not all of it:
 - **A file the prop's page links** (not there, outside its folder, a
   letter-case difference, an address starting with `/`): show the line
   of the page that links it. A folder under the page's will do as well
-  as beside it. The page is the GM's own work: never edit it without
-  saying exactly what changes.
+  as beside it. Where the file is already there (a letter-case
+  difference, or the same file reached by another path), correct the
+  link to match instead: moving it can break other notes. The page is
+  the GM's own work: never edit it without saying exactly what changes.
 - **A kind the page cannot link** (audio, video, a PDF, another page):
   show the line. To make a PDF a prop of its own: a prop note
   (`shared/templates/prop.md`) beside the file with `prop_file` naming
@@ -49,7 +51,9 @@ Offer each row's fix as it reads. Where the fix is not all of it:
   note describes.
 - **The style is unknown or cannot be used:** for a vault style, show
   the line of the file the row names (save it as UTF-8 on a yes, where
-  that is the fault); never edit a plugin style.
+  that is the fault). A style not in the vault's `_meta/prop-styles/`
+  is the plugin's: never edit it, whatever the row's fix says; tell the
+  GM to reinstall the plugin.
 - **The style leaves out assets** (the page is still built): show the
   line of `style.css` that wants each one, if any. Besides moving a
   picture or font out of a subfolder directly into `assets/`, a link to
