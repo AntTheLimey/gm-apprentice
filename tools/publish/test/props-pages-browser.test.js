@@ -20,7 +20,7 @@ test('a two-sheet page prints as 2 pages', { skip: browserSkip() }, async (t) =>
   fs.writeFileSync(path.join(out, 'two.html'),
     '<!doctype html><style>.sheet{break-after:page;height:200px}</style><div class="sheet">one</div><div class="sheet">two</div>');
   const [row] = await rows(v.configPath, [{ address: 'two.html' }], offline);
-  assert.equal(row.pages, 2);
+  assert.deepEqual(row, { address: 'two.html', pages: 2, why: null });
 });
 
 test('a held styled prop with two sheets counts 2 pages, and nothing is written to the site', { skip: browserSkip() }, async (t) => {
@@ -28,8 +28,7 @@ test('a held styled prop with two sheets counts 2 pages, and nothing is written 
     'Props/Note.md': '---\ntype: prop\nprop_style: letter\nprop_breaks: "PAGE TWO"\n---\nA note.\n\n## The Text\n\nDear friend,\n\nthe first sheet.\n\nPAGE TWO, and the second.\n',
   });
   const [row] = await rows(v.configPath, [{ note: 'Props/Note.md' }], offline);
-  assert.equal(row.pages, 2);
-  assert.equal(row.why, null);
+  assert.deepEqual({ pages: row.pages, why: row.why }, { pages: 2, why: null });
   assert.deepEqual(fs.readdirSync(v.siteDir), ['vault.config.json']);
 });
 
