@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.127] — 2026-11-03
+
+Five small fixes: a GM Story page picture count, Site Faults rows that carry their fix, a GURPS skill the sheet lacks added at its default, a kept-folder rename on a Mac or Windows disk, and `links.py unlink` picking single links. Publish tool 1.62.2. No vault change is needed.
+
+### Added
+
+- `links.py unlink … --in <page> --pick N` turns only the links of the preview's `WOULD-CHANGE` rows you pick (counted from 1, repeat for more); every other link it would have turned is listed as `KEPT` (not picked). campaign-qa's walk-through for a note with no page that published pages name now uses it, so a harmless second link to the note keeps its destination when only the telling one is turned into words (#577).
+- `gurps_skill_default.py <sheet> "<skill>" [--write]` adds a GURPS skill to a PC's Skills table at its default level for 0 points: the best of its defaults, from an attribute or a skill the sheet has bought (never from one known only at default), with the difficulty and defaults from the ttrpg-expert GURPS tables. A skill with no default is not added, and the script says it cannot be used unskilled. A skill the tables do not list, or a specialty whose listed defaults may miss its other specialties, asks for its difficulty and defaults (`--difficulty`, `--default`).
+
+### Changed
+
+- campaign-qa's Site Faults check no longer asks anyone for a GURPS skill level the sheet lacks (the to-hit calculator's row for a weapon whose skill is not on the sheet). A skill missing from the sheet is used at its default with 0 points spent, so the check adds it at that level with the script above, writes the weapon's Skill cell with that level and reports what it added. A skill with no default is reported as one that cannot be used unskilled, and nothing is added (#571).
+- Every Site Faults row now ends with the publish tool's fix where the tool gives one: a note with no page that published pages name, a secret or withheld name printed on a page, a never-show word, a stray `%%` and a code fence that never closes now carry it too. The check's guidance no longer repeats those fixes in its own words (#570).
+
+### Fixed
+
+- On the GM site, a Story page whose wrap-up players do not see, at an address where players see another Story page made from a different wrap-up, now counts the pictures of the players' page for the once-per-chapter rule. Before, it counted its own recap's pictures, so a later Story page in the same chapter could picture differently from the players' page (#569).
+- A prop in a kept folder whose `prop_address` changes only in letter case (`gazetteer/invitation.html` to `gazetteer/Invitation.html`) now takes its new spelling on a Mac or Windows disk. The build renames the file, in two steps through a temporary name, before writing it, and says `renamed in kept folder: … to … (its address changed case)`, so git sees the rename and the deployed site serves the new address. A rename the disk refuses is a warning, and the file keeps its old spelling. A disk that tells case apart is unchanged (#576).
+
+---
+
 ## [1.10.126] — 2026-11-03
 
 Two kept-folder clean-up fixes, a `props pages` fix, and browser tests that no longer fail as a vague "cancelled" on a busy machine. Publish tool 1.62.1. No vault or site change.
