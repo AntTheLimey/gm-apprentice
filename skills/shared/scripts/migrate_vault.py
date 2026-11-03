@@ -135,6 +135,11 @@ def _same(a: str, b: str) -> bool:
     return normalise(a) == normalise(b)
 
 
+def _same_entry(a: str, b: str) -> bool:
+    """Two mirror entries that differ only in where lines wrap are the same."""
+    return " ".join(a.split()) == " ".join(b.split())
+
+
 REGENCY_LINE_NOTE_RE = re.compile(r"[ \t]*<!--.*?-->")
 COC_FAMILY = ("coc-7e", "coc-7e-regency")
 # The template's own Reputation line, as the Regency build writes it.
@@ -486,7 +491,7 @@ def find_schema_mirror(vault: Path) -> list[Item]:
     mine = type_entries(text)
     if _section_span(text) is None:
         return []
-    stale = [n for n in canonical if n in mine and not _same(mine[n], canonical[n])]
+    stale = [n for n in canonical if n in mine and not _same_entry(mine[n], canonical[n])]
     missing = [n for n in canonical if n not in mine]
     if not stale and not missing:
         return []

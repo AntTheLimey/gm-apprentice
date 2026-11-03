@@ -13,19 +13,26 @@ value, the entity falls through to the smart wiki fallback.
 
 ## Dedicated Templates
 
-These entity types have purpose-built page layouts.
+These entity types have purpose-built page layouts. Under each type
+the list of template fields is generated from the note templates
+(`scripts/gen_field_lists.py`). The table beside it covers only what
+the site does with a field, or reads though the template does not carry it.
 
 ### PC (Player Character)
 
 `type: pc`
 
+<!-- generated:fields-pc (scripts/gen_field_lists.py) -->
+Template fields: `player_name`, `occupation`, `age`, `gender`,
+`nationality`, `status` (alive/dead/missing/retired/unknown),
+`key_traits`, `portrait`, `display_meta`, `sheet_source`, `hook`,
+`dndbeyond`.
+<!-- /generated:fields-pc -->
+
 | Field | Status | Description |
 |-------|--------|-------------|
-| `occupation` | Optional | Background or character class |
-| `status` | Optional | alive, dead, missing, retired, unknown, or a word in `vault.statuses.out_of_play` (which takes the PC out of play) |
+| `status` | Optional | Also a word in `vault.statuses.out_of_play` (which takes the PC out of play) |
 | `key_traits` | Optional | List of defining traits (shown on PC card and landing page) |
-| `player_name` | Optional | Real-world player name |
-| `portrait` | Optional | Path relative to vault root (e.g. `_attachments/characters/slug.jpg`) |
 | `live_key` | Optional | Written by `relink.py` when it renames a PC, so the PC keeps their live stats on the site. Leave it alone |
 | `display_meta` | Optional | Ordered list of frontmatter field names to show in the meta row (with none, the setting `player_site.sheets.header_facts` decides) |
 | `sheet_source` | Optional | Where the sheet is kept when it is not in the file. Not shown on the site (unless listed in `display_meta`). Without it, a PC whose note gives the system's sheet nothing to render is named in the build's "published with no character sheet" warning |
@@ -59,14 +66,15 @@ beneath them. No accordion — the content flows as continuous prose.
 
 `type: npc`
 
+<!-- generated:fields-npc (scripts/gen_field_lists.py) -->
+Template fields: `companion`, `occupation`, `age`, `gender`,
+`nationality`, `status` (alive/dead/missing/unknown), `location`,
+`portrait`.
+<!-- /generated:fields-npc -->
+
 | Field | Status | Description |
 |-------|--------|-------------|
-| `occupation` | Optional | Role label (e.g. "Patron", "Antagonist", "Shopkeeper") |
-| `nationality` | Optional | Origin or nationality |
-| `status` | Optional | alive, dead, missing, unknown |
-| `age` | Optional | Character age |
 | `rank` | Optional | Military or organizational rank |
-| `portrait` | Optional | Path relative to vault root |
 | `companion` | Optional | `true`: travels with the party, so Story pages never picture them, as with a PC |
 
 Body content renders below the header card. To keep a body section
@@ -79,13 +87,15 @@ heading to `player_site.hide.sections`.
 
 `type: location`
 
+<!-- generated:fields-location (scripts/gen_field_lists.py) -->
+Template fields: `location_type`, `parent_location`, `atmosphere`,
+`portrait`.
+<!-- /generated:fields-location -->
+
 | Field | Status | Description |
 |-------|--------|-------------|
-| `location_type` | Optional | Type label (e.g. "City", "Building", "Wilderness") |
 | `parent_location` | Optional | `[[wiki-link]]` to the containing location — also the grouping key for the Locations listing page; entries without it group by `location_type`, else under "Other" |
-| `security_level` | Optional | Security descriptor (rendered as badge) |
 | `atmosphere` | Optional | Tone or mood of the location (rendered as badge) |
-| `portrait` | Optional | Path relative to vault root |
 
 The parent location renders as a breadcrumb above the page title
 if the linked note can be resolved.
@@ -95,6 +105,11 @@ if the linked note can be resolved.
 ### Creature
 
 `type: creature`
+
+<!-- generated:fields-creature (scripts/gen_field_lists.py) -->
+Template fields: `creature_type`, `threat_level`, `location`,
+`portrait`.
+<!-- /generated:fields-creature -->
 
 | Field | Status | Description |
 |-------|--------|-------------|
@@ -110,7 +125,6 @@ if the linked note can be resolved.
 | `threat_level` | Optional | Threat rating (rendered as badge) |
 | `abilities` | Optional | List of special abilities (rendered as bullet list) |
 | `weaknesses` | Optional | List of vulnerabilities (rendered as bullet list) |
-| `portrait` | Optional | Path relative to vault root |
 
 The creature template renders a combat stat block at the top of
 the page followed by body content. Intended for in-session lookup
@@ -121,6 +135,10 @@ during encounters.
 ### Item
 
 `type: item`
+
+<!-- generated:fields-item (scripts/gen_field_lists.py) -->
+Template fields: `item_type`, `current_holder`, `origin`, `portrait`.
+<!-- /generated:fields-item -->
 
 | Field | Status | Description |
 |-------|--------|-------------|
@@ -133,7 +151,6 @@ during encounters.
 | `rarity` | Optional | Rarity level (rendered as badge) |
 | `current_holder` | Optional | `[[wiki-link]]` to current owner |
 | `origin` | Optional | `[[wiki-link]]` to origin location or entity |
-| `portrait` | Optional | Path relative to vault root |
 
 Body content follows the stat block.
 
@@ -145,15 +162,17 @@ Body content follows the stat block.
 
 Both factions and organizations use the same template.
 
+<!-- generated:fields-faction (scripts/gen_field_lists.py) -->
+Template fields: `faction_type`, `goals`, `resources`, `leadership`,
+`territory`, `tier`, `currentPlan`, `planProgress`, `alliances`,
+`recentActions`, `status` (active/allied/destroyed/dormant/weakened),
+`part_of`, `portrait`.
+<!-- /generated:fields-faction -->
+
 | Field | Status | Description |
 |-------|--------|-------------|
 | `faction_type` | Optional | Type label (rendered as badge; groups the Factions listing — military, corporation, government get curated headings; legacy camelCase factionType is honored) |
 | `alignment` | Optional | Faction alignment (rendered as badge) |
-| `goals` | Optional | List of faction goals |
-| `leadership` | Optional | `[[wiki-link]]` to leader entity |
-| `territory` | Optional | `[[wiki-link]]` to home location |
-| `resources` | Optional | Brief description of faction resources |
-| `portrait` | Optional | Path relative to vault root (faction banner or insignia) |
 
 Any entity in the vault with a `member_of` relationship pointing to
 this faction is listed under **Has member** in the faction page's
@@ -165,14 +184,18 @@ Connections section.
 
 `type: event`
 
+<!-- generated:fields-event (scripts/gen_field_lists.py) -->
+Template fields: `event_type`, `in_game_date`, `location`,
+`participants`, `outcome`.
+<!-- /generated:fields-event -->
+
 | Field | Status | Description |
 |-------|--------|-------------|
-| `event_type` | Optional | Type label (e.g. "battle", "discovery", "betrayal", "ritual") |
-| `date` | Optional | In-game date of the event |
+| `in_game_date` | Optional | In-game date of the event (an older `date` is read too) |
 | `location` | Optional | `[[wiki-link]]` to where the event occurred |
 | `participants` | Optional | List of participants — each entry can be `[[Entity]] (role)`, `[[Entity\|Display]] (role)`, or plain text |
 | `outcome` | Optional | What resulted — rendered as a highlighted callout box |
-| `portrait` | Optional | Path relative to vault root (scene art) |
+| `portrait` | Optional | Scene art. The template does not carry it |
 
 The event template renders a header card with the title, date, and
 location (linked if resolvable), followed by an outcome callout and
@@ -188,13 +211,17 @@ Body content renders below the participants section.
 
 `type: heritage`
 
+<!-- generated:fields-heritage (scripts/gen_field_lists.py) -->
+Template fields: `lifespan_range`, `maturity_age`, `average_height`,
+`notable_traits`, `portrait`.
+<!-- /generated:fields-heritage -->
+
 | Field | Status | Description |
 |-------|--------|-------------|
 | `lifespan_range` | Optional | Two-element array `[min, max]` — rendered as "min–max years" in the stat card |
 | `maturity_age` | Optional | Age at which members reach adulthood — rendered in the stat card |
 | `average_height` | Optional | Typical height range as a string (e.g. "5'6\"–6'2\"") — rendered in the stat card |
 | `notable_traits` | Optional | List of defining traits — rendered as badge pills below the header |
-| `portrait` | Optional | Path relative to vault root |
 
 The heritage template renders a stat card (lifespan, maturity,
 height) beside the portrait, with notable traits as badge pills
@@ -205,6 +232,11 @@ below. Body content follows, then the page's Connections.
 ### World Domain
 
 `type: world_domain`
+
+<!-- generated:fields-world_domain (scripts/gen_field_lists.py) -->
+Template fields: `domain`, `status` (active/inactive/stub), `summary`,
+`rules`.
+<!-- /generated:fields-world_domain -->
 
 | Field | Status | Description |
 |-------|--------|-------------|
@@ -237,18 +269,37 @@ Any other unrecognised `type` value also falls through here.
 
 `type: clue`
 
-Badges rendered: `clue_type`, `reliability`, `found_by`
+<!-- generated:fields-clue (scripts/gen_field_lists.py) -->
+Template fields: `clue_type`, `found_at`, `found_by`, `leads_to`,
+`reliability`, `discoveryState`.
+<!-- /generated:fields-clue -->
+
+Badges rendered: `clue_type`, `found_by`. Not `reliability`: a planted
+false clue would publish as "misleading".
 
 ### Document
 
 `type: document`
 
+<!-- generated:fields-document (scripts/gen_field_lists.py) -->
+Template fields: `doc_type`, `author`, `date`, `condition`,
+`current_holder`, `portrait`.
+<!-- /generated:fields-document -->
+
 Badges rendered: `document_type`, `author`, `classification`,
-`date_written`
+`date_written` (the data-field names). They show the template's
+`doc_type` and `date`; an older note that carries `document_type` or
+`date_written` itself wins when both are set. `classification` is read
+by the site and not in the template.
 
 ### Chapter
 
 `type: chapter`
+
+<!-- generated:fields-chapter (scripts/gen_field_lists.py) -->
+Template fields: `title`, `sort_order`, `status`
+(active/complete/planned), `date_range`, `location`, `overview`.
+<!-- /generated:fields-chapter -->
 
 Badges rendered: `sort_order`
 
@@ -266,6 +317,12 @@ wrap-up (`type: session_wrap`) all publish.
 ### Session
 
 `type: session`
+
+<!-- generated:fields-session (scripts/gen_field_lists.py) -->
+Template fields: `session_number`, `chapter`, `play_date`,
+`in_game_date`, `status` (planned/played/prepped/reviewed/wrap-up),
+`documents`, `world_evolved`.
+<!-- /generated:fields-session -->
 
 Badges rendered: `session_number`, `play_date`, `status`
 

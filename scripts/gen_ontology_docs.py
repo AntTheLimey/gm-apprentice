@@ -129,21 +129,21 @@ def blocks(o: dict) -> dict[str, str]:
             "genres": _genres(o), "tones": _tones(o), "synonyms": _synonyms(o), "verbs": _verbs(o)}
 
 
-def _opener(name: str) -> re.Pattern[str]:
-    return re.compile(rf"<!-- generated:{name} \(scripts/gen_ontology_docs\.py\) -->\n")
+def _opener(name: str, script: str = "gen_ontology_docs.py") -> re.Pattern[str]:
+    return re.compile(rf"<!-- generated:{name} \(scripts/{re.escape(script)}\) -->\n")
 
 
-def render(text: str, b: dict[str, str]) -> str:
+def render(text: str, b: dict[str, str], script: str = "gen_ontology_docs.py") -> str:
     """Replace the inside of each marker pair this file holds with its block."""
     for name, body in b.items():
-        opener = _opener(name)
+        opener = _opener(name, script)
         closer = f"\n<!-- /generated:{name} -->"
         found = opener.findall(text)
         if not found:
             if re.search(rf"<!-- generated:{name}\b", text):
                 raise ValueError(
                     f"marker generated:{name} is not written as "
-                    f"<!-- generated:{name} (scripts/gen_ontology_docs.py) -->")
+                    f"<!-- generated:{name} (scripts/{script}) -->")
             continue
         if len(found) > 1:
             raise ValueError(f"marker generated:{name} appears {len(found)} times")
