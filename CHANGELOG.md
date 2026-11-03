@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.125] — 2026-11-03
+
+campaign-qa's Site Faults check reads less. No vault change is needed.
+
+### Changed
+
+- The check's long walk-throughs for a note with no page that published pages name, a prop that cannot go on the site, and a GURPS sheet row the to-hit calculator cannot fully read now live in files of their own, read only when a run finds that fault. A run that finds none of them reads 12.7 KB of guidance instead of 29.8 KB.
+- Where a finding already says its own fix, the check no longer repeats it; it keeps only what the fix does not say.
+
+### Fixed
+
+- For a link to a note marked `withheld`, the check now gives the command that turns the link into words. Before, it pointed at the finding's fix, which the finding never shows.
+
+---
+
 ## [1.10.124] — 2026-11-03
 
 The per-type field lists in the schema files are now written from the note templates, so they cannot drift from them again. No vault change is needed; a vault's `_meta/entity-types.md` is offered the changed entries by the next update, and asks first for any entry you edited. No publish tool change.
