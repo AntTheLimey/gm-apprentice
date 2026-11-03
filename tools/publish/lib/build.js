@@ -447,13 +447,88 @@ function buildSite(options) {
   // own folder keeps one, and only where the image cache may live (never in the output folder or the vault).
   const keptRecord = (!gm && !dry && writes === 'all' && !options.outputDirOverride
     && imageCacheDir(configDir, { outputDirs: [outputDir], vaultPath: config.vaultPath })) ? keptRecordPath(configDir) : null;
-  const { files: keptRecorded, problem: keptRecordProblem } = keptRecord ? readKeptRecord(keptRecord) : { files: {}, problem: null };
-  // Recorded hashes by lower-case path, for the plan's own clean-up below.
-  const keptRecordedHash = new Map(Object.entries(keptRecorded).map(([out, hash]) => [out.toLowerCase(), hash]));
+  const { files: keptRecorded, replaced: keptRecordedReplaced, problem: keptRecordProblem } = keptRecord ? readKeptRecord(keptRecord) : { files: {}, replaced: new Set(), problem: null };
+  // The recorded spellings of each path, by lower case, for recordedHashFor.
+  const keptRecordedSpellings = new Map();
+  for (const out of Object.keys(keptRecorded)) {
+    const key = out.toLowerCase();
+    keptRecordedSpellings.set(key, [...(keptRecordedSpellings.get(key) || []), out]);
+  }
+  // What the record says the tool wrote at `out`: its own entry, or one of another spelling only where the disk makes
+  // the two one file (a disk that does not tell case apart). On a disk that does, another spelling's hash never says
+  // whose a file is.
+  function recordedHashFor(out) {
+    if (Object.hasOwn(keptRecorded, out)) return keptRecorded[out];
+    for (const other of keptRecordedSpellings.get(out.toLowerCase()) || []) {
+      if (twoFiles(other, out) === 'one') return keptRecorded[other];
+    }
+    return undefined;
+  }
+  // The recorded copies whose first write replaced a file of the GM's own (#560), and this build's, by exact spelling:
+  // after a case-only address change on a disk that tells case apart, the new name replaced nothing of the GM's.
+  const keptWasMine = new Set(keptRecordedReplaced);
+  const keptMineNow = new Set();
   const keptWritten = new Map();   // lower-case out -> [out, hash]
   const inKeptFolder = (out) => config.preserveDirs.some((d) => out.toLowerCase().startsWith(`${d.toLowerCase().replace(/\/+$/, '')}/`));
-  function keptWrote(out, data) {
-    if (keptRecord && inKeptFolder(out)) keptWritten.set(out.toLowerCase(), [out, hashOf(data)]);
+  // Before a write that replaces a file in a kept folder: whether that file is the GM's, neither what this build writes
+  // nor what the record says the tool wrote there.
+  function keptIsMine(full, out, data) {
+    if (!keptRecord || !inKeptFolder(out)) return false;
+    let have;
+    // A file that cannot be read cannot be shown to be the tool's: it is taken as the GM's, and marked.
+    try { have = fs.readFileSync(full); } catch (e) { return true; }
+    const hash = hashOf(have);
+    return hash !== hashOf(data) && hash !== recordedHashFor(out);
+  }
+  // `mine`: the write replaced a file of the GM's. A copy that did once stays marked while the tool writes it.
+  function keptWrote(out, data, mine = false) {
+    if (!keptRecord || !inKeptFolder(out)) return;
+    keptWritten.set(out.toLowerCase(), [out, hashOf(data)]);
+    if (mine || keptWasMine.has(out)) keptMineNow.add(out);
+  }
+  // Before a write over a file of the GM's: the mark is saved first, so a build that stops after the write still has
+  // it. The record names the path with the bytes about to be written; if the write never happens the GM's file there
+  // differs from them, and is left. A record that could not be read is never written over.
+  const keptEarly = { files: { ...keptRecorded }, replaced: new Set(keptRecordedReplaced) };
+  function keptMarkFirst(out, data) {
+    if (!keptRecord || keptRecordProblem) return;
+    keptEarly.files[out] = hashOf(data);
+    keptEarly.replaced.add(out);
+    try { writeKeptRecord(keptRecord, keptEarly.files, [...keptEarly.replaced]); } catch (e) {
+      if (!e.code) throw e;
+      printWarning(`could not record in ${CACHE_FOLDER}/kept-writes.json that ${out} replaces a file of yours (${e.code}); if this build stops before it ends, the mark is lost`);
+    }
+  }
+  // Whether a file is about to be written over one of the GM's: then its mark is saved before the write.
+  function keptReplacing(full, out, data) {
+    const mine = fs.existsSync(full) && keptIsMine(full, out, data);
+    if (mine) keptMarkFirst(out, data);
+    return mine;
+  }
+  const REPLACED_MINE = "it had replaced a file of yours; see the site repo's history";
+  // Whether two spellings of a path, differing only in letter case, are two files. Only 'two' lets the old one be
+  // removed: every folder on both paths lists each spelling as its own entry (compared in NFC), and the two have
+  // different inodes. 'one': not both are listed, and the old spelling still opens a file, as on a disk that does not
+  // tell case apart (macOS, Windows), which lists one name; a network share may give each spelling an inode of its
+  // own, so the listing decides. 'gone': not both are listed and the old spelling opens nothing. 'unknown': a folder
+  // or file could not be read, or both are listed with one inode (hard links: two entries for one file).
+  function twoFiles(oldOut, newOut) {
+    try {
+      const listed = (out) => {
+        let dir = outputDir;
+        for (const part of out.split('/')) {
+          const want = canonicalNfc(part);
+          if (!fs.readdirSync(dir).some((n) => canonicalNfc(n) === want)) return false;
+          dir = path.join(dir, part);
+        }
+        return true;
+      };
+      const oldFull = path.join(outputDir, ...oldOut.split('/'));
+      if (!listed(oldOut) || !listed(newOut)) return fs.existsSync(oldFull) ? 'one' : 'gone';
+      const x = fs.statSync(oldFull, { bigint: true });
+      const y = fs.statSync(path.join(outputDir, ...newOut.split('/')), { bigint: true });
+      return x.dev !== y.dev || x.ino !== y.ino ? 'two' : 'unknown';
+    } catch (e) { return 'unknown'; }
   }
   // A kept-folder copy's bytes, or its removal; an error the file system gives is said with the path, and the build
   // carries on (null / false). An error with no code is a fault of the tool's and is thrown.
@@ -482,8 +557,25 @@ function buildSite(options) {
     const next = {};
     for (const [out, hash] of Object.entries(keptRecorded)) {
       const key = out.toLowerCase();
-      if (keptWritten.has(key) || !inKeptFolder(out)) continue;
+      if (!inKeptFolder(out)) continue;
       const full = path.join(outputDir, ...out.split('/'));
+      // Written again, perhaps in another letter case (#560): on a disk that tells case apart the old name is a file
+      // of its own, and is looked at as any other recorded file is.
+      const again = keptWritten.get(key);
+      if (again && again[0] === out) continue;
+      const files = again ? twoFiles(out, again[0]) : null;
+      if (files === 'one') {
+        // One file under both spellings: it is still the copy that replaced the GM's.
+        if (keptWasMine.has(out)) keptMineNow.add(again[0]);
+        continue;
+      }
+      if (files === 'gone') continue;   // the old copy is not there: nothing to remove, and no mark to pass on
+      if (files === 'unknown') {
+        // In doubt it is left, said, and kept in the record with its mark, for a later build to settle.
+        console.log(`  left in kept folder: ${out} (could not tell whether it is ${again[0]})`);
+        next[out] = hash;
+        continue;
+      }
       const why = pathProblem(outputDir, out);
       if (why === 'link') {
         if (fs.existsSync(full)) next[out] = hash;
@@ -497,10 +589,13 @@ function buildSite(options) {
       if (keptHandled.has(key)) { if (same) next[out] = hash; continue; }
       if (!same) { console.log(`  left in kept folder: ${out} (it differs from what the tool wrote)`); continue; }
       if (!keptRemove(full, out)) { next[out] = hash; continue; }
-      console.log(`  removed from kept folder: ${out} (the tool wrote it, and no prop writes it now)`);
+      const reason = again ? `its address is now ${again[0]}` : 'the tool wrote it, and no prop writes it now';
+      console.log(`  removed from kept folder: ${out} (${reason}${keptWasMine.has(out) ? `; ${REPLACED_MINE}` : ''})`);
     }
     for (const [out, hash] of keptWritten.values()) next[out] = hash;
-    try { writeKeptRecord(keptRecord, next); } catch (e) {
+    // A copy written this build is marked as its write said; one carried over keeps the mark it had.
+    const mine = Object.keys(next).filter((out) => keptMineNow.has(out) || keptWasMine.has(out));
+    try { writeKeptRecord(keptRecord, next, mine); } catch (e) {
       if (!e.code) throw e;
       printWarning(`could not write ${CACHE_FOLDER}/kept-writes.json in the site folder (${e.code}); the kept-folder files this build wrote are not recorded`);
       return;
@@ -716,16 +811,24 @@ function buildSite(options) {
   const servedGoogleFonts = new Map();
   const servedLocalFonts = [];
   const fontsWritten = new Set();
-  function copyFontFiles(files) {
+  // `props`: the prop styles' fonts, which are recorded, said and marked in a kept folder as the styles' files are
+  // (#560).
+  function copyFontFiles(files, { props = false } = {}) {
     if (writes !== 'all') return;
     for (const f of files) {
       if (fontsWritten.has(f.rel)) continue;
       fontsWritten.add(f.rel);
+      const out = `fonts/${f.rel}`;
       const dest = path.join(outputDir, 'fonts', f.rel);
       ensureDir(dest);
+      const tracked = props && keptRecord && inKeptFolder(out);
+      const data = tracked ? fs.readFileSync(f.from) : null;
+      const mine = tracked && keptReplacing(dest, out, data);
       if (!copyOut(f.from, dest)) continue;
+      if (tracked) keptWrote(out, data, mine);
       if (f.family && !servedGoogleFonts.has(f.family)) servedGoogleFonts.set(f.family, { folder: f.rel.split('/')[0], from: f.from });
-      console.log(`  wrote fonts/${f.rel}`);
+      console.log(`  wrote ${out}`);
+      if (mine) console.log(`  replaces kept file: ${out}`);
     }
   }
 
@@ -2573,8 +2676,9 @@ function buildSite(options) {
       } else {
         const replaced = live && !dry && collection.replacesKept && fs.existsSync(full);
         const html = collectionTemplate(collectionBuilt, navFor, config, publishConfig);
+        const mine = replaced && keptReplacing(full, out, html);
         emit(out, html, `  wrote ${out}`);
-        if (live && !dry && !linkOnPath(full) && fs.existsSync(full)) keptWrote(out, html);
+        if (live && !dry && !linkOnPath(full) && fs.existsSync(full)) keptWrote(out, html, mine);
         if (replaced) console.log(`  replaces kept file: ${out}`);
       }
     }
@@ -2716,10 +2820,10 @@ function buildSite(options) {
         const have = keptBytes(full, f.out);
         if (have === null) continue;
         // What the tool would write now, or what an earlier build recorded writing there (#506): either is the tool's.
-        const ours = f.wants.some((want) => have.equals(want)) || (keptRecordedHash.has(key) && keptRecordedHash.get(key) === hashOf(have));
+        const ours = f.wants.some((want) => have.equals(want)) || recordedHashFor(f.out) === hashOf(have);
         if (!ours) { console.log(`  left in kept folder: ${f.out} (it differs from what the tool would write)`); continue; }
         if (!keptRemove(full, f.out)) continue;
-        console.log(`  removed from kept folder: ${f.out} (its prop is not published)`);
+        console.log(`  removed from kept folder: ${f.out} (its prop is not published${keptWasMine.has(f.out) ? `; ${REPLACED_MINE}` : ''})`);
       }
     }
     for (const r of failed) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);
@@ -2742,14 +2846,16 @@ function buildSite(options) {
       const full = path.join(outputDir, ...f.out.split('/'));
       ensureDir(full);
       const replaced = f.replacesKept && fs.existsSync(full);
+      const data = f.text !== undefined ? f.text : f.bytes;
+      const mine = replaced && keptReplacing(full, f.out, data);
       // A write the guard refuses (a link put there since the check above) is said there, counted and recorded as nothing.
       const done = f.isPage
         ? writeHtml(full, f.text, propPlan.props.find((p) => p.rel === f.rel).page, { gmCssHref: f.made ? encodeHref(relativeHref(f.out, 'css/gm.css')) : null })
-        : writeOut(full, f.text !== undefined ? f.text : f.bytes);
+        : writeOut(full, data);
       if (!done) continue;
       written += 1;
       if (typeof f.made === 'string') stylesWritten.add(f.made);
-      keptWrote(f.out, f.text !== undefined ? f.text : f.bytes);
+      keptWrote(f.out, data, mine);
       console.log(`  wrote ${f.out}`);
       if (f.was) console.log(`  ${f.out}: written as UTF-8 (it was ${f.was})`);
       shipped.add(f.rel);
@@ -2775,10 +2881,13 @@ function buildSite(options) {
       }
       const full = path.join(outputDir, ...out.split('/'));
       ensureDir(full);
+      // A file of the GM's in a kept folder at a style's path is replaced, said and marked as a prop's is (#560).
+      const mine = keptReplacing(full, out, data);
       if (!writeOut(full, data)) return;
-      keptWrote(out, data);
+      keptWrote(out, data, mine);
       written += 1;
       console.log(`  wrote ${out}`);
+      if (mine) console.log(`  replaces kept file: ${out}`);
     };
     const writtenStyles = usedStyles.filter((st) => stylesWritten.has(st.name));
     if (writtenStyles.length > 0) {
@@ -2790,7 +2899,7 @@ function buildSite(options) {
       }
       if (styleFonts.css) {
         writeFile(FONTS_CSS, styleFonts.css, first, "the prop styles' typefaces");
-        copyFontFiles(styleFonts.files);
+        copyFontFiles(styleFonts.files, { props: true });
       }
     }
     if (writes === 'all' && propPlan.props.length > 0) console.log(`Props: ${shipped.size} published (${written} files)`);

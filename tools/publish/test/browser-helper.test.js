@@ -7,7 +7,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { browserSkip, withChromeLock, whyNot, CHROME_TIMEOUT_MS } = require('./helpers/browser');
+const { describe, it } = require('node:test');
+const { browserSkip, withChromeLock, whyNot, runChrome, measure, browserBefore, CHROME_TIMEOUT_MS, HOLD_MS } = require('./helpers/browser');
 
 const found = () => '/usr/bin/chromium';
 const none = () => null;
@@ -96,7 +97,7 @@ test('the lock is held until a promise the work returns settles', async (t) => {
 
 test('asking again while this process holds the lock just runs the work', (t) => {
   const dir = privateLock(t);
-  assert.equal(withChromeLock(() => withChromeLock(() => 'inner', { dir, waitMs: 100 }), { dir }), 'inner');
+  assert.equal(withChromeLock(() => withChromeLock(() => 'inner', { dir, holdMs: 100 }), { dir }), 'inner');
   assert.ok(!fs.existsSync(dir));
 });
 
@@ -107,11 +108,32 @@ test('a lock left by a process that is gone is taken over', (t) => {
   assert.equal(withChromeLock(() => 'ran', { dir }), 'ran');
 });
 
-test('a lock held by a live process is waited for, and gives up with a plain message', (t) => {
+test('a lock one live process keeps past a turn is given up on, with a plain message', (t) => {
   const dir = privateLock(t);
   fs.mkdirSync(dir);
   fs.writeFileSync(path.join(dir, 'pid'), String(process.pid));
-  assert.throws(() => withChromeLock(() => 'ran', { dir, waitMs: 150 }), /waited 150 ms for another test's browser/);
+  assert.throws(() => withChromeLock(() => 'ran', { dir, holdMs: 150 }),
+    new RegExp(`waited \\d+ s for another test's browser: process ${process.pid} has held it longer than any turn takes`));
+});
+
+// #561: a long queue is not a fault. Every turn is bounded, so a waiter waits out any number of them; it gives up only
+// on one holder that keeps the browser past a turn.
+test('a lock passed from holder to holder is waited for longer than one turn may last', async (t) => {
+  const dir = privateLock(t);
+  // Twelve turns of 150 ms, 1.8 s in all; the waiter allows one holder 600 ms (wide enough for a slow Windows runner,
+  // whose waiter can miss a hand-off between two polls and see one holder twice running). Each turn hands the lock straight to the
+  // next (a new live holder's pid written into it), so the lock is never free until the last turn ends: a waiter
+  // that gets it has waited out every turn, and one that counted the whole wait would have given up.
+  const turns = `const fs = require('fs'); const path = require('path'); const nap = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+    const pids = [process.pid, ${process.pid}];
+    fs.mkdirSync(${JSON.stringify(dir)});
+    for (let i = 0; i < 12; i++) { fs.writeFileSync(path.join(${JSON.stringify(dir)}, 'pid'), String(pids[i % 2])); if (i === 0) process.stdout.write('go'); nap(150); }
+    fs.writeFileSync(${JSON.stringify(`${dir}.done`)}, '');
+    fs.rmSync(${JSON.stringify(dir)}, { recursive: true, force: true });`;
+  const kid = require('node:child_process').spawn(process.execPath, ['-e', turns], { stdio: ['ignore', 'pipe', 'inherit'] });
+  await new Promise((resolve) => kid.stdout.once('data', resolve));
+  assert.equal(withChromeLock(() => (fs.existsSync(`${dir}.done`) ? 'ran' : 'ran before the last turn ended'), { dir, holdMs: 600 }), 'ran');
+  await new Promise((resolve) => (kid.exitCode !== null ? resolve() : kid.on('exit', resolve)));
 });
 
 test('two processes asking for the lock never hold it together', async (t) => {
@@ -132,6 +154,85 @@ test('a failed launch is worded with its status, timeout, spawn error and what C
   assert.match(said, /status null, timed out, spawnSync chrome ETIMEDOUT; Chrome said: b \| c \| d/);
 });
 
+test('a failed launch says how long it waited for the browser and how long it ran, and how many tries', () => {
+  assert.match(whyNot({ status: 2, stderr: '', waitedMs: 45200, launchMs: 3100, tries: 2 }), /^status 2, 2 launches, after 45 s waiting for another test's browser and 3 s launching$/);
+  assert.match(whyNot({ status: 0, stderr: '', waitedMs: 10, launchMs: 900, tries: 1 }), /^status 0, after 0 s waiting for another test's browser and 1 s launching$/);
+});
+
 test('every browser launch has one shared timeout, long enough for a loaded machine', () => {
   assert.equal(CHROME_TIMEOUT_MS, 120000);
+  assert.ok(HOLD_MS >= 2 * CHROME_TIMEOUT_MS, 'a turn may be a launch and its one retry');
+});
+
+// #561: Chrome on a loaded machine can exit at once with nothing printed. A launch with no answer that did not run out
+// of time is tried once more, in the same turn.
+describe('a launch that gives no answer', { skip: process.platform === 'win32' && 'a shell script stands in for Chrome' }, () => {
+  const fake = (t, script) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'fake-chrome-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    const file = path.join(dir, 'chrome');
+    fs.writeFileSync(file, `#!/bin/sh\nn=$(cat "${dir}/count" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "${dir}/count"\n${script}\n`);
+    fs.chmodSync(file, 0o755);
+    return { file, count: () => Number(fs.readFileSync(path.join(dir, 'count'), 'utf8')) };
+  };
+  const answered = (out) => /ANSWER/.test(out);
+
+  it('is tried once more, and the second answer is used', (t) => {
+    const c = fake(t, 'if [ $n -eq 1 ]; then exit 2; fi\necho ANSWER');
+    const run = runChrome(['--dump-dom'], { chrome: c.file, answered });
+    assert.match(run.stdout, /ANSWER/);
+    assert.equal(run.tries, 2);
+    assert.equal(c.count(), 2);
+    assert.ok(Number.isFinite(run.waitedMs) && Number.isFinite(run.launchMs));
+  });
+
+  it('is tried twice at most, and an answer the first time is not tried again', (t) => {
+    const never = fake(t, 'exit 2');
+    const run = runChrome(['--dump-dom'], { chrome: never.file, answered });
+    assert.equal(run.tries, 2);
+    assert.equal(never.count(), 2);
+    const once = fake(t, 'echo ANSWER');
+    assert.equal(runChrome(['--dump-dom'], { chrome: once.file, answered }).tries, 1);
+    assert.equal(once.count(), 1);
+  });
+
+  // Review: the harness's own script holds the text 'RESULT['+got.join(',')+']END', and --dump-dom prints it. A page
+  // whose probes never finished (an empty <pre id="out">) is no answer: tried again, then said with its timings.
+  it('a printed harness whose answer is empty is no answer, tried again and said with its timings', (t) => {
+    const page = `<html><body><pre id="out"></pre><script>var t=setInterval(function(){document.getElementById('out').textContent='RESULT['+got.join(',')+']END';},100);</script></body></html>`;
+    const c = fake(t, `echo '${page.replace(/'/g, "'\\''")}'`);
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'measure-page-'));
+    t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+    fs.writeFileSync(path.join(dir, 'p.html'), '<html><head></head><body></body></html>');
+    assert.throws(() => measure(path.join(dir, 'p.html'), 400, 'function (done) { done({}); }', { chrome: c.file }),
+      /^Error: the browser gave no answer \(status 0, 2 launches, after \d+ s waiting for another test's browser and \d+ s launching/);
+    assert.equal(c.count(), 2);
+  });
+
+  it('that ran out of time is not tried again', (t) => {
+    const slow = fake(t, 'sleep 5');
+    const run = runChrome(['--dump-dom'], { chrome: slow.file, answered, timeout: 300 });
+    assert.equal(run.timedOut, true);
+    assert.equal(run.tries, 1);
+  });
+});
+
+// #561: node:test reports the tests of a suite whose \`before\` throws as "cancelled" ("test did not finish before its
+// parent"), and counts no failure. browserBefore keeps the error and fails each test with it.
+test('a browser suite whose measuring fails fails each test with the reason, never a cancel', () => {
+  const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'browser-before-')), 'suite.test.js');
+  fs.writeFileSync(file, `const { describe, it } = require('node:test');
+    const { browserBefore } = require(${JSON.stringify(require.resolve('./helpers/browser'))});
+    describe('measured', () => {
+      browserBefore(() => { throw new Error('the browser gave no answer (status 2)'); });
+      it('one', () => {}); it('two', () => {});
+    });`);
+  // Run as a test run of its own: NODE_TEST_CONTEXT would make it report to this one.
+  const env = { ...process.env };
+  delete env.NODE_TEST_CONTEXT;
+  const run = spawnSync(process.execPath, ['--test', '--test-reporter=tap', file], { encoding: 'utf8', env });
+  fs.rmSync(path.dirname(file), { recursive: true, force: true });
+  assert.match(run.stdout, /# fail 2/);
+  assert.match(run.stdout, /# cancelled 0/);
+  assert.match(run.stdout, /the browser check did not run: the browser gave no answer \(status 2\)/);
 });

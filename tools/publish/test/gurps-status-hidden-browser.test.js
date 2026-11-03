@@ -4,18 +4,18 @@
 // display, which outranks the browser's `[hidden] { display: none }`, so without the sheet's override both badges
 // showed at full HP and FP (a real bug). Skipped without Chrome or Chromium (set GM_TEST_CHROME), except on CI.
 // Replaces a test of the stylesheet's rule text.
-const { describe, it, before, after } = require('node:test');
+const { describe, it, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const matter = require('gray-matter');
 const { buildPc } = require('./helpers/pc-vault');
-const { browserSkip, measure } = require('./helpers/browser');
+const { browserSkip, measure, browserBefore } = require('./helpers/browser');
 
 describe('a GURPS status panel at full HP and FP, in a browser', { skip: browserSkip() }, () => {
   let pc;
   let r;
-  before(() => {
+  browserBefore(() => {
     const body = matter(fs.readFileSync(path.join(__dirname, 'fixtures', 'gurps', 'gurps-ronnie.md'), 'utf8')).content;
     const log = console.log; const warn = console.warn;
     console.log = () => {}; console.warn = () => {};

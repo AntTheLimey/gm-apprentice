@@ -17,28 +17,34 @@ const hashOf = (data) => crypto.createHash('sha256').update(data).digest('hex');
 // A site path the record may name: forward slashes, no empty, '.' or '..' part, not from the root.
 const plainOut = (out) => typeof out === 'string' && !out.includes('\\') && out.split('/').every((p) => p && p !== '.' && p !== '..');
 
-// { files: { out: hash }, problem }. A missing record (a site built before there was one) is empty, with no problem;
-// one that cannot be read, is not JSON, or is of another version is empty with `problem` saying why. An entry that is
-// not a plain site path with a hash is left out.
+// { files: { out: hash }, replaced, problem }. `replaced`: the files the record names whose first write replaced a
+// file of the GM's own in the kept folder (#560), a Set; a record from before there was such a list has none. A
+// missing record (a site built before there was one) is empty, with no problem; one that cannot be read, is not JSON,
+// or is of another version is empty with `problem` saying why. An entry that is not a plain site path with a hash is
+// left out.
 function readKeptRecord(file) {
   let text;
   try { text = fs.readFileSync(file, 'utf8'); } catch (e) {
-    if (e.code === 'ENOENT') return { files: {}, problem: null };
+    if (e.code === 'ENOENT') return { files: {}, replaced: new Set(), problem: null };
     if (!e.code) throw e;
-    return { files: {}, problem: e.code };
+    return { files: {}, replaced: new Set(), problem: e.code };
   }
   let data;
-  try { data = JSON.parse(text); } catch (e) { return { files: {}, problem: 'it is not JSON' }; }
+  try { data = JSON.parse(text); } catch (e) { return { files: {}, replaced: new Set(), problem: 'it is not JSON' }; }
   if (!data || typeof data !== 'object' || data.version !== VERSION) {
-    return { files: {}, problem: `it is not a version ${VERSION} record` };
+    return { files: {}, replaced: new Set(), problem: `it is not a version ${VERSION} record` };
   }
-  const files = data.files && typeof data.files === 'object' && !Array.isArray(data.files) ? data.files : {};
-  return { files: Object.fromEntries(Object.entries(files).filter(([out, h]) => plainOut(out) && typeof h === 'string')), problem: null };
+  const all = data.files && typeof data.files === 'object' && !Array.isArray(data.files) ? data.files : {};
+  const files = Object.fromEntries(Object.entries(all).filter(([out, h]) => plainOut(out) && typeof h === 'string'));
+  const replaced = new Set(Array.isArray(data.replaced) ? data.replaced.filter((out) => typeof out === 'string' && Object.hasOwn(files, out)) : []);
+  return { files, replaced, problem: null };
 }
 
-// Written whole or not at all: to a temporary file beside it, then renamed over it.
-function writeKeptRecord(file, files) {
+// Written whole or not at all: to a temporary file beside it, then renamed over it. `replaced` (any list of paths) is
+// kept for the files it names that `files` holds too.
+function writeKeptRecord(file, files, replaced = []) {
   const sorted = Object.fromEntries(Object.entries(files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
+  const replacedList = [...new Set(replaced)].filter((out) => Object.hasOwn(sorted, out)).sort();
   const dir = path.dirname(file);
   fs.mkdirSync(dir, { recursive: true });
   // A temporary file a write that never finished left behind is cleared first.
@@ -46,7 +52,7 @@ function writeKeptRecord(file, files) {
   for (const name of fs.readdirSync(dir)) if (stale.test(name)) fs.rmSync(path.join(dir, name), { force: true });
   const tmp = `${file}.${process.pid}.tmp`;
   try {
-    fs.writeFileSync(tmp, JSON.stringify({ version: VERSION, files: sorted }, null, 2) + '\n');
+    fs.writeFileSync(tmp, JSON.stringify({ version: VERSION, files: sorted, ...(replacedList.length ? { replaced: replacedList } : {}) }, null, 2) + '\n');
     fs.renameSync(tmp, file);
   } catch (e) {
     fs.rmSync(tmp, { force: true });

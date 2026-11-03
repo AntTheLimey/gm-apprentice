@@ -671,6 +671,259 @@ describe('a kept-folder prop that stops shipping', () => {
     } finally { s.cleanup(); }
   });
 
+  // #560: a copy that replaced a file of the GM's own says so as it goes; one that replaced only the tool's own does not.
+  const REPLACED = "it had replaced a file of yours; see the site repo's history";
+  const setupOverMine = (listed = true) => {
+    const s = setup('', false);
+    fs.mkdirSync(path.join(s.player.dir, 'gazetteer'), { recursive: true });
+    fs.writeFileSync(path.join(s.player.dir, 'gazetteer', 'invitation.html'), 'MINE');
+    if (listed) fs.writeFileSync(path.join(s.root, 'vault', '_meta', 'publish-list.yaml'), LIST(['Documents/Invitation.md', 'Documents/Other.md']));
+    const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+    assert.ok(lines.includes('  replaces kept file: gazetteer/invitation.html'), lines.join('\n'));
+    return s;
+  };
+
+  it("a deleted note's copy that had replaced a file of the GM's says so as it is removed", () => {
+    const s = setupOverMine();
+    try {
+      assert.deepEqual(record(s).replaced, ['gazetteer/invitation.html']);
+      // A build that writes it again keeps the mark, though the file it replaces is now the tool's.
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.deepEqual(record(s).replaced, ['gazetteer/invitation.html']);
+      fs.rmSync(noteOf(s));
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(!s.player.exists('gazetteer', 'invitation.html'));
+      assert.ok(lines.includes(`  removed from kept folder: gazetteer/invitation.html (the tool wrote it, and no prop writes it now; ${REPLACED})`), lines.join('\n'));
+      assert.ok(lines.includes('  removed from kept folder: gazetteer/props.css (the tool wrote it, and no prop writes it now)'), lines.join('\n'));
+      assert.ok(!('replaced' in record(s)));
+    } finally { s.cleanup(); }
+  });
+
+  it("an unpublished prop's copy that had replaced a file of the GM's says so as it is removed", () => {
+    const s = setupOverMine();
+    try {
+      unlist(s);
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(!s.player.exists('gazetteer', 'invitation.html'));
+      assert.ok(lines.includes(`  removed from kept folder: gazetteer/invitation.html (its prop is not published; ${REPLACED})`), lines.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  it("a copy that replaced only the tool's own earlier copy, or nothing, is not marked", () => {
+    const s = setup();
+    try {
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(!('replaced' in record(s)), JSON.stringify(record(s)));
+      fs.rmSync(noteOf(s));
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(!lines.some((l) => l.includes(REPLACED)), lines.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  // Whether the site folder's disk tells letter case apart.
+  const caseSensitiveAt = (dir) => {
+    const probe = path.join(dir, 'CASE-PROBE');
+    fs.writeFileSync(probe, '');
+    try { return !fs.existsSync(path.join(dir, 'case-probe')); } finally { fs.rmSync(probe); }
+  };
+  const recase = (s) => fs.writeFileSync(noteOf(s), fs.readFileSync(noteOf(s), 'utf8').replace('prop_address: gazetteer/invitation.html', 'prop_address: gazetteer/Invitation.html'));
+  const named = (s) => fs.readdirSync(path.join(s.player.dir, 'gazetteer')).filter((n) => /^invitation\.html$/i.test(n));
+
+  // Review of #560: one file under both spellings must never be taken for two. Where the disk does not tell case apart,
+  // a stat that fails, or inode numbers that differ per spelling (some network shares), leave the file alone.
+  for (const how of ['a stat that fails', 'a different inode per spelling']) {
+    it(`a case-only address change keeps the one file when ${how}`, (t) => {
+      const s = setup();
+      try {
+        if (caseSensitiveAt(path.join(s.player.dir, 'gazetteer'))) { t.skip('this disk tells letter case apart'); return; }
+        recase(s);
+        const real = fs.statSync;
+        t.mock.method(fs, 'statSync', function (p, o) {
+          const st = real.call(fs, p, o);
+          if (!/[\\/]gazetteer[\\/]invitation\.html$/i.test(String(p))) return st;
+          if (how === 'a stat that fails') throw Object.assign(new Error('EIO: i/o error'), { code: 'EIO' });
+          const odd = /Invitation\.html$/.test(String(p)) ? 1 : 0;
+          return Object.assign(Object.create(Object.getPrototypeOf(st)), st, { ino: typeof st.ino === 'bigint' ? st.ino + BigInt(odd) : st.ino + odd });
+        });
+        const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+        t.mock.restoreAll();
+        assert.equal(named(s).length, 1);
+        assert.match(fs.readFileSync(path.join(s.player.dir, 'gazetteer', 'Invitation.html'), 'utf8'), /You are invited/);
+        assert.ok(!lines.some((l) => /removed from kept folder: gazetteer\/invitation\.html/i.test(l)), lines.join('\n'));
+      } finally { t.mock.restoreAll(); s.cleanup(); }
+    });
+  }
+
+  // Review of #560: the mark goes with the file that replaced the GM's, by its exact spelling.
+  it("a case-only address change says the old copy had replaced a GM's file, and marks the new one only if it is that file", () => {
+    const s = setupOverMine();
+    try {
+      const sensitive = caseSensitiveAt(path.join(s.player.dir, 'gazetteer'));
+      recase(s);
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      if (sensitive) {
+        assert.ok(lines.includes(`  removed from kept folder: gazetteer/invitation.html (its address is now gazetteer/Invitation.html; ${REPLACED})`), lines.join('\n'));
+        assert.ok(!('replaced' in record(s)), JSON.stringify(record(s)));
+      } else {
+        // One file under both names: it is still the copy that replaced the GM's.
+        assert.deepEqual(record(s).replaced, ['gazetteer/Invitation.html']);
+      }
+    } finally { s.cleanup(); }
+  });
+
+  // Review C of #560: when the build cannot tell whether the two spellings are one file, it says so, keeps the old
+  // name in the record and keeps its mark there. The same on any disk, since the folder cannot be read either way.
+  it('a case-only address change whose folder cannot be read leaves the old name, says so, and keeps its mark', (t) => {
+    const s = setupOverMine();
+    try {
+      recase(s);
+      const folder = path.join(s.player.dir, 'gazetteer');
+      const real = fs.readdirSync;
+      t.mock.method(fs, 'readdirSync', function (p, ...rest) {
+        if (String(p) === folder) throw Object.assign(new Error('EIO: i/o error'), { code: 'EIO' });
+        return real.call(fs, p, ...rest);
+      });
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      t.mock.restoreAll();
+      assert.ok(lines.includes('  left in kept folder: gazetteer/invitation.html (could not tell whether it is gazetteer/Invitation.html)'), lines.join('\n'));
+      assert.ok(named(s).length >= 1);
+      const rec = record(s);
+      assert.ok('gazetteer/invitation.html' in rec.files, JSON.stringify(rec));
+      assert.ok('gazetteer/Invitation.html' in rec.files, JSON.stringify(rec));
+      assert.deepEqual(rec.replaced, ['gazetteer/invitation.html']);
+    } finally { t.mock.restoreAll(); s.cleanup(); }
+  });
+
+  // Review of #560: a build that stops after the GM's file is overwritten still has it marked.
+  it("a build that stops after replacing a GM's file keeps the mark", () => {
+    const s = setup('', false);
+    try {
+      fs.mkdirSync(path.join(s.player.dir, 'gazetteer'), { recursive: true });
+      fs.writeFileSync(path.join(s.player.dir, 'gazetteer', 'invitation.html'), 'MINE');
+      fs.writeFileSync(path.join(s.root, 'vault', '_meta', 'publish-list.yaml'), LIST(['Documents/Invitation.md', 'Documents/Other.md']));
+      const saved = { log: console.log, warn: console.warn };
+      console.warn = () => {};
+      console.log = (line) => { if (line === '  wrote gazetteer/invitation.html') throw new Error('stopped'); };
+      try { assert.throws(() => build({ configPath: s.configPath, site: 'player' }), /stopped/); } finally { Object.assign(console, saved); }
+      assert.match(s.player.read('gazetteer', 'invitation.html'), /You are invited/);
+      assert.deepEqual(record(s).replaced, ['gazetteer/invitation.html']);
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      fs.rmSync(noteOf(s));
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(lines.includes(`  removed from kept folder: gazetteer/invitation.html (the tool wrote it, and no prop writes it now; ${REPLACED})`), lines.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  // #560: an address that changes only in letter case. On a disk that tells the two apart (Linux) the old name is a
+  // file of its own and goes; on one that does not (macOS, Windows) the two are one file, the one just written.
+  // CodeRabbit on #575. A GM's file that could not be read before it is written over is taken as the GM's: marked.
+  const overMine = (s) => {
+    fs.mkdirSync(path.join(s.player.dir, 'gazetteer'), { recursive: true });
+    fs.writeFileSync(path.join(s.player.dir, 'gazetteer', 'invitation.html'), 'MINE');
+    fs.writeFileSync(path.join(s.root, 'vault', '_meta', 'publish-list.yaml'), LIST(['Documents/Invitation.md', 'Documents/Other.md']));
+  };
+  it("a file in a kept folder that cannot be read before it is replaced is marked as the GM's", (t) => {
+    const s = setup('', false);
+    try {
+      overMine(s);
+      const target = path.join(s.player.dir, 'gazetteer', 'invitation.html');
+      const real = fs.readFileSync;
+      let once = true;
+      t.mock.method(fs, 'readFileSync', function (p, ...rest) {
+        if (once && String(p) === target) { once = false; throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); }
+        return real.call(fs, p, ...rest);
+      });
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      t.mock.restoreAll();
+      assert.equal(once, false, 'the file was read before it was replaced');
+      assert.deepEqual(record(s).replaced, ['gazetteer/invitation.html']);
+    } finally { t.mock.restoreAll(); s.cleanup(); }
+  });
+
+  // The mark saved before the write: a record that cannot be written then is a warning, never silent.
+  it('a mark that cannot be saved before the write is a warning, and the build carries on', (t) => {
+    const s = setup('', false);
+    try {
+      overMine(s);
+      const real = fs.renameSync;
+      let once = true;
+      t.mock.method(fs, 'renameSync', function (from, to) {
+        if (once && String(to).endsWith('kept-writes.json')) { once = false; throw Object.assign(new Error('EIO: i/o error'), { code: 'EIO' }); }
+        return real.call(fs, from, to);
+      });
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      t.mock.restoreAll();
+      assert.ok(lines.includes('  WARNING: could not record in .gm-apprentice/kept-writes.json that gazetteer/invitation.html replaces a file of yours (EIO); if this build stops before it ends, the mark is lost'), lines.join('\n'));
+      assert.match(s.player.read('gazetteer', 'invitation.html'), /You are invited/);
+      assert.deepEqual(record(s).replaced, ['gazetteer/invitation.html'], 'the record at the end holds it');
+    } finally { t.mock.restoreAll(); s.cleanup(); }
+  });
+
+  // CodeRabbit on #575, on a disk that tells case apart: another spelling's recorded hash never says whose a file is.
+  it("another spelling's recorded hash does not make a GM's file the tool's", (t) => {
+    const s = setup();
+    try {
+      if (!caseSensitiveAt(path.join(s.player.dir, 'gazetteer'))) { t.skip('this disk does not tell letter case apart'); return; }
+      const rec = record(s);
+      rec.files['gazetteer/invitation.html'] = hashOf('MINE');
+      fs.writeFileSync(RECORD(s), JSON.stringify(rec));
+      fs.writeFileSync(path.join(s.player.dir, 'gazetteer', 'Invitation.html'), 'MINE');
+      recase(s);
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.deepEqual(record(s).replaced, ['gazetteer/Invitation.html']);
+    } finally { s.cleanup(); }
+  });
+
+  // CodeRabbit on #575, case-sensitive disk: an old spelling that is simply gone gives its mark to nothing.
+  it('a marked old spelling the GM removed gives no mark to the new spelling', (t) => {
+    const s = setupOverMine();
+    try {
+      if (!caseSensitiveAt(path.join(s.player.dir, 'gazetteer'))) { t.skip('this disk does not tell letter case apart'); return; }
+      fs.rmSync(path.join(s.player.dir, 'gazetteer', 'invitation.html'));
+      recase(s);
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(!('replaced' in record(s)), JSON.stringify(record(s)));
+    } finally { s.cleanup(); }
+  });
+
+  // CodeRabbit on #575, case-sensitive disk: two names that are hard links to one file are two entries, never settled
+  // as one: the old name is left, said and kept in the record.
+  it('two spellings that are hard links to one file are left and said, not taken as one', (t) => {
+    const s = setup();
+    try {
+      if (!caseSensitiveAt(path.join(s.player.dir, 'gazetteer'))) { t.skip('this disk does not tell letter case apart'); return; }
+      fs.linkSync(path.join(s.player.dir, 'gazetteer', 'invitation.html'), path.join(s.player.dir, 'gazetteer', 'Invitation.html'));
+      recase(s);
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(lines.includes('  left in kept folder: gazetteer/invitation.html (could not tell whether it is gazetteer/Invitation.html)'), lines.join('\n'));
+      assert.ok('gazetteer/invitation.html' in record(s).files);
+      assert.deepEqual(named(s).sort(), ['Invitation.html', 'invitation.html']);
+    } finally { s.cleanup(); }
+  });
+
+  it('a kept-folder prop whose address changes only in letter case leaves no file at the old name', () => {
+    const s = setup();
+    try {
+      const probe = path.join(s.player.dir, 'gazetteer', 'CASE-PROBE');
+      fs.writeFileSync(probe, '');
+      const caseSensitive = !fs.existsSync(probe.toLowerCase().replace(s.player.dir.toLowerCase(), s.player.dir));
+      fs.rmSync(probe);
+      fs.writeFileSync(noteOf(s), fs.readFileSync(noteOf(s), 'utf8').replace('prop_address: gazetteer/invitation.html', 'prop_address: gazetteer/Invitation.html'));
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      const names = fs.readdirSync(path.join(s.player.dir, 'gazetteer')).filter((n) => /^invitation\.html$/i.test(n));
+      assert.match(fs.readFileSync(path.join(s.player.dir, 'gazetteer', 'Invitation.html'), 'utf8'), /You are invited/);
+      assert.ok('gazetteer/Invitation.html' in record(s).files, JSON.stringify(record(s)));
+      assert.ok(!('gazetteer/invitation.html' in record(s).files), JSON.stringify(record(s)));
+      if (caseSensitive) {
+        assert.deepEqual(names, ['Invitation.html']);
+        assert.ok(lines.includes('  removed from kept folder: gazetteer/invitation.html (its address is now gazetteer/Invitation.html)'), lines.join('\n'));
+      } else {
+        assert.equal(names.length, 1, 'one file, never deleted');
+        assert.ok(!lines.some((l) => /removed from kept folder: gazetteer\/invitation\.html/i.test(l)), lines.join('\n'));
+      }
+    } finally { s.cleanup(); }
+  });
+
   it('a published prop leaves props/ when it is unpublished', () => {
     const s = buildBoth({
       'Documents/Invitation.md': PROP(), ...PROP_FILES, 'Documents/Other.md': '---\ntype: document\n---\nOther.\n',

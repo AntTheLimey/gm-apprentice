@@ -28,6 +28,8 @@ function printedPages(binary, file, work) {
   const pdf = path.join(work, 'page.pdf');
   const profile = path.join(work, 'profile');
   fs.mkdirSync(profile, { recursive: true });
+  // Every target prints here: a PDF an earlier target left must never be counted as this one's.
+  fs.rmSync(pdf, { force: true });
   const chromeTemp = chromeTempNow();
   // Out of time, Chrome is killed outright, so a stuck browser can never hang the command, and stopChrome ends the
   // helpers it leaves running (#565). Its temp files go in its profile folder, removed with the work folder.
@@ -36,8 +38,13 @@ function printedPages(binary, file, work) {
     `--print-to-pdf=${pdf}`, fileUrl(file)], { stdio: 'pipe', timeout: 60000, killSignal: 'SIGKILL', env: chromeEnv(profile) });
   stopChrome(profile);
   removeNewChromeTemp(chromeTemp);
-  if (run.status !== 0 || !fs.existsSync(pdf)) throw new Error(`Chrome failed (${run.status}): ${String(run.stderr).slice(0, 200)}`);
-  return countPdfPages(fs.readFileSync(pdf));
+  // Chrome on a loaded machine can exit non-zero on its way out after it has printed (#561): a whole PDF, one that
+  // ends with its end-of-file mark, is counted whatever the status, and one without it never is. A launch killed for
+  // time never is.
+  const bytes = !run.error && fs.existsSync(pdf) ? fs.readFileSync(pdf) : null;
+  const whole = bytes && /%%EOF\s*$/.test(bytes.subarray(-32).toString('latin1'));
+  if (!whole) throw new Error(`Chrome failed (${run.status}): ${String(run.stderr).slice(0, 200)}`);
+  return countPdfPages(bytes);
 }
 
 // The pages of a built file at `file`: { pages, why }.

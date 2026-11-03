@@ -77,7 +77,7 @@ test('a lock whose holder died is cleared with the Chrome it left running and th
   const orphan = fakeChrome(profile);
   t.after(() => orphan.kill('SIGKILL'));
   await new Promise((r) => setTimeout(r, 300));
-  assert.equal(withChromeLock(() => 'ran', { dir: lock, waitMs: 10000 }), 'ran');
+  assert.equal(withChromeLock(() => 'ran', { dir: lock, holdMs: 10000 }), 'ran');
   await until(() => !running(orphan));
   assert.equal(running(orphan), false, 'the orphaned Chrome was ended');
   assert.equal(fs.existsSync(profile), false, 'its profile folder was removed');
@@ -96,7 +96,7 @@ test('a stale lock naming a folder that is not a launch profile leaves that fold
   const bystander = fakeChrome(planted);
   t.after(() => bystander.kill('SIGKILL'));
   await new Promise((r) => setTimeout(r, 300));
-  assert.equal(withChromeLock(() => 'ran', { dir: lock, waitMs: 10000 }), 'ran');
+  assert.equal(withChromeLock(() => 'ran', { dir: lock, holdMs: 10000 }), 'ran');
   assert.equal(fs.existsSync(planted), true, 'the folder named is not removed');
   assert.equal(running(bystander), true, 'the process on it runs on');
 });

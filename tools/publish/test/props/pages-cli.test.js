@@ -69,3 +69,52 @@ test('a Chrome print with no countable pages is no count, never 0 pages', { skip
   assert.match(row.why, /^Chrome printed no pages it could count/);
   assert.doesNotMatch(formatLine(row), /0 pages/);
 });
+
+// #561: Chrome on a loaded Mac can exit non-zero (2) on its way out after it has printed the PDF; the whole PDF is
+// counted. A PDF it never finished is not.
+const fakeChrome = (v, pdfText, code) => {
+  const fake = path.join(v.root, 'fake-chrome');
+  fs.writeFileSync(fake, `#!/bin/sh\nfor a; do case "$a" in --print-to-pdf=*) printf '${pdfText}' > "\${a#--print-to-pdf=}";; esac; done\necho 'ERROR: CVDisplayLinkCreateWithCGDisplay failed' >&2\nexit ${code}\n`);
+  fs.chmodSync(fake, 0o755);
+  return fake;
+};
+const TWO_PAGES = '%%PDF-1.4\\n<< /Type /Pages >> << /Type /Page >> << /Type /Page >>\\n%%%%EOF\\n';
+
+test('a whole PDF Chrome printed before exiting non-zero is counted', { skip: process.platform === 'win32' && 'a shell script stands in for Chrome' }, async (t) => {
+  const v = site(t);
+  fs.writeFileSync(path.join(v.out, 'a.html'), '<p>x</p>');
+  const [row] = await rowsFor(v.configPath, [{ address: 'a.html' }], { findChrome: () => fakeChrome(v, TWO_PAGES, 2) });
+  assert.deepEqual(row, { address: 'a.html', pages: 2, why: null });
+});
+
+test('a PDF cut short is Chrome failing, with its status and what it said', { skip: process.platform === 'win32' && 'a shell script stands in for Chrome' }, async (t) => {
+  const v = site(t);
+  fs.writeFileSync(path.join(v.out, 'a.html'), '<p>x</p>');
+  const [row] = await rowsFor(v.configPath, [{ address: 'a.html' }], { findChrome: () => fakeChrome(v, '%%PDF-1.4\\n<< /Type /Page >>', 2) });
+  assert.equal(row.pages, null);
+  assert.match(row.why, /^Chrome failed \(2\): ERROR: CVDisplayLink/);
+});
+
+// Review: every target prints to the same work folder. A later target whose Chrome exits non-zero and writes nothing
+// must never be counted from the earlier target's PDF.
+test("a target whose Chrome writes nothing is never counted from the target before it", { skip: process.platform === 'win32' && 'a shell script stands in for Chrome' }, async (t) => {
+  const v = site(t);
+  fs.writeFileSync(path.join(v.out, 'a.html'), '<p>x</p>');
+  fs.writeFileSync(path.join(v.out, 'b.html'), '<p>y</p>');
+  const fake = path.join(v.root, 'fake-chrome');
+  fs.writeFileSync(fake, `#!/bin/sh\nn=$(cat "${v.root}/count" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "${v.root}/count"\nif [ $n -gt 1 ]; then echo 'ERROR: CVDisplayLink' >&2; exit 2; fi\nfor a; do case "$a" in --print-to-pdf=*) printf '${TWO_PAGES}' > "\${a#--print-to-pdf=}";; esac; done\n`);
+  fs.chmodSync(fake, 0o755);
+  const rows = await rowsFor(v.configPath, [{ address: 'a.html' }, { address: 'b.html' }], { findChrome: () => fake });
+  assert.deepEqual(rows[0], { address: 'a.html', pages: 2, why: null });
+  assert.equal(rows[1].pages, null);
+  assert.match(rows[1].why, /^Chrome failed \(2\)/);
+});
+
+// CodeRabbit on #575: a PDF cut short is no count whatever Chrome's exit status, 0 included.
+test('a PDF cut short is no count when Chrome exits 0 too', { skip: process.platform === 'win32' && 'a shell script stands in for Chrome' }, async (t) => {
+  const v = site(t);
+  fs.writeFileSync(path.join(v.out, 'a.html'), '<p>x</p>');
+  const [row] = await rowsFor(v.configPath, [{ address: 'a.html' }], { findChrome: () => fakeChrome(v, '%%PDF-1.4\\n<< /Type /Page >>', 0) });
+  assert.equal(row.pages, null);
+  assert.match(row.why, /^Chrome failed \(0\)/);
+});

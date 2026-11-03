@@ -7,13 +7,17 @@ const path = require('path');
 const { build } = require('../../lib/build');
 const { detectEncoder } = require('../../lib/image-optimize');
 const { makePng } = require('../helpers/make-png');
+const { inPrivateTmp } = require('../helpers/private-tmp');
 
 const hasCwebp = detectEncoder() !== null;
 
-const scratchDirs = () => new Set(fs.readdirSync(os.tmpdir()).filter(n => n.startsWith('gm-publish-img-')));
-// Snapshot before any build in this file runs, so a scratch dir orphaned by some earlier
-// crashed run can't masquerade as one this build leaked.
-const preexistingScratch = scratchDirs();
+// Each build runs with a temp folder of its own, so a scratch dir another test or suite has in the shared temp folder
+// can't masquerade as one this build leaked. What the builds leave there is kept here.
+const leftScratch = [];
+const buildPrivately = (opts) => {
+  const { left } = inPrivateTmp(() => build(opts));
+  leftScratch.push(...left.filter((n) => n.startsWith('gm-publish-img-')));
+};
 
 // A portrait whose filename contains a space, because that is precisely the case an
 // external postbuild gets wrong: the emitted src is URL-encoded ("Rock%20Lavey.jpg") and
@@ -65,7 +69,7 @@ function setupSite({ optimize, gitignore }) {
     folderMap: { 'Characters/NPCs': 'characters/npcs' },
   }, null, 2));
 
-  build({ configPath });
+  buildPrivately({ configPath });
   return { outputDir };
 }
 
@@ -93,8 +97,7 @@ describe('image optimization', { skip: !hasCwebp }, () => {
     });
 
     it('leaves no scratch directory behind', () => {
-      const leaked = [...scratchDirs()].filter(n => !preexistingScratch.has(n));
-      assert.deepStrictEqual(leaked, []);
+      assert.deepStrictEqual(leftScratch, []);
     });
   });
 
@@ -116,7 +119,7 @@ describe('image optimization', { skip: !hasCwebp }, () => {
       logs.push(logged(() => ({ outputDir } = setupSite({ optimize: true, gitignore: 'node_modules/\n' }))));
       siteDir = path.dirname(outputDir);
       first = filesOf(outputDir);
-      logs.push(logged(() => build({ configPath: path.join(siteDir, 'config.json') })));
+      logs.push(logged(() => buildPrivately({ configPath: path.join(siteDir, 'config.json') })));
     });
 
     it('builds the same site twice', () => {
@@ -163,7 +166,7 @@ describe('image optimization', { skip: !hasCwebp }, () => {
       }));
       const saved = console.log;
       console.log = () => {};
-      try { build({ configPath }); } finally { console.log = saved; }
+      try { buildPrivately({ configPath }); } finally { console.log = saved; }
     });
 
     it('encodes the campaign image, and the landing page and page-not-found page print the encoded file', () => {
@@ -188,8 +191,7 @@ describe('image optimization', { skip: !hasCwebp }, () => {
     });
 
     it('leaves no scratch directory behind', () => {
-      const leaked = [...scratchDirs()].filter(n => !preexistingScratch.has(n));
-      assert.deepStrictEqual(leaked, []);
+      assert.deepStrictEqual(leftScratch, []);
     });
   });
 
@@ -219,7 +221,7 @@ describe('image optimization', { skip: !hasCwebp }, () => {
     const saved = { log: console.log, warn: console.warn };
     console.log = () => {};
     console.warn = (...a) => warnings.push(a.join(' '));
-    try { build({ configPath }); } finally { Object.assign(console, saved); }
+    try { buildPrivately({ configPath }); } finally { Object.assign(console, saved); }
     return { outputDir, warnings, cache: path.join(vaultPath, '_meta/cache') };
   }
 
@@ -247,8 +249,7 @@ describe('image optimization', { skip: !hasCwebp }, () => {
     });
 
     it('leaves no scratch directory behind', () => {
-      const leaked = [...scratchDirs()].filter(n => !preexistingScratch.has(n));
-      assert.deepStrictEqual(leaked, []);
+      assert.deepStrictEqual(leftScratch, []);
     });
   });
 

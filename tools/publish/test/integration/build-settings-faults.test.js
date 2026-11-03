@@ -11,6 +11,7 @@ const { runManifest } = require('../../lib/manifest-cli');
 const { runSheetShow } = require('../../lib/sheet-cli');
 const { runDeploy } = require('../../lib/deploy-cli');
 const { createPreview } = require('../../scripts/live-preview');
+const { inPrivateTmp } = require('../helpers/private-tmp');
 
 const CLI = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
 const STOP_YAML = '  exclude_sectoins: [GM Notes]\n';
@@ -215,10 +216,11 @@ test('deploy: a stop throws before any hook, build or upload, a warning passes',
 
 test('the local preview is a player build: a stop throws and leaves no temp folder behind', async () => {
   const s = site(STOP_YAML);
-  const tmp = () => fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('gm-publish-preview-site-')).sort();
-  const before = tmp();
-  await assert.rejects(createPreview({ configPath: s.configPath }), (err) => assertStopMessage(err, 'build'));
-  assert.deepEqual(tmp(), before);
+  // With a temp folder of its own, so another suite's preview folder is never counted as this one's.
+  const { result: err, left } = await inPrivateTmp(() => createPreview({ configPath: s.configPath }).then(() => null, (e) => e));
+  assert.ok(err, 'the preview stops');
+  assertStopMessage(err, 'build');
+  assert.deepEqual(left.filter((n) => n.startsWith('gm-publish-preview-site-')), []);
 });
 
 test('a site-file hiding list that is not a list, beside the vault file\'s own list, warns once and the vault list applies', async () => {

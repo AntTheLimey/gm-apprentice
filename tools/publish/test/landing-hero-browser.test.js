@@ -3,12 +3,12 @@
 // to edge from the top of the page, the menu sits over it, the page never scrolls sideways, and every other section
 // keeps the width and place it has with the card hero. Skipped without Chrome or Chromium (set GM_TEST_CHROME), except
 // on CI.
-const { describe, it, before, after } = require('node:test');
+const { describe, it, after } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { buildBoth } = require('./helpers/gm-build');
 const { makePng } = require('./helpers/make-png');
-const { browserSkip, measure } = require('./helpers/browser');
+const { browserSkip, measure, browserBefore } = require('./helpers/browser');
 
 const skip = browserSkip();
 // The strength of the words' shade, as the stylesheet writes it (color-mix of --bg-hero at this share).
@@ -47,7 +47,7 @@ const probe = function (done) {
 describe('the full-bleed landing hero, in a browser', { skip }, () => {
   const built = [];
   const res = {};
-  before(() => {
+  browserBefore(() => {
     const site = (hero) => {
       const s = buildBoth(FILES, { sites: ['player', 'gm'], player: { title: 'Lantern Coast', theme: { campaign_image: 'Art/coast.png', tagline: 'Salt and smoke.' }, ...(hero ? { landing: { hero } } : {}) } });
       built.push(s);
