@@ -448,8 +448,22 @@ function buildSite(options) {
   const keptRecord = (!gm && !dry && writes === 'all' && !options.outputDirOverride
     && imageCacheDir(configDir, { outputDirs: [outputDir], vaultPath: config.vaultPath })) ? keptRecordPath(configDir) : null;
   const { files: keptRecorded, replaced: keptRecordedReplaced, problem: keptRecordProblem } = keptRecord ? readKeptRecord(keptRecord) : { files: {}, replaced: new Set(), problem: null };
-  // Recorded hashes by lower-case path, for the plan's own clean-up below.
-  const keptRecordedHash = new Map(Object.entries(keptRecorded).map(([out, hash]) => [out.toLowerCase(), hash]));
+  // The recorded spellings of each path, by lower case, for recordedHashFor.
+  const keptRecordedSpellings = new Map();
+  for (const out of Object.keys(keptRecorded)) {
+    const key = out.toLowerCase();
+    keptRecordedSpellings.set(key, [...(keptRecordedSpellings.get(key) || []), out]);
+  }
+  // What the record says the tool wrote at `out`: its own entry, or one of another spelling only where the disk makes
+  // the two one file (a disk that does not tell case apart). On a disk that does, another spelling's hash never says
+  // whose a file is.
+  function recordedHashFor(out) {
+    if (Object.hasOwn(keptRecorded, out)) return keptRecorded[out];
+    for (const other of keptRecordedSpellings.get(out.toLowerCase()) || []) {
+      if (twoFiles(other, out) === 'one') return keptRecorded[other];
+    }
+    return undefined;
+  }
   // The recorded copies whose first write replaced a file of the GM's own (#560), and this build's, by exact spelling:
   // after a case-only address change on a disk that tells case apart, the new name replaced nothing of the GM's.
   const keptWasMine = new Set(keptRecordedReplaced);
@@ -461,9 +475,10 @@ function buildSite(options) {
   function keptIsMine(full, out, data) {
     if (!keptRecord || !inKeptFolder(out)) return false;
     let have;
-    try { have = fs.readFileSync(full); } catch (e) { return false; }
+    // A file that cannot be read cannot be shown to be the tool's: it is taken as the GM's, and marked.
+    try { have = fs.readFileSync(full); } catch (e) { return true; }
     const hash = hashOf(have);
-    return hash !== hashOf(data) && hash !== keptRecordedHash.get(out.toLowerCase());
+    return hash !== hashOf(data) && hash !== recordedHashFor(out);
   }
   // `mine`: the write replaced a file of the GM's. A copy that did once stays marked while the tool writes it.
   function keptWrote(out, data, mine = false) {
@@ -479,7 +494,10 @@ function buildSite(options) {
     if (!keptRecord || keptRecordProblem) return;
     keptEarly.files[out] = hashOf(data);
     keptEarly.replaced.add(out);
-    try { writeKeptRecord(keptRecord, keptEarly.files, [...keptEarly.replaced]); } catch (e) { if (!e.code) throw e; }
+    try { writeKeptRecord(keptRecord, keptEarly.files, [...keptEarly.replaced]); } catch (e) {
+      if (!e.code) throw e;
+      printWarning(`could not record in ${CACHE_FOLDER}/kept-writes.json that ${out} replaces a file of yours (${e.code}); if this build stops before it ends, the mark is lost`);
+    }
   }
   // Whether a file is about to be written over one of the GM's: then its mark is saved before the write.
   function keptReplacing(full, out, data) {
@@ -488,10 +506,12 @@ function buildSite(options) {
     return mine;
   }
   const REPLACED_MINE = "it had replaced a file of yours; see the site repo's history";
-  // Whether two spellings of a path, differing only in letter case, are two files: 'two', 'one', or 'unknown' when a
-  // folder or file could not be read. Only 'two' lets the old one be removed: every folder on both paths lists each
-  // spelling as its own entry (compared in NFC), and the two have different inodes. A disk that does not tell case
-  // apart (macOS, Windows) lists one name; a network share may give each spelling an inode of its own.
+  // Whether two spellings of a path, differing only in letter case, are two files. Only 'two' lets the old one be
+  // removed: every folder on both paths lists each spelling as its own entry (compared in NFC), and the two have
+  // different inodes. 'one': not both are listed, and the old spelling still opens a file, as on a disk that does not
+  // tell case apart (macOS, Windows), which lists one name; a network share may give each spelling an inode of its
+  // own, so the listing decides. 'gone': not both are listed and the old spelling opens nothing. 'unknown': a folder
+  // or file could not be read, or both are listed with one inode (hard links: two entries for one file).
   function twoFiles(oldOut, newOut) {
     try {
       const listed = (out) => {
@@ -503,10 +523,11 @@ function buildSite(options) {
         }
         return true;
       };
-      if (!listed(oldOut) || !listed(newOut)) return 'one';
-      const x = fs.statSync(path.join(outputDir, ...oldOut.split('/')), { bigint: true });
+      const oldFull = path.join(outputDir, ...oldOut.split('/'));
+      if (!listed(oldOut) || !listed(newOut)) return fs.existsSync(oldFull) ? 'one' : 'gone';
+      const x = fs.statSync(oldFull, { bigint: true });
       const y = fs.statSync(path.join(outputDir, ...newOut.split('/')), { bigint: true });
-      return x.dev !== y.dev || x.ino !== y.ino ? 'two' : 'one';
+      return x.dev !== y.dev || x.ino !== y.ino ? 'two' : 'unknown';
     } catch (e) { return 'unknown'; }
   }
   // A kept-folder copy's bytes, or its removal; an error the file system gives is said with the path, and the build
@@ -548,6 +569,7 @@ function buildSite(options) {
         if (keptWasMine.has(out)) keptMineNow.add(again[0]);
         continue;
       }
+      if (files === 'gone') continue;   // the old copy is not there: nothing to remove, and no mark to pass on
       if (files === 'unknown') {
         // In doubt it is left, said, and kept in the record with its mark, for a later build to settle.
         console.log(`  left in kept folder: ${out} (could not tell whether it is ${again[0]})`);
@@ -789,16 +811,24 @@ function buildSite(options) {
   const servedGoogleFonts = new Map();
   const servedLocalFonts = [];
   const fontsWritten = new Set();
-  function copyFontFiles(files) {
+  // `props`: the prop styles' fonts, which are recorded, said and marked in a kept folder as the styles' files are
+  // (#560).
+  function copyFontFiles(files, { props = false } = {}) {
     if (writes !== 'all') return;
     for (const f of files) {
       if (fontsWritten.has(f.rel)) continue;
       fontsWritten.add(f.rel);
+      const out = `fonts/${f.rel}`;
       const dest = path.join(outputDir, 'fonts', f.rel);
       ensureDir(dest);
+      const tracked = props && keptRecord && inKeptFolder(out);
+      const data = tracked ? fs.readFileSync(f.from) : null;
+      const mine = tracked && keptReplacing(dest, out, data);
       if (!copyOut(f.from, dest)) continue;
+      if (tracked) keptWrote(out, data, mine);
       if (f.family && !servedGoogleFonts.has(f.family)) servedGoogleFonts.set(f.family, { folder: f.rel.split('/')[0], from: f.from });
-      console.log(`  wrote fonts/${f.rel}`);
+      console.log(`  wrote ${out}`);
+      if (mine) console.log(`  replaces kept file: ${out}`);
     }
   }
 
@@ -2790,7 +2820,7 @@ function buildSite(options) {
         const have = keptBytes(full, f.out);
         if (have === null) continue;
         // What the tool would write now, or what an earlier build recorded writing there (#506): either is the tool's.
-        const ours = f.wants.some((want) => have.equals(want)) || (keptRecordedHash.has(key) && keptRecordedHash.get(key) === hashOf(have));
+        const ours = f.wants.some((want) => have.equals(want)) || recordedHashFor(f.out) === hashOf(have);
         if (!ours) { console.log(`  left in kept folder: ${f.out} (it differs from what the tool would write)`); continue; }
         if (!keptRemove(full, f.out)) continue;
         console.log(`  removed from kept folder: ${f.out} (its prop is not published${keptWasMine.has(f.out) ? `; ${REPLACED_MINE}` : ''})`);
@@ -2869,7 +2899,7 @@ function buildSite(options) {
       }
       if (styleFonts.css) {
         writeFile(FONTS_CSS, styleFonts.css, first, "the prop styles' typefaces");
-        copyFontFiles(styleFonts.files);
+        copyFontFiles(styleFonts.files, { props: true });
       }
     }
     if (writes === 'all' && propPlan.props.length > 0) console.log(`Props: ${shipped.size} published (${written} files)`);

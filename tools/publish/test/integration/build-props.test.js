@@ -816,6 +816,91 @@ describe('a kept-folder prop that stops shipping', () => {
 
   // #560: an address that changes only in letter case. On a disk that tells the two apart (Linux) the old name is a
   // file of its own and goes; on one that does not (macOS, Windows) the two are one file, the one just written.
+  // CodeRabbit on #575. A GM's file that could not be read before it is written over is taken as the GM's: marked.
+  const overMine = (s) => {
+    fs.mkdirSync(path.join(s.player.dir, 'gazetteer'), { recursive: true });
+    fs.writeFileSync(path.join(s.player.dir, 'gazetteer', 'invitation.html'), 'MINE');
+    fs.writeFileSync(path.join(s.root, 'vault', '_meta', 'publish-list.yaml'), LIST(['Documents/Invitation.md', 'Documents/Other.md']));
+  };
+  it("a file in a kept folder that cannot be read before it is replaced is marked as the GM's", (t) => {
+    const s = setup('', false);
+    try {
+      overMine(s);
+      const target = path.join(s.player.dir, 'gazetteer', 'invitation.html');
+      const real = fs.readFileSync;
+      let once = true;
+      t.mock.method(fs, 'readFileSync', function (p, ...rest) {
+        if (once && String(p) === target) { once = false; throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); }
+        return real.call(fs, p, ...rest);
+      });
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      t.mock.restoreAll();
+      assert.equal(once, false, 'the file was read before it was replaced');
+      assert.deepEqual(record(s).replaced, ['gazetteer/invitation.html']);
+    } finally { t.mock.restoreAll(); s.cleanup(); }
+  });
+
+  // The mark saved before the write: a record that cannot be written then is a warning, never silent.
+  it('a mark that cannot be saved before the write is a warning, and the build carries on', (t) => {
+    const s = setup('', false);
+    try {
+      overMine(s);
+      const real = fs.renameSync;
+      let once = true;
+      t.mock.method(fs, 'renameSync', function (from, to) {
+        if (once && String(to).endsWith('kept-writes.json')) { once = false; throw Object.assign(new Error('EIO: i/o error'), { code: 'EIO' }); }
+        return real.call(fs, from, to);
+      });
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      t.mock.restoreAll();
+      assert.ok(lines.includes('  WARNING: could not record in .gm-apprentice/kept-writes.json that gazetteer/invitation.html replaces a file of yours (EIO); if this build stops before it ends, the mark is lost'), lines.join('\n'));
+      assert.match(s.player.read('gazetteer', 'invitation.html'), /You are invited/);
+      assert.deepEqual(record(s).replaced, ['gazetteer/invitation.html'], 'the record at the end holds it');
+    } finally { t.mock.restoreAll(); s.cleanup(); }
+  });
+
+  // CodeRabbit on #575, on a disk that tells case apart: another spelling's recorded hash never says whose a file is.
+  it("another spelling's recorded hash does not make a GM's file the tool's", (t) => {
+    const s = setup();
+    try {
+      if (!caseSensitiveAt(path.join(s.player.dir, 'gazetteer'))) { t.skip('this disk does not tell letter case apart'); return; }
+      const rec = record(s);
+      rec.files['gazetteer/invitation.html'] = hashOf('MINE');
+      fs.writeFileSync(RECORD(s), JSON.stringify(rec));
+      fs.writeFileSync(path.join(s.player.dir, 'gazetteer', 'Invitation.html'), 'MINE');
+      recase(s);
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.deepEqual(record(s).replaced, ['gazetteer/Invitation.html']);
+    } finally { s.cleanup(); }
+  });
+
+  // CodeRabbit on #575, case-sensitive disk: an old spelling that is simply gone gives its mark to nothing.
+  it('a marked old spelling the GM removed gives no mark to the new spelling', (t) => {
+    const s = setupOverMine();
+    try {
+      if (!caseSensitiveAt(path.join(s.player.dir, 'gazetteer'))) { t.skip('this disk does not tell letter case apart'); return; }
+      fs.rmSync(path.join(s.player.dir, 'gazetteer', 'invitation.html'));
+      recase(s);
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(!('replaced' in record(s)), JSON.stringify(record(s)));
+    } finally { s.cleanup(); }
+  });
+
+  // CodeRabbit on #575, case-sensitive disk: two names that are hard links to one file are two entries, never settled
+  // as one: the old name is left, said and kept in the record.
+  it('two spellings that are hard links to one file are left and said, not taken as one', (t) => {
+    const s = setup();
+    try {
+      if (!caseSensitiveAt(path.join(s.player.dir, 'gazetteer'))) { t.skip('this disk does not tell letter case apart'); return; }
+      fs.linkSync(path.join(s.player.dir, 'gazetteer', 'invitation.html'), path.join(s.player.dir, 'gazetteer', 'Invitation.html'));
+      recase(s);
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(lines.includes('  left in kept folder: gazetteer/invitation.html (could not tell whether it is gazetteer/Invitation.html)'), lines.join('\n'));
+      assert.ok('gazetteer/invitation.html' in record(s).files);
+      assert.deepEqual(named(s).sort(), ['Invitation.html', 'invitation.html']);
+    } finally { s.cleanup(); }
+  });
+
   it('a kept-folder prop whose address changes only in letter case leaves no file at the old name', () => {
     const s = setup();
     try {
