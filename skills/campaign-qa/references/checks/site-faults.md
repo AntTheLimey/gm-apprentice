@@ -67,6 +67,7 @@ every page that names it. Use it to confirm each fix.
 | `WITHHELD_PUBLISHED` (`ERROR`) | Critical | A withheld note is on the site under its name |
 | `WITHHELD_NAME_PUBLIC` | Warning | A withheld name is not looked for |
 | `WITHHELD_FLAG_UNREADABLE` | Warning | The flag does nothing until it is fixed |
+| `COMPANION_FLAG_UNREADABLE` | Warning | The companion may be pictured on Story pages |
 | `FENCE_UNCLOSED` | Critical | Hidden text is on the site now |
 | `COMMENT_STRAY` | Warning | Text the GM wrote is missing from the site |
 | `NAMED_NO_PAGE`, entity | Warning | Players read a name and cannot look it up |
@@ -173,6 +174,12 @@ the name, or to take `withheld: true` off.
 A `withheld:` value that is not true or false (`tru`, a list) is read as
 not withheld, so the note's name is not looked for. Show the value and
 propose `withheld: true` or `withheld: false` as the GM says.
+
+## COMPANION_FLAG_UNREADABLE
+
+A `companion:` value that is not true or false is read as not a
+companion, so the NPC may be pictured on Story pages. Show the value and
+propose `companion: true` or `companion: false` as the GM says.
 
 ## FENCE_UNCLOSED
 

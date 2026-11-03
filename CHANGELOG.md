@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.123] — 2026-11-03
+
+Story pages picture each person and place once per chapter, and an NPC who travels with the party can be marked so they are never pictured (#566). Publish tool 1.62.0. No vault change is needed; mark your companions when you want them left out.
+
+### Added
+
+- `companion: true` on an NPC note (or a creature note, for a familiar or animal companion) marks the NPC who travels with the party: a GURPS Ally, a D&D companion, follower or familiar, a Blades in the Dark cohort, or simply a companion in Call of Cthulhu. Story pages treat a companion as they treat a PC: never pictured, and their names still keep a shorter name inside them from counting ("Wyndham" in "Thomas Wyndham" pictures nobody). Absent means false. New vaults' NPC template carries `companion: false`; an existing vault's untouched NPC template is updated by every-pass `templates`. The schema check names a value that is not `true` or `false`, and `companion: true` on any other type of note.
+- `COMPANION_FLAG_UNREADABLE`: a `companion:` value that is not true or false (`tru`, a list) is a build warning and a Site Faults finding. The note is read as not a companion, so it may be pictured on Story pages until the value is fixed.
+
+### Changed
+
+- A page is pictured at most once per chapter. It is pictured at its first mention on the chapter's earliest Story page that pictures it, in reading order (the chapter's introduction first, then its sessions), and not again on a later Story page of the same chapter. A picture you placed in a recap counts as that page's picture for the chapter. A new chapter pictures it again. Scene pictures still show wherever their scene was played. The GM site follows the player site: a GM Story page players do not have never stops a later page from picturing what the player page pictures.
+- In Canticle, Story pages stop repeating the same faces down a chapter at the next deploy. Thomas Wyndham and Elizabeth Ashby are pictured once a chapter until their notes say `companion: true`, and then not at all.
+
+---
+
 ## [1.10.122] — 2026-11-02
 
 Test runs no longer fill the disk, and a Chrome that runs out of time is stopped completely. Publish tool 1.61.1. No vault or site change.

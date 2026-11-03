@@ -650,3 +650,56 @@ describe('sceneCandidates', () => {
     assert.equal((twice.match(/<figure /g) || []).length, 1);
   });
 });
+
+describe('companions', () => {
+  it('an NPC marked companion: true is never a candidate, nor named by a scene; its names still hold their words', () => {
+    const thomas = page('Thomas Wyndham', { companion: true });
+    const silas = page('Silas Wyndham', { aliases: ['Wyndham'] });
+    assert.deepEqual(figureCandidates([thomas, silas], { imageMap }).map((c) => c.title), ['Silas Wyndham']);
+    assert.ok(!pageNames([thomas, silas], {}).has(thomas.outputPath));
+    assert.deepEqual(nameHolders([thomas, silas], {}).map((h) => h.outputPath), [thomas.outputPath, silas.outputPath]);
+    const html = withFigures('<p>Thomas Wyndham waited.</p>', { candidates: figureCandidates([thomas, silas], { imageMap }), blockers: nameHolders([thomas, silas], {}), fromPath: 'story/s1.html', imageMap });
+    assert.ok(!html.includes('<figure'), html);
+  });
+
+  it('companion read from the source frontmatter; false or absent is not a companion', () => {
+    const p = page('Thomas Wyndham', { companion: true });
+    p.sourceFrontmatter = p.frontmatter;
+    p.frontmatter = { portrait: 'a.png' };
+    assert.deepEqual(figureCandidates([p], { imageMap }), []);
+    assert.equal(figureCandidates([page('Ann', { companion: false }), page('Bea'), page('Cy', { companion: 'no' })], { imageMap }).length, 3);
+    assert.deepEqual(figureCandidates([page('Di', { companion: 'yes' })], { imageMap }), []);
+  });
+});
+
+describe('withFigures: once per chapter (shown, pictured)', () => {
+  const mara = page('Mara Quill');
+  const rook = page('Captain Rook', { portrait: 'b.png' });
+  const all = () => figureCandidates([mara, rook], { imageMap });
+
+  it('a picture already shown earlier in the chapter is left out; the others still place', () => {
+    const pictured = new Set();
+    const html = withFigures('<p>Mara Quill and Captain Rook.</p>', { candidates: all(), fromPath: 'story/s1.html', imageMap, shown: new Set(['a.png']), pictured });
+    assert.ok(!html.includes('alt="Mara Quill"') && html.includes('alt="Captain Rook"'), html);
+    assert.deepEqual([...pictured], ['b.png']);
+  });
+
+  it('pictured holds the page pictures placed and the pictures the recap already shows', () => {
+    const pictured = new Set();
+    withFigures('<p>Mara Quill.</p><p><img src="../images/b.png"></p>', { candidates: all(), fromPath: 'story/s1.html', imageMap, pictured });
+    assert.deepEqual([...pictured].sort(), ['a.png', 'b.png']);
+    const none = new Set();
+    withFigures('<p><img src="../images/b.png"></p>', { candidates: [], fromPath: 'story/s1.html', imageMap, pictured: none });
+    assert.deepEqual([...none], ['b.png']);
+  });
+
+  it('a scene\'s picture is never left out by shown and is not pictured; a scene sharing a shown portrait stands as the scene\'s', () => {
+    const scene = { key: 'a.png', outputPath: null, title: '', terms: ['Docks Quarter'], hrefs: new Set(['locations/the-docks.html']),
+      pages: [{ href: 'locations/the-docks.html', terms: ['Docks Quarter'] }], place: true, scene: true };
+    const pictured = new Set();
+    const html = withFigures('<p>Mara Quill at the Docks Quarter.</p>', { candidates: all(), scenes: [scene], fromPath: 'story/s1.html', imageMap, shown: new Set(['a.png']), pictured });
+    assert.equal((html.match(/images\/a\.png" alt=""/g) || []).length, 1, html);
+    assert.ok(!html.includes('alt="Mara Quill"'), html);
+    assert.deepEqual([...pictured], []);
+  });
+});

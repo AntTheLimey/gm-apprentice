@@ -4,7 +4,7 @@
 // is ever touched; the build adds a figure before the paragraph it chose.
 
 const path = require('node:path');
-const { portraitBasename, nameList, isWebImageAddress, publishedFrontmatter, relativeHref, encodeImageUrl, strippedLines, fenceStep, IMAGE_EXT_REGEX } = require('./processor');
+const { portraitBasename, nameList, flagIsYes, isWebImageAddress, publishedFrontmatter, relativeHref, encodeImageUrl, strippedLines, fenceStep, IMAGE_EXT_REGEX } = require('./processor');
 const { canonicalNfc } = require('./unicode');
 const { withoutMarked } = require('./gm-marks');
 const { decodeEntities } = require('./templates/gurps/tables');
@@ -33,20 +33,21 @@ function namesOf(page, published, marks) {
   return { title, terms };
 }
 
-// The pages that may be named for a picture, each with its published frontmatter: not a PC (unless `pcs`), not one
-// of `exclude`, and on the GM site (`onPlayerSite`, a Set of the pages the player site publishes) only those.
+// The pages that may be named for a picture, each with its published frontmatter: not a PC or a companion (an NPC
+// marked `companion: true`, who travels with the party; read as `withheld` is) unless `pcs`, not one of `exclude`, and on the GM site
+// (`onPlayerSite`, a Set of the pages the player site publishes) only those.
 function* namedPages(pages, { onPlayerSite = null, exclude = new Set(), excludeFields = [], overridesOf = null, pcs = false } = {}) {
   for (const page of pages) {
     if (exclude.has(page) || (onPlayerSite && !onPlayerSite.has(page))) continue;
     const source = page.sourceFrontmatter || page.frontmatter || {};
-    if (source.type === 'pc' && !pcs) continue;
+    if ((source.type === 'pc' || flagIsYes(source.companion)) && !pcs) continue;
     yield { page, source, published: publishedFrontmatter(page.frontmatter || {}, excludeFields, (overridesOf && overridesOf(page)) || {}) };
   }
 }
 
 // The pages a recap may be pictured with, in `pages` order. `onPlayerSite` (the GM site: a Set of the pages the
 // player site publishes) keeps only those; `exclude` is a Set of the unit's own pages. A page counts when it is not
-// a PC and its portrait names an attachment the build has. Its names are namesOf's.
+// a PC or a companion and its portrait names an attachment the build has. Its names are namesOf's.
 function figureCandidates(pages, { imageMap, marks = null, ...options } = {}) {
   const out = [];
   for (const { page, source, published } of namedPages(pages, options)) {
@@ -61,14 +62,14 @@ function figureCandidates(pages, { imageMap, marks = null, ...options } = {}) {
 }
 
 // The names of every page a scene's places and people can be, portrait or not: a Map from a page's outputPath to its
-// names (namesOf), with figureCandidates' rules for which pages count.
+// names (namesOf), with figureCandidates' rules for which pages count (so a PC or a companion names no scene).
 function pageNames(pages, { marks = null, ...options } = {}) {
   const out = new Map();
   for (const { page, published } of namedPages(pages, options)) out.set(page.outputPath, namesOf(page, published, marks).terms);
   return out;
 }
 
-// The names of every page players see, PCs too, portrait or not: [{ outputPath, terms }] in `pages` order, with
+// The names of every page players see, PCs and companions too, portrait or not: [{ outputPath, terms }] in `pages` order, with
 // namesOf's names and namedPages' rules otherwise. A name of a candidate inside a longer one of these is not a mention
 // (mentionsOf): "Lady Anne Pelham" names Lady Anne, never James Pelham by his alias "Pelham".
 function nameHolders(pages, { marks = null, ...options } = {}) {
@@ -594,9 +595,13 @@ function shownImages(recapHtml, { fromPath, imageMap, marks = null }) {
 // candidate's own page (`own`: its names and links), and as a scene's picture where only the scene's pages are named,
 // so a caption never names someone the paragraph does not. `blockers` (nameHolders) are the names of every page
 // players see, for mentionsOf. Each picture placed is added to `usedImages` so the build copies it.
-function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), blockers = [], fromPath, imageMap, usedImages = null, marks = null }) {
+// Once per chapter: a page's picture whose key is in `shown` (pictured on an earlier Story page of the chapter) is left
+// out; a scene's never is, as a scene is pictured where it is played. `pictured`, a Set, is given the keys of the page
+// pictures placed here (one a scene joined among them) and of the pictures the recap already shows, for the next page.
+function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), blockers = [], fromPath, imageMap, usedImages = null, marks = null, shown = null, pictured = null }) {
   const all = [];
-  for (const c of [...(candidates || []).filter((x) => !exclude.has(x.page)), ...scenes]) {
+  const pages = (candidates || []).filter((x) => !exclude.has(x.page) && !(shown && shown.has(x.key)));
+  for (const c of [...pages, ...scenes]) {
     const at = c.scene ? all.findIndex((x) => x.key === c.key) : -1;
     if (at < 0) { all.push(c); continue; }
     const held = all[at];
@@ -609,11 +614,18 @@ function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), 
     for (const pg of c.pages || []) if (!pages.some((x) => canonicalNfc(x.href) === canonicalNfc(pg.href))) pages.push(pg);
     all[at] = { ...held, terms, hrefs: new Set([...heldHrefs, ...c.hrefs]), pages, own };
   }
-  if (!recapHtml || all.length === 0) return recapHtml;
+  if (!recapHtml) return recapHtml;
+  const taken = all.length > 0 || pictured ? shownImages(recapHtml, { fromPath, imageMap, marks }) : null;
+  if (pictured) for (const key of taken) pictured.add(key);
+  if (all.length === 0) return recapHtml;
   const paragraphs = paragraphsOf(recapHtml, { fromPath, marks });
-  const taken = shownImages(recapHtml, { fromPath, imageMap, marks });
   const placement = placeFigures(all, paragraphs, { taken, blockers });
-  if (usedImages) for (const shown of placement.values()) for (const c of shown) usedImages.add(c.key);
+  for (const placed of placement.values()) {
+    for (const c of placed) {
+      if (usedImages) usedImages.add(c.key);
+      if (pictured && !c.scene) pictured.add(c.key);
+    }
+  }
   return figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs, candidates: all, blockers });
 }
 

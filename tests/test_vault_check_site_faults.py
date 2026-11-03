@@ -374,6 +374,14 @@ class SiteFaultRowsTests(unittest.TestCase):
             f"true or false, so the note is read as not withheld — write "
             f"withheld: true or false"])
 
+    def test_a_companion_flag_that_cannot_be_read_is_a_row(self):
+        vault, _site = make(self, {MARA: npc("Plain.", "companion: tru\n")})
+        rows = findings(vc.check_site_faults(vault))
+        self.assertEqual(rows, [
+            f"WARNING\t{MARA}\tCOMPANION_FLAG_UNREADABLE: companion: tru is not "
+            f"true or false, so the note is read as not a companion and may be "
+            f"pictured on Story pages — write companion: true or false"])
+
     def test_a_link_to_a_withheld_note_is_an_error_row_that_does_not_stop_the_audit(self):
         vault, _site = make(self, {
             MARA: npc("She met [[Lord_Zorn]] and [[Vesper_Hale]]."),

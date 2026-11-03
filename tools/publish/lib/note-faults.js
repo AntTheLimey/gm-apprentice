@@ -15,6 +15,8 @@
 //                        cannot be searched for
 //   WITHHELD_PUBLISHED   a note marked `withheld: true` that the site publishes (an error)
 //   WITHHELD_FLAG_UNREADABLE  a `withheld:` value that is not true or false (read as false)
+//   COMPANION_FLAG_UNREADABLE a `companion:` value that is not true or false (read as false: the note may be
+//                        pictured on Story pages)
 //   NEVER_SHOW_IN_PROSE  a word listed under `player_site.never_show` printed on a published page
 //                        (deploy stops on it: the leak gate looks for it in the finished folder)
 //   TOHIT_UNREAD    a row of a GURPS PC sheet the to-hit calculator cannot fully read, with
@@ -60,7 +62,7 @@ const { STORY_SUFFIX } = require('./scanner');
 const { NO_PAGE_TYPES } = require('./excluding-values');
 const { decodeEntities } = require('./templates/gurps/tables');
 
-const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE', 'PROP_NOT_COPIED', 'MOMENT_KIND_UNKNOWN'];
+const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'COMPANION_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE', 'PROP_NOT_COPIED', 'MOMENT_KIND_UNKNOWN'];
 const WORST = 3;
 // The human report names this many of the pages that link a note with no page.
 const PAGES_SHOWN = 3;
@@ -289,6 +291,7 @@ function secretNamesOf(input) {
   const withheldOwners = new Map();   // folded name of a `withheld: true` note -> { alias, rel }
   const publishedWithheld = [];       // withheld notes the site publishes: { rel, out } (out as outOf gives it)
   const unreadableFlags = [];         // notes whose `withheld:` is neither true nor false: { rel, value }
+  const unreadableCompanions = [];    // notes whose `companion:` is neither true nor false: { rel, value }
   for (const note of input.notes) {
     const rel = noteRel(note);
     // Names are read from the note as it is on disk: a published page's own frontmatter has
@@ -301,6 +304,7 @@ function secretNamesOf(input) {
     // A withheld note's own names: its file name, its title and its aliases (its gm_aliases
     // are searched as every gm_aliases name is).
     if (Object.prototype.hasOwnProperty.call(fm, 'withheld') && !flagReadable(fm.withheld)) unreadableFlags.push({ rel, value: fm.withheld });
+    if (Object.prototype.hasOwnProperty.call(fm, 'companion') && !flagReadable(fm.companion)) unreadableCompanions.push({ rel, value: fm.companion });
     if (isWithheld(fm) && input.publishedRels.has(rel)) {
       // Its name is on the site by its own page: one finding for that, and no search for it.
       publishedWithheld.push({ rel, out: input.outOf(rel) });
@@ -346,7 +350,7 @@ function secretNamesOf(input) {
   const HIDDEN_CHAR = /[\u200b-\u200d\u2060\ufeff\u00ad]|&(?:shy|ZeroWidthSpace|NoBreak|#\d+|#x[0-9a-f]+);/i;
   const COMBINING = /[\u0300-\u036f]/;
   const mayHold = (html) => probe.test(html) || ((HIDDEN_CHAR.test(html) || COMBINING.test(html)) && probe.test(foldQuotes(decodeAll(String(html)))));
-  return { names, probe, mayHold, secretKeys, collisions, publishedWithheld, unreadableFlags, publicNames };
+  return { names, probe, mayHold, secretKeys, collisions, publishedWithheld, unreadableFlags, unreadableCompanions, publicNames };
 }
 
 // The words that are a public name of the site (a page's name or title): a link to one prints it, so it is no leak.
@@ -471,7 +475,7 @@ function startNoteAudit(input) {
     unmapped: new Set(input.report.unmapped.map((u) => canonicalNfc(u.dir))),
   };
   const secrets = secretNamesOf({ notes: input.notes, publishedRels, outOf: (rel) => (scanned.get(rel) || {}).outputPath, linkMap: input.linkMap, neverShow: input.publishConfig.never_show });
-  const { secretKeys, collisions, publishedWithheld, unreadableFlags, probe, mayHold, publicNames } = secrets;
+  const { secretKeys, collisions, publishedWithheld, unreadableFlags, unreadableCompanions = [], probe, mayHold, publicNames } = secrets;
   const secretNames = secrets.names;
   for (const note of input.notes) {
     const rel = noteRel(note);
@@ -912,6 +916,15 @@ function startNoteAudit(input) {
         value,
       });
     }
+    for (const u of unreadableCompanions) {
+      const value = typeof u.value === 'string' ? u.value : JSON.stringify(u.value);
+      found.push({
+        code: 'COMPANION_FLAG_UNREADABLE', severity: 'warning', path: u.rel,
+        detail: `companion: ${value} is not true or false, so the note is read as not a companion and may be pictured on Story pages`,
+        fix: 'write companion: true or false',
+        value,
+      });
+    }
     // --- NAMED_NO_PAGE: one finding per note --------------------------------------------
     if (named.size > 0) {
       for (const [rel, entry] of named) {
@@ -1035,6 +1048,9 @@ function summaryLines(findings) {
     } else if (code === 'WITHHELD_FLAG_UNREADABLE') {
       for (const f of rows.slice(0, 10)) lines.push(`${f.path}: withheld: ${f.value} is not true or false, so the note is read as not withheld.`);
       if (rows.length > 10) lines.push(`${rows.length - 10} more notes have a withheld: value that is not true or false.`);
+    } else if (code === 'COMPANION_FLAG_UNREADABLE') {
+      for (const f of rows.slice(0, 10)) lines.push(`${f.path}: companion: ${f.value} is not true or false, so the note is read as not a companion and may be pictured on Story pages.`);
+      if (rows.length > 10) lines.push(`${rows.length - 10} more notes have a companion: value that is not true or false.`);
     } else if (code === 'COMMENT_STRAY') {
       const worst = rows.slice(0, WORST).map((f) => (f.where === 'frontmatter' ? `${f.path} ${f.field}:` : `${f.path}${f.line ? ` line ${f.line}` : ''}`));
       // A comment or hidden block never closed in a frontmatter value is counted here too.

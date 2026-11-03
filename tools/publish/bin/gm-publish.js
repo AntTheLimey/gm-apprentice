@@ -604,6 +604,9 @@ change what the site shows:
   WITHHELD_FLAG_UNREADABLE
                   a withheld: value that is not true or false, read as not
                   withheld
+  COMPANION_FLAG_UNREADABLE
+                  a companion: value that is not true or false, read as not a
+                  companion, so the NPC may be pictured on Story pages
   MOMENT_KIND_UNKNOWN
                   a Memorable Moments tag (#moment/<tag>) that names none of
                   the five kinds; the moment shows with no kind

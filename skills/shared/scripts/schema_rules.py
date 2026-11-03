@@ -348,6 +348,19 @@ def frontmatter_findings(fm: dict, setting: Callable[[str], Iterable[object]] | 
         if not (isinstance(value, bool) or (isinstance(value, str)
                                              and value.strip().lower() in ("true", "false"))):
             found.append(("ERROR", "withheld must be true or false"))
+    # `companion: true` (an NPC who travels with the party) is never pictured
+    # on the site's Story pages, as a PC is not; read as `withheld` is. A
+    # familiar or an animal companion is often a creature note, so a creature
+    # may carry it too; on any other type it would hide the note's pictures
+    # for no reason.
+    if "companion" in fm:
+        value = fm["companion"]
+        if not (isinstance(value, bool) or (isinstance(value, str)
+                                             and value.strip().lower() in ("true", "false"))):
+            found.append(("ERROR", "companion must be true or false"))
+        elif (value is True or (isinstance(value, str) and value.strip().lower() == "true")) \
+                and etype not in ("npc", "creature"):
+            found.append(("ERROR", f"companion: true marks an npc or creature, not a '{etype}'"))
     portrait = fm.get("portrait")
     if portrait and not custom:
         if not isinstance(portrait, str):

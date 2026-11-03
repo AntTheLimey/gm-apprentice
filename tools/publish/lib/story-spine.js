@@ -221,7 +221,8 @@ function once(resolve) {
 // players' own recap and the title of the wrap-up's, for the build to show the wrap-up's parts apart, marked.
 // `figures` ({ candidates, blockers, scenesFor(unit) }, story-figures.js figureCandidates, nameHolders and
 // sceneCandidates) pictures the people and places each recap names beside the paragraph that first names them, and
-// the scenes played that session beside the paragraph naming the most of their places and people (placeFigures), in
+// the scenes played that session beside the paragraph naming the most of their places and people (placeFigures), each
+// page at most once a chapter (the scenes each time they are played), in
 // the recap the player page shows (on the GM site, the players' own recap of a
 // held-back unit). Each placed picture is added to `images.usedImages`; the build's two spine calls place the same
 // pictures, so the image pass copies exactly the files the pages use.
@@ -292,7 +293,9 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
   const idx = buildWrapUpIndex(pages);
 
   const units = [];
+  const chapterOf = new Map();   // unit -> its chapter page: the Story pages pictured together (withFigures)
   for (const chapter of chapters) {
+    const before = units.length;
     // Namespace unit ids by chapter so non-unique session titles (e.g. a plain "Session 1"
     // in two chapters) can't collide on the same story/<id>.html output path.
     const chSlug = slugify(chapter.displayTitle || chapter.title);
@@ -358,10 +361,20 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
         ...heldBackOf(unitOutputPath(id), chapterWrap, chapterRecap, () => (chapterIntro(chapter, resolverFor(unitOutputPath(id))) || {}).html),
       });
     }
+    for (const unit of units.slice(before)) chapterOf.set(unit, chapter);
   }
 
   if (figures && images) {
+    // A page is pictured once per chapter: on the chapter's first Story page, in reading order, that pictures it (or
+    // shows its picture where the GM placed it). On the GM site only the Story pages the player site has count
+    // towards that, so a GM page never pictures less than the player page at its address; a GM page players do not
+    // have still leaves out what was pictured before it.
+    const shownIn = new Map();   // chapter -> the keys pictured so far
     for (const unit of units) {
+      const chapter = chapterOf.get(unit);
+      if (!shownIn.has(chapter)) shownIn.set(chapter, new Set());
+      const shown = shownIn.get(chapter);
+      const counts = !players || players.has(unit.outputPath);
       // A GM unit whose banner says players see another Story page here, with no heldBack, has no player page at this
       // address to equal; its pictures still come from player-site pages only.
       const target = unit.heldBack || unit;
@@ -369,6 +382,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
         candidates: figures.candidates, scenes: figures.scenesFor ? figures.scenesFor(unit) : [], blockers: figures.blockers || [],
         exclude: new Set([unit.sourcePage, unit.wrapUpPage].filter(Boolean)),
         fromPath: unit.outputPath, imageMap: images.imageMap, usedImages: images.usedImages, marks,
+        shown: new Set(shown), pictured: counts ? shown : null,
       });
     }
   }

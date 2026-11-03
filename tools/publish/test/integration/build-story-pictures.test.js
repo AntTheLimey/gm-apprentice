@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 require('../helpers/quiet-legacy-warning.js');
 const { buildBoth } = require('../helpers/gm-build');
-const { storyVault, WRAP_1, WRAP_2, SESSION } = require('../helpers/story-vault');
+const { storyVault, WRAP_1, WRAP_2, SESSION, CHAPTER } = require('../helpers/story-vault');
 const { brokenLinks } = require('../helpers/site-links');
 const { makePng } = require('../helpers/make-png');
 const { runLeakGate } = require('../../lib/leak-gate');
@@ -49,6 +49,9 @@ const PEOPLE = {
   'Locations/The Docks.md': note('location', 'The Docks', 'docks.png'),
   'PCs/Six.md': note('pc', 'Six', 'six.png'),
   'NPCs/Captain Rook.md': note('npc', 'Captain Rook', 'rook.png'),
+  // The chapter's introduction names no page, so these tests read each session's Story page on its own: a page the
+  // introduction pictured would not be pictured again in its chapter (once per chapter, below).
+  'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('The docks, CHAPTER-BODY-1.', 'The harbour, CHAPTER-BODY-1.'),
 };
 const RECAP = 'The party reached the docks at dusk, where [[Mara Quill]] waited with a lantern and a ledger. Six watched from a roof.\n\n'
   + 'Later Captain Rook bought a round and Mara Quill paid for it.\n\nNobody slept.';
@@ -528,5 +531,100 @@ describe('Story pictures: player_site.story.pictures off', () => {
     assert.equal(entry('player_site.story.pictures').default, true);
     assert.ok(NOT_PER_SITE.has('player_site.story.pictures'));
     assert.equal(entry('gm_site.story.pictures'), undefined);
+  });
+});
+
+describe('Story pictures: once per chapter, and companions', () => {
+  const CH2 = '---\ntype: chapter\ntitle: Chapter 2 — Hills\nsort_order: 2\n---\n\n# Chapter 2 — Hills\n';
+  const s3 = SESSION(3).replace('[[Chapter 1 Overview]]', '[[Chapter 2 Overview]]');
+  const wrap3 = WRAP_2.replace(/Session 2/g, 'Session 3').replace('session_number: 2', 'session_number: 3')
+    .replace('[[Chapter 1 Overview]]', '[[Chapter 2 Overview]]')
+    .replace(/## Narrative Recap\n\n[^\n]*\n/, '## Narrative Recap\n\nIn the hills [[Mara Quill]] and Thomas Wyndham waited.\n');
+  const wrap2 = WRAP_2.replace(/## Narrative Recap\n\n[^\n]*\n/, '## Narrative Recap\n\n'
+    + 'Captain Rook rowed and [[Mara Quill]] counted the coins.\n\nOld Smith met them, with Thomas Wyndham.\n');
+  const s = buildBoth(storyVault({
+    ...PEOPLE,
+    '_attachments/smith.png': png(),
+    '_attachments/thomas.png': png(),
+    '_attachments/silas.png': png(),
+    'NPCs/Old Smith.md': note('npc', 'Old Smith', 'smith.png'),
+    'NPCs/Thomas Wyndham.md': note('npc', 'Thomas Wyndham', 'thomas.png', 'companion: true\n'),
+    'NPCs/Silas Wyndham.md': note('npc', 'Silas Wyndham', 'silas.png', 'aliases: ["Wyndham"]\n'),
+    // The introduction ("The docks, ...") comes first in the chapter, so it pictures The Docks.
+    'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER,
+    'Sessions/Session 1 Wrap-Up.md': withRecap('[[Mara Quill]] met Thomas Wyndham at the docks.\n\n![[rook.png]]\n\nCaptain Rook nodded.'),
+    'Sessions/Session 2 Wrap-Up.md': wrap2,
+    'Chapters/Chapter 2/Chapter 2 Overview.md': CH2,
+    'Sessions/Session 3.md': s3,
+    'Sessions/Session 3 Wrap-Up.md': wrap3,
+    'Sessions/Session 3 Play Notes.md': null,
+  }));
+  after(() => s.cleanup());
+  const STORY_3 = 'story/chapter-2-hills-session-3.html';
+
+  it('a page pictured earlier in the chapter, or whose picture the GM placed there, is not pictured again', () => {
+    for (const site of [s.player, s.gm]) {
+      assert.deepEqual(captions(read(site, 'story/chapter-1-docks-intro.html')), ['The Docks']);
+      assert.deepEqual(captions(read(site, STORY_1)), ['Mara Quill']);
+      assert.equal((read(site, STORY_1).match(/images\/rook\./g) || []).length, 1, 'the picture the GM placed stays');
+      assert.deepEqual(captions(read(site, STORY_2)), ['Old Smith']);
+    }
+  });
+
+  it('a new chapter pictures it again', () => {
+    for (const site of [s.player, s.gm]) assert.deepEqual(captions(read(site, STORY_3)), ['Mara Quill']);
+  });
+
+  it('a companion is never pictured, and its name still holds its words', () => {
+    for (const site of [s.player, s.gm]) {
+      for (const story of [STORY_1, STORY_2, STORY_3]) {
+        const page = read(site, story);
+        assert.ok(!/images\/(thomas|silas)\./.test(page), `${story} on ${site === s.gm ? 'gm' : 'player'}`);
+      }
+    }
+    assert.ok(s.player.files().some((f) => /thomas-wyndham\.html$/.test(f)), 'the companion still has a page');
+  });
+
+  it('every link resolves and the leak gate finds nothing', () => {
+    assert.deepEqual(brokenLinks(s.player.dir), []);
+    assert.deepEqual(brokenLinks(s.gm.dir), []);
+    assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.player.dir }).findings, []);
+  });
+});
+
+describe('Story pictures: once per chapter, with a Story page only the GM site has', () => {
+  const hidden = (text) => text.replace('---\n', '---\npublish: false\n');
+  const s = buildBoth(storyVault({
+    ...PEOPLE,
+    'Sessions/Session 1.md': hidden(SESSION(1)),
+    'Sessions/Session 1 Wrap-Up.md': hidden(withRecap('[[Mara Quill]] waited.')),
+    'Sessions/Session 2 Wrap-Up.md': WRAP_2.replace('crossed the bay at night', 'crossed the bay with [[Mara Quill]] at night'),
+  }));
+  after(() => s.cleanup());
+
+  it('the GM page players do not have does not keep the next page from picturing what the player page pictures', () => {
+    assert.ok(!s.player.files().some((f) => f.endsWith('chapter-1-docks-session-1.html')), 'players have no Session 1 Story page');
+    assert.deepEqual(captions(read(s.gm, STORY_1)), ['Mara Quill']);
+    assert.deepEqual(captions(read(s.player, STORY_2)), ['Mara Quill']);
+    assert.deepEqual(captions(read(s.gm, STORY_2)), ['Mara Quill']);
+  });
+});
+
+describe('Story pictures: once per chapter, a picture left out for room', () => {
+  const s = buildBoth(storyVault({
+    ...PEOPLE,
+    '_attachments/smith.png': png(),
+    'NPCs/Old Smith.md': note('npc', 'Old Smith', 'smith.png'),
+    // Three pages in one paragraph: two fit beside it, and Old Smith has no other mention on this page.
+    'Sessions/Session 1 Wrap-Up.md': withRecap('[[Mara Quill]], Captain Rook and Old Smith met at dusk.'),
+    'Sessions/Session 2 Wrap-Up.md': WRAP_2.replace('crossed the bay at night', 'crossed the bay with Old Smith and [[Mara Quill]] at night'),
+  }));
+  after(() => s.cleanup());
+
+  it('is pictured on the next Story page of the chapter that names it; what was pictured is not', () => {
+    for (const site of [s.player, s.gm]) {
+      assert.deepEqual(captions(read(site, STORY_1)), ['Mara Quill', 'Captain Rook']);
+      assert.deepEqual(captions(read(site, STORY_2)), ['Old Smith']);
+    }
   });
 });

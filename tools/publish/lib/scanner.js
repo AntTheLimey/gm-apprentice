@@ -456,14 +456,14 @@ function scanAllNotes(vaultPath, deps) {
       // A note that cannot be read stops the scan; one that reads but does not parse keeps its name below.
       const text = reading(rd, vaultPath, full);
       try {
-        // Only a note that declares aliases (or is `withheld`) needs its frontmatter parsed — or a session
+        // Only a note that declares aliases (or is `withheld`, or has a `companion:` value to check) needs its frontmatter parsed — or a session
         // index or Wrap-Up the scan skipped, which session-hub.js still counts when it
         // resolves a pairing link (a same-titled hub elsewhere makes a link ambiguous).
         // A note directly in _meta is read too: its type says whether it is the plugin's own (publish-decision.js).
         // A key written `withheld :` or `"withheld":` is the same key to YAML, so it is looked for so too (#352).
         const inMeta = path.relative(vaultPath, full).split(path.sep)[0] === '_meta';
         // A scene or a session Plan is read too (story-figures.js sceneCandidates), and a scene keeps its body.
-        if (inMeta || /^["']?(?:(?:gm_)?aliases|withheld|title|publish)["']?[ \t]*:/m.test(text) || HOUSEKEEPING_TYPE_LINE.test(text) || SESSION_TYPE_LINE.test(text) || PREP_TYPE_LINE.test(text)) {
+        if (inMeta || /^["']?(?:(?:gm_)?aliases|withheld|companion|title|publish)["']?[ \t]*:/m.test(text) || HOUSEKEEPING_TYPE_LINE.test(text) || SESSION_TYPE_LINE.test(text) || PREP_TYPE_LINE.test(text)) {
           const note = parseNote(text);
           frontmatter = note.data || {};
           if (frontmatter.type === 'scene') body = note.content;
