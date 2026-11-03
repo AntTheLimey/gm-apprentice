@@ -739,9 +739,17 @@ describe('rows written another way, and the report of what is not read', () => {
       assert.match(r.detail, /skill "Karate" is not in the Skills table/);
       assert.doesNotMatch(r.fix, /default level for 0 points/);
     }
-    for (const r of report) {
-      assert.strictEqual(r.fix, 'without Karate an unarmed attack rolls against DX, a kick against DX-2: write the Skill cell as DX and that level (DX 13, say), or add Karate to the Skills table with the points the character has in it');
-    }
+    // The fixture's sheet has Brawling 12 and no DX: B271, a punch at the best of DX and the unarmed skills it has, a
+    // kick at that less 2, written as a level the calculator reads.
+    assert.strictEqual(report[0].fix, 'without Karate a Punch rolls against the best of DX and the unarmed skills on the sheet (here Brawling 12): write the Skill cell as "Brawling 12", or add Karate to the Skills table with the points the character has in it');
+    assert.strictEqual(report[1].fix, 'without Karate a Kick rolls against the best of DX and the unarmed skills on the sheet, less 2 (here Brawling-2 = 10): write the Skill cell as "Brawling 10", or add Karate to the Skills table with the points the character has in it');
+  });
+  it('an unarmed attack with DX on the sheet better than its unarmed skills: the fix names DX', () => {
+    const m = model({ skills: [['Brawling', '12']], melee: [meleeRow({ weapon: 'Kick', skill: 'Karate-12' })] });
+    m.attributes.primary.DX = { value: '14', markers: [] };
+    const report = [];
+    buildTohitData(m, META, report);
+    assert.match(report[0].fix, /less 2 \(here DX-2 = 12\): write the Skill cell as "DX 12"/);
   });
   it('a skill not in the Skills table is said, with the nearest name', () => {
     const { says } = build({ skills, ranged: [rangedRow({ skill: 'Beam Weapons (Rifle)-14' })] });

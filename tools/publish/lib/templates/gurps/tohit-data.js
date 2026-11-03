@@ -502,11 +502,36 @@ function equipmentItems(eq) {
   return items.concat(extra);
 }
 
+// B271: without the skill it names, an unarmed attack rolls against the best of DX and the unarmed skills the sheet
+// has (a punch: Boxing, Brawling, Karate; a kick: Brawling, Karate, less 2; a grapple: Judo, Sumo Wrestling,
+// Wrestling; a bite: Brawling). The fix gives that level as a cell the calculator reads as a level (`Brawling 13`).
+const UNARMED_BASES = [
+  [/^kick\b/i, ['Brawling', 'Karate'], -2],
+  [/^(?:grapple|grab)\b/i, ['Judo', 'Sumo Wrestling', 'Wrestling'], 0],
+  [/^bite\b/i, ['Brawling'], 0],
+  [/./, ['Boxing', 'Brawling', 'Karate'], 0],
+];
+function unarmedBest(attack, match, dx) {
+  const [, skills, mod] = UNARMED_BASES.find(([re]) => re.test(attack));
+  const options = Number.isFinite(dx) ? [[dx, 'DX']] : [];
+  for (const name of skills) { const hit = match(name); if (hit) options.push([hit.level, hit.name]); }
+  if (!options.length) return { mod };
+  const [have, name] = options.reduce((a, b) => (b[0] > a[0] ? b : a));
+  return { name, level: have + mod, mod, how: mod ? `${name}${mod} = ${have + mod}` : `${name} ${have}` };
+}
+
 // `report`, when given, is an array: each row the calculator cannot fully read is pushed to it
 // as { severity: 'warning' | 'info', detail, fix, text }, for the build's Site Faults audit.
 function buildTohitData(model, meta, report) {
   const m = model || {};
   const match = makeSkillMatcher(m.skills || []);
+  const dx = parseInt(str(((m.attributes || {}).primary || {}).DX && m.attributes.primary.DX.value), 10);
+  const unarmedFix = (attack, skill) => {
+    const best = unarmedBest(attack, match, dx);
+    const what = `the best of DX and the unarmed skills on the sheet${best.mod ? `, less ${-best.mod}` : ''}`;
+    const write = best.how ? ` (here ${best.how}): write the Skill cell as "${best.name} ${best.level}"` : ': write the Skill cell as that skill or DX and its level';
+    return `without ${skill} a ${attack} rolls against ${what}${write}, or add ${skill} to the Skills table with the points the character has in it`;
+  };
   const say = (severity, detail, fix) => {
     if (Array.isArray(report)) report.push({ severity, detail: `to-hit calculator: ${detail}`, fix, text: `to-hit calculator: ${detail}; ${fix}` });
   };
@@ -563,7 +588,7 @@ function buildTohitData(model, meta, report) {
         // An unarmed attack needs no unarmed skill (B182, B231): it is rolled against DX, a kick DX-2. The unarmed skills
         // have no default, so the fix is never to add one at its default.
         const fix = UNARMED.test(weaponStem(key))
-          ? `${near ? 'name the skill as the Skills table does; else, ' : ''}without ${read.skill} an unarmed attack rolls against DX, a kick against DX-2: write the Skill cell as DX and that level (DX 13, say), or add ${read.skill} to the Skills table with the points the character has in it`
+          ? `${near ? 'name the skill as the Skills table does; else, ' : ''}${unarmedFix(key.trim(), read.skill)}`
           : 'name the skill as the Skills table does, or add it there at its default level for 0 points';
         say('warning', `${where}: skill "${read.skill}" is not in the Skills table${near ? ` (nearest: "${near}")` : ''}, so the row gets no techniques, off-hand rule or "+N included" line`, fix);
       }

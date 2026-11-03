@@ -27,8 +27,8 @@ and the GURPS tables and prints one row:
   cell as the skill and that level (`Knife-10`), and report both.
 - `HAVE`: the skill is in the table; use its level the same way.
 - `UNARMED`: a punch, kick or other unarmed attack needs no unarmed
-  skill; it rolls against DX (a kick DX-2). Write the Skill cell as DX
-  and the level it gives, and add nothing.
+  skill; it rolls against DX or an unarmed skill the sheet has (a kick
+  at 2 less). Write the Skill cell the row gives, and add nothing.
 - `NO-DEFAULT`: the skill can't be used until at least 1 point is
   spent on it, so nothing is added. Report that for this row; the GM
   may buy the skill or drop the weapon row.
