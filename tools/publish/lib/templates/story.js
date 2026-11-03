@@ -19,7 +19,8 @@ function sectionHtml(s) {
 // The story (the wrap-up's text above its first heading, the recap, then its other sections in written order), Previous/Next, then the moments' cards
 // and, on the GM site, what goes after them and the Play Notes link. On the GM site, a wrap-up players do not see on a
 // page they do have (`unit.heldBack`, with its mark's `open` and `close` tokens) follows the players' own recap
-// whole, inside one mark: its recap under its heading, its sections, its cards, what goes after them.
+// whole, inside one mark: the unit's own recap where players' page is made from another wrap-up (`ownHtml`), its recap
+// under its heading, its sections, its cards, what goes after them.
 function storyPage(unit, config, publishConfig, navFor) {
   const held = unit.heldBack && unit.heldBack.open ? unit.heldBack : null;
   const wrapUp = `${unit.preambleHtml || ''}
@@ -28,6 +29,7 @@ function storyPage(unit, config, publishConfig, navFor) {
   const story = held
     ? `${held.recapHtml}
       <p>${held.open}</p>
+      ${held.ownHtml || ''}
       ${unit.preambleHtml || ''}
       ${held.wrapHasRecap ? `${held.wrapRecapTitle ? `<h2>${renderInline(held.wrapRecapTitle)}</h2>` : ''}
       ${unit.recapHtml}` : ''}

@@ -291,7 +291,10 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
     // The unit's recap is the wrap-up's own only when it came from the wrap-up; otherwise it is the players' (the
     // fallback), already shown once.
     const own = !!recap && recap.sourcePage === wrapUp;
-    return { heldBack: { recapHtml: shown, wrapHasRecap: own, wrapRecapTitle: own ? recap.title : null, ...(found ? { wrapUp: theirs } : {}) } };
+    // Where players' page is made from another wrap-up, the unit's own recap or introduction (which the GM page
+    // showed in their place before) stays on the GM page, inside the mark: players do not see it here.
+    const unitOwn = found ? playersRecap() : null;
+    return { heldBack: { recapHtml: shown, wrapHasRecap: own, wrapRecapTitle: own ? recap.title : null, ...(found ? { wrapUp: theirs } : {}), ...(unitOwn ? { ownHtml: unitOwn } : {}) } };
   };
   const chapters = sortedChapters(pages);
   const sessions = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session');

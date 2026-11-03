@@ -634,15 +634,25 @@ describe('Story pictures: once per chapter, a held-back wrap-up on a page where 
   // the same address leads with the second. The chapter note has no introduction, so players have no recap of their
   // own there (no heldBack). Later pages in the chapter count what the player page pictured, on both sites.
   const chapterWrap = (recap, extra = '') => `---\ntype: session_wrap\nchapter: "[[Chapter 1 Overview]]"\n${extra}---\n\n# Chapter 1 Wrap-Up\n\n## Narrative Recap\n\n${recap}\n`;
-  const s = buildBoth(storyVault({
+  const vault569 = storyVault({
     ...PEOPLE,
     'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n').replace('\n## Overview\n\nThe docks, CHAPTER-BODY-1.\n', ''),
     'Chapters/Chapter 1/Chapter 1 Wrap-Up A.md': chapterWrap('Captain Rook kept the books.', 'publish: false\n'),
     'Chapters/Chapter 1/Chapter 1 Wrap-Up B.md': chapterWrap('[[Mara Quill]] kept the books.'),
     'Sessions/Session 1 Wrap-Up.md': withRecap('[[Mara Quill]] and Captain Rook met at dusk.').replace('canon_status: DRAFT\n', ''),
-  }));
+  });
+  const s = buildBoth(vault569);
   after(() => s.cleanup());
   const INTRO = 'story/chapter-1-docks-intro.html';
+
+  // Review B: the player site's Story pages are what a player-only build of the same vault writes: nothing of the GM
+  // site's reading reaches them.
+  it('the player pages are those a player-only build writes', () => {
+    const alone = buildBoth(vault569, { sites: ['player'] });
+    try {
+      for (const p of [INTRO, STORY_1]) assert.equal(read(s.player, p), read(alone.player, p), p);
+    } finally { alone.cleanup(); }
+  });
 
   it('the GM page leads with the recap the player page shows, pictured as it is there, then its own wrap-up marked', () => {
     assert.deepEqual(captions(read(s.player, INTRO)), ['Mara Quill']);
@@ -672,7 +682,7 @@ describe('Story pictures: a session whose wrap-up is held back, where players se
   // session's folder. The GM page leads with that one, as the players' recap.
   const hub = SESSION(1).replace('HUB-BODY-1: what the GM prepped.\n', '## Narrative Recap\n\nHUB-RECAP-1: the GM\'s own notes.\n');
   const other = '---\ntype: session_wrap\n---\n\n# Session 1 Recap\n\n## Narrative Recap\n\nCaptain Rook rowed the party out.\n';
-  const s = buildBoth(storyVault({
+  const vaultOwn = storyVault({
     ...PEOPLE,
     'Sessions/Session 1.md': null,
     'Sessions/Session 1 Wrap-Up.md': null,
@@ -680,8 +690,14 @@ describe('Story pictures: a session whose wrap-up is held back, where players se
     'Sessions/One/Session 1.md': hub,
     'Sessions/One/Session 1 Wrap-Up.md': withRecap('[[Mara Quill]] waited.').replace('---\n', '---\npublish: false\n'),
     'Sessions/One/Session 1 Recap.md': other,
-  }));
+  });
+  const s = buildBoth(vaultOwn);
   after(() => s.cleanup());
+
+  it('the player page is the one a player-only build writes', () => {
+    const alone = buildBoth(vaultOwn, { sites: ['player'] });
+    try { assert.equal(read(s.player, STORY_1), read(alone.player, STORY_1)); } finally { alone.cleanup(); }
+  });
 
   it('the GM page\'s players\' recap is the one the player page shows', () => {
     const player = read(s.player, STORY_1);
@@ -689,7 +705,12 @@ describe('Story pictures: a session whose wrap-up is held back, where players se
     assert.ok(!player.includes('HUB-RECAP-1'));
     const gm = read(s.gm, STORY_1);
     assert.ok(gm.includes('Captain Rook rowed the party out.'), 'the GM page leads with what players see');
-    assert.ok(!gm.includes('HUB-RECAP-1'), 'not the session\'s own recap, which players do not see here');
+    // Review B: the session's own recap, which the GM page showed before, stays on it: after the players' recap,
+    // inside the mark of what players do not see here.
+    const lead = gm.indexOf('Captain Rook rowed the party out.');
+    const open = gm.indexOf('This wrap-up is held back from players');
+    const own = gm.indexOf('HUB-RECAP-1');
+    assert.ok(lead >= 0 && open > lead && own > open, `players' recap, then the mark, then the session's own recap: ${lead} ${open} ${own}`);
     assert.deepEqual(captions(gm), captions(player));
   });
 
