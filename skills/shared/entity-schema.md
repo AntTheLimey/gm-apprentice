@@ -272,100 +272,120 @@ tags: []
 Mirrored into each vault's `_meta/entity-types.md`; migrations diff
 the mirror against these entries.
 
+<!-- generated:fields (scripts/gen_field_lists.py) -->
 **NPC:** `occupation`, `age`, `gender`, `nationality`, `status`
-(alive/dead/missing/unknown), `location` (wiki-link: where they're
-usually found), `portrait` (optional)
+(alive/dead/missing/unknown), `location` (wiki-link: where they can
+usually be found), `portrait`
 
 **PC:** `player_name`, `occupation`, `age`, `gender`, `nationality`,
-`status` (alive/dead/missing/retired/unknown), `key_traits`, `hook` (optional string, any system: one line under the
-name and on cards; blank means the backstory's first sentence),
-`portrait` (optional), `display_meta` (optional array: ordered field names for the site meta row;
-when omitted, the setting `player_site.sheets.header_facts` decides), `sheet_source`
-(optional string: where the sheet is kept when not in this file, e.g.
-`"D&D Beyond"` or `"paper, with the player"`; not shown by default; see
-`shared/pc-body-structure.md`), `dndbeyond` (optional string, D&D only: a
-D&D Beyond character link or id; `dnd_ddb.py` syncs the note from it)
+`status` (alive/dead/missing/retired/unknown), `key_traits`,
+`portrait`, `display_meta` (optional array: ordered field names for
+the site meta row; when omitted, the setting
+`player_site.sheets.header_facts` decides), `sheet_source` (optional
+string: where the sheet is kept when not in this file, e.g. `"D&D
+Beyond"` or `"paper, with the player"`; not shown by default; see
+`shared/pc-body-structure.md`), `hook` (optional string, any system:
+one line under the name and on cards; blank means the backstory's
+first sentence), `dndbeyond` (optional string, D&D only: a D&D Beyond
+character link or id; `dnd_ddb.py` syncs the note from it)
+
+**Character Story:** `character` (wiki-link to the PC), plus universal
+fields only. Body is append-only session sections; see the Story
+Companion Convention in `shared/pc-body-structure.md`.
+
+**Location:** `location_type` (city, district, building, room,
+wilderness, ship), `parent_location` (wiki-link; groups the published
+Locations listing, fallback `location_type`), `atmosphere` (a few
+words, shown as a badge: "damp, candlelit, watchful"), `portrait`
+(establishing shot)
+
+**Faction/Organization:** `faction_type` (cult, guild, military, etc.;
+groups the Factions listing), `goals`, `resources`, `leadership`
+(wiki-link), `territory` (wiki-link), `tier`, `currentPlan`,
+`planProgress`, `alliances`, `recentActions`, `status`
+(active/weakened/destroyed/allied/dormant), `part_of` (wiki-link to
+the parent body, optional), `portrait` (logo, seal or headquarters)
+
+**Item:** `item_type` (weapon, armor, vehicle, treasure, relic, tool,
+consumable), `current_holder` (wiki-link: who has it now), `origin`
+(wiki-link: where or who it came from), `portrait`
+
+**Event:** `event_type` (battle, ritual, disaster, discovery,
+betrayal, meeting, celebration), `in_game_date` (the in-game date, in
+the campaign's calendar), `location` (wiki-link: where it happened),
+`participants` (wiki-links), `outcome` (one line; shown on the
+location's What Happened Here timeline)
+
+**Clue:** `clue_type` (physical, testimonial, documentary), `found_at`
+(wiki-link: where it is, or was found), `found_by` (wiki-link: who
+found it, empty until found), `leads_to` (wiki-links to what it points
+at), `reliability` (solid, partial, misleading), `discoveryState` (per
+PC)
+
+**Document:** `doc_type` (letter, journal, map, contract, prophecy,
+spell, tome), `author` (wiki-link: who wrote it, or as the PCs
+believe), `date` (when written), `condition` (pristine, water-stained,
+torn, partly burned), `current_holder` (wiki-link: who has it now),
+`portrait` (a scan or prop image, if you have one). The text goes in
+the body under `## The Text`; an older `content` field moves there.
+
+**Prop:** `prop_kind` (document, object, diagram, supplied,
+container), `prop_file` (a hand-made page, PDF or picture beside the
+note), `prop_address` (its address on the site; empty means
+`props/<note name>`, or `props/<note name>-prop.html` when a page the
+site builds has that address), `prop_style` (the look of the page the
+site makes from `## The Text`; not with a `prop_file`), `prop_hand` (a
+hand id from the vault's `_meta/prop-hands.json`, so one writer always
+has one hand; `prop_font` on the note wins), `prop_line` (one line for
+the props page), `prop_group` (its heading there; empty uses its
+chapter), `prop_container` (wiki-link to the container prop it sits
+in), `show_sealed` (containers: `titles` or `none`), `revealed_in`
+(the session it reached the players; wrap-up's reveal step writes it,
+first arrival only), `prop_state` (containers: a `.js` file filled
+with what the page lists, for its script), `prop_state_global` (the
+global it sets; default `PROP_ITEMS`). Style fields (`prop_title`,
+`prop_breaks`, `prop_shift`, `prop_font`, and each style's own) are
+listed in publish-site's prop-styles reference. It publishes when the
+note does.
+
+**Plan:** `plan_type` (arc/scene/investigation/timeline), `chapter`
+(wiki-link), `participants` (wiki-links), `locations` (wiki-links),
+`leads_to` (wiki-links)
+
+**Adventure Brief:** `title`, `system`, `scope`
+(campaign/few-shot/one-shot), `sessions_estimated`,
+`continuation_type`
+(new/new-arc/new-chapter/new-pcs/parallel/prequel/time-jump),
+`adventure_shape` (branching/hub-and-spoke/linear/open-node/sandbox)
+
+**Campaign Overview:** `campaign`, `game_system`, `setting_year`,
+`current_game_date`, `genre_tags`, `scope`
+(campaign/few-shot/one-shot), `status`
+(abandoned/completed/in_progress/not_started/paused),
+`sessions_played`, `last_session`, `last_play_date`, `current_arc`,
+`arcs_planned`, `current_chapter`, `chapters_planned`, `portrait`
+
+**Creature:** `creature_type` (beast, undead, construct, spirit,
+deity, aberration), `threat_level` (how dangerous the PCs believe it
+is, shown on the site), `location` (wiki-link: where it lairs or is
+found), `portrait`, `abilities` (optional, publishes), `weaknesses`
+(optional, publishes). Keep `abilities` and `weaknesses` in the body's
+GM Notes to hide them.
+
+**Heritage:** `lifespan_range` (min/max age array), `maturity_age`,
+`average_height`, `notable_traits`, `portrait`
+
+**World Domain:** `domain`, `status` (active/inactive/stub),
+`summary`, `rules` (array of world rules, a sentence each)
+
+**World Flags:** `last_reviewed`
+<!-- /generated:fields -->
 
 ### PC Body Structure
 
 The PC body-heading hierarchy, the `## Current Status` block spec,
 and the Story Companion Convention now live in
 `shared/pc-body-structure.md`.
-
-**Character Story:** `character` (wiki-link to the PC), plus
-universal fields only. Body is append-only session sections; see the Story Companion Convention in
-`shared/pc-body-structure.md`.
-
-**Location:** `location_type`, `parent_location` (wiki-link),
-`atmosphere`, `portrait` (optional). `parent_location` groups the published Locations
-listing (fallback `location_type`).
-
-**Faction/Organization:** `faction_type` (cult, guild, military,
-etc.), `goals`, `leadership` (wiki-link), `territory` (wiki-link),
-`status` (active/weakened/destroyed/allied/dormant),
-`part_of` (wiki-link to the parent body, optional), `portrait`
-(optional). `faction_type` groups the Factions listing.
-
-**Item:** `item_type` (weapon, armor, relic, etc.),
-`current_holder` (wiki-link), `origin`, `portrait` (optional)
-
-**Event:** `event_type` (battle, ritual, etc.), `in_game_date` (in-game),
-`location` (wiki-link), `participants` (wiki-links), `outcome`
-
-**Clue:** `clue_type` (physical, testimonial, documentary),
-`found_at` (wiki-link), `found_by`, `leads_to`, `reliability`,
-`discoveryState` (per PC)
-
-**Document:** `doc_type` (letter, journal, map, etc.), `author`,
-`date` (when written), `condition`, `current_holder` (wiki-link).
-The text goes in the body under `## The Text`; an older `content`
-field moves there
-
-**Prop:** `prop_kind` (document, object, diagram, supplied,
-container), `prop_file` (a hand-made page, PDF or picture beside
-the note), `prop_address` (its address on the site; empty means
-`props/<note name>`, or `props/<note name>-prop.html` when a page
-the site builds has that address), `prop_style` (the look of the page the
-site makes from `## The Text`; not with a `prop_file`), `prop_hand` (a hand id
-from the vault's `_meta/prop-hands.json`, so one writer always has one hand;
-`prop_font` on the note wins), `prop_line` (one line
-for the props page), `prop_group` (its heading there; empty uses its
-chapter), `prop_container` (wiki-link to the container prop it sits
-in), `show_sealed` (containers: `titles` or `none`), `prop_state`
-(containers: a `.js` file filled with what the page lists, for
-its script), `prop_state_global` (the global it sets; default
-`PROP_ITEMS`), `revealed_in`
-(the session it reached the players; wrap-up's reveal step writes it, first arrival only). Style fields
-(`prop_title`, `prop_breaks`, `prop_shift`, `prop_font`, and each
-style's own) are listed in publish-site's prop-styles reference. It
-publishes when the note does
-
-**Plan:** `plan_type` (arc/scene/investigation/timeline),
-`chapter` (wiki-link), `participants` (wiki-links),
-`locations` (wiki-links), `leads_to` (wiki-links)
-
-**Adventure Brief:** `scope` (campaign/one-shot/few-shot),
-`sessions_estimated`, `continuation_type` (new/new-chapter/new-arc/time-jump/prequel/parallel/new-pcs),
-`adventure_shape` (linear/branching/hub-and-spoke/open-node/sandbox),
-`system`
-
-**Campaign Overview:** `campaign`, `game_system`, `setting_year`,
-`current_game_date`, `genre_tags`, `scope`, `status`, `sessions_played`,
-`last_session`, `last_play_date`, `current_arc`, `arcs_planned`,
-`current_chapter`, `chapters_planned`, `portrait` (optional)
-
-**Creature:** `creature_type` (beast, undead, aberration, etc.),
-`threat_level` (as the PCs judge it), `location` (wiki-link),
-`portrait` (optional). `abilities` and `weaknesses` are optional and
-publish; keep them in the body's GM Notes to hide them
-
-**Heritage:** `lifespan_range` (min/max age array), `maturity_age`,
-`average_height`, `notable_traits`, `portrait` (optional)
-
-**World Domain:** `domain`, `status` (active/stub/inactive),
-`summary`, `rules` (array of world rules, a sentence each)
-
-**World Flags:** `last_reviewed`
 
 ### The `mobrpg:` node (machine-managed — do not hand-edit)
 

@@ -53,6 +53,13 @@ adding a new field, renaming a field, changing a field's type
   - `campaign-organizer/references/` — other entity types
 - [ ] Add a comment explaining the field's purpose, valid
   values, and which code consumes it
+- [ ] Run `python3 scripts/gen_field_lists.py`: it rewrites the per-type
+  field lists in `shared/entity-schema.md` and publish-site's
+  `schema-reference.md` from the templates (CI runs `--check`). A
+  template comment shows in the entity-schema list; a field only the
+  site reads, or a sentence the template cannot say, goes in the
+  generator's entries. Vault copies of `_meta/entity-types.md` are
+  offered the changed entries by the update (`migrate_vault.py`)
 
 ### 5. Update consuming code
 
