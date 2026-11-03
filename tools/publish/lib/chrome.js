@@ -33,13 +33,16 @@ function stopChrome(profile, { graceMs = 3000, platform = process.platform } = {
   if (!profile) return 0;
   const flag = `--user-data-dir=${profile}`;
   if (platform === 'win32') {
+    // One PowerShell finds and stops them (Windows has no polite quit to send) and prints how many. Its own command
+    // line holds the flag too, so it leaves itself out; the flag must end there (a quote, written `\x22` so no `"` has
+    // to survive Windows' argument quoting, a space, or the end), so `…-abc` never matches a Chrome on `…-abcd`.
     const quoted = flag.replace(/'/g, "''");
-    const ps = (verb) => spawnSync('powershell', ['-NoProfile', '-Command',
-      `Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine.Contains('${quoted}') } | ${verb}`],
-    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
-    const found = String(ps('ForEach-Object { $_.ProcessId }').stdout || '').trim().split(/\s+/).filter(Boolean).length;
-    if (found) ps('ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }');
-    return found;
+    const script = `$m = @(Get-CimInstance Win32_Process | Where-Object { $_.ProcessId -ne $PID -and $_.CommandLine -and `
+      + `$_.CommandLine -match ([regex]::Escape('${quoted}') + '(\\x22|\\s|$)') }); `
+      + '$m | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; $m.Count';
+    const run = spawnSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', script],
+      { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], windowsHide: true });
+    return Number(String(run.stdout || '').trim()) || 0;
   }
   // pkill and pgrep read the pattern as an extended regular expression: the profile path is matched literally, and
   // up to the end of its argument, so `…-abc` never matches a Chrome running on `…-abcd`.
