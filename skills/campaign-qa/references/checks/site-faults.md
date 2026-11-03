@@ -239,9 +239,9 @@ run.
 A hidden heading (`## GM Notes`) is written inside a gm-only block, a
 comment or a hidden callout. The site withholds the text after the
 block too, to the next heading of the same or higher level. Show the
-GM that text and ask: should it stay hidden? Then make the row's fix
-for the answer: on yes the heading goes just above the block; on no
-the text may also move above the block. Edit only on an answer.
+GM that text and ask: should it stay hidden? On yes, move the heading
+out of the block, just above it. On no, move that text above the
+block or under a heading the site shows. Edit only on an answer.
 
 ## TABLE_OVERWIDE
 
