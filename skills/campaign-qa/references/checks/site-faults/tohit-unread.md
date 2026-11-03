@@ -20,12 +20,15 @@ a Skill cell with no level. Where the row gives a nearest name, first
 check the skill is not that one misspelt. GURPS uses such a skill at
 its default, 0 points spent. Run
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gurps_skill_default.py"
-"<PC note>" "<skill>" --write`. It works the level out from the sheet
+"<PC note>" "<skill>" --for "<the row's weapon>" --write`. It works the level out from the sheet
 and the GURPS tables and prints one row:
 
 - `ADDED`: the Skills table row it wrote. Write the weapon row's Skill
   cell as the skill and that level (`Knife-10`), and report both.
 - `HAVE`: the skill is in the table; use its level the same way.
+- `UNARMED`: a punch, kick or other unarmed attack needs no unarmed
+  skill; it rolls against DX (a kick DX-2). Write the Skill cell as DX
+  and the level it gives, and add nothing.
 - `NO-DEFAULT`: the skill can't be used until at least 1 point is
   spent on it, so nothing is added. Report that for this row; the GM
   may buy the skill or drop the weapon row.

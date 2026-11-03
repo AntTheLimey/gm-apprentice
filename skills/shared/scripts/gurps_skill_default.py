@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Add a GURPS skill to a PC's sheet at its default level, for 0 points.
 
-    gurps_skill_default.py SHEET.md "SKILL" [--write]
+    gurps_skill_default.py SHEET.md "SKILL" [--for "ATTACK"] [--write]
     gurps_skill_default.py SHEET.md "SKILL" --difficulty DX/A
                            --default "DX-5, Shortsword-2" [--write]
 
@@ -20,6 +20,9 @@ ttrpg-expert's answer.
 Prints one tab-separated row, `KIND<TAB>sheet<TAB>what`:
 
   HAVE          the skill is in the Skills table already; nothing written
+  UNARMED       --for names an unarmed attack (a punch, kick, bite,
+                grapple) and the skill has no default: the attack rolls
+                against DX (a kick DX-2) without it, so nothing is added
   NO-DEFAULT    the skill has no default: it can't be used until at
                 least 1 point is spent on it, so nothing is added
   WOULD-ADD     the row it would add, and the default its level comes
@@ -32,7 +35,7 @@ Prints one tab-separated row, `KIND<TAB>sheet<TAB>what`:
   CANNOT        the sheet has no Skills table, or no attribute the
                 default needs
 
-Exit: 0 HAVE, NO-DEFAULT, WOULD-ADD, ADDED; 1 NOT-FOUND, CHECK-DEFAULT,
+Exit: 0 HAVE, UNARMED, NO-DEFAULT, WOULD-ADD, ADDED; 1 NOT-FOUND, CHECK-DEFAULT,
 CANNOT; 2 usage error. The sheet is written whole or not at all.
 """
 
@@ -51,6 +54,10 @@ from migrate_core import write_text_atomic  # noqa: E402
 
 ATTRS = ("st", "dx", "iq", "ht", "will", "per")
 TERM_RE = re.compile(r"^(.+?)\s*([+\-−])\s*(\d+)$")
+# The weapon rows an unarmed attack is written as (the publish tool's to-hit
+# calculator reads the same words, tohit-data.js UNARMED).
+UNARMED_RE = re.compile(r"^(?:punch|kick|bite|slam|grapple|grab|head ?butt|"
+                        r"elbow|knee|shove|trip|unarmed)\b", re.I)
 HEADING_RE = re.compile(r"^(#{2,3})\s+(.+?)\s*$")
 NO_DEFAULT = {"", "—", "-", "–", "none"}
 
@@ -131,8 +138,10 @@ def _cells(line: str) -> list[str]:
 
 
 def plan(text: str, skill: str, difficulty: str | None = None,
-         defaults: str | None = None) -> tuple[str, str, str | None]:
-    """(kind, message, the new text or None)."""
+         defaults: str | None = None, attack: str | None = None
+         ) -> tuple[str, str, str | None]:
+    """(kind, message, the new text or None). `attack`: the weapon row the
+    skill is wanted for."""
     sheet = gk.Sheet(text)
     lines = text.splitlines(keepends=True)
     first, last = _table(lines)
@@ -196,6 +205,15 @@ def plan(text: str, skill: str, difficulty: str | None = None,
     if not dm:
         raise Refused("CANNOT", f"{skill}: difficulty \"{difficulty}\" is "
                       "not of the form DX/A")
+    if _key(defaults) in NO_DEFAULT and attack and UNARMED_RE.match(attack.strip()):
+        # B271: an unarmed attack rolls against DX (a kick DX-2) when the
+        # character lacks the skill; it needs no point in it.
+        kick = re.match(r"kick\b", attack.strip(), re.I)
+        dx = attrs.get("dx")
+        at = f"DX-2 = {dx - 2}" if kick and dx is not None else (
+            "DX-2" if kick else (f"DX {dx}" if dx is not None else "DX"))
+        return ("UNARMED", f"{attack} rolls against {at} without {skill}; "
+                "nothing is added", None)
     if _key(defaults) in NO_DEFAULT:
         # B173: a skill with no default is unusable without points.
         return ("NO-DEFAULT", f"{skill} has no default (B173): it can't be "
@@ -268,6 +286,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("skill")
     ap.add_argument("--difficulty", metavar="DX/A")
     ap.add_argument("--default", dest="defaults", metavar="DEFAULTS")
+    ap.add_argument("--for", dest="attack", metavar="ATTACK")
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args(argv)
     if (args.difficulty is None) != (args.defaults is None):
@@ -287,7 +306,7 @@ def main(argv: list[str] | None = None) -> int:
     where = args.sheet.as_posix()
     try:
         kind, what, new = plan(text, args.skill.strip(), args.difficulty,
-                               args.defaults)
+                               args.defaults, args.attack)
     except Refused as e:
         print(f"{e.args[0]}\t{where}\t{e.args[1]}")
         return 1

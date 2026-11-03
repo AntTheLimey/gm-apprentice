@@ -560,7 +560,12 @@ function buildTohitData(model, meta, report) {
         say('info', `${where} names the technique ${technique}, so it is read as ${parent.name} with that technique`, `the calculator offers ${technique} on the ${parent.name} rows too: keep this row only for its own damage or reach, written ${parent.name}-${Number.isFinite(lv) ? lv : read.level} (the technique's level)`);
       } else {
         const near = match.closest(read.skill);
-        say('warning', `${where}: skill "${read.skill}" is not in the Skills table${near ? ` (nearest: "${near}")` : ''}, so the row gets no techniques, off-hand rule or "+N included" line`, 'name the skill as the Skills table does, or add it there at its default level for 0 points');
+        // An unarmed attack needs no unarmed skill (B182, B231): it is rolled against DX, a kick DX-2. The unarmed skills
+        // have no default, so the fix is never to add one at its default.
+        const fix = UNARMED.test(weaponStem(key))
+          ? `${near ? 'name the skill as the Skills table does; else, ' : ''}without ${read.skill} an unarmed attack rolls against DX, a kick against DX-2: write the Skill cell as DX and that level (DX 13, say), or add ${read.skill} to the Skills table with the points the character has in it`
+          : 'name the skill as the Skills table does, or add it there at its default level for 0 points';
+        say('warning', `${where}: skill "${read.skill}" is not in the Skills table${near ? ` (nearest: "${near}")` : ''}, so the row gets no techniques, off-hand rule or "+N included" line`, fix);
       }
     }
     const shown = shownLevel(row.skill);

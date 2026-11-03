@@ -731,6 +731,18 @@ describe('rows written another way, and the report of what is not read', () => {
     assert.ok(says(/"Rock": its Skill cell is a bare number/, 'warning'));
     assert.ok(says(/"Stick" is left out: its Skill cell "—" has no level/, 'warning'));
   });
+  it('an unarmed attack naming an unarmed skill the sheet lacks: the fix is DX, never the skill at its default', () => {
+    // A punch rolls against DX without Brawling, Boxing or Karate, a kick against DX-2; those skills have no default.
+    const { report } = build({ skills, melee: [meleeRow({ weapon: 'Punch', skill: 'Karate-14' }), meleeRow({ weapon: 'Kick', skill: 'Karate-12' })] });
+    assert.strictEqual(report.length, 2, JSON.stringify(report));
+    for (const r of report) {
+      assert.match(r.detail, /skill "Karate" is not in the Skills table/);
+      assert.doesNotMatch(r.fix, /default level for 0 points/);
+    }
+    for (const r of report) {
+      assert.strictEqual(r.fix, 'without Karate an unarmed attack rolls against DX, a kick against DX-2: write the Skill cell as DX and that level (DX 13, say), or add Karate to the Skills table with the points the character has in it');
+    }
+  });
   it('a skill not in the Skills table is said, with the nearest name', () => {
     const { says } = build({ skills, ranged: [rangedRow({ skill: 'Beam Weapons (Rifle)-14' })] });
     assert.ok(says(/skill "Beam Weapons \(Rifle\)" is not in the Skills table \(nearest: "Beam Weapons \(Pistol\)"\)/, 'warning'));

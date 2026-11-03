@@ -113,6 +113,31 @@ class SkillDefaultTests(unittest.TestCase):
                       "until at least 1 point is spent on it", got.stdout)
         self.assertEqual(after, SHEET)
 
+    def test_an_unarmed_attack_needs_no_unarmed_skill(self):
+        # B271 (the coordinator's reading; the publish tool's UNARMED rows
+        # assume it too): a punch rolls against DX, a kick against DX-2,
+        # without Brawling, Boxing or Karate. Nothing is added, and the row
+        # never says the skill needs a point.
+        for skill, attack, level in [("Karate", "Punch", 14), ("Brawling", "Kick", 12),
+                                     ("Boxing", "Punch (left)", 14), ("Wrestling", "Grapple", 14),
+                                     ("Karate", "Bite", 14)]:
+            got, after = run(SHEET, skill, "--for", attack, "--write")
+            self.assertEqual(got.returncode, 0, got.stderr)
+            self.assertTrue(got.stdout.startswith("UNARMED\t"), got.stdout)
+            self.assertIn(f"{attack} rolls against DX", got.stdout)
+            self.assertIn(f"{level} without {skill}", got.stdout)
+            self.assertNotIn("1 point", got.stdout)
+            self.assertEqual(after, SHEET)
+
+    def test_a_no_default_skill_for_a_weapon_still_needs_a_point(self):
+        got, _after = run(SHEET, "Karate", "--for", "Nunchaku")
+        self.assertTrue(got.stdout.startswith("NO-DEFAULT\t"), got.stdout)
+
+    def test_an_unarmed_attack_with_a_skill_that_has_a_default_adds_it(self):
+        # Only a skill with no default is skipped for an unarmed attack.
+        got, _after = run(SHEET, "Knife", "--for", "Punch")
+        self.assertTrue(got.stdout.startswith("WOULD-ADD\t"), got.stdout)
+
     def test_a_skill_on_the_sheet_is_left(self):
         got, after = run(SHEET, "shortsword", "--write")
         self.assertEqual(got.returncode, 0)
