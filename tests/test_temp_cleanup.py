@@ -61,10 +61,10 @@ def test_the_guard_names_what_the_tests_left_and_fails(tmp_path):
     (temp / "pytest-of-runner").mkdir()
     dirty = _guard("check", snapshot, temp)
     assert dirty.returncode == 1
-    assert "left-behind-abc123" in dirty.stdout
-    assert "was-here" not in dirty.stdout
-    assert "node-compile-cache" not in dirty.stdout
-    assert "pytest-of-runner" not in dirty.stdout
+    # The names it lists, one per indented line (the first line names the
+    # folder, whose own path may hold anything).
+    listed = [line.strip() for line in dirty.stdout.splitlines() if line.startswith("  ")]
+    assert listed == ["left-behind-abc123"]
 
 
 def test_the_guard_explains_itself_when_called_wrongly(tmp_path):

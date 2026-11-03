@@ -24,11 +24,18 @@ function findChrome() {
 // A file URL Chrome opens; `#`, `?` and spaces in the path are escaped.
 const fileUrl = (p) => pathToFileURL(p).href;
 
+// The environment to start Chrome in: its temp folder is `dir` (a folder that exists and is removed after the
+// launch), so what Chrome leaves there goes with it (#565). On Linux each launch otherwise leaves a
+// `.com.google.Chrome.*` folder in /tmp. (A Mac Chrome's code-signing clone ignores this; it is left only by a
+// Chrome that is killed, so a launch that finishes leaves none.)
+function chromeEnv(dir) {
+  return { ...process.env, TMPDIR: dir, TMP: dir, TEMP: dir };
+}
+
 // Ends every Chrome process still running on the profile folder `profile` (#565). A launch that runs out of time is
 // killed by Node, but only the browser process: its helpers (GPU, renderer, network) carry the same
-// `--user-data-dir` and live on as orphans, and a browser killed outright leaves its code-signing clone in the
-// system's temp folder. So they are all asked to quit (SIGTERM lets Chrome clean up), and killed if they have not
-// gone within `graceMs`. A profile folder no running Chrome uses is a no-op. Returns how many processes were found.
+// `--user-data-dir` and live on as orphans. They are asked to quit, and killed if they have not gone within
+// `graceMs`. A profile folder no running Chrome uses is a no-op. Returns how many processes were found.
 function stopChrome(profile, { graceMs = 3000, platform = process.platform } = {}) {
   if (!profile) return 0;
   const flag = `--user-data-dir=${profile}`;
@@ -57,4 +64,4 @@ function stopChrome(profile, { graceMs = 3000, platform = process.platform } = {
   return found;
 }
 
-module.exports = { findChrome, fileUrl, stopChrome };
+module.exports = { findChrome, fileUrl, chromeEnv, stopChrome };

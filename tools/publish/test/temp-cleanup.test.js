@@ -9,7 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawn, spawnSync } = require('node:child_process');
 const { stopChrome } = require('../lib/chrome');
-const { withChromeLock } = require('./helpers/browser');
+const { withChromeLock, PROFILE_PREFIX } = require('./helpers/browser');
 
 const PRELOAD = path.join(__dirname, 'helpers', 'temp-cleanup.js');
 
@@ -68,9 +68,9 @@ test('a lock whose holder died is cleared with the Chrome it left running and th
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lock-reap-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const lock = path.join(root, 'lock');
-  const profile = path.join(root, 'gm-test-chrome-dead');
+  const profile = fs.mkdtempSync(path.join(os.tmpdir(), PROFILE_PREFIX));
+  t.after(() => fs.rmSync(profile, { recursive: true, force: true }));
   fs.mkdirSync(lock);
-  fs.mkdirSync(profile);
   const dead = spawnSync(process.execPath, ['-e', 'console.log(process.pid)'], { encoding: 'utf8' });
   fs.writeFileSync(path.join(lock, 'pid'), dead.stdout.trim());
   fs.writeFileSync(path.join(lock, 'profile'), profile);
@@ -81,4 +81,22 @@ test('a lock whose holder died is cleared with the Chrome it left running and th
   await until(() => !running(orphan));
   assert.equal(running(orphan), false, 'the orphaned Chrome was ended');
   assert.equal(fs.existsSync(profile), false, 'its profile folder was removed');
+});
+
+test('a stale lock naming a folder that is not a launch profile leaves that folder and its processes alone', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'lock-planted-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const lock = path.join(root, 'lock');
+  const planted = path.join(root, 'someone-elses-folder');
+  fs.mkdirSync(lock);
+  fs.mkdirSync(planted);
+  const dead = spawnSync(process.execPath, ['-e', 'console.log(process.pid)'], { encoding: 'utf8' });
+  fs.writeFileSync(path.join(lock, 'pid'), dead.stdout.trim());
+  fs.writeFileSync(path.join(lock, 'profile'), planted);
+  const bystander = fakeChrome(planted);
+  t.after(() => bystander.kill('SIGKILL'));
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(withChromeLock(() => 'ran', { dir: lock, waitMs: 10000 }), 'ran');
+  assert.equal(fs.existsSync(planted), true, 'the folder named is not removed');
+  assert.equal(running(bystander), true, 'the process on it runs on');
 });

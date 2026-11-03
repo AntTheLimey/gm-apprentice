@@ -9,7 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-const { findChrome, fileUrl, stopChrome } = require('../../lib/chrome');
+const { findChrome, fileUrl, chromeEnv, stopChrome } = require('../../lib/chrome');
 
 // The `skip` for a browser check: a reason without a browser, but never on CI, where the check runs and fails;
 // except on the Windows CI runner, where it is always skipped. The checks test Chrome's layout, which is the same
@@ -48,6 +48,10 @@ function lockIsStale(dir) {
   return !alive(pid);
 }
 
+// A profile folder runChrome makes: `gm-test-chrome-…` straight in the temp folder.
+const PROFILE_PREFIX = 'gm-test-chrome-';
+const isLaunchProfile = (p) => Boolean(p) && path.dirname(p) === os.tmpdir() && path.basename(p).startsWith(PROFILE_PREFIX);
+
 // Clears a stale lock. Takeovers are serialised by a second folder, and the verdict is read again inside it, so a
 // process that judged the lock stale a moment ago can never remove a fresh lock another process has since taken.
 function clearStale(dir) {
@@ -62,9 +66,10 @@ function clearStale(dir) {
   try {
     if (lockIsStale(dir)) {
       // Its holder died mid-launch (a test process killed on a timeout): end the Chrome it left running (#565).
+      // Only a launch's own profile folder is acted on, never another path written there.
       let profile = '';
       try { profile = fs.readFileSync(path.join(dir, 'profile'), 'utf8'); } catch (_) { /* never launched */ }
-      if (profile) { stopChrome(profile); rm(profile); }
+      if (isLaunchProfile(profile)) { stopChrome(profile); rm(profile); }
       rm(dir);
     }
   } finally { rm(reap); }
@@ -109,12 +114,18 @@ function runChrome(args, { timeout = CHROME_TIMEOUT_MS } = {}) {
   const chrome = findChrome();
   if (!chrome) throw new Error('no browser');
   return withChromeLock(() => {
-    const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-test-chrome-'));
-    // Recorded beside the lock, so whoever finds the lock stale can end this Chrome if this process dies (#565).
-    try { fs.writeFileSync(path.join(LOCK_DIR, 'profile'), profile); } catch (_) { /* a test's private lock folder */ }
+    const profile = fs.mkdtempSync(path.join(os.tmpdir(), PROFILE_PREFIX));
+    // Recorded beside the lock, so whoever finds the lock stale can end this Chrome if this process dies (#565). A
+    // launch that could not be recorded does not start.
+    try { fs.writeFileSync(path.join(LOCK_DIR, 'profile'), profile); } catch (e) {
+      fs.rmSync(profile, { recursive: true, force: true, maxRetries: 3 });
+      throw e;
+    }
     try {
+      // Out of time, it is killed outright, so a stuck browser can never hang the test; stopChrome then ends its
+      // helpers. Its temp files are kept in the profile folder, which goes with it.
       const run = spawnSync(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', `--user-data-dir=${profile}`, ...args],
-        { encoding: 'utf8', timeout, stdio: ['ignore', 'pipe', 'pipe'] });
+        { encoding: 'utf8', timeout, killSignal: 'SIGKILL', env: chromeEnv(profile), stdio: ['ignore', 'pipe', 'pipe'] });
       run.timedOut = Boolean(run.error && run.error.code === 'ETIMEDOUT');
       return run;
     } finally {
@@ -160,4 +171,4 @@ function measure(pagePaths, width, script, { height = 900, wait = 6000 } = {}) {
   return Array.isArray(pagePaths) ? results : results[0];
 }
 
-module.exports = { findChrome, browserSkip, measure, runChrome, whyNot, withChromeLock, CHROME_TIMEOUT_MS };
+module.exports = { findChrome, browserSkip, measure, runChrome, whyNot, withChromeLock, CHROME_TIMEOUT_MS, PROFILE_PREFIX };

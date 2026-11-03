@@ -13,8 +13,8 @@ Test runs no longer fill the disk, and a Chrome that runs out of time is stopped
 
 ### Fixed
 
-- `props pages` no longer leaves Chrome running. When printing a page ran out of time, only the browser process was killed, and killed outright, so its helper processes lived on and Chrome could not clean up its temp files. It is now asked to quit, and every process still on its profile folder is ended.
-- The tests remove the temp folders they make (#565). Every run left about 1,600 folders in the system temp folder (1.37 million, about 199 GB, over a few weeks). The publish tool's tests and the Python tests now remove each folder a test makes when its process ends. The browser checks end any Chrome left running after a launch that timed out, including one whose test was stopped mid-launch. CI fails a run that leaves anything in the temp folder, and names what it left.
+- `props pages` no longer leaves Chrome running. When printing a page ran out of time, only the browser process was killed, so its helper processes lived on. Every process still on its profile folder is now ended too, and Chrome keeps its temp files in that folder, which is removed afterwards.
+- The tests remove the temp folders they make (#565). Every run left about 1,600 folders in the system temp folder (1.37 million, about 199 GB, over a few weeks). The publish tool's tests and the Python tests now remove each folder a test makes when its process ends. The browser checks end any Chrome left running after a launch that timed out, including one whose test was stopped mid-launch, and keep Chrome's own temp files in the launch's profile folder. CI fails a run that leaves a new entry in the temp folder, and names it. Two entries are allowed, because they are made once and reused: Node's `node-compile-cache` and pytest's `pytest-of-*`. The guard does not look inside entries that were already there.
 
 ---
 

@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { findChrome: defaultFindChrome, fileUrl, stopChrome } = require('../chrome');
+const { findChrome: defaultFindChrome, fileUrl, chromeEnv, stopChrome } = require('../chrome');
 const { loadVaultConfig, siteConfigFor, outputFolderOf } = require('../config');
 
 const NO_CHROME = 'no Chrome or Chromium found; open the page and use print preview';
@@ -27,11 +27,12 @@ function countPdfPages(bytes) {
 function printedPages(binary, file, work) {
   const pdf = path.join(work, 'page.pdf');
   const profile = path.join(work, 'profile');
-  // A launch that runs out of time is asked to quit (SIGTERM lets Chrome clean up after itself), and stopChrome ends
-  // whatever of it is still running, helpers included (#565).
+  fs.mkdirSync(profile, { recursive: true });
+  // Out of time, Chrome is killed outright, so a stuck browser can never hang the command, and stopChrome ends the
+  // helpers it leaves running (#565). Its temp files go in its profile folder, removed with the work folder.
   const run = spawnSync(binary, ['--headless', '--disable-gpu', '--no-pdf-header-footer', '--no-first-run',
     '--no-default-browser-check', `--user-data-dir=${profile}`, '--virtual-time-budget=6000',
-    `--print-to-pdf=${pdf}`, fileUrl(file)], { stdio: 'pipe', timeout: 60000 });
+    `--print-to-pdf=${pdf}`, fileUrl(file)], { stdio: 'pipe', timeout: 60000, killSignal: 'SIGKILL', env: chromeEnv(profile) });
   stopChrome(profile);
   if (run.status !== 0 || !fs.existsSync(pdf)) throw new Error(`Chrome failed (${run.status}): ${String(run.stderr).slice(0, 200)}`);
   return countPdfPages(fs.readFileSync(pdf));

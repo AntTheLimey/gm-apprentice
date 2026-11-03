@@ -24,6 +24,8 @@ on:
 jobs:
   test:
     strategy:
+      # Each OS reports on its own: one failing must not cancel the others.
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -42,7 +44,8 @@ jobs:
         run: npm ci
 
       # The tests remove the temp folders they make (#565); the guard fails the
-      # job, naming them, if anything is left behind in the temp folder.
+      # job, naming them, if anything is left behind in the temp folder, on a
+      # red test run too.
       - name: Note what the temp folder holds
         shell: bash
         run: |
@@ -54,6 +57,7 @@ jobs:
         run: npm test
 
       - name: The tests left nothing in the temp folder
+        if: success() || failure()
         shell: bash
         run: |
           PY=$(command -v python3 || command -v python)
