@@ -918,10 +918,32 @@ describe('a kept-folder prop that stops shipping', () => {
         assert.deepEqual(names, ['Invitation.html']);
         assert.ok(lines.includes('  removed from kept folder: gazetteer/invitation.html (its address is now gazetteer/Invitation.html)'), lines.join('\n'));
       } else {
-        assert.equal(names.length, 1, 'one file, never deleted');
+        // One file under both names (#576): it takes the new spelling, so git sees the rename; nothing is deleted.
+        assert.deepEqual(names, ['Invitation.html']);
+        assert.ok(lines.includes('  renamed in kept folder: gazetteer/invitation.html to gazetteer/Invitation.html (its address changed case)'), lines.join('\n'));
         assert.ok(!lines.some((l) => /removed from kept folder: gazetteer\/invitation\.html/i.test(l)), lines.join('\n'));
+        assert.deepEqual(fs.readdirSync(path.join(s.player.dir, 'gazetteer')).filter((n) => n.includes('.case-')), [], 'no temporary name is left');
       }
     } finally { s.cleanup(); }
+  });
+
+  // #576: a rename the disk refuses leaves the old spelling, says so, and the build writes the file as before.
+  it('a case-only address change whose rename fails keeps the old spelling and says so', (t) => {
+    const s = setup();
+    try {
+      if (caseSensitiveAt(path.join(s.player.dir, 'gazetteer'))) { t.skip('this disk tells letter case apart'); return; }
+      recase(s);
+      const real = fs.renameSync;
+      t.mock.method(fs, 'renameSync', (from, to) => {
+        if (/[\\/]gazetteer[\\/]invitation\.html$/.test(String(from))) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+        return real(from, to);
+      });
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      t.mock.restoreAll();
+      assert.deepEqual(named(s), ['invitation.html']);
+      assert.match(fs.readFileSync(path.join(s.player.dir, 'gazetteer', 'invitation.html'), 'utf8'), /You are invited/);
+      assert.ok(lines.some((l) => l.includes('WARNING: could not rename gazetteer/invitation.html to gazetteer/Invitation.html (EACCES)')), lines.join('\n'));
+    } finally { t.mock.restoreAll(); s.cleanup(); }
   });
 
   it('a published prop leaves props/ when it is unpublished', () => {

@@ -323,6 +323,7 @@ function buildSite(options) {
   // into the vault): such a page is skipped with a warning, and false is returned (#507).
   function writeHtml(full, html, page, { gmCssHref = null } = {}) {
     if (linkOnPath(full)) { refuseLinked(full); return false; }
+    respell(full);
     fs.writeFileSync(full, gm ? gmPage(html, {
       marks: mark.marks, hiddenBecause: page && page.gmHiddenBecause, hidden: page && page.gmHidden,
       linkMap: publishConfig._linkMap || {}, from: (page && page.outputPath) || '', gmCssHref,
@@ -615,14 +616,58 @@ function buildSite(options) {
   function writeOut(full, data) {
     if (linkOnPath(full)) { refuseLinked(full); return false; }
     ensureDir(full);
+    respell(full);
     fs.writeFileSync(full, data);
     return true;
   }
   function copyOut(from, full) {
     if (linkOnPath(full)) { refuseLinked(full); return false; }
     ensureDir(full);
+    respell(full);
     fs.copyFileSync(from, full);
     return true;
+  }
+  // A file in a kept folder whose address changed only in letter case (#576): on a disk that does not tell case apart
+  // (macOS, Windows) the write would land in the old file and keep its old spelling, which git records no rename for,
+  // so the deployed site would keep the old address. Before the write the file is renamed to the new spelling, in two
+  // steps through a temporary name (a case-only rename is not done in one step everywhere). Only where the new
+  // spelling is not listed in its folder yet opens a file: on a disk that tells case apart the two spellings are two
+  // files, and nothing is renamed here. Only the file's own name: a folder on its path may be the GM's.
+  function respell(full) {
+    if (gm || !config.preserveDirs.some((d) => outRel(full).toLowerCase().startsWith(`${d.toLowerCase().replace(/\/+$/, '')}/`))) return;
+    const dir = path.dirname(full);
+    const want = path.basename(full);
+    let have;
+    try {
+      if (!fs.existsSync(full)) return;
+      const names = fs.readdirSync(dir);
+      if (names.some((n) => canonicalNfc(n) === canonicalNfc(want))) return;
+      have = names.find((n) => canonicalNfc(n).toLowerCase() === canonicalNfc(want).toLowerCase());
+      if (!have) return;
+    } catch (e) {
+      if (!e.code) throw e;
+      return;   // a folder that cannot be read: the write goes ahead, and the kept-folder clean-up says what it left
+    }
+    const from = path.join(dir, have);
+    const temp = path.join(dir, `${have}.case-${process.pid}.tmp`);
+    const said = (name) => outRel(path.join(dir, name));
+    try {
+      fs.renameSync(from, temp);
+    } catch (e) {
+      if (!e.code) throw e;
+      printWarning(`could not rename ${said(have)} to ${said(want)} (${e.code}); it keeps its old spelling on this disk`);
+      return;
+    }
+    try {
+      fs.renameSync(temp, full);
+    } catch (e) {
+      if (!e.code) throw e;
+      // Put back as it was, so the write below lands where the file was.
+      try { fs.renameSync(temp, from); } catch (e2) { if (!e2.code) throw e2; }
+      printWarning(`could not rename ${said(have)} to ${said(want)} (${e.code}); it keeps its old spelling on this disk`);
+      return;
+    }
+    console.log(`  renamed in kept folder: ${said(have)} to ${said(want)} (its address changed case)`);
   }
 
   // No folder is made through a link in the site folder: the write that follows is refused by the writers above.
