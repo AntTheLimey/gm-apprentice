@@ -573,8 +573,11 @@ class UnlinkTests(unittest.TestCase):
                          "the smuggler met us.\nLater [[Mara]] and her left.\n")
         self.assertEqual(p.kept, [("Docks.md", 2, "[[Mara]]", "unpicked")])
         printed = links.rows(p)
+        # Review A3/B: each row carries its pick number, so nobody counts.
         self.assertEqual(printed[0], "WOULD-CHANGE\tDocks.md:1\t"
-                                     "[[Mara|the smuggler]] -> the smuggler")
+                                     "[[Mara|the smuggler]] -> the smuggler\t#1")
+        self.assertEqual(printed[1], "WOULD-CHANGE\tDocks.md:2\t"
+                                     "[[Mara|her]] -> her\t#3")
         self.assertIn("KEPT\tDocks.md:2\t[[Mara]]\tnot picked (--pick); "
                       "left as written", printed)
         done = cli(vault, "unlink", "Mara", "--in", "Docks.md",
@@ -582,6 +585,15 @@ class UnlinkTests(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(read(vault, "Docks.md"),
                          "the smuggler met us.\nLater [[Mara]] and her left.\n")
+
+    def test_every_would_change_row_has_its_pick_number(self):
+        vault = make_vault(self, {"Mara.md": "x\n",
+                                  "Docks.md": "[[Mara]] and [[Mara|her]].\n"})
+        printed = links.rows(links.plan_unlink(vault, ["Mara"], ["Docks.md"]))
+        self.assertEqual([r.rsplit("\t", 1)[1] for r in printed[:2]], ["#1", "#2"])
+        # A plain unlink with no --in has no picks, and its rows are as before.
+        printed = links.rows(links.plan_unlink(make_vault(self, {"A.md": "[[Gone]]\n"}), ["Gone"]))
+        self.assertEqual(printed[0], "WOULD-CHANGE\tA.md:1\t[[Gone]] -> Gone")
 
     def test_pick_counts_only_links_the_fix_would_turn(self):
         vault = make_vault(self, {

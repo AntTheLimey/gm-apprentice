@@ -49,9 +49,10 @@ name (`[[Scene_02_Quay]]` becomes WORDS); a link with display text keeps
 it. A link with no words to a note marked `withheld: true` is KEPT until
 `--as` gives them: the name is the secret, so it is never the words.
 `--pick N` (again for more) turns only the links of those WOULD-CHANGE
-rows, counted from 1 in the order the preview prints them; every other
-link it would have turned is KEPT as not picked. Run the preview and the
---write with the same arguments, so the numbers mean the same links.
+rows, each printed with its number (`#N`, last); every other link it
+would have turned is KEPT as not picked. `--bare` and `--as` turn links
+the preview kept, so they change the numbers: preview with every option
+first, then pick, and run the --write with the same arguments.
 
 Both fixes print what they would change and write nothing without
 --write. With --write every note is written or none is. Links in a code
@@ -257,6 +258,8 @@ class Change:
     lineno: int
     before: str
     after: str
+    # Its `--pick` number with `unlink --in`, else 0.
+    pick: int = 0
 
 
 @dataclass
@@ -271,6 +274,8 @@ class Plan:
     picks: set[int] | None = None
     # Links the fix would turn, picked or not, in the order they are met.
     offered: int = 0
+    # `unlink --in`: each WOULD-CHANGE row prints its pick number.
+    pickable: bool = False
 
 
 # (destination, #heading or ^block, |display), is it an embed, is it in
@@ -370,7 +375,8 @@ def _rewrite(rel: str, text: str, match: Match, fix: Fix,
             if p.picks is not None and p.offered not in p.picks:
                 p.kept.append((rel, ll.lineno, m.group(0), "unpicked"))
                 return m.group(0)
-            p.changes.append(Change(rel, ll.lineno, m.group(0), after))
+            p.changes.append(Change(rel, ll.lineno, m.group(0), after,
+                                    p.offered if p.pickable else 0))
             return after
         out.append(sub_wikilinks(ll.line, ll.spans, sub))
     return "".join(out)
@@ -385,7 +391,8 @@ def _plan(vault: Path, targets: set[str], fix: Fix,
     if match is None:
         def match(body: str) -> bool:
             return link_target(body) in targets
-    p = Plan(vault, picks=set(picks) if picks else None)
+    p = Plan(vault, picks=set(picks) if picks else None,
+             pickable=only is not None)
     for rel in _walk(vault, ".md"):
         if only is not None and _nfc(rel) not in only:
             continue
@@ -564,6 +571,7 @@ def apply(p: Plan) -> None:
 def rows(p: Plan, done: bool = False) -> list[str]:
     verb = "CHANGED" if done else "WOULD-CHANGE"
     out = [f"{verb}\t{c.rel}:{c.lineno}\t{c.before} -> {c.after}"
+           + (f"\t#{c.pick}" if c.pick and not done else "")
            for c in p.changes]
     out += [f"KEPT\t{rel}:{lineno}\t{link}\t{KEPT[why]}"
             for rel, lineno, link, why in p.kept]
