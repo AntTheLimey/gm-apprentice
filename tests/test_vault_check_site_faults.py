@@ -115,7 +115,11 @@ class SiteFaultRowsTests(unittest.TestCase):
             f"WARNING\t{VESPER}\tNAMED_NO_PAGE: entity (npc), named on 1 "
             f"published page as \"the ferryman\"; no page because "
             f"MANIFEST_EXCLUDED; reason written: page body reveals the "
-            f"ferry; named on: {MARA}"])
+            f"ferry; named on: {MARA} — move what only you should know "
+            f"under a ## GM Notes heading in {VESPER}, then put it on the "
+            f"publish list so it gets a page: manifest apply --publish "
+            f"\"{VESPER}\"; or leave it hidden and record that with manifest "
+            f"apply --exclude \"{VESPER}=stays hidden: <why>\""])
         # The first row names the tool that answered and the site file.
         self.assertEqual(rows[0].split("\t")[:2], ["INFO", "(site)"])
         self.assertIn(str(site / "vault.config.json"), rows[0])
@@ -196,8 +200,17 @@ class SiteFaultRowsTests(unittest.TestCase):
         self.assertTrue(all(r.split("\t")[1] == MARA for r in rows), rows)
         self.assertIn("COMMENT_STRAY: a %% on line 5 comes straight after a "
                       "number", by_code["COMMENT_STRAY"])
+        # #570: every row ends with the tool's fix.
         self.assertTrue(by_code["COMMENT_STRAY"].endswith(
-            "| Paid 100%% now, 50%% later."), rows)
+            "| Paid 100%% now, 50%% later. — if it is a percent sign, write "
+            "a single % or \"percent\"; if it opens a comment, put a space "
+            "before it"), rows)
+        self.assertIn("never closes", by_code["FENCE_UNCLOSED"])
+        self.assertTrue(by_code["FENCE_UNCLOSED"].endswith(
+            " — add the closing fence after the code: a line of the same "
+            "marks, at least as many, with nothing after them, so the hidden "
+            "text below it is hidden again"), rows)
+        self.assertIn(" — reword it to the public name", by_code["ALIAS_IN_PROSE"])
         self.assertIn(f"\"Old Smuggler\" (a secret name of {VESPER}), "
                       f"printed 1 time | The old smuggler waved.",
                       by_code["ALIAS_IN_PROSE"])
@@ -322,7 +335,14 @@ class SiteFaultRowsTests(unittest.TestCase):
         rows = findings(vc.check_site_faults(vault))
         self.assertEqual(rows, [
             f"WARNING\t{MARA}\tWITHHELD_IN_PROSE: \"Lord Zorn\" (a withheld "
-            f"note: {ZORN}), printed 1 time | Lord Zorn rides at dawn."])
+            f"note: {ZORN}), printed 1 time | Lord Zorn rides at dawn. — "
+            f"reword it to a name the players know, in the text or in the "
+            f"frontmatter field or title that holds it; or, in the text, link "
+            f"the note ([[Lord Zorn]]): a link with no label of its own prints "
+            f"a neutral word (someone, somewhere, something) in place of a "
+            f"withheld note's name; where it is an ordinary word and not the "
+            f"name, the finding stays until the note is no longer marked "
+            f"withheld"])
 
     def test_a_withheld_everyday_word_row_carries_the_rename_fix(self):
         # #454: the tool decides the name is an everyday word (one word, on
@@ -440,13 +460,14 @@ class SiteFaultRowsTests(unittest.TestCase):
                             excluded=[VESPER, "Characters/Old_Tam.md"])
         rows = findings(vc.check_site_faults(vault))
         self.assertEqual(len(rows), 2, rows)
-        self.assertTrue(rows[1].endswith(
+        self.assertIn(
             "named on: Characters/Page_0.md; Characters/Page_1.md; "
-            "Characters/Page_2.md; +2 more (--file lists them all)"), rows)
+            "Characters/Page_2.md; +2 more (--file lists them all) — ", rows[1])
         scoped = findings(vc.check_site_faults(vault, [VESPER]))
         self.assertEqual([r.split("\t")[1] for r in scoped], [VESPER])
-        self.assertTrue(scoped[0].endswith(
-            "; ".join(f"Characters/Page_{i}.md" for i in range(5))), scoped)
+        self.assertIn(
+            "; ".join(f"Characters/Page_{i}.md" for i in range(5)) + " — ",
+            scoped[0])
 
     def test_an_answer_larger_than_a_pipe_buffer_is_read_whole(self):
         # #279: a tool that exited before its output drained was cut off at
