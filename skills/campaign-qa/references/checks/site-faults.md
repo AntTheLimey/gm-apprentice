@@ -35,7 +35,7 @@ changes the next time it is published.
   again. Otherwise put one line in the report's recommendations:
   Site Faults was not run, and will be after the next plugin update.
 - `ERROR` rows that are not a finding (`NAMED_NO_PAGE` and
-  `WITHHELD_PUBLISHED` are findings, walked below):
+  `WITHHELD_PUBLISHED` are findings, walked in their sections):
   the site's tool could not be asked, or its audit stopped. Nothing
   was checked. Treat a tool that is missing or not
   installed as the older tool above; report any other row as it reads.
@@ -79,6 +79,16 @@ every page that names it. Use it to confirm each fix.
 | `TABLE_OVERWIDE` (`INFO`) | Info | A table row has more cells than its header, so the site widened the table |
 | `MOMENT_KIND_UNKNOWN` | Warning | A moment's `#moment/` tag names no kind, so the card shows with none |
 | `PROP_NOT_COPIED` | Warning | A prop's file, styled page, address or a file it links to is not on the site, or a prop sits outside its container |
+
+Three codes are walked in files of their own, in the `site-faults/`
+folder beside this file. Read one only when a row of this run names its
+code, before the first such row, and once a run:
+
+- `NAMED_NO_PAGE`: `site-faults/named-no-page.md`
+- `TOHIT_UNREAD`: `site-faults/tohit-unread.md`
+- `PROP_NOT_COPIED`: `site-faults/prop-not-copied.md`
+
+Every other code's section is below.
 
 A row is raised only where the site shows the fault. A stray `%%` or
 an open fence that lies wholly under `## GM Notes` changes nothing a
@@ -144,8 +154,7 @@ For an attachment, rename the file and the embeds that name it.
 A name in plain text has no "leave it" answer, and `stays hidden:`
 does not settle this row: the GM rewords the sentence, links the note
 (the neutral word prints), or takes `withheld: true` off. When the fix
-says the name is an everyday word and to rename the note, also take
-the same name off its `title:` and `aliases:`, then offer to:
+says the name is an everyday word, offer that fix. A rename:
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/relink.py"
 "<vault>" "<note>" "<new name>"` previews it, links included; on a yes,
 again with `--apply`.
@@ -158,22 +167,18 @@ builds from the note's own fields: reword the field.
 ## WITHHELD_PUBLISHED
 
 A note marked `withheld: true` is on the site under its name: the row
-names its page. Ask which was meant. If the name is no secret, take
-`withheld: true` off. If it is, stop the note publishing: `publish:
-false` in its frontmatter, or out of `publishing` on the publish list
-(`SITE manifest apply --exclude "<note>"`). Edit on a yes.
+names its page and both fixes. Ask which was meant, and make that fix
+on a yes; the publish-list one is `SITE manifest apply --exclude
+"<note>"`.
 
 ## WITHHELD_NAME_PUBLIC
 
-A withheld name is also the name of another published page, so it is
-not looked for. Offer a new title or alias for the page that answers to
-the name, or to take `withheld: true` off.
+Offer the row's two fixes, and make the one the GM picks.
 
 ## WITHHELD_FLAG_UNREADABLE
 
-A `withheld:` value that is not true or false (`tru`, a list) is read as
-not withheld, so the note's name is not looked for. Show the value and
-propose `withheld: true` or `withheld: false` as the GM says.
+Show the value (`tru`, a list) and ask the GM whether the note is
+withheld; write `true` or `false` as they say.
 
 ## COMPANION_FLAG_UNREADABLE
 
@@ -211,245 +216,23 @@ field. The row quotes the line, or the frontmatter field.
 
 ## NAMED_NO_PAGE
 
-A note that has no page is linked from a published page, so its name
-is printed there as plain words. The row says what kind of note it is,
-how many pages name it and as what words, which rule keeps it off the
-site, the reason the GM wrote on the publish list if there is one, and the
-first pages that name it. A page is counted only when it prints the
-name: a link in a hidden part, or in a field that page does not show,
-is not. A PC's story page is listed as its `…_Story.md` file. A page
-whose Connections show the name is counted too, though the link
-is in a neighbour's relationships.
-
-Where the row ends "printed only by an index or listing page (…) from:
-…", the notes after "from:" do not print the name on their own page.
-A page built from many notes does (an NPC index prints each NPC's
-`first_appearance`, the landing page a recap). The link is in a
-frontmatter field of the note named, so `unlink` will not reach it:
-handle it as "A link in frontmatter" below, whatever kind the note is.
-
-An `ERROR` row, `withheld entity`, is a note marked `withheld: true`:
-it must stay off the site, so there is no page to give it. The links
-print a neutral word. Offer the `unlink` command in the row's fix with
-`--as` wording the GM agrees. If the neutral word will do, that is a
-"stays hidden" for this row only: it settles the link report and
-nothing else. Skip steps 1 to 4 below.
-
-Work most-named first, in batches of 3 to 5 notes, one question per
-batch. The GM can answer for the batch or note by note, and can stop
-at any point: what is left is listed again next time.
-
-### Entity: an NPC, place, faction, item, document, clue
-
-The players have met this name. The usual fix gives the note a page
-that shows what the players know and keeps the rest hidden.
-
-**1. Read.** For each note in the batch:
-
-- `SITE explain "<note>" --shown` prints what the site would hold of
-  the note if it published as it stands, read off the page as the
-  build makes it: the text of the page, the image files that publish
-  with it (its portrait is one), its link-preview card, and what the
-  search finds it by (title, aliases, every word of the body as
-  published).
-- What the players know is what published pages already say. Search
-  the pages that name the note for its name and read around each hit.
-  A fact that is only in the note, a plan or a hidden section is not
-  known to the players.
-- A reason written on the publish list names the secret. It must end up
-  hidden.
-- The row's "no page because" says what holds the note back. A
-  manifest rule (`MANIFEST_EXCLUDED`, `MANIFEST_NEEDS_DECISION`,
-  `MANIFEST_UNLISTED`) is lifted in step 4. Anything else is a second
-  decision to put to the GM with the split: the note is still marked
-  as prep (`AUTO_EXCLUDED_…`, `DRAFT_EXCLUDED`), it says
-  `publish: false` or `publish: none`, or its folder is not on the
-  site (`DIR_…`). A folder is added to the site by publish-site, not
-  here; offer "stays hidden" or leave the row for that.
-
-**2. Propose the split.** Say, per note:
-
-- **Stays in the open:** the `##` sections the players already know,
-  named, each with its first few words.
-- **Moves under `## GM Notes`:** every other section. Stat blocks,
-  motives, plans, true allegiances and anything not yet played move.
-  A section that holds both is split by sentence. Text is moved, never
-  reworded and never deleted.
-- **Nothing left in the open?** Offer two or three sentences of
-  Overview made only of what the published pages already say, and show
-  them in full. This is the one piece of new text this check writes.
-- **Frontmatter.** `## GM Notes` hides nothing in frontmatter. Read
-  what `--shown` printed as a player would, the header lines of the
-  page, the card and the search aliases too, and propose a change for
-  each frontmatter value that gives away what the split hides:
-  - a secret name in `aliases`: move it to `gm_aliases` (links to it
-    keep working, the name is never shown);
-  - a relationship the players do not know of: `gm_only: true` on that
-    entry;
-  - a field the page prints (`occupation`, `nationality`, `status`,
-    `age`, `location`, an item's `value` or `properties`, and the
-    like): reword it to what the players know and keep the true value
-    in a line under GM Notes, or name the field in the note's
-    `publish_exclude_fields`;
-  - a title that tells (`# Vesper Hale — The Informer`): shorten it.
-  `publish-site/references/content-filtering.md`, "Frontmatter is not
-  covered by the fence", has the detail.
-- **Names that would become links.** Once the note has a page, every
-  link to it on a published page leads there. Read the row's "named
-  as" words. One that hides who it is (`the stranger`, `the Baron`)
-  would name them the moment it is a link. Propose turning those links
-  into plain words on the pages that hold them.
-- **A page that already tells the secret.** If a published page says
-  what the publish-list reason calls hidden, tell the GM: that page is the
-  leak, whatever is decided here.
-
-**3. Ask.** Show the batch and wait.
-
-**4. On yes.** In this order, so the note is never publishable with a
-secret in the open:
-
-1. Edit the note. Hidden text goes under one `## GM Notes` heading
-   (add it at the end if there is none). Each moved heading goes one
-   level down (`## Motives` becomes `### Motives`): a `##` below
-   GM Notes ends the hidden part, and everything under it is
-   published. So a section that stays open (`## Source References`,
-   say) stays above GM Notes, or below all the hidden text; never put
-   hidden text after it. Keep every `<!-- gm-only -->` pair together
-   with the text it wraps; no pair may open above `## GM Notes` and
-   close below it. Make the frontmatter changes.
-2. Turn the telling links into words:
-   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/links.py" "<vault>" unlink "<note name>" --in "<page>"`
-   (a preview; again with `--write`). Where two notes share the name,
-   give the note's vault path as the name. A link that gives no path
-   then prints as `KEPT`: read each line, and when it means this note
-   run the command again with `--bare`.
-3. Run `SITE explain "<note>" --shown` again and read all of it: the
-   page, the card and the search lines. Nothing that moved and nothing
-   secret may be anywhere in it. What it prints is all the site would
-   hold of this note's body and fields. If something is there, fix the
-   edit before going on.
-4. Give it a page:
-   `SITE manifest apply --publish "<note>"`.
-5. Confirm: `vault_check.py "<vault>" site-faults --file "<note>"`
-   prints no row for it, and `SITE explain "<note>"` says
-   `VERDICT: publishes at …`. If the verdict names another rule, tell
-   the GM what still holds the note back.
-6. Run `vault_check.py "<vault>" gm-leak --folder "<the note's folder>"`
-   and fix any `ERROR` or `WARNING` row that names this note (an
-   unbalanced fence the note already had now matters). `INFO` rows,
-   such as a count of notes skipped, are not faults.
-
-Tell the GM what the page will show, in a line. A new page can name
-other hidden notes; they appear as rows on the next run.
-
-**On no.** Record it so it is never asked again:
-
-```bash
-SITE manifest apply --exclude "<note>=stays hidden: <the GM's reason>"
-```
-
-Use the GM's own words for the reason. The command replaces whatever
-reason the entry had, so carry the old one along: where the GM
-confirms it, write it after the prefix; where the GM gives a new one,
-write the new one and then the old (`stays hidden: not found yet;
-was: campaign-secret prep`). Run `site-faults --file "<note>"` to see
-the row is gone. The build's warning counts only what is not settled.
-
-### Working: a plan, scene, play notes, an overview
-
-Not something in the world, so never a page. Offer:
-
-- **Plain words.** The links on the pages that name it become their
-  words:
-  `links.py "<vault>" unlink "<note name>" --in "<page>" [--in "<page>" …]`.
-  A link with its own wording keeps it. Where a link has none and the
-  note's name would read as a file name (`Scene 02 Quay`), add
-  `--as "<words>"` with wording the GM agrees. Read the preview, then
-  run it again with `--write`. Where two notes share the name, give
-  the vault path as the name; a link with no path prints as `KEPT`,
-  and `--bare` turns it once the GM has agreed it means this note. It
-  changes every link to the note on those pages, hidden parts
-  included; where the GM wants a private
-  link kept, edit the open lines by hand instead.
-- **Reword** a sentence that only made sense as a link, by hand.
-- **A link in frontmatter.** `unlink` leaves frontmatter alone and
-  lists each such link as `KEPT`, so the row comes back. Where a page
-  names the note through a relationship's `target` or another field
-  it prints, show the GM that field and offer: remove the entry (or
-  mark a relationship `gm_only: true`, which keeps it for the GM and
-  off the site), or write plain words there in place of the link. Edit
-  the frontmatter by hand on a yes.
-- **Leave the links.** That is a no: record `stays hidden:` as above.
-
-### No type
-
-The site cannot tell what the note is. Read it and propose a `type`
-from `_meta/entity-types.md`. On yes, write the type with that type's
-required fields (`shared/templates/`), run
-`vault_check.py "<vault>" frontmatter --folder "<its folder>"` and fix
-the ERROR rows for this note. Then run `site-faults --file "<note>"`:
-the row now reads entity or working, and is handled as above.
+A published page names a note that has no page: an entity, a working
+note, a note with no type, or a withheld note. Walked in
+`site-faults/named-no-page.md`.
 
 ## TOHIT_UNREAD
 
-A row of a GURPS PC's sheet that the to-hit calculator on the Combat
-tab cannot fully read. The row names the PC's note, the table and the
-weapon or technique, says what is wrong, and after the `—` says the
-fix. The template (`shared/templates/pc-gurps-4e.md`, the comments
-under `## Skills`, `## Techniques`, `## Melee Weapons`) has the forms
-it reads. Work one PC at a time: show the sheet's line, the line as it
-would be, and edit on a yes. Never change a number the GM wrote
-without saying so; where a fix needs a number the sheet does not have
-(a default level, a missing level), ask ttrpg-expert for it and show
-the GM where it came from.
-
-- **A skill not in the Skills table:** rename it in the Skill cell to
-  the Skills table's name (the row gives the nearest), or add the skill
-  to the Skills table at its default level for 0 points.
-- **An attribute in the Skill cell** (`DX-12`): name the weapon's skill
-  at its default level, and add that skill at 0 points. Check the
-  default: a sheet that wrote the attribute has often got it wrong.
-- **A bare number, or words after the level:** write the skill and its
-  level; move a comment to the row's Notes.
-- **A default in place of a level** (`Kick | DX-2`): write the level the
-  default comes to.
-- **A skill written as a default in the Techniques table** (`INFO`):
-  add it to the Skills table at that level for 0 points.
-- **A row split by a `|` in a link:** write the `|` inside the link as
-  `\|`.
-- **No level:** ask the GM for it.
-- **A technique in the Skill cell** (`INFO`): the calculator already
-  offers it on the parent skill's rows. Offer to remove the row, or to
-  keep it for its own damage or reach with the parent skill in its
-  Skill cell.
-- **Two levels in one cell** (`INFO`): split it into one row each.
-- **A technique, Dual-Weapon Attack or Off-Hand Weapon Training that
-  finds no skill:** spell the skill in full, in the name and the
-  Default alike (`Dual-Weapon Attack (Beam Weapons (Pistol))`, Default
-  `Beam Weapons (Pistol)-4`). Off-Hand Weapon Training is a technique:
-  in Techniques, named for the skill. Weapon Bond names the weapon as
-  its row does.
-- **A Targeted Attack with no hit location the calculator knows:** end
-  its bracket with the location (`/Neck`, `/Vitals`, `/Arm`, `/Leg`).
-- **Techniques with no weapon row for a shooting skill:** add the
-  weapon's row, or leave it if the character no longer carries one.
-- **A level above the skill by more than the row's named bonuses**
-  (`INFO`): ask what the difference is. Name it in the row's Notes
-  (`Weapon Bond +1`), or put the level right.
-
-A row the GM wants left as it is stays a row: it comes back on every
-run and in the build's count. Log it as "left as written" and do not
-raise it again in the same run.
+A row of a GURPS PC's sheet that the to-hit calculator cannot fully
+read. Walked in `site-faults/tohit-unread.md`.
 
 ## SKILL_BELOW_BASE
 
 A Call of Cthulhu skill written lower than the base the PC's
 characteristics give it (`Dancing | 05 | 10` with DEX 70, base 14).
-The row says the number written and the base. The sheet shows the
-number written either way. Per PC, ask: raise it to the base, or leave
-it? On a raise, write the base in the Regular column and, if the
-Half and Fifth cells hold numbers, work them out again. On leave, log
-"left as written" and do not raise it again in the same run.
+Per PC, ask which of the row's two fixes the GM wants. On a raise, if
+the Half and Fifth cells hold numbers, work them out again too. On
+leave, log "left as written" and do not raise it again in the same
+run.
 
 ## HEADING_IN_HIDDEN_BLOCK
 
@@ -470,88 +253,8 @@ an answer.
 
 ## PROP_NOT_COPIED
 
-A prop note's file, its style, its address or a file its page links
-cannot go on the site as written, its kind is unknown, or its container
-cannot list it. The note's own page still publishes, without the link
-to a prop that is not on the site; a misplaced item is listed on its
-own. The row names the note and says what is wrong; after
-the `—` it says the fix. Work one note at a time: show the row's words,
-say what you would change, and edit on a yes. Styles and containers:
-publish-site's `references/prop-styles.md`.
-
-- **The prop file is not there, or is outside the note's folder:** look
-  for a file of that name in the vault (`find "<vault>" -iname
-  "<name>"`). An accented letter can be stored two ways, so if `find`
-  gives nothing, list the likely folders and compare the names as they
-  read. Offer to move the file beside the note; or, where it already
-  sits in the note's folder or a folder under it, to correct
-  `prop_file` to that path. Before a move, `grep -rlF "<name>"
-  "<vault>"` for other notes that embed or link it; if any do, offer
-  to copy it beside the note instead.
-- **A kind the site does not copy:** a prop file is a page, a PDF or a
-  picture. Where you can make one from the file (a text or Markdown
-  handout as a page, say), offer to, and point `prop_file` at it on a
-  yes. Ask the GM only for what only they have.
-- **The address is taken, or `prop_address` is not a path the site can
-  use:** offer a `prop_address` under `props/` that nothing else has,
-  ending as the prop file does (`props/invitation.html`).
-- **A file the prop's page links** (not there, outside its folder, a
-  letter-case difference, an address starting with `/`): show the line
-  of the page that links it. Offer to move the file beside the page, or
-  into a folder under it, and correct the link to match. The page is
-  the GM's own work: never edit it without saying exactly what changes.
-- **A kind the page cannot link** (audio, video, a PDF, another page):
-  show the line. A prop page cannot carry it, and the site publishes
-  no audio, video or other page. A PDF can be a prop of its own: offer
-  to make it one, a prop note (`shared/templates/prop.md`) beside the
-  file with `prop_file` naming it, linked from this prop's note, and
-  to take the link out of the page. A picture can take its place.
-  Otherwise offer to take the link out of the page. Say exactly what
-  changes and edit on a yes. Before making the note, ask whether
-  players see the PDF too. On a no, write `publish: false` in it. On a
-  yes, make it and check with `SITE explain "<new note>"`: if something
-  holds it back (not on the publish list, or drafts hidden and its
-  `canon_status: DRAFT`), say what, and on a yes run `SITE manifest
-  apply --publish "<new note>"` or change the status.
-- **Not really the kind its name says** (a `.png` that is a link to a
-  note): offer to link the real file in its place.
-- **Could not be read:** give the GM the file and the reason.
-- **An unknown `prop_kind`** (the prop is read as a document): offer
-  the listed kind that fits what the note describes.
-- **The style is unknown or cannot be used** (not a style name, not
-  one there is, a file missing, outside its folder, refused, unreadable
-  or not UTF-8, `_meta/prop-styles` not a readable folder, or a
-  container's style with no `{{{items}}}` place): the row names the
-  style and the file; offer one of the styles the row lists, or show
-  the line of the vault style it names and offer the fix (save a vault
-  style file as UTF-8 on a yes), or, for a container, remove
-  `prop_style`; never edit a plugin style. A plugin style that cannot
-  be read: tell the GM to reinstall the plugin.
-- **The style leaves out assets** (the page is still built): for each
-  one the row names, offer to move a picture or font out of a subfolder
-  directly into `assets/`, point a link to nothing at the real file,
-  make an `assets` file a folder, or remove a kind a style does not
-  copy; show the line of `style.css` that wants it, if any.
-- **An unknown `prop_hand`, or a broken `_meta/prop-hands.json`:**
-  offer to correct `prop_hand`, to add the hand with `vault_write.py
-  "<vault>" prop-hand --hand <id> --hand-font "<family>"`, or to mend the
-  entry or JSON the row names. Ask the GM for the font; never pick one
-  for them.
-- **Both a prop_file and a prop_style:** ask which the GM wants; remove
-  the other on a yes.
-- **No ## The Text (or none players see), or a prop_container that is
-  not a container:** offer to add the section with the words from the
-  note (ask for any the GM has not written), or to correct
-  `prop_container` / make the named note a container.
-- **A prop that names itself as its container:** offer to correct or
-  remove `prop_container`.
-- **A link in the site folder:** a folder on the prop's address (or on
-  a style file's), in a kept folder of the site, is a link, so nothing
-  is written through it. That is the site folder, not the vault. Tell
-  the GM, and offer another `prop_address`, or for a style file to
-  replace the link with a real folder.
-
-Confirm each fix with `site-faults --file "<note>"`.
+A prop, its style, its address or a file its page links cannot go on
+the site as written. Walked in `site-faults/prop-not-copied.md`.
 
 ## MOMENT_KIND_UNKNOWN
 
