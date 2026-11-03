@@ -50,7 +50,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gurps_calc as gc  # noqa: E402
 import gurps_check as gk  # noqa: E402
 import rules_lookup  # noqa: E402
-from migrate_core import write_text_atomic  # noqa: E402
+from migrate_core import StepFailed, write_text_atomic  # noqa: E402
 
 ATTRS = ("st", "dx", "iq", "ht", "will", "per")
 TERM_RE = re.compile(r"^(.+?)\s*([+\-−])\s*(\d+)$")
@@ -66,11 +66,34 @@ class Refused(Exception):
     """A row of KIND other than the answer: (kind, message)."""
 
 
+TL_RE = re.compile(r"\s*/\s*TL\s*\d+", re.I)
+# Short names sheets write for a table's skill (the publish tool reads the
+# same initials, tohit-data.js makeSkillMatcher).
+ALIASES = {"guns (lmg)": "guns (light machine gun)",
+           "guns (smg)": "guns (submachine gun)",
+           "guns (law)": "guns (light anti-armor weapon)",
+           "guns (gl)": "guns (grenade launcher)",
+           "gunner (mg)": "gunner (machine gun)",
+           "shield": "shield (shield)"}
+
+
+def _plain(name: str) -> str:
+    """The name with its `/TL<n>` and the sheet's marks off, case kept."""
+    name = TL_RE.sub("", re.sub(r"[*†‡§¶◇]", "", str(name)))
+    return " ".join(name.split())
+
+
 def _key(name: str) -> str:
-    """A skill name as compared: case, spacing and the sheet's marks
-    (`*`, `†`, `‡`) off."""
-    name = re.sub(r"[*†‡§¶◇]", "", str(name))
-    return " ".join(name.split()).casefold()
+    """A skill name as compared: case, spacing, the sheet's marks (`*`,
+    `†`, `‡`) and `/TL<n>` off (as the publish tool reads it), and a short
+    name the sheet writes (`Guns (LMG)`) read as the tables' name."""
+    key = _plain(name).casefold()
+    return ALIASES.get(key, key)
+
+
+def _tl(name: str) -> str:
+    m = TL_RE.search(str(name))
+    return m.group(0).strip().replace(" ", "") if m else ""
 
 
 def _stem(name: str) -> str:
@@ -99,7 +122,7 @@ def listed(skill: str) -> tuple[str, str, str] | None:
     ([Area])`) is found by its stem. Two rows that disagree are no
     answer."""
     _mode, records, _total = rules_lookup.lookup(
-        skill, system="gurps-4e", kind="skill", limit=50)
+        _key(skill), system="gurps-4e", kind="skill", limit=50)
     rows = [r for r in records if r.shape == "table" and r.headers]
     exact = [r for r in rows if _key(r.cells[0]) == _key(skill)]
     pattern = [r for r in rows if "([" in r.cells[0]
@@ -159,10 +182,14 @@ def plan(text: str, skill: str, difficulty: str | None = None,
         return row[i] if 0 <= i < len(row) else ""
 
     attrs = gk.read_attributes(sheet) or {}
+    said: list[str] = []          # what the answer stands on, said aloud
+    stand_in = set()
     for key in ("will", "per"):
         if key not in attrs and "iq" in attrs:
             attrs[key] = attrs["iq"]
+            stand_in.add(key)
     bought: dict[str, int] = {}
+    tls: dict[str, str] = {}      # a bought skill's key -> its /TL<n>
     for _i, row in rows:
         name = cell(row, i_name)
         if not _key(name):
@@ -177,8 +204,14 @@ def plan(text: str, skill: str, difficulty: str | None = None,
         level_cell = next((cell(row, i) for i in (i_base, i_eff, i_lvl)
                            if re.search(r"\d", cell(row, i))), "")
         m = re.search(r"\d+", level_cell)
-        if m and (pts is None or pts > 0):
+        # B173: a skill known only at default is no base for another. With
+        # no Points column that cannot be told, so no skill is a base.
+        if m and i_pts >= 0 and pts is not None and pts > 0:
             bought[_key(name)] = int(m.group(0))
+            tls[_key(name)] = _tl(name)
+    if i_pts < 0:
+        said.append("the Skills table has no Points column, so only "
+                    "attribute defaults are used")
 
     if difficulty is None or defaults is None:
         found = listed(skill)
@@ -206,14 +239,7 @@ def plan(text: str, skill: str, difficulty: str | None = None,
         raise Refused("CANNOT", f"{skill}: difficulty \"{difficulty}\" is "
                       "not of the form DX/A")
     if _key(defaults) in NO_DEFAULT and attack and UNARMED_RE.match(attack.strip()):
-        # B271: an unarmed attack rolls against DX (a kick DX-2) when the
-        # character lacks the skill; it needs no point in it.
-        kick = re.match(r"kick\b", attack.strip(), re.I)
-        dx = attrs.get("dx")
-        at = f"DX-2 = {dx - 2}" if kick and dx is not None else (
-            "DX-2" if kick else (f"DX {dx}" if dx is not None else "DX"))
-        return ("UNARMED", f"{attack} rolls against {at} without {skill}; "
-                "nothing is added", None)
+        return unarmed(attack.strip(), skill, attrs, bought)
     if _key(defaults) in NO_DEFAULT:
         # B173: a skill with no default is unusable without points.
         return ("NO-DEFAULT", f"{skill} has no default (B173): it can't be "
@@ -236,10 +262,24 @@ def plan(text: str, skill: str, difficulty: str | None = None,
         raise Refused("CANNOT", f"{skill}: none of its defaults ({defaults}) "
                       "can be worked out from this sheet")
     level, source = best
+    base = TERM_RE.match(source).group(1).strip().lower()
+    if base in stand_in:
+        said.append(f"{base.capitalize()} taken as IQ: the sheet lists no "
+                    f"{base.capitalize()}")
     attr = dm.group(1)
     attr_val = attrs.get(attr.lower())
     rel = f"{attr.upper() if len(attr) == 2 else attr}{level - attr_val:+d}" \
         if attr_val is not None else ""
+    if attr_val is None:
+        said.append(f"Relative Level left blank: the sheet lists no {attr}")
+    # A tech-level skill is written as the sheet writes its kin: the TL the
+    # name was given with, else the one a bought specialty of it carries.
+    tl = _tl(skill) or next((tls[k] for k in sorted(tls)
+                             if tls[k] and _stem(k) == _stem(skill)), "")
+    written = _plain(skill)
+    if tl:
+        head, _sep, rest = written.partition(" (")
+        written = f"{head}{tl} ({rest}" if rest else f"{head}{tl}"
     points = "[0]" if any(cell(r, i_pts).startswith("[") for _i, r in rows) \
         else "0"
     current = level
@@ -247,7 +287,7 @@ def plan(text: str, skill: str, difficulty: str | None = None,
     if enc and re.sub(r"\s*\(.*$", "", _key(skill)) in gc.ENC_PENALIZED_SKILLS:
         current = level - enc
     new = [""] * len(headers)
-    new[i_name] = skill
+    new[i_name] = written
     for i, value in ((gk.col(headers, "difficulty", "diff"),
                       f"{attr}/{dm.group(2).upper()}"),
                      (i_rel, rel), (i_pts, points), (i_base, str(level)),
@@ -272,8 +312,40 @@ def plan(text: str, skill: str, difficulty: str | None = None,
         ended = out[last].endswith("\n")
         out[last] = out[last].rstrip("\r\n") + eol
         out.insert(last + 1, row_text + (eol if ended else ""))
-    return ("WOULD-ADD", f"{row_text} (default {source}, level {level})",
+    note = "".join(f"; {x}" for x in said)
+    return ("WOULD-ADD", f"{row_text} (default {source}, level {level}{note})",
             "".join(out))
+
+
+# B271: an unarmed attack needs no unarmed skill. A punch rolls against the
+# best of DX, Boxing, Brawling and Karate; a kick against the best of DX,
+# Brawling and Karate, less 2; a grapple against DX, Judo, Sumo Wrestling or
+# Wrestling; a bite against DX or Brawling.
+UNARMED_BASES = (
+    (re.compile(r"^kick\b", re.I), ("brawling", "karate"), -2),
+    (re.compile(r"^(?:grapple|grab)\b", re.I),
+     ("judo", "sumo wrestling", "wrestling"), 0),
+    (re.compile(r"^bite\b", re.I), ("brawling",), 0),
+    (re.compile(r""), ("boxing", "brawling", "karate"), 0),
+)
+
+
+def unarmed(attack: str, skill: str, attrs: dict, bought: dict
+            ) -> tuple[str, str, None]:
+    """The UNARMED row: what the attack rolls against without SKILL, and
+    the Skill cell to write, in a form the to-hit calculator reads as a
+    level (`DX 12`, `Brawling 13`)."""
+    skills, mod = next((sk, m) for pat, sk, m in UNARMED_BASES
+                       if pat.match(attack))
+    options = [(attrs["dx"], "DX")] if "dx" in attrs else []
+    options += [(bought[k], k.title()) for k in skills if k in bought]
+    if not options:
+        raise Refused("CANNOT", f"{attack}: the sheet lists no DX")
+    have, name = max(options, key=lambda o: o[0])
+    level = int(have) + mod
+    how = f"{name}{mod:+d} = {level}" if mod else f"{name} {level}"
+    return ("UNARMED", f"{attack} rolls against {how} without {skill}; write "
+            f"the Skill cell as \"{name} {level}\"; nothing is added", None)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -311,7 +383,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{e.args[0]}\t{where}\t{e.args[1]}")
         return 1
     if new is not None and args.write:
-        write_text_atomic(args.sheet, new)
+        try:
+            write_text_atomic(args.sheet, new)
+        except (OSError, StepFailed) as e:
+            print(f"CANNOT\t{where}\tcould not write the sheet ({e})")
+            return 1
         kind = "ADDED"
     print(f"{kind}\t{where}\t{what}")
     return 0

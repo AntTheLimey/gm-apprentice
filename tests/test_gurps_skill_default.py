@@ -138,6 +138,77 @@ class SkillDefaultTests(unittest.TestCase):
         got, _after = run(SHEET, "Knife", "--for", "Punch")
         self.assertTrue(got.stdout.startswith("WOULD-ADD\t"), got.stdout)
 
+    # Review A2/B: a sheet writes tech-level skills with /TL<n>, as the
+    # publish tool reads them (tohit-data.js drops it).
+    def test_a_tech_level_name_is_the_same_skill(self):
+        sheet = SHEET.replace("| Guns (Pistol) |", "| Guns/TL8 (Pistol) |")
+        kind, msg, _new = gsd.plan(sheet, "Guns (Pistol)")
+        self.assertEqual((kind, msg), ("HAVE", "Guns (Pistol) is in the Skills table already, at 16"))
+        kind, msg, new = gsd.plan(sheet, "Guns (Rifle)")
+        self.assertEqual(kind, "WOULD-ADD", msg)
+        self.assertIn("| Guns/TL8 (Rifle) | DX/E | DX+0 | [0] | 14 | 14 | (default Guns (Pistol)-2, level 14)", msg)
+        self.assertIn("| Guns/TL8 (Pistol) | DX/E | DX+2 | [4] | 16 | 16 |\n| Guns/TL8 (Rifle) |", new)
+        beams = SHEET.replace("| Guns (Pistol) | DX/E | DX+2 | [4] | 16 | 16 |",
+                              "| Beam Weapons/TL11 (Pistol) | DX/E | DX+1 | [2] | 15 | 15 |")
+        self.assertEqual(gsd.plan(beams, "Beam Weapons/TL11 (Pistol)")[0], "HAVE")
+        kind, msg, _new = gsd.plan(beams, "Beam Weapons (Rifle)")
+        self.assertIn("| Beam Weapons/TL11 (Rifle) | DX/E | DX-3 | [0] | 11 | 11 | (default Beam Weapons (Pistol)-4, level 11)", msg)
+
+    def test_short_names_sheets_write(self):
+        # Review A9: Shield and Guns (LAW) are found; Guns (LMG) bought is
+        # Guns (Light Machine Gun) to a default.
+        self.assertEqual(gsd.plan(SHEET, "Shield")[0], "WOULD-ADD")
+        self.assertIn("| Guns (LAW) | DX/E |", gsd.plan(SHEET, "Guns (LAW)")[1])
+        sheet = SHEET.replace("| Guns (Pistol) |", "| Guns (LMG) |")
+        self.assertIn("(default Guns (Light Machine Gun)-2, level 14)", gsd.plan(sheet, "Guns (Rifle)")[1])
+
+    def test_an_unarmed_attack_takes_the_best_unarmed_skill_bought(self):
+        # Review A6: B271, a punch at the best of DX, Boxing, Brawling and
+        # Karate; a kick at the best of DX, Brawling and Karate, less 2. The
+        # cell to write is one the to-hit calculator reads as a level (A7).
+        sheet = SHEET.replace("| Guns (Pistol) |", "| Brawling | DX/E | DX+1 | [2] | 15 | 15 |\n| Guns (Pistol) |")
+        kind, msg, _new = gsd.plan(sheet, "Karate", attack="Kick")
+        self.assertEqual(kind, "UNARMED")
+        self.assertEqual(msg, 'Kick rolls against Brawling-2 = 13 without Karate; write the Skill cell as "Brawling 13"; nothing is added')
+        self.assertEqual(gsd.plan(sheet, "Karate", attack="Punch")[1],
+                         'Punch rolls against Brawling 15 without Karate; write the Skill cell as "Brawling 15"; nothing is added')
+        self.assertEqual(gsd.plan(SHEET, "Karate", attack="Kick")[1],
+                         'Kick rolls against DX-2 = 12 without Karate; write the Skill cell as "DX 12"; nothing is added')
+
+    def test_with_no_points_column_only_attribute_defaults_are_used(self):
+        # Review B: with no Points column a default-only row cannot be told
+        # from a bought one (B173), so no skill is a base, and that is said.
+        sheet = (SHEET.replace("| Name | Difficulty | Relative Level | Points | Base | Current |",
+                               "| Name | Difficulty | Relative Level | Base | Current |")
+                 .replace("|------|-----------|----------------|--------|------|---------|", "|---|---|---|---|---|")
+                 .replace(" [4] |", "").replace(" [0] |", ""))
+        msg = gsd.plan(sheet, "Broadsword")[1]
+        self.assertIn("(default DX-5, level 9; the Skills table has no Points column, so only attribute defaults are used)", msg)
+
+    def test_a_stand_in_and_a_missing_attribute_are_said(self):
+        sheet = SHEET.replace("| Will | 13 |\n", "").replace("| Per | 12 |\n", "").replace("| HT | 11 | +1 | 10 |\n", "")
+        msg = gsd.plan(sheet, "Lookout", "Per/A", "Per-5")[1]
+        self.assertIn("(default Per-5, level 7; Per taken as IQ: the sheet lists no Per)", msg)
+        msg = gsd.plan(sheet, "Running", "HT/A", "DX-5")[1]
+        self.assertIn("| Running | HT/A |  | [0] | 9 | 9 |", msg)
+        self.assertIn("Relative Level left blank: the sheet lists no HT", msg)
+
+    def test_a_sheet_that_cannot_be_written_is_a_row(self):
+        d = Path(tempfile.mkdtemp(prefix="gsd-"))
+        try:
+            sheet = d / "Ann_Vole.md"
+            sheet.write_text(SHEET, encoding="utf-8")
+            d.chmod(0o500)
+            got = subprocess.run([sys.executable, str(SCRIPTS / "gurps_skill_default.py"), str(sheet), "Knife", "--write"],
+                                 capture_output=True, text=True, encoding="utf-8")
+            self.assertEqual(got.returncode, 1, got.stderr)
+            self.assertTrue(got.stdout.startswith("CANNOT\t"), got.stdout)
+            self.assertIn("could not write the sheet", got.stdout)
+            self.assertNotIn("Traceback", got.stderr)
+        finally:
+            d.chmod(0o700)
+            shutil.rmtree(d, ignore_errors=True)
+
     def test_a_skill_on_the_sheet_is_left(self):
         got, after = run(SHEET, "shortsword", "--write")
         self.assertEqual(got.returncode, 0)
