@@ -927,6 +927,43 @@ describe('a kept-folder prop that stops shipping', () => {
     } finally { s.cleanup(); }
   });
 
+  // #576: a folder below the kept folder whose spelling changes only in case is renamed when the tool made it, and left
+  // with one warning when the GM's files are in it.
+  const readdress = (s, address) => fs.writeFileSync(noteOf(s), fs.readFileSync(noteOf(s), 'utf8').replace(/prop_address: \S+/, `prop_address: ${address}`));
+  it('a case-only change in a folder the tool made renames the folder', (t) => {
+    const s = setup();
+    try {
+      if (caseSensitiveAt(path.join(s.player.dir, 'gazetteer'))) { t.skip('this disk tells letter case apart'); return; }
+      readdress(s, 'gazetteer/letters/invitation.html');
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      readdress(s, 'gazetteer/Letters/invitation.html');
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.deepEqual(fs.readdirSync(path.join(s.player.dir, 'gazetteer')).filter((n) => /^letters$/i.test(n)), ['Letters']);
+      assert.ok(lines.includes('  renamed in kept folder: gazetteer/letters to gazetteer/Letters (its address changed case)'), lines.join('\n'));
+      assert.match(fs.readFileSync(path.join(s.player.dir, 'gazetteer', 'Letters', 'invitation.html'), 'utf8'), /You are invited/);
+      assert.ok('gazetteer/Letters/invitation.html' in record(s).files, JSON.stringify(record(s)));
+      assert.ok(!('gazetteer/letters/invitation.html' in record(s).files), JSON.stringify(record(s)));
+    } finally { s.cleanup(); }
+  });
+
+  it("a case-only change in a folder holding the GM's own file leaves the folder and says so once", (t) => {
+    const s = setup();
+    try {
+      if (caseSensitiveAt(path.join(s.player.dir, 'gazetteer'))) { t.skip('this disk tells letter case apart'); return; }
+      readdress(s, 'gazetteer/letters/invitation.html');
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      fs.writeFileSync(path.join(s.player.dir, 'gazetteer', 'letters', 'mine.html'), 'MINE');
+      readdress(s, 'gazetteer/Letters/invitation.html');
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.deepEqual(fs.readdirSync(path.join(s.player.dir, 'gazetteer')).filter((n) => /^letters$/i.test(n)), ['letters']);
+      const warned = lines.filter((l) => l.includes('gazetteer/letters keeps its spelling'));
+      assert.equal(warned.length, 1, lines.join('\n'));
+      assert.match(warned[0], /it holds files the tool did not write; rename it yourself if it should change/);
+      assert.equal(fs.readFileSync(path.join(s.player.dir, 'gazetteer', 'letters', 'mine.html'), 'utf8'), 'MINE');
+      assert.match(fs.readFileSync(path.join(s.player.dir, 'gazetteer', 'letters', 'invitation.html'), 'utf8'), /You are invited/);
+    } finally { s.cleanup(); }
+  });
+
   // #576: a rename the disk refuses leaves the old spelling, says so, and the build writes the file as before.
   it('a case-only address change whose rename fails keeps the old spelling and says so', (t) => {
     const s = setup();

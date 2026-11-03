@@ -629,45 +629,87 @@ function buildSite(options) {
   }
   // A file in a kept folder whose address changed only in letter case (#576): on a disk that does not tell case apart
   // (macOS, Windows) the write would land in the old file and keep its old spelling, which git records no rename for,
-  // so the deployed site would keep the old address. Before the write the file is renamed to the new spelling, in two
-  // steps through a temporary name (a case-only rename is not done in one step everywhere). Only where the new
-  // spelling is not listed in its folder yet opens a file: on a disk that tells case apart the two spellings are two
-  // files, and nothing is renamed here. Only the file's own name: a folder on its path may be the GM's.
+  // so the deployed site would keep the old address. Before the write each name on the path below the kept folder that
+  // differs only in case is renamed to the new spelling, in two steps through a temporary name (a case-only rename is
+  // not done in one step everywhere). Only where the new spelling is not listed in its folder yet opens: on a disk that
+  // tells case apart the two spellings are two things, and nothing is renamed here. A folder is renamed only when the
+  // tool made it: every file in it is one the kept record names, or this build wrote. A folder of the GM's is left,
+  // and said once.
+  const respellRefused = new Set();
   function respell(full) {
-    if (gm || !config.preserveDirs.some((d) => outRel(full).toLowerCase().startsWith(`${d.toLowerCase().replace(/\/+$/, '')}/`))) return;
-    const dir = path.dirname(full);
-    const want = path.basename(full);
-    let have;
+    if (gm) return;
+    const rel = outRel(full);
+    const kept = config.preserveDirs.map((d) => d.replace(/\/+$/, '')).find((d) => rel.toLowerCase().startsWith(`${d.toLowerCase()}/`));
+    if (!kept) return;
+    const parts = rel.split('/');
+    for (let i = kept.split('/').length; i < parts.length; i++) {
+      const dir = path.join(outputDir, ...parts.slice(0, i));
+      const want = parts[i];
+      let have;
+      try {
+        if (!fs.existsSync(path.join(dir, want))) return;
+        const names = fs.readdirSync(dir);
+        if (names.some((n) => canonicalNfc(n) === canonicalNfc(want))) continue;
+        have = names.find((n) => canonicalNfc(n).toLowerCase() === canonicalNfc(want).toLowerCase());
+        if (!have) continue;
+      } catch (e) {
+        if (!e.code) throw e;
+        return;   // a folder that cannot be read: the write goes ahead, and the kept-folder clean-up says what it left
+      }
+      const said = (name) => [...parts.slice(0, i), name].join('/');
+      const leaf = i === parts.length - 1;
+      if (!leaf) {
+        if (respellRefused.has(said(have))) continue;
+        const theirs = toolsFolder(path.join(dir, have), said(have));
+        if (theirs !== true) {
+          respellRefused.add(said(have));
+          printWarning(`${said(have)} keeps its spelling, though an address now spells it ${said(want)}: ${theirs === false ? 'it holds files the tool did not write' : `it could not be read (${theirs})`}; rename it yourself if it should change`);
+          continue;
+        }
+      }
+      if (!renameCase(dir, have, want, said)) return;
+      console.log(`  renamed in kept folder: ${said(have)} to ${said(want)} (its address changed case)`);
+    }
+  }
+  // Whether every file in a kept-folder folder is the tool's: named in the kept record by its spelling on disk, or
+  // written by this build. True, false, or the error code of a folder that could not be read.
+  function toolsFolder(full, rel) {
     try {
-      if (!fs.existsSync(full)) return;
-      const names = fs.readdirSync(dir);
-      if (names.some((n) => canonicalNfc(n) === canonicalNfc(want))) return;
-      have = names.find((n) => canonicalNfc(n).toLowerCase() === canonicalNfc(want).toLowerCase());
-      if (!have) return;
+      const files = [];
+      const walk = (d, r) => {
+        for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+          if (e.isDirectory()) walk(path.join(d, e.name), `${r}/${e.name}`);
+          else files.push(`${r}/${e.name}`);
+        }
+      };
+      walk(full, rel);
+      return files.every((f) => Object.hasOwn(keptRecorded, f) || keptWritten.has(f.toLowerCase()));
     } catch (e) {
       if (!e.code) throw e;
-      return;   // a folder that cannot be read: the write goes ahead, and the kept-folder clean-up says what it left
+      return e.code;
     }
+  }
+  // Renames `have` to `want` in `dir` through a temporary name; false, said as a warning, if the disk refuses.
+  function renameCase(dir, have, want, said) {
     const from = path.join(dir, have);
     const temp = path.join(dir, `${have}.case-${process.pid}.tmp`);
-    const said = (name) => outRel(path.join(dir, name));
     try {
       fs.renameSync(from, temp);
     } catch (e) {
       if (!e.code) throw e;
       printWarning(`could not rename ${said(have)} to ${said(want)} (${e.code}); it keeps its old spelling on this disk`);
-      return;
+      return false;
     }
     try {
-      fs.renameSync(temp, full);
+      fs.renameSync(temp, path.join(dir, want));
     } catch (e) {
       if (!e.code) throw e;
-      // Put back as it was, so the write below lands where the file was.
+      // Put back as it was, so the write lands where the file was.
       try { fs.renameSync(temp, from); } catch (e2) { if (!e2.code) throw e2; }
       printWarning(`could not rename ${said(have)} to ${said(want)} (${e.code}); it keeps its old spelling on this disk`);
-      return;
+      return false;
     }
-    console.log(`  renamed in kept folder: ${said(have)} to ${said(want)} (its address changed case)`);
+    return true;
   }
 
   // No folder is made through a link in the site folder: the write that follows is refused by the writers above.
