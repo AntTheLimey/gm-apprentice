@@ -273,9 +273,10 @@ Mirrored into each vault's `_meta/entity-types.md`; migrations diff
 the mirror against these entries.
 
 <!-- generated:fields (scripts/gen_field_lists.py) -->
-**NPC:** `occupation`, `age`, `gender`, `nationality`, `status`
-(alive/dead/missing/unknown), `location` (wiki-link: where they can
-usually be found), `portrait`
+**NPC:** `companion` (true: travels with the party (an Ally, follower,
+familiar, cohort); never pictured on Story pages), `occupation`,
+`age`, `gender`, `nationality`, `status` (alive/dead/missing/unknown),
+`location` (wiki-link: where they can usually be found), `portrait`
 
 **PC:** `player_name`, `occupation`, `age`, `gender`, `nationality`,
 `status` (alive/dead/missing/retired/unknown), `key_traits`,

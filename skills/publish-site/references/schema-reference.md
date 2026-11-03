@@ -67,8 +67,9 @@ beneath them. No accordion — the content flows as continuous prose.
 `type: npc`
 
 <!-- generated:fields-npc (scripts/gen_field_lists.py) -->
-Template fields: `occupation`, `age`, `gender`, `nationality`, `status`
-(alive/dead/missing/unknown), `location`, `portrait`.
+Template fields: `companion`, `occupation`, `age`, `gender`,
+`nationality`, `status` (alive/dead/missing/unknown), `location`,
+`portrait`.
 <!-- /generated:fields-npc -->
 
 | Field | Status | Description |
