@@ -154,8 +154,7 @@ For an attachment, rename the file and the embeds that name it.
 A name in plain text has no "leave it" answer, and `stays hidden:`
 does not settle this row: the GM rewords the sentence, links the note
 (the neutral word prints), or takes `withheld: true` off. When the fix
-says the name is an everyday word and to rename the note, also take
-the same name off its `title:` and `aliases:`, then offer to:
+says the name is an everyday word, offer that fix. A rename:
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/relink.py"
 "<vault>" "<note>" "<new name>"` previews it, links included; on a yes,
 again with `--apply`.
@@ -168,22 +167,18 @@ builds from the note's own fields: reword the field.
 ## WITHHELD_PUBLISHED
 
 A note marked `withheld: true` is on the site under its name: the row
-names its page. Ask which was meant. If the name is no secret, take
-`withheld: true` off. If it is, stop the note publishing: `publish:
-false` in its frontmatter, or out of `publishing` on the publish list
-(`SITE manifest apply --exclude "<note>"`). Edit on a yes.
+names its page and both fixes. Ask which was meant, and make that fix
+on a yes; the publish-list one is `SITE manifest apply --exclude
+"<note>"`.
 
 ## WITHHELD_NAME_PUBLIC
 
-A withheld name is also the name of another published page, so it is
-not looked for. Offer a new title or alias for the page that answers to
-the name, or to take `withheld: true` off.
+Offer the row's two fixes, and make the one the GM picks.
 
 ## WITHHELD_FLAG_UNREADABLE
 
-A `withheld:` value that is not true or false (`tru`, a list) is read as
-not withheld, so the note's name is not looked for. Show the value and
-propose `withheld: true` or `withheld: false` as the GM says.
+Show the value (`tru`, a list) and ask the GM whether the note is
+withheld; write `true` or `false` as they say.
 
 ## COMPANION_FLAG_UNREADABLE
 
@@ -222,7 +217,8 @@ field. The row quotes the line, or the frontmatter field.
 ## NAMED_NO_PAGE
 
 A published page names a note that has no page: an entity, a working
-note, a note with no type, or a withheld note. Walked in `site-faults/named-no-page.md`.
+note, a note with no type, or a withheld note. Walked in
+`site-faults/named-no-page.md`.
 
 ## TOHIT_UNREAD
 
@@ -233,20 +229,19 @@ read. Walked in `site-faults/tohit-unread.md`.
 
 A Call of Cthulhu skill written lower than the base the PC's
 characteristics give it (`Dancing | 05 | 10` with DEX 70, base 14).
-The row says the number written and the base. The sheet shows the
-number written either way. Per PC, ask: raise it to the base, or leave
-it? On a raise, write the base in the Regular column and, if the
-Half and Fifth cells hold numbers, work them out again. On leave, log
-"left as written" and do not raise it again in the same run.
+Per PC, ask which of the row's two fixes the GM wants. On a raise, if
+the Half and Fifth cells hold numbers, work them out again too. On
+leave, log "left as written" and do not raise it again in the same
+run.
 
 ## HEADING_IN_HIDDEN_BLOCK
 
 A hidden heading (`## GM Notes`) is written inside a gm-only block, a
 comment or a hidden callout. The site withholds the text after the
 block too, to the next heading of the same or higher level. Show the
-GM that text and ask: should it stay hidden? On yes, move the heading
-out of the block, just above it. On no, move that text above the
-block or under a heading the site shows. Edit only on an answer.
+GM that text and ask: should it stay hidden? Then make the row's fix
+for the answer: on yes the heading goes just above the block; on no
+the text may also move above the block. Edit only on an answer.
 
 ## TABLE_OVERWIDE
 

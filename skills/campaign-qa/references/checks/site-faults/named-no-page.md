@@ -23,10 +23,12 @@ handle it as "A link in frontmatter" below, whatever kind the note is.
 
 An `ERROR` row, `withheld entity`, is a note marked `withheld: true`:
 it must stay off the site, so there is no page to give it. The links
-print a neutral word. Offer the `unlink` command in the row's fix with
-`--as` wording the GM agrees. If the neutral word will do, that is a
-"stays hidden" for this row only: it settles the link report and
-nothing else. Skip steps 1 to 4 below.
+print a neutral word. Offer to turn them into words the GM agrees:
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/links.py" "<vault>"
+unlink "<note's vault path, no .md>" --in "<page>" --as "<words>"` (a
+preview; again with `--write`). If the neutral word will do, that is a
+"stays hidden" for this row only, recorded as under "On no" below: it
+settles the link report and nothing else. Skip steps 1 to 4 below.
 
 Work most-named first, in batches of 3 to 5 notes, one question per
 batch. The GM can answer for the batch or note by note, and can stop
