@@ -216,7 +216,8 @@ function once(resolve) {
 // Each unit carries its wrap-up's other sections (story-sections.js): `sections`, `moments`, `after`, cut from the
 // wrap-up's published view, or with `marked` (the GM site) from its marked view.
 // `players` (the GM site): `has(outputPath)`, whether the player site has a Story page at that address, and
-// `shows(page)`, whether it publishes that page. A unit whose wrap-up players do not see, on a page they do have (made
+// `shows(page)`, whether it publishes that page, and `wrapUpAt(outputPath)`, the wrap-up its Story page there is made
+// from (or null), whose recap a held-back unit's chapter counts its pictures from. A unit whose wrap-up players do not see, on a page they do have (made
 // from the session's own recap, or the chapter's introduction), carries `heldBack`: { recapHtml, wrapRecapTitle }, the
 // players' own recap and the title of the wrap-up's, for the build to show the wrap-up's parts apart, marked.
 // `figures` ({ candidates, blockers, scenesFor(unit) }, story-figures.js figureCandidates, nameHolders and
@@ -364,6 +365,16 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
     for (const unit of units.slice(before)) chapterOf.set(unit, chapter);
   }
 
+  // The recap the player page at a GM unit's address leads with, from the wrap-up players see there
+  // (`players.wrapUpAt`), as players read it: { html, wrapUp }, or null. Its links resolve as the GM page's do, and
+  // nothing is recorded or reported: this text is not shown on the GM site.
+  const playersRecapAt = (unit) => {
+    const wrapUp = players.wrapUpAt ? players.wrapUpAt(unit.outputPath) : null;
+    if (!wrapUp) return null;
+    const quiet = (md) => resolveImageEmbeds(md, images.imageMap, unit.outputPath, null, { warn: false });
+    const found = findRecap(wrapUp, linkMap ? (md) => resolveWikiLinks(quiet(md), linkMap, unit.outputPath) : quiet, { marked, marks });
+    return found ? { html: found.html, wrapUp } : null;
+  };
   if (figures && images) {
     // A page is pictured once per chapter: on the chapter's first Story page, in reading order, that pictures it (or
     // shows its picture where the GM placed it). On the GM site only the Story pages the player site has count
@@ -375,15 +386,27 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
       if (!shownIn.has(chapter)) shownIn.set(chapter, new Set());
       const shown = shownIn.get(chapter);
       const counts = !players || players.has(unit.outputPath);
-      // A GM unit whose banner says players see another Story page here, with no heldBack, has no player page at this
-      // address to equal; its pictures still come from player-site pages only.
+      const scenes = figures.scenesFor ? figures.scenesFor(unit) : [];
+      // A GM unit whose banner says players see another Story page here (its wrap-up held back, no recap of theirs to
+      // lead it) pictures its own recap, but its chapter counts what the player page at this address pictures: that
+      // page's recap, from the wrap-up players see there, read as they read it (#569).
+      const theirs = counts && players && !unit.heldBack && unit.wrapUpPage && !players.shows(unit.wrapUpPage)
+        ? playersRecapAt(unit) : null;
       const target = unit.heldBack || unit;
       target.recapHtml = withFigures(target.recapHtml, {
-        candidates: figures.candidates, scenes: figures.scenesFor ? figures.scenesFor(unit) : [], blockers: figures.blockers || [],
+        candidates: figures.candidates, scenes, blockers: figures.blockers || [],
         exclude: new Set([unit.sourcePage, unit.wrapUpPage].filter(Boolean)),
         fromPath: unit.outputPath, imageMap: images.imageMap, usedImages: images.usedImages, marks,
-        shown: new Set(shown), pictured: counts ? shown : null,
+        shown: new Set(shown), pictured: counts && !theirs ? shown : null,
       });
+      if (theirs) {
+        withFigures(theirs.html, {
+          candidates: figures.candidates, scenes, blockers: figures.blockers || [],
+          exclude: new Set([unit.sourcePage, theirs.wrapUp].filter(Boolean)),
+          fromPath: unit.outputPath, imageMap: images.imageMap, marks,
+          shown: new Set(shown), pictured: shown,
+        });
+      }
     }
   }
 

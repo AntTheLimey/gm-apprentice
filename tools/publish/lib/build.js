@@ -1321,8 +1321,10 @@ function buildSite(options) {
     { linked: hubWrapUps.linked }) : null;
   // The pictures the player site has: a folder it hides is not scanned there.
   const playerImages = gm && show.has('notes') ? scanAttachments(scanConfigFor(config, hideFrom)) : imageMap;
-  const playerStory = gm ? new Set(probeSpine(pages.filter((p) => onPlayerSite.has(p)), playerPairs, playerImages).map((u) => u.outputPath)) : null;
-  const storyPlayers = gm ? { has: (out) => playerStory.has(out), shows: (page) => onPlayerSite.has(page) } : null;
+  // Each address maps to the wrap-up the player page there is made from (or null), for the GM page that holds its own
+  // wrap-up back with no recap of the players' to lead it: its chapter counts what the player page pictures (#569).
+  const playerStory = gm ? new Map(probeSpine(pages.filter((p) => onPlayerSite.has(p)), playerPairs, playerImages).map((u) => [u.outputPath, u.wrapUpPage || null])) : null;
+  const storyPlayers = gm ? { has: (out) => playerStory.has(out), shows: (page) => onPlayerSite.has(page), wrapUpAt: (out) => playerStory.get(out) || null } : null;
   applyFold(foldPlan(storyProbe), linkMap);
   LOWER_KEYS.delete(linkMap);   // its folded spellings were read from the old addresses
   // The pages a Story page may picture beside its recap (story-figures.js), read once, after the fold has given each

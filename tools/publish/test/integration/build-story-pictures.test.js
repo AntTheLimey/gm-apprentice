@@ -628,3 +628,33 @@ describe('Story pictures: once per chapter, a picture left out for room', () => 
     }
   });
 });
+
+describe('Story pictures: once per chapter, a held-back wrap-up on a page where players see another wrap-up (#569)', () => {
+  // Two chapter wrap-ups: the GM site's Story page leads with the first, which players do not see; the player page at
+  // the same address leads with the second. The chapter note has no introduction, so players have no recap of their
+  // own there (no heldBack). Later pages in the chapter count what the player page pictured, on both sites.
+  const chapterWrap = (recap, extra = '') => `---\ntype: session_wrap\nchapter: "[[Chapter 1 Overview]]"\n${extra}---\n\n# Chapter 1 Wrap-Up\n\n## Narrative Recap\n\n${recap}\n`;
+  const s = buildBoth(storyVault({
+    ...PEOPLE,
+    'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n').replace('\n## Overview\n\nThe docks, CHAPTER-BODY-1.\n', ''),
+    'Chapters/Chapter 1/Chapter 1 Wrap-Up A.md': chapterWrap('Captain Rook kept the books.', 'publish: false\n'),
+    'Chapters/Chapter 1/Chapter 1 Wrap-Up B.md': chapterWrap('[[Mara Quill]] kept the books.'),
+    'Sessions/Session 1 Wrap-Up.md': withRecap('[[Mara Quill]] and Captain Rook met at dusk.').replace('canon_status: DRAFT\n', ''),
+  }));
+  after(() => s.cleanup());
+  const INTRO = 'story/chapter-1-docks-intro.html';
+
+  it('the GM page pictures its own recap, and the next page pictures what the player site pictures', () => {
+    assert.deepEqual(captions(read(s.player, INTRO)), ['Mara Quill']);
+    assert.deepEqual(captions(read(s.gm, INTRO)), ['Captain Rook']);
+    assert.match(read(s.gm, INTRO), /players see another Story page here/);
+    assert.deepEqual(captions(read(s.player, STORY_1)), ['Captain Rook']);
+    assert.deepEqual(captions(read(s.gm, STORY_1)), ['Captain Rook']);
+  });
+
+  it('every link resolves and the leak gate finds nothing', () => {
+    assert.deepEqual(brokenLinks(s.player.dir), []);
+    assert.deepEqual(brokenLinks(s.gm.dir), []);
+    assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.player.dir }).findings, []);
+  });
+});
