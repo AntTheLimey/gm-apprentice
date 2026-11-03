@@ -348,6 +348,13 @@ def frontmatter_findings(fm: dict, setting: Callable[[str], Iterable[object]] | 
         if not (isinstance(value, bool) or (isinstance(value, str)
                                              and value.strip().lower() in ("true", "false"))):
             found.append(("ERROR", "withheld must be true or false"))
+    # `companion: true` (an NPC who travels with the party) is never pictured
+    # on the site's Story pages, as a PC is not; read as `withheld` is.
+    if "companion" in fm:
+        value = fm["companion"]
+        if not (isinstance(value, bool) or (isinstance(value, str)
+                                             and value.strip().lower() in ("true", "false"))):
+            found.append(("ERROR", "companion must be true or false"))
     portrait = fm.get("portrait")
     if portrait and not custom:
         if not isinstance(portrait, str):

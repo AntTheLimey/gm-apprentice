@@ -4,7 +4,7 @@
 // is ever touched; the build adds a figure before the paragraph it chose.
 
 const path = require('node:path');
-const { portraitBasename, nameList, isWebImageAddress, publishedFrontmatter, relativeHref, encodeImageUrl, strippedLines, fenceStep, IMAGE_EXT_REGEX } = require('./processor');
+const { portraitBasename, nameList, flagIsYes, isWebImageAddress, publishedFrontmatter, relativeHref, encodeImageUrl, strippedLines, fenceStep, IMAGE_EXT_REGEX } = require('./processor');
 const { canonicalNfc } = require('./unicode');
 const { withoutMarked } = require('./gm-marks');
 const { decodeEntities } = require('./templates/gurps/tables');
@@ -34,13 +34,13 @@ function namesOf(page, published, marks) {
 }
 
 // The pages that may be named for a picture, each with its published frontmatter: not a PC or a companion (an NPC
-// marked `companion: true`, who travels with the party) unless `pcs`, not one of `exclude`, and on the GM site
+// marked `companion: true`, who travels with the party; read as `withheld` is) unless `pcs`, not one of `exclude`, and on the GM site
 // (`onPlayerSite`, a Set of the pages the player site publishes) only those.
 function* namedPages(pages, { onPlayerSite = null, exclude = new Set(), excludeFields = [], overridesOf = null, pcs = false } = {}) {
   for (const page of pages) {
     if (exclude.has(page) || (onPlayerSite && !onPlayerSite.has(page))) continue;
     const source = page.sourceFrontmatter || page.frontmatter || {};
-    if ((source.type === 'pc' || source.companion === true) && !pcs) continue;
+    if ((source.type === 'pc' || flagIsYes(source.companion)) && !pcs) continue;
     yield { page, source, published: publishedFrontmatter(page.frontmatter || {}, excludeFields, (overridesOf && overridesOf(page)) || {}) };
   }
 }

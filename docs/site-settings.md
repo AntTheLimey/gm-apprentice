@@ -445,7 +445,7 @@ from players.
 | Setting | What it does | Values | Left out |
 |---------|--------------|--------|----------|
 | `player_site.story.moments` | The Memorable Moments section of a session's wrap-up, shown as cards after the story on its Story page. Off, the section is left out of the site: no page, search entry, link preview or Connections text holds it. The GM site still shows the cards, marked | A switch | On |
-| `player_site.story.pictures` | Pictures of the people and places a Story page's recap names, set in the text beside the first paragraph that mentions each (two at most beside one paragraph). A picture comes from the page's `portrait`, or from a scene played that session, beside the paragraph naming the most of its places and people; player characters are left out. Off, no pictures are added; pictures you put in the recap stay | A switch | On |
+| `player_site.story.pictures` | Pictures of the people and places a Story page's recap names, set in the text beside the first paragraph that mentions each (two at most beside one paragraph), once a chapter: a page pictured on an earlier Story page of its chapter is not pictured again. A picture comes from the page's `portrait`, or from a scene played that session, beside the paragraph naming the most of its places and people; player characters and NPCs marked `companion: true` are left out. Off, no pictures are added; pictures you put in the recap stay | A switch | On |
 
 <!-- /settings:story -->
 

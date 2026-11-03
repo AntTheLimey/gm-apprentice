@@ -667,7 +667,8 @@ describe('companions', () => {
     p.sourceFrontmatter = p.frontmatter;
     p.frontmatter = { portrait: 'a.png' };
     assert.deepEqual(figureCandidates([p], { imageMap }), []);
-    assert.equal(figureCandidates([page('Ann', { companion: false }), page('Bea')], { imageMap }).length, 2);
+    assert.equal(figureCandidates([page('Ann', { companion: false }), page('Bea'), page('Cy', { companion: 'no' })], { imageMap }).length, 3);
+    assert.deepEqual(figureCandidates([page('Di', { companion: 'yes' })], { imageMap }), []);
   });
 });
 

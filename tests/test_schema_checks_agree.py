@@ -169,6 +169,8 @@ class BothChecksAgree(unittest.TestCase):
         self.assertAgree("type: plan\ncanon_status: DRAFT\nplan_type: arc\n"
                          "chapter: x\nleads_to: 7", 1)
         self.assertAgree("type: npc\ncanon_status: DRAFT\nwithheld: maybe", 1)
+        self.assertAgree("type: npc\ncanon_status: DRAFT\ncompanion: maybe", 1)
+        self.assertAgree("type: npc\ncanon_status: DRAFT\ncompanion: true", 0)
 
     def test_missing_or_listed_type(self):
         self.assertAgree("canon_status: DRAFT", 1)

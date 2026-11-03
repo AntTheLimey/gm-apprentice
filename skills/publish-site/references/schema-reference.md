@@ -67,6 +67,7 @@ beneath them. No accordion — the content flows as continuous prose.
 | `age` | Optional | Character age |
 | `rank` | Optional | Military or organizational rank |
 | `portrait` | Optional | Path relative to vault root |
+| `companion` | Optional | `true`: travels with the party, so Story pages never picture them, as with a PC |
 
 Body content renders below the header card. To keep a body section
 such as `Relationships` off the public site, `settings add` its
