@@ -3,6 +3,7 @@ const { test, before, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
 const { createPreview, refusal } = require('../scripts/live-preview');
+const { inPrivateTmp } = require('./helpers/private-tmp');
 
 // build() narrates every file it writes; keep that out of the test output. Errors still throw.
 async function quietly(fn) {
@@ -83,11 +84,11 @@ test('a real site\'s output directory is left alone', async () => {
 
 test('a failure after the build removes the temp site', async () => {
   const { dir, p } = scratch();
-  const sites = () => new Set(fs.readdirSync(os.tmpdir()).filter(n => n.startsWith('gm-publish-preview-site-')));
-  const was = sites();
   try {
-    await assert.rejects(quietly(() => createPreview({ configPath: p, handlers: async () => { throw new Error('handlers broke'); } })), /handlers broke/);
-    assert.deepEqual([...sites()].filter(n => !was.has(n)), []);
+    // With a temp folder of its own, so another suite's preview folder is never counted as this one's.
+    const { result: err, left } = await inPrivateTmp(() => quietly(() => createPreview({ configPath: p, handlers: async () => { throw new Error('handlers broke'); } })).then(() => null, (e) => e));
+    assert.match(String(err && err.message), /handlers broke/);
+    assert.deepEqual(left.filter(n => n.startsWith('gm-publish-preview-site-')), []);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 

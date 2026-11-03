@@ -9,6 +9,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { runMoveCheck } = require('../../lib/props/compare-cli');
 const { writeNewConfig } = require('../helpers/settings-files');
+const { inPrivateTmp } = require('../helpers/private-tmp');
 
 const CLI = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
 const PAGE = '<!doctype html><html><head><title>Menu</title></head><body><h1>Dinner</h1><p>Turtle soup, then a saddle of mutton.</p></body></html>';
@@ -55,8 +56,8 @@ test('move-check builds the new site alone', (t) => {
   const s = liveSite(t);
   const before = snapshot(s.siteDir);
   const vaultBefore = snapshot(s.vaultDir);
-  const tmpBefore = new Set(fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('gm-move-check-')));
-  const ok = quietly(() => runMoveCheck({ configPath: s.configPath, serves: ['gazetteer/'], listings: [], expectGone: [] }));
+  // Run with a temp folder of its own, so another suite's gm-move-check- folder is never counted as this one's.
+  const { result: ok, left } = inPrivateTmp(() => quietly(() => runMoveCheck({ configPath: s.configPath, serves: ['gazetteer/'], listings: [], expectGone: [] })));
   assert.equal(ok.rc, 0, ok.lines.join('\n'));
   assert.ok(ok.lines.some((l) => /^SAME-WORDS\tgazetteer\/papers\/menu\.html\t/.test(l)), ok.lines.join('\n'));
   // The kept folder's stylesheet is not copied into the new site: the vault alone is built.
@@ -64,8 +65,7 @@ test('move-check builds the new site alone', (t) => {
   // The live site and the vault are untouched, and the temp folder is gone.
   assert.deepEqual(snapshot(s.siteDir), before);
   assert.deepEqual(snapshot(s.vaultDir), vaultBefore);
-  const tmpAfter = fs.readdirSync(os.tmpdir()).filter((n) => n.startsWith('gm-move-check-') && !tmpBefore.has(n));
-  assert.deepEqual(tmpAfter, []);
+  assert.deepEqual(left.filter((n) => n.startsWith('gm-move-check-')), []);
 
   fs.rmSync(path.join(s.vaultDir, 'Documents', 'Menu.md'));
   const gone = quietly(() => runMoveCheck({ configPath: s.configPath, serves: ['gazetteer/'], listings: [], expectGone: [] }));
