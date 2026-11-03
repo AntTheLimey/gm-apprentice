@@ -113,7 +113,7 @@ class HandsTests(unittest.TestCase):
             self.assertIn(word, text)
 
     def test_site_faults_offers_to_add_the_hand(self):
-        step = section(read("campaign-qa/references/checks/site-faults.md"),
+        step = section(read("campaign-qa/references/checks/site-faults/prop-not-copied.md"),
                        "## PROP_NOT_COPIED")
         # A filed prop's hand is added with prop-hand, with the font the
         # GM names.

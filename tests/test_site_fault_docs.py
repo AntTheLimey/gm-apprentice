@@ -4,6 +4,11 @@
 `tools/publish/lib/note-faults.js` names the codes (`CODES`). The `doctor
 --site` help, the Site Faults check's reference and `vault_check.py` must
 each know every one of them, so a code added there cannot be left out here.
+
+A code with a long walk-through has its section in its own file under
+`site-faults/`, read only when a row names that code (#562): site-faults.md
+keeps a short `## CODE` section naming the file, and every file there is
+named from site-faults.md.
 """
 
 import re
@@ -20,8 +25,9 @@ CODES = re.findall(r"'([A-Z_]+)'", re.search(
     r"const CODES = \[(.*?)\];",
     (ROOT / "tools/publish/lib/note-faults.js").read_text(encoding="utf-8"),
     re.S).group(1))
-QA = (ROOT / "skills/campaign-qa/references/checks/site-faults.md"
-      ).read_text(encoding="utf-8")
+CHECKS = ROOT / "skills/campaign-qa/references/checks"
+QA = (CHECKS / "site-faults.md").read_text(encoding="utf-8")
+SPLIT = CHECKS / "site-faults"
 HELP = (ROOT / "tools/publish/bin/gm-publish.js").read_text(encoding="utf-8")
 TROUBLE = (ROOT / "skills/publish-site/references/troubleshooting.md"
            ).read_text(encoding="utf-8")
@@ -44,6 +50,32 @@ class NoteFaultCodeTests(unittest.TestCase):
             with self.subTest(code=code):
                 self.assertRegex(QA, rf"(?m)^## {code}$")
                 self.assertRegex(QA, rf"(?m)^\| `{code}`")
+
+    def test_a_split_section_is_in_the_file_its_section_names(self):
+        # A code whose section in site-faults.md names a split file has its
+        # walk-through there; the file is read only for that code.
+        split = 0
+        for code in CODES:
+            section = re.search(rf"(?ms)^## {code}\n(.*?)(?=^## |\Z)", QA)
+            named = re.findall(r"`site-faults/([a-z0-9-]+\.md)`",
+                               section.group(1))
+            with self.subTest(code=code):
+                for name in named:
+                    path = SPLIT / name
+                    self.assertTrue(path.is_file(), f"{name} is missing")
+                    self.assertRegex(path.read_text(encoding="utf-8"),
+                                     rf"(?m)^## {code}$")
+            split += bool(named)
+        self.assertGreaterEqual(split, 3)
+
+    def test_every_split_file_is_named_from_site_faults(self):
+        # A file nobody points at is never read.
+        files = sorted(p.name for p in SPLIT.glob("*.md"))
+        self.assertTrue(files)
+        for name in files:
+            with self.subTest(file=name):
+                self.assertTrue(f"`site-faults/{name}`" in QA,
+                                f"site-faults.md never names {name}")
 
     def test_the_error_rule_exempts_every_error_code_the_tool_raises(self):
         # The "ERROR rows ... stop this check" bullet must not catch a finding.
