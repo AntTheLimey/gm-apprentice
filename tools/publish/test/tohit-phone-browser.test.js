@@ -66,7 +66,8 @@ test('the to-hit calculator on a phone, in a real browser', (t) => {
     // Chrome can exit non-zero on its way out under load after it has printed the page: what
     // counts is the measurements in the printed page.
     run = runChrome(['--allow-file-access-from-files', '--window-size=900,1000', '--virtual-time-budget=10000', '--dump-dom',
-      'file://' + path.join(out, 'probe.html').replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')]);
+      'file://' + path.join(out, 'probe.html').replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')],
+      { answered: (printed) => /<pre id="out">[^<]/.test(printed) });
     dom = run.stdout || '';
   } finally {
     fs.rmSync(path.dirname(out), { recursive: true, force: true, maxRetries: 3 });

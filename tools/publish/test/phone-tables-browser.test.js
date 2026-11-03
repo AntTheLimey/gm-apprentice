@@ -3,13 +3,13 @@
 // in a real browser (headless Chrome, 390px wide). A CoC accordion holding a very wide table scrolls inside its own
 // body; a table written straight into a tab (PF2e) shrinks to its panel. Skipped without Chrome or Chromium (set
 // GM_TEST_CHROME to point at one), except on CI. These replace tests of the stylesheet's rule text: the browser says what the rules do.
-const { describe, it, before, after } = require('node:test');
+const { describe, it, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { buildPc } = require('./helpers/pc-vault');
 const { templateBody } = require('./helpers/pc-template');
-const { browserSkip, measure } = require('./helpers/browser');
+const { browserSkip, measure, browserBefore } = require('./helpers/browser');
 
 const skip = browserSkip();
 const quiet = (fn) => {
@@ -27,7 +27,7 @@ describe('sheet tables on a phone, in a browser', { skip }, () => {
   let pf2e;
   let cocR;
   let pf2eR;
-  before(() => {
+  browserBefore(() => {
     coc = quiet(() => buildPc('coc-7e', templateBody('pc-coc-7e.md') + wideTable('House Rules')));
     pf2e = quiet(() => buildPc('pf2e', templateBody('pc-pf2e.md')));
     cocR = measure(path.join(coc.out, 'characters', 'pcs', 'test-hero.html'), 390, function (done) {

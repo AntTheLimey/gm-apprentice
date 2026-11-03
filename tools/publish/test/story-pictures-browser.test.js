@@ -5,7 +5,7 @@
 // the page does not navigate; a click with a modifier key or the middle button is left to the browser. The browser helper cannot hold a pointer over an element, so the expand mark's hover
 // look is checked by the stylesheet's rules, and its resting look by the computed opacity. Skipped without Chrome or
 // Chromium (set GM_TEST_CHROME to point at one), except on CI.
-const { describe, it, before, after } = require('node:test');
+const { describe, it, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -13,7 +13,7 @@ require('./helpers/quiet-legacy-warning.js');
 const { buildBoth } = require('./helpers/gm-build');
 const { storyVault, WRAP_1, CHAPTER } = require('./helpers/story-vault');
 const { makePng } = require('./helpers/make-png');
-const { browserSkip, measure } = require('./helpers/browser');
+const { browserSkip, measure, browserBefore } = require('./helpers/browser');
 
 const skip = browserSkip();
 const note = (type, title, portrait) => `---\ntype: ${type}\ntitle: ${title}\nportrait: ${portrait}\n---\n\n# ${title}\n\nBODY of ${title}.\n`;
@@ -54,7 +54,7 @@ describe('Story page pictures in a browser', { skip }, () => {
       hasLeft: !!document.querySelector('.story-figures--left'),
     });
   };
-  before(() => {
+  browserBefore(() => {
     s = buildBoth(VAULT, { sites: ['player'] });
     page = path.join(s.player.dir, 'story', 'chapter-1-docks-session-1.html');
     wide = measure(page, 1280, probe);

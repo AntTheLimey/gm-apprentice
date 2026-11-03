@@ -2,11 +2,11 @@
 // The Connections drawings that once looked wrong (#343), in a real browser at a desktop and a phone width: what the
 // geometry tests in connections-client cannot see (type as drawn, wrapping, the card against the window).
 // Skipped without Chrome or Chromium (set GM_TEST_CHROME to point at one), except on CI, where it fails.
-const { describe, it, before, after } = require('node:test');
+const { describe, it, after } = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { buildBoth } = require('./helpers/gm-build');
-const { browserSkip, measure } = require('./helpers/browser');
+const { browserSkip, measure, browserBefore } = require('./helpers/browser');
 const { connectionsCases, LONG_NAME, SUBJECT_315 } = require('./helpers/connections-cases');
 
 const skip = browserSkip();
@@ -108,7 +108,7 @@ for (const [mode, widths] of [['web', [1200, 360]], ['tree', [1200, 640, 360]]])
   describe(`Connections cases in a browser, ${mode}`, { skip }, () => {
     let site;
     const at = {};
-    before(() => {
+    browserBefore(() => {
       site = buildBoth(connectionsCases(), { sites: ['player'], player: { features: { connections: mode } } });
       const pages = PAGES.map((p) => path.join(site.player.dir, 'characters', `${p}.html`));
       for (const w of widths) {
