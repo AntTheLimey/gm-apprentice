@@ -663,7 +663,10 @@ function buildSite(options) {
         const theirs = toolsFolder(path.join(dir, have), said(have));
         if (theirs !== true) {
           respellRefused.add(said(have));
-          printWarning(`${said(have)} keeps its spelling, though an address now spells it ${said(want)}: ${theirs === false ? 'it holds files the tool did not write' : `it could not be read (${theirs})`}; rename it yourself if it should change`);
+          const why = theirs === false ? 'it holds files the tool did not write, or that were changed since'
+            : theirs === 'unrecorded' ? 'this build keeps no record of the files the tool wrote in kept folders'
+              : `it could not be read (${theirs})`;
+          printWarning(`${said(have)} keeps its spelling, though an address now spells it ${said(want)}: ${why}; rename it yourself if it should change`);
           continue;
         }
       }
@@ -671,9 +674,11 @@ function buildSite(options) {
       console.log(`  renamed in kept folder: ${said(have)} to ${said(want)} (its address changed case)`);
     }
   }
-  // Whether every file in a kept-folder folder is the tool's: named in the kept record by its spelling on disk, or
-  // written by this build. True, false, or the error code of a folder that could not be read.
+  // Whether every file in a kept-folder folder is the tool's: named in the kept record by its spelling on disk and
+  // still holding the bytes recorded, or written by this build. True, false, 'unrecorded' (a build that keeps no
+  // record: a preview, a dry or sheets-only build), or the error code of a folder that could not be read.
   function toolsFolder(full, rel) {
+    if (!keptRecord) return 'unrecorded';
     try {
       const files = [];
       const walk = (d, r) => {
@@ -683,16 +688,19 @@ function buildSite(options) {
         }
       };
       walk(full, rel);
-      return files.every((f) => Object.hasOwn(keptRecorded, f) || keptWritten.has(f.toLowerCase()));
+      return files.every((f) => keptWritten.has(f.toLowerCase())
+        || (Object.hasOwn(keptRecorded, f) && hashOf(fs.readFileSync(path.join(outputDir, ...f.split('/')))) === keptRecorded[f]));
     } catch (e) {
       if (!e.code) throw e;
       return e.code;
     }
   }
-  // Renames `have` to `want` in `dir` through a temporary name; false, said as a warning, if the disk refuses.
+  // Renames `have` to `want` in `dir` through a temporary name no file has; false, said as a warning, if the disk
+  // refuses. A put-back that fails too is said with where the file now is.
   function renameCase(dir, have, want, said) {
     const from = path.join(dir, have);
-    const temp = path.join(dir, `${have}.case-${process.pid}.tmp`);
+    let temp = path.join(dir, `${have}.case-${process.pid}.tmp`);
+    for (let n = 1; fs.existsSync(temp); n++) temp = path.join(dir, `${have}.case-${process.pid}-${n}.tmp`);
     try {
       fs.renameSync(from, temp);
     } catch (e) {
@@ -705,11 +713,30 @@ function buildSite(options) {
     } catch (e) {
       if (!e.code) throw e;
       // Put back as it was, so the write lands where the file was.
-      try { fs.renameSync(temp, from); } catch (e2) { if (!e2.code) throw e2; }
+      try { fs.renameSync(temp, from); } catch (e2) {
+        if (!e2.code) throw e2;
+        printWarning(`could not rename ${said(have)} to ${said(want)} (${e.code}), nor put it back (${e2.code}): it is now at ${outRel(temp)}; rename it to ${said(want)} by hand`);
+        return false;
+      }
       printWarning(`could not rename ${said(have)} to ${said(want)} (${e.code}); it keeps its old spelling on this disk`);
       return false;
     }
     return true;
+  }
+
+  // A temporary name a letter-case rename left in a kept folder (a build stopped between its two steps, or a put-back
+  // the disk refused): said, never removed, as it holds the file.
+  function reportCaseTemps() {
+    const walk = (dir) => {
+      let entries;
+      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { if (!e.code) throw e; return; }
+      for (const e of entries) {
+        const full = path.join(dir, e.name);
+        if (/\.case-\d+(?:-\d+)?\.tmp$/.test(e.name)) printWarning(`left in kept folder: ${outRel(full)}, a temporary name from a letter-case rename that did not finish; give it back its name (the part before .case-) by hand`);
+        else if (e.isDirectory()) walk(full);
+      }
+    };
+    for (const d of config.preserveDirs) walk(path.join(outputDir, ...d.replace(/\/+$/, '').split('/')));
   }
 
   // No folder is made through a link in the site folder: the write that follows is refused by the writers above.
@@ -2993,6 +3020,7 @@ function buildSite(options) {
     }
     if (writes === 'all' && propPlan.props.length > 0) console.log(`Props: ${shipped.size} published (${written} files)`);
   }
+  if (!gm && writes === 'all') reportCaseTemps();
   if (keptRecord) cleanKeptRecord();
 
   // The licence notices for what the site ships (#428): written once everything else is, so it
