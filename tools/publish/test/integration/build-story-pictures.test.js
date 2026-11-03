@@ -644,12 +644,53 @@ describe('Story pictures: once per chapter, a held-back wrap-up on a page where 
   after(() => s.cleanup());
   const INTRO = 'story/chapter-1-docks-intro.html';
 
-  it('the GM page pictures its own recap, and the next page pictures what the player site pictures', () => {
+  it('the GM page leads with the recap the player page shows, pictured as it is there, then its own wrap-up marked', () => {
     assert.deepEqual(captions(read(s.player, INTRO)), ['Mara Quill']);
-    assert.deepEqual(captions(read(s.gm, INTRO)), ['Captain Rook']);
-    assert.match(read(s.gm, INTRO), /players see another Story page here/);
+    const gm = read(s.gm, INTRO);
+    assert.deepEqual(captions(gm), ['Mara Quill']);
+    assert.ok(gm.includes('<a href="../npcs/mara-quill.html">Mara Quill</a> kept the books.'), 'the players\' recap is on the GM page');
+    assert.ok(gm.includes('Captain Rook kept the books.'), 'the held-back wrap-up is on the GM page too');
+    assert.ok(gm.indexOf('Mara Quill</a> kept the books.') < gm.indexOf('Captain Rook kept the books.'), 'the players\' recap leads');
+    assert.doesNotMatch(gm, /players see another Story page here/);
+    assert.match(gm, /This wrap-up is held back from players/);
+  });
+
+  it('the next page pictures what the player site pictures', () => {
     assert.deepEqual(captions(read(s.player, STORY_1)), ['Captain Rook']);
     assert.deepEqual(captions(read(s.gm, STORY_1)), ['Captain Rook']);
+  });
+
+  it('every link resolves and the leak gate finds nothing', () => {
+    assert.deepEqual(brokenLinks(s.player.dir), []);
+    assert.deepEqual(brokenLinks(s.gm.dir), []);
+    assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.player.dir }).findings, []);
+  });
+});
+
+describe('Story pictures: a session whose wrap-up is held back, where players see another wrap-up and the session has its own recap (#569)', () => {
+  // The session's own recap is not what the player page shows: the player page is made from the other wrap-up in the
+  // session's folder. The GM page leads with that one, as the players' recap.
+  const hub = SESSION(1).replace('HUB-BODY-1: what the GM prepped.\n', '## Narrative Recap\n\nHUB-RECAP-1: the GM\'s own notes.\n');
+  const other = '---\ntype: session_wrap\n---\n\n# Session 1 Recap\n\n## Narrative Recap\n\nCaptain Rook rowed the party out.\n';
+  const s = buildBoth(storyVault({
+    ...PEOPLE,
+    'Sessions/Session 1.md': null,
+    'Sessions/Session 1 Wrap-Up.md': null,
+    'Sessions/Session 1 Play Notes.md': null,
+    'Sessions/One/Session 1.md': hub,
+    'Sessions/One/Session 1 Wrap-Up.md': withRecap('[[Mara Quill]] waited.').replace('---\n', '---\npublish: false\n'),
+    'Sessions/One/Session 1 Recap.md': other,
+  }));
+  after(() => s.cleanup());
+
+  it('the GM page\'s players\' recap is the one the player page shows', () => {
+    const player = read(s.player, STORY_1);
+    assert.ok(player.includes('Captain Rook rowed the party out.'), 'the player page is made from the other wrap-up');
+    assert.ok(!player.includes('HUB-RECAP-1'));
+    const gm = read(s.gm, STORY_1);
+    assert.ok(gm.includes('Captain Rook rowed the party out.'), 'the GM page leads with what players see');
+    assert.ok(!gm.includes('HUB-RECAP-1'), 'not the session\'s own recap, which players do not see here');
+    assert.deepEqual(captions(gm), captions(player));
   });
 
   it('every link resolves and the leak gate finds nothing', () => {
