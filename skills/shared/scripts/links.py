@@ -5,7 +5,7 @@
     links.py VAULT retarget NAME NOTE [--keep-text] [--write]
     links.py VAULT unlink NAME [NAME ...] [--write]
     links.py VAULT unlink NAME [NAME ...] --in NOTE [--in NOTE ...]
-                          [--as WORDS] [--bare] [--write]
+                          [--as WORDS] [--bare] [--pick N ...] [--write]
 
 With no command it prints a report and writes nothing: a header line, then
 one tab-separated row per broken name.
@@ -48,6 +48,10 @@ has no display text of its own, where the note's name would read as a file
 name (`[[Scene_02_Quay]]` becomes WORDS); a link with display text keeps
 it. A link with no words to a note marked `withheld: true` is KEPT until
 `--as` gives them: the name is the secret, so it is never the words.
+`--pick N` (again for more) turns only the links of those WOULD-CHANGE
+rows, counted from 1 in the order the preview prints them; every other
+link it would have turned is KEPT as not picked. Run the preview and the
+--write with the same arguments, so the numbers mean the same links.
 
 Both fixes print what they would change and write nothing without
 --write. With --write every note is written or none is. Links in a code
@@ -263,6 +267,10 @@ class Plan:
     changes: list[Change] = field(default_factory=list)
     # (note, line, the link, why): links a fix leaves as written.
     kept: list[tuple[str, int, str, str]] = field(default_factory=list)
+    # `--pick`: the WOULD-CHANGE rows to turn, from 1; None turns them all.
+    picks: set[int] | None = None
+    # Links the fix would turn, picked or not, in the order they are met.
+    offered: int = 0
 
 
 # (destination, #heading or ^block, |display), is it an embed, is it in
@@ -278,6 +286,7 @@ KEPT = {
     "withheld": "the note is marked withheld and this link gives no words, "
                 "so unlinking would print its name; left as written (--as "
                 "WORDS gives the words)",
+    "unpicked": "not picked (--pick); left as written",
 }
 
 
@@ -355,21 +364,28 @@ def _rewrite(rel: str, text: str, match: Match, fix: Fix,
             if after is None:
                 p.kept.append((rel, ll.lineno, m.group(0), why))
                 return m.group(0)
-            if after != m.group(0):
-                p.changes.append(Change(rel, ll.lineno, m.group(0), after))
+            if after == m.group(0):
+                return after
+            p.offered += 1
+            if p.picks is not None and p.offered not in p.picks:
+                p.kept.append((rel, ll.lineno, m.group(0), "unpicked"))
+                return m.group(0)
+            p.changes.append(Change(rel, ll.lineno, m.group(0), after))
             return after
         out.append(sub_wikilinks(ll.line, ll.spans, sub))
     return "".join(out)
 
 
 def _plan(vault: Path, targets: set[str], fix: Fix,
-          only: set[str] | None = None, match: Match | None = None) -> Plan:
+          only: set[str] | None = None, match: Match | None = None,
+          picks: list[int] | None = None) -> Plan:
     """`targets` are link targets by name (`link_target`); `match`, when
-    given, decides link by link instead (a name given with its path)."""
+    given, decides link by link instead (a name given with its path).
+    `picks`: turn only those WOULD-CHANGE rows (from 1)."""
     if match is None:
         def match(body: str) -> bool:
             return link_target(body) in targets
-    p = Plan(vault)
+    p = Plan(vault, picks=set(picks) if picks else None)
     for rel in _walk(vault, ".md"):
         if only is not None and _nfc(rel) not in only:
             continue
@@ -384,6 +400,10 @@ def _plan(vault: Path, targets: set[str], fix: Fix,
         new = _rewrite(rel, text, match, fix, p)
         if new != text:
             p.originals[rel], p.texts[rel] = text, new
+    if p.picks and max(p.picks) > p.offered:
+        raise LinksError(f"--pick {max(p.picks)}: there are only "
+                         f"{p.offered} link(s) to pick from; run the preview "
+                         f"again without --pick")
     return p
 
 
@@ -420,9 +440,11 @@ def plan_retarget(vault: Path, name: str, note: str,
 def plan_unlink(vault: Path, names: list[str],
                 within: list[str] | None = None,
                 bare: str | None = None,
-                take_bare: bool = False) -> Plan:
+                take_bare: bool = False,
+                picks: list[int] | None = None) -> Plan:
     """`within` keeps the fix to those notes, and then a name need not be
-    broken: a link to a note that exists is turned into words there."""
+    broken: a link to a note that exists is turned into words there.
+    `picks` (with `within`) turns only those WOULD-CHANGE rows."""
     if not within:
         return _plan(vault, _broken_names(vault, names), _unlink)
     notes = {_nfc(n) for n in _walk(vault, ".md")}
@@ -434,7 +456,7 @@ def plan_unlink(vault: Path, names: list[str],
         only.add(rel)
     withheld = _withheld_names(vault, names)
     return _plan(vault, set(), _unlink_as(bare, withheld), only,
-                 _names_match(vault, names, sorted(notes), take_bare))
+                 _names_match(vault, names, sorted(notes), take_bare), picks)
 
 
 def _withheld_names(vault: Path, names: list[str]) -> set[str]:
@@ -563,6 +585,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--in", dest="within", action="append", metavar="NOTE")
     ap.add_argument("--as", dest="bare", metavar="WORDS")
     ap.add_argument("--bare", dest="take_bare", action="store_true")
+    ap.add_argument("--pick", dest="picks", action="append", type=int,
+                    metavar="N")
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
         print(f"links.py: not a directory: {args.vault.as_posix()}",
@@ -583,6 +607,10 @@ def main(argv: list[str] | None = None) -> int:
         usage = "--as and --bare go with unlink --in"
     elif args.bare is not None and not args.bare.strip():
         usage = "--as takes the words to print"
+    elif args.picks and not args.within:
+        usage = "--pick goes with unlink --in"
+    elif args.picks and min(args.picks) < 1:
+        usage = "--pick takes a row number from 1"
     if usage:
         print(f"links.py: {usage}", file=sys.stderr)
         return 2
@@ -595,7 +623,7 @@ def main(argv: list[str] | None = None) -> int:
                               args.keep_text)
         else:
             p = plan_unlink(args.vault, args.names, args.within,
-                            args.bare, args.take_bare)
+                            args.bare, args.take_bare, args.picks)
         if args.write:
             apply(p)
         print("\n".join(rows(p, done=args.write)))
