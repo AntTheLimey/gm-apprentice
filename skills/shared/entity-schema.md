@@ -138,10 +138,10 @@ placeholder in place of the name. `gm_aliases` rewrites a secret name;
 own flag and is never published. Wrap-up step 4d lifts it when the
 GM confirms the note came out in play.
 
-`companion` (optional boolean on an NPC, absent means false) marks
-the NPC who travels with the party: a GURPS Ally, a D&D companion,
-follower or familiar, a Blades cohort. The site's Story pages never
-picture a companion, as they never picture a PC.
+`companion` (optional boolean on an NPC or creature, absent means
+false) marks the NPC who travels with the party: a GURPS Ally, a D&D
+companion, follower or familiar, a Blades cohort. The site's Story
+pages never picture a companion, as they never picture a PC.
 
 ### Relationships Block
 

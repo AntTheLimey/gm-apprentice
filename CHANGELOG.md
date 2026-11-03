@@ -13,7 +13,7 @@ Story pages picture each person and place once per chapter, and an NPC who trave
 
 ### Added
 
-- `companion: true` on an NPC note marks the NPC who travels with the party: a GURPS Ally, a D&D companion, follower or familiar, a Blades in the Dark cohort, or simply a companion in Call of Cthulhu. Story pages treat a companion as they treat a PC: never pictured, and their names still keep a shorter name inside them from counting ("Wyndham" in "Thomas Wyndham" pictures nobody). Absent means false. New vaults' NPC template carries `companion: false`; an existing vault's untouched NPC template is updated by every-pass `templates`. The schema check names a value that is not `true` or `false`.
+- `companion: true` on an NPC note (or a creature note, for a familiar or animal companion) marks the NPC who travels with the party: a GURPS Ally, a D&D companion, follower or familiar, a Blades in the Dark cohort, or simply a companion in Call of Cthulhu. Story pages treat a companion as they treat a PC: never pictured, and their names still keep a shorter name inside them from counting ("Wyndham" in "Thomas Wyndham" pictures nobody). Absent means false. New vaults' NPC template carries `companion: false`; an existing vault's untouched NPC template is updated by every-pass `templates`. The schema check names a value that is not `true` or `false`, and `companion: true` on any other type of note.
 - `COMPANION_FLAG_UNREADABLE`: a `companion:` value that is not true or false (`tru`, a list) is a build warning and a Site Faults finding. The note is read as not a companion, so it may be pictured on Story pages until the value is fixed.
 
 ### Changed

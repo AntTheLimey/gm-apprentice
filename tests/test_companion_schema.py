@@ -23,8 +23,8 @@ vs = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(vs)
 
 
-def companion_errors(line: str) -> list[str]:
-    fm = "type: npc\ncanon_status: DRAFT"
+def companion_errors(line: str, etype: str = "npc") -> list[str]:
+    fm = f"type: {etype}\ncanon_status: DRAFT"
     if line:
         fm += "\n" + line
     fd, name = tempfile.mkstemp(suffix=".md")
@@ -49,6 +49,21 @@ class CompanionValidationTests(unittest.TestCase):
                 errors = companion_errors(line)
                 self.assertEqual(len(errors), 1, errors)
                 self.assertIn("true or false", errors[0])
+
+
+    def test_a_companion_is_an_npc_or_a_creature(self):
+        # A familiar or an animal companion is often a creature note.
+        for etype in ("npc", "creature"):
+            with self.subTest(type=etype):
+                self.assertEqual(companion_errors("companion: true", etype), [])
+
+    def test_a_companion_mark_on_any_other_type_is_named(self):
+        for etype in ("location", "pc", "faction"):
+            with self.subTest(type=etype):
+                errors = companion_errors("companion: true", etype)
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn("npc or creature", errors[0])
+                self.assertEqual(companion_errors("companion: false", etype), [])
 
 
 class CompanionDocsTests(unittest.TestCase):
