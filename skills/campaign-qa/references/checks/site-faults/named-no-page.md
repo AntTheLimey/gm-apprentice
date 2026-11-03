@@ -114,10 +114,13 @@ secret in the open:
    close below it. Make the frontmatter changes.
 2. Turn the telling links into words:
    `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/links.py" "<vault>" unlink "<note name>" --in "<page>"`
-   (a preview; again with `--write`). Where two notes share the name,
-   give the note's vault path as the name. A link that gives no path
-   then prints as `KEPT`: read each line, and when it means this note
-   run the command again with `--bare`.
+   previews every link to the note on that page, one `WOULD-CHANGE`
+   row each. Only the telling ones change: run it again with
+   `--pick N` for each of those rows (counted from 1, in the order
+   printed) and `--write`, so a harmless link keeps its destination.
+   Where two notes share the name, give the note's vault path as the
+   name. A link that gives no path then prints as `KEPT`: read each
+   line, and when it means this note add `--bare`.
 3. Run `SITE explain "<note>" --shown` again and read all of it: the
    page, the card and the search lines. Nothing that moved and nothing
    secret may be anywhere in it. What it prints is all the site would
@@ -164,8 +167,8 @@ Not something in the world, so never a page. Offer:
   the vault path as the name; a link with no path prints as `KEPT`,
   and `--bare` turns it once the GM has agreed it means this note. It
   changes every link to the note on those pages, hidden parts
-  included; where the GM wants a private
-  link kept, edit the open lines by hand instead.
+  included; where the GM wants a link kept, add `--pick N` for each
+  row to change instead.
 - **Reword** a sentence that only made sense as a link, by hand.
 - **A link in frontmatter.** `unlink` leaves frontmatter alone and
   lists each such link as `KEPT`, so the row comes back. Where a page

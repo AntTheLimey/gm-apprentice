@@ -50,7 +50,8 @@ changes the next time it is published.
   and a fix must land in the vault that was checked.
 - `WARNING` rows, and `ERROR` rows for `NAMED_NO_PAGE` and
   `WITHHELD_PUBLISHED`: the findings,
-  one each. The table below says how much each one matters.
+  one each. The table below says how much each one matters. A row ends
+  with the tool's fix, after a dash; offer it, in plain words.
 - A closing `INFO … settled as "stays hidden"` row: notes the GM has
   already said no to. Never raise them; give the count in the report.
 - No rows at all: the site has none of these faults. Say so in a line.
@@ -111,13 +112,10 @@ often it is printed and the sentence as the page prints it.
 
 Find where the note writes it: the body, the title, a frontmatter
 field the page prints (`occupation`, a relationship's `description`),
-or the name of another page it links. Show the sentence. Offer:
+or the name of another page it links. Show the sentence and offer the
+row's two fixes, reword or link it. In the title or a frontmatter field
+rewording is the only fix.
 
-- **Reword** it to the name the players know. In the title or a
-  frontmatter field this is the only fix.
-- **Link it**, in body text: write the name as a link
-  (`[[Old Smuggler]]`). The site prints the note's public title for a
-  linked secret name.
 - Where the name is part of another page's title, that page's row is
   the one to fix; this one goes with it.
 - A row that ends "printed on the index or listing page: …" is a name
@@ -132,9 +130,8 @@ If the GM says the name is no longer a secret, move it from
 A word or phrase the GM listed under `player_site.never_show` is printed
 on a published page. The row gives the note, the word, how often it is
 printed and the sentence. A public name that holds the word is still a
-row: the GM said never. Show the sentence. Offer: **reword** it; or
-**move** it into a part of the note players do not see (a `## GM Notes`
-section, a gm-only block). A row ending "printed on the index or listing
+row: the GM said never. Show the sentence and offer the row's fix. A
+row ending "printed on the index or listing
 page: …" comes from a frontmatter field: reword that field. If the GM
 says the word no longer needs guarding, take it off the list on their
 word: `node "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js"
@@ -145,10 +142,9 @@ settings remove player_site.never_show "<word>" --vault "<vault>"`.
 A note marked `withheld: true` keeps its own name secret: its file
 name, title and `aliases`. The row gives the page the name is on (an
 attachment's path when the name is in a copied file's name), the name,
-the withheld note, how often it is printed and the sentence. Offer, as
-for `ALIAS_IN_PROSE`: **reword** it to what the players know; or in
-body text **link** the note, which prints a neutral word for the
-kind of note in its place.
+the withheld note, how often it is printed and the sentence. Offer the
+row's fix, as for `ALIAS_IN_PROSE`; a linked withheld note prints a
+neutral word in its name's place.
 For an attachment, rename the file and the embeds that name it.
 
 A name in plain text has no "leave it" answer, and `stays hidden:`
@@ -189,30 +185,19 @@ propose `companion: true` or `companion: false` as the GM says.
 ## FENCE_UNCLOSED
 
 A code fence opens and is never properly closed, so a hidden block
-below it is published. A fence closes only on a line of the same marks,
-at least as many as opened it, with nothing after them: four backticks
-are not closed by three, nor a fence by a line that goes on with words.
-The row gives the fence's line and the marker's. Read from the fence
-down, show the GM where the code ends, and put a proper closing fence
-there on a yes.
+below it is published. The row gives the fence's line, the marker's,
+and what a closing fence is. Read from the fence down, show the GM
+where the code ends, and put a closing fence there on a yes.
 
 ## COMMENT_STRAY
 
-A `%%` that is not a comment, or a comment left open in a frontmatter
-field. The row quotes the line, or the frontmatter field.
-
-- **Straight after a number** (`10%% now … 5%% later`): everything
-  between the two is hidden. If a percent sign was meant, propose a
-  single `%`. If a comment was meant, propose a space before the
-  opening `%%`.
-- **Never closed:** it hides the rest of the note or the field. Propose
-  the closing `%%` where the comment ends, or removing the stray one.
-- A `%%` in indented text (four spaces or a tab) is a comment like any
-  other. Only a fenced code block shows one as written.
-- **A `<!--`, `<!-- gm-only -->` or `<!-- spoiler -->` never closed in
-  a frontmatter field:** it hides the rest of the field. Propose the
-  closing `-->` or closing marker where the hidden words end, or
-  removing the opener.
+A `%%` that is not a comment, or a comment (`%%`, `<!--`, a gm-only or
+spoiler marker) left open in a frontmatter field. The row quotes the
+line or the field and says what it hides. Read the line and propose
+the part of the row's fix that fits what was meant (a percent sign, a
+comment), any closing mark where the hidden words end. A `%%` in indented
+text (four spaces or a tab) is a comment like any other. Only a fenced
+code block shows one as written.
 
 ## NAMED_NO_PAGE
 
