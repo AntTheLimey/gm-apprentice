@@ -67,16 +67,22 @@ def run(text, skill, *extra):
 
 
 class SkillDefaultTests(unittest.TestCase):
-    def test_an_attribute_default_is_added_in_order_for_0_points(self):
+    def test_a_default_is_added_in_order_for_0_points(self):
+        # Knife: DX-4 = 10, Shortsword-3 = 12 (the tables' B208 default).
         got, after = run(SHEET, "Knife", "--write")
         self.assertEqual(got.returncode, 0, got.stderr)
         self.assertTrue(got.stdout.startswith(
             "ADDED\t"), got.stdout)
-        self.assertIn("| Knife | DX/E | DX-4 | [0] | 10 | 10 | "
-                      "(default DX-4, level 10)", got.stdout)
+        self.assertIn("| Knife | DX/E | DX-2 | [0] | 12 | 12 | "
+                      "(default Shortsword-3, level 12)", got.stdout)
         self.assertIn("| Guns (Pistol) | DX/E | DX+2 | [4] | 16 | 16 |\n"
-                      "| Knife | DX/E | DX-4 | [0] | 10 | 10 |\n"
+                      "| Knife | DX/E | DX-2 | [0] | 12 | 12 |\n"
                       "| Shortsword |", after)
+
+    def test_an_attribute_default_when_no_bought_skill_gives_more(self):
+        _p, msg, _new = gsd.plan(SHEET, "Axe/Mace")
+        self.assertIn("| Axe/Mace | DX/A | DX-5 | [0] | 9 | 9 | "
+                      "(default DX-5, level 9)", msg)
 
     def test_a_preview_writes_nothing(self):
         got, after = run(SHEET, "Knife")
@@ -100,8 +106,11 @@ class SkillDefaultTests(unittest.TestCase):
         got, after = run(SHEET, "Brawling", "--write")
         self.assertEqual(got.returncode, 0, got.stderr)
         self.assertTrue(got.stdout.startswith("NO-DEFAULT\t"), got.stdout)
-        self.assertIn("Brawling has no default (B182): it cannot be used "
-                      "unskilled, so nothing is added", got.stdout)
+        self.assertIn("Brawling has no default (B173): it can't be used "
+                      "until at least 1 point is spent on it", got.stdout)
+        got, _after = run(SHEET, "Karate", "--write")
+        self.assertIn("Karate has no default (B173): it can't be used "
+                      "until at least 1 point is spent on it", got.stdout)
         self.assertEqual(after, SHEET)
 
     def test_a_skill_on_the_sheet_is_left(self):
@@ -122,18 +131,39 @@ class SkillDefaultTests(unittest.TestCase):
         self.assertIn("| Underwater Basket Weaving | DX/A | DX-5 | [0] | 9 |",
                       after)
 
-    def test_a_specialty_with_a_sibling_bought_asks_for_its_defaults(self):
-        # The tables list Guns (Rifle) at DX-4 only; the sheet has Guns
-        # (Pistol), which may give a better default.
-        got, after = run(SHEET, "Guns (Rifle)", "--write")
+    def test_a_specialty_defaults_from_a_bought_sibling_in_the_tables(self):
+        # B198: Guns specialties at -2 from each other, -4 to or from GL,
+        # Gyroc and LAW; B179: Beam Weapons (Pistol) from Guns (Pistol)-4.
+        cases = [("Guns (Rifle)", "| Guns (Rifle) | DX/E | DX+0 | [0] | 14 | 14 |",
+                  "Guns (Pistol)-2"),
+                 ("Guns (Gyroc)", "| Guns (Gyroc) | DX/E | DX-2 | [0] | 12 | 12 |",
+                  "Guns (Pistol)-4"),
+                 ("Beam Weapons (Pistol)", "| Beam Weapons (Pistol) | DX/E | "
+                  "DX-2 | [0] | 12 | 12 |", "Guns (Pistol)-4")]
+        for skill, row, source in cases:
+            kind, msg, _new = gsd.plan(SHEET, skill)
+            self.assertEqual(kind, "WOULD-ADD", msg)
+            self.assertIn(row, msg)
+            self.assertIn(f"(default {source},", msg)
+
+    def test_a_specialty_the_tables_give_no_sibling_default_asks(self):
+        # Gunner's defaults between specialties are not in the tables.
+        sheet = SHEET.replace("| Guns (Pistol) |",
+                              "| Gunner (Beams) | DX/E | DX+0 | [1] | 14 | 14 |\n"
+                              "| Guns (Pistol) |")
+        got, after = run(sheet, "Gunner (Cannon)", "--write")
         self.assertEqual(got.returncode, 1)
         self.assertTrue(got.stdout.startswith("CHECK-DEFAULT\t"), got.stdout)
-        self.assertIn("guns (pistol) at 16", got.stdout)
-        self.assertEqual(after, SHEET)
-        got, after = run(SHEET, "Guns (Rifle)", "--difficulty", "DX/E",
-                         "--default", "DX-4, Guns (Pistol)-2", "--write")
+        self.assertIn("gunner (beams) at 14", got.stdout)
+        self.assertEqual(after, sheet)
+        got, after = run(sheet, "Gunner (Cannon)", "--difficulty", "DX/E",
+                         "--default", "DX-4, Gunner (Beams)-4", "--write")
         self.assertEqual(got.returncode, 0, got.stderr)
-        self.assertIn("| Guns (Rifle) | DX/E | DX+0 | [0] | 14 | 14 |", after)
+        self.assertIn("| Gunner (Cannon) | DX/E | DX-4 | [0] | 10 | 10 |", after)
+
+    def test_a_list_of_specialties_is_one_default_each(self):
+        self.assertEqual(gsd._terms("DX-4, Guns (Pistol or Rifle)-2, Axe/Mace-3"),
+                         ["DX-4", "Guns (Pistol)-2", "Guns (Rifle)-2", "Axe/Mace-3"])
 
     def test_the_templates_empty_row_is_taken(self):
         sheet = SHEET.replace(

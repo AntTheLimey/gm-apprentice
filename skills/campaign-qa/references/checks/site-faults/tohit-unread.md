@@ -26,9 +26,9 @@ and the GURPS tables and prints one row:
 - `ADDED`: the Skills table row it wrote. Write the weapon row's Skill
   cell as the skill and that level (`Knife-10`), and report both.
 - `HAVE`: the skill is in the table; use its level the same way.
-- `NO-DEFAULT`: the skill cannot be used unskilled, so nothing is
-  added. Report that for this row; the GM may buy the skill or drop
-  the weapon row.
+- `NO-DEFAULT`: the skill can't be used until at least 1 point is
+  spent on it, so nothing is added. Report that for this row; the GM
+  may buy the skill or drop the weapon row.
 - `NOT-FOUND` or `CHECK-DEFAULT`: ask ttrpg-expert for the skill's
   difficulty and every default, with the page, and run it again with
   `--difficulty` and `--default "<defaults>"`.

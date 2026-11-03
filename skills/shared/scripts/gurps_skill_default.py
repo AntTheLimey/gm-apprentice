@@ -20,8 +20,8 @@ ttrpg-expert's answer.
 Prints one tab-separated row, `KIND<TAB>sheet<TAB>what`:
 
   HAVE          the skill is in the Skills table already; nothing written
-  NO-DEFAULT    the skill has no default: it cannot be used unskilled,
-                so nothing is added
+  NO-DEFAULT    the skill has no default: it can't be used until at
+                least 1 point is spent on it, so nothing is added
   WOULD-ADD     the row it would add, and the default its level comes
                 from (ADDED with --write)
   NOT-FOUND     the tables do not list the skill: give --difficulty and
@@ -68,6 +68,22 @@ def _key(name: str) -> str:
 
 def _stem(name: str) -> str:
     return _key(name).split(" (")[0]
+
+
+def _terms(defaults: str) -> list[str]:
+    """A Defaults cell as one term each: `Guns (Pistol or Rifle)-2` is
+    `Guns (Pistol)-2` and `Guns (Rifle)-2`, as the tables write the
+    defaults between a skill's specialties."""
+    out = []
+    for term in defaults.split(","):
+        term = term.strip()
+        m = re.match(r"^(.+?) \((.+ or .+)\)\s*([+\-−]\s*\d+)$", term)
+        if m:
+            out += [f"{m.group(1)} ({one.strip()}){m.group(3)}"
+                    for one in m.group(2).split(" or ")]
+        elif term:
+            out.append(term)
+    return out
 
 
 def listed(skill: str) -> tuple[str, str, str] | None:
@@ -165,7 +181,7 @@ def plan(text: str, skill: str, difficulty: str | None = None,
         defaults = defaults if defaults is not None else found[1]
         page = found[2]
         if " (" in _key(skill) and not any(
-                _stem(t) == _stem(skill) for t in defaults.split(",")):
+                _stem(t) == _stem(skill) for t in _terms(defaults)):
             others = sorted(n for n in bought
                             if n != _key(skill) and _stem(n) == _stem(skill))
             if others:
@@ -181,13 +197,13 @@ def plan(text: str, skill: str, difficulty: str | None = None,
         raise Refused("CANNOT", f"{skill}: difficulty \"{difficulty}\" is "
                       "not of the form DX/A")
     if _key(defaults) in NO_DEFAULT:
-        return ("NO-DEFAULT", f"{skill} has no default"
-                + (f" ({page})" if page else "")
-                + ": it cannot be used unskilled, so nothing is added", None)
+        # B173: a skill with no default is unusable without points.
+        return ("NO-DEFAULT", f"{skill} has no default (B173): it can't be "
+                "used until at least 1 point is spent on it", None)
 
     best = None
-    for term in defaults.split(","):
-        m = TERM_RE.match(term.strip())
+    for term in _terms(defaults):
+        m = TERM_RE.match(term)
         if not m:
             continue
         base, sign, num = m.group(1).strip(), m.group(2), int(m.group(3))
