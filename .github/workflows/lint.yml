@@ -132,7 +132,14 @@ jobs:
           VAULT_CHECK_REQUIRE_NODE: '1'
         run: |
           pip install 'pytest>=8,<10' 'pytest-xdist>=3,<4'
+          python scripts/temp_guard.py snapshot "$RUNNER_TEMP/temp-before.txt"
           python -m pytest tests -q -n auto
+
+      # The tests remove the temp folders they make (#565); this fails the job,
+      # naming them, if anything is left behind, on a red test run too.
+      - name: The Python tests left nothing in the temp folder
+        if: success() || failure()
+        run: python scripts/temp_guard.py check "$RUNNER_TEMP/temp-before.txt"
 
       - name: Every system ships its NOTICE.md with the required text
         run: python scripts/attribution_check.py

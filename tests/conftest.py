@@ -13,14 +13,45 @@ tidy. Both of these once made a test pass or fail by what ran before it.
   changes it (a migration moves its settings out, a repin replaces its
   tool) needs `private=True`. The test that leaves it changed fails here,
   naming itself, and the folder is put back so the next test is not blamed.
+
+A third piece is the system temp folder (#565): every folder
+`tempfile.mkdtemp` makes in it while the tests run is noted and removed when
+the process (each `-n auto` worker) exits, so no test has to remember its own
+clean-up. Weeks of runs without it left over a million folders behind.
 """
 
+import atexit
+import os
+import shutil
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+_MADE_TEMP_DIRS: list[str] = []
+_TEMP_ROOT = os.path.realpath(tempfile.gettempdir())
+_mkdtemp = tempfile.mkdtemp
+
+
+def _mkdtemp_noted(*args, **kwargs):
+    made = _mkdtemp(*args, **kwargs)
+    full = os.path.realpath(os.fsdecode(made))
+    # Only folders inside the temp folder: one a test makes inside its own fixture is left to it.
+    if full.startswith(_TEMP_ROOT + os.sep):
+        _MADE_TEMP_DIRS.append(full)
+    return made
+
+
+tempfile.mkdtemp = _mkdtemp_noted
+
+
+@atexit.register
+def _remove_made_temp_dirs():
+    for made in _MADE_TEMP_DIRS:
+        shutil.rmtree(made, ignore_errors=True)
 
 
 @pytest.fixture(autouse=True)

@@ -40,13 +40,21 @@ def _link_and_config(site: Path) -> None:
                                             encoding="utf-8")
 
 
+def _remove_at_exit(site: Path) -> None:
+    """Removes the site folder when the tests end, and the GM site folder the
+    publish tool makes beside it (`<site>-gm`) for a test that builds or
+    migrates a GM site (#565)."""
+    atexit.register(shutil.rmtree, site, ignore_errors=True)
+    atexit.register(shutil.rmtree, site.with_name(site.name + "-gm"), ignore_errors=True)
+
+
 def private_site() -> Path:
     """A site folder of its own, for a test that changes its site (a
     migration moves settings out of vault.config.json, a repin replaces the
     tool). The shared folder must never be changed: other tests, some of
     them built at import time, rely on it as it was made."""
     site = Path(tempfile.mkdtemp(prefix="vc-site-"))
-    atexit.register(shutil.rmtree, site, ignore_errors=True)
+    _remove_at_exit(site)
     _link_and_config(site)
     return site
 
@@ -96,7 +104,7 @@ def new_site(vault: Path, cleanup: Callable[[Path], object],
         return private_site()
     if _SITE is None:
         _SITE = Path(tempfile.mkdtemp(prefix="vc-site-"))
-        atexit.register(shutil.rmtree, _SITE, ignore_errors=True)
+        _remove_at_exit(_SITE)
     # The folderMap is for the folders test notes live in, so the tool
     # publishes them.
     restore_shared_site()
