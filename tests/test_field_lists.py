@@ -57,8 +57,45 @@ class Generated(unittest.TestCase):
         text = gen.outputs()[gen.SCHEMA]
         for entry in gen.SCHEMA_ENTRIES:
             line = next(ln for ln in text.split("\n\n") if f"**{entry.label}:**" in ln)
-            for field in gen.entry_fields(entry):
-                self.assertIn(f"`{field}`", line, f"{entry.label} lacks {field}")
+            # From the templates themselves, not from the generator's own list,
+            # so a field the generator drops is caught.
+            for t in entry.types:
+                for field in rules.template_fields(t):
+                    if field in gen.NOT_LISTED and field not in entry.keep:
+                        continue
+                    self.assertIn(f"`{field}`", line, f"{entry.label} lacks {field}")
+
+    # A template type with no generated list must be named here, with why.
+    NOT_IN_SCHEMA = {
+        "chapter": "the narrative hierarchy section describes it",
+        "scene": "the scene section and its own template describe it",
+        "session": "the session document chain describes it",
+        "session-plan": "the session document chain describes it",
+        "session-wrap-up": "an older name of session_wrap",
+        "session-wrapup": "an older name of session_wrap",
+        "session_wrap": "the session document chain describes it",
+    }
+    NOT_IN_REFERENCE = {
+        "campaign_overview": "its fields are prose in the Campaign Overview section",
+        "character-story": "it renders inside its PC's page",
+        "plan": "plans never publish",
+        "prop": "props have their own reference (prop-styles)",
+        "scene": "scenes publish through Story pages",
+        "session-plan": "plans never publish",
+        "session-wrap-up": "an older name of session_wrap",
+        "session-wrapup": "an older name of session_wrap",
+        "session_wrap": "wrap-ups fold into Story pages",
+        "world_flags": "world flags never publish",
+    }
+
+    def test_every_template_type_has_a_list_or_a_named_reason(self):
+        templated = {t for t in rules.known_types() if rules.template_sources(t)}
+        in_schema = {t for e in gen.SCHEMA_ENTRIES for t in e.types}
+        in_reference = {t for e in gen.REFERENCE_ENTRIES.values() for t in e.types}
+        self.assertEqual(sorted(templated - in_schema), sorted(self.NOT_IN_SCHEMA),
+                         "a template type has no entity-schema list and no reason here")
+        self.assertEqual(sorted(templated - in_reference), sorted(self.NOT_IN_REFERENCE),
+                         "a template type has no schema-reference list and no reason here")
 
     def test_a_hand_note_never_names_a_field_the_template_has(self):
         """`also` is for what only the site reads; a field the template
