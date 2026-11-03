@@ -23,10 +23,8 @@ handle it as "A link in frontmatter" below, whatever kind the note is.
 
 An `ERROR` row, `withheld entity`, is a note marked `withheld: true`:
 it must stay off the site, so there is no page to give it. The links
-print a neutral word. Offer to turn them into words the GM agrees:
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/links.py" "<vault>"
-unlink "<note's vault path, no .md>" --in "<page>" --as "<words>"` (a
-preview; again with `--write`). If the neutral word will do, that is a
+print a neutral word. Offer to turn them into words the GM agrees, with
+the row's command. If the neutral word will do, that is a
 "stays hidden" for this row only, recorded as under "On no" below: it
 settles the link report and nothing else. Skip steps 1 to 4 below.
 
@@ -157,15 +155,13 @@ the row is gone. The build's warning counts only what is not settled.
 
 Not something in the world, so never a page. Offer:
 
-- **Plain words.** The links on the pages that name it become their
-  words:
-  `links.py "<vault>" unlink "<note name>" --in "<page>" [--in "<page>" …]`.
-  A link with its own wording keeps it. Where a link has none and the
+- **Plain words.** The row's command turns the links on the pages that
+  name it into their words (`--in` again for each page). A link with
+  its own wording keeps it. Where a link has none and the
   note's name would read as a file name (`Scene 02 Quay`), add
-  `--as "<words>"` with wording the GM agrees. Read the preview, then
-  run it again with `--write`. Where two notes share the name, give
-  the vault path as the name; a link with no path prints as `KEPT`,
-  and `--bare` turns it once the GM has agreed it means this note. It
+  `--as "<words>"` with wording the GM agrees. Where two notes share
+  the name, a link with no path prints as `KEPT`, and `--bare` turns
+  it once the GM has agreed it means this note. It
   changes every link to the note on those pages, hidden parts
   included; where the GM wants a link kept, add `--pick N` for each
   row to change instead.
