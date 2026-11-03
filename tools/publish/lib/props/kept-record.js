@@ -36,7 +36,7 @@ function readKeptRecord(file) {
   }
   const all = data.files && typeof data.files === 'object' && !Array.isArray(data.files) ? data.files : {};
   const files = Object.fromEntries(Object.entries(all).filter(([out, h]) => plainOut(out) && typeof h === 'string'));
-  const replaced = new Set(Array.isArray(data.replaced) ? data.replaced.filter((out) => typeof out === 'string' && out in files) : []);
+  const replaced = new Set(Array.isArray(data.replaced) ? data.replaced.filter((out) => typeof out === 'string' && Object.hasOwn(files, out)) : []);
   return { files, replaced, problem: null };
 }
 
@@ -44,7 +44,7 @@ function readKeptRecord(file) {
 // kept for the files it names that `files` holds too.
 function writeKeptRecord(file, files, replaced = []) {
   const sorted = Object.fromEntries(Object.entries(files).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
-  const replacedList = [...new Set(replaced)].filter((out) => out in sorted).sort();
+  const replacedList = [...new Set(replaced)].filter((out) => Object.hasOwn(sorted, out)).sort();
   const dir = path.dirname(file);
   fs.mkdirSync(dir, { recursive: true });
   // A temporary file a write that never finished left behind is cleared first.

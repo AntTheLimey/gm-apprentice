@@ -62,3 +62,13 @@ test('an old record with no list of replaced copies reads as none replaced', (t)
   fs.writeFileSync(file, JSON.stringify({ version: 1, files: { 'gazetteer/a.html': 'aaa' }, replaced: 'gazetteer/a.html' }));
   assert.deepEqual(readKeptRecord(file).replaced, new Set(), 'a list that is not one is none');
 });
+
+// CodeRabbit on #575: a path is matched as the record's own, never as an inherited name such as toString.
+test('a replaced path the record does not hold is dropped, even one named like a built-in', (t) => {
+  const file = tempSite(t);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify({ version: 1, files: {}, replaced: ['toString', 'constructor'] }));
+  assert.deepEqual([...readKeptRecord(file).replaced], []);
+  writeKeptRecord(file, {}, ['toString', '__proto__']);
+  assert.ok(!('replaced' in JSON.parse(fs.readFileSync(file, 'utf8'))));
+});
