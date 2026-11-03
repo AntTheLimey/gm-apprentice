@@ -285,9 +285,11 @@ Template fields: `doc_type`, `author`, `date`, `condition`,
 `current_holder`, `portrait`.
 <!-- /generated:fields-document -->
 
-Badges rendered: `doc_type`, `author`, `classification`, `date`.
-`classification` is read by the site and not in the template. Older
-notes with `document_type` and `date_written` are read the same way.
+Badges rendered: `document_type`, `author`, `classification`,
+`date_written` (the data-field names). They show the template's
+`doc_type` and `date`; an older note that carries `document_type` or
+`date_written` itself wins when both are set. `classification` is read
+by the site and not in the template.
 
 ### Chapter
 

@@ -69,6 +69,7 @@ LOCATION = Entry("location", "Location", ["location"], notes={
                        "fallback `location_type`"})
 FACTION = Entry("faction", "Faction/Organization", ["faction", "organization"], notes={
     "faction_type": "cult, guild, military, etc.; groups the Factions listing",
+    "goals": "a list",
     "leadership": "wiki-link",
     "territory": "wiki-link",
     "part_of": "wiki-link to the parent body, optional"})

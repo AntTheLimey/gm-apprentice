@@ -777,6 +777,20 @@ class SchemaMirrorTests(unittest.TestCase):
         self.mirror(vault, f"# Types\n\n## Type-Specific Fields\n\n{body}\n")
         self.assertEqual(mv.find_schema_mirror(vault), [])
 
+    def test_an_entry_that_differs_only_in_wrapping_is_not_offered(self):
+        vault = make_vault(self)
+        entries = self.canonical()
+        kept = dict(entries)
+        kept["Plan"] = entries["Plan"].replace("\n", " ")
+        kept["Event"] = entries["Event"].replace(", ", ",\n", 1)
+        self.assertNotEqual(kept["Plan"], entries["Plan"])
+        self.mirror(vault, "## Type-Specific Fields\n\n" + "\n\n".join(kept.values()) + "\n")
+        self.assertEqual(mv.find_schema_mirror(vault), [])
+        kept["Plan"] = kept["Plan"].replace("plan_type", "plan_kind")
+        self.mirror(vault, "## Type-Specific Fields\n\n" + "\n\n".join(kept.values()) + "\n")
+        (item,) = mv.find_schema_mirror(vault)
+        self.assertEqual(len(item.lines), 1)
+
     def test_stale_and_missing_entries_are_one_choice(self):
         vault = make_vault(self)
         entries = self.canonical()

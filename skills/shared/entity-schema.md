@@ -300,9 +300,9 @@ words, shown as a badge: "damp, candlelit, watchful"), `portrait`
 (establishing shot)
 
 **Faction/Organization:** `faction_type` (cult, guild, military, etc.;
-groups the Factions listing), `goals`, `resources`, `leadership`
-(wiki-link), `territory` (wiki-link), `tier`, `currentPlan`,
-`planProgress`, `alliances`, `recentActions`, `status`
+groups the Factions listing), `goals` (a list), `resources`,
+`leadership` (wiki-link), `territory` (wiki-link), `tier`,
+`currentPlan`, `planProgress`, `alliances`, `recentActions`, `status`
 (active/weakened/destroyed/allied/dormant), `part_of` (wiki-link to
 the parent body, optional), `portrait` (logo, seal or headquarters)
 
