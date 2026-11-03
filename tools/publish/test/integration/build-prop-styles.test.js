@@ -310,6 +310,22 @@ describe('fix round 1', () => {
     } finally { s.cleanup(); }
   });
 
+  // Review of #560: a style's file written over a GM's own file in a kept folder is said and marked, as a prop's is.
+  it("a style file that replaces a GM's own file in a kept folder says so and is marked", () => {
+    const s = buildBoth(LETTER('prop_stamp: PAID\nprop_address: props/letter.html\n'), { sites: [], player: { keep: ['props'] } });
+    try {
+      fs.mkdirSync(path.join(s.player.dir, 'props', 'styles', 't'), { recursive: true });
+      fs.writeFileSync(path.join(s.player.dir, 'props', 'styles', 't', 'style.css'), 'MINE');
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(lines.includes('  replaces kept file: props/styles/t/style.css'), lines.join('\n'));
+      const record = JSON.parse(fs.readFileSync(path.join(path.dirname(s.player.dir), '.gm-apprentice', 'kept-writes.json'), 'utf8'));
+      assert.deepEqual(record.replaced, ['props/styles/t/style.css']);
+      // The tool's own copy, written again, is not said again.
+      const again = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(!again.some((l) => /replaces kept file: props\/styles/.test(l)), again.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
   it('a style file blocked by a link in the site folder is a problem of the note', () => {
     const s = buildBoth(LETTER('prop_stamp: PAID\nprop_address: props/letter.html\n'), { sites: [], player: { keep: ['props'] } });
     try {
