@@ -60,6 +60,7 @@ class NoteFaultCodeTests(unittest.TestCase):
             named = re.findall(r"`site-faults/([a-z0-9-]+\.md)`",
                                section.group(1))
             with self.subTest(code=code):
+                self.assertLessEqual(len(named), 1, f"{code} names more than one file")
                 for name in named:
                     path = SPLIT / name
                     self.assertTrue(path.is_file(), f"{name} is missing")
