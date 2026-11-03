@@ -72,7 +72,7 @@ PROSE: list[tuple[str, str, frozenset[str] | set[str]]] = [
      sr.PC_STATUS),
     ("shared/templates/npc.md", r"^status: alive +# (.+)$", sr.NPC_STATUS),
     ("publish-site/references/schema-reference.md",
-     r"(?s)Template fields: `occupation`.{0,200}?`status`\s\(([a-z/]+)\)", sr.NPC_STATUS),
+     r"(?s)generated:fields-npc .{0,300}?`status`\s\(([a-z/]+)\)", sr.NPC_STATUS),
     # Campaign overview status (its alias is checked in test_schema_checks_agree)
     ("publish-site/references/schema-reference.md",
      r"^`status`: (not_started[^;]+);\n`active` is read as `in_progress`$",
