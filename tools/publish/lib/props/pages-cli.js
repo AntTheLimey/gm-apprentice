@@ -39,10 +39,11 @@ function printedPages(binary, file, work) {
   stopChrome(profile);
   removeNewChromeTemp(chromeTemp);
   // Chrome on a loaded machine can exit non-zero on its way out after it has printed (#561): a whole PDF, one that
-  // ends with its end-of-file mark, is counted whatever the status. A launch killed for time never is.
+  // ends with its end-of-file mark, is counted whatever the status, and one without it never is. A launch killed for
+  // time never is.
   const bytes = !run.error && fs.existsSync(pdf) ? fs.readFileSync(pdf) : null;
   const whole = bytes && /%%EOF\s*$/.test(bytes.subarray(-32).toString('latin1'));
-  if (!bytes || (run.status !== 0 && !whole)) throw new Error(`Chrome failed (${run.status}): ${String(run.stderr).slice(0, 200)}`);
+  if (!whole) throw new Error(`Chrome failed (${run.status}): ${String(run.stderr).slice(0, 200)}`);
   return countPdfPages(bytes);
 }
 

@@ -109,3 +109,12 @@ test("a target whose Chrome writes nothing is never counted from the target befo
   assert.equal(rows[1].pages, null);
   assert.match(rows[1].why, /^Chrome failed \(2\)/);
 });
+
+// CodeRabbit on #575: a PDF cut short is no count whatever Chrome's exit status, 0 included.
+test('a PDF cut short is no count when Chrome exits 0 too', { skip: process.platform === 'win32' && 'a shell script stands in for Chrome' }, async (t) => {
+  const v = site(t);
+  fs.writeFileSync(path.join(v.out, 'a.html'), '<p>x</p>');
+  const [row] = await rowsFor(v.configPath, [{ address: 'a.html' }], { findChrome: () => fakeChrome(v, '%%PDF-1.4\\n<< /Type /Page >>', 0) });
+  assert.equal(row.pages, null);
+  assert.match(row.why, /^Chrome failed \(0\)/);
+});
