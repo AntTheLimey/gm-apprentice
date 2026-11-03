@@ -320,7 +320,7 @@ describe('NAMED_NO_PAGE: the unlink command in the fix', () => {
     };
     const [f] = await faults(files, {}, 'NAMED_NO_PAGE');
     assert.ok(f.fix.includes(`${LINKS} "Characters/Flags_Tracker" --in "<page>"`), f.fix);
-    assert.match(f.fix, /prints a preview; run it again with --write/);
+    assert.match(f.fix, /prints a preview; run it again with --write; CLAUDE_PLUGIN_ROOT is the gm-apprentice plugin's folder/);
   });
   it('a withheld note: the whole command, with --as', async () => {
     const files = {
