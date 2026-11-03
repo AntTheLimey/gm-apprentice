@@ -671,6 +671,80 @@ describe('a kept-folder prop that stops shipping', () => {
     } finally { s.cleanup(); }
   });
 
+  // #560: a copy that replaced a file of the GM's own says so as it goes; one that replaced only the tool's own does not.
+  const REPLACED = "it had replaced a file of yours; see the site repo's history";
+  const setupOverMine = (listed = true) => {
+    const s = setup('', false);
+    fs.mkdirSync(path.join(s.player.dir, 'gazetteer'), { recursive: true });
+    fs.writeFileSync(path.join(s.player.dir, 'gazetteer', 'invitation.html'), 'MINE');
+    if (listed) fs.writeFileSync(path.join(s.root, 'vault', '_meta', 'publish-list.yaml'), LIST(['Documents/Invitation.md', 'Documents/Other.md']));
+    const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+    assert.ok(lines.includes('  replaces kept file: gazetteer/invitation.html'), lines.join('\n'));
+    return s;
+  };
+
+  it("a deleted note's copy that had replaced a file of the GM's says so as it is removed", () => {
+    const s = setupOverMine();
+    try {
+      assert.deepEqual(record(s).replaced, ['gazetteer/invitation.html']);
+      // A build that writes it again keeps the mark, though the file it replaces is now the tool's.
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.deepEqual(record(s).replaced, ['gazetteer/invitation.html']);
+      fs.rmSync(noteOf(s));
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(!s.player.exists('gazetteer', 'invitation.html'));
+      assert.ok(lines.includes(`  removed from kept folder: gazetteer/invitation.html (the tool wrote it, and no prop writes it now; ${REPLACED})`), lines.join('\n'));
+      assert.ok(lines.includes('  removed from kept folder: gazetteer/props.css (the tool wrote it, and no prop writes it now)'), lines.join('\n'));
+      assert.ok(!('replaced' in record(s)));
+    } finally { s.cleanup(); }
+  });
+
+  it("an unpublished prop's copy that had replaced a file of the GM's says so as it is removed", () => {
+    const s = setupOverMine();
+    try {
+      unlist(s);
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(!s.player.exists('gazetteer', 'invitation.html'));
+      assert.ok(lines.includes(`  removed from kept folder: gazetteer/invitation.html (its prop is not published; ${REPLACED})`), lines.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  it("a copy that replaced only the tool's own earlier copy, or nothing, is not marked", () => {
+    const s = setup();
+    try {
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(!('replaced' in record(s)), JSON.stringify(record(s)));
+      fs.rmSync(noteOf(s));
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.ok(!lines.some((l) => l.includes(REPLACED)), lines.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  // #560: an address that changes only in letter case. On a disk that tells the two apart (Linux) the old name is a
+  // file of its own and goes; on one that does not (macOS, Windows) the two are one file, the one just written.
+  it('a kept-folder prop whose address changes only in letter case leaves no file at the old name', () => {
+    const s = setup();
+    try {
+      const probe = path.join(s.player.dir, 'gazetteer', 'CASE-PROBE');
+      fs.writeFileSync(probe, '');
+      const caseSensitive = !fs.existsSync(probe.toLowerCase().replace(s.player.dir.toLowerCase(), s.player.dir));
+      fs.rmSync(probe);
+      fs.writeFileSync(noteOf(s), fs.readFileSync(noteOf(s), 'utf8').replace('prop_address: gazetteer/invitation.html', 'prop_address: gazetteer/Invitation.html'));
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      const names = fs.readdirSync(path.join(s.player.dir, 'gazetteer')).filter((n) => /^invitation\.html$/i.test(n));
+      assert.match(fs.readFileSync(path.join(s.player.dir, 'gazetteer', 'Invitation.html'), 'utf8'), /You are invited/);
+      assert.ok('gazetteer/Invitation.html' in record(s).files, JSON.stringify(record(s)));
+      assert.ok(!('gazetteer/invitation.html' in record(s).files), JSON.stringify(record(s)));
+      if (caseSensitive) {
+        assert.deepEqual(names, ['Invitation.html']);
+        assert.ok(lines.includes('  removed from kept folder: gazetteer/invitation.html (its address is now gazetteer/Invitation.html)'), lines.join('\n'));
+      } else {
+        assert.equal(names.length, 1, 'one file, never deleted');
+        assert.ok(!lines.some((l) => /removed from kept folder: gazetteer\/invitation\.html/i.test(l)), lines.join('\n'));
+      }
+    } finally { s.cleanup(); }
+  });
+
   it('a published prop leaves props/ when it is unpublished', () => {
     const s = buildBoth({
       'Documents/Invitation.md': PROP(), ...PROP_FILES, 'Documents/Other.md': '---\ntype: document\n---\nOther.\n',

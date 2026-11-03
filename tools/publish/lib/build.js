@@ -447,13 +447,38 @@ function buildSite(options) {
   // own folder keeps one, and only where the image cache may live (never in the output folder or the vault).
   const keptRecord = (!gm && !dry && writes === 'all' && !options.outputDirOverride
     && imageCacheDir(configDir, { outputDirs: [outputDir], vaultPath: config.vaultPath })) ? keptRecordPath(configDir) : null;
-  const { files: keptRecorded, problem: keptRecordProblem } = keptRecord ? readKeptRecord(keptRecord) : { files: {}, problem: null };
+  const { files: keptRecorded, replaced: keptRecordedReplaced, problem: keptRecordProblem } = keptRecord ? readKeptRecord(keptRecord) : { files: {}, replaced: new Set(), problem: null };
   // Recorded hashes by lower-case path, for the plan's own clean-up below.
   const keptRecordedHash = new Map(Object.entries(keptRecorded).map(([out, hash]) => [out.toLowerCase(), hash]));
+  // The recorded copies whose first write replaced a file of the GM's own (#560), and this build's (lower case).
+  const keptWasMine = new Set([...keptRecordedReplaced].map((out) => out.toLowerCase()));
+  const keptMineNow = new Set();
   const keptWritten = new Map();   // lower-case out -> [out, hash]
   const inKeptFolder = (out) => config.preserveDirs.some((d) => out.toLowerCase().startsWith(`${d.toLowerCase().replace(/\/+$/, '')}/`));
-  function keptWrote(out, data) {
-    if (keptRecord && inKeptFolder(out)) keptWritten.set(out.toLowerCase(), [out, hashOf(data)]);
+  // Before a write that replaces a file in a kept folder: whether that file is the GM's, neither what this build writes
+  // nor what the record says the tool wrote there.
+  function keptIsMine(full, out, data) {
+    if (!keptRecord || !inKeptFolder(out)) return false;
+    let have;
+    try { have = fs.readFileSync(full); } catch (e) { return false; }
+    const hash = hashOf(have);
+    return hash !== hashOf(data) && hash !== keptRecordedHash.get(out.toLowerCase());
+  }
+  // `mine`: the write replaced a file of the GM's. A copy that did once stays marked while the tool writes it.
+  function keptWrote(out, data, mine = false) {
+    if (!keptRecord || !inKeptFolder(out)) return;
+    const key = out.toLowerCase();
+    keptWritten.set(key, [out, hashOf(data)]);
+    if (mine || keptWasMine.has(key)) keptMineNow.add(key);
+  }
+  const REPLACED_MINE = "it had replaced a file of yours; see the site repo's history";
+  // Two paths that name one file: a disk that does not tell letter case apart (macOS, Windows) spells it both ways.
+  function sameFile(a, b) {
+    try {
+      const x = fs.statSync(a, { bigint: true });
+      const y = fs.statSync(b, { bigint: true });
+      return x.dev === y.dev && x.ino === y.ino;
+    } catch (e) { return false; }
   }
   // A kept-folder copy's bytes, or its removal; an error the file system gives is said with the path, and the build
   // carries on (null / false). An error with no code is a fault of the tool's and is thrown.
@@ -482,8 +507,12 @@ function buildSite(options) {
     const next = {};
     for (const [out, hash] of Object.entries(keptRecorded)) {
       const key = out.toLowerCase();
-      if (keptWritten.has(key) || !inKeptFolder(out)) continue;
+      if (!inKeptFolder(out)) continue;
       const full = path.join(outputDir, ...out.split('/'));
+      // Written again, perhaps in another letter case (#560): on a disk that tells case apart the old name is a file
+      // of its own, and is looked at as any other recorded file is.
+      const again = keptWritten.get(key);
+      if (again && (again[0] === out || sameFile(full, path.join(outputDir, ...again[0].split('/'))))) continue;
       const why = pathProblem(outputDir, out);
       if (why === 'link') {
         if (fs.existsSync(full)) next[out] = hash;
@@ -497,10 +526,12 @@ function buildSite(options) {
       if (keptHandled.has(key)) { if (same) next[out] = hash; continue; }
       if (!same) { console.log(`  left in kept folder: ${out} (it differs from what the tool wrote)`); continue; }
       if (!keptRemove(full, out)) { next[out] = hash; continue; }
-      console.log(`  removed from kept folder: ${out} (the tool wrote it, and no prop writes it now)`);
+      const reason = again ? `its address is now ${again[0]}` : 'the tool wrote it, and no prop writes it now';
+      console.log(`  removed from kept folder: ${out} (${reason}${!again && keptWasMine.has(key) ? `; ${REPLACED_MINE}` : ''})`);
     }
     for (const [out, hash] of keptWritten.values()) next[out] = hash;
-    try { writeKeptRecord(keptRecord, next); } catch (e) {
+    const mine = Object.keys(next).filter((out) => keptMineNow.has(out.toLowerCase()) || (!keptWritten.has(out.toLowerCase()) && keptWasMine.has(out.toLowerCase())));
+    try { writeKeptRecord(keptRecord, next, mine); } catch (e) {
       if (!e.code) throw e;
       printWarning(`could not write ${CACHE_FOLDER}/kept-writes.json in the site folder (${e.code}); the kept-folder files this build wrote are not recorded`);
       return;
@@ -2573,8 +2604,9 @@ function buildSite(options) {
       } else {
         const replaced = live && !dry && collection.replacesKept && fs.existsSync(full);
         const html = collectionTemplate(collectionBuilt, navFor, config, publishConfig);
+        const mine = replaced && keptIsMine(full, out, html);
         emit(out, html, `  wrote ${out}`);
-        if (live && !dry && !linkOnPath(full) && fs.existsSync(full)) keptWrote(out, html);
+        if (live && !dry && !linkOnPath(full) && fs.existsSync(full)) keptWrote(out, html, mine);
         if (replaced) console.log(`  replaces kept file: ${out}`);
       }
     }
@@ -2719,7 +2751,7 @@ function buildSite(options) {
         const ours = f.wants.some((want) => have.equals(want)) || (keptRecordedHash.has(key) && keptRecordedHash.get(key) === hashOf(have));
         if (!ours) { console.log(`  left in kept folder: ${f.out} (it differs from what the tool would write)`); continue; }
         if (!keptRemove(full, f.out)) continue;
-        console.log(`  removed from kept folder: ${f.out} (its prop is not published)`);
+        console.log(`  removed from kept folder: ${f.out} (its prop is not published${keptWasMine.has(key) ? `; ${REPLACED_MINE}` : ''})`);
       }
     }
     for (const r of failed) console.warn(`  WARNING: ${r.rel}: ${r.detail} — ${r.fix}`);
@@ -2742,14 +2774,16 @@ function buildSite(options) {
       const full = path.join(outputDir, ...f.out.split('/'));
       ensureDir(full);
       const replaced = f.replacesKept && fs.existsSync(full);
+      const data = f.text !== undefined ? f.text : f.bytes;
+      const mine = replaced && keptIsMine(full, f.out, data);
       // A write the guard refuses (a link put there since the check above) is said there, counted and recorded as nothing.
       const done = f.isPage
         ? writeHtml(full, f.text, propPlan.props.find((p) => p.rel === f.rel).page, { gmCssHref: f.made ? encodeHref(relativeHref(f.out, 'css/gm.css')) : null })
-        : writeOut(full, f.text !== undefined ? f.text : f.bytes);
+        : writeOut(full, data);
       if (!done) continue;
       written += 1;
       if (typeof f.made === 'string') stylesWritten.add(f.made);
-      keptWrote(f.out, f.text !== undefined ? f.text : f.bytes);
+      keptWrote(f.out, data, mine);
       console.log(`  wrote ${f.out}`);
       if (f.was) console.log(`  ${f.out}: written as UTF-8 (it was ${f.was})`);
       shipped.add(f.rel);
