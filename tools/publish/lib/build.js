@@ -666,7 +666,9 @@ function buildSite(options) {
           const why = theirs === false ? 'it holds files the tool did not write, or that were changed since'
             : theirs === 'unrecorded' ? 'this build keeps no record of the files the tool wrote in kept folders'
               : `it could not be read (${theirs})`;
-          printWarning(`${said(have)} keeps its spelling, though an address now spells it ${said(want)}: ${why}; rename it yourself if it should change`);
+          // A build that keeps no record (a preview, a sheets-only build) leaves it to the next full build.
+          const then = theirs === 'unrecorded' ? 'the next full build renames it if the tool made it' : 'rename it yourself if it should change';
+          printWarning(`${said(have)} keeps its spelling, though an address now spells it ${said(want)}: ${why}; ${then}`);
           continue;
         }
       }
@@ -727,16 +729,13 @@ function buildSite(options) {
   // A temporary name a letter-case rename left in a kept folder (a build stopped between its two steps, or a put-back
   // the disk refused): said, never removed, as it holds the file.
   function reportCaseTemps() {
-    const walk = (dir) => {
-      let entries;
-      try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch (e) { if (!e.code) throw e; return; }
-      for (const e of entries) {
-        const full = path.join(dir, e.name);
-        if (/\.case-\d+(?:-\d+)?\.tmp$/.test(e.name)) printWarning(`left in kept folder: ${outRel(full)}, a temporary name from a letter-case rename that did not finish; give it back its name (the part before .case-) by hand`);
-        else if (e.isDirectory()) walk(full);
+    const { caseTemps } = require('./git-case');
+    for (const d of config.preserveDirs) {
+      const kept = d.replace(/\/+$/, '');
+      for (const r of caseTemps(path.join(outputDir, ...kept.split('/')))) {
+        printWarning(`left in kept folder: ${kept}/${r}, a temporary name from a letter-case rename that did not finish; give it back its name (the part before .case-) by hand`);
       }
-    };
-    for (const d of config.preserveDirs) walk(path.join(outputDir, ...d.replace(/\/+$/, '').split('/')));
+    }
   }
 
   // No folder is made through a link in the site folder: the write that follows is refused by the writers above.
@@ -3020,7 +3019,7 @@ function buildSite(options) {
     }
     if (writes === 'all' && propPlan.props.length > 0) console.log(`Props: ${shipped.size} published (${written} files)`);
   }
-  if (!gm && writes === 'all') reportCaseTemps();
+  if (!gm && writes !== 'none') reportCaseTemps();
   if (keptRecord) cleanKeptRecord();
 
   // The licence notices for what the site ships (#428): written once everything else is, so it

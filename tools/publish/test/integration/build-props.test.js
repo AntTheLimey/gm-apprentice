@@ -994,7 +994,18 @@ describe('a kept-folder prop that stops shipping', () => {
       const lines = quiet(() => build({ configPath: s.configPath, site: 'player', outputDirOverride: s.player.dir }));
       const warned = lines.filter((l) => l.includes('gazetteer/letters keeps its spelling'));
       assert.equal(warned.length, 1, lines.join('\n'));
-      assert.match(warned[0], /this build keeps no record of the files the tool wrote in kept folders/);
+      assert.match(warned[0], /this build keeps no record of the files the tool wrote in kept folders; the next full build renames it if the tool made it$/);
+      assert.doesNotMatch(warned[0], /rename it yourself/);
+    } finally { s.cleanup(); }
+  });
+
+  // Review C: a leftover temporary name is said by every build that writes, not only a full one.
+  it('a sheets-only build names a leftover temporary name too', () => {
+    const s = setup();
+    try {
+      fs.writeFileSync(path.join(s.player.dir, 'gazetteer', 'invitation.html.case-123.tmp'), 'X');
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player', only: 'sheets' }));
+      assert.ok(lines.some((l) => l.includes('left in kept folder: gazetteer/invitation.html.case-123.tmp')), lines.join('\n'));
     } finally { s.cleanup(); }
   });
 
