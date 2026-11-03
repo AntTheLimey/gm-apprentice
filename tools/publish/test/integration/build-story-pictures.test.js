@@ -609,3 +609,22 @@ describe('Story pictures: once per chapter, with a Story page only the GM site h
     assert.deepEqual(captions(read(s.gm, STORY_2)), ['Mara Quill']);
   });
 });
+
+describe('Story pictures: once per chapter, a picture left out for room', () => {
+  const s = buildBoth(storyVault({
+    ...PEOPLE,
+    '_attachments/smith.png': png(),
+    'NPCs/Old Smith.md': note('npc', 'Old Smith', 'smith.png'),
+    // Three pages in one paragraph: two fit beside it, and Old Smith has no other mention on this page.
+    'Sessions/Session 1 Wrap-Up.md': withRecap('[[Mara Quill]], Captain Rook and Old Smith met at dusk.'),
+    'Sessions/Session 2 Wrap-Up.md': WRAP_2.replace('crossed the bay at night', 'crossed the bay with Old Smith and [[Mara Quill]] at night'),
+  }));
+  after(() => s.cleanup());
+
+  it('is pictured on the next Story page of the chapter that names it; what was pictured is not', () => {
+    for (const site of [s.player, s.gm]) {
+      assert.deepEqual(captions(read(site, STORY_1)), ['Mara Quill', 'Captain Rook']);
+      assert.deepEqual(captions(read(site, STORY_2)), ['Old Smith']);
+    }
+  });
+});

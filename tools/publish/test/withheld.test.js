@@ -561,6 +561,32 @@ describe('a flag value the build cannot read', () => {
   });
 });
 
+describe('a companion: value the build cannot read', () => {
+  for (const value of ['tru', '[true]', '"maybe"', '2']) {
+    it(`companion: ${value} is told once, read as not a companion`, async () => {
+      const files = { 'Characters/Mara_Quill.md': mara('Plain.').replace('---\n', `---\ncompanion: ${value}\n`) };
+      const { configPath } = site(files, { excluded: [] });
+      const { json } = await doctor(configPath, { json: true });
+      const hit = json.findings.filter((f) => f.code === 'COMPANION_FLAG_UNREADABLE');
+      assert.strictEqual(hit.length, 1);
+      assert.strictEqual(hit[0].path, 'Characters/Mara_Quill.md');
+      assert.strictEqual(hit[0].severity, 'warning');
+      assert.match(hit[0].detail, /companion: .* is not true or false, so the note is read as not a companion and may be pictured on Story pages/);
+      assert.match(hit[0].fix, /true or false/);
+      const warnings = buildQuiet(configPath);
+      assert.ok(warnings.some((w) => /Characters\/Mara_Quill\.md/.test(w) && /not a companion/.test(w)), warnings.join('\n'));
+    });
+  }
+  it('says nothing for a value it reads', async () => {
+    for (const value of ['true', 'false', 'yes', 'no', '1', '']) {
+      const files = { 'Characters/Mara_Quill.md': mara('Plain.').replace('---\n', `---\ncompanion: ${value}\n`) };
+      const { configPath } = site(files, { excluded: [] });
+      const { json } = await doctor(configPath, { json: true });
+      assert.deepStrictEqual(json.findings.filter((f) => f.code === 'COMPANION_FLAG_UNREADABLE'), [], value);
+    }
+  });
+});
+
 describe('the closing line for a withheld target', () => {
   it('says a neutral word prints, not "plain words", and sorts the withheld notes apart', () => {
     const lines = summaryLines([
