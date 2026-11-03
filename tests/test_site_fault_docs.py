@@ -54,7 +54,7 @@ class NoteFaultCodeTests(unittest.TestCase):
     def test_a_split_section_is_in_the_file_its_section_names(self):
         # A code whose section in site-faults.md names a split file has its
         # walk-through there; the file is read only for that code.
-        split = 0
+        split_codes = set()
         for code in CODES:
             section = re.search(rf"(?ms)^## {code}\n(.*?)(?=^## |\Z)", QA)
             named = re.findall(r"`site-faults/([a-z0-9-]+\.md)`",
@@ -63,10 +63,15 @@ class NoteFaultCodeTests(unittest.TestCase):
                 for name in named:
                     path = SPLIT / name
                     self.assertTrue(path.is_file(), f"{name} is missing")
-                    self.assertRegex(path.read_text(encoding="utf-8"),
-                                     rf"(?m)^## {code}$")
-            split += bool(named)
-        self.assertGreaterEqual(split, 3)
+                    text = path.read_text(encoding="utf-8")
+                    self.assertRegex(text, rf"(?m)^## {code}$")
+                    # The walk-through is there, not just its heading.
+                    body = re.search(rf"(?ms)^## {code}\n(.*)", text).group(1)
+                    self.assertTrue(body.strip(), f"{name} has only its heading")
+            if named:
+                split_codes.add(code)
+        self.assertEqual(split_codes,
+                         {"NAMED_NO_PAGE", "PROP_NOT_COPIED", "TOHIT_UNREAD"})
 
     def test_the_list_and_the_stubs_name_the_same_files(self):
         # The list after the code table and each code's own section must
