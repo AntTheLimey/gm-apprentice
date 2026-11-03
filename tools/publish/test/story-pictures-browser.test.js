@@ -11,7 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 require('./helpers/quiet-legacy-warning.js');
 const { buildBoth } = require('./helpers/gm-build');
-const { storyVault, WRAP_1 } = require('./helpers/story-vault');
+const { storyVault, WRAP_1, CHAPTER } = require('./helpers/story-vault');
 const { makePng } = require('./helpers/make-png');
 const { browserSkip, measure } = require('./helpers/browser');
 
@@ -28,6 +28,8 @@ const VAULT = storyVault({
   'Locations/The Docks.md': note('location', 'The Docks', 'docks.png'),
   'NPCs/Captain Rook.md': note('npc', 'Captain Rook', 'rook.png'),
   'Sessions/Session 1 Wrap-Up.md': WRAP_1.replace(/## Narrative Recap\n\n[^\n]*\n/, `## Narrative Recap\n\n${RECAP}\n`),
+  // An introduction that names no page, so The Docks is first pictured here and not on the chapter's introduction.
+  'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('The docks, CHAPTER-BODY-1.', 'The harbour, CHAPTER-BODY-1.'),
 });
 
 describe('Story page pictures in a browser', { skip }, () => {
