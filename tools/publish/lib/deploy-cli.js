@@ -143,7 +143,7 @@ async function runDeploy(options, deps) {
   const now = d.now || (() => new Date());
   const { formatFindings, gateSummary } = leakGateLib;
   const leakGate = d.leakGate || leakGateLib.runLeakGate;
-  const staleCaseSpellings = d.staleCaseSpellings || ((root, dir) => require('./git-case').staleCaseSpellings(root, dir, runCommand));
+  const staleCaseSpellings = d.staleCaseSpellings || ((root, dir) => require('./git-case').caseRenames(root, dir, runCommand));
 
   const configPath = path.resolve(opts.configPath || './vault.config.json');
   const siteRoot = path.dirname(configPath);
@@ -344,6 +344,17 @@ async function runDeploy(options, deps) {
     return finish({ refused: true }, 1);
   } else if (gateResult && !gateResult.skipped) say(`Leak check: nothing hidden on the player site (${gateResult.files} files, ${gateResult.seconds.toFixed(1)} s).`);
 
+  // A file a letter-case rename left under its temporary name (build.js renameCase) would go online under that name.
+  // It may be the only copy, so deploy never deletes it: it stops and names each one.
+  const temps = require('./git-case').caseTemps(gateFolder).map((r) => `${outDir.replace(/\/+$/, '')}/${r}`);
+  if (temps.length > 0) {
+    for (const t of temps) {
+      const name = path.posix.basename(t).replace(/\.case-\d+(?:-\d+)?\.tmp$/, '');
+      say(`Deploy stopped: a file in ${outDir} still has the temporary name a letter-case rename gave it: ${t}. give it back its name (${name}) or move it out of the site folder; deploy never deletes it, as it may be the only copy. Nothing was uploaded.`);
+    }
+    return finish({ refused: true }, 1);
+  }
+
   let deploymentUrl = null;
   let aliasUrl = null;
   if (isCloudflare) {
@@ -380,15 +391,17 @@ async function runDeploy(options, deps) {
     };
     // A file or folder whose letter case changed on a Mac or Windows disk keeps its old spelling in git's index
     // (core.ignorecase), so `git add` alone would deploy the old address (#576). Its old spelling leaves the index
-    // first, and the commit takes the whole index, since `--only` would add the old name back. Anything else staged
-    // would ride along, so that stops the deploy.
+    // first, and the commit takes the whole index, since `--only` would add the old name back. A rename an earlier
+    // deploy staged and could not commit (`pending`) takes the same path. Anything else staged in the repo would ride
+    // along, so that stops the deploy. A repo without core.ignorecase skips all of this, as before.
     const stale = staleCaseSpellings(siteRoot, outDir);
     if (stale.error) {
       say(`Deploy failed: ${failureDetail(stale.error)}`);
       return finish({}, 1);
     }
-    if (stale.paths.length > 0) {
-      const others = git(['diff', '--cached', '--name-only', '--', '.', `:(exclude)${outDir}`]);
+    const whole = stale.paths.length > 0 || !!stale.pending;
+    if (whole) {
+      const others = git(['diff', '--cached', '--name-only', '--', ':(top)', `:(exclude)${outDir}`]);
       if (others.code !== 0) {
         say(`Deploy failed: ${failureDetail(others)}`);
         return finish({}, 1);
@@ -398,13 +411,15 @@ async function runDeploy(options, deps) {
         say(`Deploy stopped: files outside ${outDir} are staged (${staged.slice(0, 5).join(', ')}${staged.length > 5 ? ', …' : ''}), and a letter-case change under ${outDir} needs a commit of everything staged. Commit or unstage them (git restore --staged <file>), then deploy again.`);
         return finish({}, 1);
       }
-      const rm = git(['rm', '--cached', '-q', '--', ...stale.paths.map((p) => `:(literal)${p}`)]);
-      if (rm.code !== 0) {
-        say(`Deploy failed: ${failureDetail(rm)}`);
-        return finish({}, 1);
+      for (const run of require('./git-case').batches(stale.paths)) {
+        const rm = git(['rm', '--cached', '-q', '--', ...run.map((p) => `:(literal)${p}`)]);
+        if (rm.code !== 0) {
+          say(`Deploy failed: ${failureDetail(rm)}`);
+          return finish({}, 1);
+        }
       }
       const n = stale.paths.length;
-      say(`${n} file${n === 1 ? '' : 's'} under ${outDir} changed only in letter case; git records ${n === 1 ? 'it' : 'them'} under ${n === 1 ? 'its' : 'their'} new spelling`);
+      if (n > 0) say(`${n} file${n === 1 ? '' : 's'} under ${outDir} changed only in letter case; git records ${n === 1 ? 'it' : 'them'} under ${n === 1 ? 'its' : 'their'} new spelling`);
     }
     const add = git(['add', outDir]);
     if (add.code !== 0) {
@@ -420,9 +435,10 @@ async function runDeploy(options, deps) {
       // Still push: the build may be unchanged while an earlier commit is unpushed.
       say(`nothing to commit — ${outDir} unchanged`);
     } else {
-      const commit = git(stale.paths.length > 0 ? ['commit', '-m', 'Rebuild site'] : ['commit', '-m', 'Rebuild site', '--only', '--', outDir]);
+      const commit = git(whole ? ['commit', '-m', 'Rebuild site'] : ['commit', '-m', 'Rebuild site', '--only', '--', outDir]);
       if (commit.code !== 0) {
         say(`Commit failed: ${failureDetail(commit)}`);
+        if (whole) say(`Nothing is lost: the old letter-case spellings under ${outDir} are out of git's index and the new ones staged: fix what stopped the commit, then deploy again, and it commits them.`);
         return finish({}, 1);
       }
     }

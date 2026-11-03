@@ -9,7 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { runCommand } = require('../../lib/run-command');
-const { staleCaseSpellings } = require('../../lib/git-case');
+const { caseRenames: staleCaseSpellings } = require('../../lib/git-case');
 
 const git = (cwd, ...args) => {
   const r = spawnSync('git', args, { cwd, encoding: 'utf8' });
@@ -38,7 +38,7 @@ const insensitive = (dir) => {
 // Two steps, as the build renames (a case-only rename is not one step everywhere).
 const recase = (from, to) => { fs.renameSync(from, `${from}.t`); fs.renameSync(`${from}.t`, to); };
 
-describe('staleCaseSpellings', () => {
+describe('caseRenames', () => {
   it('finds the tracked spellings whose file or folder now has another case, and deploy records the new ones', (t) => {
     const root = repo();
     try {

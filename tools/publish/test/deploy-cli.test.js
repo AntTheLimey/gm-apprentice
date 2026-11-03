@@ -275,7 +275,7 @@ describe('deploy: github-pages', () => {
     const rc = await runDeploy({ configPath: CONFIG }, h.deps);
     assert.strictEqual(rc, 0, h.text());
     assert.deepStrictEqual(h.commands.map(c => c.args).slice(0, 5), [
-      ['diff', '--cached', '--name-only', '--', '.', ':(exclude)docs/'],
+      ['diff', '--cached', '--name-only', '--', ':(top)', ':(exclude)docs/'],
       ['rm', '--cached', '-q', '--', ':(literal)docs/gazetteer/invitation.html'],
       ['add', 'docs/'],
       ['status', '--porcelain', 'docs/'],
