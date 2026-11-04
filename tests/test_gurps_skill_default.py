@@ -180,6 +180,35 @@ class SkillDefaultTests(unittest.TestCase):
         self.assertEqual(gsd.plan(sheet, "Guns/TL5 (Pistol)")[0], "HAVE")
         self.assertEqual(gsd.plan(sheet, "Guns (Pistol)")[0], "HAVE")
 
+    def test_a_skill_bought_at_two_tech_levels_keeps_both(self):
+        # Review: one row per tech level. A TL8 default takes the TL8 base,
+        # whichever row comes first.
+        tl8 = "| Guns/TL8 (Pistol) | DX/E | DX+2 | [4] | 16 | 16 |"
+        tl5 = "| Guns/TL5 (Pistol) | DX/E | DX+0 | [1] | 14 | 14 |"
+        for rows in (f"{tl8}\n{tl5}", f"{tl5}\n{tl8}"):
+            sheet = SHEET.replace("| Guns (Pistol) | DX/E | DX+2 | [4] | 16 | 16 |", rows)
+            kind, msg, _new = gsd.plan(sheet, "Guns/TL8 (Rifle)")
+            self.assertEqual(kind, "WOULD-ADD", msg)
+            self.assertIn("(default Guns (Pistol)-2, level 14)", msg)
+            self.assertIn("(default Guns (Pistol)-2, level 12)",
+                          gsd.plan(sheet, "Guns/TL5 (Rifle)")[1])
+            self.assertEqual(gsd.plan(sheet, "Guns/TL8 (Pistol)")[0], "HAVE")
+
+    def test_a_current_level_column_is_read_without_its_encumbrance(self):
+        # Review: a Current Level column holds the level less encumbrance;
+        # a default from a penalised skill takes the level bought.
+        sheet = (SHEET.replace("## Skills", "## Current Status\n\n"
+                               "- **Enc:** Light (1)\n\n## Skills")
+                 .replace("| Name | Difficulty | Relative Level | Points | Base | Current |",
+                          "| Name | Difficulty | Relative Level | Points | Current Level |")
+                 .replace("|------|-----------|----------------|--------|------|---------|", "|---|---|---|---|---|")
+                 .replace("| Shortsword | DX/A | DX+1 | [4] | 15 | 15 |",
+                          "| Rapier | DX/A | DX+1 | [4] | 14 |")
+                 .replace("| 16 | 16 |", "| 16 |").replace("| 10 | 10 |", "| 10 |"))
+        kind, msg, _new = gsd.plan(sheet, "Smallsword")
+        self.assertEqual(kind, "WOULD-ADD", msg)
+        self.assertIn("| Smallsword | DX/A | DX-2 | [0] | 11 | (default Rapier-3, level 12)", msg)
+
     def test_a_level_column_beside_relative_level_is_written(self):
         # The publish tool reads a Level column that is not Relative Level
         # (parse.js resolveLevelColumns), so the new row fills it.

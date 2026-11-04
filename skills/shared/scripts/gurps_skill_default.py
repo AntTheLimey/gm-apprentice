@@ -189,9 +189,12 @@ def plan(text: str, skill: str, difficulty: str | None = None,
     i_base = gk.col(headers, "base")
     i_eff = gk.col(headers, "effective")
     i_cur = gk.col(headers, "current")
-    # A Level column, never Relative Level (as parse.js resolveLevelColumns).
+    # A Level column, never Relative Level (as parse.js resolveLevelColumns)
+    # nor Current Level, which is the level less encumbrance.
     i_lvl = next((i for i, h in enumerate(headers)
-                  if "level" in h.lower() and "relative" not in h.lower()), -1)
+                  if "level" in h.lower() and "relative" not in h.lower()
+                  and "current" not in h.lower()), -1)
+    enc = gk._declared_enc_level(sheet)
 
     def cell(row: list[str], i: int) -> str:
         return row[i] if 0 <= i < len(row) else ""
@@ -203,9 +206,10 @@ def plan(text: str, skill: str, difficulty: str | None = None,
         if key not in attrs and "iq" in attrs:
             attrs[key] = attrs["iq"]
             stand_in.add(key)
-    bought: dict[str, int] = {}
-    bought_names: dict[str, str] = {}   # a bought skill's key -> its name
-    tls: dict[str, str] = {}      # a bought skill's key -> its /TL<n>
+    bought: dict[str, int] = {}   # a bought skill's key -> its best level
+    # A bought skill's key -> one (TL, level, name) per row: a skill bought at
+    # two tech levels is two skills (B168).
+    bought_at: dict[str, list[tuple[str, int, str]]] = {}
     other_tl: list[tuple[str, str]] = []   # the skill at another TL: (name, level)
     for _i, row in rows:
         name = cell(row, i_name)
@@ -229,12 +233,20 @@ def plan(text: str, skill: str, difficulty: str | None = None,
         level_cell = next((cell(row, i) for i in (i_base, i_eff, i_lvl)
                            if re.search(r"\d", cell(row, i))), "")
         m = re.search(r"\d+", level_cell)
+        add_back = 0
+        if not m and re.search(r"\d", cell(row, i_cur)):
+            # Only a Current column: the level bought is it plus the
+            # encumbrance it was lowered by.
+            m = re.search(r"\d+", cell(row, i_cur))
+            if enc and re.sub(r"\s*\(.*$", "", _key(name)) in gc.ENC_PENALIZED_SKILLS:
+                add_back = enc
         # B173: a skill known only at default is no base for another. With
         # no Points column that cannot be told, so no skill is a base.
         if m and i_pts >= 0 and pts is not None and pts > 0:
-            bought[_key(name)] = int(m.group(0))
-            bought_names[_key(name)] = _marked_off(name)
-            tls[_key(name)] = _tl(name)
+            got = int(m.group(0)) + add_back
+            bought_at.setdefault(_key(name), []).append(
+                (_tl(name), got, _marked_off(name)))
+            bought[_key(name)] = max(got, bought.get(_key(name), got))
     if other_tl and (difficulty is None or defaults is None):
         name, at_level = other_tl[0]
         raise Refused("CHECK-DEFAULT", (
@@ -284,15 +296,18 @@ def plan(text: str, skill: str, difficulty: str | None = None,
             continue
         base, sign, num = m.group(1).strip(), m.group(2), int(m.group(3))
         mod = -num if sign in "-−" else num
+        rows_of = bought_at.get(_key(base), [])
+        same = [lv for t, lv, _n in rows_of
+                if _same_tl(t, _tl(base) or _tl(skill))]
         if base.lower() in ATTRS:
             have = attrs.get(base.lower())
-        elif _same_tl(tls.get(_key(base), ""), _tl(base) or _tl(skill)):
+        elif same or not rows_of:
             # A default from the skill at another TL is a default of a
             # default (B173), unless it is given with that TL.
-            have = bought.get(_key(base))
+            have = max(same) if same else None
         else:
             have = None
-            note = (f"{bought_names[_key(base)]} is another tech level, so "
+            note = (f"{rows_of[0][2]} is another tech level, so "
                     "no base for this default (B168, B173)")
             if note not in said:
                 said.append(note)
@@ -313,8 +328,9 @@ def plan(text: str, skill: str, difficulty: str | None = None,
         said.append(f"Relative Level left blank: the sheet lists no {attr}")
     # A tech-level skill is written as the sheet writes its kin: the TL the
     # name was given with, else the one a bought specialty of it carries.
-    tl = _tl(skill) or next((tls[k] for k in sorted(tls)
-                             if tls[k] and _stem(k) == _stem(skill)), "")
+    tl = _tl(skill) or next((t for k in sorted(bought_at)
+                             for t, _lv, _n in bought_at[k]
+                             if t and _stem(k) == _stem(skill)), "")
     written = _plain(skill)
     if tl:
         head, _sep, rest = written.partition(" (")
@@ -322,7 +338,6 @@ def plan(text: str, skill: str, difficulty: str | None = None,
     points = "[0]" if any(cell(r, i_pts).startswith("[") for _i, r in rows) \
         else "0"
     current = level
-    enc = gk._declared_enc_level(sheet)
     if enc and re.sub(r"\s*\(.*$", "", _key(skill)) in gc.ENC_PENALIZED_SKILLS:
         current = level - enc
     new = [""] * len(headers)
