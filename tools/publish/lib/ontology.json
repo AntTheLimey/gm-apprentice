@@ -441,6 +441,17 @@
     "draft",
     "ready"
   ],
+  "chapter_status": {
+    "values": [
+      "planned",
+      "active",
+      "complete"
+    ],
+    "aliases": {
+      "in_progress": "active",
+      "in-progress": "active"
+    }
+  },
   "wrap_up_types": [
     "session_wrap",
     "session-wrap-up",

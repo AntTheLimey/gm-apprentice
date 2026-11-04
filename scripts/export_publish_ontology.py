@@ -7,7 +7,7 @@
 The site colours a relationship by its tone's family and words a group
 by its predicate; `relationships words` and `relationships check` read the
 vocabulary, tones, strength, verbs and place rules. It also carries the
-short lists the tool shares with the vault scripts (session statuses,
+short lists the tool shares with the vault scripts (session and chapter statuses,
 wrap-up spellings, game systems, type folders), and nothing else (no
 mobRPG mapping). The copy is generated;
 tests/test_publish_ontology.py fails when it is stale.
@@ -26,11 +26,11 @@ KEYS = ("type", "inverse", "category", "symmetric", "genre")
 # Top-level keys copied whole: `relationships words` prints the tones and strength, and
 # `relationships check` (Task 7) reads the verbs, same-fact pairs, place fields and the
 # entity types an edge may not point at. The rest are the short lists the vault scripts
-# share with the tool (lib/shared-lists.js reads them): session statuses, the
+# share with the tool (lib/shared-lists.js reads them): session and chapter statuses, the
 # wrap-up type spellings, the game systems and their aliases, and the type folders.
 TOP_KEYS = ("tones", "tone_near", "strength_scale", "storage_rule", "verbs", "same_fact",
             "place_fields", "not_edge_target_types", "session_status", "stage_hides",
-            "wrap_up_types", "game_systems", "vault_folders")
+            "chapter_status", "wrap_up_types", "game_systems", "vault_folders")
 FAMILIES = ("positive", "negative", "neutral")
 
 

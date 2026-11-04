@@ -3,12 +3,16 @@ type: chapter
 title: "The Ashford Case"
 chapter_number: 1
 sessions: 3
-status: in-progress
+status: active
 canon_status: AUTHORITATIVE
 asOfSession: "Session 2"
 ---
 
 # Chapter 1: The Ashford Case
+
+## Teaser
+
+[[Professor Ashford]], a respected antiquarian at Miskatonic University, has vanished. His housekeeper, [[Mrs Whitmore]], found his study torn apart one October morning, and a worried colleague has brought the investigators together to find out what became of him.
 
 ## Synopsis
 

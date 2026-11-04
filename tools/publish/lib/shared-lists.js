@@ -13,6 +13,10 @@ const SESSION_PLAYED = new Set(data.session_status.played);
 // The retired `stage:` words that still keep a note off a player site.
 const STAGE_HIDES = new Set(data.stage_hides);
 
+// A chapter's `status` words, and the older spellings that mean one (`in_progress` is `active`).
+const CHAPTER_STATUSES = new Set(data.chapter_status.values);
+const CHAPTER_STATUS_ALIASES = { ...data.chapter_status.aliases };
+
 // Every `type:` spelling a Session Wrap-Up is written with; the first is the one the
 // templates write.
 const WRAP_UP_TYPE = data.wrap_up_types[0];
@@ -35,7 +39,7 @@ function systemId(raw) {
 const VAULT_FOLDERS = data.vault_folders.map((f) => ({ folder: f.folder, types: [...f.types], site: f.site }));
 
 module.exports = {
-  SESSION_NOT_YET_RUN, SESSION_PLAYED, STAGE_HIDES,
+  SESSION_NOT_YET_RUN, SESSION_PLAYED, STAGE_HIDES, CHAPTER_STATUSES, CHAPTER_STATUS_ALIASES,
   WRAP_UP_TYPE, WRAP_UP_TYPES,
   SYSTEM_IDS, SYSTEM_NAMES, SYSTEM_ALIASES, systemId,
   VAULT_FOLDERS,

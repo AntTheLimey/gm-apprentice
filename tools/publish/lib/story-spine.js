@@ -9,6 +9,7 @@ const { isLinkedWrapUp, WRAP_UP_TYPES } = require('./session-hub');
 const { isSessionHub } = require('./processor');
 const { storySections } = require('./story-sections');
 const { withFigures } = require('./story-figures');
+const { CHAPTER_STATUSES, CHAPTER_STATUS_ALIASES } = require('./shared-lists');
 
 const RECAP_TITLES = ['narrative recap', 'recap'];
 
@@ -202,12 +203,13 @@ function wrapUpForUnit(unitPage, wrapUps, idx, pairs) {
 
 function unitOutputPath(id) { return `story/${id}.html`; }
 
-// A chapter note's `status:` as the Story reads it: 'planned', 'active' or 'complete' (any case, trimmed), else
-// 'unknown' (missing, or any other value, such as an old `in_progress`). A planned chapter shows nowhere on the Story.
-const CHAPTER_STATUSES = new Set(['planned', 'active', 'complete']);
+// A chapter note's `status:` as the Story reads it: 'planned', 'active' or 'complete' (any case, trimmed), or an
+// older spelling the schema reads as one of them (`in_progress` is active: the shared ontology's chapter_status), else
+// 'unknown' (missing, or any other value). A planned chapter shows nowhere on the Story.
 function chapterStatus(chapter) {
   const s = String(((chapter && chapter.frontmatter) || {}).status || '').trim().toLowerCase();
-  return CHAPTER_STATUSES.has(s) ? s : 'unknown';
+  if (CHAPTER_STATUSES.has(s)) return s;
+  return Object.prototype.hasOwnProperty.call(CHAPTER_STATUS_ALIASES, s) ? CHAPTER_STATUS_ALIASES[s] : 'unknown';
 }
 
 // A chapter has a recap only once it is complete; until then its Story page shows its introduction.

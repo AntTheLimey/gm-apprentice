@@ -19,6 +19,7 @@ The Story page reads like a book's contents, and each chapter has one Story page
   - `status: complete`: the chapter's `overview:` line, then its recap (the chapter wrap-up's, or failing that a `## Recap` section in the chapter note): the opening paragraph, with "Read the whole chapter recap" to open the rest. The wrap-up's other sections and Memorable Moments follow, as before.
   - `status: planned`: the chapter and its sessions appear nowhere on the Story. If any of its sessions has been played, the build says so and names them.
   - No status, or one the tool does not know: the chapter's heading and sessions, no text.
+  - `in_progress` and `in-progress` read as active, as the vault schema already accepts them.
 - The chapter page no longer shows the chapter note's whole body (which put GM planning material, such as Canticle's "Chapter reference desk", on the player site's Story). The chapter note's own page in the Chapters section is unchanged for now.
 - The old `story/<chapter>-intro.html` address sends readers on to the new chapter page.
 - A chapter page pictures the people and places its Teaser or recap names, on its own, as before.

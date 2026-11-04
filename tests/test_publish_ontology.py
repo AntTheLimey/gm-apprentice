@@ -40,12 +40,24 @@ def test_copy_holds_every_tone_and_predicate():
                        "gm-apprentice-ontology.json").read_text(encoding="utf-8"))
     copy = json.loads(COPY.read_text(encoding="utf-8"))
     for key in ("tones", "tone_near", "strength_scale", "storage_rule", "verbs", "same_fact",
-                "place_fields", "not_edge_target_types", "session_status",
+                "place_fields", "not_edge_target_types", "session_status", "chapter_status",
                 "wrap_up_types", "game_systems", "vault_folders"):
         assert copy[key] == full[key], key
     assert [p["type"] for p in copy["predicates"]] == [p["type"] for p in full["predicates"]]
     for p in copy["predicates"]:
         assert set(p) == {"type", "inverse", "category", "symmetric", "genre"}, p["type"]
+
+
+def test_chapter_status_is_read_from_the_ontology():
+    """The schema's chapter statuses and their older spellings (in_progress means active) have one source, the
+    ontology; the publish tool reads the same through its copy."""
+    sys.path.insert(0, str(REPO / "skills" / "shared" / "scripts"))
+    import schema_rules
+    full = json.loads((REPO / "skills" / "shared" /
+                       "gm-apprentice-ontology.json").read_text(encoding="utf-8"))
+    assert list(schema_rules.CHAPTER_STATUS) == full["chapter_status"]["values"]
+    assert schema_rules.VALUE_ALIASES["chapter"]["status"] == full["chapter_status"]["aliases"]
+    assert full["chapter_status"]["aliases"]["in_progress"] == "active"
 
 
 def _exporter():

@@ -415,13 +415,24 @@ describe('gmStoryNotes', () => {
 describe('chapterStatus', () => {
   const { chapterStatus } = require('../../lib/story-spine');
   const of = (status) => chapterStatus({ frontmatter: status === undefined ? {} : { status } });
+  // One source: the schema's chapter statuses and their aliases (the ontology, exported for the tool).
+  it('reads the statuses and aliases the shared ontology lists', () => {
+    const { CHAPTER_STATUSES, CHAPTER_STATUS_ALIASES } = require('../../lib/shared-lists');
+    const onto = require('../../lib/ontology.json').chapter_status;
+    assert.deepStrictEqual([...CHAPTER_STATUSES], onto.values);
+    assert.deepStrictEqual(CHAPTER_STATUS_ALIASES, onto.aliases);
+    for (const [alias, meant] of Object.entries(onto.aliases)) assert.strictEqual(of(alias), meant);
+  });
   it('reads planned, active and complete in any case, trimmed', () => {
     assert.strictEqual(of('Active'), 'active');
     assert.strictEqual(of(' complete '), 'complete');
     assert.strictEqual(of('PLANNED'), 'planned');
   });
   it('a missing or other value is unknown', () => {
-    assert.strictEqual(of('in_progress'), 'unknown');
+    assert.strictEqual(of('in_progress'), 'active');
+    assert.strictEqual(of(' In-Progress '), 'active');
+    assert.strictEqual(of('in progress'), 'unknown');
+    assert.strictEqual(of('complet'), 'unknown');
     assert.strictEqual(of(undefined), 'unknown');
     assert.strictEqual(of(''), 'unknown');
     assert.strictEqual(chapterStatus(null), 'unknown');
@@ -524,7 +535,7 @@ describe('buildStorySpine: one chapter unit per shown chapter', () => {
     assert.match(u.recapHtml, /NOTE-RECAP/);
   });
 
-  for (const status of [undefined, 'in_progress']) {
+  for (const status of [undefined, 'complet']) {
     it(`a chapter with status ${status} gets a page with no text`, () => {
       const u = chapterUnit(buildStorySpine([chapterNote(status, BODY, { overview: 'OVERVIEW-LINE' }), s1]));
       assert.strictEqual(u.status, 'unknown');
