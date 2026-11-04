@@ -64,13 +64,16 @@
 //                            (`parseDate`); `day` is false when no day of the month was named, so the
 //                            date is a placed guess. vault_check's timeline --order asks this.
 //
-//   {"op":"moments","text":…}
-//       -> {"kinds":[…],"section":null|{"heading":…,"title":…,"cards":[{"kind","shape","first","last"}],"unknownTags":[…]}}
+//   {"op":"moments","text":…,"excludeCallouts":…}
+//       -> {"kinds":[…],"section":null|{"heading","title","hidden","cards":[…],"unknownTags":[…]}}
 //                            the five moment kinds (story-moments.js), and for a wrap-up's body the Memorable Moments
 //                            section the Story page reads (the first top-level `##` the moments rule names, after the
-//                            strip chain): its heading's line, each card's kind (null for none), shape and first and last
-//                            lines, all counted in `text`, and the tags that name no kind. moments.py tags past
-//                            wrap-ups from this, so the tagger never reads a card a second way.
+//                            strip chain and the hidden callouts, `excludeCallouts` as in `cut`). Each card as drawn
+//                            (kind, null for none; shape, main, speaker, context), its first and last lines, whether a
+//                            tag can go on it (not a heading or a table), and the lines of the tags that name it
+//                            ({line, lone}), all counted in `text`; and the tags that name no kind. A moments heading
+//                            that only the strip chain hides (gm-only, a comment) is `hidden: true`, with no cards.
+//                            moments.py tags wrap-ups from this, so the tagger never reads a card a second way.
 //
 //   {"op":"command","args":["settings",…]|["explain","--all",…],"cwd":…,"env":{…}}
 //       -> {"rc":…,"stdout":…,"stderr":…}  the command run as `gm-publish <args>` runs it, from the
@@ -147,17 +150,25 @@ function googleFonts(vault, config) {
 }
 
 // The Memorable Moments of a wrap-up's body, as the Story page reads them (see the op above).
-function moments(text) {
-  const kept = [];
-  const from = [];
-  cutLines(text).cut.forEach((line, i) => { if (line !== null) { kept.push(line); from.push(i); } });
-  const { headingAt } = findHeadings(kept.join('\n'));
-  const tops = [...headingAt]
+function topHeadings(text) {
+  const { headingAt } = findHeadings(text);
+  return [...headingAt]
     .filter(([, h]) => !h.nested && h.level === 2 && h.title !== '')
     .map(([line, h]) => ({ line, end: h.end, title: h.title }))
     .sort((a, b) => a.line - b.line);
+}
+
+function moments(text, excludeCallouts) {
+  const kept = [];
+  const from = [];
+  const cut = excludeCallouts ? cutLines(text, { excludeSections: [], excludeCallouts }).cut : cutLines(text).cut;
+  cut.forEach((line, i) => { if (line !== null) { kept.push(line); from.push(i); } });
+  const tops = topHeadings(kept.join('\n'));
   const at = tops.findIndex((h) => isMomentsHeading(h.title));
-  if (at < 0) return { kinds: KINDS, section: null };
+  if (at < 0) {
+    const raw = topHeadings(text.replace(/\r/g, '')).find((h) => isMomentsHeading(h.title));
+    return { kinds: KINDS, section: raw ? { heading: raw.line, title: raw.title, hidden: true, cards: [], unknownTags: [] } : null };
+  }
   const head = tops[at];
   const stop = at + 1 < tops.length ? tops[at + 1].line : kept.length;
   const parsed = parseMoments(kept.slice(head.end, stop).join('\n'));
@@ -167,7 +178,13 @@ function moments(text) {
     section: {
       heading: from[head.line],
       title: head.title,
-      cards: parsed.cards.map((c) => ({ kind: c.kind, shape: c.shape, first: line(c.lines && c.lines.first), last: line(c.lines && c.lines.last) })),
+      hidden: false,
+      cards: parsed.cards.map((c) => ({
+        kind: c.kind, shape: c.shape, main: c.main, speaker: c.speaker, context: c.context,
+        first: line(c.lines && c.lines.first), last: line(c.lines && c.lines.last),
+        taggable: Boolean(c.lines) && !['heading_open', 'table_open'].includes(c.lines.token),
+        tags: c.lines ? c.lines.tags.map((t) => ({ line: line(t.line), lone: t.lone })) : [],
+      })),
       unknownTags: parsed.unknownTags,
     },
   };
@@ -197,8 +214,11 @@ function answer(request) {
       const body = publish === 'stub' ? keepOnlySections(text, include, { excludeSections }) : text;
       return { text: playerSafeMarkdown(body, { excludeSections }).text };
     }
-    case 'moments':
-      return moments(text);
+    case 'moments': {
+      const callouts = request.excludeCallouts === undefined || request.excludeCallouts === null ? false : request.excludeCallouts;
+      if (typeof callouts !== 'boolean') list(request, 'excludeCallouts');
+      return moments(text, callouts);
+    }
     case 'sections':
       return { withheldBy: sectionVerdicts(text, list(request, 'excludeSections')) };
     case 'stub':

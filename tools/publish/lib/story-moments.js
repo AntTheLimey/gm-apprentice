@@ -77,13 +77,16 @@ function blocksOf(text, start = 0) {
         text: lines.slice(t.map[0], t.map[1]).join('\n').replace(/\s+$/, ''),
         first: start + t.map[0],
         last: start + last,
+        token: t.type,
       };
     });
 }
 
-// Where a card stands in the text parsed: { first, last }, its first and last lines (the last is where a tag added to
-// it goes). Not enumerable, so a card reads as before; a marked span's card has none.
-const stand = (c, block) => Object.defineProperty(c, 'lines', { value: { first: block.first, last: block.last }, writable: true });
+// Where a card stands in the text parsed: { first, last, token, tags }: its first and last lines (the last is where a
+// tag added to it goes), the parser's token for its last block, and each line holding a tag that names it ({ line,
+// lone }: a lone tag paragraph, or a tag ending a block). Not enumerable, so a card reads as before; a marked span's
+// card has none.
+const stand = (c, block) => Object.defineProperty(c, 'lines', { value: { first: block.first, last: block.last, token: block.token, tags: [] } });
 
 function parseMoments(markdown) {
   const lines = String(markdown == null ? '' : markdown).replace(/\r/g, '').split('\n');
@@ -106,6 +109,7 @@ function parseMoments(markdown) {
   // The kind a tag names goes on its card; a word that is no kind is reported and the card has none.
   const kindOf = (c, tagged) => {
     if (tagged.word === undefined) return;
+    if (c.lines && tagged.line !== undefined) c.lines.tags.push({ line: tagged.line, lone: Boolean(tagged.lone) });
     const kind = tagged.word.toLowerCase();
     if (KINDS.includes(kind)) c.kind = kind;
     else if (!unknownTags.some((w) => w.toLowerCase() === kind)) unknownTags.push(tagged.word);
@@ -135,17 +139,23 @@ function parseMoments(markdown) {
       const lone = block.type === 'paragraph' ? LONE_TAG.exec(block.text.trim()) : null;
       if (lone) {
         const word = lone[1];
-        if (prior && prior.kind === null) kindOf(prior, { word });
-        else if (!KINDS.includes(word.toLowerCase())) kindOf({}, { word });
+        const tag = { word, line: block.first, lone: true };
+        if (prior && prior.kind === null) kindOf(prior, tag);
+        else {
+          // The tag is still the card's to replace, though it gives no kind.
+          if (prior && prior.lines) prior.lines.tags.push({ line: block.first, lone: true });
+          if (!KINDS.includes(word.toLowerCase())) kindOf({}, tag);
+        }
         continue;
       }
       const tagged = {};
       const text = strip(block.text, tagged);
+      if (tagged.word !== undefined) tagged.line = block.last;
       const last = card;
       card = null;
       if (last && last.context === null && block.type === 'paragraph' && wholly(text, 'em')) {
         last.context = text.trim();
-        if (last.lines) last.lines = { first: last.lines.first, last: block.last };
+        if (last.lines) Object.assign(last.lines, { last: block.last, token: block.token });
         kindOf(last, tagged);
         card = null;
         continue;
