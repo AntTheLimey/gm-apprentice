@@ -158,11 +158,11 @@ test('the landing recap, its text and its links are not opted out; the story and
     assert.strictEqual(insideNoPreview(npcIndex, npcIndex.indexOf('<a ', wrap)), true, 'npc-table-wrap links are opted out');
 
     story = build('story');
-    const chapters = story.read('chapters', 'index.html');
-    const prog = chapters.indexOf('<div class="story-progression"');
-    assert.ok(prog !== -1);
-    assert.strictEqual(insideNoPreview(chapters, chapters.indexOf('<a ', prog)), true, 'story-progression links are opted out');
+    // On the player site the chapters index merges into the Story So Far (chapter pages), whose contents opt out.
     const landingPage = story.read('story.html');
+    const contents = landingPage.indexOf('<section class="story-contents"');
+    assert.ok(contents !== -1);
+    assert.strictEqual(insideNoPreview(landingPage, landingPage.indexOf('<a ', contents)), true, 'story-contents links are opted out');
     const branch = landingPage.indexOf('<section class="story-branch"');
     assert.ok(branch !== -1);
     assert.strictEqual(insideNoPreview(landingPage, landingPage.indexOf('<a ', branch)), true, 'story-branch links are opted out');

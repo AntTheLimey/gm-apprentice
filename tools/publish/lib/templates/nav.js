@@ -34,9 +34,12 @@ const isRoster = (page) => !!page.frontmatter && ROSTER_TYPES.has(page.frontmatt
 
 function generateNavGroups(pages, options = {}) {
   const populated = new Set();
+  // A section merged into the Story So Far (`options.merged`: the player site's chapters, chapter pages) has no entry.
+  const merged = new Set(options.merged || []);
   for (const page of pages) {
     // A wrap-up folded into its Story page has no page in its folder.
     if (isFolded(page)) continue;
+    if ([...merged].some((dir) => page.outputDir === dir || page.outputDir.startsWith(`${dir}/`))) continue;
     populated.add(page.outputDir);
   }
 

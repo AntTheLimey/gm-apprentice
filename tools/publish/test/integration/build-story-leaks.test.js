@@ -368,6 +368,21 @@ describe('Story page leaks: the chapter note leaves the player site', () => {
     } finally { t.cleanup(); }
   });
 
+  it('other notes in the chapters folder keep their pages; the Chapters index leads to the Story So Far, off the menu', () => {
+    const t = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CH, 'Chapters/Chapter 1/Harbour Map.md': '---\ntype: document\n---\n\n# Harbour Map\n\nA map of the harbour, HANDOUT-1.\n' }));
+    try {
+      assert.match(read(t.player, 'chapters/chapter 1/harbour-map.html'), /HANDOUT-1/);
+      assert.match(read(t.player, 'chapters/index.html'), /<meta http-equiv="refresh" content="0;url=\.\.\/story\.html">/);
+      for (const [file, text] of texts(t.player).filter(([f]) => f.endsWith('.html'))) {
+        assert.ok(!/>Chapters<\/a>/.test(text), `a Chapters menu entry in ${file}`);
+      }
+      assert.deepEqual(brokenLinks(t.player.dir), []);
+      // The GM site keeps its Chapters index and menu entry.
+      assert.match(read(t.gm, 'chapters/index.html'), /class="chapter-card"/);
+      assert.match(read(t.gm, 'story.html'), />Chapters<\/a>/);
+    } finally { t.cleanup(); }
+  });
+
   it('the gate finds a planted sentence from the note\'s GM summary', () => {
     const t = buildBoth(files('planned'), { sites: ['player'] });
     try {

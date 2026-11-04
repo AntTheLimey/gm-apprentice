@@ -1482,6 +1482,9 @@ function buildSite(options) {
     page.notePublishedMarkdown = page.publishedMarkdown || '';
     page.publishedMarkdown = chapterShownMarkdown(page.notePublishedMarkdown, page.foldedInto);
   }
+  // The Chapters section merges into the Story So Far there: it leaves the menu, and its index (still the breadcrumb of
+  // the other notes kept in the chapters folder) leads to the Story So Far.
+  const chaptersMerged = pages.some((p) => isFoldedChapterNote(p) && /^chapters\//.test(p.foldedFrom));
   LOWER_KEYS.delete(linkMap);   // its folded spellings were read from the old addresses
   // The pages a Story page may picture beside its recap (story-figures.js), read once, after the fold has given each
   // page its final address. On the GM site only those the player site writes a page for, with a portrait the player
@@ -1889,7 +1892,7 @@ function buildSite(options) {
     }
     menuExtra.push({ label: item.label, href: read.href, external: read.kind === 'outside', group: item.group || null });
   }
-  const navFor = generateNav(pages, { hasStory, timelineHref, extra: menuExtra, collection: collection ? { href: collection.address, label: collection.title } : null });
+  const navFor = generateNav(pages, { hasStory, timelineHref, merged: chaptersMerged ? ['chapters'] : [], extra: menuExtra, collection: collection ? { href: collection.address, label: collection.title } : null });
   // The props page's link from a page at `out`, for its bar: relative, encoded; null when the site has none.
   const collectionHrefFrom = (out) => (collection ? encodeHref(relativeHref(out, collection.address)) : null);
 
@@ -2748,6 +2751,11 @@ function buildSite(options) {
   }
   function eachListing(emit, live) {
     for (const [dir, label] of Object.entries(DIR_LABELS)) {
+      if (dir === 'chapters' && chaptersMerged) {
+        const kept = Object.keys(dirs).some((d) => d === dir || d.startsWith(`${dir}/`));
+        if (live && kept) emit(`${dir}/index.html`, redirectPage(`${dir}/index.html`, 'story.html', 'Story so far'), `  wrote ${dir}/index.html (redirect → story.html)`);
+        continue;
+      }
       if (dir === 'characters/pcs' && pcRedirectTarget) {
         if (live) emit(`${dir}/index.html`, redirectPage(`${dir}/index.html`, pcRedirectTarget, 'Player Characters'), `  wrote ${dir}/index.html (redirect → ${pcRedirectTarget})`);
         continue;
