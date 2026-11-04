@@ -357,3 +357,50 @@ describe('build story: a chapter status the player site hides', () => {
     } finally { s.cleanup(); }
   });
 });
+
+// Chapter pages (Task 8): a session that moves to another chapter keeps its old Story address working, build after
+// build; a session the Story stops showing gets no redirect.
+describe('build story: a session that moves chapter', () => {
+  const { buildBoth } = require('../helpers/gm-build');
+  const { build } = require('../../lib/build');
+  const { storyVault, CHAPTER } = require('../helpers/story-vault');
+  const OLD = 'chapter-1-docks-session-2.html';
+  const NEW = 'chapter-2-boats-session-2.html';
+  const CH2 = (status) => `---\ntype: chapter\ntitle: Chapter 2 — Boats\nsort_order: 2\nstatus: ${status}\n---\n\n# Chapter 2 — Boats\n\n## Teaser\n\nThe boats.\n`;
+  const quiet = (fn) => { const saved = { log: console.log, warn: console.warn }; console.log = () => {}; console.warn = () => {}; try { fn(); } finally { Object.assign(console, saved); } };
+  const vaultFile = (s, rel) => path.join(s.root, 'vault', ...rel.split('/'));
+  const moveSession2 = (s) => {
+    for (const rel of ['Sessions/Session 2.md', 'Sessions/Session 2 Wrap-Up.md']) {
+      fs.writeFileSync(vaultFile(s, rel), fs.readFileSync(vaultFile(s, rel), 'utf8').replace('[[Chapter 1 Overview]]', '[[Chapter 2 Overview]]'));
+    }
+  };
+  const rebuild = (s) => quiet(() => build({ configPath: s.configPath, site: 'player' }));
+  const isRedirectTo = (html, to) => new RegExp(`<meta http-equiv="refresh" content="0;url=${to.replace(/\./g, '\\.')}">`).test(html);
+
+  it('the old address redirects to the new one, and still does on the next build', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n'), 'Chapters/Chapter 2/Chapter 2 Overview.md': CH2('active') }), { sites: ['player'] });
+    try {
+      assert.ok(s.player.exists('story', OLD));
+      moveSession2(s);
+      rebuild(s);
+      assert.ok(s.player.exists('story', NEW));
+      assert.ok(isRedirectTo(s.player.read('story', OLD), NEW), s.player.read('story', OLD));
+      rebuild(s);
+      assert.ok(isRedirectTo(s.player.read('story', OLD), NEW), 'the redirect is gone on the next build');
+      const { brokenLinks } = require('../helpers/site-links');
+      assert.deepEqual(brokenLinks(s.player.dir), []);
+    } finally { s.cleanup(); }
+  });
+
+  it('a session the Story no longer shows (its chapter now planned) gets no redirect', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n'), 'Chapters/Chapter 2/Chapter 2 Overview.md': CH2('active') }), { sites: ['player'] });
+    try {
+      moveSession2(s);
+      rebuild(s);
+      fs.writeFileSync(vaultFile(s, 'Chapters/Chapter 2/Chapter 2 Overview.md'), CH2('planned'));
+      rebuild(s);
+      assert.equal(s.player.exists('story', OLD), false);
+      assert.equal(s.player.exists('story', NEW), false);
+    } finally { s.cleanup(); }
+  });
+});

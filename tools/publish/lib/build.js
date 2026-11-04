@@ -7,6 +7,7 @@ const path = require('path');
 const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, slugify } = require('./scanner');
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit, detectEncoder, CACHE_FOLDER } = require('./image-optimize');
 const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
+const { readStoryAddresses, writeStoryAddresses, movedSessions } = require('./story-addresses');
 const { resolveBanner, renderBanner, normalizeEntry, attachmentRef, isAddress, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, storyMomentsOn, storyPicturesOn, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
@@ -446,6 +447,10 @@ function buildSite(options) {
 
   // The record of the files this build writes into kept folders (#506): only a full build of the player site into its
   // own folder keeps one, and only where the image cache may live (never in the output folder or the vault).
+  // The Story addresses each session has had (story-addresses.js): kept, and read, only by the player site's own full
+  // build, where the image cache may live.
+  const storyAddressesOn = !gm && !dry && writes === 'all' && !options.outputDirOverride
+    && !!imageCacheDir(configDir, { outputDirs: [outputDir], vaultPath: config.vaultPath });
   const keptRecord = (!gm && !dry && writes === 'all' && !options.outputDirOverride
     && imageCacheDir(configDir, { outputDirs: [outputDir], vaultPath: config.vaultPath })) ? keptRecordPath(configDir) : null;
   const { files: keptRecorded, replaced: keptRecordedReplaced, problem: keptRecordProblem } = keptRecord ? readKeptRecord(keptRecord) : { files: {}, replaced: new Set(), problem: null };
@@ -2864,6 +2869,19 @@ function buildSite(options) {
       if (live) for (const page of (foldedOnto.get(unit.outputPath) || []).filter(isFoldedChapterNote)) {
         emit(page.foldedFrom, redirectPage(page.foldedFrom, unit.outputPath, unit.title), `  wrote ${page.foldedFrom} (redirect → ${unit.outputPath})`);
       }
+    }
+    // A session that moved chapter keeps its old Story address (story-addresses.js): on the player site's own full
+    // build, each earlier address of a session the Story shows, where this build writes no page, leads to its page now.
+    if (live && storyAddressesOn) {
+      const previous = readStoryAddresses(configDir);
+      const taken = new Set([...pages.map((p) => p.outputPath), ...spine.map((u) => u.outputPath),
+        ...spine.map((u) => u.oldOutputPath).filter(Boolean), ...pages.filter(isFoldedChapterNote).map((p) => p.foldedFrom)]);
+      for (const { from, to } of movedSessions(previous, spine, vaultRelPathOf, taken)) {
+        const unit = spine.find((u) => u.outputPath === to);
+        emit(from, redirectPage(from, to, unit.title), `  wrote ${from} (redirect → ${to}: the session moved chapter)`);
+      }
+      writeStoryAddresses(configDir, spine, vaultRelPathOf, previous);
+      ignoreCacheInGit(configDir);
     }
     if (live) characterStories = buildCharacterStories();
     if (spine.length || characterStories.length || npcStories.length) {
