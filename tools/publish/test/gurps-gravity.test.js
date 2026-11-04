@@ -123,3 +123,17 @@ test('saved ticks: an item missing from the saved state falls back to its defaul
   assert.equal(v.load, 35);
   assert.equal(v.encName, 'Light');
 });
+
+test('no gear rows: gravity still applies to body weight (215 x 0.2 = 43 lb -> Light)', () => {
+  const noGear = raw => raw.replace(/## Equipment[\s\S]*?(?=### Encumbrance)/, '## Equipment\n\n');
+  const out = sheet(noGear);
+  assert.ok(out.liveData, 'a gravity PC with no gear still gets live data');
+  assert.equal(out.liveData.items.length, 0);
+  const v = gl.deriveLive(out.liveData, null);
+  assert.equal(v.load, 43);
+  assert.equal(v.encName, 'Light');
+  assert.equal(v.move.cur, 5);
+  assert.equal(gl.deriveLive(out.liveData, { items: {} }).encName, 'Light');
+  // Without gravity a gearless sheet has nothing live, as before.
+  assert.equal(sheet(raw => noGear(raw).replace('gravity: 1.2\n', '')).liveData, null);
+});
