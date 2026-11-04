@@ -201,8 +201,9 @@ def plan(text: str, skill: str, difficulty: str | None = None,
             m = re.search(r"\d+", next(
                 (cell(row, i) for i in (i_base, i_eff, i_lvl, i_cur)
                  if re.search(r"\d", cell(row, i))), ""))
-            at = f", at {m.group(0)}" if m else ""
-            return "HAVE", f"{skill} is in the Skills table already{at}", None
+            level_at = f", at {m.group(0)}" if m else ""
+            return ("HAVE", f"{skill} is in the Skills table already"
+                    f"{level_at}", None)
         pts = gk.parse_cost(cell(row, i_pts)) if i_pts >= 0 else None
         level_cell = next((cell(row, i) for i in (i_base, i_eff, i_lvl)
                            if re.search(r"\d", cell(row, i))), "")
@@ -248,7 +249,7 @@ def plan(text: str, skill: str, difficulty: str | None = None,
         return ("NO-DEFAULT", f"{skill} has no default (B173): it can't be "
                 "used until at least 1 point is spent on it", None)
 
-    best = None
+    best: tuple[int, str, str] | None = None
     for term in _terms(defaults):
         m = TERM_RE.match(term)
         if not m:
@@ -260,12 +261,11 @@ def plan(text: str, skill: str, difficulty: str | None = None,
         else:
             have = bought.get(_key(base))
         if have is not None and (best is None or have + mod > best[0]):
-            best = (int(have) + mod, term.strip())
+            best = (int(have) + mod, term.strip(), base.lower())
     if best is None:
         raise Refused("CANNOT", f"{skill}: none of its defaults ({defaults}) "
                       "can be worked out from this sheet")
-    level, source = best
-    base = TERM_RE.match(source).group(1).strip().lower()
+    level, source, base = best
     if base in stand_in:
         said.append(f"{base.capitalize()} taken as IQ: the sheet lists no "
                     f"{base.capitalize()}")
