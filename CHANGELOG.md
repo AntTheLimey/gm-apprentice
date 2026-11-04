@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.132] — 2026-11-04
+
+The chapter note leaves the player site: players read a chapter only on its Story page. Publish tool 1.66.0. No vault change is needed.
+
+### Changed
+
+- **A chapter note has no page of its own on the player site.** Players see only its title, its `date_range:`, its `## Teaser` (active), and its `overview:` and `## Recap` (complete), on the chapter's Story page. Nothing else of the note reaches any player file: its body is no longer searched, previewed, quoted on other pages or counted as mentioning anyone. The GM site keeps the note's page, and each chapter page there links to it ("Chapter note (GM)").
+- Links to a chapter note, in any note or field, lead to its chapter's Story page, and the note's old address sends readers there too. A planned chapter has no page and no redirect, and a link to it prints as plain words.
+- The player site's Chapters section merges into the Story So Far: it leaves the menu, its index sends readers to the Story So Far, and the landing page's "The Story" card leads there and counts the chapters. Other notes kept in the chapters folder (handouts, props, session notes) keep their pages.
+- **A session that moves to another chapter keeps its old Story address.** The build keeps a record of the Story addresses each session has had (in the site folder's `.gm-apprentice/`, never in the vault or the published site) and sends each old address on to the new one, build after build. Dead End's Sessions 6 to 14, moved to Chapter 2, keep their old links.
+
+### Fixed
+
+- A chapter note whose status read as planned only after trimming or in another case (`status: "planned "`, `Planned`) was hidden from the Story but still published its own page. Both now read the status the same way, and a planned chapter stays off the player site even when the publish list lists it.
+- The leak check no longer reports a GM's numbered list of public names ("14 — [[Session 14 - Iced Tea]]") as hidden text when a page happens to print the same words, such as a session's breadcrumb.
+
+---
+
 ## [1.10.131] — 2026-11-04
 
 The Story page reads like a book's contents, and each chapter has one Story page of its own, the chapter break between one chapter's sessions and the next's. What a chapter shows depends on its `status:`. Publish tool 1.65.0. No vault change is needed; a `## Teaser` in a chapter note is new and optional.
