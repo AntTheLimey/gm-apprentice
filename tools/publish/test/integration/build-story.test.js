@@ -444,6 +444,24 @@ describe('build story: a session that moves chapter', () => {
     } finally { s.cleanup(); }
   });
 
+  // CodeRabbit 4469622179: a record that can be neither read nor moved aside is left as it is; the build goes on.
+  it('a record that cannot be read nor moved aside is left untouched, and the build says so', { skip: process.platform === 'win32' || process.getuid() === 0 }, () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n') }), { sites: ['player'] });
+    const dir = path.join(s.root, 'campaign', '.gm-apprentice');
+    const record = path.join(dir, 'story-addresses.json');
+    try {
+      fs.writeFileSync(record, '{broken');
+      for (const f of fs.readdirSync(dir)) if (fs.statSync(path.join(dir, f)).isDirectory()) fs.chmodSync(path.join(dir, f), 0o755);
+      fs.chmodSync(dir, 0o555);
+      const logs = [];
+      const saved = { log: console.log, warn: console.warn };
+      console.log = () => {}; console.warn = (m) => logs.push(String(m));
+      try { build({ configPath: s.configPath, site: 'player' }); } finally { Object.assign(console, saved); fs.chmodSync(dir, 0o755); }
+      assert.equal(fs.readFileSync(record, 'utf8'), '{broken');
+      assert.equal(logs.filter((l) => /nor moved aside/.test(l)).length, 1, logs.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
   it('two sessions with one file name are said once, and keep no old address', () => {
     const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n'),
       'Chapters/Chapter 2/Chapter 2 Overview.md': CH2('active'),

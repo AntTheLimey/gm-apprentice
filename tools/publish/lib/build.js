@@ -2889,7 +2889,9 @@ function buildSite(options) {
     // A session that moved chapter keeps its old Story address (story-addresses.js): on the player site's own full
     // build, each earlier address of a session the Story shows, where this build writes no page, leads to its page now.
     if (live && storyAddressesOn) {
-      const previous = readStoryAddresses(configDir, { warn: (msg) => console.warn(`  WARNING: ${msg}`) });
+      // null: a record that could not be read nor moved aside, left as it is (no redirect from it, no record written).
+      const record = readStoryAddresses(configDir, { warn: (msg) => console.warn(`  WARNING: ${msg}`) });
+      const previous = record || new Map();
       // Sessions whose notes share a file name keep no old address: said, never silent.
       for (const name of sharedSessionNames(spine, vaultRelPathOf)) {
         const notes = spine.filter((u) => u.kind === 'session' && path.posix.basename(vaultRelPathOf(u.sourcePage)).normalize('NFC') === name).map((u) => vaultRelPathOf(u.sourcePage));
@@ -2901,7 +2903,7 @@ function buildSite(options) {
         const unit = spine.find((u) => u.outputPath === to);
         emit(from, redirectPage(from, to, unit.title), `  wrote ${from} (redirect → ${to}: the session moved chapter)`);
       }
-      writeStoryAddresses(configDir, spine, vaultRelPathOf, previous);
+      if (record) writeStoryAddresses(configDir, spine, vaultRelPathOf, previous);
       ignoreCacheInGit(configDir);
     }
     if (live) characterStories = buildCharacterStories();

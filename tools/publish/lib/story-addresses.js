@@ -22,6 +22,7 @@ const storyAddressesPath = (siteDir) => path.join(siteDir, CACHE_FOLDER, FILE);
 // Each session's Story addresses, earliest first, by the session note's file name (NFC). No record (the first build of
 // a site with this version) is none, silently. A record that cannot be read (corrupt, unreadable, another version) is
 // never overwritten: it is moved aside to a dated .bak beside it and `warn` says so, and the build starts a new record.
+// One that cannot be moved aside either answers null: the build then leaves it as it is and writes no record.
 // `today` (YYYY-MM-DD) names the .bak.
 function readStoryAddresses(siteDir, { warn = () => {}, today = new Date().toISOString().slice(0, 10) } = {}) {
   const file = storyAddressesPath(siteDir);
@@ -46,7 +47,8 @@ function readStoryAddresses(siteDir, { warn = () => {}, today = new Date().toISO
     fs.renameSync(file, bak);
     warn(`the record of old Story addresses (${file}) could not be read (${problem}); it is kept as ${bak} and a new record starts, so sessions that moved chapter before now will not redirect from their old addresses`);
   } catch (e) {
-    warn(`the record of old Story addresses (${file}) could not be read (${problem}), nor moved aside (${e.message}); sessions that moved chapter before now will not redirect from their old addresses`);
+    warn(`the record of old Story addresses (${file}) could not be read (${problem}), nor moved aside (${e.message}); it is left as it is and not written this build, so sessions that moved chapter will not redirect from their old addresses`);
+    return null;
   }
   return new Map();
 }
@@ -87,7 +89,10 @@ function writeStoryAddresses(siteDir, spine, relOf, previous) {
   const file = storyAddressesPath(siteDir);
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const sessions = Object.fromEntries([...all].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)));
-  fs.writeFileSync(file, `${JSON.stringify({ version: VERSION, sessions }, null, 1)}\n`);
+  // Whole or not at all: a temporary file beside it, renamed over it.
+  const tmp = `${file}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, `${JSON.stringify({ version: VERSION, sessions }, null, 1)}\n`);
+  try { fs.renameSync(tmp, file); } catch (e) { fs.rmSync(tmp, { force: true }); throw e; }
 }
 
 // The redirects to write: { from, to } for each earlier address of a session the Story shows now, where this build

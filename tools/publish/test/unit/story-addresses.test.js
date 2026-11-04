@@ -99,4 +99,36 @@ describe('story addresses', () => {
       assert.deepEqual(sharedSessionNames(spine, relOf), ['Dup.md']);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
+
+  // CodeRabbit 4469622179: a record that can be neither read nor moved aside is left as it is: the reader answers null
+  // and says so, and the build writes no record over it.
+  it('a record that cannot be moved aside reads as null and is left untouched', { skip: process.platform === 'win32' || process.getuid() === 0 }, () => {
+    const dir = tmp();
+    const folder = path.dirname(storyAddressesPath(dir));
+    try {
+      fs.mkdirSync(folder, { recursive: true });
+      fs.writeFileSync(storyAddressesPath(dir), '{broken');
+      fs.chmodSync(folder, 0o555);
+      const said = [];
+      assert.equal(readStoryAddresses(dir, { warn: (m) => said.push(m), today: '2026-11-04' }), null);
+      assert.equal(said.length, 1);
+      assert.match(said[0], /nor moved aside/);
+      assert.equal(fs.readFileSync(storyAddressesPath(dir), 'utf8'), '{broken');
+    } finally { fs.chmodSync(folder, 0o755); fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // CodeRabbit 4469622220: the record is written whole or not at all (a temporary file renamed over it).
+  it('the record is written through a temporary file, none left behind', () => {
+    const dir = tmp();
+    try {
+      const real = fs.writeFileSync;
+      const wrote = [];
+      fs.writeFileSync = (f, ...rest) => { wrote.push(String(f)); return real(f, ...rest); };
+      try { writeStoryAddresses(dir, [session('Sessions/S 1.md', 'story/c-s1.html')], relOf, new Map()); } finally { fs.writeFileSync = real; }
+      assert.equal(wrote.length, 1);
+      assert.notEqual(wrote[0], storyAddressesPath(dir), 'written in place');
+      assert.deepEqual(fs.readdirSync(path.dirname(storyAddressesPath(dir))), ['story-addresses.json']);
+      assert.deepEqual([...readStoryAddresses(dir)], [['S 1.md', ['story/c-s1.html']]]);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
 });
