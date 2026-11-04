@@ -148,6 +148,8 @@ function collectHidden({ configPath, outputDir = null }) {
     if (chapterUnit) {
       const shownKeys = new Set(['title', 'date_range', ...(chapterUnit.status === 'complete' ? ['overview'] : [])]);
       visible.push(String(page.displayTitle || ''), chapterUnit.title);
+      // Its chapter page's session list, as the page prints it: each row's number (the list's own marker) and title.
+      for (const row of chapterUnit.sessions || []) visible.push(`${row.number == null ? '' : row.number} ${row.title}`);
       for (const [key, value] of Object.entries(shownFields)) {
         if (shownKeys.has(key)) visible.push(...stringsOfValue(value));
         else add(hiddenOfValue(value), rel, `${key} (a chapter note shows players only its Teaser, overview and Recap)`);

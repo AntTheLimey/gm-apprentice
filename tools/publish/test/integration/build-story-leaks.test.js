@@ -391,3 +391,21 @@ describe('Story page leaks: the chapter note leaves the player site', () => {
     } finally { t.cleanup(); }
   });
 });
+
+// Dead End's chapter note lists its sessions ("14 — [[Session 14 - Iced Tea]]"), and Session 14's breadcrumb prints
+// "Session 14 › Session 14 - Iced Tea": the same words as that row. The chapter page prints the row too (its session
+// list: the number, the title), so it is no hidden text (PR C review M1).
+describe('Story page leaks: a chapter note\'s session list, as its chapter page prints it', () => {
+  it('is no finding', () => {
+    const sess = (n, title) => `---\ntype: session\ntitle: ${title}\nsession_number: ${n}\nchapter: "[[Chapter 2]]"\nstatus: played\nplay_date: "2026-10-${n}"\n---\n\n# ${title}\n\n## Narrative Recap\n\nThey drank tea, recap ${n}.\n`;
+    const s = buildBoth({
+      'Chapters/Chapter 2/Chapter 2.md': '---\ntype: chapter\ntitle: Chapter 2 — Running Dark\nsort_order: 2\nstatus: active\n---\n\n# Chapter 2\n\n## Sessions\n\n'
+        + '| Session | Notes |\n|---|---|\n| 14 — [[Session 14 - Iced Tea]] | x |\n| 15 — [[Session 15 - Hot Coffee]] | y |\n\n## Teaser\n\nThe dark runs.\n',
+      'Sessions/Session 14/Session 14 - Iced Tea.md': sess(14, 'Session 14 - Iced Tea'),
+      'Sessions/Session 15/Session 15 - Hot Coffee.md': sess(15, 'Session 15 - Hot Coffee'),
+    }, { sites: ['player'] });
+    try {
+      assert.deepEqual(gate(s), []);
+    } finally { s.cleanup(); }
+  });
+});

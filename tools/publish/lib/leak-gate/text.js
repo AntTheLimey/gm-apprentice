@@ -184,17 +184,14 @@ function nameSet(names) {
 }
 
 // Whether a piece's words are nothing but public names of the site, one after another (a list of mentions, a cast
-// list), with any numbers among them (a numbered list: "14 — [[Session 14]]"): the site prints those names wherever it
-// links them, so they are not hidden text. The name checks look for secret names. A piece of numbers alone is no list
-// of names.
+// list): the site prints those names wherever it links them, so they are not hidden text. The name checks look for
+// secret names.
 const NAMES_ONLY_MAX = 12;
-const isNumber = (w) => /^\d+$/.test(w);
 function onlyNames(words, names) {
-  if (words.length > NAMES_ONLY_MAX || words.every(isNumber)) return false;
-  // ok[i]: the first i words are names and numbers.
+  if (words.length > NAMES_ONLY_MAX || !names.firsts.has(words[0])) return false;
   const ok = [true];
   for (let i = 1; i <= words.length; i++) {
-    ok[i] = ok[i - 1] && isNumber(words[i - 1]);
+    ok[i] = false;
     for (let j = i - 1; j >= 0 && !ok[i]; j--) if (ok[j] && names.has(words.slice(j, i).join(' '))) ok[i] = true;
   }
   return ok[words.length];
