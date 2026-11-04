@@ -259,7 +259,8 @@ class SiteFaultRowsTests(unittest.TestCase):
     def test_the_chapter_bookkeeping_codes_are_rows_with_the_tools_fix(self):
         for code in ("CHAPTER_STATUS_UNKNOWN", "CHAPTER_NO_TEASER",
                      "CHAPTER_ACTIVE_MANY", "CHAPTER_PLANNED_PLAYED",
-                     "CHAPTER_TITLE_SHARED", "SESSION_NO_CHAPTER"):
+                     "CHAPTER_TITLE_SHARED", "SESSION_NO_CHAPTER",
+                     "CHAPTER_REF_UNSHOWN"):
             with self.subTest(code=code):
                 row = vc._site_fault_row({
                     "code": code, "severity": "warning",

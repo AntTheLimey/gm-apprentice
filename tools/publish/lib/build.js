@@ -2822,11 +2822,27 @@ function buildSite(options) {
           plannedPlayed(note, held);
         } else {
           console.warn(`  WARNING: sessions name the chapter "${ref}", which is not a chapter page on this site (it does not publish here, or no chapter note has that name), so they have no Story page: ${held.map(vaultRelPathOf).join(', ')}`);
+          for (const session of held) {
+            chapterFault(vaultRelPathOf(session), 'CHAPTER_REF_UNSHOWN', `its chapter: field names "${ref}", which is not a chapter page on this site, so it has no Story page`,
+              'check the chapter: link\'s spelling against the chapter note\'s name, or the chapter note\'s publish settings');
+          }
         }
       }
-      if (spine.unchapteredSessions.length) {
-        console.warn(`  WARNING: played sessions with no chapter have no Story page (give each a chapter: field): ${spine.unchapteredSessions.map(vaultRelPathOf).join(', ')}`);
-        for (const session of spine.unchapteredSessions) {
+      // A session with no chapter: field in a planned chapter's folder is that chapter's (the GM site reads it so):
+      // the planned chapter's row, not "no chapter".
+      const inPlanned = new Map();
+      const loose = [];
+      for (const session of spine.unchapteredSessions) {
+        const note = chapterOfSession(session, unshownChapters);
+        if (note && chapterStatus(note) === 'planned') {
+          if (!inPlanned.has(note)) inPlanned.set(note, []);
+          inPlanned.get(note).push(session);
+        } else loose.push(session);
+      }
+      for (const [note, held] of inPlanned) plannedPlayed(note, held);
+      if (loose.length) {
+        console.warn(`  WARNING: played sessions with no chapter have no Story page (give each a chapter: field): ${loose.map(vaultRelPathOf).join(', ')}`);
+        for (const session of loose) {
           chapterFault(vaultRelPathOf(session), 'SESSION_NO_CHAPTER', 'a played session with no chapter: field, so it has no Story page',
             'give it a chapter: field linking the chapter note it was played in');
         }

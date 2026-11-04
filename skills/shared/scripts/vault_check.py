@@ -1825,7 +1825,7 @@ NOTE_FAULT_CODES = ("ALIAS_IN_PROSE", "NEVER_SHOW_IN_PROSE",
                     "MOMENT_KIND_UNKNOWN", "CHAPTER_STATUS_UNKNOWN",
                     "CHAPTER_NO_TEASER", "CHAPTER_ACTIVE_MANY",
                     "CHAPTER_PLANNED_PLAYED", "CHAPTER_TITLE_SHARED",
-                    "SESSION_NO_CHAPTER")
+                    "SESSION_NO_CHAPTER", "CHAPTER_REF_UNSHOWN")
 # How many of the pages naming a note a row lists; `--file` lists them all.
 SITE_FAULT_PAGES = 3
 
@@ -1876,7 +1876,7 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
                   "CHAPTER_STATUS_UNKNOWN", "CHAPTER_NO_TEASER",
                   "CHAPTER_ACTIVE_MANY", "CHAPTER_PLANNED_PLAYED",
                   "CHAPTER_TITLE_SHARED", "SESSION_NO_CHAPTER",
-                  "WITHHELD_NAME_PUBLIC", "WITHHELD_PUBLISHED",
+                  "CHAPTER_REF_UNSHOWN", "WITHHELD_NAME_PUBLIC", "WITHHELD_PUBLISHED",
                   "WITHHELD_FLAG_UNREADABLE", "COMPANION_FLAG_UNREADABLE"):
         msg = f"{code}: {_one_line(f.get('detail'))}"
     elif code == "NEVER_SHOW_IN_PROSE":

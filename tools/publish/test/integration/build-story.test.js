@@ -364,7 +364,7 @@ describe('build story: chapter bookkeeping is a Site Faults finding', () => {
   const { buildBoth } = require('../helpers/gm-build');
   const { storyVault, CHAPTER, SESSION, WRAP_2 } = require('../helpers/story-vault');
   const { summaryLines } = require('../../lib/note-faults');
-  const CHAPTER_CODES = ['CHAPTER_STATUS_UNKNOWN', 'CHAPTER_NO_TEASER', 'CHAPTER_ACTIVE_MANY', 'CHAPTER_PLANNED_PLAYED', 'CHAPTER_TITLE_SHARED', 'SESSION_NO_CHAPTER'];
+  const CHAPTER_CODES = ['CHAPTER_STATUS_UNKNOWN', 'CHAPTER_NO_TEASER', 'CHAPTER_ACTIVE_MANY', 'CHAPTER_PLANNED_PLAYED', 'CHAPTER_TITLE_SHARED', 'SESSION_NO_CHAPTER', 'CHAPTER_REF_UNSHOWN'];
   const ch = (n, status, extra = '', title = `Chapter ${n}`) => `---\ntype: chapter\ntitle: ${title}\nsort_order: ${n}\n${status ? `status: ${status}\n` : ''}---\n\n# ${title}\n${extra}`;
   const faultsOf = (files) => {
     const s = buildBoth(storyVault(files), { sites: [] });
@@ -404,6 +404,39 @@ describe('build story: chapter bookkeeping is a Site Faults finding', () => {
     assert.match(faults[0].fix, /status: to active .*complete/);
   });
 
+  it('played sessions in a planned chapter\'s folder, with no chapter: field: the chapter\'s row on both sites, never SESSION_NO_CHAPTER', () => {
+    const v = storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: planned\n'),
+      'Chapters/C2/Chapter 2.md': ch(2, 'active', '\n## Teaser\n\nT.\n') });
+    for (const k of Object.keys(v)) {
+      if (/^Sessions\/Session [12]( Wrap-Up)?\.md$/.test(k) && v[k]) { v[`Chapters/Chapter 1/${path.basename(k)}`] = v[k].replace(/chapter: .*\n/, ''); delete v[k]; }
+    }
+    const s = buildBoth(v);
+    let faults = null;
+    try { build({ configPath: s.configPath, site: 'player', inMemory: true, onNoteFaults: (f) => { faults = f; } }); } finally { s.cleanup(); }
+    faults = faults.filter((f) => CHAPTER_CODES.includes(f.code));
+    assert.deepEqual(faults.map((f) => f.code), ['CHAPTER_PLANNED_PLAYED'], JSON.stringify(faults));
+    assert.equal(faults[0].path, 'Chapters/Chapter 1/Chapter 1 Overview.md');
+    assert.match(faults[0].detail, /Chapters\/Chapter 1\/Session 1\.md/);
+    // Both sites' builds say the same: the planned chapter, never "no chapter".
+    assert.ok(!s.logs.some((l) => /played sessions with no chapter/.test(l)), s.logs.join('\n'));
+    assert.equal(s.logs.filter((l) => /this chapter is planned, so its played sessions/.test(l)).length, 2, s.logs.join('\n'));
+  });
+
+  it('sessions naming a chapter no chapter page heads: a row on each session, with its fix', () => {
+    // A misspelt link: the chapter note is fine, the sessions name no chapter page.
+    const v = storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: active\n') + '\n## Teaser\n\nT.\n' });
+    for (const k of Object.keys(v)) if (/^Sessions\//.test(k) && v[k]) v[k] = v[k].replace('[[Chapter 1 Overview]]', '[[Chapter 1 Overveiw]]');
+    const s = buildBoth(v, { sites: [] });
+    let faults = null;
+    try { build({ configPath: s.configPath, site: 'player', inMemory: true, onNoteFaults: (f) => { faults = f; } }); } finally { s.cleanup(); }
+    const unshown = rows(faults, 'CHAPTER_REF_UNSHOWN');
+    assert.deepEqual(unshown.map((f) => f.path), ['Sessions/Session 1.md', 'Sessions/Session 2.md'], JSON.stringify(faults));
+    assert.equal(unshown[0].severity, 'warning');
+    assert.match(unshown[0].detail, /Chapter 1 Overveiw/);
+    assert.match(unshown[0].fix, /spelling/);
+    assert.match(unshown[0].fix, /publish/);
+  });
+
   it('two chapters with one title, and a played session no chapter heads: one row each', () => {
     const arc = (n, status) => ch(n, status, status === 'active' ? '\n## Teaser\n\nT.\n' : '\n## Recap\n\nR.\n', 'Arc');
     const s0 = SESSION(0).replace(/chapter: .*\n/, '');
@@ -437,11 +470,11 @@ describe('build story: chapter bookkeeping is a Site Faults finding', () => {
   it('the closing summary says it once for all of them, and sends the GM to campaign-qa', () => {
     const f = (code, p) => ({ code, severity: 'warning', path: p, detail: 'd', fix: 'f' });
     const lines = summaryLines([f('CHAPTER_NO_TEASER', 'Chapters/A/A.md'), f('CHAPTER_ACTIVE_MANY', 'Chapters/A/A.md'),
-      f('CHAPTER_ACTIVE_MANY', 'Chapters/B/B.md'), f('SESSION_NO_CHAPTER', 'Sessions/S.md')]);
+      f('CHAPTER_ACTIVE_MANY', 'Chapters/B/B.md'), f('SESSION_NO_CHAPTER', 'Sessions/S.md'), f('CHAPTER_REF_UNSHOWN', 'Sessions/T.md')]);
     assert.equal(lines.length, 1, lines.join('\n'));
-    assert.match(lines[0], /^4 chapter bookkeeping faults/);
+    assert.match(lines[0], /^5 chapter bookkeeping faults/);
     // The notes were named on their own lines as the Story was built: the closing line only counts them.
-    assert.doesNotMatch(lines[0], /\b(A|B|S)\b/);
+    assert.doesNotMatch(lines[0], /\b(A|B|S|T)\b/);
     assert.match(lines[0], /campaign-qa's Site Faults check fixes these/);
   });
 });

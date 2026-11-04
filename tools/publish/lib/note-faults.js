@@ -44,7 +44,9 @@
 //   CHAPTER_PLANNED_PLAYED  a planned chapter holding played sessions, which so have no Story page
 //   CHAPTER_TITLE_SHARED  a chapter with the title of another, so sessions naming it go to the first
 //   SESSION_NO_CHAPTER  a played session no chapter heads, where chapters show, so it has no Story page
-//                     (these six: the Story's chapter bookkeeping, from build.js, one row per note)
+//   CHAPTER_REF_UNSHOWN  a played session whose `chapter:` names no chapter page on this site (a misspelt link,
+//                     or a chapter note that does not publish here), so it has no Story page
+//                     (these seven: the Story's chapter bookkeeping, from build.js, one row per note)
 //
 // Nothing here reads a page a second way, and nothing here knows which field a template
 // prints. The names are decided by the page as the build makes it: every link to a note
@@ -70,7 +72,7 @@ const { STORY_SUFFIX } = require('./scanner');
 const { NO_PAGE_TYPES } = require('./excluding-values');
 const { decodeEntities } = require('./templates/gurps/tables');
 
-const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'COMPANION_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE', 'PROP_NOT_COPIED', 'MOMENT_KIND_UNKNOWN', 'CHAPTER_STATUS_UNKNOWN', 'CHAPTER_NO_TEASER', 'CHAPTER_ACTIVE_MANY', 'CHAPTER_PLANNED_PLAYED', 'CHAPTER_TITLE_SHARED', 'SESSION_NO_CHAPTER'];
+const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'COMPANION_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE', 'PROP_NOT_COPIED', 'MOMENT_KIND_UNKNOWN', 'CHAPTER_STATUS_UNKNOWN', 'CHAPTER_NO_TEASER', 'CHAPTER_ACTIVE_MANY', 'CHAPTER_PLANNED_PLAYED', 'CHAPTER_TITLE_SHARED', 'SESSION_NO_CHAPTER', 'CHAPTER_REF_UNSHOWN'];
 // The Story's chapter bookkeeping: one closing line for all of them.
 const CHAPTER_CODES = new Set(CODES.slice(CODES.indexOf('CHAPTER_STATUS_UNKNOWN')));
 const WORST = 3;

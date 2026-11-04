@@ -650,6 +650,9 @@ change what the site shows:
   SESSION_NO_CHAPTER
                   a played session no chapter heads, where chapters show, so it
                   has no Story page
+  CHAPTER_REF_UNSHOWN
+                  a played session whose chapter: names no chapter page on this
+                  site, so it has no Story page
 To find them the site is built in memory, every page rendered and nothing
 written, so the names are read off the pages as built and the list is the
 build's own. That is every page: a note's own, a PC's story, the section
