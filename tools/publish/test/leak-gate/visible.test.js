@@ -83,6 +83,21 @@ describe('leak gate: also visible, read as the page reads it', () => {
     } finally { site.cleanup(); }
   });
 
+  // A GM's numbered list of sessions ("14 — [[Session 14 - Iced Tea]]", Dead End's chapter note) matched the session's
+  // own breadcrumb ("Session 14 › Session 14 - Iced Tea"): a number among public names says nothing more.
+  it('a hidden piece that is only numbers and public names (a numbered list of mentions) is not a finding', () => {
+    const site = leakSite({
+      'NPCs/Emma Wentworth.md': '---\ntype: npc\n---\nA lady.\n',
+      'NPCs/Marina Garrick.md': '---\ntype: npc\n---\nA lady.\n',
+      'NPCs/Session 14 - Iced Tea.md': '---\ntype: npc\n---\nA session.\n',
+      'Prep/Draft.md': '---\ntype: npc\npublish: false\n---\n| 14 — [[Session 14 - Iced Tea]] | x |\n|---|---|\n| 3 — [[Marina Garrick]] 1923 | y |\n\n- 1922 1923 1924 1925\n',
+    }, SETTINGS);
+    try {
+      leakInto(site.outputDir, 'npcs/emma-wentworth.html', 'Session 14 › Session 14 - Iced Tea. 3 Marina Garrick 1923. 1922 1923 1924 1925.');
+      assert.deepEqual(gate(site).findings.map((f) => f.text), ['1922 1923 1924 1925']);
+    } finally { site.cleanup(); }
+  });
+
   // A page's title heads its body in place of the note's own leading H1, so "[[Wrap Up]] — narrative recap" in a GM's
   // source list is the page's title and the heading players read under it (Canticle, 2026-10-27).
   const WRAP = { 'Sessions/Wrap Up One.md': '---\ntype: event\n---\n# The First Night (Wrap-Up)\n\n## Narrative Recap\n\nThe party met at the inn.\n\n## GM Notes\n\n### Hidden Ending\n\nThe innkeeper is the thief.\n' };
