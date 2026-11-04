@@ -206,7 +206,9 @@ async function runDeploy(options, deps) {
   // finding, or a gate that cannot run, on purpose: every finding is still printed, and the payload says so.
   const ignoreLeaks = !!opts.ignoreLeaks;
   const IGNORED = 'Deploying anyway: --ignore-leaks was given, so these go online as they are.';
-  const gateFolder = tomlFolder || outputFolder;
+  // The folder the upload takes: the one wrangler.toml names on Cloudflare, the one git commits on a git host (a
+  // leftover wrangler.toml there names a folder nothing uploads).
+  const gateFolder = isCloudflare ? (tomlFolder || outputFolder) : outputFolder;
   const checkLeaks = () => {
     try { return { result: leakGate({ configPath, outputDir: gateFolder }) }; } catch (err) {
       return { result: null, line: `The leak check could not run: ${err.message}. Nothing was uploaded.` };
@@ -217,7 +219,7 @@ async function runDeploy(options, deps) {
   // A file a letter-case rename left under its temporary name (build.js renameCase) would go online under that name.
   // It may be the only copy, so deploy never deletes it: it stops and names each one. The folder read is the one the
   // upload takes: wrangler's on Cloudflare, the one git commits on a git host.
-  const uploadFolder = isCloudflare ? gateFolder : outputFolder;
+  const uploadFolder = gateFolder;
   const uploadLabel = `${(path.relative(siteRoot, uploadFolder) || '.').split(path.sep).join('/')}/`;
   const caseTemps = () => require('./git-case').caseTemps(uploadFolder).map((r) => `${uploadLabel}${r}`);
   const caseTempLine = (t, stop) => {

@@ -864,6 +864,17 @@ describe('deploy: the leak gate', () => {
     assert.deepStrictEqual(seen, [path.join(SITE, 'docs')]);
   });
 
+  it('github-pages checks the folder git commits, not one a leftover wrangler.toml names', async () => {
+    const seen = [];
+    const h = harness({
+      config: { host: 'github-pages', siteUrl: 'https://u.github.io/c' },
+      files: { [path.join(SITE, 'wrangler.toml')]: 'name = "x"\npages_build_output_dir = "stale"\n' },
+      leakGate: (o) => { seen.push(o.outputDir); return leaking(); },
+    });
+    assert.strictEqual(await runDeploy({ configPath: CONFIG, noBuild: true }, h.deps), 1);
+    assert.deepStrictEqual(seen, [path.join(SITE, 'docs')]);
+  });
+
   it('a clean check says so and the deploy goes on, with the summary in --json', async () => {
     const h = harness();
     assert.strictEqual(await runDeploy({ configPath: CONFIG }, h.deps), 0);
