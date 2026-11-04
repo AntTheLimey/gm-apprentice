@@ -2834,7 +2834,7 @@ function buildSite(options) {
       for (const [first, later] of spine.duplicateChapters) {
         console.warn(`  WARNING: ${vaultRelPathOf(first)} and ${vaultRelPathOf(later)} have the same title; the second's Story page is ${spine.find((u) => u.sourcePage === later).outputPath} and sessions naming that title go to the first`);
         chapterFault(vaultRelPathOf(later), 'CHAPTER_TITLE_SHARED', `has the same title as ${vaultRelPathOf(first)}, so sessions naming that title go to the first chapter`,
-          'give one of the two chapters another title: (a sessions\' chapter: field that names it by title changes with it)');
+          'give one of the two chapters another title (its title: field), and change any session\'s chapter: field that names it by the old title');
       }
       // The chapter bookkeeping the GM sets (chapter pages): said, one line each.
       const chapterUnits = spine.filter((u) => u.kind === 'chapter');
