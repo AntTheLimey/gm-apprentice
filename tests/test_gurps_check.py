@@ -220,6 +220,14 @@ check("load message shows both levels and lbs",
       "43" in load[0][2] and "Light" in load[0][2] and "Medium" in load[0][2],
       True)
 
+# #510: with local gravity set, the sheet works encumbrance out by B350 and this
+# check reads 1G, so a mismatch is context (INFO), never a false WARNING.
+gload = gk.check_load(gk.Sheet(_LOADED.replace("type: pc\n", "type: pc\ngravity: 1.2\n")))
+check("load with gravity is INFO, says 1G and the sheet's gravity",
+      (gload[0][0], "1G" in gload[0][2], "1.2G" in gload[0][2]), ("INFO", True, True))
+g1 = gk.check_load(gk.Sheet(_LOADED.replace("type: pc\n", "type: pc\ngravity: 1\n")))
+check("load with gravity 1 still warns", [f[0] for f in g1], ["WARNING"])
+
 nl = gk.check_load(gk.Sheet(_LOADED.replace("**Enc:** Medium (2)\n", "")))
 check("load INFO when no declared level",
       (nl[0][0], "Light" in nl[0][2]), ("INFO", True))

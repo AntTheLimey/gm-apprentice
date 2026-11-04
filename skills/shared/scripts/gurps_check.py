@@ -238,6 +238,14 @@ def declared_enc(sheet):
     return m.group(1).strip() if m else None
 
 
+def local_gravity(sheet) -> float | None:
+    """The note's `gravity` (G) when set and not 1, else None (#510)."""
+    raw = sheet.fm.get("gravity")
+    m = re.fullmatch(r"\s*(\d+(?:\.\d+)?)\s*[gG]?\s*", raw) if isinstance(raw, str) else None
+    g = float(m.group(1)) if m else None
+    return g if g is not None and g != 1 else None
+
+
 def check_load(sheet):
     attrs = read_attributes(sheet)
     if attrs is None:
@@ -272,6 +280,15 @@ def check_load(sheet):
                  f"carried+worn {total:g} lb -> {computed_name} (BL {bl:g}); "
                  "no Enc: line in Current Status to compare")]
     if norm_level(declared) != computed_name.lower():
+        g = local_gravity(sheet)
+        if g is not None:
+            # The published sheet applies B350 for this gravity; this check
+            # does not, so the difference is context, not a fault.
+            return [("INFO", "load",
+                     f"Current Status says Enc {declared}; carried+worn "
+                     f"{total:g} lb computes to {computed_name} at 1G "
+                     f"(BL {bl:g}). The note sets gravity {g:g}G, which the "
+                     "published sheet applies (B350); this check reads 1G")]
         return [("WARNING", "load",
                  f"Current Status says Enc {declared} but carried+worn "
                  f"{total:g} lb computes to {computed_name} (BL {bl:g})")]
