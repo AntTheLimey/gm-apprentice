@@ -7,9 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.10.128] — 2026-11-03
+## [1.10.129] — 2026-11-04
 
-GURPS sheets and the party board can count local gravity, weights in ounces read right, and gear added after a player saved ticks shows ticked. Publish tool 1.63.0. No vault change is needed (#510).
+GURPS sheets and the party board can count local gravity, weights in ounces read right, and gear added after a player saved ticks shows ticked. Publish tool 1.64.0. No vault change is needed (#510).
 
 ### Added
 
@@ -21,6 +21,7 @@ GURPS sheets and the party board can count local gravity, weights in ounces read
 - The party board no longer shows gear added to a sheet after a player saved their ticks as unticked. An item the saved state does not name now takes its sheet default (main Equipment ticked, load-outs not); one the player unticked stays unticked.
 - The shared frontmatter reader no longer takes a commented-out line (`# gravity: 1.2`) for a field.
 
+## [1.10.128] — 2026-11-03
 
 session-wrapup writes and tags Memorable Moments for sites that show them as cards. Publish tool 1.63.0. No vault or site change.
 
