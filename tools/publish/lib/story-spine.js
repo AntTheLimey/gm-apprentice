@@ -216,7 +216,8 @@ function once(resolve) {
 // Each unit carries its wrap-up's other sections (story-sections.js): `sections`, `moments`, `after`, cut from the
 // wrap-up's published view, or with `marked` (the GM site) from its marked view.
 // `players` (the GM site): `has(outputPath)`, whether the player site has a Story page at that address, and
-// `shows(page)`, whether it publishes that page. A unit whose wrap-up players do not see, on a page they do have (made
+// `shows(page)`, whether it publishes that page, and `wrapUpAt(outputPath)`, the wrap-up its Story page there is made
+// from (or null), whose recap a held-back unit's page leads with. A unit whose wrap-up players do not see, on a page they do have (made
 // from the session's own recap, or the chapter's introduction), carries `heldBack`: { recapHtml, wrapRecapTitle }, the
 // players' own recap and the title of the wrap-up's, for the build to show the wrap-up's parts apart, marked.
 // `figures` ({ candidates, blockers, scenesFor(unit) }, story-figures.js figureCandidates, nameHolders and
@@ -277,15 +278,23 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
     const shown = fromMarks === null ? text : stripLeadingH1Marked(fromMarks);
     return { title: null, html: renderMarkdown(resolve ? resolve(shown) : shown), sourcePage: chapter };
   };
-  // What the players' own Story page at `outputPath` leads with, when the unit's wrap-up is one they do not see.
+  // What the players' own Story page at `outputPath` leads with, when the unit's wrap-up is one they do not see: the
+  // recap of the wrap-up their page is made from (`players.wrapUpAt`, a wrap-up they see), else `playersRecap()`,
+  // the unit's own recap or introduction (#569).
   const heldBackOf = (outputPath, wrapUp, recap, playersRecap) => {
     if (!players || !wrapUp || players.shows(wrapUp) || !players.has(outputPath)) return {};
-    const shown = playersRecap();
+    const theirs = players.wrapUpAt ? players.wrapUpAt(outputPath) : null;
+    const resolve = theirs ? resolverFor(outputPath) : null;
+    const found = theirs ? findRecap(theirs, resolve, { marked, marks }) : null;
+    const shown = found ? ownRecapHtml({ ...found, sourcePage: theirs }, resolve) : playersRecap();
     if (!shown) return {};
     // The unit's recap is the wrap-up's own only when it came from the wrap-up; otherwise it is the players' (the
     // fallback), already shown once.
     const own = !!recap && recap.sourcePage === wrapUp;
-    return { heldBack: { recapHtml: shown, wrapHasRecap: own, wrapRecapTitle: own ? recap.title : null } };
+    // Where players' page is made from another wrap-up, the unit's own recap or introduction (which the GM page
+    // showed in their place before) stays on the GM page, inside the mark: players do not see it here.
+    const unitOwn = found ? playersRecap() : null;
+    return { heldBack: { recapHtml: shown, wrapHasRecap: own, wrapRecapTitle: own ? recap.title : null, ...(found ? { wrapUp: theirs } : {}), ...(unitOwn ? { ownHtml: unitOwn } : {}) } };
   };
   const chapters = sortedChapters(pages);
   const sessions = pages.filter(p => p.frontmatter && p.frontmatter.type === 'session');
@@ -380,7 +389,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
       const target = unit.heldBack || unit;
       target.recapHtml = withFigures(target.recapHtml, {
         candidates: figures.candidates, scenes: figures.scenesFor ? figures.scenesFor(unit) : [], blockers: figures.blockers || [],
-        exclude: new Set([unit.sourcePage, unit.wrapUpPage].filter(Boolean)),
+        exclude: new Set([unit.sourcePage, unit.wrapUpPage, unit.heldBack && unit.heldBack.wrapUp].filter(Boolean)),
         fromPath: unit.outputPath, imageMap: images.imageMap, usedImages: images.usedImages, marks,
         shown: new Set(shown), pictured: counts ? shown : null,
       });

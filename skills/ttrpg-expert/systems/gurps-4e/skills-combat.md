@@ -4,10 +4,10 @@
 
 | Skill | Diff | Page | Defaults | Notes |
 |-------|------|------|----------|-------|
-| Axe/Mace | DX/A | B208 | DX-5, Flail-4 | Covers axes, maces, picks |
+| Axe/Mace | DX/A | B208 | DX-5, Flail-4, Two-Handed Axe/Mace-3 | Covers axes, maces, picks |
 | Boxing | DX/A | B182 | — | +1/die damage, Parry = Skill/2+3 |
 | Brawling | DX/E | B182 | — | +1/die above skill 2, Parry = Skill/2+3 |
-| Broadsword | DX/A | B208 | DX-5, Shortsword-2 | Parry = Skill/2+3 |
+| Broadsword | DX/A | B208 | DX-5, Force Sword-4, Rapier-4, Saber-4, Shortsword-2, Two-Handed Sword-4 | Parry = Skill/2+3 |
 | Cloak | DX/A | B184 | DX-5, Shield-4, Net-4 | Defensive; can entangle |
 | Fast-Draw | DX/E | B194 | — | Specializations exist (Sword, Knife, etc.) |
 | Fast-Draw (Force Sword) | DX/E | B194 | — | |
@@ -15,35 +15,35 @@
 | Fast-Draw (Sword) | DX/E | B194 | — | |
 | Fast-Draw (Two-Handed Sword) | DX/E | B194 | — | |
 | Flail | DX/H | B208 | DX-6 | Cannot be parried; no Parry |
-| Force Sword | DX/A | B208 | DX-5 | Sci-fi; Parry = Skill/2+3 |
+| Force Sword | DX/A | B208 | DX-5, Broadsword-3, Jitte/Sai-3, Knife-3, Main-Gauche-3, Rapier-3, Saber-3, Shortsword-3, Smallsword-3, Two-Handed Sword-3 | Sci-fi; Parry = Skill/2+3 |
 | Force Whip | DX/A | B209 | DX-5, Whip-3 | Sci-fi flexible weapon |
 | Garrote | DX/E | B197 | DX-4 | Grappling attack from behind |
-| Jitte/Sai | DX/A | B208 | DX-5 | Parry = Skill/2+3; good disarm |
+| Jitte/Sai | DX/A | B208 | DX-5, Force Sword-4, Main-Gauche-4, Shortsword-3 | Parry = Skill/2+3; good disarm |
 | Judo | DX/H | B203 | — | Can parry weapons at -3; grapple |
 | Karate | DX/H | B203 | — | +1/die at DX+1, +2/die at DX+2 |
-| Knife | DX/E | B208 | DX-4 | Parry = Skill/2+3; Fast Draw common |
+| Knife | DX/E | B208 | DX-4, Force Sword-3, Main-Gauche-3, Shortsword-3 | Parry = Skill/2+3; Fast Draw common |
 | Kusari | DX/H | B209 | DX-6 | Flexible; Reach 1-4 |
 | Lance | DX/A | B204 | DX-5, Spear-3 | Mounted use; Reach 4 |
-| Main-Gauche | DX/A | B208 | DX-5 | Off-hand parrying weapon |
+| Main-Gauche | DX/A | B208 | DX-5, Jitte/Sai-4, Knife-4 | Off-hand parrying weapon |
 | Monowire Whip | DX/H | B209 | DX-6, Whip-3, Kusari-3 | Ultra-tech; lethal |
 | Parry Missile Weapons | DX/H | B212 | — | Cinematic; deflect projectiles |
-| Polearm | DX/A | B208 | DX-5, Spear-4 | Reach 2-3; two-handed |
-| Rapier | DX/A | B208 | DX-5 | Parry = Skill/2+3 |
-| Saber | DX/A | B208 | DX-5 | Parry = Skill/2+3 |
+| Polearm | DX/A | B208 | DX-5, Spear-4, Staff-4, Two-Handed Axe/Mace-4 | Reach 2-3; two-handed |
+| Rapier | DX/A | B208 | DX-5, Broadsword-4, Main-Gauche-3, Saber-3, Smallsword-3 | Parry = Skill/2+3 |
+| Saber | DX/A | B208 | DX-5, Broadsword-4, Main-Gauche-3, Rapier-3, Shortsword-4, Smallsword-3 | Parry = Skill/2+3 |
 | Shield (Shield) | DX/E | B220 | DX-4 | Block = Skill/2+3 |
 | Shield (Buckler) | DX/E | B220 | DX-4 | Smaller shield variant |
 | Shield (Force) | DX/E | B220 | DX-4 | Sci-fi shield |
-| Shortsword | DX/A | B209 | DX-5, Broadsword-2 | Shorter blade |
-| Smallsword | DX/A | B208 | DX-5, Rapier-3 | Light thrusting weapon |
-| Spear | DX/A | B208 | DX-5, Staff-2 | Reach 1-2; can be thrown |
-| Staff | DX/A | B208 | DX-5, Spear-2 | Reach 1-2; Parry = Skill/2+3 |
-| Sumo Wrestling | DX/A | B223 | DX-5, Wrestling-4 | Shoves and slams |
-| Tonfa | DX/A | B209 | DX-5 | Parry = Skill/2+3 |
-| Two-Handed Axe/Mace | DX/A | B208 | DX-5, Axe/Mace-3 | Two-handed; high damage |
+| Shortsword | DX/A | B209 | DX-5, Broadsword-2, Force Sword-4, Jitte/Sai-3, Knife-4, Saber-4, Smallsword-4, Tonfa-3 | Shorter blade |
+| Smallsword | DX/A | B208 | DX-5, Main-Gauche-3, Rapier-3, Saber-3, Shortsword-4 | Light thrusting weapon |
+| Spear | DX/A | B208 | DX-5, Polearm-4, Staff-2 | Reach 1-2; can be thrown |
+| Staff | DX/A | B208 | DX-5, Polearm-4, Spear-2 | Reach 1-2; Parry = Skill/2+3 |
+| Sumo Wrestling | DX/A | B223 | — | Shoves and slams |
+| Tonfa | DX/A | B209 | DX-5, Shortsword-3 | Parry = Skill/2+3 |
+| Two-Handed Axe/Mace | DX/A | B208 | DX-5, Axe/Mace-3, Polearm-4, Two-Handed Flail-4 | Two-handed; high damage |
 | Two-Handed Flail | DX/H | B208 | DX-6, Flail-3 | Cannot be parried |
-| Two-Handed Sword | DX/A | B209 | DX-5, Broadsword-4 | Reach 1-2 |
+| Two-Handed Sword | DX/A | B209 | DX-5, Broadsword-4, Force Sword-4 | Reach 1-2 |
 | Whip | DX/A | B209 | DX-5 | Reach 1-7; flexible |
-| Wrestling | DX/A | B228 | DX-5 | Grappling; +1 per 2 pts of ST |
+| Wrestling | DX/A | B228 | — | Grappling; +1 per 2 pts of ST |
 
 ## Ranged Combat Skills
 
@@ -55,9 +55,9 @@
 | Artillery (Catapult) | IQ/A | B178 | IQ-5 | TL. Siege engines |
 | Artillery (Guided Missile) | IQ/A | B178 | IQ-5 | TL. Guided missiles |
 | Artillery (Torpedoes) | IQ/A | B178 | IQ-5 | TL. Torpedo weapons |
-| Beam Weapons (Pistol) | DX/E | B179 | DX-4 | TL. Energy sidearm |
-| Beam Weapons (Projector) | DX/E | B179 | DX-4 | TL. Energy projector |
-| Beam Weapons (Rifle) | DX/E | B179 | DX-4 | TL. Energy longarm |
+| Beam Weapons (Pistol) | DX/E | B179 | DX-4, Beam Weapons (Projector or Rifle)-4, Guns (Pistol)-4 | TL. Energy sidearm |
+| Beam Weapons (Projector) | DX/E | B179 | DX-4, Beam Weapons (Pistol or Rifle)-4 | TL. Energy projector |
+| Beam Weapons (Rifle) | DX/E | B179 | DX-4, Beam Weapons (Pistol or Projector)-4, Guns (Rifle)-4 | TL. Energy longarm |
 | Blowpipe | DX/H | B180 | DX-6 | Short range; poison delivery |
 | Bolas | DX/A | B181 | — | Entangling thrown weapon |
 | Bow | DX/A | B182 | DX-5 | ST-based damage |
@@ -67,38 +67,38 @@
 | Fast-Draw (Ammo) | DX/E | B194 | — | Quick reload |
 | Fast-Draw (Long Arm) | DX/E | B194 | — | Quick unsling rifle |
 | Fast-Draw (Pistol) | DX/E | B194 | — | Quick draw sidearm |
-| Gunner (Beams) | DX/E | B198 | DX-4 | TL. Vehicle-mounted energy |
-| Gunner (Cannon) | DX/E | B198 | DX-4 | TL. Vehicle-mounted gun |
-| Gunner (Catapult) | DX/E | B198 | DX-4 | TL. Vehicle-mounted siege |
-| Gunner (Machine Gun) | DX/E | B198 | DX-4 | TL. Vehicle-mounted MG |
-| Gunner (Rockets) | DX/E | B198 | DX-4 | TL. Vehicle-mounted rockets |
-| Guns (Grenade Launcher) | DX/E | B198 | DX-4 | TL. |
-| Guns (Gyroc) | DX/E | B198 | DX-4 | TL. Gyrojet firearms |
-| Guns (Light Anti-Armor Weapon) | DX/E | B198 | DX-4 | TL. LAW, RPG |
-| Guns (Light Machine Gun) | DX/E | B198 | DX-4 | TL. Squad automatic |
-| Guns (Musket) | DX/E | B198 | DX-4 | TL. Muzzle-loaders |
-| Guns (Pistol) | DX/E | B198 | DX-4 | TL. Handguns |
-| Guns (Rifle) | DX/E | B198 | DX-4 | TL. Rifles |
-| Guns (Shotgun) | DX/E | B198 | DX-4 | TL. Shotguns |
-| Guns (Submachine Gun) | DX/E | B198 | DX-4 | TL. SMGs |
+| Gunner (Beams) | DX/E | B198 | DX-4, Gunner (Cannon or Catapult or Machine Gun or Rockets)-4 | TL. Vehicle-mounted energy |
+| Gunner (Cannon) | DX/E | B198 | DX-4, Gunner (Beams or Catapult or Machine Gun or Rockets)-4 | TL. Vehicle-mounted gun |
+| Gunner (Catapult) | DX/E | B198 | DX-4, Gunner (Beams or Cannon or Machine Gun or Rockets)-4 | TL. Vehicle-mounted siege |
+| Gunner (Machine Gun) | DX/E | B198 | DX-4, Gunner (Beams or Cannon or Catapult or Rockets)-4 | TL. Vehicle-mounted MG |
+| Gunner (Rockets) | DX/E | B198 | DX-4, Gunner (Beams or Cannon or Catapult or Machine Gun)-4 | TL. Vehicle-mounted rockets |
+| Guns (Grenade Launcher) | DX/E | B198 | DX-4, Guns (Light Machine Gun or Musket or Pistol or Rifle or Shotgun or Submachine Gun or Gyroc or Light Anti-Armor Weapon)-4 | TL. |
+| Guns (Gyroc) | DX/E | B198 | DX-4, Guns (Light Machine Gun or Musket or Pistol or Rifle or Shotgun or Submachine Gun or Grenade Launcher or Light Anti-Armor Weapon)-4 | TL. Gyrojet firearms |
+| Guns (Light Anti-Armor Weapon) | DX/E | B198 | DX-4, Guns (Light Machine Gun or Musket or Pistol or Rifle or Shotgun or Submachine Gun or Grenade Launcher or Gyroc)-4 | TL. LAW, RPG |
+| Guns (Light Machine Gun) | DX/E | B198 | DX-4, Guns (Musket or Pistol or Rifle or Shotgun or Submachine Gun)-2, Guns (Grenade Launcher or Gyroc or Light Anti-Armor Weapon)-4 | TL. Squad automatic |
+| Guns (Musket) | DX/E | B198 | DX-4, Guns (Light Machine Gun or Pistol or Rifle or Shotgun or Submachine Gun)-2, Guns (Grenade Launcher or Gyroc or Light Anti-Armor Weapon)-4 | TL. Muzzle-loaders |
+| Guns (Pistol) | DX/E | B198 | DX-4, Guns (Light Machine Gun or Musket or Rifle or Shotgun or Submachine Gun)-2, Guns (Grenade Launcher or Gyroc or Light Anti-Armor Weapon)-4 | TL. Handguns |
+| Guns (Rifle) | DX/E | B198 | DX-4, Guns (Light Machine Gun or Musket or Pistol or Shotgun or Submachine Gun)-2, Guns (Grenade Launcher or Gyroc or Light Anti-Armor Weapon)-4 | TL. Rifles |
+| Guns (Shotgun) | DX/E | B198 | DX-4, Guns (Light Machine Gun or Musket or Pistol or Rifle or Submachine Gun)-2, Guns (Grenade Launcher or Gyroc or Light Anti-Armor Weapon)-4 | TL. Shotguns |
+| Guns (Submachine Gun) | DX/E | B198 | DX-4, Guns (Light Machine Gun or Musket or Pistol or Rifle or Shotgun)-2, Guns (Grenade Launcher or Gyroc or Light Anti-Armor Weapon)-4 | TL. SMGs |
 | Innate Attack (Beam) | DX/E | B201 | DX-4 | Racial/supernatural beam |
 | Innate Attack (Breath) | DX/E | B201 | DX-4 | Racial/supernatural breath |
 | Innate Attack (Gaze) | DX/E | B201 | DX-4 | Racial/supernatural gaze |
 | Innate Attack (Projectile) | DX/E | B201 | DX-4 | Racial/supernatural projectile |
 | Lasso | DX/A | B204 | — | Entangling rope |
-| Liquid Projector (Flamethrower) | DX/E | B205 | DX-4 | TL. |
-| Liquid Projector (Sprayer) | DX/E | B205 | DX-4 | TL. |
-| Liquid Projector (Squirt Gun) | DX/E | B205 | DX-4 | TL. |
-| Liquid Projector (Water Cannon) | DX/E | B205 | DX-4 | TL. |
+| Liquid Projector (Flamethrower) | DX/E | B205 | DX-4, Liquid Projector (Sprayer or Squirt Gun or Water Cannon)-4 | TL. |
+| Liquid Projector (Sprayer) | DX/E | B205 | DX-4, Liquid Projector (Flamethrower or Squirt Gun or Water Cannon)-4 | TL. |
+| Liquid Projector (Squirt Gun) | DX/E | B205 | DX-4, Liquid Projector (Flamethrower or Sprayer or Water Cannon)-4 | TL. |
+| Liquid Projector (Water Cannon) | DX/E | B205 | DX-4, Liquid Projector (Flamethrower or Sprayer or Squirt Gun)-4 | TL. |
 | Net | DX/H | B211 | DX-6 | Entangling |
 | Sling | DX/H | B221 | DX-6 | Low-tech ranged |
 | Spear Thrower | DX/A | B222 | DX-5 | Atlatl |
 | Thrown Weapon (Axe/Mace) | DX/E | B226 | DX-4 | |
 | Thrown Weapon (Dart) | DX/E | B226 | DX-4 | |
-| Thrown Weapon (Harpoon) | DX/E | B226 | DX-4 | |
+| Thrown Weapon (Harpoon) | DX/E | B226 | DX-4, Thrown Weapon (Spear)-2 | |
 | Thrown Weapon (Knife) | DX/E | B226 | DX-4 | |
 | Thrown Weapon (Shuriken) | DX/E | B226 | DX-4 | |
-| Thrown Weapon (Spear) | DX/E | B226 | DX-4 | |
+| Thrown Weapon (Spear) | DX/E | B226 | DX-4, Thrown Weapon (Harpoon)-2 | |
 | Thrown Weapon (Stick) | DX/E | B226 | DX-4 | |
 | Throwing | DX/A | B226 | DX-3 | General throwing; also Athletic |
 
@@ -157,25 +157,25 @@ to -4. Key cross-defaults:
 
 - Broadsword defaults to Shortsword-2, Two-Handed Sword-4,
   Force Sword-4, Rapier-4, Saber-4
-- Shortsword defaults to Broadsword-2, Knife-4
-- Knife defaults to Shortsword-4, Main-Gauche-4
+- Shortsword defaults to Broadsword-2, Jitte/Sai-3, Tonfa-3, Knife-4 and others (B208)
+- Knife defaults to Force Sword-3, Main-Gauche-3, Shortsword-3 (B208)
 - Staff defaults to Spear-2, Polearm-4
 - Spear defaults to Staff-2, Polearm-4
-- Axe/Mace defaults to Two-Handed Axe/Mace-3, Flail-4
-- Judo defaults to DX-5 (no other weapon defaults)
-- Wrestling defaults to DX-5 (no weapon defaults)
-- Boxing defaults to DX-5 (no weapon defaults)
-- Brawling defaults to DX-4 (no weapon defaults)
-- Karate defaults to DX-5 (no weapon defaults)
+- Axe/Mace defaults to Two-Handed Axe/Mace-3, Flail-4 (B208)
+- Judo has no default (B203)
+- Wrestling has no default (B228); nor has Sumo Wrestling (B223)
+- Boxing has no default (B182)
+- Brawling has no default (B182)
+- Karate has no default (B173, B203): it cannot be used until at least 1 point is spent on it
 
 ## Cross-Defaults (Ranged Weapons)
 
-Guns specializations default to each other at -2 to -4.
-Gunner specializations default similarly. Key defaults:
+Key defaults (the table above lists each specialty's):
 
 - All Guns specializations default to DX-4
-- Between Guns specs: typically -2 (similar) to -4 (dissimilar)
-- Beam Weapons specs default to DX-4, other specs at -4
+- Between Guns specs: -2; to or from Grenade Launcher, Gyroc or LAW: -4 (B198)
+- Between Gunner specs: -4 (B198)
+- Beam Weapons specs default to DX-4, other specs at -4; Pistol and Rifle to the same Guns spec at -4 (B179)
 - Crossbow defaults to DX-4
 - Bow defaults to DX-5
 - Thrown Weapon specs default to DX-4

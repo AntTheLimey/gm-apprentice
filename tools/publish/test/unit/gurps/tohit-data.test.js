@@ -10,7 +10,7 @@ const fs = require('fs');
 const matter = require('gray-matter');
 const { extractSections } = require('../../../lib/processor');
 const { parseGurps, emptyModel } = require('../../../lib/templates/gurps/parse');
-const { buildTohitData, tohitDataScript } = require('../../../lib/templates/gurps/tohit-data');
+const { buildTohitData, tohitDataScript, SKILL_ALIASES } = require('../../../lib/templates/gurps/tohit-data');
 
 const META = { pcSlug: 'six' };
 
@@ -479,6 +479,36 @@ describe('round two: skill names are matched to the Skills table', () => {
     assert.strictEqual(w1('Guns (LMG) 19').base, 17);
     assert.strictEqual(w1('Guns (LMG) 19').skillAs, 'Guns (LMG)');
   });
+  it('reads Guns (LAW) as Guns (Light Anti-Armor Weapon), either way round (the skill script\'s ALIASES)', () => {
+    const law = (skills, skill) => buildTohitData(model({ ranged: [rangedRow({ skill })], skills }), META).weapons[0];
+    assert.strictEqual(law([['Guns (LAW)', '14']], 'Guns (Light Anti-Armor Weapon) 14').base, 14);
+    assert.strictEqual(law([['Guns (Light Anti-Armor Weapon)', '13']], 'Guns (LAW) 13').base, 13);
+  });
+  it('reads a short name the Skills table writes for a weapon cell that spells it out (the skill script\'s ALIASES)', () => {
+    const w = (skills, skill) => buildTohitData(model({ ranged: [rangedRow({ skill })], skills }), META).weapons[0];
+    assert.strictEqual(w([['Guns (LMG)', '17']], 'Guns (Light Machine Gun) 17').base, 17);
+    assert.strictEqual(w([['Guns (SMG)', '13']], 'Guns (Submachine Gun) 13').base, 13);
+    assert.strictEqual(w([['Guns (GL)', '12']], 'Guns (Grenade Launcher) 12').base, 12);
+    assert.strictEqual(w([['Gunner (MG)', '14']], 'Gunner (Machine Gun) 14').base, 14);
+  });
+  it('the short names are the skill script\'s ALIASES, the same both sides', () => {
+    const py = fs.readFileSync(path.join(__dirname, '../../../../../skills/shared/scripts/gurps_skill_default.py'), 'utf8');
+    const block = /^ALIASES = \{([\s\S]*?)\}/m.exec(py)[1];
+    const want = Object.fromEntries([...block.matchAll(/"([^"]+)":\s*"([^"]+)"/g)].map(m => [m[1], m[2]]));
+    assert.deepStrictEqual(SKILL_ALIASES, want);
+  });
+  it('a weapon cell that names a tech level takes the Skills table row at that level when there are two', () => {
+    const w = (skills, skill) => buildTohitData(model({ ranged: [rangedRow({ skill })], skills }), META).weapons[0];
+    const both = [['Guns/TL5 (Rifle)', '14'], ['Guns/TL8 (Rifle)', '16']];
+    for (const skills of [both, [...both].reverse()]) {
+      assert.strictEqual(w(skills, 'Guns/TL8 (Rifle) 16').base, 16);
+      assert.strictEqual(w(skills, 'Guns/TL8 (Rifle) 16').skill, 'Guns/TL8 (Rifle)');
+      assert.strictEqual(w(skills, 'Guns/TL5 (Rifle) 14').base, 14);
+    }
+    // A cell with no tech level, or a table with one row, reads as before.
+    assert.strictEqual(w(both, 'Guns (Rifle) 14').base, 14);
+    assert.strictEqual(w([['Guns/TL5 (Rifle)', '14']], 'Guns/TL8 (Rifle) 14').base, 14);
+  });
   it('does not match a different bracket', () => {
     const w = w1('Guns (Pistol) 12');
     assert.strictEqual(w.skill, 'Guns (Pistol)'); assert.strictEqual(w.base, null);
@@ -730,6 +760,41 @@ describe('rows written another way, and the report of what is not read', () => {
     assert.deepStrictEqual(d.weapons.map(w => w.key), ['Rock']);
     assert.ok(says(/"Rock": its Skill cell is a bare number/, 'warning'));
     assert.ok(says(/"Stick" is left out: its Skill cell "—" has no level/, 'warning'));
+  });
+  it('an unarmed attack naming an unarmed skill the sheet lacks: the fix is DX, never the skill at its default', () => {
+    // A punch rolls against DX without Brawling, Boxing or Karate, a kick against DX-2; those skills have no default.
+    const { report } = build({ skills, melee: [meleeRow({ weapon: 'Punch', skill: 'Karate-14' }), meleeRow({ weapon: 'Kick', skill: 'Karate-12' })] });
+    assert.strictEqual(report.length, 2, JSON.stringify(report));
+    for (const r of report) {
+      assert.match(r.detail, /skill "Karate" is not in the Skills table/);
+      assert.doesNotMatch(r.fix, /default level for 0 points/);
+    }
+    // The fixture's sheet has Brawling 12 and no DX: B271, a punch at the best of DX and the unarmed skills it has, a
+    // kick at that less 2, written as a level the calculator reads.
+    assert.strictEqual(report[0].fix, 'without Karate a Punch rolls against the best of DX and the unarmed skills on the sheet (here Brawling 12): write the Skill cell as "Brawling 12", or add Karate to the Skills table with the points the character has in it');
+    assert.strictEqual(report[1].fix, 'without Karate a Kick rolls against the best of DX and the unarmed skills on the sheet, less 2 (here Brawling-2 = 10): write the Skill cell as "Brawling 10", or add Karate to the Skills table with the points the character has in it');
+  });
+  it('a slam takes Brawling or Sumo Wrestling (B371), a shove only Sumo Wrestling (B372)', () => {
+    const fixFor = (weapon, skills) => {
+      const m = model({ skills, melee: [meleeRow({ weapon, skill: 'Karate-12' })] });
+      m.attributes.primary.DX = { value: '12', markers: [] };
+      const report = [];
+      buildTohitData(m, META, report);
+      return report[0].fix;
+    };
+    assert.match(fixFor('Slam', [['Sumo Wrestling', '17']]), /"Sumo Wrestling 17"/);
+    assert.match(fixFor('Shove', [['Sumo Wrestling', '16']]), /"Sumo Wrestling 16"/);
+    assert.match(fixFor('Slam', [['Brawling', '15']]), /"Brawling 15"/);
+    assert.match(fixFor('Shove', [['Brawling', '15']]), /"DX 12"/);
+    assert.match(fixFor('Slam', [['Brawling', '15'], ['Sumo Wrestling', '17']]), /"Sumo Wrestling 17"/);
+    assert.match(fixFor('Slam', [['Brawling', '18'], ['Sumo Wrestling', '17']]), /"Brawling 18"/);
+  });
+  it('an unarmed attack with DX on the sheet better than its unarmed skills: the fix names DX', () => {
+    const m = model({ skills: [['Brawling', '12']], melee: [meleeRow({ weapon: 'Kick', skill: 'Karate-12' })] });
+    m.attributes.primary.DX = { value: '14', markers: [] };
+    const report = [];
+    buildTohitData(m, META, report);
+    assert.match(report[0].fix, /less 2 \(here DX-2 = 12\): write the Skill cell as "DX 12"/);
   });
   it('a skill not in the Skills table is said, with the nearest name', () => {
     const { says } = build({ skills, ranged: [rangedRow({ skill: 'Beam Weapons (Rifle)-14' })] });

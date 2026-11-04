@@ -143,6 +143,7 @@ async function runDeploy(options, deps) {
   const now = d.now || (() => new Date());
   const { formatFindings, gateSummary } = leakGateLib;
   const leakGate = d.leakGate || leakGateLib.runLeakGate;
+  const staleCaseSpellings = d.staleCaseSpellings || ((root, dir) => require('./git-case').caseRenames(root, dir, runCommand));
 
   const configPath = path.resolve(opts.configPath || './vault.config.json');
   const siteRoot = path.dirname(configPath);
@@ -205,13 +206,35 @@ async function runDeploy(options, deps) {
   // finding, or a gate that cannot run, on purpose: every finding is still printed, and the payload says so.
   const ignoreLeaks = !!opts.ignoreLeaks;
   const IGNORED = 'Deploying anyway: --ignore-leaks was given, so these go online as they are.';
-  const gateFolder = tomlFolder || outputFolder;
+  // The folder the upload takes: the one wrangler.toml names on Cloudflare, the one git commits on a git host (a
+  // leftover wrangler.toml there names a folder nothing uploads).
+  const gateFolder = isCloudflare ? (tomlFolder || outputFolder) : outputFolder;
   const checkLeaks = () => {
     try { return { result: leakGate({ configPath, outputDir: gateFolder }) }; } catch (err) {
       return { result: null, line: `The leak check could not run: ${err.message}. Nothing was uploaded.` };
     }
   };
   let gateResult = null;
+
+  // A file a letter-case rename left under its temporary name (build.js renameCase) would go online under that name.
+  // It may be the only copy, so deploy never deletes it: it stops and names each one. The folder read is the one the
+  // upload takes: wrangler's on Cloudflare, the one git commits on a git host.
+  const uploadFolder = gateFolder;
+  const uploadLabel = `${(path.relative(siteRoot, uploadFolder) || '.').split(path.sep).join('/')}/`;
+  const caseTemps = () => require('./git-case').caseTemps(uploadFolder).map((r) => `${uploadLabel}${r}`);
+  const caseTempLine = (t, stop) => {
+    const name = path.posix.basename(t).replace(/\.case-\d+(?:-\d+)?\.tmp$/, '');
+    return `${stop}: a file in ${uploadLabel} still has the temporary name a letter-case rename gave it: ${t}. give it back its name (${name}) or move it out of the site folder; deploy never deletes it, as it may be the only copy.`;
+  };
+  // A letter-case change commits the whole index (see the git step below), so anything staged outside the site
+  // folder stops the deploy. { staged } or { error }.
+  const stagedElsewhere = (run) => {
+    const r = run(['diff', '--cached', '--name-only', '--', ':(top)', `:(exclude)${outDir}`]);
+    return r.code !== 0 ? { error: r } : { staged: String(r.stdout || '').split('\n').filter(Boolean) };
+  };
+  const stagedStopLine = (staged, stop) => `${stop}: files outside ${outDir} are staged (${staged.slice(0, 5).join(', ')}${staged.length > 5 ? ', …' : ''}), and a letter-case change under ${outDir} needs a commit of everything staged. Commit or unstage them (git restore --staged <file>), then deploy again.`;
+  // `-f`: a page staged by hand before the build changed its case is replaced by `git add` all the same.
+  const rmArgs = (run) => ['rm', '--cached', '-q', '-f', '--', ...run.map((p) => `:(literal)${p}`)];
 
   let built = false;
   const buildFailed = (line) => {
@@ -225,13 +248,32 @@ async function runDeploy(options, deps) {
 
   if (hookInfo.warning && !opts.dryRun) say(hookInfo.warning);
   if (opts.dryRun) {
+    const caseLines = [];
+    let caseRefuse = false;
+    const temps = caseTemps();
+    for (const t of temps) caseLines.push(caseTempLine(t, 'Deploy would stop'));
+    if (temps.length > 0) caseRefuse = true;
     if (hooks.includes('prebuild')) commands.push('npm run prebuild');
     if (!opts.noBuild) commands.push(...vaultSteps.before, `gm-publish build --config ${configPath}`, ...vaultSteps.after);
     if (hooks.includes('postbuild')) commands.push('npm run postbuild');
     if (isCloudflare) {
       commands.push('npx wrangler@4 whoami', `npx wrangler@4 ${wranglerDeployArgs.join(' ')}`);
     } else {
-      commands.push(`git add ${outDir}`, `git commit -m "Rebuild site" --only -- ${outDir}`);
+      // The letter-case steps a real deploy would take; the checks behind them only read.
+      const stale = staleCaseSpellings(siteRoot, outDir);
+      const whole = !stale.error && (stale.paths.length > 0 || !!stale.pending);
+      if (stale.error) {
+        caseLines.push(`Deploy would fail: ${failureDetail(stale.error)}`);
+        caseRefuse = true;
+      } else if (whole) {
+        const elsewhere = stagedElsewhere((args) => runCommand('git', args, { cwd: siteRoot }));
+        if (elsewhere.error || elsewhere.staged.length > 0) {
+          caseLines.push(elsewhere.error ? `Deploy would fail: ${failureDetail(elsewhere.error)}` : stagedStopLine(elsewhere.staged, 'Deploy would stop'));
+          caseRefuse = true;
+        }
+        for (const run of require('./git-case').batches(stale.paths)) commands.push(`git ${rmArgs(run).join(' ')}`);
+      }
+      commands.push(`git add ${outDir}`, whole ? 'git commit -m "Rebuild site"' : `git commit -m "Rebuild site" --only -- ${outDir}`);
       // Whether the push needs -u depends on the branch's upstream, which a dry run
       // can only learn by asking git — a read-only rev-parse, so running it here
       // doesn't violate "nothing will run".
@@ -242,7 +284,7 @@ async function runDeploy(options, deps) {
     const gate = checkLeaks();
     const leakLines = gate.result ? [...(gate.result.warnings || [])] : [];
     const leaky = !gate.result || gate.result.findings.length > 0;
-    const refuse = leaky && !ignoreLeaks;
+    const refuse = (leaky && !ignoreLeaks) || caseRefuse;
     if (!gate.result) leakLines.push(gate.line.replace(' Nothing was uploaded.', '') + (ignoreLeaks ? ' Deploy would go ahead anyway (--ignore-leaks).' : ''));
     else if (gate.result.missing) leakLines.push(`Leak check: there is no built site in ${gateFolder} yet, so nothing to check.`);
     else if (gate.result.skipped) leakLines.push(gate.result.skipped);
@@ -258,13 +300,15 @@ async function runDeploy(options, deps) {
         ...(gate.result ? { leaks: gateSummary(gate.result) } : {}),
         ...(refuse ? { wouldRefuse: true } : {}),
         ...(leaky && ignoreLeaks ? { leaksIgnored: true } : {}),
-        ...(gate.result ? {} : { messages: leakLines }),
+        ...(gate.result && !caseLines.length ? {} : { messages: [...(gate.result ? [] : leakLines), ...caseLines] }),
+        ...(temps.length ? { caseTemps: temps } : {}),
       }, null, 2));
       return refuse ? 1 : 0;
     }
     out('DRY RUN — nothing will run.');
     for (const command of commands) out(`  ${command}`);
     for (const line of leakLines) out(line);
+    for (const line of caseLines) out(line);
     return refuse ? 1 : 0;
   }
 
@@ -343,6 +387,12 @@ async function runDeploy(options, deps) {
     return finish({ refused: true }, 1);
   } else if (gateResult && !gateResult.skipped) say(`Leak check: nothing hidden on the player site (${gateResult.files} files, ${gateResult.seconds.toFixed(1)} s).`);
 
+  const temps = caseTemps();
+  if (temps.length > 0) {
+    for (const t of temps) say(`${caseTempLine(t, 'Deploy stopped')} Nothing was uploaded.`);
+    return finish({ refused: true }, 1);
+  }
+
   let deploymentUrl = null;
   let aliasUrl = null;
   if (isCloudflare) {
@@ -377,6 +427,37 @@ async function runDeploy(options, deps) {
       commands.push(`git ${args.join(' ')}`);
       return runCommand('git', args, { cwd: siteRoot });
     };
+    // A file or folder whose letter case changed on a Mac or Windows disk keeps its old spelling in git's index
+    // (core.ignorecase), so `git add` alone would deploy the old address (#576). Its old spelling leaves the index
+    // first, and the commit takes the whole index, since `--only` would add the old name back. A rename an earlier
+    // deploy staged and could not commit (`pending`) takes the same path. Anything else staged in the repo would ride
+    // along, so that stops the deploy. A repo without core.ignorecase skips all of this, as before.
+    const stale = staleCaseSpellings(siteRoot, outDir);
+    if (stale.error) {
+      say(`Deploy failed: ${failureDetail(stale.error)}`);
+      return finish({}, 1);
+    }
+    const whole = stale.paths.length > 0 || !!stale.pending;
+    if (whole) {
+      const elsewhere = stagedElsewhere(git);
+      if (elsewhere.error) {
+        say(`Deploy failed: ${failureDetail(elsewhere.error)}`);
+        return finish({}, 1);
+      }
+      if (elsewhere.staged.length > 0) {
+        say(stagedStopLine(elsewhere.staged, 'Deploy stopped'));
+        return finish({}, 1);
+      }
+      for (const run of require('./git-case').batches(stale.paths)) {
+        const rm = git(rmArgs(run));
+        if (rm.code !== 0) {
+          say(`Deploy failed: ${failureDetail(rm)}`);
+          return finish({}, 1);
+        }
+      }
+      const n = stale.paths.length;
+      if (n > 0) say(`${n} file${n === 1 ? '' : 's'} under ${outDir} changed only in letter case; git records ${n === 1 ? 'it' : 'them'} under ${n === 1 ? 'its' : 'their'} new spelling`);
+    }
     const add = git(['add', outDir]);
     if (add.code !== 0) {
       say(`Deploy failed: ${failureDetail(add)}`);
@@ -391,9 +472,10 @@ async function runDeploy(options, deps) {
       // Still push: the build may be unchanged while an earlier commit is unpushed.
       say(`nothing to commit — ${outDir} unchanged`);
     } else {
-      const commit = git(['commit', '-m', 'Rebuild site', '--only', '--', outDir]);
+      const commit = git(whole ? ['commit', '-m', 'Rebuild site'] : ['commit', '-m', 'Rebuild site', '--only', '--', outDir]);
       if (commit.code !== 0) {
         say(`Commit failed: ${failureDetail(commit)}`);
+        if (whole) say(`Nothing is lost: the old letter-case spellings under ${outDir} are out of git's index and the new ones staged: fix what stopped the commit, then deploy again, and it commits them.`);
         return finish({}, 1);
       }
     }

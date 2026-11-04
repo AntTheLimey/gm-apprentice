@@ -945,10 +945,13 @@ function startNoteAudit(input) {
         // and the words it prints are the placeholder, not its name.
         const withheld = isWithheld(record.frontmatter);
         let fix;
+        // The command that turns the links on one page into words, whole, so the row stands alone: it prints a
+        // preview, and writes when run again with --write.
+        const unlink = (extra = '') => `python3 "\${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/links.py" "<vault>" unlink "${rel.replace(/\.md$/, '')}" --in "<page>"${extra}; it prints a preview; run it again with --write; CLAUDE_PLUGIN_ROOT is the gm-apprentice plugin's folder`;
         if (record.why === 'LISTED_ONLY') {
-          fix = `its container lists it; write words in the body of ${rel}, or a tie, to give it a page of its own, or turn the link to ${name} into plain words`;
+          fix = `its container lists it; write words in the body of ${rel}, or a tie, to give it a page of its own, or turn the link to ${name} into plain words (${unlink()})`;
         } else if (withheld) {
-          fix = `${name} is marked withheld, so it stays off the site: turn the links to it into the words the players know (links.py unlink "${rel.replace(/\.md$/, '')}" --in "<page>" --as "<words>"), or leave the neutral word it prints and record that with manifest apply --exclude "${rel}=stays hidden: <why>"`;
+          fix = `${name} is marked withheld, so it stays off the site: turn the links to it into the words the players know (${unlink(' --as "<words>"')}), or leave the neutral word it prints and record that with manifest apply --exclude "${rel}=stays hidden: <why>"`;
         } else if (kind === 'entity') {
           // Listing a note under Publishing gives it a page only when the manifest is what holds it back.
           const page = String(record.why).startsWith('MANIFEST_')
@@ -956,7 +959,7 @@ function startNoteAudit(input) {
             : `but the publish list is not what keeps it off the site (${record.why}): run explain "${rel}" for the rule`;
           fix = `move what only you should know under a ## GM Notes heading in ${rel}, ${page}; or leave it hidden and record that with manifest apply --exclude "${rel}=stays hidden: <why>"`;
         } else if (kind === 'working') {
-          fix = `turn the link to ${name} into plain words or reword the sentence; a working note like this never gets a page`;
+          fix = `turn the link to ${name} into plain words (${unlink()}) or reword the sentence; a working note like this never gets a page`;
         } else {
           fix = `give ${rel} a type: in its frontmatter, then decide whether it gets a page or the link becomes plain words`;
         }

@@ -323,6 +323,7 @@ function buildSite(options) {
   // into the vault): such a page is skipped with a warning, and false is returned (#507).
   function writeHtml(full, html, page, { gmCssHref = null } = {}) {
     if (linkOnPath(full)) { refuseLinked(full); return false; }
+    respell(full);
     fs.writeFileSync(full, gm ? gmPage(html, {
       marks: mark.marks, hiddenBecause: page && page.gmHiddenBecause, hidden: page && page.gmHidden,
       linkMap: publishConfig._linkMap || {}, from: (page && page.outputPath) || '', gmCssHref,
@@ -615,14 +616,152 @@ function buildSite(options) {
   function writeOut(full, data) {
     if (linkOnPath(full)) { refuseLinked(full); return false; }
     ensureDir(full);
+    respell(full);
     fs.writeFileSync(full, data);
     return true;
   }
   function copyOut(from, full) {
     if (linkOnPath(full)) { refuseLinked(full); return false; }
     ensureDir(full);
+    respell(full);
     fs.copyFileSync(from, full);
     return true;
+  }
+  // A file in a kept folder whose address changed only in letter case (#576): on a disk that does not tell case apart
+  // (macOS, Windows) the write would land in the old file and keep its old spelling, which git records no rename for,
+  // so the deployed site would keep the old address. Before the write each name on the path below the kept folder that
+  // differs only in case is renamed to the new spelling, in two steps through a temporary name (a case-only rename is
+  // not done in one step everywhere). Only where the new spelling is not listed in its folder yet opens: on a disk that
+  // tells case apart the two spellings are two things, and nothing is renamed here. A folder is renamed only when the
+  // tool made it: every file in it is one the kept record names, or this build wrote. A folder of the GM's is left,
+  // and said once.
+  const respellRefused = new Set();
+  function respell(full) {
+    if (gm) return;
+    const rel = outRel(full);
+    const kept = config.preserveDirs.map((d) => d.replace(/\/+$/, '')).find((d) => rel.toLowerCase().startsWith(`${d.toLowerCase()}/`));
+    if (!kept) return;
+    const parts = rel.split('/');
+    const keptParts = kept.split('/').length;
+    // The kept folder itself is the GM's and never renamed: an address that spells it in another case is said once,
+    // as its link may not open on a host that tells case apart.
+    for (let i = 0; i < keptParts; i++) {
+      const at = parts.slice(0, i + 1).join('/');
+      if (respellRefused.has(`kept:${at.toLowerCase()}`)) break;
+      let names;
+      try { names = fs.readdirSync(path.join(outputDir, ...parts.slice(0, i))); } catch (e) { if (!e.code) throw e; break; }
+      if (names.some((n) => canonicalNfc(n) === canonicalNfc(parts[i]))) continue;
+      const have = names.find((n) => canonicalNfc(n).toLowerCase() === canonicalNfc(parts[i]).toLowerCase());
+      // A disk that tells case apart makes the address's spelling a folder of its own: nothing to say.
+      if (!have || !fs.existsSync(path.join(outputDir, ...parts.slice(0, i + 1)))) break;
+      respellRefused.add(`kept:${at.toLowerCase()}`);
+      const disk = [...parts.slice(0, i), have].join('/');
+      printWarning(`the kept folder ${disk} is spelled ${at} in an address (${rel}): the folder keeps its spelling, so a link to it may not open on a host that tells letter case apart; spell the address as the folder is`);
+      break;
+    }
+    for (let i = keptParts; i < parts.length; i++) {
+      const dir = path.join(outputDir, ...parts.slice(0, i));
+      const want = parts[i];
+      let have;
+      try {
+        if (!fs.existsSync(path.join(dir, want))) return;
+        const names = fs.readdirSync(dir);
+        if (names.some((n) => canonicalNfc(n) === canonicalNfc(want))) continue;
+        have = names.find((n) => canonicalNfc(n).toLowerCase() === canonicalNfc(want).toLowerCase());
+        if (!have) continue;
+      } catch (e) {
+        if (!e.code) throw e;
+        // The write goes ahead; it may land on a name of another case, so that is said.
+        printWarning(`could not list ${outRel(dir)} (${e.code}), so ${rel} may keep the letter case it had on this disk`);
+        return;
+      }
+      const said = (name) => [...parts.slice(0, i), name].join('/');
+      const leaf = i === parts.length - 1;
+      if (!leaf) {
+        if (respellRefused.has(said(have))) continue;
+        const theirs = toolsFolder(path.join(dir, have), said(have));
+        if (theirs !== true) {
+          respellRefused.add(said(have));
+          const why = theirs === false ? 'it holds files the tool did not write, or that were changed since'
+            : theirs === 'unrecorded' ? 'this build keeps no record of the files the tool wrote in kept folders'
+              : `it could not be read (${theirs})`;
+          // A build that keeps no record (a preview, a sheets-only build) leaves it to the next full build.
+          const then = theirs === 'unrecorded' ? 'the next full build renames it if the tool made it' : 'rename it yourself if it should change';
+          printWarning(`${said(have)} keeps its spelling, though an address now spells it ${said(want)}: ${why}; ${then}`);
+          continue;
+        }
+      }
+      if (!renameCase(dir, have, want, said)) return;
+      console.log(`  renamed in kept folder: ${said(have)} to ${said(want)} (its address changed case)`);
+    }
+  }
+  // Whether every file in a kept-folder folder is the tool's: named in the kept record by its spelling on disk and
+  // still holding the bytes recorded, or written by this build. True, false, 'unrecorded' (a build that keeps no
+  // record: a preview, a dry or sheets-only build), or the error code of a folder that could not be read.
+  function toolsFolder(full, rel) {
+    if (!keptRecord) return 'unrecorded';
+    try {
+      const files = [];
+      const walk = (d, r) => {
+        for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+          if (e.isDirectory()) walk(path.join(d, e.name), `${r}/${e.name}`);
+          else files.push(`${r}/${e.name}`);
+        }
+      };
+      walk(full, rel);
+      // A folder above this one renamed in case this build leaves the record under its old spelling: that entry
+      // counts when both spellings name one file.
+      const recordedAs = (f) => (Object.hasOwn(keptRecorded, f) ? f
+        : Object.keys(keptRecorded).find((r) => r.toLowerCase() === f.toLowerCase() && twoFiles(r, f) === 'one'));
+      return files.every((f) => {
+        if (keptWritten.has(f.toLowerCase())) return true;
+        const r = recordedAs(f);
+        return r !== undefined && hashOf(fs.readFileSync(path.join(outputDir, ...f.split('/')))) === keptRecorded[r];
+      });
+    } catch (e) {
+      if (!e.code) throw e;
+      return e.code;
+    }
+  }
+  // Renames `have` to `want` in `dir` through a temporary name no file has; false, said as a warning, if the disk
+  // refuses. A put-back that fails too is said with where the file now is.
+  function renameCase(dir, have, want, said) {
+    const from = path.join(dir, have);
+    let temp = path.join(dir, `${have}.case-${process.pid}.tmp`);
+    for (let n = 1; fs.existsSync(temp); n++) temp = path.join(dir, `${have}.case-${process.pid}-${n}.tmp`);
+    try {
+      fs.renameSync(from, temp);
+    } catch (e) {
+      if (!e.code) throw e;
+      printWarning(`could not rename ${said(have)} to ${said(want)} (${e.code}); it keeps its old spelling on this disk`);
+      return false;
+    }
+    try {
+      fs.renameSync(temp, path.join(dir, want));
+    } catch (e) {
+      if (!e.code) throw e;
+      // Put back as it was, so the write lands where the file was.
+      try { fs.renameSync(temp, from); } catch (e2) {
+        if (!e2.code) throw e2;
+        printWarning(`could not rename ${said(have)} to ${said(want)} (${e.code}), nor put it back (${e2.code}): it is now at ${outRel(temp)}; rename it to ${said(want)} by hand`);
+        return false;
+      }
+      printWarning(`could not rename ${said(have)} to ${said(want)} (${e.code}); it keeps its old spelling on this disk`);
+      return false;
+    }
+    return true;
+  }
+
+  // A temporary name a letter-case rename left in a kept folder (a build stopped between its two steps, or a put-back
+  // the disk refused): said, never removed, as it holds the file.
+  function reportCaseTemps() {
+    const { caseTemps } = require('./git-case');
+    for (const d of config.preserveDirs) {
+      const kept = d.replace(/\/+$/, '');
+      for (const r of caseTemps(path.join(outputDir, ...kept.split('/')))) {
+        printWarning(`left in kept folder: ${kept}/${r}, a temporary name from a letter-case rename that did not finish; give it back its name (the part before .case-) by hand`);
+      }
+    }
   }
 
   // No folder is made through a link in the site folder: the write that follows is refused by the writers above.
@@ -1321,8 +1460,10 @@ function buildSite(options) {
     { linked: hubWrapUps.linked }) : null;
   // The pictures the player site has: a folder it hides is not scanned there.
   const playerImages = gm && show.has('notes') ? scanAttachments(scanConfigFor(config, hideFrom)) : imageMap;
-  const playerStory = gm ? new Set(probeSpine(pages.filter((p) => onPlayerSite.has(p)), playerPairs, playerImages).map((u) => u.outputPath)) : null;
-  const storyPlayers = gm ? { has: (out) => playerStory.has(out), shows: (page) => onPlayerSite.has(page) } : null;
+  // Each address maps to the wrap-up the player page there is made from (or null), for the GM page that holds its own
+  // wrap-up back with no recap of the players' to lead it: its chapter counts what the player page pictures (#569).
+  const playerStory = gm ? new Map(probeSpine(pages.filter((p) => onPlayerSite.has(p)), playerPairs, playerImages).map((u) => [u.outputPath, u.wrapUpPage || null])) : null;
+  const storyPlayers = gm ? { has: (out) => playerStory.has(out), shows: (page) => onPlayerSite.has(page), wrapUpAt: (out) => playerStory.get(out) || null } : null;
   applyFold(foldPlan(storyProbe), linkMap);
   LOWER_KEYS.delete(linkMap);   // its folded spellings were read from the old addresses
   // The pages a Story page may picture beside its recap (story-figures.js), read once, after the fold has given each
@@ -2904,6 +3045,7 @@ function buildSite(options) {
     }
     if (writes === 'all' && propPlan.props.length > 0) console.log(`Props: ${shipped.size} published (${written} files)`);
   }
+  if (!gm && writes !== 'none') reportCaseTemps();
   if (keptRecord) cleanKeptRecord();
 
   // The licence notices for what the site ships (#428): written once everything else is, so it

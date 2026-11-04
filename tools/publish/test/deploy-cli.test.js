@@ -70,6 +70,7 @@ function harness(overrides = {}) {
     now: () => new Date('2026-09-07T12:00:00.000Z'),
     config: Object.assign({ host: 'cloudflare-pages', outputDir: './docs' }, overrides.config),
     leakGate: overrides.leakGate || (() => ({ skipped: null, missing: false, findings: [], unneeded: [], files: 3, seconds: 0.01 })),
+    staleCaseSpellings: overrides.stale || (() => ({ paths: [], error: null })),
   };
   return { deps, out, writes, wrangler, wranglerOpts, commands, builds, sleeps, fetches, bodyFetches, files, text: () => out.join('\n') };
 }
@@ -261,6 +262,38 @@ describe('deploy: github-pages', () => {
     assert.strictEqual(rc, 0);
     const commit = h.commands.find(c => c.args[0] === 'commit');
     assert.deepStrictEqual(commit.args, ['commit', '-m', 'Rebuild site', '--only', '--', 'docs/']);
+  });
+
+  // #576 review A: on a Mac disk git keeps a case-only renamed file's old spelling; deploy takes it out of the index
+  // so `git add` records the new one, and commits the whole index, since `--only` would add the old name back.
+  it('a file whose letter case changed: the old spelling leaves the index, and the commit takes it', async () => {
+    const h = harness({
+      config: ghConfig,
+      stale: () => ({ paths: ['docs/gazetteer/invitation.html'], error: null }),
+      command: (cmd, args) => (args[0] === 'status' ? { code: 0, stdout: 'R  docs/gazetteer/invitation.html -> docs/gazetteer/Invitation.html\n' } : { code: 0, stdout: '' }),
+    });
+    const rc = await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.strictEqual(rc, 0, h.text());
+    assert.deepStrictEqual(h.commands.map(c => c.args).slice(0, 5), [
+      ['diff', '--cached', '--name-only', '--', ':(top)', ':(exclude)docs/'],
+      ['rm', '--cached', '-q', '-f', '--', ':(literal)docs/gazetteer/invitation.html'],
+      ['add', 'docs/'],
+      ['status', '--porcelain', 'docs/'],
+      ['commit', '-m', 'Rebuild site'],
+    ]);
+    assert.match(h.text(), /1 file under docs\/ changed only in letter case; git records it under its new spelling/);
+  });
+
+  it('a letter-case change with other files staged stops, and says why', async () => {
+    const h = harness({
+      config: ghConfig,
+      stale: () => ({ paths: ['docs/a.html'], error: null }),
+      command: (cmd, args) => (args[0] === 'diff' ? { code: 0, stdout: 'notes.txt\n' } : { code: 0, stdout: '' }),
+    });
+    const rc = await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.match(h.text(), /Deploy stopped: files outside docs\/ are staged \(notes\.txt\)/);
+    assert.ok(!h.commands.some(c => c.args[0] === 'push' || c.args[0] === 'commit'));
   });
 
   // I3: `git add`'s exit code used to be discarded entirely, and a *failing*
@@ -828,6 +861,17 @@ describe('deploy: the leak gate', () => {
     const seen = [];
     const h = harness({ leakGate: (o) => { seen.push(o.outputDir); return { skipped: null, missing: false, findings: [], unneeded: [], files: 1, seconds: 0 }; } });
     await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.deepStrictEqual(seen, [path.join(SITE, 'docs')]);
+  });
+
+  it('github-pages checks the folder git commits, not one a leftover wrangler.toml names', async () => {
+    const seen = [];
+    const h = harness({
+      config: { host: 'github-pages', siteUrl: 'https://u.github.io/c' },
+      files: { [path.join(SITE, 'wrangler.toml')]: 'name = "x"\npages_build_output_dir = "stale"\n' },
+      leakGate: (o) => { seen.push(o.outputDir); return leaking(); },
+    });
+    assert.strictEqual(await runDeploy({ configPath: CONFIG, noBuild: true }, h.deps), 1);
     assert.deepStrictEqual(seen, [path.join(SITE, 'docs')]);
   });
 

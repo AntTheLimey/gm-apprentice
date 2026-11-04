@@ -1833,7 +1833,8 @@ def _one_line(value: object) -> str:
 
 def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
     """One finding of the tool's, as a row. Its words are the tool's own;
-    nothing is worked out here."""
+    nothing is worked out here. Every row the tool gives a fix ends with
+    it, after a dash (#570)."""
     code, level = f["code"], str(f.get("severity", "warning")).upper()
     path = _one_line(f.get("path")) or "(vault)"
     if code == "NAMED_NO_PAGE":
@@ -1868,13 +1869,10 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
         msg = f"FENCE_UNCLOSED: {_one_line(f.get('detail'))}"
     elif code in ("TOHIT_UNREAD", "SKILL_BELOW_BASE",
                   "HEADING_IN_HIDDEN_BLOCK", "TABLE_OVERWIDE",
-                  "PROP_NOT_COPIED", "MOMENT_KIND_UNKNOWN"):
-        msg = (f"{code}: {_one_line(f.get('detail'))} — "
-               f"{_one_line(f.get('fix'))}")
-    elif code in ("WITHHELD_NAME_PUBLIC", "WITHHELD_PUBLISHED",
+                  "PROP_NOT_COPIED", "MOMENT_KIND_UNKNOWN",
+                  "WITHHELD_NAME_PUBLIC", "WITHHELD_PUBLISHED",
                   "WITHHELD_FLAG_UNREADABLE", "COMPANION_FLAG_UNREADABLE"):
-        msg = (f"{code}: {_one_line(f.get('detail'))} — "
-               f"{_one_line(f.get('fix'))}")
+        msg = f"{code}: {_one_line(f.get('detail'))}"
     elif code == "NEVER_SHOW_IN_PROSE":
         msg = (f"NEVER_SHOW_IN_PROSE: \"{_one_line(f.get('word'))}\" (listed "
                f"under player_site.never_show), printed "
@@ -1891,10 +1889,6 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
         outs = [_one_line(p) for p in f.get("listings") or []]
         if outs:
             msg += " | printed on the index or listing page: " + ", ".join(outs)
-        if f.get("everyday") is True:
-            # The tool's own fix for a name that is an everyday word (#454):
-            # rewording each ordinary use would never end.
-            msg += f" — {_one_line(f.get('fix'))}"
     else:
         msg = (f"ALIAS_IN_PROSE: \"{_one_line(f.get('alias'))}\" (a secret "
                f"name of {_one_line(f.get('owner'))}), printed "
@@ -1903,6 +1897,9 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
         outs = [_one_line(p) for p in f.get("listings") or []]
         if outs:
             msg += " | printed on the index or listing page: " + ", ".join(outs)
+    fix = _one_line(f.get("fix"))
+    if fix:
+        msg += f" — {fix}"
     return f"{level}\t{path}\t{msg}"
 
 

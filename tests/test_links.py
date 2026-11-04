@@ -561,6 +561,66 @@ class UnlinkTests(unittest.TestCase):
             links.plan_unlink(vault, ["Scene"], ["People/Host.md"])
         self.assertIn("give the path", str(caught.exception))
 
+    # #577: the NAMED_NO_PAGE walk-through turns only the links whose words give
+    # something away; a harmless second link to the note keeps its destination.
+    def test_pick_turns_only_the_rows_picked(self):
+        vault = make_vault(self, {
+            "Mara.md": "x\n",
+            "Docks.md": "[[Mara|the smuggler]] met us.\n"
+                        "Later [[Mara]] and [[Mara|her]] left.\n"})
+        p = links.plan_unlink(vault, ["Mara"], ["Docks.md"], picks=[1, 3])
+        self.assertEqual(p.texts["Docks.md"],
+                         "the smuggler met us.\nLater [[Mara]] and her left.\n")
+        self.assertEqual(p.kept, [("Docks.md", 2, "[[Mara]]", "unpicked")])
+        printed = links.rows(p)
+        # Review A3/B: each row carries its pick number, so nobody counts.
+        self.assertEqual(printed[0], "WOULD-CHANGE\tDocks.md:1\t"
+                                     "[[Mara|the smuggler]] -> the smuggler\t#1")
+        self.assertEqual(printed[1], "WOULD-CHANGE\tDocks.md:2\t"
+                                     "[[Mara|her]] -> her\t#3")
+        self.assertIn("KEPT\tDocks.md:2\t[[Mara]]\tnot picked (--pick); "
+                      "left as written", printed)
+        done = cli(vault, "unlink", "Mara", "--in", "Docks.md",
+                   "--pick", "1", "--pick", "3", "--write")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(read(vault, "Docks.md"),
+                         "the smuggler met us.\nLater [[Mara]] and her left.\n")
+
+    def test_every_would_change_row_has_its_pick_number(self):
+        vault = make_vault(self, {"Mara.md": "x\n",
+                                  "Docks.md": "[[Mara]] and [[Mara|her]].\n"})
+        printed = links.rows(links.plan_unlink(vault, ["Mara"], ["Docks.md"]))
+        self.assertEqual([r.rsplit("\t", 1)[1] for r in printed[:2]], ["#1", "#2"])
+        # A plain unlink with no --in has no picks, and its rows are as before.
+        printed = links.rows(links.plan_unlink(make_vault(self, {"A.md": "[[Gone]]\n"}), ["Gone"]))
+        self.assertEqual(printed[0], "WOULD-CHANGE\tA.md:1\t[[Gone]] -> Gone")
+
+    def test_pick_counts_only_links_the_fix_would_turn(self):
+        vault = make_vault(self, {
+            "Mara.md": "x\n",
+            "Docks.md": "![[Mara]] then [[Mara|the smuggler]] and [[Mara]].\n"})
+        p = links.plan_unlink(vault, ["Mara"], ["Docks.md"], picks=[2])
+        self.assertEqual(p.texts["Docks.md"],
+                         "![[Mara]] then [[Mara|the smuggler]] and Mara.\n")
+
+    def test_pick_past_the_rows_is_refused_and_writes_nothing(self):
+        vault = make_vault(self, {"Mara.md": "x\n",
+                                  "Docks.md": "[[Mara]] and [[Mara|her]].\n"})
+        got = cli(vault, "unlink", "Mara", "--in", "Docks.md", "--pick", "3",
+                  "--write")
+        self.assertEqual(got.returncode, 1)
+        self.assertIn("there are only 2 link(s) to pick from", got.stderr)
+        self.assertEqual(read(vault, "Docks.md"), "[[Mara]] and [[Mara|her]].\n")
+
+    def test_pick_goes_with_unlink_in(self):
+        vault = make_vault(self, {"A.md": "[[B]]\n", "B.md": "x\n"})
+        got = cli(vault, "unlink", "B", "--pick", "1")
+        self.assertEqual(got.returncode, 2)
+        self.assertIn("--pick goes with unlink --in", got.stderr)
+        got = cli(vault, "unlink", "B", "--in", "A.md", "--pick", "0")
+        self.assertEqual(got.returncode, 2)
+        self.assertIn("--pick takes a row number from 1", got.stderr)
+
     def test_within_refuses_a_note_that_is_not_there(self):
         vault = make_vault(self, {"A.md": "[[B]]\n", "B.md": "x\n"})
         with self.assertRaises(links.LinksError) as cm:

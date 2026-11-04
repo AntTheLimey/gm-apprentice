@@ -78,15 +78,16 @@ function shownLevel(cell) {
 // "DX-12 (default)", "10". The level is the `= N` if there is one, else the number
 // that directly follows the skill name (after `-`, a space, or inside a trailing
 // `(N)`); parentheticals of prose after it are ignored. Returns null with no level.
-// `/TL<n>` is dropped from the name: it never decides which skill this is.
+// `/TL<n>` is dropped from the name and kept as `tl`: it decides only between two Skills-table rows of one skill.
 function readOnePair(cell) {
+  const tlm = /\/TL\d+/i.exec(str(cell));
   const s = str(cell).replace(/[*\u25c7\u25c6\u2020\u2021]/g, '').replace(/\/TL\d+/gi, '').trim();
   const m = /^(.*?)(?:\s*[-\u2212\u2013]\s*(\d+)|\s*\(\s*(\d+)\s*\)|\s*(\d+))/.exec(s);
   if (!m) return null;
   const eq = /=\s*(\d+)/.exec(s);
   const level = parseInt(eq ? eq[1] : (m[2] || m[3] || m[4]), 10);
   if (!(level >= 1 && level <= 99)) return null;
-  return { skill: m[1].replace(/[\s=:\-\u2212\u2013]+$/, '').trim(), level };
+  return { skill: m[1].replace(/[\s=:\-\u2212\u2013]+$/, '').trim(), level, tl: tlm ? tlm[0].toLowerCase() : '' };
 }
 // A cell can hold two attacks (`Karate-15, Kick-13`). The one named like the weapon is read;
 // else the last, the number the sheet wraps as the row's live cell. `pairs` counts them.
@@ -111,8 +112,20 @@ function splitTop(text, sep) {
   return out;
 }
 
-// Skills-table lookup: exact, then ignoring /TL<n>, then a bracket written as
-// initials (Guns (LMG) = Guns (Light Machine Gun), SMG = Submachine Gun).
+// Short names a sheet writes that initials do not spell out (the skill script's
+// gurps_skill_default.py ALIASES carries the same).
+const SKILL_ALIASES = {
+  'guns (lmg)': 'guns (light machine gun)',
+  'guns (smg)': 'guns (submachine gun)',
+  'guns (law)': 'guns (light anti-armor weapon)',
+  'guns (gl)': 'guns (grenade launcher)',
+  'gunner (mg)': 'gunner (machine gun)',
+  'shield': 'shield (shield)',
+};
+
+// Skills-table lookup: exact, then ignoring /TL<n> (the row at the tech level `tl` names first,
+// when the table has the skill at two), then a bracket written as initials
+// (Guns (LMG) = Guns (Light Machine Gun), SMG = Submachine Gun).
 function makeSkillMatcher(skills) {
   const entries = [];
   for (const s of skills) {
@@ -131,11 +144,13 @@ function makeSkillMatcher(skills) {
     for (const ch of a) if (ch === firsts[k]) k++;
     return k === firsts.length;
   };
-  const find = (n) => {
+  const tlOf = (n) => { const m = /\/TL\d+/i.exec(n); return m ? m[0].toLowerCase() : ''; };
+  const find = (n, tl) => {
     const exact = entries.find(e => norm(e.name) === norm(n));
     if (exact) return exact;
-    const noTl = entries.find(e => bare(e.name) === bare(n));
-    if (noTl) return noTl;
+    const alias = (x) => SKILL_ALIASES[bare(x)] || bare(x);
+    const noTl = entries.filter(e => alias(e.name) === alias(n));
+    if (noTl.length) return (tl && noTl.find(e => tlOf(e.name) === tl)) || noTl[0];
     const [head, br] = split(n);
     if (br === null) return null;
     return entries.find(e => {
@@ -143,15 +158,15 @@ function makeSkillMatcher(skills) {
       return b !== null && h === head && b.split(/[^a-z]+/).filter(Boolean).length > 1 && abbrOf(br, b.split(/[^a-z]+/).filter(Boolean));
     }) || null;
   };
-  const match = (name) => {
+  const match = (name, tl = '') => {
     const n = str(name).trim();
     if (!n) return null;
-    const hit = find(n);
+    const hit = find(n, tl);
     if (hit) return hit;
     // `Beam Weapons/Pistol` is `Beam Weapons (Pistol)`; a skill whose own name has a slash
     // (Axe/Mace) was found above.
     const slash = /^([^()/]+?)\s*\/\s*([^()/]+)$/.exec(bare(n));
-    return slash ? find(`${slash[1]} (${slash[2]})`) : null;
+    return slash ? find(`${slash[1]} (${slash[2]})`, tl) : null;
   };
   // The Skills-table name nearest a name that is not on it: the same head word, else one
   // that starts the same. Only for a warning.
@@ -502,11 +517,39 @@ function equipmentItems(eq) {
   return items.concat(extra);
 }
 
+// B271: without the skill it names, an unarmed attack rolls against the best of DX and the unarmed skills the sheet
+// has (a punch: Boxing, Brawling, Karate; a kick: Brawling, Karate, less 2; a grapple: Judo, Sumo Wrestling,
+// Wrestling; a bite: Brawling; a slam: Brawling, Sumo Wrestling, B371; a shove: Sumo Wrestling, B372). The fix gives
+// that level as a cell the calculator reads as a level (`Brawling 13`).
+const UNARMED_BASES = [
+  [/^kick\b/i, ['Brawling', 'Karate'], -2],
+  [/^(?:grapple|grab)\b/i, ['Judo', 'Sumo Wrestling', 'Wrestling'], 0],
+  [/^bite\b/i, ['Brawling'], 0],
+  [/^slam\b/i, ['Brawling', 'Sumo Wrestling'], 0],
+  [/^shove\b/i, ['Sumo Wrestling'], 0],
+  [/./, ['Boxing', 'Brawling', 'Karate'], 0],
+];
+function unarmedBest(attack, match, dx) {
+  const [, skills, mod] = UNARMED_BASES.find(([re]) => re.test(attack));
+  const options = Number.isFinite(dx) ? [[dx, 'DX']] : [];
+  for (const name of skills) { const hit = match(name); if (hit) options.push([hit.level, hit.name]); }
+  if (!options.length) return { mod };
+  const [have, name] = options.reduce((a, b) => (b[0] > a[0] ? b : a));
+  return { name, level: have + mod, mod, how: mod ? `${name}${mod} = ${have + mod}` : `${name} ${have}` };
+}
+
 // `report`, when given, is an array: each row the calculator cannot fully read is pushed to it
 // as { severity: 'warning' | 'info', detail, fix, text }, for the build's Site Faults audit.
 function buildTohitData(model, meta, report) {
   const m = model || {};
   const match = makeSkillMatcher(m.skills || []);
+  const dx = parseInt(str(((m.attributes || {}).primary || {}).DX && m.attributes.primary.DX.value), 10);
+  const unarmedFix = (attack, skill) => {
+    const best = unarmedBest(attack, match, dx);
+    const what = `the best of DX and the unarmed skills on the sheet${best.mod ? `, less ${-best.mod}` : ''}`;
+    const write = best.how ? ` (here ${best.how}): write the Skill cell as "${best.name} ${best.level}"` : ': write the Skill cell as that skill or DX and its level';
+    return `without ${skill} a ${attack} rolls against ${what}${write}, or add ${skill} to the Skills table with the points the character has in it`;
+  };
   const say = (severity, detail, fix) => {
     if (Array.isArray(report)) report.push({ severity, detail: `to-hit calculator: ${detail}`, fix, text: `to-hit calculator: ${detail}; ${fix}` });
   };
@@ -530,7 +573,7 @@ function buildTohitData(model, meta, report) {
       say('warning', `${where} is left out: its Skill cell "${str(row.skill).trim()}" has no level`, 'write it as the skill and its level (Broadsword-12), or take the row off if the character does not use it');
       return;
     }
-    let hit = match(read.skill);
+    let hit = match(read.skill, read.tl);
     let technique = null;
     let base = hit ? hit.level : null;
     if (!hit && !read.skill) {
@@ -560,7 +603,12 @@ function buildTohitData(model, meta, report) {
         say('info', `${where} names the technique ${technique}, so it is read as ${parent.name} with that technique`, `the calculator offers ${technique} on the ${parent.name} rows too: keep this row only for its own damage or reach, written ${parent.name}-${Number.isFinite(lv) ? lv : read.level} (the technique's level)`);
       } else {
         const near = match.closest(read.skill);
-        say('warning', `${where}: skill "${read.skill}" is not in the Skills table${near ? ` (nearest: "${near}")` : ''}, so the row gets no techniques, off-hand rule or "+N included" line`, 'name the skill as the Skills table does, or add it there at its default level for 0 points');
+        // An unarmed attack needs no unarmed skill (B182, B231): it is rolled against DX, a kick DX-2. The unarmed skills
+        // have no default, so the fix is never to add one at its default.
+        const fix = UNARMED.test(weaponStem(key))
+          ? `${near ? 'name the skill as the Skills table does; else, ' : ''}${unarmedFix(key.trim(), read.skill)}`
+          : 'name the skill as the Skills table does, or add it there at its default level for 0 points';
+        say('warning', `${where}: skill "${read.skill}" is not in the Skills table${near ? ` (nearest: "${near}")` : ''}, so the row gets no techniques, off-hand rule or "+N included" line`, fix);
       }
     }
     const shown = shownLevel(row.skill);
@@ -699,4 +747,4 @@ function tohitMarkup(data) {
   return `<div class="wide cat-table tohit" id="tohit-calc"></div>\n${tohitDataScript(data)}`;
 }
 
-module.exports = { buildTohitData, tohitDataScript, tohitMarkup };
+module.exports = { buildTohitData, tohitDataScript, tohitMarkup, SKILL_ALIASES };
