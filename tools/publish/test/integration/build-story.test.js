@@ -457,6 +457,24 @@ describe('build story: a session that moves chapter', () => {
     } finally { s.cleanup(); }
   });
 
+  // With PR B's shared address set (every Story page takes the first free address from its slug): an old address that
+  // another page of this build now takes is that page, never a redirect over it.
+  it('an old address another session now takes stays that session\'s page', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n'), 'Chapters/Chapter 2/Chapter 2 Overview.md': CH2('active') }), { sites: ['player'] });
+    try {
+      moveSession2(s);
+      // A new note in Chapter 1 whose file name makes the same slug ("Session_2"): its address is the moved session's
+      // old one.
+      fs.writeFileSync(vaultFile(s, 'Sessions/Session_2.md'), SESSION(2).replace('session_number: 2', 'session_number: 5')
+        .replace('[[Session 2 Wrap-Up]]', '[[Session_2 Wrap-Up]]').replace('[[Session 2 Play Notes]]', '[[Session_2 Play Notes]]'));
+      fs.writeFileSync(vaultFile(s, 'Sessions/Session_2 Wrap-Up.md'), WRAP_2.replace('[[Session 2]]', '[[Session_2]]').replace('RECAP-TWO-1', 'RECAP-AGAIN-1'));
+      rebuild(s);
+      assert.ok(s.player.exists('story', NEW));
+      assert.match(s.player.read('story', OLD), /RECAP-AGAIN-1/);
+      assert.ok(!isRedirectTo(s.player.read('story', OLD), NEW));
+    } finally { s.cleanup(); }
+  });
+
   it('a session the Story no longer shows (its chapter now planned) gets no redirect', () => {
     const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n'), 'Chapters/Chapter 2/Chapter 2 Overview.md': CH2('active') }), { sites: ['player'] });
     try {
