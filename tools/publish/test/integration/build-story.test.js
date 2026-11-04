@@ -30,7 +30,7 @@ describe('build story section', () => {
 
   it('renders a campaign story page for the Chapter 1 chapter-level recap', () => {
     const html = read('story/chapter-1-london.html');
-    assert.ok(html.includes('class="story-prose"'), 'Ch1 story page missing story-prose');
+    assert.ok(html.includes('class="story-prose story-chapter"'), 'Ch1 story page missing story-prose');
     assert.ok(html.includes('Lord Harcourt'), 'Ch1 recap content missing');
   });
 

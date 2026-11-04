@@ -92,3 +92,99 @@ describe('characterStoryPage prologue', () => {
     assert.doesNotMatch(html, /Before the campaign/);
   });
 });
+
+// Chapter pages (Task 4): the chapter's own Story page, by status.
+describe('chapter page', () => {
+  const base = {
+    kind: 'chapter', outputPath: 'story/the-docks.html', title: 'The Docks', chapterTitle: 'The Docks', label: 'Chapter One',
+    dates: 'March 1817', teaserHtml: null, overview: null, recapHtml: null, sections: [], prevHref: 'story/prologue.html', nextHref: 'story/the-docks-s1.html',
+    sessions: [{ title: 'Session 1', outputPath: 'story/the-docks-s1.html', inGameDate: '12 March 1817' }, { title: 'Session 2', outputPath: 'story/the-docks-s2.html', inGameDate: null }],
+  };
+  const page = (u) => storyPage({ ...base, ...u }, cfg, pub, () => '');
+  const article = (html) => html.slice(html.indexOf('<article'), html.indexOf('</article>'));
+
+  it('active: label, title, dates, the marker, the Teaser, then Sessions so far; nothing else', () => {
+    const html = page({ status: 'active', teaserHtml: '<p>TEASER-TEXT</p>' });
+    assert.match(html, /<article class="story-prose story-chapter" data-chapter-status="active">/);
+    const at = ['<p class="story-chapter-label">Chapter One</p>', '<h1 class="page-title">The Docks</h1>', '<p class="story-chapter-dates">March 1817</p>',
+      '<p class="story-chapter-now">now being played</p>', '<div class="story-chapter-teaser"><p>TEASER-TEXT</p></div>',
+      '<h2 class="story-chapter-sessions-title">Sessions so far</h2>', '<ol class="story-chapter-sessions">'].map((s) => html.indexOf(s));
+    assert.ok(at.every((i) => i >= 0) && at.every((x, i) => i === 0 || at[i - 1] < x), `in order: ${at}`);
+    assert.match(html, /<li><a href="the-docks-s1\.html">Session 1<\/a> <span class="story-chapter-date">12 March 1817<\/span><\/li>/);
+    assert.match(html, /<li><a href="the-docks-s2\.html">Session 2<\/a><\/li>/);
+    assert.doesNotMatch(html, /story-chapter-overview|story-chapter-more|story-eyebrow/);
+    assert.equal((html.match(/class="story-nav"/g) || []).length, 2);
+  });
+
+  it('complete: overview, the recap\'s opening, the rest in a details, then The sessions; no marker, no Teaser', () => {
+    const html = page({ status: 'complete', overview: 'They lost the boat.', recapHtml: '<p>FIRST</p>\n<p>SECOND</p>' });
+    assert.match(html, /data-chapter-status="complete"/);
+    assert.match(html, /<p class="story-chapter-overview">They lost the boat\.<\/p>/);
+    assert.match(html, /<p>FIRST<\/p>\s*<details class="story-chapter-more"><summary>Read the whole chapter recap<\/summary>\s*<p>SECOND<\/p>\s*<\/details>/);
+    assert.match(html, /<h2 class="story-chapter-sessions-title">The sessions<\/h2>/);
+    assert.doesNotMatch(html, /story-chapter-now|story-chapter-teaser/);
+  });
+
+  it('unknown: heading and sessions only', () => {
+    const html = page({ status: 'unknown', label: null, dates: null });
+    assert.match(html, /data-chapter-status="unknown"/);
+    assert.doesNotMatch(article(html), /story-chapter-(label|dates|now|teaser|overview|more)/);
+    assert.match(html, /<h2 class="story-chapter-sessions-title">The sessions<\/h2>/);
+  });
+
+  it('no sessions: no sessions heading or list', () => {
+    const html = page({ status: 'active', sessions: [] });
+    assert.doesNotMatch(html, /story-chapter-sessions/);
+  });
+
+  it('a one-paragraph recap has no details', () => {
+    const html = page({ status: 'complete', recapHtml: '<p>ONLY</p>' });
+    assert.match(html, /<p>ONLY<\/p>/);
+    assert.doesNotMatch(html, /<details/);
+  });
+
+  it('the wrap-up\'s sections follow the session list, and the moments follow Previous/Next', () => {
+    const html = page({ status: 'complete', recapHtml: '<p>R</p>', sections: [{ title: 'Loot', id: 'loot', html: '<p>KEY</p>' }], momentsHtml: '<div class="story-moments">M</div>' });
+    const at = ['story-chapter-sessions-title', 'id="loot"', '</article>', 'story-moments'].map((s) => html.lastIndexOf(s));
+    assert.ok(at.every((x, i) => x >= 0 && (i === 0 || at[i - 1] < x)), `in order: ${at}`);
+  });
+});
+
+// Review Focus 3: the recap's opening is its first paragraph players see, with any figure placed beside it.
+describe('splitOpening', () => {
+  const { splitOpening } = require('../../lib/templates/story');
+  it('(a) two paragraphs: the first opens, the second is the rest', () => {
+    assert.deepStrictEqual(splitOpening('<p>a</p><p>b</p>'), { before: '', opening: '<p>a</p>', rest: '<p>b</p>' });
+  });
+  it('(b) a figure placed before the first paragraph goes with it; a heading before stays above', () => {
+    const fig = '<div class="story-figures"><figure class="story-figure"><img src="x.png" alt="X"></figure></div>';
+    const r = splitOpening(`<h3>Part one</h3>${fig}<p>a</p><p>b</p>`);
+    assert.deepStrictEqual(r, { before: '<h3>Part one</h3>', opening: `${fig}<p>a</p>`, rest: '<p>b</p>' });
+  });
+  it('(b2) a picture the GM placed as its own paragraph-less block stays above', () => {
+    const r = splitOpening('<figure><img src="x.png"></figure>\n<p>a</p>\n<p>b</p>');
+    assert.strictEqual(r.before, '<figure><img src="x.png"></figure>\n');
+    assert.strictEqual(r.opening, '<p>a</p>');
+    assert.strictEqual(r.rest.trim(), '<p>b</p>');
+  });
+  it('(c) a single paragraph: no rest', () => {
+    assert.deepStrictEqual(splitOpening('<p>only</p>\n'), { before: '', opening: '<p>only</p>', rest: '' });
+  });
+  it('no paragraph at all: everything is above', () => {
+    assert.deepStrictEqual(splitOpening('<ul><li>x</li></ul>'), { before: '<ul><li>x</li></ul>', opening: '', rest: '' });
+  });
+  it('a paragraph players do not see (inside a GM mark) is not the opening; a mark open across the split is closed and reopened', () => {
+    const open = 'abc';
+    const close = '';
+    const r = splitOpening(`<p>${open}</p><p>HIDDEN</p><p>${close}</p><p>SEEN</p><p>${open}MORE</p><p>STILL${close}</p>`);
+    assert.strictEqual(r.opening, '<p>SEEN</p>');
+    assert.ok(r.before.includes('HIDDEN'));
+    // A mark opening at a paragraph's start hides it: the first words players see open the recap.
+    const r2 = splitOpening(`<p>${open}HID</p><p>A</p><p>B${close}</p><p>C</p>`);
+    assert.strictEqual(r2.opening, '<p>C</p>');
+    // A mark still open where the opening ends is closed there and opened again at the rest's start.
+    const r3 = splitOpening(`<p>SEEN ${open}hid</p><p>more${close}</p>`);
+    assert.strictEqual(r3.opening, `<p>SEEN ${open}hid</p>${close}`);
+    assert.strictEqual(r3.rest, `${open}<p>more${close}</p>`);
+  });
+});

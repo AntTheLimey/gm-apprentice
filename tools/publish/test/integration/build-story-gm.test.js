@@ -412,3 +412,25 @@ describe('a wrap-up\'s text above its first heading', () => {
     }
   });
 });
+
+// Chapter pages: a complete chapter's recap opens with its first paragraph and folds the rest; a GM-only part in it is
+// marked in place on the GM site, every mark balanced across the fold.
+describe('the GM Story page: a complete chapter\'s folded recap', () => {
+  const chapter = CHAPTER.replace('sort_order: 1', 'sort_order: 1\nstatus: complete');
+  const chWrap = '---\ntype: session_wrap\nchapter: "[[Chapter 1 Overview]]"\n---\n\n# Chapter 1 Wrap-Up\n\n## Narrative Recap\n\n'
+    + 'RECAP-OPEN-1 the docks.\n\n<!-- gm-only -->\nGMSECRET-FOLD-1 the cook.\n\nGMSECRET-FOLD-2 the boat.\n<!-- /gm-only -->\n\nRECAP-REST-1 the bay.\n';
+  const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': chapter, 'Chapters/Chapter 1/Chapter 1 Wrap-Up.md': chWrap }));
+  after(() => s.cleanup());
+
+  it('both sites open with the first paragraph and fold the rest; the GM page marks the hidden part, balanced', () => {
+    for (const side of ['player', 'gm']) {
+      const page = read(s[side], INTRO);
+      assert.ok(ascending(at(page, ['RECAP-OPEN-1', '<details class="story-chapter-more">', 'RECAP-REST-1', '</details>'])), side);
+      assert.equal(nestingFault(page), null, side);
+      assert.ok(!TOKEN.test(page), side);
+    }
+    const gm = read(s.gm, INTRO);
+    assert.ok(markedTexts(gm).some((m) => m.kind === 'gm_only_blocks' && m.text.includes('GMSECRET-FOLD-1')));
+    for (const [file, text] of texts(s.player)) assert.ok(!text.includes('GMSECRET-FOLD'), file);
+  });
+});
