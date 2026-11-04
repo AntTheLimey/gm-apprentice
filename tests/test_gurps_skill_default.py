@@ -213,6 +213,17 @@ class SkillDefaultTests(unittest.TestCase):
         self.assertEqual(gsd.plan(SHEET, "Karate", attack="Kick")[1],
                          'Kick rolls against DX-2 = 12 without Karate; write the Skill cell as "DX 12"; nothing is added')
 
+    def test_a_slam_and_a_shove_take_sumo_wrestling(self):
+        # B371: a slam at DX, Brawling or Sumo Wrestling; B372: a shove at
+        # DX or Sumo Wrestling, not Brawling.
+        sheet = SHEET.replace("| Guns (Pistol) |", "| Brawling | DX/E | DX+1 | [2] | 15 | 15 |\n"
+                              "| Guns (Pistol) |")
+        self.assertIn('"Brawling 15"', gsd.plan(sheet, "Karate", attack="Slam")[1])
+        self.assertIn('"DX 14"', gsd.plan(sheet, "Karate", attack="Shove")[1])
+        sumo = sheet.replace("| Brawling | DX/E | DX+1 | [2] | 15 | 15 |",
+                             "| Sumo Wrestling | DX/A | DX+3 | [12] | 17 | 17 |")
+        self.assertIn('"Sumo Wrestling 17"', gsd.plan(sumo, "Karate", attack="Shove")[1])
+
     def test_with_no_points_column_only_attribute_defaults_are_used(self):
         # Review B: with no Points column a default-only row cannot be told
         # from a bought one (B173), so no skill is a base, and that is said.

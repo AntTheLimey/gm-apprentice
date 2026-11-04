@@ -358,12 +358,15 @@ def plan(text: str, skill: str, difficulty: str | None = None,
 # B271: an unarmed attack needs no unarmed skill. A punch rolls against the
 # best of DX, Boxing, Brawling and Karate; a kick against the best of DX,
 # Brawling and Karate, less 2; a grapple against DX, Judo, Sumo Wrestling or
-# Wrestling; a bite against DX or Brawling.
+# Wrestling; a bite against DX or Brawling; a slam against DX, Brawling or
+# Sumo Wrestling (B371); a shove against DX or Sumo Wrestling (B372).
 UNARMED_BASES = (
     (re.compile(r"^kick\b", re.I), ("brawling", "karate"), -2),
     (re.compile(r"^(?:grapple|grab)\b", re.I),
      ("judo", "sumo wrestling", "wrestling"), 0),
     (re.compile(r"^bite\b", re.I), ("brawling",), 0),
+    (re.compile(r"^slam\b", re.I), ("brawling", "sumo wrestling"), 0),
+    (re.compile(r"^shove\b", re.I), ("sumo wrestling",), 0),
     (re.compile(r""), ("boxing", "brawling", "karate"), 0),
 )
 

@@ -111,6 +111,10 @@ function splitTop(text, sep) {
   return out;
 }
 
+// Short names a sheet writes that initials do not spell out (the skill script's
+// gurps_skill_default.py ALIASES carries the same).
+const SKILL_ALIASES = { 'guns (law)': 'guns (light anti-armor weapon)' };
+
 // Skills-table lookup: exact, then ignoring /TL<n>, then a bracket written as
 // initials (Guns (LMG) = Guns (Light Machine Gun), SMG = Submachine Gun).
 function makeSkillMatcher(skills) {
@@ -134,7 +138,8 @@ function makeSkillMatcher(skills) {
   const find = (n) => {
     const exact = entries.find(e => norm(e.name) === norm(n));
     if (exact) return exact;
-    const noTl = entries.find(e => bare(e.name) === bare(n));
+    const alias = (x) => SKILL_ALIASES[bare(x)] || bare(x);
+    const noTl = entries.find(e => alias(e.name) === alias(n));
     if (noTl) return noTl;
     const [head, br] = split(n);
     if (br === null) return null;
@@ -504,11 +509,14 @@ function equipmentItems(eq) {
 
 // B271: without the skill it names, an unarmed attack rolls against the best of DX and the unarmed skills the sheet
 // has (a punch: Boxing, Brawling, Karate; a kick: Brawling, Karate, less 2; a grapple: Judo, Sumo Wrestling,
-// Wrestling; a bite: Brawling). The fix gives that level as a cell the calculator reads as a level (`Brawling 13`).
+// Wrestling; a bite: Brawling; a slam: Brawling, Sumo Wrestling, B371; a shove: Sumo Wrestling, B372). The fix gives
+// that level as a cell the calculator reads as a level (`Brawling 13`).
 const UNARMED_BASES = [
   [/^kick\b/i, ['Brawling', 'Karate'], -2],
   [/^(?:grapple|grab)\b/i, ['Judo', 'Sumo Wrestling', 'Wrestling'], 0],
   [/^bite\b/i, ['Brawling'], 0],
+  [/^slam\b/i, ['Brawling', 'Sumo Wrestling'], 0],
+  [/^shove\b/i, ['Sumo Wrestling'], 0],
   [/./, ['Boxing', 'Brawling', 'Karate'], 0],
 ];
 function unarmedBest(attack, match, dx) {

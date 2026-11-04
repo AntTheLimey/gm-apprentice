@@ -479,6 +479,11 @@ describe('round two: skill names are matched to the Skills table', () => {
     assert.strictEqual(w1('Guns (LMG) 19').base, 17);
     assert.strictEqual(w1('Guns (LMG) 19').skillAs, 'Guns (LMG)');
   });
+  it('reads Guns (LAW) as Guns (Light Anti-Armor Weapon), either way round (the skill script\'s ALIASES)', () => {
+    const law = (skills, skill) => buildTohitData(model({ ranged: [rangedRow({ skill })], skills }), META).weapons[0];
+    assert.strictEqual(law([['Guns (LAW)', '14']], 'Guns (Light Anti-Armor Weapon) 14').base, 14);
+    assert.strictEqual(law([['Guns (Light Anti-Armor Weapon)', '13']], 'Guns (LAW) 13').base, 13);
+  });
   it('does not match a different bracket', () => {
     const w = w1('Guns (Pistol) 12');
     assert.strictEqual(w.skill, 'Guns (Pistol)'); assert.strictEqual(w.base, null);
@@ -743,6 +748,19 @@ describe('rows written another way, and the report of what is not read', () => {
     // kick at that less 2, written as a level the calculator reads.
     assert.strictEqual(report[0].fix, 'without Karate a Punch rolls against the best of DX and the unarmed skills on the sheet (here Brawling 12): write the Skill cell as "Brawling 12", or add Karate to the Skills table with the points the character has in it');
     assert.strictEqual(report[1].fix, 'without Karate a Kick rolls against the best of DX and the unarmed skills on the sheet, less 2 (here Brawling-2 = 10): write the Skill cell as "Brawling 10", or add Karate to the Skills table with the points the character has in it');
+  });
+  it('a slam takes Brawling or Sumo Wrestling (B371), a shove only Sumo Wrestling (B372)', () => {
+    const fixFor = (weapon, skills) => {
+      const m = model({ skills, melee: [meleeRow({ weapon, skill: 'Karate-12' })] });
+      m.attributes.primary.DX = { value: '12', markers: [] };
+      const report = [];
+      buildTohitData(m, META, report);
+      return report[0].fix;
+    };
+    assert.match(fixFor('Slam', [['Sumo Wrestling', '17']]), /"Sumo Wrestling 17"/);
+    assert.match(fixFor('Shove', [['Sumo Wrestling', '16']]), /"Sumo Wrestling 16"/);
+    assert.match(fixFor('Slam', [['Brawling', '15']]), /"Brawling 15"/);
+    assert.match(fixFor('Shove', [['Brawling', '15']]), /"DX 12"/);
   });
   it('an unarmed attack with DX on the sheet better than its unarmed skills: the fix names DX', () => {
     const m = model({ skills: [['Brawling', '12']], melee: [meleeRow({ weapon: 'Kick', skill: 'Karate-12' })] });
