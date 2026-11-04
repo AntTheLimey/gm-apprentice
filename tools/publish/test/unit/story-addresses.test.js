@@ -25,18 +25,19 @@ describe('story addresses', () => {
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
+  // A session is known by its note's file name, which a move to another chapter's folder keeps.
   it('keeps every address a session has had, sessions only, beside the site (never in it)', () => {
     const dir = tmp();
     try {
       writeStoryAddresses(dir, [chapter('story/c.html'), session('Sessions/S 1.md', 'story/c-s1.html')], relOf, new Map());
       assert.ok(storyAddressesPath(dir).startsWith(path.join(dir, '.gm-apprentice') + path.sep));
       const first = readStoryAddresses(dir);
-      assert.deepEqual([...first], [['Sessions/S 1.md', ['story/c-s1.html']]]);
+      assert.deepEqual([...first], [['S 1.md', ['story/c-s1.html']]]);
       writeStoryAddresses(dir, [session('Sessions/S 1.md', 'story/d-s1.html')], relOf, first);
-      assert.deepEqual([...readStoryAddresses(dir)], [['Sessions/S 1.md', ['story/c-s1.html', 'story/d-s1.html']]]);
+      assert.deepEqual([...readStoryAddresses(dir)], [['S 1.md', ['story/c-s1.html', 'story/d-s1.html']]]);
       // A session the Story no longer shows keeps its addresses, for when it shows again.
       writeStoryAddresses(dir, [], relOf, readStoryAddresses(dir));
-      assert.deepEqual([...readStoryAddresses(dir)], [['Sessions/S 1.md', ['story/c-s1.html', 'story/d-s1.html']]]);
+      assert.deepEqual([...readStoryAddresses(dir)], [['S 1.md', ['story/c-s1.html', 'story/d-s1.html']]]);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
@@ -45,14 +46,25 @@ describe('story addresses', () => {
     try {
       const nfd = 'Sessions/Sesión 1.md'.normalize('NFD');
       writeStoryAddresses(dir, [session(nfd, 'story/c-s1.html')], relOf, new Map());
-      assert.deepEqual([...readStoryAddresses(dir).keys()], ['Sessions/Sesión 1.md'.normalize('NFC')]);
+      assert.deepEqual([...readStoryAddresses(dir).keys()], ['Sesión 1.md'.normalize('NFC')]);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
   it('movedSessions: each earlier address of a shown session that is no page of this build leads to its address now', () => {
-    const previous = new Map([['Sessions/S 1.md', ['story/a-s1.html', 'story/b-s1.html']], ['Sessions/S 2.md', ['story/a-s2.html']], ['Sessions/Gone.md', ['story/a-gone.html']]]);
+    const previous = new Map([['S 1.md', ['story/a-s1.html', 'story/b-s1.html']], ['S 2.md', ['story/a-s2.html']], ['Gone.md', ['story/a-gone.html']]]);
     const spine = [session('Sessions/S 1.md', 'story/c-s1.html'), session('Sessions/S 2.md', 'story/a-s2.html'), chapter('story/a.html')];
     const taken = new Set(['story/b-s1.html']);
     assert.deepEqual(movedSessions(previous, spine, relOf, taken), [{ from: 'story/a-s1.html', to: 'story/c-s1.html' }]);
+  });
+
+  it('a session moved to another folder is the same session; two sessions with one file name are neither', () => {
+    const previous = new Map([['S 1.md', ['story/a-s1.html']], ['Dup.md', ['story/a-dup.html']]]);
+    const spine = [session('Chapters/B/S 1.md', 'story/b-s1.html'), session('Chapters/A/Dup.md', 'story/a2-dup.html'), session('Chapters/B/Dup.md', 'story/b-dup.html')];
+    assert.deepEqual(movedSessions(previous, spine, relOf, new Set()), [{ from: 'story/a-s1.html', to: 'story/b-s1.html' }]);
+    const dir = tmp();
+    try {
+      writeStoryAddresses(dir, spine, relOf, previous);
+      assert.deepEqual(readStoryAddresses(dir).get('Dup.md'), ['story/a-dup.html']);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });

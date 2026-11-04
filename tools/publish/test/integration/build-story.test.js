@@ -369,9 +369,12 @@ describe('build story: a session that moves chapter', () => {
   const CH2 = (status) => `---\ntype: chapter\ntitle: Chapter 2 — Boats\nsort_order: 2\nstatus: ${status}\n---\n\n# Chapter 2 — Boats\n\n## Teaser\n\nThe boats.\n`;
   const quiet = (fn) => { const saved = { log: console.log, warn: console.warn }; console.log = () => {}; console.warn = () => {}; try { fn(); } finally { Object.assign(console, saved); } };
   const vaultFile = (s, rel) => path.join(s.root, 'vault', ...rel.split('/'));
+  // Into the new chapter's folder, its `chapter:` too, as a GM moves it in Obsidian.
   const moveSession2 = (s) => {
-    for (const rel of ['Sessions/Session 2.md', 'Sessions/Session 2 Wrap-Up.md']) {
-      fs.writeFileSync(vaultFile(s, rel), fs.readFileSync(vaultFile(s, rel), 'utf8').replace('[[Chapter 1 Overview]]', '[[Chapter 2 Overview]]'));
+    for (const name of ['Session 2.md', 'Session 2 Wrap-Up.md']) {
+      const from = vaultFile(s, `Sessions/${name}`);
+      fs.writeFileSync(vaultFile(s, `Chapters/Chapter 2/${name}`), fs.readFileSync(from, 'utf8').replace('[[Chapter 1 Overview]]', '[[Chapter 2 Overview]]'));
+      fs.rmSync(from);
     }
   };
   const rebuild = (s) => quiet(() => build({ configPath: s.configPath, site: 'player' }));
