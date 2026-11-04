@@ -358,6 +358,94 @@ describe('build story: a chapter status the player site hides', () => {
   });
 });
 
+// Chapter pages (Task 10): the chapter bookkeeping the build warns about is a Site Faults finding too, in the tool's
+// words, with its fix, so campaign-qa offers the fix.
+describe('build story: chapter bookkeeping is a Site Faults finding', () => {
+  const { buildBoth } = require('../helpers/gm-build');
+  const { storyVault, CHAPTER, SESSION, WRAP_2 } = require('../helpers/story-vault');
+  const { summaryLines } = require('../../lib/note-faults');
+  const CHAPTER_CODES = ['CHAPTER_STATUS_UNKNOWN', 'CHAPTER_NO_TEASER', 'CHAPTER_ACTIVE_MANY', 'CHAPTER_PLANNED_PLAYED', 'CHAPTER_TITLE_SHARED', 'SESSION_NO_CHAPTER'];
+  const ch = (n, status, extra = '', title = `Chapter ${n}`) => `---\ntype: chapter\ntitle: ${title}\nsort_order: ${n}\n${status ? `status: ${status}\n` : ''}---\n\n# ${title}\n${extra}`;
+  const faultsOf = (files) => {
+    const s = buildBoth(storyVault(files), { sites: [] });
+    let faults = null;
+    try { build({ configPath: s.configPath, site: 'player', inMemory: true, onNoteFaults: (f) => { faults = f; } }); } finally { s.cleanup(); }
+    return faults.filter((f) => CHAPTER_CODES.includes(f.code));
+  };
+  const rows = (faults, code) => faults.filter((f) => f.code === code);
+
+  it('no status, an unknown status, an active chapter with no Teaser, and two active chapters: one row per note, each with its fix', () => {
+    const faults = faultsOf({ 'Chapters/Chapter 1/Chapter 1 Overview.md': ch(1, 'complet'),
+      'Chapters/C2/Chapter 2.md': ch(2, 'active'), 'Chapters/C3/Chapter 3.md': ch(3, 'active', '\n## Teaser\n\nT.\n'), 'Chapters/C4/Chapter 4.md': ch(4, null) });
+    const unknown = rows(faults, 'CHAPTER_STATUS_UNKNOWN');
+    assert.deepEqual(unknown.map((f) => f.path).sort(), ['Chapters/C4/Chapter 4.md', 'Chapters/Chapter 1/Chapter 1 Overview.md']);
+    assert.match(unknown.find((f) => /Chapter 1/.test(f.path)).detail, /"complet"/);
+    assert.match(unknown.find((f) => /Chapter 4/.test(f.path)).detail, /no status/);
+    for (const f of unknown) assert.match(f.fix, /status: to planned .*active .*complete/);
+    const teaser = rows(faults, 'CHAPTER_NO_TEASER');
+    assert.deepEqual(teaser.map((f) => f.path), ['Chapters/C2/Chapter 2.md']);
+    assert.match(teaser[0].fix, /## Teaser/);
+    const many = rows(faults, 'CHAPTER_ACTIVE_MANY');
+    assert.deepEqual(many.map((f) => f.path).sort(), ['Chapters/C2/Chapter 2.md', 'Chapters/C3/Chapter 3.md']);
+    assert.match(many.find((f) => /Chapter 2/.test(f.path)).detail, /Chapter 3\.md/);
+    for (const f of faults) {
+      assert.equal(f.severity, 'warning', f.code);
+      assert.ok(f.detail && f.fix, `${f.code} has a detail and a fix`);
+    }
+    assert.equal(rows(faults, 'CHAPTER_PLANNED_PLAYED').length, 0);
+  });
+
+  it('a planned chapter holding played sessions: one row on the chapter note, naming the sessions', () => {
+    const faults = faultsOf({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: planned\n') });
+    assert.deepEqual(faults.map((f) => f.code), ['CHAPTER_PLANNED_PLAYED']);
+    assert.equal(faults[0].path, 'Chapters/Chapter 1/Chapter 1 Overview.md');
+    assert.match(faults[0].detail, /Sessions\/Session 1\.md/);
+    assert.match(faults[0].detail, /Sessions\/Session 2\.md/);
+    assert.match(faults[0].fix, /status: to active .*complete/);
+  });
+
+  it('two chapters with one title, and a played session no chapter heads: one row each', () => {
+    const arc = (n, status) => ch(n, status, status === 'active' ? '\n## Teaser\n\nT.\n' : '\n## Recap\n\nR.\n', 'Arc');
+    const s0 = SESSION(0).replace(/chapter: .*\n/, '');
+    const w0 = WRAP_2.replace(/Session 2/g, 'Session 0').replace('session_number: 2', 'session_number: 0').replace(/chapter: .*\n/, '');
+    const faults = faultsOf({ 'Chapters/Chapter 1/Chapter 1 Overview.md': null, 'Chapters/A/Arc.md': arc(1, 'complete'), 'Chapters/B/Arc.md': arc(2, 'active'),
+      'Sessions/Session 0.md': s0, 'Sessions/Session 0 Wrap-Up.md': w0 });
+    const shared = rows(faults, 'CHAPTER_TITLE_SHARED');
+    assert.deepEqual(shared.map((f) => f.path), ['Chapters/B/Arc.md']);
+    assert.match(shared[0].detail, /Chapters\/A\/Arc\.md/);
+    const loose = rows(faults, 'SESSION_NO_CHAPTER');
+    assert.deepEqual(loose.map((f) => f.path), ['Sessions/Session 0.md']);
+    assert.match(loose[0].fix, /chapter:/);
+  });
+
+  it('a status the player site hides is a row whose fix is the setting, not the note', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n') }),
+      { player: { hide: { fields: ['status'] } }, sites: [] });
+    let faults = null;
+    try { build({ configPath: s.configPath, site: 'player', inMemory: true, onNoteFaults: (f) => { faults = f; } }); } finally { s.cleanup(); }
+    const rows = faults.filter((f) => f.code === 'CHAPTER_STATUS_UNKNOWN');
+    assert.equal(rows.length, 1, JSON.stringify(faults));
+    assert.match(rows[0].detail, /hide\.fields/);
+    assert.match(rows[0].fix, /hide\.fields/);
+  });
+
+  it('a vault whose chapters are in order has no chapter rows', () => {
+    const faults = faultsOf({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: active\n') + '\n## Teaser\n\nThe docks.\n' });
+    assert.deepEqual(faults, []);
+  });
+
+  it('the closing summary says it once for all of them, and sends the GM to campaign-qa', () => {
+    const f = (code, p) => ({ code, severity: 'warning', path: p, detail: 'd', fix: 'f' });
+    const lines = summaryLines([f('CHAPTER_NO_TEASER', 'Chapters/A/A.md'), f('CHAPTER_ACTIVE_MANY', 'Chapters/A/A.md'),
+      f('CHAPTER_ACTIVE_MANY', 'Chapters/B/B.md'), f('SESSION_NO_CHAPTER', 'Sessions/S.md')]);
+    assert.equal(lines.length, 1, lines.join('\n'));
+    assert.match(lines[0], /^4 chapter bookkeeping faults/);
+    // The notes were named on their own lines as the Story was built: the closing line only counts them.
+    assert.doesNotMatch(lines[0], /\b(A|B|S)\b/);
+    assert.match(lines[0], /campaign-qa's Site Faults check fixes these/);
+  });
+});
+
 // Chapter pages (Task 8): a session that moves to another chapter keeps its old Story address working, build after
 // build; a session the Story stops showing gets no redirect.
 describe('build story: a session that moves chapter', () => {

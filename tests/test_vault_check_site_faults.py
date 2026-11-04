@@ -36,7 +36,7 @@ def npc(body="", extra=""):
 
 
 def make(case, files, excluded=(), tool="real", site_json=None, site=True,
-         system=None):
+         system=None, folders=()):
     """A vault and its site. `files` maps vault paths to text; every note
     not in `excluded` ("path" or "path — reason") is listed under
     publishing. `tool`: "real" installs the repo's publish tool in the
@@ -67,7 +67,9 @@ def make(case, files, excluded=(), tool="real", site_json=None, site=True,
         "---\npublish:\n  site: true\n"
         + (f"  system: {system}\n" if system else "") +
         f"  site_dir: {site_dir.as_posix()}\n  folder_map:\n"
-        "    Characters: characters\n---\n", encoding="utf-8")
+        "    Characters: characters\n"
+        + "".join(f"    {f}: {f.lower()}\n" for f in folders)
+        + "---\n", encoding="utf-8")
     # The site file names another vault: the one asked about must be the
     # vault the check was given.
     other = root / "other"
@@ -253,6 +255,34 @@ class SiteFaultRowsTests(unittest.TestCase):
             "path": "S/W.md", "detail": "d", "fix": "f"}, False)
         self.assertEqual(row, "WARNING\tS/W.md\tMOMENT_KIND_UNKNOWN: d — f")
         self.assertIn("MOMENT_KIND_UNKNOWN", vc.NOTE_FAULT_CODES)
+
+    def test_the_chapter_bookkeeping_codes_are_rows_with_the_tools_fix(self):
+        for code in ("CHAPTER_STATUS_UNKNOWN", "CHAPTER_NO_TEASER",
+                     "CHAPTER_ACTIVE_MANY", "CHAPTER_PLANNED_PLAYED",
+                     "CHAPTER_TITLE_SHARED", "SESSION_NO_CHAPTER"):
+            with self.subTest(code=code):
+                row = vc._site_fault_row({
+                    "code": code, "severity": "warning",
+                    "path": "Chapters/C/C.md", "detail": "d", "fix": "f"},
+                    False)
+                self.assertEqual(row, f"WARNING\tChapters/C/C.md\t{code}: d — f")
+                self.assertIn(code, vc.NOTE_FAULT_CODES)
+
+    def test_the_real_tool_reports_an_active_chapter_with_no_teaser(self):
+        chapter = ("---\ntype: chapter\ntitle: The Docks\nsort_order: 1\n"
+                   "status: active\n---\n\n# The Docks\n\nGM summary.\n")
+        session = ("---\ntype: session\ntitle: Session 1\nsession_number: 1\n"
+                   "chapter: \"[[The Docks]]\"\nstatus: played\n---\n\n"
+                   "# Session 1\n\n## Recap\n\nThe party met at the docks.\n")
+        vault, _site = make(self, {"Chapters/Docks/The Docks.md": chapter,
+                                   "Chapters/Docks/Session 1.md": session},
+                            folders=("Chapters",))
+        rows = [r for r in findings(vc.check_site_faults(vault))
+                if "CHAPTER_NO_TEASER" in r]
+        self.assertEqual(len(rows), 1, vc.check_site_faults(vault))
+        self.assertTrue(rows[0].startswith(
+            "WARNING\tChapters/Docks/The Docks.md\tCHAPTER_NO_TEASER: "), rows)
+        self.assertIn("## Teaser", rows[0].split(" — ", 1)[1])
 
     def test_the_real_tool_reports_a_sheet_row_the_calculator_cannot_read(self):
         pc = ("---\ntype: pc\nstatus: alive\n---\n\n## Skills\n\n"

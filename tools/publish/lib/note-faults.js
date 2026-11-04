@@ -37,6 +37,14 @@
 //                     style, `## The Text` or container that cannot be used (an unusable
 //                     style, a missing `## The Text`, a `prop_container` naming no container);
 //                     the plan's own words, from props/plan.js and the build
+//   CHAPTER_STATUS_UNKNOWN  a chapter note with no `status:`, or one that is not planned, active or complete
+//                     (its Story page shows only its heading and sessions)
+//   CHAPTER_NO_TEASER  an active chapter with no `## Teaser` (its Story page shows no text)
+//   CHAPTER_ACTIVE_MANY  one of two or more active chapters (only the chapter being played should be)
+//   CHAPTER_PLANNED_PLAYED  a planned chapter holding played sessions, which so have no Story page
+//   CHAPTER_TITLE_SHARED  a chapter with the title of another, so sessions naming it go to the first
+//   SESSION_NO_CHAPTER  a played session no chapter heads, where chapters show, so it has no Story page
+//                     (these six: the Story's chapter bookkeeping, from build.js, one row per note)
 //
 // Nothing here reads a page a second way, and nothing here knows which field a template
 // prints. The names are decided by the page as the build makes it: every link to a note
@@ -62,7 +70,9 @@ const { STORY_SUFFIX } = require('./scanner');
 const { NO_PAGE_TYPES } = require('./excluding-values');
 const { decodeEntities } = require('./templates/gurps/tables');
 
-const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'COMPANION_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE', 'PROP_NOT_COPIED', 'MOMENT_KIND_UNKNOWN'];
+const CODES = ['ALIAS_IN_PROSE', 'NEVER_SHOW_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'COMPANION_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD', 'SKILL_BELOW_BASE', 'HEADING_IN_HIDDEN_BLOCK', 'TABLE_OVERWIDE', 'PROP_NOT_COPIED', 'MOMENT_KIND_UNKNOWN', 'CHAPTER_STATUS_UNKNOWN', 'CHAPTER_NO_TEASER', 'CHAPTER_ACTIVE_MANY', 'CHAPTER_PLANNED_PLAYED', 'CHAPTER_TITLE_SHARED', 'SESSION_NO_CHAPTER'];
+// The Story's chapter bookkeeping: one closing line for all of them.
+const CHAPTER_CODES = new Set(CODES.slice(CODES.indexOf('CHAPTER_STATUS_UNKNOWN')));
 const WORST = 3;
 // The human report names this many of the pages that link a note with no page.
 const PAGES_SHOWN = 3;
@@ -1087,6 +1097,11 @@ function summaryLines(findings) {
       const notes = [...new Set(rows.map((f) => f.path))];
       const k = rows.length;
       lines.push(`${k} moment ${plural(k, 'tag names', 'tags name')} no kind (${notes.slice(0, WORST).map((p) => baseName(p)).join(', ')}) — ${where} ${plural(k, 'it', 'these')}.`);
+    } else if (CHAPTER_CODES.has(code)) {
+      // Each was said on its own line as the Story was built; the closing line counts them all, once.
+      if (code !== CODES.find((c) => CHAPTER_CODES.has(c) && open.some((f) => f.code === c))) continue;
+      const k = open.filter((f) => CHAPTER_CODES.has(f.code)).length;
+      lines.push(`${k} chapter bookkeeping ${plural(k, 'fault keeps', 'faults keep')} the Story from showing a chapter or session as it should (each said above) — ${where} ${plural(k, 'it', 'these')}.`);
     } else if (code === 'SKILL_BELOW_BASE') {
       continue;   // information for campaign-qa; the build has nothing to say about it
     } else if (code === 'HEADING_IN_HIDDEN_BLOCK' || code === 'TABLE_OVERWIDE') {
