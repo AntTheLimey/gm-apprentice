@@ -51,7 +51,7 @@ describe('characterStoryPage', () => {
 
 const { storyLanding } = require('../../lib/templates/story-landing');
 describe('storyLanding', () => {
-  const spine = [{ outputPath: 'story/chapter-1.html', title: 'Chapter 1', chapterTitle: 'Chapter 1', kind: 'chapter' }];
+  const spine = [{ outputPath: 'story/chapter-1.html', title: 'Chapter 1', chapterTitle: 'Chapter 1', kind: 'chapter', status: 'complete', sessions: [], recapHtml: '<p>R</p>' }];
   const chars = [{ outputPath: 'story/characters/adrien.html', title: 'Adrien', group: 'current' },
                  { outputPath: 'story/characters/varrio.html', title: 'Varrio', group: 'fallen' }];
   it('shows a Begin reading link and both branches', () => {
