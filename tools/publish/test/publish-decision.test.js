@@ -393,6 +393,13 @@ describe('publish-decision: a planned chapter note', () => {
     assert.strictEqual(v.code, 'AUTO_EXCLUDED_STATUS');
   });
 
+  it('autoExcludeCode, which explain prints, agrees: trimmed, any case', () => {
+    for (const status of ['planned ', ' Planned', 'PLANNED']) {
+      assert.strictEqual(autoExcludeCode({ type: 'chapter', status }), 'AUTO_EXCLUDED_STATUS', JSON.stringify(status));
+    }
+    assert.strictEqual(autoExcludeCode({ type: 'session', status: 'prepped ' }), 'AUTO_EXCLUDED_STATUS');
+  });
+
   it('active, complete, in_progress and an unknown status publish', () => {
     for (const status of ['active', 'complete', 'in_progress', 'complet', undefined]) {
       assert.strictEqual(chapter(status).code, 'OK', String(status));

@@ -389,6 +389,17 @@ describe('Story page leaks: the chapter note leaves the player site', () => {
   });
 
   // A planned chapter's title is its likeliest spoiler, and too short to be a hidden sentence (PR C review S2).
+  it('a complete chapter\'s link-preview card says Chapter', () => {
+    const done = CH.replace('status: active', 'status: complete');
+    const wrap = '---\ntype: session_wrap\nchapter: "[[Chapter 1 Overview]]"\n---\n\n# Chapter 1 Wrap-Up\n\n## Narrative Recap\n\nThe docks burned, CHWRAP-1.\n';
+    const t = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': done, 'Chapters/Chapter 1/Chapter 1 Wrap-Up.md': wrap }), { sites: ['player'] });
+    try {
+      const cards = JSON.parse(read(t.player, 'previews.json'));
+      assert.ok(cards[INTRO], Object.keys(cards).join(', '));
+      assert.equal(cards[INTRO].k, 'Chapter');
+    } finally { t.cleanup(); }
+  });
+
   it('the gate finds a planned chapter\'s title planted on a page', () => {
     const t = buildBoth(files('planned'), { sites: ['player'] });
     try {

@@ -280,7 +280,6 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   // counts them.
   const storyChapters = pages.filter(isFoldedChapterNote).length;
   for (const page of pages) {
-    if (storyChapters && isFoldedChapterNote(page)) continue;
     const d = page.outputDir;
     // A prop note kept beside its chapter is not a story entry.
     const prop = isPropNote(page.sourceFrontmatter || page.frontmatter);

@@ -2505,6 +2505,8 @@ function buildSite(options) {
     const { usesCocFolio } = require('./templates/pc');
     // A chapter note folded into its chapter page has no card: players never read the note.
     const cards = buildPreviews(pages.filter((p) => !isFoldedChapterNote(p)), { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff), limits: publishConfig.limits, headerFacts: publishConfig.header_facts });
+    // A chapter wrap-up folded into its chapter page is that chapter's card: it says Chapter, not Session.
+    for (const p of pages) if (isFolded(p) && p.foldedInto.kind === 'chapter' && cards[p.outputPath]) cards[p.outputPath].k = 'Chapter';
     // The cards are read for withheld names in their own right, whatever the pages print (and
     // also when nothing is written): every string of every card, under the note it is made from.
     const byHref = new Map(pages.map((p) => [p.outputPath, p]));

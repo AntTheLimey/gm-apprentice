@@ -1614,15 +1614,16 @@ describe('publish controls (#166, #167)', () => {
     assert.ok(!html.includes('fort-william.html'));      // but not a link
   });
 
-  // The stub note here is a chapter note. On the player site a chapter note folds into its Story chapter page (chapter
-  // pages), which shows only its Teaser or Recap: its old address leads there, and a stub's named sections (a Synopsis)
-  // are not among them. The stub cut itself is tested on other notes (never-publish, processor, the props).
+  // The stub note here is a complete chapter note. On the player site a chapter note folds into its Story chapter page
+  // (chapter pages), which shows only its Recap: the stub's included Recap shows there, its other included section
+  // (Synopsis) and everything the stub cuts do not, and its old address leads there.
   it('publish: stub on a chapter note: its old address leads to its chapter page', () => {
     assert.match(read('chapters', 'chapter-4-overview.html'), /http-equiv="refresh" content="0;url=\.\.\/story\/chapter-4-overview\.html"/);
     assert.ok(exists('story', 'chapter-4-overview.html'));
   });
 
-  it('publish: stub on a chapter note: none of its sections reach the player site', () => {
+  it('publish: stub on a chapter note: its included Recap shows, and nothing else of it', () => {
+    assert.ok(read('story', 'chapter-4-overview.html').includes('left Calcutta by the river road'));
     for (const out of [read('story', 'chapter-4-overview.html'), read('search-index.json')]) {
       for (const text of ['hot season', 'Prep preamble', 'Key NPCs', 'is the traitor', 'The Climax', 'beneath the ossuary']) {
         assert.ok(!out.includes(text), text);
@@ -1631,7 +1632,7 @@ describe('publish controls (#166, #167)', () => {
   });
 
   // The reduction drops `## GM Notes` and the spoiler opener; what they hid must not
-  // ride out on a heading that happens to share an included section's name (#320).
+  // ride out on a heading that happens to share an included section's name (#320): here the shown Recap's.
   it('publish: stub keeps nothing the whole note withholds', () => {
     for (const out of [read('story', 'chapter-4-overview.html'), read('search-index.json')]) {
       assert.ok(!out.includes('already knows who the party are'));

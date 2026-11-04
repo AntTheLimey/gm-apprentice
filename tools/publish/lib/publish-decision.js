@@ -73,8 +73,9 @@ function isHousekeepingNote(vaultPath, frontmatter) {
   return parts.length === 2 && parts[0].toLowerCase() === '_meta' && PLUGIN_META_NOTES.includes(parts[1]) && typedMeta;
 }
 
+// Trimmed and in lower case, as a status, stage or source is compared: a stray space keeps its meaning.
 function lower(value) {
-  return String(value == null ? '' : value).toLowerCase();
+  return String(value == null ? '' : value).trim().toLowerCase();
 }
 
 // Which frontmatter field marks this file as prep, or null. Exported because
