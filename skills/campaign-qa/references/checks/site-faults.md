@@ -86,6 +86,7 @@ every page that names it. Use it to confirm each fix.
 | `CHAPTER_PLANNED_PLAYED` | Warning | Played sessions are missing from the Story |
 | `CHAPTER_TITLE_SHARED` | Warning | Sessions of one chapter may be listed under the other |
 | `SESSION_NO_CHAPTER` | Warning | A played session is missing from the Story |
+| `CHAPTER_REF_UNSHOWN` | Warning | A played session is missing from the Story |
 
 Three codes are walked in files of their own, in the `site-faults/`
 folder beside this file. Read one only when a row of this run names its
@@ -254,7 +255,8 @@ Per tag, ask the GM which of the five kinds the moment is, or whether to drop th
 ## CHAPTER_STATUS_UNKNOWN
 
 Ask whether the chapter is planned, active or complete; write that
-word in `status:`.
+word in `status:`. If the row's fix names `hide.fields`, the note is
+fine: offer that fix once, for all such rows.
 
 ## CHAPTER_NO_TEASER
 
@@ -270,19 +272,23 @@ other one to `complete` or `planned` as the GM says.
 
 ## CHAPTER_PLANNED_PLAYED
 
-Show the sessions the row names. Ask whether the chapter has begun
-(`active`, or `complete` if over) or the sessions belong to another
-chapter (fix their `chapter:`); edit on the answer.
+Show the sessions the row names; ask which fix fits and edit on the
+answer.
 
 ## CHAPTER_TITLE_SHARED
 
-Ask the GM for a new title for one of the two chapters; change its
-`title:` and any session `chapter:` that names it by the old title.
+Ask the GM for the new title; edit on the answer.
 
 ## SESSION_NO_CHAPTER
 
-Propose the chapter from the session's folder and date, and write
-`chapter: "[[<chapter note>]]"` on a yes.
+Ask the GM which chapter the session was played in, and write
+`chapter: "[[<chapter note>]]"` on the answer.
+
+## CHAPTER_REF_UNSHOWN
+
+Rows naming one chapter come together. A misspelt link: propose the
+chapter note it meant and fix the sessions' `chapter:` on a yes. A
+chapter note kept off the site: ask whether it should publish.
 
 ## Reporting
 
