@@ -5,18 +5,30 @@ shows a wrap-up's Memorable Moments as cards on its Story page.
 `moments.py` is `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/moments.py"`.
 
+Players read every card. A moment comes only from what happened at
+the table as the players saw it (the Play Notes, the player-facing
+recap): never from GM Notes, gm-only text or a secret.
+
 ## This wrap-up
 
 - Notes that bring moments (a gmassistant.app export, or the GM's
   own): carry them into `## Memorable Moments` as written, tagged.
+  A speaker line is `— [[Speaker]]` when that note exists, the
+  plain name otherwise.
 - Notes that bring none: offer to write them from the Play Notes,
   and write them only on the GM's yes. As many as the session gave;
   none is a fine answer. Each is one bold beat line, or a
-  block-quoted line of table dialogue with a `— [[Speaker]]` line,
-  then one italic context line. Faithful to the notes: invent
-  nothing.
-- Tag every moment: end its last line with ` #moment/<kind>`, one
-  of status's `kinds`, picked from what the moment says.
+  block-quoted line of table dialogue with a speaker line, then one
+  italic context line. Faithful to the notes: invent nothing.
+- Tag every moment: end its last line, the italic one, with
+  ` #moment/<kind>`, one of status's `kinds`, picked from what the
+  moment says:
+
+  ```markdown
+  **Mal lit a match and watched the flame lean toward the wall.**
+  *How the party found the hidden passage.* #moment/intriguing
+  ```
+
 - Send the section with the other `##` sections.
 - Then run `moments.py <vault> check "<wrap-up>"` and fix each
   moment it names (`UNTAGGED`, `UNKNOWN`) before going on.
@@ -35,6 +47,7 @@ For each wrap-up picked:
   Pick each untagged one's kind and send `N<TAB>kind` rows to
   `moments.py <vault> tag "<wrap-up>"` (dry run, then `--write`).
   It changes nothing but the tags.
-- With none: write them from that session's Play Notes (its recap
-  if it has none) as above, show the GM, and on their yes place
-  them with `vw wrapup-add "<wrap-up>" --write`.
+- With none: write them from that session's Play Notes (its
+  player-facing recap if it has none) as above, show the GM, and on
+  their yes place them with `vw wrapup-add "<wrap-up>" --write`
+  (`--append` when it already has the heading).
