@@ -76,8 +76,7 @@ class StatusTests(unittest.TestCase):
         for config in (OFF, NO_SITE):
             code, out = run(make_vault(self, config), "status")
             self.assertEqual(code, 0, out)
-            self.assertEqual(out.splitlines()[0], "moments\toff")
-            self.assertNotIn("backfill", out)
+            self.assertEqual(out.splitlines(), ["moments\toff"])
 
     def test_offered_is_recorded_once_and_status_says_so(self):
         vault = make_vault(self)
@@ -263,6 +262,39 @@ class FixRoundTwoTests(unittest.TestCase):
                                   return_value=(None, "not installed", "fix", True)):
             with self.assertRaises(moments.Refused):
                 moments.site_tool(self.vault)
+
+
+S6 = "Sessions/Session 06 - Wrap-Up.md"
+WRAP6 = ("---\ntype: session-wrap-up\ntitle: Six\npublish: false\n---\n"
+         "\n## Narrative Recap\n\nNothing.\n")
+
+
+@unittest.skipUnless(NODE, "needs node: the publish tool reads the cards")
+class CodeRabbitTests(unittest.TestCase):
+    def test_list_leaves_out_a_wrap_up_that_never_publishes(self):
+        code, out = run(make_vault(self, files={S6: WRAP6}), "list")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(S6, out)
+
+    def test_list_except_leaves_out_this_sessions_wrap_up(self):
+        code, out = run(make_vault(self), "list", "--except", S2)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn(S2, out)
+        self.assertIn(S1, out)
+
+    def test_off_asks_the_tool_nothing(self):
+        with mock.patch.object(moments, "ask",
+                               side_effect=moments.Refused("unknown op")):
+            code, out = run(make_vault(self, OFF), "status")
+        self.assertEqual((code, out.strip()), (0, "moments\toff"))
+
+    def test_offered_says_a_failed_write_as_a_refusal(self):
+        with mock.patch.object(moments.vl, "set_state",
+                               side_effect=PermissionError("read-only")):
+            code, out = run(make_vault(self), "offered")
+        self.assertEqual(code, 1, out)
+        self.assertIn("ERROR\t", out)
+        self.assertIn("# nothing written", out)
 
 
 if __name__ == "__main__":

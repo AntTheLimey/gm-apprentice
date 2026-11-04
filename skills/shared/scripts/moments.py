@@ -3,7 +3,7 @@
 and the `#moment/<kind>` tag each one carries.
 
     moments.py VAULT status
-    moments.py VAULT list
+    moments.py VAULT list [--except WRAPUP]
     moments.py VAULT show WRAPUP
     moments.py VAULT check WRAPUP
     moments.py VAULT tag WRAPUP [--write]          < rows: N<TAB>kind
@@ -12,7 +12,8 @@ and the `#moment/<kind>` tag each one carries.
 status: `moments on|off` (on when a site, the player's or the GM's, is on
 and `player_site.story.moments` is on), the kinds, and when on whether the
 one back-fill offer was made (and if not, how many past wrap-ups it would
-cover). list: the wrap-ups with no moments or untagged ones. show: one
+cover). list: the wrap-ups with no moments or untagged ones, leaving out
+one that never publishes and, with --except, this session's. show: one
 wrap-up's moments, numbered, each with its kind, `-` for none or `n/a` for
 a heading or table, which takes no tag. check: each untagged moment
 (UNTAGGED) and each tag that names no kind (UNKNOWN, exit 1), for a
@@ -135,12 +136,17 @@ def moments_on(vault: Path) -> bool:
         raise Refused(str(e)) from None
 
 
-def to_do(vault: Path) -> list[tuple[str, int, int]]:
-    """(wrap-up, moments, untagged) for each with none or untagged ones;
-    one whose moments are hidden from players is left out."""
+def to_do(vault: Path, skip: str | None = None
+          ) -> list[tuple[str, int, int]]:
+    """(wrap-up, moments, untagged) for each with none or untagged ones.
+    Left out: `skip` (this session's), one the site never publishes
+    (`publish: false`) and one whose moments are hidden from players."""
     callouts = _callouts(vault)
     out = []
     for rel, text in wrapups(vault):
+        if rel == skip or vl.publish_mode(
+                vl.extract_frontmatter(text) or {}) == "none":
+            continue
         section = section_of(text, callouts)[1]
         if section and section["hidden"]:
             continue
@@ -161,11 +167,11 @@ def _counts(todo: list[tuple[str, int, int]]) -> str:
 
 
 def cmd_status(vault: Path) -> list[str]:
-    on = moments_on(vault)
-    rows = [f"moments\t{'on' if on else 'off'}",
-            f"kinds\t{', '.join(kinds())}"]
-    if not on:
-        return rows
+    if not moments_on(vault):
+        # Nothing more is asked: a site tool older than the moments
+        # question must not stop a wrap-up that does not use it.
+        return ["moments\toff"]
+    rows = ["moments\ton", f"kinds\t{', '.join(kinds())}"]
     try:
         offered = vl.read_state(vault).get(OFFERED_KEY)
     except vl.StateUnreadable as e:
@@ -182,8 +188,10 @@ def cmd_status(vault: Path) -> list[str]:
     return rows
 
 
-def cmd_list(vault: Path) -> list[str]:
-    todo = to_do(vault)
+def cmd_list(vault: Path, skip: str | None = None) -> list[str]:
+    if skip is not None:
+        skip = _wrapup(vw.Batch(vault), skip)
+    todo = to_do(vault, skip)
     return [f"# {_counts(todo)}",
             *(f"{rel}\t{_many(n)}\t{bare} untagged" if n else f"{rel}\tno moments"
               for rel, n, bare in todo)]
@@ -371,8 +379,9 @@ def cmd_offered(vault: Path) -> list[str]:
             return [f"SKIP\t{vl.STATE_FILE}\t\talready offered {offered}"]
         today = date.today().isoformat()
         vl.set_state(vault, OFFERED_KEY, today)
-    except vl.StateUnreadable as e:
-        raise Refused(str(e)) from None
+    except (vl.StateUnreadable, OSError) as e:
+        raise Refused(f"{vl.STATE_FILE} could not be written: {e}"
+                      if isinstance(e, OSError) else str(e)) from None
     return [f"ADDED\t{vl.STATE_FILE}\t\t{OFFERED_KEY} {today}"]
 
 
@@ -383,7 +392,9 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("vault", type=Path)
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("status", help="on or off, the kinds, the back-fill offer")
-    sub.add_parser("list", help="wrap-ups with no moments or untagged ones")
+    lst = sub.add_parser("list", help="wrap-ups with no moments or untagged ones")
+    lst.add_argument("--except", dest="skip", metavar="WRAPUP",
+                     help="leave this wrap-up out (this session's)")
     show = sub.add_parser("show", help="one wrap-up's moments, numbered")
     show.add_argument("wrapup")
     check = sub.add_parser(
@@ -416,7 +427,7 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
             print("\n".join(rows))
             return code
         rows = (cmd_status(vault) if args.command == "status"
-                else cmd_list(vault) if args.command == "list"
+                else cmd_list(vault, args.skip) if args.command == "list"
                 else cmd_show(vault, args.wrapup) if args.command == "show"
                 else cmd_offered(vault))
     except (Refused, vw.WriteError) as e:

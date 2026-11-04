@@ -37,8 +37,8 @@ recap): never from GM Notes, gm-only text or a secret.
 
 When status's `backfill` line says `not offered`, offer once, after
 Step 5, to tag the moments in past wrap-ups and write moments for
-those with none. `moments.py <vault> list` names them; the GM picks
-all, some or none. Then run `moments.py <vault> offered`, whatever
+those with none. `moments.py <vault> list --except "<this
+wrap-up>"` names them; the GM picks all, some or none. Then run `moments.py <vault> offered`, whatever
 the answer, so it is never offered again.
 
 For each wrap-up picked:
