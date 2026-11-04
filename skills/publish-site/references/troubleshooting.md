@@ -367,7 +367,7 @@ The CLI already prints the diagnosis and the fix — run the printed fix.
 ### Symptom
 
 The build succeeds, but the landing "Latest Session" recap, the Story
-page's Campaign Saga, and the "NPCs/Locations in Play" widgets are all
+So Far contents page, and the "NPCs/Locations in Play" widgets are all
 empty — even though `session-wrapup` ran and wrap-up files exist.
 
 ### Cause
@@ -375,8 +375,8 @@ empty — even though `session-wrapup` ran and wrap-up files exist.
 Recap surfacing keys off *published* `type: session` and `type: chapter`
 pages. The wrap-up (`type: session_wrap`) supplies the recap text and is folded into the
 session's Story page (it keeps its own page only when none takes it), but it only surfaces
-when its paired session index — and for the Campaign Saga, a chapter
-page — are published too. Two common breakdowns:
+when its paired session index — and for the Story So Far, its chapter
+note, with a status other than `planned` — are published too. Two common breakdowns:
 
 1. The vault's `Chapters/` folder is missing from `player_site.folder_map`,
    so every chapter, session, scene, and wrap-up file is skipped. Builds from tool 1.6.0 print a
@@ -395,11 +395,12 @@ missing — exactly the two breakdowns above.
 
 ### Fix
 
-Add the missing folder to `player_site.folder_map`, publish the session index and a
-player-safe chapter page alongside the wrap-up, and rebuild. To show a
+Add the missing folder to `player_site.folder_map`, publish the session index and its
+chapter note alongside the wrap-up, and rebuild. To show a
 recap, the session index (`type: session`) and the wrap-up
-(`type: session_wrap`) must publish; the Campaign Saga also needs its
-chapter (`type: chapter`).
+(`type: session_wrap`) must publish; the Story So Far also needs its
+chapter note (`type: chapter`, not `planned`). Players see only the
+chapter's Teaser or recap, on its Story page.
 
 ---
 
