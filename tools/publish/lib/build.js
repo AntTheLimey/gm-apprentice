@@ -642,7 +642,24 @@ function buildSite(options) {
     const kept = config.preserveDirs.map((d) => d.replace(/\/+$/, '')).find((d) => rel.toLowerCase().startsWith(`${d.toLowerCase()}/`));
     if (!kept) return;
     const parts = rel.split('/');
-    for (let i = kept.split('/').length; i < parts.length; i++) {
+    const keptParts = kept.split('/').length;
+    // The kept folder itself is the GM's and never renamed: an address that spells it in another case is said once,
+    // as its link may not open on a host that tells case apart.
+    for (let i = 0; i < keptParts; i++) {
+      const at = parts.slice(0, i + 1).join('/');
+      if (respellRefused.has(`kept:${at.toLowerCase()}`)) break;
+      let names;
+      try { names = fs.readdirSync(path.join(outputDir, ...parts.slice(0, i))); } catch (e) { if (!e.code) throw e; break; }
+      if (names.some((n) => canonicalNfc(n) === canonicalNfc(parts[i]))) continue;
+      const have = names.find((n) => canonicalNfc(n).toLowerCase() === canonicalNfc(parts[i]).toLowerCase());
+      // A disk that tells case apart makes the address's spelling a folder of its own: nothing to say.
+      if (!have || !fs.existsSync(path.join(outputDir, ...parts.slice(0, i + 1)))) break;
+      respellRefused.add(`kept:${at.toLowerCase()}`);
+      const disk = [...parts.slice(0, i), have].join('/');
+      printWarning(`the kept folder ${disk} is spelled ${at} in an address (${rel}): the folder keeps its spelling, so a link to it may not open on a host that tells letter case apart; spell the address as the folder is`);
+      break;
+    }
+    for (let i = keptParts; i < parts.length; i++) {
       const dir = path.join(outputDir, ...parts.slice(0, i));
       const want = parts[i];
       let have;
@@ -654,7 +671,9 @@ function buildSite(options) {
         if (!have) continue;
       } catch (e) {
         if (!e.code) throw e;
-        return;   // a folder that cannot be read: the write goes ahead, and the kept-folder clean-up says what it left
+        // The write goes ahead; it may land on a name of another case, so that is said.
+        printWarning(`could not list ${outRel(dir)} (${e.code}), so ${rel} may keep the letter case it had on this disk`);
+        return;
       }
       const said = (name) => [...parts.slice(0, i), name].join('/');
       const leaf = i === parts.length - 1;
@@ -690,8 +709,15 @@ function buildSite(options) {
         }
       };
       walk(full, rel);
-      return files.every((f) => keptWritten.has(f.toLowerCase())
-        || (Object.hasOwn(keptRecorded, f) && hashOf(fs.readFileSync(path.join(outputDir, ...f.split('/')))) === keptRecorded[f]));
+      // A folder above this one renamed in case this build leaves the record under its old spelling: that entry
+      // counts when both spellings name one file.
+      const recordedAs = (f) => (Object.hasOwn(keptRecorded, f) ? f
+        : Object.keys(keptRecorded).find((r) => r.toLowerCase() === f.toLowerCase() && twoFiles(r, f) === 'one'));
+      return files.every((f) => {
+        if (keptWritten.has(f.toLowerCase())) return true;
+        const r = recordedAs(f);
+        return r !== undefined && hashOf(fs.readFileSync(path.join(outputDir, ...f.split('/')))) === keptRecorded[r];
+      });
     } catch (e) {
       if (!e.code) throw e;
       return e.code;

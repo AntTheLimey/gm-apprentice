@@ -946,6 +946,50 @@ describe('a kept-folder prop that stops shipping', () => {
     } finally { s.cleanup(); }
   });
 
+  it('a case-only change in two nested folders the tool made renames both', (t) => {
+    const s = setup();
+    try {
+      if (caseSensitiveAt(path.join(s.player.dir, 'gazetteer'))) { t.skip('this disk tells letter case apart'); return; }
+      readdress(s, 'gazetteer/letters/more/invitation.html');
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      readdress(s, 'gazetteer/Letters/More/invitation.html');
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.deepEqual(fs.readdirSync(path.join(s.player.dir, 'gazetteer')).filter((n) => /^letters$/i.test(n)), ['Letters']);
+      assert.deepEqual(fs.readdirSync(path.join(s.player.dir, 'gazetteer', 'Letters')).filter((n) => /^more$/i.test(n)), ['More'], lines.join('\n'));
+      assert.ok(!lines.some((l) => l.includes('keeps its spelling')), lines.join('\n'));
+      assert.ok('gazetteer/Letters/More/invitation.html' in record(s).files, JSON.stringify(record(s)));
+    } finally { s.cleanup(); }
+  });
+
+  it('a folder on the path that cannot be listed before a case-only write is said', (t) => {
+    const s = setup();
+    try {
+      if (caseSensitiveAt(path.join(s.player.dir, 'gazetteer'))) { t.skip('this disk tells letter case apart'); return; }
+      recase(s);
+      const real = fs.readdirSync;
+      const gaz = path.join(s.player.dir, 'gazetteer');
+      t.mock.method(fs, 'readdirSync', (p, o) => {
+        if (String(p) === gaz && o === undefined) throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' });
+        return real(p, o);
+      });
+      let lines;
+      try { lines = quiet(() => build({ configPath: s.configPath, site: 'player' })); } finally { t.mock.restoreAll(); }
+      assert.ok(lines.some((l) => l.includes('WARNING: could not list gazetteer (EACCES), so gazetteer/Invitation.html may keep the letter case it had on this disk')), lines.join('\n'));
+    } finally { t.mock.restoreAll(); s.cleanup(); }
+  });
+
+  it('an address that spells the kept folder itself in another case is said once', (t) => {
+    const s = setup();
+    try {
+      if (caseSensitiveAt(path.join(s.player.dir, 'gazetteer'))) { t.skip('this disk tells letter case apart'); return; }
+      readdress(s, 'Gazetteer/invitation.html');
+      const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      const warned = lines.filter((l) => l.includes('the kept folder gazetteer is spelled Gazetteer'));
+      assert.equal(warned.length, 1, lines.join('\n'));
+      assert.deepEqual(fs.readdirSync(s.player.dir).filter((n) => /^gazetteer$/i.test(n)), ['gazetteer']);
+    } finally { s.cleanup(); }
+  });
+
   it("a case-only change in a folder holding the GM's own file leaves the folder and says so once", (t) => {
     const s = setup();
     try {
@@ -980,6 +1024,7 @@ describe('a kept-folder prop that stops shipping', () => {
       const lines = quiet(() => build({ configPath: s.configPath, site: 'player' }));
       assert.deepEqual(fs.readdirSync(path.join(s.player.dir, 'gazetteer')).filter((n) => /^letters$/i.test(n)), ['letters']);
       assert.ok(lines.some((l) => l.includes('gazetteer/letters keeps its spelling')), lines.join('\n'));
+      assert.equal(fs.readFileSync(path.join(s.player.dir, 'gazetteer', 'letters', 'more', 'x.html'), 'utf8'), 'X');
     } finally { s.cleanup(); }
   });
 
@@ -1040,6 +1085,7 @@ describe('a kept-folder prop that stops shipping', () => {
       const temp = `gazetteer/invitation.html.case-${process.pid}.tmp`;
       assert.ok(lines.some((l) => l.includes(`could not rename gazetteer/invitation.html to gazetteer/Invitation.html (EIO), nor put it back (EIO): it is now at ${temp}; rename it to gazetteer/Invitation.html by hand`)), lines.join('\n'));
       assert.ok(lines.some((l) => l.includes(`left in kept folder: ${temp}`)), lines.join('\n'));
+      assert.ok(fs.existsSync(path.join(s.player.dir, ...temp.split('/'))), 'the file is still at the temporary name');
     } finally { t.mock.restoreAll(); s.cleanup(); }
   });
 
