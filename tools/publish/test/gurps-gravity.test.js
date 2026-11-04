@@ -137,3 +137,22 @@ test('no gear rows: gravity still applies to body weight (215 x 0.2 = 43 lb -> L
   // Without gravity a gearless sheet has nothing live, as before.
   assert.equal(sheet(raw => noGear(raw).replace('gravity: 1.2\n', '')).liveData, null);
 });
+
+test('no gravity: the live data and party manifest keep the exact shape they had before #510', () => {
+  // Key lists as origin/main (1.10.126) wrote them; a PC with no gravity must not grow new keys,
+  // so its embedded page data stays byte-identical apart from the intended oz fix.
+  const OLD_LIVE = ['buildVersion', 'campaignId', 'pcSlug', 'authoredLevel', 'levels', 'skills', 'weapons',
+    'items', 'vitals', 'basicSpeed', 'dx'];
+  const OLD_MANIFEST_PC = ['pcSlug', 'name', 'outputPath', 'portrait', 'buildVersion', 'basicSpeed', 'dx',
+    'authoredLevel', 'levels', 'items', 'vitals'];
+  for (const edit of [raw => raw.replace('gravity: 1.2\n', ''), raw => raw.replace('gravity: 1.2', 'gravity: 1')]) {
+    const out = sheet(edit);
+    assert.deepEqual(Object.keys(out.liveData), OLD_LIVE);
+    const m = buildPartyManifest('c', [{ name: 'Gravity Test', outputPath: 'pcs/g.html', data: out.liveData }]);
+    assert.deepEqual(Object.keys(m.pcs[0]), OLD_MANIFEST_PC);
+    assert.equal(gl.deriveLive(m.pcs[0], null).encName, 'Light');
+  }
+  // With gravity, the two keys ride along.
+  const g = sheet();
+  assert.deepEqual(Object.keys(g.liveData), [...OLD_LIVE.slice(0, 9), 'gravity', 'bodyWeight', ...OLD_LIVE.slice(9)]);
+});

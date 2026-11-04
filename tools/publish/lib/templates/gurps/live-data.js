@@ -163,8 +163,8 @@ function buildLiveData(model, meta) {
     levels: lv.levels,
     skills, weapons, items,
     vitals: v,
-    gravity: model.gravity != null ? model.gravity : null,
-    bodyWeight: model.bodyWeight != null ? model.bodyWeight : null,
+    // Only with local gravity set (#510): a PC without it keeps the page data it always had.
+    ...(model.gravity != null ? { gravity: model.gravity, bodyWeight: model.bodyWeight } : {}),
     basicSpeed: v ? v.basicSpeed : null,
     dx: v ? v.dx : null,
   };

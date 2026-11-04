@@ -24,8 +24,7 @@ function buildPartyManifest(campaignId, entries) {
       levels: e.data.levels,
       items: e.data.items,
       vitals: e.data.vitals,
-      gravity: e.data.gravity != null ? e.data.gravity : null,
-      bodyWeight: e.data.bodyWeight != null ? e.data.bodyWeight : null,
+      ...(e.data.gravity != null ? { gravity: e.data.gravity, bodyWeight: e.data.bodyWeight != null ? e.data.bodyWeight : null } : {}),
     }))
     .sort(initiativeCmp);
   if (!pcs.length) return null;

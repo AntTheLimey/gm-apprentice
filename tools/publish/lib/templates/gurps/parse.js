@@ -847,7 +847,7 @@ function parseGurps(frontmatter, sections) {
   parseGrimoire(model, secs);
   parseStatus(model, secs, fm);
   parseGravity(model, fm);
-  parseBodyWeight(model);
+  if (model.gravity != null) parseBodyWeight(model);   // only the gravity rule reads it
   resolveCurrentEncumbrance(model);
   parseChains(model, secs);
   parseEquipment(model, secs);
