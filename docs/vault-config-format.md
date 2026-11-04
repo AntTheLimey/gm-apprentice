@@ -252,7 +252,7 @@ would do.
 
 ## The state file
 
-`_meta/vault-state.json` is a JSON object. Four keys matter:
+`_meta/vault-state.json` is a JSON object. Five keys matter:
 
 - `gm_apprentice_version` is the plugin version the vault was last updated
   to.
@@ -264,6 +264,9 @@ would do.
   remembers for the next one: `left` lists the choices the GM answered
   "leave", `said` the notices already shown, so neither is asked or
   shown again. It is dropped when the vault is stamped.
+- `moments_backfill_offered` is the date session-wrapup offered to tag
+  and write Memorable Moments in past wrap-ups, so the offer is made
+  once.
 
 Other keys may appear and must be kept. Do not edit the file by hand. The
 `settings setup-note` command reads and writes `setup`.

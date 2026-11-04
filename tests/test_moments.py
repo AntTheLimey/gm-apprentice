@@ -98,7 +98,7 @@ class StatusTests(unittest.TestCase):
         self.assertEqual(out.splitlines(), [
             "# 1 wrap-up without moments, 1 with untagged ones",
             f"{S1}\t3 moments\t3 untagged",
-            f"{S2}\t0 moments\t0 untagged"])
+            f"{S2}\tno moments"])
 
 
 @unittest.skipUnless(NODE, "needs node: the publish tool reads the cards")

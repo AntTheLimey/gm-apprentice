@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.128] — 2026-11-03
+
+session-wrapup writes and tags Memorable Moments for sites that show them as cards. Publish tool 1.63.0. No vault or site change.
+
+### Added
+
+- When a site is on and `player_site.story.moments` is on, session-wrapup offers to write Memorable Moments from the play notes when they bring none, in the shape the Story page's cards read. It writes nothing without your yes, and none is a fine answer. Moments the notes bring, from a gmassistant.app export or your own, go in as written (#557).
+- Every moment it writes or carries over gets one kind tag, `#moment/<kind>` (dramatic, intriguing, funny, epic or tragic), picked from what the moment says, so its card shows the kind. A gmassistant.app export arrives without them, and the wrap-up adds them (#567).
+- Once per campaign, session-wrapup offers to tag the moments in past wrap-ups and to write moments for the ones that have none; you pick which. The tags are written by a script (`moments.py`) that changes nothing else in the note and checks that each card then reads as tagged. That the offer was made is kept in `_meta/vault-state.json`, so it is made once.
+- The publish tool's `lines` command answers a new question, `moments`: the five kinds, and a wrap-up's Memorable Moments cards with their kinds and where each stands in the note, read exactly as the Story page reads them.
+
+---
+
 ## [1.10.127] — 2026-11-03
 
 Five small fixes: a GM Story page picture count, Site Faults rows that carry their fix, a GURPS skill the sheet lacks added at its default, a kept-folder rename on a Mac or Windows disk, and `links.py unlink` picking single links. Publish tool 1.62.2. No vault change is needed.

@@ -137,6 +137,10 @@ def cmd_status(vault: Path) -> list[str]:
     return rows
 
 
+def _many(n: int) -> str:
+    return f"{n} moment{'' if n == 1 else 's'}"
+
+
 def _counts(todo: list[tuple[str, int, int]]) -> str:
     none = sum(1 for _r, n, _b in todo if n == 0)
     return (f"{none} wrap-up{'' if none == 1 else 's'} without moments, "
@@ -146,7 +150,8 @@ def _counts(todo: list[tuple[str, int, int]]) -> str:
 def cmd_list(vault: Path) -> list[str]:
     todo = to_do(vault)
     return [f"# {_counts(todo)}",
-            *(f"{rel}\t{n} moments\t{bare} untagged" for rel, n, bare in todo)]
+            *(f"{rel}\t{_many(n)}\t{bare} untagged" if n else f"{rel}\tno moments"
+              for rel, n, bare in todo)]
 
 
 def _wrapup(batch: vw.Batch, raw: str) -> str:
@@ -165,7 +170,7 @@ def cmd_show(vault: Path, raw: str) -> list[str]:
         return [f"# {rel}: no Memorable Moments section"]
     lines = text.replace("\r\n", "\n").split("\n")
     n, bare = untagged(section)
-    out = [f"# {rel} §{section['title']}: {n} moments, {bare} untagged"]
+    out = [f"# {rel} §{section['title']}: {_many(n)}, {bare} untagged"]
     for i, card in enumerate(section["cards"], 1):
         first, last = card.get("first"), card.get("last")
         said = ("" if first is None or last is None else " / ".join(
