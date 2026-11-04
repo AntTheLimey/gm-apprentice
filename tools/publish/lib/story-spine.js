@@ -377,13 +377,16 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
     // A page is pictured once per chapter: on the chapter's first Story page, in reading order, that pictures it (or
     // shows its picture where the GM placed it). On the GM site only the Story pages the player site has count
     // towards that, so a GM page never pictures less than the player page at its address; a GM page players do not
-    // have still leaves out what was pictured before it.
-    const shownIn = new Map();   // chapter -> the keys pictured so far
+    // have still leaves out what was pictured before it. The chapter's own page ('chapter', 'chapter-intro') pictures
+    // on its own: by the same rules, from nothing pictured, and adding nothing to the chapter's set, so its session
+    // pages choose as if it were not there (a complete chapter's recap names nearly everyone).
+    const shownIn = new Map();   // chapter -> the keys pictured so far on its session pages
     for (const unit of units) {
       const chapter = chapterOf.get(unit);
       if (!shownIn.has(chapter)) shownIn.set(chapter, new Set());
-      const shown = shownIn.get(chapter);
-      const counts = !players || players.has(unit.outputPath);
+      const own = unit.kind === 'chapter' || unit.kind === 'chapter-intro';
+      const shown = own ? new Set() : shownIn.get(chapter);
+      const counts = !own && (!players || players.has(unit.outputPath));
       // A GM unit whose banner says players see another Story page here, with no heldBack, has no player page at this
       // address to equal; its pictures still come from player-site pages only.
       const target = unit.heldBack || unit;

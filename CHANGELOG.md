@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.130] — 2026-11-04
+
+A chapter's Story page no longer uses up its chapter's pictures. Publish tool 1.64.1. No vault change is needed.
+
+### Fixed
+
+- A chapter's own Story page (its introduction, or its recap once the chapter is complete) still pictures the people and places it names, but what it pictures no longer counts for the once-per-chapter rule. A complete chapter's recap names nearly everyone and comes first, so before this the session pages after it showed almost none. Session pages now choose their pictures as if the chapter page were not there; among session pages, a page is still pictured once a chapter, so a portrait may show on the chapter page and again on one session page.
+
+In Canticle, Vienna's session Story pages go from 5 pictures in all to 13 at the next deploy, and Calcutta's from 77 to 82. A session page that still shows none names only people and places an earlier session page of its chapter already pictured.
+
+---
+
 ## [1.10.129] — 2026-11-04
 
 GURPS sheets and the party board can count local gravity, weights in ounces read right, and gear added after a player saved ticks shows ticked. Publish tool 1.64.0. No vault change is needed (#510).
