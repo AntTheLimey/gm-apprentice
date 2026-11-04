@@ -49,8 +49,8 @@ const PEOPLE = {
   'Locations/The Docks.md': note('location', 'The Docks', 'docks.png'),
   'PCs/Six.md': note('pc', 'Six', 'six.png'),
   'NPCs/Captain Rook.md': note('npc', 'Captain Rook', 'rook.png'),
-  // The chapter's introduction names no page, so these tests read each session's Story page on its own: a page the
-  // introduction pictured would not be pictured again in its chapter (once per chapter, below).
+  // The chapter's introduction names no page, so these tests' chapter Story page shows no pictures (it pictures on its
+  // own and uses up nothing for its sessions: below).
   'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('The docks, CHAPTER-BODY-1.', 'The harbour, CHAPTER-BODY-1.'),
 };
 const RECAP = 'The party reached the docks at dusk, where [[Mara Quill]] waited with a lantern and a ledger. Six watched from a roof.\n\n'
@@ -550,7 +550,8 @@ describe('Story pictures: once per chapter, and companions', () => {
     'NPCs/Old Smith.md': note('npc', 'Old Smith', 'smith.png'),
     'NPCs/Thomas Wyndham.md': note('npc', 'Thomas Wyndham', 'thomas.png', 'companion: true\n'),
     'NPCs/Silas Wyndham.md': note('npc', 'Silas Wyndham', 'silas.png', 'aliases: ["Wyndham"]\n'),
-    // The introduction ("The docks, ...") comes first in the chapter, so it pictures The Docks.
+    // The introduction ("The docks, ...") pictures The Docks on its own: the chapter page adds nothing to what its
+    // session pages have pictured, so Session 1 pictures The Docks too.
     'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER,
     'Sessions/Session 1 Wrap-Up.md': withRecap('[[Mara Quill]] met Thomas Wyndham at the docks.\n\n![[rook.png]]\n\nCaptain Rook nodded.'),
     'Sessions/Session 2 Wrap-Up.md': wrap2,
@@ -565,7 +566,7 @@ describe('Story pictures: once per chapter, and companions', () => {
   it('a page pictured earlier in the chapter, or whose picture the GM placed there, is not pictured again', () => {
     for (const site of [s.player, s.gm]) {
       assert.deepEqual(captions(read(site, 'story/chapter-1-docks-intro.html')), ['The Docks']);
-      assert.deepEqual(captions(read(site, STORY_1)), ['Mara Quill']);
+      assert.deepEqual(captions(read(site, STORY_1)), ['Mara Quill', 'The Docks']);
       assert.equal((read(site, STORY_1).match(/images\/rook\./g) || []).length, 1, 'the picture the GM placed stays');
       assert.deepEqual(captions(read(site, STORY_2)), ['Old Smith']);
     }
@@ -632,7 +633,8 @@ describe('Story pictures: once per chapter, a picture left out for room', () => 
 describe('Story pictures: once per chapter, a held-back wrap-up on a page where players see another wrap-up (#569)', () => {
   // Two chapter wrap-ups: the GM site's Story page leads with the first, which players do not see; the player page at
   // the same address leads with the second. The chapter note has no introduction, so players have no recap of their
-  // own there (no heldBack). Later pages in the chapter count what the player page pictured, on both sites.
+  // own there (no heldBack). The chapter page pictures on its own, so later pages count nothing it pictured, on
+  // either site.
   const chapterWrap = (recap, extra = '') => `---\ntype: session_wrap\nchapter: "[[Chapter 1 Overview]]"\n${extra}---\n\n# Chapter 1 Wrap-Up\n\n## Narrative Recap\n\n${recap}\n`;
   const vault569 = storyVault({
     ...PEOPLE,
@@ -665,9 +667,11 @@ describe('Story pictures: once per chapter, a held-back wrap-up on a page where 
     assert.match(gm, /This wrap-up is held back from players/);
   });
 
+  // The chapter page pictures on its own (it uses up nothing for its sessions), so the next page pictures both, the
+  // same on both sites.
   it('the next page pictures what the player site pictures', () => {
-    assert.deepEqual(captions(read(s.player, STORY_1)), ['Captain Rook']);
-    assert.deepEqual(captions(read(s.gm, STORY_1)), ['Captain Rook']);
+    assert.deepEqual(captions(read(s.player, STORY_1)), ['Mara Quill', 'Captain Rook']);
+    assert.deepEqual(captions(read(s.gm, STORY_1)), ['Mara Quill', 'Captain Rook']);
   });
 
   it('every link resolves and the leak gate finds nothing', () => {
@@ -713,6 +717,43 @@ describe('Story pictures: a session whose wrap-up is held back, where players se
     assert.ok(lead >= 0 && open > lead && own > open, `players' recap, then the mark, then the session's own recap: ${lead} ${open} ${own}`);
     assert.ok(gm.indexOf('Mara Quill</a> waited.') > own, 'the held-back wrap-up recap follows the session recap');
     assert.deepEqual(captions(gm), captions(player));
+  });
+
+  it('every link resolves and the leak gate finds nothing', () => {
+    assert.deepEqual(brokenLinks(s.player.dir), []);
+    assert.deepEqual(brokenLinks(s.gm.dir), []);
+    assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.player.dir }).findings, []);
+  });
+});
+
+describe('Story pictures: the chapter page pictures on its own', () => {
+  // A complete chapter's recap names nearly everyone, and its Story page comes first in reading order. What it
+  // pictures is not counted against its sessions: they choose as if the chapter page were not there.
+  const chapterWrap = '---\ntype: session_wrap\nchapter: "[[Chapter 1 Overview]]"\n---\n\n# Chapter 1 Wrap-Up\n\n'
+    + '## Narrative Recap\n\n[[Ilse Brandt]] closed the harbour.\n';
+  const s = buildBoth(storyVault({
+    ...PEOPLE,
+    '_attachments/ilse.png': png(),
+    'NPCs/Ilse Brandt.md': note('npc', 'Ilse Brandt', 'ilse.png'),
+    'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n'),
+    'Chapters/Chapter 1/Chapter 1 Wrap-Up.md': chapterWrap,
+    'Sessions/Session 1 Wrap-Up.md': withRecap('[[Ilse Brandt]] met the party at the gate.'),
+    'Sessions/Session 2 Wrap-Up.md': WRAP_2.replace('crossed the bay at night', 'crossed the bay with Ilse Brandt at night'),
+  }));
+  after(() => s.cleanup());
+  const INTRO = 'story/chapter-1-docks-intro.html';
+  const ilse = (html) => figures(html).flatMap((f) => f.captions).filter((c) => c === 'Ilse Brandt').length;
+
+  it('complete chapter page does not take a portrait from its first session', () => {
+    for (const site of [s.player, s.gm]) {
+      const side = site === s.gm ? 'gm' : 'player';
+      assert.match(read(site, INTRO), /<figure[^>]*>[\s\S]*?alt="Ilse Brandt"/, `${side}: the chapter page pictures her`);
+      assert.match(read(site, STORY_1), /<figure[^>]*>[\s\S]*?alt="Ilse Brandt"/, `${side}: her first session pictures her too`);
+      assert.equal(ilse(read(site, INTRO)), 1, side);
+      assert.equal(ilse(read(site, STORY_1)), 1, side);
+      // Once per chapter still holds among the session pages.
+      assert.equal(ilse(read(site, STORY_2)), 0, `${side}: the next session does not picture her again`);
+    }
   });
 
   it('every link resolves and the leak gate finds nothing', () => {
