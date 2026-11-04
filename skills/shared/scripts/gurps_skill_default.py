@@ -30,7 +30,8 @@ Prints one tab-separated row, `KIND<TAB>sheet<TAB>what`:
   NOT-FOUND     the tables do not list the skill: give --difficulty and
                 --default
   CHECK-DEFAULT a specialty whose listed defaults name none of its other
-                specialties, while the sheet has one bought: ask for its
+                specialties, while the sheet has one bought, or a tech
+                skill the sheet has at another TL (B168): ask for its
                 defaults and give them with --default
   CANNOT        the sheet has no Skills table, or no attribute the
                 default needs
