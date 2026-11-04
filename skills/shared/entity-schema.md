@@ -288,7 +288,10 @@ Beyond"` or `"paper, with the player"`; not shown by default; see
 `shared/pc-body-structure.md`), `hook` (optional string, any system:
 one line under the name and on cards; blank means the backstory's
 first sentence), `dndbeyond` (optional string, D&D only: a D&D Beyond
-character link or id; `dnd_ddb.py` syncs the note from it)
+character link or id; `dnd_ddb.py` syncs the note from it), `gravity`
+(optional number, GURPS only: local gravity in G, e.g. `1.2`; the
+sheet and party board work encumbrance out by B350 and show the value;
+absent means 1G)
 
 **Character Story:** `character` (wiki-link to the PC), plus universal
 fields only. Body is append-only session sections; see the Story

@@ -55,6 +55,11 @@ class ExtractFrontmatterTests(unittest.TestCase):
         text = '---\nname: "Room #3"  # a comment\n---\n'
         self.assertEqual(vl.extract_frontmatter(text), {"name": "Room #3"})
 
+    def test_comment_line_is_not_a_key(self):
+        # A template's commented-out optional field (#510).
+        text = "---\ntype: pc\n# gravity: 1.2  # optional\n---\n"
+        self.assertEqual(vl.extract_frontmatter(text), {"type": "pc"})
+
     def test_no_frontmatter(self):
         self.assertIsNone(vl.extract_frontmatter("# Just a heading\n"))
 
