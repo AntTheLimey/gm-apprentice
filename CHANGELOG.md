@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.133] — 2026-11-04
+
+New chapter notes have a place for the Teaser, and the Story's chapter bookkeeping joins campaign-qa's Site Faults check. Publish tool 1.67.0. No vault change is needed: no existing chapter note is given a Teaser; that is yours to write.
+
+### Added
+
+- **The chapter template has a `## Teaser` section**, for players and spoiler-free: where the adventurers start, their situation, how the plot opens. It shows on the chapter's Story page while the chapter is active. The opening paragraph above it is now marked as your own summary, which players never see.
+- **Seven chapter warnings are now Site Faults findings**, each with its fix, so campaign-qa can walk you through them: a chapter with no `status:` or one it can't read (`CHAPTER_STATUS_UNKNOWN`), an active chapter with no `## Teaser` (`CHAPTER_NO_TEASER`), more than one active chapter (`CHAPTER_ACTIVE_MANY`), a planned chapter holding played sessions (`CHAPTER_PLANNED_PLAYED`), two chapters with one title (`CHAPTER_TITLE_SHARED`), a played session no chapter heads (`SESSION_NO_CHAPTER`), and sessions whose `chapter:` names no chapter page, from a misspelt link or a chapter note kept off the site (`CHAPTER_REF_UNSHOWN`). Played sessions with no `chapter:` in a planned chapter's folder now count as that chapter's, on the player site as on the GM site. The build still says each on its own line, and adds one closing line pointing to campaign-qa. For a missing Teaser, campaign-qa offers to help you draft one, but never writes one for you.
+
+### Changed
+
+- publish-site's troubleshooting and schema references say "the Story So Far" where they said "Campaign Saga", and say what of a chapter note players see.
+
+---
+
 ## [1.10.132] — 2026-11-04
 
 The chapter note leaves the player site: players read a chapter only on its Story page. Publish tool 1.66.0. No vault change is needed.

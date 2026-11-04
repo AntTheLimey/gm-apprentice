@@ -304,9 +304,14 @@ Template fields: `title`, `sort_order`, `status`
 
 Badges rendered: `sort_order`
 
-A published chapter page is required for the Story page's Campaign
-Saga: a recap surfaces only when its session, its chapter, and the
-wrap-up (`type: session_wrap`) all publish.
+The player site gives the chapter note no page of its own; its
+chapter page in the Story So Far shows one part by `status`: nothing
+for `planned` (its sessions stay off the Story too), the note's
+`## Teaser` for `active`, and `overview` plus the chapter's recap for
+`complete`. A session's recap surfaces only when the session, its
+chapter note and the wrap-up (`type: session_wrap`) all publish. A
+complete chapter's recap comes from its chapter wrap-up when one
+publishes, else from the chapter note's `## Recap`.
 
 ### Campaign Overview
 
@@ -330,7 +335,7 @@ Badges rendered: `session_number`, `play_date`, `status`
 A published session page drives the landing "Latest Session" recap
 and the "NPCs/Locations in Play" widgets. The wrap-up
 (`type: session_wrap`) supplies the recap text, but nothing surfaces
-unless the session — and, for the Campaign Saga, its chapter — publish
+unless the session — and, for the Story So Far, its chapter note — publish
 too.
 
 The session index is metadata only by design. Once its Wrap-Up

@@ -2807,23 +2807,50 @@ function buildSite(options) {
     if (live) {
       // What the Story cannot show is said: a planned chapter's played sessions, and sessions whose chapter is no
       // chapter page here.
-      for (const { chapter, sessions: held } of spine.heldBackSessions) {
-        console.warn(`  WARNING: ${vaultRelPathOf(chapter)}: this chapter is planned, so its played sessions have no Story page: ${held.map(vaultRelPathOf).join(', ')}`);
-      }
+      // Each is also a Site Faults finding on the player site (note-faults.js), with the fix campaign-qa offers.
+      const chapterFault = (rel, code, detail, fix) => { if (audit) audit.calculator(rel, [{ code, severity: 'warning', detail, fix }]); };
+      const plannedPlayed = (note, held) => {
+        const detail = `this chapter is planned, so its played sessions have no Story page: ${held.map(vaultRelPathOf).join(', ')}`;
+        console.warn(`  WARNING: ${vaultRelPathOf(note)}: ${detail}`);
+        chapterFault(vaultRelPathOf(note), 'CHAPTER_PLANNED_PLAYED', detail, 'set status: to active if this chapter is being played, or complete if it is over; if those sessions belong to another chapter, change their chapter: field to name it');
+      };
+      // One row per planned chapter: its sessions can arrive by their chapter: field and by its folder (below).
+      const plannedHeld = new Map();
+      const holdFor = (note, held) => { if (!plannedHeld.has(note)) plannedHeld.set(note, []); plannedHeld.get(note).push(...held); };
+      for (const { chapter, sessions: held } of spine.heldBackSessions) holdFor(chapter, held);
       for (const { ref, sessions: held } of spine.unpublishedChapters) {
         // A planned chapter is kept off the player site by its status, so it is named as the GM site names it.
         const note = unshownChapters.find((c) => chapterMatchesSession(c, held[0]));
         if (note && chapterStatus(note) === 'planned') {
-          console.warn(`  WARNING: ${vaultRelPathOf(note)}: this chapter is planned, so its played sessions have no Story page: ${held.map(vaultRelPathOf).join(', ')}`);
+          holdFor(note, held);
         } else {
           console.warn(`  WARNING: sessions name the chapter "${ref}", which is not a chapter page on this site (it does not publish here, or no chapter note has that name), so they have no Story page: ${held.map(vaultRelPathOf).join(', ')}`);
+          for (const session of held) {
+            chapterFault(vaultRelPathOf(session), 'CHAPTER_REF_UNSHOWN', `its chapter: field names "${ref}", which is not a chapter page on this site, so it has no Story page`,
+              'check the chapter: link\'s spelling against the chapter note\'s name, or the chapter note\'s publish settings');
+          }
         }
       }
-      if (spine.unchapteredSessions.length) {
-        console.warn(`  WARNING: played sessions with no chapter have no Story page (give each a chapter: field): ${spine.unchapteredSessions.map(vaultRelPathOf).join(', ')}`);
+      // A session with no chapter: field in a planned chapter's folder is that chapter's (the GM site reads it so):
+      // the planned chapter's row, not "no chapter".
+      const loose = [];
+      for (const session of spine.unchapteredSessions) {
+        const note = chapterOfSession(session, unshownChapters);
+        if (note && chapterStatus(note) === 'planned') holdFor(note, [session]);
+        else loose.push(session);
+      }
+      for (const [note, held] of plannedHeld) plannedPlayed(note, [...new Set(held)]);
+      if (loose.length) {
+        console.warn(`  WARNING: played sessions with no chapter have no Story page (give each a chapter: field): ${loose.map(vaultRelPathOf).join(', ')}`);
+        for (const session of loose) {
+          chapterFault(vaultRelPathOf(session), 'SESSION_NO_CHAPTER', 'a played session with no chapter: field, so it has no Story page',
+            'give it a chapter: field linking the chapter note it was played in');
+        }
       }
       for (const [first, later] of spine.duplicateChapters) {
         console.warn(`  WARNING: ${vaultRelPathOf(first)} and ${vaultRelPathOf(later)} have the same title; the second's Story page is ${spine.find((u) => u.sourcePage === later).outputPath} and sessions naming that title go to the first`);
+        chapterFault(vaultRelPathOf(later), 'CHAPTER_TITLE_SHARED', `has the same title as ${vaultRelPathOf(first)}, so sessions naming that title go to the first chapter`,
+          'give one of the two chapters another title (its title: field), and change any session\'s chapter: field that names it by the old title');
       }
       // The chapter bookkeeping the GM sets (chapter pages): said, one line each.
       const chapterUnits = spine.filter((u) => u.kind === 'chapter');
@@ -2832,13 +2859,43 @@ function buildSite(options) {
         // A status the player site's hide.fields takes off reads as none on the Story (explain agrees); say so.
         const own = ((u.sourcePage.sourceFrontmatter || {}).status);
         const blank = (v) => v == null || String(v).trim() === '';
-        const why = blank(raw) && !blank(own) ? 'its status is hidden by hide.fields, so the Story reads it as none'
+        const hidden = blank(raw) && !blank(own);
+        const ownExcludes = (u.sourcePage.sourceFrontmatter || {}).publish_exclude_fields;
+        const byNote = hidden && Array.isArray(ownExcludes) && ownExcludes.some((f) => String(f).trim() === 'status');
+        const why = byNote ? 'its status is hidden by its own publish_exclude_fields, so the Story reads it as none'
+          : hidden ? 'its status is hidden by hide.fields, so the Story reads it as none'
           : blank(raw) ? 'no status' : `status "${raw}" is not planned, active or complete`;
-        if (u.status === 'unknown') console.warn(`  WARNING: ${vaultRelPathOf(u.sourcePage)}: ${why}, so its Story page shows only its heading and sessions`);
-        if (u.status === 'active' && !u.teaserHtml) console.warn(`  WARNING: ${vaultRelPathOf(u.sourcePage)}: an active chapter with no ## Teaser, so its Story page shows no text`);
+        const rel = vaultRelPathOf(u.sourcePage);
+        if (u.status === 'unknown') {
+          const detail = `${why}, so its Story page shows only its heading and sessions`;
+          console.warn(`  WARNING: ${rel}: ${detail}`);
+          chapterFault(rel, 'CHAPTER_STATUS_UNKNOWN', detail, byNote
+            ? 'take status off this note\'s publish_exclude_fields: the Story reads a chapter\'s status to know what to show'
+            : hidden
+            ? 'take status off the player site\'s hide.fields: the Story reads a chapter\'s status to know what to show'
+            : 'set status: to planned (not yet reached: players see nothing of it), active (being played) or complete (over)');
+        }
+        if (u.status === 'active' && !u.teaserHtml) {
+          // A Teaser the note has but a publish rule takes off (hide.sections, publish_include_sections, a gm-only
+          // fence) is not a missing one: the fix names the rule, not "write it".
+          const written = /^##[ \t]+teaser[ \t]*#*[ \t]*$/im.test(String(u.sourcePage.markdown || ''));
+          const detail = written ? 'an active chapter whose ## Teaser is hidden on the player site, so its Story page shows no text'
+            : 'an active chapter with no ## Teaser, so its Story page shows no text';
+          console.warn(`  WARNING: ${rel}: ${detail}`);
+          chapterFault(rel, 'CHAPTER_NO_TEASER', detail, written
+            ? 'let the ## Teaser publish: check the player site\'s hide.sections, this note\'s publish_include_sections, and any gm-only fence around it'
+            : 'write a ## Teaser section in the chapter note: for players, spoiler-free (where the adventurers start, their situation, how the plot opens); the Teaser is yours to write');
+        }
       }
       const active = chapterUnits.filter((u) => u.status === 'active');
-      if (active.length > 1) console.warn(`  WARNING: more than one chapter is active (only the chapter being played should be): ${active.map((u) => vaultRelPathOf(u.sourcePage)).join(', ')}`);
+      if (active.length > 1) {
+        console.warn(`  WARNING: more than one chapter is active (only the chapter being played should be): ${active.map((u) => vaultRelPathOf(u.sourcePage)).join(', ')}`);
+        for (const u of active) {
+          const others = active.filter((o) => o !== u).map((o) => vaultRelPathOf(o.sourcePage));
+          chapterFault(vaultRelPathOf(u.sourcePage), 'CHAPTER_ACTIVE_MANY', `one of ${active.length} active chapters (also ${others.join(', ')})`,
+            'keep status: active on the chapter being played only; set each other one to complete if it is over, or planned if it is not yet reached');
+        }
+      }
       const written = new Set(spine.map((u) => u.outputPath));
       for (const [out, wraps] of foldedOnto) {
         if (written.has(out)) continue;

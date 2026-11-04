@@ -80,6 +80,13 @@ every page that names it. Use it to confirm each fix.
 | `TABLE_OVERWIDE` (`INFO`) | Info | A table row has more cells than its header, so the site widened the table |
 | `MOMENT_KIND_UNKNOWN` | Warning | A moment's `#moment/` tag names no kind, so the card shows with none |
 | `PROP_NOT_COPIED` | Warning | A prop's file, styled page, address or a file it links to is not on the site, or a prop sits outside its container |
+| `CHAPTER_STATUS_UNKNOWN` | Warning | A chapter's Story page shows only its heading and sessions |
+| `CHAPTER_NO_TEASER` | Warning | An active chapter's Story page shows no text |
+| `CHAPTER_ACTIVE_MANY` | Warning | More than one chapter reads as the one being played |
+| `CHAPTER_PLANNED_PLAYED` | Warning | Played sessions are missing from the Story |
+| `CHAPTER_TITLE_SHARED` | Warning | Sessions of one chapter may be listed under the other |
+| `SESSION_NO_CHAPTER` | Warning | A played session is missing from the Story |
+| `CHAPTER_REF_UNSHOWN` | Warning | A played session is missing from the Story |
 
 Three codes are walked in files of their own, in the `site-faults/`
 folder beside this file. Read one only when a row of this run names its
@@ -244,6 +251,46 @@ the site as written. Walked in `site-faults/prop-not-copied.md`.
 ## MOMENT_KIND_UNKNOWN
 
 Per tag, ask the GM which of the five kinds the moment is, or whether to drop the tag; edit only on an answer.
+
+## CHAPTER_STATUS_UNKNOWN
+
+Ask whether the chapter is planned, active or complete; write that
+word in `status:`. If the row's fix names `hide.fields` or
+`publish_exclude_fields`, the note is fine: offer that fix once, for
+all such rows.
+
+## CHAPTER_NO_TEASER
+
+The Teaser is the GM's own writing. Ask whether they want to write it
+now; offer to help draft it from what players already know, but never
+write one, or save a draft, without their words and their yes. Leaving
+it for now is a fine answer. If the row says the Teaser is hidden, it
+is written: offer the row's fix instead.
+
+## CHAPTER_ACTIVE_MANY
+
+The rows come together. Ask which chapter is being played; set each
+other one to `complete` or `planned` as the GM says.
+
+## CHAPTER_PLANNED_PLAYED
+
+Show the sessions the row names; ask which fix fits and edit on the
+answer.
+
+## CHAPTER_TITLE_SHARED
+
+Ask the GM for the new title; edit on the answer.
+
+## SESSION_NO_CHAPTER
+
+Ask the GM which chapter the session was played in, and write
+`chapter: "[[<chapter note>]]"` on the answer.
+
+## CHAPTER_REF_UNSHOWN
+
+Rows naming one chapter come together. A misspelt link: propose the
+chapter note it meant and fix the sessions' `chapter:` on a yes. A
+chapter note kept off the site: ask whether it should publish.
 
 ## Reporting
 

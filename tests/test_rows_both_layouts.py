@@ -69,9 +69,20 @@ def normaliser(old_vault: Path):
 def run_all(vault: Path, root: Path) -> dict[str, object]:
     """Every script's rows for one vault, with the vault's path made
     relative so two copies compare."""
+    # Each copy has a site folder of its own, which a row naming the
+    # site's tool prints.
+    site = vc.vault_site(vault)[2]
+    sites = sorted({str(site), str(site.resolve())} if site else set(),
+                   key=len, reverse=True)
+
     def rel(rows):
-        return [str(r).replace(str(vault), "<vault>").replace(str(root), "<root>")
-                for r in rows]
+        out = []
+        for r in rows:
+            text = str(r)
+            for s in sites:
+                text = text.replace(s, "<site>")
+            out.append(text.replace(str(vault), "<vault>").replace(str(root), "<root>"))
+        return out
 
     out: dict[str, object] = {}
     out["gm-leak"] = rel(vc.check_gm_leak(vault, None, fix=False))
