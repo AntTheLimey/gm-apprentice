@@ -1321,6 +1321,108 @@ p.story-playnotes a {
   margin: var(--space-1500) 0 var(--space-500);
 }
 
+/* chapter pages: start */
+/* The Story So Far (story.html) and each chapter's own Story page. Built from theme tokens only, so a preset or a
+   campaign stylesheet reaches every colour and face; each preset adds its own ornaments in its file. The closing
+   line's words are `content` here, so a stylesheet can change them. */
+.story-contents { max-width: 46rem; margin: 0 auto 2.5rem; }
+.story-contents > h2 { text-align: center; font-family: var(--font-heading); }
+.story-contents > p:has(> .story-begin) { text-align: center; }
+.story-contents-chapter { margin: var(--space-2000) 0; text-align: center; }
+.story-contents-chapter h3 {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  line-height: 1.25;
+  margin: var(--space-250) 0;
+  text-wrap: balance;
+}
+.story-contents-chapter h3 a { color: var(--text); text-decoration: none; }
+.story-contents-chapter h3 a:hover { color: var(--accent); }
+.story-contents-chapter[data-chapter-status="active"] h3 a { color: var(--accent); }
+p.story-chapter-label, p.story-chapter-dates {
+  font-family: var(--font-label, var(--font-body));
+  font-size: var(--font-size-875);
+  color: var(--text-muted);
+  margin: 0;
+  line-height: 1.5;
+}
+p.story-chapter-label { letter-spacing: 0.08em; }
+p.story-chapter-now {
+  font-family: var(--font-label, var(--font-body));
+  font-size: var(--font-size-850);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: var(--space-250) 0;
+}
+.story-contents .story-chapter-teaser, .story-contents p.story-chapter-overview {
+  max-width: 54ch;
+  margin: var(--space-500) auto;
+}
+.story-contents .story-chapter-teaser p { margin: 0 0 var(--space-500); }
+p.story-chapter-overview, .story-contents .story-chapter-teaser p { font-family: var(--font-serif); font-size: var(--font-size-1000); }
+.story-contents-sessions, .story-contents-sessions li { list-style: none; }
+.story-contents-sessions {
+  margin: var(--space-750) 0 0;
+  padding: 0;
+  text-align: left;
+  display: grid;
+  gap: 2px;
+}
+.story-contents-sessions li {
+  display: grid;
+  grid-template-columns: 2.6em auto 1fr auto;
+  align-items: baseline;
+  gap: var(--space-500);
+}
+.story-contents-sessions li::after {
+  content: "";
+  grid-column: 3;
+  grid-row: 1;
+  min-width: 12px;
+  border-bottom: 1px dotted var(--border);
+  transform: translateY(-0.3em);
+}
+.story-contents-sessions .n { grid-column: 1; text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.story-contents-sessions a { grid-column: 2; color: var(--text); text-decoration: none; }
+.story-contents-sessions a:hover { color: var(--accent); }
+.story-contents-sessions .d {
+  grid-column: 4;
+  font-size: var(--font-size-875);
+  color: var(--text-muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.story-contents-one { color: var(--text-muted); }
+.story-contents-one a { color: var(--accent); }
+.story-contents-end { text-align: center; color: var(--text-muted); font-style: italic; margin-top: var(--space-2000); }
+.story-contents-end[data-ending="continues"]::before { content: "To be continued…"; }
+.story-contents-end[data-ending="ended"]::before { content: "The end"; }
+/* The chapter's own page: its heading centred, like a chapter opening in a book. */
+.story-chapter > p.story-chapter-label, .story-chapter > .page-title, .story-chapter > p.story-chapter-dates,
+.story-chapter > p.story-chapter-now, .story-chapter > p.story-chapter-overview { text-align: center; }
+.story-chapter > .page-title { margin-bottom: var(--space-250); }
+.story-chapter > p.story-chapter-overview { margin: var(--space-1000) auto var(--space-1500); max-width: 54ch; }
+.story-chapter-teaser { margin-top: var(--space-1500); }
+.story-chapter-more { margin: 0 0 var(--space-1000); }
+.story-chapter-more > summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-family: var(--font-label, var(--font-body));
+  font-size: var(--font-size-950);
+  margin-bottom: var(--space-1000);
+}
+.story-chapter-sessions-title { clear: both; margin-top: var(--space-2000); }
+.story-chapter-sessions { padding-left: var(--space-1500); }
+.story-chapter-sessions li { margin: var(--space-250) 0; }
+.story-chapter-date { color: var(--text-muted); font-size: var(--font-size-875); margin-left: var(--space-500); }
+@media (max-width: 520px) {
+  .story-contents-sessions li { grid-template-columns: 2em 1fr; }
+  .story-contents-sessions li::after { display: none; }
+  .story-contents-sessions .d { grid-column: 2; }
+}
+/* chapter pages: end */
+
 /* ===== TABLES ===== */
 table {
   width: 100%;

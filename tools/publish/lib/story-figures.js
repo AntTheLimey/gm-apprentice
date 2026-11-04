@@ -629,4 +629,4 @@ function withFigures(recapHtml, { candidates, scenes = [], exclude = new Set(), 
   return figuresHtml(recapHtml, placement, { fromPath, imageMap, paragraphs, candidates: all, blockers });
 }
 
-module.exports = { figureCandidates, pageNames, nameHolders, scenePicture, sceneCandidates, paragraphsOf, mentionsOf, placeFigures, figuresHtml, shownImages, withFigures };
+module.exports = { figureCandidates, pageNames, nameHolders, scenePicture, sceneCandidates, paragraphsOf, mentionsOf, placeFigures, figuresHtml, shownImages, withFigures, topLevelElements, openMarks };

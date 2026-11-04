@@ -41,3 +41,23 @@
     --moment-dramatic: #b42318; --moment-intriguing: #0b5cad; --moment-funny: #7a4f00; --moment-epic: #6b3fb5; --moment-tragic: #475569;
   }
 }
+
+/* chapter pages: start */
+/* A case file: typed labels, each chapter a folder with its status stamped, a ledger of sessions. */
+.story-contents-chapter {
+  text-align: left;
+  border-left: 3px solid var(--accent);
+  padding: var(--space-500) 0 var(--space-500) var(--space-1250);
+}
+.story-contents .story-chapter-teaser, .story-contents p.story-chapter-overview { margin-left: 0; }
+p.story-chapter-label, p.story-chapter-dates, p.story-chapter-now { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.12em; }
+p.story-chapter-label::before { content: "File · "; }
+.story-contents-sessions { font-family: var(--font-mono); font-size: var(--font-size-950); }
+.story-contents-sessions li::after { border-bottom-style: dashed; }
+.story-contents-chapter[data-chapter-status="complete"] h3::after { content: " [closed]"; color: var(--text-muted); font-family: var(--font-mono); font-size: var(--font-size-750); }
+.story-contents-chapter[data-chapter-status="active"] h3::after { content: " [open]"; color: var(--accent); font-family: var(--font-mono); font-size: var(--font-size-750); }
+.story-contents-end { font-family: var(--font-mono); font-style: normal; letter-spacing: 0.12em; }
+.story-contents-end[data-ending="continues"]::before { content: "Case open."; }
+.story-contents-end[data-ending="ended"]::before { content: "Case closed."; }
+p.story-chapter-overview, .story-contents .story-chapter-teaser p { font-family: var(--font-body); }
+/* chapter pages: end */

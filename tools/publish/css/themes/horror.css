@@ -45,3 +45,23 @@
     --moment-dramatic: #b42318; --moment-intriguing: #0b5cad; --moment-funny: #7a4f00; --moment-epic: #6b3fb5; --moment-tragic: #475569;
   }
 }
+
+/* chapter pages: start */
+/* Book furniture: a fleuron between chapters, small-capital labels, an italic overview, dotted leaders. */
+.story-contents-chapter + .story-contents-chapter::before {
+  content: "❦";
+  display: block;
+  color: var(--text-muted);
+  font-size: 1.25rem;
+  margin-bottom: var(--space-1500);
+}
+p.story-chapter-label { font-variant: small-caps; letter-spacing: 0.12em; font-size: var(--font-size-1000); }
+p.story-chapter-overview, .story-contents .story-chapter-teaser { font-style: italic; font-family: var(--font-heading); }
+.story-contents-sessions { font-family: var(--font-heading); }
+.story-contents-sessions .n { font-variant-numeric: oldstyle-nums; }
+p.story-chapter-now { text-transform: none; font-variant: small-caps; letter-spacing: 0.08em; }
+.story-contents-end[data-ending="continues"]::before { content: "To be continued…"; }
+.story-contents-end[data-ending="ended"]::before { content: "Finis"; }
+.story-contents-end { font-family: var(--font-heading); }
+.story-contents .story-chapter-teaser p { font-family: var(--font-heading); }
+/* chapter pages: end */

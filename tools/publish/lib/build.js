@@ -31,7 +31,7 @@ const { createMarks, markKinds, sanitize, unmark, withoutMarked } = require('./g
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
 const { KINDS, parseMoments, momentsHtml } = require('./story-moments');
-const { buildStorySpine, probeSpine, gmStoryNotes, storyPagesFor, chapterOfSession, characterStoryGroup } = require('./story-spine');
+const { buildStorySpine, probeSpine, gmStoryNotes, storyPagesFor, chapterOfSession, chapterMatchesSession, chapterStatus, characterStoryGroup } = require('./story-spine');
 const { figureCandidates, pageNames, nameHolders, sceneCandidates } = require('./story-figures');
 const { foldPlan, applyFold, isFolded, labelFoldedHeadings } = require('./story-fold');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
@@ -1246,6 +1246,9 @@ function buildSite(options) {
   // The GM site: the pages the player site writes a page for, judged as the player site judges them (a listed-only prop
   // whose words are all the GM's has a page here and none there), for the pictures a Story page may show.
   const playerPaged = gm ? new Set(playerPublished.filter((p) => !noPageFor(p, { excludeSections, excludeCallouts }))) : null;
+  // The chapter notes this site does not publish, for the Story's warnings: a session naming one is told why.
+  const publishedSet = new Set(published);
+  const unshownChapters = pages.filter((p) => p.frontmatter && p.frontmatter.type === 'chapter' && !publishedSet.has(p));
   pages = published.filter(p => !getsNoPage(p));
   // A page whose address leads through a link in a kept folder (a full build's clean leaves only those; a fast build
   // cleans nothing) is never written (#507). It leaves the list here, like an unpublished note, so no link, index or
@@ -2715,21 +2718,22 @@ function buildSite(options) {
     const found = resolveSiteLink(ref.trim(), { linkMap });
     return found.kind === 'page' ? found.href : null;
   }
+  // A page that sends the reader on to `toPath` at once (a meta refresh, its canonical address, and a plain link for a
+  // reader that does not follow it): an old address kept working.
+  function redirectPage(fromPath, toPath, label) {
+    const rel = encodeHref(relativeHref(fromPath, toPath));
+    return `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">${escapeHtml(label)}</a></body></html>`;
+  }
   function eachListing(emit, live) {
     for (const [dir, label] of Object.entries(DIR_LABELS)) {
       if (dir === 'characters/pcs' && pcRedirectTarget) {
-        const depth = dir.split('/').length;
-        const rel = encodeHref('../'.repeat(depth) + pcRedirectTarget);
-        const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Player Characters</a></body></html>`;
-        if (live) emit(`${dir}/index.html`, redirectHtml, `  wrote ${dir}/index.html (redirect → ${pcRedirectTarget})`);
+        if (live) emit(`${dir}/index.html`, redirectPage(`${dir}/index.html`, pcRedirectTarget, 'Player Characters'), `  wrote ${dir}/index.html (redirect → ${pcRedirectTarget})`);
         continue;
       }
       // Redirect events/ at the timeline only when one exists; with no timeline the redirect
       // would dangle, so fall through and give events its own index.
       if (dir === 'events' && timelineHref) {
-        const rel = encodeHref(relativePath(dir, timelineHref));
-        const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Timeline</a></body></html>`;
-        if (live) emit(`${dir}/index.html`, redirectHtml, `  wrote ${dir}/index.html (redirect → ${timelineHref})`);
+        if (live) emit(`${dir}/index.html`, redirectPage(`${dir}/index.html`, timelineHref, 'Timeline'), `  wrote ${dir}/index.html (redirect → ${timelineHref})`);
         continue;
       }
       let dirPages = [];
@@ -2763,6 +2767,40 @@ function buildSite(options) {
     // The fold was planned on the probe spine (probeSpine), which reads recaps as this one does. Should the two ever
     // disagree, a folded wrap-up would be on no page: said, never silent.
     if (live) {
+      // What the Story cannot show is said: a planned chapter's played sessions, and sessions whose chapter is no
+      // chapter page here.
+      for (const { chapter, sessions: held } of spine.heldBackSessions) {
+        console.warn(`  WARNING: ${vaultRelPathOf(chapter)}: this chapter is planned, so its played sessions have no Story page: ${held.map(vaultRelPathOf).join(', ')}`);
+      }
+      for (const { ref, sessions: held } of spine.unpublishedChapters) {
+        // A planned chapter is kept off the player site by its status, so it is named as the GM site names it.
+        const note = unshownChapters.find((c) => chapterMatchesSession(c, held[0]));
+        if (note && chapterStatus(note) === 'planned') {
+          console.warn(`  WARNING: ${vaultRelPathOf(note)}: this chapter is planned, so its played sessions have no Story page: ${held.map(vaultRelPathOf).join(', ')}`);
+        } else {
+          console.warn(`  WARNING: sessions name the chapter "${ref}", which is not a chapter page on this site (it does not publish here, or no chapter note has that name), so they have no Story page: ${held.map(vaultRelPathOf).join(', ')}`);
+        }
+      }
+      if (spine.unchapteredSessions.length) {
+        console.warn(`  WARNING: played sessions with no chapter have no Story page (give each a chapter: field): ${spine.unchapteredSessions.map(vaultRelPathOf).join(', ')}`);
+      }
+      for (const [first, later] of spine.duplicateChapters) {
+        console.warn(`  WARNING: ${vaultRelPathOf(first)} and ${vaultRelPathOf(later)} have the same title; the second's Story page is ${spine.find((u) => u.sourcePage === later).outputPath} and sessions naming that title go to the first`);
+      }
+      // The chapter bookkeeping the GM sets (chapter pages): said, one line each.
+      const chapterUnits = spine.filter((u) => u.kind === 'chapter');
+      for (const u of chapterUnits) {
+        const raw = ((u.sourcePage.frontmatter || {}).status);
+        // A status the player site's hide.fields takes off reads as none on the Story (explain agrees); say so.
+        const own = ((u.sourcePage.sourceFrontmatter || {}).status);
+        const blank = (v) => v == null || String(v).trim() === '';
+        const why = blank(raw) && !blank(own) ? 'its status is hidden by hide.fields, so the Story reads it as none'
+          : blank(raw) ? 'no status' : `status "${raw}" is not planned, active or complete`;
+        if (u.status === 'unknown') console.warn(`  WARNING: ${vaultRelPathOf(u.sourcePage)}: ${why}, so its Story page shows only its heading and sessions`);
+        if (u.status === 'active' && !u.teaserHtml) console.warn(`  WARNING: ${vaultRelPathOf(u.sourcePage)}: an active chapter with no ## Teaser, so its Story page shows no text`);
+      }
+      const active = chapterUnits.filter((u) => u.status === 'active');
+      if (active.length > 1) console.warn(`  WARNING: more than one chapter is active (only the chapter being played should be): ${active.map((u) => vaultRelPathOf(u.sourcePage)).join(', ')}`);
       const written = new Set(spine.map((u) => u.outputPath));
       for (const [out, wraps] of foldedOnto) {
         if (written.has(out)) continue;
@@ -2801,6 +2839,10 @@ function buildSite(options) {
         { outputPath: unit.outputPath, gmHiddenBecause: notes.banner, gmHidden: folded ? folded.gmHidden : [] });
       // Each wrap-up folded into this page is read on it, as its own page was: its faults are its note's.
       if (live) for (const page of foldedOnto.get(unit.outputPath) || []) seen(vaultRelPathOf(page), html, page, false);
+      // A chapter's old introduction page (story/<chapter>-intro.html, where one was written) leads to its chapter page.
+      if (live && unit.oldOutputPath) {
+        emit(unit.oldOutputPath, redirectPage(unit.oldOutputPath, unit.outputPath, unit.title), `  wrote ${unit.oldOutputPath} (redirect → ${unit.outputPath})`);
+      }
     }
     if (live) characterStories = buildCharacterStories();
     if (spine.length || characterStories.length || npcStories.length) {

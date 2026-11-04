@@ -28,11 +28,13 @@ const FILES = {
   'NPCs/Captain Rook.md': '---\ntype: npc\ntitle: Captain Rook\nportrait: rook.png\n---\n\nCaptain of the night ferry.\n',
   '_attachments/Fog Header.png': 'not-really-a-png',
   // A chapter with one played session and its wrap-up, whose Memorable Moments make the Story page's cards.
-  'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER,
+  // Active, with a Teaser: its chapter page and the contents page carry the chapter hooks and the "now" marker.
+  'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: active\n') + '\n## Teaser\n\nThe harbour waits.\n',
   'Sessions/Session 2.md': SESSION(2),
   'Sessions/Session 2 Wrap-Up.md': WRAP_1.replace(/Session 1/g, 'Session 2').replace('session_number: 1', 'session_number: 2').replace('where [[Mara Quill]] waited', 'where Captain Rook waited'),
 };
 const STORY = 'story/chapter-1-docks-session-2.html';
+const CHAPTER_PAGE = 'story/chapter-1-docks.html';
 
 // One note of each kind that has its own template (the plain-note template among them): each must carry the hooks.
 const NOTE_PAGES = ['npcs/mara-quill.html', 'locations/harbour.html', 'events/the-fog.html', 'sessions/session-01.html',
@@ -61,6 +63,11 @@ const SEEN_ON = {
   'p.moment-kind[data-kind]': [STORY],
   'div.story-figures': [STORY],
   'figure.story-figure': [STORY],
+  '.story-contents': ['story.html'],
+  '.story-contents-chapter[data-chapter-status]': ['story.html'],
+  '.story-contents-sessions': ['story.html'],
+  '.story-chapter[data-chapter-status]': [CHAPTER_PAGE],
+  '.story-chapter-now': ['story.html', CHAPTER_PAGE],
 };
 
 // A regular expression that finds an element a simple selector (tag, one class, one attribute) names.

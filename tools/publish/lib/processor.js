@@ -2217,6 +2217,8 @@ function extractSections(markdown, { preamble = false } = {}) {
   try {
     ({ headingAt } = findHeadings(lines.join('\n')));
   } catch (err) {
+    // Said, never silent: a note whose headings cannot be read shows none of its sections.
+    console.warn(`  WARNING: could not read a note's headings (${err.message}); its sections are left out`);
     return [];
   }
   const sections = [];

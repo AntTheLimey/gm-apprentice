@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.131] — 2026-11-04
+
+The Story page reads like a book's contents, and each chapter has one Story page of its own, the chapter break between one chapter's sessions and the next's. What a chapter shows depends on its `status:`. Publish tool 1.65.0. No vault change is needed; a `## Teaser` in a chapter note is new and optional.
+
+### Changed
+
+- **The Story So Far** replaces the Story page's "Campaign Saga" list. Chapters run oldest first, each as a heading linked to its chapter page, with its label ("Chapter Three", from a whole-numbered `sort_order`; a chapter numbered 0.5 shows its title alone), its `date_range:`, and its sessions underneath: each one's number, title and in-game date. A chapter told as one account (a chapter wrap-up and no session pages, like Canticle's early chapters) links "read it" instead. The chapter being played is marked "now being played", and the page ends with a line each theme words for itself ("To be continued…" while a chapter is active, a closing line once none is). Character Stories are unchanged.
+- **One Story page per chapter**, at `story/<chapter>.html`, between the last session of the chapter before and this chapter's first. Previous and Next run through it.
+  - `status: active`: the chapter's `## Teaser` section and the sessions so far. Nothing else of the chapter note shows, ever; with no Teaser the page has its heading and sessions only.
+  - `status: complete`: the chapter's `overview:` line, then its recap (the chapter wrap-up's, or failing that a `## Recap` section in the chapter note): the opening paragraph, with "Read the whole chapter recap" to open the rest. The wrap-up's other sections and Memorable Moments follow, as before.
+  - `status: planned`: the chapter and its sessions appear nowhere on the Story. If any of its sessions has been played, the build says so and names them.
+  - No status, or one the tool does not know: the chapter's heading and sessions, no text.
+  - `in_progress` and `in-progress` read as active, as the vault schema already accepts them.
+  - The Teaser and the chapter note's Recap are the sections headed exactly `## Teaser` and `## Recap`; a heading that only contains the word ("Teaser ideas") is never shown.
+- The chapter page no longer shows the chapter note's whole body (which put GM planning material, such as Canticle's "Chapter reference desk", on the player site's Story). The chapter note's own page in the Chapters section is unchanged for now.
+- The old `story/<chapter>-intro.html` address sends readers on to the new chapter page.
+- A chapter page pictures the people and places its Teaser or recap names, on its own, as before.
+- New theme hooks: `.story-contents`, `.story-contents-chapter[data-chapter-status]`, `.story-contents-sessions`, `.story-chapter[data-chapter-status]` and `.story-chapter-now` (see `docs/theme-hooks.md`). Every colour and face on these pages comes from the theme's tokens, and each preset (horror, scifi, military, fantasy, noir) adds its own touches, so a campaign stylesheet reaches all of it.
+
+### Fixed
+
+- Sessions whose `chapter:` names a chapter note that does not publish (`publish: false`, a planned status, or a name no chapter has) had no Story page with no word said. The build now warns and names them.
+- The build also warns, one line each, about a played session with no chapter (where the Story shows chapters), two chapters with the same title (the second gets its own page), a chapter with no status or one it does not know, an active chapter with no `## Teaser`, and more than one active chapter.
+
+---
+
 ## [1.10.130] — 2026-11-04
 
 A chapter's Story page no longer uses up its chapter's pictures. Publish tool 1.64.1. No vault change is needed.

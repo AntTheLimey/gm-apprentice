@@ -513,7 +513,7 @@ describe('sceneCandidates', () => {
   it('its people count as well as its places; a chapter unit takes no scene', () => {
     const of = sceneCandidates([hub1, scene(`${S}/Session 1/Scenes/Docks`, { locations: [], entities: ['[[Six]]', '[[The Docks]]'] })], { names, imageMap, linkMap });
     assert.equal(of(unit1).length, 1);
-    assert.deepEqual(of({ kind: 'chapter-intro', sourcePage: { sourcePath: hub1.sourcePath } }), []);
+    assert.deepEqual(of({ kind: 'chapter', sourcePage: { sourcePath: hub1.sourcePath } }), []);
   });
 
   it('the scene\'s mention is a link to or a name of one of its pages; it renders with no caption and an empty alt', () => {

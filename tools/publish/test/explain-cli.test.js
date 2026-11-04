@@ -955,7 +955,10 @@ describe('explain and the build agree on which wrap-ups fold (published view)', 
     assert.ok(!r.story && r.wrapPage);
   });
 
-  it('(c) a complete chapter whose introduction is wholly gm-only and whose wrap-up has no recap: no chapter Story page, in both', async () => {
+  // Chapter pages: every shown chapter has its page, whatever its note's body, so a complete chapter's wrap-up folds
+  // into it even with no recap (its other sections show there); once it folded only into an -intro page made from a
+  // recap or the note's body.
+  it('(c) a complete chapter whose wrap-up has no recap: the wrap-up folds into the chapter page, whatever the note body, in both', async () => {
     const chapter = (body) => `---\ntype: chapter\ntitle: Chapter 2 — Lighthouse\nsort_order: 2\nstatus: complete\n---\n\n${body}\n`;
     const wrap = '---\ntype: session_wrap\nchapter: "[[Chapter 2 Overview]]"\n---\n\n# Chapter 2 Wrap-Up\n\nLoose notes, no recap heading.\n';
     const files = (body) => storyVault({
@@ -964,11 +967,17 @@ describe('explain and the build agree on which wrap-ups fold (published view)', 
       'Sessions/Session 3.md': '---\ntype: session\ntitle: Session 3\nsession_number: 3\nchapter: "[[Chapter 2 Overview]]"\nstatus: played\n---\n\n# Session 3\n\n## Narrative Recap\n\nThey climbed the lighthouse.\n',
     });
     const target = 'Chapters/Chapter 2/Chapter 2 Wrap-Up.md';
-    const shown = await run(files('# Chapter 2\n\nINTRO-VISIBLE.'), {}, target);
-    assert.match(shown.text, /publishes as part of .*story\/chapter-2-lighthouse-intro\.html \(its Story page\)/);
-    const hidden = await run(files('<!-- gm-only -->\n# Chapter 2\n\nINTRO-HIDDEN.\n<!-- /gm-only -->'), {}, target);
-    assert.doesNotMatch(hidden.text, /Story page/);
-    assert.match(hidden.text, /VERDICT: publishes at /);
+    for (const body of ['# Chapter 2\n\nINTRO-VISIBLE.', '<!-- gm-only -->\n# Chapter 2\n\nINTRO-HIDDEN.\n<!-- /gm-only -->']) {
+      const site = buildBoth(files(body), {});
+      try {
+        const c = capture();
+        await runExplain({ configPath: site.configPath, target }, c.deps);
+        assert.match(c.text(), /publishes as part of .*story\/chapter-2-lighthouse\.html \(its Story page\)/);
+        assert.ok(site.player.exists('story', 'chapter-2-lighthouse.html'));
+        assert.deepStrictEqual(site.player.files().filter((f) => /chapter-2-wrap-up\.html$/.test(f)), [], 'the wrap-up has no page of its own');
+        assert.match(site.player.read('story', 'chapter-2-lighthouse.html'), /Loose notes, no recap heading/);
+      } finally { site.cleanup(); }
+    }
   });
 
   it('(d) a paired session note with a recap of its own, its wrap-up\'s recap gm-only: the note\'s body is withheld, so no Story page, in both', async () => {

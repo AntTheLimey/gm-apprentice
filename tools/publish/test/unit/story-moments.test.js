@@ -214,7 +214,6 @@ describe('momentsHtml', () => {
     assert.match(out, /<h2[^>]*>Memorable Moments<\/h2>/);
     assert.match(out, /11 from this session/);
     assert.match(html(md, { unitKind: 'chapter' }), /11 from this chapter/);
-    assert.match(html(md, { unitKind: 'chapter-intro' }), /11 from this chapter/);
   });
 
   it('a kind row carries its icon; a card with no kind has none', () => {

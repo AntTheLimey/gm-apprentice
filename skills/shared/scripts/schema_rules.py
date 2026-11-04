@@ -86,7 +86,7 @@ TYPE_FOLDERS: dict[str, frozenset[str]] = {
 CANON_STATUS_VALUES = {"DRAFT", "AUTHORITATIVE", "SUPERSEDED", "STUB"}
 SESSION_STATUS = set(SESSION_NOT_YET_RUN | SESSION_PLAYED)
 SCENE_STATUS = ("planned", "paused", "played", "dropped")
-CHAPTER_STATUS = ("planned", "active", "complete")
+CHAPTER_STATUS: tuple[str, ...] = tuple(_ontology()["chapter_status"]["values"])
 SCENE_TYPES = {
     "investigation", "social", "combat", "chase",
     "transition", "horror", "downtime", "other"
@@ -141,7 +141,7 @@ VALUE_ALIASES: dict[str, dict[str, dict[str, str]]] = {
     "campaign_overview": {"status": {"active": "in_progress"}},
     "scene": {"status": {"ready": "planned", "modified": "played",
                          "cut": "dropped", "skipped": "dropped"}},
-    "chapter": {"status": {"in_progress": "active", "in-progress": "active"}},
+    "chapter": {"status": dict(_ontology()["chapter_status"]["aliases"])},
 }
 # A checked field that also takes the words of a site setting (compared
 # trimmed and lower-cased, as the publish tool does): a word the GM added

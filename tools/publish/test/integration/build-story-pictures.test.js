@@ -550,8 +550,8 @@ describe('Story pictures: once per chapter, and companions', () => {
     'NPCs/Old Smith.md': note('npc', 'Old Smith', 'smith.png'),
     'NPCs/Thomas Wyndham.md': note('npc', 'Thomas Wyndham', 'thomas.png', 'companion: true\n'),
     'NPCs/Silas Wyndham.md': note('npc', 'Silas Wyndham', 'silas.png', 'aliases: ["Wyndham"]\n'),
-    // The introduction ("The docks, ...") pictures The Docks on its own: the chapter page adds nothing to what its
-    // session pages have pictured, so Session 1 pictures The Docks too.
+    // The chapter has no status, so its page shows no text and no picture (chapter pages); Session 1 pictures The
+    // Docks.
     'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER,
     'Sessions/Session 1 Wrap-Up.md': withRecap('[[Mara Quill]] met Thomas Wyndham at the docks.\n\n![[rook.png]]\n\nCaptain Rook nodded.'),
     'Sessions/Session 2 Wrap-Up.md': wrap2,
@@ -565,7 +565,7 @@ describe('Story pictures: once per chapter, and companions', () => {
 
   it('a page pictured earlier in the chapter, or whose picture the GM placed there, is not pictured again', () => {
     for (const site of [s.player, s.gm]) {
-      assert.deepEqual(captions(read(site, 'story/chapter-1-docks-intro.html')), ['The Docks']);
+      assert.deepEqual(captions(read(site, 'story/chapter-1-docks.html')), []);
       assert.deepEqual(captions(read(site, STORY_1)), ['Mara Quill', 'The Docks']);
       assert.equal((read(site, STORY_1).match(/images\/rook\./g) || []).length, 1, 'the picture the GM placed stays');
       assert.deepEqual(captions(read(site, STORY_2)), ['Old Smith']);
@@ -645,7 +645,7 @@ describe('Story pictures: once per chapter, a held-back wrap-up on a page where 
   });
   const s = buildBoth(vault569);
   after(() => s.cleanup());
-  const INTRO = 'story/chapter-1-docks-intro.html';
+  const INTRO = 'story/chapter-1-docks.html';
 
   // Review B: the player site's Story pages are what a player-only build of the same vault writes: nothing of the GM
   // site's reading reaches them.
@@ -741,7 +741,7 @@ describe('Story pictures: the chapter page pictures on its own', () => {
     'Sessions/Session 2 Wrap-Up.md': WRAP_2.replace('crossed the bay at night', 'crossed the bay with Ilse Brandt at night'),
   }));
   after(() => s.cleanup());
-  const INTRO = 'story/chapter-1-docks-intro.html';
+  const INTRO = 'story/chapter-1-docks.html';
   const ilse = (html) => figures(html).flatMap((f) => f.captions).filter((c) => c === 'Ilse Brandt').length;
 
   it('complete chapter page does not take a portrait from its first session', () => {
@@ -759,6 +759,29 @@ describe('Story pictures: the chapter page pictures on its own', () => {
   it('every link resolves and the leak gate finds nothing', () => {
     assert.deepEqual(brokenLinks(s.player.dir), []);
     assert.deepEqual(brokenLinks(s.gm.dir), []);
+    assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.player.dir }).findings, []);
+  });
+});
+
+// Chapter pages: an active chapter's page pictures its Teaser by the same rules, on its own.
+describe('Story pictures: an active chapter\'s Teaser', () => {
+  const s = buildBoth(storyVault({
+    ...PEOPLE,
+    '_attachments/ilse.png': png(),
+    'NPCs/Ilse Brandt.md': note('npc', 'Ilse Brandt', 'ilse.png'),
+    'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: active\n')
+      + '\n## Teaser\n\nYou arrive at the harbour, where [[Ilse Brandt]] keeps the gate.\n',
+    'Sessions/Session 1 Wrap-Up.md': withRecap('[[Ilse Brandt]] met the party at the gate.'),
+  }));
+  after(() => s.cleanup());
+  const CH = 'story/chapter-1-docks.html';
+
+  it('the Teaser pictures the NPC it names, and Session 1 naming her pictures her too', () => {
+    for (const site of [s.player, s.gm]) {
+      assert.deepEqual(captions(read(site, CH)), ['Ilse Brandt']);
+      assert.ok(captions(read(site, STORY_1)).includes('Ilse Brandt'));
+    }
+    assert.deepEqual(brokenLinks(s.player.dir), []);
     assert.deepEqual(runLeakGate({ configPath: s.configPath, outputDir: s.player.dir }).findings, []);
   });
 });
