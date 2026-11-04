@@ -711,6 +711,7 @@ describe('Story pictures: a session whose wrap-up is held back, where players se
     const open = gm.indexOf('This wrap-up is held back from players');
     const own = gm.indexOf('HUB-RECAP-1');
     assert.ok(lead >= 0 && open > lead && own > open, `players' recap, then the mark, then the session's own recap: ${lead} ${open} ${own}`);
+    assert.ok(gm.indexOf('Mara Quill</a> waited.') > own, 'the held-back wrap-up recap follows the session recap');
     assert.deepEqual(captions(gm), captions(player));
   });
 
