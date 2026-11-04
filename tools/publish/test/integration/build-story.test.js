@@ -363,7 +363,7 @@ describe('build story: a chapter status the player site hides', () => {
 describe('build story: a session that moves chapter', () => {
   const { buildBoth } = require('../helpers/gm-build');
   const { build } = require('../../lib/build');
-  const { storyVault, CHAPTER } = require('../helpers/story-vault');
+  const { storyVault, CHAPTER, SESSION, WRAP_2 } = require('../helpers/story-vault');
   const OLD = 'chapter-1-docks-session-2.html';
   const NEW = 'chapter-2-boats-session-2.html';
   const CH2 = (status) => `---\ntype: chapter\ntitle: Chapter 2 — Boats\nsort_order: 2\nstatus: ${status}\n---\n\n# Chapter 2 — Boats\n\n## Teaser\n\nThe boats.\n`;
@@ -392,6 +392,68 @@ describe('build story: a session that moves chapter', () => {
       assert.ok(isRedirectTo(s.player.read('story', OLD), NEW), 'the redirect is gone on the next build');
       const { brokenLinks } = require('../helpers/site-links');
       assert.deepEqual(brokenLinks(s.player.dir), []);
+    } finally { s.cleanup(); }
+  });
+
+  it('the record is beside the site, never in its output folder', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n') }), { sites: ['player'] });
+    try {
+      assert.ok(fs.existsSync(path.join(s.root, 'campaign', '.gm-apprentice', 'story-addresses.json')));
+      assert.deepEqual(s.player.files().filter((f) => /story-addresses/.test(f)), []);
+    } finally { s.cleanup(); }
+  });
+
+  it('a GM build, an in-memory build, a sheets-only build and a preview write no record and no moved-session redirect', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n'), 'Chapters/Chapter 2/Chapter 2 Overview.md': CH2('active') }), { sites: ['gm'] });
+    const anyRecord = () => {
+      const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+      return walk(s.root).filter((f) => /story-addresses/.test(f));
+    };
+    try {
+      assert.deepEqual(anyRecord(), [], 'GM build');
+      quiet(() => build({ configPath: s.configPath, inMemory: true }));
+      assert.deepEqual(anyRecord(), [], 'in-memory build');
+      quiet(() => build({ configPath: s.configPath, outputDirOverride: path.join(s.root, 'preview') }));
+      assert.deepEqual(anyRecord(), [], 'preview build');
+      // A sheets-only build updates a full one: the full build's record is taken away first.
+      quiet(() => build({ configPath: s.configPath }));
+      for (const f of anyRecord()) fs.rmSync(f);
+      quiet(() => build({ configPath: s.configPath, only: 'sheets' }));
+      assert.deepEqual(anyRecord(), [], 'sheets-only build');
+      // Seeded by hand, a GM build still writes no redirect from it.
+      fs.mkdirSync(path.join(s.root, 'campaign', '.gm-apprentice'), { recursive: true });
+      fs.writeFileSync(path.join(s.root, 'campaign', '.gm-apprentice', 'story-addresses.json'), JSON.stringify({ version: 1, sessions: { 'Session 2.md': ['story/old-session-2.html'] } }));
+      quiet(() => build({ configPath: s.configPath, site: 'gm' }));
+      assert.equal(s.gm.exists('story', 'old-session-2.html'), false);
+    } finally { s.cleanup(); }
+  });
+
+  it('a record that cannot be read is kept as a dated .bak, the build says so, and a new record starts', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n'), 'Chapters/Chapter 2/Chapter 2 Overview.md': CH2('active') }), { sites: ['player'] });
+    const dir = path.join(s.root, 'campaign', '.gm-apprentice');
+    try {
+      fs.writeFileSync(path.join(dir, 'story-addresses.json'), '{"version":1,"sessions":{');
+      const logs = [];
+      const saved = { log: console.log, warn: console.warn };
+      console.log = () => {}; console.warn = (m) => logs.push(String(m));
+      try { build({ configPath: s.configPath, site: 'player' }); } finally { Object.assign(console, saved); }
+      assert.equal(logs.filter((l) => /WARNING/.test(l) && /story-addresses\.json\.\d{4}-\d\d-\d\d\.bak/.test(l)).length, 1, logs.join('\n'));
+      const files = fs.readdirSync(dir);
+      assert.ok(files.some((f) => /^story-addresses\.json\.\d{4}-\d\d-\d\d\.bak$/.test(f)), files.join(', '));
+      assert.ok(JSON.parse(fs.readFileSync(path.join(dir, 'story-addresses.json'), 'utf8')).sessions['Session 2.md']);
+    } finally { s.cleanup(); }
+  });
+
+  it('two sessions with one file name are said once, and keep no old address', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n'),
+      'Chapters/Chapter 2/Chapter 2 Overview.md': CH2('active'),
+      'Chapters/Chapter 2/Session 2.md': SESSION(2).replace('[[Chapter 1 Overview]]', '[[Chapter 2 Overview]]').replace('title: Session 2', 'title: Session 2b').replace('session_number: 2', 'session_number: 3').replace('[[Session 2 Wrap-Up]]', '[[Session 2b Wrap-Up]]'),
+      'Chapters/Chapter 2/Session 2b Wrap-Up.md': WRAP_2.replace('[[Session 2]]', '[[Chapters/Chapter 2/Session 2|Session 2]]').replace('[[Chapter 1 Overview]]', '[[Chapter 2 Overview]]').replace('RECAP-TWO-1', 'RECAP-TWOB-1') }), { sites: ['player'] });
+    try {
+      const hits = s.logs.filter((l) => /WARNING/.test(l) && /share the file name "Session 2\.md"/.test(l));
+      assert.equal(hits.length, 1, s.logs.filter((l) => /WARNING/.test(l)).join('\n'));
+      const record = JSON.parse(fs.readFileSync(path.join(s.root, 'campaign', '.gm-apprentice', 'story-addresses.json'), 'utf8'));
+      assert.equal(record.sessions['Session 2.md'], undefined);
     } finally { s.cleanup(); }
   });
 

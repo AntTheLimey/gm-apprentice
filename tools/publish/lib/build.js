@@ -7,7 +7,7 @@ const path = require('path');
 const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, slugify } = require('./scanner');
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit, detectEncoder, CACHE_FOLDER } = require('./image-optimize');
 const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
-const { readStoryAddresses, writeStoryAddresses, movedSessions } = require('./story-addresses');
+const { readStoryAddresses, writeStoryAddresses, movedSessions, sharedSessionNames } = require('./story-addresses');
 const { resolveBanner, renderBanner, normalizeEntry, attachmentRef, isAddress, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, storyMomentsOn, storyPicturesOn, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
@@ -2881,7 +2881,12 @@ function buildSite(options) {
     // A session that moved chapter keeps its old Story address (story-addresses.js): on the player site's own full
     // build, each earlier address of a session the Story shows, where this build writes no page, leads to its page now.
     if (live && storyAddressesOn) {
-      const previous = readStoryAddresses(configDir);
+      const previous = readStoryAddresses(configDir, { warn: (msg) => console.warn(`  WARNING: ${msg}`) });
+      // Sessions whose notes share a file name keep no old address: said, never silent.
+      for (const name of sharedSessionNames(spine, vaultRelPathOf)) {
+        const notes = spine.filter((u) => u.kind === 'session' && path.posix.basename(vaultRelPathOf(u.sourcePage)).normalize('NFC') === name).map((u) => vaultRelPathOf(u.sourcePage));
+        console.warn(`  WARNING: ${notes.join(', ')} share the file name "${name}", so if one moves chapter its old Story address will not redirect (rename one to fix this)`);
+      }
       const taken = new Set([...pages.map((p) => p.outputPath), ...spine.map((u) => u.outputPath),
         ...spine.map((u) => u.oldOutputPath).filter(Boolean), ...pages.filter(isFoldedChapterNote).map((p) => p.foldedFrom)]);
       for (const { from, to } of movedSessions(previous, spine, vaultRelPathOf, taken)) {

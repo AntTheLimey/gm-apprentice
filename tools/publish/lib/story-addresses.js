@@ -5,7 +5,9 @@
 // full build empties, and never in the vault), and writes a redirect at each earlier address to the one it has now.
 // The record keeps a session's addresses when the Story stops showing it, for when it shows again. A session is known
 // by its note's file name (NFC), which a move to another chapter's folder keeps, as links in the vault name it; two
-// shown sessions with one file name are told apart by nothing, so neither is recorded nor redirected.
+// shown sessions with one file name are told apart by nothing, so neither is recorded nor redirected, an earlier record
+// of that name is dropped, and the build says so. The record starts at the first build with it: a move made before
+// then is not known.
 const fs = require('fs');
 const path = require('path');
 const { CACHE_FOLDER } = require('./image-optimize');
@@ -17,32 +19,66 @@ const VERSION = 1;
 // Where the record lives: the site folder's own folder, beside the image cache.
 const storyAddressesPath = (siteDir) => path.join(siteDir, CACHE_FOLDER, FILE);
 
-// Each session's Story addresses, earliest first, by the session note's file name (NFC). A missing or
-// unreadable record is none: the build then writes no redirect, and starts a new record.
-function readStoryAddresses(siteDir) {
-  let data;
-  try { data = JSON.parse(fs.readFileSync(storyAddressesPath(siteDir), 'utf8')); } catch (e) { return new Map(); }
-  const sessions = data && data.version === VERSION && data.sessions && typeof data.sessions === 'object' ? data.sessions : {};
-  const out = new Map();
-  for (const [key, list] of Object.entries(sessions)) {
-    if (Array.isArray(list)) out.set(canonicalNfc(key), list.filter((a) => typeof a === 'string' && a));
+// Each session's Story addresses, earliest first, by the session note's file name (NFC). No record (the first build of
+// a site with this version) is none, silently. A record that cannot be read (corrupt, unreadable, another version) is
+// never overwritten: it is moved aside to a dated .bak beside it and `warn` says so, and the build starts a new record.
+// `today` (YYYY-MM-DD) names the .bak.
+function readStoryAddresses(siteDir, { warn = () => {}, today = new Date().toISOString().slice(0, 10) } = {}) {
+  const file = storyAddressesPath(siteDir);
+  let problem;
+  try {
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (data && !Array.isArray(data) && data.version === VERSION && data.sessions && typeof data.sessions === 'object' && !Array.isArray(data.sessions)) {
+      const out = new Map();
+      for (const [key, list] of Object.entries(data.sessions)) {
+        if (Array.isArray(list)) out.set(canonicalNfc(key), list.filter((a) => typeof a === 'string' && a));
+      }
+      return out;
+    }
+    problem = data && data.version !== undefined && data.version !== VERSION ? `it is version ${JSON.stringify(data.version)}, not ${VERSION}` : 'it is not a record of Story addresses';
+  } catch (e) {
+    if (e.code === 'ENOENT') return new Map();
+    problem = e.message;
   }
-  return out;
+  let bak = `${file}.${today}.bak`;
+  for (let n = 2; fs.existsSync(bak); n++) bak = `${file}.${today}-${n}.bak`;
+  try {
+    fs.renameSync(file, bak);
+    warn(`the record of old Story addresses (${file}) could not be read (${problem}); it is kept as ${bak} and a new record starts, so sessions that moved chapter before now will not redirect from their old addresses`);
+  } catch (e) {
+    warn(`the record of old Story addresses (${file}) could not be read (${problem}), nor moved aside (${e.message}); sessions that moved chapter before now will not redirect from their old addresses`);
+  }
+  return new Map();
 }
+
+const sessionKey = (unit, relOf) => canonicalNfc(path.posix.basename(String(relOf(unit.sourcePage)).replace(/\\/g, '/')));
+const allSessions = (spine) => (spine || []).filter((u) => u.kind === 'session' && u.sourcePage);
 
 // Each shown session's Story page, by its note's file name: [key, unit], where no other shown session has that name.
 function shownSessions(spine, relOf) {
   const byKey = new Map();
-  for (const unit of (spine || []).filter((u) => u.kind === 'session' && u.sourcePage)) {
-    const key = canonicalNfc(path.posix.basename(String(relOf(unit.sourcePage)).replace(/\\/g, '/')));
+  for (const unit of allSessions(spine)) {
+    const key = sessionKey(unit, relOf);
     byKey.set(key, byKey.has(key) ? null : unit);
   }
   return [...byKey].filter(([, unit]) => unit);
 }
 
+// The file names two or more shown sessions share: those sessions keep no old address (the build says so).
+function sharedSessionNames(spine, relOf) {
+  const seen = new Map();
+  for (const unit of allSessions(spine)) {
+    const key = sessionKey(unit, relOf);
+    seen.set(key, (seen.get(key) || 0) + 1);
+  }
+  return [...seen].filter(([, n]) => n > 1).map(([key]) => key);
+}
+
 // Keeps `previous` with each shown session's address now added. `relOf(page)` is a note's vault-relative path.
 function writeStoryAddresses(siteDir, spine, relOf, previous) {
   const all = new Map([...previous].map(([k, v]) => [k, [...v]]));
+  // A name two shown sessions now share is dropped: its old addresses can no longer say which session they were.
+  for (const key of sharedSessionNames(spine, relOf)) all.delete(key);
   for (const [key, unit] of shownSessions(spine, relOf)) {
     const list = all.get(key) || [];
     if (!list.includes(unit.outputPath)) list.push(unit.outputPath);
@@ -69,4 +105,4 @@ function movedSessions(previous, spine, relOf, taken) {
   return out;
 }
 
-module.exports = { storyAddressesPath, readStoryAddresses, writeStoryAddresses, movedSessions };
+module.exports = { storyAddressesPath, readStoryAddresses, writeStoryAddresses, movedSessions, sharedSessionNames };

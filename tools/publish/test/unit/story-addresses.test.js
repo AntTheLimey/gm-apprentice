@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { readStoryAddresses, writeStoryAddresses, movedSessions, storyAddressesPath } = require('../../lib/story-addresses');
+const { readStoryAddresses, writeStoryAddresses, movedSessions, storyAddressesPath, sharedSessionNames } = require('../../lib/story-addresses');
 
 const session = (rel, outputPath) => ({ kind: 'session', outputPath, sourcePage: { rel } });
 const chapter = (outputPath) => ({ kind: 'chapter', outputPath, sourcePage: { rel: 'Chapters/C.md' } });
@@ -15,13 +15,43 @@ const relOf = (page) => page.rel;
 describe('story addresses', () => {
   const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'story-addr-'));
 
-  it('no record reads as none; an unreadable one too', () => {
+  it('no record reads as none, silently', () => {
     const dir = tmp();
     try {
-      assert.equal(readStoryAddresses(dir).size, 0);
+      const said = [];
+      assert.equal(readStoryAddresses(dir, { warn: (m) => said.push(m), today: '2026-11-04' }).size, 0);
+      assert.deepEqual(said, []);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+
+  // A record that cannot be read is never overwritten: it is moved aside to a dated .bak, the build says so, and a new
+  // record starts (PR C review S1).
+  for (const [what, text] of [['corrupt', '{"version":1,"sessions":{'], ['of another version', '{"version":9,"sessions":{}}'], ['not a record', '[1,2]']]) {
+    it(`a ${what} record is moved aside, said, and read as none`, () => {
+      const dir = tmp();
+      try {
+        fs.mkdirSync(path.dirname(storyAddressesPath(dir)), { recursive: true });
+        fs.writeFileSync(storyAddressesPath(dir), text);
+        const said = [];
+        assert.equal(readStoryAddresses(dir, { warn: (m) => said.push(m), today: '2026-11-04' }).size, 0);
+        assert.equal(said.length, 1, said.join('\n'));
+        assert.match(said[0], /story-addresses\.json/);
+        assert.match(said[0], /story-addresses\.json\.2026-11-04\.bak/);
+        assert.equal(fs.readFileSync(`${storyAddressesPath(dir)}.2026-11-04.bak`, 'utf8'), text);
+        assert.equal(fs.existsSync(storyAddressesPath(dir)), false);
+      } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+    });
+  }
+
+  it('a second .bak the same day does not overwrite the first', () => {
+    const dir = tmp();
+    try {
       fs.mkdirSync(path.dirname(storyAddressesPath(dir)), { recursive: true });
-      fs.writeFileSync(storyAddressesPath(dir), '{not json');
-      assert.equal(readStoryAddresses(dir).size, 0);
+      fs.writeFileSync(`${storyAddressesPath(dir)}.2026-11-04.bak`, 'FIRST');
+      fs.writeFileSync(storyAddressesPath(dir), 'SECOND{');
+      readStoryAddresses(dir, { warn: () => {}, today: '2026-11-04' });
+      assert.equal(fs.readFileSync(`${storyAddressesPath(dir)}.2026-11-04.bak`, 'utf8'), 'FIRST');
+      assert.equal(fs.readFileSync(`${storyAddressesPath(dir)}.2026-11-04-2.bak`, 'utf8'), 'SECOND{');
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 
@@ -64,7 +94,9 @@ describe('story addresses', () => {
     const dir = tmp();
     try {
       writeStoryAddresses(dir, spine, relOf, previous);
-      assert.deepEqual(readStoryAddresses(dir).get('Dup.md'), ['story/a-dup.html']);
+      // A recorded name that now has a twin is dropped: its old address can no longer say which session it was.
+      assert.equal(readStoryAddresses(dir).has('Dup.md'), false);
+      assert.deepEqual(sharedSessionNames(spine, relOf), ['Dup.md']);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });
