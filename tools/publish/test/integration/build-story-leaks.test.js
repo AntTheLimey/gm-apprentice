@@ -288,7 +288,7 @@ describe('Story page leaks: a link to a folded wrap-up, read as the page prints 
 describe('Story page leaks: the chapter note leaves the player site', () => {
   const NOTE_OUT = 'chapters/chapter 1/chapter-1-overview.html';
   const CH = '---\ntype: chapter\ntitle: Chapter 1 — Docks\nsort_order: 1\nstatus: active\ndate_range: "Spring 1923"\n'
-    + 'overview: "OVERVIEW-ACTIVE-1 the whole plot."\nlocation: "[[Mara Quill]]"\n---\n\n'
+    + 'overview: "OVERVIEW-ACTIVE-1 the whole plot."\nlocation: "[[Mara Quill]]"\ngm_aliases: ["Secretalias Harbourmaster"]\n---\n\n'
     + 'GMSUMMARY-1 the smugglers own the harbour master and the party will learn it in session four.\n\n'
     + '## Teaser\n\nTEASER-OK-1 the docks are quiet, and [[Mara Quill]] has a lantern lit.\n\n'
     + '## Premise\n\nPREMISE-1 the harbour master is the smuggler they hunt.\n\n'
@@ -297,7 +297,7 @@ describe('Story page leaks: the chapter note leaves the player site', () => {
     + '## Teaser\n\nPLANNEDTEASER-1 the deeps.\n\nPLANNEDBODY-1 the sunken temple.\n';
   const MARA_LINKS = '---\ntype: npc\ntitle: Mara Quill\nstatus: alive\n---\n\n# Mara Quill\n\n'
     + 'A dockside fixer, NPC-BODY-1. See [[Chapter 1 Overview]] and [[Chapter 2 Overview]].\n';
-  const NEVER_CH = ['GMSUMMARY-1', 'PREMISE-1', 'GMFENCED-1', 'OVERVIEW-ACTIVE-1', 'PLANNEDTEASER-1', 'PLANNEDBODY-1', 'Deeps'];
+  const NEVER_CH = ['GMSUMMARY-1', 'PREMISE-1', 'GMFENCED-1', 'OVERVIEW-ACTIVE-1', 'PLANNEDTEASER-1', 'PLANNEDBODY-1', 'Deeps', 'Secretalias', 'secretalias'];
   const files = (status) => storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CH,
     'Chapters/Chapter 2/Chapter 2 Overview.md': planned(status), 'NPCs/Mara Quill.md': MARA_LINKS });
   let s;
@@ -408,6 +408,34 @@ describe('Story page leaks: the chapter note leaves the player site', () => {
       const found = gate(t);
       assert.equal(found.length, 1, JSON.stringify(found));
       assert.equal(found[0].note, 'Chapters/Chapter 2/Chapter 2 Overview.md');
+    } finally { t.cleanup(); }
+  });
+
+  // CodeRabbit 4469622157: a list-valued status reads as the Story and the publish decision read it.
+  it('the gate finds the title of a chapter planned by a list-valued status', () => {
+    const t = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CH,
+      'Chapters/Chapter 2/Chapter 2 Overview.md': planned('[active, planned]') }), { sites: ['player'] });
+    try {
+      assert.equal(t.player.exists('story', 'chapter-2-deeps.html'), false);
+      leakInto(t.player.dir, 'story.html', 'Coming soon: Chapter 2 — Deeps.');
+      assert.equal(gate(t).length, 1, JSON.stringify(gate(t)));
+    } finally { t.cleanup(); }
+  });
+
+  // CodeRabbit 4469622129: a chapter wrap-up with no recap of its own folded with the note, the page shows the note's
+  // Recap; the search index finds it on that page, once.
+  it('a complete chapter\'s note Recap shown beside a wrap-up with no recap is searchable, in one entry', () => {
+    const done = CH.replace('status: active', 'status: complete') + '\n## Recap\n\nThe Zanzibarine fleet burned the docks.\n';
+    const wrap = '---\ntype: session_wrap\nchapter: "[[Chapter 1 Overview]]"\n---\n\n# Chapter 1 Wrap-Up\n\n## Loot\n\n- A brass Quintessacle.\n';
+    const t = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': done, 'Chapters/Chapter 1/Chapter 1 Wrap-Up.md': wrap }), { sites: ['player'] });
+    try {
+      assert.match(read(t.player, INTRO), /Zanzibarine/);
+      const idx = JSON.parse(read(t.player, 'search-index.json'));
+      assert.deepEqual(Object.values(idx.documents).filter((d) => d.href === INTRO).length, 1);
+      const terms = new Set(idx.index.invertedIndex.map(([term]) => term));
+      assert.ok(terms.has('zanzibarine'), 'the note Recap is searchable');
+      assert.ok(terms.has('quintessacle'), 'the wrap-up is searchable');
+      assert.deepEqual(gate(t), []);
     } finally { t.cleanup(); }
   });
 

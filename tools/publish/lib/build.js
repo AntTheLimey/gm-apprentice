@@ -1615,9 +1615,13 @@ function buildSite(options) {
     if (typeof p.gmMarkedPublished === 'string') view.publishedMarkdown = unmark(p.gmMarkedPublished);
     return view;
   };
-  // A chapter note folded where its chapter wrap-up is folded too is found once, as that page (the wrap-up's entry).
+  // A chapter note folded where its chapter wrap-up is folded too is found once, as that page: the wrap-up's entry,
+  // holding also what the page shows of the note (its Recap, where the wrap-up has none), and nothing else of it.
+  const noteShownAt = new Map(pages.filter(isFoldedChapterNote).map((p) => [p.outputPath, p.publishedMarkdown || '']));
   const foldedWrapAt = new Set(pages.filter((p) => isFolded(p) && !isFoldedChapterNote(p)).map((p) => p.outputPath));
-  const searchPages = pages.filter((p) => !(isFoldedChapterNote(p) && foldedWrapAt.has(p.outputPath)));
+  const searchPages = pages.filter((p) => !(isFoldedChapterNote(p) && foldedWrapAt.has(p.outputPath)))
+    .map((p) => (isFolded(p) && !isFoldedChapterNote(p) && (noteShownAt.get(p.outputPath) || '').trim()
+      ? { ...p, publishedMarkdown: `${p.publishedMarkdown || ''}\n\n${noteShownAt.get(p.outputPath)}` } : p));
   const searchData = searchEnabled ? buildSearchIndex(gm ? searchPages.map(unmarked) : searchPages) : null;
 
   publishConfig._linkMap = linkMap;

@@ -19,6 +19,7 @@ const { playerFoldPlan } = require('../published-view');
 const { foldLabelsOf, labelFoldedLinks } = require('../story-fold');
 const { chapterShownMarkdown } = require('../story-spine');
 const { chapterStatusOf } = require('../shared-lists');
+const { ruleValue } = require('../excluding-values');
 const { labelsForLinks } = require('../wikilink');
 const { isWrapUp } = require('../session-hub');
 const { parseNote } = require('../frontmatter');
@@ -220,7 +221,8 @@ function collectHidden({ configPath, outputDir = null }) {
     const rel = canonicalNfc(String(note.vaultPath).replace(/\\/g, '/') + '.md');
     const fm = note.frontmatter || {};
     if (publishedRels.has(rel) || neverShown(rel) || inWorkingDir(rel)) continue;
-    if (fm.type !== 'chapter' || chapterStatusOf(Array.isArray(fm.status) ? fm.status[0] : fm.status) !== 'planned') continue;
+    // Read as the publish decision reads it: a list-valued status is the item that excludes.
+    if (fm.type !== 'chapter' || chapterStatusOf(ruleValue('status', fm.status)) !== 'planned') continue;
     const title = typeof fm.title === 'string' ? labelsForLinks(fm.title).trim() : '';
     if (wordsOf(title).length >= 2) plannedTitles.push({ title, note: rel });
   }
