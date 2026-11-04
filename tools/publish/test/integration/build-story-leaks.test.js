@@ -310,9 +310,11 @@ describe('Story page leaks: the chapter note leaves the player site', () => {
     assertNoneOn(s.player, NEVER_CH);
   });
 
-  it('no chapter note page, no Chapters index or menu entry; the old address redirects to the chapter page', () => {
+  it('no chapter note page, no Chapters index or menu entry; the old addresses redirect', () => {
     const left = texts(s.player).map(([f]) => f).filter((f) => f.startsWith('chapters/'));
-    assert.deepEqual(left, [NOTE_OUT]);
+    assert.deepEqual(left.sort(), ['chapters/index.html', NOTE_OUT].sort());
+    // The Chapters index, though nothing else is left in the folder: a bookmark of it still leads somewhere.
+    assert.match(read(s.player, 'chapters/index.html'), /<meta http-equiv="refresh" content="0;url=\.\.\/story\.html">/);
     const html = read(s.player, NOTE_OUT);
     assert.match(html, /<meta http-equiv="refresh" content="0;url=\.\.\/\.\.\/story\/chapter-1-docks\.html">/);
     for (const [file, text] of texts(s.player).filter(([f]) => f.endsWith('.html'))) {
@@ -372,6 +374,9 @@ describe('Story page leaks: the chapter note leaves the player site', () => {
     const t = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CH, 'Chapters/Chapter 1/Harbour Map.md': '---\ntype: document\n---\n\n# Harbour Map\n\nA map of the harbour, HANDOUT-1.\n' }));
     try {
       assert.match(read(t.player, 'chapters/chapter 1/harbour-map.html'), /HANDOUT-1/);
+      // Its breadcrumb names the section it now belongs to, and leads straight there.
+      assert.match(read(t.player, 'chapters/chapter 1/harbour-map.html'), /<nav class="breadcrumbs" aria-label="Breadcrumb"><a href="\.\.\/\.\.\/index\.html">Home<\/a><span class="sep">&rsaquo;<\/span><a href="\.\.\/\.\.\/story\.html">Story<\/a>/);
+      assert.match(read(t.gm, 'chapters/chapter 1/harbour-map.html'), /<span class="sep">&rsaquo;<\/span>Chapters<span/);
       assert.match(read(t.player, 'chapters/index.html'), /<meta http-equiv="refresh" content="0;url=\.\.\/story\.html">/);
       for (const [file, text] of texts(t.player).filter(([f]) => f.endsWith('.html'))) {
         assert.ok(!/>Chapters<\/a>/.test(text), `a Chapters menu entry in ${file}`);

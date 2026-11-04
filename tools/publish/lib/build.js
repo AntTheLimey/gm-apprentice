@@ -1485,6 +1485,7 @@ function buildSite(options) {
   // The Chapters section merges into the Story So Far there: it leaves the menu, and its index (still the breadcrumb of
   // the other notes kept in the chapters folder) leads to the Story So Far.
   const chaptersMerged = pages.some((p) => isFoldedChapterNote(p) && /^chapters\//.test(p.foldedFrom));
+  if (chaptersMerged) for (const page of pages) if (!isFolded(page) && /^chapters(\/|$)/.test(page.outputDir || '')) page.storySection = 'chapters';
   LOWER_KEYS.delete(linkMap);   // its folded spellings were read from the old addresses
   // The pages a Story page may picture beside its recap (story-figures.js), read once, after the fold has given each
   // page its final address. On the GM site only those the player site writes a page for, with a portrait the player
@@ -2751,9 +2752,10 @@ function buildSite(options) {
   }
   function eachListing(emit, live) {
     for (const [dir, label] of Object.entries(DIR_LABELS)) {
+      // Written whether or not other notes are left in the folder: an old bookmark of the index still leads somewhere.
+      // A note the GM wrote as that index keeps its page.
       if (dir === 'chapters' && chaptersMerged) {
-        const kept = Object.keys(dirs).some((d) => d === dir || d.startsWith(`${dir}/`));
-        if (live && kept) emit(`${dir}/index.html`, redirectPage(`${dir}/index.html`, 'story.html', 'Story so far'), `  wrote ${dir}/index.html (redirect → story.html)`);
+        if (live && !pages.some((p) => p.outputPath === `${dir}/index.html` && !isFolded(p))) emit(`${dir}/index.html`, redirectPage(`${dir}/index.html`, 'story.html', 'Story so far'), `  wrote ${dir}/index.html (redirect → story.html)`);
         continue;
       }
       if (dir === 'characters/pcs' && pcRedirectTarget) {
