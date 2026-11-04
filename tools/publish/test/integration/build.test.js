@@ -1614,24 +1614,26 @@ describe('publish controls (#166, #167)', () => {
     assert.ok(!html.includes('fort-william.html'));      // but not a link
   });
 
-  it('publish: stub keeps the page for navigation', () => {
-    assert.ok(exists('chapters', 'chapter-4-overview.html'));
+  // The stub note here is a chapter note. On the player site a chapter note folds into its Story chapter page (chapter
+  // pages), which shows only its Teaser or Recap: its old address leads there, and a stub's named sections (a Synopsis)
+  // are not among them. The stub cut itself is tested on other notes (never-publish, processor, the props).
+  it('publish: stub on a chapter note: its old address leads to its chapter page', () => {
+    assert.match(read('chapters', 'chapter-4-overview.html'), /http-equiv="refresh" content="0;url=\.\.\/story\/chapter-4-overview\.html"/);
+    assert.ok(exists('story', 'chapter-4-overview.html'));
   });
 
-  it('publish: stub emits only the named sections', () => {
-    const html = read('chapters', 'chapter-4-overview.html');
-    assert.ok(html.includes('hot season'));              // the included Synopsis
-    assert.ok(!html.includes('Prep preamble'));
-    assert.ok(!html.includes('Key NPCs'));
-    assert.ok(!html.includes('is the traitor'));
-    assert.ok(!html.includes('The Climax'));
-    assert.ok(!html.includes('beneath the ossuary'));
+  it('publish: stub on a chapter note: none of its sections reach the player site', () => {
+    for (const out of [read('story', 'chapter-4-overview.html'), read('search-index.json')]) {
+      for (const text of ['hot season', 'Prep preamble', 'Key NPCs', 'is the traitor', 'The Climax', 'beneath the ossuary']) {
+        assert.ok(!out.includes(text), text);
+      }
+    }
   });
 
   // The reduction drops `## GM Notes` and the spoiler opener; what they hid must not
   // ride out on a heading that happens to share an included section's name (#320).
   it('publish: stub keeps nothing the whole note withholds', () => {
-    for (const out of [read('chapters', 'chapter-4-overview.html'), read('search-index.json')]) {
+    for (const out of [read('story', 'chapter-4-overview.html'), read('search-index.json')]) {
       assert.ok(!out.includes('already knows who the party are'));
       assert.ok(!out.includes('monsoon breaks'));
     }

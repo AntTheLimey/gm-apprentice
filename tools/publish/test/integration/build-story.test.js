@@ -273,18 +273,8 @@ describe('build story: fix round', () => {
   const { buildBoth } = require('../helpers/gm-build');
   const { storyVault, CHAPTER, SESSION, WRAP_2 } = require('../helpers/story-vault');
   const fence = (t) => `<!-- gm-only -->\n${t}\n<!-- /gm-only -->`;
-  // Every player file but what belongs to the chapter note's own page, which shows the whole published note until PR C
-  // retires it: its page (chapters/...), its link-preview entry, and the search index (which indexes that page's words).
-  // The leak gate passes these strings for that reason, so absence is checked here directly.
-  const playerText = (site) => site.player.files().map((f) => path.relative(site.player.dir, f).split(path.sep).join('/'))
-    .filter((rel) => !rel.startsWith('chapters/') && rel !== 'search-index.json')
-    .map((rel) => {
-      const text = site.player.read(...rel.split('/'));
-      if (rel !== 'previews.json') return [rel, text];
-      const cards = JSON.parse(text);
-      for (const key of Object.keys(cards)) if (key.startsWith('chapters/')) delete cards[key];
-      return [rel, JSON.stringify(cards)];
-    });
+  // Every player file: the chapter note has no page, link preview or search entry of its own there (chapter pages).
+  const playerText = (site) => site.player.files().map((f) => [path.relative(site.player.dir, f).split(path.sep).join('/'), fs.readFileSync(f, 'utf8')]);
 
   it('M1/N1: a GM heading that contains "teaser" or "recap", and text after a later H1, reach no Story page', () => {
     const ch1 = CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n')

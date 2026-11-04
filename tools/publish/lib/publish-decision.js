@@ -34,6 +34,7 @@ const { publishMode } = require('./processor');
 const { storyOwnerPath, isStoryCompanion, matchExcludedDir } = require('./scanner');
 const { getCanonStatus } = require('./templates/base');
 const { entry, nameInFor } = require('./settings');
+const { chapterStatusOf } = require('./shared-lists');
 
 // The values that keep a note off a player site are listed once, in excluding-values.js.
 const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, PREP_TYPES, DRAFT, ruleValue } = require('./excluding-values');
@@ -195,6 +196,12 @@ function decidePage(page, options) {
 
   if (publishConfig.exclude_drafts && getCanonStatus(frontmatter) === DRAFT) {
     return verdict('exclude', 'DRAFT_EXCLUDED', 'canon_status: DRAFT and exclude_drafts is on');
+  }
+
+  // A chapter note the Story reads as planned (chapter pages): its chapter shows nowhere on the player site, so neither
+  // does the note, whatever the publish list says. Read as the Story reads it, so the two always agree.
+  if (frontmatter.type === 'chapter' && chapterStatusOf(ruleValue('status', frontmatter.status)) === 'planned') {
+    return verdict('exclude', 'AUTO_EXCLUDED_STATUS', 'status: planned');
   }
 
   // The prep-state heuristics, overridden by an explicit publish list Publishing entry.

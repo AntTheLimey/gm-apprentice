@@ -281,3 +281,98 @@ describe('Story page leaks: a link to a folded wrap-up, read as the page prints 
     } finally { s.cleanup(); }
   });
 });
+
+// Chapter pages (PR C, Task 7): the chapter note is no player page. Players read only its Teaser (active), its
+// overview and its Recap (complete), on its chapter page; links to it lead there and its old address redirects there.
+// A planned chapter is nowhere: no page, no redirect, no link, no title.
+describe('Story page leaks: the chapter note leaves the player site', () => {
+  const NOTE_OUT = 'chapters/chapter 1/chapter-1-overview.html';
+  const CH = '---\ntype: chapter\ntitle: Chapter 1 — Docks\nsort_order: 1\nstatus: active\ndate_range: "Spring 1923"\n'
+    + 'overview: "OVERVIEW-ACTIVE-1 the whole plot."\nlocation: "[[Mara Quill]]"\n---\n\n'
+    + 'GMSUMMARY-1 the smugglers own the harbour master and the party will learn it in session four.\n\n'
+    + '## Teaser\n\nTEASER-OK-1 the docks are quiet, and [[Mara Quill]] has a lantern lit.\n\n'
+    + '## Premise\n\nPREMISE-1 the harbour master is the smuggler they hunt.\n\n'
+    + '<!-- gm-only -->\n\n## GM Notes\n\nGMFENCED-1 the ledger is a forgery.\n\n<!-- /gm-only -->\n';
+  const planned = (status) => `---\ntype: chapter\ntitle: Chapter 2 — Deeps\nsort_order: 2\nstatus: ${status}\n---\n\n`
+    + '## Teaser\n\nPLANNEDTEASER-1 the deeps.\n\nPLANNEDBODY-1 the sunken temple.\n';
+  const MARA_LINKS = '---\ntype: npc\ntitle: Mara Quill\nstatus: alive\n---\n\n# Mara Quill\n\n'
+    + 'A dockside fixer, NPC-BODY-1. See [[Chapter 1 Overview]] and [[Chapter 2 Overview]].\n';
+  const NEVER_CH = ['GMSUMMARY-1', 'PREMISE-1', 'GMFENCED-1', 'OVERVIEW-ACTIVE-1', 'PLANNEDTEASER-1', 'PLANNEDBODY-1', 'Deeps'];
+  const files = (status) => storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CH,
+    'Chapters/Chapter 2/Chapter 2 Overview.md': planned(status), 'NPCs/Mara Quill.md': MARA_LINKS });
+  let s;
+  after(() => s && s.cleanup());
+
+  it('builds', () => { s = buildBoth(files('"planned "')); });
+
+  it('players see the Teaser on the chapter page, and nothing else of either chapter note anywhere', () => {
+    assert.match(read(s.player, INTRO), /TEASER-OK-1/);
+    assertNoneOn(s.player, NEVER_CH);
+  });
+
+  it('no chapter note page, no Chapters index or menu entry; the old address redirects to the chapter page', () => {
+    const left = texts(s.player).map(([f]) => f).filter((f) => f.startsWith('chapters/'));
+    assert.deepEqual(left, [NOTE_OUT]);
+    const html = read(s.player, NOTE_OUT);
+    assert.match(html, /<meta http-equiv="refresh" content="0;url=\.\.\/\.\.\/story\/chapter-1-docks\.html">/);
+    for (const [file, text] of texts(s.player).filter(([f]) => f.endsWith('.html'))) {
+      assert.ok(!/href="[^"]*chapters\/index\.html"/.test(text), `a Chapters menu entry in ${file}`);
+    }
+  });
+
+  it('no search entry or link preview at the note\'s old address', () => {
+    const { documents } = JSON.parse(read(s.player, 'search-index.json'));
+    assert.deepEqual(Object.values(documents).filter((d) => d.href.startsWith('chapters/')), []);
+    const cards = JSON.parse(read(s.player, 'previews.json'));
+    assert.deepEqual(Object.keys(cards).filter((k) => k.startsWith('chapters/') || k === INTRO), []);
+  });
+
+  it('a link to the chapter note leads to its chapter page; a link to the planned one is plain text', () => {
+    const mara = read(s.player, 'npcs/mara-quill.html');
+    assert.match(mara, /<a href="\.\.\/story\/chapter-1-docks\.html"[^>]*>Chapter 1 — Docks<\/a>/);
+    assert.ok(!/chapter-2/.test(mara), 'a link to the planned chapter');
+  });
+
+  it('the landing page\'s Story card leads to the Story So Far and counts the chapters shown', () => {
+    const html = read(s.player, 'index.html');
+    assert.match(html, /<a class="explore-card" href="story\.html">\n  <h4>The Story<\/h4>\n  <div class="card-flavour">[^<]*<\/div>\n  <div class="count">1 entry<\/div>/);
+    assert.match(read(s.gm, 'index.html'), /<a class="explore-card" href="chapters\/index\.html">\n  <h4>The Story<\/h4>/);
+  });
+
+  it('the planned chapter has no page and no redirect', () => {
+    assert.deepEqual(texts(s.player).map(([f]) => f).filter((f) => /chapter-2/.test(f)), []);
+  });
+
+  it('the GM site keeps the note\'s own page, linked from the chapter page', () => {
+    assert.match(read(s.gm, NOTE_OUT), /GMSUMMARY-1/);
+    assert.match(read(s.gm, INTRO), /<p class="story-chapter-gm-note"><a href="\.\.\/chapters\/chapter%201\/chapter-1-overview\.html">Chapter note \(GM\)<\/a><\/p>/);
+    assert.ok(!/story-chapter-gm-note/.test(read(s.player, INTRO)));
+  });
+
+  it('no broken link, no mark token, and the leak gate is clean', () => {
+    assert.deepEqual(brokenLinks(s.player.dir), []);
+    assertNoTokens(s);
+    assert.deepEqual(gate(s), []);
+  });
+
+  it('a complete chapter shows its overview and Recap, and nothing else of the note', () => {
+    const done = CH.replace('status: active', 'status: complete').replace('OVERVIEW-ACTIVE-1', 'OVERVIEW-OK-1')
+      + '\n## Recap\n\nRECAP-OK-1 the docks burned.\n';
+    const t = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': done, 'NPCs/Mara Quill.md': MARA_LINKS }), { sites: ['player'] });
+    try {
+      const page = read(t.player, INTRO);
+      assert.match(page, /OVERVIEW-OK-1/);
+      assert.match(page, /RECAP-OK-1/);
+      assertNoneOn(t.player, ['GMSUMMARY-1', 'PREMISE-1', 'GMFENCED-1', 'TEASER-OK-1']);
+      assert.deepEqual(gate(t), []);
+    } finally { t.cleanup(); }
+  });
+
+  it('the gate finds a planted sentence from the note\'s GM summary', () => {
+    const t = buildBoth(files('planned'), { sites: ['player'] });
+    try {
+      leakInto(t.player.dir, INTRO, 'GMSUMMARY-1 the smugglers own the harbour master and the party will learn it in session four.');
+      assert.equal(gate(t).length, 1, JSON.stringify(gate(t)));
+    } finally { t.cleanup(); }
+  });
+});

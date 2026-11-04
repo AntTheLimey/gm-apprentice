@@ -107,7 +107,8 @@ function chapterPage(unit, config, publishConfig, navFor) {
     ${storyNav(unit)}
     ${held ? '' : unit.momentsHtml || ''}
     ${held ? '' : unit.afterHtml || ''}
-    ${unit.playNotesHtml || ''}`;
+    ${unit.playNotesHtml || ''}
+    ${unit.gmNoteHtml || ''}`;
   return baseShell({
     pageType: 'story',
     title: unit.title,

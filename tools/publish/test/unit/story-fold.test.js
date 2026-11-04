@@ -98,3 +98,24 @@ describe('labelFoldedHeadings', () => {
     assert.equal(labelFoldedHeadings(undefined, {}), '');
   });
 });
+
+// Chapter pages (PR C): on the player site a chapter note folds into its chapter page.
+describe('story fold: chapter notes', () => {
+  const note = { title: 'Ch', displayTitle: 'Ch', outputPath: 'chapters/ch.html', outputDir: 'chapters', frontmatter: { type: 'chapter' } };
+  const c = { kind: 'chapter', outputPath: 'story/ch.html', title: 'Ch', sourcePage: note };
+  const s = { kind: 'session', outputPath: 'story/ch-s1.html', title: 'S1', sourcePage: { frontmatter: { type: 'session' } } };
+
+  it('folds with { chapters: true } only; a session unit\'s own note never folds', () => {
+    assert.equal(foldPlan([c, s]).has(note), false);
+    const plan = foldPlan([c, s], { chapters: true });
+    assert.equal(plan.get(note), c);
+    assert.equal(plan.has(s.sourcePage), false);
+  });
+
+  it('a chapter wrap-up and the chapter note both fold into the chapter page', () => {
+    const w = wrap('Ch Wrap', 'chapters/ch-wrap.html');
+    const plan = foldPlan([{ ...c, wrapUpPage: w }], { chapters: true });
+    assert.equal(plan.get(w).outputPath, 'story/ch.html');
+    assert.equal(plan.get(note).outputPath, 'story/ch.html');
+  });
+});

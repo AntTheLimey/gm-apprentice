@@ -41,7 +41,7 @@ function publishView(page, rules, facts = null) {
     { pcKeepSections, storyMoments, restored: stripped.restored });   // its warnings are the page render's to print, once
 }
 
-// The player site's fold plan (story-fold.js), for a command that reads the vault without building it (explain, the
+// The player site's fold plan (story-fold.js: its wrap-ups and, chapter pages, its chapter notes), for a command that reads the vault without building it (explain, the
 // leak gate): the pages it publishes, read as the build reads them before it folds (a paired session note's body
 // withheld, a stub cut to its named sections, then the published view), each through a copy so no page is changed.
 // The plan is keyed by the pages given. `pairs`: the site's session pairs (session-hub.js pairHubs); `imageMap`: the
@@ -75,7 +75,7 @@ function playerFoldPlan(pages, pairs, publishConfig, imageMap = null, vaultPath 
   const viewPairs = new Map([...pairs].filter(([hub, wrap]) => viewOf.has(hub) && viewOf.has(wrap)).map(([hub, wrap]) => [viewOf.get(hub), viewOf.get(wrap)]));
   if (pairs.linked) viewPairs.linked = new Set([...pairs.linked].map((w) => viewOf.get(w) || w));
   const plan = new Map();
-  for (const [view, unit] of foldPlan(probeSpine(views, viewPairs, imageMap))) plan.set(original.get(view), unit);
+  for (const [view, unit] of foldPlan(probeSpine(views, viewPairs, imageMap), { chapters: true })) plan.set(original.get(view), unit);
   return plan;
 }
 

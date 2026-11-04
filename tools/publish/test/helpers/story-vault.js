@@ -158,7 +158,7 @@ const BASE = {
 // The strings that must never reach the player site: each sits only in a gm-only part of a note, or in a note that
 // does not publish. Every other marker above (LOOT-KEY-1, MOMENT-FUNNY-1, ...) is player text: SHOWN.
 const SECRETS = ['GMSECRET-NOTES-1', 'GMSECRET-NOTES-2', 'GMSECRET-SOURCE-1', 'GMSECRET-SOURCE-2', 'PLAYNOTES-1', 'PLAYNOTES-2'];
-const SHOWN = ['The party reached the docks', 'LOOT-KEY-1', 'MOMENT-FUNNY-1', 'MOMENT-QUOTE-1', 'MOMENT-CONTEXT-1', 'RECAP-TWO-1', 'NPC-BODY-1', 'CHAPTER-BODY-1'];
+const SHOWN = ['The party reached the docks', 'LOOT-KEY-1', 'MOMENT-FUNNY-1', 'MOMENT-QUOTE-1', 'MOMENT-CONTEXT-1', 'RECAP-TWO-1', 'NPC-BODY-1'];
 
 function storyVault(overrides = {}) {
   const files = { ...BASE };

@@ -342,11 +342,13 @@ describe('a name only an index or listing page prints', () => {
     const found = await faults({
       'Characters/NPCs/Mr_Grey.md': npcs('gm_aliases: ["The Watcher"]\n'),
       'Creatures/Mire_Hound.md': '---\ntype: creature\nsubtype: "Hound of The Watcher"\n---\n\nA hound.\n',
-      'Chapters/Chapter_1.md': '---\ntype: chapter\noverview: "In which The Watcher is met."\n---\n\nA chapter.\n',
+      'Chapters/Chapter_1.md': '---\ntype: chapter\nstatus: complete\noverview: "In which The Watcher is met."\n---\n\nA chapter.\n',
     }, 'ALIAS_IN_PROSE');
     const byPath = new Map(found.map((f) => [f.path, f]));
-    assert.deepStrictEqual(byPath.get('Creatures/Mire_Hound.md').listings, ['creatures/index.html']);
-    assert.deepStrictEqual(byPath.get('Chapters/Chapter_1.md').listings, ['chapters/index.html']);
+    // A complete chapter's overview prints on the Story So Far and its chapter page (chapter pages). Neither is a section
+    // index, so the name there is counted against every note that holds it, the creature too.
+    assert.deepStrictEqual(byPath.get('Creatures/Mire_Hound.md').listings, ['creatures/index.html', 'story.html', 'story/chapter-1.html']);
+    assert.deepStrictEqual(byPath.get('Chapters/Chapter_1.md').listings, ['story.html', 'story/chapter-1.html']);
     assert.strictEqual(byPath.get('Creatures/Mire_Hound.md').owner, 'Characters/NPCs/Mr_Grey.md');
   });
 
@@ -521,6 +523,8 @@ describe('a labelled link never prints its target, whatever prints the field', (
       if (type === 'pc') lines.push('player_name: Pat');
       if (type === 'event') lines.push('in_game_date: "1925-03-04"', 'date: "1925-03-04"');
       if (type === 'session') lines.push('session_number: 1', 'status: played', 'in_game_date: "1925-03-05"');
+      // A chapter's overview prints once it is complete, on its Story page (chapter pages).
+      if (type === 'chapter') lines.push('status: complete');
       if (field === 'relationships') lines.push(`relationships:\n  - target: "${link}"\n    type: knows`);
       else if (list) lines.push(`${field}:\n  - "${link}"`);
       else lines.push(`${field}: "${link}"`);
@@ -545,14 +549,15 @@ describe('a labelled link never prints its target, whatever prints the field', (
       'Locations/Quay.md': '---\ntype: location\n---\n\nA quay.\n',
       'Locations/Shed.md': '---\ntype: location\nparent_location: "[[Quay|the waterfront]]"\n---\n\nA shed.\n',
       'Chapters/Chapter_1.md': '---\ntype: chapter\n---\n\nA chapter.\n',
-      'Sessions/Session_1.md': '---\ntype: session\nsession_number: 1\nstatus: played\nchapter: "[[Chapter_1|the first part]]"\n---\n\nPlayed.\n',
+      'Sessions/Session_1.md': '---\ntype: session\nsession_number: 1\nstatus: played\nchapter: "[[Chapter_1|the first part]]"\n---\n\n## Narrative Recap\n\nPlayed.\n',
     });
     fromBuild(configPath);
     const read = (...parts) => fs.readFileSync(path.join(root, 'docs', ...parts), 'utf8');
     assert.match(read('factions', 'guild.html'), /<h4>Has member<\/h4>\s*<ul>\s*<li><a href="[^"]*bo-pike\.html">Bo Pike<\/a>/);
     // The shed is filed under its parent on the places index, not as a place of its own region.
     assert.match(read('locations', 'index.html'), /loc-children[^]*shed\.html/);
-    assert.match(read('chapters', 'chapter-1.html'), /session-1\.html/);
+    // The chapter's page is its Story page on the player site (chapter pages), which lists its sessions.
+    assert.match(read('story', 'chapter-1.html'), /session-1\.html/);
   });
 
   it('and the audit still counts the label as a name the page prints, a title\'s among them', async () => {

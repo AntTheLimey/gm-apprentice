@@ -17,6 +17,8 @@ const { pcKeepList, storyMomentsOn } = require('../pc-prose');
 const { pairHubs } = require('../session-hub');
 const { playerFoldPlan } = require('../published-view');
 const { foldLabelsOf, labelFoldedLinks } = require('../story-fold');
+const { chapterShownMarkdown } = require('../story-spine');
+const { isWrapUp } = require('../session-hub');
 const { parseNote } = require('../frontmatter');
 const { canonicalNfc } = require('../unicode');
 const {
@@ -139,7 +141,18 @@ function collectHidden({ configPath, outputDir = null }) {
     const overrides = fieldOverrides[rel] || {};
     for (const h of hiddenFieldsOf(fm, excludeFields, overrides)) add(hiddenOfValue(h.value), rel, h.label);
     const shownFields = publishedFrontmatter(fm, excludeFields, overrides);
-    if (listedSet.has(page)) {
+    // A chapter note the player site folds into its chapter page (chapter pages) has no page: players read only its
+    // title, its dates, its overview once complete, and the part chapterShownMarkdown keeps (below). Its other fields
+    // are hidden text.
+    const chapterUnit = foldPlanned.has(page) && foldPlanned.get(page).kind === 'chapter' && !isWrapUp(page) ? foldPlanned.get(page) : null;
+    if (chapterUnit) {
+      const shownKeys = new Set(['title', 'date_range', ...(chapterUnit.status === 'complete' ? ['overview'] : [])]);
+      visible.push(String(page.displayTitle || ''), chapterUnit.title);
+      for (const [key, value] of Object.entries(shownFields)) {
+        if (shownKeys.has(key)) visible.push(...stringsOfValue(value));
+        else add(hiddenOfValue(value), rel, `${key} (a chapter note shows players only its Teaser, overview and Recap)`);
+      }
+    } else if (listedSet.has(page)) {
       // No page of its own: only what its listing row and its container's state entry print is visible (its title,
       // prop_title, prop_line and the state fields), never a field nothing prints.
       visible.push(String(page.displayTitle || ''), ...stringsOfValue([shownFields.prop_title, shownFields.prop_line, ...Object.values(stateFieldsOf(shownFields))]));
@@ -173,6 +186,13 @@ function collectHidden({ configPath, outputDir = null }) {
       // one run, in order, as the page shows them (a table row's cells, a callout's title and its text, a heading).
       const shownMarkdown = playerSafeMarkdown(shownText, options).text;
       if (source === page.markdown) shownBodyOf.set(page, shownMarkdown);
+      // A folded chapter note: its whole published body is hidden text, but for the part its chapter page shows.
+      if (chapterUnit) {
+        add(hiddenOf(shownMarkdown), rel, 'chapter note body (a chapter note shows players only its Teaser, overview and Recap)');
+        const part = chapterShownMarkdown(shownMarkdown, chapterUnit);
+        for (const shownMd of bothWays(part)) visible.push(textsOfMarkdown(shownMd, { headings: true }).join('\n'), ...tableRunsOf(shownMd));
+        continue;
+      }
       // A folded wrap-up's page is its Story page, under the unit's title.
       const titles = [String(page.displayTitle || ''), ...(foldPlanned.has(page) ? [foldPlanned.get(page).title] : [])];
       for (const shownMd of bothWays(shownMarkdown)) {

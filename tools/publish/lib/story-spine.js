@@ -9,7 +9,7 @@ const { isLinkedWrapUp, WRAP_UP_TYPES } = require('./session-hub');
 const { isSessionHub } = require('./processor');
 const { storySections } = require('./story-sections');
 const { withFigures } = require('./story-figures');
-const { CHAPTER_STATUSES, CHAPTER_STATUS_ALIASES } = require('./shared-lists');
+const { chapterStatusOf } = require('./shared-lists');
 
 const RECAP_TITLES = ['narrative recap', 'recap'];
 
@@ -80,6 +80,17 @@ function chapterNotePart(page, resolve, wanted, { marked = false, marks = null, 
   if (fromMarks === null) return { html };
   const shown = exactSection(resolved, wanted, { titleOf: (t) => withoutMarked(t, marks) });
   return { html: shown ? renderMarkdown(shown) : html };
+}
+
+// What players read of a chapter note on the player site (chapter pages), as markdown: the `## Teaser` section of an
+// active chapter, the `## Recap` section of a complete one whose recap comes from the note (not its wrap-up), found as
+// chapterNotePart finds them in `text` (the note's published view); otherwise nothing. The build puts this in the
+// folded note's published view, so nothing that reads it (search, backlinks, recency, excerpts) reads any other part.
+function chapterShownMarkdown(text, unit) {
+  const wanted = unit.status === 'active' ? 'Teaser' : unit.status === 'complete' && unit.recapFrom === 'note' ? 'Recap' : null;
+  if (!wanted) return '';
+  const body = exactSection(text, wanted.toLowerCase());
+  return body && body.trim() ? `## ${wanted}\n${body}` : '';
 }
 
 // The number each session row shows, on the contents page and the chapter page alike: its `session_number`, else one
@@ -207,9 +218,7 @@ function unitOutputPath(id) { return `story/${id}.html`; }
 // older spelling the schema reads as one of them (`in_progress` is active: the shared ontology's chapter_status), else
 // 'unknown' (missing, or any other value). A planned chapter shows nowhere on the Story.
 function chapterStatus(chapter) {
-  const s = String(((chapter && chapter.frontmatter) || {}).status || '').trim().toLowerCase();
-  if (CHAPTER_STATUSES.has(s)) return s;
-  return Object.prototype.hasOwnProperty.call(CHAPTER_STATUS_ALIASES, s) ? CHAPTER_STATUS_ALIASES[s] : 'unknown';
+  return chapterStatusOf(((chapter && chapter.frontmatter) || {}).status);
 }
 
 // A chapter has a recap only once it is complete; until then its Story page shows its introduction.
@@ -465,7 +474,9 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
     // Every shown chapter has one Story page, before its sessions: the chapter break. Before, a chapter with sessions
     // had story/<chSlug>-intro.html, made from its wrap-up's recap (complete) or the note's whole body; that address
     // redirects here (the build), where it was written.
-    const hadIntro = sessionUnits.length > 0 && (!!(isCompleteChapter(chapter) && fromWrap) || !!stripLeadingH1(publishedOf(chapter)).trim());
+    // The whole published body, even where the player site has since cut the note's view to its shown part.
+    const wholeBody = chapter.notePublishedMarkdown != null ? chapter.notePublishedMarkdown : publishedOf(chapter);
+    const hadIntro = sessionUnits.length > 0 && (!!(isCompleteChapter(chapter) && fromWrap) || !!stripLeadingH1(wholeBody).trim());
     units.push({
       kind: 'chapter', id: chSlug, outputPath: chOut,
       title: chapter.displayTitle || chapter.title.replace(/_/g, ' '),
@@ -473,6 +484,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
       status, label: chapterLabel(fm.sort_order), dates: dateFieldText(fm.date_range),
       teaserHtml: teaser ? teaser.html : null, overview,
       recapHtml: chapterRecap ? chapterRecap.html : null,
+      recapFrom: !chapterRecap ? null : chapterRecap.sourcePage === chapter ? 'note' : 'wrap-up',
       sessions: ((numbers) => sessionUnits.map((u, i) => ({ title: u.title, outputPath: u.outputPath, inGameDate: dateFieldText(u.sourcePage.frontmatter.in_game_date), number: numbers[i] })))(sessionRowNumbers(sessionUnits.map(u => sessionNumberOf(u.sourcePage)))),
       sourcePage: chapter, wrapUpPage: chapterWrap || null,
       ...bodyOf(chapterWrap, chapterRecap, chapterWrapResolve),
@@ -595,4 +607,4 @@ function characterStoryGroup(frontmatter, fallen) {
   return 'current';
 }
 
-module.exports = { chapterStatus, isCompleteChapter, chapterLabel, findSection, exactSection, sessionRowNumbers, gmStoryNotes, findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOfSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, probeSpine, storyPagesFor, orderedSessions, characterStoryGroup };
+module.exports = { chapterStatus, isCompleteChapter, chapterLabel, chapterShownMarkdown, findSection, exactSection, sessionRowNumbers, gmStoryNotes, findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOfSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, probeSpine, storyPagesFor, orderedSessions, characterStoryGroup };

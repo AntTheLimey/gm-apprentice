@@ -31,9 +31,9 @@ const { createMarks, markKinds, sanitize, unmark, withoutMarked } = require('./g
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
 const { KINDS, parseMoments, momentsHtml } = require('./story-moments');
-const { buildStorySpine, probeSpine, gmStoryNotes, storyPagesFor, chapterOfSession, chapterMatchesSession, chapterStatus, characterStoryGroup } = require('./story-spine');
+const { buildStorySpine, probeSpine, chapterShownMarkdown, gmStoryNotes, storyPagesFor, chapterOfSession, chapterMatchesSession, chapterStatus, characterStoryGroup } = require('./story-spine');
 const { figureCandidates, pageNames, nameHolders, sceneCandidates } = require('./story-figures');
-const { foldPlan, applyFold, isFolded, labelFoldedHeadings } = require('./story-fold');
+const { foldPlan, applyFold, isFolded, isFoldedChapterNote, labelFoldedHeadings } = require('./story-fold');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
 const { isSessionStory, sessionLines } = require('./story-sessions');
@@ -1467,7 +1467,16 @@ function buildSite(options) {
   // wrap-up back with no recap of the players' to lead it: its chapter counts what the player page pictures (#569).
   const playerStory = gm ? new Map(probeSpine(pages.filter((p) => onPlayerSite.has(p)), playerPairs, playerImages).map((u) => [u.outputPath, u.wrapUpPage || null])) : null;
   const storyPlayers = gm ? { has: (out) => playerStory.has(out), shows: (page) => onPlayerSite.has(page), wrapUpAt: (out) => playerStory.get(out) || null } : null;
-  applyFold(foldPlan(storyProbe), linkMap);
+  // On the player site each shown chapter's note folds into its chapter page too (chapter pages): it has no page of its
+  // own, and its published view becomes only what the chapter page shows of it (its Teaser or Recap), so nothing that
+  // reads views (search, backlinks, recency, excerpts) reads any other part. Its whole view is kept for the old
+  // introduction address's test (story-spine.js).
+  applyFold(foldPlan(storyProbe, { chapters: !gm }), linkMap);
+  for (const page of pages) {
+    if (!isFoldedChapterNote(page)) continue;
+    page.notePublishedMarkdown = page.publishedMarkdown || '';
+    page.publishedMarkdown = chapterShownMarkdown(page.notePublishedMarkdown, page.foldedInto);
+  }
   LOWER_KEYS.delete(linkMap);   // its folded spellings were read from the old addresses
   // The pages a Story page may picture beside its recap (story-figures.js), read once, after the fold has given each
   // page its final address. On the GM site only those the player site writes a page for, with a portrait the player
@@ -1597,7 +1606,10 @@ function buildSite(options) {
     if (typeof p.gmMarkedPublished === 'string') view.publishedMarkdown = unmark(p.gmMarkedPublished);
     return view;
   };
-  const searchData = searchEnabled ? buildSearchIndex(gm ? pages.map(unmarked) : pages) : null;
+  // A chapter note folded where its chapter wrap-up is folded too is found once, as that page (the wrap-up's entry).
+  const foldedWrapAt = new Set(pages.filter((p) => isFolded(p) && !isFoldedChapterNote(p)).map((p) => p.outputPath));
+  const searchPages = pages.filter((p) => !(isFoldedChapterNote(p) && foldedWrapAt.has(p.outputPath)));
+  const searchData = searchEnabled ? buildSearchIndex(gm ? searchPages.map(unmarked) : searchPages) : null;
 
   publishConfig._linkMap = linkMap;
   publishConfig._backlinks = backlinks;
@@ -2482,7 +2494,8 @@ function buildSite(options) {
   if (publishConfig.link_previews !== 'off') {
     const { buildPreviews, onlyBuiltPages } = require('./previews');
     const { usesCocFolio } = require('./templates/pc');
-    const cards = buildPreviews(pages, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff), limits: publishConfig.limits, headerFacts: publishConfig.header_facts });
+    // A chapter note folded into its chapter page has no card: players never read the note.
+    const cards = buildPreviews(pages.filter((p) => !isFoldedChapterNote(p)), { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff), limits: publishConfig.limits, headerFacts: publishConfig.header_facts });
     // The cards are read for withheld names in their own right, whatever the pages print (and
     // also when nothing is written): every string of every card, under the note it is made from.
     const byHref = new Map(pages.map((p) => [p.outputPath, p]));
@@ -2707,6 +2720,10 @@ function buildSite(options) {
     if (href) unit.playNotesHref = href;
     unit.afterHtml = parts ? `<section class="story-gm-after">\n${parts}\n</section>` : '';
     unit.playNotesHtml = href ? `<p class="story-playnotes"><a href="${encodeHref(relativeHref(unit.outputPath, href))}">Play Notes for this session →</a></p>` : '';
+    // A chapter page links its chapter note's own page, the GM's workbench, where the GM site writes one.
+    const note = unit.kind === 'chapter' ? unit.sourcePage : null;
+    unit.gmNoteHtml = note && pages.includes(note) && !getsNoPage(note) && !isFolded(note)
+      ? `<p class="story-chapter-gm-note"><a href="${encodeHref(relativeHref(unit.outputPath, note.outputPath))}">Chapter note (GM)</a></p>` : '';
   }
   // A session's Play Notes: the note its `documents.play_notes` names, else its wrap-up's `source_document`; the
   // address of its page, or null when it has none.
@@ -2842,6 +2859,10 @@ function buildSite(options) {
       // A chapter's old introduction page (story/<chapter>-intro.html, where one was written) leads to its chapter page.
       if (live && unit.oldOutputPath) {
         emit(unit.oldOutputPath, redirectPage(unit.oldOutputPath, unit.outputPath, unit.title), `  wrote ${unit.oldOutputPath} (redirect → ${unit.outputPath})`);
+      }
+      // So does the chapter note's own old page, on the player site, where the note folded into it.
+      if (live) for (const page of (foldedOnto.get(unit.outputPath) || []).filter(isFoldedChapterNote)) {
+        emit(page.foldedFrom, redirectPage(page.foldedFrom, unit.outputPath, unit.title), `  wrote ${page.foldedFrom} (redirect → ${unit.outputPath})`);
       }
     }
     if (live) characterStories = buildCharacterStories();

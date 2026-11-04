@@ -8,15 +8,21 @@ const { canonicalNfc } = require('./unicode');
 
 const FOLD_LABELS = new WeakMap();   // link map -> Map of patched key -> title of the Story page it now points at
 
-function foldPlan(spine) {
+// With `chapters` (the player site, chapter pages), each chapter unit's own chapter note folds into it too: the note has
+// no page of its own there, and its links lead to the chapter page.
+function foldPlan(spine, { chapters = false } = {}) {
   const plan = new Map();
   for (const unit of spine || []) {
+    if (chapters && unit.kind === 'chapter' && unit.sourcePage) plan.set(unit.sourcePage, unit);
     const page = unit.wrapUpPage;
     if (!page || !isWrapUp(page)) continue;
     if (unit.kind === 'session' || !plan.has(page)) plan.set(page, unit);
   }
   return plan;
 }
+
+// A chapter note folded into its chapter page (foldPlan's `chapters`), not a wrap-up.
+const isFoldedChapterNote = (page) => !!(page && page.foldedInto && page.foldedInto.kind === 'chapter' && page.foldedInto.sourcePage === page);
 
 // Each link-map key that names a folded page's address, and the unit it now leads to. Pure: read before the pages move.
 function foldedKeys(plan, linkMap) {
@@ -95,4 +101,4 @@ function labelFoldedLinks(markdown, linkMap, { headingsOnly = false, labels = nu
 // Its keys are the link map's own, in NFC (unicode.js), so a key is read in NFC however its accents were typed.
 const foldLabel = (linkMap, key) => (FOLD_LABELS.get(linkMap) || new Map()).get(canonicalNfc(key));
 
-module.exports = { foldPlan, applyFold, foldLabelsOf, isFolded, foldLabel, labelFoldedHeadings, labelFoldedLinks };
+module.exports = { foldPlan, applyFold, foldLabelsOf, isFolded, isFoldedChapterNote, foldLabel, labelFoldedHeadings, labelFoldedLinks };

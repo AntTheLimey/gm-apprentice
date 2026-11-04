@@ -323,10 +323,10 @@ describe('build with NFD refs against NFC filenames (#139)', () => {
     assert.doesNotMatch(html, /duller session/, 'landing fell back to a different session entirely');
   });
 
-  it('groups sessions under their chapter on the chapters index', () => {
-    const html = read('chapters/index.html');
-    const grouped = /<ol class="chapter-sessions">[\s\S]*?sesion-anexa\.html[\s\S]*?<\/ol>/.test(html);
-    assert.ok(grouped, 'session was not listed inside its chapter card');
-    assert.doesNotMatch(html, /Other Sessions/, 'session fell through to the ungrouped list');
+  // Chapter pages: on the player site a chapter is its Story page, and the Story So Far groups its sessions under it.
+  it('groups sessions under their chapter on the Story So Far', () => {
+    const html = read('story.html');
+    const grouped = /<div class="story-contents-chapter"[^>]*>[\s\S]*?Capítulo Renée<\/a><\/h3>[\s\S]*?<ol class="story-contents-sessions">[\s\S]*?sesion-renee\.html[\s\S]*?<\/ol>/.test(html);
+    assert.ok(grouped, 'session was not listed under its chapter');
   });
 });

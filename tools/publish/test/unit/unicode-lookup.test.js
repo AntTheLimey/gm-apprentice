@@ -307,39 +307,20 @@ describe('Map/Set title boundaries across unicode normal forms (#139)', () => {
 });
 
 describe('chapter page constituent sessions across unicode normal forms (#139)', () => {
-  const { build } = require('../../lib/build');
+  const { buildBoth } = require('../helpers/gm-build');
   const CHAPTER_NFC = 'Chapter Ren\u00e9e';
   const CHAPTER_NFD = 'Chapter Rene\u0301e';
 
+  // The chapter note's own page lists the chapter's sessions. On the player site the note folds into its Story chapter
+  // page (chapter pages), so the page is read on the GM site, which keeps it.
   it('lists a session whose chapter ref differs in normal form from the chapter filename', () => {
-    const work = fs.mkdtempSync(path.join(os.tmpdir(), 'unicode-chapter-'));
+    const s = buildBoth({
+      [`Chapters/${CHAPTER_NFC}.md`]: `---\ntype: chapter\ntitle: "${CHAPTER_NFC}"\nsort_order: 1\n---\n\nChapter body.\n`,
+      'Sessions/Session 1.md': `---\ntype: session\nchapter: "[[${CHAPTER_NFD}]]"\nsession_number: 1\nstatus: played\n---\n\nSession body.\n`,
+    }, { sites: ['gm'] });
     try {
-      const vault = path.join(work, 'vault');
-      fs.mkdirSync(path.join(vault, 'Chapters'), { recursive: true });
-      fs.mkdirSync(path.join(vault, 'Sessions'), { recursive: true });
-      fs.writeFileSync(
-        path.join(vault, 'Chapters', `${CHAPTER_NFC}.md`),
-        `---\ntype: chapter\ntitle: "${CHAPTER_NFC}"\nsort_order: 1\n---\n\nChapter body.\n`,
-      );
-      fs.writeFileSync(
-        path.join(vault, 'Sessions', 'Session 1.md'),
-        `---\ntype: session\nchapter: "[[${CHAPTER_NFD}]]"\nsession_number: 1\nstatus: played\n---\n\nSession body.\n`,
-      );
-
-      const docs = path.join(work, 'docs');
-      const configPath = path.join(work, 'config.json');
-      fs.writeFileSync(configPath, JSON.stringify({
-        vaultPath: vault, outputDir: docs, attachmentsDir: '_attachments',
-        siteTitle: 'Unicode Chapters', siteUrl: 'https://example.github.io/unicode',
-        excludeDirs: ['_meta', '_Templates'],
-        folderMap: { Chapters: 'chapters', Sessions: 'sessions' },
-      }));
-      build({ configPath });
-
-      const html = fs.readFileSync(path.join(docs, 'chapters', 'chapter-renee.html'), 'utf8');
+      const html = s.gm.read('chapters', 'chapter-renee.html');
       assert.match(html, /sessions\/session-1\.html/, 'chapter page lists no constituent sessions');
-    } finally {
-      fs.rmSync(work, { recursive: true, force: true });
-    }
+    } finally { s.cleanup(); }
   });
 });
