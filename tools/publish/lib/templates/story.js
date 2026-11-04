@@ -24,7 +24,7 @@ function sectionHtml(s) {
 function storyPage(unit, config, publishConfig, navFor) {
   const held = unit.heldBack && unit.heldBack.open ? unit.heldBack : null;
   const wrapUp = `${unit.preambleHtml || ''}
-      ${unit.recapHtml}
+      ${unit.teaserHtml || ''}${unit.recapHtml || ''}
       ${(unit.sections || []).map(sectionHtml).join('\n')}`;
   const story = held
     ? `${held.recapHtml}

@@ -9,14 +9,14 @@ describe('story fold', () => {
   it('a session wrap-up folds into its session unit; the chapter does not take it', () => {
     const w = wrap('S1 Wrap');
     const s = { kind: 'session', outputPath: 'story/ch-s1.html', title: 'Session 1', wrapUpPage: w, sourcePage: {} };
-    const c = { kind: 'chapter-intro', outputPath: 'story/ch-intro.html', title: 'Ch', wrapUpPage: w, sourcePage: {} };
+    const c = { kind: 'chapter', outputPath: 'story/ch.html', title: 'Ch', wrapUpPage: w, sourcePage: {} };
     assert.equal(foldPlan([c, s]).get(w), s);
     assert.equal(foldPlan([s, c]).get(w), s);
   });
 
   it('a chapter claims a wrap-up no session wants', () => {
     const w = wrap('Ch Wrap');
-    const c = { kind: 'chapter-intro', outputPath: 'story/ch-intro.html', title: 'Ch', wrapUpPage: w, sourcePage: {} };
+    const c = { kind: 'chapter', outputPath: 'story/ch.html', title: 'Ch', wrapUpPage: w, sourcePage: {} };
     assert.equal(foldPlan([c]).get(w), c);
   });
 

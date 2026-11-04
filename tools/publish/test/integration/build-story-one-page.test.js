@@ -190,7 +190,7 @@ describe('wrap-ups no Story unit claims, and chapter wrap-ups', () => {
     } finally { site.cleanup(); }
   });
 
-  it('an active chapter shows its introduction only; its wrap-up keeps its own page and links', () => {
+  it('an active chapter shows no recap and claims no wrap-up; its wrap-up keeps its own page and links', () => {
     const site = buildBoth(storyVault({
       'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER_ONE.replace('sort_order: 1', 'sort_order: 1\nstatus: active'),
       'Chapters/Chapter 1/Chapter 1 Wrap-Up.md': CHAPTER_WRAP.replace(/Chapter 2/g, 'Chapter 1').replace('CHAPTER-TWO-RECAP', 'CHAPTER-ONE-RECAP'),
@@ -199,9 +199,8 @@ describe('wrap-ups no Story unit claims, and chapter wrap-ups', () => {
     try {
       for (const side of ['player', 'gm']) {
         const s = site[side];
-        const intro = s.read('story', 'chapter-1-docks-intro.html');
-        assert.match(intro, /CHAPTER-BODY-1/);
-        assert.doesNotMatch(intro, /CHAPTER-ONE-RECAP/);
+        const intro = s.read('story', 'chapter-1-docks.html');
+        assert.doesNotMatch(intro, /CHAPTER-ONE-RECAP|CHAPTER-BODY-1/);
         assert.match(s.read('chapters', 'chapter 1', 'chapter-1-wrap-up.html'), /CHAPTER-ONE-RECAP/, `${side}: the wrap-up keeps its page`);
         const html = s.read('npcs', 'mara-quill.html');
         assert.ok(linkTo(html, /chapter-1-wrap-up\.html$/).length >= 1, `${side}: links still reach the wrap-up's own page`);
@@ -213,7 +212,7 @@ describe('wrap-ups no Story unit claims, and chapter wrap-ups', () => {
   it('a wrap-up both a session and its chapter claim folds into the session\'s Story page', () => {
     // Session 1's wrap-up sits alone in the chapter's folder, so the chapter's folder fallback finds it; Session 1 is
     // paired with it by documents.wrap_up. A session's Story page is its wrap-up, one to one: the chapter takes
-    // nothing from it and shows its introduction.
+    // nothing from it.
     const site = buildBoth(storyVault({
       'Sessions/Session 1 Wrap-Up.md': null,
       'Chapters/Chapter 1/Session 1 Wrap-Up.md': WRAP_1,
@@ -222,8 +221,7 @@ describe('wrap-ups no Story unit claims, and chapter wrap-ups', () => {
     try {
       for (const side of ['player', 'gm']) {
         const s = site[side];
-        const intro = s.read('story', 'chapter-1-docks-intro.html');
-        assert.match(intro, /CHAPTER-BODY-1/);
+        const intro = s.read('story', 'chapter-1-docks.html');
         assert.doesNotMatch(intro, /The party reached|<h2 id="loot"/, `${side}: the chapter takes nothing from the session's wrap-up`);
         const model = island(s.read('npcs', 'mara-quill.html'));
         const items = (model.m || []).flatMap((group) => group.d);

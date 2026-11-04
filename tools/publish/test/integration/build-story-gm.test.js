@@ -13,7 +13,7 @@ const { brokenLinks } = require('../helpers/site-links');
 const { runLeakGate } = require('../../lib/leak-gate');
 
 const STORY_1 = 'story/chapter-1-docks-session-1.html';
-const INTRO = 'story/chapter-1-docks-intro.html';
+const INTRO = 'story/chapter-1-docks.html';   // the chapter's own Story page
 const TOKEN = /[\uE000-\uE002]/;
 const rel = (site, f) => path.relative(site.dir, f).split(path.sep).join('/');
 const texts = (site) => site.files().filter((f) => /\.(?:html|json|js|xml|txt)$/.test(f)).map((f) => [rel(site, f), fs.readFileSync(f, 'utf8')]);
@@ -299,20 +299,21 @@ describe('the GM Story page: a held-back wrap-up with no recap of its own', () =
     } finally { s.cleanup(); }
   });
 
-  it('a chapter: the introduction once, unmarked; the chapter wrap-up\'s sections in the mark', () => {
-    const chapter = CHAPTER.replace('sort_order: 1', 'sort_order: 1\nstatus: complete');
+  // Chapter pages: a complete chapter whose wrap-up players do not see leads, on both sites, with the note's own Recap.
+  it('a chapter: the note\'s Recap once, unmarked; the chapter wrap-up\'s sections in the mark', () => {
+    const chapter = CHAPTER.replace('sort_order: 1', 'sort_order: 1\nstatus: complete') + '\n## Recap\n\nCHAPTER-RECAP-1: the docks fell quiet.\n';
     const chWrap = '---\ntype: session_wrap\nchapter: "[[Chapter 1 Overview]]"\ncanon_status: DRAFT\n---\n\n# Chapter 1 Wrap-Up\n\n## Aftermath\n\nCHWRAP-AFTER-1: the docks burned.\n';
-    // The session wrap-ups publish, so both sites give the chapter its introduction page.
     const canon = (w) => w.replace('canon_status: DRAFT', 'canon_status: CANON');
     const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': chapter, 'Chapters/Chapter 1/Chapter 1 Wrap-Up.md': chWrap,
       'Sessions/Session 1 Wrap-Up.md': canon(WRAP_1), 'Sessions/Session 2 Wrap-Up.md': canon(WRAP_2) }),
       { player: { hide: { drafts: true } } });
     try {
-      assert.ok(read(s.player, INTRO).includes('CHAPTER-BODY-1'));
+      assert.ok(read(s.player, INTRO).includes('CHAPTER-RECAP-1'));
+      assert.ok(!read(s.player, INTRO).includes('CHAPTER-BODY-1'), 'the note\'s body is not the chapter page');
       for (const [file, text] of texts(s.player)) assert.ok(!text.includes('CHWRAP-AFTER-1'), file);
       const page = read(s.gm, INTRO);
-      assert.equal(count(page, 'CHAPTER-BODY-1'), 1);
-      for (const m of markedTexts(page)) assert.ok(!m.text.includes('CHAPTER-BODY-1'), `the introduction in ${m.label}`);
+      assert.equal(count(page, 'CHAPTER-RECAP-1'), 1);
+      for (const m of markedTexts(page)) assert.ok(!m.text.includes('CHAPTER-RECAP-1'), `the recap in ${m.label}`);
       const held = heldMarks(page);
       assert.equal(held.length, 1, JSON.stringify(markedTexts(page).map((m) => m.label)));
       assert.ok(held[0].text.includes('CHWRAP-AFTER-1'));
@@ -339,23 +340,25 @@ describe('the GM Story page with player_site.story.moments off', () => {
   });
 });
 
-describe('the GM Story page: a chapter\'s introduction', () => {
-  const chapter = CHAPTER.replace('The docks, CHAPTER-BODY-1.\n',
-    'The docks, CHAPTER-BODY-1.\n\n<!-- gm-only -->\nGMSECRET-CHAPTER-1: the harbourmaster is paid.\n<!-- /gm-only -->\n\nThe fog, CHAPTER-BODY-2.\n');
+// Chapter pages: an active chapter's page shows its Teaser; a GM-only part inside it is marked in place on the GM site.
+describe('the GM Story page: a chapter\'s Teaser', () => {
+  const chapter = CHAPTER.replace('sort_order: 1', 'sort_order: 1\nstatus: active') + '\n## Teaser\n\nTEASER-1, the pier.\n\n<!-- gm-only -->\nGMSECRET-CHAPTER-1: the harbourmaster is paid.\n<!-- /gm-only -->\n\nTEASER-2, the fog.\n';
   const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': chapter }));
   after(() => s.cleanup());
 
-  it('shows the chapter note\'s GM-only parts in place, marked, on the GM site', () => {
+  it('shows the Teaser\'s GM-only parts in place, marked, on the GM site', () => {
     const page = read(s.gm, INTRO);
-    assert.ok(ascending(at(page, ['CHAPTER-BODY-1', 'GMSECRET-CHAPTER-1', 'CHAPTER-BODY-2'])));
-    assert.ok(markedTexts(page).some((m) => m.kind === 'gm_only_blocks' && m.text.includes('GMSECRET-CHAPTER-1') && !m.text.includes('CHAPTER-BODY-2')));
+    assert.ok(ascending(at(page, ['TEASER-1', 'GMSECRET-CHAPTER-1', 'TEASER-2'])));
+    assert.ok(markedTexts(page).some((m) => m.kind === 'gm_only_blocks' && m.text.includes('GMSECRET-CHAPTER-1') && !m.text.includes('TEASER-2')));
+    assert.ok(!page.includes('CHAPTER-BODY-1'), 'nothing but the Teaser');
     assert.equal(nestingFault(page), null);
     assert.ok(!TOKEN.test(page));
   });
 
   it('the player page keeps the published view', () => {
     const page = read(s.player, INTRO);
-    assert.ok(page.includes('CHAPTER-BODY-1') && page.includes('CHAPTER-BODY-2'));
+    assert.ok(page.includes('TEASER-1') && page.includes('TEASER-2'));
+    assert.ok(!page.includes('CHAPTER-BODY-1'));
     for (const [file, text] of texts(s.player)) assert.ok(!text.includes('GMSECRET-CHAPTER-1'), file);
     assert.ok(!main(page).includes('gm-mark'));
   });

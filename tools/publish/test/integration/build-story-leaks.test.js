@@ -18,7 +18,7 @@ const { brokenLinks } = require('../helpers/site-links');
 const { runLeakGate } = require('../../lib/leak-gate');
 
 const STORY_1 = 'story/chapter-1-docks-session-1.html';
-const INTRO = 'story/chapter-1-docks-intro.html';
+const INTRO = 'story/chapter-1-docks.html';   // the chapter's own Story page
 const TOKEN = /[-]/;
 const rel = (site, f) => path.relative(site.dir, f).split(path.sep).join('/');
 // Every file a site holds, read as text: a token or a secret in any of them is a leak, whatever the file is.
@@ -217,16 +217,17 @@ CHAPGM-1 the harbourmaster was the cook all along.
 <!-- /gm-only -->
 `;
   const s = buildBoth(storyVault({
-    'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1', 'sort_order: 1\nstatus: active'),
+    'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1', 'sort_order: 1\nstatus: active') + '\n## Teaser\n\nTEASER-1 the docks wait.\n',
     'Chapters/Chapter 1/Chapter 1 Wrap-Up.md': CHAPTER_WRAP,
   }), { player: PLAYER, gm: GM });
   after(() => s.cleanup());
   const OWN = 'chapters/chapter 1/chapter-1-wrap-up.html';
 
-  it('the introduction shows on both sites without the wrap-up; the wrap-up keeps its own page', () => {
+  it('the Teaser shows on both sites without the wrap-up or the note\'s body; the wrap-up keeps its own page', () => {
     for (const side of ['player', 'gm']) {
       const intro = read(s[side], INTRO);
-      assert.ok(intro.includes('CHAPTER-BODY-1'), side);
+      assert.ok(intro.includes('TEASER-1'), side);
+      assert.ok(!intro.includes('CHAPTER-BODY-1'), side);
       assert.ok(!intro.includes('CHAPRECAP-1') && !intro.includes('CHAPGM-1'), `${side}: the intro holds the wrap-up`);
       assert.ok(read(s[side], OWN).includes('CHAPRECAP-1'), `${side}: the wrap-up's own page`);
     }
