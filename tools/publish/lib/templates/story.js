@@ -3,6 +3,7 @@ const { baseShell, cssPath, rootPath, clientScripts } = require('./base');
 const { linkSessions } = require('../story-sessions');
 const { prologueHtml } = require('./prologue');
 const { topLevelElements, openMarks } = require('../story-figures');
+const { sessionRowNumbers } = require('../story-spine');
 
 function storyNav(unit) {
   const prev = unit.prevHref
@@ -45,7 +46,10 @@ function splitOpening(html) {
   const end = blocks[at].start + blocks[at].html.length;
   const open = openMarks(text.slice(0, end));
   const rest = text.slice(end);
+  // A rest of only mark tokens (a mark that opened in the opening and closes after it) is no rest: it stays with the
+  // opening, balanced, and there is no fold.
   if (!rest.trim()) return { before: text.slice(0, from), opening: text.slice(from, end), rest: '' };
+  if (!rest.replace(/\uE000[0-9a-z]*\uE001|\uE002/g, '').trim()) return { before: text.slice(0, from), opening: text.slice(from), rest: '' };
   return { before: text.slice(0, from), opening: text.slice(from, end) + '\uE002'.repeat(open.length), rest: open.join('') + rest };
 }
 
@@ -66,7 +70,7 @@ function chapterPage(unit, config, publishConfig, navFor) {
   const href = (to) => encodeHref(relativeHref(unit.outputPath, to));
   const sessions = (unit.sessions || []).length
     ? `<h2 class="story-chapter-sessions-title">${status === 'active' ? 'Sessions so far' : 'The sessions'}</h2>
-      <ol class="story-chapter-sessions">${unit.sessions.map((s) => `<li${s.number != null ? ` value="${s.number}"` : ''}><a href="${href(s.outputPath)}">${escapeHtml(s.title)}</a>${s.inGameDate ? ` <span class="story-chapter-date">${escapeHtml(s.inGameDate)}</span>` : ''}</li>`).join('')}</ol>`
+      <ol class="story-chapter-sessions">${((numbers) => unit.sessions.map((s, i) => `<li value="${numbers[i]}"><a href="${href(s.outputPath)}">${escapeHtml(s.title)}</a>${s.inGameDate ? ` <span class="story-chapter-date">${escapeHtml(s.inGameDate)}</span>` : ''}</li>`).join(''))(sessionRowNumbers(unit.sessions.map((s) => (s.number == null ? null : s.number))))}</ol>`
     : '';
   const sections = (unit.sections || []).map(sectionHtml).join('\n');
   const told = status === 'active'

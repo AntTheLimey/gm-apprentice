@@ -1,6 +1,7 @@
 const path = require('path');
 const { escapeHtml, relativeHref, encodeHref } = require('../processor');
 const { topLevelElements } = require('../story-figures');
+const { sessionRowNumbers } = require('../story-spine');
 const { baseShell, cssPath, rootPath, clientScripts, noPreviewAttr } = require('./base');
 
 const OUT = 'story.html';
@@ -23,7 +24,7 @@ function teaserForContents(html, fromPath) {
 // chapter page: its label and dates, then the Teaser while it is active (with the "now being played" marker) or its
 // overview once complete, then its sessions; a chapter told as one account (no session pages, a recap) links its own
 // page instead. The page ends with a line each preset words in CSS: the story continues while a chapter is active.
-// A session row's number: its `session_number`, else its place in the chapter. One digit is marked, so a preset can
+// A session row's number (story-spine.js sessionRowNumbers, as the chapter page counts it). One digit is marked, so a preset can
 // pad it (scifi's 01).
 const numberHtml = (n) => `<span class="n"${n < 10 ? ' data-digits="1"' : ''}>${n}</span>`;
 
@@ -36,7 +37,7 @@ function contentsHtml(spine) {
       ? `<p class="story-chapter-now">now being played</p>${c.teaserHtml ? `<div class="story-chapter-teaser">${teaserForContents(c.teaserHtml, c.outputPath)}</div>` : ''}`
       : status === 'complete' && c.overview ? `<p class="story-chapter-overview">${escapeHtml(c.overview)}</p>` : '';
     const sessions = c.sessions.length
-      ? `<ol class="story-contents-sessions">${c.sessions.map((x, i) => `<li>${numberHtml(x.number == null ? i + 1 : x.number)}<a href="${href(x.outputPath)}">${escapeHtml(x.title)}</a><span class="d">${x.inGameDate ? escapeHtml(x.inGameDate) : ''}</span></li>`).join('')}</ol>`
+      ? `<ol class="story-contents-sessions">${c.sessions.map((x, i, all) => `<li>${numberHtml(sessionRowNumbers(all.map((y) => (y.number == null ? null : y.number)))[i])}<a href="${href(x.outputPath)}">${escapeHtml(x.title)}</a><span class="d">${x.inGameDate ? escapeHtml(x.inGameDate) : ''}</span></li>`).join('')}</ol>`
       : c.recapHtml ? `<p class="story-contents-one">Told as one account · <a href="${href(c.outputPath)}">read it</a></p>` : '';
     return `<div class="story-contents-chapter" data-chapter-status="${status}">
       ${c.label ? `<p class="story-chapter-label">${escapeHtml(c.label)}</p>` : ''}

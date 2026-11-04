@@ -210,21 +210,143 @@ describe('build story: the old chapter introduction address', () => {
 describe('chapter page styling uses theme tokens only', () => {
   const cssDir = path.join(__dirname, '..', '..', 'css');
   const files = ['style.css', ...['horror', 'scifi', 'military', 'fantasy', 'noir'].map((t) => `themes/${t}.css`)];
-  const FONT_NAMES = /\b(serif|sans-serif|monospace|cursive|fantasy|system-ui|Georgia|Times|Arial|Helvetica|Courier|Menlo|Inter|Rajdhani|Avenir|ui-monospace)\b/i;
+  // The CSS named colours (CSS Color 4), as words.
+  const NAMED = new Set(('aliceblue antiquewhite aqua aquamarine azure beige bisque black blanchedalmond blue blueviolet brown burlywood '
+    + 'cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue darkcyan darkgoldenrod darkgray darkgreen '
+    + 'darkgrey darkkhaki darkmagenta darkolivegreen darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray '
+    + 'darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue firebrick floralwhite forestgreen fuchsia '
+    + 'gainsboro ghostwhite gold goldenrod gray green greenyellow grey honeydew hotpink indianred indigo ivory khaki lavender '
+    + 'lavenderblush lawngreen lemonchiffon lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink '
+    + 'lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue lightyellow lime limegreen linen magenta maroon '
+    + 'mediumaquamarine mediumblue mediumorchid mediumpurple mediumseagreen mediumslateblue mediumspringgreen mediumturquoise '
+    + 'mediumvioletred midnightblue mintcream mistyrose moccasin navajowhite navy oldlace olive olivedrab orange orangered orchid '
+    + 'palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink plum powderblue purple rebeccapurple red '
+    + 'rosybrown royalblue saddlebrown salmon sandybrown seagreen seashell sienna silver skyblue slateblue slategray slategrey snow '
+    + 'springgreen steelblue tan teal thistle tomato turquoise violet wheat white whitesmoke yellow yellowgreen').split(' '));
+  // Strips every var(...), nested ones included.
+  const withoutVars = (v) => { let out = v; let prev; do { prev = out; out = out.replace(/var\([^()]*\)/g, ''); } while (out !== prev); return out; };
+  const wholeVar = (v) => /^var\(/.test(v) && withoutVars(v).trim() === '';
+  // The fixed colours and faces in a block of CSS: each declaration (split on `;` and `}`), its comments and `content`
+  // strings aside. `font` and `font-family` must be wholly var(...); anywhere else, no hex, rgb/hsl or named colour
+  // outside var(...).
+  function faults(css) {
+    const found = [];
+    for (const chunk of css.replace(/\/\*[\s\S]*?\*\//g, '').split(/[;}]/)) {
+      const decl = chunk.slice(chunk.lastIndexOf('{') + 1).trim();
+      const colon = decl.indexOf(':');
+      if (colon < 0) continue;
+      const prop = decl.slice(0, colon).trim().toLowerCase();
+      const value = decl.slice(colon + 1).trim();
+      if (prop === 'content') continue;
+      if ((prop === 'font' || prop === 'font-family') && !wholeVar(value)) { found.push(decl); continue; }
+      const bare = withoutVars(value);
+      if (/#[0-9a-f]{3,8}\b|\b(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/i.test(bare)
+        || (bare.toLowerCase().match(/[a-z-]+/g) || []).some((w) => NAMED.has(w))) found.push(decl);
+    }
+    return found;
+  }
+
+  it('the check catches what a review planted', () => {
+    for (const plant of ['.a { color: #fff }', '.a { margin: 0; color: #abcdef }', '.a { color: crimson; }',
+      '.a { font-family: "EB Garamond"; }', '.a { font: italic 1rem "Palatino"; }', '.a { border: 1px solid rgb(0, 0, 0); }',
+      '.a { background: hsl(0 0% 0%); }', '.a { font-family: var(--font-body), serif; }']) {
+      assert.ok(faults(plant).length > 0, `missed: ${plant}`);
+    }
+    for (const fine of ['.a { color: var(--accent); }', '.a { font-family: var(--font-label, var(--font-body)); }',
+      '.a { border-bottom: 1px dotted var(--border) }', '.a::before { content: "white"; }', '.a { border-top-color: var(--accent); }']) {
+      assert.deepEqual(faults(fine), [], fine);
+    }
+  });
+
   for (const f of files) {
     it(`${f}: its chapter pages block has no fixed colour or font`, () => {
       const css = fs.readFileSync(path.join(cssDir, f), 'utf8');
       const m = /\/\* chapter pages: start \*\/([\s\S]*?)\/\* chapter pages: end \*\//.exec(css);
       assert.ok(m, `${f} has no chapter pages block`);
-      // Values only: what sits outside var(...), comments and `content:` strings.
-      const values = m[1].replace(/\/\*[\s\S]*?\*\//g, '').replace(/content:\s*("[^"]*"|'[^']*'|[^;]+);/g, '')
-        .match(/:[^;{}]+;/g) || [];
-      for (const v of values) {
-        const bare = v.replace(/var\([^()]*(\([^()]*\)[^()]*)*\)/g, '');
-        assert.doesNotMatch(bare, /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|\b(white|black|red|green|blue|gray|grey)\b/i, `${f}: a fixed colour in ${v}`);
-        if (/font|family/.test(v) || /^:\s*(italic|normal|bold)/.test(v)) assert.doesNotMatch(bare, FONT_NAMES, `${f}: a fixed font in ${v}`);
-        assert.doesNotMatch(bare, FONT_NAMES, `${f}: a named font in ${v}`);
-      }
+      assert.deepEqual(faults(m[1]), [], f);
     });
   }
+});
+
+// PR B fix round: what the Story leaves out, and the bookkeeping it says aloud.
+describe('build story: fix round', () => {
+  const { buildBoth } = require('../helpers/gm-build');
+  const { storyVault, CHAPTER, SESSION, WRAP_2 } = require('../helpers/story-vault');
+  const fence = (t) => `<!-- gm-only -->\n${t}\n<!-- /gm-only -->`;
+  // Every player file but what belongs to the chapter note's own page, which shows the whole published note until PR C
+  // retires it: its page (chapters/...), its link-preview entry, and the search index (which indexes that page's words).
+  // The leak gate passes these strings for that reason, so absence is checked here directly.
+  const playerText = (site) => site.player.files().map((f) => path.relative(site.player.dir, f).split(path.sep).join('/'))
+    .filter((rel) => !rel.startsWith('chapters/') && rel !== 'search-index.json')
+    .map((rel) => {
+      const text = site.player.read(...rel.split('/'));
+      if (rel !== 'previews.json') return [rel, text];
+      const cards = JSON.parse(text);
+      for (const key of Object.keys(cards)) if (key.startsWith('chapters/')) delete cards[key];
+      return [rel, JSON.stringify(cards)];
+    });
+
+  it('M1/N1: a GM heading that contains "teaser" or "recap", and text after a later H1, reach no Story page', () => {
+    const ch1 = CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n')
+      + '\n## Recap ideas (GM)\n\nLEAKX-RECAPIDEAS\n\n## Recap\n\nRECAP-OK.\n\n# Appendix\n\nLEAKX-H1AFTER\n';
+    const ch2 = '---\ntype: chapter\ntitle: Chapter Five\nsort_order: 5\nstatus: active\n---\n\n# Chapter Five\n\n'
+      + `${fence('## Teaser\n\nLEAKX-CH5-FENCEDTEASER')}\n\n## Teaser ideas for later\n\nLEAKX-CH5-TEASERIDEAS GM brainstorm.\n\n## The teaser of doom (GM only, never show)\n\nLEAKX-DOOMTEASER\n`;
+    const s3 = SESSION(3).replace('[[Chapter 1 Overview]]', '[[Chapter 5 Overview]]');
+    const w3 = WRAP_2.replace(/Session 2/g, 'Session 3').replace('session_number: 2', 'session_number: 3').replace('[[Chapter 1 Overview]]', '[[Chapter 5 Overview]]');
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': ch1, 'Chapters/Chapter 5/Chapter 5 Overview.md': ch2,
+      'Sessions/Session 3.md': s3, 'Sessions/Session 3 Wrap-Up.md': w3, 'Sessions/Session 3 Play Notes.md': null }));
+    try {
+      assert.match(s.player.read('story', 'chapter-1-docks.html'), /RECAP-OK/);
+      assert.ok(s.player.exists('story', 'chapter-five.html'));
+      for (const [file, text] of playerText(s)) {
+        for (const secret of ['LEAKX-RECAPIDEAS', 'LEAKX-H1AFTER', 'LEAKX-CH5-FENCEDTEASER', 'LEAKX-CH5-TEASERIDEAS', 'LEAKX-DOOMTEASER']) {
+          assert.ok(!text.includes(secret), `${secret} in ${file}`);
+        }
+      }
+    } finally { s.cleanup(); }
+  });
+
+  it('S1: two chapter notes with one title get two pages, and one warning names both', () => {
+    const arc = (status, word) => `---\ntype: chapter\ntitle: Arc\nsort_order: ${status === 'complete' ? 1 : 2}\nstatus: ${status}\n---\n\n# Arc\n\n## Recap\n\n${word}\n`;
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': null, 'Chapters/A/Arc.md': arc('complete', 'RECAP-ARC-A-OK'), 'Chapters/B/Arc.md': arc('active', 'B') }), { sites: ['player'] });
+    try {
+      assert.ok(s.player.exists('story', 'arc.html') && s.player.exists('story', 'arc-2.html'));
+      assert.match(s.player.read('story', 'arc.html'), /RECAP-ARC-A-OK/);
+      const hits = s.logs.filter((l) => /WARNING/.test(l) && /Chapters\/A\/Arc\.md/.test(l) && /Chapters\/B\/Arc\.md/.test(l));
+      assert.equal(hits.length, 1, s.logs.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  it('S2: a played session no chapter heads is named where a chapter shows', () => {
+    const s0 = SESSION(0).replace(/chapter: .*\n/, '').replace('session_number: 0', 'session_number: 0');
+    const w0 = WRAP_2.replace(/Session 2/g, 'Session 0').replace('session_number: 2', 'session_number: 0').replace(/chapter: .*\n/, '');
+    const s = buildBoth(storyVault({ 'Sessions/Session 0.md': s0, 'Sessions/Session 0 Wrap-Up.md': w0 }), { sites: ['player'] });
+    try {
+      const hits = s.logs.filter((l) => /WARNING/.test(l) && /Sessions\/Session 0\.md/.test(l));
+      assert.equal(hits.length, 1, s.logs.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  it('S3: unknown status, an active chapter with no Teaser, and two active chapters each say so on one line', () => {
+    const ch = (n, status, extra = '') => `---\ntype: chapter\ntitle: Chapter ${n}\nsort_order: ${n}\n${status ? `status: ${status}\n` : ''}---\n\n# Chapter ${n}\n${extra}`;
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': ch(1, 'complet'),
+      'Chapters/C2/Chapter 2.md': ch(2, 'active'), 'Chapters/C3/Chapter 3.md': ch(3, 'active', '\n## Teaser\n\nT.\n'), 'Chapters/C4/Chapter 4.md': ch(4, null) }), { sites: ['player'] });
+    try {
+      const warn = s.logs.filter((l) => /WARNING/.test(l));
+      assert.equal(warn.filter((l) => /Chapter 1 Overview\.md/.test(l) && /"complet"/.test(l)).length, 1, warn.join('\n'));
+      assert.equal(warn.filter((l) => /Chapter 4\.md/.test(l) && /no status/.test(l)).length, 1, warn.join('\n'));
+      assert.equal(warn.filter((l) => /Chapter 2\.md/.test(l) && /Teaser/.test(l)).length, 1, warn.join('\n'));
+      assert.equal(warn.filter((l) => /Chapter 3\.md/.test(l) && /Teaser/.test(l)).length, 0, warn.join('\n'));
+      assert.equal(warn.filter((l) => /more than one/.test(l) && /Chapter 2\.md/.test(l) && /Chapter 3\.md/.test(l)).length, 1, warn.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  it('N3: the player build names a planned chapter as planned', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: planned\n') }), { sites: ['player'] });
+    try {
+      const hits = s.logs.filter((l) => /WARNING/.test(l) && /Chapter 1 Overview/.test(l));
+      assert.equal(hits.length, 1, s.logs.join('\n'));
+      assert.match(hits[0], /Chapters\/Chapter 1\/Chapter 1 Overview\.md: this chapter is planned/);
+    } finally { s.cleanup(); }
+  });
 });

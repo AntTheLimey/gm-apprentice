@@ -1,6 +1,6 @@
 const path = require('path');
 const { refTarget } = require('./wikilink');
-const { extractSections, resolveWikiLinks, resolveImageEmbeds, publishedSource, stripLeadingH1, valueText } = require('./processor');
+const { extractSections, findHeadings, renderMarkdown, resolveWikiLinks, resolveImageEmbeds, publishedSource, stripLeadingH1, valueText } = require('./processor');
 const { withoutMarked } = require('./gm-marks');
 const { slugify } = require('./scanner');
 const { canonicalNfc } = require('./unicode');
@@ -44,7 +44,50 @@ function findSection(page, resolve, titles, { marked = false, marks = null } = {
   return null;
 }
 
-const TEASER_TITLES = ['teaser'];
+// A chapter note's own part for the Story (chapter pages): the first level-2 section whose heading is exactly `wanted`
+// (trimmed, any case: "Teaser", "Recap"), read to the next heading of level 1 or 2. Never another heading that only
+// contains the word, and never a later one when the first is empty. Returns the section's body markdown, null when
+// there is none, or undefined when the note's headings could not be read (`warn` is told).
+function exactSection(text, wanted, { titleOf = (t) => t, warn = null } = {}) {
+  const lines = String(text || '').replace(/\r/g, '').split('\n');
+  let headingAt;
+  try {
+    ({ headingAt } = findHeadings(lines.join('\n')));
+  } catch (err) {
+    if (warn) warn(err);
+    return undefined;
+  }
+  const heads = [...headingAt].filter(([, h]) => !h.nested).sort((a, b) => a[0] - b[0]);
+  const at = heads.findIndex(([, h]) => h.level === 2 && titleOf(h.title).trim().toLowerCase() === wanted);
+  if (at < 0) return null;
+  const start = heads[at][1].end;
+  const next = heads.slice(at + 1).find(([, h]) => h.level <= 2);
+  return lines.slice(start, next ? next[0] : lines.length).join('\n');
+}
+
+// A chapter note's part as players see it ({ html } or null): `wanted` is "teaser" or "recap". Found in the players'
+// view; on the GM site (`marked`) shown from the marked view, its GM-only parts in place, marked.
+function chapterNotePart(page, resolve, wanted, { marked = false, marks = null, warn = null } = {}) {
+  const fromMarks = marked ? markedOf(page) : null;
+  const text = fromMarks === null ? publishedOf(page) : fromMarks;
+  const resolved = resolve ? resolve(text) : text;
+  const players = fromMarks === null ? resolved : withoutMarked(resolved, marks);
+  const body = exactSection(players, wanted, { warn });
+  if (!body) return null;
+  const html = renderMarkdown(body);
+  if (!html.trim()) return null;
+  if (fromMarks === null) return { html };
+  const shown = exactSection(resolved, wanted, { titleOf: (t) => withoutMarked(t, marks) });
+  return { html: shown ? renderMarkdown(shown) : html };
+}
+
+// The number each session row shows, on the contents page and the chapter page alike: its `session_number`, else one
+// more than the row before it (the first row, 1).
+function sessionRowNumbers(numbers) {
+  const out = [];
+  for (const n of numbers) out.push(n == null ? (out.length ? out[out.length - 1] + 1 : 1) : n);
+  return out;
+}
 
 // Every `session:`/`chapter:` ref in this file is author-typed and is compared against a
 // filename-derived title through a Map key or `===`. Canonicalizing here (#139) covers the
@@ -307,11 +350,13 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
     const shown = storySections(text, { resolve, marks: true, recapTitle: recap.title }).recap;
     return shown ? shown.html : recap.html;
   };
-  // A chapter note's part, found as players see it (findSection): on the GM site shown from its marked view, its
-  // GM-only parts in place, marked (ownRecapHtml). Nothing else of the note is ever read for the Story.
-  const chapterPart = (chapter, titles, resolve) => {
-    const found = findSection(chapter, resolve, titles, { marked, marks });
-    return found ? { ...found, html: ownRecapHtml({ ...found, sourcePage: chapter }, resolve), sourcePage: chapter } : null;
+  // A chapter note's part (chapterNotePart): its Teaser or its Recap, nothing else of the note is ever read for the
+  // Story. Its unreadable headings are said on the build's one warning pass.
+  const chapterPart = (chapter, wanted, resolve) => {
+    const name = chapter.sourcePath ? path.basename(chapter.sourcePath) : chapter.title;
+    const warn = images && images.warn ? (err) => console.warn(`  WARNING: ${name}: could not read its headings (${err.message}); its ${wanted} is left off its Story page`) : null;
+    const found = chapterNotePart(chapter, resolve, wanted, { marked, marks, warn });
+    return found ? { ...found, sourcePage: chapter } : null;
   };
   // What the players' own Story page at `outputPath` leads with, when the unit's wrap-up is one they do not see: the
   // recap of the wrap-up their page is made from (`players.wrapUpAt`, a wrap-up they see), else `playersRecap()`,
@@ -339,6 +384,8 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
   const units = [];
   const chapterOf = new Map();   // unit -> its chapter page: the Story pages pictured together (withFigures)
   const heldBackSessions = [];   // { chapter, sessions }: a planned chapter's sessions that would have had a Story page
+  const slugsTaken = new Map();   // a shown chapter's title slug -> the chapters that took it, in order
+  const duplicateChapters = [];   // [first, later]: two shown chapters with one title
   for (const chapter of chapters) {
     const before = units.length;
     // A planned chapter shows nowhere, and nor do its sessions; the ones that would have had a Story page (a recap)
@@ -353,7 +400,13 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
     }
     // Namespace unit ids by chapter so non-unique session titles (e.g. a plain "Session 1"
     // in two chapters) can't collide on the same story/<id>.html output path.
-    const chSlug = slugify(chapter.displayTitle || chapter.title);
+    // Two shown chapters with one title get their own pages: the second's address takes -2 (the third -3 ...), and
+    // the pair is recorded for the build to name.
+    const baseSlug = slugify(chapter.displayTitle || chapter.title);
+    const twins = slugsTaken.get(baseSlug) || [];
+    const chSlug = twins.length ? `${baseSlug}-${twins.length + 1}` : baseSlug;
+    if (twins.length) duplicateChapters.push([twins[0], chapter]);
+    slugsTaken.set(baseSlug, [...twins, chapter]);
     const chOut = unitOutputPath(chSlug);
     const status = chapterStatus(chapter);
     // The chapter's Story page takes recap, sections and moments only from its own chapter wrap-up (never a session's,
@@ -366,9 +419,9 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
     const fromWrap = chapterWrap ? findRecap(chapterWrap, chapterWrapResolve, { marked, marks }) : null;
     // What of the note shows: an active chapter its Teaser; a complete one its recap (the wrap-up's, else the note's
     // own Recap section) and its `overview:`; any other status nothing.
-    const noteRecap = () => (status === 'complete' ? chapterPart(chapter, RECAP_TITLES, ownResolveCh) : null);
+    const noteRecap = () => (status === 'complete' ? chapterPart(chapter, 'recap', ownResolveCh) : null);
     const chapterRecap = status !== 'complete' ? null : fromWrap ? { ...fromWrap, sourcePage: chapterWrap } : noteRecap();
-    const teaser = status === 'active' ? chapterPart(chapter, TEASER_TITLES, ownResolveCh) : null;
+    const teaser = status === 'active' ? chapterPart(chapter, 'teaser', ownResolveCh) : null;
     const fm = chapter.frontmatter || {};
     const overview = status === 'complete' ? dateFieldText(fm.overview) : null;
 
@@ -410,7 +463,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
       status, label: chapterLabel(fm.sort_order), dates: dateFieldText(fm.date_range),
       teaserHtml: teaser ? teaser.html : null, overview,
       recapHtml: chapterRecap ? chapterRecap.html : null,
-      sessions: sessionUnits.map(u => ({ title: u.title, outputPath: u.outputPath, inGameDate: dateFieldText(u.sourcePage.frontmatter.in_game_date), number: sessionNumberOf(u.sourcePage) })),
+      sessions: ((numbers) => sessionUnits.map((u, i) => ({ title: u.title, outputPath: u.outputPath, inGameDate: dateFieldText(u.sourcePage.frontmatter.in_game_date), number: numbers[i] })))(sessionRowNumbers(sessionUnits.map(u => sessionNumberOf(u.sourcePage)))),
       sourcePage: chapter, wrapUpPage: chapterWrap || null,
       ...bodyOf(chapterWrap, chapterRecap, chapterWrapResolve),
       ...heldBackOf(chOut, chapterWrap, chapterRecap, () => (noteRecap() || {}).html || null),
@@ -470,6 +523,12 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
     unpublished.get(ref).push(s);
   }
   units.unpublishedChapters = [...unpublished].map(([ref, held]) => ({ ref, sessions: held }));
+  units.duplicateChapters = duplicateChapters;
+  // A session with a recap, no `chapter:` and no chapter folder, where the Story shows a chapter: it has no Story page,
+  // and the build names it. A vault with no chapter shown says nothing (its Story is as it always was).
+  const anyChapter = units.some(u => u.kind === 'chapter');
+  units.unchapteredSessions = anyChapter ? orderedSessions(pages).filter(s => !refTarget(s.frontmatter.chapter)
+    && !chapterOfSession(s, pages) && resolveUnitRecap(s, wrapUpForUnit(s, wrapUps, idx, pairs), null)) : [];
   return units;
 }
 
@@ -520,4 +579,4 @@ function characterStoryGroup(frontmatter, fallen) {
   return 'current';
 }
 
-module.exports = { chapterStatus, isCompleteChapter, chapterLabel, findSection, gmStoryNotes, findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOfSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, probeSpine, storyPagesFor, orderedSessions, characterStoryGroup };
+module.exports = { chapterStatus, isCompleteChapter, chapterLabel, findSection, exactSection, sessionRowNumbers, gmStoryNotes, findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOfSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, probeSpine, storyPagesFor, orderedSessions, characterStoryGroup };

@@ -224,7 +224,7 @@ describe('characterStoryGroup', () => {
 
 describe('wiki-link resolution in story recaps', () => {
   const pages = [
-    { title: 'Chapter 1 Overview', displayTitle: 'Chapter 1 — The Hungry God', sourcePath: '/v/Chapters/Chapter 1/Chapter 1 Overview.md', frontmatter: { type: 'chapter', sort_order: 1, status: 'complete' }, markdown: '## Narrative Recap\nIt began at [[Voss_Campus]].' },
+    { title: 'Chapter 1 Overview', displayTitle: 'Chapter 1 — The Hungry God', sourcePath: '/v/Chapters/Chapter 1/Chapter 1 Overview.md', frontmatter: { type: 'chapter', sort_order: 1, status: 'complete' }, markdown: '## Recap\nIt began at [[Voss_Campus]].' },
     { title: 'Session 04 - Fallen Stars', displayTitle: 'Session 04 - Fallen Stars', sourcePath: '/v/Chapters/Chapter 1/Sessions/Session 04 - Fallen Stars.md', frontmatter: { type: 'session', session_number: 4 }, markdown: '## Narrative Recap\nThe team hit [[Voss_Campus]] with [[Ronnie_Vint|Ronnie]] and met [[Nobody_Known]].' },
   ];
   const linkMap = {
@@ -579,5 +579,65 @@ describe('buildStorySpine: one chapter unit per shown chapter', () => {
     const clash = buildStorySpine([chapterNote('active', BODY), intro]);
     assert.ok(clash.some(u => u.outputPath === 'story/the-docks-intro.html'));
     assert.strictEqual(chapterUnit(clash).oldOutputPath, null);
+  });
+});
+
+// PR B fix round: the chapter note's parts are its sections named exactly "Teaser" and "Recap" (M1, N1), chapters
+// with one title get their own pages (S1), unchaptered played sessions are recorded (S2), and session numbers (nit 2).
+describe('buildStorySpine: a chapter note\'s Teaser and Recap, exactly', () => {
+  const note = (status, body) => ({ title: 'Ch5', displayTitle: 'Ch5', sourcePath: '/v/Ch5.md', frontmatter: { type: 'chapter', sort_order: 5, status }, markdown: body });
+  const s = { title: 'S6', displayTitle: 'S6', sourcePath: '/v/S6.md', frontmatter: { type: 'session', session_number: 6, chapter: '[[Ch5]]' }, markdown: '## Narrative Recap\nS6.' };
+  const unit = (n) => buildStorySpine([n, s]).find(u => u.kind === 'chapter');
+
+  it('a heading that only contains "teaser" is not the Teaser, and a fenced Teaser does not fall through to it', () => {
+    const fenced = note('active', '# Ch5\n\n<!-- gm-only -->\n## Teaser\n\nFENCED\n<!-- /gm-only -->\n\n## Teaser ideas for later\n\nLEAKX-CH5-TEASERIDEAS\n');
+    fenced.publishedMarkdown = '# Ch5\n\n\n## Teaser ideas for later\n\nLEAKX-CH5-TEASERIDEAS\n';
+    assert.strictEqual(unit(fenced).teaserHtml, null);
+    assert.strictEqual(unit(note('active', '# Ch5\n\n## The teaser of doom (GM only, never show)\n\nLEAKX-DOOMTEASER\n')).teaserHtml, null);
+  });
+  it('an empty Teaser is no Teaser, even with another Teaser-ish heading after it', () => {
+    assert.strictEqual(unit(note('active', '## Teaser\n\n## Teaser draft\n\nDRAFT\n')).teaserHtml, null);
+  });
+  it('the heading is matched trimmed and in any case', () => {
+    assert.match(unit(note('active', '##   TEASER  \n\nT-OK\n')).teaserHtml, /T-OK/);
+  });
+  it('the note\'s Recap is the section headed "Recap" exactly', () => {
+    assert.strictEqual(unit(note('complete', '## Recap ideas (GM)\n\nLEAKX-RECAPIDEAS\n')).recapHtml, null);
+    assert.strictEqual(unit(note('complete', '## Narrative Recap draft\n\nLEAKX-NR\n')).recapHtml, null);
+    assert.match(unit(note('complete', '## recap\n\nR-OK\n')).recapHtml, /R-OK/);
+  });
+  it('a section ends at the next heading of level 1 or 2', () => {
+    const u = unit(note('active', '## Teaser\n\nT-OK\n\n### Detail\n\nT-H3-OK\n\n# Appendix\n\nLEAKX-H1AFTER\n'));
+    assert.match(u.teaserHtml, /T-OK[\s\S]*T-H3-OK/);
+    assert.doesNotMatch(u.teaserHtml, /LEAKX-H1AFTER/);
+    const r = unit(note('complete', '## Recap\n\nR-OK\n\n# Appendix\n\nLEAKX-H1AFTER\n'));
+    assert.doesNotMatch(r.recapHtml, /LEAKX-H1AFTER/);
+  });
+});
+
+describe('buildStorySpine: chapters with one title, unchaptered sessions, numbers', () => {
+  const arc = (dir, status) => ({ title: 'Arc', displayTitle: 'Arc', sourcePath: `/v/Chapters/${dir}/Arc.md`, frontmatter: { type: 'chapter', sort_order: dir === 'A' ? 1 : 2, status }, markdown: '## Recap\n\nR.' });
+  it('two chapters with the same title get their own pages; the pair is recorded', () => {
+    const a = arc('A', 'complete');
+    const b = arc('B', 'active');
+    const spine = buildStorySpine([a, b]);
+    assert.deepStrictEqual(spine.filter(u => u.kind === 'chapter').map(u => u.outputPath), ['story/arc.html', 'story/arc-2.html']);
+    assert.deepStrictEqual(spine.duplicateChapters, [[a, b]]);
+  });
+  it('a played session no chapter heads is recorded where a chapter is shown, never in a chapterless vault', () => {
+    const lone = { title: 'Session 0', displayTitle: 'Session 0', sourcePath: '/v/Sessions/Session 0.md', frontmatter: { type: 'session', session_number: 0 }, markdown: '## Narrative Recap\nPrologue.' };
+    const quiet = { ...lone, title: 'Session 9', markdown: '## Overview\nnot played' };
+    assert.deepStrictEqual(buildStorySpine([arc('A', 'active'), lone, quiet]).unchapteredSessions, [lone]);
+    assert.deepStrictEqual(buildStorySpine([lone]).unchapteredSessions, []);
+  });
+  it('a session with no number takes the one after the row before it', () => {
+    const ch = arc('A', 'active');
+    const mk = (title, n) => ({ title, displayTitle: title, sourcePath: `/v/Chapters/A/${title}.md`, frontmatter: { type: 'session', ...(n == null ? {} : { session_number: n }), chapter: '[[Arc]]' }, markdown: '## Narrative Recap\nx' });
+    // An unnumbered session sorts first (bySessionNumber reads it as 0), so it is 1 here.
+    const u = buildStorySpine([ch, mk('S6', 6), mk('S7', 7), mk('Sx', null)]).find(x => x.kind === 'chapter');
+    assert.deepStrictEqual(u.sessions.map(x => [x.title, x.number]), [['Sx', 1], ['S6', 6], ['S7', 7]]);
+    const { sessionRowNumbers } = require('../../lib/story-spine');
+    assert.deepStrictEqual(sessionRowNumbers([6, 7, null]), [6, 7, 8]);
+    assert.deepStrictEqual(sessionRowNumbers([null, null]), [1, 2]);
   });
 });

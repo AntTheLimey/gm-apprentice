@@ -110,8 +110,8 @@ describe('chapter page', () => {
       '<p class="story-chapter-now">now being played</p>', '<div class="story-chapter-teaser"><p>TEASER-TEXT</p></div>',
       '<h2 class="story-chapter-sessions-title">Sessions so far</h2>', '<ol class="story-chapter-sessions">'].map((s) => html.indexOf(s));
     assert.ok(at.every((i) => i >= 0) && at.every((x, i) => i === 0 || at[i - 1] < x), `in order: ${at}`);
-    assert.match(html, /<li><a href="the-docks-s1\.html">Session 1<\/a> <span class="story-chapter-date">12 March 1817<\/span><\/li>/);
-    assert.match(html, /<li><a href="the-docks-s2\.html">Session 2<\/a><\/li>/);
+    assert.match(html, /<li value="1"><a href="the-docks-s1\.html">Session 1<\/a> <span class="story-chapter-date">12 March 1817<\/span><\/li>/);
+    assert.match(html, /<li value="2"><a href="the-docks-s2\.html">Session 2<\/a><\/li>/);
     assert.doesNotMatch(html, /story-chapter-overview|story-chapter-more|story-eyebrow/);
     assert.equal((html.match(/class="story-nav"/g) || []).length, 2);
   });
@@ -130,6 +130,16 @@ describe('chapter page', () => {
     assert.match(html, /data-chapter-status="unknown"/);
     assert.doesNotMatch(article(html), /story-chapter-(label|dates|now|teaser|overview|more)/);
     assert.match(html, /<h2 class="story-chapter-sessions-title">The sessions<\/h2>/);
+  });
+
+  it('the contents page and the chapter page number a session the same way', () => {
+    const { storyLanding } = require('../../lib/templates/story-landing');
+    const sessions = [{ title: 'A', outputPath: 'story/the-docks-a.html', inGameDate: null, number: 6 }, { title: 'B', outputPath: 'story/the-docks-b.html', inGameDate: null, number: 7 }];
+    const unit = { ...base, status: 'complete', sessions };
+    const chapterHtml = storyPage(unit, cfg, pub, () => '');
+    const contents = storyLanding([unit], [], cfg, pub, () => '');
+    assert.deepStrictEqual([...chapterHtml.matchAll(/<li value="(\d+)">/g)].map((m) => m[1]), ['6', '7']);
+    assert.deepStrictEqual([...contents.matchAll(/<span class="n"[^>]*>(\d+)<\/span>/g)].map((m) => m[1]), ['6', '7']);
   });
 
   it('a session with a number keeps it in the list', () => {
@@ -191,5 +201,9 @@ describe('splitOpening', () => {
     const r3 = splitOpening(`<p>SEEN ${open}hid</p><p>more${close}</p>`);
     assert.strictEqual(r3.opening, `<p>SEEN ${open}hid</p>${close}`);
     assert.strictEqual(r3.rest, `${open}<p>more${close}</p>`);
+    // A rest that holds only mark tokens is no rest: no toggle, the marks still balanced.
+    const r4 = splitOpening(`<p>a ${open}x</p>${close}`);
+    assert.strictEqual(r4.rest, '');
+    assert.strictEqual(r4.opening, `<p>a ${open}x</p>${close}`);
   });
 });

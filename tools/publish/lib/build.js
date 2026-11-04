@@ -31,7 +31,7 @@ const { createMarks, markKinds, sanitize, unmark, withoutMarked } = require('./g
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
 const { KINDS, parseMoments, momentsHtml } = require('./story-moments');
-const { buildStorySpine, probeSpine, gmStoryNotes, storyPagesFor, chapterOfSession, characterStoryGroup } = require('./story-spine');
+const { buildStorySpine, probeSpine, gmStoryNotes, storyPagesFor, chapterOfSession, chapterMatchesSession, chapterStatus, characterStoryGroup } = require('./story-spine');
 const { figureCandidates, pageNames, nameHolders, sceneCandidates } = require('./story-figures');
 const { foldPlan, applyFold, isFolded, labelFoldedHeadings } = require('./story-fold');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
@@ -1246,6 +1246,9 @@ function buildSite(options) {
   // The GM site: the pages the player site writes a page for, judged as the player site judges them (a listed-only prop
   // whose words are all the GM's has a page here and none there), for the pictures a Story page may show.
   const playerPaged = gm ? new Set(playerPublished.filter((p) => !noPageFor(p, { excludeSections, excludeCallouts }))) : null;
+  // The chapter notes this site does not publish, for the Story's warnings: a session naming one is told why.
+  const publishedSet = new Set(published);
+  const unshownChapters = pages.filter((p) => p.frontmatter && p.frontmatter.type === 'chapter' && !publishedSet.has(p));
   pages = published.filter(p => !getsNoPage(p));
   // A page whose address leads through a link in a kept folder (a full build's clean leaves only those; a fast build
   // cleans nothing) is never written (#507). It leaves the list here, like an unpublished note, so no link, index or
@@ -2770,8 +2773,29 @@ function buildSite(options) {
         console.warn(`  WARNING: ${vaultRelPathOf(chapter)}: this chapter is planned, so its played sessions have no Story page: ${held.map(vaultRelPathOf).join(', ')}`);
       }
       for (const { ref, sessions: held } of spine.unpublishedChapters) {
-        console.warn(`  WARNING: sessions name the chapter "${ref}", which is not a chapter page on this site (it does not publish here, or no chapter note has that name), so they have no Story page: ${held.map(vaultRelPathOf).join(', ')}`);
+        // A planned chapter is kept off the player site by its status, so it is named as the GM site names it.
+        const note = unshownChapters.find((c) => chapterMatchesSession(c, held[0]));
+        if (note && chapterStatus(note) === 'planned') {
+          console.warn(`  WARNING: ${vaultRelPathOf(note)}: this chapter is planned, so its played sessions have no Story page: ${held.map(vaultRelPathOf).join(', ')}`);
+        } else {
+          console.warn(`  WARNING: sessions name the chapter "${ref}", which is not a chapter page on this site (it does not publish here, or no chapter note has that name), so they have no Story page: ${held.map(vaultRelPathOf).join(', ')}`);
+        }
       }
+      if (spine.unchapteredSessions.length) {
+        console.warn(`  WARNING: played sessions with no chapter have no Story page (give each a chapter: field): ${spine.unchapteredSessions.map(vaultRelPathOf).join(', ')}`);
+      }
+      for (const [first, later] of spine.duplicateChapters) {
+        console.warn(`  WARNING: ${vaultRelPathOf(first)} and ${vaultRelPathOf(later)} have the same title; the second's Story page is ${spine.find((u) => u.sourcePage === later).outputPath} and sessions naming that title go to the first`);
+      }
+      // The chapter bookkeeping the GM sets (chapter pages): said, one line each.
+      const chapterUnits = spine.filter((u) => u.kind === 'chapter');
+      for (const u of chapterUnits) {
+        const raw = ((u.sourcePage.frontmatter || {}).status);
+        if (u.status === 'unknown') console.warn(`  WARNING: ${vaultRelPathOf(u.sourcePage)}: ${raw == null || String(raw).trim() === '' ? 'no status' : `status "${raw}" is not planned, active or complete`}, so its Story page shows only its heading and sessions`);
+        if (u.status === 'active' && !u.teaserHtml) console.warn(`  WARNING: ${vaultRelPathOf(u.sourcePage)}: an active chapter with no ## Teaser, so its Story page shows no text`);
+      }
+      const active = chapterUnits.filter((u) => u.status === 'active');
+      if (active.length > 1) console.warn(`  WARNING: more than one chapter is active (only the chapter being played should be): ${active.map((u) => vaultRelPathOf(u.sourcePage)).join(', ')}`);
       const written = new Set(spine.map((u) => u.outputPath));
       for (const [out, wraps] of foldedOnto) {
         if (written.has(out)) continue;
