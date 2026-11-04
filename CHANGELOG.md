@@ -17,6 +17,8 @@ A chapter's Story page no longer uses up its chapter's pictures. Publish tool 1.
 
 In Canticle, Vienna's session Story pages go from 5 pictures in all to 13 at the next deploy, and Calcutta's from 77 to 82. A session page that still shows none names only people and places an earlier session page of its chapter already pictured.
 
+---
+
 ## [1.10.129] — 2026-11-04
 
 GURPS sheets and the party board can count local gravity, weights in ounces read right, and gear added after a player saved ticks shows ticked. Publish tool 1.64.0. No vault change is needed (#510).
