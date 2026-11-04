@@ -151,10 +151,17 @@ function wrapUpForUnit(unitPage, wrapUps, idx, pairs) {
 
 function unitOutputPath(id) { return `story/${id}.html`; }
 
-// A chapter has a recap only once it is complete (`status: complete`, any case); until then its Story page shows its
-// introduction.
+// A chapter note's `status:` as the Story reads it: 'planned', 'active' or 'complete' (any case, trimmed), else
+// 'unknown' (missing, or any other value, such as an old `in_progress`). A planned chapter shows nowhere on the Story.
+const CHAPTER_STATUSES = new Set(['planned', 'active', 'complete']);
+function chapterStatus(chapter) {
+  const s = String(((chapter && chapter.frontmatter) || {}).status || '').trim().toLowerCase();
+  return CHAPTER_STATUSES.has(s) ? s : 'unknown';
+}
+
+// A chapter has a recap only once it is complete; until then its Story page shows its introduction.
 function isCompleteChapter(chapter) {
-  return String(((chapter && chapter.frontmatter) || {}).status || '').trim().toLowerCase() === 'complete';
+  return chapterStatus(chapter) === 'complete';
 }
 
 function sortedChapters(pages) {
@@ -303,8 +310,19 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
 
   const units = [];
   const chapterOf = new Map();   // unit -> its chapter page: the Story pages pictured together (withFigures)
+  const heldBackSessions = [];   // { chapter, sessions }: a planned chapter's sessions that would have had a Story page
   for (const chapter of chapters) {
     const before = units.length;
+    // A planned chapter shows nowhere, and nor do its sessions; the ones that would have had a Story page (a recap)
+    // are recorded, for the build to name.
+    if (chapterStatus(chapter) === 'planned') {
+      const held = sessions
+        .filter(s => chapterOfSession(s, pages) === chapter)
+        .sort(bySessionNumber)
+        .filter(s => resolveUnitRecap(s, wrapUpForUnit(s, wrapUps, idx, pairs), null));
+      if (held.length) heldBackSessions.push({ chapter, sessions: held });
+      continue;
+    }
     // Namespace unit ids by chapter so non-unique session titles (e.g. a plain "Session 1"
     // in two chapters) can't collide on the same story/<id>.html output path.
     const chSlug = slugify(chapter.displayTitle || chapter.title);
@@ -403,6 +421,19 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
     units[i].prevHref = i > 0 ? units[i - 1].outputPath : null;
     units[i].nextHref = i < units.length - 1 ? units[i + 1].outputPath : null;
   }
+  units.heldBackSessions = heldBackSessions;
+  // { ref, sessions }: each `chapter:` ref that sessions with a recap name but no chapter page here heads (the chapter
+  // note does not publish: `publish: false`, a planned status, left out; or the ref names no chapter), once each, in
+  // session order, with those sessions: the build says so, never silent.
+  const unpublished = new Map();
+  for (const s of orderedSessions(pages)) {
+    const ref = refTarget(s.frontmatter.chapter);
+    if (!ref || chapterOfSession(s, pages)) continue;
+    if (!resolveUnitRecap(s, wrapUpForUnit(s, wrapUps, idx, pairs), null)) continue;
+    if (!unpublished.has(ref)) unpublished.set(ref, []);
+    unpublished.get(ref).push(s);
+  }
+  units.unpublishedChapters = [...unpublished].map(([ref, held]) => ({ ref, sessions: held }));
   return units;
 }
 
@@ -453,4 +484,4 @@ function characterStoryGroup(frontmatter, fallen) {
   return 'current';
 }
 
-module.exports = { gmStoryNotes, findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOfSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, probeSpine, storyPagesFor, orderedSessions, characterStoryGroup };
+module.exports = { chapterStatus, isCompleteChapter, gmStoryNotes, findRecap, publishedOf, RECAP_TITLES, buildWrapUpIndex, refTarget, WRAP_UP_TYPES, resolveUnitRecap, chapterMatchesSession, chapterOfSession, wrapUpForUnit, folderOf, isUnder, buildStorySpine, probeSpine, storyPagesFor, orderedSessions, characterStoryGroup };

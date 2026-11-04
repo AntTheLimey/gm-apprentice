@@ -2763,6 +2763,14 @@ function buildSite(options) {
     // The fold was planned on the probe spine (probeSpine), which reads recaps as this one does. Should the two ever
     // disagree, a folded wrap-up would be on no page: said, never silent.
     if (live) {
+      // What the Story cannot show is said: a planned chapter's played sessions, and sessions whose chapter is no
+      // chapter page here.
+      for (const { chapter, sessions: held } of spine.heldBackSessions) {
+        console.warn(`  WARNING: ${vaultRelPathOf(chapter)}: this chapter is planned, so its played sessions have no Story page: ${held.map(vaultRelPathOf).join(', ')}`);
+      }
+      for (const { ref, sessions: held } of spine.unpublishedChapters) {
+        console.warn(`  WARNING: sessions name the chapter "${ref}", which is not a chapter page on this site (it does not publish here, or no chapter note has that name), so they have no Story page: ${held.map(vaultRelPathOf).join(', ')}`);
+      }
       const written = new Set(spine.map((u) => u.outputPath));
       for (const [out, wraps] of foldedOnto) {
         if (written.has(out)) continue;

@@ -64,3 +64,37 @@ describe('build story section', () => {
     }
   });
 });
+
+// Chapter status (chapter pages, Task 2): what a chapter holds back is said, never silent.
+describe('build story: chapters the Story cannot show say so', () => {
+  const { buildBoth } = require('../helpers/gm-build');
+  const { storyVault, CHAPTER } = require('../helpers/story-vault');
+
+  // A planned note already stays off the player site (AUTO_EXCLUDED_STATUS), so there its sessions name a chapter that
+  // does not publish; the GM site has the note, and its Story holds the planned chapter's sessions back.
+  it('a planned chapter with played sessions: no Story page for them, and one warning naming them on each site', () => {
+    const vault = storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: planned\n') });
+    for (const site of ['player', 'gm']) {
+      const s = buildBoth(vault, { sites: [site] });
+      try {
+        assert.equal(s[site].exists('story', 'chapter-1-docks-session-1.html'), false, site);
+        const hits = s.logs.filter((l) => /WARNING/.test(l) && /Chapter 1 Overview/.test(l));
+        assert.equal(hits.length, 1, `${site}:\n${s.logs.join('\n')}`);
+        if (site === 'gm') assert.match(hits[0], /Chapters\/Chapter 1\/Chapter 1 Overview\.md: this chapter is planned/);
+        assert.match(hits[0], /Sessions\/Session 1\.md/);
+        assert.match(hits[0], /Sessions\/Session 2\.md/);
+      } finally { s.cleanup(); }
+    }
+  });
+
+  // Review Focus 1: the chapter note does not publish, so nothing of it shows and its sessions have no chapter.
+  it('a chapter note that does not publish: one warning naming it, and nothing of the note shows', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\npublish: false\n') }), { sites: ['player'] });
+    try {
+      const hits = s.logs.filter((l) => /WARNING/.test(l) && /Chapter 1 Overview/.test(l));
+      assert.equal(hits.length, 1, s.logs.join('\n'));
+      const all = s.player.files().filter((f) => f.endsWith('.html')).map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+      assert.ok(!all.includes('CHAPTER-BODY-1'), 'the chapter note shows nowhere');
+    } finally { s.cleanup(); }
+  });
+});

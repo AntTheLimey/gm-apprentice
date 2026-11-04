@@ -407,3 +407,52 @@ describe('gmStoryNotes', () => {
     assert.strictEqual(gmStoryNotes({ sourcePage: {}, wrapUpPage: null }, { playerHas: false, shows: () => false }).banner, 'the player site has no Story page here');
   });
 });
+
+// Chapter status (chapter pages, Task 2): planned / active / complete, anything else unknown.
+describe('chapterStatus', () => {
+  const { chapterStatus } = require('../../lib/story-spine');
+  const of = (status) => chapterStatus({ frontmatter: status === undefined ? {} : { status } });
+  it('reads planned, active and complete in any case, trimmed', () => {
+    assert.strictEqual(of('Active'), 'active');
+    assert.strictEqual(of(' complete '), 'complete');
+    assert.strictEqual(of('PLANNED'), 'planned');
+  });
+  it('a missing or other value is unknown', () => {
+    assert.strictEqual(of('in_progress'), 'unknown');
+    assert.strictEqual(of(undefined), 'unknown');
+    assert.strictEqual(of(''), 'unknown');
+    assert.strictEqual(chapterStatus(null), 'unknown');
+  });
+});
+
+describe('buildStorySpine: chapter status', () => {
+  it('a planned chapter gives no unit for itself or its sessions, and records the sessions it held back', () => {
+    const chapter = ch('Chapter_1', 1, 'planned');
+    const s1 = sess('Chapter_1_S1', 'Chapter_1', 1, 'C1S1 recap');
+    const spine = buildStorySpine([chapter, s1]);
+    assert.deepStrictEqual(spine.map(u => u.id), []);
+    assert.deepStrictEqual(spine.heldBackSessions, [{ chapter, sessions: [s1] }]);
+    assert.deepStrictEqual(spine.unpublishedChapters, []);
+  });
+  it('a planned chapter whose sessions have no recap holds nothing back', () => {
+    const spine = buildStorySpine([ch('Chapter_1', 1, 'planned'), sess('Chapter_1_S1', 'Chapter_1', 1, null)]);
+    assert.deepStrictEqual(spine.heldBackSessions, []);
+  });
+  for (const status of ['active', 'complete', 'in_progress', undefined]) {
+    it(`a ${status} chapter is shown`, () => {
+      const spine = buildStorySpine([ch('Chapter_1', 1, status), sess('Chapter_1_S1', 'Chapter_1', 1, 'C1S1 recap')]);
+      assert.ok(spine.some(u => u.kind === 'session'), `units: ${spine.map(u => u.kind)}`);
+      assert.deepStrictEqual(spine.heldBackSessions, []);
+    });
+  }
+  // Review Focus 1: the chapter note does not publish, so it is not in `pages`.
+  it('a session naming a chapter that is not in pages records the ref, once', () => {
+    const spine = buildStorySpine([
+      sess('Chapter_9_S1', 'Chapter_9', 1, 'C9S1 recap'),
+      sess('Chapter_9_S2', 'Chapter_9', 2, 'C9S2 recap'),
+      sess('Loose', '', 3, 'no ref at all'),
+    ]);
+    assert.deepStrictEqual(spine.unpublishedChapters.map(e => [e.ref, e.sessions.map(x => x.title)]), [['Chapter_9', ['Chapter_9_S1', 'Chapter_9_S2']]]);
+    assert.deepStrictEqual(spine.heldBackSessions, []);
+  });
+});
