@@ -350,3 +350,20 @@ describe('build story: fix round', () => {
     } finally { s.cleanup(); }
   });
 });
+
+// PR B CodeRabbit round (4465405774): a status hide.fields takes off still reads as no status on the Story (pinned in
+// explain-cli (f)); the warning says why, rather than telling the GM the note has none.
+describe('build story: a chapter status the player site hides', () => {
+  const { buildBoth } = require('../helpers/gm-build');
+  const { storyVault, CHAPTER } = require('../helpers/story-vault');
+  it('the warning names hide.fields', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n') }),
+      { player: { hide: { fields: ['status'] } }, sites: ['player'] });
+    try {
+      const hits = s.logs.filter((l) => /WARNING/.test(l) && /Chapter 1 Overview\.md/.test(l));
+      assert.equal(hits.length, 1, s.logs.join('\n'));
+      assert.match(hits[0], /hide\.fields/);
+      assert.doesNotMatch(hits[0], /no status/);
+    } finally { s.cleanup(); }
+  });
+});

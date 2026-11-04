@@ -2791,7 +2791,12 @@ function buildSite(options) {
       const chapterUnits = spine.filter((u) => u.kind === 'chapter');
       for (const u of chapterUnits) {
         const raw = ((u.sourcePage.frontmatter || {}).status);
-        if (u.status === 'unknown') console.warn(`  WARNING: ${vaultRelPathOf(u.sourcePage)}: ${raw == null || String(raw).trim() === '' ? 'no status' : `status "${raw}" is not planned, active or complete`}, so its Story page shows only its heading and sessions`);
+        // A status the player site's hide.fields takes off reads as none on the Story (explain agrees); say so.
+        const own = ((u.sourcePage.sourceFrontmatter || {}).status);
+        const blank = (v) => v == null || String(v).trim() === '';
+        const why = blank(raw) && !blank(own) ? 'its status is hidden by hide.fields, so the Story reads it as none'
+          : blank(raw) ? 'no status' : `status "${raw}" is not planned, active or complete`;
+        if (u.status === 'unknown') console.warn(`  WARNING: ${vaultRelPathOf(u.sourcePage)}: ${why}, so its Story page shows only its heading and sessions`);
         if (u.status === 'active' && !u.teaserHtml) console.warn(`  WARNING: ${vaultRelPathOf(u.sourcePage)}: an active chapter with no ## Teaser, so its Story page shows no text`);
       }
       const active = chapterUnits.filter((u) => u.status === 'active');

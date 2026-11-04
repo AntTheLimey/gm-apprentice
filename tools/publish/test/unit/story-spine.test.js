@@ -652,3 +652,36 @@ describe('buildStorySpine: chapters with one title, unchaptered sessions, number
     assert.deepStrictEqual(sessionRowNumbers([null, null]), [1, 2]);
   });
 });
+
+// PR B CodeRabbit round.
+describe('buildStorySpine: CodeRabbit round', () => {
+  const chap = (title, sort, status, dir = title) => ({ title, displayTitle: title, sourcePath: `/v/Chapters/${dir}/${title}.md`, frontmatter: { type: 'chapter', sort_order: sort, status }, markdown: `# ${title}\n\nBody.\n\n## Recap\n\nR.` });
+  const sess = (title, chapterTitle, n, dir) => ({ title, displayTitle: title, sourcePath: `/v/Chapters/${dir}/${title}.md`,
+    frontmatter: { type: 'session', ...(n === undefined ? {} : { session_number: n }), chapter: `[[${chapterTitle}]]` }, markdown: '## Narrative Recap\nx' });
+
+  it('4465405786: a blank session_number is no number, not 0', () => {
+    const { sessionRowNumbers } = require('../../lib/story-spine');
+    for (const blank of [null, '', '  ']) {
+      const u = buildStorySpine([chap('Arc', 1, 'active'), sess('S1', 'Arc', blank, 'Arc')]).find(x => x.kind === 'chapter');
+      assert.deepStrictEqual(u.sessions.map(x => x.number), [1], JSON.stringify(blank));
+    }
+    assert.deepStrictEqual(sessionRowNumbers([null]), [1]);
+  });
+
+  it('4465405827: no two Story pages share an address (a titled -2 chapter, a chapter named like a session page)', () => {
+    const spine = buildStorySpine([chap('Arc', 1, 'complete', 'A'), chap('Arc-2', 2, 'complete', 'B'), chap('Arc', 3, 'complete', 'C'),
+      chap('Docks', 4, 'active'), sess('S1', 'Docks', 1, 'Docks'), chap('Docks S1', 5, 'complete')]);
+    const out = spine.map(u => u.outputPath);
+    assert.strictEqual(new Set(out).size, out.length, out.join(', '));
+    assert.ok(out.includes('story/docks-s1.html'));
+  });
+
+  it('4465405834: the old -intro address of two same-titled chapters leads to the one that was last written there', () => {
+    const a = chap('Arc', 1, 'complete', 'A');
+    const b = chap('Arc', 2, 'active', 'B');
+    const spine = buildStorySpine([a, b, sess('S1', 'Arc', 1, 'A'), { ...sess('S2', 'Arc', 2, 'B'), frontmatter: { type: 'session', session_number: 2 } }]);
+    const units = spine.filter(u => u.kind === 'chapter');
+    const owners = units.filter(u => u.oldOutputPath).map(u => [u.sourcePage, u.oldOutputPath]);
+    assert.deepStrictEqual(owners, [[b, 'story/arc-intro.html']]);
+  });
+});

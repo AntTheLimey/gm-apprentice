@@ -235,9 +235,11 @@ function dateFieldText(value) {
   return text.trim() ? text.trim() : null;
 }
 
-// A session's `session_number` as a whole number, or null.
+// A session's `session_number` as a whole number, or null (missing or blank too: `Number('')` would read 0).
 function sessionNumberOf(session) {
-  const n = Number(((session && session.frontmatter) || {}).session_number);
+  const raw = ((session && session.frontmatter) || {}).session_number;
+  if (raw == null || (typeof raw === 'string' && !raw.trim())) return null;
+  const n = Number(raw);
   return Number.isInteger(n) && n >= 0 ? n : null;
 }
 
@@ -387,6 +389,10 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
   const chapterOf = new Map();   // unit -> its chapter page: the Story pages pictured together (withFigures)
   const heldBackSessions = [];   // { chapter, sessions }: a planned chapter's sessions that would have had a Story page
   const slugsTaken = new Map();   // a shown chapter's title slug -> the chapters that took it, in order
+  // Every Story page's address, chapters' and sessions' alike: each unit takes the first free one from its slug
+  // (`slug`, then `slug-2`, `slug-3` ...), so no two pages are written to one file.
+  const takenOut = new Set();
+  const freeId = (slug) => { let id = slug; for (let n = 2; takenOut.has(unitOutputPath(id)); n++) id = `${slug}-${n}`; return id; };
   const duplicateChapters = [];   // [first, later]: two shown chapters with one title
   for (const chapter of chapters) {
     const before = units.length;
@@ -402,11 +408,12 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
     }
     // Namespace unit ids by chapter so non-unique session titles (e.g. a plain "Session 1"
     // in two chapters) can't collide on the same story/<id>.html output path.
-    // Two shown chapters with one title get their own pages: the second's address takes -2 (the third -3 ...), and
-    // the pair is recorded for the build to name.
+    // Two shown chapters with one title get their own pages (the second's address the next free one, -2 ...), and the
+    // pair is recorded for the build to name.
     const baseSlug = slugify(chapter.displayTitle || chapter.title);
     const twins = slugsTaken.get(baseSlug) || [];
-    const chSlug = twins.length ? `${baseSlug}-${twins.length + 1}` : baseSlug;
+    const chSlug = freeId(baseSlug);
+    takenOut.add(unitOutputPath(chSlug));
     if (twins.length) duplicateChapters.push([twins[0], chapter]);
     slugsTaken.set(baseSlug, [...twins, chapter]);
     const chOut = unitOutputPath(chSlug);
@@ -433,12 +440,13 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
 
     const sessionUnits = [];
     for (const s of chapterSessions) {
-      const id = `${chSlug}-${slugify(s.title)}`;
+      const id = freeId(`${chSlug}-${slugify(s.title)}`);
       const wrapUp = ownWrapUp(wrapUpForUnit(s, wrapUps, idx, pairs), unitOutputPath(id));
       const wrapResolve = once(resolverFor(unitOutputPath(id), foldedInto(wrapUp, unitOutputPath(id))));
       const ownResolve = resolverFor(unitOutputPath(id));
       const recap = resolveUnitRecap(s, wrapUp, ownResolve, wrapResolve, { marked, marks });
       if (!recap) continue;
+      takenOut.add(unitOutputPath(id));
       sessionUnits.push({
         kind: 'session', id, outputPath: unitOutputPath(id),
         title: s.displayTitle || s.title.replace(/_/g, ' '),
@@ -469,7 +477,8 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
       sourcePage: chapter, wrapUpPage: chapterWrap || null,
       ...bodyOf(chapterWrap, chapterRecap, chapterWrapResolve),
       ...heldBackOf(chOut, chapterWrap, chapterRecap, () => (noteRecap() || {}).html || null),
-      oldOutputPath: hadIntro ? unitOutputPath(`${chSlug}-intro`) : null,
+      // The address origin/main wrote: from the title alone, so same-titled chapters shared it (settled below).
+      oldOutputPath: hadIntro ? unitOutputPath(`${baseSlug}-intro`) : null,
     });
     units.push(...sessionUnits);
     for (const unit of units.slice(before)) chapterOf.set(unit, chapter);
@@ -508,6 +517,11 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
   // that page's: no redirect over it.
   const written = new Set(units.map(u => u.outputPath));
   for (const u of units) if (u.oldOutputPath && written.has(u.oldOutputPath)) u.oldOutputPath = null;
+  // Same-titled chapters each wrote that one address; the page left there was the last one written, in chapter order,
+  // so only that chapter's page takes the redirect.
+  const lastAt = new Map();
+  for (const u of units) if (u.oldOutputPath) lastAt.set(u.oldOutputPath, u);
+  for (const u of units) if (u.oldOutputPath && lastAt.get(u.oldOutputPath) !== u) u.oldOutputPath = null;
   for (let i = 0; i < units.length; i++) {
     units[i].prevHref = i > 0 ? units[i - 1].outputPath : null;
     units[i].nextHref = i < units.length - 1 ? units[i + 1].outputPath : null;
