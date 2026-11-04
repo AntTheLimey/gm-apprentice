@@ -15,13 +15,15 @@ The chapter note leaves the player site: players read a chapter only on its Stor
 
 - **A chapter note has no page of its own on the player site.** Players see only its title, its `date_range:`, its `## Teaser` (active), and its `overview:` and `## Recap` (complete), on the chapter's Story page. Nothing else of the note reaches any player file: its body is no longer searched, previewed, quoted on other pages or counted as mentioning anyone. The GM site keeps the note's page, and each chapter page there links to it ("Chapter note (GM)").
 - Links to a chapter note, in any note or field, lead to its chapter's Story page, and the note's old address sends readers there too. A planned chapter has no page and no redirect, and a link to it prints as plain words.
-- The player site's Chapters section merges into the Story So Far: it leaves the menu, its index sends readers to the Story So Far, and the landing page's "The Story" card leads there and counts the chapters. Other notes kept in the chapters folder (handouts, props, session notes) keep their pages.
-- **A session that moves to another chapter keeps its old Story address.** The build keeps a record of the Story addresses each session has had (in the site folder's `.gm-apprentice/`, never in the vault or the published site) and sends each old address on to the new one, build after build. Dead End's Sessions 6 to 14, moved to Chapter 2, keep their old links.
+- The player site's Chapters section merges into the Story So Far: it leaves the menu, its index sends readers to the Story So Far, and the landing page's "The Story" card leads there and counts the chapters. Other notes kept in the chapters folder (handouts, props, session notes) keep their pages, and their breadcrumb reads "Story".
+- **A session that moves to another chapter keeps its old Story address.** The build keeps a record of the Story addresses each session has had (in the site folder's `.gm-apprentice/`, never in the vault or the published site) and sends each old address on to the new one, build after build. The record starts at the first build with this version, so a move made before it is not known. A session is known by its note's file name; two sessions with the same file name keep no old address, and the build says so. A record that cannot be read is kept aside as a dated `.bak`, and the build says so.
+- A complete chapter's link preview is labelled "Chapter", not "Session".
 
 ### Fixed
 
 - A chapter note whose status read as planned only after trimming or in another case (`status: "planned "`, `Planned`) was hidden from the Story but still published its own page. Both now read the status the same way, and a planned chapter stays off the player site even when the publish list lists it.
-- The leak check no longer reports a GM's numbered list of public names ("14 — [[Session 14 - Iced Tea]]") as hidden text when a page happens to print the same words, such as a session's breadcrumb.
+- A `status:`, `stage:` or `source:` with a stray space (`"prepped "`) now keeps a note off the player site as the word itself does.
+- The leak check reads a chapter page's session list as text players see, so a chapter note's list of its sessions ("14 — [[Session 14 - Iced Tea]]") is no finding where a page prints the same words. A planned chapter's title printed on any page is now a finding.
 
 ---
 
