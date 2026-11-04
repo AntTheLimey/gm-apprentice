@@ -1468,6 +1468,21 @@ def read_held(vault: Path) -> dict[str, set[str]]:
             for key in ("left", "said")}
 
 
+def read_state(vault: Path) -> dict[str, Any]:
+    """The state file's keys ({} when there is none). A broken file raises
+    `StateUnreadable`."""
+    return _read_state(vault)
+
+
+def set_state(vault: Path, key: str, value: Any) -> None:
+    """Set one key of the state file, every other key kept, written as the
+    publish tool writes it. For bookkeeping a skill keeps (an offer made
+    once); the version stamp has its own writer."""
+    state = _read_state(vault)
+    state[key] = value
+    _write_state(vault, state)
+
+
 def write_held(vault: Path, left: set[str], said: set[str]) -> None:
     """Remember the ids for the next update (merged with those already
     remembered); nothing is written on the old layout."""
@@ -2642,13 +2657,19 @@ def sub_wikilinks(line: str, spans: list[tuple[int, int]],
 def body_text(text: str) -> str:
     """The body as gray-matter hands it to the publisher: frontmatter
     removed, `\\r` dropped (playerSafeMarkdown does the same)."""
+    return body_and_offset(text)[1]
+
+
+def body_and_offset(text: str) -> tuple[int, str]:
+    """(how many lines of `text` come before the body, the body as
+    `body_text` gives it), for a caller that maps body lines back."""
     norm = text.replace("\r\n", "\n").replace("\r", "")
     lines = norm.split("\n")
     if lines and lines[0].strip() == "---":
         for i in range(1, len(lines)):
             if lines[i].strip() == "---":
-                return "\n".join(lines[i + 1:])
-    return norm
+                return i + 1, "\n".join(lines[i + 1:])
+    return 0, norm
 
 
 def strip_comment_spans(line: str, in_comment: bool) -> tuple[str, bool]:

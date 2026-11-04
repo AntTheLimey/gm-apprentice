@@ -185,5 +185,85 @@ class ShowAndTagTests(unittest.TestCase):
         self.assertEqual((code, out.strip()), (0, f"# {S2}: no Memorable Moments section"))
 
 
+S4 = "Sessions/Session 04 - Wrap-Up.md"
+S5 = "Sessions/Session 05 - Wrap-Up.md"
+WRAP4 = (FM.format(t="Four") + "\n## Memorable Moments\n\n### The Docks\n\n"
+         "| who | what |\n|---|---|\n| Mal | ran |\n\n**Beat.** #moment/funny\n\n"
+         "*Ctx.*\n\n#moment/funny\n\n**Two.** #moment/sad %%note%%\n\n"
+         "**Three.**\n\n#moment/sad\n")
+WRAP5 = (FM.format(t="Five") + "\n## Narrative Recap\n\nx\n\n<!-- gm-only -->\n\n"
+         "## Memorable Moments\n\n**Kept back.**\n\n## GM Notes\n\ny\n\n"
+         "<!-- /gm-only -->\n")
+
+
+@unittest.skipUnless(NODE, "needs node: the publish tool reads the cards")
+class FixRoundTwoTests(unittest.TestCase):
+    def setUp(self):
+        self.vault = make_vault(self, files={S4: WRAP4, S5: WRAP5})
+
+    def text(self, rel=S4):
+        return (self.vault / rel).read_bytes().decode("utf-8")
+
+    def test_headings_and_tables_are_never_listed_or_tagged(self):
+        _c, out = run(self.vault, "check", S4)
+        self.assertNotIn("The Docks", out)
+        self.assertNotIn("| who", out)
+        code, out = run(self.vault, "tag", S4, "--write", stdin="1\tepic\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("a heading or a table", out)
+        self.assertIn("### The Docks\n", self.text())
+
+    def test_a_section_hidden_from_players_is_said_hidden_and_never_offered(self):
+        _c, out = run(self.vault, "list")
+        self.assertNotIn(S5, out)
+        _c, out = run(self.vault, "show", S5)
+        self.assertIn("hidden from players", out)
+        code, out = run(self.vault, "check", S5)
+        self.assertEqual(code, 0, out)
+        self.assertIn("hidden from players", out)
+        code, out = run(self.vault, "tag", S5, stdin="1\tepic\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("hidden from players", out)
+
+    def test_retagging_says_what_it_replaces_and_takes_out_the_lone_tag(self):
+        code, out = run(self.vault, "tag", S4, "--write", stdin="3\tepic\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("#moment/epic (replaces #moment/funny)", out)
+        text = self.text()
+        self.assertIn("**Beat.**\n\n*Ctx.* #moment/epic\n\n**Two.**", text)
+        self.assertNotIn("#moment/funny", text)
+
+    def test_a_lone_unknown_tag_is_cleared_so_check_can_pass(self):
+        code, out = run(self.vault, "tag", S4, "--write", stdin="5\ttragic\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("**Three.** #moment/tragic\n", self.text())
+        self.assertNotIn("\n#moment/sad\n", self.text())
+
+    def test_a_tag_that_would_change_what_a_card_shows_is_refused(self):
+        before = self.text()
+        code, out = run(self.vault, "tag", S4, "--write", stdin="4\tepic\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("tag it by hand", out)
+        self.assertEqual(self.text(), before)
+
+    def test_the_sites_own_tool_is_asked(self):
+        site = Path(tempfile.mkdtemp(prefix="moments-site-"))
+        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+        tool = site / "gm-publish.js"
+        with mock.patch.object(moments.vl, "vault_site",
+                               return_value=(True, True, site)), \
+                mock.patch.object(moments.vc, "_lines_tool",
+                                  return_value=(tool, None, None, True)), \
+                mock.patch.object(moments.vl, "use_publish_tool") as use:
+            moments.site_tool(self.vault)
+        use.assert_called_once_with(tool)
+        with mock.patch.object(moments.vl, "vault_site",
+                               return_value=(True, True, site)), \
+                mock.patch.object(moments.vc, "_lines_tool",
+                                  return_value=(None, "not installed", "fix", True)):
+            with self.assertRaises(moments.Refused):
+                moments.site_tool(self.vault)
+
+
 if __name__ == "__main__":
     unittest.main()
