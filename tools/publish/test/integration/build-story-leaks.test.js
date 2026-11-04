@@ -383,6 +383,18 @@ describe('Story page leaks: the chapter note leaves the player site', () => {
     } finally { t.cleanup(); }
   });
 
+  // A planned chapter's title is its likeliest spoiler, and too short to be a hidden sentence (PR C review S2).
+  it('the gate finds a planned chapter\'s title planted on a page', () => {
+    const t = buildBoth(files('planned'), { sites: ['player'] });
+    try {
+      assert.deepEqual(gate(t), []);
+      leakInto(t.player.dir, 'story.html', 'Coming soon: Chapter 2 — Deeps.');
+      const found = gate(t);
+      assert.equal(found.length, 1, JSON.stringify(found));
+      assert.equal(found[0].note, 'Chapters/Chapter 2/Chapter 2 Overview.md');
+    } finally { t.cleanup(); }
+  });
+
   it('the gate finds a planted sentence from the note\'s GM summary', () => {
     const t = buildBoth(files('planned'), { sites: ['player'] });
     try {

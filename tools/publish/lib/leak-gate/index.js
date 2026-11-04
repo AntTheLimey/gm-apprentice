@@ -180,6 +180,25 @@ function heldTitleFindings({ files, hidden }) {
   return found;
 }
 
+// A planned chapter's title (collect.js plannedTitles) printed on any page: a chapter that shows nowhere, named. Not a
+// title the site prints anyway (another note's words, a public name).
+const PLANNED_TITLE = 'the title of a planned chapter, which the player site does not show';
+function plannedTitleFindings({ files, hidden }) {
+  const found = [];
+  if (!(hidden.plannedTitles || []).length) return found;
+  const shown = hidden.visible.map((text) => ` ${wordsOf(text).join(' ')} `);
+  const titles = hidden.plannedTitles.map((h) => ({ ...h, text: wordsOf(h.title).join(' ') }))
+    .filter((t) => !shown.some((run) => run.includes(` ${t.text} `)));
+  for (const file of files) {
+    const words = ` ${wordsOf(file.text || '').join(' ')} `;
+    for (const t of titles) {
+      if (!words.includes(` ${t.text} `)) continue;
+      found.push({ id: findingId(file.rel, t.text), kind: 'text', code: 'HIDDEN_TEXT', page: file.rel, text: t.text, shown: t.title, note: t.note, reason: PLANNED_TITLE });
+    }
+  }
+  return found;
+}
+
 function runLeakGate({ configPath, outputDir }) {
   const start = performance.now();
   const done = (r) => ({ skipped: null, missing: false, findings: [], unneeded: [], warnings: [], files: 0, ...r, seconds: (performance.now() - start) / 1000 });
@@ -260,6 +279,10 @@ function runLeakGate({ configPath, outputDir }) {
   for (const f of heldTitleFindings({ files, hidden })) {
     const key = keyOf(f.page, f.text);
     if (!raw.has(key) && !toldFor.has(`${f.page}\n${f.note}`)) raw.set(key, f);
+  }
+  for (const f of plannedTitleFindings({ files, hidden })) {
+    const key = keyOf(f.page, f.text);
+    if (!raw.has(key)) raw.set(key, f);
   }
   for (const f of neverShowFindings({ files, allFiles: listFiles(outputDir), words: hidden.neverShow, findingId, published: hidden.published })) {
     const key = findingKey(f);

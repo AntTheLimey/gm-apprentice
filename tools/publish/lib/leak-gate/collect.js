@@ -18,6 +18,8 @@ const { pairHubs } = require('../session-hub');
 const { playerFoldPlan } = require('../published-view');
 const { foldLabelsOf, labelFoldedLinks } = require('../story-fold');
 const { chapterShownMarkdown } = require('../story-spine');
+const { chapterStatusOf } = require('../shared-lists');
+const { labelsForLinks } = require('../wikilink');
 const { isWrapUp } = require('../session-hub');
 const { parseNote } = require('../frontmatter');
 const { canonicalNfc } = require('../unicode');
@@ -64,7 +66,7 @@ function collectHidden({ configPath, outputDir = null }) {
   const keptBy = player.vault.kept_by;
   // The GM's own words that must never reach players (player_site.never_show): looked for on every kind of vault.
   const neverShow = (player.site.never_show || []).filter((w) => typeof w === 'string' && w.trim());
-  const empty = { sitePath: '/', vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), stateFiles: new Set(), heldProps: [], heldNotePages: [], heldTitles: [], sealedOn: new Map(), collectionAddress: null, siteTakes: () => false, keeps: () => false };
+  const empty = { sitePath: '/', vaultPath, siteDir, keptBy, neverShow, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => [], propOwner: new Map(), propFiles: new Set(), madeFiles: new Set(), stateFiles: new Set(), heldProps: [], heldNotePages: [], heldTitles: [], plannedTitles: [], sealedOn: new Map(), collectionAddress: null, siteTakes: () => false, keeps: () => false };
   if (keptBy === 'player') return empty;
 
   const quiet = () => {};
@@ -211,6 +213,17 @@ function collectHidden({ configPath, outputDir = null }) {
   // Every other note's body is hidden text: no page publishes it. The folders that never publish and the plugin's own
   // working folders are left out (WORKING_DIRS); a folder the GM hides is not.
   const scannedByRel = new Map(corpus.map((p) => [relOf(p), p]));
+  // The titles of planned chapters (chapter pages): a planned chapter shows nowhere on the player site, and its title is
+  // its likeliest spoiler, too short to be a hidden piece. Two words or more, looked for whole on every page (index.js).
+  const plannedTitles = [];
+  for (const note of notes) {
+    const rel = canonicalNfc(String(note.vaultPath).replace(/\\/g, '/') + '.md');
+    const fm = note.frontmatter || {};
+    if (publishedRels.has(rel) || neverShown(rel) || inWorkingDir(rel)) continue;
+    if (fm.type !== 'chapter' || chapterStatusOf(Array.isArray(fm.status) ? fm.status[0] : fm.status) !== 'planned') continue;
+    const title = typeof fm.title === 'string' ? labelsForLinks(fm.title).trim() : '';
+    if (wordsOf(title).length >= 2) plannedTitles.push({ title, note: rel });
+  }
   for (const note of notes) {
     const rel = canonicalNfc(String(note.vaultPath).replace(/\\/g, '/') + '.md');
     if (publishedRels.has(rel) || neverShown(rel) || inWorkingDir(rel)) continue;
@@ -399,7 +412,7 @@ function collectHidden({ configPath, outputDir = null }) {
   const outOf = (rel) => [outputOf.get(rel), ...(propOuts.get(rel) || [])].filter(Boolean);
   return {
     vaultPath, siteDir, keptBy, neverShow, pieces, visible, warnings, notes, published, publishedRels, linkMap, outOf,
-    propOwner, propFiles: new Set(propOwner.keys()), madeFiles, stateFiles, heldProps, heldNotePages, heldTitles, sealedOn,
+    propOwner, propFiles: new Set(propOwner.keys()), madeFiles, stateFiles, heldProps, heldNotePages, heldTitles, plannedTitles, sealedOn,
     keeps: (rel) => taken.keeps(rel),
     // The path the site is served under ('/', or '/campaign/' on a project site): a rooted link is read below it.
     sitePath: sitePathOf(config.siteUrl),
