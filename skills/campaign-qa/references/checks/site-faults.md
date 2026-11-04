@@ -255,15 +255,17 @@ Per tag, ask the GM which of the five kinds the moment is, or whether to drop th
 ## CHAPTER_STATUS_UNKNOWN
 
 Ask whether the chapter is planned, active or complete; write that
-word in `status:`. If the row's fix names `hide.fields`, the note is
-fine: offer that fix once, for all such rows.
+word in `status:`. If the row's fix names `hide.fields` or
+`publish_exclude_fields`, the note is fine: offer that fix once, for
+all such rows.
 
 ## CHAPTER_NO_TEASER
 
 The Teaser is the GM's own writing. Ask whether they want to write it
 now; offer to help draft it from what players already know, but never
 write one, or save a draft, without their words and their yes. Leaving
-it for now is a fine answer.
+it for now is a fine answer. If the row says the Teaser is hidden, it
+is written: offer the row's fix instead.
 
 ## CHAPTER_ACTIVE_MANY
 

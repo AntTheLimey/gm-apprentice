@@ -308,8 +308,10 @@ The player site gives the chapter note no page of its own; its
 chapter page in the Story So Far shows one part by `status`: nothing
 for `planned` (its sessions stay off the Story too), the note's
 `## Teaser` for `active`, and `overview` plus the chapter's recap for
-`complete`. A recap surfaces only when its session, its chapter note
-and the wrap-up (`type: session_wrap`) all publish.
+`complete`. A session's recap surfaces only when the session, its
+chapter note and the wrap-up (`type: session_wrap`) all publish. A
+complete chapter's recap comes from its chapter wrap-up when one
+publishes, else from the chapter note's `## Recap`.
 
 ### Campaign Overview
 

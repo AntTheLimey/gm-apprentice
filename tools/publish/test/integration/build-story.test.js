@@ -422,6 +422,44 @@ describe('build story: chapter bookkeeping is a Site Faults finding', () => {
     assert.equal(s.logs.filter((l) => /this chapter is planned, so its played sessions/.test(l)).length, 2, s.logs.join('\n'));
   });
 
+  // CodeRabbit (PR D, build.js:2817): sessions reaching a planned chapter both ways make one row, not two.
+  it('a planned chapter reached by chapter: links and by its folder: one row naming every session', () => {
+    const v = storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: planned\n'),
+      'Chapters/C2/Chapter 2.md': ch(2, 'active', '\n## Teaser\n\nT.\n') });
+    v['Chapters/Chapter 1/Session 3.md'] = v['Sessions/Session 2.md'].replace(/chapter: .*\n/, '').replace(/Session 2/g, 'Session 3')
+      .replace('session_number: 2', 'session_number: 3').replace('2026-10-02', '2026-10-03');
+    v['Chapters/Chapter 1/Session 3 Wrap-Up.md'] = v['Sessions/Session 2 Wrap-Up.md'].replace(/chapter: .*\n/, '').replace(/Session 2/g, 'Session 3');
+    const s = buildBoth(v, { sites: [] });
+    let faults = null;
+    try { build({ configPath: s.configPath, site: 'player', inMemory: true, onNoteFaults: (f) => { faults = f; } }); } finally { s.cleanup(); }
+    const planned = faults.filter((f) => f.code === 'CHAPTER_PLANNED_PLAYED');
+    assert.equal(planned.length, 1, JSON.stringify(planned));
+    for (const rel of ['Sessions/Session 1.md', 'Sessions/Session 2.md', 'Chapters/Chapter 1/Session 3.md']) assert.ok(planned[0].detail.includes(rel), `${rel} in ${planned[0].detail}`);
+  });
+
+  // CodeRabbit (PR D, build.js:2871): a status the note's own publish_exclude_fields takes off names that, not hide.fields.
+  it('a status the note itself excludes: the fix names its publish_exclude_fields', () => {
+    const faults = faultsOf({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\npublish_exclude_fields: [status]\n') });
+    const unknown = rows(faults, 'CHAPTER_STATUS_UNKNOWN');
+    assert.equal(unknown.length, 1, JSON.stringify(faults));
+    assert.match(unknown[0].detail, /publish_exclude_fields/);
+    assert.match(unknown[0].fix, /publish_exclude_fields/);
+    assert.doesNotMatch(unknown[0].fix, /hide\.fields/);
+  });
+
+  // CodeRabbit (PR D, build.js:2876): a Teaser the note has but hide.sections takes off is hidden, not missing.
+  it('an active chapter whose Teaser a publish rule hides: the fix names the rule, never "write"', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: active\n') + '\n## Teaser\n\nT.\n' }),
+      { player: { hide: { sections: ['Teaser'] } }, sites: [] });
+    let faults = null;
+    try { build({ configPath: s.configPath, site: 'player', inMemory: true, onNoteFaults: (f) => { faults = f; } }); } finally { s.cleanup(); }
+    const teaser = faults.filter((f) => f.code === 'CHAPTER_NO_TEASER');
+    assert.equal(teaser.length, 1, JSON.stringify(faults));
+    assert.match(teaser[0].detail, /hidden/);
+    assert.match(teaser[0].fix, /hide\.sections/);
+    assert.doesNotMatch(teaser[0].fix, /write a ## Teaser/);
+  });
+
   it('sessions naming a chapter no chapter page heads: a row on each session, with its fix', () => {
     // A misspelt link: the chapter note is fine, the sessions name no chapter page.
     const v = storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: active\n') + '\n## Teaser\n\nT.\n' });
