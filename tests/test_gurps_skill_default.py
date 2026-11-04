@@ -154,6 +154,42 @@ class SkillDefaultTests(unittest.TestCase):
         kind, msg, _new = gsd.plan(beams, "Beam Weapons (Rifle)")
         self.assertIn("| Beam Weapons/TL11 (Rifle) | DX/E | DX-3 | [0] | 11 | 11 | (default Beam Weapons (Pistol)-4, level 11)", msg)
 
+    def test_another_tech_level_is_another_skill(self):
+        # B168/B513: a tech skill at another TL is a separate skill that
+        # defaults to the known one at a TL penalty the tables do not hold,
+        # so it is neither HAVE nor a silent default; asked for instead.
+        sheet = SHEET.replace("| Guns (Pistol) |", "| Guns/TL5 (Pistol) |")
+        with self.assertRaises(gsd.Refused) as caught:
+            gsd.plan(sheet, "Guns/TL8 (Pistol)")
+        kind, msg = caught.exception.args
+        self.assertEqual(kind, "CHECK-DEFAULT", msg)
+        self.assertIn("another tech level of Guns/TL5 (Pistol) at 16", msg)
+        self.assertIn("B168", msg)
+        # A sibling at another TL is no base: that is a default of a default.
+        kind, msg, _new = gsd.plan(sheet, "Guns/TL8 (Rifle)")
+        self.assertIn("(default DX-4, level 10; Guns/TL5 (Pistol) is another "
+                      "tech level, so no base for this default (B168, B173))", msg)
+        # Given by hand, a default from the other TL is used as written.
+        kind, msg, _new = gsd.plan(sheet, "Guns/TL8 (Pistol)", "DX/E",
+                                   "DX-4, Guns/TL5 (Pistol)-4")
+        self.assertIn("| Guns/TL8 (Pistol) | DX/E | DX-2 | [0] | 12 | 12 | "
+                      "(default Guns/TL5 (Pistol)-4, level 12)", msg)
+        # The same TL, or a name with none, is the same skill.
+        self.assertEqual(gsd.plan(sheet, "Guns/TL5 (Pistol)")[0], "HAVE")
+        self.assertEqual(gsd.plan(sheet, "Guns (Pistol)")[0], "HAVE")
+
+    def test_a_level_column_beside_relative_level_is_written(self):
+        # The publish tool reads a Level column that is not Relative Level
+        # (parse.js resolveLevelColumns), so the new row fills it.
+        sheet = (SHEET.replace("| Name | Difficulty | Relative Level | Points | Base | Current |",
+                               "| Name | Difficulty | Relative Level | Points | Level |")
+                 .replace("|------|-----------|----------------|--------|------|---------|", "|---|---|---|---|---|")
+                 .replace("| 16 | 16 |", "| 16 |").replace("| 15 | 15 |", "| 15 |")
+                 .replace("| 10 | 10 |", "| 10 |"))
+        _p, msg, _new = gsd.plan(sheet, "Knife")
+        self.assertIn("| Knife | DX/E | DX-2 | [0] | 12 | (default Shortsword-3", msg)
+        self.assertIn("at 15", gsd.plan(sheet, "Shortsword")[1])
+
     def test_short_names_sheets_write(self):
         # Review A9: Shield and Guns (LAW) are found; Guns (LMG) bought is
         # Guns (Light Machine Gun) to a default.

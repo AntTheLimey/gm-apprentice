@@ -80,10 +80,14 @@ ALIASES = {"guns (lmg)": "guns (light machine gun)",
            "shield": "shield (shield)"}
 
 
+def _marked_off(name: str) -> str:
+    """The name with the sheet's marks off, case and `/TL<n>` kept."""
+    return " ".join(re.sub(r"[*†‡§¶◇]", "", str(name)).split())
+
+
 def _plain(name: str) -> str:
     """The name with its `/TL<n>` and the sheet's marks off, case kept."""
-    name = TL_RE.sub("", re.sub(r"[*†‡§¶◇]", "", str(name)))
-    return " ".join(name.split())
+    return " ".join(TL_RE.sub("", _marked_off(name)).split())
 
 
 def _key(name: str) -> str:
@@ -97,6 +101,11 @@ def _key(name: str) -> str:
 def _tl(name: str) -> str:
     m = TL_RE.search(str(name))
     return m.group(0).strip().replace(" ", "") if m else ""
+
+
+def _same_tl(a: str, b: str) -> bool:
+    """Two `/TL<n>` marks name one tech level, or one of them is absent."""
+    return not a or not b or a.casefold() == b.casefold()
 
 
 def _stem(name: str) -> str:
@@ -179,7 +188,9 @@ def plan(text: str, skill: str, difficulty: str | None = None,
     i_base = gk.col(headers, "base")
     i_eff = gk.col(headers, "effective")
     i_cur = gk.col(headers, "current")
-    i_lvl = gk.col(headers, "level") if i_rel < 0 else -1
+    # A Level column, never Relative Level (as parse.js resolveLevelColumns).
+    i_lvl = next((i for i, h in enumerate(headers)
+                  if "level" in h.lower() and "relative" not in h.lower()), -1)
 
     def cell(row: list[str], i: int) -> str:
         return row[i] if 0 <= i < len(row) else ""
@@ -192,12 +203,21 @@ def plan(text: str, skill: str, difficulty: str | None = None,
             attrs[key] = attrs["iq"]
             stand_in.add(key)
     bought: dict[str, int] = {}
+    bought_names: dict[str, str] = {}   # a bought skill's key -> its name
     tls: dict[str, str] = {}      # a bought skill's key -> its /TL<n>
+    other_tl: list[tuple[str, str]] = []   # the skill at another TL: (name, level)
     for _i, row in rows:
         name = cell(row, i_name)
         if not _key(name):
             continue
-        if _key(name) == _key(skill):
+        if _key(name) == _key(skill) and not _same_tl(_tl(name), _tl(skill)):
+            # B168: another TL is another skill (B513: it defaults to this
+            # one at the TL penalty).
+            m = re.search(r"\d+", next(
+                (cell(row, i) for i in (i_base, i_eff, i_lvl, i_cur)
+                 if re.search(r"\d", cell(row, i))), ""))
+            other_tl.append((_marked_off(name), m.group(0) if m else "?"))
+        elif _key(name) == _key(skill):
             m = re.search(r"\d+", next(
                 (cell(row, i) for i in (i_base, i_eff, i_lvl, i_cur)
                  if re.search(r"\d", cell(row, i))), ""))
@@ -212,7 +232,14 @@ def plan(text: str, skill: str, difficulty: str | None = None,
         # no Points column that cannot be told, so no skill is a base.
         if m and i_pts >= 0 and pts is not None and pts > 0:
             bought[_key(name)] = int(m.group(0))
+            bought_names[_key(name)] = _marked_off(name)
             tls[_key(name)] = _tl(name)
+    if other_tl and (difficulty is None or defaults is None):
+        name, at_level = other_tl[0]
+        raise Refused("CHECK-DEFAULT", (
+            f"{skill} is another tech level of {name} at {at_level}, which it "
+            "defaults to at the tech-level penalty (B168, B513); give its "
+            "defaults with --default"))
     if i_pts < 0:
         said.append("the Skills table has no Points column, so only "
                     "attribute defaults are used")
@@ -258,8 +285,16 @@ def plan(text: str, skill: str, difficulty: str | None = None,
         mod = -num if sign in "-−" else num
         if base.lower() in ATTRS:
             have = attrs.get(base.lower())
-        else:
+        elif _same_tl(tls.get(_key(base), ""), _tl(base) or _tl(skill)):
+            # A default from the skill at another TL is a default of a
+            # default (B173), unless it is given with that TL.
             have = bought.get(_key(base))
+        else:
+            have = None
+            note = (f"{bought_names[_key(base)]} is another tech level, so "
+                    "no base for this default (B168, B173)")
+            if note not in said:
+                said.append(note)
         if have is not None and (best is None or have + mod > best[0]):
             best = (int(have) + mod, term.strip(), base.lower())
     if best is None:
