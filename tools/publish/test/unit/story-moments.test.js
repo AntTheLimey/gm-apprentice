@@ -181,6 +181,21 @@ describe('parseMoments', () => {
   });
 });
 
+describe('parseMoments: where each card stands (`lines`, for the wrap-up tagger)', () => {
+  const at = (md) => parseMoments(md).cards.map((c) => c.lines && [c.lines.first, c.lines.last]);
+
+  it('a card spans its own lines; a context line after it extends it; the field is not enumerable', () => {
+    const md = '**Beat one.**\n\n*Its context.*\n\n> "Said."\n> \u2014 Mara\n\n**Mara walked off.**\n*Nobody helped.*\n\n- a list\n';
+    assert.deepEqual(at(md), [[0, 2], [4, 5], [7, 8], [10, 10]]);
+    assert.deepEqual(Object.keys(parseMoments(md).cards[0]).includes('lines'), false);
+  });
+
+  it('a lone tag paragraph and a rule do not move a card; blank lines inside a quote are not its end', () => {
+    assert.deepEqual(at('**A.**\n\n#moment/epic\n\n---\n\n*B.*\n'), [[0, 0], [6, 6]]);
+    assert.deepEqual(at('> one\n>\n> two\n\n\n'), [[0, 2]]);
+  });
+});
+
 describe('momentsHtml', () => {
   const words = (md, ...ws) => { const out = html(md); for (const w of ws) assert.ok(out.includes(w), `${w} in ${out}`); return out; };
 

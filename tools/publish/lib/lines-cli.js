@@ -64,6 +64,14 @@
 //                            (`parseDate`); `day` is false when no day of the month was named, so the
 //                            date is a placed guess. vault_check's timeline --order asks this.
 //
+//   {"op":"moments","text":…}
+//       -> {"kinds":[…],"section":null|{"heading":…,"title":…,"cards":[{"kind","shape","first","last"}],"unknownTags":[…]}}
+//                            the five moment kinds (story-moments.js), and for a wrap-up's body the Memorable Moments
+//                            section the Story page reads (the first top-level `##` the moments rule names, after the
+//                            strip chain): its heading's line, each card's kind (null for none), shape and first and last
+//                            lines, all counted in `text`, and the tags that name no kind. moments.py tags past
+//                            wrap-ups from this, so the tagger never reads a card a second way.
+//
 //   {"op":"command","args":["settings",…]|["explain","--all",…],"cwd":…,"env":{…}}
 //       -> {"rc":…,"stdout":…,"stderr":…}  the command run as `gm-publish <args>` runs it, from the
 //                            same option reader and the same function, in `cwd` with `env` (both
@@ -77,9 +85,11 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { readSettings, nameIn, fileLabel, layoutOf } = require('./settings');
-const { cutLines, playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts, isWithheld, nameList, gmAliasList } = require('./processor');
+const { cutLines, findHeadings, playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts, isWithheld, nameList, gmAliasList } = require('./processor');
 const { parseNote } = require('./frontmatter');
 const { labelsForLinks } = require('./wikilink');
+const { KINDS, parseMoments } = require('./story-moments');
+const { isMomentsHeading } = require('./heading-key');
 
 // A request is checked, not coerced: a list that is not a list read as "no list"
 // would answer "nothing is withheld".
@@ -136,6 +146,33 @@ function googleFonts(vault, config) {
   return { families: require('./fonts').googleFontsFor(path.resolve(vault), siteConfig) };
 }
 
+// The Memorable Moments of a wrap-up's body, as the Story page reads them (see the op above).
+function moments(text) {
+  const kept = [];
+  const from = [];
+  cutLines(text).cut.forEach((line, i) => { if (line !== null) { kept.push(line); from.push(i); } });
+  const { headingAt } = findHeadings(kept.join('\n'));
+  const tops = [...headingAt]
+    .filter(([, h]) => !h.nested && h.level === 2 && h.title !== '')
+    .map(([line, h]) => ({ line, end: h.end, title: h.title }))
+    .sort((a, b) => a.line - b.line);
+  const at = tops.findIndex((h) => isMomentsHeading(h.title));
+  if (at < 0) return { kinds: KINDS, section: null };
+  const head = tops[at];
+  const stop = at + 1 < tops.length ? tops[at + 1].line : kept.length;
+  const parsed = parseMoments(kept.slice(head.end, stop).join('\n'));
+  const line = (i) => (i === undefined ? null : from[head.end + i]);
+  return {
+    kinds: KINDS,
+    section: {
+      heading: from[head.line],
+      title: head.title,
+      cards: parsed.cards.map((c) => ({ kind: c.kind, shape: c.shape, first: line(c.lines && c.lines.first), last: line(c.lines && c.lines.last) })),
+      unknownTags: parsed.unknownTags,
+    },
+  };
+}
+
 function answer(request) {
   if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('a request is a JSON object');
   if (request.op === 'site') return site(request.vault);
@@ -160,6 +197,8 @@ function answer(request) {
       const body = publish === 'stub' ? keepOnlySections(text, include, { excludeSections }) : text;
       return { text: playerSafeMarkdown(body, { excludeSections }).text };
     }
+    case 'moments':
+      return moments(text);
     case 'sections':
       return { withheldBy: sectionVerdicts(text, list(request, 'excludeSections')) };
     case 'stub':

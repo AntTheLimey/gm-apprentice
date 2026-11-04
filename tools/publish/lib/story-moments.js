@@ -44,15 +44,17 @@ function wholly(text, type) {
   return false;
 }
 
-// The text split into unmarked stretches and marked spans, in order: { text, marked }.
+// The text split into unmarked stretches and marked spans, in order: { text, marked, start (its first line) }.
 function stretches(lines) {
   const out = [];
   let cur = [];
+  let start = 0;
   let depth = 0;
   let spanning = false;
-  const flush = (marked) => { if (cur.length) out.push({ text: cur.join('\n'), marked }); cur = []; };
-  for (const line of lines) {
+  const flush = (marked) => { if (cur.length) out.push({ text: cur.join('\n'), marked, start }); cur = []; };
+  for (const [i, line] of lines.entries()) {
     if (depth === 0 && !spanning && OPEN_LINE.test(line.trim())) { flush(false); spanning = true; }
+    if (!cur.length) start = i;
     cur.push(line);
     for (const m of line.matchAll(MARK)) depth = m[0] === '' ? Math.max(0, depth - 1) : depth + 1;
     if (spanning && depth === 0) { flush(true); spanning = false; }
@@ -61,16 +63,27 @@ function stretches(lines) {
   return out;
 }
 
-// The top-level blocks of unmarked text: { type, text } (type: paragraph, quote, rule or other), each as written.
-function blocksOf(text) {
+// The top-level blocks of unmarked text: { type, text, first, last } (type: paragraph, quote, rule or other), each as
+// written; `first` and `last` are its first and last written lines, counted from `start`.
+function blocksOf(text, start = 0) {
   const lines = text.split('\n');
   return md.parse(text, {})
     .filter((t) => t.level === 0 && t.map && t.nesting !== -1)
-    .map((t) => ({
-      type: t.type === 'paragraph_open' ? 'paragraph' : t.type === 'blockquote_open' ? 'quote' : t.type === 'hr' ? 'rule' : 'other',
-      text: lines.slice(t.map[0], t.map[1]).join('\n').replace(/\s+$/, ''),
-    }));
+    .map((t) => {
+      let last = t.map[1] - 1;
+      while (last > t.map[0] && !lines[last].trim()) last--;
+      return {
+        type: t.type === 'paragraph_open' ? 'paragraph' : t.type === 'blockquote_open' ? 'quote' : t.type === 'hr' ? 'rule' : 'other',
+        text: lines.slice(t.map[0], t.map[1]).join('\n').replace(/\s+$/, ''),
+        first: start + t.map[0],
+        last: start + last,
+      };
+    });
 }
+
+// Where a card stands in the text parsed: { first, last }, its first and last lines (the last is where a tag added to
+// it goes). Not enumerable, so a card reads as before; a marked span's card has none.
+const stand = (c, block) => Object.defineProperty(c, 'lines', { value: { first: block.first, last: block.last }, writable: true });
 
 function parseMoments(markdown) {
   const lines = String(markdown == null ? '' : markdown).replace(/\r/g, '').split('\n');
@@ -114,7 +127,7 @@ function parseMoments(markdown) {
       continue;
     }
     card = null;
-    for (const block of blocksOf(part.text)) {
+    for (const block of blocksOf(part.text, part.start)) {
       // A `---` rule divides the section; it is no moment, and no context line reaches back across it.
       if (block.type === 'rule') { card = null; prior = null; continue; }
       // A paragraph that is only a tag is no card: it names the kind of the card before it, when that card has none. A
@@ -132,6 +145,7 @@ function parseMoments(markdown) {
       card = null;
       if (last && last.context === null && block.type === 'paragraph' && wholly(text, 'em')) {
         last.context = text.trim();
+        if (last.lines) last.lines = { first: last.lines.first, last: block.last };
         kindOf(last, tagged);
         card = null;
         continue;
@@ -141,10 +155,10 @@ function parseMoments(markdown) {
         while (body.length && !body[body.length - 1].trim()) body.pop();
         const m = body.length ? DASH.exec(body[body.length - 1].trim()) : null;
         if (m) body.pop();
-        card = add(fresh('speech', body.join('\n').trim(), m ? m[3].trim() : null), tagged);
+        card = add(stand(fresh('speech', body.join('\n').trim(), m ? m[3].trim() : null), block), tagged);
         if (m) card.speakerDash = m[1] + m[2];
       } else if (block.type === 'paragraph' && wholly(text, 'strong')) {
-        card = add(fresh('narration', text.trim()), tagged);
+        card = add(stand(fresh('narration', text.trim()), block), tagged);
       } else if (block.type === 'paragraph' && text.includes('\n')) {
         // The template's two lines in one paragraph: a bold beat, then its italic context.
         const rows = text.split('\n');
@@ -153,12 +167,12 @@ function parseMoments(markdown) {
           if (wholly(rows.slice(0, i).join('\n'), 'strong') && wholly(rows.slice(i).join('\n'), 'em')) split = i;
         }
         if (split > 0) {
-          add(fresh('narration', rows.slice(0, split).join('\n').trim(), null, rows.slice(split).join('\n').trim()), tagged);
+          add(stand(fresh('narration', rows.slice(0, split).join('\n').trim(), null, rows.slice(split).join('\n').trim()), block), tagged);
         } else {
-          add(fresh('other', text.trim()), tagged);
+          add(stand(fresh('other', text.trim()), block), tagged);
         }
       } else {
-        add(fresh('other', text.trim()), tagged);
+        add(stand(fresh('other', text.trim()), block), tagged);
       }
     }
   }

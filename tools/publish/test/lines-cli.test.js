@@ -349,3 +349,32 @@ describe('lines: dates (vault_check timeline --order asks it, so the two never r
     assert.throws(() => answer({ op: 'dates', values: [7] }), /values must be a list of strings/);
   });
 });
+
+describe('lines: moments (moments.py asks it, so the wrap-up tagger reads cards as the Story page does)', () => {
+  const { KINDS } = require('../lib/story-moments');
+  const WRAP = '# S1\n\n## Narrative Recap\n\nThey went.\n\n## Memorable Moments\n\n**Beat.**\n\n*Context.* #moment/funny\n\n> "Hi."\n> \u2014 Mara\n\n<!-- gm-only -->\n\n## GM Notes\n\n**Hidden.**\n\n<!-- /gm-only -->\n';
+
+  it('gives the five kinds, from story-moments.js', () => {
+    assert.deepStrictEqual(answer({ op: 'moments', text: '' }), { kinds: KINDS, section: null });
+  });
+
+  it('reads the section the Story page reads: its cards, their kinds and lines in the text; gm-only text is not in it', () => {
+    const got = answer({ op: 'moments', text: WRAP });
+    assert.deepStrictEqual(got.section, {
+      heading: 6, title: 'Memorable Moments', unknownTags: [],
+      cards: [{ kind: 'funny', shape: 'narration', first: 8, last: 10 }, { kind: null, shape: 'speech', first: 12, last: 13 }],
+    });
+  });
+
+  it('no moments heading: no section; a heading with more words is one; an unknown tag is reported', () => {
+    assert.strictEqual(answer({ op: 'moments', text: '## Narrative Recap\nx' }).section, null);
+    const got = answer({ op: 'moments', text: '## Memorable Moments \u2014 Highlights\n\n**A.** #moment/sad\n\n## Loot\n\n**Not a moment.**' });
+    assert.deepStrictEqual(got.section.cards, [{ kind: null, shape: 'narration', first: 2, last: 2 }]);
+    assert.deepStrictEqual(got.section.unknownTags, ['sad']);
+  });
+
+  it('a moments heading in a gm-only block or a code fence is no section', () => {
+    assert.strictEqual(answer({ op: 'moments', text: '<!-- gm-only -->\n## Memorable Moments\n**A.**\n<!-- /gm-only -->' }).section, null);
+    assert.strictEqual(answer({ op: 'moments', text: '```\n## Memorable Moments\n**A.**\n```' }).section, null);
+  });
+});
