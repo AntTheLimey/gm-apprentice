@@ -60,16 +60,17 @@ describe('the props page', () => {
   const page = () => s.player.read('props', 'index.html');
 
   it('groups by container, prop_group, chapter, then the rest', () => {
-    const one = rels(s.player).find((r) => /chapter-one\.html$/.test(r));
-    const two = rels(s.player).find((r) => /chapter-two\.html$/.test(r));
-    assert.ok(one && two, rels(s.player).join(', '));
+    // On the player site a chapter heading leads to its chapter page on the Story (chapter pages).
     assert.deepEqual(headings(page()), [
       'Bookshelf -> bookshelf.html',
       'Evidence',
       'Other props',
-      `Chapter One -> ../${encodeURI(one)}`,
-      `Chapter Two -> ../${two}`,
+      'Chapter One -> ../story/chapter-one.html',
+      'Chapter Two -> ../story/chapter-two.html',
     ]);
+    const one = rels(s.gm).find((r) => /chapters\/.*chapter-one\.html$/.test(r));
+    assert.ok(one, rels(s.gm).join(', '));
+    assert.match(s.gm.read('props', 'index.html'), new RegExp(`<h2><a href="\\.\\./${encodeURI(one).replace(/\./g, '\\.')}">Chapter One</a>`));
     // The container's rows are its own page's: the sealed item by title; it is in no other group.
     assert.match(page(), /<li class="prop-item prop-sealed"><span class="prop-title">Sealed Letter<\/span>/);
     assert.equal((page().match(/Diary</g) || []).length, 1);

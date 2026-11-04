@@ -34,6 +34,7 @@ const { publishMode } = require('./processor');
 const { storyOwnerPath, isStoryCompanion, matchExcludedDir } = require('./scanner');
 const { getCanonStatus } = require('./templates/base');
 const { entry, nameInFor } = require('./settings');
+const { chapterStatusOf } = require('./shared-lists');
 
 // The values that keep a note off a player site are listed once, in excluding-values.js.
 const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, PREP_TYPES, DRAFT, ruleValue } = require('./excluding-values');
@@ -72,8 +73,9 @@ function isHousekeepingNote(vaultPath, frontmatter) {
   return parts.length === 2 && parts[0].toLowerCase() === '_meta' && PLUGIN_META_NOTES.includes(parts[1]) && typedMeta;
 }
 
+// Trimmed and in lower case, as a status, stage or source is compared: a stray space keeps its meaning.
 function lower(value) {
-  return String(value == null ? '' : value).toLowerCase();
+  return String(value == null ? '' : value).trim().toLowerCase();
 }
 
 // Which frontmatter field marks this file as prep, or null. Exported because
@@ -195,6 +197,12 @@ function decidePage(page, options) {
 
   if (publishConfig.exclude_drafts && getCanonStatus(frontmatter) === DRAFT) {
     return verdict('exclude', 'DRAFT_EXCLUDED', 'canon_status: DRAFT and exclude_drafts is on');
+  }
+
+  // A chapter note the Story reads as planned (chapter pages): its chapter shows nowhere on the player site, so neither
+  // does the note, whatever the publish list says. Read as the Story reads it, so the two always agree.
+  if (frontmatter.type === 'chapter' && chapterStatusOf(ruleValue('status', frontmatter.status)) === 'planned') {
+    return verdict('exclude', 'AUTO_EXCLUDED_STATUS', 'status: planned');
   }
 
   // The prep-state heuristics, overridden by an explicit publish list Publishing entry.

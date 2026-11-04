@@ -47,6 +47,12 @@ function generateBreadcrumbs(outputPath, options = {}) {
 
   for (let i = 0; i < dirs.length; i++) {
     const dir = dirs[i];
+    // A section merged into the Story So Far (`page.storySection`: the player site's chapters, chapter pages) is
+    // named "Story" and leads there.
+    if (i === 0 && options.page && options.page.storySection === dir) {
+      crumbs.push({ label: 'Story', href: '../'.repeat(depthToRoot) + 'story.html' });
+      continue;
+    }
     const label = DIR_LABELS[dir] || titleFromSlug(dir);
     const isLastDir = i === dirs.length - 1;
 

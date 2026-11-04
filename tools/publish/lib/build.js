@@ -7,6 +7,7 @@ const path = require('path');
 const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, slugify } = require('./scanner');
 const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit, detectEncoder, CACHE_FOLDER } = require('./image-optimize');
 const { indexTextPath, writeIndexText } = require('./leak-gate/index-text');
+const { readStoryAddresses, writeStoryAddresses, movedSessions, sharedSessionNames } = require('./story-addresses');
 const { resolveBanner, renderBanner, normalizeEntry, attachmentRef, isAddress, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, storyMomentsOn, storyPicturesOn, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { nameList, gmAliasList, strippedLines, sectionWithholder, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, unstableSectionsMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, plainMetaValue, portraitBasename, encodeHref, isWebImageAddress } = require('./processor');
@@ -31,9 +32,9 @@ const { createMarks, markKinds, sanitize, unmark, withoutMarked } = require('./g
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
 const { KINDS, parseMoments, momentsHtml } = require('./story-moments');
-const { buildStorySpine, probeSpine, gmStoryNotes, storyPagesFor, chapterOfSession, chapterMatchesSession, chapterStatus, characterStoryGroup } = require('./story-spine');
+const { buildStorySpine, probeSpine, chapterShownMarkdown, gmStoryNotes, storyPagesFor, chapterOfSession, chapterMatchesSession, chapterStatus, characterStoryGroup } = require('./story-spine');
 const { figureCandidates, pageNames, nameHolders, sceneCandidates } = require('./story-figures');
-const { foldPlan, applyFold, isFolded, labelFoldedHeadings } = require('./story-fold');
+const { foldPlan, applyFold, isFolded, isFoldedChapterNote, labelFoldedHeadings } = require('./story-fold');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
 const { storyLanding } = require('./templates/story-landing');
 const { isSessionStory, sessionLines } = require('./story-sessions');
@@ -446,6 +447,10 @@ function buildSite(options) {
 
   // The record of the files this build writes into kept folders (#506): only a full build of the player site into its
   // own folder keeps one, and only where the image cache may live (never in the output folder or the vault).
+  // The Story addresses each session has had (story-addresses.js): kept, and read, only by the player site's own full
+  // build, where the image cache may live.
+  const storyAddressesOn = !gm && !dry && writes === 'all' && !options.outputDirOverride
+    && !!imageCacheDir(configDir, { outputDirs: [outputDir], vaultPath: config.vaultPath });
   const keptRecord = (!gm && !dry && writes === 'all' && !options.outputDirOverride
     && imageCacheDir(configDir, { outputDirs: [outputDir], vaultPath: config.vaultPath })) ? keptRecordPath(configDir) : null;
   const { files: keptRecorded, replaced: keptRecordedReplaced, problem: keptRecordProblem } = keptRecord ? readKeptRecord(keptRecord) : { files: {}, replaced: new Set(), problem: null };
@@ -1467,7 +1472,20 @@ function buildSite(options) {
   // wrap-up back with no recap of the players' to lead it: its chapter counts what the player page pictures (#569).
   const playerStory = gm ? new Map(probeSpine(pages.filter((p) => onPlayerSite.has(p)), playerPairs, playerImages).map((u) => [u.outputPath, u.wrapUpPage || null])) : null;
   const storyPlayers = gm ? { has: (out) => playerStory.has(out), shows: (page) => onPlayerSite.has(page), wrapUpAt: (out) => playerStory.get(out) || null } : null;
-  applyFold(foldPlan(storyProbe), linkMap);
+  // On the player site each shown chapter's note folds into its chapter page too (chapter pages): it has no page of its
+  // own, and its published view becomes only what the chapter page shows of it (its Teaser or Recap), so nothing that
+  // reads views (search, backlinks, recency, excerpts) reads any other part. Its whole view is kept for the old
+  // introduction address's test (story-spine.js).
+  applyFold(foldPlan(storyProbe, { chapters: !gm }), linkMap);
+  for (const page of pages) {
+    if (!isFoldedChapterNote(page)) continue;
+    page.notePublishedMarkdown = page.publishedMarkdown || '';
+    page.publishedMarkdown = chapterShownMarkdown(page.notePublishedMarkdown, page.foldedInto);
+  }
+  // The Chapters section merges into the Story So Far there: it leaves the menu, and its index (still the breadcrumb of
+  // the other notes kept in the chapters folder) leads to the Story So Far.
+  const chaptersMerged = pages.some((p) => isFoldedChapterNote(p) && /^chapters\//.test(p.foldedFrom));
+  if (chaptersMerged) for (const page of pages) if (!isFolded(page) && /^chapters(\/|$)/.test(page.outputDir || '')) page.storySection = 'chapters';
   LOWER_KEYS.delete(linkMap);   // its folded spellings were read from the old addresses
   // The pages a Story page may picture beside its recap (story-figures.js), read once, after the fold has given each
   // page its final address. On the GM site only those the player site writes a page for, with a portrait the player
@@ -1597,7 +1615,14 @@ function buildSite(options) {
     if (typeof p.gmMarkedPublished === 'string') view.publishedMarkdown = unmark(p.gmMarkedPublished);
     return view;
   };
-  const searchData = searchEnabled ? buildSearchIndex(gm ? pages.map(unmarked) : pages) : null;
+  // A chapter note folded where its chapter wrap-up is folded too is found once, as that page: the wrap-up's entry,
+  // holding also what the page shows of the note (its Recap, where the wrap-up has none), and nothing else of it.
+  const noteShownAt = new Map(pages.filter(isFoldedChapterNote).map((p) => [p.outputPath, p.publishedMarkdown || '']));
+  const foldedWrapAt = new Set(pages.filter((p) => isFolded(p) && !isFoldedChapterNote(p)).map((p) => p.outputPath));
+  const searchPages = pages.filter((p) => !(isFoldedChapterNote(p) && foldedWrapAt.has(p.outputPath)))
+    .map((p) => (isFolded(p) && !isFoldedChapterNote(p) && (noteShownAt.get(p.outputPath) || '').trim()
+      ? { ...p, publishedMarkdown: `${p.publishedMarkdown || ''}\n\n${noteShownAt.get(p.outputPath)}` } : p));
+  const searchData = searchEnabled ? buildSearchIndex(gm ? searchPages.map(unmarked) : searchPages) : null;
 
   publishConfig._linkMap = linkMap;
   publishConfig._backlinks = backlinks;
@@ -1872,7 +1897,7 @@ function buildSite(options) {
     }
     menuExtra.push({ label: item.label, href: read.href, external: read.kind === 'outside', group: item.group || null });
   }
-  const navFor = generateNav(pages, { hasStory, timelineHref, extra: menuExtra, collection: collection ? { href: collection.address, label: collection.title } : null });
+  const navFor = generateNav(pages, { hasStory, timelineHref, merged: chaptersMerged ? ['chapters'] : [], extra: menuExtra, collection: collection ? { href: collection.address, label: collection.title } : null });
   // The props page's link from a page at `out`, for its bar: relative, encoded; null when the site has none.
   const collectionHrefFrom = (out) => (collection ? encodeHref(relativeHref(out, collection.address)) : null);
 
@@ -2482,7 +2507,10 @@ function buildSite(options) {
   if (publishConfig.link_previews !== 'off') {
     const { buildPreviews, onlyBuiltPages } = require('./previews');
     const { usesCocFolio } = require('./templates/pc');
-    const cards = buildPreviews(pages, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff), limits: publishConfig.limits, headerFacts: publishConfig.header_facts });
+    // A chapter note folded into its chapter page has no card: players never read the note.
+    const cards = buildPreviews(pages.filter((p) => !isFoldedChapterNote(p)), { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff), limits: publishConfig.limits, headerFacts: publishConfig.header_facts });
+    // A chapter wrap-up folded into its chapter page is that chapter's card: it says Chapter, not Session.
+    for (const p of pages) if (isFolded(p) && p.foldedInto.kind === 'chapter' && cards[p.outputPath]) cards[p.outputPath].k = 'Chapter';
     // The cards are read for withheld names in their own right, whatever the pages print (and
     // also when nothing is written): every string of every card, under the note it is made from.
     const byHref = new Map(pages.map((p) => [p.outputPath, p]));
@@ -2707,6 +2735,10 @@ function buildSite(options) {
     if (href) unit.playNotesHref = href;
     unit.afterHtml = parts ? `<section class="story-gm-after">\n${parts}\n</section>` : '';
     unit.playNotesHtml = href ? `<p class="story-playnotes"><a href="${encodeHref(relativeHref(unit.outputPath, href))}">Play Notes for this session →</a></p>` : '';
+    // A chapter page links its chapter note's own page, the GM's workbench, where the GM site writes one.
+    const note = unit.kind === 'chapter' ? unit.sourcePage : null;
+    unit.gmNoteHtml = note && pages.includes(note) && !getsNoPage(note) && !isFolded(note)
+      ? `<p class="story-chapter-gm-note"><a href="${encodeHref(relativeHref(unit.outputPath, note.outputPath))}">Chapter note (GM)</a></p>` : '';
   }
   // A session's Play Notes: the note its `documents.play_notes` names, else its wrap-up's `source_document`; the
   // address of its page, or null when it has none.
@@ -2726,6 +2758,12 @@ function buildSite(options) {
   }
   function eachListing(emit, live) {
     for (const [dir, label] of Object.entries(DIR_LABELS)) {
+      // Written whether or not other notes are left in the folder: an old bookmark of the index still leads somewhere.
+      // A note the GM wrote as that index keeps its page.
+      if (dir === 'chapters' && chaptersMerged) {
+        if (live && !pages.some((p) => p.outputPath === `${dir}/index.html` && !isFolded(p))) emit(`${dir}/index.html`, redirectPage(`${dir}/index.html`, 'story.html', 'Story so far'), `  wrote ${dir}/index.html (redirect → story.html)`);
+        continue;
+      }
       if (dir === 'characters/pcs' && pcRedirectTarget) {
         if (live) emit(`${dir}/index.html`, redirectPage(`${dir}/index.html`, pcRedirectTarget, 'Player Characters'), `  wrote ${dir}/index.html (redirect → ${pcRedirectTarget})`);
         continue;
@@ -2843,6 +2881,30 @@ function buildSite(options) {
       if (live && unit.oldOutputPath) {
         emit(unit.oldOutputPath, redirectPage(unit.oldOutputPath, unit.outputPath, unit.title), `  wrote ${unit.oldOutputPath} (redirect → ${unit.outputPath})`);
       }
+      // So does the chapter note's own old page, on the player site, where the note folded into it.
+      if (live) for (const page of (foldedOnto.get(unit.outputPath) || []).filter(isFoldedChapterNote)) {
+        emit(page.foldedFrom, redirectPage(page.foldedFrom, unit.outputPath, unit.title), `  wrote ${page.foldedFrom} (redirect → ${unit.outputPath})`);
+      }
+    }
+    // A session that moved chapter keeps its old Story address (story-addresses.js): on the player site's own full
+    // build, each earlier address of a session the Story shows, where this build writes no page, leads to its page now.
+    if (live && storyAddressesOn) {
+      // null: a record that could not be read nor moved aside, left as it is (no redirect from it, no record written).
+      const record = readStoryAddresses(configDir, { warn: (msg) => console.warn(`  WARNING: ${msg}`) });
+      const previous = record || new Map();
+      // Sessions whose notes share a file name keep no old address: said, never silent.
+      for (const name of sharedSessionNames(spine, vaultRelPathOf)) {
+        const notes = spine.filter((u) => u.kind === 'session' && path.posix.basename(vaultRelPathOf(u.sourcePage)).normalize('NFC') === name).map((u) => vaultRelPathOf(u.sourcePage));
+        console.warn(`  WARNING: ${notes.join(', ')} share the file name "${name}", so if one moves chapter its old Story address will not redirect (rename one to fix this)`);
+      }
+      const taken = new Set([...pages.map((p) => p.outputPath), ...spine.map((u) => u.outputPath),
+        ...spine.map((u) => u.oldOutputPath).filter(Boolean), ...pages.filter(isFoldedChapterNote).map((p) => p.foldedFrom)]);
+      for (const { from, to } of movedSessions(previous, spine, vaultRelPathOf, taken)) {
+        const unit = spine.find((u) => u.outputPath === to);
+        emit(from, redirectPage(from, to, unit.title), `  wrote ${from} (redirect → ${to}: the session moved chapter)`);
+      }
+      if (record) writeStoryAddresses(configDir, spine, vaultRelPathOf, previous);
+      ignoreCacheInGit(configDir);
     }
     if (live) characterStories = buildCharacterStories();
     if (spine.length || characterStories.length || npcStories.length) {

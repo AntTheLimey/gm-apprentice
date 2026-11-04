@@ -13,6 +13,9 @@ const expected = require('../fixtures/session-golden/expected.json');
 // 1.10.17 tool (see fixtures/session-golden/generate.js).
 const LIB = path.join(__dirname, '..', '..');
 const withoutNav = (html) => html.replace(/<div class="story-nav">[\s\S]*?<\/div>/g, '<div class="story-nav"></div>');
+// Chapter pages (1.10.132) merge the player site's Chapters section into the Story: a note left in the chapters folder
+// has "Story" in its breadcrumb, linked, where 1.10.17 printed "Chapters". Read back as it was; nothing else may differ.
+const asOldCrumb = (html) => html.replace(/<a href="(?:\.\.\/)*story\.html">Story<\/a>(<span class="sep">)/, 'Chapters$1');
 
 describe('recap-in-hub session pages render as in 1.10.17 (#276 review)', () => {
   for (const variant of Object.keys(VARIANTS)) {
@@ -23,7 +26,7 @@ describe('recap-in-hub session pages render as in 1.10.17 (#276 review)', () => 
         assert.deepStrictEqual(Object.keys(actual).sort(), Object.keys(expected[variant]).sort());
         for (const [page, html] of Object.entries(expected[variant])) {
           // Chapters restart numbering; #276 regroups their prev/next on purpose.
-          if (variant === 'chapters') assert.strictEqual(withoutNav(actual[page]), withoutNav(html), page);
+          if (variant === 'chapters') assert.strictEqual(withoutNav(asOldCrumb(actual[page])), withoutNav(html), page);
           else assert.strictEqual(actual[page], html, page);
         }
       } finally {

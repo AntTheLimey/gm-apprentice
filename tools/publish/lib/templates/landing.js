@@ -10,6 +10,7 @@ const { isOutOfPlay } = require('../pc-status');
 const { isPlayedSession } = require('../session-hub');
 const { propListHtml } = require('./props-page');
 const { isPropNote } = require('../props/note');
+const { isFoldedChapterNote } = require('../story-fold');
 
 function formatDate(dateStr) {
   if (!dateStr) return null;
@@ -275,6 +276,9 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
     { key: 'creatures', label: 'Creatures', dir: 'creatures' },
   ];
   const dirCounts = {};
+  // On the player site the chapter notes are the Story So Far's chapters (chapter pages): the Story card leads there and
+  // counts them.
+  const storyChapters = pages.filter(isFoldedChapterNote).length;
   for (const page of pages) {
     const d = page.outputDir;
     // A prop note kept beside its chapter is not a story entry.
@@ -286,12 +290,14 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
       }
     }
   }
+  if (storyChapters) dirCounts.story = storyChapters;
   const exploreCards = exploreDirs
     .filter(ed => dirCounts[ed.key] > 0)
     .map(ed => {
       const desc = exploreDescs[ed.key] || '';
       const count = dirCounts[ed.key];
-      return `<a class="explore-card" href="${escapeHtml(ed.dir)}/index.html">
+      const href = ed.key === 'story' && storyChapters ? 'story.html' : `${ed.dir}/index.html`;
+      return `<a class="explore-card" href="${escapeHtml(href)}">
   <h4>${escapeHtml(ed.label)}</h4>
   <div class="card-flavour">${escapeHtml(desc)}</div>
   <div class="count">${count} ${count === 1 ? 'entry' : 'entries'}</div>

@@ -273,18 +273,8 @@ describe('build story: fix round', () => {
   const { buildBoth } = require('../helpers/gm-build');
   const { storyVault, CHAPTER, SESSION, WRAP_2 } = require('../helpers/story-vault');
   const fence = (t) => `<!-- gm-only -->\n${t}\n<!-- /gm-only -->`;
-  // Every player file but what belongs to the chapter note's own page, which shows the whole published note until PR C
-  // retires it: its page (chapters/...), its link-preview entry, and the search index (which indexes that page's words).
-  // The leak gate passes these strings for that reason, so absence is checked here directly.
-  const playerText = (site) => site.player.files().map((f) => path.relative(site.player.dir, f).split(path.sep).join('/'))
-    .filter((rel) => !rel.startsWith('chapters/') && rel !== 'search-index.json')
-    .map((rel) => {
-      const text = site.player.read(...rel.split('/'));
-      if (rel !== 'previews.json') return [rel, text];
-      const cards = JSON.parse(text);
-      for (const key of Object.keys(cards)) if (key.startsWith('chapters/')) delete cards[key];
-      return [rel, JSON.stringify(cards)];
-    });
+  // Every player file: the chapter note has no page, link preview or search entry of its own there (chapter pages).
+  const playerText = (site) => site.player.files().map((f) => [path.relative(site.player.dir, f).split(path.sep).join('/'), fs.readFileSync(f, 'utf8')]);
 
   it('M1/N1: a GM heading that contains "teaser" or "recap", and text after a later H1, reach no Story page', () => {
     const ch1 = CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n')
@@ -364,6 +354,154 @@ describe('build story: a chapter status the player site hides', () => {
       assert.equal(hits.length, 1, s.logs.join('\n'));
       assert.match(hits[0], /hide\.fields/);
       assert.doesNotMatch(hits[0], /no status/);
+    } finally { s.cleanup(); }
+  });
+});
+
+// Chapter pages (Task 8): a session that moves to another chapter keeps its old Story address working, build after
+// build; a session the Story stops showing gets no redirect.
+describe('build story: a session that moves chapter', () => {
+  const { buildBoth } = require('../helpers/gm-build');
+  const { build } = require('../../lib/build');
+  const { storyVault, CHAPTER, SESSION, WRAP_2 } = require('../helpers/story-vault');
+  const OLD = 'chapter-1-docks-session-2.html';
+  const NEW = 'chapter-2-boats-session-2.html';
+  const CH2 = (status) => `---\ntype: chapter\ntitle: Chapter 2 — Boats\nsort_order: 2\nstatus: ${status}\n---\n\n# Chapter 2 — Boats\n\n## Teaser\n\nThe boats.\n`;
+  const quiet = (fn) => { const saved = { log: console.log, warn: console.warn }; console.log = () => {}; console.warn = () => {}; try { fn(); } finally { Object.assign(console, saved); } };
+  const vaultFile = (s, rel) => path.join(s.root, 'vault', ...rel.split('/'));
+  // Into the new chapter's folder, its `chapter:` too, as a GM moves it in Obsidian.
+  const moveSession2 = (s) => {
+    for (const name of ['Session 2.md', 'Session 2 Wrap-Up.md']) {
+      const from = vaultFile(s, `Sessions/${name}`);
+      fs.writeFileSync(vaultFile(s, `Chapters/Chapter 2/${name}`), fs.readFileSync(from, 'utf8').replace('[[Chapter 1 Overview]]', '[[Chapter 2 Overview]]'));
+      fs.rmSync(from);
+    }
+  };
+  const rebuild = (s) => quiet(() => build({ configPath: s.configPath, site: 'player' }));
+  const isRedirectTo = (html, to) => new RegExp(`<meta http-equiv="refresh" content="0;url=${to.replace(/\./g, '\\.')}">`).test(html);
+
+  it('the old address redirects to the new one, and still does on the next build', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n'), 'Chapters/Chapter 2/Chapter 2 Overview.md': CH2('active') }), { sites: ['player'] });
+    try {
+      assert.ok(s.player.exists('story', OLD));
+      moveSession2(s);
+      rebuild(s);
+      assert.ok(s.player.exists('story', NEW));
+      assert.ok(isRedirectTo(s.player.read('story', OLD), NEW), s.player.read('story', OLD));
+      rebuild(s);
+      assert.ok(isRedirectTo(s.player.read('story', OLD), NEW), 'the redirect is gone on the next build');
+      const { brokenLinks } = require('../helpers/site-links');
+      assert.deepEqual(brokenLinks(s.player.dir), []);
+    } finally { s.cleanup(); }
+  });
+
+  it('the record is beside the site, never in its output folder', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n') }), { sites: ['player'] });
+    try {
+      assert.ok(fs.existsSync(path.join(s.root, 'campaign', '.gm-apprentice', 'story-addresses.json')));
+      assert.deepEqual(s.player.files().filter((f) => /story-addresses/.test(f)), []);
+    } finally { s.cleanup(); }
+  });
+
+  it('a GM build, an in-memory build, a sheets-only build and a preview write no record and no moved-session redirect', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n'), 'Chapters/Chapter 2/Chapter 2 Overview.md': CH2('active') }), { sites: ['gm'] });
+    const anyRecord = () => {
+      const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+      return walk(s.root).filter((f) => /story-addresses/.test(f));
+    };
+    try {
+      assert.deepEqual(anyRecord(), [], 'GM build');
+      quiet(() => build({ configPath: s.configPath, inMemory: true }));
+      assert.deepEqual(anyRecord(), [], 'in-memory build');
+      quiet(() => build({ configPath: s.configPath, outputDirOverride: path.join(s.root, 'preview') }));
+      assert.deepEqual(anyRecord(), [], 'preview build');
+      // A sheets-only build updates a full one: the full build's record is taken away first.
+      quiet(() => build({ configPath: s.configPath }));
+      for (const f of anyRecord()) fs.rmSync(f);
+      quiet(() => build({ configPath: s.configPath, only: 'sheets' }));
+      assert.deepEqual(anyRecord(), [], 'sheets-only build');
+      // Seeded by hand, a GM build still writes no redirect from it.
+      fs.mkdirSync(path.join(s.root, 'campaign', '.gm-apprentice'), { recursive: true });
+      fs.writeFileSync(path.join(s.root, 'campaign', '.gm-apprentice', 'story-addresses.json'), JSON.stringify({ version: 1, sessions: { 'Session 2.md': ['story/old-session-2.html'] } }));
+      quiet(() => build({ configPath: s.configPath, site: 'gm' }));
+      assert.equal(s.gm.exists('story', 'old-session-2.html'), false);
+    } finally { s.cleanup(); }
+  });
+
+  it('a record that cannot be read is kept as a dated .bak, the build says so, and a new record starts', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n'), 'Chapters/Chapter 2/Chapter 2 Overview.md': CH2('active') }), { sites: ['player'] });
+    const dir = path.join(s.root, 'campaign', '.gm-apprentice');
+    try {
+      fs.writeFileSync(path.join(dir, 'story-addresses.json'), '{"version":1,"sessions":{');
+      const logs = [];
+      const saved = { log: console.log, warn: console.warn };
+      console.log = () => {}; console.warn = (m) => logs.push(String(m));
+      try { build({ configPath: s.configPath, site: 'player' }); } finally { Object.assign(console, saved); }
+      assert.equal(logs.filter((l) => /WARNING/.test(l) && /story-addresses\.json\.\d{4}-\d\d-\d\d\.bak/.test(l)).length, 1, logs.join('\n'));
+      const files = fs.readdirSync(dir);
+      assert.ok(files.some((f) => /^story-addresses\.json\.\d{4}-\d\d-\d\d\.bak$/.test(f)), files.join(', '));
+      assert.ok(JSON.parse(fs.readFileSync(path.join(dir, 'story-addresses.json'), 'utf8')).sessions['Session 2.md']);
+    } finally { s.cleanup(); }
+  });
+
+  // CodeRabbit 4469622179: a record that can be neither read nor moved aside is left as it is; the build goes on.
+  it('a record that cannot be read nor moved aside is left untouched, and the build says so', { skip: process.platform === 'win32' || process.getuid() === 0 }, () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n') }), { sites: ['player'] });
+    const dir = path.join(s.root, 'campaign', '.gm-apprentice');
+    const record = path.join(dir, 'story-addresses.json');
+    try {
+      fs.writeFileSync(record, '{broken');
+      for (const f of fs.readdirSync(dir)) if (fs.statSync(path.join(dir, f)).isDirectory()) fs.chmodSync(path.join(dir, f), 0o755);
+      fs.chmodSync(dir, 0o555);
+      const logs = [];
+      const saved = { log: console.log, warn: console.warn };
+      console.log = () => {}; console.warn = (m) => logs.push(String(m));
+      try { build({ configPath: s.configPath, site: 'player' }); } finally { Object.assign(console, saved); fs.chmodSync(dir, 0o755); }
+      assert.equal(fs.readFileSync(record, 'utf8'), '{broken');
+      assert.equal(logs.filter((l) => /nor moved aside/.test(l)).length, 1, logs.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
+  it('two sessions with one file name are said once, and keep no old address', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n'),
+      'Chapters/Chapter 2/Chapter 2 Overview.md': CH2('active'),
+      'Chapters/Chapter 2/Session 2.md': SESSION(2).replace('[[Chapter 1 Overview]]', '[[Chapter 2 Overview]]').replace('title: Session 2', 'title: Session 2b').replace('session_number: 2', 'session_number: 3').replace('[[Session 2 Wrap-Up]]', '[[Session 2b Wrap-Up]]'),
+      'Chapters/Chapter 2/Session 2b Wrap-Up.md': WRAP_2.replace('[[Session 2]]', '[[Chapters/Chapter 2/Session 2|Session 2]]').replace('[[Chapter 1 Overview]]', '[[Chapter 2 Overview]]').replace('RECAP-TWO-1', 'RECAP-TWOB-1') }), { sites: ['player'] });
+    try {
+      const hits = s.logs.filter((l) => /WARNING/.test(l) && /share the file name "Session 2\.md"/.test(l));
+      assert.equal(hits.length, 1, s.logs.filter((l) => /WARNING/.test(l)).join('\n'));
+      const record = JSON.parse(fs.readFileSync(path.join(s.root, 'campaign', '.gm-apprentice', 'story-addresses.json'), 'utf8'));
+      assert.equal(record.sessions['Session 2.md'], undefined);
+    } finally { s.cleanup(); }
+  });
+
+  // With PR B's shared address set (every Story page takes the first free address from its slug): an old address that
+  // another page of this build now takes is that page, never a redirect over it.
+  it('an old address another session now takes stays that session\'s page', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n'), 'Chapters/Chapter 2/Chapter 2 Overview.md': CH2('active') }), { sites: ['player'] });
+    try {
+      moveSession2(s);
+      // A new note in Chapter 1 whose file name makes the same slug ("Session_2"): its address is the moved session's
+      // old one.
+      fs.writeFileSync(vaultFile(s, 'Sessions/Session_2.md'), SESSION(2).replace('session_number: 2', 'session_number: 5')
+        .replace('[[Session 2 Wrap-Up]]', '[[Session_2 Wrap-Up]]').replace('[[Session 2 Play Notes]]', '[[Session_2 Play Notes]]'));
+      fs.writeFileSync(vaultFile(s, 'Sessions/Session_2 Wrap-Up.md'), WRAP_2.replace('[[Session 2]]', '[[Session_2]]').replace('RECAP-TWO-1', 'RECAP-AGAIN-1'));
+      rebuild(s);
+      assert.ok(s.player.exists('story', NEW));
+      assert.match(s.player.read('story', OLD), /RECAP-AGAIN-1/);
+      assert.ok(!isRedirectTo(s.player.read('story', OLD), NEW));
+    } finally { s.cleanup(); }
+  });
+
+  it('a session the Story no longer shows (its chapter now planned) gets no redirect', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: complete\n'), 'Chapters/Chapter 2/Chapter 2 Overview.md': CH2('active') }), { sites: ['player'] });
+    try {
+      moveSession2(s);
+      rebuild(s);
+      fs.writeFileSync(vaultFile(s, 'Chapters/Chapter 2/Chapter 2 Overview.md'), CH2('planned'));
+      rebuild(s);
+      assert.equal(s.player.exists('story', OLD), false);
+      assert.equal(s.player.exists('story', NEW), false);
     } finally { s.cleanup(); }
   });
 });

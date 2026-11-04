@@ -83,6 +83,32 @@ describe('leak gate: also visible, read as the page reads it', () => {
     } finally { site.cleanup(); }
   });
 
+  // A secret made of public names and numbers is still a secret (PR C review M1): a combination, coordinates, a date,
+  // a session number, a ranking. Each, left on a page by a broken hiding rule, is a finding.
+  const NUMBERED = [
+    ['- [[Captain Vey]] 31 47 22 09', 'Captain Vey 31 47 22 09'],
+    ['- [[Wreck of the Aurora]] 51.5074, -0.1278', 'Wreck of the Aurora 51.5074, -0.1278'],
+    ['- [[Marina Garrick]] 12/03/1923', 'Marina Garrick 12/03/1923'],
+    ['| Reveal | [[Lord Digby]] 14 |\n|---|---|\n| x | [[Lord Digby]] [[Emma Wentworth]] 14 |', 'Lord Digby Emma Wentworth 14'],
+    ['- 1 [[Emma Wentworth]] 2 [[Lord Digby]]', '1 Emma Wentworth 2 Lord Digby'],
+    ['- 7 [[Captain Vey]] 3 1', '7 Captain Vey 3 1'],
+  ];
+  for (const [hiddenLine, leaked] of NUMBERED) {
+    it(`public names with numbers are still hidden text: ${leaked}`, () => {
+      const site = leakSite({
+        'NPCs/Captain Vey.md': `---\ntype: npc\n---\nA ship captain.\n\n## GM Notes\n\n${hiddenLine}\n`,
+        'NPCs/Marina Garrick.md': '---\ntype: npc\n---\nA lady.\n',
+        'NPCs/Lord Digby.md': '---\ntype: npc\n---\nA lord.\n',
+        'NPCs/Emma Wentworth.md': '---\ntype: npc\n---\nA lady.\n',
+        'Places/Wreck of the Aurora.md': '---\ntype: location\n---\nA wreck.\n',
+      }, { player: { folder_map: { NPCs: 'npcs', Places: 'places' }, hide: { sections: ['GM Notes'] } } });
+      try {
+        leakInto(site.outputDir, 'npcs/captain-vey.html', leaked);
+        assert.equal(gate(site).findings.length, 1, JSON.stringify(gate(site).findings));
+      } finally { site.cleanup(); }
+    });
+  }
+
   // A page's title heads its body in place of the note's own leading H1, so "[[Wrap Up]] — narrative recap" in a GM's
   // source list is the page's title and the heading players read under it (Canticle, 2026-10-27).
   const WRAP = { 'Sessions/Wrap Up One.md': '---\ntype: event\n---\n# The First Night (Wrap-Up)\n\n## Narrative Recap\n\nThe party met at the inn.\n\n## GM Notes\n\n### Hidden Ending\n\nThe innkeeper is the thief.\n' };

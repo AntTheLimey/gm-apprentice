@@ -1312,7 +1312,6 @@ p.story-playnotes a {
   text-decoration: none;
 }
 .story-begin:hover { opacity: 0.9; }
-.story-toc { line-height: 1.9; }
 .story-branch h3 {
   font-size: var(--font-size-900);
   text-transform: uppercase;

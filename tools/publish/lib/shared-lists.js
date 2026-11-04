@@ -17,6 +17,14 @@ const STAGE_HIDES = new Set(data.stage_hides);
 const CHAPTER_STATUSES = new Set(data.chapter_status.values);
 const CHAPTER_STATUS_ALIASES = { ...data.chapter_status.aliases };
 
+// A chapter note's `status:` value as the Story and the publish decision both read it: 'planned', 'active' or
+// 'complete' (trimmed, any case), or an older spelling that means one of them, else 'unknown' (missing, or any other).
+function chapterStatusOf(value) {
+  const s = String(value == null ? '' : value).trim().toLowerCase();
+  if (CHAPTER_STATUSES.has(s)) return s;
+  return Object.prototype.hasOwnProperty.call(CHAPTER_STATUS_ALIASES, s) ? CHAPTER_STATUS_ALIASES[s] : 'unknown';
+}
+
 // Every `type:` spelling a Session Wrap-Up is written with; the first is the one the
 // templates write.
 const WRAP_UP_TYPE = data.wrap_up_types[0];
@@ -39,7 +47,7 @@ function systemId(raw) {
 const VAULT_FOLDERS = data.vault_folders.map((f) => ({ folder: f.folder, types: [...f.types], site: f.site }));
 
 module.exports = {
-  SESSION_NOT_YET_RUN, SESSION_PLAYED, STAGE_HIDES, CHAPTER_STATUSES, CHAPTER_STATUS_ALIASES,
+  SESSION_NOT_YET_RUN, SESSION_PLAYED, STAGE_HIDES, CHAPTER_STATUSES, CHAPTER_STATUS_ALIASES, chapterStatusOf,
   WRAP_UP_TYPE, WRAP_UP_TYPES,
   SYSTEM_IDS, SYSTEM_NAMES, SYSTEM_ALIASES, systemId,
   VAULT_FOLDERS,

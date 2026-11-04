@@ -1,7 +1,8 @@
 ---
 type: chapter
+status: complete
 publish: stub
-publish_include_sections: [Synopsis]
+publish_include_sections: [Synopsis, Recap]
 ---
 
 # Chapter 4 - Calcutta
@@ -20,15 +21,19 @@ Havildar Singh is the traitor.
 
 The cult completes the rite beneath the ossuary.
 
+## Recap
+
+The party left Calcutta by the river road.
+
 ## GM Notes
 
-### Synopsis
+### Recap
 
 The Resident already knows who the party are.
 
 <!-- spoiler -->
 
-## Synopsis
+## Recap
 
 The monsoon breaks on the night of the rite.
 

@@ -374,3 +374,35 @@ describe('publish-decision: STORY_COMPANION', () => {
     assert.strictEqual(v.code, 'OK');
   });
 });
+
+// Chapter pages (PR C): a chapter note the Story reads as planned (its shared reading: trimmed, any case, the
+// ontology's aliases) is the note the player site leaves out, so the two never disagree.
+describe('publish-decision: a planned chapter note', () => {
+  const chapter = (status) => decide({ type: 'chapter', status }, { rel: 'Chapters/Ch/Ch.md' });
+
+  it('is left out however its status is typed', () => {
+    for (const status of ['planned', 'planned ', ' Planned', 'PLANNED']) {
+      const v = chapter(status);
+      assert.strictEqual(v.code, 'AUTO_EXCLUDED_STATUS', JSON.stringify(status));
+      assert.strictEqual(v.reason, 'status: planned', JSON.stringify(status));
+    }
+  });
+
+  it('is left out even when the publish list lists it, as the Story leaves it out', () => {
+    const v = decide({ type: 'chapter', status: 'planned' }, { rel: 'Chapters/Ch/Ch.md', manifest: manifestOf({ publishing: ['Chapters/Ch/Ch.md'] }) });
+    assert.strictEqual(v.code, 'AUTO_EXCLUDED_STATUS');
+  });
+
+  it('autoExcludeCode, which explain prints, agrees: trimmed, any case', () => {
+    for (const status of ['planned ', ' Planned', 'PLANNED']) {
+      assert.strictEqual(autoExcludeCode({ type: 'chapter', status }), 'AUTO_EXCLUDED_STATUS', JSON.stringify(status));
+    }
+    assert.strictEqual(autoExcludeCode({ type: 'session', status: 'prepped ' }), 'AUTO_EXCLUDED_STATUS');
+  });
+
+  it('active, complete, in_progress and an unknown status publish', () => {
+    for (const status of ['active', 'complete', 'in_progress', 'complet', undefined]) {
+      assert.strictEqual(chapter(status).code, 'OK', String(status));
+    }
+  });
+});
