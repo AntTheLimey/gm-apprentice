@@ -2,6 +2,7 @@
 """gurps_skill_default.py: a skill the sheet lacks is added at its default
 level for 0 points (#571); one with no default is not."""
 
+import os
 import shutil
 import subprocess
 import sys
@@ -108,10 +109,11 @@ class SkillDefaultTests(unittest.TestCase):
         self.assertTrue(got.stdout.startswith("NO-DEFAULT\t"), got.stdout)
         self.assertIn("Brawling has no default (B173): it can't be used "
                       "until at least 1 point is spent on it", got.stdout)
-        got, _after = run(SHEET, "Karate", "--write")
+        got, after_karate = run(SHEET, "Karate", "--write")
         self.assertIn("Karate has no default (B173): it can't be used "
                       "until at least 1 point is spent on it", got.stdout)
         self.assertEqual(after, SHEET)
+        self.assertEqual(after_karate, SHEET)
 
     def test_an_unarmed_attack_needs_no_unarmed_skill(self):
         # B271 (the coordinator's reading; the publish tool's UNARMED rows
@@ -229,6 +231,8 @@ class SkillDefaultTests(unittest.TestCase):
         self.assertIn("| Running | HT/A |  | [0] | 9 | 9 |", msg)
         self.assertIn("Relative Level left blank: the sheet lists no HT", msg)
 
+    @unittest.skipIf(hasattr(os, "geteuid") and os.geteuid() == 0,
+                     "root ignores directory permission bits")
     def test_a_sheet_that_cannot_be_written_is_a_row(self):
         d = Path(tempfile.mkdtemp(prefix="gsd-"))
         try:
