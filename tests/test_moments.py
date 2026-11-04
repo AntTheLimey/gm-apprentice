@@ -166,6 +166,24 @@ class ShowAndTagTests(unittest.TestCase):
         self.assertIn("no Memorable Moments section", out)
         self.assertEqual(self.text(), before)
 
+    def test_check_names_untagged_cards_and_fails_on_a_word_that_is_no_kind(self):
+        code, out = run(self.vault, "check", S1)
+        self.assertEqual(code, 1, out)
+        self.assertEqual(out.splitlines(), [
+            "UNTAGGED\t1\t**Six crawled through the sewer.** / *Nobody planned it.*",
+            "UNTAGGED\t2\t> \"Mission incomplete.\" / > \u2014 Six",
+            "UNTAGGED\t3\t**Mara laughed.** #moment/sad",
+            "UNKNOWN\t#moment/sad\tnot a kind (dramatic, intriguing, funny, epic, tragic)",
+            "# 3 moments: 3 untagged, 1 unknown kind"])
+        run(self.vault, "tag", S1, "--write", stdin="1\tfunny\n3\tepic\n")
+        code, out = run(self.vault, "check", S1)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.splitlines()[-1], "# 3 moments: 1 untagged, 0 unknown kinds")
+        code, out = run(self.vault, "check", S3)
+        self.assertEqual((code, out.strip()), (0, "# 1 moment: 0 untagged, 0 unknown kinds"))
+        code, out = run(self.vault, "check", S2)
+        self.assertEqual((code, out.strip()), (0, f"# {S2}: no Memorable Moments section"))
+
 
 if __name__ == "__main__":
     unittest.main()

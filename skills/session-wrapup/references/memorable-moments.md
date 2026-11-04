@@ -18,6 +18,8 @@ shows a wrap-up's Memorable Moments as cards on its Story page.
 - Tag every moment: end its last line with ` #moment/<kind>`, one
   of status's `kinds`, picked from what the moment says.
 - Send the section with the other `##` sections.
+- Then run `moments.py <vault> check "<wrap-up>"` and fix each
+  moment it names (`UNTAGGED`, `UNKNOWN`) before going on.
 
 ## Back-fill, offered once per campaign
 

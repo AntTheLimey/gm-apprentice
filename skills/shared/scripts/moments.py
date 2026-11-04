@@ -5,6 +5,7 @@ and the `#moment/<kind>` tag each one carries.
     moments.py VAULT status
     moments.py VAULT list
     moments.py VAULT show WRAPUP
+    moments.py VAULT check WRAPUP
     moments.py VAULT tag WRAPUP [--write]          < rows: N<TAB>kind
     moments.py VAULT offered
 
@@ -12,7 +13,9 @@ status: `moments on|off` (on when a site, the player's or the GM's, is on
 and `player_site.story.moments` is on), the kinds, and when on whether the
 one back-fill offer was made (and if not, how many past wrap-ups it would
 cover). list: the wrap-ups with no moments or untagged ones. show: one
-wrap-up's moments, numbered, each with its kind or `-`. tag: puts each
+wrap-up's moments, numbered, each with its kind or `-`. check: each
+untagged moment (UNTAGGED) and each tag that names no kind (UNKNOWN,
+exit 1), for a wrap-up just written. tag: puts each
 row's kind on moment N (at the end of its last line; an unknown tag there
 is replaced), then asks the publish tool again that every card reads as
 tagged; without --write it prints its plan. offered: records in
@@ -161,23 +164,52 @@ def _wrapup(batch: vw.Batch, raw: str) -> str:
         raise Refused(str(e)) from None
 
 
-def cmd_show(vault: Path, raw: str) -> list[str]:
+def _read_section(vault: Path, raw: str
+                  ) -> tuple[str, dict[str, Any] | None, list[str]]:
+    """(the wrap-up, its moments section or None, each card's text)."""
     batch = vw.Batch(vault)
     rel = _wrapup(batch, raw)
     text = batch.read(rel)
     offset, section = section_of(text)
     if section is None:
-        return [f"# {rel}: no Memorable Moments section"]
+        return rel, None, []
     lines = text.replace("\r\n", "\n").split("\n")
+    said = []
+    for card in section["cards"]:
+        first, last = card.get("first"), card.get("last")
+        said.append("" if first is None or last is None else " / ".join(
+            ln.strip() for ln in lines[offset + first:offset + last + 1]
+            if ln.strip()))
+    return rel, section, said
+
+
+def cmd_show(vault: Path, raw: str) -> list[str]:
+    rel, section, said = _read_section(vault, raw)
+    if section is None:
+        return [f"# {rel}: no Memorable Moments section"]
     n, bare = untagged(section)
     out = [f"# {rel} §{section['title']}: {_many(n)}, {bare} untagged"]
     for i, card in enumerate(section["cards"], 1):
-        first, last = card.get("first"), card.get("last")
-        said = ("" if first is None or last is None else " / ".join(
-            ln.strip() for ln in lines[offset + first:offset + last + 1]
-            if ln.strip()))
-        out.append(f"{i}\t{card.get('kind') or '-'}\t{said}")
+        out.append(f"{i}\t{card.get('kind') or '-'}\t{said[i - 1]}")
     return out
+
+
+def cmd_check(vault: Path, raw: str) -> tuple[list[str], int]:
+    """Each untagged card and each tag that names no kind; exit 1 on the
+    latter (a card the site draws with no kind, and a warning)."""
+    rel, section, said = _read_section(vault, raw)
+    if section is None:
+        return [f"# {rel}: no Memorable Moments section"], 0
+    out = [f"UNTAGGED\t{i}\t{said[i - 1]}"
+           for i, card in enumerate(section["cards"], 1)
+           if not card.get("kind")]
+    unknown = [str(w) for w in section.get("unknownTags") or []]
+    names = ", ".join(kinds())
+    out += [f"UNKNOWN\t#moment/{w}\tnot a kind ({names})" for w in unknown]
+    n, bare = untagged(section)
+    out.append(f"# {_many(n)}: {bare} untagged, {len(unknown)} unknown "
+               f"kind{'' if len(unknown) == 1 else 's'}")
+    return out, 1 if unknown else 0
 
 
 def _tagged(line: str, kind: str) -> str:
@@ -276,6 +308,10 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("list", help="wrap-ups with no moments or untagged ones")
     show = sub.add_parser("show", help="one wrap-up's moments, numbered")
     show.add_argument("wrapup")
+    check = sub.add_parser(
+        "check", help="name untagged moments and tags that are no kind "
+        "(exit 1 on the latter)")
+    check.add_argument("wrapup")
     tag = sub.add_parser("tag", help="tag moments (stdin: N<TAB>kind rows)")
     tag.add_argument("wrapup")
     tag.add_argument("--write", action="store_true")
@@ -295,6 +331,10 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
             text = vw.read_stdin() if stdin is None else stdin
             sys.stdout.write(cmd_tag(vault, args.wrapup, text, args.write))
             return 0
+        if args.command == "check":
+            rows, code = cmd_check(vault, args.wrapup)
+            print("\n".join(rows))
+            return code
         rows = (cmd_status(vault) if args.command == "status"
                 else cmd_list(vault) if args.command == "list"
                 else cmd_show(vault, args.wrapup) if args.command == "show"
