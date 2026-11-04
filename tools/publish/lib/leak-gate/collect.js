@@ -223,7 +223,9 @@ function collectHidden({ configPath, outputDir = null }) {
     if (publishedRels.has(rel) || neverShown(rel) || inWorkingDir(rel)) continue;
     // Read as the publish decision reads it: a list-valued status is the item that excludes.
     if (fm.type !== 'chapter' || chapterStatusOf(ruleValue('status', fm.status)) !== 'planned') continue;
-    const title = typeof fm.title === 'string' ? labelsForLinks(fm.title).trim() : '';
+    // Its title as the Story would print it: the title, else the file name (scanner.js displayTitle).
+    const title = (fm.title != null && fm.title !== '' ? labelsForLinks(String(fm.title)).trim() : '')
+      || String(note.displayTitle || '').trim();
     if (wordsOf(title).length >= 2) plannedTitles.push({ title, note: rel });
   }
   for (const note of notes) {

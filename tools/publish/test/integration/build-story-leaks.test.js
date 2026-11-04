@@ -411,6 +411,33 @@ describe('Story page leaks: the chapter note leaves the player site', () => {
     } finally { t.cleanup(); }
   });
 
+  // CodeRabbit (PR C, collect.js:226): a planned chapter with no title: is named by its file name, and checked under it.
+  it('the gate finds the file-name title of a planned chapter with no title field', () => {
+    const untitled = planned('planned').replace('title: Chapter 2 — Deeps\n', '');
+    const t = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CH,
+      'Chapters/Chapter 2/Chapter 2 Deeps.md': untitled }), { sites: ['player'] });
+    try {
+      assert.deepEqual(gate(t), []);
+      leakInto(t.player.dir, 'story.html', 'Coming soon: Chapter 2 Deeps.');
+      const found = gate(t);
+      assert.equal(found.length, 1, JSON.stringify(found));
+      assert.equal(found[0].note, 'Chapters/Chapter 2/Chapter 2 Deeps.md');
+    } finally { t.cleanup(); }
+  });
+
+  // The status slip (N5): a planned chapter with no title: whose played session names it by its file name. The session
+  // page prints that link; the build warns (the chapter should be active or complete), and the deploy is not stopped.
+  it('a played session naming an untitled planned chapter is no finding', () => {
+    const untitled = planned('planned').replace('title: Chapter 2 — Deeps\n', '');
+    const sess = '---\ntype: session\ntitle: Session 2\nsession_number: 2\nchapter: "[[Chapter 2 Deeps]]"\nstatus: played\n'
+      + 'play_date: "2026-10-02"\n---\n\n# Session 2\n\n## Narrative Recap\n\nThey dived, recap 2.\n';
+    const t = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CH,
+      'Chapters/Chapter 2/Chapter 2 Deeps.md': untitled, 'Sessions/Session 2/Session 2.md': sess }), { sites: ['player'] });
+    try {
+      assert.deepEqual(gate(t), []);
+    } finally { t.cleanup(); }
+  });
+
   // CodeRabbit 4469622157: a list-valued status reads as the Story and the publish decision read it.
   it('the gate finds the title of a chapter planned by a list-valued status', () => {
     const t = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CH,
