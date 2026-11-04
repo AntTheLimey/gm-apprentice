@@ -149,7 +149,9 @@ function buildLiveData(model, meta) {
   const lv = buildLevels(model);
   if (!lv) return null;
   const items = buildItems(model);
-  if (items.length === 0) return null;
+  // No gear means nothing to toggle, so no live data; unless local gravity is set, where body
+  // weight alone can move the level (B350) and the sheet and board must still work it out (#510).
+  if (items.length === 0 && model.gravity == null) return null;
   const skills = buildSkills(model, lv.authoredLevel);
   const weapons = buildWeapons(model, skills, lv.authoredLevel);
   const v = buildVitals(model);
@@ -161,6 +163,8 @@ function buildLiveData(model, meta) {
     levels: lv.levels,
     skills, weapons, items,
     vitals: v,
+    // Only with local gravity set (#510): a PC without it keeps the page data it always had.
+    ...(model.gravity != null ? { gravity: model.gravity, bodyWeight: model.bodyWeight } : {}),
     basicSpeed: v ? v.basicSpeed : null,
     dx: v ? v.dx : null,
   };

@@ -132,6 +132,8 @@ check("enc subsection table first row",
 check("parse_weight le-symbol", gk.parse_weight("≤29 lbs"), 29.0)
 check("parse_weight plain", gk.parse_weight("2 lb"), 2.0)
 check("parse_weight none", gk.parse_weight("—"), None)
+check("parse_weight ounces", gk.parse_weight("9.6 oz"), 0.6)
+check("parse_weight lb before oz", gk.parse_weight("2 lb (32 oz)"), 2.0)
 check("parse_cost bracket", gk.parse_cost("[20]"), 20)
 check("parse_cost unicode minus", gk.parse_cost("−25"), -25)
 check("col finds header", gk.col(["Level", "Max Weight", "Move"], "weight"), 1)
@@ -217,6 +219,14 @@ check("load flags declared vs computed",
 check("load message shows both levels and lbs",
       "43" in load[0][2] and "Light" in load[0][2] and "Medium" in load[0][2],
       True)
+
+# #510: with local gravity set, the sheet works encumbrance out by B350 and this
+# check reads 1G, so a mismatch is context (INFO), never a false WARNING.
+gload = gk.check_load(gk.Sheet(_LOADED.replace("type: pc\n", "type: pc\ngravity: 1.2\n")))
+check("load with gravity is INFO, says 1G and the sheet's gravity",
+      (gload[0][0], "1G" in gload[0][2], "1.2G" in gload[0][2]), ("INFO", True, True))
+g1 = gk.check_load(gk.Sheet(_LOADED.replace("type: pc\n", "type: pc\ngravity: 1\n")))
+check("load with gravity 1 still warns", [f[0] for f in g1], ["WARNING"])
 
 nl = gk.check_load(gk.Sheet(_LOADED.replace("**Enc:** Medium (2)\n", "")))
 check("load INFO when no declared level",

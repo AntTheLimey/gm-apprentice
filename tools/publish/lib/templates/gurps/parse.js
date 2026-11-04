@@ -1,5 +1,6 @@
 const { parseTableRows, parseTables, countTables, findSectionByTitle, extractSubsectionHtml, topLevelHtml, aboveSubheadings } = require('./tables');
 const { splitMarkers, stripCost } = require('./render');
+const gc = require('./gurps-calc');
 
 const PRIMARY = ['ST', 'DX', 'IQ', 'HT'];
 
@@ -22,6 +23,7 @@ function emptyModel() {
     equipment: { items: [], loadouts: [] },
     chains: { melee: [], ranged: [] },
     points: [],
+    gravity: null, bodyWeight: null,
     warnings: [],
   };
 }
@@ -802,6 +804,36 @@ function crossReferenceSkillDefenses(model) {
   }
 }
 
+// The optional `gravity` field: local gravity in G (B350). Absent, or 1, is 1G and stored as null.
+// A number written as text ("1.2", "1.2G") is read; anything else is a build warning and 1G.
+function parseGravity(model, fm) {
+  const raw = fm.gravity;
+  if (raw == null || raw === '') return;
+  const m = typeof raw === 'number' ? null : /^\s*(\d+(?:\.\d+)?)\s*g?\s*$/i.exec(String(raw));
+  const g = typeof raw === 'number' ? raw : (m ? parseFloat(m[1]) : NaN);
+  if (!Number.isFinite(g) || g < 0) {
+    model.warnings.push(`GURPS \`gravity: ${raw}\` is not a number of G (e.g. \`gravity: 1.2\`); the sheet reads 1G.`);
+    return;
+  }
+  if (g !== 1) model.gravity = g;
+}
+
+// Body weight in lb from the sheet's `Weight` row (Appearance & Social), which the gravity rule
+// needs above 1G (B350); null when the row is missing or holds no number.
+// Pounds, ounces or a bare number are read; any other unit (kg, stone) is a build warning and no
+// body weight, so the page says it is missing rather than reading kilograms as pounds.
+function parseBodyWeight(model) {
+  const key = Object.keys(model.identity).find(k => /^\s*(body\s+)?weight\s*$/i.test(k));
+  const raw = key ? String(model.identity[key]) : '';
+  if (!/\d/.test(raw)) return;
+  const unit = raw.replace(/[\d.,\s]/g, '').toLowerCase();
+  if (unit && !/^(lbs?|pounds?|oz|ounces?)$/.test(unit)) {
+    model.warnings.push(`GURPS Weight row \`${raw.trim()}\` is not in pounds or ounces; write it in lb so gravity can count it (B350).`);
+    return;
+  }
+  model.bodyWeight = gc.parseWeight(raw);
+}
+
 function parseGurps(frontmatter, sections) {
   const fm = frontmatter || {};
   const secs = sections || [];
@@ -823,6 +855,8 @@ function parseGurps(frontmatter, sections) {
   noteEmptyWeapons(model, secs);
   parseGrimoire(model, secs);
   parseStatus(model, secs, fm);
+  parseGravity(model, fm);
+  if (model.gravity != null) parseBodyWeight(model);   // only the gravity rule reads it
   resolveCurrentEncumbrance(model);
   parseChains(model, secs);
   parseEquipment(model, secs);

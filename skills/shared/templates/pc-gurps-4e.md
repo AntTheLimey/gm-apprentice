@@ -15,6 +15,7 @@ status: alive
 key_traits: []
 portrait: ""
 sheet_source: ""
+# gravity: 1.2  # optional: local gravity in G (B350 encumbrance on the sheet and party board); absent is 1G
 display_meta: [occupation, age, nationality]
 relationships:
   - target: "[[]]"

@@ -49,10 +49,15 @@ function block(skill, combatReflexes) {
   return 3 + Math.floor(skill / 2) + (combatReflexes ? 1 : 0);
 }
 
+// A weight cell in pounds. Sheets write lb or lbs (or no unit, read as lb); a number written in
+// ounces ("9.6 oz") is converted, 16 oz to the pound (#510). The unit read is the one right after
+// the first number.
 function parseWeight(str) {
   if (str == null) return 0;
-  const m = String(str).replace(/,/g, '').match(/\d+(?:\.\d+)?/);
-  return m ? parseFloat(m[0]) : 0;
+  const m = String(str).replace(/,/g, '').match(/(\d+(?:\.\d+)?)\s*(oz\b|ounces?\b)?/i);
+  if (!m) return 0;
+  const n = parseFloat(m[1]);
+  return m[2] ? Math.round((n / 16) * 10000) / 10000 : n;
 }
 
 module.exports = {

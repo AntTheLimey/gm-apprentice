@@ -194,8 +194,9 @@ def extract_frontmatter(content: str) -> dict[str, Any] | None:
     # Simple YAML parsing (handles flat key: value and arrays)
     current_key = None
     for line in yaml_content.split("\n"):
-        # Skip empty lines
-        if not line.strip():
+        # Skip empty lines, and comment lines (a template's `# gravity: 1.2`
+        # shows an optional field; it is not a key)
+        if not line.strip() or line.lstrip().startswith("#"):
             continue
 
         # Array item

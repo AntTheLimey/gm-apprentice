@@ -31,6 +31,12 @@
     if (view.tired) badges.push('<span class="gl-badge tired">⚠ Tired</span>');
     var status = badges.length ? badges.join(' ') : '<span class="gl-badge ok">Ready</span>';
     var enc = (view.encLevel > 0) ? '<span class="gl-enc-chip">' + esc(view.encName) + '</span>' : '';
+    // Local gravity (B350) moves the level, so the board names it beside the level.
+    if (view.gravity != null) {
+      enc += (enc ? ' ' : '') + '<span class="gl-enc-chip gl-grav-chip" title="Encumbrance at ' + esc(view.gravity) +
+        'G (B350)' + (view.bodyMissing ? '; no Weight row, so body weight is not counted' : '') + '">' +
+        esc(view.gravity) + 'G' + (view.bodyMissing ? '?' : '') + '</span>';
+    }
     return {
       rowClass: rowClass,
       hp: view.hp ? bar('hp', view.hp.cur, view.hp.max) : '—',

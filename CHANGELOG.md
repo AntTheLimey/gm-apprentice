@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.129] — 2026-11-04
+
+GURPS sheets and the party board can count local gravity, weights in ounces read right, and gear added after a player saved ticks shows ticked. Publish tool 1.64.0. No vault change is needed (#510).
+
+### Added
+
+- An optional `gravity` field on a GURPS PC note, the local gravity in G (`gravity: 1.2`). Leave it out and nothing changes: the sheet reads 1G, and nothing asks for it. When it is set and not 1, the sheet and the party board work encumbrance out by B350, and Move, Dodge and the encumbrance-penalised skills follow. Above 1G the extra weight of (body weight + everything carried) × (gravity − 1) is added to the load; below 1G carried gear counts at gravity × its weight and body weight plays no part. The value shows where the encumbrance does: a line under the sheet's Encumbrance table, a "Load at 1.2G" readout beside the carried weight, and a "1.2G" chip on the party board. Body weight comes from the sheet's `Weight` row; with none, the sheet says so and counts only the gear's share. A PC with no gear rows still gets the live sheet and a board row when `gravity` is set, since body weight alone can move the level. A split party sets it on each PC. `gurps_check.py`'s load check still reads 1G: on a note with `gravity` set, a level that differs from the sheet's `Enc:` line is reported as information that names the gravity, not as a warning. The GURPS PC template shows the field as one commented-out line.
+
+### Fixed
+
+- A weight written in ounces (`9.6 oz`) now counts in pounds, 16 oz to the pound, on the sheet, the party board and `gurps_check.py`'s load check. Before, `9.6 oz` counted as 9.6 lb.
+- The party board no longer shows gear added to a sheet after a player saved their ticks as unticked. An item the saved state does not name now takes its sheet default (main Equipment ticked, load-outs not); one the player unticked stays unticked.
+- The shared frontmatter reader no longer takes a commented-out line (`# gravity: 1.2`) for a field.
+- On a PC with gravity set, a Weight row in a unit the sheet does not read (`97 kg`) is a build warning and the page says the body weight is missing, instead of reading it as pounds.
+
 ## [1.10.128] — 2026-11-03
 
 session-wrapup writes and tags Memorable Moments for sites that show them as cards. Publish tool 1.63.0. No vault or site change.
