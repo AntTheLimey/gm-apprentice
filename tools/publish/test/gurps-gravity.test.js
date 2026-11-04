@@ -97,6 +97,17 @@ test('above 1G with no Weight row: the gear share only, and the sheet says the b
   assert.match(out.sheetHtml, /No Weight row/);
 });
 
+test('a Weight row in a unit the sheet does not read (kg) is a build warning, not pounds', () => {
+  const out = sheet(raw => raw.replace('| Weight | 215 lb |', '| Weight | 97 kg |'));
+  assert.equal(out.liveData.bodyWeight, null);
+  assert.ok(out.warnings.some(w => /Weight.*97 kg/.test(w)));
+  for (const w of ['215', '215 lbs', '215 pounds', '3440 oz']) {
+    const ok = sheet(raw => raw.replace('| Weight | 215 lb |', `| Weight | ${w} |`));
+    assert.equal(ok.liveData.bodyWeight, 215, w);
+    assert.ok(!ok.warnings.some(x => /Weight/.test(x)), w);
+  }
+});
+
 test('an unreadable gravity is a build warning and reads as 1G', () => {
   const out = sheet(raw => raw.replace('gravity: 1.2', 'gravity: heavy'));
   assert.equal(out.liveData.gravity, null);

@@ -820,9 +820,18 @@ function parseGravity(model, fm) {
 
 // Body weight in lb from the sheet's `Weight` row (Appearance & Social), which the gravity rule
 // needs above 1G (B350); null when the row is missing or holds no number.
+// Pounds, ounces or a bare number are read; any other unit (kg, stone) is a build warning and no
+// body weight, so the page says it is missing rather than reading kilograms as pounds.
 function parseBodyWeight(model) {
   const key = Object.keys(model.identity).find(k => /^\s*(body\s+)?weight\s*$/i.test(k));
-  if (key && /\d/.test(model.identity[key])) model.bodyWeight = gc.parseWeight(model.identity[key]);
+  const raw = key ? String(model.identity[key]) : '';
+  if (!/\d/.test(raw)) return;
+  const unit = raw.replace(/[\d.,\s]/g, '').toLowerCase();
+  if (unit && !/^(lbs?|pounds?|oz|ounces?)$/.test(unit)) {
+    model.warnings.push(`GURPS Weight row \`${raw.trim()}\` is not in pounds or ounces; write it in lb so gravity can count it (B350).`);
+    return;
+  }
+  model.bodyWeight = gc.parseWeight(raw);
 }
 
 function parseGurps(frontmatter, sections) {
