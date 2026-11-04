@@ -8,6 +8,20 @@
     return (items || []).reduce((sum, it) => sum + (checked[it.key] ? (it.weight || 0) : 0), 0);
   }
 
+  // B350, encumbrance in other gravity. Above 1G the extra weight is (body weight + everything
+  // carried) x (gravity - 1), added to the carried weight; below 1G carried gear counts at gravity x
+  // its weight, and body weight plays no part. No gravity, or 1, is 1G. Above 1G with no body
+  // weight, only the gear's share is added and bodyMissing says so (the sheet asks for a Weight row
+  // rather than guess one). The one place this sum is made: the sheet and the party board call it.
+  function gravityLoad(carried, gravity, bodyWeight) {
+    if (typeof gravity !== 'number' || !isFinite(gravity) || gravity < 0 || gravity === 1) {
+      return { load: carried, gravity: null, bodyMissing: false };
+    }
+    var body = typeof bodyWeight === 'number' && bodyWeight > 0 ? bodyWeight : null;
+    var load = gravity < 1 ? carried * gravity : carried + ((body || 0) + carried) * (gravity - 1);
+    return { load: Math.round(load * 1000) / 1000, gravity: gravity, bodyMissing: gravity > 1 && body === null };
+  }
+
   function levelForWeight(total, levels) {
     for (let i = 0; i < levels.length; i++) {
       if (total <= levels[i].maxWeight) return { level: i, overloaded: false };
@@ -79,20 +93,22 @@
     const items = pc.items || [];
     // KV present -> current. Freshness = a usable state blob, not a build match.
     const fresh = !!(state && typeof state === 'object' && state.items);
-    let checked, vitals;
+    let vitals;
+    // The sheet's own ticks first; a saved state then sets the items it names. An item added to
+    // the sheet after the state was saved keeps its default (a key saved as false stays false).
+    const checked = {};
+    items.forEach(function (it) { checked[it.key] = !!it.defaultCarried; });
     if (fresh) {
-      checked = state.items || {};
+      Object.keys(state.items).forEach(function (k) { checked[k] = !!state.items[k]; });
       vitals = pc.vitals ? {
         hp: state.hp != null ? { cur: state.hp, max: pc.vitals.hp.max } : pc.vitals.hp,
         fp: state.fp != null ? { cur: state.fp, max: pc.vitals.fp.max } : pc.vitals.fp,
       } : null;
     } else {
-      checked = {};
-      items.forEach(function (it) { checked[it.key] = !!it.defaultCarried; });
       vitals = pc.vitals ? { hp: pc.vitals.hp, fp: pc.vitals.fp } : null;
     }
-    const total = sumCarriedWeight(items, checked);
-    const level = levelForWeight(total, pc.levels).level;
+    const g = gravityLoad(sumCarriedWeight(items, checked), pc.gravity, pc.bodyWeight);
+    const level = levelForWeight(g.load, pc.levels).level;
     const r = applyModifiers(pc, level, vitals || undefined);
     return {
       hp: vitals ? vitals.hp : null,
@@ -104,10 +120,13 @@
       st: r.st ? { base: r.st.base, cur: r.st.cur } : null,
       reeling: r.reeling,
       tired: r.tired,
+      load: g.load,
+      gravity: g.gravity,
+      bodyMissing: g.bodyMissing,
     };
   }
 
-  const api = { sumCarriedWeight, levelForWeight, applyModifiers, vitalsView, deriveLive };
+  const api = { sumCarriedWeight, gravityLoad, levelForWeight, applyModifiers, vitalsView, deriveLive };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.__gurpsLive = api;
 
@@ -179,9 +198,11 @@
       var checked = currentChecked();
       var vit = currentVitals();
       var total = api.sumCarriedWeight(data.items, checked);
-      var lvl = api.levelForWeight(total, data.levels);
+      var g = api.gravityLoad(total, data.gravity, data.bodyWeight);
+      var lvl = api.levelForWeight(g.load, data.levels);
       var r = api.applyModifiers(data, lvl.level, vit || undefined);
       setText('gl-weight', Math.round(total * 10) / 10);
+      setText('gl-load', Math.round(g.load * 10) / 10);
       setText('gl-level', r.levelName + (lvl.overloaded ? ' (overloaded!)' : ''));
       // Move/Dodge appear in several places (readout, Attributes, status pips,
       // Combat chips); update every live field so they all track encumbrance.

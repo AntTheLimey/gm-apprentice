@@ -52,6 +52,11 @@ test('parseWeight handles authored formats', () => {
   assert.equal(gc.parseWeight('1,000 lbs'), 1000);
   assert.equal(gc.parseWeight('—'), 0);
   assert.equal(gc.parseWeight(null), 0);
+  // Ounces convert to pounds, 16 oz = 1 lb (#510).
+  assert.equal(gc.parseWeight('9.6 oz'), 0.6);
+  assert.equal(gc.parseWeight('4oz'), 0.25);
+  assert.equal(gc.parseWeight('~8 ounces'), 0.5);
+  assert.equal(gc.parseWeight('2 lb (32 oz)'), 2);
 });
 
 test('halveUp rounds up (B419/B426)', () => {

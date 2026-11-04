@@ -28,7 +28,8 @@ from schema_rules import extract_frontmatter  # noqa: E402
 from vaultlib import body_of  # noqa: E402
 
 HEADING_RE = re.compile(r"^(#{2,3})\s+(.+?)\s*$", re.M)
-WEIGHT_RE = re.compile(r"(\d+(?:\.\d+)?)")
+# The first number and the unit right after it; ounces convert to lb (16 oz = 1 lb).
+WEIGHT_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(oz\b|ounces?\b)?", re.I)
 COST_RE = re.compile(r"[\[\(]?\s*([+\-−]?\d+)\s*[\]\)]?")
 LEVEL_ALIASES = {"extra-heavy": "x-heavy", "extra heavy": "x-heavy",
                  "xheavy": "x-heavy", "very heavy": "x-heavy"}
@@ -85,7 +86,10 @@ def parse_weight(s):
     for junk in ("≤", "≈", "~", "<", ">"):
         cleaned = cleaned.replace(junk, "")
     m = WEIGHT_RE.search(cleaned)
-    return float(m.group(1)) if m else None
+    if not m:
+        return None
+    n = float(m.group(1))
+    return round(n / 16, 4) if m.group(2) else n
 
 
 def parse_cost(s):

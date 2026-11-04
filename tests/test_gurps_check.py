@@ -132,6 +132,8 @@ check("enc subsection table first row",
 check("parse_weight le-symbol", gk.parse_weight("≤29 lbs"), 29.0)
 check("parse_weight plain", gk.parse_weight("2 lb"), 2.0)
 check("parse_weight none", gk.parse_weight("—"), None)
+check("parse_weight ounces", gk.parse_weight("9.6 oz"), 0.6)
+check("parse_weight lb before oz", gk.parse_weight("2 lb (32 oz)"), 2.0)
 check("parse_cost bracket", gk.parse_cost("[20]"), 20)
 check("parse_cost unicode minus", gk.parse_cost("−25"), -25)
 check("col finds header", gk.col(["Level", "Max Weight", "Move"], "weight"), 1)

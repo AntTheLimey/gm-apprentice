@@ -4176,6 +4176,8 @@ body.landing-full-bleed > main.content > :not(.landing-hero) {
    ran together) and Reset was an unstyled browser button. Space them and style Reset like the step buttons. */
 .gl-readout { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 1rem; padding: 0.5rem 0.75rem; }
 .gl-readout[hidden] { display: none; }
+/* Local gravity (B350): one line under the encumbrance table saying why the level moved. */
+.gl-grav-note { margin: 0.4rem 0.75rem 0; font-size: 0.85em; color: var(--text-muted, inherit); }
 #gl-reset {
   font: inherit; font-size: 0.85em; line-height: 1; padding: 4px 10px; border: 1px solid var(--border);
   border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer;

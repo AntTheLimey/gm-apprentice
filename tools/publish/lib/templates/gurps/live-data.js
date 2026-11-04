@@ -161,6 +161,8 @@ function buildLiveData(model, meta) {
     levels: lv.levels,
     skills, weapons, items,
     vitals: v,
+    gravity: model.gravity != null ? model.gravity : null,
+    bodyWeight: model.bodyWeight != null ? model.bodyWeight : null,
     basicSpeed: v ? v.basicSpeed : null,
     dx: v ? v.dx : null,
   };
