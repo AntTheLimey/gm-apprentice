@@ -498,8 +498,8 @@ describe('buildStorySpine: one chapter unit per shown chapter', () => {
     assert.strictEqual(u.overview, null);
     assert.strictEqual(u.recapHtml, null);
     assert.doesNotMatch(text(u), /GM-SUMMARY|PREMISE-SECRET|NOTE-RECAP/);
-    assert.deepStrictEqual(u.sessions.map(s => [s.title, s.outputPath, s.inGameDate]),
-      [['S1', 'story/the-docks-s1.html', '12 March 1817'], ['S2', 'story/the-docks-s2.html', null]]);
+    assert.deepStrictEqual(u.sessions.map(s => [s.title, s.outputPath, s.inGameDate, s.number]),
+      [['S1', 'story/the-docks-s1.html', '12 March 1817', 1], ['S2', 'story/the-docks-s2.html', null, 2]]);
   });
 
   it('a complete chapter with no wrap-up takes the note\'s ## Recap and its overview; no Teaser', () => {
@@ -574,5 +574,10 @@ describe('buildStorySpine: one chapter unit per shown chapter', () => {
     assert.strictEqual(noSessions.oldOutputPath, null);
     const noBody = chapterUnit(buildStorySpine([chapterNote('active', '# Ch1\n'), s1]));
     assert.strictEqual(noBody.oldOutputPath, null);
+    // A session whose own address is the old one keeps it: no redirect over a page.
+    const intro = { ...s1, title: 'Intro', displayTitle: 'Intro' };
+    const clash = buildStorySpine([chapterNote('active', BODY), intro]);
+    assert.ok(clash.some(u => u.outputPath === 'story/the-docks-intro.html'));
+    assert.strictEqual(chapterUnit(clash).oldOutputPath, null);
   });
 });

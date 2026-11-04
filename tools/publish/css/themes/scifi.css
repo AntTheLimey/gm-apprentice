@@ -45,3 +45,40 @@
     --moment-dramatic: #b42318; --moment-intriguing: #0b5cad; --moment-funny: #7a4f00; --moment-epic: #6b3fb5; --moment-tragic: #475569;
   }
 }
+
+/* chapter pages: start */
+/* A ship's log readout: bracketed panels, zero-padded numbers, a live marker, dashed leaders. */
+.story-contents-chapter {
+  position: relative;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  padding: var(--space-1500) var(--space-1500) var(--space-1250);
+}
+.story-contents-chapter::before, .story-contents-chapter::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--accent);
+}
+.story-contents-chapter::before { top: -1px; left: -1px; border-right: 0; border-bottom: 0; }
+.story-contents-chapter::after { bottom: -1px; right: -1px; border-left: 0; border-top: 0; }
+.story-contents-chapter h3, .story-chapter > .page-title { text-transform: uppercase; letter-spacing: 0.06em; }
+.story-contents-chapter[data-chapter-status="active"] h3 a { color: var(--text); }
+p.story-chapter-label, p.story-chapter-dates {
+  font-family: var(--font-heading);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-weight: 600;
+}
+.story-contents-sessions li { font-family: var(--font-heading); font-size: 1.15rem; font-weight: 500; }
+.story-contents-sessions .n { font-family: var(--font-mono); font-size: var(--font-size-875); color: var(--accent); }
+.story-contents-sessions .n[data-digits="1"]::before { content: "0"; }
+.story-contents-sessions li::after { border-bottom-style: dashed; }
+p.story-chapter-now { font-family: var(--font-heading); font-weight: 700; letter-spacing: 0.14em; }
+p.story-chapter-now::before { content: "● live: "; }
+.story-contents-end { font-family: var(--font-mono); font-style: normal; font-size: var(--font-size-875); letter-spacing: 0.1em; }
+.story-contents-end[data-ending="continues"]::before { content: "// log continues ▍"; }
+.story-contents-end[data-ending="ended"]::before { content: "// end of log"; }
+p.story-chapter-overview, .story-contents .story-chapter-teaser p { font-family: var(--font-body); }
+/* chapter pages: end */

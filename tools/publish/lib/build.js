@@ -2715,21 +2715,22 @@ function buildSite(options) {
     const found = resolveSiteLink(ref.trim(), { linkMap });
     return found.kind === 'page' ? found.href : null;
   }
+  // A page that sends the reader on to `toPath` at once (a meta refresh, its canonical address, and a plain link for a
+  // reader that does not follow it): an old address kept working.
+  function redirectPage(fromPath, toPath, label) {
+    const rel = encodeHref(relativeHref(fromPath, toPath));
+    return `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">${escapeHtml(label)}</a></body></html>`;
+  }
   function eachListing(emit, live) {
     for (const [dir, label] of Object.entries(DIR_LABELS)) {
       if (dir === 'characters/pcs' && pcRedirectTarget) {
-        const depth = dir.split('/').length;
-        const rel = encodeHref('../'.repeat(depth) + pcRedirectTarget);
-        const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Player Characters</a></body></html>`;
-        if (live) emit(`${dir}/index.html`, redirectHtml, `  wrote ${dir}/index.html (redirect → ${pcRedirectTarget})`);
+        if (live) emit(`${dir}/index.html`, redirectPage(`${dir}/index.html`, pcRedirectTarget, 'Player Characters'), `  wrote ${dir}/index.html (redirect → ${pcRedirectTarget})`);
         continue;
       }
       // Redirect events/ at the timeline only when one exists; with no timeline the redirect
       // would dangle, so fall through and give events its own index.
       if (dir === 'events' && timelineHref) {
-        const rel = encodeHref(relativePath(dir, timelineHref));
-        const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Timeline</a></body></html>`;
-        if (live) emit(`${dir}/index.html`, redirectHtml, `  wrote ${dir}/index.html (redirect → ${timelineHref})`);
+        if (live) emit(`${dir}/index.html`, redirectPage(`${dir}/index.html`, timelineHref, 'Timeline'), `  wrote ${dir}/index.html (redirect → ${timelineHref})`);
         continue;
       }
       let dirPages = [];
@@ -2809,6 +2810,10 @@ function buildSite(options) {
         { outputPath: unit.outputPath, gmHiddenBecause: notes.banner, gmHidden: folded ? folded.gmHidden : [] });
       // Each wrap-up folded into this page is read on it, as its own page was: its faults are its note's.
       if (live) for (const page of foldedOnto.get(unit.outputPath) || []) seen(vaultRelPathOf(page), html, page, false);
+      // A chapter's old introduction page (story/<chapter>-intro.html, where one was written) leads to its chapter page.
+      if (live && unit.oldOutputPath) {
+        emit(unit.oldOutputPath, redirectPage(unit.oldOutputPath, unit.outputPath, unit.title), `  wrote ${unit.oldOutputPath} (redirect → ${unit.outputPath})`);
+      }
     }
     if (live) characterStories = buildCharacterStories();
     if (spine.length || characterStories.length || npcStories.length) {

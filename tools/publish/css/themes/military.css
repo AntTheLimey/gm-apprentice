@@ -42,3 +42,39 @@
     --moment-dramatic: #b42318; --moment-intriguing: #0b5cad; --moment-funny: #7a4f00; --moment-epic: #6b3fb5; --moment-tragic: #475569;
   }
 }
+
+/* chapter pages: start */
+/* An after-action file: a file-tab bar, a COMPLETE stamp, set left, solid leaders, END OF FILE. */
+.story-contents-chapter {
+  text-align: left;
+  border-top: 4px solid var(--text-muted);
+  background: var(--bg-card);
+  padding: var(--space-1250) var(--space-1500);
+}
+.story-contents-chapter[data-chapter-status="active"] { border-top-color: var(--accent); }
+.story-contents-chapter h3, .story-chapter > .page-title { text-transform: uppercase; letter-spacing: 0.02em; }
+.story-contents .story-chapter-teaser, .story-contents p.story-chapter-overview { margin-left: 0; }
+p.story-chapter-label, p.story-chapter-dates { text-transform: uppercase; letter-spacing: 0.18em; font-size: var(--font-size-750); font-weight: 700; }
+.story-contents-sessions .n { font-family: var(--font-mono); font-size: var(--font-size-875); }
+.story-contents-sessions li::after { border-bottom-style: solid; }
+.story-contents-chapter[data-chapter-status="complete"] h3::after,
+.story-chapter[data-chapter-status="complete"] > .page-title::after {
+  content: "Complete";
+  display: inline-block;
+  margin-left: var(--space-750);
+  padding: 0 var(--space-500);
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--font-label, var(--font-body));
+  font-size: var(--font-size-750);
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  vertical-align: middle;
+  transform: rotate(-2deg);
+}
+.story-contents-end { font-style: normal; font-size: var(--font-size-750); font-weight: 700; letter-spacing: 0.2em; }
+.story-contents-end[data-ending="continues"]::before { content: "— FILE OPEN —"; }
+.story-contents-end[data-ending="ended"]::before { content: "— END OF FILE —"; }
+p.story-chapter-overview, .story-contents .story-chapter-teaser p { font-family: var(--font-body); }
+/* chapter pages: end */

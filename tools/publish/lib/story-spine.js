@@ -190,6 +190,12 @@ function dateFieldText(value) {
   return text.trim() ? text.trim() : null;
 }
 
+// A session's `session_number` as a whole number, or null.
+function sessionNumberOf(session) {
+  const n = Number(((session && session.frontmatter) || {}).session_number);
+  return Number.isInteger(n) && n >= 0 ? n : null;
+}
+
 function sortedChapters(pages) {
   return pages
     .filter(p => p.frontmatter && p.frontmatter.type === 'chapter')
@@ -404,7 +410,7 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
       status, label: chapterLabel(fm.sort_order), dates: dateFieldText(fm.date_range),
       teaserHtml: teaser ? teaser.html : null, overview,
       recapHtml: chapterRecap ? chapterRecap.html : null,
-      sessions: sessionUnits.map(u => ({ title: u.title, outputPath: u.outputPath, inGameDate: dateFieldText(u.sourcePage.frontmatter.in_game_date) })),
+      sessions: sessionUnits.map(u => ({ title: u.title, outputPath: u.outputPath, inGameDate: dateFieldText(u.sourcePage.frontmatter.in_game_date), number: sessionNumberOf(u.sourcePage) })),
       sourcePage: chapter, wrapUpPage: chapterWrap || null,
       ...bodyOf(chapterWrap, chapterRecap, chapterWrapResolve),
       ...heldBackOf(chOut, chapterWrap, chapterRecap, () => (noteRecap() || {}).html || null),
@@ -443,6 +449,10 @@ function buildStorySpine(pages, linkMap, pairs, images = null, { marked = false,
     }
   }
 
+  // An old introduction address that a page of this spine now has (a session whose title makes the same address) is
+  // that page's: no redirect over it.
+  const written = new Set(units.map(u => u.outputPath));
+  for (const u of units) if (u.oldOutputPath && written.has(u.oldOutputPath)) u.oldOutputPath = null;
   for (let i = 0; i < units.length; i++) {
     units[i].prevHref = i > 0 ? units[i - 1].outputPath : null;
     units[i].nextHref = i < units.length - 1 ? units[i + 1].outputPath : null;

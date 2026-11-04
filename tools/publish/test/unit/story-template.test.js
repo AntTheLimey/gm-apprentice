@@ -132,6 +132,11 @@ describe('chapter page', () => {
     assert.match(html, /<h2 class="story-chapter-sessions-title">The sessions<\/h2>/);
   });
 
+  it('a session with a number keeps it in the list', () => {
+    const html = page({ status: 'complete', sessions: [{ title: 'Session 6', outputPath: 'story/the-docks-s6.html', inGameDate: null, number: 6 }] });
+    assert.match(html, /<li value="6"><a href="the-docks-s6\.html">Session 6<\/a><\/li>/);
+  });
+
   it('no sessions: no sessions heading or list', () => {
     const html = page({ status: 'active', sessions: [] });
     assert.doesNotMatch(html, /story-chapter-sessions/);

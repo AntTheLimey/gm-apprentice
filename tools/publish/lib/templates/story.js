@@ -66,7 +66,7 @@ function chapterPage(unit, config, publishConfig, navFor) {
   const href = (to) => encodeHref(relativeHref(unit.outputPath, to));
   const sessions = (unit.sessions || []).length
     ? `<h2 class="story-chapter-sessions-title">${status === 'active' ? 'Sessions so far' : 'The sessions'}</h2>
-      <ol class="story-chapter-sessions">${unit.sessions.map((s) => `<li><a href="${href(s.outputPath)}">${escapeHtml(s.title)}</a>${s.inGameDate ? ` <span class="story-chapter-date">${escapeHtml(s.inGameDate)}</span>` : ''}</li>`).join('')}</ol>`
+      <ol class="story-chapter-sessions">${unit.sessions.map((s) => `<li${s.number != null ? ` value="${s.number}"` : ''}><a href="${href(s.outputPath)}">${escapeHtml(s.title)}</a>${s.inGameDate ? ` <span class="story-chapter-date">${escapeHtml(s.inGameDate)}</span>` : ''}</li>`).join('')}</ol>`
     : '';
   const sections = (unit.sections || []).map(sectionHtml).join('\n');
   const told = status === 'active'

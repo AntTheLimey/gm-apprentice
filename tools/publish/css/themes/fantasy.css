@@ -41,3 +41,28 @@
     --moment-dramatic: #b42318; --moment-intriguing: #0b5cad; --moment-funny: #7a4f00; --moment-epic: #6b3fb5; --moment-tragic: #475569;
   }
 }
+
+/* chapter pages: start */
+/* An illuminated book: a coloured initial on each chapter's Teaser or overview, star ornaments between chapters. */
+.story-contents-chapter + .story-contents-chapter::before {
+  content: "✦ ✧ ✦";
+  display: block;
+  color: var(--accent);
+  letter-spacing: 0.4em;
+  margin-bottom: var(--space-1500);
+}
+p.story-chapter-label { font-family: var(--font-heading); font-variant: small-caps; letter-spacing: 0.14em; font-size: var(--font-size-1000); color: var(--accent); }
+.story-contents-chapter h3, .story-chapter > .page-title { font-family: var(--font-heading); }
+.story-contents .story-chapter-teaser > p:first-child::first-letter, .story-contents p.story-chapter-overview::first-letter,
+.story-chapter-teaser > p:first-child::first-letter, .story-chapter > p.story-chapter-overview::first-letter {
+  font-family: var(--font-heading);
+  font-size: 2.2em;
+  line-height: 1;
+  color: var(--accent);
+}
+.story-contents-sessions { font-family: var(--font-heading); }
+p.story-chapter-now { text-transform: none; font-variant: small-caps; font-family: var(--font-heading); }
+.story-contents-end { font-family: var(--font-heading); }
+.story-contents-end[data-ending="continues"]::before { content: "Here the tale pauses…"; }
+.story-contents-end[data-ending="ended"]::before { content: "Here ends the tale"; }
+/* chapter pages: end */

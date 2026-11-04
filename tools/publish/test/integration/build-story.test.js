@@ -142,8 +142,10 @@ describe('build story: the Story So Far contents page', () => {
 
   it('a session row: number, linked title, in-game date in the margin (empty with none)', () => {
     const c = contents('player');
-    assert.match(c, /<li><span class="n">1<\/span><a href="story\/chapter-1-docks-session-1\.html">Session 1<\/a><span class="d">12 March 1817<\/span><\/li>/);
-    assert.match(c, /<li><span class="n">2<\/span><a href="story\/chapter-1-docks-session-2\.html">Session 2<\/a><span class="d"><\/span><\/li>/);
+    assert.match(c, /<li><span class="n" data-digits="1">1<\/span><a href="story\/chapter-1-docks-session-1\.html">Session 1<\/a><span class="d">12 March 1817<\/span><\/li>/);
+    assert.match(c, /<li><span class="n" data-digits="1">2<\/span><a href="story\/chapter-1-docks-session-2\.html">Session 2<\/a><span class="d"><\/span><\/li>/);
+    // The number is the session's own: Chapter 2's first session is 3, not 1.
+    assert.match(c, /<li><span class="n" data-digits="1">3<\/span><a href="story\/chapter-2-bay-session-3\.html">Session 3<\/a>/);
   });
 
   it('every link resolves', () => {
@@ -174,4 +176,55 @@ describe('build story: the Story So Far contents page', () => {
       assert.deepEqual(t.logs.filter((l) => /WARNING/.test(l) && /chapter/i.test(l)), []);
     } finally { t.cleanup(); }
   });
+});
+
+// Chapter pages (Task 6): the old -intro address leads to the chapter page.
+describe('build story: the old chapter introduction address', () => {
+  const { buildBoth } = require('../helpers/gm-build');
+  const { storyVault, CHAPTER } = require('../helpers/story-vault');
+
+  it('story/<chapter>-intro.html is a redirect to story/<chapter>.html, on both sites', () => {
+    const s = buildBoth(storyVault({ 'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: active\n') }));
+    try {
+      for (const side of ['player', 'gm']) {
+        const html = s[side].read('story', 'chapter-1-docks-intro.html');
+        assert.match(html, /<meta http-equiv="refresh" content="0;url=chapter-1-docks\.html">/, side);
+        assert.match(html, /<link rel="canonical" href="chapter-1-docks\.html">/, side);
+        assert.match(html, /<a href="chapter-1-docks\.html">Chapter 1 — Docks<\/a>/, side);
+      }
+    } finally { s.cleanup(); }
+  });
+
+  it('no redirect where origin/main wrote no introduction (a chapter with no sessions)', () => {
+    const s = buildBoth(storyVault({ 'Sessions/Session 1 Wrap-Up.md': null, 'Sessions/Session 2 Wrap-Up.md': null,
+      'Sessions/Session 1.md': null, 'Sessions/Session 2.md': null,
+      'Chapters/Chapter 1/Chapter 1 Overview.md': CHAPTER.replace('sort_order: 1\n', 'sort_order: 1\nstatus: active\n') }), { sites: ['player'] });
+    try {
+      assert.ok(s.player.exists('story', 'chapter-1-docks.html'));
+      assert.equal(s.player.exists('story', 'chapter-1-docks-intro.html'), false);
+    } finally { s.cleanup(); }
+  });
+});
+
+// Chapter pages (Task 6): the new styling reads tokens only, so a campaign's stylesheet reaches every colour and face.
+describe('chapter page styling uses theme tokens only', () => {
+  const cssDir = path.join(__dirname, '..', '..', 'css');
+  const files = ['style.css', ...['horror', 'scifi', 'military', 'fantasy', 'noir'].map((t) => `themes/${t}.css`)];
+  const FONT_NAMES = /\b(serif|sans-serif|monospace|cursive|fantasy|system-ui|Georgia|Times|Arial|Helvetica|Courier|Menlo|Inter|Rajdhani|Avenir|ui-monospace)\b/i;
+  for (const f of files) {
+    it(`${f}: its chapter pages block has no fixed colour or font`, () => {
+      const css = fs.readFileSync(path.join(cssDir, f), 'utf8');
+      const m = /\/\* chapter pages: start \*\/([\s\S]*?)\/\* chapter pages: end \*\//.exec(css);
+      assert.ok(m, `${f} has no chapter pages block`);
+      // Values only: what sits outside var(...), comments and `content:` strings.
+      const values = m[1].replace(/\/\*[\s\S]*?\*\//g, '').replace(/content:\s*("[^"]*"|'[^']*'|[^;]+);/g, '')
+        .match(/:[^;{}]+;/g) || [];
+      for (const v of values) {
+        const bare = v.replace(/var\([^()]*(\([^()]*\)[^()]*)*\)/g, '');
+        assert.doesNotMatch(bare, /#[0-9a-f]{3,8}\b|rgba?\(|hsla?\(|\b(white|black|red|green|blue|gray|grey)\b/i, `${f}: a fixed colour in ${v}`);
+        if (/font|family/.test(v) || /^:\s*(italic|normal|bold)/.test(v)) assert.doesNotMatch(bare, FONT_NAMES, `${f}: a fixed font in ${v}`);
+        assert.doesNotMatch(bare, FONT_NAMES, `${f}: a named font in ${v}`);
+      }
+    });
+  }
 });
