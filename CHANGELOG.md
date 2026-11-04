@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.128] — 2026-11-03
+
+session-wrapup writes and tags Memorable Moments for sites that show them as cards. Publish tool 1.63.0. No vault or site change.
+
+### Added
+
+- When a site is on and `player_site.story.moments` is on, session-wrapup offers to write Memorable Moments from the play notes when they bring none, in the shape the Story page's cards read. It writes nothing without your yes, none is a fine answer, and moments come only from what the players saw at the table, never from GM Notes or secrets. After writing, it checks every moment carries a kind the cards know. Moments the notes bring, from a gmassistant.app export or your own, go in as written (#557).
+- Every moment it writes or carries over gets one kind tag, `#moment/<kind>` (dramatic, intriguing, funny, epic or tragic), picked from what the moment says, so its card shows the kind. A gmassistant.app export arrives without them, and the wrap-up adds them (#567).
+- Once per campaign, session-wrapup offers to tag the moments in past wrap-ups and to write moments for the ones that have none; you pick which. The tags are written by a script (`moments.py`) that changes nothing else in the note (a moment's old tag is replaced) and refuses unless every card then shows exactly as before with its new kind. A heading or table in the section is never tagged, and moments you hid from players in a gm-only block are left alone and never offered. That the offer was made is kept in `_meta/vault-state.json`, so it is made once.
+- The publish tool's `lines` command answers a new question, `moments`: the five kinds, and a wrap-up's Memorable Moments cards with their kinds and where each stands in the note, read exactly as the Story page reads them.
+
+---
+
 ## [1.10.127] — 2026-11-03
 
 Five small fixes: a GM Story page picture count, Site Faults rows that carry their fix, a GURPS skill the sheet lacks added at its default, a kept-folder rename on a Mac or Windows disk, and `links.py unlink` picking single links. Publish tool 1.62.2. No vault change is needed.

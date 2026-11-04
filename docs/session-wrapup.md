@@ -19,6 +19,15 @@ Reach for session-wrapup when you need to:
 
 **Obsidian:** Recommended. session-wrapup creates and updates vault files directly during wrap-up. Works on plain markdown folders; bundled utilities provide ranked search when needed. Use campaign-organizer afterward for additional filing or normalization when needed.
 
+## Memorable Moments
+
+When your site shows Memorable Moments as cards on its Story pages (a site is on and `player_site.story.moments` is on, its default), wrap-up handles them for you:
+
+- Moments your notes bring, from a GM-Assistant export or your own, go into the wrap-up as written.
+- When the notes bring none, it offers to write some from the play notes, in the shape the cards read. Moments are written only from what happened at the table as the players saw it, never from your GM Notes or secrets, because players read every card. It writes nothing without your yes, and none is a fine answer.
+- Every moment gets a kind tag, `#moment/<kind>` with one of the kinds the Story cards know, at the end of its last line, so its card shows the kind. A GM-Assistant export arrives without them, and wrap-up adds them.
+- Once per campaign it offers to go back over past wrap-ups: tag the moments they have, and write moments for the ones that have none. You pick which. It remembers that it asked (in `_meta/vault-state.json`), so the offer comes once.
+
 ## GM-Assistant (gmassistant.app) Exports
 
 session-wrapup natively supports [gmassistant.app](https://gmassistant.app) session exports as play notes. Detection is automatic — if your notes contain a `## Memorable Moments` heading, they're treated as a GM-Assistant export and wrap-up switches to a passthrough path:

@@ -111,7 +111,10 @@ Steps 2 and 4.
 Write `## Narrative Recap` from the Play Notes, with every entity
 `[[wiki-linked]]`; tone per `references/recap-formats.md`, set
 from the chapter overview and recent notes. Add Quick Bullets and
-Memorable Moments when the template's conditions call for them.
+Memorable Moments when the template's conditions call for them. Run
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/moments.py"
+<vault> status`; on `moments on`, read
+`references/memorable-moments.md`.
 The recap is the single source of truth — session-prep reuses it,
 never regenerates it.
 

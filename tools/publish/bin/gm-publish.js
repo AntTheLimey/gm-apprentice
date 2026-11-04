@@ -454,6 +454,8 @@ vault_check uses it instead of keeping a copy of the build's filters.
       -> {"kept":[…]}          per line: whether a publish: stub page keeps it
   {"op":"site","vault":"/path/to/vault"}
       -> {"publishes":…,"site":…,"siteDir":…}  the vault's publish: block, whether its site is on, and the site folder
+  {"op":"moments","text":"…"}
+      -> {"kinds":[…],"section":…}  the moment kinds, and a wrap-up body's Memorable Moments cards with their lines
   {"op":"command","args":["settings","get","--vault","…","--json"],"cwd":"…","env":{…}}
       -> {"rc":…,"stdout":"…","stderr":"…"}  settings or explain --all, run as on its own
 
