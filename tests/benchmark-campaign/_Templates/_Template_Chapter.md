@@ -10,8 +10,13 @@ campaign: ""
 tags: []
 ---
 
-{A short summary of the chapter: where it starts, what pulls the party
-through it, where it ends.}
+{Your summary of the chapter, for you: where it starts, what pulls the
+party through it, where it ends. Players never see this.}
+
+## Teaser
+
+{For players, spoiler-free: where the adventurers start, their situation,
+how the plot opens. Shown on the Story page while this chapter is active.}
 
 <!-- gm-only -->
 
