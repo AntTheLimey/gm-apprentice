@@ -13,8 +13,9 @@ A chapter's Story page no longer uses up its chapter's pictures. Publish tool 1.
 
 ### Fixed
 
-- A chapter's own Story page (its introduction, or its recap once the chapter is complete) now pictures the people and places it names by the same rules as a session's Story page, but what it pictures no longer counts for the once-per-chapter rule. A complete chapter's recap names nearly everyone, and the chapter page comes first, so before this it took every portrait and the session pages after it showed almost none. Session pages now choose their pictures as if the chapter page were not there; among the session pages, a page is still pictured once a chapter. A portrait may now show on the chapter page and again on a session page.
-- In Canticle, Vienna's 14 session Story pages go from 5 pictures in all to 13 at the next deploy, and Calcutta's 15 from 77 to 82. A session page that still shows none names only people and places an earlier session page of its chapter pictured.
+- A chapter's own Story page (its introduction, or its recap once the chapter is complete) still pictures the people and places it names, but what it pictures no longer counts for the once-per-chapter rule. A complete chapter's recap names nearly everyone and comes first, so before this the session pages after it showed almost none. Session pages now choose their pictures as if the chapter page were not there; among session pages, a page is still pictured once a chapter, so a portrait may show on the chapter page and again on one session page.
+
+In Canticle, Vienna's session Story pages go from 5 pictures in all to 13 at the next deploy, and Calcutta's from 77 to 82. A session page that still shows none names only people and places an earlier session page of its chapter already pictured.
 
 ## [1.10.129] — 2026-11-04
 
