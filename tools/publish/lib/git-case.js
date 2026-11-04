@@ -13,9 +13,10 @@ const LIST_BUFFER = 64 * 1024 * 1024;
 
 // { caseBlind, paths, pending, error }. `caseBlind`: the repo has core.ignorecase on; with it off nothing else is
 // asked. `paths`: the tracked paths under `outDir` (git's spelling, relative to `siteRoot`) whose file the disk now
-// lists under another letter case, in a name or a folder on its path. `pending`: the index already holds a case-only
-// rename HEAD does not have (a deploy whose commit failed after the old spellings left the index), so the commit must
-// still take the whole index. `error`: git's failure.
+// lists under another letter case, in a name or a folder on its path. `pending`: a path HEAD has
+// that the index lacks while the index or the disk holds it under another case (a deploy whose commit or `git add`
+// failed after the old spellings left the index), so the commit must still take the whole index: `--only` would add
+// the old name back. `error`: git's failure.
 function caseRenames(siteRoot, outDir, runCommand) {
   const cfg = runCommand('git', ['config', '--bool', 'core.ignorecase'], { cwd: siteRoot });
   if (String(cfg.stdout || '').trim() !== 'true') return { caseBlind: false, paths: [], pending: false, error: null };
@@ -23,40 +24,48 @@ function caseRenames(siteRoot, outDir, runCommand) {
   const ls = list(['ls-files', '-z', '--', outDir]);
   if (ls.code !== 0) return { caseBlind: true, paths: [], pending: false, error: ls };
   const tracked = String(ls.stdout || '').split('\0').filter(Boolean);
+  // Each folder is listed once, its names put in canonical form once: { exact, lower } map to the name on disk.
   const listings = new Map();
   const listed = (dir) => {
     if (!listings.has(dir)) {
       let names = null;
       try { names = fs.readdirSync(dir); } catch (e) { if (!e.code) throw e; }
-      listings.set(dir, names);
+      const exact = new Map();
+      const lower = new Map();
+      for (const n of names || []) {
+        const c = canonicalNfc(n);
+        if (!exact.has(c)) exact.set(c, n);
+        if (!lower.has(c.toLowerCase())) lower.set(c.toLowerCase(), n);
+      }
+      listings.set(dir, names ? { exact, lower } : null);
     }
     return listings.get(dir);
   };
-  const paths = [];
-  for (const rel of tracked) {
+  // Whether the disk holds REL under another letter case, in its name or a folder on its path.
+  const otherCaseOnDisk = (rel) => {
     let dir = siteRoot;
     let other = false;
-    let there = true;
     for (const part of rel.split('/')) {
       const names = listed(dir);
       const want = canonicalNfc(part);
-      const exact = names && names.find((n) => canonicalNfc(n) === want);
-      const near = !exact && names && names.find((n) => canonicalNfc(n).toLowerCase() === want.toLowerCase());
-      if (!exact && !near) { there = false; break; }
+      const exact = names && names.exact.get(want);
+      const near = !exact && names && names.lower.get(want.toLowerCase());
+      if (!exact && !near) return false;
       if (near) other = true;
       dir = path.join(dir, exact || near);
     }
-    if (there && other) paths.push(rel);
-  }
-  // HEAD against the index: a path HEAD has that the index holds only under another case. A repo with no commit yet
-  // has no HEAD, and nothing pending.
+    return other;
+  };
+  const paths = tracked.filter(otherCaseOnDisk);
+  // HEAD against the index: a path HEAD has that the index lacks, while the index or the disk has it under another
+  // case. A repo with no commit yet has no HEAD, and nothing pending.
   const head = list(['ls-tree', '-r', '-z', '--name-only', 'HEAD', '--', outDir]);
   let pending = false;
   if (head.code === 0) {
     const inIndex = new Set(tracked.map(canonicalNfc));
     const lower = new Set(tracked.map((p) => canonicalNfc(p).toLowerCase()));
     pending = String(head.stdout || '').split('\0').filter(Boolean)
-      .some((p) => !inIndex.has(canonicalNfc(p)) && lower.has(canonicalNfc(p).toLowerCase()));
+      .some((p) => !inIndex.has(canonicalNfc(p)) && (lower.has(canonicalNfc(p).toLowerCase()) || otherCaseOnDisk(p)));
   }
   return { caseBlind: true, paths, pending, error: null };
 }

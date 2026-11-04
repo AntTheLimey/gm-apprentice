@@ -51,7 +51,7 @@ function setup({ sub = '', ignorecase = true, runCommand = null } = {}) {
     siteOffFor: () => null,
     ...(runCommand ? { runCommand } : {}),
   };
-  const deploy = async () => { out.length = 0; return runDeploy({ configPath: path.join(site, 'vault.config.json'), noBuild: true }, deps); };
+  const deploy = async (more = {}) => { out.length = 0; return runDeploy({ configPath: path.join(site, 'vault.config.json'), noBuild: true, ...more }, deps); };
   return { root, repo, site, out, deploy, cleanup: () => fs.rmSync(root, { recursive: true, force: true }) };
 }
 const recaseInvitation = (s) => {
@@ -76,6 +76,69 @@ describe('deploy: a case-only rename with real git', () => {
       assert.equal(await s.deploy(), 0, s.out.join('\n'));
       assert.deepEqual(headFiles(s), ['README.md', 'docs/gazetteer/Invitation.html', 'docs/index.html']);
       assert.equal(git(s.repo, 'show', 'HEAD:docs/gazetteer/Invitation.html'), 'b');
+    } finally { s.cleanup(); }
+  });
+
+  it('a site folder below the repo root: a commit that fails once still leaves the rename for the next deploy', async (t) => {
+    const s = setup({ sub: 'site' });
+    try {
+      if (!insensitive(s.repo)) { t.skip('this disk tells letter case apart'); return; }
+      recaseInvitation(s);
+      const hook = path.join(s.repo, '.git', 'hooks', 'pre-commit');
+      fs.writeFileSync(hook, '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+      assert.equal(await s.deploy(), 1);
+      assert.match(s.out.join('\n'), /the old letter-case spellings under docs\/ are out of git's index and the new ones staged/);
+      fs.rmSync(hook);
+      assert.equal(await s.deploy(), 0, s.out.join('\n'));
+      assert.deepEqual(headFiles(s), ['README.md', 'site/docs/gazetteer/Invitation.html', 'site/docs/index.html']);
+    } finally { s.cleanup(); }
+  });
+
+  it('a git add that fails after the old spelling left the index: the next deploy still commits the new spelling', async (t) => {
+    const real = require('../lib/run-command').runCommand;
+    let failAdd = true;
+    const s = setup({ runCommand: (cmd, args, o) => {
+      if (args[0] === 'add' && failAdd) { failAdd = false; return { code: 1, stdout: '', stderr: 'fatal: add stood in to fail' }; }
+      return real(cmd, args, o);
+    } });
+    try {
+      if (!insensitive(s.repo)) { t.skip('this disk tells letter case apart'); return; }
+      recaseInvitation(s);
+      assert.equal(await s.deploy(), 1);
+      assert.match(s.out.join('\n'), /add stood in to fail/);
+      assert.equal(await s.deploy(), 0, s.out.join('\n'));
+      assert.deepEqual(headFiles(s), ['README.md', 'docs/gazetteer/Invitation.html', 'docs/index.html']);
+      assert.equal(git(s.repo, 'show', 'HEAD:docs/gazetteer/Invitation.html'), 'b');
+    } finally { s.cleanup(); }
+  });
+
+  it('a page staged by hand before its letter case changed still takes its new spelling', async (t) => {
+    const s = setup();
+    try {
+      if (!insensitive(s.repo)) { t.skip('this disk tells letter case apart'); return; }
+      fs.writeFileSync(path.join(s.site, 'docs', 'gazetteer', 'invitation.html'), 'staged by hand');
+      git(s.repo, 'add', 'docs/gazetteer/invitation.html');
+      recaseInvitation(s);
+      assert.equal(await s.deploy(), 0, s.out.join('\n'));
+      assert.deepEqual(headFiles(s), ['README.md', 'docs/gazetteer/Invitation.html', 'docs/index.html']);
+      assert.equal(git(s.repo, 'show', 'HEAD:docs/gazetteer/Invitation.html'), 'b');
+    } finally { s.cleanup(); }
+  });
+
+  it('a dry run prints the letter-case steps a real deploy takes, and the stop for files staged elsewhere', async (t) => {
+    const s = setup();
+    try {
+      if (!insensitive(s.repo)) { t.skip('this disk tells letter case apart'); return; }
+      recaseInvitation(s);
+      assert.equal(await s.deploy({ dryRun: true }), 0, s.out.join('\n'));
+      const text = s.out.join('\n');
+      assert.match(text, /git rm --cached -q -f -- :\(literal\)docs\/gazetteer\/invitation\.html\n {2}git add docs\/\n {2}git commit -m "Rebuild site"\n/);
+      assert.doesNotMatch(text, /--only/);
+      assert.ok(git(s.repo, 'ls-files').includes('docs/gazetteer/invitation.html'), 'the dry run changed nothing');
+      fs.writeFileSync(path.join(s.repo, 'README.md'), 'changed');
+      git(s.repo, 'add', 'README.md');
+      assert.equal(await s.deploy({ dryRun: true }), 1);
+      assert.match(s.out.join('\n'), /Deploy would stop: files outside docs\/ are staged \(README\.md\)/);
     } finally { s.cleanup(); }
   });
 
@@ -137,6 +200,31 @@ describe('deploy: a case-only rename with real git', () => {
       assert.match(text, /Deploy stopped: a file in docs\/ still has the temporary name a letter-case rename gave it: docs\/gazetteer\/invitation\.html\.case-123\.tmp/);
       assert.match(text, /give it back its name \(invitation\.html\) or move it out of the site folder; deploy never deletes it/);
       assert.ok(fs.existsSync(path.join(s.site, 'docs', 'gazetteer', 'invitation.html.case-123.tmp')));
+      assert.ok(!git(s.repo, 'ls-files').includes('.case-'), 'not staged');
+    } finally { s.cleanup(); }
+  });
+
+  it('a dry run names a leftover temporary name and would stop, --ignore-leaks or not, in text and JSON', async () => {
+    const s = setup();
+    try {
+      fs.writeFileSync(path.join(s.site, 'docs', 'gazetteer', 'invitation.html.case-123.tmp'), 'only copy');
+      assert.equal(await s.deploy({ dryRun: true, ignoreLeaks: true }), 1);
+      assert.match(s.out.join('\n'), /Deploy would stop: a file in docs\/ still has the temporary name a letter-case rename gave it: docs\/gazetteer\/invitation\.html\.case-123\.tmp/);
+      assert.equal(await s.deploy({ dryRun: true, json: true }), 1);
+      const payload = JSON.parse(s.out.join('\n'));
+      assert.deepEqual(payload.caseTemps, ['docs/gazetteer/invitation.html.case-123.tmp']);
+      assert.equal(payload.wouldRefuse, true);
+    } finally { s.cleanup(); }
+  });
+
+  it('on a git host the temporary-name check reads the folder git commits, whatever wrangler.toml names', async () => {
+    const s = setup();
+    try {
+      fs.mkdirSync(path.join(s.site, 'other'));
+      fs.writeFileSync(path.join(s.site, 'wrangler.toml'), 'name = "x"\npages_build_output_dir = "other"\n');
+      fs.writeFileSync(path.join(s.site, 'docs', 'index.html.case-7.tmp'), 'only copy');
+      assert.equal(await s.deploy(), 1);
+      assert.match(s.out.join('\n'), /temporary name a letter-case rename gave it: docs\/index\.html\.case-7\.tmp/);
       assert.ok(!git(s.repo, 'ls-files').includes('.case-'), 'not staged');
     } finally { s.cleanup(); }
   });

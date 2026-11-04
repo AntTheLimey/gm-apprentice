@@ -276,7 +276,7 @@ describe('deploy: github-pages', () => {
     assert.strictEqual(rc, 0, h.text());
     assert.deepStrictEqual(h.commands.map(c => c.args).slice(0, 5), [
       ['diff', '--cached', '--name-only', '--', ':(top)', ':(exclude)docs/'],
-      ['rm', '--cached', '-q', '--', ':(literal)docs/gazetteer/invitation.html'],
+      ['rm', '--cached', '-q', '-f', '--', ':(literal)docs/gazetteer/invitation.html'],
       ['add', 'docs/'],
       ['status', '--porcelain', 'docs/'],
       ['commit', '-m', 'Rebuild site'],
