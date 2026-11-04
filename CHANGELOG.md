@@ -20,6 +20,7 @@ The Story page reads like a book's contents, and each chapter has one Story page
   - `status: planned`: the chapter and its sessions appear nowhere on the Story. If any of its sessions has been played, the build says so and names them.
   - No status, or one the tool does not know: the chapter's heading and sessions, no text.
   - `in_progress` and `in-progress` read as active, as the vault schema already accepts them.
+  - The Teaser and the chapter note's Recap are the sections headed exactly `## Teaser` and `## Recap`; a heading that only contains the word ("Teaser ideas") is never shown.
 - The chapter page no longer shows the chapter note's whole body (which put GM planning material, such as Canticle's "Chapter reference desk", on the player site's Story). The chapter note's own page in the Chapters section is unchanged for now.
 - The old `story/<chapter>-intro.html` address sends readers on to the new chapter page.
 - A chapter page pictures the people and places its Teaser or recap names, on its own, as before.
@@ -28,6 +29,7 @@ The Story page reads like a book's contents, and each chapter has one Story page
 ### Fixed
 
 - Sessions whose `chapter:` names a chapter note that does not publish (`publish: false`, a planned status, or a name no chapter has) had no Story page with no word said. The build now warns and names them.
+- The build also warns, one line each, about a played session with no chapter (where the Story shows chapters), two chapters with the same title (the second gets its own page), a chapter with no status or one it does not know, an active chapter with no `## Teaser`, and more than one active chapter.
 
 ---
 
