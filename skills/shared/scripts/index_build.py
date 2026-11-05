@@ -639,6 +639,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--force", action="store_true",
                         help="replace an _meta/index.md this tool did not make")
     parser.add_argument("--date", help="override today's date (YYYY-MM-DD)")
+    parser.epilog = 'Example: gma index-build "<vault>" --write'
     return parser
 
 

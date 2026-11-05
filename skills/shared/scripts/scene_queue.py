@@ -110,6 +110,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("vault", type=Path)
     ap.add_argument("--chapter")
+    ap.epilog = 'Example: gma scene-queue "<vault>"'
     return ap
 
 

@@ -433,6 +433,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--publish", action="append", default=[], metavar="PATH")
     ap.add_argument("--released", action="append", default=[], metavar="PATH=WHAT")
     ap.add_argument("--write", action="store_true")
+    ap.epilog = 'Example: gma reveal "<vault>" --session "<title>" --publish "<path>" --write'
     return ap
 
 

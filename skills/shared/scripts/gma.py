@@ -5,7 +5,7 @@
 
 Each command is one of the scripts beside this file; `gma <name> args` runs
 that script's `main(args)`. `gma publish args` runs the publish tool under
-node. COMMANDS is plain data (module name and one-line summary) so another
+node; `gma llms [<command>]` prints the command reference. COMMANDS is plain data (module name and one-line summary) so another
 implementation can read the same table.
 
 A module is imported only when its command runs; `full_tree()` imports them
@@ -18,6 +18,7 @@ import argparse
 import importlib
 import subprocess
 import sys
+from pathlib import Path
 from typing import NamedTuple
 
 import vaultlib
@@ -58,6 +59,7 @@ COMMANDS: dict[str, Command] = {
     "vault-search": Command("vault_search", "Ranked vault search."),
     "vault-write": Command("vault_write", "Place text the apprentice wrote into vault notes."),
     "publish": Command("", "Build and deploy the campaign site (runs the publish tool under node)."),
+    "llms": Command("", "The command reference: when to use each command, its flags, an example."),
 }
 
 AGENT_NOTE = ("Agents: do not work from --help alone. Run 'gma llms' for the "
@@ -76,6 +78,47 @@ def _root(with_commands: bool) -> argparse.ArgumentParser:
     if with_commands:
         root.add_subparsers(dest="command", metavar="<command>")
     return root
+
+
+PAGES = Path(__file__).resolve().parent.parent / "gma"
+
+
+def _publish_parser() -> argparse.ArgumentParser:
+    stub = argparse.ArgumentParser(
+        prog="gma publish", description=COMMANDS["publish"].summary,
+        epilog="Example: gma publish build --site player")
+    stub.add_argument("args", nargs=argparse.REMAINDER,
+                      help="passed to the publish tool unchanged")
+    return stub
+
+
+def _llms_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        prog="gma llms", description=COMMANDS["llms"].summary,
+        epilog="Example: gma llms relink")
+    ap.add_argument("page", nargs="?", metavar="command",
+                    help="the command whose page to print; none prints the index")
+    return ap
+
+
+def _llms(args: list[str]) -> int:
+    page = _llms_parser().parse_args(args).page
+    if page is None:
+        path = PAGES / "llms.md"
+    else:
+        names = sorted(p.stem for p in (PAGES / "llms").glob("*.md"))
+        if page not in names:
+            print(f"gma llms: no page '{page}'; pages: {', '.join(names)}",
+                  file=sys.stderr)
+            return 2
+        path = PAGES / "llms" / f"{page}.md"
+    text = path.read_text(encoding="utf-8")
+    enc = getattr(sys.stdout, "encoding", None) or "utf-8"
+    sys.stdout.write(text.encode(enc, "replace").decode(enc))
+    return 0
+
+
+BUILTINS = {"publish": _publish_parser, "llms": _llms_parser}
 
 
 def _load(name: str) -> argparse.ArgumentParser:
@@ -106,11 +149,7 @@ def full_tree() -> argparse.ArgumentParser:
             # The script's own parser, whole (options, nested commands).
             sub.choices[name] = _load(name)
         else:
-            stub = argparse.ArgumentParser(
-                prog=f"gma {name}", description=cmd.summary)
-            stub.add_argument("args", nargs=argparse.REMAINDER,
-                              help="passed to the publish tool unchanged")
-            sub.choices[name] = stub
+            sub.choices[name] = BUILTINS[name]()
         sub._choices_actions.append(
             sub._ChoicesPseudoAction(name, (), cmd.summary))
     return root
@@ -149,6 +188,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if name == "publish":
         return _publish(rest)
+    if name == "llms":
+        return _llms(rest)
     module = importlib.import_module(COMMANDS[name].module)
     # argparse derives its default prog from sys.argv[0], so usage and error
     # lines read `gma <name> ...` at every depth.

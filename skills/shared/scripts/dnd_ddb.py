@@ -1807,6 +1807,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="with --party: run only when vault.dndbeyond_sync is build")
     ap.add_argument("--player-text", action="store_true",
                     help="the player's D&D Beyond text for each background part the note does not match (not report rows)")
+    ap.epilog = 'Example: gma dnd-ddb "<PC note>" --write'
     return ap
 
 

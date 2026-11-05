@@ -581,6 +581,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--personal", action="store_true",
                         help="also read the gitignored personal/ files")
     parser.add_argument("--systems-dir", type=Path, default=SYSTEMS_DIR)
+    parser.epilog = 'Example: gma rules-lookup gurps-4e "Broadsword" --kind skill'
     return parser
 
 

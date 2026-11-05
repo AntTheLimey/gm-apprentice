@@ -250,6 +250,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="report Planning/ entries naming these participants "
                          "or locations (space- or comma-separated, repeatable)")
     ap.add_argument("--json", action="store_true")
+    ap.epilog = 'Example: gma plans-index "<vault>" --json'
     return ap
 
 

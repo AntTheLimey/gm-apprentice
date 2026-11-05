@@ -414,6 +414,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--default", dest="defaults", metavar="DEFAULTS")
     ap.add_argument("--for", dest="attack", metavar="ATTACK")
     ap.add_argument("--write", action="store_true")
+    ap.epilog = 'Example: gma gurps-skill-default "<PC note>" "<skill>" --write'
     return ap
 
 

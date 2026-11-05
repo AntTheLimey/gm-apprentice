@@ -48,6 +48,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("query")
     ap.add_argument("--limit", type=int, default=10)
     ap.add_argument("--context", action="store_true")
+    ap.epilog = 'Example: gma vault-search "<vault>" "<query>"'
     return ap
 
 

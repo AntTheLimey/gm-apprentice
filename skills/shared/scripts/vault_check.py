@@ -6114,6 +6114,7 @@ def build_parser() -> argparse.ArgumentParser:
                          "vault.name_match setting)")
     ap.add_argument("--since", type=int,
                     help="session number for the changed command")
+    ap.epilog = 'Example: gma vault-check "<vault>" version'
     return ap
 
 

@@ -460,6 +460,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--set", dest="sets", action="append", metavar="OLD=NEW")
     ap.add_argument("--accept", action="store_true")
     ap.add_argument("--write", action="store_true")
+    ap.epilog = 'Example: gma tones "<vault>"'
     return ap
 
 

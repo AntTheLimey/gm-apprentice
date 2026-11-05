@@ -592,6 +592,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--bare", dest="take_bare", action="store_true")
     ap.add_argument("--pick", dest="picks", action="append", type=int,
                     metavar="N")
+    ap.epilog = 'Example: gma links "<vault>" unlink "<note>" --in "<page>"'
     return ap
 
 

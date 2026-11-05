@@ -1034,6 +1034,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("old")
     ap.add_argument("new")
     ap.add_argument("--apply", action="store_true")
+    ap.epilog = 'Example: gma relink "<vault>" "<old path>" "<new name>" --apply'
     return ap
 
 

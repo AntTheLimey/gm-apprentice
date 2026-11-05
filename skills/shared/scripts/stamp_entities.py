@@ -435,6 +435,7 @@ def build_parser() -> argparse.ArgumentParser:
                          "bare number) in files that already use one")
     ap.add_argument("--write", action="store_true",
                     help="apply changes (default: dry run)")
+    ap.epilog = 'Example: gma stamp-entities "<vault>" "<note>" --set status=active --write'
     return ap
 
 

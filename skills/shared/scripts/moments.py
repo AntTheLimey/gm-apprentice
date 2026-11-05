@@ -405,6 +405,7 @@ def build_parser() -> argparse.ArgumentParser:
     tag.add_argument("wrapup")
     tag.add_argument("--write", action="store_true")
     sub.add_parser("offered", help="record that the back-fill was offered")
+    ap.epilog = 'Example: gma moments "<vault>" status'
     return ap
 
 

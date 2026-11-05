@@ -156,6 +156,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--folder", help="restrict results to this subfolder")
     ap.add_argument("--exclude", action="append", default=[],
                     help="glob of relpaths or top-level dirs to skip")
+    ap.epilog = 'Example: gma graph-check "<vault>" orphans --folder Characters'
     return ap
 
 

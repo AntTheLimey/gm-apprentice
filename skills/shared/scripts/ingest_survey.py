@@ -620,6 +620,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--write", action="store_true",
                     help="apply the archive move (default: dry-run plan). "
                          "Only meaningful with --archive.")
+    ap.epilog = 'Example: gma ingest-survey "<source dir>"'
     return ap
 
 

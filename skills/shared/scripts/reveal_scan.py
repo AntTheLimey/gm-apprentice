@@ -247,6 +247,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("session", help="the session index's path or file name")
     parser.add_argument("--also", action="append", default=[], metavar="PATH",
                         help="a vault-relative note this run wrote; repeat for each")
+    parser.epilog = 'Example: gma reveal-scan "<vault>" "<session index>" --also "<path>"'
     return parser
 
 

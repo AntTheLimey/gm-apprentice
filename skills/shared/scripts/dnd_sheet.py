@@ -470,6 +470,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--write", action="store_true")
     ap.add_argument("--party", metavar="VAULT",
                     help="run the rules checks on every PC note in a vault; never writes")
+    ap.epilog = 'Example: gma dnd-sheet --party "<vault>"'
     return ap
 
 

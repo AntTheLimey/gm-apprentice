@@ -621,6 +621,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("sheet", type=Path)
     ap.add_argument("command", nargs="?", default="all",
                     choices=[name for name, _fn in CHECKS] + ["all"])
+    ap.epilog = 'Example: gma gurps-check "<PC note>" all'
     return ap
 
 

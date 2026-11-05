@@ -624,6 +624,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     one = sub.add_parser("show", help="one type's fields; no type lists the types")
     one.add_argument("type", nargs="?")
+    parser.epilog = 'Example: gma schema-rules show npc'
     return parser
 
 

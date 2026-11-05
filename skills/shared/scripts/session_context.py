@@ -1374,6 +1374,7 @@ def build_parser() -> argparse.ArgumentParser:
              "unchanged. Drill into a file only where a stub or outline "
              "shows the need — for the Plan that means "
              "`plan_check.py --inventory/--state`, not a full read.")
+    ap.epilog = 'Example: gma session-context "<vault>" --prep'
     return ap
 
 

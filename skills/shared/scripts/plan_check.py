@@ -1066,6 +1066,7 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument("--inventory", action="store_true")
     mode.add_argument("--state", action="store_true")
     ap.add_argument("--json", action="store_true")
+    ap.epilog = 'Example: gma plan-check "<plan>" --inventory'
     return ap
 
 

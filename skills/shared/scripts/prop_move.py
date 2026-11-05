@@ -2025,6 +2025,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--decisions", type=Path, metavar="FILE")
     ap.add_argument("--draft", type=Path, metavar="OUT")
     ap.add_argument("--json", type=Path, metavar="OUT", dest="json_out")
+    ap.epilog = 'Example: gma prop-move "<vault>" plan'
     return ap
 
 

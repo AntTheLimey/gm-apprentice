@@ -372,6 +372,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--choose", action="append", default=[],
                     metavar="ID[=VALUE]",
                     help="apply only: a Your-choice id from plan; repeatable")
+    ap.epilog = 'Example: gma migrate "<vault>" plan'
     return ap
 
 

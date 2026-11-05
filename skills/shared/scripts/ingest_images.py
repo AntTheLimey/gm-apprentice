@@ -567,6 +567,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("dir", type=Path)
     ap.add_argument("--execute", action="store_true",
                     help="write files and metadata (default: dry-run)")
+    ap.epilog = 'Example: gma ingest-images "<vault>" "<source dir>" --execute'
     return ap
 
 

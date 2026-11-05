@@ -3526,6 +3526,7 @@ def build_parser() -> argparse.ArgumentParser:
                     metavar="PART", help="with --headless: the parts the "
                     "GM supplied (intent, scenes, spotlight; bare: all)")
     pl.add_argument("--write", action="store_true")
+    ap.epilog = 'Example: gma vault-write "<vault>" wrapup-add "<wrap-up>" --write'
     return ap
 
 

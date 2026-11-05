@@ -84,7 +84,7 @@ class GmaTests(unittest.TestCase):
             if isinstance(action, argparse._SubParsersAction):
                 names |= set(action.choices)
         self.assertEqual(names, set(gma.COMMANDS))
-        self.assertEqual(len(names), 29)
+        self.assertEqual(len(names), 30)
 
     def test_a_command_imports_only_its_own_module(self):
         vault = Path(tempfile.mkdtemp(prefix="gma-vault-"))

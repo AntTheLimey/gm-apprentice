@@ -479,6 +479,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="also create _inbox/ for vault-ingest")
     ap.add_argument("--write", action="store_true",
                     help="create it (default: print the plan)")
+    ap.epilog = 'Example: gma vault-scaffold "<vault>" --system <id> --name "<campaign name>"'
     return ap
 
 
