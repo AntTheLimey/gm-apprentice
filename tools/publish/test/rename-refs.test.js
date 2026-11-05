@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
-const { runRename } = require('../lib/rename-refs');
+const { runRename, renameRefs } = require('../lib/rename-refs');
 
 const { pcLiveKey, slugify } = require('../lib/scanner');
 const { build } = require('../lib/build');
@@ -51,7 +51,7 @@ const LIST = (eol = '\n') => [
   '',
 ].join(eol);
 
-// The old Markdown list, which the build still reads until the update moves it.
+// The old Markdown list, which no longer reads (it stops the rename).
 const OLD_LIST = [
   '---', 'generated: 2026-10-03', '---', '',
   '## Publishing (2 files)', '',
@@ -88,17 +88,10 @@ describe('manifest rename', () => {
     assert.match(text, /^  - Characters\/PCs\/Emma_Wentworth_Hale\.md$/m);
   });
 
-  it('renames in the old Markdown list while the vault has no YAML list yet', () => {
-    const vault = vaultWith({ '_meta/publish-manifest.md': OLD_LIST });
-    const got = rename(vault);
-    assert.strictEqual(got.files['_meta/publish-manifest.md'], OLD_LIST.split(FROM).join(TO));
-    assert.strictEqual(got.files['_meta/publish-list.yaml'], undefined);
-  });
-
-  it('renames in the YAML list when both files are there', () => {
-    const vault = vaultWith({ '_meta/publish-manifest.md': OLD_LIST, '_meta/publish-list.yaml': LIST() });
-    const got = rename(vault);
-    assert.deepStrictEqual(Object.keys(got.files), ['_meta/publish-list.yaml']);
+  it('the old Markdown list stops the rename by name, whether or not the YAML list is there', () => {
+    const stop = /_meta\/publish-manifest\.md is the old publish list, no longer read since plugin 1\.11\.0/;
+    assert.throws(() => renameRefs(vaultWith({ '_meta/publish-manifest.md': OLD_LIST }), FROM, TO), stop);
+    assert.throws(() => renameRefs(vaultWith({ '_meta/publish-manifest.md': OLD_LIST, '_meta/publish-list.yaml': LIST() }), FROM, TO), stop);
   });
 
   it('keeps CRLF endings', () => {
@@ -120,19 +113,19 @@ describe('manifest rename', () => {
     assert.deepStrictEqual(rename(vaultWith({ 'a.md': 'x' })).files, {});
   });
 
-  it('rewrites a vault-config override path and featured names, byte for byte', () => {
+  it('rewrites a settings override path and featured names, byte for byte', () => {
     const cfg = [
-      '---', 'publish:', '  overrides:', '    fields:',
+      'version: 1', 'player_site:', '  hide:', '    field_exceptions:',
       `      "${FROM}":`, '        include: [secrets]',
-      '  landing:', '    featured_npcs: ["Emma_Wentworth", Other]', '    quick_links:', '      - Emma_Wentworth', '---', '', '# Config', ''].join('\n');
-    const vault = vaultWith({ '_meta/vault-config.md': cfg, [FROM]: '---\ntype: npc\n---\n' });
-    const text = rename(vault).files['_meta/vault-config.md'];
+      '  landing:', '    featured_npcs: ["Emma_Wentworth", Other]', '    quick_links:', '      - Emma_Wentworth', ''].join('\n');
+    const vault = vaultWith({ '_meta/vault-config.yaml': cfg, [FROM]: '---\ntype: npc\n---\n' });
+    const text = rename(vault).files['_meta/vault-config.yaml'];
     assert.strictEqual(text, cfg.replace(FROM, TO).replace('"Emma_Wentworth"', '"Emma_Wentworth_Hale"').replace('- Emma_Wentworth', '- Emma_Wentworth_Hale'));
   });
 
   it('leaves a featured name alone when two notes share the old name', () => {
-    const cfg = '---\npublish:\n  landing:\n    featured_npcs: [Emma_Wentworth]\n---\n';
-    const vault = vaultWith({ '_meta/vault-config.md': cfg, [FROM]: '---\ntype: npc\n---\n', 'Elsewhere/Emma_Wentworth.md': '---\ntype: npc\n---\n' });
+    const cfg = 'version: 1\nplayer_site:\n  landing:\n    featured_npcs: [Emma_Wentworth]\n';
+    const vault = vaultWith({ '_meta/vault-config.yaml': cfg, [FROM]: '---\ntype: npc\n---\n', 'Elsewhere/Emma_Wentworth.md': '---\ntype: npc\n---\n' });
     assert.deepStrictEqual(rename(vault).files, {});
   });
 
@@ -143,11 +136,6 @@ describe('manifest rename', () => {
     assert.deepStrictEqual(Object.keys(files), ['_meta/vault-config.yaml']);
     assert.strictEqual(files['_meta/vault-config.yaml'], cfg.replace('Emma_Wentworth.md"', 'Emma_Wentworth_Hale.md"').replace('[Emma_Wentworth,', '[Emma_Wentworth_Hale,'));
     assert.strictEqual(fs.readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8'), cfg);
-  });
-
-  it('an old settings file with no frontmatter names nothing to rename', () => {
-    const vault = vaultWith({ '_meta/vault-config.md': '# Notes only\n\nNo frontmatter here.\n', [FROM]: '---\ntype: pc\n---\n' });
-    assert.deepStrictEqual(rename(vault).files, {});
   });
 
   it('the command itself prints the same answer as --json, and a missing --to or --vault is one stderr line', () => {
@@ -280,14 +268,6 @@ describe('manifest rename: who each spelling goes to', () => {
     assert.strictEqual(ask(hidden, ['Charlotte_Thorne']).owners.Charlotte_Thorne, null);
   });
 
-  it('reads the site config the build reads, when the folder map lives there', () => {
-    const vault = vaultWith({ '_meta/vault-config.md': '---\npublish:\n---\n', [NPC]: note('npc') });
-    const cfg = path.join(vault, 'site.config.json');
-    fs.writeFileSync(cfg, JSON.stringify({ vaultPath: vault, folderMap: { 'Characters/NPCs': 'characters/npcs' }, excludeDirs: ['_meta'] }));
-    assert.strictEqual(ask(vault, ['Charlotte_Thorne']).owners.Charlotte_Thorne, null, 'no folder map without the site config');
-    assert.strictEqual(ask(vault, ['Charlotte_Thorne'], NPC, ['--config', cfg]).owners.Charlotte_Thorne, NPC);
-  });
-
   it('agrees with what the build links a bare name to', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bare-owner-'));
     const vault = path.join(root, 'vault');
@@ -336,11 +316,11 @@ describe('backlinks follow the page a link resolves to', () => {
 });
 
 describe('manifest rename: what the site publishes', () => {
-  const MAP = '---\npublish:\n  exclude_dirs: [GM]\n  folder_map:\n    NPCs: characters/npcs\n    Cultures: cultures\n    Sessions: sessions\n---\n';
+  const MAP = 'version: 1\nplayer_site:\n  hide:\n    folders: [GM]\n  folder_map:\n    NPCs: characters/npcs\n    Cultures: cultures\n    Sessions: sessions\n';
   const npc = '---\ntype: npc\n---\n# N\n';
 
   it('lists the notes the site publishes, so links in the rest are not read through its link map', () => {
-    const vault = vaultWith({ '_meta/vault-config.md': MAP, 'NPCs/Hallam.md': npc, 'GM/Hallam.md': npc, 'GM/Plan.md': '---\ntype: session\n---\n[[Hallam]]\n', 'Sessions/S1.md': '---\ntype: session\n---\n[[Hallam]]\n' });
+    const vault = vaultWith({ '_meta/vault-config.yaml': MAP, 'NPCs/Hallam.md': npc, 'GM/Hallam.md': npc, 'GM/Plan.md': '---\ntype: session\n---\n[[Hallam]]\n', 'Sessions/S1.md': '---\ntype: session\n---\n[[Hallam]]\n' });
     const got = rename(vault, 'NPCs/Hallam.md', 'NPCs/Hallam_Reeve.md', ['--name', 'Hallam']);
     assert.ok(got.published.includes('NPCs/Hallam.md'));
     assert.ok(got.published.includes('Sessions/S1.md'));
@@ -349,15 +329,15 @@ describe('manifest rename: what the site publishes', () => {
   });
 
   it('says when the new place would take a published page off the site', () => {
-    const vault = vaultWith({ '_meta/vault-config.md': MAP, 'NPCs/Hallam.md': npc, 'Cultures/Elves.md': '---\ntype: culture\n---\n' });
+    const vault = vaultWith({ '_meta/vault-config.yaml': MAP, 'NPCs/Hallam.md': npc, 'Cultures/Elves.md': '---\ntype: culture\n---\n' });
     assert.match(rename(vault, 'NPCs/Hallam.md', 'Elsewhere/Hallam.md').unpublishes, /Elsewhere\/Hallam\.md.*folder_map/);
-    assert.match(rename(vault, 'NPCs/Hallam.md', 'GM/Hallam.md').unpublishes, /GM\/Hallam\.md.*exclude_dirs/);
+    assert.match(rename(vault, 'NPCs/Hallam.md', 'GM/Hallam.md').unpublishes, /GM\/Hallam\.md.*player_site\.hide\.folders/);
     assert.match(rename(vault, 'Cultures/Elves.md', 'Heritages/Elves.md').unpublishes, /Heritages\/Elves\.md.*folder_map/);
     assert.strictEqual(rename(vault, 'NPCs/Hallam.md', 'NPCs/Hallam_Reeve.md').unpublishes, undefined);
   });
 
   it('does not object when the page was not published to begin with', () => {
-    const vault = vaultWith({ '_meta/vault-config.md': MAP, 'NPCs/Hallam.md': '---\ntype: npc\npublish: false\n---\n' });
+    const vault = vaultWith({ '_meta/vault-config.yaml': MAP, 'NPCs/Hallam.md': '---\ntype: npc\npublish: false\n---\n' });
     assert.strictEqual(rename(vault, 'NPCs/Hallam.md', 'Elsewhere/Hallam.md').unpublishes, undefined);
   });
 });
