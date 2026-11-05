@@ -42,7 +42,8 @@ class EntryPointTests(unittest.TestCase):
     def test_cli_list_matches_the_scripts_that_have_a_main(self):
         found = sorted(
             p.stem for p in SCRIPTS.glob("*.py")
-            if "\ndef main(" in p.read_text(encoding="utf-8"))
+            if p.stem != "gma"  # the dispatcher itself
+            and "\ndef main(" in p.read_text(encoding="utf-8"))
         self.assertEqual(found, sorted(CLI_SCRIPTS))
 
 
