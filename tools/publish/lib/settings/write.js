@@ -129,7 +129,9 @@ function documentOf(value, ctx = {}) {
   YAML.visit(doc, {
     Scalar(_, node) {
       if (typeof node.value !== 'string') return;
-      if (/[\r\n]/.test(node.value) || readsAsOtherInYaml11(node.value)) node.type = 'QUOTE_DOUBLE';
+      if (/[\r\n]/.test(node.value)) node.type = 'QUOTE_DOUBLE';
+      // Text a YAML 1.1 reader misreads is quoted; a value already in quotes keeps the quotes it had (`inline` sets them).
+      else if (!node.type && readsAsOtherInYaml11(node.value)) node.type = 'QUOTE_DOUBLE';
     },
   });
   return doc;

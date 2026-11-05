@@ -1,5 +1,5 @@
 {
-  "about": "Text values the publish tool's settings writer writes, as it writes them. A reader that follows YAML 1.1 (Obsidian, PyYAML, js-yaml) reads an unquoted 12:30 as the number 750 and an unquoted yes as true, so the writer quotes those. Both sides read `written` back as `value`: tools/publish/test/yaml-shared-cases.test.js (the writer, and the yaml package in both 1.2 and 1.1 mode) and tests/test_yaml_shared_cases.py (vaultlib's frontmatter reader).",
+  "about": "Text values the publish tool's settings writer writes, as it writes them. A reader that follows YAML 1.1 (Obsidian, PyYAML, js-yaml) reads an unquoted 12:30 as the number 750 and an unquoted yes as true, so the writer quotes those. A lone y or n is the deliberate exception: only the `yaml` package in 1.1 mode reads it as a boolean (Obsidian, PyYAML and js-yaml do not), so it stays bare and the 1.1 check skips it (only_yaml_package_1_1_differs). Both sides read `written` back as `value`: tools/publish/test/yaml-shared-cases.test.js (the writer, and the yaml package in both 1.2 and 1.1 mode) and tests/test_yaml_shared_cases.py (vaultlib's frontmatter reader).",
   "cases": [
     {"value": "Plain title", "written": "Plain title"},
     {"value": "7pm", "written": "7pm"},
@@ -9,6 +9,8 @@
     {"value": "12:30:45.5", "written": "\"12:30:45.5\""},
     {"value": "yes", "written": "\"yes\""},
     {"value": "Off", "written": "\"Off\""},
-    {"value": "1_000", "written": "\"1_000\""}
+    {"value": "1_000", "written": "\"1_000\""},
+    {"value": "y", "written": "y", "only_yaml_package_1_1_differs": true},
+    {"value": "N", "written": "N", "only_yaml_package_1_1_differs": true}
   ]
 }
