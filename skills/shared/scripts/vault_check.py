@@ -882,16 +882,27 @@ def _fault_file(f: dict[str, Any]) -> str:
     return name if name.startswith("_meta/") else vaultlib.SETTINGS_FILE
 
 
-def unmoved(vault: Path, stamp: str | None) -> list[Left]:
+SITE_CHECKS_SKIPPED = ("the site checks need node and were skipped "
+                       "(what the build stops on is checked when it runs)")
+
+
+def unmoved(vault: Path, stamp: str | None,
+            notes: list[str] | None = None) -> list[Left]:
     """What keeps a vault from the update, in the order the refusal names
     them; empty when the vault is moved. Everything the build stops on as a
     leftover comes from the publish tool (`settings get`: the old settings
     file alone or beside the new one, the old publish list, keys in the site
     folder's vault.config.json, build hooks or an unreadable package.json in
     the site folder); this adds only the stamp and the site's tool version.
-    Settings or a site tool that cannot be read are named, never passed. A
-    vault with no stamp and no settings file is new, not unmoved: the caller
-    sends it to setup first."""
+    Settings the tool reads and refuses (not valid YAML) are named.
+
+    The gate must not need node: when the tool cannot be asked (no node, no
+    tool, a timeout), only what Python sees is checked (the stamp, the old
+    settings file, the old publish list) and `SITE_CHECKS_SKIPPED` goes on
+    `notes`. The build stops on the rest by itself, so nothing can leak. A
+    vault with no site folder has no site checks. A vault with no stamp and
+    no settings file is new, not unmoved: the caller sends it to setup
+    first."""
     left: list[Left] = []
     if stamp is None:
         left.append(Left(vaultlib.STATE_FILE, f"no update stamp ({vaultlib.STATE_FILE})", True))
@@ -901,8 +912,13 @@ def unmoved(vault: Path, stamp: str | None) -> list[Left]:
     try:
         own = settings(vault)
     except SettingsUnavailable as e:
-        left.append(Left(vaultlib.SETTINGS_FILE, f"{e}. Fix that so its settings can "
-                         "be checked.", False))
+        if e.answered:
+            left.append(Left(vaultlib.SETTINGS_FILE, f"{e}. Fix that so its "
+                             "settings can be checked.", False))
+            return left
+        left += _seen_without_tool(vault)
+        if notes is not None:
+            notes.append(SITE_CHECKS_SKIPPED)
         return left
     for f in own.faults:
         if f.get("level") == "stop" and f.get("leftover"):
@@ -919,6 +935,19 @@ def unmoved(vault: Path, stamp: str | None) -> list[Left]:
             left.append(Left(f"{site.as_posix()}/package.json",
                              f"a site publish tool older than {MOVED_TOOL}",
                              True))
+    return left
+
+
+def _seen_without_tool(vault: Path) -> list[Left]:
+    """The leftovers Python sees with no tool to ask: the old settings file
+    and the old publish list, by their being there."""
+    left: list[Left] = []
+    old = vaultlib.LEGACY_SETTINGS_FILE
+    if (vault / old).is_file():
+        left.append(Left(old, f"the old settings file {old}", True))
+    listed = "_meta/publish-manifest.md"
+    if (vault / listed).is_file():
+        left.append(Left(listed, f"the old publish list {listed}", True))
     return left
 
 

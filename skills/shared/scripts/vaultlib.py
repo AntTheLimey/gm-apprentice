@@ -1522,11 +1522,15 @@ class SettingsUnavailable(RuntimeError):
     """The settings could not be read or written. The message is one plain
     line. `refused` is True when the tool ran and turned a `set` or `unset`
     down (the message is its reason, for the GM); False when the tool could
-    not be asked at all (node or the tool missing, bad output, a timeout)."""
+    not be asked at all (node or the tool missing, bad output, a timeout).
+    `answered` is True when the tool ran and gave its own reason (a file
+    that is not valid YAML): it could be asked."""
 
-    def __init__(self, message: str, *, refused: bool = False) -> None:
+    def __init__(self, message: str, *, refused: bool = False,
+                 answered: bool = False) -> None:
         super().__init__(message)
         self.refused = refused
+        self.answered = answered
 
 
 @dataclass(frozen=True)
@@ -1635,7 +1639,9 @@ def _run_settings(args: list[str], *, refusable: bool = False,
         if own and refusable:
             raise SettingsUnavailable(reason, refused=True)
         if own:
-            raise fail(reason)
+            raise SettingsUnavailable(
+                f"could not read the vault's settings: {reason}",
+                answered=True)
         started = ("the publish tool failed to start "
                    f"({reason or 'exit code ' + str(done.returncode)})")
         if refusable:

@@ -63,8 +63,10 @@ CHECKS: list[Check] = [*SITE_CHECKS, *VAULT_CHECKS]
 TEMPLATE = "template:"   # a template's choice; its answer is in the update record
 
 
-def gate(vault: Path) -> tuple[str, str] | str:
-    """(vault version, plugin version), or the one line that refuses."""
+def gate(vault: Path,
+         notes: list[str] | None = None) -> tuple[str, str] | str:
+    """(vault version, plugin version), or the one line that refuses. A
+    check the gate had to skip is said on `notes`."""
     found = plugin_version()
     if found is None:
         return "cannot determine the plugin version"
@@ -78,7 +80,7 @@ def gate(vault: Path) -> tuple[str, str] | str:
     if shown is None and vault_layout(vault) == "none":
         return (f"{vault} has a _meta/ folder but no settings file: that is "
                 f"first-time setup (vault_scaffold.py), not a migration")
-    left = unmoved(vault, shown)
+    left = unmoved(vault, shown, notes)
     if left:
         return refusal(left, plugin)
     if shown is None:   # unmoved lists a missing stamp; never pass without one

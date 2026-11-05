@@ -161,34 +161,24 @@ def test_a_broken_state_file_is_not_overwritten(tmp_path):
 
 # ---- vault_check.py version, with no Node ---------------------------------
 
-def version_row(vault: Path, node: bool = True):
-    """`vault_check.py <vault> version`; with `node` False, no Node on PATH."""
-    env = dict(os.environ)
-    if not node:
-        empty = vault.parent / "empty-bin"    # a folder that holds no `node`
-        empty.mkdir(exist_ok=True)
-        env["PATH"] = str(empty)
+def version_row(vault: Path):
+    """`vault_check.py <vault> version` with no Node on PATH: the gate must
+    not need node."""
+    env = {k: v for k, v in os.environ.items() if k != "PATH"}
+    empty = vault.parent / "empty-bin"    # a folder that holds no `node`
+    empty.mkdir(exist_ok=True)
+    env["PATH"] = str(empty)
     done = subprocess.run([sys.executable, str(SCRIPTS / "vault_check.py"),
                            str(vault), "version"], capture_output=True,
                           text=True, env=env)
     return done.returncode, done.stdout
 
 
-def test_version_row_ok_on_the_new_layout(tmp_path):
+def test_version_row_ok_on_the_new_layout_with_no_node(tmp_path):
     vault = vault_with(tmp_path, new="version: 1\n", state=state(PLUGIN))
     code, out = version_row(vault)
     assert code == 0
     assert out.splitlines()[-1] == f"OK\t_meta/vault-state.json\tvault {PLUGIN} = plugin {PLUGIN}"
-
-
-def test_version_row_with_no_node_is_refused_naming_why(tmp_path):
-    # The gate asks the publish tool what is left on the vault: with no node
-    # it cannot, and says so rather than passing the vault unchecked.
-    vault = vault_with(tmp_path, new="version: 1\n", state=state(PLUGIN))
-    code, out = version_row(vault, node=False)
-    assert code == 1
-    row = out.splitlines()[-1]
-    assert row.startswith("REFUSED\t_meta/vault-config.yaml\t") and "node is not on PATH" in row
 
 
 def test_version_row_mismatch_and_ahead_from_the_state_file(tmp_path):
@@ -206,15 +196,17 @@ def test_version_row_absent_on_the_new_layout(tmp_path):
     assert code == 1
     assert "REFUSED\t_meta/vault-state.json\tPlugin " in out
     assert "It has no update stamp (_meta/vault-state.json)" in out
+    assert "node" not in out
 
 
-def test_version_row_with_both_files_is_refused_naming_the_old_file(tmp_path):
+def test_version_row_with_both_files_reads_the_state_file_and_names_the_old_file(tmp_path):
+    # With no node, the old file is still seen: it is refused by its being there.
     vault = vault_with(tmp_path, old=old_file("1.10.20"), new="version: 1\n",
                        state=state(PLUGIN))
     code, out = version_row(vault)
     assert code == 1
     assert "REFUSED\t_meta/vault-config.md\t" in out
-    assert "_meta/vault-config.md is still beside _meta/vault-config.yaml" in out
+    assert "the old settings file _meta/vault-config.md" in out
 
 
 def test_version_row_for_a_broken_state_file_is_an_error_row(tmp_path):

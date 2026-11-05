@@ -412,7 +412,7 @@ def run(vault: Path, answers: dict[str, str], headless: bool, *,
     if headless and answers:
         return _refuse(res, "a headless run takes no --answer: there is no "
                             "GM to have given one")
-    gate = migrate.gate(vault)
+    gate = migrate.gate(vault, res.notes)
     if isinstance(gate, str):
         return _refuse(res, gate)
     vault_v, plugin_v = gate

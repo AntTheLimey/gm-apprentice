@@ -234,3 +234,55 @@ class RefusalWordsTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WithoutNodeTests(unittest.TestCase):
+    """The gate must not need node: with no tool to ask it checks only what
+    Python sees, and a vault with no site is never refused for site reasons."""
+
+    def no_tool(self):
+        return mock.patch.object(vc, "settings", side_effect=vaultlib.SettingsUnavailable(
+            "could not read the vault's settings: node is not on PATH"))
+
+    def test_without_the_tool_a_moved_vault_passes_and_says_what_was_skipped(self):
+        vault, site = moved_vault(self)
+        package_hook(vault, site)   # the build stops on it; the gate cannot see it
+        notes = []
+        with self.no_tool():
+            self.assertEqual(vc.unmoved(vault, "1.10.134", notes), [])
+        self.assertEqual(notes, [vc.SITE_CHECKS_SKIPPED])
+
+    def test_without_the_tool_python_still_sees_the_old_files_and_the_stamp(self):
+        vault, _ = moved_vault(self, stamp="1.10.10")
+        self.assertLess(vc.parse_version("1.10.10"), vc.parse_version(vc.MOVED_FLOOR))
+        old_list(vault, None)
+        both_files(vault, None)
+        with self.no_tool():
+            said = [x.text for x in vc.unmoved(vault, "1.10.10")]
+        self.assertEqual(said, [
+            f"an update stamp of 1.10.10 (_meta/vault-state.json), older than {vc.MOVED_FLOOR}",
+            "the old settings file _meta/vault-config.md",
+            "the old publish list _meta/publish-manifest.md"])
+        self.assertNotIn("node", vc.refusal(vc.unmoved(vault, "1.10.10"), PLUGIN))
+
+    def test_update_reports_the_skipped_checks_in_worth_knowing(self):
+        vault, _ = moved_vault(self)
+        with self.no_tool(), mock.patch.object(migrate, "plugin_version",
+                                               return_value=(PLUGIN, "test")):
+            notes = []
+            self.assertEqual(migrate.gate(vault, notes), ("1.10.134", PLUGIN))
+        self.assertIn(vc.SITE_CHECKS_SKIPPED, notes)
+
+    def test_a_vault_with_no_site_is_never_refused_for_site_reasons(self):
+        root = Path(tempfile.mkdtemp(prefix="nosite-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        vault = root / "vault"
+        (vault / "_meta").mkdir(parents=True)
+        (vault / "_meta" / "vault-config.yaml").write_text("version: 1\n", encoding="utf-8")
+        # A stray package.json and site file beside the vault name no site of it.
+        (root / "package.json").write_text('{ "scripts": ', encoding="utf-8")
+        (vault / "package.json").write_text('{"scripts": {"prebuild": "x"}}', encoding="utf-8")
+        vaultlib.forget_settings(vault)
+        self.assertEqual(vc.unmoved(vault, "1.10.134"), [])
+        with self.no_tool():
+            self.assertEqual(vc.unmoved(vault, "1.10.134"), [])

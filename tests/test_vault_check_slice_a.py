@@ -318,15 +318,11 @@ class SettingsUnavailableCommandTests(unittest.TestCase):
                     "node is not on PATH\n"), proc.stderr)
                 self.assertNotIn("Traceback", proc.stderr)
 
-    def test_version_without_node_is_refused_naming_why(self):
-        # The gate asks the publish tool what is left on the vault; with no
-        # node it cannot, and says so rather than passing the vault unchecked.
+    def test_version_needs_no_settings_and_no_node(self):
         vault = make_vault(self, "---\ngm_apprentice_version: \"%s\"\n---\n"
                            % plugin_version_string(), site=False)
         proc = run_cli_without_node(vault, "version")
-        self.assertEqual(proc.returncode, 1, proc.stderr)
-        self.assertIn("REFUSED", proc.stdout)
-        self.assertIn("node is not on PATH", proc.stdout)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
 
     def test_a_vault_file_that_is_not_YAML_stops_with_one_line(self):
         vault = make_vault(self, "---\npublish:\n  mode: [\n---\n", site=False)
