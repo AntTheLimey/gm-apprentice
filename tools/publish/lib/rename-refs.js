@@ -23,7 +23,6 @@ const path = require('path');
 const { parseNote } = require('./frontmatter');
 const YAML = require('yaml');
 const { canonicalPath } = require('./manifest');
-const { renameInOldList } = require('./manifest-legacy');
 const { canonicalNfc } = require('./unicode');
 const {
   pcLiveKey, storyPathOf, storyOwnerPath, isStoryCompanion, scanVaultReport, buildLinkMap,
@@ -35,7 +34,7 @@ const { loadManifest } = require('./manifest');
 const { publishedPages } = require('./published-pages');
 const { renameInSettings, settingsText } = require('./settings/write');
 const { nameInFor } = require('./settings');
-const { PUBLISH_LIST_FILE, OLD_LIST_FILE } = require('./settings/layout');
+const { PUBLISH_LIST_FILE, OLD_LIST_FILE, OLD_LIST_STOP } = require('./settings/layout');
 
 const EXCEPTIONS = 'player_site.hide.field_exceptions';
 const LANDING = 'player_site.landing';
@@ -216,10 +215,9 @@ function renameRefs(vault, from, to, configPath, names) {
     const file = path.join(vault, rel);
     return fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : null;
   };
-  // The list the build reads: the YAML file, or the old Markdown file until the update moves it.
-  const hasNew = read(PUBLISH_LIST_FILE) !== null;
-  const MANIFEST_REL = hasNew ? PUBLISH_LIST_FILE : OLD_LIST_FILE;
-  const renameInManifest = hasNew ? renameInList : renameInOldList;
+  // The list the build reads. The old Markdown list is never read: present, it stops by name.
+  if (read(OLD_LIST_FILE) !== null) throw new Error(OLD_LIST_STOP);
+  const MANIFEST_REL = PUBLISH_LIST_FILE;
   const manifest = read(MANIFEST_REL);
   // A settings file that cannot be read (no frontmatter, not valid YAML) names no note: nothing to rename in it.
   let settings = null;
@@ -227,7 +225,7 @@ function renameRefs(vault, from, to, configPath, names) {
   let manifestText = manifest;
   let configText = settings ? settings.whole : null;
   for (const move of moves) {
-    if (manifestText !== null) manifestText = renameInManifest(manifestText, move.from, move.to) ?? manifestText;
+    if (manifestText !== null) manifestText = renameInList(manifestText, move.from, move.to) ?? manifestText;
     if (settings) configText = renameInFile(settings, vault, move.from, move.to, configText) ?? configText;
   }
   if (manifest !== null && manifestText !== manifest) files[MANIFEST_REL] = manifestText;

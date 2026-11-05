@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { loadManifest, loadPublishList, listText, writeAccepted, resetNotices } = require('../../lib/manifest');
+const { loadManifest, loadPublishList, listText, writeAccepted } = require('../../lib/manifest');
 const { leakSite, hashTree } = require('../helpers/leak-site');
 
 const vaultWith = (text) => {
@@ -17,7 +17,6 @@ const vaultWith = (text) => {
 
 describe('the publish list: accepted', () => {
   it('reads accepted entries and knows the key', () => {
-    resetNotices();
     const warnings = [];
     const dir = vaultWith('publishing:\n  - A.md\naccepted:\n  - page: npcs/a.html\n    text: the baker is a kind man\n    note: NPCs/A.md\n  - page: npcs/b.html\n');
     try {
