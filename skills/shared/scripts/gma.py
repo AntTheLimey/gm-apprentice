@@ -64,37 +64,59 @@ AGENT_NOTE = ("Agents: do not work from --help alone. Run 'gma llms' for the "
               "command reference and when to use each command.")
 
 
-def _root_parser() -> argparse.ArgumentParser:
-    return argparse.ArgumentParser(
+def _root(with_commands: bool) -> argparse.ArgumentParser:
+    """The root parser; `with_commands` adds one subparser per command."""
+    root = argparse.ArgumentParser(
         prog="gma",
         description="One entry point for the gm-apprentice vault scripts.\n\n"
                     + AGENT_NOTE,
         formatter_class=argparse.RawDescriptionHelpFormatter)
+    root.add_argument("--version", action="store_true",
+                      help="print the plugin version")
+    if with_commands:
+        root.add_subparsers(dest="command", metavar="<command>")
+    return root
+
+
+def _reprog(parser: argparse.ArgumentParser, old: str, new: str) -> None:
+    """Swap the leading program name at every depth of a parser."""
+    parser.prog = new + parser.prog[len(old):]
+    for action in parser._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            for child in set(action.choices.values()):
+                _reprog(child, old, new)
 
 
 def _load(name: str) -> argparse.ArgumentParser:
     module = importlib.import_module(COMMANDS[name].module)
     parser: argparse.ArgumentParser = module.build_parser()
-    parser.prog = f"gma {name}"
+    _reprog(parser, parser.prog, f"gma {name}")
     return parser
+
+
+def _subparsers(root: argparse.ArgumentParser) -> argparse._SubParsersAction:
+    for action in root._actions:
+        if isinstance(action, argparse._SubParsersAction):
+            return action
+    raise RuntimeError("root has no subcommands")
 
 
 def full_tree() -> argparse.ArgumentParser:
     """The root parser with one subparser per command (imports every module)."""
-    root = _root_parser()
-    root.add_argument("--version", action="store_true",
-                      help="print the plugin version")
-    sub = root.add_subparsers(dest="command", metavar="<command>")
+    root = _root(True)
+    sub = _subparsers(root)
     for name, cmd in COMMANDS.items():
-        entry = sub.add_parser(name, help=cmd.summary)
         if cmd.module:
-            # Keep the script's own parser whole (options, nested commands).
-            sub._name_parser_map[name] = _load(name)
+            # The script's own parser, whole (options, nested commands).
+            sub.choices[name] = _load(name)
         else:
-            entry.prog = f"gma {name}"
-            entry.description = cmd.summary
-            entry.add_argument("args", nargs=argparse.REMAINDER,
-                               help="passed to the publish tool unchanged")
+            stub = argparse.ArgumentParser(
+                prog=f"gma {name}", description=cmd.summary)
+            stub.add_argument("args", nargs=argparse.REMAINDER,
+                              help="passed to the publish tool unchanged")
+            sub.choices[name] = stub
+        sub._choices_actions.append(
+            sub._ChoicesPseudoAction(name, (), cmd.summary))
     return root
 
 
@@ -104,18 +126,16 @@ def _publish(args: list[str]) -> int:
         return subprocess.call(cmd)
     except FileNotFoundError:
         print("gma: publish needs node on the PATH", file=sys.stderr)
-        return 127
+        return 1
 
 
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
     if not args or args[0] in ("-h", "--help"):
-        # Help lists every command with its summary, so the table is needed,
-        # but not each script's own parser.
-        root = _root_parser()
-        root.add_argument("--version", action="store_true",
-                          help="print the plugin version")
-        sub = root.add_subparsers(dest="command", metavar="<command>")
+        # Help lists every command with its summary; the table is enough,
+        # so no script's own parser is built.
+        root = _root(True)
+        sub = _subparsers(root)
         for name, cmd in COMMANDS.items():
             sub.add_parser(name, help=cmd.summary)
         root.print_help()
@@ -133,6 +153,9 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if name == "publish":
         return _publish(rest)
+    if any(a in ("-h", "--help") for a in rest):
+        # Help comes from the re-programmed parser so usage reads `gma ...`.
+        _load(name).parse_args(rest)
     module = importlib.import_module(COMMANDS[name].module)
     result: int | None = module.main(rest)
     return result or 0

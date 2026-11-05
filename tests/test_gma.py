@@ -1,5 +1,6 @@
 """gma: one entry point dispatching to the vault scripts."""
 
+import argparse
 import contextlib
 import io
 import shutil
@@ -73,17 +74,44 @@ class GmaTests(unittest.TestCase):
         tree = gma.full_tree()
         names = set()
         for action in tree._actions:
-            if getattr(action, "choices", None) and hasattr(
-                    action, "_name_parser_map"):
+            if isinstance(action, argparse._SubParsersAction):
                 names |= set(action.choices)
         self.assertEqual(names, set(gma.COMMANDS))
         self.assertEqual(len(names), 29)
 
-    def test_commands_import_lazily(self):
-        for name in ("vault_search", "dnd_ddb"):
-            sys.modules.pop(name, None)
-        gma.main(["--version"])
+    def test_a_command_imports_only_its_own_module(self):
+        vault = Path(tempfile.mkdtemp(prefix="gma-vault-"))
+        self.addCleanup(shutil.rmtree, vault, True)
+        sys.modules.pop("dnd_ddb", None)
+        _run(["vault-check", str(vault), "version"])
         self.assertNotIn("dnd_ddb", sys.modules)
+
+    def test_nested_usage_reads_gma(self):
+        tree = gma.full_tree()
+        links = gma._subparsers(tree).choices["links"]
+        self.assertTrue(links.format_usage().startswith("usage: gma links"))
+        nested = [a for a in links._actions
+                  if isinstance(a, argparse._SubParsersAction)]
+        for action in nested:
+            for child in action.choices.values():
+                self.assertTrue(
+                    child.format_usage().startswith("usage: gma links"),
+                    child.format_usage())
+        code, out, _ = _run(["links", "fix", "--help"])
+        self.assertEqual(code, 0)
+        self.assertTrue(out.startswith("usage: gma links"), out)
+
+    def test_truly_nested_usage_reads_gma(self):
+        code, out, _ = _run(["moments", "status", "--help"])
+        self.assertEqual(code, 0)
+        self.assertTrue(out.startswith("usage: gma moments status"), out)
+
+    def test_missing_node_exits_1(self):
+        import unittest.mock as mock
+        with mock.patch("subprocess.call", side_effect=FileNotFoundError):
+            code, _, err = _run(["publish", "doctor"])
+        self.assertEqual(code, 1)
+        self.assertIn("needs node", err)
 
 
 if __name__ == "__main__":
