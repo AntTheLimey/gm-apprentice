@@ -3,7 +3,8 @@
 
 The archive holds every file the update can write: each .md, .yaml and
 .json note, and the props move's pages, styles and scripts, in the vault
-(the update never edits pictures); and the site folder's package.json,
+(the update never edits pictures; a symlinked file is archived as the
+file its link leads to, because the update writes that file); and the site folder's package.json,
 package-lock.json, vault.config.json and scripts/ (the repin, the settings
 move and the retired build steps write those), under
 `.gm-apprentice-site/`. It lives under
@@ -54,17 +55,22 @@ def _site_folder(vault: Path) -> Path | None:
         return None
 
 
+def _linked_file(path: Path) -> bool:
+    """A symlink to a file. An update write goes through it (it replaces
+    the target, not the link), so the target's bytes are archived."""
+    return path.is_symlink() and path.resolve().is_file()
+
+
 def _site_files(site: Path | None) -> list[Path]:
     """The site files the update can write; none of node_modules or the
     built pages."""
     if site is None or not site.is_dir():
         return []
-    found = [site / n for n in SITE_FILES
-             if (site / n).is_file() and not (site / n).is_symlink()]
+    found = [site / n for n in SITE_FILES if (site / n).is_file()]
     for d in SITE_DIRS:
         if (site / d).is_dir() and not (site / d).is_symlink():
             found.extend(p for p in sorted((site / d).rglob("*"))
-                         if p.is_file() and not p.is_symlink())
+                         if p.is_file())
     return found
 
 
@@ -97,7 +103,8 @@ def _notes(vault: Path, site: Path | None) -> list[Path]:
             and not (site is not None and (here / d).resolve() == site))   # under site/
         for name in sorted(filenames):
             path = here / name
-            if path.suffix.lower() in NOTE_SUFFIXES and not path.is_symlink():
+            if path.suffix.lower() in NOTE_SUFFIXES and (
+                    not path.is_symlink() or _linked_file(path)):
                 found.append(path)
     return found
 
@@ -131,7 +138,13 @@ def backup(vault: Path, *, home: Path | None = None, keep: int = 10) -> Path:
         with tarfile.open(partial, "w:gz") as tar:
             for path, arcname in files:
                 try:
-                    tar.add(path, arcname=arcname, recursive=False)
+                    if path.is_symlink():   # the target's bytes, as a file
+                        real = path.resolve()
+                        info = tar.gettarinfo(str(real), arcname=arcname)
+                        with real.open("rb") as handle:
+                            tar.addfile(info, handle)
+                    else:
+                        tar.add(path, arcname=arcname, recursive=False)
                 except OSError as e:
                     raise BackupFailed(_unreadable_note(path, e)) from e
         os.replace(partial, target)

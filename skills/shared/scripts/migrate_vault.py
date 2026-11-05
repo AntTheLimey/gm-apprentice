@@ -478,6 +478,21 @@ def _survey_templates(vault: Path) -> tuple[
             same[name] = entry(name, current, text,
                                f"It is the plugin's {version} text.")
             continue
+        known = record["templates"].get(name)
+        if isinstance(known, dict) and known.get("decision") == "keep" \
+                and known.get("file_sha") == text_hash(current) \
+                and known.get("shipped_sha") == text_hash(text):
+            if behind:
+                on = known.get("on") or "earlier"
+
+                def kept(_value: str | None, label: str = label,
+                         on: str = str(on)) -> list[str]:
+                    return [f"Kept your {label} template (decided {on})."]
+
+                items.append(Item(
+                    f"template-kept:{name}", WILL,
+                    [f"keep your {label} template (decided {on})"], kept))
+            continue
         is_old, release = _release_of(
             (regency_released if regency_build else released).get(name, []),
             {text_hash(current), text_hash(_with_values(current, text, filled))})
@@ -498,21 +513,6 @@ def _survey_templates(vault: Path) -> tuple[
                 f"template:{name}", WILL,
                 [f"update the {label} template to {version} "
                  f"(it is {was}'s text, unedited)"], update))
-            continue
-        known = record["templates"].get(name)
-        if isinstance(known, dict) and known.get("decision") == "keep" \
-                and known.get("file_sha") == text_hash(current) \
-                and known.get("shipped_sha") == text_hash(text):
-            if behind:
-                on = known.get("on") or "earlier"
-
-                def kept(_value: str | None, label: str = label,
-                         on: str = str(on)) -> list[str]:
-                    return [f"Kept your {label} template (decided {on})."]
-
-                items.append(Item(
-                    f"template-kept:{name}", WILL,
-                    [f"keep your {label} template (decided {on})"], kept))
             continue
         if known is None and f"template:{name}" in held_left:
             # An older update's "leave" is a keep; the record takes it over

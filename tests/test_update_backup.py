@@ -169,11 +169,44 @@ class BackupTests(unittest.TestCase):
 
     @unittest.skipUnless(os.name == "posix" and hasattr(os, "symlink"),
                          "symlinks and chmod are POSIX")
-    def test_symlinks_are_skipped(self):
+    def test_a_symlinked_note_is_archived_as_its_target_and_a_write_goes_through(self):
+        from migrate_core import write_text_atomic
         outside = self.tmp / "secret.md"
-        outside.write_text("s")
+        outside.write_text("before")
         self._write("keep.md")
         os.symlink(outside, self.vault / "link.md")
+        archive = update_backup.backup(self.vault, home=self.home)
+        self.assertEqual(self._names(archive), ["keep.md", "link.md"])
+        with tarfile.open(archive) as tar:
+            member = tar.getmember("link.md")
+            self.assertTrue(member.isfile())
+            self.assertEqual(tar.extractfile(member).read(), b"before")
+        # The update writes the target and keeps the link: so the target is
+        # what the backup must hold.
+        write_text_atomic(self.vault / "link.md", "after")
+        self.assertTrue((self.vault / "link.md").is_symlink())
+        self.assertEqual(outside.read_text(), "after")
+
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "symlink"),
+                         "symlinks are POSIX")
+    def test_a_symlinked_site_package_json_is_archived_as_its_target(self):
+        outside = self.tmp / "outside-package.json"
+        outside.write_text('{"v": 1}')
+        site = self.tmp / "Site"
+        site.mkdir()
+        os.symlink(outside, site / "package.json")
+        with mock.patch.object(update_backup, "_site_folder",
+                               return_value=site.resolve()):
+            archive = update_backup.backup(self.vault, home=self.home)
+        with tarfile.open(archive) as tar:
+            data = tar.extractfile(".gm-apprentice-site/package.json").read()
+        self.assertEqual(data, b'{"v": 1}')
+
+    @unittest.skipUnless(os.name == "posix" and hasattr(os, "symlink"),
+                         "symlinks are POSIX")
+    def test_a_broken_symlink_is_skipped(self):
+        os.symlink(self.tmp / "gone.md", self.vault / "dead.md")
+        self._write("keep.md")
         archive = update_backup.backup(self.vault, home=self.home)
         self.assertEqual(self._names(archive), ["keep.md"])
 

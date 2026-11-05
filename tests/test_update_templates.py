@@ -119,9 +119,30 @@ class TemplateRuleTests(unittest.TestCase):
     def test_crlf_copy_of_the_shipped_template_is_the_same(self):
         vault = make_vault(self)
         path = vault / "_Templates" / NPC
-        path.write_bytes(path.read_bytes().replace(b"\n", b"\r\n"))
+        # From LF text, so a Windows checkout (already CRLF) is not doubled.
+        path.write_bytes(path.read_bytes().replace(b"\r\n", b"\n")
+                         .replace(b"\n", b"\r\n"))
         self.assertIn(b"\r\n", path.read_bytes())
         self.assertEqual(mv.find_templates(vault), [])
+
+    def test_a_recorded_keep_stands_even_when_history_later_names_the_text(self):
+        vault = make_vault(self)
+        path = edited_npc(vault)
+        kept = path.read_text(encoding="utf-8")
+        entry = {"state": "gms", "decision": "keep", "on": "2026-01-01",
+                 "file_sha": mv.text_hash(kept),
+                 "shipped_sha": mv.text_hash(mv.expected_templates(vault)[NPC])}
+        (vault / ur.RECORD_FILE).parent.mkdir(exist_ok=True)
+        (vault / ur.RECORD_FILE).write_text(json.dumps(
+            {"templates": {NPC: entry}, "answers": {}, "updates": []}),
+            encoding="utf-8")
+        file = Path(tempfile.mkdtemp(prefix="updh-")) / "template-history.json"
+        self.addCleanup(shutil.rmtree, file.parent, ignore_errors=True)
+        file.write_text(json.dumps(
+            {"coc-7e": {NPC: {mv.text_hash(kept): "1.10.5"}}}), encoding="utf-8")
+        with mock.patch.object(mv, "HISTORY", file):
+            self.assertNotIn(f"template:{NPC}", by_id(mv.find_templates(vault)))
+        self.assertEqual(path.read_text(encoding="utf-8"), kept)
 
     def test_empty_template_is_a_read_problem_not_a_difference(self):
         vault = make_vault(self)
@@ -382,6 +403,25 @@ class CompareTests(unittest.TestCase):
             tc.summary(c), "only yours has 1 field, 1 heading and 1 table row; "
             "only the plugin's has 1 field, 1 heading and 1 table row; 1 section reads differently")
         self.assertEqual(json.loads(json.dumps(c.as_dict()))["sections_changed"], [["Shared", 2, 1]])
+
+
+class CompareDetailTests(unittest.TestCase):
+    def test_a_changed_field_value_is_reported(self):
+        c = tc.compare("---\ntype: npc\nwithheld: true\n---\n# A\n",
+                       "---\ntype: npc\nwithheld: false\n---\n# A\n")
+        self.assertEqual(c.field_values_changed, ["withheld"])
+        self.assertEqual(tc.summary(c), "1 field has a different value")
+
+    def test_a_heading_level_change_is_reported(self):
+        c = tc.compare("# GM Notes\n\nx\n", "## GM Notes\n\nx\n")
+        self.assertEqual(c.heading_levels_changed, ["GM Notes"])
+        self.assertEqual(tc.summary(c), "1 heading sits at a different level")
+
+    def test_a_tilde_line_inside_a_backtick_fence_does_not_close_it(self):
+        text = "# A\n\n```\n~~~\n## Example\n| x | y |\n```\n\n## Real\n"
+        c = tc.compare(text, "# A\n\n## Real\n")
+        self.assertEqual(c.headings_only_vault, [])
+        self.assertEqual(c.table_rows_only_vault, [])
 
 
 class LabelTests(unittest.TestCase):

@@ -13,9 +13,10 @@ import difflib
 import re
 from dataclasses import asdict, dataclass, field
 
+from vaultlib import fence_step
+
 FIELD_RE = re.compile(r"^([A-Za-z_][\w-]*)[ \t]*:")
 HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)[ \t#]*$")
-FENCE_RE = re.compile(r"^[ \t]*(```|~~~)")
 TABLE_RULE_RE = re.compile(r"^\|?[\s:|-]+\|?$")
 PREAMBLE = ""   # the section before the first heading
 
@@ -28,6 +29,10 @@ class Comparison:
     headings_only_shipped: list[str] = field(default_factory=list)
     table_rows_only_vault: list[str] = field(default_factory=list)
     table_rows_only_shipped: list[str] = field(default_factory=list)
+    # frontmatter fields both texts hold whose values differ
+    field_values_changed: list[str] = field(default_factory=list)
+    # headings both texts hold at different levels
+    heading_levels_changed: list[str] = field(default_factory=list)
     # (heading, lines only yours have, lines only the plugin's has), for a
     # heading both texts hold
     sections_changed: list[tuple[str, int, int]] = field(default_factory=list)
@@ -45,6 +50,8 @@ class _Parts:
     headings: list[str]
     rows: list[str]
     sections: dict[str, list[str]]
+    values: dict[str, str]
+    levels: dict[str, int]
 
 
 def _squash(line: str) -> str:
@@ -54,27 +61,36 @@ def _squash(line: str) -> str:
 def _parts(text: str) -> _Parts:
     lines = text.replace("\r\n", "\n").split("\n")
     fields: list[str] = []
+    values: dict[str, str] = {}
     start = 0
     if lines and lines[0].rstrip() == "---":
         end = next((i for i in range(1, len(lines))
                     if lines[i].rstrip() == "---"), None)
         if end is not None:
+            key = None
             for line in lines[1:end]:
                 m = FIELD_RE.match(line)
-                if m and m.group(1) not in fields:
-                    fields.append(m.group(1))
+                if m:
+                    key = m.group(1) if m.group(1) not in fields else None
+                    if key:
+                        fields.append(key)
+                        values[key] = _squash(line[m.end():])
+                elif key:
+                    values[key] = _squash(f"{values[key]} {line}")
             start = end + 1
     headings: list[str] = []
     rows: list[str] = []
     sections: dict[str, list[str]] = {PREAMBLE: []}
     current = PREAMBLE
-    fenced = False
+    levels: dict[str, int] = {}
+    fence: str | None = None
     for line in lines[start:]:
-        if FENCE_RE.match(line):
-            fenced = not fenced
+        fence, toggled = fence_step(line, fence)
+        fenced = fence is not None or toggled
         heading = None if fenced else HEADING_RE.match(line)
         if heading:
             current = heading.group(2).strip()
+            levels.setdefault(current, len(heading.group(1)))
             if current not in headings:
                 headings.append(current)
             sections.setdefault(current, [])
@@ -86,7 +102,7 @@ def _parts(text: str) -> _Parts:
         if not fenced and squashed.startswith("|") \
                 and not TABLE_RULE_RE.match(squashed) and squashed not in rows:
             rows.append(squashed)
-    return _Parts(fields, headings, rows, sections)
+    return _Parts(fields, headings, rows, sections, values, levels)
 
 
 def _only(a: list[str], b: list[str]) -> list[str]:
@@ -118,6 +134,10 @@ def compare(vault_text: str, shipped_text: str) -> Comparison:
         headings_only_shipped=_only(theirs.headings, mine.headings),
         table_rows_only_vault=_only(mine.rows, theirs.rows),
         table_rows_only_shipped=_only(theirs.rows, mine.rows),
+        field_values_changed=[f for f in mine.fields if f in theirs.values
+                              and mine.values[f] != theirs.values[f]],
+        heading_levels_changed=[h for h, n in mine.levels.items()
+                                if h in theirs.levels and theirs.levels[h] != n],
         sections_changed=changed)
 
 
@@ -146,6 +166,12 @@ def summary(c: Comparison) -> str:
         out.append(f"only yours has {yours}")
     if theirs:
         out.append(f"only the plugin's has {theirs}")
+    if c.field_values_changed:
+        out.append(f"{_count(len(c.field_values_changed), 'field has', 'fields have')} "
+                   f"a different value")
+    if c.heading_levels_changed:
+        out.append(f"{_count(len(c.heading_levels_changed), 'heading sits', 'headings sit')} "
+                   f"at a different level")
     if c.sections_changed:
         out.append(f"{_count(len(c.sections_changed), 'section reads', 'sections read')} "
                    f"differently")

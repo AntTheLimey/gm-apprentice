@@ -459,6 +459,19 @@ class AskedTextTests(Base):
         self.assertEqual((res.exit, log), (3, []))
         self.assertTrue(any("drop=yes" in n for n in res.notes), res.notes)
 
+    def test_a_stale_id_for_an_item_already_left_says_it_was_answered(self):
+        vault = make_vault(self)
+        log = []
+        r, _ = check("drop", "removes", will_item("drop"), log=log)
+        [q] = self.run_update(vault, [r]).questions
+        self.assertEqual(self.run_update(vault, [r], {q.id: "leave"}).exit, 0)
+        for key in ("drop", "drop@00000000"):
+            res = self.run_update(vault, [r], {key: "yes"})
+            self.assertEqual((res.exit, res.questions, log), (0, [], []))
+            [note] = [n for n in res.notes if "was not used" in n]
+            self.assertIn("already answered (kept as it is)", note)
+            self.assertNotIn("asked again", note)
+
     def test_an_answer_for_a_fix_by_hand_row_says_so(self):
         vault = make_vault(self)
         c, _ = check("broken", "asks", lambda: [Item(

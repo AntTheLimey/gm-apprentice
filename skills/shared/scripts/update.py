@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """update.py: `gma update`, the vault update as one command.
 
-    gma update VAULT [--answer ID=VALUE]... [--headless] [--json]
+    gma update VAULT [--answer <id>@<hash>=VALUE]... [--headless] [--json]
 
 Every change a check finds is one of three kinds (`Check.kind`):
 bookkeeping changes form and keeps content, so it runs in every run,
@@ -89,13 +89,20 @@ def _matches(item: Item, given: dict[str, Given]) -> str | None:
     return g.value if g is not None and g.hash == asked_hash(item) else None
 
 
-def _offered(item: Item, given: dict[str, Given], res: UpdateResult) -> str | None:
+def _offered(item: Item, given: dict[str, Given], res: UpdateResult,
+             answers: dict[str, AnswerEntry] | None = None) -> str | None:
     """_matches, saying in Worth knowing why an answer given was not used."""
     g = given.get(item.id)
     if g is None:
         return None
     if g.hash == asked_hash(item):
         return g.value
+    if answers and migrate.recorded(item, answers) is not None:
+        note = (f"Your answer {g.raw}={g.value} was not used: {item.id} was "
+                f"already answered (kept as it is), so nothing is asked.")
+        if note not in res.notes:
+            res.notes.append(note)
+        return None
     why = (f"{item.id} changed since you were asked" if g.hash is not None
            else f"it does not name the question as it was shown "
                 f"({asked_id(item)}), so it may be for other text")
@@ -203,7 +210,7 @@ def _answer_for(item: Item, given: dict[str, Given],
     record answers only with a standing answer (leave, keep), and only
     while the item's lines are the ones it was given against."""
     if item.id in given:
-        value = _offered(item, given, res)
+        value = _offered(item, given, res, answers)
         return value, value is not None
     return migrate.recorded(item, answers), False
 
@@ -267,7 +274,7 @@ def run(vault: Path, answers: dict[str, str], headless: bool, *,
         for f in found:
             for item in f.items:
                 if item.group != PERSON and _asks(f.check, item):
-                    _offered(item, given, res)
+                    _offered(item, given, res, known)
                 _sort_unapplied(f.check, item, held, known, res)
         _unused(given, set(), found, res)
         res.exit = 3 if res.questions else 0

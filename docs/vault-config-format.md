@@ -277,8 +277,9 @@ Other keys may appear and must be kept. Do not edit the file by hand. The
 
 `_meta/update-record.json` is a JSON object the update writes, and it
 survives stamping, so an answer the GM gave once is not asked again.
-Under `templates`, each file in `_Templates/` that the update has looked
-at has an entry: whose text it is (`state`: `plugin` or `gms`), the
+Under `templates`, each file in `_Templates/` that an update which did
+work has looked at has an entry (a run that finds nothing to do writes
+none): whose text it is (`state`: `plugin` or `gms`), the
 release it equals (`matches`), the GM's answer when one was asked
 (`decision`: `keep` or `take`), a hash of the vault's copy and of the
 plugin's text it was compared with (`file_sha`, `shipped_sha`), the
