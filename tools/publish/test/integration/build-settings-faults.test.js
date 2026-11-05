@@ -12,20 +12,22 @@ const { runSheetShow } = require('../../lib/sheet-cli');
 const { runDeploy } = require('../../lib/deploy-cli');
 const { createPreview } = require('../../scripts/live-preview');
 const { inPrivateTmp } = require('../helpers/private-tmp');
+const { writeSiteConfig } = require('../helpers/vault-files');
 
 const CLI = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
-const STOP_YAML = '  exclude_sectoins: [GM Notes]\n';
-const WARN_YAML = '  link_preview: off\n';
+// The YAML under `player_site:` in the vault's settings file.
+const STOP_YAML = '  hide:\n    sectoins: [GM Notes]\n';
+const WARN_YAML = '  features:\n    link_preview: off\n';
 const HEAD = /^(\w[\w .-]*) stopped: the settings have a fault that could show players more than you meant\.\n/;
 const FIX = /\nFix it, or ask the apprentice to run the Settings check\.$/;
-const STOP_LINE = '  publish.exclude_sectoins is not a setting. Did you mean publish.exclude_sections?';
+const STOP_LINE = '  player_site.hide.sectoins is not a setting. Did you mean player_site.hide.sections?';
 
 const roots = [];
 test.after(() => roots.forEach((r) => fs.rmSync(r, { recursive: true, force: true })));
 
 function writeVaultConfig(vault, yaml) {
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-    `---\ntype: meta\npublish:\n  folder_map:\n    NPCs: npcs\n    Characters/PCs: characters/pcs\n${yaml}---\n`);
+  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.yaml'),
+    `player_site:\n  folder_map:\n    NPCs: npcs\n    Characters/PCs: characters/pcs\n${yaml}`);
 }
 
 function site(yaml, siteExtra = {}) {
@@ -39,7 +41,7 @@ function site(yaml, siteExtra = {}) {
   fs.writeFileSync(path.join(vault, 'Characters', 'PCs', 'Karl.md'), '---\ntype: pc\n---\n# Karl\n\nA fighter.\n');
   writeVaultConfig(vault, yaml);
   const configPath = path.join(root, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T', ...siteExtra }));
+  writeSiteConfig(configPath, { vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T', ...siteExtra });
   return { root, vault, configPath, outputDir: path.join(root, 'docs'), setYaml: (y) => writeVaultConfig(vault, y) };
 }
 
@@ -73,7 +75,7 @@ function assertStopMessage(err, command) {
   assert.equal(m[1], command);
   assert.match(err.message, FIX);
   assert.ok(err.message.includes(STOP_LINE), err.message);
-  assert.equal(err.message.split('exclude_sectoins is not a setting').length - 1, 1, 'each stop listed once');
+  assert.equal(err.message.split('sectoins is not a setting').length - 1, 1, 'each stop listed once');
   return true;
 }
 
@@ -88,7 +90,7 @@ test('a misspelt hiding setting stops the build and writes nothing', async () =>
 test('a stopped build shows each stop once, in the message and not as a warning line', async () => {
   const s = site(STOP_YAML);
   await assert.rejects(capturing(() => build({ configPath: s.configPath })), (err) => {
-    assert.equal(err.lines.filter((l) => l.includes('exclude_sectoins')).length, 0, err.lines.join('\n'));
+    assert.equal(err.lines.filter((l) => l.includes('sectoins')).length, 0, err.lines.join('\n'));
     return true;
   });
 });
@@ -96,7 +98,7 @@ test('a stopped build shows each stop once, in the message and not as a warning 
 test('a misspelt look setting warns and the build runs', async () => {
   const s = site(WARN_YAML);
   const { lines } = await capturing(() => build({ configPath: s.configPath }));
-  assert.ok(lines.some((w) => /publish\.link_preview is not a setting\. Did you mean publish\.link_previews\?/.test(w)), lines.join('\n'));
+  assert.ok(lines.some((w) => /player_site\.features\.link_preview is not a setting\. Did you mean player_site\.features\.link_previews\?/.test(w)), lines.join('\n'));
   assert.equal(fs.existsSync(path.join(s.outputDir, 'index.html')), true);
 });
 
@@ -118,7 +120,7 @@ test('the command line build exits non-zero with the message once on stderr and 
   const r = spawnSync(process.execPath, [CLI, 'build', '--config', s.configPath], { encoding: 'utf8' });
   assert.equal(r.status, 1);
   assert.match(r.stderr, /(^|\n)build stopped: the settings have a fault/);
-  assert.equal(r.stderr.split('exclude_sectoins is not a setting').length - 1, 1, r.stderr);
+  assert.equal(r.stderr.split('sectoins is not a setting').length - 1, 1, r.stderr);
   assert.ok(!/\n\s+at /.test(r.stderr), 'no stack trace');
   assert.ok(!/Build failed/.test(r.stderr));
   assert.deepEqual(snapshot(s.root), before);
@@ -207,7 +209,7 @@ test('deploy: a stop throws before any hook, build or upload, a warning passes',
   const r = spawnSync(process.execPath, [CLI, 'deploy', '--config', s.configPath], { encoding: 'utf8' });
   assert.equal(r.status, 1);
   assert.match(r.stderr, /^deploy stopped: /);
-  assert.equal(r.stderr.split('exclude_sectoins is not a setting').length - 1, 1);
+  assert.equal(r.stderr.split('sectoins is not a setting').length - 1, 1);
   const ok = site(WARN_YAML);
   const h2 = deployHarness(ok);
   await capturing(() => runDeploy({ configPath: ok.configPath }, h2.deps));
@@ -223,23 +225,9 @@ test('the local preview is a player build: a stop throws and leaves no temp fold
   assert.deepEqual(left.filter((n) => n.startsWith('gm-publish-preview-site-')), []);
 });
 
-test('a site-file hiding list that is not a list, beside the vault file\'s own list, warns once and the vault list applies', async () => {
-  const s = site('  exclude_sections: [GM Notes]\n', { excludeSections: 'oops' });
-  const { lines } = await capturing(() => build({ configPath: s.configPath }));
-  const said = lines.filter((l) => l.includes('excludeSections in vault.config.json is not a list and is ignored'));
-  assert.equal(said.length, 1, lines.join('\n'));
-  const page = fs.readFileSync(path.join(s.outputDir, 'npcs', 'vex.html'), 'utf8');
-  assert.ok(!page.includes('Secret.'), 'the vault list hid GM Notes');
-});
-
-test('a site-file hiding list that is not a list, with no vault list, stops the build', async () => {
-  const s = site('', { excludeSections: 'oops' });
-  await assert.rejects(capturing(() => build({ configPath: s.configPath })), (err) => HEAD.test(err.message) && err.message.includes('excludeSections in the site folder\'s vault.config.json') && !err.message.includes('publish.exclude_sections'));
-});
-
 test('commands that only warn print the fault text alone, one plain line each, with no object', () => {
   const cases = [
-    ['a warn fault', 'publish.zebra is not a setting.', '  zebra: 1\n'],
+    ['a warn fault', 'player_site.features.zebra is not a setting.', '  features:\n    zebra: 1\n'],
     ['a stop fault', STOP_LINE.trim(), STOP_YAML],
   ];
   for (const [label, text, yaml] of cases) {
