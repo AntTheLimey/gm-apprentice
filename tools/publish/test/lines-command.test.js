@@ -34,7 +34,7 @@ function makeVault(title = 'One') {
 
 function siteFor(vault) {
   const configPath = path.join(tmp('lines-command-site-'), 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', vaultPath: vault, outputDir: './docs', folderMap: { Sessions: 'sessions' } }));
+  require('./helpers/vault-files').writeSiteConfig(configPath, { vaultPath: vault, folderMap: { Sessions: 'sessions' } });
   return configPath;
 }
 

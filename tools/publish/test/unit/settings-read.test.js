@@ -39,7 +39,7 @@ test('an unknown system id warns and is kept as written', () => {
   const r = readSettings({ vaultPath: dir });
   assert.equal(r.values.vault.system, 'starfinder');
   assert.equal(r.faults.find((f) => f.name === 'vault.system').level, 'warn');
-  assert.equal(r.faults.find((f) => f.name === 'player_site.section_titles.locatons').suggest, 'player_site.section_titles.locations');
+  assert.equal(r.faults.find((f) => f.name === 'player_site.lists.section_titles.locatons').suggest, 'player_site.lists.section_titles.locations');
 });
 
 function readYaml(yaml) {
