@@ -890,6 +890,13 @@ if (command === 'build') {
     console.error(`Build failed: could not read the GM site's settings: ${String(err.message).split('\n')[0].trim()}`);
     process.exit(1);
   }
+  // An old settings file or a leftover is the cause to name, before "the GM site is off".
+  if (siteFlag === 'gm' && !gmOn) {
+    try { configLib.assertNoStopsFor(configPath, 'build', 'gm'); } catch (err) {
+      console.error(`Build failed: ${err.message}`);
+      process.exit(1);
+    }
+  }
   if (siteFlag === 'gm' && !gmOn) {
     console.error('The GM site is off for this vault (gm_site.publish); nothing was built.');
     process.exit(1);
