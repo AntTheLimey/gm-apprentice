@@ -64,7 +64,20 @@ class IssueReleaseTests(unittest.TestCase):
 
     def test_against_the_real_changelog(self):
         text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
-        self.assertEqual(issue_releases(text)[510].release, "1.10.129")
+        got = issue_releases(text)
+        self.assertEqual(got[510].release, "1.10.129")
+        self.assertNotIn(483, got)   # named in 1.10.94's Follow-ups, still open
+
+    def test_only_the_intro_and_the_change_subsections_are_read(self):
+        log = ("## [1.2.3] — x\n\nIntro (#1).\n\n"
+               "### Added\n\n- added (#2).\n\n"
+               "### Follow-ups\n\n- filed, not fixed (#3).\n\n"
+               "### Testing\n\n- tested (#4).\n\n"
+               "### Fixed (publish tool)\n\n- fixed (#5).\n\n"
+               "### Removed\n\n- removed (#6).\n\n"
+               "### Security\n\n- s (#7).\n\n### Deprecated\n\n- d (#8).\n\n"
+               "### Changed\n\n- changed (#9).\n\n### Note\n\n- n (#10).\n")
+        self.assertEqual(sorted(issue_releases(log)), [1, 2, 5, 6, 7, 8, 9])
 
     def test_a_missing_changelog_reads_as_none(self):
         self.assertIsNone(changelog_issues.plugin_releases(

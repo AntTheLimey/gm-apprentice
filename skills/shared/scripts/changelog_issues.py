@@ -2,8 +2,11 @@
 """changelog_issues.py: which release shipped each GitHub issue.
 
 Read offline from the plugin's own CHANGELOG.md. Only released sections
-(`## [x.y.z]`) count; `[Unreleased]` and anything else is skipped. Every
-`#N` in a section's entries is an issue it cites. An issue cited in more
+(`## [x.y.z]`) count; `[Unreleased]` and anything else is skipped. Within
+a release only its intro paragraphs and its change subsections (Added,
+Changed, Fixed, Removed, Security, Deprecated) are read: Follow-ups,
+Testing, Note and the like name issues filed, not fixed. Every `#N` in
+those entries is an issue the release ships. An issue cited in more
 than one release maps to the highest: the last is when the fix was
 complete. Library module, no CLI.
 """
@@ -24,6 +27,10 @@ _RELEASE = re.compile(r"^## \[(\d+(?:\.\d+)*)\]")
 _HEADING = re.compile(r"^#{1,6} ")
 _BULLET = re.compile(r"^\s*[-*] ")
 _ISSUE = re.compile(r"#(\d+)\b")
+_SUBSECTION = re.compile(r"^### +(\w+)")
+# A `### ` subsection is read when its title's first word is one of these
+# ("Fixed (publish tool)" counts as Fixed).
+SHIPPED = ("Added", "Changed", "Fixed", "Removed", "Security", "Deprecated")
 
 
 @dataclass
@@ -55,15 +62,21 @@ def issue_releases(changelog: str) -> dict[int, ReleaseNote]:
     citing it and that release's entries that cite it."""
     sections: list[tuple[str, list[str]]] = []
     current: list[str] | None = None
+    reading = True
     for line in changelog.splitlines():
         if line.startswith("## "):
             m = _RELEASE.match(line)
             current = None
             if m:
-                current = []
+                current, reading = [], True   # the intro is read
                 sections.append((m.group(1), current))
         elif current is not None:
-            current.append(line)
+            sub = _SUBSECTION.match(line)
+            if sub:
+                reading = sub.group(1) in SHIPPED
+                current.append(line)   # a heading ends the entry before it
+            elif reading:
+                current.append(line)
     found: dict[int, ReleaseNote] = {}
     for release, body in sections:
         here: dict[int, list[str]] = {}

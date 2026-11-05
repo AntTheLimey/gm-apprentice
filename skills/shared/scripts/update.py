@@ -55,6 +55,7 @@ HASH_LEN = 8      # an answer id's hash: `<id>@<8 hex>`
 ASKED_RE = re.compile(rf"(.+)@([0-9a-f]{{{HASH_LEN}}})")
 WORKAROUND = "workaround:"   # a workaround question's id is this + its id
 WORKAROUND_OPTIONS = ["retire", "keep"]
+SAID = 160   # the CHANGELOG entry a workaround question quotes, at most
 NO_SWEEP = ("No workaround record yet: run the one-time sweep "
             "(campaign-organizer, workaround-sweep.md).")
 NO_CHANGELOG = ("Could not read the plugin's CHANGELOG, so no workaround "
@@ -253,7 +254,8 @@ class _Offers:
 
 def _first_line(lines: list[str]) -> str:
     line = lines[0] if lines else ""
-    return line[2:] if line.startswith(("- ", "* ")) else line
+    line = (line[2:] if line.startswith(("- ", "* ")) else line).rstrip(". ")
+    return line if len(line) <= SAID else line[:SAID - 1].rstrip() + "…"
 
 
 def _offers(record: update_record.Record, plugin_v: str,
@@ -285,7 +287,7 @@ def _offers(record: update_record.Record, plugin_v: str,
             continue
         item_id = f"{WORKAROUND}{w['id']}"
         where = ", ".join(str(p) for p in w.get("where") or [])
-        said = _first_line(note.lines if note else []).rstrip(". ")
+        said = _first_line(note.lines if note else [])
         built = f"built in since {release}" + (f": {said}" if said else "")
         text = (f"{w.get('what')} ({where}) stands in for #{w['issue']}, "
                 f"{built}. Retire it and switch to the built-in way?")

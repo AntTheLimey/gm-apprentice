@@ -105,6 +105,12 @@ class AddTests(Base):
             workaround.add(self.vault, 510, "x", "poem", ["PCs/Six.md"])
         self.assertEqual(self.record()["workarounds"], [])
 
+    def test_a_release_is_three_numbers(self):
+        for bad in ("1.10", "1", "1.10.3.4", "v1.10.3"):
+            with self.subTest(release=bad), self.assertRaises(workaround.Refused):
+                self.add(release=bad)
+        self.assertEqual(self.add(release="1.10.3")["release"], "1.10.3")
+
     def test_memory_paths_need_not_exist(self):
         w = self.add(where=("memory:gravity.md", "PCs/Six.md"))
         self.assertEqual(w["where"], ["memory:gravity.md", "PCs/Six.md"])
@@ -193,6 +199,18 @@ class OfferTests(Base):
             q.text, "Gravity by hand on the sheet (PCs/Six.md) stands in for "
             "#510, built in since 1.10.129: GURPS sheets can count local "
             "gravity (#510). Retire it and switch to the built-in way?")
+
+    def test_a_long_changelog_entry_is_cut_to_160(self):
+        self.swept()
+        self.changelog.write_text(
+            "## [1.10.129] — x\n\n" + "word " * 500 + "(#510).\n",
+            encoding="utf-8")
+        self.add()
+        [q] = self.update().questions
+        said = q.text.split("built in since 1.10.129: ", 1)[1]
+        said = said.rsplit(". Retire it", 1)[0]
+        self.assertLessEqual(len(said), 160)
+        self.assertTrue(said.endswith("…"))
 
     def test_release_override_wins(self):
         self.swept()

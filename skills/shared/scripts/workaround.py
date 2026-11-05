@@ -37,7 +37,7 @@ MEMORY = "memory:"
 SHOWN = 160   # a scan line's text is trimmed to this many characters
 _ISSUE_REFS = re.compile(
     r"github\.com/AntTheLimey/gm-apprentice/issues/(\d+)|(?<![\w&])#(\d{1,6})\b")
-_VERSION = re.compile(r"^\d+(\.\d+)*$")
+_VERSION = re.compile(r"^\d+\.\d+\.\d+$")
 
 
 class Refused(ValueError):
