@@ -6,7 +6,7 @@
 // Since plugin 1.11.0 nothing else is read: the old settings file, and any key but vaultPath in the
 // site folder's vault.config.json, stop the build by name (what they hid would otherwise publish).
 const path = require('node:path');
-const { parseDocument, isSeq, isScalar } = require('yaml');
+const { parseDocument, isSeq, isScalar, isAlias } = require('yaml');
 const { REGISTRY, NOT_PER_SITE, entry: settingEntry, legacyNameOf } = require('./registry');
 const { TYPES, isMap, getPath, setIn, emptyIsFault } = require('./types');
 const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, startsLikeHide, show } = require('./faults');
@@ -217,7 +217,13 @@ function misreadEntries(doc) {
   for (const e of HIDING_LISTS) {
     const node = doc.getIn(e.name.split('.'), true);
     if (!isSeq(node)) continue;
-    for (const item of node.items) {
+    for (const entry of node.items) {
+      // An `*alias` entry is the node it points at (the reader resolves it): checked as that node, so a name anchored
+      // elsewhere as `007` is the same stop. The text named is the anchored node's, which the GM quotes at its source.
+      let item = entry;
+      if (isAlias(entry)) {
+        try { item = entry.resolve(doc) || entry; } catch { item = entry; }
+      }
       if (!isScalar(item) || typeof item.value === 'string' || item.value === null) continue;
       const written = item.source !== undefined ? String(item.source) : String(item.value);
       let readAs = null;

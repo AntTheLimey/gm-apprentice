@@ -55,7 +55,10 @@ function packageScripts(siteDir) {
 // Why the site folder's package.json cannot be read as JSON, or null (no file, or it parses).
 function packageJsonProblem(siteDir) {
   let text;
-  try { text = fs.readFileSync(path.join(siteDir, 'package.json'), 'utf8'); } catch { return null; }
+  // A file that is not there is no problem; one that is there and cannot be read is (the scripts in it cannot be checked).
+  try { text = fs.readFileSync(path.join(siteDir, 'package.json'), 'utf8'); } catch (e) {
+    return e && e.code === 'ENOENT' ? null : `it cannot be read: ${e && e.code ? e.code : String(e.message).split('\n')[0]}`;
+  }
   try { JSON.parse(text.replace(/^﻿/, '')); return null; } catch (e) { return String(e.message).split('\n')[0]; }
 }
 

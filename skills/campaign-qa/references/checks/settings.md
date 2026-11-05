@@ -40,8 +40,11 @@ beside the right one) need no `carry`: `--fix` merges them.
 **Keys and build steps left in the site folder** (`vault.config.json`,
 `package.json`). A `STOP` row with no fix, against that file, naming
 each key's home (`siteTitle (now player_site.title)`). With the GM's
-yes, set each with `settings set` under its home, then take it out of
-the file (only `vaultPath` stays in `vault.config.json`). A build
+yes, read the home's current value first (`settings get <home>`); when
+it is already set and differs from the file's, show the GM both and ask
+which to keep before any `settings set` replaces it. Then set each under
+its home and take it out of the file (only `vaultPath` stays in
+`vault.config.json`). A build
 script in `package.json` goes to the setting the row names
 (`player_site.before_build` or `player_site.after_build`) with
 `settings add`. A file that is not valid JSON: fix it first.

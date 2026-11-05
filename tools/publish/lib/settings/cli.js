@@ -51,8 +51,9 @@ function target(options) {
     const vaultPath = path.resolve(options.vault);
     // With no --config, the site folder is the one the vault names; --no-site-file reads none
     // (the vault scripts ask for it, and read the site file themselves).
-    const named = options.config || options.noSiteFile ? null : siteFileNamedBy(vaultPath);
-    const config = options.config ? path.resolve(options.config) : (named && named.exists ? named.file : null);
+    // --no-site-file reads no site file, but the site folder is still found, for its package.json.
+    const named = options.config ? null : siteFileNamedBy(vaultPath);
+    const config = options.config ? path.resolve(options.config) : (named && named.exists && !options.noSiteFile ? named.file : null);
     // The site folder, for its package.json: the one --config is in, else the one the vault names.
     const siteDir = options.config ? path.dirname(config) : (named ? named.dir : undefined);
     let siteConfig = {};

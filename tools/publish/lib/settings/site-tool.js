@@ -53,6 +53,11 @@ function oldTool(pin, from, updated) {
 // and of the installed tool as siteToolHold; the caller words the answer.
 function siteToolOlderThan(siteDir, from, { updated = false, pinCheck: ask = pinCheck } = {}) {
   const pin = { ...(ask(siteDir) || {}) };
+  // update-pin said nothing usable: the pin is read from the site's package.json, as the build reads it.
+  if (!pin.spec && !pin.installedBefore) {
+    const fromFile = require('../site-pin').pinSpecOf(siteDir);
+    if (fromFile) { pin.spec = fromFile; pin.ours = false; }
+  }
   const installed = siteToolVersion(siteDir);
   if (installed) {
     pin.installedBefore = installed;

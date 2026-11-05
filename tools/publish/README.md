@@ -506,10 +506,13 @@ player_site:
     Factions & Organizations: factions
     Items & Artifacts: items
     Creatures: creatures
+    Heritages: heritages
     Events: events
     Documents: documents
     Clues: clues
+    Chapters: chapters
     _Campaign: campaign
+    _World: world
 ```
 
 ---

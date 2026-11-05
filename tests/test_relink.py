@@ -300,6 +300,16 @@ class RefusalTests(unittest.TestCase):
         self.assertEqual(cm.exception.usage, usage)
         return str(cm.exception)
 
+    def test_a_vault_on_the_retired_settings_file_is_refused(self):
+        # Written raw: make_vault would put the settings where they now live.
+        vault = make_vault(self, {OLD: "x\n"})
+        legacy = vault / "_meta" / "vault-config.md"
+        legacy.parent.mkdir(parents=True, exist_ok=True)
+        legacy.write_text("---\npublish:\n  site: true\n---\n")
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.plan(vault, OLD, "Sessions/Renamed.md")
+        self.assertIn("retired settings file", str(cm.exception))
+
     def test_refusals(self):
         base = {OLD: "x\n", "Other/Taken.md": "x\n"}
         self.assertIn("does not exist",

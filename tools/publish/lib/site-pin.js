@@ -116,10 +116,18 @@ function sitePin(siteDir) {
   return { source: 'package.json', version, stale: staleReason(version) };
 }
 
+// The gm-apprentice-publish dependency text in the site's package.json, or null (no file, unreadable, or none pinned).
+function pinSpecOf(siteDir) {
+  const pkg = readJson(path.join(siteDir, 'package.json'));
+  if (!pkg.data) return null;
+  const spec = ((pkg.data.dependencies || {})[PKG]) || ((pkg.data.devDependencies || {})[PKG]);
+  return spec ? String(spec) : null;
+}
+
 function staleReason(version) {
   return semverBelow(version, WITHHOLDS_HUB_BODIES_SINCE)
     ? `site is pinned to ${version}; update the pin before publishing sessions`
     : null;
 }
 
-module.exports = { sitePin, semverBelow, parseSemver, specVersion, WITHHOLDS_HUB_BODIES_SINCE, PKG };
+module.exports = { sitePin, pinSpecOf, semverBelow, parseSemver, specVersion, WITHHOLDS_HUB_BODIES_SINCE, PKG };

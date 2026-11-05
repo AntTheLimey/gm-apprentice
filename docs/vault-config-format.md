@@ -187,8 +187,13 @@ The output is one JSON object:
 - `values` holds every setting by its full name (`player_site.title`),
   not nested.
 - `origins` holds, under the same names, where each value came from:
-  `default`, `file`, `site-file`, `old-name` or `fault`. `fault` means the
-  file's value could not be read and the value shown is the fallback.
+  `default`, `file`, `inherit` or `fault`. `inherit` is a GM-site setting
+  the file does not set, which takes the player site's value. `fault` means
+  the file's value could not be read and the value shown is the fallback.
+  With `--site gm`, a value the file writes under `gm_site.` is named by
+  that setting (`gm_site.title`); one it does not is `inherited from
+  <player_site name>`, or `the GM site's own default (not inherited)` for
+  the build steps.
 - `written` holds, under the same names, the name the vault's own file
   writes the setting under (the new names). A message to the GM names a
   setting this way.

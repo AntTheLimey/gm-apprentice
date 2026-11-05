@@ -15,6 +15,7 @@ const path = require('path');
 const { scanVaultReport, buildLinkMap, scanAttachments, scanAllNotes, pairStoryFiles, slugify } = require('./scanner');
 const { resolveConfig, vaultRelPath, scanConfigFor } = require('./config');
 const { formatFault, entry: settingEntry, fileLabel, nameIn } = require('./settings');
+const { OLD_FILE, OLD_LIST_FILE } = require('./settings/layout');
 const { pcKeepList, storyMomentsOn } = require('./pc-prose');
 const { loadManifest } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
@@ -208,7 +209,18 @@ async function runSiteDoctor(options, deps) {
   const resolved = resolveConfig(config, vaultPath, () => {}, { siteDir: siteRoot });
   config = resolved.config;
   const publishConfig = resolved.publishConfig;
-  const manifest = loadManifest(vaultPath);
+  // The old publish list stops the build (it is also a settings fault, reported below); any other unreadable list is a finding.
+  let manifest = null;
+  let listProblem = null;
+  try {
+    manifest = loadManifest(vaultPath);
+  } catch (err) {
+    if (!publishConfig.faults.some((f) => f.level === 'stop')) listProblem = err;
+  }
+  if (listProblem) {
+    return emit(out, [finding('SETTINGS_FAULT', 'error', path.join(vaultPath, '_meta'), String(listProblem.message || listProblem).split('\n')[0],
+      'fix or remove the publish list named, then run the audit again')], vaultPath, asJson);
+  }
   // scanConfigFor: same unioned, normalized exclude_dirs the build applies, so `doctor
   // --site` predicts exactly what the build does (#209 follow-up).
   const scanConfig = scanConfigFor(Object.assign({}, config, { vaultPath }), publishConfig);
@@ -248,7 +260,8 @@ async function runSiteDoctor(options, deps) {
   // --- the settings themselves ----------------------------------------------
   for (const f of publishConfig.faults) {
     // A leftover in the site folder (a key of its vault.config.json, a package.json build script) is fixed there.
-    const where = f.source === 'site' ? 'vault.config.json' : f.source === 'package' ? 'package.json' : fileLabel(vaultPath);
+    const where = f.source === 'site' ? 'vault.config.json' : f.source === 'package' ? 'package.json'
+      : f.leftover && (f.name === OLD_FILE || f.name === OLD_LIST_FILE) ? f.name : fileLabel(vaultPath);
     findings.push(finding(
       'SETTINGS_FAULT', f.level === 'stop' ? 'error' : 'warning', where,
       formatFault(f),

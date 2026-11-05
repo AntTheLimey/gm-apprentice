@@ -533,7 +533,13 @@ YAML_WORDS = {"true", "false", "null", "yes", "no", "on", "off", "y", "n"}
 def _has_site(vault: Path) -> bool:
     """Whether the vault has a site, asked of the publish tool. A vault
     with no vault file has none, and nothing is asked. When the tool cannot
-    be asked, the file's own switch is read instead."""
+    be asked, the file's own switch is read instead. A vault still on the
+    retired settings file is refused: the tool reads only the current file,
+    so it would say "no site" and the live-state pin would be skipped."""
+    if vault_layout(vault) == "legacy":
+        raise RelinkError(
+            "the vault is on the retired settings file; update the vault "
+            "before renaming notes; nothing was changed")
     if vault_layout(vault) == "none":
         return False
     try:
