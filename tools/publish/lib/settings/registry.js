@@ -262,7 +262,7 @@ const REGISTRY = [
     retiredSays: 'is no longer used: the GM site is what `full` was; the update removes it, or moves a `full` vault to a GM site',
   },
   {
-    name: 'player_site.folder_map', was: [{ name: 'publish.folder_map', in: 'vault' }, { name: 'folderMap', in: 'site' }], type: 'map', open: true, default: {}, stopOnFault: true, legacyKind: 'map', group: 'published',
+    name: 'player_site.folder_map', was: [{ name: 'publish.folder_map', in: 'vault' }, { name: 'folderMap', in: 'site' }], type: 'map', open: true, default: {}, stopOnFault: true, folderValues: true, legacyKind: 'map', group: 'published',
     shape: 'a vault folder and its address, one pair to a line',
     does: 'Which vault folders are published, and the web address each gets',
     left_out: 'Nothing is mapped; setting up a site writes the standard map',

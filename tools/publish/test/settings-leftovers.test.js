@@ -12,8 +12,8 @@ const { loadPublishList } = require('../lib/manifest');
 const { renameRefs } = require('../lib/rename-refs');
 const { writeSettings } = require('./helpers/vault-files');
 
-const OLD_FILE_STOP = '_meta/vault-config.md is the old settings file, no longer read since plugin 1.11.0. Run the update with plugin 1.10.134 first.';
-const OLD_LIST_STOP = '_meta/publish-manifest.md is the old publish list, no longer read since plugin 1.11.0. Run the update with plugin 1.10.134 first.';
+const OLD_FILE_STOP = '_meta/vault-config.md is the old settings file, no longer read since plugin 1.11.0. Run the update with a 1.10 release, 1.10.134 or later, first.';
+const OLD_LIST_STOP = '_meta/publish-manifest.md is the old publish list, no longer read since plugin 1.11.0. Run the update with a 1.10 release, 1.10.134 or later, first.';
 
 let roots = [];
 afterEach(() => { for (const r of roots) fs.rmSync(r, { recursive: true, force: true }); roots = []; });
@@ -172,5 +172,74 @@ describe('leftovers from before plugin 1.11.0 stop the build by name', () => {
     const { error, lines } = quietBuild(s.configPath);
     assert.ifError(error);
     assert.ok(fs.existsSync(path.join(s.siteDir, 'docs', 'index.html')), lines.join('\n'));
+  });
+});
+
+// `settings get` and `settings check` (what the Settings check and the update's gate read) carry every leftover the
+// build stops on, each with the file it is in, so nothing the build refuses can pass the update as "moved".
+describe('the settings commands report every leftover the build stops on', () => {
+  const { runSettings } = require('../lib/settings/cli');
+  function ask(s, verb = 'get') {
+    const out = [];
+    const err = [];
+    const rc = runSettings({ verb, args: [], vault: s.vault, json: true }, { out: (l) => out.push(l), err: (l) => err.push(l) });
+    return { rc, result: out.length ? JSON.parse(out.join('\n')) : null, err };
+  }
+  const named = (opts) => site({ ...opts, settings: { player_site: { title: 'T', folder: '../site' }, ...(opts.extra || {}) } });
+  const leftovers = (r) => r.result.faults.filter((f) => f.level === 'stop' && f.leftover);
+
+  it('a package.json prebuild is a stop leftover naming the package file', () => {
+    const s = named({ pkg: { scripts: { prebuild: 'echo hi' } } });
+    for (const verb of ['get', 'check']) {
+      const [f] = leftovers(ask(s, verb));
+      assert.ok(f, verb);
+      assert.strictEqual(f.source, 'package');
+      assert.match(f.message, /prebuild \(now player_site\.before_build\)/);
+    }
+  });
+
+  it('an unparseable package.json is a stop leftover', () => {
+    const s = named({});
+    fs.writeFileSync(path.join(s.siteDir, 'package.json'), '{ "scripts": ');
+    const [f] = leftovers(ask(s));
+    assert.ok(f);
+    assert.strictEqual(f.source, 'package');
+    assert.match(f.message, /package\.json is not valid JSON/);
+  });
+
+  it('a site-folder key keeps its source, so the row names the site file', () => {
+    const s = named({ site: { siteTitle: 'Old' } });
+    const [f] = leftovers(ask(s));
+    assert.strictEqual(f.source, 'site');
+    assert.match(f.message, /siteTitle \(now player_site\.title\)/);
+  });
+
+  it('an unparseable site vault.config.json found through the vault is reported, not read as no file', () => {
+    const s = named({});
+    fs.writeFileSync(s.configPath, '{ "vaultPath": "../vault", }');
+    const r = ask(s);
+    const [f] = leftovers(r);
+    assert.ok(f, JSON.stringify(r.result.faults));
+    assert.strictEqual(f.source, 'site');
+    assert.match(f.message, /vault\.config\.json could not be read as JSON/);
+  });
+
+  it('the old publish list is a stop leftover', () => {
+    const s = named({});
+    fs.writeFileSync(path.join(s.vault, '_meta', 'publish-manifest.md'), '# Publish Manifest\n');
+    const [f] = leftovers(ask(s));
+    assert.ok(f);
+    assert.strictEqual(f.message, OLD_LIST_STOP);
+  });
+
+  it('both settings files present is a stop leftover', () => {
+    const s = named({ oldFile: true });
+    const [f] = leftovers(ask(s));
+    assert.match(f.message, /is still beside _meta\/vault-config\.yaml/);
+  });
+
+  it('a moved vault with a clean site has no leftovers', () => {
+    const s = named({ pkg: { scripts: { build: 'gm-apprentice-publish build' } } });
+    assert.deepStrictEqual(leftovers(ask(s)), []);
   });
 });

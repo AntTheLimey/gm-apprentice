@@ -21,7 +21,7 @@ const { readSwitch } = require('./types');
 const { resolveGmFolder, defaultGmFolder, gmFolderProblem } = require('../gm-site');
 const { forSite } = require('./resolve');
 const { NEW_FILE, STATE_FILE, layoutOf } = require('./layout');
-const { nearest } = require('./faults');
+const { nearest, makeFault } = require('./faults');
 const { row, isLeaf } = require('./describe');
 const { normalizeExcludeDir, normalizeExcludeDirs } = require('./folders');
 const { readState, writeState } = require('./state');
@@ -53,17 +53,34 @@ function target(options) {
     // (the vault scripts ask for it, and read the site file themselves).
     const named = options.config || options.noSiteFile ? null : siteFileNamedBy(vaultPath);
     const config = options.config ? path.resolve(options.config) : (named && named.exists ? named.file : null);
+    // The site folder, for its package.json: the one --config is in, else the one the vault names.
+    const siteDir = options.config ? path.dirname(config) : (named ? named.dir : undefined);
     let siteConfig = {};
+    let siteFault = null;
     if (options.config && !rd.exists(config)) throw new Error(`--config ${config} does not exist`);
     if (config && rd.exists(config)) {
-      try { siteConfig = loadVaultConfig(config, rd); } catch (e) { if (options.config) throw e; }
+      try {
+        siteConfig = loadVaultConfig(config, rd);
+      } catch (e) {
+        if (options.config) throw e;
+        // Found through the vault's settings: a site file that cannot be read is reported, never read as no file (it may hold leftovers).
+        siteFault = makeFault({ name: 'vault.config.json', setting: null, kind: 'dropped', level: 'stop', leftover: true, source: 'site',
+          message: `${firstLine(e)}. Fix the file so the keys in it can be checked; only vaultPath belongs there.` });
+      }
     }
-    return { vaultPath, siteConfig };
+    return { vaultPath, siteConfig, siteDir, siteFault };
   }
   const config = path.resolve(options.config || './vault.config.json');
   const siteConfig = loadVaultConfig(config, rd);
   if (!siteConfig.vaultPath) throw new Error(`${config} has no "vaultPath"`);
-  return { vaultPath: path.resolve(path.dirname(config), siteConfig.vaultPath), siteConfig };
+  return { vaultPath: path.resolve(path.dirname(config), siteConfig.vaultPath), siteConfig, siteDir: path.dirname(config), siteFault: null };
+}
+
+// The settings as read for `target(options)`, with the site file's own fault when it could not be read.
+function readFor(t, options) {
+  const read = readSettings({ vaultPath: t.vaultPath, siteConfig: t.siteConfig, siteDir: t.siteDir, deps: options.deps });
+  if (t.siteFault) read.faults.unshift(t.siteFault);
+  return read;
 }
 
 // The settings file as written; {} with no file.
@@ -79,6 +96,7 @@ function faultJson(f) {
   if (f.suggest) out.suggest = f.suggest;
   if (f.use) out.use = f.use;
   if (f.leftover) out.leftover = true;
+  if (f.source) out.source = f.source;
   return out;
 }
 // Stops first, otherwise in the order found.
@@ -108,12 +126,13 @@ function gmOrigin(read, name) {
 }
 
 function get(options, names) {
-  const { vaultPath, siteConfig } = target(options);
+  const t = target(options);
+  const { vaultPath } = t;
   const leaves = LEAVES();
   // A retired name can still be asked for by its name: it answers what the file holds (the update reads it to decide).
   const retiredAsked = names.map((n) => resolve(n)).filter((r) => r && r.entry.retired && !r.entry.legacyOnly).map((r) => r.entry);
   for (const name of names) if (!leaves.some((e) => reaches(e, name)) && !retiredAsked.some((e) => e.name === (resolve(name) || {}).entry?.name)) throw new Error(notASetting(name));
-  const read = readSettings({ vaultPath, siteConfig, deps: options.deps });
+  const read = readFor(t, options);
   // --site gm: the values the GM site builds with, and for each whether the GM wrote it for that site or it is the player site's.
   const gmSite = options.site === 'gm';
   if (options.site && !gmSite && options.site !== 'player') throw new Error(`settings get --site takes player or gm, not "${options.site}".`);
@@ -147,8 +166,7 @@ function get(options, names) {
 }
 
 function check(options) {
-  const { vaultPath, siteConfig } = target(options);
-  const faults = sortedFaults(readSettings({ vaultPath, siteConfig, deps: options.deps }).faults);
+  const faults = sortedFaults(readFor(target(options), options).faults);
   return {
     result: { faults: faults.map(faultJson) },
     lines: faults.length ? faults.map(faultLine) : ['Every setting in the file reads cleanly.'],

@@ -9,7 +9,7 @@ const { readerFrom } = require('../vault-reader');
 const NEW_FILE = '_meta/vault-config.yaml';
 const OLD_FILE = '_meta/vault-config.md';
 // What the tools say of the old file since plugin 1.11.0, when it is the only settings file, and when it is left beside the new one.
-const OLD_FILE_STOP = `${OLD_FILE} is the old settings file, no longer read since plugin 1.11.0. Run the update with plugin 1.10.134 first.`;
+const OLD_FILE_STOP = `${OLD_FILE} is the old settings file, no longer read since plugin 1.11.0. Run the update with a 1.10 release, 1.10.134 or later, first.`;
 const OLD_FILE_LEFT = `${OLD_FILE} is still beside ${NEW_FILE}: remove or rename \`${OLD_FILE}\` once you have checked its settings are in \`${NEW_FILE}\`; plugin 1.11.0 no longer reads it.`;
 const STATE_FILE = '_meta/vault-state.json';
 const NOTES_FILE = '_meta/vault-notes.md';
@@ -17,7 +17,7 @@ const NOTES_FILE = '_meta/vault-notes.md';
 // The publish list: the YAML file, and the Markdown file it replaced (never read since plugin 1.11.0: it stops by name).
 const PUBLISH_LIST_FILE = '_meta/publish-list.yaml';
 const OLD_LIST_FILE = '_meta/publish-manifest.md';
-const OLD_LIST_STOP = `${OLD_LIST_FILE} is the old publish list, no longer read since plugin 1.11.0. Run the update with plugin 1.10.134 first.`;
+const OLD_LIST_STOP = `${OLD_LIST_FILE} is the old publish list, no longer read since plugin 1.11.0. Run the update with a 1.10 release, 1.10.134 or later, first.`;
 // The first publish tool version that reads the YAML publish list; an older one reads a moved vault as having no list.
 const PUBLISH_LIST_FROM = '1.27.0';
 // The first publish tool version that reads the accepted leak findings in the publish list; an older one reads a list

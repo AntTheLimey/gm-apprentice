@@ -6,14 +6,15 @@
 // Since plugin 1.11.0 nothing else is read: the old settings file, and any key but vaultPath in the
 // site folder's vault.config.json, stop the build by name (what they hid would otherwise publish).
 const path = require('node:path');
-const { parseDocument } = require('yaml');
+const { parseDocument, isSeq, isScalar } = require('yaml');
 const { REGISTRY, NOT_PER_SITE, entry: settingEntry, legacyNameOf } = require('./registry');
 const { TYPES, isMap, getPath, setIn, emptyIsFault } = require('./types');
 const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, startsLikeHide, show } = require('./faults');
-const { NEW_FILE, OLD_FILE, OLD_FILE_STOP, OLD_FILE_LEFT, at, GROUPS, GM_GROUP, STRICT_PARENTS, stopsUnknown } = require('./layout');
+const { NEW_FILE, OLD_FILE, OLD_FILE_STOP, OLD_FILE_LEFT, OLD_LIST_FILE, OLD_LIST_STOP, at, GROUPS, GM_GROUP, STRICT_PARENTS, stopsUnknown } = require('./layout');
 const { readerFrom } = require('../vault-reader');
 const { entryFaults } = require('./entry-faults');
 const { normalizeExcludeDirs, outputProblem, keepProblem, tidyChecked } = require('./folders');
+const { packageScripts, packageJsonProblem } = require('./steps');
 
 const LAYOUT_VERSION = 1;
 const NEWER_VERSION = "this vault's settings were written by a newer gm-apprentice; update the plugin";
@@ -39,6 +40,13 @@ function unsetIn(obj, name) {
 // The rules a value must meet beyond its type (an entry's `check`); each returns why it cannot be used, or null.
 const CHECKS = { output: (value, c) => outputProblem(value, c.siteDir, c.deps), keep: (value) => keepProblem(value) };
 
+// A map from vault folders to the folder each publishes as: an entry whose value is not a folder name (null, a number,
+// a list) would publish under a made-up folder (`null/plot.html`), so it stops, naming the entry.
+function folderValuesProblem(map) {
+  const bad = Object.entries(map).find(([, v]) => typeof v !== 'string' || v.trim() === '');
+  return bad ? `its entry "${bad[0]}" is ${bad[1] === null ? 'empty' : show(bad[1])}, not a folder name; write the folder it publishes as, in quotes if it looks like a number` : null;
+}
+
 function settle(c, e, { written, setting }, first, defaultOf) {
   const { values, origins, faults, fault } = c;
   // A list of maps is read entry by entry: one that cannot be used is left out alone, with a warning naming it.
@@ -50,7 +58,7 @@ function settle(c, e, { written, setting }, first, defaultOf) {
       faults.push(fault({ name: written, setting, kind: 'dropped', level: 'warn', value: null, message: `${written} ${who} ${d.why}; it is left out` }));
     }
   }
-  const problem = r.ok && e.check ? CHECKS[e.check](r.value, c) : null;
+  const problem = r.ok && e.check ? CHECKS[e.check](r.value, c) : (r.ok && e.folderValues ? folderValuesProblem(r.value) : null);
   if (problem) r = { ok: false, problem };
   else if (r.ok && e.check) r = { ok: true, value: tidyChecked(e.check, r.value) };
   // A list of folders is tidied here for both layouts (the scanner compares exact vault-relative paths).
@@ -98,6 +106,24 @@ function siteLeftovers(site) {
   return parts;
 }
 const siteLeftoverText = (parts) => `the site folder's vault.config.json holds keys that are no longer read there: ${parts.join(', ')}. Move each to the vault's settings (${NEW_FILE}) and leave only vaultPath in vault.config.json.`;
+
+// The site folder's package.json: a build script left there (never run since plugin 1.11.0), or a file that cannot be
+// read, so any build scripts in it cannot be checked. Each stops, naming the file.
+function packageFaults(siteDir) {
+  const faults = [];
+  const scripts = Object.keys(packageScripts(siteDir));
+  if (scripts.length) {
+    const homeOf = (script) => REGISTRY.find((e) => e.stepsFrom === script && !e.twinOf).name;
+    faults.push(makeFault({ name: 'package.json', setting: null, kind: 'dropped', level: 'stop', leftover: true, source: 'package',
+      message: `the site folder's package.json holds build scripts that are no longer run: ${scripts.map((s) => `${s} (now ${homeOf(s)})`).join(', ')}. Move each to the vault's settings and take it out of package.json.` }));
+  }
+  const problem = packageJsonProblem(siteDir);
+  if (problem) {
+    faults.push(makeFault({ name: 'package.json', setting: null, kind: 'dropped', level: 'stop', leftover: true, source: 'package',
+      message: `the site folder's package.json is not valid JSON (${problem}), so any build scripts in it cannot be checked. Fix the file or remove it.` }));
+  }
+  return faults;
+}
 
 const LIST = REGISTRY.filter((e) => !e.legacyOnly);
 const BY_NAME = new Map(LIST.map((e) => [e.name, e]));
@@ -168,15 +194,42 @@ function strayLeaves(block, prefix, byOldName) {
   return found;
 }
 
-// The new file as written, as plain data. {} for an empty file; throws for one that is not valid YAML.
-function parseNewFile(vaultPath, deps) {
+// The new file as written: { doc, tree }, the YAML document and its plain data ({} for an empty file). Throws for a
+// file that is not valid YAML.
+function parseNewDoc(vaultPath, deps) {
   const doc = parseDocument(readerFrom(deps).readFile(at(vaultPath, NEW_FILE)));
   if (doc.errors.length) {
     throw new Error(`${NEW_FILE} is not valid YAML: ${String(doc.errors[0].message).split('\n')[0].trim().replace(/:$/, '')}`);
   }
   const parsed = doc.toJS();
   if (parsed !== null && !isMap(parsed)) throw new Error(`${NEW_FILE} must hold settings written as name: value`);
-  return parsed || {};
+  return { doc, tree: parsed || {} };
+}
+const parseNewFile = (vaultPath, deps) => parseNewDoc(vaultPath, deps).tree;
+
+// An entry of a hiding list that YAML reads as other than the text written (`007` is the number 7, `1e3` is 1000,
+// `true` a switch) would be matched as that other text, and what it hides would publish: one stop per entry, saying to
+// quote it. A number whose text reads back as written (`1999`) is the text the GM meant. A null entry is already a stop
+// (the list cannot be read).
+const HIDING_LISTS = LIST.filter((e) => e.guards && (e.type === 'list' || e.type === 'switchOrList'));
+function misreadEntries(doc) {
+  const faults = [];
+  for (const e of HIDING_LISTS) {
+    const node = doc.getIn(e.name.split('.'), true);
+    if (!isSeq(node)) continue;
+    for (const item of node.items) {
+      if (!isScalar(item) || typeof item.value === 'string' || item.value === null) continue;
+      const written = item.source !== undefined ? String(item.source) : String(item.value);
+      let readAs = null;
+      if (typeof item.value === 'boolean') readAs = `${item.value}, not text`;
+      else if (typeof item.value === 'number' && written !== String(item.value)) readAs = `the number ${item.value}`;
+      else if (typeof item.value !== 'number') readAs = `${show(item.value)}, not text`;
+      if (!readAs) continue;
+      faults.push(makeFault({ name: e.name, setting: e.name, kind: 'not-allowed', level: 'stop', value: written, entry: e,
+        hint: `${e.name} entry ${written} is read as ${readAs}, so it would not match; write it in quotes: '${written}'` }));
+    }
+  }
+  return faults;
 }
 
 function readNew({ vaultPath, siteConfig, siteDir, deps }) {
@@ -185,7 +238,7 @@ function readNew({ vaultPath, siteConfig, siteDir, deps }) {
   const exists = rd.exists(at(vaultPath, NEW_FILE));
   const hasOld = rd.exists(at(vaultPath, OLD_FILE));
   const file = { path: at(vaultPath, NEW_FILE), exists, hasSiteBlock: false, leftover: exists && hasOld };
-  const tree = exists ? parseNewFile(vaultPath, deps) : {};
+  const { doc, tree } = exists ? parseNewDoc(vaultPath, deps) : { doc: null, tree: {} };
   file.hasSiteBlock = isMap(tree.player_site);
   const values = {};
   const origins = {};
@@ -204,6 +257,13 @@ function readNew({ vaultPath, siteConfig, siteDir, deps }) {
   if (leftKeys.length) {
     faults.push(makeFault({ name: 'vault.config.json', setting: null, kind: 'dropped', level: 'stop', leftover: true, source: 'site', message: siteLeftoverText(leftKeys) }));
   }
+  // The old publish list is not read: what it hid would publish.
+  if (rd.exists(at(vaultPath, OLD_LIST_FILE))) {
+    faults.push(makeFault({ name: OLD_LIST_FILE, setting: null, kind: 'dropped', level: 'stop', leftover: true, message: OLD_LIST_STOP }));
+  }
+  // A build script left in the site folder's package.json is never run: one stop naming each and its home in the vault.
+  if (siteDir) faults.push(...packageFaults(siteDir));
+  if (doc) faults.push(...misreadEntries(doc));
 
   // The layout's number.
   if (tree.version !== undefined) {
