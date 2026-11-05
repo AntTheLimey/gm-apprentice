@@ -42,6 +42,9 @@ class Item:
     # A PERSON row that only tells the GM something: said once, even while
     # the stamp is held and the plan comes back.
     notice: bool = False
+    # Structure behind a CHOICE for whoever puts it to the GM (a template's
+    # comparison); JSON-able. `summary`, when given, is shown after the line.
+    detail: dict[str, object] | None = None
 
 
 @dataclass(frozen=True)

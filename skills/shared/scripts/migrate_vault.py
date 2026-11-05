@@ -5,26 +5,29 @@ alone: templates, the schema mirror, and the small per-release fixes."""
 from __future__ import annotations
 
 import bisect
-import difflib
+import datetime
 import hashlib
 import json
 import posixpath
 import re
 from collections.abc import Callable
 from pathlib import Path
+from typing import Literal
 
 import relink
+import update_record
 from dnd_note import PLACEHOLDER
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           cells, edit_frontmatter, plugin_tool, stopped,
                           write_text_atomic)
 from schema_rules import system_id as _system_id
+from template_compare import compare, summary
 from schema_rules import STAGE_HIDES, TEMPLATE_NAMES
 from schema_rules import tone_families, without_generated_markers
 from vault_check import (RECONSTRUCTION_NOTE_RE, WRAP_TYPES, WrapDetail, check_wrapup,
                          configured_site, player_section_key, semver_below,
                          site_pin, wrapup_filename_findings)
-from vaultlib import (LEGACY_SETTINGS_FILE, SKIP_DIRS, SettingsUnavailable, entity_type, extract_frontmatter,
+from vaultlib import (LEGACY_SETTINGS_FILE, SKIP_DIRS, SettingsUnavailable, StateUnreadable, entity_type, extract_frontmatter,
                       delete_key, fence_step, frontmatter_span, opens_a_block,
                       parse_version, plugin_version,
                       read_stamp, scan_body, settings, settings_file,
@@ -179,33 +182,6 @@ def _regency_pc_template(vault: Path) -> bool:
         return False
 
 
-def _differs(current: str, expected: str, shown: int = 4) -> str:
-    """What differs, on one row: how many lines, then the first few as
-    "- yours | + the plugin's". A line edited in place counts once."""
-    mine = [x for x in normalise(current).split("\n") if x.strip()]
-    theirs = [x for x in normalise(expected).split("\n") if x.strip()]
-    changes: list[str] = []
-    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(
-            None, mine, theirs, autojunk=False).get_opcodes():
-        if op == "equal":
-            continue
-        for k in range(max(i2 - i1, j2 - j1)):
-            a = mine[i1 + k].strip()[:90] if i1 + k < i2 else None
-            b = theirs[j1 + k].strip()[:90] if j1 + k < j2 else None
-            if a is not None and b is not None and a.split() == b.split():
-                changes.append(f"spacing differs: {b}")
-            else:
-                changes.append(" | ".join(
-                    [f"- {a}"] * (a is not None) + [f"+ {b}"] * (b is not None)))
-    if not changes:
-        return "only blank lines differ"
-    more = len(changes) - shown
-    return (f"{len(changes)} line{'' if len(changes) == 1 else 's'} "
-            f"{'differs' if len(changes) == 1 else 'differ'} "
-            f"(- yours, + the plugin's): " + "; ".join(changes[:shown])
-            + (f"; and {more} more" if more > 0 else ""))
-
-
 GENERIC = "generic"   # the history's key for a vault with no known system
 
 
@@ -291,21 +267,146 @@ def _with_values(target: str, source: str, keys: set[str]) -> str:
     return "".join(t_lines)
 
 
+# A plain name for each template the plugin ships (by its file in
+# skills/shared/templates/), for what the GM is told about it.
+TEMPLATE_LABELS = {
+    "campaign-overview.md": "Campaign Overview",
+    "chapter.md": "Chapter",
+    "character-story.md": "character story",
+    "clue.md": "Clue",
+    "creature.md": "Creature",
+    "crew-fitd.md": "crew sheet",
+    "document.md": "Document",
+    "event.md": "Event",
+    "faction.md": "Faction",
+    "heritage.md": "Heritage",
+    "item.md": "Item",
+    "location.md": "Location",
+    "npc.md": "NPC",
+    "organization.md": "Organization",
+    "pc-coc-7e-regency.md": "Regency sheet",
+    "pc-coc-7e.md": "Call of Cthulhu character sheet",
+    "pc-dnd-5e-2024.md": "D&D character sheet",
+    "pc-fitd.md": "Forged in the Dark character sheet",
+    "pc-generic.md": "character sheet",
+    "pc-gurps-4e.md": "GURPS character sheet",
+    "pc-pf2e.md": "Pathfinder character sheet",
+    "plan.md": "Plan",
+    "prop.md": "Prop",
+    "scene.md": "Scene",
+    "session-plan.md": "Session Plan",
+    "session-wrap.md": "Session Wrap-Up",
+    "session.md": "Session",
+    "world-domain.md": "World Domain",
+    "world-flags.md": "world flags",
+    "world-index.md": "world index",
+}
+_SHIPPED_NAME = {vault_name: src for src, vault_name in TEMPLATE_NAMES.items()}
+
+
+def template_label(name: str) -> str:
+    """The plain name of the template a vault holds as `_Templates/<name>`;
+    the file name when it has none."""
+    return TEMPLATE_LABELS.get(_SHIPPED_NAME.get(name, name), name)
+
+
+DATALESS = 0x40000000   # macOS UF_DATALESS: iCloud holds the file, not the disk
+
+
+def _unreadable_reason(path: Path) -> str:
+    """Why a template that read as empty is a read problem: a shipped
+    template is never empty."""
+    try:
+        st = path.stat()
+    except OSError as e:
+        return e.strerror or e.__class__.__name__
+    if getattr(st, "st_flags", 0) & DATALESS:
+        return "iCloud has not downloaded it to this computer"
+    if st.st_size > 0:
+        return f"it read as empty, though it holds {st.st_size} bytes"
+    return "it is empty"
+
+
+def _unreadable(name: str, path: Path, reason: str) -> Item:
+    return Item(f"template-unreadable:{name}", PERSON, [
+        f"_Templates/{name} could not be read ({reason}); left as it is. "
+        f'Fix: brctl download "{path}" (iCloud), or check its permissions, '
+        f"then run the update again."])
+
+
+def _release_of(released: dict[str, str | None] | list[str],
+                hashes: set[str]) -> tuple[bool, str | None]:
+    """(is any of `hashes` a released text, the last release that wrote it
+    when the history names one)."""
+    found = hashes & set(released)
+    if not found:
+        return False, None
+    if isinstance(released, dict):
+        named = sorted((v for h in found if isinstance(v := released.get(h), str)),
+                       key=parse_version)
+        return True, named[-1] if named else None
+    return True, None
+
+
+def _today() -> str:
+    return datetime.date.today().isoformat()
+
+
 def find_templates(vault: Path) -> list[Item]:
+    """Each template is decided by rule, in order: missing, copied; not
+    readable, said so and left alone; the plugin's text, nothing; an older
+    release's text, unedited, updated; the GM's own, asked once (keep or
+    take) and the answer remembered in the update record against both
+    texts, so it is asked again only when one of them changes."""
     folder = vault / "_Templates"
     items: list[Item] = []
     system = vault_system(vault)
     released = _released_hashes(system)
     regency_released = _released_hashes("coc-7e-regency")
     regency_pc = _regency_pc_template(vault)
+    record = update_record.load(vault)
+    found_plugin = plugin_version()
+    version = found_plugin[0] if found_plugin else "unknown"
+    try:
+        stamp = read_stamp(vault)
+    except StateUnreadable:   # the gate reports it
+        stamp = None
+    behind = stamp is not None and version != "unknown" \
+        and parse_version(stamp) < parse_version(version)
+    same: dict[str, update_record.TemplateEntry] = {}
+
+    def entry(name: str, file_text: str, shipped: str, why: str,
+              state: Literal["plugin", "gms"] = "plugin",
+              matches: str | None = version,
+              decision: Literal["keep", "take"] | None = None
+              ) -> update_record.TemplateEntry:
+        return {"state": state, "matches": matches,
+                "decision": decision, "file_sha": text_hash(file_text),
+                "shipped_sha": text_hash(shipped), "plugin": version,
+                "on": _today(), "why": why}
+
+    def remember(*entries: tuple[str, update_record.TemplateEntry]) -> None:
+        # The templates found the same as the plugin's ride along with any
+        # write; a run that changes nothing writes nothing.
+        update_record.record_templates(vault, {**same, **dict(entries)})
+
     for name, text in expected_templates(vault).items():
         path = folder / name
+        label = template_label(name)
+        current = ""
         if path.is_file():
             try:
                 current = path.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError) as e:
-                raise StepFailed(f"_Templates/{name} cannot be read "
-                                 f"({e.__class__.__name__})") from e
+            except UnicodeDecodeError:
+                items.append(_unreadable(name, path, "it is not UTF-8 text"))
+                continue
+            except OSError as e:
+                items.append(_unreadable(
+                    name, path, e.strerror or e.__class__.__name__))
+                continue
+            if not current.strip():
+                items.append(_unreadable(name, path, _unreadable_reason(path)))
+                continue
             regency = _regency_build(system, name, current)
             if regency is not None:
                 text = regency
@@ -316,15 +417,18 @@ def find_templates(vault: Path) -> list[Item]:
         mine = current if path.is_file() else text
         written = _with_values(text, mine, filled)
 
-        def apply(_value: str | None, path: Path = path,
-                  text: str = written, name: str = name) -> list[str]:
-            write_text_atomic(path, text)
-            return [f"wrote _Templates/{name}"]
-
         if not path.is_file():
+            def copy(_value: str | None, path: Path = path, text: str = text,
+                     written: str = written, name: str = name) -> list[str]:
+                write_text_atomic(path, written)
+                remember((name, entry(name, written, text,
+                                      f"The vault had no copy, so the plugin's "
+                                      f"{version} text was copied in.")))
+                return [f"wrote _Templates/{name}"]
+
             items.append(Item(f"template:{name}", WILL,
                               [f"copy the missing template _Templates/{name}"],
-                              apply))
+                              copy))
             continue
         # What releases wrote for a Regency build is the Regency list,
         # whatever system the vault is stamped (#355).
@@ -333,20 +437,76 @@ def find_templates(vault: Path) -> list[Item]:
             _without_setup_comment(current) if regency_build else current,
             text, filled)
         if _same(shown, text):
+            same[name] = entry(name, current, text,
+                               f"It is the plugin's {version} text.")
             continue
-        if {text_hash(current), text_hash(_with_values(current, text, filled))} \
-                & set((regency_released if regency_build else released
-                       ).get(name, [])):
+        is_old, release = _release_of(
+            (regency_released if regency_build else released).get(name, []),
+            {text_hash(current), text_hash(_with_values(current, text, filled))})
+        if is_old:
+            was = release or "an earlier release"
+
+            def update(_value: str | None, path: Path = path, text: str = text,
+                       written: str = written, name: str = name,
+                       label: str = label, was: str = was) -> list[str]:
+                write_text_atomic(path, written)
+                remember((name, entry(name, written, text,
+                                      f"It was {was}'s text, unedited, so it "
+                                      f"was updated to {version}.")))
+                return [f"Updated the {label} template to {version} "
+                        f"(it was {was}'s text, unedited)."]
+
             items.append(Item(
                 f"template:{name}", WILL,
-                [f"update _Templates/{name} from an earlier release's text"],
-                apply))
-        else:
-            items.append(Item(
-                f"template:{name}", CHOICE,
-                [f"overwrite _Templates/{name} with the plugin's version; "
-                 f"local changes are lost; {_differs(shown, text)}"],
-                apply))
+                [f"update the {label} template to {version} "
+                 f"(it is {was}'s text, unedited)"], update))
+            continue
+        known = record["templates"].get(name)
+        if isinstance(known, dict) and known.get("decision") == "keep" \
+                and known.get("file_sha") == text_hash(current) \
+                and known.get("shipped_sha") == text_hash(text):
+            if behind:
+                on = known.get("on") or "earlier"
+
+                def kept(_value: str | None, label: str = label,
+                         on: str = str(on)) -> list[str]:
+                    return [f"kept your {label} template (decided {on})"]
+
+                items.append(Item(
+                    f"template-kept:{name}", WILL,
+                    [f"keep your {label} template (decided {on})"], kept))
+            continue
+        comparison = compare(shown, text)
+
+        def choose(value: str | None, path: Path = path, text: str = text,
+                   written: str = written, name: str = name,
+                   label: str = label, current: str = current) -> list[str]:
+            if value == "leave":
+                return [f"left _Templates/{name} as it is; it is asked "
+                        f"again next time"]
+            if value == "keep":
+                remember((name, entry(
+                    name, current, text,
+                    f"The GM chose to keep their own {label} template.",
+                    state="gms", matches=None, decision="keep")))
+                return [f"kept your {label} template"]
+            if value == "take":
+                write_text_atomic(path, written)
+                remember((name, entry(
+                    name, written, text,
+                    f"The GM chose the plugin's {version} {label} template.",
+                    decision="take")))
+                return [f"took the plugin's {label} template"]
+            raise StepFailed(f"template:{name} takes keep or take")
+
+        items.append(Item(
+            f"template:{name}", CHOICE,
+            [f"Your {label} template differs from every release of the "
+             f"plugin's. Keep yours, or take the plugin's?"],
+            choose, wants="keep or take",
+            detail={"file": f"_Templates/{name}", "label": label,
+                    "comparison": comparison.as_dict(),
+                    "summary": summary(comparison)}))
     return items
 
 
@@ -1766,7 +1926,7 @@ def find_reconstruction_note_fence(vault: Path) -> list[Item]:
 VAULT_CHECKS: list[Check] = [
     Check("skeleton", None, 3, "the vault skeleton", find_skeleton),
     Check("templates", None, 3, "templates", find_templates,
-          choices=("template:",)),
+          choices=("template:=",)),
     Check("regency-looks", "1.10.49", 3, "a Regency look to the templates",
           find_regency_looks),
     Check("pc-template-sheet-source", "1.10.22", 3,

@@ -276,10 +276,9 @@ class TemplateTests(unittest.TestCase):
                                          "template:_Template_NPC.md"])
         self.assertEqual(items["template:_Template_Item.md"].group, WILL)
         self.assertEqual(items["template:_Template_NPC.md"].group, CHOICE)
-        self.assertIn("local changes are lost",
-                      items["template:_Template_NPC.md"].lines[0])
-        for item in items.values():
-            item.apply(None)
+        self.assertNotIn("lost", items["template:_Template_NPC.md"].lines[0])
+        items["template:_Template_Item.md"].apply(None)
+        items["template:_Template_NPC.md"].apply("take")
         self.assertEqual(mv.find_templates(vault), [])
 
     def npc_vault(self, text):
@@ -323,10 +322,12 @@ class TemplateTests(unittest.TestCase):
             plain, encoding="utf-8")
         item = by_id(mv.find_templates(vault))["template:_Template_NPC.md"]
         self.assertEqual(item.group, CHOICE)
-        self.assertIn("+ **Reputation** {n}", item.lines[0])
+        self.assertEqual(item.detail["comparison"]["sections_changed"],
+                         [["Stats", 0, 1]])
 
-    def test_the_choice_row_names_what_differs(self):
-        # #311: "local changes are lost" gave the GM nothing to decide on.
+    def test_the_choice_names_what_differs_without_a_raw_diff(self):
+        # #311: "local changes are lost" gave the GM nothing to decide on;
+        # the comparison does, and the row says it in counts.
         vault = make_vault(self)
         expected = mv.expected_templates(vault)["_Template_NPC.md"]
         text = expected.replace("**Armour** {none}", "**Armour** {leather}")
@@ -334,33 +335,12 @@ class TemplateTests(unittest.TestCase):
         text += "\n## My Section\n"
         item = by_id(mv.find_templates(self.npc_vault(text))
                      )["template:_Template_NPC.md"]
-        row = item.lines[0]
-        self.assertIn("local changes are lost", row)
-        self.assertIn("2 lines differ", row)
-        self.assertIn("- **Damage Bonus** {+0} · **Build** {0} · **Move** "
-                      "{8} · **Armour** {leather}", row)
-        self.assertIn("+ **Damage Bonus** {+0} · **Build** {0} · **Move** "
-                      "{8} · **Armour** {none}", row)
-        self.assertIn("- ## My Section", row)
-        self.assertNotIn("\n", row)
-
-    def row_for(self, text):
-        return by_id(mv.find_templates(self.npc_vault(text))
-                     )["template:_Template_NPC.md"].lines[0]
-
-    def test_the_count_is_changed_lines_as_a_person_counts_them(self):
-        expected = mv.expected_templates(make_vault(self))["_Template_NPC.md"]
-        one = expected.replace("**Armour** {none}", "**Armour** {leather}")
-        self.assertIn("1 line differs (", self.row_for(one))
-        self.assertIn("1 line differs (", self.row_for(expected + "\nExtra\n"))
-        lines = expected.split("\n")
-        body = [i for i, line in enumerate(lines)
-                if i > lines.index("---", 1) and line.strip()]
-        for i in body[:5]:   # five edited lines (a blank frontmatter value is the vault's own)
-            lines[i] = lines[i] + " EDIT"
-        row = self.row_for("\n".join(lines))
-        self.assertIn("5 lines differ (", row)
-        self.assertTrue(row.endswith("and 1 more"), row)
+        comparison = item.detail["comparison"]
+        self.assertEqual(comparison["headings_only_vault"], ["My Section"])
+        self.assertEqual(comparison["sections_changed"], [["Stats", 1, 1]])
+        self.assertIn("only yours has 1 heading", item.detail["summary"])
+        self.assertNotIn("Armour", item.detail["summary"])
+        self.assertNotIn("\n", item.lines[0])
 
     def regency_build(self, comment=False):
         text = mv.expected_templates(
@@ -379,9 +359,9 @@ class TemplateTests(unittest.TestCase):
         vault = self.npc_vault(stale)
         item = by_id(mv.find_templates(vault))["template:_Template_NPC.md"]
         self.assertEqual(item.group, CHOICE)
-        self.assertIn("1 line differs", item.lines[0])
-        self.assertNotIn("Reputation", item.lines[0])
-        item.apply(None)
+        self.assertEqual(item.detail["comparison"]["sections_changed"],
+                         [["Stats", 1, 1]])
+        item.apply("take")
         self.assertEqual((vault / "_Templates" / "_Template_NPC.md"
                           ).read_text(encoding="utf-8"), self.regency_build())
 
@@ -485,21 +465,21 @@ class TemplateTests(unittest.TestCase):
         self.assertNotEqual(text, plain)
         vault = self.npc_vault(text)
         item = by_id(mv.find_templates(vault))["template:_Template_NPC.md"]
-        self.assertIn("- **Reputation** in town: {x}", item.lines[0])
-        self.assertNotIn("+ **Reputation** {n}", item.lines[0])
+        # one line only the vault has; the plugin's text is the plain build
+        self.assertEqual(item.detail["comparison"]["sections_changed"],
+                         [["Stats", 1, 0]])
         self.assertEqual(mv.find_regency_looks(vault), [])
 
     def test_a_blank_line_or_spacing_difference_is_said_in_words(self):
         plain = mv.expected_templates(make_vault(self))["_Template_NPC.md"]
         blank = plain.replace("\n\n## ", "\n## ", 1)
-        self.assertNotEqual(blank, plain)
-        self.assertIn("only blank lines differ", self.row_for(blank))
-        self.assertNotIn("0 line", self.row_for(blank))
         spaced = plain.replace("**Armour** {none}", "**Armour**  {none}", 1)
-        row = self.row_for(spaced)
-        self.assertIn("1 line differs", row)
-        self.assertIn("spacing differs: **Damage Bonus**", row)
-        self.assertNotIn("- **Armour**", row)
+        for text in (blank, spaced):
+            self.assertNotEqual(text, plain)
+            item = by_id(mv.find_templates(self.npc_vault(text))
+                         )["template:_Template_NPC.md"]
+            self.assertEqual(item.detail["summary"],
+                             "they differ only in spacing or blank lines")
 
     def older(self, history):
         """A vault whose Document template is an old text; HISTORY points at
@@ -529,8 +509,8 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(item.group, WILL)
         self.assertEqual(
             item.lines,
-            ["update _Templates/_Template_Document.md from an earlier "
-             "release's text"])
+            [f"update the Document template to {mv.plugin_version()[0]} "
+             "(it is an earlier release's text, unedited)"])
         item.apply(None)
         self.assertNotIn("template:_Template_Document.md",
                          by_id(mv.find_templates(vault)))
@@ -569,7 +549,7 @@ class TemplateTests(unittest.TestCase):
         item = by_id(mv.find_templates(vault))["template:pc-coc-7e.md"]
         self.assertEqual(item.group, CHOICE)
         self.assertNotIn("campaign", item.lines[0])
-        item.apply("y")
+        item.apply("take")
         after = path.read_text(encoding="utf-8")
         self.assertIn('campaign: "Canticle"', after)
         self.assertIn("| Dodge | DEX/2 |", after)
@@ -612,7 +592,7 @@ class TemplateTests(unittest.TestCase):
                                          + "\nMy edit\n")
         item = by_id(mv.find_templates(vault))["template:pc-coc-7e.md"]
         self.assertEqual(item.group, CHOICE)
-        item.apply("y")
+        item.apply("take")
         self.assertEqual(path.read_text(encoding="utf-8"),
                          text.replace('source_document: ""', "source_document: |\n  line one\n  line two", 1))
 
@@ -620,7 +600,7 @@ class TemplateTests(unittest.TestCase):
         vault = make_vault(self)
         path, text = self.write_template(vault, "pc-coc-7e.md", lambda t: t.replace('portrait: ""\n', "", 1))
         item = by_id(mv.find_templates(vault))["template:pc-coc-7e.md"]
-        item.apply("y")
+        item.apply("take")
         self.assertEqual(path.read_text(encoding="utf-8"), text)
 
     def test_a_frontmatter_it_cannot_split_safely_is_compared_whole(self):
@@ -728,12 +708,13 @@ class TemplateTests(unittest.TestCase):
                         self.assertGreaterEqual(parse_version(last),
                                                 parse_version(FLOOR))
 
-    def test_an_unreadable_template_is_a_failed_step(self):
+    def test_an_unreadable_template_is_a_read_problem_not_a_failed_step(self):
         vault = make_vault(self)
         (vault / "_Templates").mkdir()
         (vault / "_Templates" / "_Template_NPC.md").write_bytes(b"\xff\xfe\x00bad")
-        with self.assertRaises(StepFailed):
-            mv.find_templates(vault)
+        items = by_id(mv.find_templates(vault))
+        self.assertEqual(items["template-unreadable:_Template_NPC.md"].group, PERSON)
+        self.assertNotIn("template:_Template_NPC.md", items)
 
     def test_a_vault_with_no_templates_folder_gets_one(self):
         vault = make_vault(self)

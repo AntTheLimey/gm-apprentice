@@ -50,6 +50,7 @@ WAITED_LINE = ("the site's publish tool is updated; run plan again for the "
                "choices it now offers")
 
 CHECKS: list[Check] = [*SITE_CHECKS, *VAULT_CHECKS]
+TEMPLATE = "template:"   # a template's choice; its answer is in the update record
 
 
 def gate(vault: Path) -> tuple[str, str] | str:
@@ -96,7 +97,8 @@ def _answered(item: Item, held: dict[str, set[str]]) -> bool:
     """Is this item settled by what a held update remembered: a "leave"
     already given, or a notice already said?"""
     if item.group == CHOICE:
-        return item.id in held["left"]
+        # A template's answer lives in the update record, not here.
+        return item.id in held["left"] and not item.id.startswith(TEMPLATE)
     return item.notice and item.id in held["said"]
 
 
@@ -104,7 +106,11 @@ def _rows(item: Item) -> list[Row]:
     if item.group == PERSON:
         return [(item.id, line) for line in item.lines]
     label = f"{item.id}=<{item.wants}>" if item.wants else item.id
-    return [(item.id, f"{label}\t{line}") for line in item.lines]
+    lines = list(item.lines)
+    said = (item.detail or {}).get("summary")
+    if lines and isinstance(said, str) and said:
+        lines[-1] = f"{lines[-1]} ({said})"
+    return [(item.id, f"{label}\t{line}") for line in lines]
 
 
 def _grouped(rows: list[Row]) -> list[str]:
@@ -336,7 +342,8 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
             failed = failed if failed is not None else len(todo)
     if not stamped:
         try:   # the next plan does not ask these again
-            write_held(vault, left_ids, said)
+            write_held(vault, {i for i in left_ids
+                               if not i.startswith(TEMPLATE)}, said)
         except (StateUnreadable, OSError) as e:
             print(f"{cli_name()}: answers could not be remembered "
                   f"({e.__class__.__name__}); they will be asked again",
