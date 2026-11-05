@@ -6,6 +6,7 @@ const path = require('path');
 
 const { runSiteDoctor, nearestNames, diceCoefficient } = require('../lib/site-doctor');
 const { writePublishList } = require('./helpers/publish-list');
+const { writeSettings, writeSiteConfig } = require('./helpers/vault-files');
 const FIXTURES = path.join(__dirname, 'fixtures');
 
 function write(root, rel, body) {
@@ -18,7 +19,7 @@ function write(root, rel, body) {
 function siteFor(vaultPath, extra = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-'));
   const configPath = path.join(dir, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify(Object.assign({
+  const config = Object.assign({
     siteTitle: 'Audit Test',
     vaultPath,
     outputDir: './docs',
@@ -30,7 +31,10 @@ function siteFor(vaultPath, extra = {}) {
       Sessions: 'sessions',
       Chapters: 'chapters',
     },
-  }, extra), null, 2));
+  }, extra);
+  // A vault on the settings file takes these as settings; one without keeps them in the site file.
+  if (!Object.keys(extra).length && fs.existsSync(path.join(vaultPath, '_meta', 'vault-config.yaml'))) writeSiteConfig(configPath, config, 2);
+  else fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
   return { dir, configPath };
 }
 
@@ -76,8 +80,15 @@ describe('doctor --site', () => {
     return vault;
   }
 
+  function newSettingsVault(settings) {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-settings-'));
+    write(vault, 'Characters/NPCs/Vex.md', '---\ntype: npc\n---\n\nA fixer.\n');
+    writeSettings(vault, settings);
+    return vault;
+  }
+
   it('a hiding-side settings fault is an error finding listed first, exits non-zero, and no in-memory build is attempted', async () => {
-    const { configPath } = siteFor(settingsVault('  exclude_sectoins: [GM Notes]\n'));
+    const { configPath } = siteFor(newSettingsVault({ 'player_site.hide.sectoins': ['GM Notes'] }));
     const buildModule = require('../lib/build');
     const realBuild = buildModule.build;
     let built = 0;
@@ -91,12 +102,12 @@ describe('doctor --site', () => {
       const rows = findings.filter((f) => f.code === 'SETTINGS_FAULT');
       assert.equal(rows.length, 1);
       assert.equal(rows[0].severity, 'error');
-      assert.equal(rows[0].detail, 'publish.exclude_sectoins is not a setting. Did you mean publish.exclude_sections?');
+      assert.equal(rows[0].detail, 'player_site.hide.sectoins is not a setting. Did you mean player_site.hide.sections?');
       assert.equal(findings[0].code, 'SETTINGS_FAULT');
       assert.ok(!findings.some((f) => f.code === 'NOTE_FAULTS_UNCHECKED'));
       const text = capture();
       assert.equal(await runSiteDoctor({ configPath }, text.deps), 1);
-      assert.match(text.text(), /SETTINGS_FAULT \(1 error\)\n {2}_meta\/vault-config\.md — publish\.exclude_sectoins is not a setting/);
+      assert.match(text.text(), /SETTINGS_FAULT \(1 error\)\n {2}_meta\/vault-config\.yaml — player_site\.hide\.sectoins is not a setting/);
     } finally { buildModule.build = realBuild; }
   });
 
@@ -149,7 +160,7 @@ describe('doctor --site', () => {
   });
 
   it('a look-side settings fault is a warning finding, and the audit goes on to build', async () => {
-    const { configPath } = siteFor(settingsVault('  link_preview: off\n'));
+    const { configPath } = siteFor(newSettingsVault({ 'player_site.features.link_preview': 'off' }));
     const buildModule = require('../lib/build');
     const realBuild = buildModule.build;
     let built = 0;
@@ -160,7 +171,7 @@ describe('doctor --site', () => {
       const { findings } = JSON.parse(cap.text());
       const row = findings.find((f) => f.code === 'SETTINGS_FAULT');
       assert.equal(row.severity, 'warning');
-      assert.equal(row.detail, 'publish.link_preview is not a setting. Did you mean publish.link_previews?');
+      assert.equal(row.detail, 'player_site.features.link_preview is not a setting. Did you mean player_site.features.link_previews?');
       assert.equal(built, 1);
     } finally { buildModule.build = realBuild; }
   });
@@ -315,7 +326,7 @@ describe('doctor --site', () => {
   it('does not report a folder excluded only via publish.exclude_dirs in vault-config.md', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-vaultconfig-excl-'));
     write(vault, 'Drafts/Idea.md', '---\ntype: npc\n---\n\nA half-formed idea.\n');
-    write(vault, '_meta/vault-config.md', '---\npublish:\n  exclude_dirs:\n    - "Drafts"\n---\n');
+    writeSettings(vault, { 'player_site.hide.folders': ['Drafts'] });
     const { configPath } = siteFor(vault);
     const c = capture();
 
@@ -561,10 +572,10 @@ describe('doctor --site', () => {
 });
 
 describe('runSiteDoctor Google Fonts finding (#270)', () => {
-  async function findingsFor(fontsYaml) {
+  async function findingsFor(fonts) {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-fonts-'));
     write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\nHi.\n');
-    write(vault, '_meta/vault-config.md', `---\npublish:\n  theme:\n    fonts:\n${fontsYaml}\n---\n`);
+    writeSettings(vault, { 'player_site.theme.fonts': fonts });
     const { configPath } = siteFor(vault);
     const c = capture();
     await runSiteDoctor({ configPath, json: true }, c.deps);
@@ -573,14 +584,14 @@ describe('runSiteDoctor Google Fonts finding (#270)', () => {
   }
 
   it('warns when a custom font loads from Google', async () => {
-    const found = await findingsFor('      heading: Cinzel\n      body: Inter');
+    const found = await findingsFor({ heading: 'Cinzel', body: 'Inter' });
     assert.strictEqual(found.length, 1);
     assert.match(found[0].detail, /Cinzel, Inter/);
     assert.match(found[0].fix, /self-host/);
   });
 
   it('is quiet for self-host and for system fonts', async () => {
-    assert.strictEqual((await findingsFor('      heading: Cinzel\n      source: self-host')).length, 0);
-    assert.strictEqual((await findingsFor('      heading: serif')).length, 0);
+    assert.strictEqual((await findingsFor({ heading: 'Cinzel', source: 'self-host' })).length, 0);
+    assert.strictEqual((await findingsFor({ heading: 'serif' })).length, 0);
   });
 });

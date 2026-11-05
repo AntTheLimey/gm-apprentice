@@ -5,6 +5,7 @@ const { spawnSync } = require('child_process');
 const { Readable } = require('stream');
 const { runLines, answer, answerLine, siteDirPath } = require('../lib/lines-cli');
 const { filterSections, keepOnlySections, playerSafeMarkdown } = require('../lib/processor');
+const { writeSettings } = require('./helpers/vault-files');
 
 const BIN = path.join(__dirname, '..', 'bin', 'gm-publish.js');
 const NOTE = '# T\nintro <!-- gm-only -->aside<!-- /gm-only -->\n## Overview\npublic\n## GM Notes\nsecret\n```\n## Example\n```\nstill secret\n## Next\nmore';
@@ -306,17 +307,16 @@ describe('lines: google-fonts', () => {
   const fs = require('fs');
   const os = require('os');
   const cases = {
-    'a genre and google fonts': 'theme:\n    genre: gothic\n    fonts:\n      heading: Cinzel\n      body: Lora\n',
-    'self-hosted fonts': 'theme:\n    genre: gothic\n    fonts:\n      source: self-host\n      heading: Cinzel\n',
-    'no theme': 'mode: player\n',
+    'a genre and google fonts': { 'player_site.theme.genre': 'gothic', 'player_site.theme.fonts': { heading: 'Cinzel', body: 'Lora' } },
+    'self-hosted fonts': { 'player_site.theme.genre': 'gothic', 'player_site.theme.fonts': { source: 'self-host', heading: 'Cinzel' } },
+    'no theme': { 'player_site.title': 'T' },
   };
   for (const [name, publish] of Object.entries(cases)) {
     it(`gives the google fonts: ${name}`, () => {
       const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gf-'));
       try {
         const vault = path.join(root, 'vault');
-        fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-        fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\ntype: meta\npublish:\n  ${publish.replace(/\n(?=.)/g, '\n  ')}---\n`);
+        writeSettings(vault, publish);
         const asked = answer({ op: 'google-fonts', vault });
         if (name === 'self-hosted fonts' || name === 'no theme') assert.ok(Array.isArray(asked.families));
         if (name === 'a genre and google fonts') assert.ok(asked.families.includes('Cinzel') && asked.families.includes('Lora'));

@@ -4,19 +4,17 @@ const fs = require('node:fs');
 const os = require('node:os');
 const nodePath = require('node:path');
 const { runSetupBackend } = require('../lib/setup-backend');
+const { writeSettings } = require('./helpers/vault-files');
 
-// A throwaway vault whose _meta/vault-config.md is where the switch is written.
-function tempVault(configText) {
+// A throwaway vault whose _meta/vault-config.yaml is where the switch is written.
+function tempVault(settings) {
   const vault = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'gm-setup-vault-'));
-  if (configText !== undefined) {
-    fs.mkdirSync(nodePath.join(vault, '_meta'));
-    fs.writeFileSync(nodePath.join(vault, '_meta', 'vault-config.md'), configText);
-  }
+  if (settings !== undefined) writeSettings(vault, settings);
   return vault;
 }
-const vaultConfig = (vault) => fs.readFileSync(nodePath.join(vault, '_meta', 'vault-config.md'), 'utf8');
+const vaultConfig = (vault) => fs.readFileSync(nodePath.join(vault, '_meta', 'vault-config.yaml'), 'utf8');
 
-function harness(overrides = {}, vault = tempVault('---\ntype: meta\npublish:\n  mode: player\n---\n')) {
+function harness(overrides = {}, vault = tempVault({ 'player_site.title': 'T' })) {
   const files = {
     './vault.config.json': JSON.stringify({
       cloudflarePagesProject: 'proj-x', siteUrl: 'https://proj-x.pages.dev', vaultPath: vault,
@@ -49,7 +47,7 @@ test('setup-status-bar: creates KV, patches toml, flips flag, builds, deploys', 
   assert.strictEqual(rc, 0);
   assert.match(files['wrangler.toml'], /name = "proj-x"/);        // name aligned
   assert.match(files['wrangler.toml'], /id = "kv777"/);           // KV bound
-  assert.match(vaultConfig(vault), /^  live_stats: true$/m);
+  assert.match(vaultConfig(vault), /^ +live_stats: true$/m);
   assert.doesNotMatch(files['./vault.config.json'], /backend/);   // the site file is not touched
   assert.ok(calls.includes('build'));
   assert.ok(calls.some((c) => c.startsWith('pages deploy')));
@@ -80,8 +78,8 @@ test('setup-inbox flips the inbox flag (and KV is ensured — inbox⇒KV)', asyn
   const { deps, files, vault } = harness();
   const rc = await runSetupBackend('inbox', { configPath: './vault.config.json' }, deps);
   assert.strictEqual(rc, 0);
-  assert.match(vaultConfig(vault), /^  inbox: true$/m);
-  assert.match(vaultConfig(vault), /^  mode: player$/m);   // other keys untouched
+  assert.match(vaultConfig(vault), /^ +inbox: true$/m);
+  assert.match(vaultConfig(vault), /^ +title: T$/m);   // other keys untouched
   assert.match(files['wrangler.toml'], /id = "kv777"/);
 });
 
@@ -109,7 +107,7 @@ test('idempotent: a second run with KV already bound + flag true still succeeds 
 });
 
 test('a vault file the editor refuses stops the command before any KV or wrangler.toml change', async () => {
-  const vault = tempVault('---\npublish: [unclosed\n---\n');
+  const vault = tempVault('player_site: [unclosed\n');
   const lines = [];
   const { deps, files, calls } = harness({ out: (m) => lines.push(m) }, vault);
   const tomlBefore = files['wrangler.toml'];
