@@ -987,18 +987,6 @@ class SessionsManifestTests(unittest.TestCase):
             f"  - path: {self.INDEX}\n    reason: private\n"
             f"  - {self.WRAP}\n")), [])
 
-    def test_a_vault_not_yet_moved_is_read_through_the_tool(self):
-        # Dated: the old Markdown list is still obeyed until the update runs.
-        vault = self.vault(None)
-        (vault / "_meta" / "publish-manifest.md").write_text(
-            "## Publishing (1 files)\n\n"
-            f"- [x] {self.WRAP}\n\n## Needs Decision (1 files)\n\n"
-            f"- [ ] {self.INDEX}\n", encoding="utf-8")
-        rows = self.missing(vault)
-        self.assertEqual(len(rows), 1, rows)
-        self.assertIn(f"\t{self.INDEX}\t", rows[0])
-        self.assertIn("(Needs Decision)", rows[0])
-
     def test_a_list_the_tool_cannot_read_is_one_row_that_promises_nothing(self):
         rows = self.missing(self.vault("publishing: [\n"))
         self.assertEqual(len(rows), 1, rows)
@@ -1089,43 +1077,6 @@ class FrontmatterUnparseableTests(unittest.TestCase):
         (vault / "Clean" / "Ok.md").write_text(
             "---\ntype: npc\ncanon_status: DRAFT\n---\n", encoding="utf-8")
         self.assertEqual(vc.check_frontmatter(vault, "Clean"), [])
-
-    def test_the_generated_publish_manifest_needs_no_type(self):
-        # #333: the publish tool writes this note with no `type` key, and
-        # the GM cannot keep one there. Any other _meta note still needs it.
-        vault, _calls = self._vault()
-        manifest = ("---\ngenerated: 2026-10-11T01:12:09.961Z\n"
-                    "vault: \"Canticle\"\nmode: player\n---\n\n"
-                    "publishing: []\n")
-        (vault / "_meta" / "publish-manifest.md").write_text(
-            manifest, encoding="utf-8")
-        (vault / "_meta" / "other.md").write_text(
-            manifest, encoding="utf-8")
-        rows = rows_for(vc.check_frontmatter(vault, None), "_meta/")
-        self.assertIn("ERROR\t_meta/other.md\tmissing 'type' field", rows)
-        self.assertFalse(rows_for(rows, "publish-manifest"), rows)
-
-    def test_the_publish_manifest_with_a_type_is_checked_like_any_note(self):
-        # #333: the tool now writes `type: meta`; it is no longer skipped.
-        vault, _calls = self._vault()
-        (vault / "_meta" / "publish-manifest.md").write_text(
-            "---\ntype: meta\ngenerated: x\n---\n\n## Publishing (0 files)\n",
-            encoding="utf-8")
-        self.assertEqual(rows_for(vc.check_frontmatter(vault, None),
-                                  "publish-manifest"), [])
-
-    def test_a_publish_manifest_with_broken_frontmatter_is_named(self):
-        # #333: the tool's own message names the file; the frontmatter check
-        # says so as an ERROR on that note instead of leaving it silent.
-        vault, _calls = self._vault()
-        (vault / "_meta" / "publish-manifest.md").write_text(
-            "---\ngenerated: x\nvault: a: b\n---\n\n## Publishing (0 files)\n",
-            encoding="utf-8")
-        rows = rows_for(vc.check_frontmatter(vault, None), "publish-manifest")
-        self.assertEqual(len(rows), 1, rows)
-        self.assertTrue(rows[0].startswith(
-            "ERROR\t_meta/publish-manifest.md\tthe publish tool cannot read "
-            "this frontmatter ("), rows)
 
     def test_a_file_the_build_walks_and_this_script_skips_is_still_named(self):
         # `_inbox` is in vaultlib's SKIP_DIRS and not in the tool's
@@ -1351,8 +1302,9 @@ class GmLeakCommandTests(unittest.TestCase):
         (vault / "Empty.md").write_text(
             "---\ntype: npc\npublish: stub\n---\n\n"
             "## Keeper Checklist\n\nNothing ships.\n", encoding="utf-8")
-        self.assertEqual(vc.check_gm_leak(vault, None), [
-            "INFO\t(vault)\t1 notes skipped: the site does not publish them"])
+        # (The old settings file was itself a note the site skipped, and the
+        # one row said so; the settings file is not a note now.)
+        self.assertEqual(vc.check_gm_leak(vault, None), [])
 
     def test_an_unrecognised_fence_problem_is_never_dropped(self):
         self.assertEqual(
@@ -4802,7 +4754,7 @@ class GmLeakWithheldHubTests(unittest.TestCase):
         self.assertTrue(rows[0].startswith("ERROR\t(vault)\tgm-leak could "
                                            "not ask the publish tool"), rows)
         self.assertIn("no vault.config.json", rows[0])
-        self.assertIn("fix publish.site_dir", rows[0])
+        self.assertIn("fix player_site.folder", rows[0])
 
     def test_vault_that_never_publishes_does_not_ask(self):
         # No publish: block, so no site: nothing is asked and nothing checked.
@@ -5742,7 +5694,7 @@ class StoryMomentsSettingOldToolTests(unittest.TestCase):
     @staticmethod
     def _settings(values):
         return vc.Settings(values=values, origins={}, faults=[],
-                           has_site_block=True, inline=False)
+                           has_site_block=True)
 
     def test_a_registry_without_the_name_counts_as_on(self):
         old = self._settings({"player_site.hide.sections": ["GM Notes"]})
