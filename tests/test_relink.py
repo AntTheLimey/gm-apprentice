@@ -2,6 +2,7 @@
 """relink.py: rename or move a note and rewrite every link to it."""
 
 import io
+import json
 import os
 import shutil
 import subprocess
@@ -23,6 +24,10 @@ def make_vault(case, files):
     vault = Path(tempfile.mkdtemp(prefix="relink-"))
     case.addCleanup(shutil.rmtree, vault, ignore_errors=True)
     for rel, text in files.items():
+        if rel == "_meta/vault-config.md":
+            # Settings are written the short way; they go where they now live.
+            write_config(vault, text)
+            continue
         path = vault / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(text.encode("utf-8"))
@@ -31,6 +36,16 @@ def make_vault(case, files):
 
 def read(vault, rel):
     return (vault / rel).read_bytes().decode("utf-8")
+
+
+def site_build_config(root, vault, **settings):
+    """What a build of `vault` reads: the settings in the vault's own file
+    (`name=value` pairs through the tool) and a config.json that names only
+    the vault. Returns the config's path."""
+    vaultlib.settings_set(vault, [
+        ("player_site.output", str(root / "docs")), *settings.items()])
+    (root / "config.json").write_text(json.dumps({"vaultPath": str(vault)}))
+    return root / "config.json"
 
 
 OLD = "Sessions/Session_4_Wrapup.md"
@@ -920,31 +935,15 @@ class PublishListTests(unittest.TestCase):
         site.assert_not_called()
         self.assertEqual(set(p.texts), {"A.md"})
 
-    def test_an_old_form_list_the_links_also_change_gets_both_edits(self):
-        # Dated: an un-updated vault still has the Markdown list.
-        vault = make_vault(self, {
-            PC_OLD: "---\ntype: pc\n---\n# Emma\n",
-            "_meta/vault-config.md": SITE_CONFIG,
-            "_meta/publish-manifest.md": OLD_FORM + "[[Emma_Wentworth]]\n"})
-        p = relink.plan(vault, PC_OLD, PC_NEW)
-        self.assertEqual(p.texts["_meta/publish-manifest.md"],
-                         (OLD_FORM + "[[Emma_Wentworth]]\n").replace(
-                             PC_OLD, PC_NEW).replace("[[Emma_Wentworth]]",
-                                                     "[[Emma_Wentworth_Hale]]"))
-
-    def test_a_file_the_tool_and_the_links_both_change_gets_both_edits(self):
-        cfg = ("---\npublish:\n  site: true\n  landing:\n    featured_npcs: [Hallam]\n---\n"
-               "[[Hallam]]\n")
+    def test_a_rename_updates_the_name_in_the_settings_file(self):
+        cfg = ("---\npublish:\n  site: true\n  landing:\n    featured_npcs: [Hallam]\n---\n")
         vault = make_vault(self, {"NPCs/Hallam.md": "---\ntype: npc\n---\n",
                                   "_meta/vault-config.md": cfg})
+        before = read(vault, "_meta/vault-config.yaml")
         p = relink.plan(vault, "NPCs/Hallam.md", "NPCs/Hallam_Reeve.md")
-        self.assertEqual(p.originals["_meta/vault-config.md"], cfg)
-        self.assertEqual(
-            p.texts["_meta/vault-config.md"],
-            "---\npublish:\n  site: true\n  landing:\n    featured_npcs: [Hallam_Reeve]\n---\n"
-            "[[Hallam_Reeve]]\n")
-        self.assertEqual(len([c for c in p.changes
-                              if c.rel == "_meta/vault-config.md"]), 1)
+        self.assertEqual(p.originals["_meta/vault-config.yaml"], before)
+        self.assertEqual(p.texts["_meta/vault-config.yaml"],
+                         before.replace("Hallam", "Hallam_Reeve"))
 
 
 @unittest.skipUnless(shutil.which("node"), "needs Node")
@@ -1041,8 +1040,8 @@ class LiveKeyTests(unittest.TestCase):
         vault = root / "vault"
         shutil.copytree(PUBLISH_TOOL.parent.parent / "test" / "fixtures"
                         / "with-party-roster", vault)
-        cfg = vault / "_meta" / "vault-config.md"
-        cfg.write_bytes(cfg.read_bytes().replace(b"publish:\n", b"publish:\n  site: true\n  live_stats: true\n"))
+        vaultlib.settings_set(vault, [("player_site.publish", True),
+                                      ("player_site.features.live_stats", True)])
         old, new = "Characters/PCs/Karl Brenner.md", "Characters/PCs/Karl_Hale.md"
         relink.apply(relink.plan(vault, old, new))
         self.assertIn("live_key: karl-brenner", read(vault, new))
@@ -1051,16 +1050,16 @@ class LiveKeyTests(unittest.TestCase):
         script = (
             "const {build}=require(process.argv[1]);"
             "build({configPath:process.argv[2]});")
-        (root / "config.json").write_text(
-            '{"vaultPath": %s, "outputDir": %s, "attachmentsDir": "_attachments",'
-            '"siteTitle": "Roster Test", "system": "gurps-4e",'
-            '"excludeDirs": ["_meta"], "excludeSections": [],'
-            '"folderMap": {"Characters/PCs": "characters/pcs"}}'
-            % (__import__("json").dumps(str(vault)),
-               __import__("json").dumps(str(root / "docs"))))
+        config = site_build_config(
+            root, vault, **{"vault.attachments": "_attachments",
+                            "player_site.title": "Roster Test",
+                            "vault.system": "gurps-4e",
+                            "player_site.hide.folders": ["_meta"],
+                            "player_site.hide.sections": [],
+                            "player_site.folder_map": {"Characters/PCs": "characters/pcs"}})
         r = subprocess.run(
             ["node", "-e", script, str(PUBLISH_TOOL.parent.parent / "lib" / "build.js"),
-             str(root / "config.json")], capture_output=True, text=True)
+             str(config)], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
         page = (root / "docs" / "characters" / "pcs" / "karl-hale.html").read_text()
         self.assertIn('"pcSlug":"karl-brenner"', page.replace(" ", ""))
@@ -1203,20 +1202,21 @@ class CompanionTests(unittest.TestCase):
         vault = root / "vault"
         shutil.copytree(PUBLISH_TOOL.parent.parent / "test" / "fixtures"
                         / "with-story", vault)
-        write_config(vault, "---\npublish:\n  site: true\n  mode: full\n---\n")
+        write_config(vault, "---\npublish:\n  site: true\n---\n")
         old = "Characters/PCs/Lord_Blackwood.md"
         relink.apply(relink.plan(vault, old, "Characters/PCs/Lord_Edmund_Blackwood.md"))
         self.assertTrue((vault / "Characters/PCs/Lord_Edmund_Blackwood_Story.md").is_file())
-        import json
-        (root / "config.json").write_text(json.dumps({
-            "vaultPath": str(vault), "outputDir": str(root / "docs"),
-            "attachmentsDir": "_attachments", "siteTitle": "Story Test",
-            "system": "coc-7e", "excludeDirs": ["_meta"], "excludeSections": [],
-            "folderMap": {"Characters/PCs": "characters/pcs"}}))
+        config = site_build_config(
+            root, vault, **{"vault.attachments": "_attachments",
+                            "player_site.title": "Story Test",
+                            "vault.system": "coc-7e",
+                            "player_site.hide.folders": ["_meta"],
+                            "player_site.hide.sections": [],
+                            "player_site.folder_map": {"Characters/PCs": "characters/pcs"}})
         r = subprocess.run(
             ["node", "-e", "require(process.argv[1]).build({configPath: process.argv[2]})",
              str(PUBLISH_TOOL.parent.parent / "lib" / "build.js"),
-             str(root / "config.json")], capture_output=True, text=True)
+             str(config)], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
         docs = root / "docs"
         self.assertTrue((docs / "story" / "characters" / "lord-edmund-blackwood.html").is_file())
@@ -1271,16 +1271,15 @@ class SiteSharedNameTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, root, ignore_errors=True)
         vault = root / "vault"
         shutil.copytree(self.vault(pc_extra="canon_status: SUPERSEDED\n"), vault)
-        import json
-        (root / "config.json").write_text(json.dumps({
-            "vaultPath": str(vault), "outputDir": str(root / "docs"),
-            "attachmentsDir": "_attachments", "siteTitle": "T"}))
+        config = site_build_config(
+            root, vault, **{"vault.attachments": "_attachments",
+                            "player_site.title": "T"})
 
         def build():
             r = subprocess.run(
                 ["node", "-e", "require(process.argv[1]).build({configPath: process.argv[2]})",
                  str(PUBLISH_TOOL.parent.parent / "lib" / "build.js"),
-                 str(root / "config.json")], capture_output=True, text=True)
+                 str(config)], capture_output=True, text=True)
             self.assertEqual(r.returncode, 0, r.stderr)
             html = (root / "docs" / "sessions" / "s1.html").read_text()
             import re
@@ -1320,21 +1319,19 @@ class SpellingOwnerTests(unittest.TestCase):
         self.assertEqual(p.texts["Sessions/S1.md"],
                          "---\ntype: session\n---\n[[hallam]] [[Hallam_Reeve]]\n")
 
-    def test_the_site_folders_config_is_handed_to_the_tool(self):
-        # The folder map lives only in the site's vault.config.json.
+    def test_the_vaults_folder_map_is_handed_to_the_tool(self):
+        # The folder map is a setting of the vault.
         site = Path(tempfile.mkdtemp(prefix="relink-site-"))
         self.addCleanup(shutil.rmtree, site, ignore_errors=True)
-        import json
-        (site / "vault.config.json").write_text(json.dumps({
-            "folderMap": {"Characters/NPCs": "characters/npcs",
-                          "Characters/PCs": "characters/pcs",
-                          "Sessions": "sessions"}}))
+        (site / "vault.config.json").write_text("{}")
         vault = make_vault(self, {
             NPC: typed("npc"), PCN: typed("pc", "canon_status: SUPERSEDED\n"),
             "Sessions/S1.md": "---\ntype: session\n---\n[[Charlotte_Thorne]]\n",
             "_meta/vault-config.md":
-                f"---\npublish:\n  site: true\n  mode: full\n"
-                f"  site_dir: {site.as_posix()}\n---\n"})
+                f"---\npublish:\n  site: true\n"
+                f"  site_dir: {site.as_posix()}\n"
+                "  folder_map:\n    Characters/NPCs: characters/npcs\n"
+                "    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n"})
         p = relink.plan(vault, NPC, NPC_NEW)
         self.assertEqual(p.owners.get("Charlotte_Thorne"), NPC)
         self.assertIn("Sessions/S1.md", p.texts)
