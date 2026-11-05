@@ -5,7 +5,6 @@
 //   - every search entry names a built file (L2).
 // Each fixture gets a probe note of that kind dropped into its first mapped folder, so one build serves all three.
 const { describe, it, before, after } = require('node:test');
-require('../helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');

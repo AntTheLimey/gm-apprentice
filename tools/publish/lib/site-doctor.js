@@ -14,8 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, buildLinkMap, scanAttachments, scanAllNotes, pairStoryFiles, slugify } = require('./scanner');
 const { resolveConfig, vaultRelPath, scanConfigFor } = require('./config');
-const { formatFault, entry: settingEntry, fileLabel, nameIn, layoutOf, siteFolderKeys } = require('./settings');
-const { packageScripts, packageNotes } = require('./settings/steps');
+const { formatFault, entry: settingEntry, fileLabel, nameIn } = require('./settings');
 const { pcKeepList, storyMomentsOn } = require('./pc-prose');
 const { loadManifest } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
@@ -27,7 +26,7 @@ const { getsNoPage, decideNoPage } = require('./previews');
 const { pairHubs, isWrapUp, isPlayedSession, REGISTRABLE_TYPES } = require('./session-hub');
 const { canonicalNfc } = require('./unicode');
 const { wikilinkRe } = require('./wikilink');
-const { pinnedVersionOf, runUpdatePin } = require('./update-pin');
+const { pinnedVersionOf } = require('./update-pin');
 
 const UNTYPED_ROW_CAP = 20;
 const LINK_ROW_CAP = 30;
@@ -163,17 +162,6 @@ function readerView(page, publishConfig, { bodyWithheld = false, rel = '', pcKee
   return { source, safe, frontmatter: publishedFrontmatter(page.frontmatter, publishConfig.exclude_fields, fieldOverrides[rel] || {}) };
 }
 
-// What update-pin says of the site's tool ({ ours, spec, ok }), or null when it says nothing usable.
-async function pinCheck(siteDir, d) {
-  const lines = [];
-  try {
-    await runUpdatePin({ siteDir, check: true, json: true }, { out: (l) => lines.push(l), detect: d.detect });
-    return JSON.parse(lines.join('\n'));
-  } catch {
-    return null;
-  }
-}
-
 async function runSiteDoctor(options, deps) {
   const opts = options || {};
   const d = deps || {};
@@ -259,44 +247,15 @@ async function runSiteDoctor(options, deps) {
 
   // --- the settings themselves ----------------------------------------------
   for (const f of publishConfig.faults) {
-    // A site-folder key the vault does not set yet is an INFO row below: the next update moves it.
-    if (f.siteLeft) continue;
-    // A setting left in the site folder's file is fixed there, not in the vault's settings file.
-    const fromSite = f.source === 'site';
+    // A leftover in the site folder (a key of its vault.config.json, a package.json build script) is fixed there.
+    const where = f.source === 'site' ? 'vault.config.json' : f.source === 'package' ? 'package.json' : fileLabel(vaultPath);
     findings.push(finding(
-      'SETTINGS_FAULT', f.level === 'stop' ? 'error' : 'warning', fromSite ? 'vault.config.json' : fileLabel(vaultPath),
+      'SETTINGS_FAULT', f.level === 'stop' ? 'error' : 'warning', where,
       formatFault(f),
-      fromSite
-        ? `remove it from vault.config.json (it is ${f.use} in ${fileLabel(vaultPath)}), or ask the apprentice to run the Settings check`
+      f.leftover
+        ? 'do as the line says: nothing in it is read, so the build stops until then'
         : `correct it in ${fileLabel(vaultPath)}, or ask the apprentice to run the Settings check`,
     ));
-  }
-  // On a vault that has moved, a site-folder key still in the site file is not a fault: the next update moves it.
-  if (layoutOf(vaultPath) === 'new') {
-    for (const { key, name } of siteFolderKeys()) {
-      if (rawSiteConfig[key] === undefined || rawSiteConfig[key] === null) continue;
-      if (publishConfig.faults.some((f) => f.source === 'site' && !f.siteLeft && f.name === key)) continue;
-      findings.push(finding('SETTINGS_FAULT', 'info', 'vault.config.json', `${key} is still in vault.config.json; it moves to ${name} at the next update`,
-        'nothing to do: the vault update moves it'));
-    }
-  }
-  // A step still in the site's package.json runs under `npm run build` as well as, now, from the vault's settings.
-  if (layoutOf(vaultPath) === 'new') {
-    const notes = packageNotes(packageScripts(siteRoot), publishConfig.steps);
-    if (notes.twice) findings.push(finding('BUILD_STEPS_TWICE', 'warning', path.join(siteRoot, 'package.json'), notes.twice, notes.fix));
-  }
-  // A vault still on the old settings file: whether the next update moves it depends on whose tool builds this
-  // site and whether that tool can read the new file (move.js: siteToolHold).
-  if (layoutOf(vaultPath) === 'legacy') {
-    const pin = await (d.pinCheck || pinCheck)(siteRoot, d);
-    const hold = pin && require('./settings/move').siteToolHold(siteRoot, { updated: true, pinCheck: () => pin });
-    if (hold) {
-      findings.push(finding('SETTINGS_FILE_OLD', 'warning', fileLabel(vaultPath), hold.line, 'update that tool, then run the vault update'));
-    } else if (pin && (pin.spec || pin.installedBefore)) {
-      findings.push(finding('SETTINGS_FILE_OLD', 'warning', fileLabel(vaultPath),
-        'this vault is still on the old settings file; the next update moves it',
-        'run the vault update (campaign-organizer\'s migration)'));
-    }
   }
   const settingsStopped = publishConfig.faults.some((f) => f.level === 'stop');
 

@@ -18,6 +18,8 @@ const os = require('os');
 const path = require('path');
 const { build } = require('../lib/build');
 const { runFlush } = require('../lib/flush-cli');
+const { readSettings } = require('../lib/settings');
+const { NEW_FILE } = require('../lib/settings/layout');
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
   '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
@@ -29,8 +31,11 @@ const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; ch
 function refusal(configPath) {
   const resolved = path.resolve(configPath);
   if (fs.existsSync(path.join(path.dirname(resolved), 'wrangler.toml'))) return 'Refusing: wrangler.toml is present beside ' + resolved + '. Preview a scratch copy with it deleted.';
+  // The host is the vault's setting (player_site.host); one the vault sets marks a site configured to deploy.
   const raw = JSON.parse(fs.readFileSync(resolved, 'utf8'));
-  if (raw.host) return 'Refusing: "host" is set in ' + resolved + '. Preview a scratch copy with it removed.';
+  const vaultPath = path.resolve(path.dirname(resolved), raw.vaultPath || '.');
+  const { origins } = readSettings({ vaultPath, siteConfig: {} });
+  if (origins['player_site.host'] === 'file') return 'Refusing: player_site.host is set in ' + path.join(vaultPath, NEW_FILE) + '. Preview a scratch copy with it removed.';
   return null;
 }
 

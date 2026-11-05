@@ -6,7 +6,6 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-require('./helpers/quiet-legacy-warning.js');
 const { build } = require('../lib/build');
 
 const CHAPTER = '---\ntype: chapter\ntitle: Chapter 1 — Docks\nsort_order: 1\n---\n\n## Overview\n\nThe docks.\n';

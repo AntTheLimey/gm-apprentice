@@ -1,4 +1,3 @@
-require('./helpers/quiet-legacy-warning.js');
 const { test, before, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
@@ -26,8 +25,8 @@ function scratch(fixture, extra) {
     system: 'dnd-5e-2024', excludeDirs: ['_meta', '_Templates'], excludeSections: ['GM Notes'],
     folderMap: { 'Characters/PCs': 'characters/pcs', Creatures: 'creatures', Items: 'items' },
   }), 2);
-  // `extra` is written to the site file as it is: the preview's refusal reads `host` from there.
-  if (extra) fs.writeFileSync(p, JSON.stringify(Object.assign(JSON.parse(fs.readFileSync(p, 'utf8')), extra), null, 2));
+  // `extra` is settings for the vault (the preview's refusal reads player_site.host there).
+  if (extra) mergeSettings(vault, extra);
   return { dir, p };
 }
 
@@ -52,11 +51,10 @@ test('it refuses a site that could be deployed (a wrangler.toml, or a host), and
     await assert.rejects(createPreview({ configPath: p }), /wrangler\.toml/);
     assert.equal(fs.existsSync(path.join(dir, 'docs')), false);
     fs.rmSync(path.join(dir, 'wrangler.toml'));
-    const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
-    fs.writeFileSync(p, JSON.stringify(Object.assign(cfg, { host: 'cloudflare-pages' })));
-    assert.match(refusal(p), /host/);
+    mergeSettings(path.join(dir, 'vault'), { 'player_site.host': 'cloudflare-pages' });
+    assert.match(refusal(p), /player_site\.host/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-  const h = scratch('with-dnd-pc', { host: 'cloudflare-pages' });
+  const h = scratch('with-dnd-pc', { 'player_site.host': 'cloudflare-pages' });
   try {
     await assert.rejects(createPreview({ configPath: h.p }), /host/);
     assert.equal(fs.existsSync(path.join(h.dir, 'docs')), false);
