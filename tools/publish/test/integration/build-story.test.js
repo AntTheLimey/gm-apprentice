@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { build } = require('../../lib/build');
+const { writeSiteConfig } = require('../helpers/vault-files');
 
 const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
 
@@ -17,13 +18,13 @@ describe('build story section', () => {
     out = fs.mkdtempSync(path.join(os.tmpdir(), 'story-build-'));
     configPath = path.join(out, 'config.json');
     docs = path.join(out, 'docs');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       vaultPath: fixtures, outputDir: docs, attachmentsDir: '_attachments',
       siteTitle: 'Story Test', siteUrl: 'https://example.github.io/story',
       excludeDirs: ['_meta', '_Templates'],
       excludeSections: ['GM Notes'],
       folderMap: { Chapters: 'chapters', 'Characters/PCs': 'characters/pcs', Locations: 'locations' },
-    }));
+    });
     build({ configPath });
   });
   after(() => fs.rmSync(out, { recursive: true, force: true }));

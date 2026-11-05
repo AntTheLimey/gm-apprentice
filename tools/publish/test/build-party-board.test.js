@@ -9,7 +9,7 @@ const { buildPartyManifest, partyDataScript } = require('../lib/party-manifest')
 const { renderPartyBoard } = require('../lib/templates/gurps/party-board');
 const { boardFor } = require('../lib/party-board-registry');
 const { build } = require('../lib/build');
-const { setOldSettings } = require('./helpers/settings-files');
+const { writeSiteConfig, mergeSettings } = require('./helpers/vault-files');
 
 function pcEntry(name, slug, bs, dx) {
   return { name, outputPath: 'characters/pcs/' + slug + '.html', data: {
@@ -64,16 +64,16 @@ function buildRosterHtml(statusBar, rosterType) {
       const roster = path.join(vault, 'Characters', 'PCs', 'Player Characters.md');
       fs.writeFileSync(roster, fs.readFileSync(roster, 'utf-8').replace('type: pc_roster', 'type: ' + rosterType));
     }
-    if (statusBar) setOldSettings(vault, { 'player_site.features.live_stats': true });
+    if (statusBar) mergeSettings(vault, { 'player_site.features.live_stats': true });
     fs.writeFileSync(path.join(outputDir, 'wrangler.toml'), '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       vaultPath: vault,
       outputDir: path.join(outputDir, 'docs'),
       attachmentsDir: '_attachments', siteTitle: 'Roster Test',
       system: 'gurps-4e',
       excludeDirs: ['_meta', '_Templates'], excludeSections: [],
       folderMap: { 'Characters/PCs': 'characters/pcs' },
-    }, null, 2));
+    }, 2);
     build({ configPath });
     const rosterPath = path.join(outputDir, 'docs', 'characters', 'pcs', 'player-characters.html');
     assert.ok(fs.existsSync(rosterPath), 'roster page renders regardless of statusBar');

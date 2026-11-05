@@ -4,6 +4,7 @@ const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
 const { createPreview, refusal } = require('../scripts/live-preview');
 const { inPrivateTmp } = require('./helpers/private-tmp');
+const { writeSiteConfig, mergeSettings } = require('./helpers/vault-files');
 
 // build() narrates every file it writes; keep that out of the test output. Errors still throw.
 async function quietly(fn) {
@@ -18,14 +19,15 @@ function scratch(fixture, extra) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-preview-'));
   const vault = path.join(dir, 'vault');
   fs.cpSync(path.join(FIXTURES, fixture || 'with-dnd-pc'), vault, { recursive: true });
-  const cfg = path.join(vault, '_meta', 'vault-config.md');
-  if (!fixture) fs.writeFileSync(cfg, fs.readFileSync(cfg, 'utf8').replace('system: dnd-5e-2024', 'system: dnd-5e-2024\n  live_stats: true'));
+  if (!fixture) mergeSettings(vault, { 'player_site.features.live_stats': true });
   const p = path.join(dir, 'vault.config.json');
-  fs.writeFileSync(p, JSON.stringify(Object.assign({
+  writeSiteConfig(p, Object.assign({
     vaultPath: vault, outputDir: path.join(dir, 'docs'), attachmentsDir: '_attachments', siteTitle: 'D&D Test',
     system: 'dnd-5e-2024', excludeDirs: ['_meta', '_Templates'], excludeSections: ['GM Notes'],
     folderMap: { 'Characters/PCs': 'characters/pcs', Creatures: 'creatures', Items: 'items' },
-  }, extra || {}), null, 2));
+  }), 2);
+  // `extra` is written to the site file as it is: the preview's refusal reads `host` from there.
+  if (extra) fs.writeFileSync(p, JSON.stringify(Object.assign(JSON.parse(fs.readFileSync(p, 'utf8')), extra), null, 2));
   return { dir, p };
 }
 

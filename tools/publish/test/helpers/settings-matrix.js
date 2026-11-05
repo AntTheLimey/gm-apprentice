@@ -23,7 +23,7 @@ const BASE = pub('mode: player');
 
 function fixtureVaults() {
   const out = [];
-  const fixtures = path.join(TOOL_ROOT, 'test/fixtures');
+  const fixtures = path.join(TOOL_ROOT, 'test/fixtures-legacy');
   for (const name of fs.readdirSync(fixtures).sort()) {
     const dir = path.join(fixtures, name);
     if (fs.statSync(dir).isDirectory() && fs.existsSync(path.join(dir, '_meta/vault-config.md'))) {

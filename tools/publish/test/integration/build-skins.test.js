@@ -10,6 +10,8 @@ const { skinsInVault } = require('../../lib/skins');
 const { buildPc } = require('../helpers/pc-vault');
 const { druidBody, cutterBody } = require('../helpers/pc-template');
 const { resolveConfig, loadVaultConfig, scanConfigFor } = require('../../lib/config');
+const YAML = require('yaml');
+const { writeSiteConfig, mergeSettings } = require('../helpers/vault-files');
 
 const fixturesDir = path.join(__dirname, '..', 'fixtures');
 const tmpRoots = [];
@@ -22,7 +24,7 @@ function setUpFixture(fixture, edit) {
   fs.cpSync(path.join(fixturesDir, fixture), vault, { recursive: true });
   if (edit) edit(vault);
   const configPath = path.join(root, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
+  writeSiteConfig(configPath, {
     vaultPath: vault,
     outputDir: path.join(root, 'docs'),
     attachmentsDir: '_attachments',
@@ -30,7 +32,7 @@ function setUpFixture(fixture, edit) {
     excludeDirs: ['_meta', '_Templates'],
     excludeSections: [],
     folderMap: { 'Characters/PCs': 'characters/pcs' },
-  }, null, 2));
+  }, 2);
   return { out: path.join(root, 'docs'), vault, configPath };
 }
 
@@ -73,9 +75,13 @@ function stubFetch(calls) {
   };
 }
 
-// Remove every sheet_* line from the vault's config and PC notes.
+// Remove every sheet_* line from the vault's settings and PC notes.
 function stripSheetLines(vault) {
-  const files = [path.join(vault, '_meta', 'vault-config.md')];
+  const settingsFile = path.join(vault, '_meta', 'vault-config.yaml');
+  const settings = YAML.parse(fs.readFileSync(settingsFile, 'utf8')) || {};
+  if (settings.player_site && settings.player_site.sheets) { delete settings.player_site.sheets.skin; delete settings.player_site.sheets.frame; }
+  fs.writeFileSync(settingsFile, YAML.stringify(settings));
+  const files = [];
   const pcs = path.join(vault, 'Characters', 'PCs');
   for (const f of fs.readdirSync(pcs)) files.push(path.join(pcs, f));
   for (const f of files) {
@@ -90,9 +96,8 @@ function addToNote(vault, rel, line) {
   fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/type: pc\r?\n/, (m) => m + line + '\n'));
 }
 
-function addPublishKey(vault, line) {
-  const f = path.join(vault, '_meta', 'vault-config.md');
-  fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/(publish:\r?\n)/, (m) => m + '  ' + line + '\n'));
+function addSetting(vault, settings) {
+  mergeSettings(vault, settings);
 }
 
 // The D&D fixture dressed by the setting: the campaign's skin and each PC's own look (one
@@ -100,7 +105,7 @@ function addPublishKey(vault, line) {
 function skinned(edit) {
   const pc = (name) => 'Characters/PCs/' + name + '.md';
   return (vault) => {
-    addPublishKey(vault, 'sheet_skin: parchment');
+    addSetting(vault, { 'player_site.sheets.skin': 'parchment' });
     addToNote(vault, pc('Dov_Ashgrove'), 'sheet_skin: "  Ledger "');
     addToNote(vault, pc('Ilse_Varn'), 'sheet_skin: console');
     addToNote(vault, pc('Oriel_Thackeray'), 'sheet_skin: vellum');
@@ -139,7 +144,7 @@ describe('build integration: sheet skins and frames', () => {
       stripSheetLines(v);
       addToNote(v, 'Characters/PCs/Tamsin_Reed.md', 'sheet_frame: thorns');
     }));
-    sheetsOff = buildFixture('with-dnd-pc', skinned((v) => addPublishKey(v, 'character_sheets: false')));
+    sheetsOff = buildFixture('with-dnd-pc', skinned((v) => addSetting(v, { 'player_site.sheets.show': false })));
   });
   after(() => { for (const r of tmpRoots) fs.rmSync(r, { recursive: true, force: true }); });
 
@@ -182,7 +187,7 @@ describe('build integration: sheet skins and frames', () => {
   });
 
   it('dresses a Call of Cthulhu sheet: the skin attribute, the stylesheet link and the framed portrait in its cell', () => {
-    const { out } = buildFixture('with-coc-pc', (v) => addPublishKey(v, 'sheet_skin: ledger'));
+    const { out } = buildFixture('with-coc-pc', (v) => addSetting(v, { 'player_site.sheets.skin': 'ledger' }));
     const page = fs.readFileSync(path.join(out, 'characters/pcs/jane-ashford.html'), 'utf8');
     assert.match(page, /<main class="content" data-skin="ledger"/);
     assert.match(page, /<link rel="stylesheet" href="[^"]*css\/skins\.css">/);
@@ -217,10 +222,10 @@ describe('build integration: sheet skins and frames', () => {
   it('says "ignored" in both warnings and cuts a very long unknown value', () => {
     const long = 'v'.repeat(500);
     const bad = buildFixture('with-dnd-pc', (v) => {
-      addPublishKey(v, 'sheet_skin: ' + long);
+      addSetting(v, { 'player_site.sheets.skin': long });
       addToNote(v, 'Characters/PCs/Tamsin_Reed.md', 'sheet_frame: wreath');
     });
-    const campaign = bad.warnings.filter((w) => /publish\.sheet_skin/.test(w));
+    const campaign = bad.warnings.filter((w) => /player_site\.sheets\.skin/.test(w));
     const pc = bad.warnings.filter((w) => /Tamsin_Reed/.test(w));
     assert.strictEqual(campaign.length, 1);
     assert.strictEqual(pc.length, 1);
@@ -231,8 +236,8 @@ describe('build integration: sheet skins and frames', () => {
   });
 
   it('prints each campaign-level problem once, not once per PC', () => {
-    const bad = buildFixture('with-dnd-pc', skinned((v) => { stripSheetLines(v); addPublishKey(v, 'sheet_skin: vellum'); }));
-    assert.strictEqual(bad.warnings.filter((w) => /publish\.sheet_skin/.test(w)).length, 1);
+    const bad = buildFixture('with-dnd-pc', skinned((v) => { stripSheetLines(v); addSetting(v, { 'player_site.sheets.skin': 'vellum' }); }));
+    assert.strictEqual(bad.warnings.filter((w) => /player_site\.sheets\.skin/.test(w)).length, 1);
   });
 
   it('adds no skin, frame or stylesheet to the untouched system fixtures', () => {
@@ -264,7 +269,7 @@ describe('build integration: sheet skins and frames', () => {
   });
 
   it('keeps the skin faces on the site when the theme itself loads fonts from Google', async () => {
-    const { out } = await buildFixtureWithFonts('with-dnd-pc', skinned((v) => addPublishKey(v, 'theme:\n    fonts:\n      heading: Cinzel')), stubFetch([]));
+    const { out } = await buildFixtureWithFonts('with-dnd-pc', skinned((v) => addSetting(v, { 'player_site.theme.fonts.heading': 'Cinzel' })), stubFetch([]));
     const skins = fs.readFileSync(path.join(out, 'css/skins.css'), 'utf8');
     assert.match(skins, /url\('\.\.\/fonts\/alegreya\//);
     // Google appears only where the GM's own theme asked for it, never in skins.css or a page
@@ -307,11 +312,11 @@ describe('build integration: sheet skins and frames', () => {
   });
 
   it('finds the same skins before the build as the build dresses', () => {
-    for (const edit of [null, (v) => addPublishKey(v, 'character_sheets: false'), stripSheetLines]) {
+    for (const edit of [null, (v) => addSetting(v, { 'player_site.sheets.show': false }), stripSheetLines]) {
       const { out, vault, configPath } = buildFixture('with-dnd-pc', skinned(edit));
       const config = loadVaultConfig(configPath);
-      const { publishConfig } = resolveConfig(config, vault, () => {});
-      const found = skinsInVault(scanConfigFor(Object.assign({}, config, { vaultPath: vault }), publishConfig), publishConfig.sheetLook);
+      const { config: resolved, publishConfig } = resolveConfig(config, vault, () => {});
+      const found = skinsInVault(scanConfigFor(Object.assign({}, resolved, { vaultPath: vault }), publishConfig), publishConfig.sheetLook);
       assert.deepStrictEqual([...found].sort(), pcSkinsOf(out));
     }
   });
@@ -333,7 +338,7 @@ describe('build integration: Pathfinder and FitD PCs take a skin', () => {
   after(() => { for (const r of roots) fs.rmSync(r, { recursive: true, force: true }); });
   for (const [system, body, sheet] of [['pf2e', druidBody(), 'pf2e-sheet'], ['fitd', cutterBody(), 'fitd-sheet']]) {
     it(`dresses a ${system} PC from the campaign setting`, () => {
-      const out = buildPc(system, body, ['sheet_skin: ledger']);
+      const out = buildPc(system, body, { 'player_site.sheets.skin': 'ledger' });
       roots.push(out.root);
       assert.ok(out.html.includes(sheet));
       assert.match(out.html, /<main class="content" data-skin="ledger"/);

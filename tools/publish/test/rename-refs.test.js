@@ -11,6 +11,7 @@ const { pcLiveKey, slugify } = require('../lib/scanner');
 const { build } = require('../lib/build');
 const { setOldSettings } = require('./helpers/settings-files');
 const { writePublishList } = require('./helpers/publish-list');
+const { writeSiteConfig, settingsText, NEW_FILE } = require('./helpers/vault-files');
 const BIN = path.join(__dirname, '..', 'bin', 'gm-publish.js');
 const FROM = 'Characters/PCs/Emma_Wentworth.md';
 const TO = 'Characters/PCs/Emma_Wentworth_Hale.md';
@@ -248,7 +249,7 @@ describe('manifest rename: story companions', () => {
 });
 
 describe('manifest rename: who each spelling goes to', () => {
-  const SITE = '---\npublish:\n  folder_map:\n    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n';
+  const SITE = settingsText({ 'player_site.folder_map': { 'Characters/NPCs': 'characters/npcs', 'Characters/PCs': 'characters/pcs', Sessions: 'sessions' } });
   const NPC = 'Characters/NPCs/Charlotte_Thorne.md';
   const PC = 'Characters/PCs/Charlotte_Thorne.md';
   const note = (type, extra = '') => `---\ntype: ${type}\n${extra}---\n# C\n`;
@@ -256,27 +257,27 @@ describe('manifest rename: who each spelling goes to', () => {
   const ask = (vault, spellings, from = NPC, extra = []) => rename(vault, from, 'Characters/NPCs/Charlotte_Thorne_NPC.md', [...names(...spellings), ...extra]);
 
   it('asks nothing of the link map when no spelling is given', () => {
-    const vault = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc') });
+    const vault = vaultWith({ [NEW_FILE]: SITE, [NPC]: note('npc') });
     assert.strictEqual(ask(vault, []).owners, undefined);
   });
 
   it('names the note the build links each spelling to', () => {
-    const toNpc = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc'), [PC]: note('pc', 'canon_status: SUPERSEDED\n') });
+    const toNpc = vaultWith({ [NEW_FILE]: SITE, [NPC]: note('npc'), [PC]: note('pc', 'canon_status: SUPERSEDED\n') });
     assert.strictEqual(ask(toNpc, ['Charlotte_Thorne']).owners.Charlotte_Thorne, NPC);
-    const toPc = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc', 'canon_status: SUPERSEDED\n'), [PC]: note('pc') });
+    const toPc = vaultWith({ [NEW_FILE]: SITE, [NPC]: note('npc', 'canon_status: SUPERSEDED\n'), [PC]: note('pc') });
     assert.strictEqual(ask(toPc, ['Charlotte_Thorne']).owners.Charlotte_Thorne, PC);
   });
 
   it('follows an alias another note holds, and null for a spelling that maps to nothing', () => {
     const vault = vaultWith({
-      '_meta/vault-config.md': SITE,
+      [NEW_FILE]: SITE,
       'Characters/PCs/Charlotte_Thorne.md': note('pc'),
       'Characters/NPCs/Cast_Charlotte.md': note('npc', 'aliases: ["Charlotte Thorne"]\n'),
     });
     const got = ask(vault, ['Charlotte Thorne', 'Nobody_Here'], 'Characters/PCs/Charlotte_Thorne.md').owners;
     assert.strictEqual(got['Charlotte Thorne'], 'Characters/NPCs/Cast_Charlotte.md');
     assert.strictEqual(got.Nobody_Here, null);
-    const hidden = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc', 'publish: false\n') });
+    const hidden = vaultWith({ [NEW_FILE]: SITE, [NPC]: note('npc', 'publish: false\n') });
     assert.strictEqual(ask(hidden, ['Charlotte_Thorne']).owners.Charlotte_Thorne, null);
   });
 
@@ -292,14 +293,14 @@ describe('manifest rename: who each spelling goes to', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bare-owner-'));
     const vault = path.join(root, 'vault');
     for (const [rel, text] of Object.entries({
-      '_meta/vault-config.md': SITE, [NPC]: note('npc'), [PC]: note('pc'),
+      [NEW_FILE]: SITE, [NPC]: note('npc'), [PC]: note('pc'),
       'Sessions/S1.md': '---\ntype: session\n---\nSee [[Charlotte_Thorne]].\n',
     })) {
       fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
       fs.writeFileSync(path.join(vault, rel), text);
     }
     const configPath = path.join(root, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' }));
+    writeSiteConfig(configPath, { vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' });
     const real = console.log; console.log = () => {};
     try { build({ configPath }); } finally { console.log = real; }
     const html = fs.readFileSync(path.join(root, 'docs', 'sessions', 's1.html'), 'utf8');
@@ -315,7 +316,7 @@ describe('backlinks follow the page a link resolves to', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'backlink-key-'));
     const vault = path.join(root, 'vault');
     const files = {
-      '_meta/vault-config.md': '---\npublish:\n  folder_map:\n    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n',
+      [NEW_FILE]: settingsText({ 'player_site.folder_map': { 'Characters/NPCs': 'characters/npcs', 'Characters/PCs': 'characters/pcs', Sessions: 'sessions' } }),
       'Characters/NPCs/Charlotte_Thorne.md': '---\ntype: npc\ncanon_status: SUPERSEDED\n---\n# N\n',
       'Characters/PCs/Charlotte_Thorne.md': '---\ntype: pc\n---\n# P\n',
       'Sessions/S1.md': '---\ntype: session\n---\nWe met [[Charlotte_Thorne]].\n',
@@ -325,7 +326,7 @@ describe('backlinks follow the page a link resolves to', () => {
       fs.writeFileSync(path.join(vault, rel), text);
     }
     const configPath = path.join(root, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' }));
+    writeSiteConfig(configPath, { vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' });
     const real = console.log; console.log = () => {};
     try { build({ configPath }); } finally { console.log = real; }
     const html = fs.readFileSync(path.join(root, 'docs', 'sessions', 's1.html'), 'utf8');
@@ -394,11 +395,11 @@ describe('a pinned key reaches the build', () => {
     }
     fs.writeFileSync(path.join(root, 'wrangler.toml'), '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n');
     const configPath = path.join(root, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments',
       siteTitle: 'Roster Test', system: 'gurps-4e', excludeDirs: ['_meta', '_Templates'], excludeSections: [],
       folderMap: { 'Characters/PCs': 'characters/pcs' },
-    }));
+    });
     build({ configPath });
     const read = (...p) => fs.readFileSync(path.join(root, 'docs', ...p), 'utf8');
     return { read, root };
@@ -429,11 +430,11 @@ describe('two PCs on one live key', () => {
     const src = fs.readFileSync(path.join(pcs, 'Karl Brenner.md'), 'utf8');
     fs.writeFileSync(path.join(pcs, 'Karl_Hale.md'), src.replace(/type: pc(\r?\n)/, 'type: pc$1live_key: karl-brenner$1'));
     const configPath = path.join(root, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments',
       siteTitle: 'Roster Test', system: 'gurps-4e', excludeDirs: ['_meta'], excludeSections: [],
       folderMap: { 'Characters/PCs': 'characters/pcs' },
-    }));
+    });
     const warned = [];
     const real = console.warn;
     console.warn = (...a) => warned.push(a.join(' '));
@@ -450,11 +451,11 @@ describe('two PCs on one live key', () => {
     const vault = path.join(root, 'vault');
     fs.cpSync(path.join(__dirname, 'fixtures', 'with-party-roster'), vault, { recursive: true });
     const configPath = path.join(root, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments',
       siteTitle: 'Roster Test', system: 'gurps-4e', excludeDirs: ['_meta'], excludeSections: [],
       folderMap: { 'Characters/PCs': 'characters/pcs' },
-    }));
+    });
     const warned = [];
     const real = console.warn;
     console.warn = (...a) => warned.push(a.join(' '));

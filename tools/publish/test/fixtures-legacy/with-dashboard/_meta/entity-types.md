@@ -1,0 +1,5 @@
+---
+type: meta
+---
+
+# Entity Types

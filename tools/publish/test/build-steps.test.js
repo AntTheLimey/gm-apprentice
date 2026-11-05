@@ -19,6 +19,7 @@ const BIN = path.join(__dirname, '..', 'bin', 'gm-publish.js');
 const APPEND = path.join(__dirname, 'fixtures', 'steps', 'append.js');
 const FAIL = path.join(__dirname, 'fixtures', 'steps', 'fail.js');
 const FIXTURE = path.join(__dirname, 'fixtures', 'with-dnd-pc');
+const LEGACY_FIXTURE = path.join(__dirname, 'fixtures-legacy', 'with-dnd-pc');
 
 // A step command that appends `line` to `file` (relative to the site folder, where steps run).
 const append = (line, file) => `node ${JSON.stringify(APPEND)} ${line} ${file}`;
@@ -35,12 +36,11 @@ function scratch({ settings = {}, layout = 'new', package: pkg = null } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'build-steps-'));
   const vault = path.join(root, 'vault');
   const site = path.join(root, 'site');
-  fs.cpSync(FIXTURE, vault, { recursive: true });
+  fs.cpSync(layout === 'new' ? FIXTURE : LEGACY_FIXTURE, vault, { recursive: true });
   fs.mkdirSync(site);
   const folderMap = { 'Characters/PCs': 'characters/pcs', Creatures: 'creatures', Items: 'items' };
   let siteFile = { vaultPath: '../vault' };
   if (layout === 'new') {
-    fs.rmSync(path.join(vault, '_meta', 'vault-config.md'));
     writeNewConfig(vault, { version: 1, vault: { system: 'dnd-5e-2024' }, player_site: { title: 'T', hide: { folders: ['_meta', '_Templates'] }, folder_map: folderMap, ...settings } });
   } else {
     siteFile = { vaultPath: '../vault', attachmentsDir: '_attachments', siteTitle: 'T', excludeDirs: ['_meta', '_Templates'], folderMap };

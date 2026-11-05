@@ -5,6 +5,7 @@ const fs = require('fs'); const path = require('path'); const os = require('os')
 const { build } = require('../../lib/build');
 const { applyDnDFlush } = require('../../lib/flush/dnd-writeback');
 const { fit } = require('../../js/dnd-live');
+const { writeSiteConfig, mergeSettings } = require('../helpers/vault-files');
 
 // The write-back must find, in the note, every cell the build made live. For every D&D PC
 // fixture: build, change everything live, flush, rebuild from the flushed note, compare.
@@ -15,17 +16,14 @@ function copyAndBuild(sourceVault, mutate) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-dnd-roundtrip-'));
   const vault = path.join(work, 'vault');
   fs.cpSync(sourceVault, vault, { recursive: true });
-  const cfg = path.join(vault, '_meta', 'vault-config.md');
-  if (!/live_stats: true/.test(fs.readFileSync(cfg, 'utf8'))) {
-    fs.writeFileSync(cfg, fs.readFileSync(cfg, 'utf8').replace('system: dnd-5e-2024', 'system: dnd-5e-2024\n  live_stats: true'));
-  }
+  mergeSettings(vault, { 'player_site.features.live_stats': true });
   if (mutate) mutate(vault);
   const configPath = path.join(work, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
+  writeSiteConfig(configPath, {
     vaultPath: vault, outputDir: path.join(work, 'docs'), attachmentsDir: '_attachments', siteTitle: 'D&D Test',
     system: 'dnd-5e-2024', excludeDirs: ['_meta', '_Templates'], excludeSections: ['GM Notes'],
     folderMap: { 'Characters/PCs': 'characters/pcs', Creatures: 'creatures', Items: 'items' },
-  }, null, 2));
+  }, 2);
   const realWarn = console.warn; const realLog = console.log;
   console.warn = () => {}; console.log = () => {};
   try { build({ configPath, assumeKv: true }); } finally { console.warn = realWarn; console.log = realLog; }
@@ -213,8 +211,7 @@ describe('D&D flush round trip, every fixture note', () => {
 // what flush writes are the same on a skinned site.
 describe('D&D flush round trip on a skinned site', () => {
   const skinIt = (vault) => {
-    const cfg = path.join(vault, '_meta', 'vault-config.md');
-    fs.writeFileSync(cfg, fs.readFileSync(cfg, 'utf8').replace(/(publish:\r?\n)/, (m) => m + '  sheet_skin: ledger\n  sheet_frame: thorns\n'));
+    mergeSettings(vault, { 'player_site.sheets.skin': 'ledger', 'player_site.sheets.frame': 'thorns' });
   };
   let plain, skinned, rebuilt;
   before(() => {

@@ -5,6 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { build } = require('../lib/build');
+const { settingsText, NEW_FILE } = require('./helpers/vault-files');
 
 function buildVault(files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'backlinks-build-'));
@@ -14,17 +15,17 @@ function buildVault(files) {
     fs.writeFileSync(path.join(vault, rel), text);
   }
   const configPath = path.join(root, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' }));
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
   const real = console.log; console.log = () => {};
   try { build({ configPath }); } finally { console.log = real; }
   return { read: (...p) => fs.readFileSync(path.join(root, 'docs', ...p), 'utf8'), root };
 }
 
-const CONFIG = '---\npublish:\n  folder_map:\n    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n';
+const CONFIG = settingsText({ 'player_site.title': 'T', 'player_site.folder_map': { 'Characters/NPCs': 'characters/npcs', 'Characters/PCs': 'characters/pcs', Sessions: 'sessions' } });
 
 test('a page only mentioned in a session keeps its Connections section, with the session under Mentions', () => {
   const { read, root } = buildVault({
-    '_meta/vault-config.md': CONFIG,
+    [NEW_FILE]: CONFIG,
     'Characters/NPCs/Hallam.md': '---\ntype: npc\n---\n# Hallam\n',
     'Sessions/S1.md': '---\ntype: session\n---\nWe met [[Hallam]].\n',
   });
@@ -37,7 +38,7 @@ test('a page only mentioned in a session keeps its Connections section, with the
 
 test('a mention through an alias counts for the page the alias reaches', () => {
   const { read, root } = buildVault({
-    '_meta/vault-config.md': CONFIG,
+    [NEW_FILE]: CONFIG,
     'Characters/NPCs/Hallam.md': '---\ntype: npc\naliases: ["The Warden"]\n---\n# Hallam\n',
     'Sessions/S1.md': '---\ntype: session\n---\nWe met [[The Warden]].\n',
   });
@@ -47,7 +48,7 @@ test('a mention through an alias counts for the page the alias reaches', () => {
 
 test('heading, block and .md links resolve to the page, and count as mentions', () => {
   const { read, root } = buildVault({
-    '_meta/vault-config.md': CONFIG,
+    [NEW_FILE]: CONFIG,
     'Characters/NPCs/Lord_Vane.md': '---\ntype: npc\n---\n# Lord Vane\n\n## Past\n\ntext\n',
     'Sessions/S1.md': '---\ntype: session\n---\nA [[Lord_Vane#Past]] B [[Lord_Vane^b1|the lord]] C [[Lord_Vane.md]] D [[Lord_Vane#Past|history]].\n',
   });
@@ -61,7 +62,7 @@ test('heading, block and .md links resolve to the page, and count as mentions', 
 
 test('a page that links to its own heading does not list itself as a mention', () => {
   const { read, root } = buildVault({
-    '_meta/vault-config.md': CONFIG,
+    [NEW_FILE]: CONFIG,
     'Characters/NPCs/Hallam.md': '---\ntype: npc\n---\n# Hallam\n\nSee [[Hallam#Past]].\n\n## Past\n\nx\n',
   });
   const html = read('characters', 'npcs', 'hallam.html');
@@ -80,7 +81,7 @@ test('a link to its own name with .md resolves as the plain self-link does', () 
   assert.deepStrictEqual(Object.keys(withMd), ['characters/npcs/hallam.html']);
   // The page itself never lists itself in Connections, whichever way it links to itself.
   const { read, root } = buildVault({
-    '_meta/vault-config.md': CONFIG,
+    [NEW_FILE]: CONFIG,
     'Characters/NPCs/Hallam.md': '---\ntype: npc\n---\n# Hallam\n\nSee [[Hallam.md]].\n',
   });
   assert.doesNotMatch(read('characters', 'npcs', 'hallam.html'), /<h3>Mentions<\/h3>/);
@@ -89,7 +90,7 @@ test('a link to its own name with .md resolves as the plain self-link does', () 
 
 test('a path-written link to a secret alias shows neither the secret nor its file name, on the page or in search', () => {
   const { read, root } = buildVault({
-    '_meta/vault-config.md': CONFIG,
+    [NEW_FILE]: CONFIG,
     'Characters/NPCs/Lord_Vane.md': '---\ntype: npc\ngm_aliases: ["Elias Crowe"]\n---\n# Vane\n',
     'Sessions/S1.md': '---\ntype: session\n---\nMet [[Characters/NPCs/Elias Crowe]] and [[Characters/NPCs/Elias Crowe.md#Past]].\n',
   });

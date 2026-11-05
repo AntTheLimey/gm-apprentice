@@ -5,6 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { build } = require('../lib/build');
+const { settingsText, NEW_FILE } = require('./helpers/vault-files');
 
 function buildVault(files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pc-timeline-build-'));
@@ -14,13 +15,13 @@ function buildVault(files) {
     fs.writeFileSync(path.join(vault, rel), text);
   }
   const configPath = path.join(root, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' }));
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
   const real = console.log; console.log = () => {};
   try { build({ configPath }); } finally { console.log = real; }
   return { read: (...p) => fs.readFileSync(path.join(root, 'docs', ...p), 'utf8'), root };
 }
 
-const CONFIG = '---\npublish:\n  folder_map:\n    Characters/PCs: characters/pcs\n    Events: events\n    Sessions: sessions\n---\n';
+const CONFIG = settingsText({ 'player_site.title': 'T', 'player_site.folder_map': { 'Characters/PCs': 'characters/pcs', Events: 'events', Sessions: 'sessions' } });
 
 function event(date, participants) {
   const list = participants.length ? '\n' + participants.map(p => `  - "${p}"`).join('\n') : ' []';
@@ -28,7 +29,7 @@ function event(date, participants) {
 }
 
 const VAULT = {
-  '_meta/vault-config.md': CONFIG,
+  [NEW_FILE]: CONFIG,
   'Characters/PCs/Mara_Voss.md': '---\ntype: pc\naliases: ["The Captain"]\n---\n# Mara Voss\n',
   'Characters/PCs/Tobin.md': '---\ntype: pc\n---\n# Tobin\n',
   'Characters/PCs/Quill.md': '---\ntype: pc\n---\n# Quill\n',
@@ -101,7 +102,7 @@ test('the landing page keeps the whole campaign in its timeline', () => {
 });
 
 test('a CoC investigator page carries the Timeline in its own Journey panel', () => {
-  const { read, root } = buildVault({ ...VAULT, '_meta/vault-config.md': CONFIG.replace('publish:\n', 'publish:\n  system: "coc-7e"\n') });
+  const { read, root } = buildVault({ ...VAULT, [NEW_FILE]: settingsText({ 'vault.system': 'coc-7e', 'player_site.title': 'T', 'player_site.folder_map': { 'Characters/PCs': 'characters/pcs', Events: 'events', Sessions: 'sessions' } }) });
   const html = read('characters', 'pcs', 'mara-voss.html');
   const start = html.indexOf('id="p-journey"');
   assert.notStrictEqual(start, -1, 'the page is a CoC folio');

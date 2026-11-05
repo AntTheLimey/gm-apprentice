@@ -7,6 +7,7 @@ const path = require('path');
 const { runManifest } = require('../lib/manifest-cli');
 const { writePublishList, readListText } = require('./helpers/publish-list');
 const { loadManifest, writeAccepted } = require('../lib/manifest');
+const { writeSettings, writeSiteConfig } = require('./helpers/vault-files');
 const FIXTURES = path.join(__dirname, 'fixtures');
 
 const FOLDER_MAP = {
@@ -21,13 +22,13 @@ const FOLDER_MAP = {
 function siteFor(vaultPath) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-cli-'));
   const configPath = path.join(dir, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
+  writeSiteConfig(configPath, {
     siteTitle: 'Test Campaign',
     vaultPath,
     outputDir: './docs',
     excludeDirs: ['_meta', '_Templates'],
     folderMap: FOLDER_MAP,
-  }, null, 2));
+  }, 2);
   return { dir, configPath };
 }
 
@@ -149,13 +150,11 @@ describe('manifest diff', () => {
   // the vault with the raw vault.config.json `excludeDirs` only — a folder excluded
   // exclusively via vault-config.md's `publish.exclude_dirs` still showed up in the diff
   // as a New file, disagreeing with what the real build would do with it.
-  it('never lists a file under a folder excluded only via publish.exclude_dirs in vault-config.md', async () => {
+  it('never lists a file under a folder excluded only via player_site.hide.folders in the settings file', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-vaultconfig-excl-'));
     fs.mkdirSync(path.join(vault, 'Drafts'), { recursive: true });
     fs.writeFileSync(path.join(vault, 'Drafts', 'Idea.md'), '---\ntype: npc\n---\n\nA half-formed idea.\n');
-    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-      '---\npublish:\n  exclude_dirs:\n    - "Drafts"\n---\n');
+    writeSettings(vault, { 'player_site.hide.folders': ['Drafts'] });
     const { configPath } = siteFor(vault);
     const c = capture();
     const rc = await runManifest({ verb: 'diff', configPath, json: true }, c.deps);
@@ -918,10 +917,10 @@ describe('manifest publish-played ticks only hubs the site will withhold (#276/#
     writePublishList(vault, variant === 'excluded'
       ? { excluded: [{ path: wrapUpPath, reason: 'secrets' }], needsDecision: ['Sessions/Session 01 - Arrival.md'] }
       : { needsDecision: ['Sessions/Session 01 - Arrival.md', wrapUpPath] });
-    w('_meta/vault-config.md', '---\npublish:\n  site_title: T\n---\n');
+    writeSettings(vault, { 'player_site.title': 'T' });
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
-      outputDir: path.join(work, 'docs'), excludeDirs: ['_meta'], folderMap: { Sessions: 'sessions' } }));
+    writeSiteConfig(configPath, { siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
+      outputDir: path.join(work, 'docs'), excludeDirs: ['_meta'], folderMap: { Sessions: 'sessions' } });
     return { work, vault, configPath };
   }
 
@@ -997,11 +996,11 @@ describe('a documents.wrap_up written as a GM alias pairs the same everywhere (#
     const WRAP = 'Sessions/Session 01 Wrap-Up.md';
     w(HUB, '---\ntype: session\nsession_number: 1\nstatus: reviewed\ndocuments:\n  wrap_up: "[[The Sealed Ledger]]"\n---\n\n# Session 01 - Arrival\n\nKEEPERONLYSECRET the Baron appears at the ball\n');
     w(WRAP, '---\ntype: session_wrap\ngm_aliases:\n  - The Sealed Ledger\n---\n\n## Narrative Recap\n\nThey arrived at dusk.\n');
-    w('_meta/vault-config.md', '---\npublish:\n  site_title: T\n---\n');
+    writeSettings(vault, { 'player_site.title': 'T' });
     writePublishList(vault, { needsDecision: [HUB, WRAP] });
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
-      outputDir: path.join(work, 'docs'), excludeDirs: ['_meta'], folderMap: { Sessions: 'sessions' } }));
+    writeSiteConfig(configPath, { siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
+      outputDir: path.join(work, 'docs'), excludeDirs: ['_meta'], folderMap: { Sessions: 'sessions' } });
 
     try {
       // publish-played pairs it, so ticks both.

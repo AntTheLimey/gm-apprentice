@@ -6,6 +6,7 @@ const path = require('path');
 const os = require('os');
 const { build } = require('../../lib/build');
 const { buildLinkMap, scanVault } = require('../../lib/scanner');
+const { writeSettings, writeSiteConfig } = require('../helpers/vault-files');
 
 describe('build integration', () => {
   const fixturesDir = path.join(__dirname, '..', 'fixtures');
@@ -34,7 +35,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
 
       // Run build once for all tests
       build({ configPath });
@@ -111,7 +112,7 @@ describe('build integration', () => {
         folderMap: {},
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -154,7 +155,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -205,7 +206,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
 
       // Build link map to test resolution
       const pages = scanVault(config);
@@ -250,7 +251,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
 
       // Build link map to test redirect behavior
       const pages = scanVault(config);
@@ -304,7 +305,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -393,7 +394,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -438,7 +439,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -496,7 +497,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -556,7 +557,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -614,7 +615,7 @@ describe('build integration', () => {
     before(() => {
       outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-regress-'));
       configPath = path.join(outputDir, 'config.json');
-      fs.writeFileSync(configPath, JSON.stringify({
+      writeSiteConfig(configPath, {
         vaultPath: path.join(fixturesDir, 'minimal'),
         outputDir: path.join(outputDir, 'docs'),
         attachmentsDir: '_attachments',
@@ -628,7 +629,7 @@ describe('build integration', () => {
           'Characters/NPCs': 'characters/npcs',
           'Locations': 'locations',
         },
-      }, null, 2));
+      }, 2);
       build({ configPath });
     });
 
@@ -668,7 +669,7 @@ describe('build integration', () => {
     it('warns when a Publishing entry matches no scanned page', () => {
       const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-warn-'));
       const configPath = path.join(outputDir, 'config.json');
-      fs.writeFileSync(configPath, JSON.stringify({
+      writeSiteConfig(configPath, {
         vaultPath: path.join(fixturesDir, 'with-manifest'),
         outputDir: path.join(outputDir, 'docs'),
         attachmentsDir: '_attachments',
@@ -677,7 +678,7 @@ describe('build integration', () => {
         excludeDirs: ['_meta'],
         excludeSections: [],
         folderMap: { 'Characters/NPCs': 'characters/npcs', Locations: 'locations', Sessions: 'sessions' },
-      }, null, 2));
+      }, 2);
 
       const warnings = [];
       const realWarn = console.warn;
@@ -704,7 +705,7 @@ describe('build integration', () => {
         '---\ntype: session_wrap\nsession_number: 6\ncanon_status: AUTHORITATIVE\naliases: []\ntags: []\n---\n\n## Recap\n\nThe job went sideways.\n');
 
       const configPath = path.join(tmp, 'config.json');
-      fs.writeFileSync(configPath, JSON.stringify({
+      writeSiteConfig(configPath, {
         vaultPath: vault,
         outputDir: path.join(tmp, 'docs'),
         attachmentsDir: '_attachments',
@@ -713,7 +714,7 @@ describe('build integration', () => {
         excludeDirs: ['_meta', '_Templates'],
         excludeSections: ['GM Notes'],
         folderMap: { 'Characters/NPCs': 'characters/npcs', Locations: 'locations', Sessions: 'sessions' },
-      }, null, 2));
+      }, 2);
 
       const warnings = [];
       const realWarn = console.warn;
@@ -747,7 +748,7 @@ describe('build integration', () => {
         '---\ntype: session_wrap\nsession: "[[Session 11 - Docks]]"\n---\n\n## Narrative Recap\n\nDocks.\n');
 
       const configPath = path.join(tmp, 'config.json');
-      fs.writeFileSync(configPath, JSON.stringify({
+      writeSiteConfig(configPath, {
         vaultPath: vault,
         outputDir: path.join(tmp, 'docs'),
         attachmentsDir: '_attachments',
@@ -756,7 +757,7 @@ describe('build integration', () => {
         excludeDirs: ['_meta', '_Templates'],
         excludeSections: ['GM Notes'],
         folderMap: { 'Characters/NPCs': 'characters/npcs', Locations: 'locations', Sessions: 'sessions' },
-      }, null, 2));
+      }, 2);
 
       const lines = [];
       const realWarn = console.warn;
@@ -811,7 +812,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -888,7 +889,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -1003,7 +1004,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -1048,9 +1049,7 @@ describe('build integration', () => {
       // Copy the fixture rather than writing into it: node --test runs test FILES in parallel.
       const vaultDir = path.join(outputDir, 'vault');
       fs.cpSync(path.join(fixturesDir, 'auto-exclude'), vaultDir, { recursive: true });
-      const metaDir = path.join(vaultDir, '_meta');
-      fs.mkdirSync(metaDir, { recursive: true });
-      fs.writeFileSync(path.join(metaDir, 'vault-config.md'), '---\npublish:\n  mode: full\n---\n');
+      writeSettings(vaultDir, { 'player_site.hide.mode': 'full' });
 
       const config = {
         vaultPath: vaultDir,
@@ -1066,7 +1065,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -1112,7 +1111,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -1206,7 +1205,7 @@ describe('build integration', () => {
           'Characters/PCs': 'characters/pcs',
         },
       };
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -1258,7 +1257,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -1334,7 +1333,7 @@ describe('build integration', () => {
         folderMap: { 'Locations': 'locations' },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -1387,7 +1386,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config));
+      writeSiteConfig(configPath, config);
       build({ configPath });
     });
 
@@ -1479,7 +1478,7 @@ describe('build integration', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -1499,7 +1498,7 @@ describe('build integration', () => {
     function buildFixture(fixture, folderMap) {
       const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-timeline-'));
       const configPath = path.join(outputDir, 'config.json');
-      fs.writeFileSync(configPath, JSON.stringify({
+      writeSiteConfig(configPath, {
         vaultPath: path.join(fixturesDir, fixture),
         outputDir: path.join(outputDir, 'docs'),
         attachmentsDir: '_attachments',
@@ -1508,7 +1507,7 @@ describe('build integration', () => {
         excludeDirs: ['_meta'],
         excludeSections: [],
         folderMap,
-      }, null, 2));
+      }, 2);
       build({ configPath });
       return path.join(outputDir, 'docs');
     }
@@ -1587,7 +1586,7 @@ describe('publish controls (#166, #167)', () => {
         'Chapters': 'chapters',
       },
     };
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    writeSiteConfig(configPath, config, 2);
     build({ configPath });
   });
 
@@ -1699,7 +1698,7 @@ describe('landing config and pinning (#169)', () => {
   before(() => {
     outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-landing-'));
     configPath = path.join(outputDir, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       vaultPath: path.join(fixturesDir, 'with-landing-config'),
       outputDir: path.join(outputDir, 'docs'),
       attachmentsDir: '_attachments',
@@ -1712,7 +1711,7 @@ describe('landing config and pinning (#169)', () => {
         'Locations': 'locations',
         'Sessions': 'sessions',
       },
-    }, null, 2));
+    }, 2);
 
     warnings = [];
     const realWarn = console.warn;

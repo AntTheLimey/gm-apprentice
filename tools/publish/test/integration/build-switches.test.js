@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
 const { build } = require('../../lib/build');
 
-const FIXTURE = path.join(__dirname, '..', 'fixtures', 'with-gurps-pc');
+const FIXTURE = path.join(__dirname, '..', 'fixtures-legacy', 'with-gurps-pc');
 const KV_TOML = '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n';
 
 // Builds the with-gurps-pc fixture in a temp site whose vault file carries `publish`

@@ -16,7 +16,7 @@ const { build } = require('../lib/build');
 const { prepareFixture } = require('./helpers/fixture-build');
 const { writeNewConfig } = require('./helpers/settings-files');
 
-const FIXTURES = path.join(__dirname, 'fixtures');
+const FIXTURES = path.join(__dirname, 'fixtures-legacy');
 const REPO_TESTS = path.join(__dirname, '..', '..', '..', 'tests');
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'move-'));
 const quiet = () => {};

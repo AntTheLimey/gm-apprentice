@@ -19,7 +19,7 @@ describe('a GURPS status panel at full HP and FP, in a browser', { skip: browser
     const body = matter(fs.readFileSync(path.join(__dirname, 'fixtures', 'gurps', 'gurps-ronnie.md'), 'utf8')).content;
     const log = console.log; const warn = console.warn;
     console.log = () => {}; console.warn = () => {};
-    try { pc = buildPc('gurps-4e', body, ['live_stats: true'], { assumeKv: true }); } finally { console.log = log; console.warn = warn; }
+    try { pc = buildPc('gurps-4e', body, { 'player_site.features.live_stats': true }, { assumeKv: true }); } finally { console.log = log; console.warn = warn; }
     r = measure(path.join(pc.out, 'characters', 'pcs', 'test-hero.html'), 390, function (done) {
       var sel = '.gl-status-panel .gl-badge, .gl-status-panel .gl-status-effects, .gl-status-panel .gl-delta, .gl-status-panel .gl-status-note';
       done({ parts: Array.prototype.map.call(document.querySelectorAll(sel), function (e) {

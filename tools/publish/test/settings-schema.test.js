@@ -15,7 +15,7 @@ const { NEW_FILE, OLD_FILE, at } = require('../lib/settings/layout');
 
 const SCHEMA_FILE = path.join(__dirname, '..', 'schema', 'vault-config.schema.json');
 const FORMAT_PAGE = path.join(__dirname, '..', '..', '..', 'docs', 'vault-config-format.md');
-const FIXTURES = path.join(__dirname, 'fixtures');
+const FIXTURES = path.join(__dirname, 'fixtures-legacy');
 const REPO_TESTS = path.join(__dirname, '..', '..', '..', 'tests');
 const norm = (t) => t.replace(/\r\n/g, '\n');
 

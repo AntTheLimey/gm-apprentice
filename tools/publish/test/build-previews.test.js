@@ -9,10 +9,11 @@ const { pageText, cardProblems } = require('./helpers/card-subset');
 const { prepareFixture } = require('./helpers/fixture-build');
 const { insideNoPreview } = require('./helpers/no-preview');
 const { buildVault: buildSmallVault } = require('./helpers/build-vault');
+const { settingsText, NEW_FILE } = require('./helpers/vault-files');
 
-function configFor(root, vault, outputDir) {
+function configFor(root, vault) {
   const configPath = path.join(root, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir, attachmentsDir: '_attachments', siteTitle: 'T' }));
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
   return configPath;
 }
 
@@ -29,13 +30,13 @@ function buildVault(files) {
     fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
     fs.writeFileSync(path.join(vault, rel), text);
   }
-  quietBuild(configFor(root, vault, path.join(root, 'docs')));
+  quietBuild(configFor(root, vault));
   return { read: (...p) => fs.readFileSync(path.join(root, 'docs', ...p), 'utf8'), root };
 }
 
-const CONFIG = (extra) => `---\npublish:\n${extra}  folder_map:\n    Characters/NPCs: characters/npcs\n    Locations: locations\n---\n`;
+const CONFIG = (extra = {}) => settingsText({ 'player_site.folder_map': { 'Characters/NPCs': 'characters/npcs', Locations: 'locations' }, ...extra });
 const FILES = (extra) => ({
-  '_meta/vault-config.md': CONFIG(extra),
+  [NEW_FILE]: CONFIG(extra),
   'Characters/NPCs/Hallam.md': '---\ntype: npc\noccupation: Warden\nsecrets: "the killer"\n---\n# Hallam\n\nKeeper of the gate.\n\n## GM Notes\n\nHe did it.\n',
   'Locations/North Gate.md': '---\ntype: location\nlocation_type: Gate\n---\nHeld by [[Hallam]].\n',
   'Locations/Hidden.md': '---\ntype: location\npublish: false\n---\nNobody knows.\n',
@@ -43,7 +44,7 @@ const FILES = (extra) => ({
 
 // The default build, made once for the tests that only read it.
 let defaultSite = null;
-const defaultBuild = () => defaultSite || (defaultSite = buildVault(FILES('')));
+const defaultBuild = () => defaultSite || (defaultSite = buildVault(FILES()));
 after(() => { if (defaultSite) fs.rmSync(defaultSite.root, { recursive: true, force: true }); });
 
 test('the build writes one card per published page and marks every page', () => {
@@ -71,14 +72,14 @@ test('nothing hidden reaches the cards', () => {
 });
 
 test('desktop marks the pages desktop', () => {
-  const { read, root } = buildVault(FILES('  link_previews: desktop\n'));
+  const { read, root } = buildVault(FILES({ 'player_site.features.link_previews': 'desktop' }));
   assert.match(read('locations', 'north-gate.html'), /data-previews="desktop"/);
   assert.match(read('404.html'), /data-previews="desktop"/);
   fs.rmSync(root, { recursive: true, force: true });
 });
 
 test('off writes no file, no script tag and no attribute, and does not copy the script', () => {
-  const { read, root } = buildVault(FILES('  link_previews: off\n'));
+  const { read, root } = buildVault(FILES({ 'player_site.features.link_previews': 'off' }));
   assert.ok(!fs.existsSync(path.join(root, 'docs', 'previews.json')));
   assert.ok(!fs.existsSync(path.join(root, 'docs', 'js', 'previews.js')), 'js/previews.js is not copied');
   assert.ok(fs.existsSync(path.join(root, 'docs', 'js', 'nav.js')), 'the other scripts still are');
@@ -98,11 +99,11 @@ test('a build with previews off after one with them on keeps nothing from the fi
       fs.writeFileSync(path.join(vault, rel), text);
     }
   };
-  const configPath = configFor(root, vault, out);
-  write('');
+  const configPath = configFor(root, vault);
+  write();
   quietBuild(configPath);
   assert.ok(fs.existsSync(path.join(out, 'previews.json')));
-  write('  link_previews: off\n');
+  write({ 'player_site.features.link_previews': 'off' });
   quietBuild(configPath);
   assert.ok(!fs.existsSync(path.join(out, 'previews.json')), 'the stale file is cleared');
   assert.ok(!fs.existsSync(path.join(out, 'js', 'previews.js')), 'the stale script is cleared');
@@ -186,7 +187,7 @@ test('a card is a subset of its page for the shapes that once differed', () => {
     'Notes/Dated.md': '---\ntype: note\ndate: 2026-07-02\n---\nBody.\n',
   };
   holders.forEach((h, i) => { files[`Items/Item ${i}.md`] = `---\ntype: item\nitem_type: plot_thread\ncurrent_holder: ${JSON.stringify(h)}\n---\n- A list marker here. Then more.\n`; });
-  const v = buildSmallVault(files, { extraConfig: '  exclude_sections: []\n' });
+  const v = buildSmallVault(files, { settings: { 'player_site.hide.sections': [] } });
   try {
     const cards = JSON.parse(v.read('previews.json'));
     assert.ok(Object.keys(cards).length >= 14, Object.keys(cards).join());
@@ -204,7 +205,7 @@ test('a card is a subset of its page for the shapes that once differed', () => {
 // A note the build writes no page for has no card, and no card key is a file that was not built.
 test('a world-flags note has no page and no card; every card key is a built file', () => {
   const { read, root } = buildVault({
-    '_meta/vault-config.md': CONFIG(''),
+    [NEW_FILE]: CONFIG(),
     'Characters/NPCs/Hallam.md': '---\ntype: npc\noccupation: Warden\n---\nKeeper of the gate.\n',
     'Locations/_flags.md': '---\ntype: world_flags\n---\n## Canon\n\n- The mayor is secretly the cult leader. Zebrafish warning.\n',
   });
@@ -229,7 +230,7 @@ test('a CoC folio PC card is a subset of its page when display_meta names a badg
   const files = {
     'Characters/Ada Quill.md': '---\ntype: pc\nplayer_name: Pat\noccupation: Antiquarian\ndisplay_meta: [allegiance, occupation]\nallegiance: Wyvern Lodge Xq\n---\n## Stat Sheet\n\nSTR 50\n',
   };
-  const v = buildSmallVault(files, { extraConfig: '  system: coc-7e\n' });
+  const v = buildSmallVault(files, { settings: { 'vault.system': 'coc-7e' } });
   try {
     const cards = JSON.parse(v.read('previews.json'));
     const card = cards['characters/ada-quill.html'];

@@ -3,6 +3,7 @@ const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
 const { build } = require('../../lib/build');
+const { writeSiteConfig, mergeSettings } = require('../helpers/vault-files');
 
 const FIXTURES = path.join(__dirname, '..', 'fixtures');
 
@@ -13,15 +14,14 @@ function site(liveStats, mutate) {
   fs.writeFileSync(path.join(vault, 'Characters', 'PCs', 'Player Characters.md'), '---\ntype: pc_roster\ncanon_status: AUTHORITATIVE\n---\n\n# Player Characters\n\nThe party.\n');
   if (mutate) mutate(vault);
   if (liveStats) {
-    const cfg = path.join(vault, '_meta', 'vault-config.md');
-    fs.writeFileSync(cfg, fs.readFileSync(cfg, 'utf8').replace('system: dnd-5e-2024', 'system: dnd-5e-2024\n  live_stats: true'));
+    mergeSettings(vault, { 'player_site.features.live_stats': true });
   }
   const configPath = path.join(work, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
+  writeSiteConfig(configPath, {
     vaultPath: vault, outputDir: path.join(work, 'docs'), attachmentsDir: '_attachments', siteTitle: 'D&D Test',
     system: 'dnd-5e-2024', excludeDirs: ['_meta', '_Templates'], excludeSections: ['GM Notes'],
     folderMap: { 'Characters/PCs': 'characters/pcs', Creatures: 'creatures', Items: 'items' },
-  }, null, 2));
+  }, 2);
   const warned = [];
   const realWarn = console.warn;
   console.warn = (...a) => { warned.push(a.join(' ')); };

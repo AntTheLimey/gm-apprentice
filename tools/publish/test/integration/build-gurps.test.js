@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { build } = require('../../lib/build');
-const { setOldSettings } = require('../helpers/settings-files');
+const { writeSiteConfig, mergeSettings } = require('../helpers/vault-files');
 
 describe('build integration — GURPS PC', () => {
   const fixturesDir = path.join(__dirname, '..', 'fixtures');
@@ -21,7 +21,7 @@ describe('build integration — GURPS PC', () => {
       // The switch lives in the vault file; a wired KV store lets it take effect.
       const vault = path.join(outputDir, 'vault');
       fs.cpSync(path.join(fixturesDir, 'with-gurps-pc'), vault, { recursive: true });
-      setOldSettings(vault, { 'player_site.features.live_stats': true });
+      mergeSettings(vault, { 'player_site.features.live_stats': true });
       fs.writeFileSync(path.join(outputDir, 'wrangler.toml'), '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n');
       const config = {
         vaultPath: vault,
@@ -35,7 +35,7 @@ describe('build integration — GURPS PC', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 
@@ -149,7 +149,7 @@ describe('build integration — GURPS PC', () => {
         },
       };
 
-      fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeSiteConfig(configPath, config, 2);
       build({ configPath });
     });
 

@@ -20,7 +20,7 @@ const FILES = {
   'Sessions/Session_1.md': note('type: session\nsession_number: 1', '[[Emma]] met [[Hallam]].'),
 };
 const sites = [];
-const site = (extraConfig = '') => { const s = buildVault(FILES, { extraConfig }); sites.push(s); return s; };
+const site = (settings = {}) => { const s = buildVault(FILES, { settings }); sites.push(s); return s; };
 after(() => sites.forEach((s) => s.cleanup()));
 
 test('a page carries one Connections section and none of the old four', () => {
@@ -142,9 +142,9 @@ test('a target with no page is in the page\'s data island by its words, and its 
 
 test('each mode builds; off leaves no section and no script', () => {
   for (const mode of ['web', 'cards']) {
-    assert.match(site(`  connections: ${mode}\n`).read('npcs', 'emma.html'), new RegExp(`data-cx-mode="${mode}"`));
+    assert.match(site({ 'player_site.features.connections': mode }).read('npcs', 'emma.html'), new RegExp(`data-cx-mode="${mode}"`));
   }
-  const off = site('  connections: off\n');
+  const off = site({ 'player_site.features.connections': 'off' });
   const html = off.read('npcs', 'emma.html');
   assert.ok(!html.includes('class="cx"') && !html.includes('connections.js'));
   assert.ok(!off.exists('js', 'connections.js'));
