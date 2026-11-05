@@ -135,6 +135,25 @@ describe('leftovers from before plugin 1.11.0 stop the build by name', () => {
     assert.deepStrictEqual(ran, []);
   });
 
+  for (const [label, value] of [['a string', 'GM Secrets'], ['null', null], ['an empty list', []]]) {
+    it(`a site-file hiding key given as ${label} stops the build and writes nothing`, () => {
+      const s = site({ site: { excludeSections: value } });
+      const { error } = quietBuild(s.configPath);
+      assert.ok(error, 'the build stopped');
+      assert.match(error.message, /holds keys that are no longer read there: excludeSections \(now player_site\.hide\.sections\)/);
+      builtNothing(s);
+    });
+  }
+
+  it('both settings files present stops, naming the old file and what to do', () => {
+    const s = site({ oldFile: true });
+    const { error } = quietBuild(s.configPath);
+    assert.ok(error, 'the build stopped');
+    assert.match(error.message, /_meta\/vault-config\.md/);
+    assert.match(error.message, /remove or rename `_meta\/vault-config\.md` once you have checked its settings are in `_meta\/vault-config\.yaml`; plugin 1\.11\.0 no longer reads it/);
+    builtNothing(s);
+  });
+
   it('a site file with only vaultPath builds', () => {
     const s = site({ pkg: { scripts: { build: 'gm-apprentice-publish build' } } });
     const { error, lines } = quietBuild(s.configPath);
