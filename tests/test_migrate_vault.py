@@ -22,6 +22,7 @@ sys.path.insert(0, str(SCRIPTS.parent.parent.parent / "scripts"))
 import template_history as th  # noqa: E402
 from migrate import FLOOR  # noqa: E402
 from vaultlib import parse_version  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 SHARED = SCRIPTS.parent
 
@@ -31,9 +32,7 @@ def make_vault(case, system="coc-7e"):
     case.addCleanup(shutil.rmtree, vault, ignore_errors=True)
     (vault / "_meta").mkdir()
     publish = f"publish:\n  system: {system}\n" if system else ""
-    (vault / "_meta" / "vault-config.md").write_text(
-        f'---\ngm_apprentice_version: "1.10.12"\n{publish}---\n',
-        encoding="utf-8")
+    write_config(vault, f'---\ngm_apprentice_version: "1.10.12"\n{publish}---\n')
     return vault
 
 
@@ -1028,9 +1027,8 @@ class SmallCheckTests(unittest.TestCase):
     def test_a_heritage_move_that_would_unpublish_the_page_is_a_person_row(self):
         vault = make_vault(self)
         (vault / "_meta" / "mobrpg-map.json").write_text("{}", encoding="utf-8")
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\npublish:\n  site: true\n  mode: full\n  folder_map:\n"
-            "    Cultures: cultures\n---\n", encoding="utf-8")
+        write_config(vault, "---\npublish:\n  site: true\n  mode: full\n  folder_map:\n"
+            "    Cultures: cultures\n---\n")
         (vault / "Cultures").mkdir()
         (vault / "Cultures" / "Elves.md").write_text(
             "---\ntype: culture\n---\n", encoding="utf-8")
@@ -1078,9 +1076,8 @@ class SmallCheckTests(unittest.TestCase):
             "console.error('Error: Unknown manifest command: rename');"
             "process.exit(1);")
         vault = make_vault(self)
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\npublish:\n  site: true\n  mode: full\n"
-            f"  site_dir: {site.as_posix()}\n---\n", encoding="utf-8")
+        write_config(vault, "---\npublish:\n  site: true\n  mode: full\n"
+            f"  site_dir: {site.as_posix()}\n---\n")
         (vault / "Chapters" / "Chapter 1").mkdir(parents=True)
         (vault / "Chapters" / "Chapter 1" / "Session 03 - Ball - Wrap-Up.md"
          ).write_text("---\ntype: session_wrap\nsession_number: 3\n---\n",
@@ -1123,8 +1120,7 @@ WS_CONFIG = ('---\ngm_apprentice_version: "1.10.27"\npublish:\n'
 class WrapupFixture(unittest.TestCase):
     def vault(self, wrap=WS_WRAP, config=WS_CONFIG):
         vault = make_vault(self)
-        (vault / "_meta" / "vault-config.md").write_text(config,
-                                                         encoding="utf-8")
+        write_config(vault, config)
         path = vault / WS_REL
         path.parent.mkdir(parents=True)
         path.write_text(wrap, encoding="utf-8")

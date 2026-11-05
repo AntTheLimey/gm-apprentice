@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent
 
 import vault_check as vc  # noqa: E402
 import vaultlib  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 CONFIG = "_meta/vault-config.md"
 
@@ -729,9 +730,7 @@ class SiteFileKeyTests(NewFileBase):
         self.addCleanup(shutil.rmtree, root, ignore_errors=True)
         vault = root / "V"
         (vault / "_meta").mkdir(parents=True)
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\ntype: meta\npublish:\n  site_title: Mine\n  exclude_sections: [A]\n---\n",
-            encoding="utf-8")
+        write_config(vault, "---\ntype: meta\npublish:\n  site_title: Mine\n  exclude_sections: [A]\n---\n")
         site_fixture.give_site(vault, lambda p: None, private=True)
         site = site_fixture.point_site_at(vault)
         move_to_new_layout(vault)

@@ -9,6 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills" / "shared" / "scripts"))
 
 import vaultlib  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -27,8 +28,7 @@ def make_vault(tmp_path: Path, frontmatter: str | None) -> Path:
     vault = tmp_path / "vault"
     (vault / "_meta").mkdir(parents=True)
     if frontmatter is not None:
-        (vault / "_meta" / "vault-config.md").write_text(
-            f"---\n{frontmatter}\n---\n", encoding="utf-8")
+        write_config(vault, f"---\n{frontmatter}\n---\n")
     return vault
 
 
@@ -248,8 +248,7 @@ def test_settings_default(tmp_path):
 def test_hand_edit_is_not_seen_until_forgotten(tmp_path):
     vault = make_vault(tmp_path, "publish:\n  connections: web")
     assert vaultlib.settings(vault).get("player_site.features.connections") == "web"
-    (vault / "_meta" / "vault-config.md").write_text(
-        "---\npublish:\n  connections: tree\n---\n", encoding="utf-8")
+    write_config(vault, "---\npublish:\n  connections: tree\n---\n")
     assert vaultlib.settings(vault).get("player_site.features.connections") == "web"
     vaultlib.forget_settings(vault)
     assert vaultlib.settings(vault).get("player_site.features.connections") == "tree"

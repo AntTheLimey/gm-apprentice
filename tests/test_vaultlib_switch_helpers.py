@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills" / "shared" / "scripts"))
 
 import vaultlib  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -23,8 +24,7 @@ def make(tmp_path: Path, publish: str | None) -> Path:
     vault = tmp_path / "vault"
     (vault / "_meta").mkdir(parents=True)
     if publish is not None:
-        (vault / "_meta" / "vault-config.md").write_text(
-            f"---\npublish:\n{publish}---\n", encoding="utf-8")
+        write_config(vault, f"---\npublish:\n{publish}---\n")
     return vault
 
 

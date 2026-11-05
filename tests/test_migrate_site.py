@@ -25,6 +25,7 @@ import migrate_site as ms  # noqa: E402
 import site_fixture  # noqa: E402
 import vault_check as vc  # noqa: E402
 from migrate_core import PERSON, WILL, StepFailed  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 REAL_PLUGIN_TOOL = migrate_core.plugin_tool
 
@@ -50,8 +51,7 @@ def make_vault(case, publish=True, site=True, version="1.10.12", extra=""):
             (site_dir / "vault.config.json").write_text("{}", encoding="utf-8")
             body += f"  site_dir: {site_dir}\n"
         body += extra
-    (vault / "_meta" / "vault-config.md").write_text(body + "---\n",
-                                                    encoding="utf-8")
+    write_config(vault, body + "---\n")
     return vault
 
 
@@ -160,10 +160,8 @@ class RepinTests(unittest.TestCase):
 
     def test_inline_publish_block_stops_the_repin(self):
         vault = make_vault(self, publish=False)
-        (vault / "_meta" / "vault-config.md").write_text(
-            '---\ngm_apprentice_version: "1.10.12"\n'
-            "publish: {mode: player, site_dir: ../site}\n---\n",
-            encoding="utf-8")
+        write_config(vault, '---\ngm_apprentice_version: "1.10.12"\n'
+            "publish: {mode: player, site_dir: ../site}\n---\n")
         pin = Pin()
         with self.assertRaises(StepFailed) as caught:
             self.find(vault, pin)
@@ -233,9 +231,7 @@ class PublishSiteTests(unittest.TestCase):
         # `settings().has_site_block` is false for it; the line is there, and
         # the switch is written under it, as it always was.
         vault = make_vault(self, publish=False)
-        (vault / "_meta" / "vault-config.md").write_text(
-            '---\ngm_apprentice_version: "1.10.12"\npublish:\n---\n',
-            encoding="utf-8")
+        write_config(vault, '---\ngm_apprentice_version: "1.10.12"\npublish:\n---\n')
         self.assertFalse(vc.settings(vault).has_site_block)
         (item,) = ms.find_publish_site(vault)
         item.apply(None)
@@ -244,8 +240,7 @@ class PublishSiteTests(unittest.TestCase):
 
     def test_a_publish_block_on_one_line_gets_nothing(self):
         vault = make_vault(self, publish=False)
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\npublish: {mode: player}\n---\n", encoding="utf-8")
+        write_config(vault, "---\npublish: {mode: player}\n---\n")
         self.assertEqual(ms.find_publish_site(vault), [])
 
     def test_a_switch_that_is_not_a_switch_word_is_still_a_written_switch(self):
@@ -914,9 +909,7 @@ class VaultSettingEndToEndTests(unittest.TestCase):
     def test_the_real_tool_reads_sets_and_reads_again(self):
         vault = tmp(self, "vs-e2e-vault-")
         (vault / "_meta").mkdir()
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\ntype: meta\npublish:\n  mode: player\n---\n",
-            encoding="utf-8")
+        write_config(vault, "---\ntype: meta\npublish:\n  mode: player\n---\n")
         site_fixture.give_site(vault, lambda p: None)
         self.assertFalse(vc.written_in_vault_file(
             vc.settings(vault), "player_site.theme.default_mode"))
@@ -930,9 +923,7 @@ class VaultSettingEndToEndTests(unittest.TestCase):
     def vault_with(self, publish_lines):
         vault = tmp(self, "vs-excl-vault-")
         (vault / "_meta").mkdir()
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\ntype: meta\npublish:\n" + publish_lines + "---\nBody\n",
-            encoding="utf-8")
+        write_config(vault, "---\ntype: meta\npublish:\n" + publish_lines + "---\nBody\n")
         site_fixture.give_site(vault, lambda p: None)
         return vault, vault / "_meta" / "vault-config.md"
 
@@ -968,9 +959,7 @@ class MigrateEndToEndTests(unittest.TestCase):
         (vault / "_meta").mkdir()
         (vault / "Overview.md").write_text(
             "---\ntype: campaign_overview\ncanon_status: AUTHORITATIVE\n---\n\n# Overview\n", encoding="utf-8")
-        (vault / "_meta" / "vault-config.md").write_text(
-            f'---\ntype: meta\ngm_apprentice_version: "1.10.23"\npublish:\n  mode: player\n  site_dir: {site}\n---\n',
-            encoding="utf-8")
+        write_config(vault, f'---\ntype: meta\ngm_apprentice_version: "1.10.23"\npublish:\n  mode: player\n  site_dir: {site}\n---\n')
         (site / "vault.config.json").write_text(json.dumps({
             "siteTitle": "Legacy", "vaultPath": str(vault),
             "outputDir": "./docs", "excludeDirs": ["_meta"],
@@ -1005,11 +994,10 @@ class MigrateEndToEndTests(unittest.TestCase):
             (site / "vault.config.json").write_text(json.dumps(site_file),
                                                     encoding="utf-8")
             site_dir = f"  site_dir: {site}\n"
-        (vault / "_meta" / "vault-config.md").write_text(
-            f'---\ntype: meta\ngm_apprentice_version: "{version}"\n'
+        write_config(vault, f'---\ntype: meta\ngm_apprentice_version: "{version}"\n'
             f"publish:\n  mode: player\n{site_dir}"
             + ("  exclude_sections: [GM Notes]\n  exclude_fields: [secrets]\n"
-               if lists else "") + "---\n", encoding="utf-8")
+               if lists else "") + "---\n")
         return vault
 
     def test_settings_left_after_1_10_24_are_still_moved(self):

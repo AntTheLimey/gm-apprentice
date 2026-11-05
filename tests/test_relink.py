@@ -16,6 +16,7 @@ sys.path.insert(0, str(SCRIPTS))
 
 import relink  # noqa: E402
 import vaultlib  # noqa: E402,F401
+from layouts import write_config  # noqa: E402
 
 
 def make_vault(case, files):
@@ -1202,8 +1203,7 @@ class CompanionTests(unittest.TestCase):
         vault = root / "vault"
         shutil.copytree(PUBLISH_TOOL.parent.parent / "test" / "fixtures"
                         / "with-story", vault)
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\npublish:\n  site: true\n  mode: full\n---\n")
+        write_config(vault, "---\npublish:\n  site: true\n  mode: full\n---\n")
         old = "Characters/PCs/Lord_Blackwood.md"
         relink.apply(relink.plan(vault, old, "Characters/PCs/Lord_Edmund_Blackwood.md"))
         self.assertTrue((vault / "Characters/PCs/Lord_Edmund_Blackwood_Story.md").is_file())

@@ -17,6 +17,7 @@ import migrate_vault as mv  # noqa: E402
 import vault_scaffold as vs  # noqa: E402
 import schema_rules as rules  # noqa: E402
 from migrate_core import CHOICE  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 
 class Generated(unittest.TestCase):
@@ -135,8 +136,7 @@ class VaultMirror(unittest.TestCase):
         vault = Path(tempfile.mkdtemp(prefix="fl-"))
         self.addCleanup(shutil.rmtree, vault, ignore_errors=True)
         (vault / "_meta").mkdir()
-        (vault / "_meta" / "vault-config.md").write_text(
-            '---\ngm_apprentice_version: "1.10.12"\n---\n', encoding="utf-8")
+        write_config(vault, '---\ngm_apprentice_version: "1.10.12"\n---\n')
         body = "\n\n".join(entries.values())
         (vault / "_meta" / "entity-types.md").write_text(
             f"# Types\n\n## Type-Specific Fields\n\n{body}\n", encoding="utf-8")

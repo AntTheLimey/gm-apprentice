@@ -19,6 +19,7 @@ import migrate_core  # noqa: E402
 import migrate_site as ms  # noqa: E402
 import vault_check as vc  # noqa: E402
 from test_migrate_move import NEEDS_NODE  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 CONVERTED = """---
 type: meta
@@ -151,8 +152,7 @@ class PublishHiddenTests(unittest.TestCase):
         from unittest import mock
         import migrate
         vault = make(self.tmp)
-        (vault / "_meta" / "vault-config.md").write_text(
-            '---\ntype: meta\ngm_apprentice_version: "1.10.106"\npublish:\n  mode: player\n---\n', encoding="utf-8")
+        write_config(vault, '---\ntype: meta\ngm_apprentice_version: "1.10.106"\npublish:\n  mode: player\n---\n')
 
         def update(*args):
             out, err = io.StringIO(), io.StringIO()

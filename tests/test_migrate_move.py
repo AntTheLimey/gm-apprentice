@@ -24,6 +24,7 @@ import migrate_site as ms  # noqa: E402
 import site_fixture  # noqa: E402
 import vault_check as vc  # noqa: E402
 from vaultlib import (read_stamp, settings, vault_layout,  # noqa: E402
+from layouts import write_config  # noqa: E402
                       write_stamp)
 
 PLUGIN = "1.10.53"
@@ -44,9 +45,8 @@ def make_vault(case, front="publish:\n  mode: player\n", version="1.10.12",
                notes="My own notes.\n"):
     vault = tmp(case) / "Vault"
     (vault / "_meta").mkdir(parents=True)
-    (vault / "_meta" / "vault-config.md").write_text(
-        f'---\ntype: meta\ngm_apprentice_version: "{version}"\n{front}---\n'
-        f"{notes}", encoding="utf-8")
+    write_config(vault, f'---\ntype: meta\ngm_apprentice_version: "{version}"\n{front}---\n'
+        f"{notes}")
     return vault
 
 
@@ -190,9 +190,8 @@ class MoveEndToEndTests(unittest.TestCase):
     def test_the_site_switch_being_off_does_not_skip_the_guard(self):
         vault = make_vault(self)
         site = with_site(self, vault, spec="^1.20.0")
-        (vault / "_meta" / "vault-config.md").write_text(
-            (vault / "_meta" / "vault-config.md").read_text().replace(
-                "site: true", "site: false"), encoding="utf-8")
+        write_config(vault, (vault / "_meta" / "vault-config.md").read_text().replace(
+                "site: true", "site: false"))
         self.assertFalse(vc.settings(vault).get("player_site.publish"))
         before = hashes(vault.parent)
         code, plan, err = update(vault, "plan")
@@ -208,9 +207,8 @@ class MoveEndToEndTests(unittest.TestCase):
         vault = make_vault(self)
         site = with_site(self, vault, spec=f"file:{site_fixture.TOOL_DIR.as_posix()}",
                          installed="1.22.0")
-        (vault / "_meta" / "vault-config.md").write_text(
-            (vault / "_meta" / "vault-config.md").read_text().replace(
-                "site: true", "site: false"), encoding="utf-8")
+        write_config(vault, (vault / "_meta" / "vault-config.md").read_text().replace(
+                "site: true", "site: false"))
         self.assertFalse(vc.settings(vault).get("player_site.publish"))
         before = hashes(vault.parent)
         code, plan, err = update(vault, "plan")
@@ -266,9 +264,8 @@ class MoveEndToEndTests(unittest.TestCase):
     def test_a_moved_vault_with_a_left_over_old_file_is_tidied_by_the_update(self):
         vault = make_vault(self)
         self.assertEqual(update(vault, "apply")[0], 0)
-        (vault / "_meta" / "vault-config.md").write_text(
-            '---\ntype: meta\ngm_apprentice_version: "1.10.12"\n'
-            "publish:\n  mode: player\n---\nMy own notes.\n", encoding="utf-8")
+        write_config(vault, '---\ntype: meta\ngm_apprentice_version: "1.10.12"\n'
+            "publish:\n  mode: player\n---\nMy own notes.\n")
         write_stamp(vault, "1.10.12")
         code, did, err = update(vault, "apply")
         self.assertEqual(code, 0, err + did)
@@ -283,7 +280,7 @@ class MoveEndToEndTests(unittest.TestCase):
         keep_md = (vault / "_meta" / "vault-config.md").read_text()
         keep_site = (site / "vault.config.json").read_text()
         self.assertEqual(update(vault, "apply")[0], 0)
-        (vault / "_meta" / "vault-config.md").write_text(keep_md)
+        write_config(vault, keep_md)
         (site / "vault.config.json").write_text(keep_site)
         write_stamp(vault, "1.10.12")
         code, did, err = update(vault, "apply")

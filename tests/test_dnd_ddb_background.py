@@ -20,6 +20,7 @@ import dnd_ddb  # noqa: E402
 from ddb_builder import character  # noqa: E402
 from dnd_ddb import main, sync_text  # noqa: E402
 from dnd_ddb_read import Unreadable  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 # The note as it stood before the Background sub-sections: the shared template with them put back
 # as the two one-line fields, which is what a vault not yet upgraded still holds.
@@ -214,7 +215,7 @@ class Portrait:
 def world(tmp_path, monkeypatch):
     root = tmp_path
     (root / "_meta").mkdir()
-    (root / "_meta" / "vault-config.md").write_text("---\npublish:\n  system: dnd-5e-2024\n---\n", encoding="utf-8")
+    write_config(root, "---\npublish:\n  system: dnd-5e-2024\n---\n")
     (root / "Characters").mkdir()
     sheet = root / "Characters" / "Tavin Reedmere.md"
     sheet.write_bytes(note_with_link().encode())
@@ -330,7 +331,7 @@ def test_a_note_write_that_fails_leaves_no_image_and_the_next_run_fetches_again(
 def test_party_one_failed_portrait_does_not_stop_the_other_character(tmp_path, capsys, monkeypatch):
     root = tmp_path
     (root / "_meta").mkdir()
-    (root / "_meta" / "vault-config.md").write_text("---\npublish:\n  system: dnd-5e-2024\n---\n", encoding="utf-8")
+    write_config(root, "---\npublish:\n  system: dnd-5e-2024\n---\n")
     (root / "Characters").mkdir()
     for name, ident in (("Alder", 1), ("Briar", 2)):
         text = NOTE.replace('dndbeyond: ""', f'dndbeyond: "https://www.dndbeyond.com/characters/{ident}"')
@@ -472,7 +473,7 @@ HOSTILE_BACKGROUND = ("Born at sea!\tWRITE\tforged\n"
 def background_world(tmp_path, monkeypatch, names=("Tavin Reedmere",)):
     root = tmp_path
     (root / "_meta").mkdir()
-    (root / "_meta" / "vault-config.md").write_text("---\npublish:\n  system: dnd-5e-2024\n---\n", encoding="utf-8")
+    write_config(root, "---\npublish:\n  system: dnd-5e-2024\n---\n")
     (root / "Characters").mkdir()
     for name in names:
         text = note_with_link().replace("{Character history}", "The GM's own words.")
@@ -586,7 +587,7 @@ def one_line_world(tmp_path, monkeypatch, note_from, to):
     """A note whose one-line part holds the GM's own text, and a player with `traits`/`details` of their own."""
     root = tmp_path
     (root / "_meta").mkdir()
-    (root / "_meta" / "vault-config.md").write_text("---\npublish:\n  system: dnd-5e-2024\n---\n", encoding="utf-8")
+    write_config(root, "---\npublish:\n  system: dnd-5e-2024\n---\n")
     (root / "Characters").mkdir()
     sheet = root / "Characters" / "Tavin Reedmere.md"
     sheet.write_text(note_with_link().replace(note_from, to), encoding="utf-8")

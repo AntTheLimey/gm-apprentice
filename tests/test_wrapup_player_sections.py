@@ -23,6 +23,7 @@ sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
 import vault_check as vc  # noqa: E402
 from migrate_vault import read_wrap_up_player_sections  # noqa: E402
 from vaultlib import SettingsUnavailable  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 REL = "Sessions/Chapter_01_Session_01_Wrap_Up.md"
 
@@ -121,7 +122,7 @@ class ReaderTests(unittest.TestCase):
             vault = Path(tmp)
             (vault / "_meta").mkdir()
             if cfg is not None:
-                (vault / "_meta" / "vault-config.md").write_text(cfg)
+                write_config(vault, cfg)
             return read_wrap_up_player_sections(vault)
 
     def test_absent_config_or_key_is_empty(self):

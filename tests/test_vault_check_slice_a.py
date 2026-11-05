@@ -35,6 +35,7 @@ import vault_check as vc  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from site_fixture import give_site, site_copy, with_site  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "slice-a"
 VAULT_CHECK_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "vault-check"
@@ -132,9 +133,7 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
             else "process.exit(1);\n", encoding="utf-8")
     (vault / "_meta").mkdir(exist_ok=True)
     mode_line = f"  mode: {mode}\n" if mode else ""
-    (vault / "_meta" / "vault-config.md").write_text(
-        f"---\npublish:\n{mode_line}  site_dir: {site}\n---\n",
-        encoding="utf-8")
+    write_config(vault, f"---\npublish:\n{mode_line}  site_dir: {site}\n---\n")
     calls = []
 
     def fake(cmd, **kwargs):
@@ -261,8 +260,7 @@ def make_vault(case, config=None, meta=True, site=True):
                 config, d,
                 lambda p: case.addCleanup(shutil.rmtree, p, ignore_errors=True))
         if config is not None:
-            (d / "_meta" / "vault-config.md").write_text(config,
-                                                         encoding="utf-8")
+            write_config(d, config)
     return d
 
 
@@ -2212,8 +2210,7 @@ class RenestReviewRegressionTests(unittest.TestCase):
                     site = stub_site(self)
                     config = config.replace(
                         "{", f"{{site: true, site_dir: {site.as_posix()}, ")
-                    (vault / "_meta" / "vault-config.md").write_text(
-                        config, encoding="utf-8")
+                    write_config(vault, config)
                 else:
                     config = read(vault, "_meta/vault-config.md")
                 rows = vc.check_gm_leak(vault, None, fix=True,
@@ -4826,9 +4823,7 @@ class GmLeakWithheldHubTests(unittest.TestCase):
     def test_a_site_dir_with_no_site_in_it_is_not_guessed_at(self):
         vault = self.vault()
         stub_publish_tool(self, vault, ["Session 01 - Lone.md"])
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\npublish:\n  site_dir: /no/such/site\n---\n",
-            encoding="utf-8")
+        write_config(vault, "---\npublish:\n  site_dir: /no/such/site\n---\n")
         rows = vc.check_gm_leak(vault, None)
         self.assertEqual(len(rows), 1, rows)
         self.assertTrue(rows[0].startswith("ERROR\t(vault)\tgm-leak could "
@@ -4839,8 +4834,7 @@ class GmLeakWithheldHubTests(unittest.TestCase):
     def test_vault_that_never_publishes_does_not_ask(self):
         # No publish: block, so no site: nothing is asked and nothing checked.
         vault = self.vault()
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\ntype: meta\n---\n", encoding="utf-8")
+        write_config(vault, "---\ntype: meta\n---\n")
         with no_other_tool_run() as others:
             rows = vc.check_gm_leak(vault, None)
         self.assertEqual(others, [])
@@ -5277,9 +5271,7 @@ class PublishToolEndToEndTests(unittest.TestCase):
             "siteTitle": "T", "vaultPath": str(vault), "outputDir": "./docs",
             "excludeDirs": ["_meta"],
             "folderMap": {"Sessions": "sessions"}}), encoding="utf-8")
-        (vault / "_meta" / "vault-config.md").write_text(
-            f"---\npublish:\n  mode: player\n  site_dir: {site}\n---\n",
-            encoding="utf-8")
+        write_config(vault, f"---\npublish:\n  mode: player\n  site_dir: {site}\n---\n")
         (vault / "Sessions").mkdir()
         (vault / "Sessions" / "Session 01 - Arrival.md").write_text(
             f"---\ntype: session\nsession_number: 1\nstatus: played\n"
@@ -5474,8 +5466,7 @@ class GmLeakReviewFollowupTests(unittest.TestCase):
         (vault / "Bob.md").write_text(bob, encoding="utf-8")
         row = next(r for r in vc.check_gm_leak(vault, None) if "'World State'" in r)
         pasted = row[row.index("["):row.index("]") + 1]
-        (vault / "_meta" / "vault-config.md").write_text(
-            f"---\ntype: meta\npublish:\n  exclude_sections: {pasted}\n---\n", encoding="utf-8")
+        write_config(vault, f"---\ntype: meta\npublish:\n  exclude_sections: {pasted}\n---\n")
         site_for(self, vault)
         vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         hidden = vc.hidden_lines(read(vault, "Bob.md"), ["GM Notes"], {"type": "npc"})
@@ -5613,8 +5604,7 @@ class RenestExcludesSilentVaultTests(unittest.TestCase):
         # No site: nothing publishes, so there is nothing to re-nest for.
         vault = self.setup_vault("---\ntype: meta\n---\n")
         calls = stub_publish_tool(self, vault)
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\ntype: meta\n---\n", encoding="utf-8")
+        write_config(vault, "---\ntype: meta\n---\n")
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertEqual(rows, [SITE_OFF_ROW])
         self.assertEqual(calls, [])
@@ -5773,7 +5763,7 @@ class UnderGmNotesOrNotTests(unittest.TestCase):
                 (vault / "_meta").mkdir()
                 (vault / "Sessions").mkdir()
                 if config:
-                    (vault / "_meta" / "vault-config.md").write_text(config)
+                    write_config(vault, config)
                 (vault / NEW_READING_REL).write_bytes(text.encode("utf-8"))
                 results.append(vc.check_wrapup(vault, None, False))
         self.assertEqual(results[0], results[1])
