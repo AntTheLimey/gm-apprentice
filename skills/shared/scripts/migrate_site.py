@@ -134,7 +134,7 @@ def _ask_move(vault: Path, args: list[str]) -> dict[str, Any]:
 CANNOT_FINISH = " The update cannot finish until this is done."
 
 
-def _clear_tool_hold(line: str) -> str:
+def _clear_tool_hold(vault: Path, line: str) -> str:
     """The way out of a hold on the site's publish tool being too old: the
     tool names the version in its own line; the update repins a tool only
     when the plugin pinned it."""
@@ -143,7 +143,7 @@ def _clear_tool_hold(line: str) -> str:
     return (f" To clear it: update that site's publish tool to {version} or "
             "later (the update repins it only when the plugin pinned it), "
             "or, if the site is no longer published, clear "
-            "player_site.folder." + CANNOT_FINISH)
+            f"{setting_name(vault, 'player_site.folder')}." + CANNOT_FINISH)
 
 
 def find_settings_move(vault: Path) -> list[Item]:
@@ -179,7 +179,7 @@ def find_settings_move(vault: Path) -> list[Item]:
         # Left behind: the tool says why in plain words and the vault is
         # told it every pass. The move is not done, so the stamp holds.
         return [Item(MOVE, PERSON, [f"settings\t{plan.get('line')}"
-                      f"{_clear_tool_hold(str(plan.get('line')))}"],
+                      f"{_clear_tool_hold(vault, str(plan.get('line')))}"],
                      holds_stamp=True)]
     if not plan["ok"]:
         blockers = [str(b) for b in plan.get("blockers") or []]
@@ -308,7 +308,7 @@ def find_publish_list(vault: Path) -> list[Item]:
     plan = _ask_convert(vault, "--check", *flag)
     if plan.get("held"):
         said = str(plan["lines"][0])
-        clear = (_clear_tool_hold(said) if plan.get("held") == "site-tool"
+        clear = (_clear_tool_hold(vault, said) if plan.get("held") == "site-tool"
                  else " To clear it: change that build step so it no longer "
                       "reads the old file." + CANNOT_FINISH)
         return [Item(PUBLISH_LIST, PERSON, [f"publish list\t{said}{clear}"],

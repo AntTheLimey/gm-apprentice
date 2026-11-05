@@ -157,7 +157,8 @@ class MoveEndToEndTests(unittest.TestCase):
         self.assertIn("To clear it: update that site's publish tool to 1.23.0 "
                       "or later (the update repins it only when the plugin "
                       "pinned it), or, if the site is no longer published, "
-                      "clear player_site.folder.", plan)
+                      "clear publish.site_dir.", plan)   # the old file's name
+        self.assertNotIn("player_site.folder", plan)
         stamp = read_stamp(vault)
         code, did, err = update(vault, "apply", "--choose", "default-mode=leave")
         self.assertEqual(code, 0, err + did)
@@ -492,6 +493,20 @@ class SiteLeftoversTests(unittest.TestCase):
         self.assertIn("the settings could not be moved (the publish tool "
                       "reported nothing to write); the update cannot finish "
                       "until they are", "".join(items[0].lines))
+
+    def test_held_steps_alone_hold_the_stamp(self):
+        vault, site = moved_vault_with_site(
+            self, spec="^1.20.0", installed="1.23.1")
+        add_steps(site, postbuild="node scripts/glue.mjs")
+        items = ms.find_settings_move(vault)
+        self.assertEqual([i.group for i in items], [ms.PERSON])
+        self.assertIn("build steps stay in its package.json",
+                      "".join(items[0].lines))
+        stamp = read_stamp(vault)
+        code, did, err = update(vault, "apply")
+        self.assertEqual(code, 0, err + did)
+        self.assertEqual(read_stamp(vault), stamp)
+        self.assertIn("not stamped", did)
 
     def test_a_vault_with_no_site_and_the_new_file_finds_nothing(self):
         vault = tmp(self) / "Vault"
