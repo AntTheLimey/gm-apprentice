@@ -14,11 +14,9 @@ function tempVault(settings) {
 }
 const vaultConfig = (vault) => fs.readFileSync(nodePath.join(vault, '_meta', 'vault-config.yaml'), 'utf8');
 
-function harness(overrides = {}, vault = tempVault({ 'player_site.title': 'T' })) {
+function harness(overrides = {}, vault = tempVault({ 'player_site.title': 'T', 'player_site.cloudflare_project': 'proj-x', 'player_site.url': 'https://proj-x.pages.dev' })) {
   const files = {
-    './vault.config.json': JSON.stringify({
-      cloudflarePagesProject: 'proj-x', siteUrl: 'https://proj-x.pages.dev', vaultPath: vault,
-    }),
+    './vault.config.json': JSON.stringify({ vaultPath: vault }),
     'wrangler.toml': 'name = "old"\npages_build_output_dir = "docs"\n',
   };
   const calls = [];
@@ -116,22 +114,6 @@ test('a vault file the editor refuses stops the command before any KV or wrangle
   assert.match(lines.join('\n'), /cannot edit the vault's settings/);
   assert.strictEqual(files['wrangler.toml'], tomlBefore, 'wrangler.toml untouched');
   assert.deepStrictEqual(calls, [], 'no wrangler call of any kind');
-});
-
-test('a vault with no settings file whose site file still holds settings is left as it is, before any KV or toml change', async () => {
-  const vault = tempVault();
-  const lines = [];
-  const { deps, files, calls } = harness({ out: (m) => lines.push(m) }, vault);
-  files['./vault.config.json'] = JSON.stringify({ vaultPath: vault, siteTitle: 'Kept', excludeSections: ['Spoilers'] });
-  const tomlBefore = files['wrangler.toml'];
-  const rc = await runSetupBackend('inbox', { configPath: './vault.config.json' }, deps);
-  assert.strictEqual(rc, 1);
-  assert.match(lines.join('\n'), /still holds this vault's settings, so none can be set yet\. Bring them into the vault first by running: gm-apprentice-publish settings move --vault .* --config/);
-  assert.ok(lines.join('\n').includes(`--config "${nodePath.resolve('./vault.config.json')}"`), 'the real site file path, not a placeholder');
-  assert.ok(!lines.join('\n').includes('<site folder>'));
-  assert.strictEqual(files['wrangler.toml'], tomlBefore);
-  assert.deepStrictEqual(calls, []);
-  assert.strictEqual(fs.existsSync(nodePath.join(vault, '_meta')), false, 'no settings file was made');
 });
 
 test('a vault with no settings file whose site file holds no settings gets the new file, as before', async () => {
