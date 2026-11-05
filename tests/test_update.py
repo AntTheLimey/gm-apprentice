@@ -570,6 +570,35 @@ class ExcludeListsTests(Base):
         self.assertIn("exclude_sections: Mine", typed)
 
 
+    def new_layout_vault(self, site_config, top="", under=""):
+        root = Path(tempfile.mkdtemp(prefix="upd-lists-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        vault, site = root / "Vault", root / "site"
+        (vault / "_meta").mkdir(parents=True)
+        site.mkdir()
+        (site / "vault.config.json").write_text(json.dumps(site_config),
+                                                encoding="utf-8")
+        (vault / "_meta" / "vault-config.yaml").write_text(
+            f"version: 1\n{top}player_site:\n  folder: {site.as_posix()}\n"
+            f"{under}", encoding="utf-8")
+        import vaultlib
+        vaultlib.forget_settings(None)
+        return vault
+
+    def test_a_list_typed_under_an_old_name_or_in_a_bad_place_asks(self):
+        import migrate_site as ms
+        for label, vault in (
+                ("site file's old name",
+                 self.new_layout_vault({"excludeSections": ["Mine"]})),
+                ("vault's old name", self.new_layout_vault(
+                    {}, top="publish:\n  exclude_sections:\n    - Mine\n")),
+                ("the group is not a map",
+                 self.new_layout_vault({}, under="  hide: Mine\n"))):
+            with self.subTest(label):
+                kinds = {i.id: i.kind for i in ms.find_exclude_lists(vault)}
+                self.assertEqual(kinds.get("exclude-lists-replace"), "asks",
+                                 kinds)
+
     def test_report_never_says_lost(self):
         vault = make_vault(self)
         b, _ = check("tidy", "bookkeeping", will_item("tidy"))

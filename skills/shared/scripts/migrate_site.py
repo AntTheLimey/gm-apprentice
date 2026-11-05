@@ -926,6 +926,9 @@ def find_tone_shown(vault: Path) -> list[Item]:
 
 # The two lists the vault file holds in plain sight.
 EXCLUDE_LISTS = ("player_site.hide.sections", "player_site.hide.fields")
+# The publish tool's fault kinds (tools/publish/lib/settings/read.js) that
+# mean the GM wrote a value for a setting that was not used.
+TYPED_FAULTS = ("not-allowed", "dropped", "old-name", "unknown-name")
 
 
 def find_exclude_lists(vault: Path) -> list[Item]:
@@ -950,10 +953,20 @@ def find_exclude_lists(vault: Path) -> list[Item]:
     # so the old file's name would be wrong by the time the lists are written.
     where = (SETTINGS_FILE if vault_layout(vault) == "legacy"
              else settings_file(vault))
-    # A value the GM wrote that is not a list: the build ignored it, so the built-in list
-    # has been what publishes; the line says what was typed before it is replaced.
-    typed = {f.get("setting"): f.get("message") for f in now.faults
-             if f.get("kind") == "not-allowed"}
+    # A value the GM wrote that the tool could not use (not a list, an old
+    # name, a misplaced name, a group that is not a map): the build ignored
+    # it, so the built-in list has been what publishes; the line says what
+    # was typed before it is replaced, and replacing it asks.
+    typed: dict[str, str] = {}
+    for f in now.faults:
+        if f.get("kind") not in TYPED_FAULTS:
+            continue
+        setting, written = f.get("setting"), str(f.get("name") or "")
+        said = str(f.get("message") or written)
+        for name in EXCLUDE_LISTS:
+            if setting == name or (setting is None and written
+                                   and name.startswith(written + ".")):
+                typed.setdefault(name, said)
 
     def line(name: str, default: list) -> str:
         replaced = f" (replacing: {typed[name]})" if name in typed else ""
