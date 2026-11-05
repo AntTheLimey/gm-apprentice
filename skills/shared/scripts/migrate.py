@@ -137,20 +137,26 @@ def recorded_answers(vault: Path) -> dict[str, AnswerEntry]:
         return {}
 
 
+# Answers that change nothing: the only ones the record answers again. A
+# yes to a change is given fresh each time, or a GM's later edit could be
+# overwritten by an old yes.
+STANDING = ("leave", "keep")
+
+
 def recorded(item: Item, answers: dict[str, AnswerEntry]) -> str | None:
-    """The answer the record keeps for this item while its lines are the
-    ones it was given against; a template's answer is the record's
-    templates entry, never this."""
+    """The standing answer (leave or keep) the record keeps for this item
+    while its lines are the ones it was given against; a template's answer
+    is the record's templates entry, never this."""
     if item.group == PERSON or item.id.startswith(TEMPLATE):
         return None
     entry = answers.get(item.id)
     if isinstance(entry, dict) and entry.get("lines_sha") == lines_sha(item.lines):
         answer = entry.get("answer")
-        return answer if isinstance(answer, str) else None
+        return answer if answer in STANDING else None
     return None
 
 
-def _answered(item: Item, held: dict[str, set[str]],
+def answered(item: Item, held: dict[str, set[str]],
               answers: dict[str, AnswerEntry] | None = None) -> bool:
     """Is this item settled by what a held update remembered (a "leave"
     already given, or a notice already said), or by an answer the update
@@ -230,7 +236,7 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
                                    f"(apply stops here until this is fixed)"))
             continue
         for item in found.items:
-            if _answered(item, held, answers):
+            if answered(item, held, answers):
                 continue
             groups[item.group].extend(_rows(item))
             if item.holds_stamp:
@@ -262,7 +268,22 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
     return 0
 
 
-def _stamp(vault: Path, version: str) -> None:
+def stamp_target(todo: list[Check], failed: int | None, vault_v: str,
+                 plugin_v: str) -> str:
+    """The version a run may stamp: the plugin's, or after the check at
+    `failed` stopped it, the last release whose steps all finished."""
+    if failed is None:
+        return plugin_v
+    left = [c.release for c in todo[failed:] if c.release]
+    if not left:
+        return vault_v
+    first = parse_version(min(left, key=parse_version))
+    done = [c.release for c in todo
+            if c.release and parse_version(c.release) < first]
+    return max([vault_v, *done], key=parse_version)
+
+
+def stamp(vault: Path, version: str) -> None:
     try:
         write_stamp(vault, version)
     except (StateUnreadable, OSError) as e:
@@ -271,7 +292,7 @@ def _stamp(vault: Path, version: str) -> None:
                          f"({e.__class__.__name__})") from e
 
 
-def _check_stampable(vault: Path) -> None:
+def check_stampable(vault: Path) -> None:
     """Raise StepFailed unless the stamp could be written."""
     if vault_layout(vault) == "new":
         try:
@@ -316,7 +337,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
             return 2
     if parse_version(vault_v) < parse_version(plugin_v):
         try:   # a stamp is due, written last; find out now that it can be
-            _check_stampable(vault)
+            check_stampable(vault)
         except StepFailed as e:
             print(f"{cli_name()}: {e}; nothing was changed", file=sys.stderr)
             return 1
@@ -338,7 +359,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         try:
             for item in check.find(vault):
                 picked = any(i == item.id for i, _v in chosen)
-                if _answered(item, held, answers) and not picked:
+                if answered(item, held, answers) and not picked:
                     continue
                 if item.notice:
                     said.add(item.id)
@@ -381,20 +402,12 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         except (StepFailed, SettingsUnavailable) as e:
             failed, error = n, f"{check.name}: {e}"
             break
-    target = plugin_v
-    if failed is not None:
-        target = vault_v
-        left = [c.release for c in todo[failed:] if c.release]
-        if left:
-            first = parse_version(min(left, key=parse_version))
-            done = [c.release for c in todo
-                    if c.release and parse_version(c.release) < first]
-            target = max([vault_v, *done], key=parse_version)
+    target = stamp_target(todo, failed, vault_v, plugin_v)
     stamped = (parse_version(target) > parse_version(vault_v)
                and not waited and not unanswered and not stuck)
     if stamped:
         try:
-            _stamp(vault, target)
+            stamp(vault, target)
         except StepFailed as e:
             stamped = False
             error = error or f"stamp: {e}"

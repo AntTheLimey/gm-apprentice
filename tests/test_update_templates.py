@@ -231,7 +231,7 @@ class TemplateRuleTests(unittest.TestCase):
         path = edited_npc(vault)
         text = path.read_text(encoding="utf-8")
         item = by_id(mv.find_templates(vault))[f"template:{NPC}"]
-        self.assertEqual(item.apply("leave"), [f"left _Templates/{NPC} as it is"])
+        self.assertEqual(item.apply("leave"), ["kept your NPC template"])
         self.assertEqual(path.read_text(encoding="utf-8"), text)
         entry = record(vault)["templates"][NPC]
         self.assertEqual((entry["state"], entry["decision"]), ("gms", "keep"))

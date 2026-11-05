@@ -51,6 +51,21 @@ def check(name, kind, items, release=None, plain=None, log=None):
     return c, state
 
 
+def file_check(vault, name, kind, release=None):
+    """A check that finds its item until `<name>.done` exists in the vault,
+    and whose apply writes that file: what it finds is the vault's state."""
+    def find(_vault):
+        if (vault / f"{name}.done").exists():
+            return []
+
+        def apply(_v):
+            (vault / f"{name}.done").write_text("done", encoding="utf-8")
+            return [f"did {name}"]
+        return [Item(name, WILL, [f"do {name}"], apply)]
+    return Check(name, release, 3, f"title of {name}", find, kind=kind,
+                 plain=f"Plainly did {name}.")
+
+
 def will_item(name):
     return lambda: [Item(name, WILL, [f"do {name}"], None)]
 
@@ -97,6 +112,16 @@ class SortTests(unittest.TestCase):
                 self.assertTrue(c.plain.endswith("."), c.plain)
                 for word in ("frontmatter", "stamp", "lost"):
                     self.assertNotIn(word, c.plain.lower())
+                    self.assertNotIn(word, c.ask.lower())
+                    self.assertNotIn(word, c.left.lower())
+                can_ask = (c.kind != "bookkeeping"
+                           or any(x.endswith("=") for x in c.choices)
+                           or c.name == "exclude-lists")
+                if can_ask:
+                    self.assertTrue(c.ask.endswith("."), c.ask)
+                    self.assertTrue(c.left.endswith("."), c.left)
+                    # a consequence, not a report: no past-tense lead word
+                    self.assertFalse(c.ask.split()[0].endswith("ed"), c.ask)
 
     def test_the_proposed_sort_holds_where_the_brief_fixed_it(self):
         kinds = {c.name: c.kind for c in migrate.CHECKS}
@@ -262,20 +287,118 @@ class RunTests(Base):
 
     def test_failed_step_records_only_what_finished_and_rerun_asks_nothing_new(self):
         vault = make_vault(self)
-        log = []
-        a, _ = check("first", "removes", will_item("first"), release="1.10.20",
-                     log=log)
-        b, _ = check("second", "removes", failing("second"), release="1.10.30",
-                     log=log)
-        res = self.run_update(vault, [a, b], {"first": "yes", "second": "yes"})
+        early, _ = check("early", "bookkeeping", will_item("early"),
+                         release="1.10.20")
+        first = file_check(vault, "first", "removes")
+        second, _ = check("second", "removes", failing("second"),
+                          release="1.10.30")
+        res = self.run_update(vault, [early, first, second],
+                              {"first": "yes", "second": "yes"})
         self.assertEqual(res.exit, 1)
         self.assertIn("broke", res.error)
+        self.assertTrue((vault / "first.done").is_file())
         self.assertEqual(stamp_of(vault), "1.10.20")
         rec = update_record.load(vault)
         self.assertEqual(set(rec["answers"]), {"first"})
         self.assertEqual(rec["updates"][-1]["to"], "1.10.20")
-        again = self.run_update(vault, [a, b])
+        # `first` runs every pass: it is not asked again only because the
+        # file now says it is done.
+        again = self.run_update(vault, [early, first, second])
         self.assertEqual([q.id for q in again.questions], ["second"])
+
+    def test_an_unexpected_error_still_records_what_finished(self):
+        vault = make_vault(self)
+        first = file_check(vault, "first", "removes")
+
+        def boom():
+            def apply(_v):
+                raise RuntimeError("not a step failure")
+            return [Item("boom", WILL, ["do boom"], apply)]
+        bad, _ = check("boom", "bookkeeping", boom)
+        with self.assertRaises(RuntimeError):
+            self.run_update(vault, [first, bad], {"first": "yes"})
+        rec = update_record.load(vault)
+        self.assertEqual(rec["answers"]["first"]["answer"], "yes")
+        self.assertEqual(rec["updates"][-1]["did"], ["Plainly did first."])
+        self.assertEqual(rec["updates"][-1]["to"], "1.10.12")
+        self.assertEqual(stamp_of(vault), "1.10.12")
+
+    def test_a_recorded_yes_is_never_applied_again_unasked(self):
+        vault = make_vault(self)
+        log = []
+        r, state = check("drop", "removes", will_item("drop"), log=log)
+        self.run_update(vault, [r], {"drop": "yes"})
+        self.assertEqual(log, ["drop"])
+        state["pending"] = True   # the same change is due again (GM re-edited)
+        headless = self.run_update(vault, [r], headless=True)
+        self.assertEqual(log, ["drop"])
+        self.assertEqual([q.id for q in headless.questions], ["drop"])
+        asked = self.run_update(vault, [r])
+        self.assertEqual(log, ["drop"])
+        self.assertEqual((asked.exit, [q.id for q in asked.questions]),
+                         (3, ["drop"]))
+
+    def test_a_held_question_alone_writes_nothing(self):
+        vault = make_vault(self)
+        r, _ = check("drop", "removes", will_item("drop"), release="1.10.20")
+        res = self.run_update(vault, [r])
+        self.assertEqual((res.exit, res.backup), (3, None))
+        self.assertEqual(self.backups(), [])
+        self.assertFalse((vault / update_record.RECORD_FILE).exists())
+
+    def test_a_leave_is_reported_in_plain_words(self):
+        vault = make_vault(self)
+        r, _ = check("drop", "removes", will_item("drop"))
+        r = dataclasses.replace(r, left="Kept your old lines.")
+        res = self.run_update(vault, [r], {"drop": "leave"})
+        self.assertEqual(res.did, ["Kept your old lines."])
+        self.assertEqual(update_record.load(vault)["updates"][-1]["did"],
+                         ["Kept your old lines."])
+
+    def test_an_item_kind_overrides_its_check(self):
+        vault = make_vault(self)
+        log = []
+        c, _ = check("lists", "bookkeeping", lambda: [
+            Item("lists", WILL, ["write the list"], None),
+            Item("lists-replace", WILL, ["replace what you typed"], None,
+                 kind="asks")], log=log)
+        res = self.run_update(vault, [c], headless=True)
+        self.assertEqual(log, ["lists"])
+        self.assertEqual([(q.id, q.kind) for q in res.questions],
+                         [("lists-replace", "asks")])
+
+
+class ExcludeListsTests(Base):
+    """The built-in hide lists are bookkeeping; replacing a value the GM
+    typed asks, and a headless run never does it."""
+
+    def test_replacing_a_typed_value_asks_and_is_never_done_headless(self):
+        import migrate_site as ms
+        import test_migrate_site as tms
+        vault = tms.make_vault(self,
+                               extra="  exclude_sections: Mine\n")
+        items = ms.find_exclude_lists(vault)
+        self.assertEqual(sorted((i.id, i.kind) for i in items),
+                         [("exclude-lists", None),
+                          ("exclude-lists-replace", "asks")])
+        real = next(c for c in ms.SITE_CHECKS if c.name == "exclude-lists")
+        lists = dataclasses.replace(real, asks_site=False, release=None)
+        before = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
+        self.assertIn("exclude_sections: Mine", before)
+        res = self.run_update(vault, [lists], headless=True)
+        self.assertEqual([q.id for q in res.questions], ["exclude-lists-replace"])
+        self.assertEqual([q.kind for q in res.questions], ["asks"])
+        import vault_check as vc
+        s = vc.settings(vault)
+        self.assertEqual(s.get("player_site.hide.fields"),
+                         ms.settings_default("player_site.hide.fields"))
+        self.assertEqual(s.origins["player_site.hide.fields"], "file")
+        # What the GM typed is still there (the tool reads it as a fault and
+        # falls back to the built-in list, so read the file).
+        typed = "".join(p.read_text(encoding="utf-8")
+                        for p in (vault / "_meta").glob("vault-config.*"))
+        self.assertIn("exclude_sections: Mine", typed)
+
 
     def test_report_never_says_lost(self):
         vault = make_vault(self)

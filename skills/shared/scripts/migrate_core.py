@@ -25,6 +25,10 @@ WILL, CHOICE, PERSON = "will", "choice", "person"
 TOOL_TIMEOUT = 600  # update-pin runs npm install
 
 
+Kind = Literal["bookkeeping", "removes", "asks"]
+KINDS: tuple[Kind, ...] = ("bookkeeping", "removes", "asks")
+
+
 class StepFailed(Exception):
     """A step could not be done. The run stops; the message is one line."""
 
@@ -45,10 +49,9 @@ class Item:
     # Structure behind a CHOICE for whoever puts it to the GM (a template's
     # comparison); JSON-able. `summary`, when given, is shown after the line.
     detail: dict[str, object] | None = None
-
-
-Kind = Literal["bookkeeping", "removes", "asks"]
-KINDS: tuple[Kind, ...] = ("bookkeeping", "removes", "asks")
+    # Overrides its check's kind for `gma update` (one case of a
+    # bookkeeping check that would replace what the GM wrote asks).
+    kind: Optional[Kind] = None
 
 
 @dataclass(frozen=True)
@@ -71,6 +74,11 @@ class Check:
     # One sentence, past tense, for a GM who knows nothing of the system:
     # what changed for them when this check ran.
     plain: str = ""
+    # For a check that can ask (or has an item that asks): what a yes does,
+    # as a consequence ("Moves ... so ..."), and the record's line for a
+    # leave ("Kept your own ...").
+    ask: str = ""
+    left: str = ""
 
 
 # The files the vault's settings are read from: the vault's (either layout)
