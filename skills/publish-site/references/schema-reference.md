@@ -25,8 +25,8 @@ the site does with a field, or reads though the template does not carry it.
 <!-- generated:fields-pc (scripts/gen_field_lists.py) -->
 Template fields: `player_name`, `occupation`, `age`, `gender`,
 `nationality`, `status` (alive/dead/missing/retired/unknown),
-`key_traits`, `portrait`, `display_meta`, `sheet_source`, `hook`,
-`dndbeyond`.
+`key_traits`, `portrait`, `display_meta`, `voice`, `sheet_source`,
+`hook`, `dndbeyond`.
 <!-- /generated:fields-pc -->
 
 | Field | Status | Description |
@@ -70,7 +70,7 @@ beneath them. No accordion — the content flows as continuous prose.
 <!-- generated:fields-npc (scripts/gen_field_lists.py) -->
 Template fields: `companion`, `occupation`, `age`, `gender`,
 `nationality`, `status` (alive/dead/missing/unknown), `location`,
-`portrait`.
+`portrait`, `voice`.
 <!-- /generated:fields-npc -->
 
 | Field | Status | Description |

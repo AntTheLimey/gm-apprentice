@@ -18,6 +18,7 @@ nationality: ""
 status: alive         # alive / dead / missing / unknown
 location: ""          # "[[Where they can usually be found]]"
 portrait: ""
+voice: ""            # set only when the GM gives this NPC their own story; how they are told and speak; never published
 relationships:
   - target: "[[]]"
     type: knows

@@ -1,7 +1,8 @@
 {
  "coc-7e": {
   "_Template_Campaign_Overview.md": {
-   "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+   "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
+   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": null
   },
   "_Template_Chapter.md": {
    "6e2060b44d3e4421b207b1de0af756b95f4eaca18bf663896a7b6afbc39cb974": null,
@@ -32,8 +33,9 @@
    "edd1d0e2b88fe22fc41eb12a6bc26762fc1775127e236551b86c591622295db6": null
   },
   "_Template_NPC.md": {
+   "18378fbf43d05def78503f68ca13cc68bd918e03276bc8d5c150b81fb22540f6": null,
    "bb84fe9a6786630642cc5942b74a0f4992b41b4cf44e99d96fc35d9cfa0eac96": "1.10.122",
-   "cba7b7df7dd8963b9134615dc7aacb496fa24c9121752e369abaee7ee2633104": null
+   "cba7b7df7dd8963b9134615dc7aacb496fa24c9121752e369abaee7ee2633104": "1.11.1"
   },
   "_Template_Organization.md": {
    "91d409ba7bd15cf111f20337c62f37f08b6d18e944e7a84f9700c8926fd0232b": null
@@ -74,12 +76,14 @@
    "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.93"
   },
   "pc-coc-7e.md": {
-   "bf2c2fa0c2df630c0dfdcb523eb8dc34bad14c0a4cf308151a06a6b44264d8ec": null
+   "bf2c2fa0c2df630c0dfdcb523eb8dc34bad14c0a4cf308151a06a6b44264d8ec": "1.11.1",
+   "ff92b872f8b0dabd9f1b253f61e64248fa988b7a4df5c3a76f70d56831cd624d": null
   }
  },
  "coc-7e-regency": {
   "_Template_Campaign_Overview.md": {
-   "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+   "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
+   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": null
   },
   "_Template_Chapter.md": {
    "6e2060b44d3e4421b207b1de0af756b95f4eaca18bf663896a7b6afbc39cb974": null,
@@ -111,7 +115,8 @@
   },
   "_Template_NPC.md": {
    "316efcac55285faac3d15581db5991118d364553d9150b15a7f5bf8d244e529c": "1.10.122",
-   "990a9cd37c1d076646f685be02dfd5318db449446f7d189f4203296f351fbf60": null
+   "5d8f2aec14beeabb0cc280c7c39d7d547abbaecfab824778633c1dd65aff44e6": null,
+   "990a9cd37c1d076646f685be02dfd5318db449446f7d189f4203296f351fbf60": "1.11.1"
   },
   "_Template_Organization.md": {
    "91d409ba7bd15cf111f20337c62f37f08b6d18e944e7a84f9700c8926fd0232b": null
@@ -152,12 +157,14 @@
    "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.93"
   },
   "pc-coc-7e-regency.md": {
-   "84dbce5c179b074eaac805a19beca05a3eb5e4b56fc2c2000d7877a68cdc6f4a": null
+   "1b7f0595db700167874ae0314132314d331842ee94c173963d95e61fc1803009": null,
+   "84dbce5c179b074eaac805a19beca05a3eb5e4b56fc2c2000d7877a68cdc6f4a": "1.11.1"
   }
  },
  "dnd-5e-2024": {
   "_Template_Campaign_Overview.md": {
-   "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+   "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
+   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": null
   },
   "_Template_Chapter.md": {
    "6e2060b44d3e4421b207b1de0af756b95f4eaca18bf663896a7b6afbc39cb974": null,
@@ -188,7 +195,8 @@
    "edd1d0e2b88fe22fc41eb12a6bc26762fc1775127e236551b86c591622295db6": null
   },
   "_Template_NPC.md": {
-   "62c9361d13575025f18a976398c8522afc179f035a09a7a094263fdb837c66ea": null,
+   "1d560432c4a293fb935fc9bf58cdc980455e66c2e08e6317f07ecdab702a73e3": null,
+   "62c9361d13575025f18a976398c8522afc179f035a09a7a094263fdb837c66ea": "1.11.1",
    "cc10d9691f9d2f1ea8e9db12cdd4a5bec13bbac6261ffd2f564dbf4acc6a7281": "1.10.122"
   },
   "_Template_Organization.md": {
@@ -231,12 +239,14 @@
   },
   "pc-dnd-5e-2024.md": {
    "1e4774d82b692109b0f896c4e0fe26f75287d8471e16425ec2d1fe0840edf174": "1.10.93",
-   "615af1fe8ccebe729809ffff44dfdafbc138bde9c8689d48ad1ee5f971ec7a37": null
+   "615af1fe8ccebe729809ffff44dfdafbc138bde9c8689d48ad1ee5f971ec7a37": "1.11.1",
+   "852a93f2670efeeac62b492cedc8a1d6372a9bef3e0a5b6261715541d743c030": null
   }
  },
  "fitd": {
   "_Template_Campaign_Overview.md": {
-   "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+   "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
+   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": null
   },
   "_Template_Chapter.md": {
    "6e2060b44d3e4421b207b1de0af756b95f4eaca18bf663896a7b6afbc39cb974": null,
@@ -267,7 +277,8 @@
    "edd1d0e2b88fe22fc41eb12a6bc26762fc1775127e236551b86c591622295db6": null
   },
   "_Template_NPC.md": {
-   "677c2321e34aff9b5cd56e704d4de56c02997a076c8927d790943f06d5fc739a": null,
+   "3d7c70f1fbd53aa42f0f7f16b775c0b05c2164a954112f9839f2837b3525cdfb": null,
+   "677c2321e34aff9b5cd56e704d4de56c02997a076c8927d790943f06d5fc739a": "1.11.1",
    "7117910f04f116ae75dbf0dd9e38986024ce15b32e27c3f948ebe94e838db86a": "1.10.122"
   },
   "_Template_Organization.md": {
@@ -312,12 +323,14 @@
    "66dc0d025c065878db64480e84d3ff675df3fa0082e35dcf33733db005e770b3": null
   },
   "pc-fitd.md": {
-   "cb9d767198866f86e2df3c38170adfda1801f96df483e17293c78ac1d7ec4b6b": null
+   "cb9d767198866f86e2df3c38170adfda1801f96df483e17293c78ac1d7ec4b6b": "1.11.1",
+   "d93e865084e857268d14190037957d60332977a53ace96618f7232acdcc4b61d": null
   }
  },
  "generic": {
   "_Template_Campaign_Overview.md": {
-   "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+   "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
+   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": null
   },
   "_Template_Chapter.md": {
    "6e2060b44d3e4421b207b1de0af756b95f4eaca18bf663896a7b6afbc39cb974": null,
@@ -348,8 +361,9 @@
    "edd1d0e2b88fe22fc41eb12a6bc26762fc1775127e236551b86c591622295db6": null
   },
   "_Template_NPC.md": {
+   "dd87925da1f9a34fe36b1a3bff1d94f9a93ac562a38d76f0d53fc636f14d657c": null,
    "df8fbaf8e5bff28a552429944750ddd107516e992823c33119a4bb563ea9825b": "1.10.122",
-   "e7a53c88aa4a7c27b845d891f08488ddd4cd786b9498a0d4a8544878172f3d49": null
+   "e7a53c88aa4a7c27b845d891f08488ddd4cd786b9498a0d4a8544878172f3d49": "1.11.1"
   },
   "_Template_Organization.md": {
    "91d409ba7bd15cf111f20337c62f37f08b6d18e944e7a84f9700c8926fd0232b": null
@@ -390,12 +404,14 @@
    "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.93"
   },
   "pc-generic.md": {
-   "81924ae369f1b5ef7230b14ea2f5c8f8091656211935e356bbf65b10dc7931d9": null
+   "21ac9ecddefc48f3aade911cce0bd2f6ba8ec018d703235753a530933a6ff89c": null,
+   "81924ae369f1b5ef7230b14ea2f5c8f8091656211935e356bbf65b10dc7931d9": "1.11.1"
   }
  },
  "gurps-4e": {
   "_Template_Campaign_Overview.md": {
-   "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+   "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
+   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": null
   },
   "_Template_Chapter.md": {
    "6e2060b44d3e4421b207b1de0af756b95f4eaca18bf663896a7b6afbc39cb974": null,
@@ -426,7 +442,8 @@
    "edd1d0e2b88fe22fc41eb12a6bc26762fc1775127e236551b86c591622295db6": null
   },
   "_Template_NPC.md": {
-   "0c2a0a0ea6f580b99e884af6df111bf21db1bb05ec6b0e65252503317ec2d601": null,
+   "0c2a0a0ea6f580b99e884af6df111bf21db1bb05ec6b0e65252503317ec2d601": "1.11.1",
+   "5941a2021f08a59b1899ee84acd60afb8068d0dd20e593eac8882c7992f5fdcb": null,
    "a8cc9bd2b4696ffb02d3ecf10c047c6d400d2670d095231a46d0f7f513709ecb": "1.10.122"
   },
   "_Template_Organization.md": {
@@ -469,12 +486,14 @@
   },
   "pc-gurps-4e.md": {
    "8f530b69d78f9302b3847ae3aa5d15039eaa57213d3c610190d68804b6bb250d": "1.10.128",
-   "cd6b35417def55644541636b609e319d431cd435f4318a0da5b671020c0b757c": null
+   "cd6b35417def55644541636b609e319d431cd435f4318a0da5b671020c0b757c": "1.11.1",
+   "db5b6c030e667ec4c2bd1366327578f06e07b67f8f636fd7805bab56e494bb15": null
   }
  },
  "pf2e": {
   "_Template_Campaign_Overview.md": {
-   "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": null
+   "4653a514b4d29d5307eaa00e75c69bbc0d48d99e121b842aa690c0b3bfeac4e8": "1.11.1",
+   "bde3182f77669e96659d53b05773d900ff4484994ba57c6a43bf82c4f9e4beee": null
   },
   "_Template_Chapter.md": {
    "6e2060b44d3e4421b207b1de0af756b95f4eaca18bf663896a7b6afbc39cb974": null,
@@ -506,7 +525,8 @@
   },
   "_Template_NPC.md": {
    "525b9e89048645bd734f9fb3c5a76879446d41d1da2f002d4406c17edbc410a2": "1.10.122",
-   "8dbc533409713b76522bf5ebcf445352b2669762e90969d31e26ca509edf45c8": null
+   "8dbc533409713b76522bf5ebcf445352b2669762e90969d31e26ca509edf45c8": "1.11.1",
+   "fbf09effba1f866b184b58d940ae75946b4ebffa946dd19c5cb7a48c07d5b02e": null
   },
   "_Template_Organization.md": {
    "91d409ba7bd15cf111f20337c62f37f08b6d18e944e7a84f9700c8926fd0232b": null
@@ -547,7 +567,8 @@
    "fc4429d6b24020f90d5200d7d667f11835ac8e581944f5ec89e80faaa234b1f3": "1.10.93"
   },
   "pc-pf2e.md": {
-   "ca1833d7348410aa498a44c3714acaed4d60533557ee65fa404f3b69ff371f16": null
+   "a14f489118a93a497ffb01e02fad2b4e246ffda9b219e8deccb3288f81be6604": null,
+   "ca1833d7348410aa498a44c3714acaed4d60533557ee65fa404f3b69ff371f16": "1.11.1"
   }
  }
 }
