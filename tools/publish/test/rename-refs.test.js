@@ -138,6 +138,13 @@ describe('manifest rename', () => {
     assert.strictEqual(fs.readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8'), cfg);
   });
 
+  it('renames a player_site.landing.quick_links entry in the new file', () => {
+    const cfg = 'version: 1\nplayer_site:\n  landing:\n    quick_links:\n      - Emma_Wentworth  # first\n      - Other\n';
+    const vault = vaultWith({ '_meta/vault-config.yaml': cfg, [FROM]: '---\ntype: npc\n---\n' });
+    const files = rename(vault).files;
+    assert.strictEqual(files['_meta/vault-config.yaml'], cfg.replace('- Emma_Wentworth ', '- Emma_Wentworth_Hale '));
+  });
+
   it('the command itself prints the same answer as --json, and a missing --to or --vault is one stderr line', () => {
     const vault = vaultWith({ '_meta/publish-list.yaml': LIST() });
     const out = execFileSync('node', [BIN, 'manifest', 'rename', '--vault', vault, '--from', FROM, '--to', TO, '--json'], { encoding: 'utf8' });
