@@ -278,7 +278,6 @@ settings unset <name> ...          Remove settings from the file
 settings add <name> <entry> ...    Add entries to a list setting
 settings remove <name> <entry> ... Take entries out of a list setting
 settings raw [<name>]              The file as written
-settings move [--check]            Take a vault from the old settings file to the new one
 settings setup-note <get|set|clear> The publish set-up guide's note to itself
 ```
 
@@ -330,10 +329,10 @@ path, as `npm run` gives a script), and stops the build when one fails or
 takes longer than ten minutes. Nothing is published after a failure. Only
 `build`, `deploy` and the two set-up commands that build before they
 deploy (`setup-status-bar` and `setup-inbox`) run steps; a dry build, `explain`, `manifest`,
-`doctor --site`, the live preview and `deploy --no-build` do not. Build
-scripts an older site keeps in its `package.json` are carried across by
-`settings move` once the site's tool is 1.24.0 or later. Until then
-`deploy` keeps running those scripts for a site that has not been moved.
+`doctor --site`, the live preview and `deploy --no-build` do not. A
+`prebuild` or `postbuild` script left in the site's `package.json` is not run:
+it stops the build and names the setting it moved to. Move it into the vault
+and take it out of `package.json`.
 
 The steps under `player_site` never run for the GM site. Its own go under
 `gm_site.before_build` and `gm_site.after_build`, and run in the same site
@@ -444,42 +443,11 @@ editor at the schema to get names and values as you type.
 
 ### The old settings file
 
-Vaults made before this layout keep their settings in the frontmatter of
-`_meta/vault-config.md`, under `publish:`. Release 1.10.54 moves vaults to
-the new file. This tool keeps reading the old file for two releases after
-that one, and every message names the file the vault is on and
-each setting as that file writes it (`publish.site`, not
-`player_site.publish`). The `settings` command can still change an old
-file, at the old names.
-
-`settings move` takes a vault to the new file. It checks that every
-setting would resolve to what it resolved to before, then writes
-`_meta/vault-config.yaml`, moves bookkeeping into
-`_meta/vault-state.json` and your own notes into `_meta/vault-notes.md`,
-and removes the old file. It does all of it or none of it; `--check` shows
-what it would do. The plugin's update normally runs it for you. Running
-it by hand is safe: when the tool installed in the vault's site is
-too old to read the new file, whoever pinned it, the move leaves the vault
-on the old file and says so in one line, naming the version it needs.
-The vault moves once that tool is that new. `--discard-old-file`
-removes a left-over old file that holds more than the new one;
-`--site-tool-updated` is for a caller that has just repinned the site.
-`--fold-site-file` is for a vault that has already moved while its site
-folder's `vault.config.json` still holds settings that differ from the
-vault's. Without it the command only reports them and changes nothing.
-With it, those settings come out of the site file and what they say goes
-into the vault: a hiding list's entries are added to the vault's list
-(the built-in entries stay), the stricter of two callout rules is kept,
-any other setting the vault does not set is carried into it, and where
-the vault sets one differently its own value stays and the site file's
-is listed as dropped, as is a value that cannot be used or a name that
-is not a setting. The plan names each before anything is written. The
-two files change together or not at all. Add `--only <key>` (repeatable) to take just the named keys of the
-site file (a name inside one of its maps, such as `landing.max_npcs`,
-takes just that one), or `package.json` for its build steps; every other
-key is left where it is.
-If both
-files exist the new one is read, and the old one is reported as left over.
+The tool no longer reads `_meta/vault-config.md`. A vault that still has only
+that file stops with a line saying to run the update with plugin 1.10.134
+first; one that has both files reads the new one and warns that the old file
+can be deleted. The old publish list (`_meta/publish-manifest.md`) is
+handled the same way.
 
 ---
 
@@ -503,63 +471,46 @@ The five keys that used to sit here are now:
 | `cloudflarePagesProject` | `player_site.cloudflare_project`: the Cloudflare Pages project name; the site folder's name unless set |
 | `preserveDirs` | `player_site.keep`: folders of the output kept across builds (e.g. `["superpowers"]`) |
 
-While the site file still holds these keys and the vault sets none, the
-tool reads them from the site file. On a vault with the new settings file
-it warns that the next update moves them; a site whose own tool is older
-than 1.24.0 keeps them there.
+A site file that holds any other key stops the build, and the message names
+each key and the setting it moved to. Move each into the vault's settings and
+leave only `vaultPath` in the file.
 
-### Keys an older site file may still hold
+### player_site.folder_map
 
-A vault on the old settings file (`_meta/vault-config.md`) still reads
-these from the site file. A vault on `_meta/vault-config.yaml` does not
-read them, and `settings move` carries them across.
+`player_site.folder_map` (in the vault's settings) controls which vault
+folders become pages and where they appear in the output. Keys are paths
+relative to the vault; values are paths relative to the output folder
+(`player_site.output`).
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `siteTitle` | string | Site name shown in the nav bar and page title |
-| `landingTagline` | string | One-sentence campaign hook shown on the landing page hero |
-| `attachmentsDir` | string | Subfolder inside `vaultPath` that holds images (default `_attachments`) |
-| `folderMap` | object | Maps vault folder paths to site output paths (see below) |
-| `excludeDirs` | array | A vault on `_meta/vault-config.yaml` does not read it, and it stops the build there (use `player_site.hide.folders`). Vault subdirectories to skip entirely (e.g. `["_meta", "_Templates"]`). Added to `publish.exclude_dirs` in `_meta/vault-config.md`: either source can add to the skip list, neither shadows the other. Entries are normalized (a trailing slash, a leading `./`, backslashes, and an absolute path inside the vault are all rewritten to the same vault-relative spelling the scanner uses) and matched case-insensitively |
-| `excludeSections` | array | A vault on `_meta/vault-config.yaml` does not read it, and it stops the build there (use `player_site.hide.sections`). Section headings to strip before rendering, at any heading level (e.g. `["GM Notes"]`) |
-
-### folderMap
-
-`folderMap` controls which vault folders become pages and where they
-appear in the output. Keys are paths relative to `vaultPath`; values
-are paths relative to the output folder (`player_site.output`).
-
-```json
-{
-  "folderMap": {
-    "Characters/NPCs": "characters/npcs",
-    "Locations": "locations",
-    "Factions & Organizations": "factions"
-  }
-}
+```yaml
+player_site:
+  folder_map:
+    Characters/NPCs: characters/npcs
+    Locations: locations
+    Factions & Organizations: factions
 ```
 
-Files in unmapped folders are silently skipped. Files without a
+Files in unmapped folders are skipped, and the build says so. Files without a
 `type` frontmatter field are also skipped regardless of folder.
 
-### Default folderMap
+### Default folder map
 
-The scaffold template provides this default, matching the standard
+The scaffold provides this default, matching the standard
 campaign-organizer vault structure:
 
-```json
-{
-  "Characters/PCs": "characters/pcs",
-  "Characters/NPCs": "characters/npcs",
-  "Locations": "locations",
-  "Factions & Organizations": "factions",
-  "Items & Artifacts": "items",
-  "Creatures": "creatures",
-  "Events": "events",
-  "Documents": "documents",
-  "Clues": "clues",
-  "_Campaign": "campaign"
-}
+```yaml
+player_site:
+  folder_map:
+    Characters/PCs: characters/pcs
+    Characters/NPCs: characters/npcs
+    Locations: locations
+    Factions & Organizations: factions
+    Items & Artifacts: items
+    Creatures: creatures
+    Events: events
+    Documents: documents
+    Clues: clues
+    _Campaign: campaign
 ```
 
 ---
@@ -945,31 +896,6 @@ Template signatures vary slightly — most accept
 `sections` param, `itemTemplate`/`factionTemplate` add `linkMap` for
 relationship resolution, and `landingTemplate` accepts
 `(pages, navFor, config, publishConfig)`. See `lib/build.js` for exact usage.
-
-### Settings move
-
-`require('gm-apprentice-publish/lib/settings/move')` gives the code behind
-`settings move`, for a tool that embeds this one:
-
-- **`planMove(options, deps?)`** and **`applyMove(plan, deps?)`**: plan
-  the move of a vault to `_meta/vault-config.yaml`, then carry it out.
-  The move asks whether a site folder's own tool can read the new layout
-  by running this tool's `update-pin --check`. Pass `deps.pinCheck`
-  (`(siteDir) => ({ ok, ours, spec, installedBefore })`, or `null` when
-  there is no answer) to answer that yourself; then no program is
-  started, and `child_process` is never loaded. In a packaged host,
-  where `process.execPath` is the host and not Node, always pass it.
-- **`stripSiteKeys(siteText, options?)`**: the site file's text with the
-  keys the move takes out removed: `{ siteAfter, siteOut, removedKeys }`
-  (`siteOut` is `null` when nothing was removed).
-- **`movedSiteKeys(siteConfig, options?)`**: just the names it would
-  remove, from the parsed site file or its text. A host staging a site
-  file for a build on a moved vault leaves these out, or the build stops
-  on old-name faults. Stage with
-  `movedSiteKeys(siteConfig, { leaveFallback: true })`: the key that
-  lists folders the build keeps stays in the site file until the vault
-  has `player_site.keep`, and removing it sooner drops those folders
-  from the build.
 
 ---
 

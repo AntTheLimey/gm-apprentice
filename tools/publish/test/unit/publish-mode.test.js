@@ -4,7 +4,7 @@ const fs = require('node:fs'); const os = require('node:os'); const path = requi
 const { resolveConfig } = require('../../lib/config');
 const { writeSettings } = require('../helpers/vault-files');
 
-// `publish.mode` is retired (Build 2 part C): the GM site is what `full` was. Whatever the old file
+// `player_site.hide.mode` is retired (Build 2 part C): the GM site is what `full` was. Whatever the old file
 // holds, the build reads nothing from it and says so once; it never stops a build.
 function read(line) {
   const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-mode-'));
@@ -16,7 +16,7 @@ function read(line) {
   } finally { fs.rmSync(vault, { recursive: true, force: true }); }
 }
 
-describe('publish.mode (retired)', () => {
+describe('player_site.hide.mode (retired)', () => {
   it('is left out: nothing is said and the config holds no mode', () => {
     const { publishConfig, said } = read('');
     assert.deepStrictEqual(said, []);

@@ -145,13 +145,10 @@ function listText(list) {
 }
 
 // Writes the accepted findings into the vault's publish list, keeping its three lists. A vault still on the old Markdown
-// list is refused: only the update and `manifest convert` move a list. A vault with no list gets a file holding only
+// list stops by name (loadPublishList). A vault with no list gets a file holding only
 // `accepted:`, which is not a publish list for page decisions (amendment 7a).
 function writeAccepted(vaultPath, accepted) {
   const list = loadPublishList(vaultPath, { warn: () => {} });
-  if (list && list.file !== 'new') {
-    throw new Error(`This vault's publish list is not in ${PUBLISH_LIST_FILE} yet. Run the update (or gm-apprentice-publish manifest convert --vault <vault>) first.`);
-  }
   const base = list || { publishing: [], excluded: [], needsDecision: [], reasons: new Map(), acceptedOnly: true };
   writeAtomic(at(vaultPath, PUBLISH_LIST_FILE), listText({ ...base, accepted }));
 }

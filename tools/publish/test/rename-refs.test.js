@@ -8,7 +8,7 @@ const { runRename, renameRefs } = require('../lib/rename-refs');
 
 const { pcLiveKey, slugify } = require('../lib/scanner');
 const { build } = require('../lib/build');
-const { setOldSettings } = require('./helpers/settings-files');
+const { mergeSettings } = require('./helpers/vault-files');
 const { writePublishList } = require('./helpers/publish-list');
 const { writeSiteConfig, settingsText, NEW_FILE } = require('./helpers/vault-files');
 const BIN = path.join(__dirname, '..', 'bin', 'gm-publish.js');
@@ -363,7 +363,7 @@ describe('a pinned key reaches the build', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'live-key-'));
     const vault = path.join(root, 'vault');
     fs.cpSync(path.join(__dirname, 'fixtures', 'with-party-roster'), vault, { recursive: true });
-    setOldSettings(vault, { 'player_site.features.live_stats': true });
+    mergeSettings(vault, { 'player_site.features.live_stats': true });
     const pcs = path.join(vault, 'Characters', 'PCs');
     if (pinned) {
       const src = fs.readFileSync(path.join(pcs, 'Karl Brenner.md'), 'utf8');

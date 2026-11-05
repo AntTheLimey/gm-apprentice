@@ -46,11 +46,11 @@ describe('the publish list: accepted', () => {
       assert.deepEqual(list.accepted.map((a) => a.page), ['a.html', 'z.html']);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
-  it('writeAccepted refuses a vault whose list is not moved yet', () => {
+  it('writeAccepted stops on a vault that still has the old list', () => {
     const dir = vaultWith(null);
     fs.writeFileSync(path.join(dir, '_meta', 'publish-manifest.md'), '## Publishing\n\n- [x] A.md\n');
     try {
-      assert.throws(() => writeAccepted(dir, []), /update|manifest convert/);
+      assert.throws(() => writeAccepted(dir, []), /_meta\/publish-manifest\.md is the old publish list, no longer read since plugin 1\.11\.0/);
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
 });

@@ -106,8 +106,8 @@ const { spawnSync } = require('node:child_process');
 const BIN = path.join(__dirname, '..', 'bin', 'gm-publish.js');
 
 // `init` writes its own deployment-only vault.config.json, so it can never meet a site file that still holds
-// a vault's settings: it makes the vault's new settings file instead. The refusal that names `settings move`
-// belongs to the commands that read an existing site folder (setup-inbox and the rest).
+// a vault's settings: it makes the vault's new settings file instead. The old file and a site file holding settings
+// stop the commands that read an existing site folder (setup-inbox and the rest), by name.
 test('init on a vault with no settings file makes the new file and says nothing about moving', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'init-nosettings-'));
   const vault = path.join(root, 'vault');

@@ -238,13 +238,9 @@ Never open the file to read or change it. Ask the tool:
   that names no file in the vault is refused and nothing is written;
   `--publish` also refuses a note in a folder the site leaves out.
 
-A vault the update has not moved may still hold the old file,
-`_meta/publish-manifest.md`: one the update has not reached, or one it
-held there (the site's publish tool is older than 1.27.0, or a build
-step reads the old file). The commands read it and write their changes
-back into it. Only the update, or `manifest convert --vault <vault>`,
-moves a vault to the new file; it keeps the old file beside it as
-`_meta/publish-manifest.md.converted`.
+The old Markdown list, `_meta/publish-manifest.md`, is no longer read:
+a vault that still has it stops with a line saying to run the update with
+plugin 1.10.134 first.
 
 ## Campaign Image
 

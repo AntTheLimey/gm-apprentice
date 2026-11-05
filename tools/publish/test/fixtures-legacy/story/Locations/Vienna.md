@@ -1,4 +1,0 @@
----
-type: location
----
-A city.

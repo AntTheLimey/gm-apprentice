@@ -190,66 +190,39 @@ The output is one JSON object:
   `default`, `file`, `site-file`, `old-name` or `fault`. `fault` means the
   file's value could not be read and the value shown is the fallback.
 - `written` holds, under the same names, the name the vault's own file
-  writes the setting under: the same name on the new layout, the old
-  file's own name for it on the old one. A message to the GM
-  names a setting this way.
+  writes the setting under (the new names). A message to the GM names a
+  setting this way.
 - `faults` is a list of problems found in the file. Each has `name`,
   `level` (`stop` or `warn`), `kind` and `message`, and may have `setting`,
   `suggest` and `use`. A `stop` fault means a player build refuses to run.
 - `file` says which settings file was read: `path`, `exists`, `hasSiteBlock`
   (whether it holds the site's block of settings, `player_site:`) and
-  `leftover` (whether an old file sits beside the new one). On the old
-  layout it also has `inline`, true when its `publish:` block is written on
-  one line.
+  `leftover` (whether an old file sits beside the new one).
 
 Pass one or more names to limit the output to those settings.
 `settings check` prints only the faults and exits 1 when one stops the
 build.
 
-## Telling the layouts apart
+## Which file holds the settings
 
-A vault is on one of three layouts. The tool decides by which file exists:
+A vault has settings when `_meta/vault-config.yaml` exists, and none yet
+when it does not. The tool never reads `_meta/vault-config.md`:
 
-- `_meta/vault-config.yaml` exists: the new layout. The old file, if it is
-  still there, is not read and is reported as left over.
-- Only the old file exists (see the next section): the old layout.
-- Neither exists: the vault has no settings yet.
-
-Do not infer the layout from file contents.
+- With only the old file, the tool stops and says to run the update with
+  plugin 1.10.134 first.
+- With both, it reads the new file and warns that the old file can be deleted.
 
 ## The old file
 
 Before this layout, settings lived in the frontmatter of
 `_meta/vault-config.md`, under a `publish:` block with other names, such as
-`publish.exclude_sections`. The tool still reads that file, and still writes
-to it, at the old names. Version 1.10.54 is the release that moves vaults to
-the new file. The old file's reader stays for two releases after that one,
-then goes.
+`publish.exclude_sections`. The tool no longer reads it (plugin 1.11.0).
+Plugin 1.10.134 holds the update that moves a vault off it.
 
-`gm-apprentice-publish settings move` takes a vault from the old file to the
-new one, and the plugin's update runs it for each vault. It changes nothing unless the new file resolves to exactly what the
-old one did. When it cannot promise that, it says why and leaves the vault
-alone. The old file's prose and any keys that are not settings move to
-`_meta/vault-notes.md`.
-
-A site folder's `vault.config.json` once held more than `vaultPath`:
-`siteUrl`, `host`, `outputDir`, `cloudflarePagesProject` and `preserveDirs`.
-Its `package.json` held the `prebuild` and `postbuild` scripts that were the
-site's build steps. The update moves these into the vault as the settings
-named under "The site folder" above, and `gm-apprentice-publish settings
-move` carries them on a vault already moved. Until it does, the reader takes
-those five keys from the site file when the vault sets none, and `deploy`
-runs the `package.json` steps. A site whose installed publish tool is older
-than 1.24.0 keeps its keys and steps where they are, because that tool
-cannot run steps from the vault.
-
-The move holds back when the publish tool installed in the vault's site
-is too old to read the new file, whoever pinned it: that tool would read the
-moved vault as having no settings. The vault stays on the old file and the
-update says so on every pass, naming the version it needs, until the tool is
-that new. That
-makes `settings move` safe to run by hand too; `--check` shows what it
-would do.
+A site folder's `vault.config.json` holds only `vaultPath`. Any other key
+there, or a `prebuild` or `postbuild` script in the site's `package.json`,
+stops the build and the message names where each moved to (see "The site
+folder" above).
 
 ## The state file
 
