@@ -54,7 +54,7 @@ def write_config(vault: Path, text: str) -> None:
     """Write `text` (settings the short way) as the vault's settings file,
     and any version stamp it carries into the state file."""
     meta = vault / "_meta"
-    meta.mkdir(exist_ok=True)
+    meta.mkdir(parents=True, exist_ok=True)
     yaml_text, state = _converted(text)
     (meta / "vault-config.yaml").write_text(yaml_text, encoding="utf-8")
     stamp = json.loads(state)
