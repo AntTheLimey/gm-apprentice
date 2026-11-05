@@ -157,7 +157,8 @@ class MoveEndToEndTests(unittest.TestCase):
         self.assertIn("To clear it: update that site's publish tool to 1.23.0 "
                       "or later (the update repins it only when the plugin "
                       "pinned it), or, if the site is no longer published, "
-                      "clear publish.site_dir.", plan)   # the old file's name
+                      "set publish.site to false and clear "
+                      "publish.site_dir.", plan)   # the old file's names
         self.assertNotIn("player_site.folder", plan)
         stamp = read_stamp(vault)
         code, did, err = update(vault, "apply", "--choose", "default-mode=leave")

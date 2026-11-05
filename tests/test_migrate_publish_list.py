@@ -111,9 +111,11 @@ class PublishListMoveTests(unittest.TestCase):
                 "site's publish tool is 1.27.0 or later")
         clear = (" To clear it: update that site's publish tool to 1.27.0 or "
                  "later (the update repins it only when the plugin pinned "
-                 "it), or, if the site is no longer published, clear "
-                 "publish.site_dir. The update cannot finish until this "
-                 "is done.")
+                 "it), or, if the site is no longer published, set "
+                 "player_site.publish (publish.site before the settings "
+                 "move) to false and clear player_site.folder "
+                 "(publish.site_dir before the settings move). The update "
+                 "cannot finish until this is done.")
         code, plan, err = update(vault, "plan")
         self.assertIn(line + clear, plan)
         stamp = read_stamp(vault)
