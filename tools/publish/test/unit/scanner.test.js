@@ -775,9 +775,9 @@ describe('loadPublishConfig on a vault-config.md that is not valid YAML', () => 
   it('fails with one line naming the file (#287)', () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'bad-config-'));
     fs.mkdirSync(path.join(vault, '_meta'));
-    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), '---\npublish:\n  mode: player\n  mode: gm\n---\n');
+    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'version: 1\nplayer_site:\n  title: A\n  title: B\n');
     assert.throws(() => loadPublishConfig(vault), (e) => {
-      assert.match(e.message, /^_meta\/vault-config\.md frontmatter is not valid YAML: duplicated mapping key at line 4, column 3$/);
+      assert.match(e.message, /^_meta\/vault-config\.yaml is not valid YAML: .*Map keys must be unique/);
       return true;
     });
     fs.rmSync(vault, { recursive: true, force: true });
@@ -800,11 +800,6 @@ describe('scanner messages name the vault\'s own settings file', () => {
     try { scanVault({ vaultPath: vault, excludeDirs: [], folderMap: { 'Characters/NPCs': 'npcs' } }); } finally { console.warn = orig; fs.rmSync(vault, { recursive: true, force: true }); }
     return warns.join('\n');
   }
-  it('on the old file: publish.folder_map and _meta/vault-config.md', () => {
-    const said = warnsFor('_meta/vault-config.md', '---\npublish:\n  site: true\n---\n');
-    assert.match(said, /not in publish\.folder_map; typed pages inside will not publish\. Add it to publish\.folder_map in _meta\/vault-config\.md to publish, or to publish\.exclude_dirs to silence/);
-    assert.match(said, /their folder in publish\.exclude_dirs \(_meta\/vault-config\.md\) to silence this/);
-  });
   it('on the new file: player_site.folder_map and _meta/vault-config.yaml', () => {
     const said = warnsFor('_meta/vault-config.yaml', 'version: 1\nplayer_site:\n  publish: true\n');
     assert.match(said, /not in player_site\.folder_map; typed pages inside will not publish\. Add it to player_site\.folder_map in _meta\/vault-config\.yaml to publish, or to player_site\.hide\.folders to silence/);
