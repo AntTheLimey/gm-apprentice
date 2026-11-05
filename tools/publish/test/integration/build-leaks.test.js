@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { build } = require('../../lib/build');
+const { writeSettings, writeSiteConfig } = require('../helpers/vault-files');
 
 // Leaks, end to end. Nothing marked gm-only, spoiler, commented out or in an excluded
 // section may appear anywhere in the built site — page bodies, the campaign index
@@ -123,21 +124,21 @@ function buildVault(work) {
     fs.mkdirSync(path.dirname(full), { recursive: true });
     fs.writeFileSync(full, body);
   };
-  write('_meta/vault-config.md', `---\npublish:\n  exclude_drafts: false\n---\n`);
+  writeSettings(vault, { 'player_site.hide.drafts': false });
   write('Characters/NPCs/Vex.md', NPC);
   write('_Campaign/Overview.md', OVERVIEW);
   write('Locations/Keep.md', KEEP_CRLF);
   write('Documents/Chit.md', HANDOUT);
   write('Documents/Card.md', HANDOUT_HIDDEN_TYPE);
   const configPath = path.join(work, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
+  writeSiteConfig(configPath, {
     siteTitle: 'Leaks',
     siteUrl: 'https://example.com/leaks',
     vaultPath: vault,
     outputDir: path.join(work, 'docs'),
     excludeDirs: ['_meta', '_Templates'],
     folderMap: { 'Characters/NPCs': 'characters/npcs', _Campaign: 'campaign', Locations: 'locations', Documents: 'documents' },
-  }, null, 2));
+  }, 2);
   const log = console.log;
   console.log = () => {};
   try {

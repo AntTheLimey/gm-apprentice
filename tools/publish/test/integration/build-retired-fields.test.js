@@ -3,21 +3,21 @@ const { describe, it, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
 const { build } = require('../../lib/build');
+const { writeSettings, writeSiteConfig } = require('../helpers/vault-files');
 
 const KV_TOML = '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n';
 const roots = [];
 after(() => roots.forEach((r) => fs.rmSync(r, { recursive: true, force: true })));
 
-// A one-PC site whose vault file carries `publish`; returns the PC page HTML and
+// A one-PC site whose vault file carries `settings`; returns the PC page HTML and
 // every line the build warned.
-function buildPc(system, fm, publish = '') {
+function buildPc(system, fm, settings = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-retired-'));
   roots.push(root);
   const vault = path.join(root, 'vault');
   fs.mkdirSync(path.join(vault, 'Characters', 'PCs'), { recursive: true });
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-    `---\npublish:\n  mode: player\n  system: ${system}\n${publish}---\n`);
+  writeSettings(vault, { 'vault.system': system, ...settings });
   fs.writeFileSync(path.join(vault, 'Characters', 'PCs', 'Hero.md'),
     `---\ntype: pc\nplayer_name: T\n${fm}---\n\n## Background\n\nA sailor.\n`);
   fs.writeFileSync(path.join(root, 'wrangler.toml'), KV_TOML);
@@ -25,10 +25,10 @@ function buildPc(system, fm, publish = '') {
   fs.writeFileSync(path.join(root, 'functions', 'api', 'request.js'), '// fn');
   fs.writeFileSync(path.join(root, 'functions', 'api', 'loadout.js'), '// fn');
   const configPath = path.join(root, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
+  writeSiteConfig(configPath, {
     vaultPath: vault, outputDir: path.join(root, 'docs'), siteTitle: 'Test', excludeDirs: ['_meta'],
     folderMap: { 'Characters/PCs': 'characters/pcs' },
-  }));
+  });
   const lines = [];
   const real = console.warn;
   console.warn = (...a) => lines.push(a.join(' '));
@@ -42,7 +42,7 @@ const stem = /WARNING: Characters\/PCs\/Hero\.md: frontmatter field\(s\) attribu
 
 describe('build and retired frontmatter sheet fields', () => {
   it('a GURPS PC with frontmatter-only stats shows none of them, has no live island, and the build says so', () => {
-    const { html, lines } = buildPc('gurps-4e', GURPS_FM, '  live_stats: true\n');
+    const { html, lines } = buildPc('gurps-4e', GURPS_FM, { 'player_site.features.live_stats': true });
     for (const s of ['7701', '7702', 'SENTINELSKILL', 'SENTINELKIT', 'SENTINELITEM']) assert.ok(!html.includes(s), s);
     assert.ok(!html.includes('gurps-live-data'), 'no live-data island');
     assert.strictEqual(lines.filter((l) => stem.test(l)).length, 1, lines.join('\n'));
@@ -61,7 +61,7 @@ describe('build and retired frontmatter sheet fields', () => {
   });
 
   it('is silent when character sheets are off', () => {
-    const { lines } = buildPc('gurps-4e', GURPS_FM, '  character_sheets: false\n');
+    const { lines } = buildPc('gurps-4e', GURPS_FM, { 'player_site.sheets.show': false });
     assert.ok(!lines.some((l) => l.includes('no longer read for the character sheet')), lines.join('\n'));
   });
 });

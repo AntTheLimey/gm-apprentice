@@ -3,6 +3,7 @@ const { describe, it, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
 const { build } = require('../../lib/build');
+const { writeSettings, writeSiteConfig } = require('../helpers/vault-files');
 
 // #287: a note whose frontmatter is not valid YAML gets no page, and the only word of
 // it was one scanner line above the whole `wrote …` list.
@@ -15,14 +16,14 @@ describe('build repeats the notes it could not parse in its closing warnings', (
     const vault = path.join(root, 'vault');
     fs.mkdirSync(path.join(vault, 'Characters', 'NPCs'), { recursive: true });
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), '---\npublish:\n  mode: player\n---\n');
+    writeSettings(vault, {});
     for (const [name, text] of Object.entries(notes)) fs.writeFileSync(path.join(vault, 'Characters', 'NPCs', `${name}.md`), text);
     const configPath = path.join(root, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments',
       siteTitle: 'Test', excludeDirs: ['_meta'], excludeSections: ['GM Notes'],
       folderMap: { 'Characters/NPCs': 'characters/npcs' },
-    }));
+    });
     lines = [];
     const original = { warn: console.warn, log: console.log };
     console.warn = (...args) => lines.push(args.join(' '));

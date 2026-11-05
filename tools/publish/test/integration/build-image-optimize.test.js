@@ -8,6 +8,7 @@ const { build } = require('../../lib/build');
 const { detectEncoder } = require('../../lib/image-optimize');
 const { makePng } = require('../helpers/make-png');
 const { inPrivateTmp } = require('../helpers/private-tmp');
+const { writeSettings, writeSiteConfig } = require('../helpers/vault-files');
 
 const hasCwebp = detectEncoder() !== null;
 
@@ -34,15 +35,7 @@ function setupSite({ optimize, gitignore }) {
   fs.mkdirSync(path.join(vaultPath, '_attachments/characters'), { recursive: true });
   fs.mkdirSync(path.join(vaultPath, 'Characters/NPCs'), { recursive: true });
 
-  fs.writeFileSync(path.join(vaultPath, '_meta/vault-config.md'), [
-    '---',
-    'publish:',
-    '  images:',
-    `    optimize: ${optimize}`,
-    '    max_width: 400',
-    '---',
-    '',
-  ].join('\n'));
+  writeSettings(vaultPath, { 'player_site.images': { optimize, max_width: 400 } });
 
   fs.writeFileSync(path.join(vaultPath, '_attachments/characters', PORTRAIT), makePng(1600, 900));
 
@@ -60,14 +53,14 @@ function setupSite({ optimize, gitignore }) {
   ].join('\n'));
 
   const configPath = path.join(siteDir, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
+  writeSiteConfig(configPath, {
     vaultPath, outputDir,
     attachmentsDir: '_attachments',
     siteTitle: 'Image Site',
     siteUrl: 'https://example.github.io/image-site',
     excludeDirs: ['_meta'],
     folderMap: { 'Characters/NPCs': 'characters/npcs' },
-  }, null, 2));
+  }, 2);
 
   buildPrivately({ configPath });
   return { outputDir };
@@ -148,11 +141,7 @@ describe('image optimization', { skip: !hasCwebp }, () => {
       fs.mkdirSync(path.join(vaultPath, '_meta'), { recursive: true });
       fs.mkdirSync(path.join(vaultPath, '_attachments'), { recursive: true });
       fs.mkdirSync(path.join(vaultPath, 'Characters/NPCs'), { recursive: true });
-      fs.writeFileSync(path.join(vaultPath, '_meta/vault-config.md'), [
-        '---', 'publish:', '  images:', '    optimize: true', '  theme:', '    campaign_image: _attachments/Hero Shot.png',
-        '  banners:', '    characters/npcs:', '      image: _attachments/band.png', '      link: _attachments/full.png',
-        '    locations:', '      image: _attachments/map.png', '      link: _attachments/map.webp', '---', '',
-      ].join('\n'));
+      writeSettings(vaultPath, { 'player_site.images': {"optimize": true}, 'player_site.theme.campaign_image': "_attachments/Hero Shot.png", 'player_site.lists.banners': {"characters/npcs": {"image": "_attachments/band.png", "link": "_attachments/full.png"}, "locations": {"image": "_attachments/map.png", "link": "_attachments/map.webp"}} });
       for (const name of ['Hero Shot.png', 'band.png', 'full.png', 'map.png']) fs.writeFileSync(path.join(vaultPath, '_attachments', name), makePng(1200, 600));
       // The link opens a file named as the picture's encoded copy would be: the link's file keeps that name.
       fs.writeFileSync(path.join(vaultPath, '_attachments/map.webp'), 'the big map');
@@ -160,10 +149,10 @@ describe('image optimization', { skip: !hasCwebp }, () => {
       fs.writeFileSync(path.join(vaultPath, 'Locations/Harbour.md'), '---\ntype: location\n---\n\n# Harbour\n');
       fs.writeFileSync(path.join(vaultPath, 'Characters/NPCs/Rock Lavey.md'), '---\ntype: npc\n---\n\n# Rock Lavey\n');
       const configPath = path.join(siteDir, 'config.json');
-      fs.writeFileSync(configPath, JSON.stringify({
+      writeSiteConfig(configPath, {
         vaultPath, outputDir, attachmentsDir: '_attachments', siteTitle: 'Image Site',
         siteUrl: 'https://example.github.io/image-site', excludeDirs: ['_meta'], folderMap: { 'Characters/NPCs': 'characters/npcs', Locations: 'locations' },
-      }));
+      });
       const saved = console.log;
       console.log = () => {};
       try { buildPrivately({ configPath }); } finally { console.log = saved; }
@@ -203,9 +192,7 @@ describe('image optimization', { skip: !hasCwebp }, () => {
     const outputDir = path.join(siteDir, 'docs');
     for (const dir of ['_meta/cache', '_attachments/characters', 'Art', 'Characters/NPCs']) fs.mkdirSync(path.join(vaultPath, dir), { recursive: true });
     fs.symlinkSync(path.join(vaultPath, '_meta/cache'), path.join(siteDir, '.gm-apprentice'), 'dir');
-    fs.writeFileSync(path.join(vaultPath, '_meta/vault-config.md'), [
-      '---', 'publish:', '  images:', '    optimize: true', '  theme:', '    campaign_image: Art/Hero Shot.png', '---', '',
-    ].join('\n'));
+    writeSettings(vaultPath, { 'player_site.images': {"optimize": true}, 'player_site.theme.campaign_image': "Art/Hero Shot.png" });
     fs.writeFileSync(path.join(vaultPath, 'Art/Hero Shot.png'), makePng(1200, 600));
     fs.writeFileSync(path.join(vaultPath, '_attachments/characters/Rock Lavey.png'), makePng(900, 900));
     // Another picture whose encoded name is the campaign image's.
@@ -213,10 +200,10 @@ describe('image optimization', { skip: !hasCwebp }, () => {
     fs.writeFileSync(path.join(vaultPath, 'Characters/NPCs/Rock Lavey.md'),
       `---\ntype: npc\nportrait: _attachments/characters/Rock Lavey.png\n---\n\n# Rock Lavey\n${clash ? '\n![[Hero Shot.jpg]]\n' : ''}`);
     const configPath = path.join(siteDir, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       vaultPath, outputDir, attachmentsDir: '_attachments', siteTitle: 'Image Site',
       siteUrl: 'https://example.github.io/image-site', excludeDirs: ['_meta', 'Art'], folderMap: { 'Characters/NPCs': 'characters/npcs' },
-    }));
+    });
     const warnings = [];
     const saved = { log: console.log, warn: console.warn };
     console.log = () => {};
