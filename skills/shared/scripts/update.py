@@ -463,8 +463,10 @@ def report(res: UpdateResult) -> str:
             out.extend(f"- {line}" for line in lines)
     if res.headless:
         out.append("")
-        out.append(f"Run without a GM: {len(res.questions)} questions were "
-                   f"left for next time; nothing was asked.")
+        n = len(res.questions)
+        left = "1 question was" if n == 1 else f"{n} questions were"
+        out.append(f"Run without a GM: {left} left for next time; "
+                   f"nothing was asked.")
     if res.backup:
         out.append("")
         out.append(f"Backup: {res.backup}")

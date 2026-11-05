@@ -179,9 +179,17 @@ class RunTests(Base):
         code, out, _ = self.main(vault, [b, r], "--headless")
         self.assertEqual(code, 3)
         self.assertEqual(log, ["tidy"])
-        self.assertIn("Run without a GM: 1 questions were left for next "
+        self.assertIn("Run without a GM: 1 question was left for next "
                       "time; nothing was asked.", out)
         self.assertIn("Waiting for you (1):", out)
+
+    def test_headless_plural_for_several_questions(self):
+        vault = make_vault(self)
+        r1, _ = check("drop", "removes", will_item("drop"))
+        r2, _ = check("drop2", "removes", will_item("drop2"))
+        code, out, _ = self.main(vault, [r1, r2], "--headless")
+        self.assertEqual(code, 3)
+        self.assertIn("2 questions were left for next time", out)
 
     def test_headless_takes_no_answers(self):
         vault = make_vault(self)
