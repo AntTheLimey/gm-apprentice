@@ -13,7 +13,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item,
                           StepFailed, cells, edit_frontmatter, plugin_tool, stopped)
@@ -926,6 +926,9 @@ def find_tone_shown(vault: Path) -> list[Item]:
 
 # The two lists the vault file holds in plain sight.
 EXCLUDE_LISTS = ("player_site.hide.sections", "player_site.hide.fields")
+# The publish tool's fault kinds (tools/publish/lib/settings/read.js) that
+# mean the GM wrote a value for a setting that was not used.
+TYPED_FAULTS = ("not-allowed", "dropped", "old-name", "unknown-name")
 
 
 def find_exclude_lists(vault: Path) -> list[Item]:
@@ -945,20 +948,25 @@ def find_exclude_lists(vault: Path) -> list[Item]:
     if not lists:
         return []
 
-    def apply(_value: str | None) -> list[str]:
-        _set_settings(vault, [(name, default) for name, default in lists])
-        return [f"wrote {setting_name(vault, name)}: {len(default)} entries"
-                for name, default in lists]
-
     # On the old file the same pass moves the settings first (the move is
     # held only for a site whose own tool is pinned elsewhere, and says so),
     # so the old file's name would be wrong by the time the lists are written.
     where = (SETTINGS_FILE if vault_layout(vault) == "legacy"
              else settings_file(vault))
-    # A value the GM wrote that is not a list: the build ignored it, so the built-in list
-    # has been what publishes; the line says what was typed before it is replaced.
-    typed = {f.get("setting"): f.get("message") for f in now.faults
-             if f.get("kind") == "not-allowed"}
+    # A value the GM wrote that the tool could not use (not a list, an old
+    # name, a misplaced name, a group that is not a map): the build ignored
+    # it, so the built-in list has been what publishes; the line says what
+    # was typed before it is replaced, and replacing it asks.
+    typed: dict[str, str] = {}
+    for f in now.faults:
+        if f.get("kind") not in TYPED_FAULTS:
+            continue
+        setting, written = f.get("setting"), str(f.get("name") or "")
+        said = str(f.get("message") or written)
+        for name in EXCLUDE_LISTS:
+            if setting == name or (setting is None and written
+                                   and name.startswith(written + ".")):
+                typed.setdefault(name, said)
 
     def line(name: str, default: list) -> str:
         replaced = f" (replacing: {typed[name]})" if name in typed else ""
@@ -967,7 +975,27 @@ def find_exclude_lists(vault: Path) -> list[Item]:
                 f"into {where} so you can see and edit it"
                 f"{replaced}; what publishes does not change")
 
-    return [Item("exclude-lists", WILL, [line(n, d) for n, d in lists], apply)]
+    def write(chosen: list[tuple[str, list]]) -> Callable[[str | None], list[str]]:
+        def apply(_value: str | None) -> list[str]:
+            _set_settings(vault, list(chosen))
+            return [f"wrote {setting_name(vault, name)}: {len(default)} entries"
+                    for name, default in chosen]
+        return apply
+
+    # Writing a list the vault never had changes nothing; replacing what the
+    # GM typed is theirs to say yes to (`gma update` asks; migrate.py runs
+    # both on the one yes, as before).
+    fresh = [(n, d) for n, d in lists if n not in typed]
+    replacing = [(n, d) for n, d in lists if n in typed]
+    items = []
+    if fresh:
+        items.append(Item("exclude-lists", WILL,
+                          [line(n, d) for n, d in fresh], write(fresh)))
+    if replacing:
+        items.append(Item("exclude-lists-replace", WILL,
+                          [line(n, d) for n, d in replacing], write(replacing),
+                          kind="asks"))
+    return items
 
 
 AFTER_BUILD = "player_site.after_build"
@@ -1277,46 +1305,114 @@ def find_props_settle(vault: Path) -> list[Item]:
 
 
 SITE_CHECKS: list[Check] = [
-    Check(REPIN, None, 1, "the site's publish tool", find_site_repin),
+    Check(REPIN, None, 1, "the site's publish tool", find_site_repin,
+          kind="bookkeeping",
+          plain=("Updated the site's publish tool to match the plugin.")),
     Check(MOVE, None, 2, "the settings move to the new settings file",
-          find_settings_move),
+          find_settings_move,
+          kind="bookkeeping",
+          plain=("Moved your vault's settings into the new settings file, keeping every value.")),
     Check(PUBLISH_LIST, None, 2, "the publish list moves to its new file",
-          find_publish_list),
+          find_publish_list,
+          kind="bookkeeping",
+          plain=("Moved the list of pages your site publishes into its new file, keeping every entry.")),
     Check(FULL_MODE, None, 2, "a vault that published everything becomes a "
-          "GM site", find_full_mode),
+          "GM site", find_full_mode,
+          kind="removes",
+          plain=("Retired the old site mode setting; a site that showed everything became your GM site."),
+          ask=("Removes the old site mode setting; if it said everything should show, your site becomes your GM site."),
+          left=("Kept the old site mode setting.")),
     Check("publish-site", None, 2, "the site switch",
-          find_publish_site),
+          find_publish_site,
+          kind="bookkeeping",
+          plain=("Wrote down whether this vault has a site, which it had only implied.")),
     Check("default-mode", "1.10.16", 2, "a default palette", find_default_mode,
-          asks_site=True, choices=("default-mode=",)),
+          asks_site=True, choices=("default-mode=",),
+          kind="asks",
+          plain=("Set the colour scheme your site starts readers in."),
+          ask=("Sets the colour scheme your site starts readers in."),
+          left=("Kept your site starting in the reader's own colour scheme.")),
     Check("fonts-self-host", "1.10.17", 2, "fonts served from the site",
-          find_fonts, asks_site=True, choices=("fonts-self-host",)),
+          find_fonts, asks_site=True, choices=("fonts-self-host",),
+          kind="asks",
+          plain=("Set your site to serve its own fonts, so readers' addresses are not sent to Google."),
+          ask=("Makes your site serve its own fonts, so readers' addresses are not sent to Google."),
+          left=("Kept your site loading its fonts from Google.")),
     Check("postbuild", "1.10.17", 3, "the site's postbuild script",
-          find_postbuild),
+          find_postbuild,
+          kind="asks",
+          plain=("Pointed out a build step of your site's own that may now repeat what the publish tool does."),
+          ask=("Needs you to look at the build step by hand; nothing changes until then."),
+          left=("Kept your site's own build step.")),
     Check("tone-shown", "1.10.46", 3, "relationship tones shown on the site",
-          find_tone_shown),
+          find_tone_shown,
+          kind="bookkeeping",
+          plain=("Said that the site now shows whether each relationship is warm, hostile or neutral; nothing was changed.")),
     Check("retire-steps", "1.10.63", 3, "build steps the publish tool now "
-          "does itself", find_retire_steps, choices=("retire-step:=",)),
+          "does itself", find_retire_steps, choices=("retire-step:=",),
+          kind="removes",
+          plain=("Removed build steps your site ran that the publish tool now does itself."),
+          ask=("Removes a build step your site runs that the publish tool now does itself, so it is not done twice."),
+          left=("Kept your site's own build step.")),
     Check("retire-steps-2", "1.10.92", 3, "build steps the publish tool now "
           "does itself", lambda v: find_retire_steps(v, "1.10.92"),
-          choices=("retire-step:=",)),
+          choices=("retire-step:=",),
+          kind="removes",
+          plain=("Removed build steps your site ran that the publish tool now does itself."),
+          ask=("Removes a build step your site runs that the publish tool now does itself, so it is not done twice."),
+          left=("Kept your site's own build step.")),
     Check("publish-played", "1.10.18", 4, "played sessions are registered",
-          find_publish_played, asks_site=True, choices=("played:",)),
+          find_publish_played, asks_site=True, choices=("played:",),
+          kind="asks",
+          plain=("Added the sessions you have played to the pages your site publishes."),
+          ask=("Adds the sessions you have played to the pages your site publishes, so players can read them."),
+          left=("Kept those sessions off your site.")),
     Check("session-recaps", "1.10.18", 4, "recaps kept in session indexes",
-          find_session_recaps, asks_site=True),
+          find_session_recaps, asks_site=True,
+          kind="asks",
+          plain=("Pointed out session notes whose recap text the site now keeps off the player site."),
+          ask=("Needs you to move the recap text by hand; nothing changes until then."),
+          left=("Kept the recap text where it is.")),
     Check("sheet-source", "1.10.22", 4, "PCs with no character sheet",
-          find_sheet_source, asks_site=True, choices=("sheet-source:=",)),
+          find_sheet_source, asks_site=True, choices=("sheet-source:=",),
+          kind="asks",
+          plain=("Recorded where each character's sheet is kept, for characters whose notes have none."),
+          ask=("Records where the character's sheet is kept, so the site can show it."),
+          left=("Left the character with no sheet named.")),
     Check("unparseable-notes", "1.10.23", 4,
-          "notes the build cannot parse", find_unparseable, asks_site=True),
+          "notes the build cannot parse", find_unparseable, asks_site=True,
+          kind="asks",
+          plain=("Pointed out notes whose details at the top the site cannot read."),
+          ask=("Needs you to fix the details at the top of the note by hand; nothing changes until then."),
+          left=("Left the note as it is.")),
     Check("exclude-lists", "1.10.47", 2, "the built-in exclude lists, written "
-          "into the vault file", find_exclude_lists, asks_site=True),
+          "into the vault file", find_exclude_lists, asks_site=True,
+          kind="bookkeeping",
+          plain=("Wrote the lists of headings and details your site hides into your settings, where you can see them; what publishes is unchanged."),
+          ask=("Replaces a value you typed for the headings or details your site hides with the built-in list; what publishes does not change, since the site already ignored that value."),
+          left=("Kept the value you typed for what your site hides.")),
     Check(PUBLISH_HIDDEN, "1.10.107", 2, "published pages the old publish "
           "list hid with a comment", find_publish_hidden,
-          choices=(f"{PUBLISH_HIDDEN}=",)),
+          choices=(f"{PUBLISH_HIDDEN}=",),
+          kind="asks",
+          plain=("Moved pages that your old publish list had hidden, but that were publishing, to the list of pages waiting for your decision."),
+          ask=("Moves pages your old publish list hid, but that were publishing, to the list waiting for your decision, so they stop publishing."),
+          left=("Kept those pages publishing.")),
     Check("gm-leak", None, 4, "sections the site withholds are nested under "
-          "GM Notes", find_gm_leak, asks_site=True),
+          "GM Notes", find_gm_leak, asks_site=True,
+          kind="bookkeeping",
+          plain=("Moved headings the site keeps from players under GM Notes, so the notes match the site.")),
     Check("props-move", "1.10.105", 4, "props kept by hand or by site scripts "
           "move into the vault", find_props_move, asks_site=True,
-          choices=("props-move=",)),
+          choices=("props-move=",),
+          kind="asks",
+          plain=("Moved props kept by hand or by site scripts into the vault as prop notes."),
+          ask=("Moves props kept by hand or by site scripts into the vault as prop notes."),
+          left=("Kept your props where they are.")),
     Check(PROPS_SETTLE, "1.10.106", 4, "prop notes the props move left as drafts",
-          find_props_settle, asks_site=True, choices=(f"{PROPS_SETTLE}=",)),
+          find_props_settle, asks_site=True, choices=(f"{PROPS_SETTLE}=",),
+          kind="asks",
+          plain=("Marked the prop notes the props move made as finished, so their pages stop showing a Draft badge."),
+          ask=("Marks the prop notes the props move made as finished, so their pages stop showing a Draft badge."),
+          left=("Kept those prop notes marked as drafts.")),
 ]

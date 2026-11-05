@@ -181,3 +181,16 @@ describe('gm-publish manifest never-publish (the command line)', () => {
     assert.match(fs.readFileSync(path.join(vault, 'Sessions/Plan.md'), 'utf8'), /^---\npublish: false\n/);
   });
 });
+
+describe('the update record never publishes', () => {
+  it('_meta/update-record.json is in an always-excluded folder and the scan never reads it as a page', () => {
+    const { alwaysExcludedSegment } = require('../lib/publish-decision');
+    assert.strictEqual(alwaysExcludedSegment('_meta/update-record.json'), '_meta');
+    const { vault } = setup({ ...FILES, '_meta/update-record.json': '{\n  "templates": {}\n}\n', '_meta/Other.md': 'x\n' });
+    // Even a site whose config hides no folder at all.
+    const report = scanVaultReport({ vaultPath: vault, excludeDirs: [], folderMap: FOLDER_MAP });
+    const named = JSON.stringify(report);
+    assert.ok(named.includes('Other'), 'control: the scan names a note it reads in _meta');
+    assert.ok(!named.includes('update-record'), named);
+  });
+});

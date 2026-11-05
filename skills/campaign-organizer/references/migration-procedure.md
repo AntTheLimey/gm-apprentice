@@ -1,72 +1,77 @@
-# Vault Migration Procedure
+# Vault Update Procedure
 
-Runs when `vault_check.py <vault> version` returns `MISMATCH`. The
-migration is a script; this file says how to drive it.
+Runs when `vault_check.py <vault> version` returns `MISMATCH`, or when
+the GM asks to update the vault. The update is one command; this file
+says how to drive it. It does the bookkeeping itself (renames, moves,
+new folders, template copies, the site's publish tool), takes a backup
+of the notes before its first write, and asks before anything that
+would remove what the GM wrote. There is no separate "may I apply?"
+step: run it.
 
-1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/migrate.py" <vault> plan`
-   and show the GM its lists as printed: Will do, Your choice, Needs a
-   person, and, while the site's publish tool is out of date, Checked
-   once the site's tool is updated. It writes nothing. `up to date`
-   means there is nothing to do: skip to the end.
-2. Ask once: "May I apply Will do and the checks listed to run once
-   the site's tool is updated? Tell me which of Your choice you
-   want." A choice that shows `id=<…>` needs the GM's answer for the
-   value.
-3. On the GM's yes, run the same script with `<vault> apply`, adding
-   `--choose <id>` or `--choose "<id>=<value>"` once for each choice
-   they took. An instruction already in the request ("apply the
-   migration") is a yes, but neither it nor a plain "go ahead" answers
-   a choice shown as `id=<…>`: never run `apply` with one unanswered;
-   ask for its value first. `leave` is an answer to every choice that
-   needs a value (`--choose tone-words=leave` keeps things as they are).
-   A yes/no choice (no value) left unanswered is a no: once the vault is
-   stamped past its release it is not offered again (the checks that run
-   on every pass, such as templates, come back on each plan). If it prints
-   "the site's publish tool is updated; run plan again…", a check that
-   waited on the update offers a choice the GM has not seen, so it did
-   not stamp: go back to step 1 and ask the GM only about the new rows. If it prints
-   `not answered: <id>=<…>` and `not stamped`, a choice that needs a
-   value was left open: everything else was applied, but the vault stays
-   unstamped so the choice comes back. Ask the GM, then run `apply` again
-   with `--choose "<id>=<value>"` for it (the plan's stamp row names the
-   choices it waits for). While the stamp is held, a `leave` answer and the said-once
-   notices are not asked again; `--choose "<id>=<value>"` still overrides
-   a remembered leave. A yes/no choice takes no value but `leave`.
-4. Report what it printed under Did, and any `not offered: <id>` line
-   (a choice it had nothing to apply to). Work through Needs a person with
-   the GM, one row at a time; the script never changes those. A row
-   ending "apply stops here until this is fixed" comes first.
-   Rows from one check that share a message print it once, as
-   `check (N): message`, with the paths indented under it. After an
-   `apply`, `# N rows already shown in the plan` stands for rows the
-   plan already showed; only the rows it could not have shown print.
-5. If it exits 1, give the GM the error line as printed. The vault is
-   stamped at the last release that finished (the output says which,
-   or "not stamped"), and the next run starts at the step that failed.
-6. No GM reachable (a scripted or headless run with no instruction
-   about the migration): run `plan`, report it, apply nothing.
-7. Exit 2 is a refusal; the script changed nothing. A vault below
-   1.10.12, or ahead of the plugin, cannot be migrated by this plugin:
-   tell the GM the line it printed and stop. A `--choose` it rejects
-   means the id was wrong: check it against `plan` and run again.
+1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py" update <vault> --json`
+   and show the GM its `report` as printed: Done, Waiting for you,
+   Could not read, Worth knowing, and the Backup line.
+2. **Could not read** lines name a file the update could not read and
+   its fix (for an iCloud file, `brctl download "<path>"`). Tell the GM
+   the file and the fix; the update left that file as it was.
+3. **Exit 0** means done (or nothing to do). Go to the end.
+4. **Exit 3** means `questions` wait. Each has an `id`, `options` and
+   `detail`. Put each question to the GM once, one at a time, in plain
+   words:
+   - Say what saying yes would do (`detail.if_yes`).
+   - A template question (`template:<file>@...`): use `detail.summary`
+     and `detail.comparison` to say what the GM's version has that the
+     plugin's does not, and what the plugin's adds. `keep` keeps theirs
+     as it is; `take` puts the plugin's in its place. Never show a raw
+     diff.
+   - A question with no `options` is something to fix by hand: tell
+     the GM what and where (`detail.lines`), then run the update again
+     once it is fixed.
+   - `leave` is always an answer and leaves that thing as it is.
+5. Run it again with every answer, one `--answer` per question, by its
+   `id` exactly as given (the `@` part names the text the GM saw):
+   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py" update <vault> --json --answer template:pc-coc-7e-regency.md@1a2b3c4d=keep`.
+   Each answer is kept in `_meta/update-record.json`, so the same
+   question is not asked again while what it would change stays the
+   same. If a file changed since the GM was asked, Worth knowing says
+   so and the question comes back; if it exits 3 again, ask only about
+   the new questions.
+6. **Exit 1** means a step failed: give the GM the line under "Stopped"
+   as printed. What finished is kept, and the next run carries on from
+   the failed step.
+7. **Exit 2** means it refused and changed nothing: the vault is not one
+   it updates (first-time setup, too old, or ahead of the plugin), or an
+   answer was not one of the question's options. Tell the GM what the
+   message names and stop. For a rejected answer, check the id and
+   value against the `--json` output and run again.
+8. **No GM to ask** (a scheduled or unattended run): run
+   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py" update <vault> --headless`.
+   It does the bookkeeping only and leaves every question for the next
+   run with a GM. Report what it printed, including how many questions
+   wait. It takes no `--answer`.
 
-**The settings move.** The update itself moves the vault's settings
-to the new settings file (`settings-move`). Its rows under Needs a
-person:
+**Asked later.** When the GM asks which version of a template they are
+on, why, or what an update did, read `_meta/update-record.json`:
+`templates` says, per template, whose text it is, the release it
+matches and what was decided when; `answers` holds each answer;
+`updates` lists each run and its backup.
+
+**The settings move.** The update moves the vault's settings to the new
+settings file. Its rows come as questions with no options:
 
 - The vault stays on the old file because its site's publish tool is
   too old to read the new one (the row names the version it needs). The
   same holds for the publish list, and for build steps or site keys the
-  old tool cannot take. These holds stop the update (the vault is not
-  stamped) until cleared. Tell the GM what clears each: update or repin
-  the site's tool; change a build step that reads the old file; or, for a
+  old tool cannot take. These holds keep the vault at its old version
+  until cleared. Tell the GM what clears each: update or repin the
+  site's tool; change a build step that reads the old file; or, for a
   site no longer published, clear `player_site.folder`.
-- The settings cannot move yet. Each row says what blocks the move, and
-  the vault is not stamped until it has moved. A row naming a setting:
-  campaign-qa's Settings check. A site folder that belongs to another
-  vault or cannot be read: correct `vaultPath` in that site's
-  `vault.config.json`. A `vault-notes.md` that already exists and
-  differs: ask the GM, then move it aside. Then run the update again.
+- The settings cannot move yet. Each row says what blocks the move. A
+  row naming a setting: campaign-qa's Settings check. A site folder that
+  belongs to another vault or cannot be read: correct `vaultPath` in
+  that site's `vault.config.json`. A `vault-notes.md` that already
+  exists and differs: ask the GM, then move it aside. Then run the
+  update again.
 - Settings still in the site folder's file of a vault already moved:
   campaign-qa's Settings check.
 

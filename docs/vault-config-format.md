@@ -15,6 +15,7 @@ A vault keeps its settings and the tools' own bookkeeping apart.
 |------|-------|---------------|
 | `_meta/vault-config.yaml` | The settings: choices the GM makes | The GM, or the `gm-apprentice-publish settings` command |
 | `_meta/vault-state.json` | Bookkeeping the tools keep | The tools only |
+| `_meta/update-record.json` | What the update decided, and why | The update only |
 
 The settings file is plain YAML with nothing else in it. There is no
 frontmatter and no prose. A GM can edit it by hand, and the file keeps
@@ -263,10 +264,40 @@ would do.
 - `update_held` is what an update that could not stamp the vault
   remembers for the next one: `left` lists the choices the GM answered
   "leave", `said` the notices already shown, so neither is asked or
-  shown again. It is dropped when the vault is stamped.
+  shown again. It is dropped when the vault is stamped. A template's
+  answer is never kept here: it goes in the update record.
 - `moments_backfill_offered` is the date session-wrapup offered to tag
   and write Memorable Moments in past wrap-ups, so the offer is made
   once.
 
 Other keys may appear and must be kept. Do not edit the file by hand. The
 `settings setup-note` command reads and writes `setup`.
+
+## The update record
+
+`_meta/update-record.json` is a JSON object the update writes, and it
+survives stamping, so an answer the GM gave once is not asked again.
+Under `templates`, each file in `_Templates/` that an update which did
+work has looked at has an entry (a run that finds nothing to do writes
+none): whose text it is (`state`: `plugin` or `gms`), the
+release it equals (`matches`), the GM's answer when one was asked
+(`decision`: `keep` or `take`), a hash of the vault's copy and of the
+plugin's text it was compared with (`file_sha`, `shipped_sha`), the
+plugin version and the date, and one sentence saying why. A kept
+template is asked about again only when one of those two texts changes.
+The file is written only when something in it changes, so an update
+with nothing to do leaves the vault untouched. A "leave" answer counts as keep,
+and so does a template "leave" an older update kept in `update_held`. A
+record that cannot be read stops the template check rather than being
+written over: restore it from the latest update backup, or delete it and
+answer the template questions again. Under `answers`, every question
+`gma update` asked has the GM's answer (`answer`), a hash of the lines
+it was asked with (`lines_sha`), the date and the plugin version: a
+`leave` stands while a check finds those same lines (a yes is asked
+again whenever the change is due again). A
+template's answer is listed there too, but what counts for a template
+is its `templates` entry. Under `updates`, each run that did something lists the version
+it came from and went to, the date, what it did in plain words, the
+questions answered and left open, and its backup. Do not
+edit the file by hand. It sits in `_meta/`, which a site never
+publishes.

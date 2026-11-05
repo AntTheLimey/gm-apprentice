@@ -189,7 +189,7 @@ def test_the_migrate_gate_refuses_a_vault_with_no_stamp_on_both(tmp_path, layout
 
 def test_the_migrate_stamp_writes_where_the_layout_keeps_it(tmp_path, layout):
     vault = on_layout(make_vault(tmp_path, stamp="1.10.20"), layout)
-    migrate._stamp(vault, PLUGIN)
+    migrate.stamp(vault, PLUGIN)
     assert vaultlib.read_stamp(vault) == PLUGIN
     assert (vault / "_meta" / "vault-state.json").exists() == (layout == "new")
 

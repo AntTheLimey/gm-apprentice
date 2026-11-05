@@ -55,6 +55,7 @@ COMMANDS: dict[str, Command] = {
     "session-context": Command("session_context", "Session-prep context bundle in one call."),
     "stamp-entities": Command("stamp_entities", "Batch frontmatter writes for the session workflows."),
     "tones": Command("tones", "List a vault's stray tone words, and tidy them."),
+    "update": Command("update", "Update a vault and its site to the plugin's version, with a plain report."),
     "vault-check": Command("vault_check", "Vault content checks: frontmatter, names, index, drafts and more."),
     "vault-scaffold": Command("vault_scaffold", "Build a new vault's skeleton, or list what one lacks."),
     "vault-search": Command("vault_search", "Ranked vault search."),

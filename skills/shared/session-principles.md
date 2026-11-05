@@ -12,8 +12,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault> ver
 ```
 
 - `OK` or `SETUP` → proceed.
-- `MISMATCH` → announce the row, run campaign-organizer's migration
-  workflow (`campaign-organizer/references/migration-procedure.md`),
+- `MISMATCH` → announce the row, run the update
+  (`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py" update <vault>`)
+  as `campaign-organizer/references/migration-procedure.md` says,
   then resume your task.
 - `AHEAD` → announce the row and tell the GM to update the plugin. Stop.
 - `ERROR` → report the row: the plugin install is broken. Stop.

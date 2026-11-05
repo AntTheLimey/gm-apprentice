@@ -5,15 +5,17 @@ alone: templates, the schema mirror, and the small per-release fixes."""
 from __future__ import annotations
 
 import bisect
-import difflib
+import datetime
 import hashlib
 import json
 import posixpath
 import re
 from collections.abc import Callable
 from pathlib import Path
+from typing import Literal
 
 import relink
+import update_record
 from dnd_note import PLACEHOLDER
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           cells, edit_frontmatter, plugin_tool, stopped,
@@ -21,13 +23,14 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
 from schema_rules import system_id as _system_id
 from schema_rules import STAGE_HIDES, TEMPLATE_NAMES
 from schema_rules import tone_families, without_generated_markers
+from template_compare import compare, summary
 from vault_check import (RECONSTRUCTION_NOTE_RE, WRAP_TYPES, WrapDetail, check_wrapup,
                          configured_site, player_section_key, semver_below,
                          site_pin, wrapup_filename_findings)
-from vaultlib import (LEGACY_SETTINGS_FILE, SKIP_DIRS, SettingsUnavailable, entity_type, extract_frontmatter,
+from vaultlib import (LEGACY_SETTINGS_FILE, SKIP_DIRS, SettingsUnavailable, StateUnreadable, entity_type, extract_frontmatter,
                       delete_key, fence_step, frontmatter_span, opens_a_block,
                       parse_version, plugin_version,
-                      read_stamp, scan_body, settings, settings_file,
+                      read_held, read_stamp, scan_body, settings, settings_file,
                       settings_raw,
                       settings_unset, vault_files, vault_layout,
                       wrapup_filename)
@@ -179,33 +182,6 @@ def _regency_pc_template(vault: Path) -> bool:
         return False
 
 
-def _differs(current: str, expected: str, shown: int = 4) -> str:
-    """What differs, on one row: how many lines, then the first few as
-    "- yours | + the plugin's". A line edited in place counts once."""
-    mine = [x for x in normalise(current).split("\n") if x.strip()]
-    theirs = [x for x in normalise(expected).split("\n") if x.strip()]
-    changes: list[str] = []
-    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(
-            None, mine, theirs, autojunk=False).get_opcodes():
-        if op == "equal":
-            continue
-        for k in range(max(i2 - i1, j2 - j1)):
-            a = mine[i1 + k].strip()[:90] if i1 + k < i2 else None
-            b = theirs[j1 + k].strip()[:90] if j1 + k < j2 else None
-            if a is not None and b is not None and a.split() == b.split():
-                changes.append(f"spacing differs: {b}")
-            else:
-                changes.append(" | ".join(
-                    [f"- {a}"] * (a is not None) + [f"+ {b}"] * (b is not None)))
-    if not changes:
-        return "only blank lines differ"
-    more = len(changes) - shown
-    return (f"{len(changes)} line{'' if len(changes) == 1 else 's'} "
-            f"{'differs' if len(changes) == 1 else 'differ'} "
-            f"(- yours, + the plugin's): " + "; ".join(changes[:shown])
-            + (f"; and {more} more" if more > 0 else ""))
-
-
 GENERIC = "generic"   # the history's key for a vault with no known system
 
 
@@ -291,21 +267,184 @@ def _with_values(target: str, source: str, keys: set[str]) -> str:
     return "".join(t_lines)
 
 
+# A plain name for each template the plugin ships (by its file in
+# skills/shared/templates/), for what the GM is told about it.
+TEMPLATE_LABELS = {
+    "campaign-overview.md": "Campaign Overview",
+    "chapter.md": "Chapter",
+    "character-story.md": "character story",
+    "clue.md": "Clue",
+    "creature.md": "Creature",
+    "crew-fitd.md": "crew sheet",
+    "document.md": "Document",
+    "event.md": "Event",
+    "faction.md": "Faction",
+    "heritage.md": "Heritage",
+    "item.md": "Item",
+    "location.md": "Location",
+    "npc.md": "NPC",
+    "organization.md": "Organization",
+    "pc-coc-7e-regency.md": "Regency sheet",
+    "pc-coc-7e.md": "Call of Cthulhu character sheet",
+    "pc-dnd-5e-2024.md": "D&D character sheet",
+    "pc-fitd.md": "Forged in the Dark character sheet",
+    "pc-generic.md": "character sheet",
+    "pc-gurps-4e.md": "GURPS character sheet",
+    "pc-pf2e.md": "Pathfinder character sheet",
+    "plan.md": "Plan",
+    "prop.md": "Prop",
+    "scene.md": "Scene",
+    "session-plan.md": "Session Plan",
+    "session-wrap.md": "Session Wrap-Up",
+    "session.md": "Session",
+    "world-domain.md": "World Domain",
+    "world-flags.md": "world flags",
+    "world-index.md": "world index",
+}
+_SHIPPED_NAME = {vault_name: src for src, vault_name in TEMPLATE_NAMES.items()}
+
+
+def template_label(name: str) -> str:
+    """The plain name of the template a vault holds as `_Templates/<name>`;
+    the file name when it has none."""
+    return TEMPLATE_LABELS.get(_SHIPPED_NAME.get(name, name), name)
+
+
+DATALESS = 0x40000000   # macOS UF_DATALESS: iCloud holds the file, not the disk
+
+
+def _unreadable_reason(path: Path) -> str:
+    """Why a template that read as empty is a read problem: a shipped
+    template is never empty."""
+    try:
+        st = path.stat()
+    except OSError as e:
+        return e.strerror or e.__class__.__name__
+    if getattr(st, "st_flags", 0) & DATALESS:
+        return "iCloud has not downloaded it to this computer"
+    if st.st_size > 0:
+        return (f"it read as empty, though it holds {st.st_size} "
+                f"byte{'s' * (st.st_size != 1)}")
+    return "it is empty"
+
+
+def _unreadable(name: str, path: Path, reason: str) -> Item:
+    return Item(f"template-unreadable:{name}", PERSON, [
+        f"_Templates/{name} could not be read ({reason}); left as it is. "
+        f'Fix: brctl download "{path}" (iCloud), or check its permissions, '
+        f"then run the update again."])
+
+
+def _empty_on_disk(name: str, what: str = "0 bytes on disk") -> Item:
+    """A template that truly holds nothing: no download brings it back."""
+    return Item(f"template-unreadable:{name}", PERSON, [
+        f"_Templates/{name} is empty ({what}); left as it is. Fix: "
+        f"restore it from a backup, or delete it so the update copies the "
+        f"plugin's, then run the update again."])
+
+
+def _is_empty_on_disk(path: Path) -> bool:
+    try:
+        st = path.stat()
+    except OSError:
+        return False
+    return st.st_size == 0 and not getattr(st, "st_flags", 0) & DATALESS
+
+
+def _release_of(released: dict[str, str | None] | list[str],
+                hashes: set[str]) -> tuple[bool, str | None]:
+    """(is any of `hashes` a released text, the last release that wrote it
+    when the history names one)."""
+    found = hashes & set(released)
+    if not found:
+        return False, None
+    if isinstance(released, dict):
+        named = sorted((v for h in found if isinstance(v := released.get(h), str)),
+                       key=parse_version)
+        return True, named[-1] if named else None
+    return True, None
+
+
+def _today() -> str:
+    return datetime.date.today().isoformat()
+
+
 def find_templates(vault: Path) -> list[Item]:
+    """Each template is decided by rule, in order: missing, copied; not
+    readable, said so and left alone; the plugin's text, nothing; an older
+    release's text, unedited, updated; the GM's own, asked once (keep or
+    take) and the answer remembered in the update record against both
+    texts, so it is asked again only when one of them changes."""
+    return _survey_templates(vault)[0]
+
+
+def same_templates(vault: Path) -> dict[str, update_record.TemplateEntry]:
+    """A record entry for each template that is the plugin's text, as it
+    is now: what `gma update` writes at the end of a run that did work."""
+    return _survey_templates(vault)[1]
+
+
+def _survey_templates(vault: Path) -> tuple[
+        list[Item], dict[str, update_record.TemplateEntry]]:
+    """find_templates' items, and the entries of the templates found the
+    same as the plugin's."""
     folder = vault / "_Templates"
     items: list[Item] = []
     system = vault_system(vault)
     released = _released_hashes(system)
     regency_released = _released_hashes("coc-7e-regency")
     regency_pc = _regency_pc_template(vault)
+    record = update_record.load(vault)
+    found_plugin = plugin_version()
+    version = found_plugin[0] if found_plugin else "unknown"
+    try:
+        stamp = read_stamp(vault)
+    except StateUnreadable:   # the gate reports it
+        stamp = None
+    behind = stamp is not None and version != "unknown" \
+        and parse_version(stamp) < parse_version(version)
+    same: dict[str, update_record.TemplateEntry] = {}
+    try:   # "leave" answers an older update kept before the record existed
+        held_left = read_held(vault)["left"]
+    except (StateUnreadable, OSError):
+        held_left = set()
+
+    def entry(name: str, file_text: str, shipped: str, why: str,
+              state: Literal["plugin", "gms"] = "plugin",
+              matches: str | None = version,
+              decision: Literal["keep", "take"] | None = None
+              ) -> update_record.TemplateEntry:
+        return {"state": state, "matches": matches,
+                "decision": decision, "file_sha": text_hash(file_text),
+                "shipped_sha": text_hash(shipped), "plugin": version,
+                "on": _today(), "why": why}
+
+    def remember(*entries: tuple[str, update_record.TemplateEntry]) -> None:
+        # The templates found the same as the plugin's ride along with any
+        # write; a run that changes nothing writes nothing.
+        update_record.record_templates(vault, dict(entries), refresh=same)
+
     for name, text in expected_templates(vault).items():
         path = folder / name
+        label = template_label(name)
+        current = ""
         if path.is_file():
             try:
                 current = path.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError) as e:
-                raise StepFailed(f"_Templates/{name} cannot be read "
-                                 f"({e.__class__.__name__})") from e
+            except UnicodeDecodeError:
+                items.append(_unreadable(name, path, "it is not UTF-8 text"))
+                continue
+            except OSError as e:
+                items.append(_unreadable(
+                    name, path, e.strerror or e.__class__.__name__))
+                continue
+            if not current:
+                items.append(_empty_on_disk(name) if _is_empty_on_disk(path)
+                             else _unreadable(name, path, _unreadable_reason(path)))
+                continue
+            if not current.strip():
+                items.append(_empty_on_disk(name, "only blank lines"))
+                continue
             regency = _regency_build(system, name, current)
             if regency is not None:
                 text = regency
@@ -316,15 +455,18 @@ def find_templates(vault: Path) -> list[Item]:
         mine = current if path.is_file() else text
         written = _with_values(text, mine, filled)
 
-        def apply(_value: str | None, path: Path = path,
-                  text: str = written, name: str = name) -> list[str]:
-            write_text_atomic(path, text)
-            return [f"wrote _Templates/{name}"]
-
         if not path.is_file():
+            def copy(_value: str | None, path: Path = path, text: str = text,
+                     written: str = written, name: str = name) -> list[str]:
+                write_text_atomic(path, written)
+                remember((name, entry(name, written, text,
+                                      f"The vault had no copy, so the plugin's "
+                                      f"{version} text was copied in.")))
+                return [f"Added the missing {template_label(name)} template."]
+
             items.append(Item(f"template:{name}", WILL,
                               [f"copy the missing template _Templates/{name}"],
-                              apply))
+                              copy))
             continue
         # What releases wrote for a Regency build is the Regency list,
         # whatever system the vault is stamped (#355).
@@ -333,21 +475,94 @@ def find_templates(vault: Path) -> list[Item]:
             _without_setup_comment(current) if regency_build else current,
             text, filled)
         if _same(shown, text):
+            same[name] = entry(name, current, text,
+                               f"It is the plugin's {version} text.")
             continue
-        if {text_hash(current), text_hash(_with_values(current, text, filled))} \
-                & set((regency_released if regency_build else released
-                       ).get(name, [])):
+        known = record["templates"].get(name)
+        if isinstance(known, dict) and known.get("decision") == "keep" \
+                and known.get("file_sha") == text_hash(current) \
+                and known.get("shipped_sha") == text_hash(text):
+            if behind:
+                on = known.get("on") or "earlier"
+
+                def kept(_value: str | None, label: str = label,
+                         on: str = str(on)) -> list[str]:
+                    return [f"Kept your {label} template (decided {on})."]
+
+                items.append(Item(
+                    f"template-kept:{name}", WILL,
+                    [f"keep your {label} template (decided {on})"], kept))
+            continue
+        is_old, release = _release_of(
+            (regency_released if regency_build else released).get(name, []),
+            {text_hash(current), text_hash(_with_values(current, text, filled))})
+        if is_old:
+            was = release or "an earlier release"
+
+            def update(_value: str | None, path: Path = path, text: str = text,
+                       written: str = written, name: str = name,
+                       label: str = label, was: str = was) -> list[str]:
+                write_text_atomic(path, written)
+                remember((name, entry(name, written, text,
+                                      f"It was {was}'s text, unedited, so it "
+                                      f"was updated to {version}.")))
+                return [f"Updated the {label} template to {version} "
+                        f"(it was {was}'s text, unedited)."]
+
             items.append(Item(
                 f"template:{name}", WILL,
-                [f"update _Templates/{name} from an earlier release's text"],
-                apply))
-        else:
+                [f"update the {label} template to {version} "
+                 f"(it is {was}'s text, unedited)"], update))
+            continue
+        if known is None and f"template:{name}" in held_left:
+            # An older update's "leave" is a keep; the record takes it over
+            # on apply (plan writes nothing).
+            def adopt(_value: str | None, name: str = name, text: str = text,
+                      label: str = label, current: str = current) -> list[str]:
+                remember((name, entry(
+                    name, current, text,
+                    f"The GM chose to keep their own {label} template "
+                    f"(answered leave in an earlier update).",
+                    state="gms", matches=None, decision="keep")))
+                return [f"Kept your {label} template (you answered before)."]
+
             items.append(Item(
-                f"template:{name}", CHOICE,
-                [f"overwrite _Templates/{name} with the plugin's version; "
-                 f"local changes are lost; {_differs(shown, text)}"],
-                apply))
-    return items
+                f"template-kept:{name}", WILL,
+                [f"keep your {label} template (you answered before)"], adopt))
+            continue
+        comparison = compare(shown, text)
+
+        def choose(value: str | None, path: Path = path, text: str = text,
+                   written: str = written, name: str = name,
+                   label: str = label, current: str = current) -> list[str]:
+            if value in ("keep", "leave"):
+                # "leave" is a keep too: never the same question twice.
+                remember((name, entry(
+                    name, current, text,
+                    f"The GM chose to keep their own {label} template.",
+                    state="gms", matches=None, decision="keep")))
+                return [f"Kept your {label} template."]
+            if value == "take":
+                write_text_atomic(path, written)
+                remember((name, entry(
+                    name, written, text,
+                    f"The GM chose the plugin's {version} {label} template.",
+                    decision="take")))
+                return [f"Took the plugin's {label} template."]
+            raise StepFailed(f"template:{name} takes keep or take")
+
+        items.append(Item(
+            f"template:{name}", CHOICE,
+            [f"Your {label} template differs from every release of the "
+             f"plugin's. Keep yours, or take the plugin's?"],
+            choose, wants="keep or take",
+            detail={"file": f"_Templates/{name}", "label": label,
+                    # What the GM is shown: an answer names it (gma update).
+                    "texts_sha": hashlib.sha256(
+                        (current + "\0" + text).encode("utf-8")).hexdigest(),
+                    "comparison": comparison.as_dict(),
+                    "summary": summary(comparison)}))
+    return items, same
 
 
 def _read(path: Path) -> str:
@@ -1764,57 +1979,119 @@ def find_reconstruction_note_fence(vault: Path) -> list[Item]:
 
 
 VAULT_CHECKS: list[Check] = [
-    Check("skeleton", None, 3, "the vault skeleton", find_skeleton),
+    Check("skeleton", None, 3, "the vault skeleton", find_skeleton,
+          kind="bookkeeping",
+          plain=("Added the folders and setup files your vault was missing; nothing already there was touched.")),
     Check("templates", None, 3, "templates", find_templates,
-          choices=("template:",)),
+          choices=("template:=",),
+          kind="bookkeeping",
+          plain=("Brought your note templates up to date with the plugin's."),
+          ask=("Replaces your template with the plugin's, keeping the values you filled in, so new notes follow the plugin's layout."),
+          left=("Kept your own version of the template.")),
     Check("regency-looks", "1.10.49", 3, "a Regency look to the templates",
-          find_regency_looks),
+          find_regency_looks,
+          kind="bookkeeping",
+          plain=("Noticed that your templates look like Regency Cthulhu while the vault is set to plain Call of Cthulhu, and said so; nothing was changed.")),
     Check("pc-template-sheet-source", "1.10.22", 3,
-          "sheet_source in PC templates", find_pc_template_field),
+          "sheet_source in PC templates", find_pc_template_field,
+          kind="bookkeeping",
+          plain=("Added an empty place for a character sheet link to your PC templates.")),
     Check("schema-mirror", None, 3, "the schema mirror", find_schema_mirror,
-          choices=("schema-mirror",)),
+          choices=("schema-mirror",),
+          kind="removes",
+          plain=("Brought the vault's own copy of the built-in note types up to the plugin's."),
+          ask=("Replaces the vault's copy of the built-in note types with the plugin's, so the skills read the same fields you do; your own changes inside those entries go."),
+          left=("Kept your own version of the built-in note types.")),
     Check("required-ties-section", "1.10.65",
           3, "the retired required-relationships section",
-          find_required_ties_section, choices=("required-ties-section",)),
+          find_required_ties_section, choices=("required-ties-section",),
+          kind="removes",
+          plain=("Removed the old Required Relationships section from your list of note types; nothing reads it any more."),
+          ask=("Removes the old Required Relationships section, lines you added included, since nothing reads it any more."),
+          left=("Kept the old Required Relationships section.")),
     Check("relationship-types-missing", "1.10.66", 3,
           "the relationship types a list is missing",
           find_relationship_types_missing,
-          choices=("relationship-types-missing",)),
+          choices=("relationship-types-missing",),
+          kind="asks",
+          plain=("Added the relationship types your list was missing, so every kind of tie can be recorded."),
+          ask=("Adds the relationship types your list leaves out, so every kind of tie can be recorded; say leave if your list is a deliberate choice for this genre."),
+          left=("Kept your list of relationship types as it is.")),
     # An empty Timeline changes what an older publish tool shows, so it waits
     # for the repin: band 4, asks_site.
     Check("timeline-page", None, 4, "the Timeline page", find_timeline_page,
-          asks_site=True),
+          asks_site=True,
+          kind="bookkeeping",
+          plain=("Created an empty Timeline page for session events to be written to.")),
     # A rename asks the site's publish tool (what it changes on the site), so
     # it waits for the repin: band 4, asks_site.
     Check("wrapup-filenames", None, 4, "Wrap-Up filenames",
           find_wrapup_filenames, asks_site=True,
-          choices=("wrapup-filenames",)),
+          choices=("wrapup-filenames",),
+          kind="bookkeeping",
+          plain=("Renamed wrap-up notes to the current naming pattern and updated every link to them.")),
     # Re-nesting changes what the site shows, so it waits for the repin.
     Check("wrapup-sections", "1.10.28", 4, "Wrap-Up sections",
           find_wrapup_sections, asks_site=True,
-          choices=("wrapup-sections=",)),
+          choices=("wrapup-sections=",),
+          kind="asks",
+          plain=("Moved the wrap-up notes' GM headings under GM Notes, so they stay off the player site."),
+          ask=("Moves GM headings in wrap-up notes under GM Notes, so they stay off the player site."),
+          left=("Kept your wrap-up notes' headings where they are.")),
     Check("wrapup-sections-key", None, 2, "the retired player-sections list",
-          find_wrapup_sections_key),
+          find_wrapup_sections_key,
+          kind="removes",
+          plain=("Removed an old setting that listed which wrap-up sections players see; the site no longer reads it."),
+          ask=("Removes an old setting listing which wrap-up sections players see, since the site no longer reads it."),
+          left=("Kept the old wrap-up sections setting.")),
     Check("tone-words", "1.10.44", 3, "tone words",
-          find_tone_words, choices=("tone-words=",)),
+          find_tone_words, choices=("tone-words=",),
+          kind="asks",
+          plain=("Changed the tone words on relationships to the listed ones."),
+          ask=("Changes the tone words on relationships to the listed ones, so the site can show each tie as warm, hostile or neutral."),
+          left=("Kept your relationship tone words as they are.")),
     Check("tone-list", "1.10.44", 3, "the tone list in _meta",
-          find_tone_list),
+          find_tone_list,
+          kind="bookkeeping",
+          plain=("Updated the list of relationship tone words in your setup files to the current list.")),
     Check("mobrpg-sections", "1.10.13", 3, "mobRPG vault-only sections",
-          find_mobrpg_sections, choices=("mobrpg-sections",)),
+          find_mobrpg_sections, choices=("mobrpg-sections",),
+          kind="bookkeeping",
+          plain=("Added two section titles to mobRPG's list of sections kept in the vault, so wrap-up lines stay private.")),
     Check("heritage-notes", "1.10.15", 4, "mobRPG heritage notes",
           find_heritage_notes, asks_site=True,
-          choices=("heritage-notes",)),
+          choices=("heritage-notes",),
+          kind="bookkeeping",
+          plain=("Moved culture and race notes into the Heritages folder and updated every link to them.")),
     Check("open-threads-fold", "1.10.83", 3,
           "per-session open threads in PC Current Status",
-          find_open_threads_fold, choices=("open-threads-fold=",)),
+          find_open_threads_fold, choices=("open-threads-fold=",),
+          kind="asks",
+          plain=("Folded each session's new open threads into the one Open threads list in PC Current Status, word for word."),
+          ask=("Folds each session's new open threads into the one Open threads list in PC Current Status, word for word."),
+          left=("Kept the open threads where each session put them.")),
     Check("stage-keys", "1.10.93", 3, "the retired stage: key",
-          find_stage_keys),
+          find_stage_keys,
+          kind="removes",
+          plain=("Removed the old stage line from session notes; nothing reads it any more."),
+          ask=("Removes the old stage line from session notes, since nothing reads it any more."),
+          left=("Kept the old stage lines in your session notes.")),
     Check("empty-scenes-lists", "1.10.93", 3, "empty scenes: lists",
-          find_empty_scenes_lists),
+          find_empty_scenes_lists,
+          kind="removes",
+          plain=("Removed empty scene lists from session index notes."),
+          ask=("Removes empty scene lists from session index notes, since nothing reads them any more."),
+          left=("Kept the empty scene lists in your session notes.")),
     Check("dnd-background-sections", "1.10.94", 3,
-          "backstory sections in D&D PC notes", find_dnd_background_sections),
+          "backstory sections in D&D PC notes", find_dnd_background_sections,
+          kind="bookkeeping",
+          plain=("Moved D&D characters' backstory, appearance and personality into their own sections under Background, word for word.")),
     Check("wrapup-source-fence", "1.10.114", 3,
-          "the Source callout in Wrap-Ups", find_wrapup_source_fence),
+          "the Source callout in Wrap-Ups", find_wrapup_source_fence,
+          kind="bookkeeping",
+          plain=("Hid the line in each wrap-up that says where it came from, so the player site never shows it.")),
     Check("reconstruction-note-fence", "1.10.119", 3,
-          "the Reconstruction Note callout", find_reconstruction_note_fence),
+          "the Reconstruction Note callout", find_reconstruction_note_fence,
+          kind="bookkeeping",
+          plain=("Hid the Reconstruction Note on imported notes, so the player site never shows it.")),
 ]

@@ -22,6 +22,14 @@ lists it again; everything else in the plan still runs.
 A step that fails stops the run; the vault is stamped at the last release
 whose steps all completed, so the next run starts at the failed step.
 
+`gma update` (update.py) is the command skills run; this is its engine.
+For a direct caller: a template's choice needs a value
+(`--choose template:<file>=keep|take`); `apply` writes the update record
+(`_meta/update-record.json`) with the template decisions; an unreadable
+template is a Needs a person row and never stops the run; and the hide
+lists can be two ids (`exclude-lists`, `exclude-lists-replace` for a list
+the GM typed), both run on the one yes.
+
 Exit: 0 done or nothing to do; 1 a step failed; 2 bad arguments, or a
 vault this script does not migrate (below 1.10.12, or ahead of the plugin).
 """
@@ -30,12 +38,16 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
+
+import update_record
 
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           check_editable)
 from migrate_site import REPIN, SITE_CHECKS
 from migrate_vault import VAULT_CHECKS
+from update_record import AnswerEntry, lines_sha
 from vaultlib import cli_name  # noqa: E402
 from vaultlib import (LEGACY_SETTINGS_FILE, SettingsUnavailable,
                       StateUnreadable, parse_version, plugin_version,
@@ -50,6 +62,7 @@ WAITED_LINE = ("the site's publish tool is updated; run plan again for the "
                "choices it now offers")
 
 CHECKS: list[Check] = [*SITE_CHECKS, *VAULT_CHECKS]
+TEMPLATE = "template:"   # a template's choice; its answer is in the update record
 
 
 def gate(vault: Path) -> tuple[str, str] | str:
@@ -92,11 +105,75 @@ def offered(checks: list[Check], vault_v: str,
 Row = tuple[str, str]   # (the check or item that printed it, its row)
 
 
-def _answered(item: Item, held: dict[str, set[str]]) -> bool:
-    """Is this item settled by what a held update remembered: a "leave"
-    already given, or a notice already said?"""
+@dataclass
+class Found:
+    """What one offered check found, in run order."""
+    check: Check
+    items: list[Item] = field(default_factory=list)
+    failed: str | None = None   # its find raised StepFailed: the message
+    waiting: bool = False       # behind a pending repin: not looked at
+
+
+def collect(vault: Path, checks: list[Check]) -> list[Found]:
+    """Run each check's find, in the order given (`offered`), printing
+    nothing. A check that asks the site's tool waits, unlooked-at, while a
+    repin is still to run; a find that fails is kept with its message."""
+    out: list[Found] = []
+    repin_waits = False
+    for check in checks:
+        if check.asks_site and repin_waits:
+            out.append(Found(check, waiting=True))
+            continue
+        try:
+            items = check.find(vault)
+        except StepFailed as e:
+            out.append(Found(check, failed=str(e)))
+            repin_waits = repin_waits or check.name == REPIN
+            continue
+        out.append(Found(check, items))
+        if check.name == REPIN and any(i.group == WILL for i in items):
+            repin_waits = True
+    return out
+
+
+def recorded_answers(vault: Path) -> dict[str, AnswerEntry]:
+    """The answers the update record keeps; none when it cannot be read
+    (`gma update` reports that; a plan only shows the question again)."""
+    try:
+        return update_record.load(vault)["answers"]
+    except update_record.RecordUnreadable:
+        return {}
+
+
+# Answers that change nothing: the only ones the record answers again. A
+# yes to a change is given fresh each time, or a GM's later edit could be
+# overwritten by an old yes.
+STANDING = ("leave", "keep")
+
+
+def recorded(item: Item, answers: dict[str, AnswerEntry]) -> str | None:
+    """The standing answer (leave or keep) the record keeps for this item
+    while its lines are the ones it was given against; a template's answer
+    is the record's templates entry, never this."""
+    if item.group == PERSON or item.id.startswith(TEMPLATE):
+        return None
+    entry = answers.get(item.id)
+    if isinstance(entry, dict) and entry.get("lines_sha") == lines_sha(item.lines):
+        answer = entry.get("answer")
+        return answer if answer in STANDING else None
+    return None
+
+
+def answered(item: Item, held: dict[str, set[str]],
+              answers: dict[str, AnswerEntry] | None = None) -> bool:
+    """Is this item settled by what a held update remembered (a "leave"
+    already given, or a notice already said), or by an answer the update
+    record keeps against these same lines?"""
+    if answers and recorded(item, answers) is not None:
+        return True
     if item.group == CHOICE:
-        return item.id in held["left"]
+        # A template's answer lives in the update record, not here.
+        return item.id in held["left"] and not item.id.startswith(TEMPLATE)
     return item.notice and item.id in held["said"]
 
 
@@ -104,7 +181,11 @@ def _rows(item: Item) -> list[Row]:
     if item.group == PERSON:
         return [(item.id, line) for line in item.lines]
     label = f"{item.id}=<{item.wants}>" if item.wants else item.id
-    return [(item.id, f"{label}\t{line}") for line in item.lines]
+    lines = list(item.lines)
+    said = (item.detail or {}).get("summary")
+    if lines and isinstance(said, str) and said:
+        lines[-1] = f"{lines[-1]} ({said})"
+    return [(item.id, f"{label}\t{line}") for line in lines]
 
 
 def _grouped(rows: list[Row]) -> list[str]:
@@ -147,30 +228,27 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
     holding: list[str] = []   # choices apply will not stamp without
     maybe: list[str] = []     # checks behind the repin that may ask one
     held = read_held(vault)
+    answers = recorded_answers(vault)
     stuck: list[str] = []     # things only a person can settle, that hold it
-    repin_waits = False
-    for check in offered(CHECKS if checks is None else checks, vault_v, plugin_v):
-        if check.asks_site and repin_waits:
+    todo = offered(CHECKS if checks is None else checks, vault_v, plugin_v)
+    for found in collect(vault, todo):
+        check = found.check
+        if found.waiting:
             waiting.append((check.name, f"{check.name}\t{check.title}"))
             if any(c.endswith("=") for c in check.choices):
                 # not looked at yet: all that is known is that it can ask
                 maybe.append(check.name)
             continue
-        try:
-            items = check.find(vault)
-        except StepFailed as e:
-            groups[PERSON].append((check.name, f"{check.name}\t{e} (apply "
-                                   f"stops here until this is fixed)"))
-            repin_waits = repin_waits or check.name == REPIN
+        if found.failed is not None:
+            groups[PERSON].append((check.name, f"{check.name}\t{found.failed} "
+                                   f"(apply stops here until this is fixed)"))
             continue
-        for item in items:
-            if _answered(item, held):
+        for item in found.items:
+            if answered(item, held, answers):
                 continue
             groups[item.group].extend(_rows(item))
             if item.holds_stamp:
                 (stuck if item.group == PERSON else holding).append(item.id)
-        if check.name == REPIN and any(i.group == WILL for i in items):
-            repin_waits = True
     behind = parse_version(vault_v) < parse_version(plugin_v)
     print(f"vault {vault_v}, plugin {plugin_v}")
     if not behind and not waiting and not any(groups.values()):
@@ -198,7 +276,22 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
     return 0
 
 
-def _stamp(vault: Path, version: str) -> None:
+def stamp_target(todo: list[Check], failed: int | None, vault_v: str,
+                 plugin_v: str) -> str:
+    """The version a run may stamp: the plugin's, or after the check at
+    `failed` stopped it, the last release whose steps all finished."""
+    if failed is None:
+        return plugin_v
+    left = [c.release for c in todo[failed:] if c.release]
+    if not left:
+        return vault_v
+    first = parse_version(min(left, key=parse_version))
+    done = [c.release for c in todo
+            if c.release and parse_version(c.release) < first]
+    return max([vault_v, *done], key=parse_version)
+
+
+def stamp(vault: Path, version: str) -> None:
     try:
         write_stamp(vault, version)
     except (StateUnreadable, OSError) as e:
@@ -207,7 +300,7 @@ def _stamp(vault: Path, version: str) -> None:
                          f"({e.__class__.__name__})") from e
 
 
-def _check_stampable(vault: Path) -> None:
+def check_stampable(vault: Path) -> None:
     """Raise StepFailed unless the stamp could be written."""
     if vault_layout(vault) == "new":
         try:
@@ -252,7 +345,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
             return 2
     if parse_version(vault_v) < parse_version(plugin_v):
         try:   # a stamp is due, written last; find out now that it can be
-            _check_stampable(vault)
+            check_stampable(vault)
         except StepFailed as e:
             print(f"{cli_name()}: {e}; nothing was changed", file=sys.stderr)
             return 1
@@ -265,6 +358,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
     repinned = waited = False
     unanswered: list[str] = []   # value choices the GM was not asked
     held = read_held(vault)
+    answers = recorded_answers(vault)
     left_ids: set[str] = set()   # "leave" answers given this run
     said: set[str] = set()       # notices seen this run
     stuck: list[str] = []        # person rows that hold the stamp
@@ -273,7 +367,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         try:
             for item in check.find(vault):
                 picked = any(i == item.id for i, _v in chosen)
-                if _answered(item, held) and not picked:
+                if answered(item, held, answers) and not picked:
                     continue
                 if item.notice:
                     said.add(item.id)
@@ -316,27 +410,20 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         except (StepFailed, SettingsUnavailable) as e:
             failed, error = n, f"{check.name}: {e}"
             break
-    target = plugin_v
-    if failed is not None:
-        target = vault_v
-        left = [c.release for c in todo[failed:] if c.release]
-        if left:
-            first = parse_version(min(left, key=parse_version))
-            done = [c.release for c in todo
-                    if c.release and parse_version(c.release) < first]
-            target = max([vault_v, *done], key=parse_version)
+    target = stamp_target(todo, failed, vault_v, plugin_v)
     stamped = (parse_version(target) > parse_version(vault_v)
                and not waited and not unanswered and not stuck)
     if stamped:
         try:
-            _stamp(vault, target)
+            stamp(vault, target)
         except StepFailed as e:
             stamped = False
             error = error or f"stamp: {e}"
             failed = failed if failed is not None else len(todo)
     if not stamped:
         try:   # the next plan does not ask these again
-            write_held(vault, left_ids, said)
+            write_held(vault, {i for i in left_ids
+                               if not i.startswith(TEMPLATE)}, said)
         except (StateUnreadable, OSError) as e:
             print(f"{cli_name()}: answers could not be remembered "
                   f"({e.__class__.__name__}); they will be asked again",

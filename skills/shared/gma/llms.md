@@ -31,7 +31,7 @@ gma <command> ... [options]
 | Argument | Value | Help |
 |---|---|---|
 | `--version` |  | print the plugin version |
-| `<command>` | `dnd-ddb`, `dnd-sheet`, `graph-check`, `gurps-check`, `gurps-skill-default`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `session-context`, `stamp-entities`, `tones`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `publish`, `llms` | the command to run; each has its own --help |
+| `<command>` | `dnd-ddb`, `dnd-sheet`, `graph-check`, `gurps-check`, `gurps-skill-default`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `session-context`, `stamp-entities`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `publish`, `llms` | the command to run; each has its own --help |
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma llms -->
@@ -77,6 +77,7 @@ Example: `gma llms relink`
 | `session-context` | `gma llms session-context` | Session-prep context bundle in one call. |
 | `stamp-entities` | `gma llms stamp-entities` | Batch frontmatter writes for the session workflows. |
 | `tones` | `gma llms tones` | List a vault's stray tone words, and tidy them. |
+| `update` | `gma llms update` | Update a vault and its site to the plugin's version, with a plain report. |
 | `vault-check` | `gma llms vault-check` | Vault content checks: frontmatter, names, index, drafts and more. |
 | `vault-scaffold` | `gma llms vault-scaffold` | Build a new vault's skeleton, or list what one lacks. |
 | `vault-search` | `gma llms vault-search` | Ranked vault search. |
