@@ -1,5 +1,4 @@
 // tools/publish/test/integration/build-pf2e-fitd.test.js
-require('../helpers/quiet-legacy-warning.js');
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');

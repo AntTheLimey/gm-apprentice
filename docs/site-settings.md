@@ -641,17 +641,9 @@ folders a rebuild leaves alone are settings of the vault
 `player_site.cloudflare_project` and `player_site.keep`, in the tables
 above), and so are the build steps. A new site's file holds none of them.
 
-An older site may still hold some of these in its file, or other campaign
-settings under other names. The next vault update moves the five site
-settings and the build steps into the vault and tells you what it did. A
-site whose own publish tool is older than 1.24.0 keeps them where they are
-until that tool is updated. Until they move, the build reads those five from
-this file when the vault sets none, and warns about each. On a vault that is
-already on the new settings file, other campaign settings are not read from
-this file: the build warns about each, and stops for one that hides things
-from players.
-Ask the apprentice to check the settings: it adds anything such a key hid
-to the vault's own list and removes the keys from this file.
+A site file that holds any other key stops the build, and the message
+names each key and the setting it moved to. Move each into the vault's
+settings and leave only `vaultPath` in the file.
 
 ## See also
 

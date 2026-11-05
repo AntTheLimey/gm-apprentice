@@ -72,9 +72,10 @@ def test_explain_all_is_asked_of_the_same_process_and_sees_a_new_note(
     vault = new_vault(tmp_path, "One")
     config = tmp_path / "site" / "vault.config.json"
     config.parent.mkdir()
-    config.write_text(json.dumps({"vaultPath": str(vault),
-                                  "folderMap": {"Sessions": "sessions"}}),
-                      encoding="utf-8")
+    config.write_text(json.dumps({"vaultPath": str(vault)}), encoding="utf-8")
+    (vault / "_meta" / "vault-config.yaml").write_text(
+        "version: 1\nplayer_site:\n  title: One\n  folder_map:\n    Sessions: sessions\n",
+        encoding="utf-8")
     cmd = [NODE, str(vaultlib.PUBLISH_TOOL), "explain", "--all", "--json",
            "--config", str(config), "--vault", str(vault)]
 

@@ -139,30 +139,31 @@ describe('PC keep-list threading', () => {
   });
 });
 
-describe('publish.pc_prose_sections in the config', () => {
+describe('player_site.sheets.prose_sections in the config', () => {
   const fs = require('node:fs'); const os = require('node:os'); const path = require('node:path');
   const { resolveConfig } = require('../../lib/config');
+  const { writeSettings } = require('../helpers/vault-files');
   const load = (yaml) => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-pcp-'));
     fs.mkdirSync(path.join(vault, '_meta'));
-    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n  character_sheets: false\n${yaml}---\n`);
+    writeSettings(vault, `player_site:\n  sheets:\n    show: false\n    ${yaml.trim().replace('pc_prose_sections', 'prose_sections')}\n`);
     try { return resolveConfig({ vaultPath: vault }, vault, () => {}).publishConfig; }
     finally { fs.rmSync(vault, { recursive: true, force: true }); }
   };
   it('a list is read; a non-list is ignored with a fault, never "keep everything"', () => {
     const ok = load('  pc_prose_sections: [Psionics]\n');
     assert.deepStrictEqual(pcKeepList(ok), [...PC_PROSE_SECTIONS, 'Psionics']);
-    assert.ok(!ok.faults.some((f) => f.name === 'publish.pc_prose_sections'));
+    assert.ok(!ok.faults.some((f) => f.name === 'player_site.sheets.prose_sections'));
     const bad = load('  pc_prose_sections: everything\n');
     assert.deepStrictEqual(pcKeepList(bad), PC_PROSE_SECTIONS);
-    assert.ok(bad.faults.some((f) => f.name === 'publish.pc_prose_sections'));
+    assert.ok(bad.faults.some((f) => f.name === 'player_site.sheets.prose_sections'));
     // A number is read as the text it is written as.
     const mixed = load('  pc_prose_sections: [Psionics, 3]\n');
     assert.deepStrictEqual(pcKeepList(mixed), [...PC_PROSE_SECTIONS, 'Psionics', '3']);
     // An entry that is not plain text refuses the whole list, which then keeps only the built-in ones.
     const nested = load('  pc_prose_sections: [Psionics, [Deep]]\n');
     assert.deepStrictEqual(pcKeepList(nested), PC_PROSE_SECTIONS);
-    assert.ok(nested.faults.some((f) => f.name === 'publish.pc_prose_sections'));
+    assert.ok(nested.faults.some((f) => f.name === 'player_site.sheets.prose_sections'));
   });
 });
 

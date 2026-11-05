@@ -47,11 +47,6 @@ describe('the settings readers read through deps, and a read error stops them (#
     assert.throws(() => readSettings({ vaultPath: '/v', deps }), /EIO/);
   });
 
-  it('readSettings throws when the old settings file cannot be read', () => {
-    const deps = { exists: (p) => same(p, OLD), readFile: () => { throw eio(); } };
-    assert.throws(() => readSettings({ vaultPath: '/v', deps }), /EIO/);
-  });
-
   it('readSettings throws when the left-over old file cannot be looked for', () => {
     const deps = { exists: (p) => { if (same(p, OLD)) throw eio(); return same(p, NEW); }, readFile: () => 'player_site:\n  title: T\n' };
     assert.throws(() => readSettings({ vaultPath: '/v', deps }), /EIO/);

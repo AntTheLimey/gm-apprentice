@@ -87,7 +87,7 @@ const { StringDecoder } = require('string_decoder');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { readSettings, nameIn, fileLabel, layoutOf } = require('./settings');
+const { readSettings, nameIn, fileLabel } = require('./settings');
 const { cutLines, findHeadings, playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts, isWithheld, nameList, gmAliasList } = require('./processor');
 const { parseNote } = require('./frontmatter');
 const { labelsForLinks } = require('./wikilink');
@@ -111,12 +111,9 @@ function site(vault) {
   if (typeof vault !== 'string' || vault === '') throw new Error('vault must be a path');
   const { values, origins, faults, file } = readSettings({ vaultPath: vault, siteConfig: {} });
   if (!file.exists || !file.hasSiteBlock) {
-    // A stray `publish` at the top: on the old file it is the block of settings, written as something
-    // else; on the new file it is not a setting at all, the site's settings go under player_site.
+    // A stray `publish` at the top is not a setting at all: the site's settings go under player_site.
     if (faults.some((f) => f.name === 'publish')) {
-      throw new Error(layoutOf(vault) === 'new'
-        ? `publish in ${fileLabel(vault)} is not a setting; the site's settings go under player_site`
-        : `publish: in ${fileLabel(vault)} is not a block of settings`);
+      throw new Error(`publish in ${fileLabel(vault)} is not a setting; the site's settings go under player_site`);
     }
     return { publishes: false, site: false, siteDir: null };
   }
@@ -305,7 +302,6 @@ async function runCommand(request) {
   try {
     if (request.cwd) process.chdir(request.cwd);
     if (request.env) env = swapEnv(request.env);
-    require('./manifest').resetNotices();
     process.stdout.write = catcher('stdout');
     process.stderr.write = catcher('stderr');
     let rc;

@@ -89,6 +89,7 @@ import tempfile  # noqa: E402
 from unittest import mock  # noqa: E402
 
 import tones  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 
 def note(*tone_lines):
@@ -722,7 +723,10 @@ class UsesTests(VaultCase):
 class ShownTests(VaultCase):
     def run_shown(self, files, published, eol=""):
         for rel, text in files.items():
-            self.put(rel, text, newline=eol)
+            if rel == "_meta/vault-config.md":
+                write_config(self.vault, text)
+            else:
+                self.put(rel, text, newline=eol)
         out, err = io.StringIO(), io.StringIO()
         with mock.patch.object(tones, "published_notes",
                                return_value=published), \

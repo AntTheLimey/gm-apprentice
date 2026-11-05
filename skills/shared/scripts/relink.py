@@ -527,15 +527,19 @@ def _alias_warnings(texts: dict[str, str | None], old: str,
 
 
 MANIFEST_REL = "_meta/publish-list.yaml"
-# Dated: an un-updated vault still has the old file; remove at 1.11.0.
-OLD_MANIFEST_REL = "_meta/publish-manifest.md"
 YAML_WORDS = {"true", "false", "null", "yes", "no", "on", "off", "y", "n"}
 
 
 def _has_site(vault: Path) -> bool:
     """Whether the vault has a site, asked of the publish tool. A vault
     with no vault file has none, and nothing is asked. When the tool cannot
-    be asked, the file's own switch is read instead."""
+    be asked, the file's own switch is read instead. A vault still on the
+    retired settings file is refused: the tool reads only the current file,
+    so it would say "no site" and the live-state pin would be skipped."""
+    if vault_layout(vault) == "legacy":
+        raise RelinkError(
+            "the vault is on the retired settings file; update the vault "
+            "before renaming notes; nothing was changed")
     if vault_layout(vault) == "none":
         return False
     try:
@@ -721,8 +725,7 @@ def plan(vault: Path, old: str, new: str) -> Plan:
     if why:
         raise RelinkError(why)
     p = Plan(vault, old, new)
-    listed = any((vault / rel).is_file()
-                 for rel in (MANIFEST_REL, OLD_MANIFEST_REL))
+    listed = (vault / MANIFEST_REL).is_file()
     site = _has_site(vault)
     answer = _ask_publish(vault, old, new, listed, site)
     _companions(vault, notes, p, answer)

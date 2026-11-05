@@ -26,6 +26,7 @@ SCRIPTS = ROOT / "skills" / "shared" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import vaultlib as vl  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 
 def write(directory: Path, rel: str, text: str) -> Path:
@@ -494,8 +495,7 @@ class ExcludeSectionsTests(unittest.TestCase):
     def test_vault_list_replaces_the_defaults_inline(self):
         with tempfile.TemporaryDirectory() as d:
             vault = Path(d)
-            write(vault, "_meta/vault-config.md",
-                  '---\npublish:\n  mode: full\n'
+            write_config(vault, '---\npublish:\n  mode: full\n'
                   '  exclude_sections: ["GM Notes", "Keeper Notes"]\n---\n')
             got = self.listed(vault)
         self.assertEqual(got, ["GM Notes", "Keeper Notes"])
@@ -505,9 +505,10 @@ class ExcludeSectionsTests(unittest.TestCase):
         # is not seen and the defaults would stand in for the GM's list.
         with tempfile.TemporaryDirectory() as d:
             vault = Path(d)
-            write(vault, "_meta/vault-config.md",
-                  '\ufeff---\npublish:\n'
-                  '  exclude_sections: ["Keeper Notes"]\n---\n')
+            (vault / "_meta").mkdir()
+            (vault / "_meta" / "vault-config.yaml").write_text(
+                '\ufeffversion: 1\nplayer_site:\n  hide:\n'
+                '    sections: ["Keeper Notes"]\n', encoding="utf-8")
             got = self.listed(vault)
             seen = vl.settings(vault)
         self.assertEqual(got, ["Keeper Notes"])
@@ -516,8 +517,7 @@ class ExcludeSectionsTests(unittest.TestCase):
     def test_vault_list_replaces_the_defaults_block(self):
         with tempfile.TemporaryDirectory() as d:
             vault = Path(d)
-            write(vault, "_meta/vault-config.md",
-                  "---\npublish:\n  exclude_sections:\n"
+            write_config(vault, "---\npublish:\n  exclude_sections:\n"
                   '    - "Keeper Notes"\n    - "Other"\n---\n')
             got = self.listed(vault)
         self.assertEqual(got, ["Keeper Notes", "Other"])
@@ -526,8 +526,7 @@ class ExcludeSectionsTests(unittest.TestCase):
         # `[]` is an array to config.js: no defaults, nothing excluded.
         with tempfile.TemporaryDirectory() as d:
             vault = Path(d)
-            write(vault, "_meta/vault-config.md",
-                  "---\npublish:\n  exclude_sections: []\n---\n")
+            write_config(vault, "---\npublish:\n  exclude_sections: []\n---\n")
             self.assertEqual(self.listed(vault), [])
 
     def test_no_list_or_a_non_list_falls_back_to_the_defaults(self):
@@ -537,19 +536,18 @@ class ExcludeSectionsTests(unittest.TestCase):
             with self.subTest(body=body), \
                     tempfile.TemporaryDirectory() as d:
                 vault = Path(d)
-                write(vault, "_meta/vault-config.md", f"---\n{body}---\n")
+                write_config(vault, f"---\n{body}---\n")
                 self.assertEqual(self.listed(vault),
                                  vl.settings_default("player_site.hide.sections"))
 
     def test_a_non_list_is_a_fault_the_caller_can_report(self):
         with tempfile.TemporaryDirectory() as d:
             vault = Path(d)
-            write(vault, "_meta/vault-config.md",
-                  '---\npublish:\n  exclude_sections: "GM Notes"\n---\n')
+            write_config(vault, '---\npublish:\n  exclude_sections: "GM Notes"\n---\n')
             seen = vl.settings(vault)
         self.assertEqual(seen.origins["player_site.hide.sections"], "fault")
         self.assertEqual([f["name"] for f in seen.faults],
-                         ["publish.exclude_sections"])
+                         ["player_site.hide.sections"])
 
     def test_no_config_returns_defaults(self):
         with tempfile.TemporaryDirectory() as d:

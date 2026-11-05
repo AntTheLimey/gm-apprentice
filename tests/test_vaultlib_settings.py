@@ -9,6 +9,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills" / "shared" / "scripts"))
 
 import vaultlib  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -27,13 +28,12 @@ def make_vault(tmp_path: Path, frontmatter: str | None) -> Path:
     vault = tmp_path / "vault"
     (vault / "_meta").mkdir(parents=True)
     if frontmatter is not None:
-        (vault / "_meta" / "vault-config.md").write_text(
-            f"---\n{frontmatter}\n---\n", encoding="utf-8")
+        write_config(vault, f"---\n{frontmatter}\n---\n")
     return vault
 
 
 def file_text(vault: Path) -> str:
-    return (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
+    return (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
 
 
 def count_runs(monkeypatch):
@@ -49,7 +49,7 @@ def count_runs(monkeypatch):
 
 
 def test_defaults_are_not_written(tmp_path):
-    vault = make_vault(tmp_path, "publish: {}")
+    vault = make_vault(tmp_path, "publish:\n  site_title: T")
     s = vaultlib.settings(vault)
     assert s.get("player_site.features.connections") == "tree"
     assert not s.written("player_site.features.connections")
@@ -80,27 +80,17 @@ def test_no_file_at_all(tmp_path):
 def test_fault_is_listed_not_raised(tmp_path):
     vault = make_vault(tmp_path, "publish:\n  connections: sideways")
     s = vaultlib.settings(vault)
-    assert [f["name"] for f in s.faults] == ["publish.connections"]
+    assert [f["name"] for f in s.faults] == ["player_site.features.connections"]
     assert {"name", "level", "kind", "message"} <= set(s.faults[0])
     assert s.origins["player_site.features.connections"] == "fault"
 
 
 def test_unknown_name_fault_keeps_suggestion(tmp_path):
-    vault = make_vault(tmp_path, "publish:\n  conections: web")
+    vault = make_vault(tmp_path, None)
+    (vault / "_meta" / "vault-config.yaml").write_text(
+        "version: 1\nplayer_site:\n  features:\n    conections: web\n", encoding="utf-8")
     faults = vaultlib.settings(vault).faults
-    assert any(f.get("suggest") == "publish.connections" for f in faults)
-
-
-def test_site_config_old_keys_take_part(tmp_path):
-    vault = make_vault(tmp_path, "publish: {}")
-    config = tmp_path / "vault.config.json"
-    config.write_text('{"vaultPath": "vault", "excludeSections": ["Mine"]}',
-                      encoding="utf-8")
-    s = vaultlib.settings(vault, site_config=config)
-    # The site file's list adds to the built-in one when the vault file sets none.
-    assert s.get("player_site.hide.sections") == built_in() + ["Mine"]
-    assert s.origins["player_site.hide.sections"] == "site-file"
-    assert vaultlib.settings(vault).get("player_site.hide.sections") == built_in()
+    assert any(f.get("suggest") == "player_site.features.connections" for f in faults)
 
 
 def test_set_then_settings_sees_it(tmp_path):
@@ -143,17 +133,17 @@ def test_unset(tmp_path):
 def test_refused_unset(tmp_path):
     vault = make_vault(tmp_path, "publish: {}")
     with pytest.raises(vaultlib.SettingsUnavailable) as e:
-        vaultlib.settings_unset(vault, ["nonsense.thing"])
+        vaultlib.settings_unset(vault, ["player_site.hide"])
     assert e.value.refused
 
 
 def test_raw_returns_the_map(tmp_path):
     vault = make_vault(
-        tmp_path, "publish:\n  wrap_up:\n    recap: false")
-    raw = vaultlib.settings_raw(vault, "publish.wrap_up")
+        tmp_path, "publish:\n  landing:\n    max_npcs: 3")
+    raw = vaultlib.settings_raw(vault, "player_site.landing")
     assert isinstance(raw, dict) and raw
-    assert vaultlib.settings_raw(vault, "publish.nothing_here") is None
-    assert "publish" in vaultlib.settings_raw(vault)
+    assert vaultlib.settings_raw(vault, "player_site.nothing_here") is None
+    assert "player_site" in vaultlib.settings_raw(vault)
 
 
 def test_invalid_yaml_raises_with_the_line(tmp_path):
@@ -248,8 +238,8 @@ def test_settings_default(tmp_path):
 def test_hand_edit_is_not_seen_until_forgotten(tmp_path):
     vault = make_vault(tmp_path, "publish:\n  connections: web")
     assert vaultlib.settings(vault).get("player_site.features.connections") == "web"
-    (vault / "_meta" / "vault-config.md").write_text(
-        "---\npublish:\n  connections: tree\n---\n", encoding="utf-8")
+    (vault / "_meta" / "vault-config.yaml").write_text(
+        "version: 1\nplayer_site:\n  features:\n    connections: tree\n", encoding="utf-8")
     assert vaultlib.settings(vault).get("player_site.features.connections") == "web"
     vaultlib.forget_settings(vault)
     assert vaultlib.settings(vault).get("player_site.features.connections") == "tree"
@@ -488,8 +478,9 @@ def test_crash_names_a_typeerror_not_the_file_path(tmp_path, monkeypatch):
     assert "read.js" not in str(e.value)
 
 
-def test_target_args_keep_the_tool_from_reading_the_site_file_itself(tmp_path):
+def test_target_args_leave_the_site_file_to_the_tool_unless_one_is_named(tmp_path):
     vault = tmp_path / "v"
-    assert "--no-site-file" in vaultlib._target_args(vault)
+    plain = vaultlib._target_args(vault)
+    assert "--no-site-file" not in plain and "--config" not in plain
     with_site = vaultlib._target_args(vault, tmp_path / "s" / "vault.config.json")
     assert "--no-site-file" not in with_site and "--config" in with_site

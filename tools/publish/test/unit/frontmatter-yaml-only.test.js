@@ -4,7 +4,6 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { parseNote } = require('../../lib/frontmatter');
-const { splitFront } = require('../../lib/settings/write');
 const { scanVaultReport } = require('../../lib/scanner');
 
 // A frontmatter opener may name a language (`---js`). Only YAML is ever read: a note that
@@ -27,11 +26,6 @@ describe('frontmatter is YAML only', () => {
   it('parseNote still reads plain and ---yaml frontmatter', () => {
     assert.deepStrictEqual(parseNote('---\ntype: npc\n---\nBody.\n').data, { type: 'npc' });
     assert.deepStrictEqual(parseNote('---yaml\ntype: npc\n---\nBody.\n').data, { type: 'npc' });
-  });
-
-  it('the old settings file split refuses a ---js file without running it', () => {
-    assert.throws(() => splitFront(JS_NOTE('__fmRanSettings')), /YAML/);
-    assert.strictEqual(globalThis.__fmRanSettings, undefined);
   });
 
   it('the scanner lists a ---js note as one whose frontmatter cannot be parsed', () => {

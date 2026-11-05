@@ -84,6 +84,8 @@ describe('runDoctor --set-cloudflare-creds', () => {
   });
 });
 
+const { writeSiteConfig } = require('../helpers/vault-files');
+
 describe('runDoctor --site', () => {
   it('routes to the vault audit and never touches the host CLI', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-site-vault-'));
@@ -91,10 +93,10 @@ describe('runDoctor --site', () => {
     fs.writeFileSync(path.join(vault, 'Characters', 'NPCs', 'Someone.md'), '---\ntype: npc\n---\n\nHi.\n');
     const site = fs.mkdtempSync(path.join(os.tmpdir(), 'doctor-site-'));
     const configPath = path.join(site, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'x', vaultPath: vault, outputDir: './docs',
       excludeDirs: ['_meta'], folderMap: { 'Characters/NPCs': 'characters/npcs' },
-    }));
+    });
 
     const lines = [];
     const ran = [];

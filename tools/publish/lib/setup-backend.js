@@ -97,6 +97,9 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   const off = (deps.siteOffFor || require('./config').siteOffFor)(configPath);
   if (off) { out(off.replace('nothing was built', 'nothing was set up')); return 1; }
 
+  // A leftover in the site folder, or an old settings file, stops the setup before KV or wrangler.toml is touched.
+  (deps.assertNoStopsFor || require('./config').assertNoStopsFor)(configPath, 'setup-backend');
+
   const config = JSON.parse(readFile(configPath));
   const siteRoot = path.dirname(path.resolve(configPath));
   const tomlPath = path.join(siteRoot, 'wrangler.toml');
@@ -110,7 +113,7 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   const turnOn = [{ op: 'set', name: SWITCH_NAME[feature], value: true }];
   if (!config.vaultPath) { out(`${configPath} has no "vaultPath"`); return 1; }
   const vaultPath = path.resolve(siteRoot, config.vaultPath);
-  try { planChanges(vaultPath, turnOn, { create: true, siteConfig: config, siteConfigPath: path.resolve(configPath) }); } catch (e) { out(`cannot edit the vault's settings: ${String(e.message).split('\n')[0]}`); return 1; }
+  try { planChanges(vaultPath, turnOn, { create: true, siteConfigPath: path.resolve(configPath) }); } catch (e) { out(`cannot edit the vault's settings: ${String(e.message).split('\n')[0]}`); return 1; }
   // The project name and the address are the vault's settings, not the site file's.
   const resolved = require('./config').siteConfigFor(config, siteRoot);
   const projectName = resolved.cloudflarePagesProject || path.basename(siteRoot);
@@ -130,7 +133,7 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   writeFile(tomlPath, tomlText);
 
   // Turn the switch on in the vault's settings, the one place they live.
-  try { applyChanges(vaultPath, turnOn, { create: true, siteConfig: config, siteConfigPath: path.resolve(configPath) }); } catch (e) { out(e.message); return 1; }
+  try { applyChanges(vaultPath, turnOn, { create: true, siteConfigPath: path.resolve(configPath) }); } catch (e) { out(e.message); return 1; }
 
   // Sync plugin-owned Cloudflare Functions into the site, then build + deploy.
   syncFunctions(siteRoot, configPath);

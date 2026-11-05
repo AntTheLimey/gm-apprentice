@@ -1,5 +1,4 @@
 const { test } = require('node:test');
-require('./helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const { buildVault } = require('./helpers/build-vault');
 const { pageText } = require('./helpers/card-subset');
@@ -10,7 +9,7 @@ function header(html) {
   return pageText(main.split(/<h2\b/)[0]);
 }
 
-const SETTINGS = { extraConfig: '  link_previews: off\n' };
+const SETTINGS = { settings: { 'player_site.features.link_previews': 'off' } };
 function site(files) { return buildVault(files, SETTINGS); }
 
 test('B1: an unquoted date in a header prints as written (YYYY-MM-DD), on every template', () => {
@@ -122,7 +121,7 @@ test('A3: a bare header value holding # ^ or | prints whole, on every template t
     files[`Items/I ${k}.md`] = `---\ntype: item\ncurrent_holder: ${v}\norigin: ${v}\n---\nBody.\n`;
     files[`Factions/F ${k}.md`] = `---\ntype: faction\nleadership: ${v}\nterritory: ${v}\n---\nBody.\n`;
   }
-  const v = buildVault(files, { extraConfig: '' });
+  const v = buildVault(files, { settings: {} });
   try {
     for (const k of Object.keys(values)) {
       const w = want[k];

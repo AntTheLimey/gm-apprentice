@@ -1,5 +1,4 @@
 const { describe, it, after } = require('node:test');
-require('./helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -9,12 +8,13 @@ const { build } = require('../lib/build');
 const { runExplain } = require('../lib/explain-cli');
 const { runSiteDoctor } = require('../lib/site-doctor');
 const { shapeFrontmatter } = require('../lib/frontmatter-shape');
+const { writeSettings } = require('./helpers/vault-files');
 
 const made = [];
 after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: true }); });
 
 // A site over a small vault with no manifest. Folders are mapped to themselves, lower-cased.
-function site(files, { mode = 'player', extra = '' } = {}) {
+function site(files, { mode = 'player', settings = {} } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'review-findings-'));
   made.push(root);
   const vault = path.join(root, 'vault');
@@ -24,11 +24,9 @@ function site(files, { mode = 'player', extra = '' } = {}) {
     fs.writeFileSync(path.join(vault, rel), text);
     if (rel.includes('/')) folders.add(path.dirname(rel));
   }
-  fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-    `---\npublish:\n  mode: ${mode}\n${extra}  folder_map:\n${[...folders].map((f) => `    ${f}: ${f.toLowerCase()}\n`).join('')}---\n`);
+  writeSettings(vault, { 'player_site.title': 'T', 'player_site.hide.mode': mode, 'player_site.folder_map': Object.fromEntries([...folders].map((f) => [f, f.toLowerCase()])), ...settings });
   const configPath = path.join(root, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: './docs', attachmentsDir: '_attachments', siteTitle: 'T', excludeDirs: ['_meta', '_Templates'] }));
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
   return { root, vault, configPath };
 }
 
@@ -79,7 +77,7 @@ describe('a list in a field that can keep a note off the site', () => {
       'Scenes/Listed_Dropped.md': '---\ntype: scene\nstatus: [played, dropped]\n---\n\nBody.\n',
       'People/Plain_List.md': npc('status: [alive, well]'),
       'People/Fine.md': npc('status: alive'),
-    }, { extra: '  exclude_drafts: true\n' });
+    }, { settings: { 'player_site.hide.drafts': true } });
     const { said } = quietBuild(configPath);
     const built = (dir, name) => fs.existsSync(path.join(root, 'docs', dir, name));
     for (const name of ['listed-status.html', 'listed-canon.html', 'listed-source.html', 'listed-flags.html', 'listed-scene.html']) {

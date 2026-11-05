@@ -52,27 +52,20 @@ test('a value is read from the file and says so', () => {
 });
 
 // 2
-test('the site file is not merged; each setting key still in it is a warning naming the new setting, a stop when it hides things', () => {
+test('the site file is not merged; any key but vaultPath is one stop naming each key and where it went', () => {
   const r = read('version: 1\n', { vaultPath: './v', siteTitle: 'Old', excludeSections: ['X'], backend: { inbox: true }, outputDir: 'docs' });
   assert.equal(r.values.player_site.title, null);
   assert.equal(r.values.player_site.features.inbox, false);
   assert.deepEqual(r.values.player_site.hide.sections, entry('player_site.hide.sections').default);
-  const olds = r.faults.filter((f) => f.kind === 'old-name');
-  assert.deepEqual(olds.map((f) => f.name).sort(), ['backend.inbox', 'excludeSections', 'siteTitle']);
-  for (const f of olds) assert.equal(f.level, f.name === 'excludeSections' ? 'stop' : 'warn', f.name);
-  assert.match(fault(r, 'excludeSections').message, /^excludeSections in the site folder's vault\.config\.json is no longer read, so what it hides would be published; put its entries under player_site\.hide\.sections in the vault's settings\.$/);
-  assert.equal(fault(r, 'siteTitle').message, "siteTitle in the site folder's vault.config.json is no longer read; it is player_site.title in the vault's settings.");
-  assert.equal(fault(r, 'siteTitle').use, 'player_site.title');
+  assert.equal(r.faults.length, 1);
+  const f = fault(r, 'vault.config.json');
+  assert.equal(f.level, 'stop');
+  assert.equal(f.leftover, true);
+  assert.equal(f.message, "the site folder's vault.config.json holds keys that are no longer read there: siteTitle (now player_site.title), excludeSections (now player_site.hide.sections), backend.inbox (now player_site.features.inbox), outputDir (now player_site.output). Move each to the vault's settings (_meta/vault-config.yaml) and leave only vaultPath in vault.config.json.");
 });
 
 test('a site file with only vaultPath says nothing', () => {
   assert.deepEqual(read('version: 1\n', { vaultPath: './v' }).faults, []);
-});
-
-test('the site folder\'s own keys are read while the vault sets none, and said to move', () => {
-  const r = read('version: 1\n', { vaultPath: './v', outputDir: 'docs', host: 'github-pages' });
-  assert.deepEqual(r.faults.map((f) => f.name), ['host', 'outputDir']);
-  assert.ok(r.faults.every((f) => f.level === 'warn' && f.source === 'site'));
 });
 
 // 3
@@ -216,7 +209,7 @@ test('vault.campaign unset is the vault folder name, from the default', () => {
 });
 
 // 9
-test('both files present: the old one is not read, and one warning says it is left over', () => {
+test('both files present: the old one is not read, and one stop says to remove it', () => {
   const v = vault();
   writeOldConfig(v, { mode: 'full', site_title: 'Old' });
   writeNewConfig(v, 'player_site:\n  title: New\n');
@@ -224,9 +217,9 @@ test('both files present: the old one is not read, and one warning says it is le
   assert.equal(r.file.leftover, true);
   assert.equal(r.values.player_site.title, 'New');
   assert.equal(r.values.player_site.hide.mode, undefined);
-  const left = r.faults.filter((f) => f.level === 'warn' && /left over/.test(f.message));
+  const left = r.faults.filter((f) => f.level === 'stop' && /plugin 1\.11\.0 no longer reads it/.test(f.message));
   assert.equal(left.length, 1);
-  assert.equal(left[0].message, '_meta/vault-config.md is left over from before the update and is not read');
+  assert.equal(left[0].message, '_meta/vault-config.md is still beside _meta/vault-config.yaml: remove or rename `_meta/vault-config.md` once you have checked its settings are in `_meta/vault-config.yaml`; plugin 1.11.0 no longer reads it.');
   assert.equal(r.faults.length, 1);
 });
 
@@ -320,15 +313,6 @@ test('the site switch is on when a folder is set and nothing else says', () => {
   assert.equal(read('version: 1\n').values.player_site.publish, false);
 });
 
-test('a fault on an entry that exists only in the old file carries no new name', () => {
-  const v = vault();
-  writeOldConfig(v, { backend: 'yes', total_sessions: 4, overrides: 'x' });
-  const r = readSettings({ vaultPath: v });
-  const named = r.faults.filter((f) => ['publish.backend', 'publish.total_sessions', 'publish.overrides'].includes(f.name));
-  assert.equal(named.length, 3);
-  for (const f of named) assert.equal(f.setting, null, f.name);
-});
-
 // The site file is not merged on the new layout: resolveConfig lets no raw site-file setting through.
 test('resolveConfig on the new layout: a raw site-file setting never reaches the config', () => {
   const { resolveConfig, scanConfigFor } = require('../../lib/config');
@@ -347,16 +331,8 @@ test('resolveConfig on the new layout: a raw site-file setting never reaches the
   const scan = scanConfigFor(config, publishConfig);
   assert.ok(!scan.excludeDirs.includes('Hidden'));
   assert.equal(scan.attachmentsDir, entry('vault.attachments').default);
-  const olds = publishConfig.faults.filter((f) => f.kind === 'old-name').map((f) => f.name).sort();
-  assert.deepEqual(olds, ['attachmentsDir', 'excludeDirs', 'excludeSections', 'folderMap', 'footer', 'siteTitle']);
-  assert.equal(warned.filter((m) => /no longer read/.test(m)).length, 6);
-});
-
-test('each of the four hiding lists left in the site file is a stop; the other keys stay warnings', () => {
-  const r = read('version: 1\n', { vaultPath: './v', excludeDirs: ['a'], excludeSections: ['b'], excludeFields: ['c'], excludeCallouts: true, siteTitle: 'T', searchEnabled: false });
-  const level = (n) => fault(r, n).level;
-  for (const n of ['excludeDirs', 'excludeSections', 'excludeFields', 'excludeCallouts']) assert.equal(level(n), 'stop', n);
-  for (const n of ['siteTitle', 'searchEnabled']) assert.equal(level(n), 'warn', n);
+  assert.deepEqual(publishConfig.faults.map((f) => f.name), ['vault.config.json']);
+  assert.equal(warned.filter((m) => /no longer read/.test(m)).length, 1);
 });
 
 test('a hiding list left in the site file stops the build and nothing is written', () => {
@@ -368,6 +344,15 @@ test('a hiding list left in the site file stops the build and nothing is written
   const out = path.join(site, 'docs');
   const configPath = path.join(site, 'vault.config.json');
   fs.writeFileSync(configPath, JSON.stringify({ vaultPath: v, outputDir: out, excludeSections: ['X'] }));
-  assert.throws(() => build({ configPath }), /excludeSections in the site folder's vault\.config\.json is no longer read/);
+  assert.throws(() => build({ configPath }), /vault\.config\.json holds keys that are no longer read there: .*excludeSections \(now player_site\.hide\.sections\)/);
   assert.equal(fs.existsSync(out), false);
+});
+
+test('an unreadable folder map stops the player build: read as empty, it would publish nothing (#375)', () => {
+  for (const text of ['player_site:\n  folder_map: [a, b]\n', 'player_site:\n  folder_map: Notes\n']) {
+    const f = fault(read(text), 'player_site.folder_map');
+    assert.equal(f.level, 'stop', text);
+  }
+  // The GM site's twin warns, as every GM-site fault does.
+  assert.equal(fault(read('gm_site:\n  folder_map: [a]\n'), 'gm_site.folder_map').level, 'warn');
 });

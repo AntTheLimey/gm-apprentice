@@ -8,13 +8,14 @@ const { runSiteDoctor } = require('../lib/site-doctor');
 const { build } = require('../lib/build');
 const { summaryLines, kindOfType } = require('../lib/note-faults');
 const { writePublishList } = require('./helpers/publish-list');
+const { writeSettings } = require('./helpers/vault-files');
 const made = [];
 after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: true }); });
 
 // A site over a small player-mode vault. `files` maps vault paths to text; every note in
 // `publish` is listed under Publishing, every `excluded` entry ("path" or "path — reason")
 // under Excluded. Folders are mapped to themselves, lower-cased.
-function site(files, { publish = null, excluded = [], extra = '' } = {}) {
+function site(files, { publish = null, excluded = [], settings = {} } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'note-faults-'));
   made.push(root);
   const vault = path.join(root, 'vault');
@@ -27,11 +28,10 @@ function site(files, { publish = null, excluded = [], extra = '' } = {}) {
   const listed = publish || Object.keys(files).filter((rel) => !excluded.some((e) => e.startsWith(rel)) && !rel.startsWith('_') && !rel.startsWith('Quiet/'));
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
   writePublishList(vault, { publishing: listed, excluded });
-  const map = [...folders].filter((f) => !f.startsWith('Quiet')).map((f) => `    ${f}: ${f.toLowerCase()}\n`).join('');
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-    `---\npublish:\n${extra}  exclude_dirs:\n    - Quiet\n  folder_map:\n${map}---\n`);
+  const map = Object.fromEntries([...folders].filter((f) => !f.startsWith('Quiet')).map((f) => [f, f.toLowerCase()]));
+  writeSettings(vault, { 'player_site.title': 'T', 'player_site.hide.folders': ['Quiet', '_meta', '_Templates'], 'player_site.folder_map': map, ...settings });
   const configPath = path.join(root, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: './docs', attachmentsDir: '_attachments', siteTitle: 'T', excludeDirs: ['_meta', '_Templates'] }));
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
   return { root, vault, configPath };
 }
 

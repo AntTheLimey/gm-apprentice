@@ -15,7 +15,6 @@ const path = require('path');
 const { failureDetail, WRANGLER_DEPLOY_TIMEOUT_MS } = require('./run-command');
 const { alignProjectName } = require('./setup-backend');
 const { loadVaultConfig, siteConfigFor, outputFolderOf, tomlOutputFolder, loadPublishConfig } = require('./config');
-const { buildHooks, HOOK_TIMEOUT_MS } = require('./settings/legacy');
 const { nameIn } = require('./settings');
 const { gmEvidence } = require('./gm-site');
 const leakGateLib = require('./leak-gate');
@@ -184,22 +183,12 @@ async function runDeploy(options, deps) {
     ? ['pages', 'deploy', '--branch=main', '--commit-dirty=true']
     : ['pages', 'deploy', outDir, `--project-name=${projectName}`, '--branch=main', '--commit-dirty=true'];
 
-  // The vault's own steps run inside the build. A package.json hook is skipped only for a slot the settings hold steps
-  // for (`before` stands in for prebuild, `after` for postbuild); any other runs here exactly as it always did.
-  let vaultSteps = { before: [], after: [] };
-  try {
-    if (vaultPath) vaultSteps = loadPublishConfig(vaultPath, rawConfig, () => {}, { siteDir: siteRoot }).steps;
-  } catch { /* a vault that cannot be read is reported by the build */ }
-  const hookInfo = opts.noBuild ? { hooks: [], warning: null } : buildHooks(siteRoot, readFile);
-  const hooks = hookInfo.hooks.filter((h) => !(h === 'prebuild' ? vaultSteps.before : vaultSteps.after).length);
-  // A hook left out because the vault holds steps for that slot is said, so the two ways of publishing are not a surprise.
-  for (const h of hookInfo.hooks.filter((x) => !hooks.includes(x))) {
-    say(`\`${h}\` in package.json is not run by deploy: the vault holds ${h === 'prebuild' ? 'before_build' : 'after_build'} steps for that slot, and the tool runs those.`);
-  }
-  const platform = d.platform || process.platform;
-
-  // A hiding-side settings fault stops the deploy, a dry run included, --no-build included (it throws; the CLI prints it once).
+  // A hiding-side settings fault stops the deploy, a dry run included, --no-build included (it throws; the CLI prints it
+  // once). A package.json prebuild or postbuild is one: it is never run, and the stop names its home in the vault.
   (d.assertNoStopsFor || require('./config').assertNoStopsFor)(configPath, 'deploy');
+
+  // The vault's own steps run inside the build.
+  const vaultSteps = vaultPath ? loadPublishConfig(vaultPath, rawConfig, () => {}, { siteDir: siteRoot }).steps : { before: [], after: [] };
 
   // The leak gate (#293): the folder that would be uploaded, after the build, its steps and any postbuild script.
   // It reads and never writes; a gate that cannot run stops the deploy (it fails closed). --ignore-leaks deploys past a
@@ -246,16 +235,13 @@ async function runDeploy(options, deps) {
   const off = (d.siteOffFor || require('./config').siteOffFor)(configPath);
   if (off) return buildFailed(off);
 
-  if (hookInfo.warning && !opts.dryRun) say(hookInfo.warning);
   if (opts.dryRun) {
     const caseLines = [];
     let caseRefuse = false;
     const temps = caseTemps();
     for (const t of temps) caseLines.push(caseTempLine(t, 'Deploy would stop'));
     if (temps.length > 0) caseRefuse = true;
-    if (hooks.includes('prebuild')) commands.push('npm run prebuild');
     if (!opts.noBuild) commands.push(...vaultSteps.before, `gm-publish build --config ${configPath}`, ...vaultSteps.after);
-    if (hooks.includes('postbuild')) commands.push('npm run postbuild');
     if (isCloudflare) {
       commands.push('npx wrangler@4 whoami', `npx wrangler@4 ${wranglerDeployArgs.join(' ')}`);
     } else {
@@ -312,33 +298,11 @@ async function runDeploy(options, deps) {
     return refuse ? 1 : 0;
   }
 
-  const runHook = (hook) => {
-    commands.push(`npm run ${hook}`);
-    // Output streams as it happens (a big image step runs for minutes); under --json it
-    // goes to stderr so stdout stays the JSON payload. A shell on Windows, where npm is
-    // npm.cmd and can't be spawned directly.
-    const res = runCommand('npm', ['run', hook], {
-      cwd: siteRoot, timeoutMs: HOOK_TIMEOUT_MS,
-      stdio: opts.json ? ['ignore', 2, 2] : 'inherit',
-      shell: platform === 'win32',
-    });
-    return res.code === 0 ? null : `${hook} failed: ${failureDetail(res)}`;
-  };
   if (!opts.noBuild) {
-    if (hookInfo.error) return buildFailed(hookInfo.error);
-    if (hooks.includes('prebuild')) {
-      const failed = runHook('prebuild');
-      if (failed) return buildFailed(failed);
-    }
     try {
       await build({ configPath, site: 'player' });
     } catch (err) {
       return buildFailed(`Build failed: ${err.message}`);
-    }
-    if (hooks.includes('postbuild')) {
-      // A failed postbuild must not ship: the output is half-processed.
-      const failed = runHook('postbuild');
-      if (failed) return buildFailed(failed);
     }
     built = true;
   }

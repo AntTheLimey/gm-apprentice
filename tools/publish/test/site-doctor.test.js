@@ -6,6 +6,7 @@ const path = require('path');
 
 const { runSiteDoctor, nearestNames, diceCoefficient } = require('../lib/site-doctor');
 const { writePublishList } = require('./helpers/publish-list');
+const { writeSettings, writeSiteConfig } = require('./helpers/vault-files');
 const FIXTURES = path.join(__dirname, 'fixtures');
 
 function write(root, rel, body) {
@@ -15,10 +16,10 @@ function write(root, rel, body) {
 }
 
 // A site directory whose vault.config.json points at `vaultPath`.
-function siteFor(vaultPath, extra = {}) {
+function siteFor(vaultPath, extra = {}, { raw = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-'));
   const configPath = path.join(dir, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify(Object.assign({
+  const config = Object.assign({
     siteTitle: 'Audit Test',
     vaultPath,
     outputDir: './docs',
@@ -30,7 +31,10 @@ function siteFor(vaultPath, extra = {}) {
       Sessions: 'sessions',
       Chapters: 'chapters',
     },
-  }, extra), null, 2));
+  }, extra);
+  // The campaign keys are the vault's settings; a test that wants them left in the site file passes `raw`.
+  if (raw) fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+  else writeSiteConfig(configPath, config, 2);
   return { dir, configPath };
 }
 
@@ -76,8 +80,15 @@ describe('doctor --site', () => {
     return vault;
   }
 
+  function newSettingsVault(settings) {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-settings-'));
+    write(vault, 'Characters/NPCs/Vex.md', '---\ntype: npc\n---\n\nA fixer.\n');
+    writeSettings(vault, settings);
+    return vault;
+  }
+
   it('a hiding-side settings fault is an error finding listed first, exits non-zero, and no in-memory build is attempted', async () => {
-    const { configPath } = siteFor(settingsVault('  exclude_sectoins: [GM Notes]\n'));
+    const { configPath } = siteFor(newSettingsVault({ 'player_site.hide.sectoins': ['GM Notes'] }));
     const buildModule = require('../lib/build');
     const realBuild = buildModule.build;
     let built = 0;
@@ -91,65 +102,27 @@ describe('doctor --site', () => {
       const rows = findings.filter((f) => f.code === 'SETTINGS_FAULT');
       assert.equal(rows.length, 1);
       assert.equal(rows[0].severity, 'error');
-      assert.equal(rows[0].detail, 'publish.exclude_sectoins is not a setting. Did you mean publish.exclude_sections?');
+      assert.equal(rows[0].detail, 'player_site.hide.sectoins is not a setting. Did you mean player_site.hide.sections?');
       assert.equal(findings[0].code, 'SETTINGS_FAULT');
       assert.ok(!findings.some((f) => f.code === 'NOTE_FAULTS_UNCHECKED'));
       const text = capture();
       assert.equal(await runSiteDoctor({ configPath }, text.deps), 1);
-      assert.match(text.text(), /SETTINGS_FAULT \(1 error\)\n {2}_meta\/vault-config\.md — publish\.exclude_sectoins is not a setting/);
+      assert.match(text.text(), /SETTINGS_FAULT \(1 error\)\n {2}_meta\/vault-config\.yaml — player_site\.hide\.sectoins is not a setting/);
     } finally { buildModule.build = realBuild; }
   });
 
-  it('a vault still on the old file: one note, whose words depend on whether the site\'s tool is ours', async () => {
-    const vault = settingsVault('  mode: player\n');
-    const { dir, configPath } = siteFor(vault);
-    const pin = (spec) => fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ dependencies: { 'gm-apprentice-publish': spec } }));
-    const notes = async () => {
-      const cap = capture();
-      await runSiteDoctor({ configPath, json: true }, cap.deps);
-      return JSON.parse(cap.text()).findings.filter((f) => f.code === 'SETTINGS_FILE_OLD');
-    };
-    assert.deepEqual(await notes(), [], 'no package.json: nothing to say');
-    pin('file:/cache/gm-apprentice/1.10.54/tools/publish');
-    const ours = await notes();
-    assert.equal(ours.length, 1);
-    assert.equal(ours[0].detail, 'this vault is still on the old settings file; the next update moves it');
-    pin('^1.20.0');
-    const theirs = await notes();
-    assert.equal(theirs.length, 1);
-    assert.match(theirs[0].detail, /stays on the old settings file because its site's tool \(\^1\.20\.0\) cannot read the new one\. When that tool is 1\.23\.0 or later, run the update again\./);
-    pin('^1.24.0');
-    const fine = await notes();
-    assert.equal(fine.length, 1);
-    assert.equal(fine[0].detail, 'this vault is still on the old settings file; the next update moves it');
-  });
-
-  it('an old tool installed in a site folder with no package.json is said to hold the vault, as the move holds it', async () => {
-    const { dir, configPath } = siteFor(settingsVault('  mode: player\n'));
-    const pkg = path.join(dir, 'node_modules', 'gm-apprentice-publish');
-    fs.mkdirSync(pkg, { recursive: true });
-    fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: 'gm-apprentice-publish', version: '1.22.0' }));
-    const cap = capture();
-    await runSiteDoctor({ configPath, json: true }, cap.deps);
-    const notes = JSON.parse(cap.text()).findings.filter((f) => f.code === 'SETTINGS_FILE_OLD');
-    assert.equal(notes.length, 1);
-    assert.match(notes[0].detail, /stays on the old settings file because its site's tool \(1\.22\.0\) cannot read the new one/);
-  });
-
   it('a setting left in the site folder\'s file is fixed in vault.config.json, not in the vault\'s settings file', async () => {
-    const vault = settingsVault('  mode: player\n');
-    fs.unlinkSync(path.join(vault, '_meta', 'vault-config.md'));
-    write(vault, '_meta/vault-config.yaml', 'version: 1\n');
-    const { configPath } = siteFor(vault, { siteTitle: 'Left Behind' });
+    const vault = newSettingsVault({ version: 1 });
+    const { configPath } = siteFor(vault, { siteTitle: 'Left Behind' }, { raw: true });
     const cap = capture();
     await runSiteDoctor({ configPath, json: true }, cap.deps);
     const row = JSON.parse(cap.text()).findings.find((f) => f.code === 'SETTINGS_FAULT' && f.path === 'vault.config.json');
     assert.ok(row, cap.text());
-    assert.match(row.fix, /remove it from vault\.config\.json/);
+    assert.match(row.detail, /leave only vaultPath in vault\.config\.json/);
   });
 
   it('a look-side settings fault is a warning finding, and the audit goes on to build', async () => {
-    const { configPath } = siteFor(settingsVault('  link_preview: off\n'));
+    const { configPath } = siteFor(newSettingsVault({ 'player_site.features.link_preview': 'off' }));
     const buildModule = require('../lib/build');
     const realBuild = buildModule.build;
     let built = 0;
@@ -160,7 +133,7 @@ describe('doctor --site', () => {
       const { findings } = JSON.parse(cap.text());
       const row = findings.find((f) => f.code === 'SETTINGS_FAULT');
       assert.equal(row.severity, 'warning');
-      assert.equal(row.detail, 'publish.link_preview is not a setting. Did you mean publish.link_previews?');
+      assert.equal(row.detail, 'player_site.features.link_preview is not a setting. Did you mean player_site.features.link_previews?');
       assert.equal(built, 1);
     } finally { buildModule.build = realBuild; }
   });
@@ -187,6 +160,7 @@ describe('doctor --site', () => {
     write(other, 'Characters/NPCs/Fine.md', '---\ntype: npc\n---\n\nNothing wrong.\n');
     const audited = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-audited-'));
     write(audited, 'Characters/NPCs/Odd.md', '---\ntype: npc\n---\n\nWe were 100%% done and 50%% off.\n');
+    writeSettings(audited, { 'player_site.folder_map': { 'Characters/NPCs': 'characters/npcs' } });
     const { configPath } = siteFor(other);
     const cap = capture();
     await runSiteDoctor({ configPath, vaultPath: audited, json: true }, cap.deps);
@@ -216,7 +190,7 @@ describe('doctor --site', () => {
       write(vault, `Characters/NPCs/Odd_${n}.md`, `---\ntype: npc\n${fields.map(shape).join('\n')}\n---\n\nFine.\n`);
     }
     const { configPath } = siteFor(vault);
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const { config } = require('../lib/config').resolveConfig(JSON.parse(fs.readFileSync(configPath, 'utf8')), vault, () => {});
     const { scanVaultReport } = require('../lib/scanner');
     const { mistyped } = scanVaultReport({ ...config, vaultPath: vault, folderMap: config.folderMap });
     assert.ok(mistyped.length > 3);
@@ -315,7 +289,7 @@ describe('doctor --site', () => {
   it('does not report a folder excluded only via publish.exclude_dirs in vault-config.md', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-vaultconfig-excl-'));
     write(vault, 'Drafts/Idea.md', '---\ntype: npc\n---\n\nA half-formed idea.\n');
-    write(vault, '_meta/vault-config.md', '---\npublish:\n  exclude_dirs:\n    - "Drafts"\n---\n');
+    writeSettings(vault, { 'player_site.hide.folders': ['Drafts'] });
     const { configPath } = siteFor(vault);
     const c = capture();
 
@@ -375,7 +349,7 @@ describe('doctor --site', () => {
   });
 
   it('reports a vaultPath that does not exist as an error', async () => {
-    const { configPath } = siteFor(path.join(os.tmpdir(), 'no-such-vault-' + Date.now()));
+    const { configPath } = siteFor(path.join(os.tmpdir(), 'no-such-vault-' + Date.now()), {}, { raw: true });
     const c = capture();
     const rc = await runSiteDoctor({ configPath, json: true }, c.deps);
     assert.strictEqual(rc, 1);
@@ -538,8 +512,10 @@ describe('doctor --site', () => {
     const c = capture();
     c.deps.detect = () => ({ pinned: '1.11.30', latest: '1.11.30', drift: false, versionsRoot: '/cache/gm-apprentice' });
     const rc = await runSiteDoctor({ configPath, json: true }, c.deps);
-    assert.strictEqual(rc, 0);
+    // The unreadable package.json is also a settings stop now (it might hold build scripts that no longer run).
+    assert.strictEqual(rc, 1);
     const payload = JSON.parse(c.out.join(''));
+    assert.ok(payload.findings.some((f) => f.code === 'SETTINGS_FAULT' && /package\.json is not valid JSON/.test(f.detail)), JSON.stringify(payload.findings));
     const finding = payload.findings.find((f) => f.code === 'VERSION_DRIFT' && /package\.json/.test(f.path));
     assert.ok(finding, JSON.stringify(payload.findings));
     assert.match(finding.detail, /could not be read as JSON/);
@@ -561,10 +537,10 @@ describe('doctor --site', () => {
 });
 
 describe('runSiteDoctor Google Fonts finding (#270)', () => {
-  async function findingsFor(fontsYaml) {
+  async function findingsFor(fonts) {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-fonts-'));
     write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\nHi.\n');
-    write(vault, '_meta/vault-config.md', `---\npublish:\n  theme:\n    fonts:\n${fontsYaml}\n---\n`);
+    writeSettings(vault, { 'player_site.theme.fonts': fonts });
     const { configPath } = siteFor(vault);
     const c = capture();
     await runSiteDoctor({ configPath, json: true }, c.deps);
@@ -573,14 +549,14 @@ describe('runSiteDoctor Google Fonts finding (#270)', () => {
   }
 
   it('warns when a custom font loads from Google', async () => {
-    const found = await findingsFor('      heading: Cinzel\n      body: Inter');
+    const found = await findingsFor({ heading: 'Cinzel', body: 'Inter' });
     assert.strictEqual(found.length, 1);
     assert.match(found[0].detail, /Cinzel, Inter/);
     assert.match(found[0].fix, /self-host/);
   });
 
   it('is quiet for self-host and for system fonts', async () => {
-    assert.strictEqual((await findingsFor('      heading: Cinzel\n      source: self-host')).length, 0);
-    assert.strictEqual((await findingsFor('      heading: serif')).length, 0);
+    assert.strictEqual((await findingsFor({ heading: 'Cinzel', source: 'self-host' })).length, 0);
+    assert.strictEqual((await findingsFor({ heading: 'serif' })).length, 0);
   });
 });

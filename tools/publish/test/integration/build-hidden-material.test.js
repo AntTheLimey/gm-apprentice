@@ -1,5 +1,4 @@
 const { describe, it, before, after } = require('node:test');
-require('../helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -42,7 +41,7 @@ describe('L1: a heading written with decoration is hidden like a plain one', () 
     files['Locations/Setext.md'] = '---\ntype: location\n---\nPublic.\n\n**GM Notes**\n-----\n\nHIDDENSETEXT text.\n\n## Open\n\nSHOWNSETEXT text.\n';
     files['Locations/Fenced.md'] = '---\ntype: location\n---\nPublic.\n\n```\n## GM Notes\n```\n\nSHOWNAFTERFENCE text.\n\n## GM Notes\n\nHIDDENAFTERFENCE text.\n';
     files['Locations/Different.md'] = '---\ntype: location\n---\nPublic.\n\n## GM Notes on travel\n\nSHOWNTRAVEL text.\n\n## GM Notes -\n\nSHOWNDASH text.\n';
-    site = buildVault(files, { extraConfig: '  exclude_sections: ["GM Notes"]\n' });
+    site = buildVault(files, { settings: { 'player_site.hide.sections': ['GM Notes'] } });
   });
   after(() => site.cleanup());
 
@@ -84,7 +83,7 @@ describe('L3: %% comments are hidden', () => {
         'Code `%%SHOWNCODE%%` stays.', '', '```', '%%SHOWNFENCE', '```', '',
       ].join('\n'),
       'Locations/Unclosed.md': '---\ntype: location\n---\nShown before.\n\n%% never closed\n\nHIDDENUNCLOSED\n\n## Later\n\nHIDDENLATER\n',
-    }, { extraConfig: '  exclude_sections: ["GM Notes"]\n' });
+    }, { settings: { 'player_site.hide.sections': ['GM Notes'] } });
   });
   after(() => site.cleanup());
 

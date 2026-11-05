@@ -1,9 +1,9 @@
-require('./helpers/quiet-legacy-warning.js');
 const { test, before, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
 const { createPreview, refusal } = require('../scripts/live-preview');
 const { inPrivateTmp } = require('./helpers/private-tmp');
+const { writeSiteConfig, mergeSettings } = require('./helpers/vault-files');
 
 // build() narrates every file it writes; keep that out of the test output. Errors still throw.
 async function quietly(fn) {
@@ -18,14 +18,15 @@ function scratch(fixture, extra) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-preview-'));
   const vault = path.join(dir, 'vault');
   fs.cpSync(path.join(FIXTURES, fixture || 'with-dnd-pc'), vault, { recursive: true });
-  const cfg = path.join(vault, '_meta', 'vault-config.md');
-  if (!fixture) fs.writeFileSync(cfg, fs.readFileSync(cfg, 'utf8').replace('system: dnd-5e-2024', 'system: dnd-5e-2024\n  live_stats: true'));
+  if (!fixture) mergeSettings(vault, { 'player_site.features.live_stats': true });
   const p = path.join(dir, 'vault.config.json');
-  fs.writeFileSync(p, JSON.stringify(Object.assign({
+  writeSiteConfig(p, Object.assign({
     vaultPath: vault, outputDir: path.join(dir, 'docs'), attachmentsDir: '_attachments', siteTitle: 'D&D Test',
     system: 'dnd-5e-2024', excludeDirs: ['_meta', '_Templates'], excludeSections: ['GM Notes'],
     folderMap: { 'Characters/PCs': 'characters/pcs', Creatures: 'creatures', Items: 'items' },
-  }, extra || {}), null, 2));
+  }), 2);
+  // `extra` is settings for the vault (the preview's refusal reads player_site.host there).
+  if (extra) mergeSettings(vault, extra);
   return { dir, p };
 }
 
@@ -50,11 +51,10 @@ test('it refuses a site that could be deployed (a wrangler.toml, or a host), and
     await assert.rejects(createPreview({ configPath: p }), /wrangler\.toml/);
     assert.equal(fs.existsSync(path.join(dir, 'docs')), false);
     fs.rmSync(path.join(dir, 'wrangler.toml'));
-    const cfg = JSON.parse(fs.readFileSync(p, 'utf8'));
-    fs.writeFileSync(p, JSON.stringify(Object.assign(cfg, { host: 'cloudflare-pages' })));
-    assert.match(refusal(p), /host/);
+    mergeSettings(path.join(dir, 'vault'), { 'player_site.host': 'cloudflare-pages' });
+    assert.match(refusal(p), /player_site\.host/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
-  const h = scratch('with-dnd-pc', { host: 'cloudflare-pages' });
+  const h = scratch('with-dnd-pc', { 'player_site.host': 'cloudflare-pages' });
   try {
     await assert.rejects(createPreview({ configPath: h.p }), /host/);
     assert.equal(fs.existsSync(path.join(h.dir, 'docs')), false);

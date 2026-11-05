@@ -7,6 +7,7 @@ const path = require('path');
 const { runSiteDoctor } = require('../lib/site-doctor');
 const { build } = require('../lib/build');
 const { pageText } = require('../lib/note-faults');
+const { writeSettings } = require('./helpers/vault-files');
 
 // The names a page prints and the secret names on it are decided by the page as the build
 // makes it, not by a list of fields. These tests plant a link or a name where one type's
@@ -16,7 +17,7 @@ const made = [];
 after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: true }); });
 
 // A full-mode site: every typed note in a mapped folder publishes unless it says `publish: false`.
-function site(files, extra = '') {
+function site(files, settings = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'note-faults-pages-'));
   made.push(root);
   const vault = path.join(root, 'vault');
@@ -26,11 +27,9 @@ function site(files, extra = '') {
     fs.writeFileSync(path.join(vault, rel), text);
     if (rel.includes('/')) folders.add(path.dirname(rel));
   }
-  fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-  const map = [...folders].map((f) => `    ${f}: ${f.toLowerCase()}\n`).join('');
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n${extra}  folder_map:\n${map}---\n`);
+  writeSettings(vault, { 'player_site.title': 'T', 'player_site.folder_map': Object.fromEntries([...folders].map((f) => [f, f.toLowerCase()])), ...settings });
   const configPath = path.join(root, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: './docs', attachmentsDir: '_attachments', siteTitle: 'T', excludeDirs: ['_meta', '_Templates'] }));
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
   return { root, vault, configPath };
 }
 
@@ -52,8 +51,8 @@ function fromBuild(configPath) {
 
 // The doctor's findings, after checking the build returns the very same list.
 // `checks.html(root)`, when given, reads the built pages.
-async function faults(files, code, extra, checks = {}) {
-  const { configPath, root } = site(files, extra);
+async function faults(files, code, settings, checks = {}) {
+  const { configPath, root } = site(files, settings);
   const doctor = await fromDoctor(configPath);
   assert.ok(!fs.existsSync(path.join(root, 'docs')), 'the doctor wrote a site');
   assert.deepStrictEqual(fromBuild(configPath), doctor, 'the build and the doctor disagree');
@@ -101,7 +100,7 @@ describe('NAMED_NO_PAGE is decided by the page as built', () => {
       'Hidden/Old_Tam.md': hidden(),
       'Hidden/Brass_Key.md': hidden(),
       'PCs/Ada_Moor.md': pc('## Background\n\nRaised by [[Old_Tam]].\n\n## Notes To Self\n\nFind the [[Brass_Key]].\n'),
-    }, '  character_sheets: false\n  pc_prose_sections:\n    - Background\n');
+    }, { 'player_site.sheets.show': false, 'player_site.sheets.prose_sections': ['Background'] });
     const found = (await fromDoctor(configPath)).filter((f) => f.code === 'NAMED_NO_PAGE');
     assert.deepStrictEqual(fromBuild(configPath).filter((f) => f.code === 'NAMED_NO_PAGE'), found);
     assert.deepStrictEqual(found.map((f) => f.path), ['Hidden/Old_Tam.md']);
@@ -241,7 +240,7 @@ describe('COMMENT_STRAY: only where it changes what the site shows', () => {
 
 describe('a PC note withheld whole (a link label changes its headings, sheets off)', () => {
   it('reports no stray and names no note: nothing of its body is on the site', async () => {
-    const sheetsOff = '  character_sheets: false\n  pc_prose_sections:\n    - Background\n';
+    const sheetsOff = { 'player_site.sheets.show': false, 'player_site.sheets.prose_sections': ['Background'] };
     const { configPath } = site({
       'Hidden/Old_Tam.md': hidden(),
       'PCs/Jean.md': '---\ntype: pc\nplayer_name: Pat\n---\n\n# Jean\n## Background\nRaised by [[Old_Tam]], at 100%% and 50%% pay.\n[[Nowhere|## Skills]]\nSTAT14\n',
@@ -572,9 +571,9 @@ describe('a labelled link never prints its target, whatever prints the field', (
 });
 
 describe('a heading that holds a link to a note with no page', () => {
-  const extra = '  exclude_sections:\n    - GM Notes\n    - Notes on Old Tam\n';
+  const settings = { 'player_site.hide.sections': ['GM Notes', 'Notes on Old Tam'] };
   const run = async (body) => {
-    const { configPath, root } = site({ 'Hidden/Old_Tam.md': hidden(), 'Hidden/Notes.md': hidden(), 'Hidden/Brass_Key.md': hidden(), 'People/Bo_Pike.md': npcNote(body) }, extra);
+    const { configPath, root } = site({ 'Hidden/Old_Tam.md': hidden(), 'Hidden/Notes.md': hidden(), 'Hidden/Brass_Key.md': hidden(), 'People/Bo_Pike.md': npcNote(body) }, settings);
     const found = (await fromDoctor(configPath)).filter((f) => f.code === 'NAMED_NO_PAGE');
     assert.deepStrictEqual(fromBuild(configPath).filter((f) => f.code === 'NAMED_NO_PAGE'), found);
     return { paths: found.map((f) => f.path), html: fs.readFileSync(path.join(root, 'docs', 'people', 'bo-pike.html'), 'utf8') };

@@ -3,6 +3,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const { writeSiteConfig } = require('../helpers/vault-files');
 const { execFileSync, spawnSync } = require('child_process');
 
 // Repo root is four levels up from tools/publish/test/integration.
@@ -73,9 +74,9 @@ describe('clean install build (Bug 1 guardrail)', () => {
       // Use the known-good committed fixture vault (it ships inside the cache copy).
       const vault = path.join(cacheToolDir, 'test', 'fixtures', 'minimal');
       assert.ok(fs.existsSync(vault), 'fixture vault should be copied into the cache');
-      fs.writeFileSync(
+      writeSiteConfig(
         path.join(site, 'vault.config.json'),
-        JSON.stringify({
+        {
           siteTitle: 'Clean Install',
           siteUrl: 'https://example.github.io/clean-install',
           vaultPath: vault,
@@ -87,7 +88,7 @@ describe('clean install build (Bug 1 guardrail)', () => {
             'Characters/NPCs': 'characters/npcs',
             Locations: 'locations',
           },
-        }),
+        },
       );
 
       // 3. Build exactly as `npm run build` would — through the symlinked bin.

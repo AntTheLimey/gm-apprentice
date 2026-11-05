@@ -48,12 +48,12 @@ test('the container sits inside the Combat tab, before the rules reference', () 
 });
 
 test('with live stats on the page holds the three and the live script', () => {
-  const { html } = quiet(() => buildPc('gurps-4e', RONNIE, ['live_stats: true']));
+  const { html } = quiet(() => buildPc('gurps-4e', RONNIE, { 'player_site.features.live_stats': true }));
   assert.deepStrictEqual(has(html), { container: true, data: true, script: true });
 });
 
 test('tohit_calculator: off leaves none of the three', () => {
-  const { html } = quiet(() => buildPc('gurps-4e', RONNIE, ['tohit_calculator: off']));
+  const { html } = quiet(() => buildPc('gurps-4e', RONNIE, { 'player_site.features.tohit_calculator': 'off' }));
   assert.deepStrictEqual(has(html), NONE);
 });
 
@@ -83,7 +83,7 @@ test('a weapon name that tries to close the script builds and reads back exactly
 test('the calculator\'s script is copied only into a GURPS site with the calculator on', () => {
   const on = quiet(() => buildPc('gurps-4e', RONNIE));
   assert.ok(fs.existsSync(path.join(on.out, 'js', 'gurps-tohit.js')));
-  const off = quiet(() => buildPc('gurps-4e', RONNIE, ['tohit_calculator: off']));
+  const off = quiet(() => buildPc('gurps-4e', RONNIE, { 'player_site.features.tohit_calculator': 'off' }));
   assert.ok(!fs.existsSync(path.join(off.out, 'js', 'gurps-tohit.js')));
   const coc = quiet(() => buildPc('coc-7e', templateBody('pc-coc-7e.md')));
   assert.ok(!fs.existsSync(path.join(coc.out, 'js', 'gurps-tohit.js')));
@@ -116,7 +116,7 @@ test('a row the calculator cannot read is a finding, with a summary line', () =>
   const lines = [];
   const warn = console.warn; const log = console.log;
   console.log = () => {}; console.warn = (m) => lines.push(String(m));
-  try { buildPc('gurps-4e', body, [], { onNoteFaults: (f) => { faults = f; } }); } finally { console.warn = warn; console.log = log; }
+  try { buildPc('gurps-4e', body, {}, { onNoteFaults: (f) => { faults = f; } }); } finally { console.warn = warn; console.log = log; }
   const mine = faults.filter((f) => f.code === 'TOHIT_UNREAD' && f.severity === 'warning');
   assert.ok(mine.some((f) => f.path === 'Characters/PCs/Test_Hero.md' && /SIG-Sauer P226 \(9mm\)".*names the attribute DX/.test(f.detail) && /default level/.test(f.fix)), JSON.stringify(mine));
   assert.ok(lines.some((l) => /rows? of (a )?PC sheets? (is|are) not fully read by the to-hit calculator \(Test_Hero \d+\) — campaign-qa's Site Faults check fixes/.test(l)), lines.join('\n'));
@@ -125,7 +125,7 @@ test('a row the calculator cannot read is a finding, with a summary line', () =>
 test('a PC out of play has no rows reported', () => {
   const body = RONNIE.replace(/\| SIG-Sauer P226 \(9mm\) \| [^|]*\|/, '| SIG-Sauer P226 (9mm) | DX-12 (default) |');
   let faults = null;
-  quiet(() => buildPc('gurps-4e', body, [], { onNoteFaults: (f) => { faults = f; } }, { status: 'dead' }));
+  quiet(() => buildPc('gurps-4e', body, {}, { onNoteFaults: (f) => { faults = f; } }, { status: 'dead' }));
   assert.deepStrictEqual(faults.filter((f) => f.code === 'TOHIT_UNREAD'), []);
 });
 
@@ -152,7 +152,7 @@ test('a CoC skill written below its worked-out base is a SKILL_BELOW_BASE findin
   const warn = console.warn; const log = console.log;
   console.log = () => {}; console.warn = (m) => lines.push(String(m));
   let built;
-  try { built = buildPc('coc-7e-regency', body, [], { onNoteFaults: (f) => { faults = f; } }); } finally { console.warn = warn; console.log = log; }
+  try { built = buildPc('coc-7e-regency', body, {}, { onNoteFaults: (f) => { faults = f; } }); } finally { console.warn = warn; console.log = log; }
   const mine = faults.filter((f) => f.code === 'SKILL_BELOW_BASE');
   assert.strictEqual(mine.length, 1, JSON.stringify(mine));
   assert.strictEqual(mine[0].severity, 'info');

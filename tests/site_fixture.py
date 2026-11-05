@@ -13,19 +13,26 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Callable
+
+from layouts import write_config  # noqa: E402
+
+_RUN = subprocess.run   # a test may patch subprocess.run for the code it tests
 
 TOOL_DIR = Path(__file__).resolve().parents[1] / "tools" / "publish"
 BARE = "---\npublish:\n---\n"
 
 
 _SITE: Path | None = None
-_CONFIG = {"vaultPath": ".",
-           "folderMap": {"Characters/NPCs": "characters/npcs",
-                         "Characters/PCs": "characters/pcs",
-                         "Chapters": "chronicle"}}
+_CONFIG = {"vaultPath": "."}
+# The folders test notes live in, so the tool publishes them: a setting of the
+# vault, not of the site folder (which holds only `vaultPath`).
+FOLDER_MAP = {"Characters/NPCs": "characters/npcs",
+              "Characters/PCs": "characters/pcs",
+              "Chapters": "chronicle"}
 
 
 def _link_and_config(site: Path) -> None:
@@ -78,7 +85,7 @@ def shared_site_problem() -> str | None:
     except (OSError, ValueError) as e:
         return f"vault.config.json in {_SITE} cannot be read ({e})"
     if config != _CONFIG:
-        return f"vault.config.json in {_SITE} no longer holds its folderMap"
+        return f"vault.config.json in {_SITE} holds more than vaultPath"
     return None
 
 
@@ -105,8 +112,6 @@ def new_site(vault: Path, cleanup: Callable[[Path], object],
     if _SITE is None:
         _SITE = Path(tempfile.mkdtemp(prefix="vc-site-"))
         _remove_at_exit(_SITE)
-    # The folderMap is for the folders test notes live in, so the tool
-    # publishes them.
     restore_shared_site()
     return _SITE
 
@@ -138,8 +143,10 @@ def with_site(config: str | None, vault: Path,
     child = next((line for line in lines[at + 1:] if line.strip()), "")
     pad = child[:len(child) - len(child.lstrip())] or "  "
     site = new_site(vault, cleanup, private)
-    lines[at + 1:at + 1] = [f"{pad}site: true",
-                            f"{pad}site_dir: {site.as_posix()}"]
+    found = [f"{pad}site: true", f"{pad}site_dir: {site.as_posix()}"]
+    if not re.search(r"^\s*folder_map\s*:", config, re.M):
+        found.append(f"{pad}folder_map: {json.dumps(FOLDER_MAP)}")
+    lines[at + 1:at + 1] = found
     return "\n".join(lines)
 
 
@@ -161,19 +168,36 @@ def site_copy(fixture: Path) -> Path:
 def give_site(vault: Path, cleanup: Callable[[Path], object],
               private: bool = False) -> None:
     """Turn the site on in a vault already on disk. `private=True` for a
-    test that changes the site (see `private_site`)."""
-    file = vault / "_meta" / "vault-config.md"
-    config = file.read_text(encoding="utf-8") if file.is_file() else None
+    test that changes the site (see `private_site`). A vault whose settings
+    are still written the short way (`_meta/vault-config.md`, as a test
+    builds them) is written as the new settings file; one already on it gets
+    the two settings through the tool."""
+    new_file = vault / "_meta" / "vault-config.yaml"
+    if new_file.is_file():
+        text = new_file.read_text(encoding="utf-8")
+        if re.search(r"^[ \t]+(publish|folder)[ \t]*:", text, re.M):
+            return
+        site = new_site(vault, cleanup, private)
+        _RUN(
+            ["node", str(TOOL_DIR / "bin" / "gm-publish.js"), "settings", "set",
+             "--vault", str(vault), "player_site.publish=true",
+             f"player_site.folder={json.dumps(site.as_posix())}",
+             f"player_site.folder_map={json.dumps(FOLDER_MAP)}"],
+            check=True, capture_output=True, text=True)
+        return
+    old = vault / "_meta" / "vault-config.md"
+    config = old.read_text(encoding="utf-8") if old.is_file() else None
     text = with_site(config, vault, cleanup, private)
-    if text is not None and text != config:
-        file.parent.mkdir(exist_ok=True)
-        file.write_text(text, encoding="utf-8")
+    if text is not None:
+        (vault / "_meta").mkdir(exist_ok=True)
+        write_config(vault, text)
+        old.unlink(missing_ok=True)
 
 
 def site_of(vault: Path) -> Path:
     """The site folder a test vault's settings name (`player_site.folder`)."""
-    text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
-    found = re.search(r"^\s*site_dir:\s*(.+)$", text, re.M)
+    text = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
+    found = re.search(r"^\s*folder:\s*(.+)$", text, re.M)
     assert found, "the vault names no site folder"
     return Path(found.group(1).strip().strip("\"'"))
 

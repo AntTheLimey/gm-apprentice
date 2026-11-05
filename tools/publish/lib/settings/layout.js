@@ -4,17 +4,20 @@
 // its frontmatter); the tools' own bookkeeping is `_meta/vault-state.json`.
 const fs = require('node:fs');
 const path = require('node:path');
-const { entry, legacyNameOf } = require('./registry');
 const { readerFrom } = require('../vault-reader');
 
 const NEW_FILE = '_meta/vault-config.yaml';
 const OLD_FILE = '_meta/vault-config.md';
+// What the tools say of the old file since plugin 1.11.0, when it is the only settings file, and when it is left beside the new one.
+const OLD_FILE_STOP = `${OLD_FILE} is the old settings file, no longer read since plugin 1.11.0. Run the update with a 1.10 release, 1.10.134 or later, first.`;
+const OLD_FILE_LEFT = `${OLD_FILE} is still beside ${NEW_FILE}: remove or rename \`${OLD_FILE}\` once you have checked its settings are in \`${NEW_FILE}\`; plugin 1.11.0 no longer reads it.`;
 const STATE_FILE = '_meta/vault-state.json';
 const NOTES_FILE = '_meta/vault-notes.md';
 
-// The publish list: the YAML file, and the Markdown file it replaces (read only until the update moves it).
+// The publish list: the YAML file, and the Markdown file it replaced (never read since plugin 1.11.0: it stops by name).
 const PUBLISH_LIST_FILE = '_meta/publish-list.yaml';
 const OLD_LIST_FILE = '_meta/publish-manifest.md';
+const OLD_LIST_STOP = `${OLD_LIST_FILE} is the old publish list, no longer read since plugin 1.11.0. Run the update with a 1.10 release, 1.10.134 or later, first.`;
 // The first publish tool version that reads the YAML publish list; an older one reads a moved vault as having no list.
 const PUBLISH_LIST_FROM = '1.27.0';
 // The first publish tool version that reads the accepted leak findings in the publish list; an older one reads a list
@@ -48,7 +51,8 @@ const STEPS_FROM = '1.24.0';
 // installed or its package.json cannot be read. The one reader of it. `readFile` is for a caller that has its own.
 function siteToolVersion(siteDir, readFile = (f) => fs.readFileSync(f, 'utf8')) {
   try {
-    return JSON.parse(readFile(path.join(siteDir, 'node_modules', 'gm-apprentice-publish', 'package.json'))).version || null;
+    const { version } = JSON.parse(readFile(path.join(siteDir, 'node_modules', 'gm-apprentice-publish', 'package.json'))) || {};
+    return typeof version === 'string' && version ? version : null;
   } catch {
     return null;
   }
@@ -57,23 +61,18 @@ function siteToolVersion(siteDir, readFile = (f) => fs.readFileSync(f, 'utf8')) 
 const at = (vaultPath, rel) => path.join(vaultPath, ...rel.split('/'));
 
 // 'new' whenever the new file exists (the old file, if it is still there, is not read), 'legacy'
-// when only the old file exists, 'none' when neither does.
+// when only the old file exists (its settings are not read: the build stops), 'none' when neither does.
 function layoutOf(vaultPath, deps) {
   const rd = readerFrom(deps);
   if (rd.exists(at(vaultPath, NEW_FILE))) return 'new';
   return rd.exists(at(vaultPath, OLD_FILE)) ? 'legacy' : 'none';
 }
 
-// What a message to the GM calls the settings file of a layout, and a setting as that file writes it:
-// the new name on the new layout (and when there is no file yet), the old name on the old one. These
-// two are the only way a message names either; the old-name/new-name pairs live in the list.
-const fileLabelFor = (layout) => (layout === 'legacy' ? OLD_FILE : NEW_FILE);
-const nameInFor = (layout, name) => {
-  const e = entry(name);
-  return (layout === 'legacy' && e && legacyNameOf(e)) || name;
-};
-const layoutOrNone = (vaultPath) => (typeof vaultPath === 'string' && vaultPath ? layoutOf(vaultPath) : 'none');
-const fileLabel = (vaultPath) => fileLabelFor(layoutOrNone(vaultPath));
-const nameIn = (vaultPath, name) => nameInFor(layoutOrNone(vaultPath), name);
+// What a message to the GM calls the settings file, and a setting as that file writes it. Only the new file is read,
+// so both are the new file's whatever the layout; the old-name/new-name pairs live in the list.
+const fileLabelFor = () => NEW_FILE;
+const nameInFor = (layout, name) => name;
+const fileLabel = () => NEW_FILE;
+const nameIn = (vaultPath, name) => name;
 
-module.exports = { FIRST_TOOL_READING_NEW_FILE, STEPS_FROM, siteToolVersion, SETTING_GROUPS, GM_GROUP, GROUPS, HIDE_GROUP, STRICT_PARENTS, stopsUnknown, NEW_FILE, OLD_FILE, STATE_FILE, NOTES_FILE, PUBLISH_LIST_FILE, OLD_LIST_FILE, PUBLISH_LIST_FROM, ACCEPTED_FROM, SETTLE_FROM, TIE_FROM, layoutOf, at, fileLabel, nameIn, fileLabelFor, nameInFor };
+module.exports = { FIRST_TOOL_READING_NEW_FILE, STEPS_FROM, siteToolVersion, SETTING_GROUPS, GM_GROUP, GROUPS, HIDE_GROUP, STRICT_PARENTS, stopsUnknown, NEW_FILE, OLD_FILE, OLD_FILE_STOP, OLD_FILE_LEFT, STATE_FILE, NOTES_FILE, PUBLISH_LIST_FILE, OLD_LIST_FILE, OLD_LIST_STOP, PUBLISH_LIST_FROM, ACCEPTED_FROM, SETTLE_FROM, TIE_FROM, layoutOf, at, fileLabel, nameIn, fileLabelFor, nameInFor };

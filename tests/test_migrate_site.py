@@ -25,6 +25,7 @@ import migrate_site as ms  # noqa: E402
 import site_fixture  # noqa: E402
 import vault_check as vc  # noqa: E402
 from migrate_core import PERSON, WILL, StepFailed  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 REAL_PLUGIN_TOOL = migrate_core.plugin_tool
 
@@ -50,8 +51,7 @@ def make_vault(case, publish=True, site=True, version="1.10.12", extra=""):
             (site_dir / "vault.config.json").write_text("{}", encoding="utf-8")
             body += f"  site_dir: {site_dir}\n"
         body += extra
-    (vault / "_meta" / "vault-config.md").write_text(body + "---\n",
-                                                    encoding="utf-8")
+    write_config(vault, body + "---\n")
     return vault
 
 
@@ -148,8 +148,8 @@ class RepinTests(unittest.TestCase):
         vault = make_vault(self, site=False, extra="  site: true\n")
         with self.assertRaises(StepFailed) as caught:
             self.find(vault, Pin())
-        self.assertIn("publish.site is on but publish.site_dir names no "
-                      "folder", str(caught.exception))
+        self.assertIn("player_site.publish is on but player_site.folder names "
+                      "no folder", str(caught.exception))
 
     def test_a_site_dir_with_no_site_file_stops(self):
         vault = make_vault(self)
@@ -157,18 +157,6 @@ class RepinTests(unittest.TestCase):
         with self.assertRaises(StepFailed) as caught:
             self.find(vault, Pin())
         self.assertIn("no vault.config.json is there", str(caught.exception))
-
-    def test_inline_publish_block_stops_the_repin(self):
-        vault = make_vault(self, publish=False)
-        (vault / "_meta" / "vault-config.md").write_text(
-            '---\ngm_apprentice_version: "1.10.12"\n'
-            "publish: {mode: player, site_dir: ../site}\n---\n",
-            encoding="utf-8")
-        pin = Pin()
-        with self.assertRaises(StepFailed) as caught:
-            self.find(vault, pin)
-        self.assertIn("written on one line", str(caught.exception))
-        self.assertEqual(pin.calls, [])
 
     def test_unreadable_check_output_stops(self):
         with self.assertRaises(StepFailed) as caught:
@@ -195,29 +183,29 @@ class RepinTests(unittest.TestCase):
 
 class PublishSiteTests(unittest.TestCase):
     def text(self, vault):
-        return (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
+        return (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
 
     def test_a_site_dir_writes_true(self):
         vault = make_vault(self)
         (item,) = ms.find_publish_site(vault)
         self.assertEqual((item.id, item.group), ("publish-site", WILL))
-        self.assertEqual(item.apply(None), ["wrote publish.site: true"])
-        self.assertIn("\n  site: true\n", self.text(vault))
+        self.assertEqual(item.apply(None), ["wrote player_site.publish: true"])
+        self.assertIn("\n  publish: true\n", self.text(vault))
         self.assertEqual(ms.find_publish_site(vault), [])
 
     def test_no_site_dir_writes_false(self):
         vault = make_vault(self, site=False)
         (item,) = ms.find_publish_site(vault)
         self.assertIn("no site folder is named; if this vault has a site, "
-                      "set publish.site_dir to its folder instead",
+                      "set player_site.folder to its folder instead",
                       item.lines[0])
         item.apply(None)
-        self.assertIn("\n  site: false\n", self.text(vault))
+        self.assertIn("\n  publish: false\n", self.text(vault))
 
     def test_a_site_dir_row_has_no_caveat(self):
         (item,) = ms.find_publish_site(make_vault(self))
         self.assertEqual(
-            item.lines, ["write publish.site: true in _meta/vault-config.md"])
+            item.lines, ["write player_site.publish: true in _meta/vault-config.yaml"])
 
     def test_a_switch_already_written_is_left(self):
         vault = make_vault(self, extra="  site: false\n")
@@ -233,19 +221,13 @@ class PublishSiteTests(unittest.TestCase):
         # `settings().has_site_block` is false for it; the line is there, and
         # the switch is written under it, as it always was.
         vault = make_vault(self, publish=False)
-        (vault / "_meta" / "vault-config.md").write_text(
-            '---\ngm_apprentice_version: "1.10.12"\npublish:\n---\n',
-            encoding="utf-8")
+        (vault / "_meta" / "vault-config.yaml").write_text(
+            "version: 1\nplayer_site:\n", encoding="utf-8")
+        vc.forget_settings(vault)
         self.assertFalse(vc.settings(vault).has_site_block)
         (item,) = ms.find_publish_site(vault)
         item.apply(None)
-        self.assertIn("publish:\n  site: false\n", self.text(vault))
-        self.assertEqual(ms.find_publish_site(vault), [])
-
-    def test_a_publish_block_on_one_line_gets_nothing(self):
-        vault = make_vault(self, publish=False)
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\npublish: {mode: player}\n---\n", encoding="utf-8")
+        self.assertIn("player_site:\n  publish: false\n", self.text(vault))
         self.assertEqual(ms.find_publish_site(vault), [])
 
     def test_a_switch_that_is_not_a_switch_word_is_still_a_written_switch(self):
@@ -483,20 +465,6 @@ class PersonRowTests(unittest.TestCase):
                 # No site: nothing publishes, so nothing waits on the tool.
                 self.assertEqual(find(make_vault(self, site=False)), [], name)
 
-    def test_a_postbuild_script_is_named(self):
-        vault = make_vault(self)
-        site = site_of(vault)
-        (site / "package.json").write_text(json.dumps(
-            {"scripts": {"postbuild": "node add-toggle.js"}}), encoding="utf-8")
-        (item,) = ms.find_postbuild(vault)
-        self.assertEqual(item.group, PERSON)
-        self.assertIn("node add-toggle.js", item.lines[0])
-        self.assertTrue(item.lines[0].startswith("package.json (site)\t"))
-        self.assertIn("build step", item.lines[0])
-        (site / "package.json").write_text("{}", encoding="utf-8")
-        self.assertEqual(ms.find_postbuild(vault), [])
-        self.assertEqual(ms.find_postbuild(make_vault(self, site=False)), [])
-
 
 class ToneShownNoticeTests(unittest.TestCase):
     NOTE = ("---\ntype: npc\nrelationships:\n"
@@ -646,7 +614,7 @@ class ThemeChoiceTests(unittest.TestCase):
                          ("default-mode", "dark, light or leave"))
         self.assertTrue(item.holds_stamp)
         self.assertEqual(item.apply("dark"),
-                         ["wrote publish.theme.default_mode: dark"])
+                         ["wrote player_site.theme.default_mode: dark"])
         self.assertEqual(self.written(vault).get("player_site.theme.default_mode"),
                          "dark")
         self.assertEqual(item.apply("leave"),
@@ -657,7 +625,7 @@ class ThemeChoiceTests(unittest.TestCase):
         # Written, so no longer offered; the file shows the one line added.
         self.assertEqual(ms.find_default_mode(vault), [])
         self.assertIn("    default_mode: dark\n",
-                      (vault / "_meta" / "vault-config.md").read_text(
+                      (vault / "_meta" / "vault-config.yaml").read_text(
                           encoding="utf-8"))
 
     def test_default_mode_already_set_is_not_offered(self):
@@ -705,8 +673,8 @@ class ThemeChoiceTests(unittest.TestCase):
         check = next(c for c in ms.SITE_CHECKS if c.name == "default-mode")
         self.assertEqual(check.choices, ("default-mode=",))
         self.assertEqual(
-            [c.name for c in ms.SITE_CHECKS[:7]],
-            [ms.REPIN, ms.MOVE, ms.PUBLISH_LIST, ms.FULL_MODE, "publish-site",
+            [c.name for c in ms.SITE_CHECKS[:5]],
+            [ms.REPIN, ms.FULL_MODE, "publish-site",
              "default-mode", "fonts-self-host"])
 
 
@@ -751,23 +719,12 @@ class ExcludeListTests(unittest.TestCase):
     def test_a_vault_with_its_own_lists_is_left_alone(self):
         vault = make_vault(self, extra="  exclude_sections: [Mine]\n"
                                        "  exclude_fields: [mine]\n")
-        before = (vault / "_meta" / "vault-config.md").read_bytes()
+        before = (vault / "_meta" / "vault-config.yaml").read_bytes()
         self.assertEqual(ms.find_exclude_lists(vault), [])
-        self.assertEqual((vault / "_meta" / "vault-config.md").read_bytes(), before)
+        self.assertEqual((vault / "_meta" / "vault-config.yaml").read_bytes(), before)
 
-    def test_a_list_only_the_site_file_holds_is_the_vaults_own_for_now(self):
+    def test_the_plan_names_the_settings_file(self):
         vault = make_vault(self)
-        site_of(vault).joinpath("vault.config.json").write_text(
-            json.dumps({"excludeSections": ["Old"]}), encoding="utf-8")
-        (item,) = ms.find_exclude_lists(vault)
-        self.assertEqual(len(item.lines), 1)
-        self.assertIn("publish.exclude_fields", item.lines[0])
-
-    def test_the_plan_does_not_name_the_old_file_the_move_removes(self):
-        # #388: on the old settings file the same pass moves the settings, so
-        # the lists land in the new file; the line must not say otherwise.
-        vault = make_vault(self)
-        self.assertEqual(ms.vault_layout(vault), "legacy")
         (item,) = ms.find_exclude_lists(vault)
         for line in item.lines:
             self.assertNotIn("vault-config.md", line)
@@ -778,7 +735,7 @@ class ExcludeListTests(unittest.TestCase):
                                        "  exclude_fields: [mine]\n")
         (item,) = ms.find_exclude_lists(vault)
         self.assertEqual(len(item.lines), 1)
-        self.assertIn("publish.exclude_sections", item.lines[0])
+        self.assertIn("player_site.hide.sections", item.lines[0])
 
     def test_the_line_quotes_what_the_replaced_value_said(self):
         # The build already ignored the scalar, so nothing published changes; but the
@@ -914,9 +871,7 @@ class VaultSettingEndToEndTests(unittest.TestCase):
     def test_the_real_tool_reads_sets_and_reads_again(self):
         vault = tmp(self, "vs-e2e-vault-")
         (vault / "_meta").mkdir()
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\ntype: meta\npublish:\n  mode: player\n---\n",
-            encoding="utf-8")
+        write_config(vault, "---\ntype: meta\npublish:\n  mode: player\n---\n")
         site_fixture.give_site(vault, lambda p: None)
         self.assertFalse(vc.written_in_vault_file(
             vc.settings(vault), "player_site.theme.default_mode"))
@@ -927,23 +882,21 @@ class VaultSettingEndToEndTests(unittest.TestCase):
             after, "player_site.theme.default_mode"))
         self.assertEqual(after.get("player_site.theme.default_mode"), "dark")
 
-    def vault_with(self, publish_lines):
+    def vault_with(self, site_lines):
         vault = tmp(self, "vs-excl-vault-")
         (vault / "_meta").mkdir()
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\ntype: meta\npublish:\n" + publish_lines + "---\nBody\n",
-            encoding="utf-8")
+        config = vault / "_meta" / "vault-config.yaml"
+        config.write_text("version: 1\nplayer_site:\n" + site_lines, encoding="utf-8")
         site_fixture.give_site(vault, lambda p: None)
-        return vault, vault / "_meta" / "vault-config.md"
+        return vault, config
 
     def test_the_exclude_lists_are_written_once_and_a_second_run_changes_nothing(self):
         vault, config = self.vault_with(
-            "  # who reads\n  mode: player  # keep\n  site_title: X\n")
+            "  # who reads\n  title: X  # keep\n")
         (item,) = ms.find_exclude_lists(vault)
         item.apply(None)
         text = config.read_text(encoding="utf-8")
-        self.assertIn("  # who reads\n  mode: player  # keep\n  site_title: X\n", text)
-        self.assertTrue(text.endswith("---\nBody\n"))
+        self.assertIn("  # who reads\n  title: X  # keep\n", text)
         self.assertIn("GM Notes", text)
         self.assertIn("secrets", text)
         self.assertEqual(ms.find_exclude_lists(vault), [])
@@ -951,7 +904,7 @@ class VaultSettingEndToEndTests(unittest.TestCase):
 
     def test_a_vault_with_its_own_lists_is_not_changed(self):
         vault, config = self.vault_with(
-            "  exclude_sections: [Rumours]\n  exclude_fields: [mine]\n")
+            "  hide:\n    sections: [Rumours]\n    fields: [mine]\n")
         before = config.read_text(encoding="utf-8")
         self.assertEqual(ms.find_exclude_lists(vault), [])
         self.assertEqual(config.read_text(encoding="utf-8"), before)
@@ -962,29 +915,24 @@ class VaultSettingEndToEndTests(unittest.TestCase):
                          vc.PUBLISH_TOOL.parent.parent / "node_modules").is_dir()),
                      "node and the publish tool's node_modules are needed")
 class MigrateEndToEndTests(unittest.TestCase):
-    def test_legacy_site_migrates_and_frontmatter_stays_clean(self):
+    def test_a_vault_on_the_settings_file_migrates_and_frontmatter_stays_clean(self):
         vault = tmp(self, "mig-e2e-vault-")
         site = tmp(self, "mig-e2e-site-")
         (vault / "_meta").mkdir()
         (vault / "Overview.md").write_text(
             "---\ntype: campaign_overview\ncanon_status: AUTHORITATIVE\n---\n\n# Overview\n", encoding="utf-8")
-        (vault / "_meta" / "vault-config.md").write_text(
-            f'---\ntype: meta\ngm_apprentice_version: "1.10.23"\npublish:\n  mode: player\n  site_dir: {site}\n---\n',
-            encoding="utf-8")
-        (site / "vault.config.json").write_text(json.dumps({
-            "siteTitle": "Legacy", "vaultPath": str(vault),
-            "outputDir": "./docs", "excludeDirs": ["_meta"],
-            "backend": {"inbox": True}}), encoding="utf-8")
+        (vault / "_meta" / "vault-config.yaml").write_text(
+            f"version: 1\nplayer_site:\n  publish: true\n  folder: {site.as_posix()}\n"
+            "  title: Legacy\n", encoding="utf-8")
+        (vault / "_meta" / "vault-state.json").write_text(
+            '{"gm_apprentice_version": "1.10.60"}\n', encoding="utf-8")
+        (site / "vault.config.json").write_text(json.dumps({"vaultPath": str(vault)}),
+                                                encoding="utf-8")
         out = io.StringIO()
         with mock.patch.object(ms, "plugin_tool", Pin(ok=True)), \
                 contextlib.redirect_stdout(out):
             self.assertEqual(migrate.main([str(vault), "apply"]), 0)
-            self.assertIn("settings-move\tWrote _meta/vault-config.yaml.",
-                          out.getvalue())
-            text = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
-            self.assertIn("title: Legacy", text)
-            self.assertFalse((vault / "_meta" / "vault-config.md").exists())
-            self.assertNotIn("siteTitle", (site / "vault.config.json").read_text())
+            self.assertIn("title: Legacy", (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8"))
             again = io.StringIO()
             with contextlib.redirect_stdout(again):
                 self.assertEqual(migrate.main([str(vault), "apply"]), 0)
@@ -995,85 +943,7 @@ class MigrateEndToEndTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("# count: 0", proc.stdout)
 
-    def vault_at(self, version, site_file, lists=False):
-        vault = tmp(self, "mig-e2e-vault-")
-        (vault / "_meta").mkdir()
-        site_dir = ""
-        if site_file is not None:
-            site = tmp(self, "mig-e2e-site-")
-            site_file.setdefault("vaultPath", str(vault))
-            (site / "vault.config.json").write_text(json.dumps(site_file),
-                                                    encoding="utf-8")
-            site_dir = f"  site_dir: {site}\n"
-        (vault / "_meta" / "vault-config.md").write_text(
-            f'---\ntype: meta\ngm_apprentice_version: "{version}"\n'
-            f"publish:\n  mode: player\n{site_dir}"
-            + ("  exclude_sections: [GM Notes]\n  exclude_fields: [secrets]\n"
-               if lists else "") + "---\n", encoding="utf-8")
-        return vault
 
-    def test_settings_left_after_1_10_24_are_still_moved(self):
-        vault = self.vault_at("1.10.24", {"siteTitle": "Legacy",
-                                          "outputDir": "./docs"})
-        plugin = ("1.10.24", "t")
-        with mock.patch.object(ms, "plugin_tool", Pin(ok=True)), \
-                mock.patch.object(migrate, "plugin_version",
-                                  return_value=plugin):
-            out = io.StringIO()
-            with contextlib.redirect_stdout(out):
-                self.assertEqual(migrate.main([str(vault), "plan"]), 0)
-            self.assertIn("settings-move\tWill write _meta/vault-config.yaml.",
-                          out.getvalue())
-            with contextlib.redirect_stdout(io.StringIO()):
-                self.assertEqual(migrate.main([str(vault), "apply"]), 0)
-            self.assertEqual(ms.find_settings_move(vault), [])
-        self.assertIn("title: Legacy", (vault / "_meta" / "vault-config.yaml")
-                      .read_text(encoding="utf-8"))
-
-    def test_a_vault_with_deployment_keys_only_or_no_site_still_moves_its_own_file(self):
-        for site_file in ({"outputDir": "./docs"}, None):
-            vault = self.vault_at("1.10.25", site_file, lists=True)
-            with mock.patch.object(ms, "plugin_tool", Pin(ok=True)):
-                (item,) = ms.find_settings_move(vault)
-                text = "\n".join(item.lines)
-                if site_file is None:
-                    self.assertNotIn("Will remove the settings from", text)
-                else:
-                    # The site folder's outputDir is a setting of the vault
-                    # now: the move carries it and takes it out of the site
-                    # file, and says so.
-                    self.assertIn("Will remove the settings from", text)
-                    self.assertIn("outputDir", text)
-                    self.assertIn("`outputDir` moves to `player_site.output`.",
-                                  text)
-                item.apply(None)
-                self.assertEqual(ms.find_settings_move(vault), [])
-            moved = (vault / "_meta" / "vault-config.yaml")
-            self.assertTrue(moved.is_file())
-            if site_file is not None:
-                self.assertIn("output: ./docs", moved.read_text(encoding="utf-8"))
-                site_json = site_of(vault) / "vault.config.json"
-                self.assertEqual(
-                    json.loads(site_json.read_text(encoding="utf-8")),
-                    {"vaultPath": str(vault)})
-
-    def test_a_site_file_with_no_list_moves_and_the_built_in_lists_are_written(self):
-        vault = self.vault_at("1.10.25", {"outputDir": "./docs"})
-        with mock.patch.object(ms, "plugin_tool", Pin(ok=True)):
-            (item,) = ms.find_settings_move(vault)
-            item.apply(None)
-        self.assertEqual(ms.find_settings_move(vault), [])
-        (lists,) = ms.find_exclude_lists(vault)
-        lists.apply(None)
-        text = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
-        self.assertIn("sections:", text)
-        self.assertIn("fields:", text)
-
-
-@unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
-                     or (shutil.which("node") and (
-                         vc.PUBLISH_TOOL.parent.parent / "node_modules").is_dir()),
-                     "node and the publish tool's node_modules are needed")
 class LeakEndToEndTests(unittest.TestCase):
     def test_a_handouts_context_is_planned_once_and_moved(self):
         vault = tmp(self, "mig-leak-vault-")

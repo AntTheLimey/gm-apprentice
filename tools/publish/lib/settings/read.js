@@ -1,26 +1,25 @@
 'use strict';
-// readSettings: reads a vault's settings against the declared list, from whichever layout the
-// vault is on (layout.js says which): the new file read here, the old one read by legacy.js. It
+// readSettings: reads a vault's settings file (_meta/vault-config.yaml) against the declared list. It
 // returns values and origins under the list's names, the faults, each with `name` (as written in
 // the file) and `setting` (the list's name, or null), `layout`, and `file`. It prints nothing and
 // throws only for a file that is not valid YAML or was written by a newer gm-apprentice.
+// Since plugin 1.11.0 nothing else is read: the old settings file, and any key but vaultPath in the
+// site folder's vault.config.json, stop the build by name (what they hid would otherwise publish).
 const path = require('node:path');
-const { parseDocument } = require('yaml');
-const { REGISTRY, NOT_PER_SITE, legacyNameOf, siteKeyOf } = require('./registry');
+const { parseDocument, isSeq, isScalar, isAlias } = require('yaml');
+const { REGISTRY, NOT_PER_SITE, entry: settingEntry, legacyNameOf } = require('./registry');
 const { TYPES, isMap, getPath, setIn, emptyIsFault } = require('./types');
 const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, startsLikeHide, show } = require('./faults');
-const { NEW_FILE, OLD_FILE, layoutOf, at, GROUPS, GM_GROUP, STRICT_PARENTS, stopsUnknown } = require('./layout');
-const legacy = require('./legacy');
+const { NEW_FILE, OLD_FILE, OLD_FILE_STOP, OLD_FILE_LEFT, OLD_LIST_FILE, OLD_LIST_STOP, at, GROUPS, GM_GROUP, STRICT_PARENTS, stopsUnknown } = require('./layout');
 const { readerFrom } = require('../vault-reader');
 const { entryFaults } = require('./entry-faults');
-const { normalizeExcludeDirs, outputProblem, keepProblem, tidyChecked, sameChecked } = require('./folders');
+const { normalizeExcludeDirs, outputProblem, keepProblem, tidyChecked } = require('./folders');
+const { packageScripts, packageJsonProblem } = require('./steps');
 
 const LAYOUT_VERSION = 1;
 const NEWER_VERSION = "this vault's settings were written by a newer gm-apprentice; update the plugin";
 const MAP_ENTRY = { type: 'map', shape: 'settings, one to a line' };
 const TOP = ['version', ...GROUPS];
-
-// ---- Shared by both layouts ---------------------------------------------------------------
 
 const clone = (v) => (v !== null && typeof v === 'object' ? structuredClone(v) : v);
 
@@ -41,6 +40,13 @@ function unsetIn(obj, name) {
 // The rules a value must meet beyond its type (an entry's `check`); each returns why it cannot be used, or null.
 const CHECKS = { output: (value, c) => outputProblem(value, c.siteDir, c.deps), keep: (value) => keepProblem(value) };
 
+// A map from vault folders to the folder each publishes as: an entry whose value is not a folder name (null, a number,
+// a list) would publish under a made-up folder (`null/plot.html`), so it stops, naming the entry.
+function folderValuesProblem(map) {
+  const bad = Object.entries(map).find(([, v]) => typeof v !== 'string' || v.trim() === '');
+  return bad ? `its entry "${bad[0]}" is ${bad[1] === null ? 'empty' : show(bad[1])}, not a folder name; write the folder it publishes as, in quotes if it looks like a number` : null;
+}
+
 function settle(c, e, { written, setting }, first, defaultOf) {
   const { values, origins, faults, fault } = c;
   // A list of maps is read entry by entry: one that cannot be used is left out alone, with a warning naming it.
@@ -52,7 +58,7 @@ function settle(c, e, { written, setting }, first, defaultOf) {
       faults.push(fault({ name: written, setting, kind: 'dropped', level: 'warn', value: null, message: `${written} ${who} ${d.why}; it is left out` }));
     }
   }
-  const problem = r.ok && e.check ? CHECKS[e.check](r.value, c) : null;
+  const problem = r.ok && e.check ? CHECKS[e.check](r.value, c) : (r.ok && e.folderValues ? folderValuesProblem(r.value) : null);
   if (problem) r = { ok: false, problem };
   else if (r.ok && e.check) r = { ok: true, value: tidyChecked(e.check, r.value) };
   // A list of folders is tidied here for both layouts (the scanner compares exact vault-relative paths).
@@ -76,25 +82,48 @@ function settle(c, e, { written, setting }, first, defaultOf) {
     const shown = first.shown !== undefined ? first.shown : first.raw;
     faults.push(fault({
       name: written, setting, kind: 'not-allowed', level: e.guards || e.stopOnFault ? 'stop' : 'warn', value: shown, entry: e,
-      // A value from the site folder's file says so: the GM fixes it there, not in the vault's settings.
-      ...(first.origin === 'site-file'
-        ? { hint: `${written} in the site folder's vault.config.json is ${shown === null ? 'empty' : show(shown)}; ${problem || `it takes ${TYPES[e.type].takes(e)}`}.` }
-        : problem ? { hint: `${written} is ${show(shown)}; ${problem}.` } : {}),
+      ...(problem ? { hint: `${written} is ${show(shown)}; ${problem}.` } : {}),
     }));
   }
   return r;
 }
 
-// A setting that is also a key of the site folder's file (the entry's `siteFallback`): the key and the value the
-// site file holds, or undefined when it holds none (a null is none).
-function siteValueOf(site, e) {
-  const key = siteKeyOf(e);
-  return key !== null && site[key] !== undefined && site[key] !== null ? { key, raw: site[key] } : undefined;
+// The block the old settings file kept its settings under (`publish`), taken from the names themselves.
+const OLD_BLOCK = legacyNameOf(settingEntry('player_site.title')).split('.')[0];
+
+// Every key the site folder's vault.config.json once held, and the setting it is now.
+const SITE_HOMES = REGISTRY.filter((e) => !e.twinOf).flatMap((e) => (e.was || []).filter((w) => w.in === 'site').map((w) => ({ key: w.name, name: e.name })));
+
+// The keys of the site folder's file other than vaultPath, each with where it lives now: ['siteTitle (now player_site.title)', ...].
+function siteLeftovers(site) {
+  const parts = [];
+  for (const key of Object.keys(site)) {
+    if (key === 'vaultPath') continue;
+    const homes = SITE_HOMES.filter((h) => h.key === key || (h.key.startsWith(`${key}.`) && getPath(site, h.key.split('.')) !== undefined));
+    if (homes.length) parts.push(...homes.map((h) => `${h.key} (now ${h.name})`));
+    else parts.push(`${key} (not a setting)`);
+  }
+  return parts;
 }
+const siteLeftoverText = (parts) => `the site folder's vault.config.json holds keys that are no longer read there: ${parts.join(', ')}. Move each to the vault's settings (${NEW_FILE}) and leave only vaultPath in vault.config.json.`;
 
-const core = { settle, getPath, setIn, clone, emptyIsFault, MAP_ENTRY, siteValueOf };
-
-// ---- The new layout -----------------------------------------------------------------------
+// The site folder's package.json: a build script left there (never run since plugin 1.11.0), or a file that cannot be
+// read, so any build scripts in it cannot be checked. Each stops, naming the file.
+function packageFaults(siteDir) {
+  const faults = [];
+  const scripts = Object.keys(packageScripts(siteDir));
+  if (scripts.length) {
+    const homeOf = (script) => REGISTRY.find((e) => e.stepsFrom === script && !e.twinOf).name;
+    faults.push(makeFault({ name: 'package.json', setting: null, kind: 'dropped', level: 'stop', leftover: true, source: 'package',
+      message: `the site folder's package.json holds build scripts that are no longer run: ${scripts.map((s) => `${s} (now ${homeOf(s)})`).join(', ')}. Move each to the vault's settings and take it out of package.json.` }));
+  }
+  const problem = packageJsonProblem(siteDir);
+  if (problem) {
+    faults.push(makeFault({ name: 'package.json', setting: null, kind: 'dropped', level: 'stop', leftover: true, source: 'package',
+      message: `the site folder's package.json is not valid JSON (${problem}), so any build scripts in it cannot be checked. Fix the file or remove it.` }));
+  }
+  return faults;
+}
 
 const LIST = REGISTRY.filter((e) => !e.legacyOnly);
 const BY_NAME = new Map(LIST.map((e) => [e.name, e]));
@@ -165,45 +194,82 @@ function strayLeaves(block, prefix, byOldName) {
   return found;
 }
 
-// The new file as written, as plain data. {} for an empty file; throws for one that is not valid YAML.
-function parseNewFile(vaultPath, deps) {
+// The new file as written: { doc, tree }, the YAML document and its plain data ({} for an empty file). Throws for a
+// file that is not valid YAML.
+function parseNewDoc(vaultPath, deps) {
   const doc = parseDocument(readerFrom(deps).readFile(at(vaultPath, NEW_FILE)));
   if (doc.errors.length) {
     throw new Error(`${NEW_FILE} is not valid YAML: ${String(doc.errors[0].message).split('\n')[0].trim().replace(/:$/, '')}`);
   }
   const parsed = doc.toJS();
   if (parsed !== null && !isMap(parsed)) throw new Error(`${NEW_FILE} must hold settings written as name: value`);
-  return parsed || {};
+  return { doc, tree: parsed || {} };
+}
+const parseNewFile = (vaultPath, deps) => parseNewDoc(vaultPath, deps).tree;
+
+// An entry of a hiding list that YAML reads as other than the text written (`007` is the number 7, `1e3` is 1000,
+// `true` a switch) would be matched as that other text, and what it hides would publish: one stop per entry, saying to
+// quote it. A number whose text reads back as written (`1999`) is the text the GM meant. A null entry is already a stop
+// (the list cannot be read).
+const HIDING_LISTS = LIST.filter((e) => e.guards && (e.type === 'list' || e.type === 'switchOrList'));
+function misreadEntries(doc) {
+  const faults = [];
+  for (const e of HIDING_LISTS) {
+    const node = doc.getIn(e.name.split('.'), true);
+    if (!isSeq(node)) continue;
+    for (const entry of node.items) {
+      // An `*alias` entry is the node it points at (the reader resolves it): checked as that node, so a name anchored
+      // elsewhere as `007` is the same stop. The text named is the anchored node's, which the GM quotes at its source.
+      let item = entry;
+      if (isAlias(entry)) {
+        try { item = entry.resolve(doc) || entry; } catch { item = entry; }
+      }
+      if (!isScalar(item) || typeof item.value === 'string' || item.value === null) continue;
+      const written = item.source !== undefined ? String(item.source) : String(item.value);
+      let readAs = null;
+      if (typeof item.value === 'boolean') readAs = `${item.value}, not text`;
+      else if (typeof item.value === 'number' && written !== String(item.value)) readAs = `the number ${item.value}`;
+      else if (typeof item.value !== 'number') readAs = `${show(item.value)}, not text`;
+      if (!readAs) continue;
+      faults.push(makeFault({ name: e.name, setting: e.name, kind: 'not-allowed', level: 'stop', value: written, entry: e,
+        hint: `${e.name} entry ${written} is read as ${readAs}, so it would not match; write it in quotes: '${written}'` }));
+    }
+  }
+  return faults;
 }
 
 function readNew({ vaultPath, siteConfig, siteDir, deps }) {
   const faults = [];
-  const file = { path: at(vaultPath, NEW_FILE), exists: true, hasSiteBlock: false, leftover: readerFrom(deps).exists(at(vaultPath, OLD_FILE)) };
-  const tree = parseNewFile(vaultPath, deps);
+  const rd = readerFrom(deps);
+  const exists = rd.exists(at(vaultPath, NEW_FILE));
+  const hasOld = rd.exists(at(vaultPath, OLD_FILE));
+  const file = { path: at(vaultPath, NEW_FILE), exists, hasSiteBlock: false, leftover: exists && hasOld };
+  const { doc, tree } = exists ? parseNewDoc(vaultPath, deps) : { doc: null, tree: {} };
   file.hasSiteBlock = isMap(tree.player_site);
   const values = {};
   const origins = {};
   const fault = makeFault;
   const c = { values, origins, faults, fault, vaultPath, siteDir, deps };
 
-  if (file.leftover) {
-    faults.push(makeFault({ name: OLD_FILE, setting: null, kind: 'dropped', level: 'warn', message: `${OLD_FILE} is left over from before the update and is not read` }));
+  // The old settings file with no new one: what it holds is not read, so nothing may be built from defaults in its place.
+  if (hasOld && !exists) {
+    faults.push(makeFault({ name: OLD_FILE, setting: null, kind: 'dropped', level: 'stop', leftover: true, message: OLD_FILE_STOP }));
+  } else if (hasOld) {
+    faults.push(makeFault({ name: OLD_FILE, setting: null, kind: 'dropped', level: 'stop', leftover: true, message: OLD_FILE_LEFT }));
   }
-  // A setting still written in the site folder's vault.config.json is not read any more.
+  // Any key but vaultPath left in the site folder's vault.config.json is not read: one stop naming every one.
   const site = isMap(siteConfig) ? siteConfig : {};
-  for (const e of LIST) {
-    // The site folder's own five keys are read below, while the vault sets none.
-    if (e.siteFallback) continue;
-    for (const w of (e.was || []).filter((x) => x.in === 'site' && !x.carryOnly)) {
-      const value = getPath(site, w.name.split('.'));
-      if (value === undefined) continue;
-      // A list that hides things, left in the site folder, would publish what it meant to hide: it stops the build.
-      faults.push(makeFault({ name: w.name, setting: e.name, kind: 'old-name', level: e.guards ? 'stop' : 'warn', value, use: e.name, source: 'site',
-        hint: e.guards
-          ? `${w.name} in the site folder's vault.config.json is no longer read, so what it hides would be published; put its entries under ${e.name} in the vault's settings.`
-          : `${w.name} in the site folder's vault.config.json is no longer read; it is ${e.name} in the vault's settings.` }));
-    }
+  const leftKeys = siteLeftovers(site);
+  if (leftKeys.length) {
+    faults.push(makeFault({ name: 'vault.config.json', setting: null, kind: 'dropped', level: 'stop', leftover: true, source: 'site', message: siteLeftoverText(leftKeys) }));
   }
+  // The old publish list is not read: what it hid would publish.
+  if (rd.exists(at(vaultPath, OLD_LIST_FILE))) {
+    faults.push(makeFault({ name: OLD_LIST_FILE, setting: null, kind: 'dropped', level: 'stop', leftover: true, message: OLD_LIST_STOP }));
+  }
+  // A build script left in the site folder's package.json is never run: one stop naming each and its home in the vault.
+  if (siteDir) faults.push(...packageFaults(siteDir));
+  if (doc) faults.push(...misreadEntries(doc));
 
   // The layout's number.
   if (tree.version !== undefined) {
@@ -234,15 +300,7 @@ function readNew({ vaultPath, siteConfig, siteDir, deps }) {
       origins[e.name] = 'inherit';
       continue;
     }
-    const fromSite = e.siteFallback ? siteValueOf(site, e) : undefined;
     if (raw === undefined || (raw === null && !emptyIsFault(e))) {
-      if (fromSite) {
-        // The vault sets none and the site folder's file still holds one: it is used until the next update moves it.
-        settle(c, e, { written: fromSite.key, setting: e.name }, { raw: fromSite.raw, origin: 'site-file' }, defaultOf);
-        faults.push(makeFault({ name: fromSite.key, setting: e.name, kind: 'dropped', level: 'warn', value: fromSite.raw, use: e.name, source: 'site', siteLeft: true,
-          message: `\`${fromSite.key}\` in the site folder's vault.config.json moves to \`${e.name}\` at the next update` }));
-        continue;
-      }
       setIn(values, e.name, defaultOf(e));
       origins[e.name] = 'default';
       continue;
@@ -250,15 +308,6 @@ function readNew({ vaultPath, siteConfig, siteDir, deps }) {
     settle(c, e, { written: e.name, setting: e.name }, { raw, origin: 'file' }, defaultOf);
     // A twin that cannot be read takes the player site's value, as one that is not set does.
     if (e.twinOf && origins[e.name] === 'fault') unsetIn(values, e.name);
-    if (fromSite && !sameChecked(e.check, fromSite.raw, raw, c.siteDir)) {
-      // Folders the site file keeps and the vault's list leaves out would be emptied by the next build: a stop, naming them.
-      const lost = e.check === 'keep' && Array.isArray(fromSite.raw) && Array.isArray(raw)
-        ? fromSite.raw.filter((d) => typeof d === 'string' && !raw.some((r) => String(r).trim().toLowerCase() === d.trim().toLowerCase())) : [];
-      faults.push(makeFault({ name: fromSite.key, setting: e.name, kind: 'dropped', level: lost.length ? 'stop' : 'warn', value: fromSite.raw, use: e.name, source: 'site', siteDiffers: true, ...(e.check ? { checks: e.check } : {}),
-        message: lost.length
-          ? `\`${fromSite.key}\` in the site folder's vault.config.json keeps ${lost.map((d) => JSON.stringify(d)).join(', ')}, which \`${e.name}\` in the vault's settings leaves out, so the next build would empty ${lost.length === 1 ? 'it' : 'them'}; add ${lost.length === 1 ? 'it' : 'them'} to \`${e.name}\`, or take ${lost.length === 1 ? 'it' : 'them'} out of the site file`
-          : `\`${fromSite.key}\` in the site folder's vault.config.json (${show(fromSite.raw)}) differs from \`${e.name}\` in the vault's settings (${show(raw)}); the vault's is used` }));
-    }
   }
 
   // What the file holds, against the list.
@@ -323,7 +372,7 @@ function readNew({ vaultPath, siteConfig, siteDir, deps }) {
       walk(key, value);
       continue;
     }
-    if (key === legacy.OLD_BLOCK) {
+    if (key === OLD_BLOCK) {
       faults.push(makeFault({ name: key, setting: null, kind: 'unknown-name', level: 'stop', value, hint: `this file uses the new names; ${key} is the old block` }));
       // Each setting in it that has a place in the new file, so the Settings check can move it there.
       if (isMap(value)) for (const s of strayLeaves(value, key, true)) faults.push(makeFault({ name: s.written, setting: s.entry.name, kind: 'old-name', level: 'stop', value: s.value, use: s.entry.name }));
@@ -341,23 +390,15 @@ function readNew({ vaultPath, siteConfig, siteDir, deps }) {
     if (isMap(value)) for (const s of strayLeaves(value, key, false)) faults.push(makeFault({ name: s.written, setting: s.entry.name, kind: 'unknown-name', level: 'stop', value: s.value, suggest: s.entry.name }));
   }
 
-  return { values, origins, faults, layout: 'new', file };
+  return { values, origins, faults, layout: exists ? 'new' : 'none', file };
 }
 
 // ---- The entry point ----------------------------------------------------------------------
 
 function readSettings({ vaultPath, siteConfig = {}, siteDir, deps }) {
-  const site = siteConfig || {};
-  const layout = layoutOf(vaultPath, deps);
-  const read = layout === 'new' ? readNew({ vaultPath, siteConfig: site, siteDir, deps }) : { ...legacy.readLegacy({ vaultPath, siteConfig: site, siteDir, deps }, core), layout };
+  const read = readNew({ vaultPath, siteConfig: siteConfig || {}, siteDir, deps });
   read.faults.push(...entryFaults(vaultPath, read.values, read.origins, deps));
   return read;
 }
 
-// The settings as the OLD layout reads them, whatever files the vault has: for the move, which compares the old
-// files with the new one. `skipOldFile` reads the site folder's file alone.
-function readOldLayout({ vaultPath, siteConfig = {}, skipOldFile = false }) {
-  return { ...legacy.readLegacy({ vaultPath, siteConfig: siteConfig || {}, skipOldFile }, core), layout: 'legacy' };
-}
-
-module.exports = { readSettings, readOldLayout, parseNewFile, LAYOUT_VERSION, NEWER_VERSION };
+module.exports = { readSettings, parseNewFile, siteLeftovers, OLD_BLOCK, LAYOUT_VERSION, NEWER_VERSION };

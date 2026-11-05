@@ -1,11 +1,11 @@
 const { describe, it } = require('node:test');
-require('./helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { build } = require('../lib/build');
 const { TEXT_FIELDS, LIST_FIELDS, RECORD_LIST_FIELDS } = require('../lib/frontmatter-shape');
+const { writeSettings, writeSiteConfig } = require('./helpers/vault-files');
 
 // One note of every kind of page, each carrying `lines` in its frontmatter; built as a site.
 // Returns what the build said and whether it finished.
@@ -17,9 +17,7 @@ function buildWith(lines, { typed = true } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wrong-types-'));
   const vault = path.join(root, 'vault');
   const folders = [...new Set(Object.values(KINDS))];
-  fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-    `---\npublish:\n  folder_map:\n${folders.map((f) => `    ${f}: ${f.toLowerCase()}\n`).join('')}---\n`);
+  writeSettings(vault, { 'player_site.folder_map': Object.fromEntries(folders.map((f) => [f, f.toLowerCase()])) });
   for (const [type, folder] of Object.entries(KINDS)) {
     fs.mkdirSync(path.join(vault, folder), { recursive: true });
     for (const n of [1, 2]) {
@@ -29,7 +27,7 @@ function buildWith(lines, { typed = true } = {}) {
     }
   }
   const configPath = path.join(root, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' }));
+  writeSiteConfig(configPath, { vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' });
   const said = [];
   const { log, warn, error } = console;
   console.log = () => {};

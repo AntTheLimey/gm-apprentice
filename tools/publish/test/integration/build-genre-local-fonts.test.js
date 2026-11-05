@@ -1,11 +1,11 @@
 const { describe, it, after } = require('node:test');
-require('../helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { build } = require('../../lib/build');
 const { VALID_PRESETS } = require('../../lib/theme');
+const { writeSettings, writeSiteConfig } = require('../helpers/vault-files');
 
 function write(base, rel, body) {
   const full = path.join(base, rel);
@@ -42,27 +42,18 @@ describe('every genre preset with theme.fonts.source: local ships zero Google Fo
       const vault = path.join(work, 'vault');
       const outputDir = path.join(work, 'docs');
 
-      write(vault, '_meta/vault-config.md', [
-        '---',
-        'publish:',
-        '  theme:',
-        `    genre: ${preset}`,
-        '    fonts:',
-        '      source: local',
-        '---',
-        '',
-      ].join('\n'));
+      writeSettings(vault, { 'player_site.theme.genre': preset, 'player_site.theme.fonts': { source: 'local' } });
       write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\n# Someone\n');
 
       const configPath = path.join(work, 'vault.config.json');
-      fs.writeFileSync(configPath, JSON.stringify({
+      writeSiteConfig(configPath, {
         siteTitle: `${preset} Local Fonts`,
         siteUrl: `https://example.github.io/${preset}-local-fonts`,
         vaultPath: vault,
         outputDir,
         excludeDirs: ['_meta', '_Templates'],
         folderMap: { 'Characters/NPCs': 'characters/npcs' },
-      }, null, 2));
+      }, 2);
 
       build({ configPath });
 
@@ -85,18 +76,18 @@ describe('every genre preset with theme.fonts.source: local ships zero Google Fo
     const vault = path.join(work, 'vault');
     const outputDir = path.join(work, 'docs');
 
-    write(vault, '_meta/vault-config.md', '---\npublish:\n  theme:\n    genre: scifi\n---\n');
+    writeSettings(vault, { 'player_site.theme.genre': "scifi" });
     write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\n# Someone\n');
 
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Scifi Control',
       siteUrl: 'https://example.github.io/scifi-control',
       vaultPath: vault,
       outputDir,
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { 'Characters/NPCs': 'characters/npcs' },
-    }, null, 2));
+    }, 2);
 
     build({ configPath });
     const themeGenreCss = fs.readFileSync(path.join(outputDir, 'css', 'themes', 'scifi.css'), 'utf8');

@@ -7,6 +7,7 @@ const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
 const { build } = require('../../lib/build');
 const { templateBody, setRow, replace } = require('../helpers/pc-template');
+const { writeSettings, writeSiteConfig } = require('../helpers/vault-files');
 
 const roots = [];
 after(() => roots.forEach((r) => fs.rmSync(r, { recursive: true, force: true })));
@@ -73,17 +74,20 @@ function pcFor(system) {
 }
 
 // Builds a vault of one PC, one NPC and a roster. `publish` is a YAML fragment for
-// the vault file. Returns the output root plus every line the build printed.
-function buildSite({ system, sheets = false, publish = '', pcBody, pcFm = '', npc = true, wrangler = false }) {
+// the vault's settings file (by their new names). Returns the output root plus every line the build printed.
+function buildSite({ system, sheets = false, settings = {}, pcBody, pcFm = '', npc = true, wrangler = false }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-sheets-off-'));
   roots.push(root);
   const vault = path.join(root, 'vault');
   fs.mkdirSync(path.join(vault, 'Characters', 'PCs'), { recursive: true });
   fs.mkdirSync(path.join(vault, 'Characters', 'NPCs'), { recursive: true });
-  fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-  const sys = system && system !== 'generic' ? `  system: ${system}\n` : '';
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-    `---\npublish:\n  mode: player\n${sys}  folder_map:\n    Characters/PCs: characters/pcs\n    Characters/NPCs: characters/npcs\n${sheets ? '' : '  character_sheets: false\n'}${publish}---\n`);
+  writeSettings(vault, {
+    'player_site.hide.mode': 'player',
+    ...(system && system !== 'generic' ? { 'vault.system': system } : {}),
+    'player_site.folder_map': { 'Characters/PCs': 'characters/pcs', 'Characters/NPCs': 'characters/npcs' },
+    ...(sheets ? {} : { 'player_site.sheets.show': false }),
+    ...settings,
+  });
   fs.writeFileSync(path.join(vault, 'Characters', 'PCs', 'Test Hero.md'),
     `---\ntype: pc\nplayer_name: Pat\nstatus: alive\n${pcFm}---\n\n# Test Hero\n\n${pcBody}`);
   fs.writeFileSync(path.join(vault, 'Characters', 'PCs', 'Player Characters.md'),
@@ -94,7 +98,7 @@ function buildSite({ system, sheets = false, publish = '', pcBody, pcFm = '', np
   }
   if (wrangler) fs.writeFileSync(path.join(root, 'wrangler.toml'), '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n');
   const configPath = path.join(root, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs') }));
+  writeSiteConfig(configPath, { vaultPath: vault, outputDir: path.join(root, 'docs') });
   const real = { warn: console.warn, log: console.log };
   const lines = [];
   console.warn = (...a) => lines.push(a.join(' '));
@@ -212,13 +216,13 @@ describe('character sheets off: more cases', () => {
   it('publish.pc_prose_sections publishes the named section, and only then', () => {
     const body = `${dnd.body}\n## Personality\n\nPERSONALITY-SENTINEL\n`;
     assert.ok(!buildSite({ system: 'dnd-5e-2024', pcBody: body }).pc().includes('PERSONALITY-SENTINEL'));
-    const kept = buildSite({ system: 'dnd-5e-2024', pcBody: body, publish: '  pc_prose_sections: [Personality]\n' });
+    const kept = buildSite({ system: 'dnd-5e-2024', pcBody: body, settings: { 'player_site.sheets.prose_sections': ['Personality'] } });
     assert.ok(kept.pc().includes('PERSONALITY-SENTINEL'));
     assert.ok(allOutput(kept.root).every(([, t]) => !t.includes(ABILITY)));
   });
 
   it('an identity value the GM excluded is not shown', () => {
-    const { pc } = buildSite({ system: 'dnd-5e-2024', pcBody: dnd.body, publish: '  exclude_sections: [GM Notes, Background]\n' });
+    const { pc } = buildSite({ system: 'dnd-5e-2024', pcBody: dnd.body, settings: { 'player_site.hide.sections': ['GM Notes', 'Background'] } });
     assert.deepStrictEqual(identityOf(pc()), [['Level', '4']]);
     assert.ok(!pc().includes('Rogue') && !pc().includes('Gnome'));
   });
@@ -233,7 +237,7 @@ describe('character sheets off: more cases', () => {
   });
 
   it('identity values are HTML-escaped', () => {
-    const { pc } = buildSite({ system: 'gurps-4e', pcBody: '## Background\n\nx\n', pcFm: 'point_total: 150\n', publish: '' });
+    const { pc } = buildSite({ system: 'gurps-4e', pcBody: '## Background\n\nx\n', pcFm: 'point_total: 150\n', settings: {} });
     assert.deepStrictEqual(identityOf(pc()), [['Points', '150']]);
     const body = '## Points Summary\n\n| Category | Points |\n|---|---|\n| **Total** | **1 <i>x</i>** |\n';
     assert.deepStrictEqual(identityOf(buildSite({ system: 'gurps-4e', pcBody: body }).pc()), [['Points', '1 &lt;i&gt;x&lt;/i&gt;']]);
@@ -284,9 +288,9 @@ describe('character sheets off: more cases', () => {
   });
 
   it('the chatbox root says sheets are off, when the inbox is live', () => {
-    const off = buildSite({ system: 'gurps-4e', pcBody: dnd.body, publish: '  inbox: true\n', wrangler: true }).pc();
+    const off = buildSite({ system: 'gurps-4e', pcBody: dnd.body, settings: { 'player_site.features.inbox': true }, wrangler: true }).pc();
     assert.ok(/<div id="cr-root"[^>]* data-sheets="off"><\/div>/.test(off), off.match(/id="cr-root"[^>]*/));
-    const on = buildSite({ system: 'gurps-4e', sheets: true, pcBody: dnd.body, publish: '  inbox: true\n', wrangler: true }).pc();
+    const on = buildSite({ system: 'gurps-4e', sheets: true, pcBody: dnd.body, settings: { 'player_site.features.inbox': true }, wrangler: true }).pc();
     assert.ok(on.includes('id="cr-root"') && !on.includes('data-sheets'));
   });
 
@@ -296,11 +300,9 @@ describe('character sheets off: more cases', () => {
       roots.push(root);
       const vault = path.join(root, 'vault');
       fs.cpSync(path.join(__dirname, '..', 'fixtures', 'with-party-roster'), vault, { recursive: true });
-      fs.appendFileSync(path.join(vault, '_meta', 'vault-config.md'), '');
-      fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-        `---\npublish:\n  mode: player\n  system: gurps-4e\n  folder_map:\n    Characters/PCs: characters/pcs\n${sheets ? '' : '  character_sheets: false\n'}---\n`);
+      writeSettings(vault, { 'player_site.hide.mode': 'player', 'vault.system': 'gurps-4e', 'player_site.folder_map': { 'Characters/PCs': 'characters/pcs' }, ...(sheets ? {} : { 'player_site.sheets.show': false }) });
       const configPath = path.join(root, 'vault.config.json');
-      fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs') }));
+      writeSiteConfig(configPath, { vaultPath: vault, outputDir: path.join(root, 'docs') });
       const real = { warn: console.warn, log: console.log };
       console.warn = () => {}; console.log = () => {};
       try { build({ configPath }); } finally { Object.assign(console, real); }

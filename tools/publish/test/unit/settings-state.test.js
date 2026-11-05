@@ -8,7 +8,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { readState, writeState } = require('../../lib/settings/state');
 const { runSettings } = require('../../lib/settings/cli');
-const { STATE_FILE, OLD_FILE, NEW_FILE, at } = require('../../lib/settings/layout');
+const { STATE_FILE, NEW_FILE, at } = require('../../lib/settings/layout');
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'settings-state-'));
 const stateText = (dir) => fs.readFileSync(at(dir, STATE_FILE), 'utf8');
@@ -107,32 +107,15 @@ describe('settings setup-note on the new layout', () => {
   });
 });
 
-describe('settings setup-note on the old layout', () => {
-  const OLD = '---\npublish:\n  site: true\n  setup_progress:\n    host: pages\n    last_completed_step: 4\n---\nMy notes.\n';
-
-  it('reads publish.setup_progress from the old file', () => {
-    const dir = tmp();
-    put(dir, OLD_FILE, OLD);
-    assert.deepStrictEqual(JSON.parse(note(dir, ['get'], true).out), { host: 'pages', last_completed_step: 4 });
-    assert.strictEqual(note(dir, ['get', 'host']).out, 'pages');
-  });
-
-  it('writes and clears it in the old file, and not in a state file', () => {
-    const dir = tmp();
-    put(dir, OLD_FILE, OLD);
-    assert.strictEqual(note(dir, ['set', 'last_completed_step=5']).rc, 0);
-    assert.strictEqual(fs.readFileSync(at(dir, OLD_FILE), 'utf8'), OLD.replace('last_completed_step: 4', 'last_completed_step: 5'));
-    assert.strictEqual(note(dir, ['clear']).rc, 0);
-    assert.strictEqual(fs.readFileSync(at(dir, OLD_FILE), 'utf8'), '---\npublish:\n  site: true\n---\nMy notes.\n');
-    assert.ok(!fs.existsSync(at(dir, STATE_FILE)));
-  });
+describe('settings set and the setup note', () => {
+  const NEW = 'version: 1\nplayer_site:\n  publish: true\n';
 
   it('settings set still refuses the note by its name', () => {
     const dir = tmp();
-    put(dir, OLD_FILE, OLD);
+    put(dir, NEW_FILE, NEW);
     const r = run(dir, 'set', ['publish.setup_progress={}']);
     assert.strictEqual(r.rc, 1);
     assert.match(r.err, /publish\.setup_progress is kept by the tool and cannot be set here/);
-    assert.strictEqual(fs.readFileSync(at(dir, OLD_FILE), 'utf8'), OLD);
+    assert.strictEqual(fs.readFileSync(at(dir, NEW_FILE), 'utf8'), NEW);
   });
 });

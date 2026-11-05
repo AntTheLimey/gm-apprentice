@@ -1,11 +1,11 @@
 const { describe, it, before, after } = require('node:test');
-require('../helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { build } = require('../../lib/build');
 const { writePublishList } = require('../helpers/publish-list');
+const { writeSettings, writeSiteConfig } = require('../helpers/vault-files');
 // The build prints a one-line breakdown of why pages were dropped. Each dropped
 // page is counted ONCE, under whichever rule caught it first — and which rule that
 // is has been stable since the four filter passes were written, so a page carrying
@@ -23,7 +23,7 @@ describe('build exclusion log attribution', () => {
       fs.writeFileSync(full, body);
     };
 
-    write('_meta/vault-config.md', '---\npublish:\n  exclude_drafts: true\n---\n');
+    writeSettings(vault, { 'player_site.hide.drafts': true });
     write('Sessions/Played.md', '---\ntype: session\nstatus: played\n---\n\nHappened.\n');
     // Two reasons at once: prep state AND an explicit publish: false.
     write('Sessions/Both.md', '---\ntype: session\nstatus: planned\npublish: false\n---\n\nPrep.\n');
@@ -33,14 +33,14 @@ describe('build exclusion log attribution', () => {
     write('Characters/NPCs/Hidden.md', '---\ntype: npc\npublish: false\n---\n\nx\n');
 
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Exclusion Log',
       siteUrl: 'https://example.github.io/exclusion-log',
       vaultPath: vault,
       outputDir: path.join(work, 'docs'),
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { Sessions: 'sessions', 'Characters/NPCs': 'characters/npcs' },
-    }, null, 2));
+    }, 2);
 
     const lines = [];
     const original = console.log;
@@ -101,14 +101,14 @@ describe('build manifest-filter line counts allowlist membership only', () => {
     writePublishList(vault, { publishing: ['Locations/Tavern.md', 'Locations/Cellar.md'] });
 
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Manifest Line',
       siteUrl: 'https://example.github.io/manifest-line',
       vaultPath: vault,
       outputDir: path.join(work, 'docs'),
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { Locations: 'locations' },
-    }, null, 2));
+    }, 2);
 
     const lines = [];
     const original = console.log;
@@ -166,14 +166,14 @@ describe('build "Auto-excluded" count excludes a manifest-re-included prep page'
     writePublishList(vault, { publishing: ['Locations/Sneak_Peek.md'] });
 
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Reinclude Count',
       siteUrl: 'https://example.github.io/reinclude-count',
       vaultPath: vault,
       outputDir: path.join(work, 'docs'),
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { Locations: 'locations' },
-    }, null, 2));
+    }, 2);
 
     const lines = [];
     const original = console.log;

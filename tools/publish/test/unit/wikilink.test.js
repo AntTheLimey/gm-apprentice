@@ -180,10 +180,10 @@ describe('site-doctor and the escaped link', () => {
     }
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wikilink-site-'));
     const configPath = path.join(dir, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    require('../helpers/vault-files').writeSiteConfig(configPath, {
       siteTitle: 'T', vaultPath: vault, outputDir: './docs', attachmentsDir: '_attachments',
       folderMap: { Characters: 'characters', Sessions: 'sessions' },
-    }));
+    });
     const out = [];
     await runSiteDoctor({ configPath, json: true }, { out: (l) => out.push(String(l)), detect: () => null });
     fs.rmSync(vault, { recursive: true, force: true });

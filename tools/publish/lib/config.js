@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { canonicalPath } = require('./manifest');
 const { isBlankStep, menuKey, words: statusWords } = require('./settings/entry-faults');
-const { readSettings, forSite, formatFault, makeFault, stops, entry, movedKeys, siteFolderKeys, layoutOf, nameIn, fileLabelFor, nameInFor } = require('./settings');
+const { readSettings, forSite, formatFault, makeFault, stops, entry, REGISTRY, legacyNameOf, siteKeyOf, siteFolderKeys, nameIn, fileLabelFor } = require('./settings');
 
 // build.js looks up per-page field overrides via `fieldOverrides[vaultRelPathOf(page)]`,
 // and vaultRelPathOf() canonicalizes the scanned path to NFC (#139). An overrides.fields
@@ -91,7 +91,7 @@ function setOnly(map, prefix, origins) {
 // everything below reshapes them as it always has. The GM site's faults are warnings except a GM site kept by a player vault.
 function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn, { quietStops = false, siteDir, site = 'player', deps } = {}) {
   const read = readSettings({ vaultPath, siteConfig: jsonConfigFallback, siteDir, deps });
-  const { legacy = [], layout } = read;
+  const { layout } = read;
   const resolved = forSite(read, site);
   const { origins } = resolved;
   const v = resolved.vault;
@@ -154,7 +154,6 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
     exclude_sections: p.hide.sections,
     exclude_fields: p.hide.fields,
     exclude_dirs: p.hide.folders,
-    legacy,
     landing: setOnly(p.landing, 'player_site.landing', origins),
     theme: {
       ...theme,
@@ -280,7 +279,8 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   Object.defineProperty(merged, 'statuses', { value: statuses, enumerable: false });
 
   // On the GM site nothing it reads can show players more, so a fault is a warning (a copy: the reader's are not changed).
-  if (site === 'gm') faults.forEach((f, i) => { if (f.level === 'stop' && f.kind !== 'gm-kept-by-player') faults[i] = { ...f, level: 'warn' }; });
+  // A leftover the tool no longer reads still stops: the GM site would be built without the settings it holds.
+  if (site === 'gm') faults.forEach((f, i) => { if (f.level === 'stop' && f.kind !== 'gm-kept-by-player' && !f.leftover) faults[i] = { ...f, level: 'warn' }; });
   for (const f of faults) if (!(quietStops && f.level === 'stop')) warn(formatFault(f));
   return merged;
 }
@@ -320,10 +320,10 @@ function assertNoStopsFor(configPath, what, site = 'player') {
 
 // What `build` and `deploy` say instead of running when the GM has turned the site off.
 // Only an explicit off stops them: a site folder whose vault never set the switch builds.
-// It names the switch as this vault's file writes it, so it takes the vault (or a layout).
-const siteOffText = (layout) => `the site is off for this vault (${nameInFor(layout, 'player_site.publish')} in ${fileLabelFor(layout)}); nothing was built. Set ${nameInFor(layout, 'player_site.publish')}: true to publish again.`;
-function siteOff(switches, vaultPath) {
-  return switches && switches.explicitOff && switches.explicitOff.site ? siteOffText(vaultPath ? layoutOf(vaultPath) : 'legacy') : null;
+const SITE_OFF = `the site is off for this vault (player_site.publish in ${fileLabelFor()}); nothing was built. Set player_site.publish: true to publish again.`;
+const siteOffText = () => SITE_OFF;
+function siteOff(switches) {
+  return switches && switches.explicitOff && switches.explicitOff.site ? SITE_OFF : null;
 }
 
 // A page's key into `publish.overrides.fields`: its vault-relative path, posix
@@ -337,41 +337,33 @@ function vaultRelPath(vaultPath, sourcePath) {
 }
 
 // The one config object scanVault/scanVaultReport/scanAttachments should ever be handed:
-// the raw vault.config.json config, with `excludeDirs` replaced by publishConfig's already
-// normalized, already-unioned exclude_dirs. build.js, `explain`, `manifest diff` and
-// `doctor --site` all promise the scanner sees the same exclusions the GM configured
-// (either vault-config.md's publish.exclude_dirs or the legacy vault.config.json field) —
-// before this helper existed, each of the four re-derived that union (or, in three of the
-// four, didn't) independently, and drifted (#209 follow-up).
+// the resolved config, with `excludeDirs` replaced by publishConfig's already normalized
+// exclude_dirs. build.js, `explain`, `manifest diff` and `doctor --site` all promise the
+// scanner sees the same exclusions the GM configured (#209 follow-up).
 function scanConfigFor(config, publishConfig) {
   return Object.assign({}, config, { excludeDirs: publishConfig.exclude_dirs });
 }
 
-// The site folder's five keys in the spelling the site file used, and the field of publishConfig.site each is.
-// Derived from the registry, the one place that names them: [['siteUrl', 'url'], ['host', 'host'], ...].
+// The settings the config object carries under the camelCase names templates and the scanner read (config.siteTitle,
+// folderMap, attachmentsDir ...), and the field of publishConfig each is: [['siteTitle', 'site_title'], ...]. Derived
+// from the registry. The site folder's five keys come from publishConfig.site: [['siteUrl', 'url'], ...].
+const CONFIG_KEYS = REGISTRY.filter((e) => !e.twinOf && !e.siteFallback && siteKeyOf(e) && legacyNameOf(e))
+  .map((e) => [siteKeyOf(e), legacyNameOf(e).split('.').slice(1).join('.')]);
 const SITE_KEYS = siteFolderKeys().map(({ key, name }) => [key, name.split('.').pop()]);
 
-// The one resolved config every command reads. `config` is the raw vault.config.json
-// object with each moved key overwritten, in its old JSON spelling, by the value
-// loadPublishConfig settled on (vault file first, site file only when the vault file is
-// silent), so templates and the scanner that read config.siteTitle / folderMap /
-// attachmentsDir keep working. `publishConfig` is loadPublishConfig's own output. The raw
-// object is not mutated. A key neither file sets stays as the raw object had it.
+// The one resolved config every command reads: vaultPath from the site folder's vault.config.json, and every other
+// key the vault's settings resolved, under the camelCase name above (absent when unset). Nothing else in the site
+// file is read: a key left there stops the build (settings/read.js). `publishConfig` is loadPublishConfig's output.
 function resolveConfig(rawConfig, vaultPath, warn = console.warn, options = {}) {
   const publishConfig = loadPublishConfig(vaultPath, rawConfig, warn, options);
-  const config = Object.assign({}, rawConfig);
-  // On the new layout the site file is not merged: a moved key is what the vault's settings resolved, or absent.
-  const fromVaultOnly = publishConfig.layout === 'new';
-  for (const entry of movedKeys()) {
-    const value = publishConfig[entry.publish];
-    if (value !== undefined && value !== null) config[entry.json] = value;
-    else if (fromVaultOnly) delete config[entry.json];
+  const config = { vaultPath: rawConfig.vaultPath };
+  for (const [key, field] of CONFIG_KEYS) {
+    const value = publishConfig[field];
+    if (value !== undefined && value !== null) config[key] = value;
   }
-  // The site folder's own keys are always what the settings resolved (never the raw site file), or absent.
   for (const [key, field] of SITE_KEYS) {
     const value = publishConfig.site[field];
     if (value !== undefined && value !== null) config[key] = value;
-    else delete config[key];
   }
   return { config, publishConfig };
 }
@@ -412,7 +404,7 @@ function siteOffFor(configPath) {
     return null;
   }
   try {
-    return siteOff(loadPublishConfig(vaultPath, raw, () => {}).switches, vaultPath);
+    return siteOff(loadPublishConfig(vaultPath, raw, () => {}).switches);
   } catch (err) {
     // A deploy without a build reads nothing else: a vault file that says `site: false`
     // next to a broken line must not be uploaded for.

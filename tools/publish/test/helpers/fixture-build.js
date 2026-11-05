@@ -4,7 +4,7 @@
 // that the prep rules allow. Shared by the build test, the byte-identity proof and Task 7's proof script.
 const fs = require('fs');
 const path = require('path');
-const { setOldSettings } = require('./settings-files');
+const { writeSiteConfig, mergeSettings } = require('./vault-files');
 
 const FIXTURES = path.join(__dirname, '..', 'fixtures');
 const SKIP = new Set(['_meta', '_Templates', '_attachments']);
@@ -31,12 +31,12 @@ function folderMapFor(vault) {
 function prepareFixture(name, root, { keys = {} } = {}) {
   const vault = path.join(root, 'vault');
   fs.cpSync(path.join(FIXTURES, name), vault, { recursive: true });
-  setOldSettings(vault, { ...keys });
+  mergeSettings(vault, { ...keys });
   const configPath = path.join(root, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
+  writeSiteConfig(configPath, {
     vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T',
     excludeDirs: ['_meta', '_Templates'], folderMap: folderMapFor(vault),
-  }));
+  });
   return configPath;
 }
 

@@ -1,11 +1,11 @@
 const { describe, it, before, after } = require('node:test');
-require('../helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { build } = require('../../lib/build');
 const { makePng } = require('../helpers/make-png');
+const { writeSettings, writeSiteConfig } = require('../helpers/vault-files');
 
 // A recap's picture shows on the story page and is copied; a picture only in a hidden
 // part of the Wrap-Up is not copied.
@@ -80,9 +80,9 @@ They sailed at dawn without a picture.
     fs.mkdirSync(path.join(vault, '_attachments'), { recursive: true });
     fs.writeFileSync(path.join(vault, '_attachments', 'harbour.png'), makePng(8, 8));
     fs.writeFileSync(path.join(vault, '_attachments', 'secret-map.png'), makePng(8, 8));
-    write(vault, '_meta/vault-config.md', '---\npublish:\n  folder_map:\n    Chapters: chapters\n---\n');
+    writeSettings(vault, { 'player_site.folder_map': {"Chapters": "chapters"} });
     const configPath = path.join(work, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: docs, attachmentsDir: '_attachments', siteTitle: 'T' }));
+    writeSiteConfig(configPath, { vaultPath: vault, outputDir: docs, attachmentsDir: '_attachments', siteTitle: 'T' });
     const log = console.log; const warn = console.warn;
     console.log = () => {}; console.warn = () => {};
     try { build({ configPath }); } finally { console.log = log; console.warn = warn; }
@@ -142,9 +142,9 @@ ${recap}
 `);
   fs.mkdirSync(path.join(vault, '_attachments'), { recursive: true });
   for (const n of ['harbour.png', 'hidden.png', 'html.png']) fs.writeFileSync(path.join(vault, '_attachments', n), makePng(8, 8));
-  write(vault, '_meta/vault-config.md', '---\npublish:\n  folder_map:\n    Chapters: chapters\n---\n');
+  writeSettings(vault, { 'player_site.folder_map': {"Chapters": "chapters"} });
   const configPath = path.join(work, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: docs, attachmentsDir: '_attachments', siteTitle: 'T' }));
+  writeSiteConfig(configPath, { vaultPath: vault, outputDir: docs, attachmentsDir: '_attachments', siteTitle: 'T' });
   const run = (opts) => {
     const warnings = [];
     const log = console.log; const warn = console.warn;

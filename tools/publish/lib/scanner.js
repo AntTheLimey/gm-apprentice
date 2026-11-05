@@ -53,8 +53,8 @@ function toPosix(p) {
 // case is not, deliberately: a GM's own casing survives dedup for display. Matching must
 // still be case-insensitive, because the filesystem the scanner walks may or may not be
 // (macOS/Windows: case-insensitive by default; Linux: case-sensitive). Without this, a
-// vault-config.md entry spelled "GM" and a JSON excludeDirs entry spelled "gm" collapse
-// to one surviving spelling in the union, and whichever one wins case-sensitively matches
+// hiding-list entry spelled "GM" and another spelled "gm" collapse
+// to one surviving spelling in the list, and whichever one wins case-sensitively matches
 // the on-disk folder on macOS but silently fails to exclude it on Linux.
 // Returns the excludeDirs entry that matched relPath (in its own configured casing, for
 // display — "in NPCs/Hidden/ — listed in excludeDirs" should show the GM's own spelling),
@@ -335,7 +335,7 @@ function scanAttachments(config, deps) {
 
   // The walk below only tests CHILD directories against excludeDirs — it never checks
   // the attachments root itself, so a GM who excludes the whole attachments folder (e.g.
-  // a vault-config.md that gives GM-only attachments their own directory and excludes
+  // vault settings that give GM-only attachments their own directory and excludes
   // it wholesale) still got every image directly under that root scanned and copied
   // (CodeRabbit review, PR #234). Check the root the same way before ever walking it.
   const attachmentsRootRel = toPosix(path.relative(vaultPath, attachmentsPath));

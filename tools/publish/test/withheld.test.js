@@ -9,6 +9,7 @@ const { build } = require('../lib/build');
 const { summaryLines } = require('../lib/note-faults');
 const { writeNewConfig } = require('./helpers/settings-files');
 const { writePublishList } = require('./helpers/publish-list');
+const { writeSettings } = require('./helpers/vault-files');
 // `withheld: true` (#291): a note's own name is a secret. Its file name, title and aliases are
 // searched for in everything the build publishes, as gm_aliases names are. An unlabelled
 // link to it prints a neutral placeholder. #292: a link to such a note is an error.
@@ -21,7 +22,7 @@ const ZORN = 'Lord Zorn';
 
 // A player-mode site over a small vault. `files` maps vault paths to text. `excluded` lists
 // manifest Excluded entries ("path" or "path — reason"); every other note is published.
-function site(files, { excluded = [], publish = null, binary = {}, mode = 'player', extra = '' } = {}) {
+function site(files, { excluded = [], publish = null, binary = {}, mode = 'player', settings = {} } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'withheld-'));
   made.push(root);
   const vault = path.join(root, 'vault');
@@ -38,11 +39,10 @@ function site(files, { excluded = [], publish = null, binary = {}, mode = 'playe
   const listed = publish || Object.keys(files).filter((rel) => !excluded.some((e) => e.startsWith(rel)));
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
   writePublishList(vault, { publishing: listed, excluded });
-  const map = [...folders].map((f) => `    ${f}: ${f.toLowerCase()}\n`).join('');
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-    `---\npublish:\n  mode: ${mode}\n  exclude_dirs:\n    - Quiet\n${extra}  folder_map:\n${map}---\n`);
+  const map = Object.fromEntries([...folders].map((f) => [f, f.toLowerCase()]));
+  writeSettings(vault, { 'player_site.title': 'T', 'player_site.hide.mode': mode, 'player_site.hide.folders': ['Quiet', '_meta', '_Templates'], 'player_site.folder_map': map, ...settings });
   const configPath = path.join(root, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: './docs', attachmentsDir: '_attachments', siteTitle: 'T', excludeDirs: ['_meta', '_Templates'] }));
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
   return { root, vault, configPath, docs: path.join(root, 'docs') };
 }
 
@@ -285,7 +285,6 @@ describe('player_site.withheld_words: the audit does not depend on the built-in 
       'Characters/Mara_Quill.md': mara('She met [[Lord_Zorn]] at the quay. Lord Zorn laughed.'),
     };
     const s = site(files, { excluded: ZORN_EXCLUDED });
-    fs.rmSync(path.join(s.vault, '_meta', 'vault-config.md'));
     writeNewConfig(s.vault, {
       version: 1,
       player_site: { hide: { folders: ['Quiet'] }, folder_map: { Characters: 'characters' }, ...(word ? { withheld_words: { person: word } } : {}) },
@@ -666,23 +665,16 @@ describe('a "stays hidden:" reason beside a Publishing entry', () => {
 
 describe('every file the build copies is read for a withheld name', () => {
   it('a campaign image, a section banner and a vault font', async () => {
-    const extra = [
-      '  theme:',
-      '    campaign_image: "_attachments/Lord Zorn Crest.png"',
-      '    fonts:',
-      '      source: local',
-      '      files:',
-      '        - path: "_attachments/Lord Zorn Serif.woff2"',
-      '          family: Zorn Serif',
-      '  banners:',
-      '    characters/npcs: "_attachments/Lord Zorn Banner.png"',
-      '',
-    ].join('\n');
+    const settings = {
+      'player_site.theme.campaign_image': '_attachments/Lord Zorn Crest.png',
+      'player_site.theme.fonts': { source: 'local', files: [{ path: '_attachments/Lord Zorn Serif.woff2', family: 'Zorn Serif' }] },
+      'player_site.lists.banners': { 'characters/npcs': '_attachments/Lord Zorn Banner.png' },
+    };
     const files = { 'Characters/NPCs/Lord_Zorn.md': zornNote(), 'Characters/NPCs/Mara_Quill.md': mara('Plain.') };
     const binary = {
       '_attachments/Lord Zorn Crest.png': 'x', '_attachments/Lord Zorn Serif.woff2': 'x', '_attachments/Lord Zorn Banner.png': 'x',
     };
-    const { configPath } = site(files, { excluded: ['Characters/NPCs/Lord_Zorn.md'], binary, extra });
+    const { configPath } = site(files, { excluded: ['Characters/NPCs/Lord_Zorn.md'], binary, settings });
     const { json } = await doctor(configPath, { json: true });
     const paths = json.findings.filter((f) => f.code === 'WITHHELD_IN_PROSE' && f.path.startsWith('_attachments/')).map((f) => f.path).sort();
     assert.deepStrictEqual(paths, ['_attachments/Lord Zorn Banner.png', '_attachments/Lord Zorn Crest.png', '_attachments/Lord Zorn Serif.woff2']);
@@ -691,9 +683,9 @@ describe('every file the build copies is read for a withheld name', () => {
 
 describe('a withheld name in the label of a link to a published page', () => {
   const base = { 'Characters/Lord_Zorn.md': zornNote(), 'Characters/Mara_Quill.md': mara('Plain.') };
-  const noSearch = '  search: false\n';
+  const noSearch = { 'player_site.features.search': false };
 
-  for (const [name, options] of [['search on', {}], ['search off', { extra: noSearch }]]) {
+  for (const [name, options] of [['search on', {}], ['search off', { settings: noSearch }]]) {
     it(`in the body is reported on the page that holds it (${name})`, async () => {
       const files = Object.assign({}, base, { 'Characters/Dax.md': mara("Intro.\n\nDax met [[Mara_Quill|Lord Zorn's friend]] and [[Mara_Quill|Lord Zorn]].") });
       const hits = await found(files, Object.assign({ excluded: ZORN_EXCLUDED }, options));
@@ -708,7 +700,7 @@ describe('a withheld name in the label of a link to a published page', () => {
     ['event', 'Events/Raid.md', 'location'], ['world_domain', 'World/Law.md', 'summary'],
   ];
   for (const [type, rel, field] of fields) {
-    for (const [name, options] of [['search on', {}], ['search off', { extra: noSearch }]]) {
+    for (const [name, options] of [['search on', {}], ['search off', { settings: noSearch }]]) {
       it(`in ${type} ${field} is reported on that note (${name})`, async () => {
         const files = Object.assign({}, base, { [rel]: `---\ntype: ${type}\n${field}: "[[Mara_Quill|Lord Zorn's man]]"\n---\n\nPlain words.\n` });
         const hits = await found(files, Object.assign({ excluded: ZORN_EXCLUDED }, options));
@@ -818,12 +810,12 @@ describe('secret-name leftovers (#352)', () => {
     assert.doesNotMatch(f.detail, /times/);
   });
   it('a PC heading that links a withheld note keeps the PC\'s page whole while sheets are off', () => {
-    const sheetsOff = '  character_sheets: false\n  pc_prose_sections:\n    - Background\n';
+    const sheetsOff = { 'player_site.sheets.show': false, 'player_site.sheets.prose_sections': ['Background'] };
     for (const heading of ['## [[Lord_Zorn]]', '## Debts to [[Lord_Zorn]]']) {
       const { configPath, docs } = site({
         'Characters/Lord_Zorn.md': zornNote(),
         'PCs/Jean.md': `---\ntype: pc\nplayer_name: Pat\n---\n\n# Jean\n## Background\nRaised in the docks.\n${heading}\nOwes a debt.\n`,
-      }, { excluded: ZORN_EXCLUDED, extra: sheetsOff });
+      }, { excluded: ZORN_EXCLUDED, settings: sheetsOff });
       const warnings = buildQuiet(configPath);
       assert.deepStrictEqual(warnings.filter((w) => /changes this note's headings/.test(w)), [], heading);
       const html = fs.readFileSync(path.join(docs, 'pcs', 'jean.html'), 'utf8');

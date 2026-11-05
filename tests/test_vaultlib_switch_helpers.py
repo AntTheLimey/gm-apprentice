@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills" / "shared" / "scripts"))
 
 import vaultlib  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -23,8 +24,7 @@ def make(tmp_path: Path, publish: str | None) -> Path:
     vault = tmp_path / "vault"
     (vault / "_meta").mkdir(parents=True)
     if publish is not None:
-        (vault / "_meta" / "vault-config.md").write_text(
-            f"---\npublish:\n{publish}---\n", encoding="utf-8")
+        write_config(vault, f"---\npublish:\n{publish}---\n")
     return vault
 
 
@@ -47,15 +47,10 @@ def test_a_switch_not_written_is_none(tmp_path):
         assert vaultlib.site_switch_written(s) is None
 
 
-def test_a_switch_from_the_site_file_is_not_the_vault_files(tmp_path):
-    vault = make(tmp_path, "  connections: web\n")
-    config = tmp_path / "vault.config.json"
-    config.write_text('{"siteTitle": "T"}', encoding="utf-8")
-    s = vaultlib.settings(vault, site_config=config)
-    assert s.origins["player_site.title"] == "site-file"
+def test_a_value_the_vault_file_writes_is_the_vault_files(tmp_path):
+    s = vaultlib.settings(make(tmp_path, "  connections: web\n"))
+    assert vaultlib.written_in_vault_file(s, "player_site.features.connections")
     assert not vaultlib.written_in_vault_file(s, "player_site.title")
-    assert vaultlib.written_in_vault_file(
-        vaultlib.settings(vault), "player_site.features.connections")
 
 
 @pytest.mark.parametrize("publish, want", [
@@ -82,7 +77,8 @@ def test_writing_a_settings_file_atomically_forgets_what_was_read(tmp_path):
     vault = make(tmp_path, "  connections: web\n")
     assert vaultlib.settings(vault).get("player_site.features.connections") == "web"
     migrate_core.write_text_atomic(
-        vault / "_meta" / "vault-config.md", "---\npublish:\n  connections: cards\n---\n")
+        vault / "_meta" / "vault-config.yaml",
+        "version: 1\nplayer_site:\n  features:\n    connections: cards\n")
     assert vaultlib.settings(vault).get("player_site.features.connections") == "cards"
 
 

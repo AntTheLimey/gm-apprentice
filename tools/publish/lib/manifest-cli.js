@@ -7,20 +7,15 @@
 // what the manifest does not yet say about it — so the answer comes from the same
 // code the build runs, not from re-reading the filtering rules.
 // `apply` moves named paths between the three lists and rewrites the list, keeping the reasons
-// on the entries it was not asked to touch. It writes the file the vault is on: a vault whose
-// list is still in the old Markdown file gets it back in that file, by the old writer
-// (manifest-legacy.js); only the update and `manifest convert` move a list.
+// on the entries it was not asked to touch. It writes _meta/publish-list.yaml.
 const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, dirIsExcluded, scanAllNotes } = require('./scanner');
 const { isAgentFile } = require('./agent-files');
 const { resolveConfig, assertNoStops, vaultRelPath, loadVaultConfig, scanConfigFor } = require('./config');
 const { loadManifest, loadPublishList, canonicalPath, counts, listText } = require('./manifest');
-const { parseAnnotatedManifest, renderManifest } = require('./manifest-legacy');
 const { writeAtomic } = require('./settings/write');
-const { PUBLISH_LIST_FILE, OLD_LIST_FILE, PUBLISH_LIST_FROM, at } = require('./settings/layout');
-const { siteToolOlderThan } = require('./settings/move');
-const { convertPublishList, setsOf, KEPT_SUFFIX } = require('./publish-list-convert');
+const { PUBLISH_LIST_FILE, at } = require('./settings/layout');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { pairHubs, isWrapUp, isPlayedSession } = require('./session-hub');
 const { getCanonStatus } = require('./templates/base');
@@ -68,18 +63,16 @@ function entriesOf(list) {
   return entries;
 }
 
-// Whether the vault's list lives in the old Markdown file: it is there, or there is no list yet and the site's
-// tool is older than PUBLISH_LIST_FROM (it would read a new file as no list at all).
-function onOldFile(survey) {
-  if (survey.manifest) return survey.manifest.file === 'old';
-  return Boolean(survey.siteDir && siteToolOlderThan(survey.siteDir, PUBLISH_LIST_FROM));
-}
-
-// The list as an entries map, as the file the vault is on is read: the old file by the old annotated reader (every
-// entry line it knows, as the old writer kept them), the new one through loadManifest.
-function listedEntries(survey, readFile = (p) => fs.readFileSync(p, 'utf8')) {
-  if (survey.manifest && survey.manifest.file === 'old') return parseAnnotatedManifest(readFile(at(survey.vaultPath, OLD_LIST_FILE)));
-  return entriesOf(survey.manifest);
+// The three lists with their reasons, as `manifest list` prints them.
+const reasonsFor = (list, rels) => Object.fromEntries(rels.filter((rel) => list.reasons.get(rel)).map((rel) => [rel, list.reasons.get(rel)]));
+function setsOf(list) {
+  return {
+    publishing: list.publishing,
+    publishing_reasons: reasonsFor(list, list.publishing),
+    excluded: list.excluded.map((rel) => (list.reasons.get(rel) ? { path: rel, reason: list.reasons.get(rel) } : { path: rel })),
+    needs_decision: list.needsDecision,
+    needs_decision_reasons: reasonsFor(list, list.needsDecision),
+  };
 }
 
 // The three lists of an entries map, as loadManifest shapes them.
@@ -120,9 +113,8 @@ function surveyVault(options, deps) {
     : resolveConfig(rawConfig, vaultPath, console.warn, { quietStops: true, siteDir: configDir });
   const manifest = loadManifest(vaultPath);
 
-  // scanConfigFor: same unioned, normalized exclude_dirs build.js uses, so this command
-  // predicts exactly what the build does with a folder excluded only via vault-config.md's
-  // publish.exclude_dirs, not just the legacy vault.config.json field (#209 follow-up).
+  // scanConfigFor: the same normalized exclude_dirs build.js uses, so this command predicts
+  // exactly what the build does with a hidden folder (#209 follow-up).
   const scanConfig = scanConfigFor(Object.assign({}, config, { vaultPath }), publishConfig);
   const report = scanVaultReport(scanConfig);
   const pagesByRel = new Map(report.pages.map((p) => [vaultRelPath(vaultPath, p.sourcePath), p]));
@@ -163,7 +155,7 @@ async function runDiff(options, deps, survey) {
   const exists = deps.exists || ((p) => fs.existsSync(p));
   const { vaultPath, manifest, files, verdicts } = survey;
 
-  const listed = listedEntries(survey, deps.readFile);
+  const listed = entriesOf(survey.manifest);
 
   const added = [];
   const unchanged = { publishing: 0, excluded: 0, needsDecision: 0 };
@@ -228,12 +220,10 @@ async function runApply(options, deps, survey) {
   const writeFile = deps.writeFile || ((p, c) => writeAtomic(p, c));
   const exists = deps.exists || ((p) => fs.existsSync(p));
   const mkdir = deps.mkdir || ((p) => fs.mkdirSync(p, { recursive: true }));
-  const now = deps.now || (() => new Date());
-  const { vaultPath, files, publishConfig } = survey;
+  const { vaultPath, files } = survey;
 
-  const old = onOldFile(survey);
-  const manifestPath = at(vaultPath, old ? OLD_LIST_FILE : PUBLISH_LIST_FILE);
-  const entries = listedEntries(survey, deps.readFile);
+  const manifestPath = at(vaultPath, PUBLISH_LIST_FILE);
+  const entries = entriesOf(survey.manifest);
 
   const moves = [
     ...(options.publish || []).map((a) => Object.assign(splitReason(a), { section: 'publishing' })),
@@ -281,15 +271,8 @@ async function runApply(options, deps, survey) {
   }
 
   mkdir(path.dirname(manifestPath));
-  writeFile(manifestPath, old
-    ? renderManifest({
-      entries,
-      generated: now().toISOString(),
-      vault: publishConfig.site_title || path.basename(vaultPath),
-      totalFiles: files.length,
-    })
-    // The accepted leak findings ride along; a vault whose file holds only them (no list yet) keeps them too.
-    : listText({ ...listOf(entries), accepted: (loadPublishList(vaultPath, { warn: () => {} }) || {}).accepted || [] }));
+  // The accepted leak findings ride along; a vault whose file holds only them (no list yet) keeps them too.
+  writeFile(manifestPath, listText({ ...listOf(entries), accepted: (loadPublishList(vaultPath, { warn: () => {} }) || {}).accepted || [] }));
 
   const sectionCounts = { publishing: 0, excluded: 0, needsDecision: 0 };
   for (const entry of entries.values()) sectionCounts[entry.section]++;
@@ -364,7 +347,7 @@ function pairsWith(survey, published) {
 // is left to the checks above, and Excluded or non-session paths are still refused.
 function planPublishPlayed(survey, { only = null, includeUnreviewed = false, publishBody = false } = {}) {
   const { vaultPath, publishConfig, manifest, files, pagesByRel } = survey;
-  const listed = listedEntries(survey, survey.readFile);
+  const listed = entriesOf(survey.manifest);
   const sectionOf = (rel) => (listed.get(rel) || {}).section || null;
   const onDisk = new Set(files);
   const relOf = new Map([...pagesByRel].map(([rel, page]) => [page, rel]));
@@ -533,53 +516,6 @@ function vaultFor(opts, out) {
   return path.resolve(opts.vaultPath);
 }
 
-// `manifest convert`: moves the publish list to _meta/publish-list.yaml, all or nothing.
-function runConvert(opts, d) {
-  const out = d.out || console.log;
-  const vault = vaultFor(opts, out);
-  if (!vault) return 1;
-  const result = convertPublishList(vault, { check: !!opts.check, siteConfigPath: opts.configPath ? path.resolve(opts.configPath) : null, siteToolUpdated: !!opts.siteToolUpdated });
-  if (opts.json) out(JSON.stringify(result, null, 2));
-  else if (result.held) out(`The publish list ${result.lines[0]}`);
-  else if (!result.ok) out(['The publish list was not moved; nothing was changed.', ...result.blockers.map((b) => `  ${b}`)].join('\n'));
-  else out(result.lines.length ? result.lines.join('\n') : 'The publish list is already in _meta/publish-list.yaml.');
-  return result.ok ? 0 : 1;
-}
-
-// `manifest hidden`: the paths a `%%` or `<!-- -->` comment hid in the old list (_meta/publish-manifest.md.converted)
-// that _meta/publish-list.yaml still publishes, because a conversion before 1.48.2 read them as ticked (#500). The
-// comment rule is the old reader's own (commentHiddenEntries). `--decide` moves them to needs_decision.
-// JSON: { converted (the old file is there), hidden (every path the rule hides there), publishing (those the list
-// still publishes), moved, now (each moved path: 'needs_decision', or 'excluded' when it was already there) }.
-function runHidden(opts, d) {
-  const out = d.out || console.log;
-  const vault = vaultFor(opts, out);
-  if (!vault) return 1;
-  const { commentHiddenEntries } = require('./manifest-legacy');
-  const { moveToNeedsDecision } = require('./manifest');
-  const convertedFile = at(vault, `${OLD_LIST_FILE}${KEPT_SUFFIX}`);
-  const result = { converted: fs.existsSync(convertedFile), hidden: [], publishing: [], moved: [], now: {} };
-  if (result.converted) {
-    result.hidden = commentHiddenEntries(fs.readFileSync(convertedFile, 'utf8')).publishing;
-    const list = loadManifest(vault, { warn: () => {} });
-    const published = new Set(list && list.file === 'new' ? list.publishing : []);
-    result.publishing = result.hidden.filter((rel) => published.has(rel));
-    if (opts.decide && result.publishing.length) {
-      for (const m of moveToNeedsDecision(vault, result.publishing)) {
-        result.moved.push(m.path);
-        result.now[m.path] = m.now;
-      }
-    }
-  }
-  if (opts.json) out(JSON.stringify(result, null, 2));
-  else if (!result.publishing.length) out('No page the old publish list hid with a comment is published.');
-  else {
-    out(`${opts.decide ? 'Moved to needs_decision' : 'Published, though the old publish list hid them with a comment'} (${result.publishing.length}):`);
-    for (const rel of result.publishing) out(`  ${rel}${result.now[rel] === 'excluded' ? ' (already under excluded: it stays there)' : ''}`);
-  }
-  return 0;
-}
-
 // `manifest list`: the three lists and their counts, computed on request.
 function runList(opts, d) {
   const out = d.out || console.log;
@@ -616,9 +552,7 @@ async function runManifest(options, deps) {
     }
   }
   // Answers about one vault from its files alone: no site config, no survey.
-  if (opts.verb === 'convert') return runConvert(opts, d);
   if (opts.verb === 'list') return runList(opts, d);
-  if (opts.verb === 'hidden') return runHidden(opts, d);
   if (opts.verb === 'rename') return require('./rename-refs').runRename(opts, d);
   const survey = surveyVault(opts, d);
   assertNoStops(survey.publishConfig, 'manifest');

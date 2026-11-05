@@ -22,6 +22,7 @@ import migrate  # noqa: E402
 import migrate_vault as mv  # noqa: E402
 import vault_write as vw  # noqa: E402
 from migrate_core import CHOICE, StepFailed  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 SHACK = "Characters/PCs/Shack.md"
 SIX = "Characters/PCs/Six.md"
@@ -149,9 +150,7 @@ def make_vault(case, files):
     vault = Path(tempfile.mkdtemp(prefix="mig-threads-"))
     case.addCleanup(shutil.rmtree, vault, ignore_errors=True)
     (vault / "_meta").mkdir()
-    (vault / "_meta" / "vault-config.md").write_text(
-        '---\ntype: meta\ngm_apprentice_version: "1.10.81"\n---\n',
-        encoding="utf-8")
+    write_config(vault, '---\ntype: meta\ngm_apprentice_version: "1.10.81"\n---\n')
     for rel, text in files.items():
         path = vault / rel
         path.parent.mkdir(parents=True, exist_ok=True)

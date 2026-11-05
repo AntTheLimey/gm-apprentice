@@ -5,8 +5,9 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { build } = require('../../lib/build');
+const { writeSettings } = require('./vault-files');
 
-function buildVault(files, { extraConfig = '' } = {}) {
+function buildVault(files, { settings = {} } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'small-vault-'));
   const vault = path.join(root, 'vault');
   const folders = new Set();
@@ -15,11 +16,10 @@ function buildVault(files, { extraConfig = '' } = {}) {
     fs.writeFileSync(path.join(vault, rel), text);
     if (rel.includes('/') && !rel.startsWith('_meta/')) folders.add(path.dirname(rel));
   }
-  const map = [...folders].map((f) => `    ${f}: ${f.toLowerCase()}\n`).join('');
-  fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n${extraConfig}  folder_map:\n${map}---\n`);
+  const folderMap = Object.fromEntries([...folders].map((f) => [f, f.toLowerCase()]));
+  writeSettings(vault, { 'player_site.title': 'T', 'player_site.folder_map': folderMap, ...settings });
   const configPath = path.join(root, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' }));
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
   const log = console.log; const warn = console.warn;
   console.log = () => {}; console.warn = () => {};
   try { build({ configPath }); } finally { console.log = log; console.warn = warn; }

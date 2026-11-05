@@ -9,6 +9,7 @@ const { promisify } = require('util');
 
 const { runExplain, runExplainAll } = require('../lib/explain-cli');
 const { writePublishList } = require('./helpers/publish-list');
+const { writeSettings, mergeSettings, writeSiteConfig } = require('./helpers/vault-files');
 const CLI = path.join(__dirname, '..', 'bin', 'gm-publish.js');
 
 function write(root, rel, body) {
@@ -27,20 +28,19 @@ function makeVault() {
     '## Reconciliation Context', '', 'Carried forward.', '',
   ].join('\n'));
   write(vault, 'Sessions/Session_08.md', '---\ntype: session\nsession_number: 8\nstatus: prepped\n---\n\n## Prep\n\nAmbush.\n');
-  write(vault, '_meta/vault-config.md', '---\npublish:\n  site_title: T\n---\n');
+  writeSettings(vault, { 'player_site.title': 'T' });
   return vault;
 }
 
 function siteFor(vaultPath) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-site-'));
   const configPath = path.join(dir, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
-    siteTitle: 'Explain Test',
+  writeSiteConfig(configPath, {
     vaultPath,
     outputDir: './docs',
     excludeDirs: ['_meta', '_Templates'],
     folderMap: { Sessions: 'sessions' },
-  }, null, 2));
+  }, 2);
   return configPath;
 }
 
@@ -49,13 +49,13 @@ function siteFor(vaultPath) {
 function siteForFixtureStory() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-story-'));
   const configPath = path.join(dir, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
+  writeSiteConfig(configPath, {
     siteTitle: 'Story Fixture',
     vaultPath: path.join(__dirname, 'fixtures', 'story'),
     outputDir: './docs',
     excludeDirs: ['_meta', '_Templates'],
     folderMap: { 'Characters/PCs': 'characters/pcs', Locations: 'locations', Chapters: 'chapters' },
-  }, null, 2));
+  }, 2);
   return configPath;
 }
 
@@ -87,9 +87,7 @@ describe('explain', () => {
   ].join('\n');
   const npcSite = (vault) => {
     const configPath = siteFor(vault);
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    config.folderMap.People = 'people';
-    fs.writeFileSync(configPath, JSON.stringify(config));
+    mergeSettings(JSON.parse(fs.readFileSync(configPath, 'utf8')).vaultPath, { 'player_site.folder_map.People': 'people' });
     return configPath;
   };
 
@@ -197,7 +195,7 @@ describe('explain', () => {
     const vault = makeVault();
     write(vault, 'Sessions/Session_09.md', '---\ntype: session\nsession_number: 9\nstatus: reviewed\ndocuments:\n  wrap_up: "[[Session_09_Wrap_Up]]"\n---\n\n## Prep\n\nPrep only words.\n');
     write(vault, 'Sessions/Session_09_Wrap_Up.md', '---\ntype: session_wrap\nsession: "[[Session_09]]"\ncanon_status: AUTHORITATIVE\n---\n\n## Narrative Recap\n\nThe recap as played.\n');
-    write(vault, '_meta/vault-config.md', '---\npublish:\n  site_title: T\n---\n');
+    writeSettings(vault, { 'player_site.title': 'T' });
     const c = capture();
     await runExplain({ configPath: siteFor(vault), target: 'Sessions/Session_09.md', shown: true, json: true }, c.deps);
     const { shown, bodyWithheld } = JSON.parse(c.out.join(''));
@@ -310,7 +308,7 @@ describe('explain', () => {
   it('explains a file in _meta as always excluded', async () => {
     const vault = makeVault();
     const c = capture();
-    const rc = await runExplain({ configPath: siteFor(vault), target: '_meta/vault-config.md' }, c.deps);
+    const rc = await runExplain({ configPath: siteFor(vault), target: '_meta/vault-config.yaml' }, c.deps);
     assert.strictEqual(rc, 0);
     assert.match(c.text(), /VERDICT: does not publish — .*\(DIR_ALWAYS_EXCLUDED\)/);
     fs.rmSync(vault, { recursive: true, force: true });
@@ -409,13 +407,13 @@ describe('explain', () => {
     write(vault, 'Characters/NPCs/Bram.md', MALFORMED);
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-malformed-site-'));
     const configPath = path.join(dir, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Malformed Test',
       vaultPath: vault,
       outputDir: './docs',
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { 'Characters/NPCs': 'characters/npcs' },
-    }, null, 2));
+    }, 2);
     return { vault, dir, configPath };
   }
 
@@ -465,13 +463,13 @@ describe('explain', () => {
     write(vault, 'Drafts/Idea.md', '---\ntype: npc\n---\n\nA half-formed idea.\n');
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-config-excluded-site-'));
     const configPath = path.join(dir, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Config Exclude Test',
       vaultPath: vault,
       outputDir: './docs',
       excludeDirs: ['_meta', '_Templates', 'Drafts'],
       folderMap: {},
-    }, null, 2));
+    }, 2);
 
     const c = capture();
     const rc = await runExplain({ configPath, target: 'Drafts/Idea.md' }, c.deps);
@@ -493,21 +491,21 @@ describe('explain', () => {
   it('reports DIR_CONFIG_EXCLUDED for a folder excluded only via publish.exclude_dirs in vault-config.md', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-vaultconfig-excluded-'));
     write(vault, 'Drafts/Idea.md', '---\ntype: npc\n---\n\nA half-formed idea.\n');
-    write(vault, '_meta/vault-config.md', '---\npublish:\n  exclude_dirs:\n    - "Drafts"\n---\n');
+    writeSettings(vault, { 'player_site.hide.folders': ['Drafts'] });
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-vaultconfig-excluded-site-'));
     const configPath = path.join(dir, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Vault Config Exclude Test',
       vaultPath: vault,
       outputDir: './docs',
       excludeDirs: ['_meta', '_Templates'],
       folderMap: {},
-    }, null, 2));
+    }, 2);
 
     const c = capture();
     const rc = await runExplain({ configPath, target: 'Drafts/Idea.md' }, c.deps);
     assert.strictEqual(rc, 0);
-    assert.match(c.text(), /VERDICT: does not publish — in Drafts\/ — listed in publish\.exclude_dirs \(DIR_CONFIG_EXCLUDED\)/);
+    assert.match(c.text(), /VERDICT: does not publish — in Drafts\/ — listed in player_site\.hide\.folders \(DIR_CONFIG_EXCLUDED\)/);
     fs.rmSync(vault, { recursive: true, force: true });
     fs.rmSync(dir, { recursive: true, force: true });
   });
@@ -548,9 +546,9 @@ describe('explain on a session index that does not publish (#276)', () => {
 });
 
 describe('explain reports the switches and the sheet-withheld sections (#285)', () => {
-  function vaultWith(publishLines, siteExtra) {
+  function vaultWith(settings, legacy) {
     const vault = makeVault();
-    write(vault, '_meta/vault-config.md', `---\npublish:\n  site_title: T\n${publishLines}---\n`);
+    writeSettings(vault, { 'player_site.title': 'T', ...settings });
     write(vault, 'Sessions/Hero.md', [
       '---', 'type: pc', '---', '',
       '## Stat Sheet', '', 'ST 12', '',
@@ -559,10 +557,6 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
       '## GM Notes', '', 'Secret.', '',
     ].join('\n'));
     const configPath = siteFor(vault);
-    if (siteExtra) {
-      const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-      fs.writeFileSync(configPath, JSON.stringify(Object.assign(cfg, siteExtra)));
-    }
     return { vault, configPath };
   }
   let lastWarnings = [];
@@ -575,71 +569,67 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
   }
 
   it('reports the defaults, sheets off forcing live stats off, and all on', async () => {
-    const d = vaultWith('');
+    const d = vaultWith({});
     assert.deepStrictEqual((await explainAll(d.configPath)).switches,
       { characterSheets: true, liveStats: false, inbox: false });
-    const off = vaultWith('  character_sheets: false\n  live_stats: true\n');
+    const off = vaultWith({ 'player_site.sheets.show': false, 'player_site.features.live_stats': true });
     assert.deepStrictEqual((await explainAll(off.configPath)).switches,
       { characterSheets: false, liveStats: false, inbox: false });
-    assert.deepStrictEqual(lastWarnings, ['publish.live_stats is on but publish.character_sheets is off; live stats are not published']);
-    const on = vaultWith('  live_stats: true\n  inbox: true\n');
+    assert.deepStrictEqual(lastWarnings, ['player_site.features.live_stats is on but player_site.sheets.show is off; live stats are not published']);
+    const on = vaultWith({ 'player_site.features.live_stats': true, 'player_site.features.inbox': true });
     assert.deepStrictEqual((await explainAll(on.configPath)).switches,
       { characterSheets: true, liveStats: true, inbox: true });
     for (const v of [d, off, on]) fs.rmSync(v.vault, { recursive: true, force: true });
   });
 
   it('reports the system and its sheet family, which picks the change-request file', async () => {
-    const cases = [['', null, null], ['  system: gurps-4e\n', 'gurps-4e', 'gurps'],
-      ['  system: coc-7e-regency\n', 'coc-7e-regency', 'coc'], ['  system: dnd\n', 'dnd-5e-2024', 'dnd'],
-      ['  system: fitd\n', 'fitd', null]];
-    for (const [line, system, family] of cases) {
-      const v = vaultWith(line);
+    const cases = [[{}, null, null], [{ 'vault.system': 'gurps-4e' }, 'gurps-4e', 'gurps'],
+      [{ 'vault.system': 'coc-7e-regency' }, 'coc-7e-regency', 'coc'], [{ 'vault.system': 'dnd' }, 'dnd-5e-2024', 'dnd'],
+      [{ 'vault.system': 'fitd' }, 'fitd', null]];
+    for (const [settings, system, family] of cases) {
+      const v = vaultWith(settings);
       const got = await explainAll(v.configPath);
-      assert.deepStrictEqual([got.system, got.sheetFamily], [system, family], line);
+      assert.deepStrictEqual([got.system, got.sheetFamily], [system, family], JSON.stringify(settings));
       fs.rmSync(v.vault, { recursive: true, force: true });
     }
   });
 
   it('reports the PC keep-list: null with sheets on, the list with sheets off', async () => {
-    const on = vaultWith('');
+    const on = vaultWith({});
     assert.strictEqual((await explainAll(on.configPath)).pcKeepSections, null);
-    const off = vaultWith('  character_sheets: false\n  pc_prose_sections: [Rumours]\n');
+    const off = vaultWith({ 'player_site.sheets.show': false, 'player_site.sheets.prose_sections': ['Rumours'] });
     const keep = (await explainAll(off.configPath)).pcKeepSections;
     assert.ok(Array.isArray(keep) && keep.includes('Background') && keep.includes('Rumours'), String(keep));
     for (const v of [on, off]) fs.rmSync(v.vault, { recursive: true, force: true });
   });
 
-  it('reports the list the build resolves: vault file then site-only entries, else the site file, else the default', async () => {
-    const both = vaultWith('  exclude_sections: ["GM Notes"]\n', { excludeSections: ['Keeper Only'] });
-    assert.deepStrictEqual((await explainAll(both.configPath)).excludeSections, ['GM Notes', 'Keeper Only']);
-    const siteOnly = vaultWith('', { excludeSections: ['Keeper Only'] });
-    // The site file's list adds to the built-in list when the vault file sets none (#371).
-    assert.deepStrictEqual((await explainAll(siteOnly.configPath)).excludeSections,
-      ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile', 'Keeper Only']);
-    const none = vaultWith('');
+  it('reports the list the build resolves: the vault list, else the default', async () => {
+    const own = vaultWith({ 'player_site.hide.sections': ['GM Notes', 'Keeper Only'] });
+    assert.deepStrictEqual((await explainAll(own.configPath)).excludeSections, ['GM Notes', 'Keeper Only']);
+    const none = vaultWith({});
     assert.deepStrictEqual((await explainAll(none.configPath)).excludeSections,
       ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile']);
     const c = capture();
-    assert.strictEqual(await runExplain({ configPath: both.configPath, target: 'Sessions/Hero.md', json: true }, c.deps), 0);
+    assert.strictEqual(await runExplain({ configPath: own.configPath, target: 'Sessions/Hero.md', json: true }, c.deps), 0);
     assert.deepStrictEqual(JSON.parse(c.out.join('')).excludeSections, ['GM Notes', 'Keeper Only']);
-    for (const v of [both, siteOnly, none]) fs.rmSync(v.vault, { recursive: true, force: true });
+    for (const v of [own, none]) fs.rmSync(v.vault, { recursive: true, force: true });
   });
 
   it('names the sections only the keep-list withholds, apart from the stripped ones', async () => {
-    const off = vaultWith('  character_sheets: false\n');
+    const off = vaultWith({ 'player_site.sheets.show': false });
     const pages = new Map((await explainAll(off.configPath)).pages.map((p) => [p.path, p]));
     const hero = pages.get('Sessions/Hero.md');
     assert.deepStrictEqual(hero.sheetWithheldSections, ['Stat Sheet', 'Skills']);
     assert.deepStrictEqual(hero.strippedSections, ['GM Notes']);
     fs.rmSync(off.vault, { recursive: true, force: true });
-    const on = vaultWith('');
+    const on = vaultWith({});
     const heroOn = (await explainAll(on.configPath)).pages.find((p) => p.path === 'Sessions/Hero.md');
     assert.deepStrictEqual(heroOn.sheetWithheldSections, []);
     fs.rmSync(on.vault, { recursive: true, force: true });
   });
 
   it('gives null for a file the scanner made no page for', async () => {
-    const off = vaultWith('  character_sheets: false\n');
+    const off = vaultWith({ 'player_site.sheets.show': false });
     write(off.vault, 'Unmapped/Hidden.md', '---\ntype: pc\n---\n\n## Stat Sheet\n\nST 12\n');
     const pages = new Map((await explainAll(off.configPath)).pages.map((p) => [p.path, p]));
     assert.strictEqual(pages.get('Unmapped/Hidden.md').sheetWithheldSections, null);
@@ -647,7 +637,7 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
   });
 
   it('single-file --json and the report carry the same field', async () => {
-    const off = vaultWith('  character_sheets: false\n');
+    const off = vaultWith({ 'player_site.sheets.show': false });
     const j = capture();
     await runExplain({ configPath: off.configPath, target: 'Sessions/Hero.md', json: true }, j.deps);
     assert.deepStrictEqual(JSON.parse(j.out.join('')).sheetWithheldSections, ['Stat Sheet', 'Skills']);
@@ -753,7 +743,7 @@ describe('explain --all (#276)', () => {
     let lastRetiredWarnings = [];
     async function retiredFor(system, fm) {
       const vault = makeVault();
-      write(vault, '_meta/vault-config.md', `---\npublish:\n  site_title: T\n${system ? `  system: ${system}\n` : ''}---\n`);
+      writeSettings(vault, { 'player_site.title': 'T', ...(system ? { 'vault.system': system } : {}) });
       write(vault, 'Sessions/Pc.md', `---\ntype: pc\noccupation: Sailor\n${fm}---\n\nA sailor.\n`);
       write(vault, 'Sessions/Npc.md', '---\ntype: npc\nskills: [x]\n---\n\nA clerk.\n');
       const { rc, json, warnings } = await all(siteFor(vault));
@@ -779,7 +769,7 @@ describe('explain --all (#276)', () => {
         const got = await retiredFor(system, 'skills: [x]\nidentity: x\nlanguages: [x]\npoints: [x]\n');
         assert.deepStrictEqual(got, [], system);
       }
-      assert.match(lastRetiredWarnings.join('\n'), /publish\.system is "generic"; it takes /, 'a system the tool does not know is said, not silent');
+      assert.match(lastRetiredWarnings.join('\n'), /vault\.system is "generic"; it takes /, 'a system the tool does not know is said, not silent');
     });
 
     it('reports each system its own names, a shared name for every system that read it', async () => {

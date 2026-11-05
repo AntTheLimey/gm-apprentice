@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.11.0] — 2026-11-05
+
+**Before you update: every vault and site must already be moved.** Update each vault with plugin 1.10.134 or later first (its update moves the settings to `_meta/vault-config.yaml` and the publish list to `_meta/publish-list.yaml`, and repins the site's publish tool). Then check three things the 1.10 update can leave behind: `_meta/vault-config.md` beside the new file (remove it once its settings are in `_meta/vault-config.yaml`), a key other than `vaultPath` in the site folder's `vault.config.json`, and a `prebuild` or `postbuild` script in the site's `package.json` (move it to `player_site.before_build` or `player_site.after_build`). Plugin 1.11.0 no longer moves anything: its update refuses a vault that is not moved or still holds any of these, and names each with its fix; the build stops on them by name. Publish tool 1.69.0.
+
+### Removed
+
+- **The old settings file's reader** (`_meta/vault-config.md`): the scripts and the publish tool read only `_meta/vault-config.yaml`.
+- **The old publish list** (`_meta/publish-manifest.md`): its reader and writer are gone.
+- **The settings move** (`settings move`, with `--fold-site-file`, `--no-site-file` and `--discard-old-file`) and the update's settings-move, publish-list and hidden-entry rows.
+- **`manifest convert` and `manifest hidden`.**
+- **Settings in the site folder's `vault.config.json`**: only `vaultPath` is read there.
+- **Running the site's `package.json` build hooks**: build steps live in `player_site.before_build` and `player_site.after_build`.
+- **The closing WARNING line** a build printed for campaign settings left in the site folder's `vault.config.json` (a leftover is now a stop, below).
+
+### Changed
+
+- **A leftover stops the build by name.** Any key but `vaultPath` in the site folder's `vault.config.json` stops it with each key's new home (`siteTitle (now player_site.title)`); so does a build hook left in the site's `package.json`, naming the setting it moved to, and a `package.json` that cannot be read. `setup-status-bar` and `setup-inbox` stop on a leftover before they change anything.
+- **Both settings files present stops the build**, and says to remove or rename the old one once its settings are checked against the new one.
+- **The update refuses a vault that is not moved** (exit 2; `vault_check.py version` says `REFUSED`, a new verdict, with the file and the fix): no stamp or one older than 1.10.60, the old settings file (alone or beside the new one), the old publish list, a site publish tool older than 1.27.0, and every leftover the build stops on (site-folder keys, `package.json` build scripts or a `package.json` that cannot be read). It asks the publish tool which leftovers there are, so the update and the build agree; settings the tool refuses, or a site tool whose version cannot be read, are named. The gate does not need node: without it, it checks the stamp, the old settings file and the old publish list, and the update says the site checks were skipped (the build still stops on the rest). A vault with no site has no site checks. The message links to the last 1.10 release.
+- **The Settings check names the file a leftover is in** (`vault.config.json`, `package.json`, the old file) and shows the `package.json` stops it used to miss.
+- **The update's floor is 1.10.60, and the vault must actually be moved.** A stamp alone is not enough.
+- **Messages name settings directly**, by the one name each has.
+
+### Fixed
+
+- **An unreadable `player_site.folder_map` stops the build** (#375). It was a warning, and the build then read an empty map and published no pages.
+- **A hiding-list entry YAML reads as something else stops the build.** A bare `007` was read as the number 7 (and `1e3`, `0x1F`, `1.50` and `true` likewise), so it matched nothing and what it hid published. Quote it (`'007'`); a number that reads back as written (`1999`) is fine.
+- **A `player_site.folder_map` entry whose value is not a folder name** (empty, a number, a list) stops the build, naming the entry. It published under a made-up folder (`null/`).
+
+### Publish tool 1.69.0
+
+- Reads only `_meta/vault-config.yaml` and `_meta/publish-list.yaml`; the old settings file or publish list stops a build by name, alone or beside the new one.
+- A key other than `vaultPath` in the site folder's `vault.config.json`, a non-list, empty or null hiding key there, a build hook left in the site's `package.json`, or a `package.json` that cannot be read stops `build`, `deploy`, `doctor --site` and the set-up commands, naming each and where it moved.
+- `build --site gm` on a vault with only the old settings file names that file.
+- `settings move`, `manifest convert` and `manifest hidden` are gone, with the site-file fallback and the closing WARNING line.
+- An unreadable `player_site.folder_map` is a stop (#375).
+- `config.js` no longer exports `SITE_OFF` for one test (#382).
+- `settings get` and `settings check` carry the `package.json` stops, the old publish list and an unparseable site `vault.config.json`, each with its `source`; the old-file and old-list messages say a 1.10 release, 1.10.134 or later.
+- A hiding-list entry YAML reads as other than its text, and a `folder_map` value that is not a folder name, stop.
+
+---
+
 ## [1.10.137] — 2026-11-05
 
 Workarounds a vault's agent builds are recorded against the gm-apprentice issue they stand in for, and the update offers them back when that issue ships. Publish tool 1.68.0. No vault change; the next update runs a one-time sweep with the GM.

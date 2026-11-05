@@ -1,10 +1,10 @@
 const { describe, it, before, after } = require('node:test');
-require('../helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { build } = require('../../lib/build');
+const { writeSettings, writeSiteConfig } = require('../helpers/vault-files');
 
 function write(base, rel, body) {
   const full = path.join(base, rel);
@@ -27,19 +27,19 @@ describe('publish.exclude_dirs from vault-config.md reaches the scanner (#209)',
     // Only publish.exclude_dirs names "Secret Notes" — vault.config.json's legacy
     // excludeDirs does NOT. If the scanner only consulted the legacy field (the bug),
     // this folder would still publish.
-    write(vault, '_meta/vault-config.md', '---\npublish:\n  exclude_dirs:\n    - "Secret Notes"\n---\n');
+    writeSettings(vault, { 'player_site.hide.folders': ["Secret Notes"] });
     write(vault, 'Secret Notes/Hidden.md', '---\ntype: npc\n---\n\n# Hidden\n\nShould never publish.\n');
     write(vault, 'Characters/NPCs/Visible.md', '---\ntype: npc\n---\n\n# Visible\n\nShould publish.\n');
 
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Exclude Dirs Site',
       siteUrl: 'https://example.github.io/exclude-dirs',
       vaultPath: vault,
       outputDir,
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { 'Characters/NPCs': 'characters/npcs', 'Secret Notes': 'secret-notes' },
-    }, null, 2));
+    }, 2);
 
     build({ configPath });
   });
@@ -68,13 +68,13 @@ describe('vault.config.json excludeDirs entries the vault list lacks still apply
     outputDir = path.join(work, 'docs');
 
     // vault-config.md names one folder; vault.config.json's excludeDirs names a different one.
-    write(vault, '_meta/vault-config.md', '---\npublish:\n  exclude_dirs:\n    - "From Vault Config"\n---\n');
+    writeSettings(vault, { 'player_site.hide.folders': ["From Vault Config"] });
     write(vault, 'From Vault Config/A.md', '---\ntype: npc\n---\n\n# A\n');
     write(vault, 'From Json Config/B.md', '---\ntype: npc\n---\n\n# B\n');
     write(vault, 'Characters/NPCs/Visible.md', '---\ntype: npc\n---\n\n# Visible\n');
 
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Legacy Exclude Dirs',
       siteUrl: 'https://example.github.io/legacy-exclude-dirs',
       vaultPath: vault,
@@ -85,7 +85,7 @@ describe('vault.config.json excludeDirs entries the vault list lacks still apply
         'From Vault Config': 'from-vault-config',
         'From Json Config': 'from-json-config',
       },
-    }, null, 2));
+    }, 2);
 
     build({ configPath });
   });
@@ -118,14 +118,13 @@ describe('scanAttachments honours exclude_dirs during a real build (#210)', () =
     const vault = path.join(work, 'vault');
     outputDir = path.join(work, 'docs');
 
-    write(vault, '_meta/vault-config.md',
-      '---\npublish:\n  exclude_dirs:\n    - "_attachments/gm-maps"\n---\n');
+    writeSettings(vault, { 'player_site.hide.folders': ["_attachments/gm-maps"] });
     write(vault, '_attachments/gm-maps/Secret Map.png', 'fake-png-bytes');
     write(vault, '_attachments/Hero.png', 'fake-png-bytes');
     write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\nportrait: Hero.png\n---\n\n# Someone\n');
 
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Attachments Exclude',
       siteUrl: 'https://example.github.io/attachments-exclude',
       vaultPath: vault,
@@ -133,7 +132,7 @@ describe('scanAttachments honours exclude_dirs during a real build (#210)', () =
       attachmentsDir: '_attachments',
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { 'Characters/NPCs': 'characters/npcs' },
-    }, null, 2));
+    }, 2);
 
     build({ configPath });
   });
@@ -163,14 +162,13 @@ describe('excluding the attachments root itself excludes every image, including 
     const vault = path.join(work, 'vault');
     outputDir = path.join(work, 'docs');
 
-    write(vault, '_meta/vault-config.md',
-      '---\npublish:\n  exclude_dirs:\n    - "_attachments"\n---\n');
+    writeSettings(vault, { 'player_site.hide.folders': ["_attachments"] });
     write(vault, '_attachments/Top Level.png', 'fake-png-bytes');
     write(vault, '_attachments/portraits/Nested.png', 'fake-png-bytes');
     write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\n# Someone\n');
 
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Attachments Root Exclude',
       siteUrl: 'https://example.github.io/attachments-root-exclude',
       vaultPath: vault,
@@ -178,7 +176,7 @@ describe('excluding the attachments root itself excludes every image, including 
       attachmentsDir: '_attachments',
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { 'Characters/NPCs': 'characters/npcs' },
-    }, null, 2));
+    }, 2);
 
     build({ configPath });
   });
@@ -206,14 +204,14 @@ describe('player mode prunes unreferenced images with no manifest present (#210)
     outputDir = path.join(work, 'docs');
 
     // No publish list anywhere in this vault.
-    write(vault, '_meta/vault-config.md', '---\npublish:\n  site_title: T\n---\n');
+    writeSettings(vault, { 'player_site.title': "T" });
     write(vault, '_attachments/Referenced.png', 'fake-png-bytes');
     write(vault, '_attachments/Never Embedded.png', 'fake-png-bytes');
     write(vault, 'Characters/NPCs/Someone.md',
       '---\ntype: npc\nportrait: Referenced.png\n---\n\n# Someone\n');
 
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Player No Manifest',
       siteUrl: 'https://example.github.io/player-no-manifest',
       vaultPath: vault,
@@ -221,7 +219,7 @@ describe('player mode prunes unreferenced images with no manifest present (#210)
       attachmentsDir: '_attachments',
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { 'Characters/NPCs': 'characters/npcs' },
-    }, null, 2));
+    }, 2);
 
     build({ configPath });
   });

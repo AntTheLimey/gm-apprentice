@@ -43,19 +43,17 @@ from pathlib import Path
 
 import update_record
 
-from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
-                          check_editable)
+from migrate_core import CHOICE, PERSON, WILL, Check, Item, StepFailed
 from migrate_site import REPIN, SITE_CHECKS
 from migrate_vault import VAULT_CHECKS
 from update_record import AnswerEntry, lines_sha
+from vault_check import MOVED_FLOOR, Left, refusal, unmoved
 from vaultlib import cli_name  # noqa: E402
-from vaultlib import (LEGACY_SETTINGS_FILE, SettingsUnavailable,
-                      StateUnreadable, parse_version, plugin_version,
+from vaultlib import (STATE_FILE, SettingsUnavailable, StateUnreadable, parse_version, plugin_version,
                       read_held, read_stamp, vault_layout, write_held,
                       write_stamp)
 
-FLOOR = "1.10.12"
-LAST_PROSE = "1.10.25"   # the last release whose skills migrate by hand
+FLOOR = MOVED_FLOOR
 TITLES = {WILL: "Will do", CHOICE: "Your choice", PERSON: "Needs a person"}
 WAITING = "Checked once the site's tool is updated"
 WAITED_LINE = ("the site's publish tool is updated; run plan again for the "
@@ -65,8 +63,10 @@ CHECKS: list[Check] = [*SITE_CHECKS, *VAULT_CHECKS]
 TEMPLATE = "template:"   # a template's choice; its answer is in the update record
 
 
-def gate(vault: Path) -> tuple[str, str] | str:
-    """(vault version, plugin version), or the one line that refuses."""
+def gate(vault: Path,
+         notes: list[str] | None = None) -> tuple[str, str] | str:
+    """(vault version, plugin version), or the one line that refuses. A
+    check the gate had to skip is said on `notes`."""
     found = plugin_version()
     if found is None:
         return "cannot determine the plugin version"
@@ -80,10 +80,12 @@ def gate(vault: Path) -> tuple[str, str] | str:
     if shown is None and vault_layout(vault) == "none":
         return (f"{vault} has a _meta/ folder but no settings file: that is "
                 f"first-time setup (vault_scaffold.py), not a migration")
-    if shown is None or parse_version(shown) < parse_version(FLOOR):
-        return (f"this vault is at {shown or 'no recorded version'}, below "
-                f"{FLOOR}, the oldest this script migrates from; migrate it "
-                f"with gm-apprentice {LAST_PROSE} first")
+    left = unmoved(vault, shown, notes)
+    if left:
+        return refusal(left, plugin)
+    if shown is None:   # unmoved lists a missing stamp; never pass without one
+        return refusal([Left(STATE_FILE, f"no update stamp ({STATE_FILE})",
+                             True)], plugin)
     if parse_version(shown) > parse_version(plugin):
         return (f"vault {shown} is ahead of plugin {plugin}; update the "
                 f"plugin before touching this vault")
@@ -302,13 +304,10 @@ def stamp(vault: Path, version: str) -> None:
 
 def check_stampable(vault: Path) -> None:
     """Raise StepFailed unless the stamp could be written."""
-    if vault_layout(vault) == "new":
-        try:
-            read_stamp(vault)
-        except StateUnreadable as e:
-            raise StepFailed(str(e)) from e
-    else:
-        check_editable(vault / LEGACY_SETTINGS_FILE)
+    try:
+        read_stamp(vault)
+    except StateUnreadable as e:
+        raise StepFailed(str(e)) from e
 
 
 def _choice_problem(choice: str, value: str | None,

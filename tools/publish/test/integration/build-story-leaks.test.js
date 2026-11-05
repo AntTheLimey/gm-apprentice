@@ -9,7 +9,6 @@ const { describe, it, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-require('../helpers/quiet-legacy-warning.js');
 const { build } = require('../../lib/build');
 const { buildBoth, markedTexts } = require('../helpers/gm-build');
 const { storyVault, SECRETS, WRAP_1, SESSION, CHAPTER } = require('../helpers/story-vault');

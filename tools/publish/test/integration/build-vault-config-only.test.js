@@ -2,6 +2,7 @@ const { describe, it, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
 const { build } = require('../../lib/build');
+const { writeSettings, writeSiteConfig } = require('../helpers/vault-files');
 
 // The site file holds only the deploy keys; everything else comes from the vault file.
 describe('build with settings only in _meta/vault-config.md', () => {
@@ -13,11 +14,10 @@ describe('build with settings only in _meta/vault-config.md', () => {
     const vault = path.join(root, 'vault');
     fs.mkdirSync(path.join(vault, 'NPCs'), { recursive: true });
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-      '---\npublish:\n  mode: player\n  site_title: Vault Only Title\n  folder_map:\n    NPCs: npcs\n  exclude_dirs: [_meta]\n---\n');
+    writeSettings(vault, { 'player_site.title': "Vault Only Title", 'player_site.folder_map': {"NPCs": "npcs"}, 'player_site.hide.folders': ["_meta"] });
     fs.writeFileSync(path.join(vault, 'NPCs', 'Clerk.md'), '---\ntype: npc\n---\n\nA clerk.\n');
     const configPath = path.join(root, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs') }));
+    writeSiteConfig(configPath, { vaultPath: vault, outputDir: path.join(root, 'docs') });
     const original = { warn: console.warn, log: console.log };
     const lines = [];
     console.warn = (...a) => lines.push(a.join(' '));

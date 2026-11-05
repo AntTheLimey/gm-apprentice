@@ -1,5 +1,4 @@
 const { describe, it, after } = require('node:test');
-require('./helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
@@ -7,22 +6,22 @@ const path = require('path');
 
 const { build } = require('../lib/build');
 const { noticeText } = require('../lib/notice');
+const { writeSettings } = require('./helpers/vault-files');
 
 // #428: a built site ships lunr.js and the generator's own CSS and JavaScript, so it carries
 // the licence notices those ask for, in a NOTICE.txt at the site root.
 const made = [];
 after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: true }); });
 
-function site(extraSettings = '') {
+function site(settings = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'build-notice-'));
   made.push(root);
   const vault = path.join(root, 'vault');
   fs.mkdirSync(path.join(vault, 'N'), { recursive: true });
-  fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
   fs.writeFileSync(path.join(vault, 'N', 'Vex.md'), '---\ntype: npc\n---\n\nA ferryman.\n');
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n  folder_map:\n    N: n\n${extraSettings}---\n`);
+  writeSettings(vault, { 'player_site.title': 'T', 'player_site.folder_map': { N: 'n' }, ...settings });
   const configPath = path.join(root, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: './docs', attachmentsDir: '_attachments', siteTitle: 'T', excludeDirs: ['_meta'] }));
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault }));
   return { root, configPath };
 }
 

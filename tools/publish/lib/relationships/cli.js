@@ -14,7 +14,7 @@ const { listTones, planTones, parseSets, skipped } = require('./tones');
 const { loadPublishList, writeAccepted } = require('../manifest');
 const { acceptedTieKeys, tieText, TIE_NOTE, keyOf } = require('../accepted-ties');
 const { TIE_FROM } = require('../settings/layout');
-const { siteToolOlderThan, siteFileNamedBy } = require('../settings/move');
+const { siteToolOlderThan, siteFileNamedBy } = require('../settings/site-tool');
 
 const VERBS = ['words', 'check', 'list', 'fix', 'accept'];
 

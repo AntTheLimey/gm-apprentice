@@ -25,21 +25,32 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item,  # noqa: E402
 from site_fixture import give_site, point_site_at  # noqa: E402
 
 PLUGIN = "1.10.33"
+REAL_FLOOR = vc.MOVED_FLOOR
+# These tests stamp vaults at made-up old versions; the real floor is
+# checked by GateTests, which asks for it.
+TEST_FLOOR = "1.10.12"
 REAL_PLUGIN_TOOL = migrate_site.plugin_tool
 
 
-def make_vault(case, version="1.10.12", eol="\n"):
+def make_vault(case, version="1.10.12"):
+    """A vault on the settings file, stamped `version` in its state file."""
     vault = Path(tempfile.mkdtemp(prefix="mig-"))
     case.addCleanup(shutil.rmtree, vault, ignore_errors=True)
     (vault / "_meta").mkdir()
-    lines = ["---", "type: meta"]
+    (vault / "_meta" / "vault-config.yaml").write_text("version: 1\n", encoding="utf-8")
     if version is not None:
-        lines.append(f'gm_apprentice_version: "{version}"')
-    lines += ["---", "", "# Config", ""]
-    with (vault / "_meta" / "vault-config.md").open(
-            "w", encoding="utf-8", newline="") as f:
-        f.write(eol.join(lines))
+        (vault / "_meta" / "vault-state.json").write_text(
+            json.dumps({"gm_apprentice_version": version}, indent=2) + "\n",
+            encoding="utf-8")
     return vault
+
+
+def sample_note(vault):
+    """A note alone in its folder, for the tests of the file-editing helpers."""
+    note = vault / "Notes" / "Sample.md"
+    note.parent.mkdir()
+    note.write_text("---\ntype: note\n---\n\n# Sample\n", encoding="utf-8")
+    return note
 
 
 def stamp_of(vault):
@@ -67,9 +78,10 @@ def will(name, release=None, band=3, log=None, fail=False, pending=None,
                  asks_site=asks_site)
 
 
-def call(args, checks):
+def call(args, checks, floor=TEST_FLOOR):
     out, err = io.StringIO(), io.StringIO()
-    with mock.patch.object(migrate, "plugin_version",
+    with mock.patch.object(vc, "MOVED_FLOOR", floor), \
+            mock.patch.object(migrate, "plugin_version",
                            return_value=(PLUGIN, "test")), \
             mock.patch.object(migrate, "CHECKS", checks), \
             contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
@@ -84,13 +96,84 @@ class GateTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertEqual(out, "")
         self.assertEqual(len(err.strip().splitlines()), 1)
-        self.assertIn("this vault is at 1.9.14, below 1.10.12", err)
+        self.assertIn("an update stamp of 1.9.14 (_meta/vault-state.json), older than 1.10.12", err)
 
     def test_no_recorded_version_is_refused(self):
         vault = make_vault(self, None)
         code, _, err = call([str(vault), "apply"], [])
         self.assertEqual(code, 2)
-        self.assertIn("no recorded version", err)
+        self.assertIn("no update stamp (_meta/vault-state.json)", err)
+
+    def test_a_vault_below_the_floor_is_refused_naming_the_bridge(self):
+        vault = make_vault(self, "1.10.59")
+        code, _, err = call([str(vault), "plan"], [], floor=REAL_FLOOR)
+        self.assertEqual(code, 2)
+        self.assertEqual(REAL_FLOOR, "1.10.60")
+        self.assertIn("older than 1.10.60", err)
+        self.assertIn("a 1.10 release, 1.10.134 or later", err)
+        self.assertIn("releases/tag/v1.10.137", err)
+
+    def test_a_moved_vault_stamped_1_10_121_passes(self):
+        vault = make_vault(self, "1.10.121")
+        with mock.patch.object(migrate, "plugin_version",
+                               return_value=("1.11.0", "test")):
+            self.assertEqual(migrate.gate(vault), ("1.10.121", "1.11.0"))
+
+    def test_a_moved_vault_at_the_floor_passes(self):
+        vault = make_vault(self, "1.10.60")
+        with mock.patch.object(migrate, "plugin_version",
+                               return_value=("1.11.0", "test")):
+            self.assertEqual(migrate.gate(vault), ("1.10.60", "1.11.0"))
+
+    def test_an_old_layout_vault_is_refused_even_when_stamped_above_the_floor(self):
+        vault = make_vault(self, "1.10.121")
+        (vault / "_meta" / "vault-config.yaml").rename(
+            vault / "_meta" / "vault-config.md")
+        with mock.patch.object(migrate, "plugin_version",
+                               return_value=("1.11.0", "test")):
+            said = migrate.gate(vault)
+        self.assertIsInstance(said, str)
+        self.assertIn("_meta/vault-config.md is the old settings file", said)
+        self.assertNotIn("older than", said)
+
+    def test_an_old_list_left_behind_is_refused(self):
+        vault = make_vault(self, "1.10.121")
+        (vault / "_meta" / "publish-manifest.md").write_text("x\n", encoding="utf-8")
+        with mock.patch.object(migrate, "plugin_version",
+                               return_value=("1.11.0", "test")):
+            said = migrate.gate(vault)
+        self.assertIn("_meta/publish-manifest.md is the old publish list", said)
+
+    def test_every_leftover_is_named_not_just_the_first(self):
+        vault = make_vault(self, "1.9.50")
+        (vault / "_meta" / "vault-config.yaml").rename(
+            vault / "_meta" / "vault-config.md")
+        (vault / "_meta" / "publish-manifest.md").write_text("x\n", encoding="utf-8")
+        said = vc.unmoved(vault, "1.9.50")
+        self.assertEqual(len(said), 3, said)
+
+    def test_an_old_site_tool_is_refused(self):
+        vault = make_vault(self, "1.10.121")
+        site = vault / "site"
+        site.mkdir()
+        (site / "vault.config.json").write_text(
+            json.dumps({"vaultPath": vault.as_posix()}), encoding="utf-8")
+        (site / "package.json").write_text(
+            '{"dependencies": {"gm-apprentice-publish": "1.26.0"}}',
+            encoding="utf-8")
+        (vault / "_meta" / "vault-config.yaml").write_text(
+            "version: 1\nplayer_site:\n  folder: site\n", encoding="utf-8")
+        vc.forget_settings(vault)
+        said = vc.unmoved(vault, "1.10.121")
+        self.assertEqual([x.text for x in said],
+                         ["a site publish tool older than 1.27.0"])
+
+    def test_a_new_vault_with_no_stamp_and_no_settings_is_not_refused(self):
+        vault = Path(tempfile.mkdtemp(prefix="mig-"))
+        self.addCleanup(shutil.rmtree, vault, ignore_errors=True)
+        (vault / "_meta").mkdir()
+        _, _, err = call([str(vault), "plan"], [], floor=REAL_FLOOR)
+        self.assertIn("first-time setup", err)
 
     def test_a_vault_ahead_of_the_plugin_is_refused(self):
         vault = make_vault(self, "1.11.0")
@@ -140,7 +223,7 @@ class PlanTests(unittest.TestCase):
 
     def test_three_lists_in_order_and_nothing_written(self):
         vault = make_vault(self)
-        before = (vault / "_meta" / "vault-config.md").read_bytes()
+        before = (vault / "_meta" / "vault-state.json").read_bytes()
         checks = [
             Check("ask", "1.10.20", 3, "t", lambda v: [
                 Item("fonts", CHOICE, ["self-host the fonts"], lambda x: []),
@@ -158,7 +241,7 @@ class PlanTests(unittest.TestCase):
             "## Your choice", "# count: 2", "fonts\tself-host the fonts",
             "mode=<dark or light>\tset the default palette",
             "## Needs a person", "# count: 1", "Notes/A.md:4\tbroken YAML"])
-        self.assertEqual((vault / "_meta" / "vault-config.md").read_bytes(),
+        self.assertEqual((vault / "_meta" / "vault-state.json").read_bytes(),
                          before)
 
     def test_a_release_step_is_offered_only_below_its_release(self):
@@ -708,7 +791,7 @@ class ApplyTests(unittest.TestCase):
 
     def test_an_unwritable_config_fails_cleanly(self):
         vault = make_vault(self)
-        cfg = vault / "_meta" / "vault-config.md"
+        cfg = vault / "_meta" / "vault-state.json"
         cfg.chmod(0o444)
         vault.joinpath("_meta").chmod(0o555)
         self.addCleanup(vault.joinpath("_meta").chmod, 0o755)
@@ -728,14 +811,6 @@ class ApplyTests(unittest.TestCase):
             self.choice_checks([]))
         self.assertEqual(code, 0)
         self.assertIn("not offered: template:npc.md", out)
-
-    def test_stamp_keeps_crlf(self):
-        vault = make_vault(self, eol="\r\n")
-        self.assertEqual(call([str(vault), "apply"], [])[0], 0)
-        raw = (vault / "_meta" / "vault-config.md").read_bytes()
-        self.assertIn(f'gm_apprentice_version: "{PLUGIN}"\r\n'.encode(), raw)
-        self.assertNotIn(b"\n\n", raw.replace(b"\r\n", b""))
-        self.assertEqual(raw.count(b"\r\n"), raw.count(b"\n"))
 
 
 class ShortOutputTests(unittest.TestCase):
@@ -789,55 +864,10 @@ class ShortOutputTests(unittest.TestCase):
                       "stamped", out)
 
 
-class ApplyGuardTests(unittest.TestCase):
-    def test_a_frontmatter_the_stamp_cannot_edit_stops_before_anything_runs(self):
-        vault = make_vault(self)
-        path = vault / "_meta" / "vault-config.md"
-        path.write_text('---\ntype: meta\ngm_apprentice_version: "1.10.12"\n'
-                        'description: >\n  folded text\n---\n',
-                        encoding="utf-8")
-        before = path.read_bytes()
-        log = []
-        code, out, err = call([str(vault), "apply"],
-                              [will("files", None, 3, log)])
-        self.assertEqual(code, 1)
-        self.assertEqual(log, [])
-        self.assertEqual(path.read_bytes(), before)
-        self.assertIn("vault-config.md", err)
-        self.assertIn("nothing was changed", err)
-
-    def test_a_current_vault_with_an_uneditable_config_still_applies(self):
-        vault = make_vault(self, PLUGIN)
-        path = vault / "_meta" / "vault-config.md"
-        path.write_text(f'---\ngm_apprentice_version: "{PLUGIN}"\n'
-                        'description: >\n  folded text\n---\n',
-                        encoding="utf-8")
-        code, out, err = call([str(vault), "apply"], [will("copy", None)])
-        self.assertEqual(code, 0, err)
-        self.assertIn("copy\tdid copy", out)
-
-    def test_a_byte_order_mark_is_read_and_kept(self):
-        vault = make_vault(self)
-        path = vault / "_meta" / "vault-config.md"
-        path.write_bytes(b"\xef\xbb\xbf" + path.read_bytes())
-        code, out, _ = call([str(vault), "plan"], [])
-        self.assertEqual(code, 0)
-        self.assertIn("vault 1.10.12", out)
-        self.assertEqual(call([str(vault), "apply"], [])[0], 0)
-        raw = path.read_bytes()
-        self.assertTrue(raw.startswith(b"\xef\xbb\xbf---"))
-        self.assertEqual(stamp_of(vault).lstrip("\ufeff"), PLUGIN)
-
-
 class WrapupSectionsEngineTests(unittest.TestCase):
-    def test_choice_stamp_then_key_removal_end_to_end(self):
+    def test_choice_then_stamp_end_to_end(self):
         import migrate_vault as mv
         vault = make_vault(self, "1.10.27")
-        cfg = vault / "_meta" / "vault-config.md"
-        cfg.write_text(
-            '---\ngm_apprentice_version: "1.10.27"\npublish:\n'
-            '  wrap_up:\n    player_sections: [What the Party Learned]\n'
-            '---\n', encoding="utf-8")
         note = vault / "Sessions" / "Chapter_01_Session_01_Wrap_Up.md"
         note.parent.mkdir()
         note.write_text(
@@ -846,27 +876,19 @@ class WrapupSectionsEngineTests(unittest.TestCase):
             '## What the Party Learned\n\na\n\n## Secret\n\nb\n\n'
             '<!-- gm-only -->\n\n## GM Notes\n\n### S\n\n- x\n\n'
             '<!-- /gm-only -->\n', encoding="utf-8")
-        checks = [c for c in mv.VAULT_CHECKS
-                  if c.name in ("wrapup-sections", "wrapup-sections-key")]
+        checks = [c for c in mv.VAULT_CHECKS if c.name == "wrapup-sections"]
         code, out, _ = call([str(vault), "plan"], checks)
         self.assertEqual(code, 0)
         self.assertIn("wrapup-sections=<move or leave>", out)
-        self.assertNotIn("wrapup-sections-key\tremove", out)
         code, out, _ = call([str(vault), "apply", "--choose",
                              "wrapup-sections=move"], checks)
         self.assertEqual(code, 0, out)
         text = note.read_text(encoding="utf-8")
         self.assertIn("### Secret", text)
-        self.assertIn("\n## What the Party Learned\n", text)
+        self.assertIn("### What the Party Learned", text)
         self.assertEqual(stamp_of(vault), PLUGIN)
         code, out, _ = call([str(vault), "plan"], checks)
-        self.assertEqual(stamp_of(vault), PLUGIN)
         self.assertEqual(code, 0)
-        self.assertIn("wrapup-sections-key\tremove", out)
-        code, out, _ = call([str(vault), "apply"], checks)
-        self.assertEqual(code, 0, out)
-        self.assertNotIn("player_sections", cfg.read_text(encoding="utf-8"))
-        code, out, _ = call([str(vault), "plan"], checks)
         self.assertIn("up to date", out)
 
 
@@ -905,8 +927,7 @@ class ToneListEngineTests(unittest.TestCase):
 
 class EditFrontmatterTests(unittest.TestCase):
     def test_failure_leaves_the_note_and_no_temp_file(self):
-        vault = make_vault(self)
-        cfg = vault / "_meta" / "vault-config.md"
+        cfg = sample_note(make_vault(self))
         before = cfg.read_bytes()
         with mock.patch("migrate_core.os.replace",
                         side_effect=OSError("boom")):
@@ -914,13 +935,13 @@ class EditFrontmatterTests(unittest.TestCase):
                 edit_frontmatter(cfg, lambda fm, eol: fm.append("a: b" + eol))
         self.assertEqual(cfg.read_bytes(), before)
         self.assertEqual([p.name for p in cfg.parent.iterdir()],
-                         ["vault-config.md"])
+                         ["Sample.md"])
 
     def test_symlink_and_mode_survive(self):
         vault = make_vault(self)
         real = vault / "real.md"
-        (vault / "_meta" / "vault-config.md").replace(real)
-        link = vault / "_meta" / "vault-config.md"
+        sample_note(vault).replace(real)
+        link = vault / "Notes" / "Sample.md"
         link.symlink_to(real)
         real.chmod(0o640)
         edit_frontmatter(link, lambda fm, eol: fm.append("a: b" + eol))
@@ -938,8 +959,7 @@ class WriteTextAtomicTests(unittest.TestCase):
         self.assertEqual([p.name for p in path.parent.iterdir()], ["a.md"])
 
     def test_failure_leaves_the_file_and_no_temp_file(self):
-        vault = make_vault(self)
-        path = vault / "_meta" / "vault-config.md"
+        path = sample_note(make_vault(self))
         before = path.read_bytes()
         with mock.patch("migrate_core.os.replace",
                         side_effect=OSError("boom")):
@@ -947,17 +967,13 @@ class WriteTextAtomicTests(unittest.TestCase):
                 write_text_atomic(path, "x")
         self.assertEqual(path.read_bytes(), before)
         self.assertEqual([p.name for p in path.parent.iterdir()],
-                         ["vault-config.md"])
+                         ["Sample.md"])
 
 
 def map_folder(vault, folder, key):
-    """Add `folder: key` to the vault's `publish.folder_map`, so the
+    """Add `folder: key` to the vault's `player_site.folder_map`, so the
     publish tool takes notes from that folder."""
-    file = vault / "_meta" / "vault-config.md"
-    lines = file.read_text(encoding="utf-8").split("\n")
-    at = lines.index("publish:")
-    lines[at + 1:at + 1] = ["  folder_map:", f"    {folder}: {key}"]
-    file.write_text("\n".join(lines), encoding="utf-8")
+    vc.settings_set(vault, [("player_site.folder_map", {folder: key})])
 
 
 @unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
@@ -1007,31 +1023,6 @@ class RealToolTests(unittest.TestCase):
         self.assertLess(text.index("## GM Notes"), text.index("Context"))
         code, again, _ = self.run_real(vault, "plan")
         self.assertEqual(again.splitlines()[1], "up to date", again)
-
-    def test_a_multi_line_footer_moves_and_the_vault_still_stamps(self):
-        vault = make_vault(self, "1.10.12")
-        # Apply moves the site's settings into the vault: a site of its own.
-        give_site(vault, lambda p: None, private=True)
-        text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
-        site = Path(re.search(r"^\s*site_dir:\s*(.+)$", text, re.M)
-                    .group(1).strip().strip("\"'"))
-        footer = 'Line one\n"quoted" \\ slash\nlast line'
-        config = json.loads((site / "vault.config.json").read_text(
-            encoding="utf-8"))
-        config["footer"] = footer
-        (site / "vault.config.json").write_text(json.dumps(config),
-                                                encoding="utf-8")
-        point_site_at(vault, site)
-        code, did, err = self.run_real(vault, "apply", "--choose",
-                                       "default-mode=leave")
-        self.assertEqual(code, 0, err + did)
-        self.assertIn("settings-move\tWrote _meta/vault-config.yaml.", did)
-        self.assertEqual(stamp_of(vault), PLUGIN)
-        self.assertEqual(vc.settings(vault).get("player_site.footer"), footer)
-        self.assertFalse((vault / "_meta" / "vault-config.md").exists())
-        self.assertEqual(self.run_real(vault, "plan")[1].splitlines()[1],
-                         "up to date")
-        self.assertEqual(self.run_real(vault, "apply")[0], 0)
 
     def test_a_vault_with_no_site_migrates_without_a_site_step(self):
         vault = make_vault(self, "1.10.12")

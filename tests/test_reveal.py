@@ -664,8 +664,8 @@ class ApplyPublishRealTool(unittest.TestCase):
         make(self.vault, {
             "NPCs/Lady Anne.md": "---\ntype: npc\n---\n\nAnne.\n",
             "Secret/Z.md": "---\ntype: npc\n---\n\nZ.\n",
-            "_meta/vault-config.md": f"---\npublish:\n  site: true\n  site_dir: {self.site}\n"
-                                     "  exclude_dirs:\n    - _meta\n    - Secret\n---\n",
+            "_meta/vault-config.yaml": f"version: 1\nplayer_site:\n  publish: true\n  folder: {self.site}\n"
+                                       "  hide:\n    folders:\n      - _meta\n      - Secret\n",
         })
 
     def _list(self, text: str = "publishing: []\nexcluded: []\nneeds_decision: []\n") -> None:

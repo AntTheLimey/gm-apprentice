@@ -1,16 +1,16 @@
 const { describe, it } = require('node:test');
-require('./helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { execFileSync, spawnSync } = require('child_process');
-const { runRename } = require('../lib/rename-refs');
+const { runRename, renameRefs } = require('../lib/rename-refs');
 
 const { pcLiveKey, slugify } = require('../lib/scanner');
 const { build } = require('../lib/build');
-const { setOldSettings } = require('./helpers/settings-files');
+const { mergeSettings } = require('./helpers/vault-files');
 const { writePublishList } = require('./helpers/publish-list');
+const { writeSiteConfig, settingsText, NEW_FILE } = require('./helpers/vault-files');
 const BIN = path.join(__dirname, '..', 'bin', 'gm-publish.js');
 const FROM = 'Characters/PCs/Emma_Wentworth.md';
 const TO = 'Characters/PCs/Emma_Wentworth_Hale.md';
@@ -51,7 +51,7 @@ const LIST = (eol = '\n') => [
   '',
 ].join(eol);
 
-// The old Markdown list, which the build still reads until the update moves it.
+// The old Markdown list, which no longer reads (it stops the rename).
 const OLD_LIST = [
   '---', 'generated: 2026-10-03', '---', '',
   '## Publishing (2 files)', '',
@@ -88,17 +88,10 @@ describe('manifest rename', () => {
     assert.match(text, /^  - Characters\/PCs\/Emma_Wentworth_Hale\.md$/m);
   });
 
-  it('renames in the old Markdown list while the vault has no YAML list yet', () => {
-    const vault = vaultWith({ '_meta/publish-manifest.md': OLD_LIST });
-    const got = rename(vault);
-    assert.strictEqual(got.files['_meta/publish-manifest.md'], OLD_LIST.split(FROM).join(TO));
-    assert.strictEqual(got.files['_meta/publish-list.yaml'], undefined);
-  });
-
-  it('renames in the YAML list when both files are there', () => {
-    const vault = vaultWith({ '_meta/publish-manifest.md': OLD_LIST, '_meta/publish-list.yaml': LIST() });
-    const got = rename(vault);
-    assert.deepStrictEqual(Object.keys(got.files), ['_meta/publish-list.yaml']);
+  it('the old Markdown list stops the rename by name, whether or not the YAML list is there', () => {
+    const stop = /_meta\/publish-manifest\.md is the old publish list, no longer read since plugin 1\.11\.0/;
+    assert.throws(() => renameRefs(vaultWith({ '_meta/publish-manifest.md': OLD_LIST }), FROM, TO), stop);
+    assert.throws(() => renameRefs(vaultWith({ '_meta/publish-manifest.md': OLD_LIST, '_meta/publish-list.yaml': LIST() }), FROM, TO), stop);
   });
 
   it('keeps CRLF endings', () => {
@@ -120,19 +113,19 @@ describe('manifest rename', () => {
     assert.deepStrictEqual(rename(vaultWith({ 'a.md': 'x' })).files, {});
   });
 
-  it('rewrites a vault-config override path and featured names, byte for byte', () => {
+  it('rewrites a settings override path and featured names, byte for byte', () => {
     const cfg = [
-      '---', 'publish:', '  overrides:', '    fields:',
+      'version: 1', 'player_site:', '  hide:', '    field_exceptions:',
       `      "${FROM}":`, '        include: [secrets]',
-      '  landing:', '    featured_npcs: ["Emma_Wentworth", Other]', '    quick_links:', '      - Emma_Wentworth', '---', '', '# Config', ''].join('\n');
-    const vault = vaultWith({ '_meta/vault-config.md': cfg, [FROM]: '---\ntype: npc\n---\n' });
-    const text = rename(vault).files['_meta/vault-config.md'];
+      '  landing:', '    featured_npcs: ["Emma_Wentworth", Other]', '    quick_links:', '      - Emma_Wentworth', ''].join('\n');
+    const vault = vaultWith({ '_meta/vault-config.yaml': cfg, [FROM]: '---\ntype: npc\n---\n' });
+    const text = rename(vault).files['_meta/vault-config.yaml'];
     assert.strictEqual(text, cfg.replace(FROM, TO).replace('"Emma_Wentworth"', '"Emma_Wentworth_Hale"').replace('- Emma_Wentworth', '- Emma_Wentworth_Hale'));
   });
 
   it('leaves a featured name alone when two notes share the old name', () => {
-    const cfg = '---\npublish:\n  landing:\n    featured_npcs: [Emma_Wentworth]\n---\n';
-    const vault = vaultWith({ '_meta/vault-config.md': cfg, [FROM]: '---\ntype: npc\n---\n', 'Elsewhere/Emma_Wentworth.md': '---\ntype: npc\n---\n' });
+    const cfg = 'version: 1\nplayer_site:\n  landing:\n    featured_npcs: [Emma_Wentworth]\n';
+    const vault = vaultWith({ '_meta/vault-config.yaml': cfg, [FROM]: '---\ntype: npc\n---\n', 'Elsewhere/Emma_Wentworth.md': '---\ntype: npc\n---\n' });
     assert.deepStrictEqual(rename(vault).files, {});
   });
 
@@ -145,9 +138,11 @@ describe('manifest rename', () => {
     assert.strictEqual(fs.readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8'), cfg);
   });
 
-  it('an old settings file with no frontmatter names nothing to rename', () => {
-    const vault = vaultWith({ '_meta/vault-config.md': '# Notes only\n\nNo frontmatter here.\n', [FROM]: '---\ntype: pc\n---\n' });
-    assert.deepStrictEqual(rename(vault).files, {});
+  it('renames a player_site.landing.quick_links entry in the new file', () => {
+    const cfg = 'version: 1\nplayer_site:\n  landing:\n    quick_links:\n      - Emma_Wentworth  # first\n      - Other\n';
+    const vault = vaultWith({ '_meta/vault-config.yaml': cfg, [FROM]: '---\ntype: npc\n---\n' });
+    const files = rename(vault).files;
+    assert.strictEqual(files['_meta/vault-config.yaml'], cfg.replace('- Emma_Wentworth ', '- Emma_Wentworth_Hale '));
   });
 
   it('the command itself prints the same answer as --json, and a missing --to or --vault is one stderr line', () => {
@@ -248,7 +243,7 @@ describe('manifest rename: story companions', () => {
 });
 
 describe('manifest rename: who each spelling goes to', () => {
-  const SITE = '---\npublish:\n  folder_map:\n    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n';
+  const SITE = settingsText({ 'player_site.folder_map': { 'Characters/NPCs': 'characters/npcs', 'Characters/PCs': 'characters/pcs', Sessions: 'sessions' } });
   const NPC = 'Characters/NPCs/Charlotte_Thorne.md';
   const PC = 'Characters/PCs/Charlotte_Thorne.md';
   const note = (type, extra = '') => `---\ntype: ${type}\n${extra}---\n# C\n`;
@@ -256,50 +251,42 @@ describe('manifest rename: who each spelling goes to', () => {
   const ask = (vault, spellings, from = NPC, extra = []) => rename(vault, from, 'Characters/NPCs/Charlotte_Thorne_NPC.md', [...names(...spellings), ...extra]);
 
   it('asks nothing of the link map when no spelling is given', () => {
-    const vault = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc') });
+    const vault = vaultWith({ [NEW_FILE]: SITE, [NPC]: note('npc') });
     assert.strictEqual(ask(vault, []).owners, undefined);
   });
 
   it('names the note the build links each spelling to', () => {
-    const toNpc = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc'), [PC]: note('pc', 'canon_status: SUPERSEDED\n') });
+    const toNpc = vaultWith({ [NEW_FILE]: SITE, [NPC]: note('npc'), [PC]: note('pc', 'canon_status: SUPERSEDED\n') });
     assert.strictEqual(ask(toNpc, ['Charlotte_Thorne']).owners.Charlotte_Thorne, NPC);
-    const toPc = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc', 'canon_status: SUPERSEDED\n'), [PC]: note('pc') });
+    const toPc = vaultWith({ [NEW_FILE]: SITE, [NPC]: note('npc', 'canon_status: SUPERSEDED\n'), [PC]: note('pc') });
     assert.strictEqual(ask(toPc, ['Charlotte_Thorne']).owners.Charlotte_Thorne, PC);
   });
 
   it('follows an alias another note holds, and null for a spelling that maps to nothing', () => {
     const vault = vaultWith({
-      '_meta/vault-config.md': SITE,
+      [NEW_FILE]: SITE,
       'Characters/PCs/Charlotte_Thorne.md': note('pc'),
       'Characters/NPCs/Cast_Charlotte.md': note('npc', 'aliases: ["Charlotte Thorne"]\n'),
     });
     const got = ask(vault, ['Charlotte Thorne', 'Nobody_Here'], 'Characters/PCs/Charlotte_Thorne.md').owners;
     assert.strictEqual(got['Charlotte Thorne'], 'Characters/NPCs/Cast_Charlotte.md');
     assert.strictEqual(got.Nobody_Here, null);
-    const hidden = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc', 'publish: false\n') });
+    const hidden = vaultWith({ [NEW_FILE]: SITE, [NPC]: note('npc', 'publish: false\n') });
     assert.strictEqual(ask(hidden, ['Charlotte_Thorne']).owners.Charlotte_Thorne, null);
-  });
-
-  it('reads the site config the build reads, when the folder map lives there', () => {
-    const vault = vaultWith({ '_meta/vault-config.md': '---\npublish:\n---\n', [NPC]: note('npc') });
-    const cfg = path.join(vault, 'site.config.json');
-    fs.writeFileSync(cfg, JSON.stringify({ vaultPath: vault, folderMap: { 'Characters/NPCs': 'characters/npcs' }, excludeDirs: ['_meta'] }));
-    assert.strictEqual(ask(vault, ['Charlotte_Thorne']).owners.Charlotte_Thorne, null, 'no folder map without the site config');
-    assert.strictEqual(ask(vault, ['Charlotte_Thorne'], NPC, ['--config', cfg]).owners.Charlotte_Thorne, NPC);
   });
 
   it('agrees with what the build links a bare name to', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bare-owner-'));
     const vault = path.join(root, 'vault');
     for (const [rel, text] of Object.entries({
-      '_meta/vault-config.md': SITE, [NPC]: note('npc'), [PC]: note('pc'),
+      [NEW_FILE]: SITE, [NPC]: note('npc'), [PC]: note('pc'),
       'Sessions/S1.md': '---\ntype: session\n---\nSee [[Charlotte_Thorne]].\n',
     })) {
       fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
       fs.writeFileSync(path.join(vault, rel), text);
     }
     const configPath = path.join(root, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' }));
+    writeSiteConfig(configPath, { vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' });
     const real = console.log; console.log = () => {};
     try { build({ configPath }); } finally { console.log = real; }
     const html = fs.readFileSync(path.join(root, 'docs', 'sessions', 's1.html'), 'utf8');
@@ -315,7 +302,7 @@ describe('backlinks follow the page a link resolves to', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'backlink-key-'));
     const vault = path.join(root, 'vault');
     const files = {
-      '_meta/vault-config.md': '---\npublish:\n  folder_map:\n    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n',
+      [NEW_FILE]: settingsText({ 'player_site.folder_map': { 'Characters/NPCs': 'characters/npcs', 'Characters/PCs': 'characters/pcs', Sessions: 'sessions' } }),
       'Characters/NPCs/Charlotte_Thorne.md': '---\ntype: npc\ncanon_status: SUPERSEDED\n---\n# N\n',
       'Characters/PCs/Charlotte_Thorne.md': '---\ntype: pc\n---\n# P\n',
       'Sessions/S1.md': '---\ntype: session\n---\nWe met [[Charlotte_Thorne]].\n',
@@ -325,7 +312,7 @@ describe('backlinks follow the page a link resolves to', () => {
       fs.writeFileSync(path.join(vault, rel), text);
     }
     const configPath = path.join(root, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' }));
+    writeSiteConfig(configPath, { vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' });
     const real = console.log; console.log = () => {};
     try { build({ configPath }); } finally { console.log = real; }
     const html = fs.readFileSync(path.join(root, 'docs', 'sessions', 's1.html'), 'utf8');
@@ -336,11 +323,11 @@ describe('backlinks follow the page a link resolves to', () => {
 });
 
 describe('manifest rename: what the site publishes', () => {
-  const MAP = '---\npublish:\n  exclude_dirs: [GM]\n  folder_map:\n    NPCs: characters/npcs\n    Cultures: cultures\n    Sessions: sessions\n---\n';
+  const MAP = 'version: 1\nplayer_site:\n  hide:\n    folders: [GM]\n  folder_map:\n    NPCs: characters/npcs\n    Cultures: cultures\n    Sessions: sessions\n';
   const npc = '---\ntype: npc\n---\n# N\n';
 
   it('lists the notes the site publishes, so links in the rest are not read through its link map', () => {
-    const vault = vaultWith({ '_meta/vault-config.md': MAP, 'NPCs/Hallam.md': npc, 'GM/Hallam.md': npc, 'GM/Plan.md': '---\ntype: session\n---\n[[Hallam]]\n', 'Sessions/S1.md': '---\ntype: session\n---\n[[Hallam]]\n' });
+    const vault = vaultWith({ '_meta/vault-config.yaml': MAP, 'NPCs/Hallam.md': npc, 'GM/Hallam.md': npc, 'GM/Plan.md': '---\ntype: session\n---\n[[Hallam]]\n', 'Sessions/S1.md': '---\ntype: session\n---\n[[Hallam]]\n' });
     const got = rename(vault, 'NPCs/Hallam.md', 'NPCs/Hallam_Reeve.md', ['--name', 'Hallam']);
     assert.ok(got.published.includes('NPCs/Hallam.md'));
     assert.ok(got.published.includes('Sessions/S1.md'));
@@ -349,15 +336,15 @@ describe('manifest rename: what the site publishes', () => {
   });
 
   it('says when the new place would take a published page off the site', () => {
-    const vault = vaultWith({ '_meta/vault-config.md': MAP, 'NPCs/Hallam.md': npc, 'Cultures/Elves.md': '---\ntype: culture\n---\n' });
+    const vault = vaultWith({ '_meta/vault-config.yaml': MAP, 'NPCs/Hallam.md': npc, 'Cultures/Elves.md': '---\ntype: culture\n---\n' });
     assert.match(rename(vault, 'NPCs/Hallam.md', 'Elsewhere/Hallam.md').unpublishes, /Elsewhere\/Hallam\.md.*folder_map/);
-    assert.match(rename(vault, 'NPCs/Hallam.md', 'GM/Hallam.md').unpublishes, /GM\/Hallam\.md.*exclude_dirs/);
+    assert.match(rename(vault, 'NPCs/Hallam.md', 'GM/Hallam.md').unpublishes, /GM\/Hallam\.md.*player_site\.hide\.folders/);
     assert.match(rename(vault, 'Cultures/Elves.md', 'Heritages/Elves.md').unpublishes, /Heritages\/Elves\.md.*folder_map/);
     assert.strictEqual(rename(vault, 'NPCs/Hallam.md', 'NPCs/Hallam_Reeve.md').unpublishes, undefined);
   });
 
   it('does not object when the page was not published to begin with', () => {
-    const vault = vaultWith({ '_meta/vault-config.md': MAP, 'NPCs/Hallam.md': '---\ntype: npc\npublish: false\n---\n' });
+    const vault = vaultWith({ '_meta/vault-config.yaml': MAP, 'NPCs/Hallam.md': '---\ntype: npc\npublish: false\n---\n' });
     assert.strictEqual(rename(vault, 'NPCs/Hallam.md', 'Elsewhere/Hallam.md').unpublishes, undefined);
   });
 });
@@ -383,7 +370,7 @@ describe('a pinned key reaches the build', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'live-key-'));
     const vault = path.join(root, 'vault');
     fs.cpSync(path.join(__dirname, 'fixtures', 'with-party-roster'), vault, { recursive: true });
-    setOldSettings(vault, { 'player_site.features.live_stats': true });
+    mergeSettings(vault, { 'player_site.features.live_stats': true });
     const pcs = path.join(vault, 'Characters', 'PCs');
     if (pinned) {
       const src = fs.readFileSync(path.join(pcs, 'Karl Brenner.md'), 'utf8');
@@ -394,11 +381,11 @@ describe('a pinned key reaches the build', () => {
     }
     fs.writeFileSync(path.join(root, 'wrangler.toml'), '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n');
     const configPath = path.join(root, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments',
       siteTitle: 'Roster Test', system: 'gurps-4e', excludeDirs: ['_meta', '_Templates'], excludeSections: [],
       folderMap: { 'Characters/PCs': 'characters/pcs' },
-    }));
+    });
     build({ configPath });
     const read = (...p) => fs.readFileSync(path.join(root, 'docs', ...p), 'utf8');
     return { read, root };
@@ -429,11 +416,11 @@ describe('two PCs on one live key', () => {
     const src = fs.readFileSync(path.join(pcs, 'Karl Brenner.md'), 'utf8');
     fs.writeFileSync(path.join(pcs, 'Karl_Hale.md'), src.replace(/type: pc(\r?\n)/, 'type: pc$1live_key: karl-brenner$1'));
     const configPath = path.join(root, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments',
       siteTitle: 'Roster Test', system: 'gurps-4e', excludeDirs: ['_meta'], excludeSections: [],
       folderMap: { 'Characters/PCs': 'characters/pcs' },
-    }));
+    });
     const warned = [];
     const real = console.warn;
     console.warn = (...a) => warned.push(a.join(' '));
@@ -450,11 +437,11 @@ describe('two PCs on one live key', () => {
     const vault = path.join(root, 'vault');
     fs.cpSync(path.join(__dirname, 'fixtures', 'with-party-roster'), vault, { recursive: true });
     const configPath = path.join(root, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments',
       siteTitle: 'Roster Test', system: 'gurps-4e', excludeDirs: ['_meta'], excludeSections: [],
       folderMap: { 'Characters/PCs': 'characters/pcs' },
-    }));
+    });
     const warned = [];
     const real = console.warn;
     console.warn = (...a) => warned.push(a.join(' '));

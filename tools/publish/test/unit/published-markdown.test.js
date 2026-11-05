@@ -1,10 +1,10 @@
 const { describe, it, before, after } = require('node:test');
-require('../helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { build } = require('../../lib/build');
+const { writeSiteConfig } = require('../helpers/vault-files');
 
 const walk = d => fs.readdirSync(d, { withFileTypes: true })
   .flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
@@ -25,7 +25,7 @@ describe('publishedMarkdown strips HTML comments (issue #149)', () => {
     out = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-html-comment-'));
     const configPath = path.join(out, 'config.json');
     docs = path.join(out, 'docs');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       vaultPath: fixtures,
       outputDir: docs,
       attachmentsDir: '_attachments',
@@ -34,7 +34,7 @@ describe('publishedMarkdown strips HTML comments (issue #149)', () => {
       excludeDirs: ['_meta'],
       excludeSections: [],
       folderMap: { Chapters: 'chapters' },
-    }));
+    });
     build({ configPath });
   });
 

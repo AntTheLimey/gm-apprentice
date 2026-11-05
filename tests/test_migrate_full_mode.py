@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import migrate_site as ms  # noqa: E402
 import site_fixture  # noqa: E402
 from migrate_core import PERSON, WILL, StepFailed  # noqa: E402
-from test_migrate_move import (NEEDS_NODE, PLUGIN, hashes, make_vault,  # noqa: E402
+from migrate_helpers import (NEEDS_NODE, PLUGIN, hashes, make_vault,  # noqa: E402
                                update, with_site)
 from vaultlib import (SettingsUnavailable, read_stamp, settings,  # noqa: E402
                       settings_written)

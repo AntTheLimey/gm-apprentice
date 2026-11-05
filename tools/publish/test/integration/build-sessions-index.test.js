@@ -1,10 +1,10 @@
 const { describe, it, before, after } = require('node:test');
-require('../helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { build } = require('../../lib/build');
+const { writeSiteConfig } = require('../helpers/vault-files');
 
 function write(base, rel, body) {
   const full = path.join(base, rel);
@@ -29,14 +29,14 @@ describe('sessions/index.html is generated when session pages exist (#214)', () 
       '---\ntype: session\nsession_number: 1\n---\n\n# Session One\n\nThe party arrives.\n');
 
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Sessions Index Site',
       siteUrl: 'https://example.github.io/sessions-index',
       vaultPath: vault,
       outputDir,
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { Sessions: 'sessions' },
-    }, null, 2));
+    }, 2);
 
     build({ configPath });
   });
@@ -74,14 +74,14 @@ describe('the Sessions nav link is hidden when no session pages exist (#214)', (
     write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\n# Someone\n');
 
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'No Sessions Site',
       siteUrl: 'https://example.github.io/no-sessions',
       vaultPath: vault,
       outputDir,
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { 'Characters/NPCs': 'characters/npcs' },
-    }, null, 2));
+    }, 2);
 
     build({ configPath });
   });

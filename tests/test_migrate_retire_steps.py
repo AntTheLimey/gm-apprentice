@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import migrate  # noqa: E402
 import migrate_site as ms  # noqa: E402
 from migrate_core import CHOICE, PERSON, StepFailed  # noqa: E402
-from test_migrate_move import NEEDS_NODE, moved_vault_with_site  # noqa: E402
+from migrate_helpers import NEEDS_NODE, moved_vault_with_site  # noqa: E402
 from vaultlib import read_stamp, settings, write_stamp  # noqa: E402
 
 STEPS = "player_site.after_build"

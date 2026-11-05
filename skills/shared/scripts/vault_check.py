@@ -205,7 +205,6 @@ from vaultlib import (  # noqa: F401
     Settings,
     SettingsUnavailable,
     StateUnreadable,
-    LEGACY_SETTINGS_FILE,
     forget_settings,
     read_stamp,
     settings_file,
@@ -216,10 +215,6 @@ from vaultlib import (  # noqa: F401
     settings,
     settings_add,
     settings_carry,
-    settings_fold_site_file,
-    settings_move_plan,
-    setting_name,
-    settings_tidy,
     settings_describe,
     settings_raw,
     settings_set,
@@ -277,10 +272,6 @@ def _emit_tool_once() -> Callable[[str, list[str]], None]:
         emit(label, kept)
     return emit_once
 
-
-# Dated: the old file may still be in an un-updated vault; remove at 1.11.0.
-# A copy written before the tool added `type: meta` is let through untyped.
-PUBLISH_MANIFEST_REL = "_meta/publish-manifest.md"
 
 
 def check_frontmatter(vault: Path, folder: str | None,
@@ -340,19 +331,6 @@ def check_frontmatter(vault: Path, folder: str | None,
             # the build rejects; they mean nothing until it parses.
             continue
         fm = extract_frontmatter(text)
-        if rel == PUBLISH_MANIFEST_REL:
-            # The tool reads this file's frontmatter with a real YAML
-            # parser: its refusal is the finding (#333).
-            _sets, listed = publish_list_sets(vault)
-            if listed.why and "frontmatter cannot be read" in listed.why:
-                detail = listed.why.split("(", 1)[-1].rstrip(") ")
-                rows.append(f"ERROR\t{rel}\tthe publish tool cannot read "
-                            f"this frontmatter ({detail}) — {_yaml_hint(detail)}")
-                continue
-            if fm is not None and "type" not in fm:
-                # Written before the tool added `type: meta`; the next
-                # write of the list adds it, so a row would only nag.
-                continue
         if fm is None:
             rows.append(f"INFO\t{rel}\tno frontmatter")
             continue
@@ -875,6 +853,161 @@ MIGRATION_HINT = ("run campaign-organizer's migration workflow "
                   "(references/migration-procedure.md) before proceeding")
 
 
+MOVED_FLOOR = "1.10.60"      # the oldest stamp the update accepts
+MOVED_TOOL = "1.27.0"        # the oldest site publish tool it accepts
+BRIDGE = "1.10.134"          # the first release whose update moves a vault
+LAST_BRIDGE = "1.10.137"     # the last 1.10 release (the one to install)
+
+# Where a leftover the publish tool names is, by its `source`; a leftover
+# with no source is the vault file the fault names.
+LEFTOVER_FILES = {"site": "vault.config.json", "package": "package.json"}
+
+
+@dataclass(frozen=True)
+class Left:
+    """One thing that keeps a vault from the update: the file it is in, what
+    it is, and whether the 1.10 bridge update fixes it (`bridge`: a short
+    phrase for one sentence) or the GM does by hand (a sentence that says
+    how, as the publish tool words it)."""
+    file: str
+    text: str
+    bridge: bool
+
+
+def _fault_file(f: dict[str, Any]) -> str:
+    source = f.get("source")
+    if source in LEFTOVER_FILES:
+        return LEFTOVER_FILES[source]
+    name = str(f.get("name") or "")
+    return name if name.startswith("_meta/") else vaultlib.SETTINGS_FILE
+
+
+SITE_CHECKS_SKIPPED = ("the site checks need node and were skipped "
+                       "(what the build stops on is checked when it runs)")
+
+
+def unmoved(vault: Path, stamp: str | None,
+            notes: list[str] | None = None) -> list[Left]:
+    """What keeps a vault from the update, in the order the refusal names
+    them; empty when the vault is moved. Everything the build stops on as a
+    leftover comes from the publish tool (`settings get`: the old settings
+    file alone or beside the new one, the old publish list, keys in the site
+    folder's vault.config.json, build hooks or an unreadable package.json in
+    the site folder); this adds only the stamp and the site's tool version.
+    Settings the tool reads and refuses (not valid YAML) are named.
+
+    The gate must not need node: when the tool cannot be asked (no node, no
+    tool, a timeout), only what Python sees is checked (the stamp, the old
+    settings file, the old publish list) and `SITE_CHECKS_SKIPPED` goes on
+    `notes`. The build stops on the rest by itself, so nothing can leak. A
+    vault with no site folder has no site checks. A vault with no stamp and
+    no settings file is new, not unmoved: the caller sends it to setup
+    first."""
+    left: list[Left] = []
+    if stamp is None:
+        left.append(Left(vaultlib.STATE_FILE, f"no update stamp ({vaultlib.STATE_FILE})", True))
+    elif parse_version(stamp) < parse_version(MOVED_FLOOR):
+        left.append(Left(vaultlib.STATE_FILE, f"an update stamp of {stamp} "
+                         f"({vaultlib.STATE_FILE}), older than {MOVED_FLOOR}", True))
+    try:
+        own = settings(vault)
+    except SettingsUnavailable as e:
+        if e.answered:
+            left.append(Left(vaultlib.SETTINGS_FILE, f"{e}. Fix that so its "
+                             "settings can be checked.", False))
+            return left
+        left += _seen_without_tool(vault)
+        if notes is not None and _names_a_site_folder(vault):
+            notes.append(SITE_CHECKS_SKIPPED)
+        return left
+    for f in own.faults:
+        if f.get("level") == "stop" and f.get("leftover"):
+            text = str(f["message"])
+            if f.get("source") in LEFTOVER_FILES:
+                text = f"{_sentence(text)[:-1]}; {CLEAR_FOLDER}"
+            left.append(Left(_fault_file(f), text, False))
+    site, _ = _site_of(own, vault)
+    if site is not None:
+        pin = site_pin(site)
+        if pin.version is None and pin.stale:
+            left.append(Left(f"{site.as_posix()}/package.json",
+                             f"The site's publish tool version could not be "
+                             f"checked: {pin.stale}. Fix that in the site "
+                             f"folder; {CLEAR_FOLDER}", False))
+        elif pin.version is not None and semver_below(pin.version, MOVED_TOOL):
+            left.append(Left(f"{site.as_posix()}/package.json",
+                             f"a site publish tool older than {MOVED_TOOL}",
+                             True))
+    return left
+
+
+# A site-folder leftover on a vault whose site is no longer published: the
+# folder can go instead.
+CLEAR_FOLDER = ("or, if the site is no longer published, clear "
+                "player_site.folder.")
+
+
+def _names_a_site_folder(vault: Path) -> bool:
+    """Whether the settings file may name a site folder, read with no tool:
+    any `folder:` key with a value. Errs towards yes (it only decides
+    whether the update says the site checks were skipped)."""
+    try:
+        text = (vault / vaultlib.SETTINGS_FILE).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return True
+    return re.search(r"^\s*folder\s*:\s*[^\s#]", text, re.M) is not None
+
+
+def _seen_without_tool(vault: Path) -> list[Left]:
+    """The leftovers Python sees with no tool to ask: the old settings file
+    and the old publish list, by their being there. The old file beside the
+    new one is a hand fix (the 1.10 update leaves it there), worded as the
+    tool words it."""
+    left: list[Left] = []
+    old, new = vaultlib.LEGACY_SETTINGS_FILE, vaultlib.SETTINGS_FILE
+    if (vault / old).is_file() and (vault / new).is_file():
+        left.append(Left(old, f"{old} is still beside {new}: remove or rename "
+                         f"`{old}` once you have checked its settings are in "
+                         f"`{new}`; plugin 1.11.0 no longer reads it", False))
+    elif (vault / old).is_file():
+        left.append(Left(old, f"the old settings file {old}", True))
+    listed = "_meta/publish-manifest.md"
+    if (vault / listed).is_file():
+        left.append(Left(listed, f"the old publish list {listed}", True))
+    return left
+
+
+def _and(parts: list[str]) -> str:
+    return (parts[0] if len(parts) < 2
+            else f"{', '.join(parts[:-1])} and {parts[-1]}")
+
+
+def _sentence(text: str) -> str:
+    text = text.strip()
+    text = text[:1].upper() + text[1:]
+    return text if text.endswith((".", "!", "?")) else f"{text}."
+
+
+def refusal(left: list[Left], plugin: str) -> str:
+    """The one line that refuses the update: what the 1.10 bridge update
+    fixes in one sentence, then each thing the GM fixes, as the tool says
+    it."""
+    said = [f"Plugin {plugin} cannot update this vault yet."]
+    bridged = [x.text for x in left if x.bridge]
+    where = (f"{LAST_BRIDGE} is the last: https://github.com/AntTheLimey/"
+             f"gm-apprentice/releases/tag/v{LAST_BRIDGE}; install its "
+             f"campaign-organizer and run its update")
+    if bridged:
+        said.append(f"It has {_and(bridged)}: update it first with a 1.10 "
+                    f"release, {BRIDGE} or later ({where}).")
+    by_hand = [_sentence(x.text) for x in left if not x.bridge]
+    said += by_hand
+    if not bridged and any(BRIDGE in x for x in by_hand):
+        said.append(f"(For the 1.10 release: {where}.)")
+    said.append("Then run this update again.")
+    return " ".join(said)
+
+
 def check_version(vault: Path) -> tuple[list[str], int]:
     """The vault/plugin semver gate eight skills open with.
 
@@ -909,6 +1042,10 @@ def check_version(vault: Path) -> tuple[list[str], int]:
         return (["SETUP\t(vault)\tno settings file in _meta/ — first-time "
                  "setup, not migration (campaign-organizer's "
                  "references/vault-setup.md)"], 0)
+    left = unmoved(vault, str(current) if current else None)
+    if left:
+        # Not ERROR (a broken install): the vault must be moved or tidied first.
+        return ([f"REFUSED\t{left[0].file}\t{refusal(left, plugin)}"], 1)
     if not current:
         return ([f"MISMATCH\t{rel}\tgm_apprentice_version absent — "
                  f"{MIGRATION_HINT}"], 1)
@@ -1092,9 +1229,7 @@ def manifest_rows(vault: Path, played: list[str]) -> list[str]:
     reason. The Wrap-Up rows come from the same answer. When it can't be
     asked, the rows promise nothing about what happens next.
     """
-    if not played or not any((vault / "_meta" / name).is_file()
-                             for name in ("publish-list.yaml",
-                                          "publish-manifest.md")):
+    if not played or not (vault / "_meta" / "publish-list.yaml").is_file():
         return []
     sections, listed = publish_list_sets(vault)
     if sections is None:
@@ -1307,10 +1442,10 @@ def story_moments_on(site_settings: Settings | None) -> bool:
 
 
 def vault_settings(vault: Path) -> Settings:
-    """Every setting of the vault, with the site folder's own
-    vault.config.json taking part when the vault has one (its old keys are
-    still read until they are moved). The vault file alone says where the
-    site is, so that is read first."""
+    """Every setting of the vault, read with the site folder's own
+    vault.config.json when the vault has one (any key there but vaultPath
+    is a stop the faults name; nothing in it is read as a setting). The
+    vault file alone says where the site is, so that is read first."""
     own = settings(vault)
     site, has_config = _site_of(own, vault)
     if site is not None and has_config:
@@ -1319,7 +1454,7 @@ def vault_settings(vault: Path) -> Settings:
 
 
 def no_site_dir(vault: Path) -> str:
-    return f"{setting_name(vault, 'player_site.folder')} is not set"
+    return "player_site.folder is not set"
 
 
 def _site_config(vault: Path) -> tuple[Path | None, str | None]:
@@ -1334,7 +1469,7 @@ def _site_config(vault: Path) -> tuple[Path | None, str | None]:
         return None, no_site_dir(vault)
     if not has_config:
         return None, (f"no vault.config.json in "
-                      f"{setting_name(vault, 'player_site.folder')} ({site})")
+                      f"player_site.folder ({site})")
     return site / "vault.config.json", None
 
 
@@ -1667,7 +1802,7 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
         has_site = site_without_tool(settings(vault))
         if has_site:
             fix += (f"; if this vault has no site, set "
-                    f"{setting_name(vault, 'player_site.publish')}: false "
+                    "player_site.publish: false "
                     f"in {settings_file(vault)}")
         elif fix == node_fix:
             # The site is off and only node is missing: there is nothing a
@@ -1684,18 +1819,14 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
                 "fix what it lists"), True
         return None, site_is_off(vault), None, False
     if site is None:
-        on_name = setting_name(vault, "player_site.publish")
+        on_name = "player_site.publish"
         return None, (f"{on_name} is on but "
-                      f"{setting_name(vault, 'player_site.folder')} names no "
+                      "player_site.folder names no "
                       f"site"), (
             f"set the site up with publish-site, or set {on_name}: false"
             ), True
-    if publishes and settings(vault).inline:
-        return None, (f"publish: in {settings_file(vault)} is written in a way that "
-                      f"is not understood here (on one line)"), (
-            "write it as a block at the margin, one key per line"), True
     if not (site / "vault.config.json").is_file():
-        folder_name = setting_name(vault, "player_site.folder")
+        folder_name = "player_site.folder"
         return None, (f"no vault.config.json in {folder_name} "
                       f"({site.as_posix()})"), f"fix {folder_name}", True
     fix = f"run update-pin --site {site.as_posix()}, then run this again"
@@ -1739,7 +1870,7 @@ def _stop_fault(vault: Path) -> bool:
 
 
 def site_is_off(vault: Path) -> str:
-    return f"{setting_name(vault, 'player_site.publish')} is not on"
+    return "player_site.publish is not on"
 
 
 def _resolved_from(site: Path) -> Path | None:
@@ -2879,8 +3010,8 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
             if state.in_code or not state.published:
                 continue
             if state.heading is not None:
-                found = _heading_leak(rel, state, excludes, setting_name(
-                    vault, "player_site.hide.sections"), settled)
+                found = _heading_leak(rel, state, excludes,
+                                      "player_site.hide.sections", settled)
                 was_settled = found == [SETTLED_SKIP]
                 if was_settled:
                     found = []
@@ -4812,7 +4943,7 @@ def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
     an `exclude_sections` the tool cannot read, writes nothing.
     """
     name = "player_site.hide.sections"
-    shown_name = setting_name(vault, name)
+    shown_name = name
     own = settings(vault)
     if own.origins[name] == "fault":
         why = next((f["message"] for f in own.faults if f.get("setting") == name),
@@ -4848,10 +4979,6 @@ def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
         elif new_text is not None:
             writes.append((rel, new_text, moved))
 
-    if collapse and own.inline:
-        refused += 1
-        rows.append(f"ERROR\t{settings_file(vault)}\t{shown_name} cannot be "
-                    f"collapsed: publish: is written on one line")
     if refused:
         rows.append(f"ERROR\t{settings_file(vault)}\tmigration blocked by {refused} "
                     f"refusal(s) above — nothing written, {shown_name} "
@@ -5230,10 +5357,6 @@ def _resolve_vault_paths(vault: Path, raw_paths: list[str]
 # name (`--apply`). "none": the GM decides what to do.
 SETTINGS_UNREAD = "could not read the vault's settings: "
 SETTINGS_KINDS = ("certain", "proposed", "none")
-SITE_FILE_NOTE = ("This one is in the site folder's vault.config.json, not "
-                  "in the vault's settings file. Run the vault update "
-                  "(campaign-organizer's migration) to move it; this check "
-                  "does not change that file.")
 
 
 @dataclass
@@ -5248,8 +5371,6 @@ class SettingsRow:
     done: str | None = None
     note: str | None = None
     comments: list[str] = field(default_factory=list)
-    site: bool = False
-    where: str | None = None    # the file a site row names, when not vault.config.json
 
     @property
     def certain(self) -> bool:
@@ -5263,8 +5384,7 @@ def _short(value: Any) -> str:
 
 def _written_at(raw: Any, name: str) -> tuple[bool, Any]:
     """(whether the dotted `name` is written in the settings file, its
-    value). `raw` is the file as written: the whole new file, or the old
-    file's frontmatter."""
+    value). `raw` is the file as written."""
     cur = raw
     for seg in name.split("."):
         if not isinstance(cur, dict) or seg not in cur:
@@ -5281,10 +5401,6 @@ def _run_ops(vault: Path, ops: list[dict[str, Any]]) -> None:
             settings_add(vault, op["name"], op["entries"])
         elif op["op"] == "carry":
             settings_carry(vault, op["from"], op["to"])
-        elif op["op"] == "fold-site":
-            settings_fold_site_file(vault, op.get("keys"))
-        elif op["op"] == "tidy":
-            settings_tidy(vault, discard_old_file=bool(op.get("discard")))
         else:
             settings_unset(vault, list(op["names"]))
 
@@ -5366,298 +5482,6 @@ def _classify_move(fault_kind: str, name: str, value: Any, target: str,
     return row
 
 
-SITE_FILE_PLACE = "in the site folder's vault.config.json"
-
-
-def _site_move_plan(vault: Path, *, fold: bool = False,
-                    only: list[str] | None = None) -> dict[str, Any]:
-    """What the tool's move would do with the site folder's files (with
-    `fold`, what its --fold-site-file would do, for the `only` keys when
-    given), or {} when it cannot say. A blocked plan comes back as the tool
-    gave it, `ok` false with its `blockers`."""
-    try:
-        return settings_move_plan(vault, fold_site_file=fold, only=only)
-    except SettingsUnavailable:
-        return {}
-
-
-def _site_held(plan: dict[str, Any]) -> str | None:
-    """The tool's sentence when the site's own tool is too old to read the
-    site-folder keys from the vault, else None."""
-    held = plan.get("keysHeld")
-    if isinstance(held, dict) and held.get("line"):
-        return str(held["line"])
-    return None
-
-
-def _site_held_row(fault: dict[str, Any], line: str) -> SettingsRow:
-    """One informational row for every site-folder key a too-old site tool
-    leaves in the site file: nothing for the GM to do in the vault, so it is
-    a note, not a warning, and the report does not count it."""
-    return SettingsRow({**fault, "level": "info", "kind": "held",
-                        "message": line}, site=True)
-
-
-def _site_left_row(fault: dict[str, Any]) -> SettingsRow:
-    """A site-folder key the vault sets none of: the site file's value is
-    read until the tool's move carries it into the vault. Certain: the move
-    changes nothing the site shows."""
-    row = SettingsRow(fault, site=True)
-    target = str(fault.get("use") or fault.get("setting") or "")
-    key = fault["name"]
-    row.kind = "certain"
-    row.ops = [{"op": "fold-site", "keys": [key]}]
-    row.fix = (f"move it to {target} in the vault's settings and take it out "
-               "of vault.config.json (until it moves, the value is read from "
-               "vault.config.json, so the site builds the same either way)")
-    row.done = f"moved {key} to {target}"
-    return row
-
-
-def _site_unusable_row(fault: dict[str, Any]) -> SettingsRow:
-    """A site-folder key whose value the tool cannot use (the fault says what
-    it takes). The move would stop on it; the GM corrects it in the site
-    file."""
-    row = SettingsRow(fault, site=True)
-    row.note = ("Nothing is changed automatically: fix it in the site "
-                "folder's vault.config.json, then run this check again.")
-    return row
-
-
-def _site_differs_row(fault: dict[str, Any], own: Any,
-                      site_value: Any) -> SettingsRow:
-    """A site-folder key the vault sets too, to something else: the vault's
-    value is the one in use. Dropping the site file's value is certain for an
-    address, host or project name. For the kept folders and the output folder
-    it is proposed, because a folder only the site file names is cleaned by
-    the next build."""
-    row = SettingsRow(fault, site=True)
-    target = str(fault.get("use") or fault.get("setting") or "")
-    key = fault["name"]
-    try:
-        mine = own.get(target)
-    except KeyError:
-        mine = None
-    row.ops = [{"op": "fold-site", "keys": [key]}]
-    row.done = f"took {key} out of vault.config.json"
-    checks = fault.get("checks")
-    if checks == "keep" and isinstance(site_value, list) \
-            and isinstance(mine, list):
-        kept = {str(x).strip().strip("/") for x in mine}
-        lost = [str(x) for x in site_value
-                if str(x).strip().strip("/") not in kept]
-        if lost:
-            names = ", ".join(lost)
-            row.kind = "proposed"
-            row.fix = (f"the site file keeps {names} but the vault's "
-                       f"{target} ({_short(mine)}) does not, so {names} "
-                       "would be cleaned at the next build. To keep "
-                       f"{'it' if len(lost) == 1 else 'them'}, add "
-                       f"{'it' if len(lost) == 1 else 'them'} to {target}; "
-                       "to let "
-                       f"{'it' if len(lost) == 1 else 'them'} go, apply this "
-                       "fix, which drops the site file's list")
-            return row
-        row.kind = "certain"
-        row.fix = (f"everything the site file keeps ({_short(site_value)}) is "
-                   f"already in the vault's {target}; take the list out of "
-                   "vault.config.json")
-        return row
-    if checks == "output":
-        row.kind = "proposed"
-        row.fix = (f"the site file says {_short(site_value)} and the vault's "
-                   f"{target} says {_short(mine)}: the site builds into "
-                   f"{_short(mine)} now and still will once the site file's "
-                   f"is dropped, and {_short(site_value)} is not used. To "
-                   f"build into {_short(site_value)} instead, set {target} to "
-                   "it first; otherwise apply this fix, which drops the site "
-                   "file's value")
-        return row
-    row.kind = "certain"
-    row.fix = (f"the vault's {target} ({_short(mine)}) is the value in use; "
-               f"drop the site file's {_short(site_value)} from "
-               "vault.config.json")
-    return row
-
-
-def _package_step_rows(plan: dict[str, Any]) -> list[SettingsRow]:
-    """The build steps the site folder's package.json still holds on a moved
-    vault: certain rows, fixed by the tool's move. The tool names what it
-    would carry (`carried`, from `package.json <script>`); steps that the
-    vault's settings already hold are removed from package.json."""
-    rows: list[SettingsRow] = []
-    carried = [c for c in plan.get("carried") or []
-               if isinstance(c, dict)
-               and str(c.get("from", "")).startswith("package.json ")]
-    for c in carried:
-        script = str(c["from"]).split(" ", 1)[1]
-        target = str(c.get("to"))
-        fault = {"name": f"package.json {script}", "level": "warn",
-                 "kind": "dropped", "setting": target, "use": target,
-                 "message": f"the site's {script} step is still in "
-                            "package.json; its tool runs it from there until "
-                            f"the update moves it to {target}"}
-        row = SettingsRow(fault, site=True, where="package.json")
-        row.kind = "certain"
-        row.ops = [{"op": "fold-site", "keys": [fault["name"]]}]
-        row.fix = (f"move it to {target} in the vault's settings and take it "
-                   "out of package.json (the tool then runs it from the "
-                   "settings)")
-        row.done = f"moved the {script} step to {target}"
-        rows.append(row)
-    for d in plan.get("stepsDiffer") or []:
-        if not isinstance(d, dict):
-            continue
-        differing: dict[str, Any] = {"name": f"package.json {d.get('script')}", "level": "warn",
-                 "kind": "dropped", "setting": d.get("setting"),
-                 "message": str(d.get("line"))}
-        row = SettingsRow(differing, site=True, where="package.json")
-        row.note = ("Nothing is changed automatically. `npm run build` runs "
-                    "the package.json script as well as the vault's steps, so "
-                    "the step can run twice; the tool's own build and deploy "
-                    "run only the vault's. Either make them the same (set "
-                    f"{d.get('setting')} to match), or take the script out of "
-                    "package.json.")
-        rows.append(row)
-    written = [Path(str(p)).name for p in (plan.get("files") or {}).get("write") or []]
-    if not carried and "package.json" in written:
-        fault = {"name": "package.json", "level": "warn", "kind": "dropped",
-                 "message": "package.json holds build steps that the vault's "
-                            "settings already hold, so they run twice under "
-                            "npm run build"}
-        row = SettingsRow(fault, site=True, where="package.json")
-        row.kind = "certain"
-        row.ops = [{"op": "fold-site", "keys": ["package.json"]}]
-        row.fix = "take them out of package.json (the tool runs the vault's)"
-        row.done = "took the build steps out of package.json"
-        rows.append(row)
-    return rows
-
-
-def _site_key_row(fault: dict[str, Any], own: Any,
-                  site_value: Any = None,
-                  fold: dict[str, Any] | None = None,
-                  vault: Path | None = None) -> SettingsRow:
-    """A setting the site folder's vault.config.json still holds, on a vault
-    already on the new file. That file is not read now. The fix takes the key
-    out of the site file, in one change with the vault's file (the tool does
-    it): a setting the vault does not set moves into the vault's file, and
-    the vault's own value stays where it sets one. `fold` is the tool's
-    `--fold-site-file` check, whose `carried` and `dropped` say which, so the
-    row says what the tool will do (#539). Certain: it hides the same or
-    more, and loses nothing the vault does not already say."""
-    row = SettingsRow(fault, site=True)
-    target = str(fault.get("use") or fault.get("setting") or "")
-    try:
-        info = settings_describe(target)
-    except SettingsUnavailable:
-        info = {}
-    key = fault["name"]
-
-    def mine(entries: Any) -> list[dict[str, Any]]:
-        return [x for x in entries or [] if isinstance(x, dict)
-                and (str(x.get("from")) == key
-                     or str(x.get("from")).startswith(key + "."))]
-
-    if fold and fold.get("ok") is False and vault is not None:
-        # The whole fold is refused, maybe for another key: this row's fix
-        # folds its own key alone, so ask the tool about that.
-        fold = _site_move_plan(vault, fold=True, only=[key])
-    if fold and fold.get("ok") is False:
-        # The tool refuses the fold: say why, and offer nothing to apply.
-        said = "; ".join(str(b) for b in fold.get("blockers") or []) \
-            or "the publish tool would not take it out"
-        row.note = (f"Nothing is changed automatically: the publish tool "
-                    f"will not take it out yet ({said}).")
-        return row
-    moved = mine((fold or {}).get("carried"))
-    gone = mine((fold or {}).get("dropped"))
-    carries = (info.get("kind") == "switchOrList" and site_value is True) or (
-        isinstance(site_value, list)
-        and any(isinstance(x, str) and x.strip() for x in site_value))
-    nothing = (info.get("guards") and info.get("kind") in ("list", "switchOrList")
-               and not carries)
-    done = f"took {key} out of vault.config.json"
-    if nothing:
-        # Not a list of entries: the old layout ignored it too, so nothing it
-        # hid is shown, and nothing is carried over.
-        what = ("remove it from vault.config.json; it holds no list of "
-                f"entries, so nothing is added to {target}")
-        done += "; it held no list of entries, so nothing was carried"
-    elif moved or gone:
-        # The tool's own plan: what it carries and what it leaves behind.
-        parts = []
-        if moved:
-            if len(moved) == 1 and moved[0]["from"] == key:
-                parts.append(f"move it to {moved[0]['to']}, which the vault "
-                             "does not set")
-            else:
-                parts.append("move " + ", ".join(
-                    f"{c['from']} to {c['to']}" for c in moved)
-                    + ", which the vault does not set")
-            done += ", moving " + ", ".join(
-                f"{c['from']} to {c['to']}" for c in moved)
-        what = ((parts[0] + ", and remove it from vault.config.json")
-                if parts else "remove it from vault.config.json")
-        if gone:
-            left = "; ".join(f"{d['from']} ({d.get('why')})" for d in gone)
-            what += "; the site file's value is not carried: " + left
-            done += "; not carried: " + left
-    elif info.get("guards") and info.get("kind") == "list":
-        what = (f"add its entries to {target} (the built-in entries stay) "
-                "and remove it from vault.config.json")
-    elif info.get("guards"):
-        what = (f"keep the stricter of the two rules in {target} and remove "
-                "it from vault.config.json")
-    elif not fold:
-        # The tool could not say what it would carry.
-        what = ("remove it from vault.config.json; the tool carries what the "
-                f"vault does not set into {target} and keeps the vault's own "
-                "values")
-    else:
-        # Nothing to carry and nothing lost: the vault already says it.
-        shown = ""
-        try:
-            shown = f" ({_short(own.get(target))})"
-        except KeyError:
-            pass
-        what = (f"remove it from vault.config.json; the vault's {target}"
-                f"{shown} already says the same, and that file is not read "
-                "now")
-    row.kind = "certain"
-    row.ops = [{"op": "fold-site", "keys": [key]}]
-    row.fix = what
-    row.done = done
-    return row
-
-
-def _leftover_row(fault: dict[str, Any], vault: Path) -> SettingsRow:
-    """The old settings file left beside the new one: the publish tool says
-    whether it holds anything the new file lacks. Nothing more: removed when
-    it holds nothing (certain), else removed only on the GM's yes."""
-    row = SettingsRow(fault)
-    try:
-        left = settings_move_plan(vault).get("leftover")
-    except SettingsUnavailable:
-        return row
-    if not isinstance(left, dict):
-        return row
-    if left.get("redundant"):
-        row.kind = "certain"
-        row.ops = [{"op": "tidy", "discard": False}]
-        row.fix = (f"remove {LEGACY_SETTINGS_FILE}; it holds nothing the new "
-                   "file lacks")
-        row.done = f"removed {LEGACY_SETTINGS_FILE}"
-    else:
-        keys = ", ".join(str(k) for k in left.get("keys") or []) or "settings"
-        row.kind = "proposed"
-        row.ops = [{"op": "tidy", "discard": True}]
-        row.fix = (f"remove {LEGACY_SETTINGS_FILE} anyway; it holds {keys}, "
-                   "which the new file does not")
-        row.done = f"removed {LEGACY_SETTINGS_FILE}"
-    return row
-
-
 def _both_set(row: SettingsRow, name: str, value: Any, target: str,
               there: bool, held: Any, info: dict[str, Any]) -> None:
     """A stray key whose right setting is already set, in the new file. A
@@ -5688,17 +5512,8 @@ def _plan_fix(fault: dict[str, Any], raw: Any, claimed: set[str],
               scratch: Path, text: str) -> SettingsRow:
     row = SettingsRow(fault)
     name, kind = str(fault["name"]), fault["kind"]
-    if kind == "misplaced":
-        # Beside `publish:`, not under it: the settings command only edits
-        # inside the publish block, so it cannot move the key.
-        row.note = ("the settings command cannot move a key from beside "
-                    "publish:; move it under publish: by hand.")
-        return row
     present, value = _written_at(raw, name)
-    # On the old file only a key under `publish:` is fixed here; the new
-    # file's keys all are settings or mistakes.
-    old_file = vault_layout(scratch) == "legacy"
-    if (old_file and not name.startswith("publish.")) or not present:
+    if not present:
         return row
     if kind == "retired":
         row.kind = "certain"
@@ -5711,25 +5526,18 @@ def _plan_fix(fault: dict[str, Any], raw: Any, claimed: set[str],
         if not target:
             return row
         there, held = _written_at(raw, target)
-        if (there or target in claimed) and old_file:
-            shown = _short(held) if there else "a value from another fix"
-            row.note = (f"{target} is already set ({shown}) and {name} holds "
-                        f"{_short(value)}; keep one, then remove the other.")
-            return row
         try:
             info = settings_describe(target)
         except SettingsUnavailable:
             return row  # not a setting the tool can describe
-        # A stray key in the new file is not read at all, so what it holds is
+        # A stray key in the file is not read at all, so what it holds is
         # judged as any mistyped name's would be, whatever it was called.
-        moved = _classify_move("unknown-name" if not old_file else kind,
-                               name, value, target, info)
+        moved = _classify_move("unknown-name", name, value, target, info)
         moved.fault = fault
-        if not old_file:
-            # One all-or-nothing change: the value (a list's entries added to
-            # the list), then the stray key removed.
-            moved.ops = [{"op": "carry", "from": name, "to": target}]
-        if not old_file and (there or target in claimed):
+        # One all-or-nothing change: the value (a list's entries added to
+        # the list), then the stray key removed.
+        moved.ops = [{"op": "carry", "from": name, "to": target}]
+        if there or target in claimed:
             _both_set(moved, name, value, target, there, held, info)
         row = moved
     else:
@@ -5742,8 +5550,6 @@ def _plan_fix(fault: dict[str, Any], raw: Any, claimed: set[str],
     # certain fix is tried the way `--fix` will meet it.
     target_file = scratch / settings_file(scratch)
     kept = target_file.read_bytes()
-    before = settings(scratch).values if kind == "old-name" and old_file \
-        else None
     ok = False
     try:
         _run_ops(scratch, row.ops)
@@ -5761,9 +5567,6 @@ def _plan_fix(fault: dict[str, Any], raw: Any, claimed: set[str],
         row.note = (f"{name} holds {_short(value)}"
                     + (f", and {target} takes {takes}." if takes
                        else f" ({e})."))
-    if ok and before is not None and settings(scratch).values != before:
-        # The old name's value was read differently from the new name's.
-        row.kind = "proposed"
     if not ok or row.kind != "certain":
         target_file.write_bytes(kept)
         forget_settings(scratch)
@@ -5778,124 +5581,36 @@ def _plan_fix(fault: dict[str, Any], raw: Any, claimed: set[str],
     return row
 
 
-def plan_settings(vault: Path) -> tuple[list[SettingsRow], bool]:
-    """(every fault in the settings as a row, whether the `publish:` block
-    is written in a way the tool cannot edit). Writes nothing."""
+def plan_settings(vault: Path) -> list[SettingsRow]:
+    """Every fault in the settings as a row. Writes nothing."""
     try:
         own = settings(vault)
     except SettingsUnavailable as e:
         if "is not valid YAML" not in str(e):
             raise
         reason = str(e).removeprefix(SETTINGS_UNREAD)
-        return ([SettingsRow({"name": "publish", "level": "stop",
-                              "kind": "invalid-yaml",
-                              "message": reason})], False)
+        return [SettingsRow({"name": "player_site", "level": "stop",
+                             "kind": "invalid-yaml", "message": reason})]
     rows: list[SettingsRow] = []
     file_name = settings_file(vault)
-    if own.inline:
-        rows = [SettingsRow(f) for f in own.faults]
-        rows.append(SettingsRow({
-            "name": "publish", "level": "warn", "kind": "inline",
-            "message": f"publish: in {file_name} is written on one line, "
-                       "which the settings command cannot edit; write it "
-                       "with one setting to a line."}))
-    else:
-        raw = settings_raw(vault)
-        source = vault / file_name
-        text = source.read_text(encoding="utf-8") if source.is_file() else ""
-        with tempfile.TemporaryDirectory(prefix="vc-settings-") as tmp:
-            scratch = Path(tmp)
-            (scratch / "_meta").mkdir()
-            # Whichever file the vault is on, under its own name, so the tool
-            # reads the copy the way it reads the real one.
-            empty = ("---\ntype: meta\n---\n"
-                     if vault_layout(vault) == "legacy" else "version: 1\n")
-            (scratch / file_name).write_text(text or empty, encoding="utf-8")
-            claimed: set[str] = set()
-            try:
-                for f in own.faults:
-                    if f["kind"] == "dropped" and f["name"] == LEGACY_SETTINGS_FILE:
-                        rows.append(_leftover_row(f, vault))
-                        continue
-                    rows.append(_plan_fix(f, raw, claimed, scratch, text))
-            finally:
-                forget_settings(scratch)
-    # Faults the site folder's own vault.config.json adds.
-    site, has_config = _site_of(own, vault)
-    if has_config and site is not None:
-        merged = settings(vault, site_config=site / "vault.config.json")
-        seen = {(f["name"], f["kind"], f["message"]) for f in own.faults}
+    raw = settings_raw(vault)
+    source = vault / file_name
+    text = source.read_text(encoding="utf-8") if source.is_file() else ""
+    with tempfile.TemporaryDirectory(prefix="vc-settings-") as tmp:
+        scratch = Path(tmp)
+        (scratch / "_meta").mkdir()
+        # A copy, so the tool reads it the way it reads the real one.
+        (scratch / file_name).write_text(text or "version: 1\n",
+                                         encoding="utf-8")
+        claimed: set[str] = set()
         try:
-            site_json = json.loads(
-                (site / "vault.config.json").read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            site_json = {}
-        moved = vault_layout(vault) == "new"
-        move_plan = _site_move_plan(vault) if moved else {}
-        fold_plan: dict[str, Any] | None = None   # asked once, when needed
-        left_names = {f["name"] for f in merged.faults if f.get("siteLeft")}
-        # A value the tool cannot use blocks the move; the tool names the key
-        # first in its blocker, whatever the vault holds.
-        blocked: dict[str, str] = {}
-        for b in move_plan.get("blockers") or []:
-            key = str(b).split(" ", 1)[0]
-            if any(g["name"] == key for g in merged.faults):
-                blocked.setdefault(key, str(b))
-        held_line = _site_held(move_plan)
-        said: set[str] = set()
-        for f in merged.faults:
-            if (f["name"], f["kind"], f["message"]) in seen:
-                continue
-            message = f["message"]
-            if SITE_FILE_PLACE not in message:
-                message += f" ({SITE_FILE_PLACE})"
-            if moved:
-                fault = {**f, "message": message}
-                if f["name"] in blocked:
-                    if f["name"] not in said:
-                        said.add(f["name"])
-                        rows.append(_site_unusable_row(
-                            {"name": f["name"], "level": "stop",
-                             "kind": "not-allowed",
-                             "setting": f.get("setting"),
-                             "message": blocked[f["name"]]}))
-                    continue
-                if held_line and (f.get("siteLeft") or f.get("siteDiffers")):
-                    if "held" not in said:
-                        said.add("held")
-                        rows.append(_site_held_row(fault, held_line))
-                    continue
-                if f.get("siteLeft") and any(
-                        g["name"] == f["name"] and g["level"] == "stop"
-                        for g in merged.faults):
-                    continue    # the unusable value's own row says it
-                if f.get("siteLeft"):
-                    rows.append(_site_left_row(fault))
-                elif f["level"] == "stop" and f["name"] in left_names:
-                    rows.append(_site_unusable_row(fault))
-                elif f.get("siteDiffers"):
-                    rows.append(_site_differs_row(
-                        fault, own,
-                        site_json.get(f["name"])
-                        if isinstance(site_json, dict) else None))
-                else:
-                    if fold_plan is None:
-                        fold_plan = _site_move_plan(vault, fold=True)
-                    rows.append(_site_key_row(
-                        fault, own,
-                        site_json.get(f["name"])
-                        if isinstance(site_json, dict) else None,
-                        fold_plan, vault))
-                continue
-            if f.get("siteLeft"):
-                continue    # the update moves it; the legacy file reads it
-            rows.append(SettingsRow(
-                {**f, "message": message}, note=SITE_FILE_NOTE, site=True))
-        if moved:
-            rows.extend(_package_step_rows(move_plan))
+            for f in own.faults:
+                rows.append(_plan_fix(f, raw, claimed, scratch, text))
+        finally:
+            forget_settings(scratch)
     rows.sort(key=lambda r: (SETTINGS_KINDS.index(r.kind),
                              r.fault["level"] != "stop"))
-    return rows, own.inline
+    return rows
 
 
 def _row_json(r: SettingsRow) -> dict[str, Any]:
@@ -5907,8 +5622,6 @@ def _row_json(r: SettingsRow) -> dict[str, Any]:
                            "operations": r.ops}
     if r.comments:
         out["comments"] = r.comments
-    if r.site:
-        out["file"] = "site"
     if r.note:
         out["note"] = r.note
     return out
@@ -5916,7 +5629,8 @@ def _row_json(r: SettingsRow) -> dict[str, Any]:
 
 def _row_lines(r: SettingsRow, file_name: str) -> list[str]:
     word = {"stop": "STOP", "info": "NOTE"}.get(r.fault["level"], "WARN")
-    where = r.where or ("vault.config.json" if r.site else file_name)
+    where = (_fault_file(r.fault) if r.fault.get("leftover")
+             or r.fault.get("source") else file_name)
     lines = [f"{word}\t{where}\t{r.fault['message']}"]
     if r.fix:
         lines.append(f"{'proposed' if r.kind == 'proposed' else 'fix'}: "
@@ -5954,14 +5668,9 @@ def check_settings(vault: Path, fix: bool, apply_names: list[str],
     """`vault_check.py <vault> settings`: the faults in the settings, and
     with `fix` the certain fixes done, with `apply_names` the named fixes
     (certain or proposed) done."""
-    rows, inline = plan_settings(vault)
+    rows = plan_settings(vault)
     applied: list[SettingsRow] = []
-    skipped = ""
-    if (fix or apply_names) and inline:
-        skipped = (f"Nothing was written: publish: in {settings_file(vault)} is "
-                   "written on one line, which the settings command cannot "
-                   "edit. Write it with one setting to a line first.")
-    elif fix or apply_names:
+    if fix or apply_names:
         bad = [n for n in apply_names
                if not any(r.fault["name"] == n and r.ops for r in rows)]
         if bad:
@@ -5974,7 +5683,7 @@ def check_settings(vault: Path, fix: bool, apply_names: list[str],
         for n in apply_names:
             if any(a.fault["name"] == n for a in applied):
                 continue
-            fresh = plan_settings(vault)[0] if applied else rows
+            fresh = plan_settings(vault) if applied else rows
             found = next((x for x in fresh
                           if x.fault["name"] == n and x.ops), None)
             if found is None:
@@ -5983,14 +5692,13 @@ def check_settings(vault: Path, fix: bool, apply_names: list[str],
                     "earlier fixes; nothing more was changed.")
             _apply_row(vault, found, applied)
         if applied:
-            rows, inline = plan_settings(vault)
+            rows = plan_settings(vault)
     waiting = sum(1 for r in rows if r.kind == "proposed")
     if as_json:
         print(json.dumps({"applied": [
             {"name": a.fault["name"], "done": a.done, "operations": a.ops}
             for a in applied], "waiting": waiting,
-            "faults": [_row_json(r) for r in rows],
-            **({"skipped": skipped} if skipped else {})},
+            "faults": [_row_json(r) for r in rows]},
             indent=2, ensure_ascii=False))
         return 0
     for a in applied:
@@ -5998,8 +5706,6 @@ def check_settings(vault: Path, fix: bool, apply_names: list[str],
     if fix and waiting:
         print(f"{waiting} proposed fix{'es are' if waiting != 1 else ' is'} "
               "waiting for the GM's yes; apply one by name with --apply.")
-    if skipped:
-        print(skipped)
     if not rows:
         print("Settings: no faults")
     for r in rows:
@@ -6012,12 +5718,6 @@ def settings_fault_rows(vault: Path) -> list[str]:
     """One row for a report (`all`, `wrapup`) when the settings have a
     fault, pointing at the Settings check; none when they read cleanly."""
     faults = vault_settings(vault).faults
-    pending = [f for f in faults if f.get("siteLeft") or f.get("siteDiffers")]
-    if pending and vault_layout(vault) == "new" \
-            and _site_held(_site_move_plan(vault)):
-        # The site's own tool is too old to take them: nothing to do in the
-        # vault, so the report does not count them.
-        faults = [f for f in faults if f not in pending]
     if not faults:
         return []
     stops = sum(1 for f in faults if f["level"] == "stop")

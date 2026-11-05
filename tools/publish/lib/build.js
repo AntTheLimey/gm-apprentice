@@ -17,7 +17,7 @@ const { isRoster } = require('./templates/nav');
 const { noticeText } = require('./notice');
 const { fontNamesOfFile, licenceOf } = require('./font-names');
 const { getsNoPage, decideNoPage, noPageFor, listedOnly } = require('./previews');
-const { runSteps, packageScripts, packageNotes } = require('./settings/steps');
+const { runSteps } = require('./settings/steps');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
 const { ignoringMark } = require('./heading-key');
 const { linkText, parseWikilink } = require('./wikilink');
@@ -42,7 +42,6 @@ const { backgroundParts } = require('./pc-background');
 const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
 const { hasRealKvId, detectInbox, detectStatusBar } = require('./backend-flags');
-const { SITE_OLD_ROOTS } = require('./settings/legacy');
 const { publishesPage, autoExcludeCode, isHousekeepingNote, ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
 const { publishedPages } = require('./published-pages');
 const { isOutOfPlay } = require('./pc-status');
@@ -58,38 +57,6 @@ const { makeProps } = require('./props/make');
 const { collectionTemplate } = require('./templates/props-page');
 
 const TOOL_VERSION = require('../package.json').version;
-
-// The closing line about vault.config.json keys that moved to _meta/vault-config.md. Used
-// keys are listed plainly, a key the vault file also sets is "ignored", and an entry of a
-// list that the vault file's list lacks is named as still applied from the site file. The
-// old `backend` block and `landingTagline` are named too: either gives the migration work.
-// A list key that is not a list, or holds only entries that cannot be carried over, gets its
-// own clause (the migration cannot move it) and does not send the GM to migrate.py when it is all that is left. Returns the lines to print.
-function legacyWarning(legacy, rawConfig, layout) {
-  const parts = [];
-  const byHand = [];
-  for (const rec of Array.isArray(legacy) ? legacy : []) {
-    if (rec.notAList) {
-      byHand.push(`${rec.key} in vault.config.json is not a list and is ignored; remove it or move its entries to publish.${rec.publishKey} by hand`);
-      continue;
-    }
-    if (rec.unmovable) {
-      byHand.push(`${rec.key} in vault.config.json holds entries that are not text and cannot be moved; remove them or the key by hand`);
-      continue;
-    }
-    parts.push(rec.status === 'ignored' ? `${rec.key} (ignored; the vault file sets it)` : rec.key);
-    for (const x of rec.stillApplied || []) parts.push(`${rec.key} entry "${x}" is still applied from vault.config.json`);
-  }
-  for (const key of SITE_OLD_ROOTS) {
-    if (rawConfig && rawConfig[key] !== undefined) parts.push(key);
-  }
-  const moved = parts.length && layout === 'new'
-    ? `WARNING: vault.config.json still holds campaign settings: ${parts.join(', ')}. This vault's settings are in ${fileLabel(rawConfig.vaultPath)}, so these are no longer read; remove them from vault.config.json.`
-    : parts.length
-    ? `WARNING: vault.config.json still holds campaign settings: ${parts.join(', ')}. Settings left in vault.config.json are planned to stop being read in plugin 1.11.0. Run \`migrate.py <vault>\` to move them.`
-    : null;
-  return [moved, ...byHand.map((c) => `WARNING: ${c}.`)].filter(Boolean);
-}
 
 // Run `fn` with the console quiet: the in-memory build prints nothing, and a page rendered a
 // second time for the audit must not repeat its warnings.
@@ -314,7 +281,7 @@ function buildSite(options) {
     if (insideGitWorkTree(outputDir)) printWarning('The GM site\'s folder is inside a git repository; do not push it.');
   }
   // The player site's switch does not stop the GM site: its own (gm_site.publish) was checked above.
-  const off = gm ? null : siteOff(publishConfig.switches, rawConfig.vaultPath);
+  const off = gm ? null : siteOff(publishConfig.switches);
   // A setting named in a message is named as this vault's file writes it.
   const nm = (name) => nameIn(rawConfig.vaultPath, name);
   if (off && !dry) throw new Error(off);
@@ -343,18 +310,10 @@ function buildSite(options) {
     const there = gm ? fs.existsSync(path.join(outputDir, 'gm-build.json')) : fs.existsSync(path.join(outputDir, 'index.html'));
     if (!there) throw new Error(`There is no full build in ${outputDir} to update. Run gm-apprentice-publish build --site ${gm ? 'gm' : 'player'} first.`);
   }
-  // The site's own package.json build scripts are not run by a fast build: say so, once.
-  if (onlySheets) {
-    const skipped = Object.keys(packageScripts(configDir));
-    if (skipped.length) console.log(`  Note: the site's package.json ${skipped.join(' and ')} script${skipped.length === 1 ? '' : 's'} does not run in a sheets-only build; the update moves build steps into the vault's settings.`);
-  }
   // The steps before the build do not run for a fast build: they make files it does not write.
   if (runningSteps && !onlySheets) {
     // An output folder the build would refuse stops it before any step runs (a step may change it, so the check also stays below).
     assertSafeOutputDir();
-    const notes = packageNotes(publishConfig.layout === 'new' ? packageScripts(configDir) : {}, publishConfig.steps);
-    if (notes.twice) printWarning(notes.twice);
-    if (notes.only) (options.stepsLog || console.log)(`  ${notes.only}`);
     if (publishConfig.steps.before.length) runSteps(publishConfig.steps.before, { cwd: configDir, label: 'before_build', log: options.stepsLog, stdio: options.stepsStdio, extraEnv: stepEnv });
   }
 
@@ -1078,14 +1037,10 @@ function buildSite(options) {
 
   // Main build logic
   if (!dry) assertSafeOutputDir();
-  // publishConfig.exclude_dirs is already the normalized union of vault.config.json's
-  // legacy `excludeDirs` and `publish.exclude_dirs` from vault-config.md (config.js's
-  // unionExcludeDirs), but the raw `config` object handed to the scanner still only
-  // carries the legacy field. scanConfigFor routes the scanner through the unioned list
-  // so a GM who sets `publish.exclude_dirs` in vault-config.md is actually honoured
-  // (#209), and scanAttachments applies the same skip list to the attachments tree
-  // (#210). `explain`, `manifest diff` and `doctor --site` use the same helper so all
-  // four predict exactly the same exclusions the build applies.
+  // scanConfigFor routes the scanner through the vault's normalized player_site.hide.folders
+  // (#209), and scanAttachments applies the same skip list to the attachments tree (#210).
+  // `explain`, `manifest diff` and `doctor --site` use the same helper so all four predict
+  // exactly the same exclusions the build applies.
   // The GM site showing whole notes reads every folder but the plugin's own and the GM's personal one; a page in a
   // folder the player site hides is then marked with that reason.
   const scanConfig = gm && show.has('notes')
@@ -3275,9 +3230,6 @@ function buildSite(options) {
     const more = n > shown.length ? `, and ${n - shown.length} more` : '';
     console.warn(`  WARNING: the build skipped ${n} note${n === 1 ? '' : 's'} whose frontmatter is not valid YAML: ${shown.join('; ')}${more} — a skipped note has no page on the site, and a skipped story file (…_Story.md) is missing from its PC's page. Fix the frontmatter and rebuild. \`vault_check.py <vault> frontmatter\` lists each file.`);
   }
-
-  // Settings that still live in the site file. One line, so it is the thing the GM reads.
-  for (const line of legacyWarning(publishConfig.legacy, rawConfig, publishConfig.layout)) console.warn(`  ${line}`);
 
   // Live stats and the inbox used to be detected from a deployed backend; unset now means
   // off. A deployed feature whose switch neither file sets is never lost silently: the line

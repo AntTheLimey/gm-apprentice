@@ -1,10 +1,10 @@
 // tools/publish/test/integration/build-dnd.test.js
-require('../helpers/quiet-legacy-warning.js');
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
 const matter = require('gray-matter');
 const { build } = require('../../lib/build');
+const { writeSiteConfig } = require('../helpers/vault-files');
 
 // #271: a D&D PC written to the template's body structure got no sheet at all.
 // The full sheet (1.13.0): vitals strip, Sheet, Combat, Spells and Equipment
@@ -33,14 +33,14 @@ describe('build integration — D&D PC', () => {
     fs.writeFileSync(path.join(vault, 'Characters', 'PCs', 'Empty_Caster.md'),
       dov.replace('## Proficiencies', `${templateSpellcasting}## Proficiencies`));
     const configPath = path.join(work, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       vaultPath: vault,
       outputDir: path.join(work, 'docs'),
       attachmentsDir: '_attachments', siteTitle: 'D&D Test',
       system: 'dnd-5e-2024',
       excludeDirs: ['_meta', '_Templates'], excludeSections: ['GM Notes'],
       folderMap: { 'Characters/PCs': 'characters/pcs', Creatures: 'creatures', Items: 'items' },
-    }, null, 2));
+    }, 2);
     build({ configPath });
     pages = {}; notes = {};
     for (const slug of [...PCS, 'empty-caster']) pages[slug] = fs.readFileSync(path.join(pagesDir(), `${slug}.html`), 'utf-8');

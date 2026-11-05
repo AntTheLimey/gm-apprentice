@@ -5,11 +5,11 @@
 //   - every search entry names a built file (L2).
 // Each fixture gets a probe note of that kind dropped into its first mapped folder, so one build serves all three.
 const { describe, it, before, after } = require('node:test');
-require('../helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const YAML = require('yaml');
 const { build } = require('../../lib/build');
 const { fixtureNames, prepareFixture } = require('../helpers/fixture-build');
 const { pageText, cardProblems } = require('../helpers/card-subset');
@@ -30,7 +30,7 @@ describe('every fixture vault, built once', () => {
     for (const name of fixtureNames()) {
       const root = fs.mkdtempSync(path.join(os.tmpdir(), 'fixture-sweep-'));
       const configPath = prepareFixture(name, root);
-      const dir = Object.keys(JSON.parse(fs.readFileSync(configPath, 'utf8')).folderMap)[0];
+      const dir = Object.keys(YAML.parse(fs.readFileSync(path.join(root, 'vault', '_meta', 'vault-config.yaml'), 'utf8')).player_site.folder_map)[0];
       if (dir) fs.writeFileSync(path.join(root, 'vault', dir, 'Zzflagsprobe.md'), '---\ntype: world_flags\n---\nZZSECRETFLAG\n');
       const log = console.log; const warn = console.warn;
       console.log = () => {}; console.warn = () => {};

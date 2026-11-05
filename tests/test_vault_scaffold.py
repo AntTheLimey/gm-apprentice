@@ -20,7 +20,7 @@ import migrate_vault as mv  # noqa: E402
 import vault_check as vc  # noqa: E402
 import vaultlib as vl  # noqa: E402
 import vault_scaffold as vs  # noqa: E402
-from layouts import on_layout  # noqa: E402
+from layouts import write_config  # noqa: E402
 from vaultlib import (PUBLISH_TOOL, extract_frontmatter, plugin_version,  # noqa: E402
                       read_stamp, settings, settings_default, vault_layout)
 
@@ -118,6 +118,10 @@ def paths(pieces):
 
 
 def note(vault, rel, text):
+    if rel == "_meta/vault-config.md":
+        # Settings are written the short way; they go where they now live.
+        write_config(vault, text)
+        return
     path = vault / rel
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
@@ -772,19 +776,14 @@ class NewFilesTests(unittest.TestCase):
             self.assertFalse((root / "V").exists())
 
     def test_the_skeleton_check_never_gives_a_vault_either_new_file(self):
-        for layout in ("legacy", "new"):
-            vault = scratch(self) / "V"
-            (vault / "_meta").mkdir(parents=True)
-            (vault / "_meta" / "vault-config.md").write_text(
-                '---\ntype: meta\ngm_apprentice_version: "1.10.30"\n'
-                "publish:\n  system: coc-7e\n---\n", encoding="utf-8")
-            if layout == "new":
-                on_layout(vault, "new")
-            names = {p.rel for p in vs.missing(
-                vault, "coc-7e", campaign="X", version="1.10.54",
-                templates=False, pages=False)}
-            self.assertFalse(names & set(vs.NEW_FILES), layout)
-            self.assertNotIn("_meta/vault-config.md", names, layout)
+        vault = scratch(self) / "V"
+        write_config(vault, '---\ntype: meta\ngm_apprentice_version: "1.10.30"\n'
+                     "publish:\n  system: coc-7e\n---\n")
+        names = {p.rel for p in vs.missing(
+            vault, "coc-7e", campaign="X", version="1.10.54",
+            templates=False, pages=False)}
+        self.assertFalse(names & set(vs.NEW_FILES))
+        self.assertNotIn("_meta/vault-config.md", names)
 
 
 if __name__ == "__main__":

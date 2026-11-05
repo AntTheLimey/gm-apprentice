@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { runSteps, packageScripts } = require('../lib/settings/steps');
+const { runSteps } = require('../lib/settings/steps');
 const { runDeploy } = require('../lib/deploy-cli');
 const { build } = require('../lib/build');
 const { createPreview } = require('../scripts/live-preview');
@@ -30,23 +30,17 @@ const quietly = async (fn) => {
 };
 
 // A vault (a copy of a fixture) and a site folder beside it. `settings` are the player_site settings of a vault on the
-// new layout; `layout: 'legacy'` leaves the fixture's old settings file as it is.
-function scratch({ settings = {}, layout = 'new', package: pkg = null } = {}) {
+// new layout.
+function scratch({ settings = {}, package: pkg = null } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'build-steps-'));
   const vault = path.join(root, 'vault');
   const site = path.join(root, 'site');
   fs.cpSync(FIXTURE, vault, { recursive: true });
   fs.mkdirSync(site);
   const folderMap = { 'Characters/PCs': 'characters/pcs', Creatures: 'creatures', Items: 'items' };
-  let siteFile = { vaultPath: '../vault' };
-  if (layout === 'new') {
-    fs.rmSync(path.join(vault, '_meta', 'vault-config.md'));
-    writeNewConfig(vault, { version: 1, vault: { system: 'dnd-5e-2024' }, player_site: { title: 'T', hide: { folders: ['_meta', '_Templates'] }, folder_map: folderMap, ...settings } });
-  } else {
-    siteFile = { vaultPath: '../vault', attachmentsDir: '_attachments', siteTitle: 'T', excludeDirs: ['_meta', '_Templates'], folderMap };
-  }
+  writeNewConfig(vault, { version: 1, vault: { system: 'dnd-5e-2024' }, player_site: { title: 'T', hide: { folders: ['_meta', '_Templates'] }, folder_map: folderMap, ...settings } });
   const configPath = path.join(site, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify(siteFile, null, 2));
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: '../vault' }, null, 2));
   if (pkg) fs.writeFileSync(path.join(site, 'package.json'), JSON.stringify(pkg, null, 2));
   return { root, vault, site, configPath };
 }
@@ -182,91 +176,6 @@ function deployHarness(s, { pkg = null } = {}) {
   };
   return { deps, out, commands };
 }
-
-const HOOKS = { scripts: { prebuild: 'node pre.js', postbuild: 'node post.js' } };
-
-test('deploy: a package.json hook is skipped only for the slot the settings hold steps for', async () => {
-  const s = scratch({ settings: { after_build: [append('x', 'x.txt')] }, package: HOOKS });
-  const h = deployHarness(s, { pkg: HOOKS });
-  await runDeploy({ configPath: s.configPath }, h.deps);
-  assert.deepEqual(h.commands.filter((c) => c.startsWith('npm')), ['npm run prebuild'], 'prebuild has no steps of its own, so it still runs; postbuild is the vault\'s now');
-  const dry = deployHarness(s, { pkg: HOOKS });
-  await runDeploy({ configPath: s.configPath, dryRun: true }, dry.deps);
-  assert.ok(dry.out.some((l) => l.includes(append('x', 'x.txt'))), 'a dry run lists the vault\'s own steps');
-  assert.ok(dry.out.some((l) => /npm run prebuild/.test(l)));
-  assert.ok(!dry.out.some((l) => /npm run postbuild/.test(l)));
-});
-
-test('deploy: the new layout with no steps of its own runs the package.json hooks exactly as before', async () => {
-  const s = scratch({ package: HOOKS });
-  const h = deployHarness(s, { pkg: HOOKS });
-  await runDeploy({ configPath: s.configPath }, h.deps);
-  assert.deepEqual(h.commands.filter((c) => c.startsWith('npm')), ['npm run prebuild', 'npm run postbuild']);
-  const dry = deployHarness(s, { pkg: HOOKS });
-  await runDeploy({ configPath: s.configPath, dryRun: true }, dry.deps);
-  assert.ok(dry.out.some((l) => /npm run postbuild/.test(l)), 'a dry run lists it');
-});
-
-test('deploy: on the old layout it keeps running the package.json steps, as before', async () => {
-  const s = scratch({ layout: 'legacy', package: HOOKS });
-  const h = deployHarness(s, { pkg: HOOKS });
-  await runDeploy({ configPath: s.configPath }, h.deps);
-  assert.deepEqual(h.commands.filter((c) => c.startsWith('npm')), ['npm run prebuild', 'npm run postbuild']);
-});
-
-// ---- the second run of a step ------------------------------------------------------------
-
-test('a package.json that holds the same step as the vault: the build warns it runs twice and the update removes it, and runs nothing for it', () => {
-  const s = scratch({ settings: { after_build: [append('own', 'own.txt')] }, package: { scripts: { postbuild: append('own', 'own.txt') } } });
-  const r = cli(s, 'build');
-  assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stderr, /`postbuild` in the site folder's package\.json also runs under `npm run build`, after the tool has run the vault's own after_build steps, so those run twice there/);
-  assert.match(r.stderr, /The next update removes it from package\.json/);
-  assert.deepEqual(lines(path.join(s.site, 'own.txt')), ['own'], 'the tool ran nothing from package.json');
-  const doctor = cli(s, 'doctor', '--site');
-  assert.match(doctor.stdout + doctor.stderr, /BUILD_STEPS_TWICE/);
-});
-
-test('a package.json step that differs from the vault\'s: the build and doctor say both run and the update leaves it, with what to do', async () => {
-  const s = scratch({ settings: { after_build: [append('own', 'own.txt')] }, package: { scripts: { postbuild: append('npm', 'npm.txt') } } });
-  const r = await buildIn(s);
-  assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stderr, /`postbuild` in the site folder's package\.json differs from the vault's after_build steps\. Both run under `npm run build`/);
-  assert.match(r.stderr, /next update leaves it where it is: .*make them the same, or take the script out of package\.json/);
-  assert.doesNotMatch(r.stderr, /run twice|moves it|removes it/);
-  assert.equal(fs.existsSync(path.join(s.site, 'npm.txt')), false, 'the tool ran nothing from package.json');
-  const doctor = await doctorIn(s);
-  assert.match(doctor.stdout + doctor.stderr, /BUILD_STEPS_TWICE/);
-  assert.match(doctor.stdout + doctor.stderr, /make the package\.json script the same as the vault's steps, or take it out/);
-});
-
-test('a package.json step with no steps in the vault for that slot is not a double run: one plain line, no warning, not in doctor', async () => {
-  for (const settings of [{}, { before_build: [append('own', 'own.txt')] }]) {
-    const s = scratch({ settings, package: { scripts: { postbuild: append('npm', 'npm.txt') } } });
-    const r = await buildIn(s);
-    assert.equal(r.status, 0, r.stderr);
-    assert.doesNotMatch(r.stderr, /twice|WARNING.*postbuild/);
-    assert.match(r.stdout, /`postbuild` in the site folder's package\.json still runs under `npm run build` and `deploy`, and moves into the vault at the next update/);
-    const doctor = await doctorIn(s, '--json');
-    assert.doesNotMatch(doctor.stdout, /BUILD_STEPS_TWICE|run twice|runs? under `npm run build`, after the tool/);
-  }
-});
-
-test('deploy says so when it skips a package.json hook because the vault holds different steps for that slot', async () => {
-  const s = scratch({ settings: { after_build: [append('x', 'x.txt')] }, package: HOOKS });
-  const h = deployHarness(s, { pkg: HOOKS });
-  await runDeploy({ configPath: s.configPath }, h.deps);
-  assert.ok(h.out.some((l) => /`postbuild` in package\.json is not run by deploy: the vault holds after_build steps for that slot/.test(l)), h.out.join('\n'));
-  assert.ok(!h.out.some((l) => /`prebuild` in package\.json is not run/.test(l)));
-});
-
-test('a package.json with no steps, or on the old layout, gives no such warning', async () => {
-  const none = scratch({ package: { scripts: { start: 'x' } } });
-  assert.doesNotMatch((await buildIn(none)).stderr, /npm run build/);
-  const legacy = scratch({ layout: 'legacy', package: HOOKS });
-  assert.doesNotMatch((await buildIn(legacy)).stderr, /npm run build/);
-  assert.deepEqual(packageScripts(legacy.site), { prebuild: 'node pre.js', postbuild: 'node post.js' });
-});
 
 // ---- the settings ----------------------------------------------------------------------------
 

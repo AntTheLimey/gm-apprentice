@@ -1,10 +1,11 @@
 const { describe, it, before } = require('node:test');
-require('../helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
+const YAML = require('yaml');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { build } = require('../../lib/build');
+const { writeSettings, writeSiteConfig } = require('../helpers/vault-files');
 
 // A star map whose nodes link to entity pages — the case that forces inlining rather than
 // an <img>, since an <img> would never run these anchors.
@@ -19,8 +20,7 @@ function setupSite({ banners, conventionFile, linkFile }) {
   fs.mkdirSync(path.join(vaultPath, 'Locations'), { recursive: true });
   fs.mkdirSync(path.join(vaultPath, '_attachments'), { recursive: true });
 
-  fs.writeFileSync(path.join(vaultPath, '_meta/vault-config.md'),
-    banners ? `---\npublish:\n  banners:\n${banners}\n---\n` : '---\n---\n');
+  writeSettings(vaultPath, banners ? { 'player_site.lists.banners': YAML.parse(`b:\n${banners}`).b } : {});
 
   if (conventionFile) fs.writeFileSync(path.join(vaultPath, 'Locations', conventionFile), STAR_MAP_SVG);
   fs.writeFileSync(path.join(vaultPath, '_attachments/Sector Map.webp'), 'fake-webp-bytes');
@@ -32,14 +32,14 @@ function setupSite({ banners, conventionFile, linkFile }) {
   fs.writeFileSync(path.join(vaultPath, 'Factions/Guild.md'), '---\ntype: faction\n---\n\n# Guild\n\nA guild.\n');
 
   const configPath = path.join(siteDir, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
+  writeSiteConfig(configPath, {
     vaultPath, outputDir,
     attachmentsDir: '_attachments',
     siteTitle: 'Banner Site',
     siteUrl: 'https://example.github.io/banner-site',
     excludeDirs: ['_meta'],
     folderMap: { 'Locations': 'locations', 'Factions': 'factions' },
-  }, null, 2));
+  }, 2);
 
   build({ configPath });
   return { siteDir, outputDir };
@@ -136,7 +136,7 @@ describe('section index banners', () => {
       for (const folder of ['_meta', 'Locations', 'Creatures']) {
         fs.mkdirSync(path.join(vaultPath, folder), { recursive: true });
       }
-      fs.writeFileSync(path.join(vaultPath, '_meta/vault-config.md'), '---\n---\n');
+      writeSettings(vaultPath, {});
       // Raster, not SVG: an SVG with no link is inlined and never copied.
       fs.writeFileSync(path.join(vaultPath, 'Locations/_banner.png'), 'LOCATIONS-BYTES');
       fs.writeFileSync(path.join(vaultPath, 'Creatures/_banner.png'), 'CREATURES-BYTES');
@@ -144,12 +144,12 @@ describe('section index banners', () => {
       fs.writeFileSync(path.join(vaultPath, 'Creatures/Xeno.md'), '---\ntype: creature\n---\n# Xeno\n');
 
       const configPath = path.join(siteDir, 'config.json');
-      fs.writeFileSync(configPath, JSON.stringify({
+      writeSiteConfig(configPath, {
         vaultPath, outputDir, attachmentsDir: '_attachments',
         siteTitle: 'Clash', siteUrl: 'https://example.github.io/clash',
         excludeDirs: ['_meta'],
         folderMap: { 'Locations': 'locations', 'Creatures': 'creatures' },
-      }, null, 2));
+      }, 2);
       build({ configPath });
     });
 

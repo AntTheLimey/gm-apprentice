@@ -57,11 +57,11 @@ class SharedSiteGuardTests(unittest.TestCase):
         self.assertTrue((site / "node_modules" / "gm-apprentice-publish"
                          / "bin" / "gm-publish.js").is_file())
 
-    def test_a_folderMap_moved_out_is_a_problem(self):
+    def test_a_site_file_holding_more_than_vaultPath_is_a_problem(self):
         site = shared()
         (site / "vault.config.json").write_text(
-            json.dumps({"vaultPath": "."}), encoding="utf-8")
-        self.assertIn("folderMap", sf.shared_site_problem())
+            json.dumps({"vaultPath": ".", "siteTitle": "x"}), encoding="utf-8")
+        self.assertIn("more than vaultPath", sf.shared_site_problem())
         sf.restore_shared_site()
         self.assertIsNone(sf.shared_site_problem())
 
@@ -78,10 +78,10 @@ class SharedSiteGuardTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, vault, ignore_errors=True)
         (vault / "_meta").mkdir()
         sf.give_site(vault, lambda p: None, private=True)
-        text = (vault / "_meta" / "vault-config.md").read_text(
+        text = (vault / "_meta" / "vault-config.yaml").read_text(
             encoding="utf-8")
         self.assertNotIn(shared().as_posix(), text)
-        self.assertIn("site_dir:", text)
+        self.assertIn("folder:", text)
 
 
 class PublishToolStartsFromThePluginsTests(unittest.TestCase):

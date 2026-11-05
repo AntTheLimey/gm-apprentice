@@ -109,10 +109,8 @@ async function runExplain(options, deps) {
   // excludeDirs is the scanner's rule, not decidePage's — decidePage only knows the
   // directories that are excluded on every site. Fold the config's own list in here
   // so the verdict matches what the build would actually do with this file.
-  // publishConfig.exclude_dirs (not the raw config.excludeDirs): the normalized union of
-  // vault-config.md's publish.exclude_dirs and the legacy vault.config.json field, matched
-  // case-insensitively — otherwise this command disagreed with the build about a folder
-  // excluded only via vault-config.md, or via a differently-cased spelling (#209 follow-up).
+  // publishConfig.exclude_dirs: player_site.hide.folders normalized, matched case-insensitively,
+  // so this command agrees with the build about a differently-cased spelling (#209 follow-up).
   const configExcluded = matchExcludedDir(dir, publishConfig.exclude_dirs);
   const alwaysExcluded = alwaysExcludedSegment(`${dir}/`) !== null;
 

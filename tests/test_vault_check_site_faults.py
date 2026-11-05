@@ -29,6 +29,7 @@ TOOL_DIR = ROOT / "tools" / "publish"
 sys.path.insert(0, str(SCRIPTS))
 
 import vault_check as vc  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 
 def npc(body="", extra=""):
@@ -63,20 +64,19 @@ def make(case, files, excluded=(), tool="real", site_json=None, site=True,
     if not site:
         return vault, site_dir
     site_dir.mkdir()
-    (vault / "_meta" / "vault-config.md").write_text(
-        "---\npublish:\n  site: true\n"
+    write_config(vault, "---\npublish:\n  site: true\n"
         + (f"  system: {system}\n" if system else "") +
         f"  site_dir: {site_dir.as_posix()}\n  folder_map:\n"
         "    Characters: characters\n"
         + "".join(f"    {f}: {f.lower()}\n" for f in folders)
-        + "---\n", encoding="utf-8")
+        + "---\n")
     # The site file names another vault: the one asked about must be the
     # vault the check was given.
     other = root / "other"
     other.mkdir()
     (site_dir / "vault.config.json").write_text(
         site_json if site_json is not None else json.dumps(
-            {"vaultPath": other.as_posix(), "outputDir": "./docs"}),
+            {"vaultPath": other.as_posix()}),
         encoding="utf-8")
     (site_dir / "node_modules").mkdir()
     installed = site_dir / "node_modules" / "gm-apprentice-publish"
@@ -151,12 +151,12 @@ class SiteFaultRowsTests(unittest.TestCase):
         vault, _site = make(self, {MARA: npc("x")}, site=False)
         # The file is not valid YAML further down: the settings cannot be
         # read, and nothing is guessed from the lines that can.
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\npublish:\n  site: false\n  theme: [unclosed\n---\n",
+        (vault / "_meta" / "vault-config.yaml").write_text(
+            "version: 1\nplayer_site:\n  publish: false\n  theme: [unclosed\n",
             encoding="utf-8")
         with self.assertRaises(vc.SettingsUnavailable) as caught:
             vc.check_site_faults(vault)
-        self.assertIn("_meta/vault-config.md frontmatter is not valid YAML",
+        self.assertIn("_meta/vault-config.yaml is not valid YAML",
                       str(caught.exception))
         self.assertNotIn("\n", str(caught.exception))
 

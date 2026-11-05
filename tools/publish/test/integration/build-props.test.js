@@ -14,6 +14,7 @@ const { propBar, withPropBar, propLinkHtml } = require('../../lib/templates/prop
 const { propHrefFor, propOutputs } = require('../../lib/props/files');
 const { runSiteDoctor } = require('../../lib/site-doctor');
 const { summaryLines } = require('../../lib/note-faults');
+const { writeSiteConfig } = require('../helpers/vault-files');
 
 const PROP = (extra = '') => `---\ntype: prop\nprop_file: invitation.html\n${extra}---\nAn invitation to the ball.\n`;
 const PAGE = [
@@ -402,12 +403,12 @@ describe('every file a build writes is a taken address', () => {
 
   it('the reserved files and folders cover the site the build writes', () => {
     const configPath = path.join(outputDir, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       vaultPath: path.join(fixturesDir, 'redesign-full'), outputDir: path.join(outputDir, 'docs'), attachmentsDir: '_attachments',
       siteTitle: 'Redesign Test', siteUrl: 'https://example.github.io/redesign-test', searchEnabled: true,
       excludeDirs: ['_meta', '_Templates'], excludeSections: [],
       folderMap: { 'Characters/PCs': 'characters/pcs', 'Characters/NPCs': 'characters/npcs', Locations: 'locations', Events: 'events', Sessions: 'sessions', Factions: 'factions' },
-    }));
+    });
     quiet(() => build({ configPath }));
     const docs = path.join(outputDir, 'docs');
     const written = allFiles(docs).map((f) => path.relative(docs, f).split(path.sep).join('/')).filter((f) => !f.startsWith('props/'));

@@ -116,7 +116,7 @@ for (const system of ['dnd-5e-2024', 'pf2e', 'fitd']) {
   }
   const live = system === 'dnd-5e-2024';
   // The build stamps each island with a hash of the page; that is the one thing allowed to differ.
-  const build = (body) => quiet(() => buildPc(system, body, live ? ['live_stats: true'] : [], live ? { assumeKv: true } : {})).html.replace(/"buildVersion":"[^"]*"/g, '');
+  const build = (body) => quiet(() => buildPc(system, body, live ? { 'player_site.features.live_stats': true } : {}, live ? { assumeKv: true } : {})).html.replace(/"buildVersion":"[^"]*"/g, '');
   test(`${system}: an extra cell on any table row leaves the sheet's own numbers and trackers as they were`, () => {
     assert.ok(rows.length >= 20);
     assert.ok(rows.reduce((k, r) => k + fills[r].length, 0) >= 5, 'filled values to look for');

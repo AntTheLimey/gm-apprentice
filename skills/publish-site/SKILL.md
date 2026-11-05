@@ -22,7 +22,7 @@ version`. `OK`/`SETUP` → proceed. `MISMATCH` → announce the row,
 run the update by campaign-organizer's
 `references/migration-procedure.md`, then resume. `AHEAD` →
 announce the row, tell the GM to update the plugin, stop. `ERROR` → report the row (broken plugin install),
-stop. No verdict row plus a `not a directory` error → ask the GM
+stop. `REFUSED` → tell the GM in plain words what the row says is left and how to fix it (most need the update from a 1.10 release, 1.10.134 or later, first), stop. No verdict row plus a `not a directory` error → ask the GM
 for the correct vault path.
 
 ## The build tool
@@ -97,10 +97,10 @@ https://nodejs.org (LTS).
 **Settings.** Read and change every setting through `node "$TOOL"
 settings … --config <dir>/vault.config.json` (`--help` lists the
 verbs); never open a settings file in `_meta/` to read one or edit it
-by hand. When `settings` answers "needs the new settings file; run the
-update first", or `init` says the settings are still in the old file,
-run the update by campaign-organizer's
-`references/migration-procedure.md`, then carry on.
+by hand. When a command stops on the old settings file or the old
+publish list ("no longer read since plugin 1.11.0"), the vault needs the
+update from plugin 1.10.134 first; tell the GM, then carry on once it is
+done.
 
 **Is there a site?** `node "$TOOL" settings get player_site.publish
 player_site.folder --vault <vault>`.

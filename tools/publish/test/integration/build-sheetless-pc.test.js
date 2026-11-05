@@ -6,6 +6,7 @@ const matter = require('gray-matter');
 const { build } = require('../../lib/build');
 const { sheetSourceOf } = require('../../lib/sheet-source');
 const { templateBody } = require('../helpers/pc-template');
+const { writeSettings, writeSiteConfig } = require('../helpers/vault-files');
 
 // #273: a PC page with no sheet used to publish without a word to the GM.
 describe('build warns about PCs with no character sheet', () => {
@@ -18,14 +19,14 @@ describe('build warns about PCs with no character sheet', () => {
     const vault = path.join(root, 'vault');
     fs.mkdirSync(path.join(vault, 'Characters', 'PCs'), { recursive: true });
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n  mode: player\n  system: ${system}\n---\n`);
+    writeSettings(vault, { 'vault.system': system });
     for (const [name, text] of Object.entries(pcs)) fs.writeFileSync(path.join(vault, 'Characters', 'PCs', `${name}.md`), text);
     const configPath = path.join(root, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments',
       siteTitle: 'Test', system, excludeDirs: ['_meta'], excludeSections: ['GM Notes'],
       folderMap: { 'Characters/PCs': 'characters/pcs' },
-    }));
+    });
     warnings = [];
     const original = console.warn;
     console.warn = (...args) => warnings.push(args.join(' '));

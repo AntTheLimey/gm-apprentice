@@ -1,0 +1,7 @@
+vault:
+  setting_year: 2019
+player_site:
+  theme:
+    palette:
+      primary: "#1a2332"
+      accent: "#b8962e"

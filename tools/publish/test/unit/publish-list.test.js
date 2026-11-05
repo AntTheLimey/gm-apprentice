@@ -1,5 +1,5 @@
 'use strict';
-const { describe, it, beforeEach } = require('node:test');
+const { describe, it } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -33,8 +33,6 @@ const read = (v, opts) => {
 };
 
 describe('the YAML publish list', () => {
-  beforeEach(() => manifest.resetNotices());
-
   it('reads the documented shape', () => {
     const { list, warnings } = read(vaultWith({ 'publish-list.yaml': SHAPE }));
     assert.deepEqual(warnings, []);
@@ -88,30 +86,10 @@ describe('the YAML publish list', () => {
     assert.deepEqual(list.publishing, [nfd.normalize('NFC')]);
   });
 
-  it('old file only: reads it, and says so once per process', () => {
-    const v = vaultWith({ 'publish-manifest.md': '## Publishing (1 files)\n\n- [x] A.md\n' });
-    const first = read(v);
-    assert.equal(first.list.file, 'old');
-    assert.deepEqual(first.list.publishing, ['A.md']);
-    assert.equal(first.warnings.length, 1);
-    assert.match(first.warnings[0], /still in _meta\/publish-manifest\.md/);
-    assert.equal(read(v).warnings.length, 0);
-  });
-
-  it('old file only: a reason beside a Needs Decision entry is read', () => {
-    const v = vaultWith({ 'publish-manifest.md': '## Needs Decision (1 files)\n\n- [ ] Drafts/Idea.md — ask the players\n' });
-    const { list } = read(v);
-    assert.deepEqual(list.needsDecision, ['Drafts/Idea.md']);
-    assert.deepEqual([...list.reasons], [['Drafts/Idea.md', 'ask the players']]);
-  });
-
-  it('both files: reads the new one and warns the old is left over', () => {
-    const v = vaultWith({ 'publish-manifest.md': '## Publishing (1 files)\n\n- [x] Old.md\n', 'publish-list.yaml': 'publishing:\n  - New.md\n' });
-    const { list, warnings } = read(v);
-    assert.equal(list.file, 'new');
-    assert.deepEqual(list.publishing, ['New.md']);
-    assert.equal(warnings.length, 1);
-    assert.match(warnings[0], /left over/);
+  it('the old Markdown list stops the read, whether or not the new file is there', () => {
+    const old = '## Publishing (1 files)\n\n- [x] A.md\n';
+    assert.throws(() => loadManifest(vaultWith({ 'publish-manifest.md': old })), /_meta\/publish-manifest\.md is the old publish list, no longer read since plugin 1\.11\.0/);
+    assert.throws(() => loadManifest(vaultWith({ 'publish-manifest.md': old, 'publish-list.yaml': 'publishing:\n  - New.md\n' })), /old publish list/);
   });
 
   it('listText round-trips', () => {
@@ -153,7 +131,6 @@ describe('the YAML publish list', () => {
 });
 
 describe('a reason beside a publishing entry', () => {
-  beforeEach(() => manifest.resetNotices());
   it('is read, written back and kept', () => {
     const v = vaultWith({ 'publish-list.yaml': 'publishing:\n  - path: A.md\n    reason: "stays hidden: x"\n  - B.md\n' });
     const { list, warnings } = read(v);

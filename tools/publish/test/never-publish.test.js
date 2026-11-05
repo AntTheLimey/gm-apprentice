@@ -8,6 +8,7 @@ const { scanVaultReport, warnScanReport } = require('../lib/scanner');
 const { runManifest } = require('../lib/manifest-cli');
 const { markNeverPublish } = require('../lib/never-publish');
 
+const { writeSiteConfig } = require('./helpers/vault-files');
 const FOLDER_MAP = { Sessions: 'sessions', 'Characters/NPCs': 'characters/npcs' };
 
 // A vault with one of each kind of note, and a site config pointing at it.
@@ -19,9 +20,9 @@ function setup(files) {
     fs.writeFileSync(path.join(vault, rel), text);
   }
   const configPath = path.join(dir, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
+  writeSiteConfig(configPath, {
     siteTitle: 'T', vaultPath: vault, outputDir: './docs', excludeDirs: ['_meta'], folderMap: FOLDER_MAP,
-  }));
+  });
   return { dir, vault, configPath };
 }
 

@@ -10,13 +10,13 @@
 //     - Drafts/Idea.md
 //
 // Only `excluded` reasons settle anything; the others are the GM's notes, kept.
-// A vault whose update has not run still has the Markdown file (`_meta/publish-manifest.md`); it is read and
-// written by manifest-legacy.js, with a notice, until the update or `manifest convert` moves the list.
+// The Markdown list it replaced (`_meta/publish-manifest.md`) is no longer read since plugin 1.11.0: present, it
+// stops by name. The update with plugin 1.10.134 moves it (and sets it aside as `.converted`).
 const fs = require('fs');
 const YAML = require('yaml');
 const { canonicalNfc } = require('./unicode');
 const { writeAtomic } = require('./settings/write');
-const { PUBLISH_LIST_FILE, OLD_LIST_FILE, at } = require('./settings/layout');
+const { PUBLISH_LIST_FILE, OLD_LIST_FILE, OLD_LIST_STOP, at } = require('./settings/layout');
 
 // Normalize a vault-relative path to NFC for equality comparisons (#139). build.js compares
 // list entries against scanned paths with exact-string `Set.has()`, so without a shared
@@ -28,15 +28,6 @@ function canonicalPath(entry) {
 }
 
 const KEYS = ['publishing', 'excluded', 'needs_decision'];
-
-// The notices said once per process, so a build that reads the list twice does not repeat them.
-const said = new Set();
-function resetNotices() { said.clear(); }
-function sayOnce(warn, message) {
-  if (said.has(message)) return;
-  said.add(message);
-  warn(message);
-}
 
 const isText = (x) => typeof x === 'string' && x.trim() !== '';
 
@@ -119,8 +110,7 @@ function parseNewFile(text, warn) {
 }
 
 // Reads the publish list of a vault: null when there is none, otherwise
-// { publishing, excluded, needsDecision (path lists), reasons (Map path -> reason), accepted, file: 'new' | 'old' }.
-// `file` names the file read, so a caller can tell a vault the update has not moved. An invalid YAML file throws.
+// { publishing, excluded, needsDecision (path lists), reasons (Map path -> reason), accepted, file: 'new' }. An invalid YAML file throws.
 // A file holding only `accepted:` is no publish list for page decisions: null here. loadPublishList is the whole read.
 function loadManifest(vaultPath, options) {
   const list = loadPublishList(vaultPath, options);
@@ -128,41 +118,12 @@ function loadManifest(vaultPath, options) {
 }
 
 // The file as it stands, an accepted-only one included (the leak gate and `leaks accept` read and write it this way).
+// The old Markdown list is never read: present, it stops by name (what it held back would otherwise publish).
 function loadPublishList(vaultPath, { warn = console.warn } = {}) {
+  if (fs.existsSync(at(vaultPath, OLD_LIST_FILE))) throw new Error(OLD_LIST_STOP);
   const newFile = at(vaultPath, PUBLISH_LIST_FILE);
-  const oldFile = at(vaultPath, OLD_LIST_FILE);
-  const hasNew = fs.existsSync(newFile);
-  const hasOld = fs.existsSync(oldFile);
-  if (hasNew) {
-    if (hasOld) sayOnce(warn, `The old publish list ${OLD_LIST_FILE} is left over and not read; ${PUBLISH_LIST_FILE} is the publish list. The next update (or manifest convert) checks the two agree and sets the old file aside.`);
-    return parseNewFile(fs.readFileSync(newFile, 'utf-8'), warn);
-  }
-  if (!hasOld) return null;
-  sayOnce(warn, `The publish list is still in ${OLD_LIST_FILE}; the update moves it to ${PUBLISH_LIST_FILE}, or says what holds it back.`);
-  const { parseManifest, parseAnnotatedManifest } = require('./manifest-legacy');
-  const text = fs.readFileSync(oldFile, 'utf-8');
-  const parsed = parseManifest(text);
-  // The reasons the old reader finds, beside an entry of any list, for the list that entry is in.
-  const annotated = parseAnnotatedManifest(text);
-  const reasons = new Map();
-  for (const [list, section] of [[parsed.publishing, 'publishing'], [parsed.excluded, 'excluded']]) {
-    for (const rel of list) {
-      const entry = annotated.get(rel);
-      if (entry && entry.section === section && entry.annotation && !reasons.has(rel)) reasons.set(rel, entry.annotation);
-    }
-  }
-  for (const rel of parsed.needsDecision) {
-    const entry = annotated.get(rel);
-    if (entry && entry.section === 'needsDecision' && entry.decisionNote && !reasons.has(rel)) reasons.set(rel, entry.decisionNote);
-  }
-  return {
-    publishing: parsed.publishing,
-    excluded: parsed.excluded,
-    needsDecision: parsed.needsDecision,
-    reasons,
-    accepted: [],
-    file: 'old',
-  };
+  if (!fs.existsSync(newFile)) return null;
+  return parseNewFile(fs.readFileSync(newFile, 'utf-8'), warn);
 }
 
 const sortedPaths = (list) => [...new Set(list || [])].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
@@ -184,13 +145,10 @@ function listText(list) {
 }
 
 // Writes the accepted findings into the vault's publish list, keeping its three lists. A vault still on the old Markdown
-// list is refused: only the update and `manifest convert` move a list. A vault with no list gets a file holding only
+// list stops by name (loadPublishList). A vault with no list gets a file holding only
 // `accepted:`, which is not a publish list for page decisions (amendment 7a).
 function writeAccepted(vaultPath, accepted) {
   const list = loadPublishList(vaultPath, { warn: () => {} });
-  if (list && list.file !== 'new') {
-    throw new Error(`This vault's publish list is not in ${PUBLISH_LIST_FILE} yet. Run the update (or gm-apprentice-publish manifest convert --vault <vault>) first.`);
-  }
   const base = list || { publishing: [], excluded: [], needsDecision: [], reasons: new Map(), acceptedOnly: true };
   writeAtomic(at(vaultPath, PUBLISH_LIST_FILE), listText({ ...base, accepted }));
 }
@@ -283,4 +241,4 @@ function parseListText(text, { warn = console.warn } = {}) {
   return parseNewFile(text, warn);
 }
 
-module.exports = { readPublishListFile, parseListText, loadManifest, loadPublishList, writeAccepted, listText, writePublishList, moveToNeedsDecision, counts, canonicalPath, resetNotices };
+module.exports = { readPublishListFile, parseListText, loadManifest, loadPublishList, writeAccepted, listText, writePublishList, moveToNeedsDecision, counts, canonicalPath };

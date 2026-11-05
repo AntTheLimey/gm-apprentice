@@ -1,0 +1,12 @@
+player_site:
+  hide:
+    sections:
+      - GM Notes
+    fields:
+      - secrets
+    folders:
+      - _meta
+      - _Templates
+  not_found: The stars are not yet right for this knowledge...
+  theme:
+    genre: horror

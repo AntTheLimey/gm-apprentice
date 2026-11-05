@@ -4,23 +4,19 @@ const fs = require('node:fs');
 const os = require('node:os');
 const nodePath = require('node:path');
 const { runSetupBackend } = require('../lib/setup-backend');
+const { writeSettings } = require('./helpers/vault-files');
 
-// A throwaway vault whose _meta/vault-config.md is where the switch is written.
-function tempVault(configText) {
+// A throwaway vault whose _meta/vault-config.yaml is where the switch is written.
+function tempVault(settings) {
   const vault = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'gm-setup-vault-'));
-  if (configText !== undefined) {
-    fs.mkdirSync(nodePath.join(vault, '_meta'));
-    fs.writeFileSync(nodePath.join(vault, '_meta', 'vault-config.md'), configText);
-  }
+  if (settings !== undefined) writeSettings(vault, settings);
   return vault;
 }
-const vaultConfig = (vault) => fs.readFileSync(nodePath.join(vault, '_meta', 'vault-config.md'), 'utf8');
+const vaultConfig = (vault) => fs.readFileSync(nodePath.join(vault, '_meta', 'vault-config.yaml'), 'utf8');
 
-function harness(overrides = {}, vault = tempVault('---\ntype: meta\npublish:\n  mode: player\n---\n')) {
+function harness(overrides = {}, vault = tempVault({ 'player_site.title': 'T', 'player_site.cloudflare_project': 'proj-x', 'player_site.url': 'https://proj-x.pages.dev' })) {
   const files = {
-    './vault.config.json': JSON.stringify({
-      cloudflarePagesProject: 'proj-x', siteUrl: 'https://proj-x.pages.dev', vaultPath: vault,
-    }),
+    './vault.config.json': JSON.stringify({ vaultPath: vault }),
     'wrangler.toml': 'name = "old"\npages_build_output_dir = "docs"\n',
   };
   const calls = [];
@@ -49,7 +45,7 @@ test('setup-status-bar: creates KV, patches toml, flips flag, builds, deploys', 
   assert.strictEqual(rc, 0);
   assert.match(files['wrangler.toml'], /name = "proj-x"/);        // name aligned
   assert.match(files['wrangler.toml'], /id = "kv777"/);           // KV bound
-  assert.match(vaultConfig(vault), /^  live_stats: true$/m);
+  assert.match(vaultConfig(vault), /^ +live_stats: true$/m);
   assert.doesNotMatch(files['./vault.config.json'], /backend/);   // the site file is not touched
   assert.ok(calls.includes('build'));
   assert.ok(calls.some((c) => c.startsWith('pages deploy')));
@@ -80,8 +76,8 @@ test('setup-inbox flips the inbox flag (and KV is ensured — inbox⇒KV)', asyn
   const { deps, files, vault } = harness();
   const rc = await runSetupBackend('inbox', { configPath: './vault.config.json' }, deps);
   assert.strictEqual(rc, 0);
-  assert.match(vaultConfig(vault), /^  inbox: true$/m);
-  assert.match(vaultConfig(vault), /^  mode: player$/m);   // other keys untouched
+  assert.match(vaultConfig(vault), /^ +inbox: true$/m);
+  assert.match(vaultConfig(vault), /^ +title: T$/m);   // other keys untouched
   assert.match(files['wrangler.toml'], /id = "kv777"/);
 });
 
@@ -109,7 +105,7 @@ test('idempotent: a second run with KV already bound + flag true still succeeds 
 });
 
 test('a vault file the editor refuses stops the command before any KV or wrangler.toml change', async () => {
-  const vault = tempVault('---\npublish: [unclosed\n---\n');
+  const vault = tempVault('player_site: [unclosed\n');
   const lines = [];
   const { deps, files, calls } = harness({ out: (m) => lines.push(m) }, vault);
   const tomlBefore = files['wrangler.toml'];
@@ -120,17 +116,18 @@ test('a vault file the editor refuses stops the command before any KV or wrangle
   assert.deepStrictEqual(calls, [], 'no wrangler call of any kind');
 });
 
-test('a vault with no settings file whose site file still holds settings is left as it is, before any KV or toml change', async () => {
+test('a site file that still holds settings stops setup before any KV or toml change', async () => {
   const vault = tempVault();
   const lines = [];
   const { deps, files, calls } = harness({ out: (m) => lines.push(m) }, vault);
-  files['./vault.config.json'] = JSON.stringify({ vaultPath: vault, siteTitle: 'Kept', excludeSections: ['Spoilers'] });
+  const siteDir = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'gm-setup-site-'));
+  const siteFile = nodePath.join(siteDir, 'vault.config.json');
+  fs.writeFileSync(siteFile, JSON.stringify({ vaultPath: vault, siteTitle: 'Kept', excludeSections: ['Spoilers'] }));
+  files['vault.config.json'] = fs.readFileSync(siteFile, 'utf8');
   const tomlBefore = files['wrangler.toml'];
-  const rc = await runSetupBackend('inbox', { configPath: './vault.config.json' }, deps);
-  assert.strictEqual(rc, 1);
-  assert.match(lines.join('\n'), /still holds this vault's settings, so none can be set yet\. Bring them into the vault first by running: gm-apprentice-publish settings move --vault .* --config/);
-  assert.ok(lines.join('\n').includes(`--config "${nodePath.resolve('./vault.config.json')}"`), 'the real site file path, not a placeholder');
-  assert.ok(!lines.join('\n').includes('<site folder>'));
+  try {
+    await assert.rejects(runSetupBackend('inbox', { configPath: siteFile }, deps), /vault\.config\.json holds keys that are no longer read there: siteTitle \(now player_site\.title\), excludeSections/);
+  } finally { fs.rmSync(siteDir, { recursive: true, force: true }); }
   assert.strictEqual(files['wrangler.toml'], tomlBefore);
   assert.deepStrictEqual(calls, []);
   assert.strictEqual(fs.existsSync(nodePath.join(vault, '_meta')), false, 'no settings file was made');

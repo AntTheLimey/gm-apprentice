@@ -20,6 +20,7 @@
 const fs = require('fs');
 const path = require('path');
 const { pinnedVersionOf } = require('./update-pin');
+const { siteToolVersion } = require('./settings/layout');
 
 const PKG = 'gm-apprentice-publish';
 const WITHHOLDS_HUB_BODIES_SINCE = '1.11.40';
@@ -93,7 +94,8 @@ function readJson(file) {
 function sitePin(siteDir) {
   const installed = readJson(path.join(siteDir, 'node_modules', PKG, 'package.json'));
   if (!installed.missing) {
-    const version = installed.data && typeof installed.data.version === 'string' ? installed.data.version : null;
+    // The installed tool's version, as every reader of it takes it (settings/layout.js); this one also needs it to be semver.
+    const version = siteToolVersion(siteDir);
     if (!version || !parseSemver(version)) {
       return { source: 'installed', version: null, stale: `the site's installed ${PKG} has no readable version; update the pin before publishing sessions` };
     }
@@ -114,10 +116,18 @@ function sitePin(siteDir) {
   return { source: 'package.json', version, stale: staleReason(version) };
 }
 
+// The gm-apprentice-publish dependency text in the site's package.json, or null (no file, unreadable, or none pinned).
+function pinSpecOf(siteDir) {
+  const pkg = readJson(path.join(siteDir, 'package.json'));
+  if (!pkg.data) return null;
+  const spec = ((pkg.data.dependencies || {})[PKG]) || ((pkg.data.devDependencies || {})[PKG]);
+  return spec ? String(spec) : null;
+}
+
 function staleReason(version) {
   return semverBelow(version, WITHHOLDS_HUB_BODIES_SINCE)
     ? `site is pinned to ${version}; update the pin before publishing sessions`
     : null;
 }
 
-module.exports = { sitePin, semverBelow, parseSemver, specVersion, WITHHOLDS_HUB_BODIES_SINCE, PKG };
+module.exports = { sitePin, pinSpecOf, semverBelow, parseSemver, specVersion, WITHHOLDS_HUB_BODIES_SINCE, PKG };

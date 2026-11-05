@@ -10,8 +10,7 @@ const { parse } = require('yaml');
 const { schema, schemaText } = require('../lib/settings/describe');
 const { REGISTRY } = require('../lib/settings/registry');
 const { readSettings } = require('../lib/settings/read');
-const { planMove, applyMove } = require('../lib/settings/move');
-const { NEW_FILE, OLD_FILE, at } = require('../lib/settings/layout');
+const { NEW_FILE, at } = require('../lib/settings/layout');
 
 const SCHEMA_FILE = path.join(__dirname, '..', 'schema', 'vault-config.schema.json');
 const FORMAT_PAGE = path.join(__dirname, '..', '..', '..', 'docs', 'vault-config-format.md');
@@ -89,28 +88,21 @@ test('the schema takes what it should and refuses what it should', () => {
   assert.notDeepEqual(ok({ player_site: { hide: { secions: ['x'] } } }).concat(ok({ vault: { tonne: 1 } })), []);
 });
 
-// ---- Every fixture's moved file validates ----
+// ---- Every fixture's settings file validates ----
 
-function movedFixtures() {
+function fixtureVaults() {
   const found = [];
   for (const name of fs.readdirSync(FIXTURES)) found.push(path.join(FIXTURES, name));
   for (const rel of ['benchmark-campaign', 'fixtures/slice-b/index', 'fixtures/slice-a/version-behind', 'fixtures/slice-a/wrapup', 'fixtures/slice-a/leak']) found.push(path.join(REPO_TESTS, ...rel.split('/')));
-  return found.filter((dir) => fs.existsSync(at(dir, OLD_FILE)));
+  return found.filter((dir) => fs.existsSync(at(dir, NEW_FILE)));
 }
 
-test('the moved file of every fixture vault validates', () => {
-  const dirs = movedFixtures();
+test('the settings file of every fixture vault validates', () => {
+  const dirs = fixtureVaults();
   assert.ok(dirs.length >= 11, `only ${dirs.length} fixture vaults found`);
   for (const dir of dirs) {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'schema-'));
-    const vault = path.join(root, 'Vault');
-    fs.cpSync(dir, vault, { recursive: true });
-    const plan = planMove({ vaultPath: vault });
-    assert.equal(plan.ok, true, `${dir}: ${plan.blockers.join(' | ')}`);
-    applyMove(plan);
-    const moved = parse(fs.readFileSync(at(vault, NEW_FILE), 'utf8')) || {};
-    assert.deepEqual(check(schema(), moved), [], dir);
-    fs.rmSync(root, { recursive: true, force: true });
+    const settings = parse(fs.readFileSync(at(dir, NEW_FILE), 'utf8')) || {};
+    assert.deepEqual(check(schema(), settings), [], dir);
   }
 });
 

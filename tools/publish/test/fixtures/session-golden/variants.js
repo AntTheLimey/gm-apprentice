@@ -2,10 +2,11 @@
 
 // Vaults of recap-in-hub sessions (no Wrap-Ups: the hub body is the session's record),
 // written fresh for each build. Shared by generate.js, which records what the publish
-// tool at 1.10.17 (before #276) rendered, and test/integration/session-golden.test.js,
+// tool at 1.10.17 (before #276) rendered (the goldens are fixed; generate.js is kept as history and only ran on that tool), and test/integration/session-golden.test.js,
 // which requires the current tool to render the same thing.
 const fs = require('fs');
 const path = require('path');
+const { writeSiteConfig } = require('../../helpers/vault-files');
 
 const sess = (n, title, extra = '') => `---\ntype: session\nsession_number: ${n}\nplay_date: "2026-0${n}-01"\nstatus: played\n${extra}---\n\n# ${title}\n\nThe party fought [[Ghoul King]] in the ruins. Full prose recap here.\n\n## What the Party Learned\n\n- The crater glows\n- The Queen lies\n`;
 
@@ -51,11 +52,11 @@ function buildVariant(libRoot, work, variant) {
     fs.writeFileSync(full, body);
   }
   const configPath = path.join(work, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
+  writeSiteConfig(configPath, {
     siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault, outputDir: docs,
     excludeDirs: ['_meta'],
     folderMap: { Sessions: 'sessions', Chapters: 'chapters', 'Characters/NPCs': 'characters/npcs' },
-  }));
+  });
   const log = console.log; const warn = console.warn;
   console.log = () => {}; console.warn = () => {};
   try { build({ configPath }); } finally { console.log = log; console.warn = warn; }

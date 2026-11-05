@@ -17,10 +17,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import migrate  # noqa: E402
 import update  # noqa: E402
+import vault_check as vc  # noqa: E402
 import update_record  # noqa: E402
 from migrate_core import (CHOICE, KINDS, PERSON, WILL, Check, Item,  # noqa: E402
                           StepFailed)
-from test_migrate import PLUGIN, make_vault, stamp_of  # noqa: E402
+from test_migrate import (PLUGIN, REAL_FLOOR, TEST_FLOOR, make_vault,  # noqa: E402
+                          stamp_of)
 
 
 def check(name, kind, items, release=None, plain=None, log=None):
@@ -135,11 +137,10 @@ class SortTests(unittest.TestCase):
                      "empty-scenes-lists", "retire-steps"):
             self.assertEqual(kinds[name], "removes", name)
         for name in ("wrapup-sections", "tone-words", "open-threads-fold",
-                     "sheet-source", "props-move", "props-settle",
-                     "publish-hidden"):
+                     "sheet-source", "props-move", "props-settle"):
             self.assertEqual(kinds[name], "asks", name)
         for name in ("wrapup-filenames", "heritage-notes", "mobrpg-sections",
-                     "templates", "site-repin", "settings-move"):
+                     "templates", "site-repin"):
             self.assertEqual(kinds[name], "bookkeeping", name)
 
 
@@ -566,8 +567,8 @@ class ExcludeListsTests(Base):
                           ("exclude-lists-replace", "asks")])
         real = next(c for c in ms.SITE_CHECKS if c.name == "exclude-lists")
         lists = dataclasses.replace(real, asks_site=False, release=None)
-        before = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
-        self.assertIn("exclude_sections: Mine", before)
+        before = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
+        self.assertIn("sections: Mine", before)
         res = self.run_update(vault, [lists], headless=True)
         self.assertEqual([q.id.split("@")[0] for q in res.questions], ["exclude-lists-replace"])
         self.assertEqual([q.kind for q in res.questions], ["asks"])
@@ -580,7 +581,7 @@ class ExcludeListsTests(Base):
         # falls back to the built-in list, so read the file).
         typed = "".join(p.read_text(encoding="utf-8")
                         for p in (vault / "_meta").glob("vault-config.*"))
-        self.assertIn("exclude_sections: Mine", typed)
+        self.assertIn("sections: Mine", typed)
 
 
     def new_layout_vault(self, site_config, top="", under=""):
@@ -601,8 +602,6 @@ class ExcludeListsTests(Base):
     def test_a_list_typed_under_an_old_name_or_in_a_bad_place_asks(self):
         import migrate_site as ms
         for label, vault in (
-                ("site file's old name",
-                 self.new_layout_vault({"excludeSections": ["Mine"]})),
                 ("vault's old name", self.new_layout_vault(
                     {}, top="publish:\n  exclude_sections:\n    - Mine\n")),
                 ("the group is not a map",
@@ -646,7 +645,18 @@ class ExcludeListsTests(Base):
         c, _ = check("tidy", "bookkeeping", will_item("tidy"))
         code, out, err = self.main(vault, [c])
         self.assertEqual(code, 2)
-        self.assertIn("below 1.10.12", err)
+        self.assertIn("an update stamp of 1.9.14 (_meta/vault-state.json), older than 1.10.12", err)
+        self.assertEqual(self.backups(), [])
+
+    def test_an_unmoved_vault_exits_2_naming_the_bridge(self):
+        vault = make_vault(self, "1.10.121")
+        (vault / "_meta" / "publish-manifest.md").write_text("x\n", encoding="utf-8")
+        c, _ = check("tidy", "bookkeeping", will_item("tidy"))
+        with mock.patch.object(vc, "MOVED_FLOOR", REAL_FLOOR):
+            code, _, err = self.main(vault, [c])
+        self.assertEqual(code, 2)
+        self.assertIn("_meta/publish-manifest.md is the old publish list", err)
+        self.assertIn("releases/tag/v1.10.137", err)
         self.assertEqual(self.backups(), [])
 
     def test_an_unreadable_template_is_a_read_problem_not_a_question(self):

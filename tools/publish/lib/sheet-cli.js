@@ -157,8 +157,8 @@ async function runSheetShow(deps) {
   }
 
   const warnings = [];
-  // Per-file field overrides come from `publish.overrides.fields` in
-  // vault-config.md, keyed by vault-relative path — the same map build.js reads
+  // Per-file field overrides come from `player_site.hide.field_exceptions` in
+  // the vault's settings, keyed by vault-relative path — the same map build.js reads
   // (there is no per-file override key in a page's own frontmatter). Resolving
   // it from anywhere else would make a field the site publishes look GM-only
   // here, or the reverse.

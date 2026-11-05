@@ -55,6 +55,23 @@ def _remove_made_temp_dirs():
 
 
 @pytest.fixture(autouse=True)
+def _test_vaults_may_be_stamped_old(request):
+    """Most tests stamp vaults at made-up old versions; the update's real
+    floor (1.10.60) would refuse them all. A module that tests the floor
+    itself sets REAL_FLOOR_TESTS."""
+    vault_check = sys.modules.get("vault_check")
+    if vault_check is None or getattr(request.module, "REAL_FLOOR_TESTS", False):
+        yield
+        return
+    real = vault_check.MOVED_FLOOR
+    vault_check.MOVED_FLOOR = "1.10.12"
+    try:
+        yield
+    finally:
+        vault_check.MOVED_FLOOR = real
+
+
+@pytest.fixture(autouse=True)
 def _shared_state_stays_shared():
     vaultlib = sys.modules.get("vaultlib")
     if vaultlib is not None:

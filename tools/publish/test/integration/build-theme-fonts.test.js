@@ -1,10 +1,10 @@
 const { describe, it, before, after } = require('node:test');
-require('../helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { build } = require('../../lib/build');
+const { writeSettings, writeSiteConfig } = require('../helpers/vault-files');
 
 function write(base, rel, body) {
   const full = path.join(base, rel);
@@ -22,29 +22,13 @@ describe('theme.fonts.source: local copies font files into the build (#211)', ()
     const vault = path.join(work, 'vault');
     outputDir = path.join(work, 'docs');
 
-    write(vault, '_meta/vault-config.md', [
-      '---',
-      'publish:',
-      '  theme:',
-      '    fonts:',
-      '      heading: Cinzel',
-      '      body: Inter',
-      '      source: local',
-      '      files:',
-      '        - family: Cinzel',
-      '          path: _attachments/fonts/Cinzel-Regular.woff2',
-      '        - family: Inter',
-      '          path: _attachments/fonts/Inter-Regular.woff2',
-      '          weight: 400',
-      '---',
-      '',
-    ].join('\n'));
+    writeSettings(vault, { 'player_site.theme.fonts.heading': "Cinzel", 'player_site.theme.fonts.body': "Inter", 'player_site.theme.fonts.source': "local", 'player_site.theme.fonts.files': [{"family": "Cinzel", "path": "_attachments/fonts/Cinzel-Regular.woff2"}, {"family": "Inter", "path": "_attachments/fonts/Inter-Regular.woff2", "weight": 400}] });
     write(vault, '_attachments/fonts/Cinzel-Regular.woff2', 'fake-woff2-bytes-cinzel');
     write(vault, '_attachments/fonts/Inter-Regular.woff2', 'fake-woff2-bytes-inter');
     write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\n# Someone\n');
 
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Theme Fonts Site',
       siteUrl: 'https://example.github.io/theme-fonts',
       vaultPath: vault,
@@ -52,7 +36,7 @@ describe('theme.fonts.source: local copies font files into the build (#211)', ()
       attachmentsDir: '_attachments',
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { 'Characters/NPCs': 'characters/npcs' },
-    }, null, 2));
+    }, 2);
 
     build({ configPath });
     themeCss = fs.readFileSync(path.join(outputDir, 'css', 'theme.css'), 'utf8');
@@ -95,33 +79,20 @@ describe('theme.fonts.source: local does not collide two files sharing a basenam
     const vault = path.join(work, 'vault');
     outputDir = path.join(work, 'docs');
 
-    write(vault, '_meta/vault-config.md', [
-      '---',
-      'publish:',
-      '  theme:',
-      '    fonts:',
-      '      source: local',
-      '      files:',
-      '        - family: Cinzel',
-      '          path: fonts/Cinzel/Regular.woff2',
-      '        - family: Inter',
-      '          path: fonts/Inter/Regular.woff2',
-      '---',
-      '',
-    ].join('\n'));
+    writeSettings(vault, { 'player_site.theme.fonts.source': "local", 'player_site.theme.fonts.files': [{"family": "Cinzel", "path": "fonts/Cinzel/Regular.woff2"}, {"family": "Inter", "path": "fonts/Inter/Regular.woff2"}] });
     write(vault, 'fonts/Cinzel/Regular.woff2', 'cinzel-bytes');
     write(vault, 'fonts/Inter/Regular.woff2', 'inter-bytes');
     write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\n# Someone\n');
 
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Theme Fonts Collide',
       siteUrl: 'https://example.github.io/theme-fonts-collide',
       vaultPath: vault,
       outputDir,
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { 'Characters/NPCs': 'characters/npcs' },
-    }, null, 2));
+    }, 2);
 
     build({ configPath });
     themeCss = fs.readFileSync(path.join(outputDir, 'css', 'theme.css'), 'utf8');
@@ -154,30 +125,19 @@ describe('theme.fonts.source: local rejects a non-font file extension', () => {
     const vault = path.join(work, 'vault');
     const outputDir = path.join(work, 'docs');
 
-    write(vault, '_meta/vault-config.md', [
-      '---',
-      'publish:',
-      '  theme:',
-      '    fonts:',
-      '      source: local',
-      '      files:',
-      '        - family: Mistyped',
-      '          path: _meta/gm-plans.md',
-      '---',
-      '',
-    ].join('\n'));
+    writeSettings(vault, { 'player_site.theme.fonts.source': "local", 'player_site.theme.fonts.files': [{"family": "Mistyped", "path": "_meta/gm-plans.md"}] });
     write(vault, '_meta/gm-plans.md', '---\ntype: meta\n---\n\nSecret GM plans.\n');
     write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\n# Someone\n');
 
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Theme Fonts Bad Ext',
       siteUrl: 'https://example.github.io/theme-fonts-bad-ext',
       vaultPath: vault,
       outputDir,
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { 'Characters/NPCs': 'characters/npcs' },
-    }, null, 2));
+    }, 2);
 
     const warns = [];
     const orig = console.warn;
@@ -202,19 +162,18 @@ describe('theme.fonts default source stays google (regression guard)', () => {
     const vault = path.join(work, 'vault');
     outputDir = path.join(work, 'docs');
 
-    write(vault, '_meta/vault-config.md',
-      '---\npublish:\n  theme:\n    fonts:\n      heading: Cinzel\n---\n');
+    writeSettings(vault, { 'player_site.theme.fonts.heading': "Cinzel" });
     write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\n# Someone\n');
 
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Theme Fonts Google',
       siteUrl: 'https://example.github.io/theme-fonts-google',
       vaultPath: vault,
       outputDir,
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { 'Characters/NPCs': 'characters/npcs' },
-    }, null, 2));
+    }, 2);
 
     build({ configPath });
     themeCss = fs.readFileSync(path.join(outputDir, 'css', 'theme.css'), 'utf8');

@@ -14,6 +14,7 @@ FIXTURES = ROOT / "tests" / "fixtures" / "dnd-pcs"
 
 sys.path.insert(0, str(ROOT / "tests"))
 from dnd_builder import sheet  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -566,8 +567,7 @@ def make_vault(tmp_path, system="dnd-5e-2024"):
     vault = tmp_path / "vault"
     (vault / "Characters" / "PCs").mkdir(parents=True)
     (vault / "_meta").mkdir()
-    (vault / "_meta" / "vault-config.md").write_text(
-        f"---\ntype: meta\npublish:\n  system: {system}\n---\n", encoding="utf-8")
+    write_config(vault, f"---\ntype: meta\npublish:\n  system: {system}\n---\n")
     (vault / "Campaign Overview.md").write_text(
         f"---\ntype: campaign_overview\ngame_system: {system}\n---\n\n# Campaign\n", encoding="utf-8")
     return vault

@@ -7,6 +7,7 @@ const path = require('path');
 const { runManifest } = require('../lib/manifest-cli');
 const { writePublishList, readListText } = require('./helpers/publish-list');
 const { loadManifest, writeAccepted } = require('../lib/manifest');
+const { writeSettings, writeSiteConfig } = require('./helpers/vault-files');
 const FIXTURES = path.join(__dirname, 'fixtures');
 
 const FOLDER_MAP = {
@@ -21,13 +22,13 @@ const FOLDER_MAP = {
 function siteFor(vaultPath) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-cli-'));
   const configPath = path.join(dir, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
+  writeSiteConfig(configPath, {
     siteTitle: 'Test Campaign',
     vaultPath,
     outputDir: './docs',
     excludeDirs: ['_meta', '_Templates'],
     folderMap: FOLDER_MAP,
-  }, null, 2));
+  }, 2);
   return { dir, configPath };
 }
 
@@ -149,13 +150,11 @@ describe('manifest diff', () => {
   // the vault with the raw vault.config.json `excludeDirs` only — a folder excluded
   // exclusively via vault-config.md's `publish.exclude_dirs` still showed up in the diff
   // as a New file, disagreeing with what the real build would do with it.
-  it('never lists a file under a folder excluded only via publish.exclude_dirs in vault-config.md', async () => {
+  it('never lists a file under a folder excluded only via player_site.hide.folders in the settings file', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-vaultconfig-excl-'));
     fs.mkdirSync(path.join(vault, 'Drafts'), { recursive: true });
     fs.writeFileSync(path.join(vault, 'Drafts', 'Idea.md'), '---\ntype: npc\n---\n\nA half-formed idea.\n');
-    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-      '---\npublish:\n  exclude_dirs:\n    - "Drafts"\n---\n');
+    writeSettings(vault, { 'player_site.hide.folders': ['Drafts'] });
     const { configPath } = siteFor(vault);
     const c = capture();
     const rc = await runManifest({ verb: 'diff', configPath, json: true }, c.deps);
@@ -918,10 +917,10 @@ describe('manifest publish-played ticks only hubs the site will withhold (#276/#
     writePublishList(vault, variant === 'excluded'
       ? { excluded: [{ path: wrapUpPath, reason: 'secrets' }], needsDecision: ['Sessions/Session 01 - Arrival.md'] }
       : { needsDecision: ['Sessions/Session 01 - Arrival.md', wrapUpPath] });
-    w('_meta/vault-config.md', '---\npublish:\n  site_title: T\n---\n');
+    writeSettings(vault, { 'player_site.title': 'T' });
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
-      outputDir: path.join(work, 'docs'), excludeDirs: ['_meta'], folderMap: { Sessions: 'sessions' } }));
+    writeSiteConfig(configPath, { siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
+      outputDir: path.join(work, 'docs'), excludeDirs: ['_meta'], folderMap: { Sessions: 'sessions' } });
     return { work, vault, configPath };
   }
 
@@ -997,11 +996,11 @@ describe('a documents.wrap_up written as a GM alias pairs the same everywhere (#
     const WRAP = 'Sessions/Session 01 Wrap-Up.md';
     w(HUB, '---\ntype: session\nsession_number: 1\nstatus: reviewed\ndocuments:\n  wrap_up: "[[The Sealed Ledger]]"\n---\n\n# Session 01 - Arrival\n\nKEEPERONLYSECRET the Baron appears at the ball\n');
     w(WRAP, '---\ntype: session_wrap\ngm_aliases:\n  - The Sealed Ledger\n---\n\n## Narrative Recap\n\nThey arrived at dusk.\n');
-    w('_meta/vault-config.md', '---\npublish:\n  site_title: T\n---\n');
+    writeSettings(vault, { 'player_site.title': 'T' });
     writePublishList(vault, { needsDecision: [HUB, WRAP] });
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
-      outputDir: path.join(work, 'docs'), excludeDirs: ['_meta'], folderMap: { Sessions: 'sessions' } }));
+    writeSiteConfig(configPath, { siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
+      outputDir: path.join(work, 'docs'), excludeDirs: ['_meta'], folderMap: { Sessions: 'sessions' } });
 
     try {
       // publish-played pairs it, so ticks both.
@@ -1046,101 +1045,9 @@ describe('manifest apply keeps a reason beside a needs_decision entry', () => {
   });
 });
 
-// Only the update and `manifest convert` move a list (review C1): every other writer keeps the vault on its file.
-describe('a vault still on the old Markdown list stays on it', () => {
+describe('a vault with no list gets the new file', () => {
   const oldFile = (vault) => path.join(vault, '_meta', 'publish-manifest.md');
   const newFile = (vault) => path.join(vault, '_meta', 'publish-list.yaml');
-  // A site whose build step reads the old file: the update holds this vault on it.
-  function heldSite(vault) {
-    const site = siteFor(vault);
-    fs.mkdirSync(path.join(site.dir, 'scripts'));
-    fs.writeFileSync(path.join(site.dir, 'scripts', 'add-props.mjs'), "readFileSync('../vault/_meta/publish-manifest.md')\n");
-    fs.writeFileSync(path.join(site.dir, 'package.json'), JSON.stringify({ scripts: { postbuild: 'node scripts/add-props.mjs' } }));
-    return site;
-  }
-
-  it('apply writes the old file in the old layout, byte for byte what the old writer wrote, and no new file', async () => {
-    const vault = copyVault('auto-exclude');
-    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(oldFile(vault), '---\nmode: player\n---\n\n## Publishing (0 files)\n\n## Needs Decision (1 files)\n\n- [ ] Sessions/Planned Session.md\n');
-    const { configPath } = heldSite(vault);
-    const c = capture();
-    const rc = await runManifest({
-      verb: 'apply', configPath, publish: ['Sessions/Played Session.md'], exclude: ['Sessions/Planned Session.md=prep'],
-    }, c.deps);
-    assert.strictEqual(rc, 0, c.text());
-    assert.strictEqual(fs.existsSync(newFile(vault)), false, 'no new file');
-    assert.strictEqual(fs.readFileSync(oldFile(vault), 'utf8'), [
-      '---',
-      'type: meta',
-      'generated: 2026-09-07T12:00:00.000Z',
-      'vault: "Test Campaign"',
-      'mode: player',
-      'total_files: 5',
-      'publishing: 1',
-      'excluded: 1',
-      'needs_decision: 0',
-      '---',
-      '',
-      '## Publishing (1 files)',
-      '',
-      '- [x] Sessions/Played Session.md',
-      '',
-      '## Excluded (1 files)',
-      '',
-      '- [x] Sessions/Planned Session.md — prep',
-      '',
-      '## Needs Decision (0 files)',
-      '',
-    ].join('\n'));
-    assert.match(c.text(), /manifest updated: \+1 publishing, \+1 excluded, \+0 needs decision, -0 pruned/);
-    assert.doesNotMatch(c.text(), /Moved the publish list/);
-    fs.rmSync(vault, { recursive: true, force: true });
-  });
-
-  it('apply writes an unticked Publishing entry back unticked: the page does not start to publish (#403)', async () => {
-    const vault = copyVault('auto-exclude');
-    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(oldFile(vault), '---\nmode: player\n---\n\n## Publishing (2 files)\n\n- [x] Notes/Kept.md\n- [ ] Notes/Held Back.md — not yet\n\n## Needs Decision (1 files)\n\n- [ ] Sessions/Planned Session.md\n');
-    const { configPath } = heldSite(vault);
-    const c = capture();
-    assert.strictEqual(await runManifest({ verb: 'apply', configPath, exclude: ['Sessions/Planned Session.md=prep'] }, c.deps), 0, c.text());
-    const written = fs.readFileSync(oldFile(vault), 'utf8');
-    assert.match(written, /- \[x\] Notes\/Kept\.md\n/);
-    assert.match(written, /- \[ \] Notes\/Held Back\.md — not yet\n/, 'still unticked, so still not published');
-    fs.rmSync(vault, { recursive: true, force: true });
-  });
-
-  it('publish-played ticks in the old file and leaves the vault on it', async () => {
-    const vault = copyVault('auto-exclude');
-    fs.writeFileSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'),
-      '---\ntype: session_wrap\nsession: "[[Played Session]]"\ncanon_status: AUTHORITATIVE\n---\n\n## Recap\n\nDone.\n');
-    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(oldFile(vault), '---\nmode: player\n---\n\n## Excluded (1 files)\n\n- [ ] Notes/Kept.md — spoils it\n\n## Needs Decision (1 files)\n\n- [ ] Sessions/Played Session.md\n');
-    const { configPath } = heldSite(vault);
-    const c = capture();
-    assert.strictEqual(await runManifest({ verb: 'publish-played', configPath }, c.deps), 0, c.text());
-    assert.strictEqual(fs.existsSync(newFile(vault)), false, 'no new file');
-    const written = fs.readFileSync(oldFile(vault), 'utf8');
-    assert.match(written, /- \[x\] Sessions\/Played Session\.md\n/);
-    assert.match(written, /- \[x\] Sessions\/Session 06 - Wrap-Up\.md\n/);
-    assert.match(written, /- \[x\] Notes\/Kept\.md — spoils it\n/, 'the old writer keeps an unticked Excluded entry');
-    assert.match(c.text(), /published 2 file\(s\)/);
-    fs.rmSync(vault, { recursive: true, force: true });
-  });
-
-  it('a vault with no list whose site tool cannot read the new file gets the old file', async () => {
-    const vault = copyVault('auto-exclude');
-    const site = siteFor(vault);
-    const pkg = path.join(site.dir, 'node_modules', 'gm-apprentice-publish');
-    fs.mkdirSync(pkg, { recursive: true });
-    fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ version: '1.26.0' }));
-    const c = capture();
-    assert.strictEqual(await runManifest({ verb: 'apply', configPath: site.configPath, exclude: ['Sessions/Planned Session.md=prep'] }, c.deps), 0, c.text());
-    assert.strictEqual(fs.existsSync(newFile(vault)), false);
-    assert.match(fs.readFileSync(oldFile(vault), 'utf8'), /## Excluded \(1 files\)\n\n- \[x\] Sessions\/Planned Session\.md — prep\n/);
-    fs.rmSync(vault, { recursive: true, force: true });
-  });
 
   it('a vault with no list and an up-to-date site gets the new file', async () => {
     const vault = copyVault('auto-exclude');

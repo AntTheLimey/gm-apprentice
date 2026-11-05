@@ -294,7 +294,7 @@ describe('init', () => {
       assert.deepStrictEqual(lines.filter((l) => /WARNING/.test(l)), []);
     });
 
-    it('a fresh init builds, dry-runs a deploy and passes doctor on the built-in defaults; a host and address the old guide writes to vault.config.json take effect', async () => {
+    it('a fresh init builds, dry-runs a deploy and passes doctor on the built-in defaults; a host and address set in the vault settings take effect', async () => {
       const tmpDir = await makeTmpDir();
       const real = { log: console.log, warn: console.warn, error: console.error };
       try {
@@ -319,9 +319,8 @@ describe('init', () => {
         build({ configPath });
         assert.ok(existsSync(path.join(site, 'docs', 'index.html')));
         assert.deepStrictEqual(said.filter((l) => /WARNING|differs/.test(l)), []);
-        // What the old guide wrote to the site file still takes effect.
-        const raw = JSON.parse(readFileSync(configPath, 'utf8'));
-        await fs.writeFile(configPath, JSON.stringify({ ...raw, host: 'cloudflare-pages', siteUrl: 'https://dead.pages.dev' }));
+        // A host and address in the vault's settings take effect.
+        require('../helpers/vault-files').mergeSettings(vault, { 'player_site.host': 'cloudflare-pages', 'player_site.url': 'https://dead.pages.dev' });
         const cf = [];
         assert.strictEqual(await runDeploy({ configPath, dryRun: true }, { out: (l) => cf.push(String(l)) }), 0);
         assert.match(cf.join('\n'), /wrangler/, cf.join('\n'));
@@ -438,7 +437,7 @@ describe('init', () => {
       }
     });
 
-    it('a vault still on the old settings file stops init before anything is written, and says to update the vault first', async () => {
+    it('a vault still on the old settings file stops init before anything is written, and says to run the 1.10.134 update first', async () => {
       const tmpDir = await makeTmpDir();
       try {
         const vault = path.join(tmpDir, 'vault');
@@ -447,7 +446,7 @@ describe('init', () => {
         await fs.writeFile(path.join(vault, '_meta', 'vault-config.md'), original);
         const site = path.join(tmpDir, 'site');
         await assert.rejects(() => init(site, { vaultPath: vault }),
-          /This vault's settings are still in the old file\. Update the vault first \(ask the apprentice to update it\), then set up the site\./);
+          /_meta\/vault-config\.md is the old settings file, no longer read since plugin 1\.11\.0\. Run the update with a 1\.10 release, 1\.10\.134 or later, first\./);
         await assert.rejects(fs.access(site));
         assert.strictEqual(readFileSync(path.join(vault, '_meta', 'vault-config.md'), 'utf8'), original);
         assert.ok(!existsSync(path.join(vault, '_meta', 'vault-config.yaml')));
