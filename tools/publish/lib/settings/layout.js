@@ -60,19 +60,17 @@ function siteToolVersion(siteDir, readFile = (f) => fs.readFileSync(f, 'utf8')) 
 
 const at = (vaultPath, rel) => path.join(vaultPath, ...rel.split('/'));
 
-// 'new' whenever the new file exists (the old file, if it is still there, is not read), 'legacy'
+// 'new' whenever the new file exists (the old file, if it is still there, is not read), 'old-only'
 // when only the old file exists (its settings are not read: the build stops), 'none' when neither does.
 function layoutOf(vaultPath, deps) {
   const rd = readerFrom(deps);
   if (rd.exists(at(vaultPath, NEW_FILE))) return 'new';
-  return rd.exists(at(vaultPath, OLD_FILE)) ? 'legacy' : 'none';
+  return rd.exists(at(vaultPath, OLD_FILE)) ? 'old-only' : 'none';
 }
 
-// What a message to the GM calls the settings file, and a setting as that file writes it. Only the new file is read,
-// so both are the new file's whatever the layout; the old-name/new-name pairs live in the list.
-const fileLabelFor = () => NEW_FILE;
-const nameInFor = (layout, name) => name;
+// What a message to the GM calls the settings file, and a setting as that file writes it: only the new file is read,
+// so both are the new file's.
 const fileLabel = () => NEW_FILE;
-const nameIn = (vaultPath, name) => name;
+const nameIn = (name) => name;
 
-module.exports = { FIRST_TOOL_READING_NEW_FILE, STEPS_FROM, siteToolVersion, SETTING_GROUPS, GM_GROUP, GROUPS, HIDE_GROUP, STRICT_PARENTS, stopsUnknown, NEW_FILE, OLD_FILE, OLD_FILE_STOP, OLD_FILE_LEFT, STATE_FILE, NOTES_FILE, PUBLISH_LIST_FILE, OLD_LIST_FILE, OLD_LIST_STOP, PUBLISH_LIST_FROM, ACCEPTED_FROM, SETTLE_FROM, TIE_FROM, layoutOf, at, fileLabel, nameIn, fileLabelFor, nameInFor };
+module.exports = { FIRST_TOOL_READING_NEW_FILE, STEPS_FROM, siteToolVersion, SETTING_GROUPS, GM_GROUP, GROUPS, HIDE_GROUP, STRICT_PARENTS, stopsUnknown, NEW_FILE, OLD_FILE, OLD_FILE_STOP, OLD_FILE_LEFT, STATE_FILE, NOTES_FILE, PUBLISH_LIST_FILE, OLD_LIST_FILE, OLD_LIST_STOP, PUBLISH_LIST_FROM, ACCEPTED_FROM, SETTLE_FROM, TIE_FROM, layoutOf, at, fileLabel, nameIn };

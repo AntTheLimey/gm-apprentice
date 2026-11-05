@@ -110,6 +110,18 @@ function dropLines(text, a, b, eol) {
 // ---- Making text with the library --------------------------------------------------------------
 
 const toStringOptions = (ctx) => ({ indent: ctx.step, indentSeq: ctx.indentSeq, lineWidth: 0, blockQuote: false, flowCollectionPadding: false, minContentWidth: 0 });
+// True when a YAML 1.1 reader (Obsidian, PyYAML, js-yaml) would read this text, written bare, as something other than
+// the same string: `12:30` is the number 750 there and `yes` is true. The library writes YAML 1.2, where both are text,
+// so these are quoted to be read the same everywhere (tests/shared-cases/yaml-scalars.json).
+function readsAsOtherInYaml11(text) {
+  if (/^[yn]$/i.test(text)) return false; // only the `yaml` package reads a lone y or n as a boolean; Obsidian, PyYAML and js-yaml do not
+  try {
+    return YAML.parse(`v: ${text}`, { version: '1.1' }).v !== text;
+  } catch {
+    return false;
+  }
+}
+
 // A string with a line break is always written double-quoted on one line: the library would otherwise
 // spread it over lines, which a one-line (flow) group cannot hold.
 function documentOf(value, ctx = {}) {
@@ -118,6 +130,8 @@ function documentOf(value, ctx = {}) {
     Scalar(_, node) {
       if (typeof node.value !== 'string') return;
       if (/[\r\n]/.test(node.value)) node.type = 'QUOTE_DOUBLE';
+      // Text a YAML 1.1 reader misreads is quoted; a value already in quotes keeps the quotes it had (`inline` sets them).
+      else if (!node.type && readsAsOtherInYaml11(node.value)) node.type = 'QUOTE_DOUBLE';
     },
   });
   return doc;
@@ -254,7 +268,7 @@ function setAt(text, doc, keys, value, ctx) {
     const lines = entryLines(keys[0], nest(keys.slice(1), value), ctx, 0);
     // The text keeps its ending: a file that ended in a line break still does; the old file's frontmatter
     // (cut before its closing ---) has none, and an empty one gets none.
-    const ends = text === '' ? !ctx.keepBlock : /\n$/.test(text);
+    const ends = text === '' || /\n$/.test(text);
     return [{ from: 0, to: text.length, text: (body ? body + ctx.eol : '') + lines.join(ctx.eol) + (ends ? ctx.eol : '') }];
   }
   let map = doc.contents;
@@ -275,16 +289,13 @@ function withValue(obj, keys, value) {
   out[keys[0]] = keys.length === 1 ? value : withValue(out[keys[0]], keys.slice(1), value);
   return out;
 }
-// `keep` is the one top-level block left (bare) when its last child goes, as the old file's `publish:` is.
-function withoutValue(obj, keys, keep, top = true) {
+function withoutValue(obj, keys) {
   if (!isMap(obj) || !Object.prototype.hasOwnProperty.call(obj, keys[0])) return obj;
   const out = { ...obj };
   if (keys.length === 1) { delete out[keys[0]]; return out; }
-  const child = withoutValue(obj[keys[0]], keys.slice(1), keep, false);
-  if (isMap(child) && Object.keys(child).length === 0) {
-    if (top && keys[0] === keep) out[keys[0]] = null;
-    else delete out[keys[0]];
-  } else out[keys[0]] = child;
+  const child = withoutValue(obj[keys[0]], keys.slice(1));
+  if (isMap(child) && Object.keys(child).length === 0) delete out[keys[0]];
+  else out[keys[0]] = child;
   return out;
 }
 
@@ -297,7 +308,6 @@ function flowRewrite(text, map, ctx, doc, change) {
 // Removes the entry at `keys`; a group it leaves empty goes too. [] when it is not there.
 function removeAt(text, doc, keys, ctx) {
   const chain = [];
-  let emptiedFlow = false;
   let map = doc.contents;
   for (const k of keys) {
     if (!isYMap(map)) return [];
@@ -308,7 +318,6 @@ function removeAt(text, doc, keys, ctx) {
       if (isDeepStrictEqual(next, now)) return [];
       // A one-line group left with nothing goes with its key (below), as a block group does.
       if (Object.keys(next).length || chain.length === 0) return [{ from: map.range[0], to: endOf(map, text), text: inline(next, map, ctx, true) }];
-      emptiedFlow = true;
       break;
     }
     const pair = findPair(map, k);
@@ -316,13 +325,9 @@ function removeAt(text, doc, keys, ctx) {
     chain.push({ map, pair });
     map = pair.value;
   }
-  // Climb while the entry is the only one in its group. The old file's `publish:` block is left (bare)
-  // when its last child goes, as it always was; on the new layout the emptied group goes too.
-  const floor = ctx.keepBlock && keys.length > 1 && keys[0] === ctx.keepBlock ? 1 : 0;
+  // Climb while the entry is the only one in its group: an emptied group goes too.
   let at = chain.length - 1;
-  // The old file's bare `publish:` keeps its key when the one-line group under it empties.
-  if (emptiedFlow && at < floor) return [{ from: colonEnd(chain[at].pair), to: endOf(chain[at].pair.value, text), text: '' }];
-  while (at > floor && chain[at].map.items.length === 1) at--;
+  while (at > 0 && chain[at].map.items.length === 1) at--;
   const { pair } = chain[at];
   return [dropLines(text, pair.key.range[0], Math.max(pair.key.range[1], pair.value ? endOf(pair.value, text) : 0), ctx.eol)];
 }
@@ -432,7 +437,7 @@ function open(vaultPath, layout, create) {
     const text = fs.readFileSync(at(vaultPath, NEW_FILE), 'utf8');
     return { rel: NEW_FILE, label: NEW_FILE, whole: text, text, eol: eolOf(text), join: (t) => t };
   }
-  if (layout === 'legacy') throw plain(OLD_FILE_STOP);
+  if (layout === 'old-only') throw plain(OLD_FILE_STOP);
   if (!create) throw new Error(`this vault has no settings file yet; add --create to make ${NEW_FILE}`);
   return { rel: NEW_FILE, label: NEW_FILE, whole: null, text: 'version: 1\n', eol: '\n', join: (t) => t, created: true };
 }
@@ -546,9 +551,9 @@ function prepare(changes, layout, { allowState = false, siteDir = null } = {}) {
 // ---- Doing the changes -------------------------------------------------------------------------
 
 // One step on one text. Returns { text, expected (the data it should parse to), wrote, removed, notes }.
-function runStep(text, step, label, eol, keepBlock) {
+function runStep(text, step, label, eol) {
   const doc = parseText(text, label);
-  const ctx = { ...styleOf(doc, text), eol, keepBlock };
+  const ctx = { ...styleOf(doc, text), eol };
   const before = doc.toJS() || {};
   const wrote = [];
   const removed = [];
@@ -564,9 +569,9 @@ function runStep(text, step, label, eol, keepBlock) {
     if (olderHere.length && !presentAt(step.keys) && olderHere.length === 1 && sameParent(olderHere[0])) {
       edits = renameKey(text, doc, olderHere[0], step.keys[step.keys.length - 1], ctx);
       notes.push(`Replaced ${nameOf(olderHere[0])} with ${step.spelling}.`);
-      expected = withValue(withoutValue(before, olderHere[0], keepBlock), olderHere[0].slice(0, -1).concat(step.keys[step.keys.length - 1]), getPath(before, olderHere[0]));
+      expected = withValue(withoutValue(before, olderHere[0]), olderHere[0].slice(0, -1).concat(step.keys[step.keys.length - 1]), getPath(before, olderHere[0]));
       const mid = applyEdits(text, edits);
-      const next = runStep(mid, { ...step, older: [] }, label, eol, keepBlock);
+      const next = runStep(mid, { ...step, older: [] }, label, eol);
       return { ...next, notes: [...notes, ...next.notes], removed: [...removed, ...next.removed] };
     }
     if (!isDeepStrictEqual(getPath(before, step.keys), step.value) || !presentAt(step.keys)) edits = setAt(text, doc, step.keys, step.value, ctx);
@@ -578,7 +583,7 @@ function runStep(text, step, label, eol, keepBlock) {
       const d2 = parseText(cur, label);
       const rm = removeAt(cur, d2, o, ctx);
       cur = applyEdits(cur, rm);
-      expected = withoutValue(expected, o, keepBlock);
+      expected = withoutValue(expected, o);
       removed.push(nameOf(o));
       notes.push(`Replaced ${nameOf(o)} with ${step.spelling}.`);
     }
@@ -590,7 +595,7 @@ function runStep(text, step, label, eol, keepBlock) {
     for (const keys of all) {
       const d2 = parseText(cur, label);
       cur = applyEdits(cur, removeAt(cur, d2, keys, ctx));
-      expected = withoutValue(expected, keys, keepBlock);
+      expected = withoutValue(expected, keys);
       removed.push(nameOf(keys));
     }
     return { text: cur, expected, wrote, removed, notes };
@@ -658,7 +663,7 @@ function planChanges(vaultPath, changes, { create = false, allowState = false, s
     const before = text;
     let out;
     try {
-      out = runStep(text, step, doc.label, doc.eol, null);
+      out = runStep(text, step, doc.label, doc.eol);
       const after = parseText(out.text, doc.label).toJS() || {};
       if (!isDeepStrictEqual(after, out.expected)) throw new Error('did not read back as intended');
     } catch (e) {

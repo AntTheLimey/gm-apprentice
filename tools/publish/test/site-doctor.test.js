@@ -504,7 +504,7 @@ describe('doctor --site', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
-  it('names the failure instead of going silent when the site package.json is malformed JSON (M7)', async () => {
+  it('reports a malformed site package.json once, as the settings stop (M7)', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-pkg-bad-'));
     write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\nHi.\n');
     const { dir, configPath } = siteFor(vault, { folderMap: { 'Characters/NPCs': 'characters/npcs' } });
@@ -516,9 +516,23 @@ describe('doctor --site', () => {
     assert.strictEqual(rc, 1);
     const payload = JSON.parse(c.out.join(''));
     assert.ok(payload.findings.some((f) => f.code === 'SETTINGS_FAULT' && /package\.json is not valid JSON/.test(f.detail)), JSON.stringify(payload.findings));
-    const finding = payload.findings.find((f) => f.code === 'VERSION_DRIFT' && /package\.json/.test(f.path));
-    assert.ok(finding, JSON.stringify(payload.findings));
-    assert.match(finding.detail, /could not be read as JSON/);
+    // One report of it, not two: the stop already names the file.
+    assert.deepStrictEqual(payload.findings.filter((f) => f.code === 'VERSION_DRIFT' && /package\.json/.test(f.path)), [], JSON.stringify(payload.findings));
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('makes no pinned-version claim when drift is detected and package.json cannot be parsed', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-pkg-bad-drift-'));
+    write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\nHi.\n');
+    const { dir, configPath } = siteFor(vault, { folderMap: { 'Characters/NPCs': 'characters/npcs' } });
+    fs.writeFileSync(path.join(dir, 'package.json'), '{ not json');
+    const c = capture();
+    c.deps.detect = () => ({ pinned: '1.11.20', latest: '1.11.30', drift: true, versionsRoot: '/cache/gm-apprentice' });
+    await runSiteDoctor({ configPath, json: true }, c.deps);
+    const payload = JSON.parse(c.out.join(''));
+    const about = payload.findings.filter((f) => /package\.json$/.test(f.path));
+    assert.strictEqual(about.length, 1, JSON.stringify(payload.findings));
+    assert.strictEqual(about[0].code, 'SETTINGS_FAULT');
     fs.rmSync(vault, { recursive: true, force: true });
   });
 

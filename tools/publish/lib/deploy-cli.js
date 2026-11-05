@@ -464,7 +464,7 @@ async function runDeploy(options, deps) {
   }
 
   if (!url) {
-    say(`no ${nameIn(vaultPath, 'player_site.url')} set — cannot verify; check the site by hand`);
+    say(`no ${nameIn('player_site.url')} set — cannot verify; check the site by hand`);
     return finish({ deployed: true, url: null }, 0);
   }
 

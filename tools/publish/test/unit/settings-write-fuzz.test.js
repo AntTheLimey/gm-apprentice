@@ -1,20 +1,20 @@
 'use strict';
-// A seeded property test of the settings writer, on both layouts. Files are generated in many shapes
+// A seeded property test of the settings writer. Files are generated in many shapes
 // (block and flow lists and maps, comments, blank lines, quoted keys, block scalars, empty groups, one-line
-// groups, CRLF, no final newline, an old file's body holding --- lines), then random valid steps are done.
+// groups, CRLF, no final newline), then random valid steps are done.
 // After every step: the file reads, readSettings shows exactly the intended change, the lines nobody
-// meant to touch are still there in order, the old body is byte-identical, no temp file is left, and no
-// valid step is refused. The seed is fixed so CI is deterministic; a failure prints the file and the step.
+// meant to touch are the lines of the file that were there before, in the same order, no temp file is left,
+// and no valid step is refused. The seed is fixed so CI is deterministic; a failure prints the file and the step.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { applyChanges } = require('../../lib/settings/write');
-const { readSettings, entry, legacyNameOf, stops } = require('../../lib/settings');
-const { NEW_FILE, OLD_FILE, at } = require('../../lib/settings/layout');
+const { readSettings, entry, stops } = require('../../lib/settings');
+const { NEW_FILE, at } = require('../../lib/settings/layout');
 
-const ITERATIONS = 100; // per layout; FUZZ_SEED tries another run, and a fixed seed keeps CI deterministic
+const ITERATIONS = 100; // a fixed seed keeps CI deterministic
 const SEED = Number(process.env.FUZZ_SEED) || 20261013; // FUZZ_SEED tries another
 
 function rng(seed) {
@@ -42,10 +42,10 @@ const POOL = [
   { name: 'player_site.landing.quick_links', kind: 'list' },
 ];
 const GROUPS = ['player_site.hide', 'player_site.features', 'player_site.theme', 'player_site.theme.palette', 'player_site.landing'];
-const pathOf = (name, legacy) => (legacy ? legacyNameOf(entry(name)) : name).split('.');
+const pathOf = (name) => name.split('.');
 const WORDS = ['alpha', 'beta', 'gamma', 'delta', 'omega', 'north gate', 'The Keeper', 'Rumours', 'gm notes', 'c: d', 'it\'s', 'a "b"', '#hash', 'x y z'];
 
-function generate(r, legacy) {
+function generate(r) {
   const pick = (xs) => xs[Math.floor(r() * xs.length)];
   const chance = (p) => r() < p;
   let uid = 0;
@@ -64,7 +64,7 @@ function generate(r, legacy) {
   const chosen = POOL.filter(() => chance(0.55));
   const tree = {}; // nested groups of paths
   for (const s of chosen) {
-    const p = pathOf(s.name, legacy);
+    const p = pathOf(s.name);
     let cur = tree;
     for (const seg of p.slice(0, -1)) cur = cur[seg] = cur[seg] || {};
     cur[p[p.length - 1]] = s;
@@ -134,8 +134,8 @@ function generate(r, legacy) {
       else emitGroup(k, v, col + indent, `${groupPath}.${k}`);
     }
     // Decoys: known groups with nothing in them, written empty or bare, beside the settings.
-    if (col === 0 && (legacy ? groupPath === 'publish' : groupPath === 'player_site')) {
-      for (const d of (legacy ? ['theme', 'landing'] : ['features', 'theme', 'landing', 'hide'])) {
+    if (col === 0 && groupPath === 'player_site') {
+      for (const d of ['features', 'theme', 'landing', 'hide']) {
         if (!(d in node) && chance(0.25)) lines.push({ t: `${' '.repeat(col + indent)}${d}:${pick([' {}', ''])}`, owner: `group:${groupPath}.${d}` });
       }
     }
@@ -143,35 +143,20 @@ function generate(r, legacy) {
   }
 
   const emitTop = (key, node, groupPath) => emitGroup(key, node, 0, groupPath);
-  if (legacy) {
-    lines.push({ t: 'type: meta', owner: 'top' });
-    if (chance(0.5)) lines.push({ t: `gm_apprentice_version: "1.10.${uid++}"   # kept`, owner: 'top' });
-    if (chance(0.3)) { maybeBlank(); lines.push({ t: `chapter_naming: "Chapter ${uid++}"`, owner: 'top' }); }
-    for (const [k, v] of Object.entries(tree)) {
-      maybeBlank();
-      if (isLeaf(v)) emitLeaf(k, v, 0);
-      else emitTop(k, v, k);
-    }
-  } else {
-    lines.push({ t: 'version: 1', owner: 'top' });
-    for (const [k, v] of Object.entries(tree)) {
-      maybeBlank();
-      emitTop(k, v, k);
-    }
+  lines.push({ t: 'version: 1', owner: 'top' });
+  for (const [k, v] of Object.entries(tree)) {
+    maybeBlank();
+    emitTop(k, v, k);
   }
   if (chance(0.3)) lines.push({ t: `# the end ${uid++}`, owner: 'tail' });
   return { lines, chosen };
 }
 
-function renderFile(g, r, legacy) {
+function renderFile(g, r) {
   const crlf = r() < 0.3;
   const eol = crlf ? '\r\n' : '\n';
   const core = g.lines.map((l) => l.t);
   const final = r() < 0.7;
-  if (legacy) {
-    const body = ['', '# Notes', 'Some prose.', '---', 'more prose', '---', 'end'];
-    return { text: `---${eol}${core.join(eol)}${eol}---${eol}${body.join(eol)}${final ? eol : ''}`, eol, crlf };
-  }
   return { text: core.join(eol) + (final ? eol : ''), eol, crlf };
 }
 
@@ -210,25 +195,20 @@ const setIn = (obj, dotted, value) => {
   cur[segs[segs.length - 1]] = value;
 };
 
-// `want` as a subsequence of `have`.
-function inOrder(want, have) {
-  return firstMissing(want, have) === null;
-}
-// The first line of `want` that `have` does not carry on, in order; null when all are there.
-function firstMissing(want, have) {
-  let i = 0;
-  for (const l of have) if (i < want.length && l === want[i]) i++;
-  return i === want.length ? null : want[i];
-}
+// The lines of `have` that are also lines of `want`, blanks left out (a blank line is too common to tell apart).
+const known = (want, have) => {
+  const set = new Set(want);
+  return have.filter((l) => l !== '' && set.has(l));
+};
 
-function run(legacy) {
-  const r = rng(SEED + (legacy ? 1 : 0));
+function run() {
+  const r = rng(SEED);
   let steps = 0;
   for (let it = 0; it < ITERATIONS; it++) {
-    const g = generate(r, legacy);
-    const file = renderFile(g, r, legacy);
+    const g = generate(r);
+    const file = renderFile(g, r);
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'wfuzz-'));
-    const rel = legacy ? OLD_FILE : NEW_FILE;
+    const rel = NEW_FILE;
     fs.mkdirSync(path.dirname(at(dir, rel)), { recursive: true });
     fs.writeFileSync(at(dir, rel), file.text);
     try {
@@ -257,18 +237,16 @@ function run(legacy) {
         assert.deepEqual(read.values, want, `${label}: values\n--- before ---\n${text}\n--- after ---\n${after}`);
         // No eol mixing; the old body is as it was.
         if (file.crlf) assert.ok(!after.replace(/\r\n/g, '').includes('\n'), `${label}: a bare line feed`);
-        if (legacy) {
-          const fence = `${file.eol}---${file.eol}`;
-          assert.equal(after.slice(after.indexOf(fence, 3)), text.slice(text.indexOf(fence, 3)), `${label}: the body changed`);
-        }
         // Lines nobody meant to touch are still there, in order.
-        const segs = pathOf(step.name, legacy);
+        const segs = pathOf(step.name);
         const mine = new Set([step.name, ...segs.slice(0, -1).map((_, i) => `group:${segs.slice(0, i + 1).join('.')}`)]);
         const afterLines = after.split(/\r?\n/);
         // Comments and blank lines inside a group that went with its last setting went with it.
         const goneGroups = new Set([...mine].filter((o) => o.startsWith('group:') && groupLine.has(o) && !afterLines.includes(groupLine.get(o))).map((o) => o.slice(6)));
         const exempt = (l) => mine.has(l.owner) || (l.owner === 'free' && goneGroups.has(l.inside));
-        assert.ok(inOrder(lines.filter((l) => !exempt(l)).map((l) => l.t), afterLines), `${label}: an untouched line was lost or moved: ${JSON.stringify(firstMissing(lines.filter((l) => !exempt(l)).map((l) => l.t), afterLines))}\n--- before ---\n${text}\n--- after ---\n${after}`);
+        // Equal, not a subsequence: nothing untouched is lost, moved, duplicated or joined by a line the writer added.
+        const untouched = lines.filter((l) => !exempt(l)).map((l) => l.t).filter((t) => t !== '');
+        assert.deepEqual(known(untouched, afterLines), untouched, `${label}: the untouched lines changed\n--- before ---\n${text}\n--- after ---\n${after}`);
         // What this step may have rewritten is not checked again by the later steps.
         lines = lines.filter((l) => !exempt(l));
         text = after;
@@ -284,8 +262,8 @@ function run(legacy) {
   return steps;
 }
 
-test('seeded property test: the new file', () => {
-  const steps = run(false);
+test('seeded property test', () => {
+  const steps = run();
   assert.ok(steps > 50, `ran ${steps} steps`);
 });
 
@@ -293,7 +271,7 @@ test('the generator makes a spread of shapes', () => {
   const r = rng(7);
   const seen = new Set();
   for (let i = 0; i < 100; i++) {
-    const t = renderFile(generate(r, false), r, false).text;
+    const t = renderFile(generate(r), r).text;
     for (const [name, re] of [['block scalar', /: [|>]-?$/m], ['flow list', /: \[/], ['flow group', /: \{"?\w/], ['quoted key', /^\s*["']\w+["']:/m], ['crlf', /\r\n/], ['comment', /# c\d+/], ['bare group', /^\s*\w+:\s*$/m]]) {
       if (re.test(t)) seen.add(name);
     }

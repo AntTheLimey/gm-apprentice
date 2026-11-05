@@ -283,7 +283,7 @@ function buildSite(options) {
   // The player site's switch does not stop the GM site: its own (gm_site.publish) was checked above.
   const off = gm ? null : siteOff(publishConfig.switches);
   // A setting named in a message is named as this vault's file writes it.
-  const nm = (name) => nameIn(rawConfig.vaultPath, name);
+  const nm = (name) => nameIn(name);
   if (off && !dry) throw new Error(off);
   // Every HTML file goes through here: on the GM site it is marked (gmPage); on the player site it is written as made.
   // `gmCssHref`: where a page the tool makes with no style.css link (a styled prop page) finds css/gm.css.
@@ -2271,7 +2271,7 @@ function buildSite(options) {
     if (!shownPage) {
       const dir = path.posix.dirname(shownRel);
       const unmapped = dir !== '.' && require('./scanner').mapFolder(dir, config.folderMap || {}) === null;
-      return { why: unmapped ? `the site does not read this note: its folder ${dir} is not in ${nameIn(config.vaultPath, 'player_site.folder_map')}` : 'the site does not read this note' };
+      return { why: unmapped ? `the site does not read this note: its folder ${dir} is not in ${nameIn('player_site.folder_map')}` : 'the site does not read this note' };
     }
     const p = propPlan && propPlan.props.find((x) => x.page === shownPage);
     if (!p) return { why: 'not a prop note' };

@@ -28,7 +28,7 @@ const reader = (files) => {
 describe('the settings readers read through deps, and a read error stops them (#424)', () => {
   it('layoutOf asks the reader which file exists', () => {
     assert.strictEqual(layoutOf('/v', reader({ [NEW]: 'x' })), 'new');
-    assert.strictEqual(layoutOf('/v', reader({ [OLD]: 'x' })), 'legacy');
+    assert.strictEqual(layoutOf('/v', reader({ [OLD]: 'x' })), 'old-only');
     assert.strictEqual(layoutOf('/v', reader({})), 'none');
   });
 

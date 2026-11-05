@@ -10,6 +10,3 @@ reviews:
     - "!docs/site-settings.md"
     - "!tools/publish/package-lock.json"
     - "!.claude-plugin/plugin.json"
-    # 1.11.0 PR only: test moves exceed the file limit; restore in the next PR
-    - "!tests/**"
-    - "!tools/publish/test/**"

@@ -33,7 +33,7 @@
 const { publishMode } = require('./processor');
 const { storyOwnerPath, isStoryCompanion, matchExcludedDir } = require('./scanner');
 const { getCanonStatus } = require('./templates/base');
-const { entry, nameInFor } = require('./settings');
+const { entry } = require('./settings');
 const { chapterStatusOf } = require('./shared-lists');
 
 // The values that keep a note off a player site are listed once, in excluding-values.js.
@@ -164,7 +164,7 @@ function decidePage(page, options) {
   const excludedDir = alwaysExcludedSegment(rel);
   if (excludedDir) return verdict('exclude', 'DIR_ALWAYS_EXCLUDED', `in ${excludedDir}/ — never published`);
   if (!folderMapped) {
-    return verdict('decide', 'DIR_UNMAPPED', `its folder is not in ${nameInFor(publishConfig.layout, 'player_site.folder_map')}`);
+    return verdict('decide', 'DIR_UNMAPPED', `its folder is not in player_site.folder_map`);
   }
   if (!frontmatter || !frontmatter.type) {
     return verdict('decide', 'NO_TYPE', 'no `type:` in frontmatter');
@@ -283,7 +283,7 @@ function decideGmPage(page, options) {
     const player = {
       bucket: 'exclude',
       code: 'DIR_CONFIG_EXCLUDED',
-      reason: `in ${folder}/ — listed in ${nameInFor(publishConfig.layout, 'player_site.hide.folders')}`,
+      reason: `in ${folder}/ — listed in player_site.hide.folders`,
       outputPath,
     };
     if (!show.has('notes') && !playNotes) return withPlayer(player);

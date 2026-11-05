@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.11.1] — 2026-11-05
+
+Settings writer fixes (#380). Publish tool 1.69.1. No vault change.
+
+### Fixed
+
+- **Values a YAML 1.1 reader would misread** (`12:30`, `yes`, `1_000` and the like) are written quoted, so Obsidian and the scripts read the same text the publish tool does. A lone `y` or `n` stays bare.
+- **A value already in quotes keeps its own quotes** when a change still needs it quoted (`'yes'` stays single-quoted).
+- **Renaming a note reports a settings error** (an unreadable file, or a vault with only the old settings file) instead of silently leaving the settings unchanged.
+- **The site doctor reports a malformed `package.json` once**, as the settings stop, not again as a version warning.
+
+### Changed
+
+- **Dead code from the old settings layer removed**: the layout-aware name and file-label helpers, the hidden `layout` property of the publish config, and the old-file branches of the writer's tests. The settings-name and file-label helpers take no layout argument.
+
+---
+
 ## [1.11.0] — 2026-11-05
 
 **Before you update: every vault and site must already be moved.** Update each vault with plugin 1.10.134 or later first (its update moves the settings to `_meta/vault-config.yaml` and the publish list to `_meta/publish-list.yaml`, and repins the site's publish tool). Then check three things the 1.10 update can leave behind: `_meta/vault-config.md` beside the new file (remove it once its settings are in `_meta/vault-config.yaml`), a key other than `vaultPath` in the site folder's `vault.config.json`, and a `prebuild` or `postbuild` script in the site's `package.json` (move it to `player_site.before_build` or `player_site.after_build`). Plugin 1.11.0 no longer moves anything: its update refuses a vault that is not moved or still holds any of these, and names each with its fix; the build stops on them by name. Publish tool 1.69.0.

@@ -16,7 +16,7 @@ test('a vault with neither file is on no layout', () => {
 test('a vault with only the old file is on the old layout', () => {
   const v = vault();
   writeOldConfig(v, { mode: 'player' });
-  assert.equal(layoutOf(v), 'legacy');
+  assert.equal(layoutOf(v), 'old-only');
 });
 
 test('a vault with the new file is on the new layout', () => {

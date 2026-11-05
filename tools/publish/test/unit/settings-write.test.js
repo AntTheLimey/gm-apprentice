@@ -18,8 +18,8 @@ function vaultWith(rel, text) {
   return { dir, file, read: () => fs.readFileSync(file, 'utf8') };
 }
 
-// Runs `change` on the new-layout text and checks the whole text. (`old`/`oldOut` are the old file's form of the same case, no longer run.)
-function both(name, { nw, old, changes, newOut, oldOut, eol = '\n' }) {
+// Runs `change` on the settings text and checks the whole text.
+function both(name, { nw, changes, newOut }) {
   it(`${name}`, () => {
     const v = vaultWith(NEW_FILE, nw);
     applyChanges(v.dir, changes.new);
@@ -33,117 +33,87 @@ const FLD = 'player_site.hide.fields';
 describe('settings writer: comments and lists', () => {
   both('a comment on the key line of a list survives set', {
     nw: 'version: 1\nplayer_site:\n  hide:\n    sections:  # mine\n      - a\n      - b\n',
-    old: 'publish:\n  exclude_sections:  # mine\n    - a\n    - b\n',
     changes: { new: [{ op: 'set', name: SEC, value: ['x', 'y'] }] },
     newOut: 'version: 1\nplayer_site:\n  hide:\n    sections:  # mine\n      - x\n      - y\n',
-    oldOut: 'publish:\n  exclude_sections:  # mine\n    - x\n    - y\n',
   });
   both('a comment on the key line of a list survives add', {
     nw: 'version: 1\nplayer_site:\n  hide:\n    sections:  # mine\n      - a\n',
-    old: 'publish:\n  exclude_sections:  # mine\n    - a\n',
     changes: { new: [{ op: 'add', name: SEC, entries: ['b'] }] },
     newOut: 'version: 1\nplayer_site:\n  hide:\n    sections:  # mine\n      - a\n      - b\n',
-    oldOut: 'publish:\n  exclude_sections:  # mine\n    - a\n    - b\n',
   });
   both('item comments survive add of another item', {
     nw: 'version: 1\nplayer_site:\n  hide:\n    sections:\n      - a  # one\n      - b  # two\n    fields: [q]\n',
-    old: 'publish:\n  exclude_sections:\n    - a  # one\n    - b  # two\n  exclude_fields: [q]\n',
     changes: { new: [{ op: 'add', name: SEC, entries: ['c'] }] },
     newOut: 'version: 1\nplayer_site:\n  hide:\n    sections:\n      - a  # one\n      - b  # two\n      - c\n    fields: [q]\n',
-    oldOut: 'publish:\n  exclude_sections:\n    - a  # one\n    - b  # two\n    - c\n  exclude_fields: [q]\n',
   });
   both('item comments survive remove of another item', {
     nw: 'version: 1\nplayer_site:\n  hide:\n    sections:\n      - a  # one\n      - b  # two\n      - c  # three\n',
-    old: 'publish:\n  exclude_sections:\n    - a  # one\n    - b  # two\n    - c  # three\n',
     changes: { new: [{ op: 'remove', name: SEC, entries: ['b'] }] },
     newOut: 'version: 1\nplayer_site:\n  hide:\n    sections:\n      - a  # one\n      - c  # three\n',
-    oldOut: 'publish:\n  exclude_sections:\n    - a  # one\n    - c  # three\n',
   });
   both('a flow list stays a flow list after add', {
     nw: 'version: 1\nplayer_site:\n  hide:\n    fields: [a, b]\n',
-    old: 'publish:\n  exclude_fields: [a, b]\n',
     changes: { new: [{ op: 'add', name: FLD, entries: ['c'] }] },
     newOut: 'version: 1\nplayer_site:\n  hide:\n    fields: [a, b, c]\n',
-    oldOut: 'publish:\n  exclude_fields: [a, b, c]\n',
   });
   both('a block list stays a block list after add', {
     nw: 'version: 1\nplayer_site:\n  hide:\n    fields:\n    - a\n',
-    old: 'publish:\n  exclude_fields:\n  - a\n',
     changes: { new: [{ op: 'add', name: FLD, entries: ['c'] }] },
     newOut: 'version: 1\nplayer_site:\n  hide:\n    fields:\n    - a\n    - c\n',
-    oldOut: 'publish:\n  exclude_fields:\n  - a\n  - c\n',
   });
   both('removing the last entry leaves an empty list, not an empty key', {
     nw: 'version: 1\nplayer_site:\n  hide:\n    sections:  # mine\n      - a\n    fields: [q]\n',
-    old: 'publish:\n  exclude_sections:  # mine\n    - a\n  exclude_fields: [q]\n',
     changes: { new: [{ op: 'remove', name: SEC, entries: ['a'] }] },
     newOut: 'version: 1\nplayer_site:\n  hide:\n    sections: []  # mine\n    fields: [q]\n',
-    oldOut: 'publish:\n  exclude_sections: []  # mine\n  exclude_fields: [q]\n',
   });
 });
 
 describe('settings writer: where things go', () => {
   both('set of an existing key leaves it where it is, and keeps its comment', {
     nw: 'version: 1\nplayer_site:\n  title: Old   # the name\n  footer: f\n',
-    old: 'publish:\n  site_title: Old   # the name\n  footer: f\n',
     changes: { new: [{ op: 'set', name: 'player_site.title', value: 'New' }] },
     newOut: 'version: 1\nplayer_site:\n  title: New   # the name\n  footer: f\n',
-    oldOut: 'publish:\n  site_title: New   # the name\n  footer: f\n',
   });
   both('a new key goes at the end of its group, a new group at the end of its parent', {
     nw: 'version: 1\nvault:\n  system: gurps\nplayer_site:\n  title: T  # t\n',
-    old: 'type: meta\npublish:\n  site_title: T  # t\n',
     changes: { new: [{ op: 'set', name: 'player_site.footer', value: 'F' }, { op: 'set', name: 'player_site.theme.tagline', value: 'Hi' }] },
     newOut: 'version: 1\nvault:\n  system: gurps\nplayer_site:\n  title: T  # t\n  footer: F\n  theme:\n    tagline: Hi\n',
-    oldOut: 'type: meta\npublish:\n  site_title: T  # t\n  footer: F\n  theme:\n    tagline: Hi\n',
   });
   both('a new group is made when the parent has none', {
     nw: 'version: 1\n',
-    old: 'type: meta\n',
     changes: { new: [{ op: 'set', name: 'player_site.title', value: 'T' }] },
     newOut: 'version: 1\nplayer_site:\n  title: T\n',
-    oldOut: 'type: meta\npublish:\n  site_title: T\n',
   });
   both('four-space indentation is kept for new lines', {
     nw: 'version: 1\nplayer_site:\n    title: T\n    hide:\n        sections: [a]\n',
-    old: 'publish:\n    site_title: T\n',
     changes: { new: [{ op: 'set', name: 'player_site.footer', value: 'F' }] },
     newOut: 'version: 1\nplayer_site:\n    title: T\n    hide:\n        sections: [a]\n    footer: F\n',
-    oldOut: 'publish:\n    site_title: T\n    footer: F\n',
   });
 });
 
 describe('settings writer: values', () => {
   both('a quoted value stays quoted; a number given to a text setting is text', {
     nw: 'version: 1\nplayer_site:\n  title: "Quoted"\n  footer: plain\n',
-    old: 'publish:\n  site_title: "Quoted"\n  footer: plain\n',
     changes: { new: [{ op: 'set', name: 'player_site.title', value: 'Other' }, { op: 'set', name: 'player_site.footer', value: 5 }] },
     newOut: 'version: 1\nplayer_site:\n  title: "Other"\n  footer: "5"\n',
-    oldOut: 'publish:\n  site_title: "Other"\n  footer: "5"\n',
   });
   both('a text setting given yes is written as text', {
     nw: 'version: 1\nplayer_site:\n  title: a\n',
-    old: 'publish:\n  site_title: a\n',
     changes: { new: [{ op: 'set', name: 'player_site.title', value: 'yes' }] },
-    newOut: 'version: 1\nplayer_site:\n  title: yes\n',
-    oldOut: 'publish:\n  site_title: yes\n',
+    newOut: 'version: 1\nplayer_site:\n  title: "yes"\n', // quoted: a YAML 1.1 reader reads a bare yes as true
   });
   both('vault.setting_year is written (under vault, or at the left edge of the old file)', {
     nw: 'version: 1\nvault:\n  system: gurps\n',
-    old: 'type: meta\npublish:\n  site_title: T\n',
     changes: { new: [{ op: 'set', name: 'vault.setting_year', value: 1925 }] },
     newOut: 'version: 1\nvault:\n  system: gurps\n  setting_year: "1925"\n',
-    oldOut: 'type: meta\npublish:\n  site_title: T\nsetting_year: "1925"\n',
   });
 });
 
 describe('settings writer: unset', () => {
   both('unset of the last key in a group removes the empty group', {
     nw: 'version: 1\nplayer_site:\n  title: T\n  theme:\n    # about the look\n    tagline: Hi\n  footer: F\n',
-    old: 'publish:\n  site_title: T\n  theme:\n    tagline: Hi\n  footer: F\n',
     changes: { new: [{ op: 'unset', name: 'player_site.theme.tagline' }] },
     newOut: 'version: 1\nplayer_site:\n  title: T\n  footer: F\n',
-    oldOut: 'publish:\n  site_title: T\n  footer: F\n',
   });
   it('unset of a group is refused and lists what is in it', () => {
     const v = vaultWith(NEW_FILE, 'version: 1\nplayer_site:\n  theme:\n    tagline: Hi\n');
@@ -177,10 +147,8 @@ describe('settings writer: all or nothing, line endings, the rest of the file', 
   });
   both('CRLF line endings are kept', {
     nw: 'version: 1\r\nplayer_site:\r\n  title: T\r\n  hide:\r\n    sections:\r\n      - a\r\n',
-    old: 'publish:\r\n  site_title: T\r\n  exclude_sections:\r\n    - a\r\n',
     changes: { new: [{ op: 'set', name: 'player_site.footer', value: 'F' }, { op: 'add', name: SEC, entries: ['b'] }] },
     newOut: 'version: 1\r\nplayer_site:\r\n  title: T\r\n  hide:\r\n    sections:\r\n      - a\r\n      - b\r\n  footer: F\r\n',
-    oldOut: 'publish:\r\n  site_title: T\r\n  exclude_sections:\r\n    - a\r\n    - b\r\n  footer: F\r\n',
     eol: '\r\n',
   });
   it('a file with no trailing newline keeps none', () => {
