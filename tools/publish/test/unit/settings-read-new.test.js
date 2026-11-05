@@ -347,3 +347,12 @@ test('a hiding list left in the site file stops the build and nothing is written
   assert.throws(() => build({ configPath }), /vault\.config\.json holds keys that are no longer read there: .*excludeSections \(now player_site\.hide\.sections\)/);
   assert.equal(fs.existsSync(out), false);
 });
+
+test('an unreadable folder map stops the player build: read as empty, it would publish nothing (#375)', () => {
+  for (const text of ['player_site:\n  folder_map: [a, b]\n', 'player_site:\n  folder_map: Notes\n']) {
+    const f = fault(read(text), 'player_site.folder_map');
+    assert.equal(f.level, 'stop', text);
+  }
+  // The GM site's twin warns, as every GM-site fault does.
+  assert.equal(fault(read('gm_site:\n  folder_map: [a]\n'), 'gm_site.folder_map').level, 'warn');
+});
