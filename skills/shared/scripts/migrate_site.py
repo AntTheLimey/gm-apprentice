@@ -131,6 +131,9 @@ def _ask_move(vault: Path, args: list[str]) -> dict[str, Any]:
     return data
 
 
+CANNOT_FINISH = " The update cannot finish until this is done."
+
+
 def find_settings_move(vault: Path) -> list[Item]:
     """Every pass: a vault on the old settings file moves to the new one,
     all of it by the publish tool (`settings move`): the new file, the
@@ -141,8 +144,7 @@ def find_settings_move(vault: Path) -> list[Item]:
     to move: the move itself holds a vault whose site's publish tool is
     pinned by something else (its answer has `held`, with the words), because
     such a tool reads a moved vault as having no settings and would publish
-    with defaults. `held` is a notice that does not hold the stamp; a
-    blocker does."""
+    with defaults. A `held` move and a blocker both hold the stamp."""
     layout = vault_layout(vault)
     if layout == "none":
         return []    # no settings file: nothing names a site folder to ask
@@ -162,9 +164,10 @@ def find_settings_move(vault: Path) -> list[Item]:
     base = _move_args(vault, site, has_config, *extra)
     plan = _ask_move(vault, [*base, "--check"])
     if plan.get("held"):
-        # Left behind, not wrong: the tool says why in plain words and the
-        # vault is told it every pass. This does not hold the stamp.
-        return [Item(MOVE, PERSON, [f"settings\t{plan.get('line')}"])]
+        # Left behind: the tool says why in plain words and the vault is
+        # told it every pass. The move is not done, so the stamp holds.
+        return [Item(MOVE, PERSON, [f"settings\t{plan.get('line')}{CANNOT_FINISH}"],
+                     holds_stamp=True)]
     if not plan["ok"]:
         blockers = [str(b) for b in plan.get("blockers") or []]
         if layout == "legacy":
@@ -191,9 +194,9 @@ def find_settings_move(vault: Path) -> list[Item]:
             "vault.config.json\tstill holds settings this vault's file "
             f"decides ({', '.join(str(x) for x in differs)}); run "
             "campaign-qa's Settings check, which takes them out safely"]))
-    # Left behind, not wrong: the site's installed tool is older than the one
-    # that runs steps and reads the folder keys from the vault. The tool says
-    # which part and in what words; neither holds the stamp.
+    # Left behind: the site's installed tool is older than the one that runs
+    # steps and reads the folder keys from the vault. The tool says which part
+    # and in what words; the move is unfinished, so each holds the stamp.
     told: set[str] = set()
     for key, where in (("stepsHeld", "package.json (site)"),
                        ("keysHeld", "vault.config.json (site)")):
@@ -201,7 +204,8 @@ def find_settings_move(vault: Path) -> list[Item]:
         if isinstance(held, dict) and held.get("line"):
             told.add(str(held["line"]))
             items.append(Item(f"{MOVE}-{key}", PERSON,
-                              [f"{where}\t{held['line']}"]))
+                              [f"{where}\t{held['line']}{CANNOT_FINISH}"],
+                              holds_stamp=True))
     # A package.json step that differs from the vault's is left, and runs
     # beside the vault's under `npm run build`: told each pass, never written.
     for d in plan.get("stepsDiffer") or []:
@@ -268,8 +272,7 @@ def find_publish_list(vault: Path) -> list[Item]:
     decides what moves and whether it should: it holds the list where it is
     (`held`, with the words) when the site's tool is older than 1.27.0 or a
     build step of the site reads the old file. A held list is left behind,
-    not wrong: told every pass, and it does not hold the stamp. A list the
-    tool cannot move holds it."""
+    told every pass, and holds the stamp, as a list the tool cannot move does."""
     if not (vault / OLD_PUBLISH_LIST).is_file():
         return []
     site, has_config = configured_site(vault)
@@ -279,7 +282,8 @@ def find_publish_list(vault: Path) -> list[Item]:
     plan = _ask_convert(vault, "--check", *flag)
     if plan.get("held"):
         return [Item(PUBLISH_LIST, PERSON,
-                     [f"publish list\t{plan['lines'][0]}"])]
+                     [f"publish list\t{plan['lines'][0]}{CANNOT_FINISH}"],
+                     holds_stamp=True)]
     if not plan["ok"]:
         return [Item(PUBLISH_LIST, PERSON,
                      [f"publish list\tthe publish list cannot move to its new "

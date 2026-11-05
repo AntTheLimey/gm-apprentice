@@ -103,7 +103,7 @@ class PublishListMoveTests(unittest.TestCase):
         self.assertFalse(has_old(vault))
         self.assertEqual(read_stamp(vault), PLUGIN)
 
-    def test_a_site_tool_older_than_1_27_0_keeps_the_old_list_and_says_why(self):
+    def test_a_site_tool_older_than_1_27_0_keeps_the_old_list_and_says_why_and_holds_the_stamp(self):
         vault = make_vault(self)
         put_old_list(vault)
         with_site(self, vault, spec="^1.26.0", installed="1.26.0")
@@ -111,15 +111,17 @@ class PublishListMoveTests(unittest.TestCase):
                 "site's publish tool is 1.27.0 or later")
         code, plan, err = update(vault, "plan")
         self.assertIn(line, plan)
+        stamp = read_stamp(vault)
         code, did, err = update(vault, *CHOOSE)
         self.assertEqual(code, 0, err + did)
         self.assertTrue(has_old(vault) and not has_new(vault))
-        self.assertEqual(read_stamp(vault), PLUGIN)   # told, not held
+        self.assertEqual(read_stamp(vault), stamp)   # held, not advanced
+        self.assertIn("not stamped", did)
         before = hashes(vault.parent)
         self.assertIn(line, update(vault, "plan")[1])   # told every pass
         self.assertEqual(hashes(vault.parent), before)
 
-    def test_a_site_step_that_reads_the_old_file_keeps_it_and_names_the_script(self):
+    def test_a_site_step_that_reads_the_old_file_keeps_it_and_names_the_script_and_holds_the_stamp(self):
         vault = make_vault(self)
         put_old_list(vault)
         site = with_site(self, vault, spec=PLUGINS_OWN, installed="1.27.0")
@@ -136,10 +138,12 @@ class PublishListMoveTests(unittest.TestCase):
                       "build step scripts/add-props.mjs reads it. Change the "
                       "script to ask `gm-apprentice-publish manifest list "
                       "--json`, then run the update again.", plan)
+        stamp = read_stamp(vault)
         code, did, err = update(vault, *CHOOSE)
         self.assertEqual(code, 0, err + did)
         self.assertTrue(has_old(vault) and not has_new(vault))
-        self.assertEqual(read_stamp(vault), PLUGIN)
+        self.assertEqual(read_stamp(vault), stamp)
+        self.assertIn("not stamped", did)
         # The step is in the vault's settings now; the second pass still sees it.
         self.assertIn("scripts/add-props.mjs reads it", update(vault, "plan")[1])
 
