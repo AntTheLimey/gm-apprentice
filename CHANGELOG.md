@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.137] — 2026-11-05
+
+Workarounds a vault's agent builds are recorded against the gm-apprentice issue they stand in for, and the update offers them back when that issue ships. Publish tool 1.68.0. No vault change; the next update runs a one-time sweep with the GM.
+
+### Added
+
+- **`gma workaround add/list/keep/retire/scan/swept`.** A workaround is recorded in `_meta/update-record.json` with its issue, what it is, where it lives (vault paths, or `memory:<file>` for the agent's own memory) and its kind. `scan` lists the lines that cite an issue, for the sweep, and writes nothing.
+- **The update offers a workaround back once its issue ships**: "… stands in for #N, built in since <release>: … Retire it and switch to the built-in way?", answered `retire` or `keep`. Keep stands and is not asked again. On retire the update changes nothing: the agent switches to the built-in way, removes the workaround, then records it. The release comes from the plugin's own CHANGELOG, offline; only a release's intro text and its Added, Changed, Fixed, Removed, Security and Deprecated entries count, so issues named under Follow-ups are never taken as shipped. A workaround can name its release by hand.
+- **The one-time sweep** (campaign-organizer's `workaround-sweep.md`): the agent reads the vault's `_meta` notes, its agent files and its own memory for issue numbers, shows the GM each finding, and records only those the GM says yes to. Until it runs, the update's report says so in one line.
+- **`shared/filing-plugin-issues.md`**: when an agent files a gm-apprentice issue and builds something to stand in for it, it records the workaround.
+- **A plugin-managed block in the vault's `CLAUDE.md`** (and `AGENTS.md` if present), written by the update and the scaffold: it tells the vault's agent to run the update when the version gate says MISMATCH, and to record a stand-in for a plugin gap as a workaround.
+
+### Changed
+
+- **The vault's root `CLAUDE.md` and `AGENTS.md` are agent files, not notes**, in the scripts and the publish tool: no untyped-note warning, and never published.
+
+---
+
 ## [1.10.136] — 2026-11-05
 
 The vault update is now one command, `gma update`, and it says what it did. No vault change is needed; the next update writes `_meta/update-record.json`.
