@@ -125,6 +125,16 @@ describe('leftovers from before plugin 1.11.0 stop the build by name', () => {
     builtNothing(s);
   });
 
+  it('deploy stops on a package.json prebuild before it builds or runs anything', async () => {
+    const { runDeploy } = require('../lib/deploy-cli');
+    const s = site({ pkg: { scripts: { postbuild: 'echo bye' } } });
+    const ran = [];
+    const out = [];
+    const deps = { out: (l) => out.push(String(l)), runCommand: (...a) => { ran.push(a); return { code: 0, stdout: '', stderr: '' }; }, runWrangler: (...a) => { ran.push(a); return { code: 0, stdout: '', stderr: '' }; }, build: async () => { ran.push('build'); } };
+    await assert.rejects(runDeploy({ configPath: s.configPath }, deps), /postbuild \(now player_site\.after_build\)/);
+    assert.deepStrictEqual(ran, []);
+  });
+
   it('a site file with only vaultPath builds', () => {
     const s = site({ pkg: { scripts: { build: 'gm-apprentice-publish build' } } });
     const { error, lines } = quietBuild(s.configPath);
