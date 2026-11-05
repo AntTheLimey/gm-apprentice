@@ -512,8 +512,10 @@ describe('doctor --site', () => {
     const c = capture();
     c.deps.detect = () => ({ pinned: '1.11.30', latest: '1.11.30', drift: false, versionsRoot: '/cache/gm-apprentice' });
     const rc = await runSiteDoctor({ configPath, json: true }, c.deps);
-    assert.strictEqual(rc, 0);
+    // The unreadable package.json is also a settings stop now (it might hold build scripts that no longer run).
+    assert.strictEqual(rc, 1);
     const payload = JSON.parse(c.out.join(''));
+    assert.ok(payload.findings.some((f) => f.code === 'SETTINGS_FAULT' && /package\.json is not valid JSON/.test(f.detail)), JSON.stringify(payload.findings));
     const finding = payload.findings.find((f) => f.code === 'VERSION_DRIFT' && /package\.json/.test(f.path));
     assert.ok(finding, JSON.stringify(payload.findings));
     assert.match(finding.detail, /could not be read as JSON/);
