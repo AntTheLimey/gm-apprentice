@@ -98,7 +98,7 @@ describe('site: whether the vault has a site at all', () => {
   });
   it('siteOff stops a build only for an explicit off', () => {
     assert.strictEqual(siteOff(resolve({ site: false, site_dir: '/s' })), siteOffText());
-    assert.strictEqual(siteOffText(), config.SITE_OFF);
+    assert.match(siteOffText(), /^the site is off for this vault \(player_site\.publish in _meta\/vault-config\.yaml\); nothing was built\. Set player_site\.publish: true to publish again\.$/);
     assert.strictEqual(siteOff(resolve({})), null);
     assert.strictEqual(siteOff(resolve({ site: true })), null);
     assert.strictEqual(siteOff(undefined), null);
