@@ -854,6 +854,42 @@ MIGRATION_HINT = ("run campaign-organizer's migration workflow "
                   "(references/migration-procedure.md) before proceeding")
 
 
+MOVED_FLOOR = "1.10.60"      # the oldest stamp the update accepts
+MOVED_TOOL = "1.27.0"        # the oldest site publish tool it accepts
+BRIDGE = "1.10.134"          # the last release that moves a vault
+
+
+def unmoved(vault: Path, stamp: str | None) -> list[str]:
+    """What is left on a vault that 1.10.134 has not moved, in the order the
+    refusal names them; empty when the vault is moved. A vault with no
+    stamp and no settings file is new, not unmoved: the caller sends it to
+    setup first."""
+    left: list[str] = []
+    if stamp is None or parse_version(stamp) < parse_version(MOVED_FLOOR):
+        left.append(f"a stamp older than {MOVED_FLOOR}")
+    if vault_layout(vault) == "legacy":
+        left.append(f"the old settings file {vaultlib.LEGACY_SETTINGS_FILE}")
+    if (vault / "_meta" / "publish-manifest.md").is_file():
+        left.append("the old publish list _meta/publish-manifest.md")
+    try:
+        site, _ = configured_site(vault)
+    except (SettingsUnavailable, OSError, ValueError):
+        site = None
+    if site is not None:
+        version = site_pin(site).version
+        if version is not None and semver_below(version, MOVED_TOOL):
+            left.append(f"a site publish tool older than {MOVED_TOOL}")
+    return left
+
+
+def refusal(left: list[str]) -> str:
+    return (f"This vault still has {', '.join(left)}. Plugin 1.11.0 no longer "
+            f"moves these; {BRIDGE} is the last release that can. Update it "
+            f"with that release first: see https://github.com/AntTheLimey/"
+            f"gm-apprentice/releases/tag/v{BRIDGE} (campaign-organizer zip, "
+            f"run its update), then run this one.")
+
+
 def check_version(vault: Path) -> tuple[list[str], int]:
     """The vault/plugin semver gate eight skills open with.
 
@@ -888,6 +924,9 @@ def check_version(vault: Path) -> tuple[list[str], int]:
         return (["SETUP\t(vault)\tno settings file in _meta/ — first-time "
                  "setup, not migration (campaign-organizer's "
                  "references/vault-setup.md)"], 0)
+    left = unmoved(vault, str(current) if current else None)
+    if left:
+        return ([f"ERROR\t{rel}\t{refusal(left)}"], 1)
     if not current:
         return ([f"MISMATCH\t{rel}\tgm_apprentice_version absent — "
                  f"{MIGRATION_HINT}"], 1)

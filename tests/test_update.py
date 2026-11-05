@@ -17,10 +17,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import migrate  # noqa: E402
 import update  # noqa: E402
+import vault_check as vc  # noqa: E402
 import update_record  # noqa: E402
 from migrate_core import (CHOICE, KINDS, PERSON, WILL, Check, Item,  # noqa: E402
                           StepFailed)
-from test_migrate import PLUGIN, make_vault, stamp_of  # noqa: E402
+from test_migrate import (PLUGIN, REAL_FLOOR, TEST_FLOOR, make_vault,  # noqa: E402
+                          stamp_of)
 
 
 def check(name, kind, items, release=None, plain=None, log=None):
@@ -643,7 +645,18 @@ class ExcludeListsTests(Base):
         c, _ = check("tidy", "bookkeeping", will_item("tidy"))
         code, out, err = self.main(vault, [c])
         self.assertEqual(code, 2)
-        self.assertIn("below 1.10.12", err)
+        self.assertIn("a stamp older than 1.10.12", err)
+        self.assertEqual(self.backups(), [])
+
+    def test_an_unmoved_vault_exits_2_naming_the_bridge(self):
+        vault = make_vault(self, "1.10.121")
+        (vault / "_meta" / "publish-manifest.md").write_text("x\n", encoding="utf-8")
+        c, _ = check("tidy", "bookkeeping", will_item("tidy"))
+        with mock.patch.object(vc, "MOVED_FLOOR", REAL_FLOOR):
+            code, _, err = self.main(vault, [c])
+        self.assertEqual(code, 2)
+        self.assertIn("the old publish list _meta/publish-manifest.md", err)
+        self.assertIn("releases/tag/v1.10.134", err)
         self.assertEqual(self.backups(), [])
 
     def test_an_unreadable_template_is_a_read_problem_not_a_question(self):

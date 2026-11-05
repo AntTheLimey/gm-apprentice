@@ -47,13 +47,13 @@ from migrate_core import CHOICE, PERSON, WILL, Check, Item, StepFailed
 from migrate_site import REPIN, SITE_CHECKS
 from migrate_vault import VAULT_CHECKS
 from update_record import AnswerEntry, lines_sha
+from vault_check import MOVED_FLOOR, refusal, unmoved
 from vaultlib import cli_name  # noqa: E402
 from vaultlib import (SettingsUnavailable, StateUnreadable, parse_version, plugin_version,
                       read_held, read_stamp, vault_layout, write_held,
                       write_stamp)
 
-FLOOR = "1.10.12"
-LAST_PROSE = "1.10.25"   # the last release whose skills migrate by hand
+FLOOR = MOVED_FLOOR
 TITLES = {WILL: "Will do", CHOICE: "Your choice", PERSON: "Needs a person"}
 WAITING = "Checked once the site's tool is updated"
 WAITED_LINE = ("the site's publish tool is updated; run plan again for the "
@@ -78,10 +78,10 @@ def gate(vault: Path) -> tuple[str, str] | str:
     if shown is None and vault_layout(vault) == "none":
         return (f"{vault} has a _meta/ folder but no settings file: that is "
                 f"first-time setup (vault_scaffold.py), not a migration")
-    if shown is None or parse_version(shown) < parse_version(FLOOR):
-        return (f"this vault is at {shown or 'no recorded version'}, below "
-                f"{FLOOR}, the oldest this script migrates from; migrate it "
-                f"with gm-apprentice {LAST_PROSE} first")
+    left = unmoved(vault, shown)
+    if left:
+        return refusal(left)
+    assert shown is not None   # no stamp is "a stamp older than the floor"
     if parse_version(shown) > parse_version(plugin):
         return (f"vault {shown} is ahead of plugin {plugin}; update the "
                 f"plugin before touching this vault")

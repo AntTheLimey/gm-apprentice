@@ -181,9 +181,9 @@ def test_version_row_ok_on_the_new_layout_with_no_node(tmp_path):
 
 
 def test_version_row_mismatch_and_ahead_from_the_state_file(tmp_path):
-    behind = vault_with(tmp_path / "a", new="version: 1\n", state=state("1.10.20"))
+    behind = vault_with(tmp_path / "a", new="version: 1\n", state=state("1.10.121"))
     code, out = version_row(behind)
-    assert code == 1 and f"MISMATCH\t_meta/vault-state.json\tvault 1.10.20 < plugin {PLUGIN}" in out
+    assert code == 1 and f"MISMATCH\t_meta/vault-state.json\tvault 1.10.121 < plugin {PLUGIN}" in out
     ahead = vault_with(tmp_path / "b", new="version: 1\n", state=state("99.0.0"))
     code, out = version_row(ahead)
     assert code == 1 and "AHEAD\t_meta/vault-state.json\tvault 99.0.0 >" in out
@@ -193,7 +193,7 @@ def test_version_row_absent_on_the_new_layout(tmp_path):
     vault = vault_with(tmp_path, new="version: 1\n")
     code, out = version_row(vault)
     assert code == 1
-    assert "MISMATCH\t_meta/vault-state.json\tgm_apprentice_version absent" in out
+    assert "ERROR\t_meta/vault-state.json\tThis vault still has a stamp older than 1.10.60" in out
 
 
 def test_version_row_with_both_files_reads_the_state_file(tmp_path):

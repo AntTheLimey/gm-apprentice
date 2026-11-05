@@ -162,7 +162,7 @@ def test_the_migrate_gate_reads_the_stamp_on_both(tmp_path):
 
 def test_the_migrate_gate_refuses_a_vault_with_no_stamp_on_both(tmp_path):
     refused = migrate.gate(make_vault(tmp_path))
-    assert isinstance(refused, str) and "no recorded version" in refused
+    assert isinstance(refused, str) and "a stamp older than" in refused
 
 
 def test_the_migrate_stamp_writes_where_the_layout_keeps_it(tmp_path):

@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from site_fixture import give_site, site_copy, with_site  # noqa: E402
 from layouts import write_config  # noqa: E402
 
+REAL_FLOOR_TESTS = True   # conftest leaves the update floor at its real value
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "slice-a"
 VAULT_CHECK_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "vault-check"
 SCRIPT = SCRIPTS / "vault_check.py"
@@ -354,23 +355,29 @@ class VersionCommandTests(unittest.TestCase):
         self.assertEqual(code, 0)
 
     def test_behind_is_a_mismatch_pointing_at_the_migration_workflow(self):
-        (token, path, message), code = self.verdict(FIXTURES / "version-behind")
+        # A moved vault (stamped above the floor) that is merely behind.
+        vault = make_vault(self, '---\ngm_apprentice_version: "1.10.121"\n---\n')
+        (token, path, message), code = self.verdict(vault)
         self.assertEqual(token, "MISMATCH")
         self.assertEqual(path, "_meta/vault-state.json")
-        self.assertIn(f"vault 1.8.9 < plugin {plugin_version_string()}", message)
+        self.assertIn(f"vault 1.10.121 < plugin {plugin_version_string()}", message)
         self.assertIn("campaign-organizer's migration workflow", message)
         self.assertIn("references/migration-procedure.md", message)
+        self.assertEqual(code, 1)
+
+    def test_a_vault_below_the_floor_is_an_error_naming_the_bridge_not_a_mismatch(self):
+        (token, path, message), code = self.verdict(FIXTURES / "version-behind")
+        self.assertEqual(token, "ERROR")
+        self.assertEqual(path, "_meta/vault-state.json")
+        self.assertIn("a stamp older than 1.10.60", message)
+        self.assertIn("1.10.134 is the last release that can", message)
         self.assertEqual(code, 1)
 
     def test_comparison_is_numeric_not_lexical(self):
         # 1.8.9 < 1.9.6 lexically too; 1.10.0 vs 1.9.6 is the real test.
         vault = make_vault(self, '---\ngm_apprentice_version: "1.10.0"\n---\n')
         (token, _path, _message), _code = self.verdict(vault)
-        vault_v = vc.parse_version("1.10.0")
-        plugin_v = vc.parse_version(plugin_version_string())
-        expected = ("OK" if vault_v == plugin_v
-                    else "AHEAD" if vault_v > plugin_v else "MISMATCH")
-        self.assertEqual(token, expected)
+        self.assertEqual(token, "ERROR")   # 1.10.0 is below the floor 1.10.60
         # "1.9.99" sorts after "1.10.0" as text; numerically it is behind.
         self.assertLess(vc.parse_version("1.9.99"), vc.parse_version("1.10.0"))
 
@@ -383,22 +390,19 @@ class VersionCommandTests(unittest.TestCase):
         self.assertIn("update the plugin before touching this vault", message)
         self.assertEqual(code, 1)
 
-    def test_absent_field_is_a_mismatch_not_a_pass(self):
+    def test_absent_field_is_an_error_not_a_pass(self):
         vault = make_vault(self, "---\npublish:\n  mode: player\n---\n")
         (token, path, message), code = self.verdict(vault)
-        self.assertEqual(token, "MISMATCH")
+        self.assertEqual(token, "ERROR")
         self.assertEqual(path, "_meta/vault-state.json")
-        self.assertTrue(message.startswith("gm_apprentice_version absent"),
-                        message)
-        self.assertIn("references/migration-procedure.md", message)
+        self.assertIn("a stamp older than 1.10.60", message)
         self.assertEqual(code, 1)
 
     def test_meta_without_a_config_file_is_the_absent_mismatch(self):
         vault = make_vault(self, config=None, meta=True)
         (token, _path, message), code = self.verdict(vault)
-        self.assertEqual(token, "MISMATCH")
-        self.assertTrue(message.startswith("gm_apprentice_version absent"),
-                        message)
+        self.assertEqual(token, "ERROR")
+        self.assertIn("a stamp older than 1.10.60", message)
         self.assertEqual(code, 1)
 
     def test_meta_with_no_settings_file_is_setup_not_migration(self):
