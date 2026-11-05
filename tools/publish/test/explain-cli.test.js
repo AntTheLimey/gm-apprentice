@@ -559,17 +559,6 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
     const configPath = siteFor(vault);
     return { vault, configPath };
   }
-  // The old-layout vault (the old settings file and a site file holding lists): kept for the legacy list test.
-  function legacyVaultWith(publishLines, siteExtra) {
-    const vault = makeVault();
-    fs.rmSync(path.join(vault, '_meta', 'vault-config.yaml'));
-    write(vault, '_meta/vault-config.md', `---\npublish:\n  site_title: T\n${publishLines}---\n`);
-    write(vault, 'Sessions/Hero.md', '---\ntype: pc\n---\n\n## Stat Sheet\n\nST 12\n\n## Skills\n\nBrawling 12\n\n## Background\n\nA sailor.\n\n## GM Notes\n\nSecret.\n');
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'explain-site-'));
-    const configPath = path.join(dir, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify(Object.assign({ vaultPath: vault, outputDir: './docs', excludeDirs: ['_meta', '_Templates'], folderMap: { Sessions: 'sessions' } }, siteExtra), null, 2));
-    return { vault, configPath };
-  }
   let lastWarnings = [];
   async function explainAll(configPath) {
     const c = capture();
@@ -614,20 +603,16 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
     for (const v of [on, off]) fs.rmSync(v.vault, { recursive: true, force: true });
   });
 
-  it('reports the list the build resolves: vault file then site-only entries, else the site file, else the default', async () => {
-    const both = legacyVaultWith('  exclude_sections: ["GM Notes"]\n', { excludeSections: ['Keeper Only'] });
-    assert.deepStrictEqual((await explainAll(both.configPath)).excludeSections, ['GM Notes', 'Keeper Only']);
-    const siteOnly = legacyVaultWith('', { excludeSections: ['Keeper Only'] });
-    // The site file's list adds to the built-in list when the vault file sets none (#371).
-    assert.deepStrictEqual((await explainAll(siteOnly.configPath)).excludeSections,
-      ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile', 'Keeper Only']);
-    const none = legacyVaultWith('');
+  it('reports the list the build resolves: the vault list, else the default', async () => {
+    const own = vaultWith({ 'player_site.hide.sections': ['GM Notes', 'Keeper Only'] });
+    assert.deepStrictEqual((await explainAll(own.configPath)).excludeSections, ['GM Notes', 'Keeper Only']);
+    const none = vaultWith({});
     assert.deepStrictEqual((await explainAll(none.configPath)).excludeSections,
       ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile']);
     const c = capture();
-    assert.strictEqual(await runExplain({ configPath: both.configPath, target: 'Sessions/Hero.md', json: true }, c.deps), 0);
+    assert.strictEqual(await runExplain({ configPath: own.configPath, target: 'Sessions/Hero.md', json: true }, c.deps), 0);
     assert.deepStrictEqual(JSON.parse(c.out.join('')).excludeSections, ['GM Notes', 'Keeper Only']);
-    for (const v of [both, siteOnly, none]) fs.rmSync(v.vault, { recursive: true, force: true });
+    for (const v of [own, none]) fs.rmSync(v.vault, { recursive: true, force: true });
   });
 
   it('names the sections only the keep-list withholds, apart from the stripped ones', async () => {

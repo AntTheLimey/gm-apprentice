@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { build } = require('../lib/build');
+const { writeSiteConfig } = require('./helpers/vault-files');
 
 const CHAPTER = '---\ntype: chapter\ntitle: Chapter 1 — Docks\nsort_order: 1\n---\n\n## Overview\n\nThe docks.\n';
 const SESSION = (chapter) => `---\ntype: session\n${chapter ? 'chapter: "[[Chapter 1 Overview]]"\n' : ''}`
@@ -23,10 +24,10 @@ function site(files) {
   }
   const docs = path.join(root, 'docs');
   const configPath = path.join(root, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
+  writeSiteConfig(configPath, {
     vaultPath: vault, outputDir: docs, siteTitle: 'Landing Story', excludeSections: ['GM Notes'],
     folderMap: { Chapters: 'chapters', Sessions: 'sessions' },
-  }));
+  });
   const saved = { log: console.log, warn: console.warn };
   console.log = () => {};
   console.warn = () => {};

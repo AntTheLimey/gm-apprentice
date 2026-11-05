@@ -97,20 +97,6 @@ test('add onto an explicitly empty hiding list says the built-in entries are not
   assert.match(out, /built-in/);
 });
 
-test('a vault keep list that drops folders the site file keeps is a stop naming them (#386)', () => {
-  const { readSettings } = require('../lib/settings/read');
-  const s = scratch('version: 1\nplayer_site:\n  keep: []\n');
-  const r = readSettings({ vaultPath: s.vault, siteConfig: { preserveDirs: ['audio', 'maps'] }, siteDir: s.root });
-  const f = r.faults.find((x) => x.siteDiffers);
-  assert.equal(f.level, 'stop');
-  assert.match(f.message, /audio/);
-  assert.match(f.message, /maps/);
-  // Folders the vault also keeps are no conflict worth a stop.
-  const t = scratch('version: 1\nplayer_site:\n  keep: [audio, maps, extra]\n');
-  const r2 = readSettings({ vaultPath: t.vault, siteConfig: { preserveDirs: ['audio'] }, siteDir: t.root });
-  assert.ok(!r2.faults.some((x) => x.level === 'stop'));
-});
-
 test('a key can be added after a |+ block scalar: its trailing blank lines are content and stay (#380)', () => {
   const { applyChanges } = require('../lib/settings/write');
   const s = scratch('version: 1\nplayer_site:\n  title: T\n  footer: |+\n    hello\n\n');
@@ -139,7 +125,7 @@ test('--vault alone reads the site folder file the vault names; --no-site-file l
     return { rc, faults: JSON.parse(out.join('\n')).faults };
   };
   const seen = check({});
-  assert.ok(seen.faults.some((f) => f.name === 'excludeSections' && f.level === 'stop'), JSON.stringify(seen.faults));
+  assert.ok(seen.faults.some((f) => f.name === 'vault.config.json' && f.level === 'stop' && /excludeSections/.test(f.message)), JSON.stringify(seen.faults));
   assert.equal(seen.rc, 1);
   const blind = check({ noSiteFile: true });
   assert.deepEqual(blind.faults, []);
