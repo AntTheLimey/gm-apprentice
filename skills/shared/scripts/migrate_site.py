@@ -17,19 +17,13 @@ from typing import Any, Callable
 
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item,
                           StepFailed, cells, edit_frontmatter, plugin_tool, stopped)
-from migrate_vault import vault_system
 from vault_check import (ExplainAll, ask_publish_tool, check_frontmatter, check_gm_leak,
                          check_pc_body, check_sessions, configured_site,
                          _kept_by_player, semver_below, site_pin, vault_settings)
-from vaultlib import (LEGACY_SETTINGS_FILE, SETTINGS_FILE, PublishToolUnavailable, SettingsUnavailable,
+from vaultlib import (PublishToolUnavailable, SettingsUnavailable,
                       forget_settings, google_fonts, set_key, setting_name, settings,
                       settings_default, settings_file, settings_raw, settings_remove, settings_set,
-                      settings_unset, settings_written, site_switch_written, vault_layout, written_in_vault_file, yaml_scalar)
-
-INLINE_PUBLISH = (
-    f"the publish: block in {LEGACY_SETTINGS_FILE} is written on one line "
-    "({…}); write it as a block so its settings can be read")  # old file only
-
+                      settings_unset, settings_written, site_switch_written, written_in_vault_file, yaml_scalar)
 
 # --- the checks ---------------------------------------------------------------
 
@@ -57,8 +51,6 @@ def find_site_repin(vault: Path) -> list[Item]:
     """The site builds with the tool installed in it, so that tool is
     brought to the plugin's before anything else asks it. `update-pin
     --check` says whether it is; this never reads the pin itself."""
-    if settings(vault).inline:
-        raise StepFailed(INLINE_PUBLISH)
     site, has_config = configured_site(vault)
     switch = setting_name(vault, "player_site.publish")
     folder = setting_name(vault, "player_site.folder")
@@ -94,325 +86,6 @@ def find_site_repin(vault: Path) -> list[Item]:
 
     return [Item(REPIN, WILL,
                  [f"repin the site's publish tool (installed: {installed})"], apply)]
-
-
-MOVE = "settings-move"
-
-
-def _hidden_move_files(vault: Path) -> bool:
-    """Whether `_meta` holds a hidden file a stopped move left."""
-    meta = vault / "_meta"
-    return meta.is_dir() and any(
-        re.search(r"\.move\.(old|new)$", f.name) for f in meta.iterdir())
-
-
-def _move_args(vault: Path, site: Path | None, has_config: bool,
-               *extra: str) -> list[str]:
-    args = ["settings", "move", "--vault", str(vault), "--json", *extra]
-    if site is not None and has_config:
-        args += ["--config", str(site / "vault.config.json")]
-    return args
-
-
-def _ask_move(vault: Path, args: list[str]) -> dict[str, Any]:
-    """The settings command's answer to a move (a blocked move exits 1 and
-    still answers in JSON). Raises StepFailed when it gives none."""
-    code, out, err = plugin_tool(args)
-    try:
-        data = json.loads(out)
-    except ValueError:
-        data = None
-    if not isinstance(data, dict) or not isinstance(data.get("ok"), bool) \
-            or not isinstance(data.get("lines"), list):
-        said = [x for x in err.splitlines() if x.strip()]
-        raise StepFailed("the settings move gave no usable answer: "
-                         + (said[-1].strip().removeprefix("Error: ") if said
-                            else f"it exited {code}"))
-    return data
-
-
-CANNOT_FINISH = " The update cannot finish until this is done."
-
-
-def _setting_words(vault: Path, name: str, moves: bool) -> str:
-    """`name` as the vault's file writes it; where the settings move happens
-    before the GM reads this (`moves`), the new name with the old one beside."""
-    written = setting_name(vault, name)
-    if moves and written != name:
-        return f"{name} ({written} before the settings move)"
-    return written
-
-
-def _clear_tool_hold(vault: Path, line: str, moves: bool = False) -> str:
-    """The way out of a hold on the site's publish tool being too old: the
-    tool names the version in its own line; the update repins a tool only
-    when the plugin pinned it. A site left switched on stops the next update
-    (the repin), so the switch goes off as well as the folder going blank.
-    `moves` is for a hold the settings move happens ahead of."""
-    found = re.search(r"\b(\d+\.\d+\.\d+) or later", line)
-    version = found.group(1) if found else "the version above"
-    return (f" To clear it: update that site's publish tool to {version} or "
-            "later (the update repins it only when the plugin pinned it), "
-            "or, if the site is no longer published, set "
-            f"{_setting_words(vault, 'player_site.publish', moves)} to false "
-            f"and clear {_setting_words(vault, 'player_site.folder', moves)}."
-            + CANNOT_FINISH)
-
-
-def find_settings_move(vault: Path) -> list[Item]:
-    """Every pass: a vault on the old settings file moves to the new one,
-    all of it by the publish tool (`settings move`): the new file, the
-    state file, the notes file, the settings out of the site folder's
-    vault.config.json. A vault already moved is asked too when something
-    could be left (an old file, a hidden file, a site folder), and tidied.
-    The tool decides what moves; this decides only whether it is the plugin's
-    to move: the move itself holds a vault whose site's publish tool is
-    pinned by something else (its answer has `held`, with the words), because
-    such a tool reads a moved vault as having no settings and would publish
-    with defaults. A `held` move and a blocker both hold the stamp."""
-    layout = vault_layout(vault)
-    if layout == "none":
-        return []    # no settings file: nothing names a site folder to ask
-    site, has_config = configured_site(vault)
-    if layout == "new" and not (
-            (vault / LEGACY_SETTINGS_FILE).exists()
-            or _hidden_move_files(vault) or (site is not None and has_config)):
-        return []
-    # The repin comes first, but only for a site it looked at: a switched-off
-    # site is not looked at, so its folder's tool is still the move's to judge.
-    extra: list[str] = (["--site-tool-updated"]
-                        if site is not None and has_config else [])
-    if layout == "legacy" and not settings(vault).get("vault.system"):
-        found = vault_system(vault)
-        if found:
-            extra += ["--fill", f"vault.system={found}"]
-    base = _move_args(vault, site, has_config, *extra)
-    plan = _ask_move(vault, [*base, "--check"])
-    if plan.get("held"):
-        # Left behind: the tool says why in plain words and the vault is
-        # told it every pass. The move is not done, so the stamp holds.
-        return [Item(MOVE, PERSON, [f"settings\t{plan.get('line')}"
-                      f"{_clear_tool_hold(vault, str(plan.get('line')))}"],
-                     holds_stamp=True)]
-    if not plan["ok"]:
-        blockers = [str(b) for b in plan.get("blockers") or []]
-        if layout == "legacy":
-            cannot = "the settings cannot move to the new file yet"
-            tail = "The vault is not up to date until it has moved"
-        else:
-            cannot = ("the site folder's settings cannot be carried into "
-                      "the vault yet")
-            tail = ("The vault is not up to date until the site folder's "
-                    "settings are carried")
-        return [Item(MOVE, PERSON,
-                     [f"settings\t{cannot}: {b}" for b in blockers]
-                     + ["settings\tfix what each line names, then run the "
-                        "update again; for a line that names a setting, "
-                        f"campaign-qa's Settings check fixes it or asks. {tail}"],
-                     holds_stamp=True)]
-    items: list[Item] = []
-    differs = plan.get("siteDiffers")
-    if differs:
-        # Already moved, but the site folder's file still says things the
-        # vault says differently: the Settings check fixes them. A notice, so
-        # it does not hold the stamp.
-        items.append(Item(MOVE + "-site-file", PERSON, [
-            "vault.config.json\tstill holds settings this vault's file "
-            f"decides ({', '.join(str(x) for x in differs)}); run "
-            "campaign-qa's Settings check, which takes them out safely"]))
-    # Left behind: the site's installed tool is older than the one that runs
-    # steps and reads the folder keys from the vault. The tool says which part
-    # and in what words; the move is unfinished, so each holds the stamp.
-    told: set[str] = set()
-    for key, where in (("stepsHeld", "package.json (site)"),
-                       ("keysHeld", "vault.config.json (site)")):
-        held = plan.get(key)
-        if isinstance(held, dict) and held.get("line"):
-            version = re.search(r"\b(\d+\.\d+\.\d+) or later", str(held["line"]))
-            clear = (" To clear it: update that site's publish tool to "
-                     f"{version.group(1) if version else 'the version above'}"
-                     " or later (the update repins it only when the plugin "
-                     "pinned it); the "
-                     + ("build steps" if key == "stepsHeld" else "site keys")
-                     + " then move into the vault." + CANNOT_FINISH)
-            told.add(str(held["line"]))
-            items.append(Item(f"{MOVE}-{key}", PERSON,
-                              [f"{where}\t{held['line']}{clear}"],
-                              holds_stamp=True))
-    # A package.json step that differs from the vault's is left, and runs
-    # beside the vault's under `npm run build`: told each pass, never written.
-    for d in plan.get("stepsDiffer") or []:
-        if isinstance(d, dict) and d.get("line"):
-            told.add(str(d["line"]))
-            items.append(Item(f"{MOVE}-stepsDiffer-{d.get('script')}", PERSON,
-                              [f"package.json (site)\t{d['line']}"]))
-    files = plan.get("files") or {}
-    if not (files.get("write") or files.get("remove")):
-        if layout == "legacy":
-            # ok, yet nothing to write: the vault is still on the old file.
-            items.append(Item(MOVE, PERSON, [
-                "settings\tthe settings could not be moved (the publish tool "
-                "reported nothing to write); the update cannot finish until "
-                "they are"], holds_stamp=True))
-        return items
-    shows = _shows_lines(plan)
-
-    def not_told(lines: list[Any]) -> list[str]:
-        return [str(x) for x in lines if str(x) not in told]
-
-    def apply(_value: str | None) -> list[str]:
-        done = _ask_move(vault, base)
-        forget_settings(vault)
-        if not done["ok"]:
-            raise StepFailed("; ".join(str(b) for b in done.get("blockers")
-                                       or ["the move was blocked"]))
-        if layout == "legacy" and vault_layout(vault) != "new":
-            raise StepFailed("the move finished but the vault is not on the "
-                             "new settings file")
-        return [*_shows_lines(done), *not_told(done["lines"])]
-
-    return [*items,
-            Item(MOVE, WILL, [*shows, *not_told(plan["lines"])], apply)]
-
-
-PUBLISH_LIST = "publish-list"
-OLD_PUBLISH_LIST = "_meta/publish-manifest.md"   # dated: remove at 1.11.0
-
-
-def _ask_convert(vault: Path, *extra: str) -> dict[str, Any]:
-    """`manifest convert --json` for the vault, with the site's config when
-    it has one (the tool judges the site: its own version, and the build
-    steps that read the old file). A refused conversion exits 1 and still
-    answers in JSON. Raises StepFailed when it gives none."""
-    site, has_config = configured_site(vault)
-    args = ["manifest", "convert", "--vault", str(vault), "--json", *extra]
-    if site is not None and has_config:
-        args += ["--config", str(site / "vault.config.json")]
-    code, out, err = plugin_tool(args)
-    try:
-        data = json.loads(out)
-    except ValueError:
-        data = None
-    if not isinstance(data, dict) or not isinstance(data.get("ok"), bool) \
-            or not isinstance(data.get("lines"), list):
-        said = [x for x in err.splitlines() if x.strip()]
-        raise StepFailed("the publish list move gave no usable answer: "
-                         + (said[-1].strip().removeprefix("Error: ") if said
-                            else f"it exited {code}"))
-    return data
-
-
-def find_publish_list(vault: Path) -> list[Item]:
-    """Every pass: a vault still on `_meta/publish-manifest.md` moves to
-    `_meta/publish-list.yaml`, all of it by the publish tool (`manifest
-    convert`), which writes the new file, reads it back, compares the three
-    lists and every entry line with the old file's and only then sets the
-    old one aside as `_meta/publish-manifest.md.converted`. The tool
-    decides what moves and whether it should: it holds the list where it is
-    (`held`, with the words) when the site's tool is older than 1.27.0 or a
-    build step of the site reads the old file. A held list is left behind,
-    told every pass, and holds the stamp, as a list the tool cannot move does."""
-    if not (vault / OLD_PUBLISH_LIST).is_file():
-        return []
-    site, has_config = configured_site(vault)
-    # The repin comes first, so the site's tool is brought up to date before
-    # this is judged (as the settings move does).
-    flag = ["--site-tool-updated"] if site is not None and has_config else []
-    plan = _ask_convert(vault, "--check", *flag)
-    if plan.get("held"):
-        said = str(plan["lines"][0])
-        clear = (_clear_tool_hold(vault, said, moves=True) if plan.get("held") == "site-tool"
-                 else " To clear it: change that build step so it no longer "
-                      "reads the old file." + CANNOT_FINISH)
-        return [Item(PUBLISH_LIST, PERSON, [f"publish list\t{said}{clear}"],
-                     holds_stamp=True)]
-    if not plan["ok"]:
-        return [Item(PUBLISH_LIST, PERSON,
-                     [f"publish list\tthe publish list cannot move to its new "
-                      f"file yet: {b}" for b in plan.get("blockers") or []]
-                     + ["publish list\tfix what each line names, then run the "
-                        "update again. Nothing was changed, and the old file "
-                        "is still read. The vault is not up to date until it "
-                        "has moved"], holds_stamp=True)]
-
-    def apply(_value: str | None) -> list[str]:
-        # Without the flag: by now the repin has run, so the site's tool is
-        # judged as it is, and a repin that failed holds the list back.
-        done = _ask_convert(vault)
-        if done.get("held"):
-            raise StepFailed(f"publish list {done['lines'][0]}")
-        if not done["ok"]:
-            raise StepFailed("; ".join(str(b) for b in done.get("blockers")
-                                       or ["the move was blocked"]))
-        if not (vault / "_meta" / "publish-list.yaml").is_file() \
-                or (vault / OLD_PUBLISH_LIST).exists():
-            raise StepFailed("the publish list move finished but "
-                             "_meta/publish-list.yaml is not the only list")
-        return [str(x) for x in done["lines"]]
-
-    return [Item(PUBLISH_LIST, WILL, [str(x) for x in plan["lines"]], apply)]
-
-
-PUBLISH_HIDDEN = "publish-hidden"
-CONVERTED_LIST = OLD_PUBLISH_LIST + ".converted"
-
-
-def _ask_hidden(vault: Path, *extra: str) -> dict[str, Any]:
-    """`manifest hidden --json` for the vault: the paths a `%%` or
-    `<!-- -->` comment hid in the old list that publish-list.yaml still
-    publishes. The comment rule is the tool's (#498); never read here.
-    Raises StepFailed when it gives no usable answer."""
-    code, out, err = plugin_tool(["manifest", "hidden", "--vault", str(vault), "--json", *extra])
-    try:
-        data = json.loads(out)
-    except ValueError:
-        data = None
-    if code != 0 or not isinstance(data, dict) or not isinstance(data.get("publishing"), list) \
-            or not isinstance(data.get("moved"), list):
-        said = [x for x in (err or out).splitlines() if x.strip()]
-        raise StepFailed("the publish list's hidden entries could not be read: "
-                         + (said[-1].strip().removeprefix("Error: ") if said else f"it exited {code}"))
-    return data
-
-
-def find_publish_hidden(vault: Path) -> list[Item]:
-    """1.10.107 (#500): before publish tool 1.48.2 the publish list's move
-    read the old file with no comment rule, so a ticked line hidden by `%%`
-    or `<!-- -->` went into publish-list.yaml under publishing, uncommented.
-    The old text is kept as publish-manifest.md.converted; the tool names
-    each such path the list still publishes. Every one is named, and only
-    the GM's answer moves them (to needs_decision, by the tool, the file's
-    comments and order kept). A path the old file also ticks with no
-    comment around it was published on purpose and is not named."""
-    if not (vault / CONVERTED_LIST).is_file():
-        return []
-    rels = [str(x) for x in _ask_hidden(vault)["publishing"]]
-    if not rels:
-        return []
-    n = len(rels)
-    pages = f"{n} page{'' if n == 1 else 's'}"
-    lines = [f"{pages} the old publish list hid with a comment ({CONVERTED_LIST}) "
-             f"{'is' if n == 1 else 'are'} on your site: when the publish list moved to its new file, "
-             f"an older version missed the comments that hid {'it' if n == 1 else 'them'}. move: put "
-             f"{'it' if n == 1 else 'them'} under needs_decision in _meta/publish-list.yaml, off the site "
-             f"until you decide; leave: keep {'it' if n == 1 else 'them'} published"]
-    lines += [f"{rel}\tpublished; hidden by a comment in the old list" for rel in rels]
-
-    def apply(value: str | None) -> list[str]:
-        if value not in ("move", "leave"):
-            raise StepFailed(f"{PUBLISH_HIDDEN} takes move or leave")
-        if value == "leave":
-            return [f"left the {pages} published"]
-        data = _ask_hidden(vault, "--decide")
-        moved = [str(x) for x in data["moved"]]
-        got = data.get("now")
-        now: dict[str, Any] = got if isinstance(got, dict) else {}
-        if sorted(moved) != sorted(rels):
-            raise StepFailed(f"the move did not take the pages named: moved {', '.join(moved) or 'none'}")
-        return [f"{rel}: off publishing; it stays under excluded, as the list already had it"
-                if now.get(rel) == "excluded" else f"{rel}: moved to needs_decision" for rel in moved]
-
-    return [Item(PUBLISH_HIDDEN, CHOICE, lines, apply, wants="move or leave", holds_stamp=True)]
 
 
 FULL_MODE = "full-mode"
@@ -506,11 +179,6 @@ def find_full_mode(vault: Path) -> list[Item]:
                       "a player, so it has no GM site, and its site follows "
                       "the publish list"],
                      lambda _v: _drop_mode(vault))]
-    if vault_layout(vault) != "new":
-        return [Item(FULL_MODE, PERSON,
-                     [f"{name}\t`full` is no longer used: this vault's site "
-                      "becomes a GM site once its settings have moved to the "
-                      "new settings file. Run the update again after that"])]
     if not own.get("player_site.folder") and not own.get("gm_site.folder"):
         return [Item(FULL_MODE, PERSON,
                      [f"{name}\t`full` is no longer used: this vault's site "
@@ -518,7 +186,7 @@ def find_full_mode(vault: Path) -> list[Item]:
                       "site folder is named to put it beside. Tell me the "
                       "folder (settings set player_site.folder=<folder>), "
                       "then run the update again"], holds_stamp=True)]
-    if vault_layout(vault) == "new" and any(
+    if any(
             written_in_vault_file(own, n) and own.get(n) is False
             for n in ("gm_site.publish", "player_site.publish")):
         return [Item(FULL_MODE, WILL,
@@ -537,28 +205,16 @@ def find_full_mode(vault: Path) -> list[Item]:
                  lambda _v: _move_full_vault(vault))]
 
 
-def _shows_lines(plan: dict[str, Any]) -> list[str]:
-    """A value carried out of the site folder that the site did not show
-    before (it was read by nothing), told on its own line."""
-    out = []
-    for c in plan.get("carried") or []:
-        if isinstance(c, dict) and c.get("shows"):
-            out.append(f"{c['shows']} becomes: {c.get('value')}")
-    return out
-
-
 def find_publish_site(vault: Path) -> list[Item]:
     """`player_site.publish` says whether the vault has a site. Written where it
     is missing: true with a site_dir, else false. A vault file with no
     `publish:` block has no site and gets nothing."""
     own = settings(vault)
-    if own.inline or site_switch_written(own) is not None:
+    if site_switch_written(own) is not None:
         return []
     # `has_site_block` is false for a `publish:` line with nothing under it,
     # which this still writes into; only a vault with no such line gets nothing.
-    # The block that holds the site's settings, as the file names it.
-    block = "player_site" if vault_layout(vault) == "new" else "publish"
-    if block not in settings_raw(vault):
+    if "player_site" not in settings_raw(vault):
         return []
     has_dir = bool(own.get("player_site.folder"))
     value = "true" if has_dir else "false"
@@ -948,11 +604,7 @@ def find_exclude_lists(vault: Path) -> list[Item]:
     if not lists:
         return []
 
-    # On the old file the same pass moves the settings first (the move is
-    # held only for a site whose own tool is pinned elsewhere, and says so),
-    # so the old file's name would be wrong by the time the lists are written.
-    where = (SETTINGS_FILE if vault_layout(vault) == "legacy"
-             else settings_file(vault))
+    where = settings_file(vault)
     # A value the GM wrote that the tool could not use (not a list, an old
     # name, a misplaced name, a group that is not a map): the build ignored
     # it, so the built-in list has been what publishes; the line says what
@@ -1308,14 +960,6 @@ SITE_CHECKS: list[Check] = [
     Check(REPIN, None, 1, "the site's publish tool", find_site_repin,
           kind="bookkeeping",
           plain=("Updated the site's publish tool to match the plugin.")),
-    Check(MOVE, None, 2, "the settings move to the new settings file",
-          find_settings_move,
-          kind="bookkeeping",
-          plain=("Moved your vault's settings into the new settings file, keeping every value.")),
-    Check(PUBLISH_LIST, None, 2, "the publish list moves to its new file",
-          find_publish_list,
-          kind="bookkeeping",
-          plain=("Moved the list of pages your site publishes into its new file, keeping every entry.")),
     Check(FULL_MODE, None, 2, "a vault that published everything becomes a "
           "GM site", find_full_mode,
           kind="removes",
@@ -1391,13 +1035,6 @@ SITE_CHECKS: list[Check] = [
           plain=("Wrote the lists of headings and details your site hides into your settings, where you can see them; what publishes is unchanged."),
           ask=("Replaces a value you typed for the headings or details your site hides with the built-in list; what publishes does not change, since the site already ignored that value."),
           left=("Kept the value you typed for what your site hides.")),
-    Check(PUBLISH_HIDDEN, "1.10.107", 2, "published pages the old publish "
-          "list hid with a comment", find_publish_hidden,
-          choices=(f"{PUBLISH_HIDDEN}=",),
-          kind="asks",
-          plain=("Moved pages that your old publish list had hidden, but that were publishing, to the list of pages waiting for your decision."),
-          ask=("Moves pages your old publish list hid, but that were publishing, to the list waiting for your decision, so they stop publishing."),
-          left=("Kept those pages publishing.")),
     Check("gm-leak", None, 4, "sections the site withholds are nested under "
           "GM Notes", find_gm_leak, asks_site=True,
           kind="bookkeeping",

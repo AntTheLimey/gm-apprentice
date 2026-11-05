@@ -310,9 +310,8 @@ def has_nested_block(raw: str, key: str) -> bool:
 def nested_mapping(text: str, key: str) -> dict[str, str]:
     """Child key -> scalar value for the block indented under `key:`.
 
-    Covers the two nested shapes the vault schema actually uses: a
-    session index's `documents:` map and `_meta/vault-config.md`'s
-    `publish:` map. Only the block's own level is read — a grandchild
+    Covers the nested shape the vault schema uses: a session index's
+    `documents:` map. Only the block's own level is read — a grandchild
     belongs to its parent's block, not this one. An inline list value
     (`exclude_sections: ["A", "B"]`) is returned raw; for a parsed
     setting ask the publish tool (`settings`).
@@ -1368,7 +1367,7 @@ atexit.register(_close_publish_tools)
 # --------------------------------------------------------------------------
 
 SETTINGS_FILE = "_meta/vault-config.yaml"
-LEGACY_SETTINGS_FILE = "_meta/vault-config.md"
+LEGACY_SETTINGS_FILE = "_meta/vault-config.md"   # named only by the 1.11.0 refusal
 STATE_FILE = "_meta/vault-state.json"
 STAMP_KEY = "gm_apprentice_version"
 # What an update that could not stamp the vault remembers for the next one:
@@ -1404,15 +1403,13 @@ def find_vault(path: Path) -> Path | None:
 
 def settings_file(vault: Path) -> str:
     """The vault-relative name of the file the vault's settings are in, for
-    a message: the new file, unless the vault is still on the old one."""
-    return (LEGACY_SETTINGS_FILE if vault_layout(vault) == "legacy"
-            else SETTINGS_FILE)
+    a message."""
+    return SETTINGS_FILE
 
 
 def stamp_file(vault: Path) -> str:
     """The vault-relative name of the file that holds the version stamp."""
-    return (LEGACY_SETTINGS_FILE if vault_layout(vault) in ("legacy", "none")
-            else STATE_FILE)
+    return STATE_FILE
 
 
 class StateUnreadable(RuntimeError):
@@ -1441,37 +1438,20 @@ def _read_state(vault: Path) -> dict[str, Any]:
 
 def read_stamp(vault: Path) -> str | None:
     """The plugin version the vault was last updated to, None when it
-    records none. On the new layout it is `vault-state.json`'s
-    `gm_apprentice_version` (a broken file raises `StateUnreadable`).
-    On the old layout it is the old settings file's frontmatter: that
-    branch is legacy and goes two releases after 1.10.54."""
-    if vault_layout(vault) == "new":
-        found: Any = _read_state(vault).get(STAMP_KEY)
-    else:
-        try:
-            fm = extract_frontmatter((vault / LEGACY_SETTINGS_FILE).read_text(
-                encoding="utf-8-sig", errors="replace")) or {}
-        except OSError:
-            fm = {}
-        found = fm.get(STAMP_KEY)
+    records none: `vault-state.json`'s `gm_apprentice_version` (a broken
+    file raises `StateUnreadable`)."""
+    found: Any = _read_state(vault).get(STAMP_KEY)
     if not found or isinstance(found, (list, dict)):
         return None
     return str(found)
 
 
 def write_stamp(vault: Path, version: str) -> None:
-    """Record `version` as the plugin version the vault was updated to. On
-    the new layout the state file is read, the one key changed and the file
-    written whole in the form the publish tool writes it (two-space indent,
-    a trailing newline, every other key and the key order kept), through a
-    temporary file swapped in. On the old layout the old file's frontmatter
-    line is edited (legacy, goes two releases after 1.10.54)."""
-    if vault_layout(vault) != "new":
-        from migrate_core import edit_frontmatter
-        edit_frontmatter(
-            vault / LEGACY_SETTINGS_FILE,
-            lambda fm, eol: set_key(fm, STAMP_KEY, f'"{version}"', eol))
-        return
+    """Record `version` as the plugin version the vault was updated to: the
+    state file is read, the one key changed and the file written whole in
+    the form the publish tool writes it (two-space indent, a trailing
+    newline, every other key and the key order kept), through a temporary
+    file swapped in."""
     state = _read_state(vault)
     state[STAMP_KEY] = version
     state.pop(HELD_KEY, None)
@@ -1479,10 +1459,7 @@ def write_stamp(vault: Path, version: str) -> None:
 
 
 def read_held(vault: Path) -> dict[str, set[str]]:
-    """The `left` and `said` ids a held update remembered. Only the new
-    layout keeps them; an old-layout vault moves in the same update."""
-    if vault_layout(vault) != "new":
-        return {"left": set(), "said": set()}
+    """The `left` and `said` ids a held update remembered."""
     held = _read_state(vault).get(HELD_KEY)
     held = held if isinstance(held, dict) else {}
     return {key: {str(i) for i in held[key]}
@@ -1507,9 +1484,7 @@ def set_state(vault: Path, key: str, value: Any) -> None:
 
 def write_held(vault: Path, left: set[str], said: set[str]) -> None:
     """Remember the ids for the next update (merged with those already
-    remembered); nothing is written on the old layout."""
-    if vault_layout(vault) != "new":
-        return
+    remembered)."""
     before = read_held(vault)
     left, said = left | before["left"], said | before["said"]
     state = _read_state(vault)
@@ -1566,11 +1541,8 @@ class Settings:
     origins: dict[str, str]
     faults: list[dict[str, Any]]
     # Whether the file holds the block the site's settings live in
-    # (`player_site:`; on the old file `publish:`). A key with nothing under
-    # it does not count.
+    # (`player_site:`). A key with nothing under it does not count.
     has_site_block: bool
-    # Old file only: its `publish:` block is written on one line.
-    inline: bool
     # Each setting's name as THIS vault's file writes it (the tool's answer):
     # the same name on the new file, the old file's name on the old one.
     names: dict[str, str] = field(default_factory=dict)
@@ -1764,7 +1736,7 @@ def settings(vault: Path, *, site_config: Path | None = None) -> Settings:
     return Settings(
         values=read["values"], origins=read["origins"], faults=read["faults"],
         has_site_block=bool(read["file"].get("hasSiteBlock")),
-        inline=bool(read["file"].get("inline")), names=read["names"])
+        names=read["names"])
 
 
 def setting_name(vault: Path, name: str) -> str:
@@ -1855,64 +1827,6 @@ def settings_carry(vault: Path, written: str, name: str) -> list[str]:
     answer = _run_settings(["carry", *_target_args(vault), written, name],
                            refusable=True)
     return [str(answer["into"])]
-
-
-def settings_move_plan(vault: Path, *, fold_site_file: bool = False,
-                       only: list[str] | None = None) -> dict[str, Any]:
-    """What `settings move --check` says of a vault: `ok`, `lines`,
-    `blockers`, `files`, and for a moved vault with an old file left beside
-    the new one, `leftover` (`redundant`, `keys`). With `fold_site_file`,
-    what `--fold-site-file` would do, its `carried` and `dropped` naming
-    each site-file key; `only` limits that fold to the named keys. Writes
-    nothing."""
-    _check_vault(vault)
-    fold = ["--fold-site-file"] if fold_site_file else []
-    fold += [a for k in only or [] for a in ("--only", k)] if fold else []
-    answer = _run_settings(["move", *_target_args(vault), "--check", *fold],
-                           blockable=True)
-    if not isinstance(answer, dict):
-        raise SettingsUnavailable(
-            "could not read the vault's settings: the publish tool's "
-            "answer was not in the shape expected")
-    return answer
-
-
-def settings_tidy(vault: Path, *, discard_old_file: bool = False) -> list[str]:
-    """Tidy a moved vault (`settings move` on it): remove what a stopped
-    move left, the old settings file when it holds nothing the new one
-    lacks (always, with `discard_old_file`). The lines it reports."""
-    _check_vault(vault)
-    forget_settings(vault)
-    args = ["move", *_target_args(vault)]
-    if discard_old_file:
-        args.append("--discard-old-file")
-    answer = _run_settings(args, refusable=True)
-    forget_settings(vault)
-    return [str(x) for x in answer.get("lines", [])]
-
-
-def settings_fold_site_file(vault: Path,
-                            keys: list[str] | None = None) -> list[str]:
-    """On a vault already on the new file, take the settings its site
-    folder's vault.config.json still holds out of that file, in one change
-    across both files: a hiding list's entries are added to the vault's list,
-    the stricter callout rule is kept, a setting the vault does not set is
-    carried into its file, and one it sets differently keeps the vault's
-    value (the tool lists it as dropped). With `keys` (site-file key names, `package.json` or
-    `package.json <script>`) only those are taken and every other key is
-    left where it is. The lines the tool reports."""
-    _check_vault(vault)
-    forget_settings(vault)
-    only = [a for k in keys or [] for a in ("--only", k)]
-    answer = _run_settings(
-        ["move", *_target_args(vault), "--fold-site-file", *only],
-        refusable=True, blockable=True)
-    if answer.get("ok") is False:
-        said = " ".join(str(b) for b in answer.get("blockers") or [])
-        raise SettingsUnavailable(said or "the move was blocked",
-                                  refused=True)
-    forget_settings(vault)
-    return [str(x) for x in answer.get("lines", [])]
 
 
 def settings_add(vault: Path, name: str, entries: list[str]) -> list[str]:

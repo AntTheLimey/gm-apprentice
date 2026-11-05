@@ -25,20 +25,18 @@ from schema_rules import STAGE_HIDES, TEMPLATE_NAMES
 from schema_rules import tone_families, without_generated_markers
 from template_compare import compare, summary
 from vault_check import (RECONSTRUCTION_NOTE_RE, WRAP_TYPES, WrapDetail, check_wrapup,
-                         configured_site, player_section_key, semver_below,
+                         configured_site, semver_below,
                          site_pin, wrapup_filename_findings)
-from vaultlib import (LEGACY_SETTINGS_FILE, SKIP_DIRS, SettingsUnavailable, StateUnreadable, entity_type, extract_frontmatter,
+from vaultlib import (SKIP_DIRS, SettingsUnavailable, StateUnreadable, entity_type, extract_frontmatter,
                       delete_key, fence_step, frontmatter_span, opens_a_block,
                       parse_version, plugin_version,
                       read_held, read_stamp, scan_body, settings, settings_file,
-                      settings_raw,
-                      settings_unset, vault_files, vault_layout,
+                      vault_files, vault_layout,
                       wrapup_filename)
 
 SHARED = Path(__file__).resolve().parent.parent
 TEMPLATES = SHARED / "templates"
 HISTORY = SHARED / "template-history.json"
-CONFIG = LEGACY_SETTINGS_FILE
 
 STAT_BLOCK_RE = re.compile(r"^\{STAT BLOCK:.*?\}[ \t]*$", re.M | re.S)
 GENERIC_BLOCK = "### Stats\n\n{System stat block.}"
@@ -46,13 +44,11 @@ GENERIC_BLOCK = "### Stats\n\n{System stat block.}"
 
 def vault_system(vault: Path) -> str | None:
     """The vault's game system, aliases mapped to the file ids; None when
-    the vault records none. A vault on the new settings file records it in
-    `vault.system` and nowhere else. The other two places are for a vault
-    with no settings file yet (the scaffold's and the midwife's first
-    contact) and for a vault still on the old file, which must not lose its
-    system for being left behind: the Campaign Overview's `game_system`,
-    then the adventure brief's `system`. The old-file part goes two releases
-    after 1.10.54, with the old layout."""
+    the vault records none. A vault on the settings file records it in
+    `vault.system` and nowhere else. For a vault with no settings file yet
+    (the scaffold's and the midwife's first contact) the Campaign
+    Overview's `game_system` is read, then the adventure brief's
+    `system`."""
     found = _system_id(settings(vault).get("vault.system"))
     if found or vault_layout(vault) == "new":
         return found
@@ -575,22 +571,6 @@ def _read(path: Path) -> str:
                          f"({e.__class__.__name__})") from e
 
 
-GAME_SYSTEM_ROW_RE = re.compile(r"^\s*\|\s*\**game system\**\s*\|(.*)\|",
-                                re.I | re.M)
-
-
-def _game_system_row_regency(vault: Path) -> bool:
-    """Does a `Game System | ... Regency ...` row of the old settings
-    table say Regency Cthulhu?"""
-    try:
-        text = (vault / CONFIG).read_text(
-            encoding="utf-8")
-    except (OSError, UnicodeDecodeError):
-        return False
-    return any("regency" in m.group(1).casefold()
-               for m in GAME_SYSTEM_ROW_RE.finditer(text))
-
-
 def find_regency_looks(vault: Path) -> list[Item]:
     """1.10.49: a vault stamped plain `coc-7e` whose templates look like
     Regency Cthulhu: a stat block with the Reputation line, or a template
@@ -599,7 +579,7 @@ def find_regency_looks(vault: Path) -> list[Item]:
     if vault_system(vault) != "coc-7e":
         return []
     folder = vault / "_Templates"
-    looks = _regency_pc_template(vault) or _game_system_row_regency(vault)
+    looks = _regency_pc_template(vault)
     for name in ("_Template_NPC.md", "_Template_Creature.md"):
         try:
             looks = looks or bool(REPUTATION_LINE_RE.search(
@@ -1087,26 +1067,6 @@ def find_heritage_notes(vault: Path) -> list[Item]:
     return _relink_items(vault, "heritage-notes", "move", moves)
 
 
-def read_wrap_up_player_sections(vault: Path) -> list[str]:
-    """`publish.wrap_up.player_sections` from `_meta/vault-config.md`: the
-    extra H2 titles the vault declares player-facing on a Wrap-Up. A name
-    that exists only in the old file; a vault on the new file has none.
-
-    Read as the publish tool has it in the file. Absent, empty, null or not
-    a list of plain entries all read as no extra sections — the Keeper-facing
-    default.
-    """
-    if vault_layout(vault) != "legacy":
-        return []
-    block = settings_raw(vault, "publish.wrap_up")
-    listed = block.get("player_sections") if isinstance(block, dict) else None
-    if not isinstance(listed, list) or not all(
-            isinstance(x, (str, int, float)) and not isinstance(x, bool)
-            for x in listed):
-        return []
-    return [str(x) for x in listed]
-
-
 def _name_headings(titles: list[str]) -> str:
     return ", ".join(f"'## {t}'" for t in titles)
 
@@ -1116,14 +1076,10 @@ def find_wrapup_sections(vault: Path) -> list[Item]:
     the reading before that, every H2 the vault did not list was Keeper
     content; those are offered once to be moved under GM Notes.
 
-    The list is read here and never removed here: it must still be there
-    when the choice is applied, and when this is asked again before the
-    vault is stamped. `find_wrapup_sections_key` drops it a release later.
     A note with a fence the re-nest cannot handle, one the checker refuses
     to write, or one with no recap heading it recognises is never moved:
     it is for a person."""
-    listed = read_wrap_up_player_sections(vault)
-    player = frozenset(k for k in map(player_section_key, listed) if k)
+    player: frozenset[str] = frozenset()
     seen: list[WrapDetail] = []
     rows = [cells(r) for r in check_wrapup(
         vault, None, False, player=player, renest_only=True, detail=seen)]
@@ -1200,38 +1156,6 @@ def find_wrapup_sections(vault: Path) -> list[Item]:
     if person:
         items.append(Item("wrapup-sections-review", PERSON, person))
     return items
-
-
-def find_wrapup_sections_key(vault: Path) -> list[Item]:
-    """Every pass: `publish.wrap_up.player_sections` is no longer read.
-    It goes once the vault is stamped 1.10.28 or later, so the migration
-    that stamps 1.10.28 could still read it. Offered only when removing it
-    would change the file."""
-    if vault_layout(vault) != "legacy":    # the key exists only in the old file
-        return []
-    config = vault / CONFIG
-    text = _read(config).removeprefix("\ufeff")
-    stamp = read_stamp(vault)
-    if not stamp or parse_version(stamp) < parse_version("1.10.28"):
-        return []
-    if frontmatter_span(text.splitlines(keepends=True))[1]:
-        return []
-    block = settings_raw(vault, "publish.wrap_up")
-    if not (isinstance(block, dict) and "player_sections" in block):
-        return []
-
-    def apply(_value: str | None) -> list[str]:
-        try:
-            settings_unset(vault, ["publish.wrap_up.player_sections"])
-        except SettingsUnavailable as e:
-            if not e.refused:
-                raise
-            raise StepFailed(str(e)) from e
-        return [f"removed publish.wrap_up.player_sections from {CONFIG}"]
-
-    return [Item("wrapup-sections-key", WILL,
-                 [f"remove publish.wrap_up.player_sections from {CONFIG} "
-                  f"(no longer read)"], apply)]
 
 
 AGENT_BLOCK_UNREADABLE = "agent-block-unreadable:"
@@ -2073,12 +1997,6 @@ VAULT_CHECKS: list[Check] = [
           plain=("Moved the wrap-up notes' GM headings under GM Notes, so they stay off the player site."),
           ask=("Moves GM headings in wrap-up notes under GM Notes, so they stay off the player site."),
           left=("Kept your wrap-up notes' headings where they are.")),
-    Check("wrapup-sections-key", None, 2, "the retired player-sections list",
-          find_wrapup_sections_key,
-          kind="removes",
-          plain=("Removed an old setting that listed which wrap-up sections players see; the site no longer reads it."),
-          ask=("Removes an old setting listing which wrap-up sections players see, since the site no longer reads it."),
-          left=("Kept the old wrap-up sections setting.")),
     Check("tone-words", "1.10.44", 3, "tone words",
           find_tone_words, choices=("tone-words=",),
           kind="asks",

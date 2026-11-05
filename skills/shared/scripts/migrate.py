@@ -43,14 +43,12 @@ from pathlib import Path
 
 import update_record
 
-from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
-                          check_editable)
+from migrate_core import CHOICE, PERSON, WILL, Check, Item, StepFailed
 from migrate_site import REPIN, SITE_CHECKS
 from migrate_vault import VAULT_CHECKS
 from update_record import AnswerEntry, lines_sha
 from vaultlib import cli_name  # noqa: E402
-from vaultlib import (LEGACY_SETTINGS_FILE, SettingsUnavailable,
-                      StateUnreadable, parse_version, plugin_version,
+from vaultlib import (SettingsUnavailable, StateUnreadable, parse_version, plugin_version,
                       read_held, read_stamp, vault_layout, write_held,
                       write_stamp)
 
@@ -302,13 +300,10 @@ def stamp(vault: Path, version: str) -> None:
 
 def check_stampable(vault: Path) -> None:
     """Raise StepFailed unless the stamp could be written."""
-    if vault_layout(vault) == "new":
-        try:
-            read_stamp(vault)
-        except StateUnreadable as e:
-            raise StepFailed(str(e)) from e
-    else:
-        check_editable(vault / LEGACY_SETTINGS_FILE)
+    try:
+        read_stamp(vault)
+    except StateUnreadable as e:
+        raise StepFailed(str(e)) from e
 
 
 def _choice_problem(choice: str, value: str | None,

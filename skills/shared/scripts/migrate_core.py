@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Callable, Literal, Optional
 
 import vaultlib
-from vaultlib import (LEGACY_SETTINGS_FILE, PUBLISH_TOOL, SETTINGS_FILE, STATE_FILE,
+from vaultlib import (PUBLISH_TOOL, SETTINGS_FILE, STATE_FILE,
                       forget_settings, frontmatter_span)
 
 WILL, CHOICE, PERSON = "will", "choice", "person"
@@ -81,9 +81,9 @@ class Check:
     left: str = ""
 
 
-# The files the vault's settings are read from: the vault's (either layout)
-# and a site's; and the state file the stamp lives in.
-SETTINGS_FILES = (*(Path(f).name for f in (LEGACY_SETTINGS_FILE, SETTINGS_FILE, STATE_FILE)),
+# The files the vault's settings are read from: the vault's and a site's;
+# and the state file the stamp lives in.
+SETTINGS_FILES = (*(Path(f).name for f in (SETTINGS_FILE, STATE_FILE)),
                   "vault.config.json")
 
 
