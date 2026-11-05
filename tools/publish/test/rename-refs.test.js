@@ -217,6 +217,21 @@ describe('manifest rename: story companions', () => {
     assert.match(rename(odd, STORY, 'Characters/PCs/Emma_Tale.md').detaches, /story/);
   });
 
+  it('reports a settings file that cannot be read instead of leaving it out (#380)', () => {
+    const vault = vaultWith({ '_meta/vault-config.yaml': 'version: 1\nplayer_site: [unclosed\n' });
+    assert.throws(() => renameRefs(vault, FROM, TO), /vault-config\.yaml is not valid YAML/);
+    const err = [];
+    const real = console.error;
+    console.error = (m) => err.push(m);
+    try { assert.strictEqual(runRename({ vaultPath: vault, from: FROM, to: TO }, { out: () => {} }), 1); } finally { console.error = real; }
+    assert.match(err.join('\n'), /vault-config\.yaml is not valid YAML/);
+  });
+
+  it('stops by name on a vault that has only the old settings file, rather than renaming nothing in silence (#380)', () => {
+    const vault = vaultWith({ '_meta/vault-config.md': '---\ntype: meta\n---\n' });
+    assert.throws(() => renameRefs(vault, FROM, TO), /vault-config\.md is the old settings file/);
+  });
+
   it('refuses a rename onto <PC>_Story.md beside a PC, which the build would swallow as its story', () => {
     const vault = vaultWith({ [FROM]: '---\ntype: pc\n---\n', 'Characters/NPCs/Hallam.md': '---\ntype: npc\n---\n' });
     const got = rename(vault, 'Characters/NPCs/Hallam.md', STORY);

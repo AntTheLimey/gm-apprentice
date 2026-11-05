@@ -219,9 +219,8 @@ function renameRefs(vault, from, to, configPath, names) {
   if (read(OLD_LIST_FILE) !== null) throw new Error(OLD_LIST_STOP);
   const MANIFEST_REL = PUBLISH_LIST_FILE;
   const manifest = read(MANIFEST_REL);
-  // A settings file that cannot be read (no frontmatter, not valid YAML) names no note: nothing to rename in it.
-  let settings = null;
-  try { settings = settingsText(vault); } catch (e) { settings = null; }
+  // A settings file that cannot be read (not valid YAML, or only the old file) is reported, never skipped as if it named no note.
+  const settings = settingsText(vault);
   let manifestText = manifest;
   let configText = settings ? settings.whole : null;
   for (const move of moves) {
