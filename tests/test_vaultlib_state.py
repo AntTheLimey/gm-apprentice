@@ -1,4 +1,4 @@
-"""The version stamp and the layout, on both settings layouts. Neither needs
+"""The version stamp and the layout. Neither needs
 Node: `vault_check.py <vault> version` runs at the start of every skill."""
 
 import json
@@ -62,10 +62,6 @@ def test_a_folder_in_the_files_place_is_not_a_file(tmp_path):
 
 # ---- reading the stamp ----------------------------------------------------
 
-def test_stamp_from_the_old_file(tmp_path):
-    assert vaultlib.read_stamp(vault_with(tmp_path, old=old_file("1.10.20"))) == "1.10.20"
-
-
 def test_stamp_from_the_state_file(tmp_path):
     vault = vault_with(tmp_path, new="version: 1\n", state=state("1.10.54"))
     assert vaultlib.read_stamp(vault) == "1.10.54"
@@ -99,11 +95,6 @@ def test_a_broken_state_file_is_one_plain_line(tmp_path, text):
     message = str(caught.value)
     assert message.startswith("_meta/vault-state.json is not valid JSON")
     assert "\n" not in message
-
-
-def test_a_broken_state_file_is_ignored_on_the_old_layout(tmp_path):
-    vault = vault_with(tmp_path, old=old_file("1.10.20"), state="{broken")
-    assert vaultlib.read_stamp(vault) == "1.10.20"
 
 
 # ---- writing the stamp ----------------------------------------------------
@@ -168,14 +159,6 @@ def test_a_broken_state_file_is_not_overwritten(tmp_path):
     assert (vault / "_meta/vault-state.json").read_text("utf-8") == "{broken"
 
 
-def test_write_on_the_old_layout_edits_the_old_file_only(tmp_path):
-    vault = vault_with(tmp_path, old=old_file("1.10.20"))
-    vaultlib.write_stamp(vault, "1.10.54")
-    assert 'gm_apprentice_version: "1.10.54"' in (vault / "_meta/vault-config.md").read_text("utf-8")
-    assert not (vault / "_meta/vault-state.json").exists()
-    assert vaultlib.read_stamp(vault) == "1.10.54"
-
-
 # ---- vault_check.py version, with no Node ---------------------------------
 
 def version_row(vault: Path):
@@ -226,12 +209,6 @@ def test_version_row_for_a_broken_state_file_is_an_error_row(tmp_path):
     assert code == 1
     row = out.splitlines()[-1]
     assert row.startswith("ERROR\t(vault)\t_meta/vault-state.json is not valid JSON")
-
-
-def test_version_row_on_the_old_layout_still_reads_the_old_file(tmp_path):
-    vault = vault_with(tmp_path, old=old_file(PLUGIN))
-    code, out = version_row(vault)
-    assert code == 0 and f"OK\t_meta/vault-config.md\tvault {PLUGIN} = plugin {PLUGIN}" in out
 
 
 def test_version_row_for_a_vault_with_no_settings_file(tmp_path):

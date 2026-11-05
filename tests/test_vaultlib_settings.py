@@ -33,7 +33,7 @@ def make_vault(tmp_path: Path, frontmatter: str | None) -> Path:
 
 
 def file_text(vault: Path) -> str:
-    return (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
+    return (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
 
 
 def count_runs(monkeypatch):
@@ -49,7 +49,7 @@ def count_runs(monkeypatch):
 
 
 def test_defaults_are_not_written(tmp_path):
-    vault = make_vault(tmp_path, "publish: {}")
+    vault = make_vault(tmp_path, "publish:\n  site_title: T")
     s = vaultlib.settings(vault)
     assert s.get("player_site.features.connections") == "tree"
     assert not s.written("player_site.features.connections")
@@ -80,27 +80,17 @@ def test_no_file_at_all(tmp_path):
 def test_fault_is_listed_not_raised(tmp_path):
     vault = make_vault(tmp_path, "publish:\n  connections: sideways")
     s = vaultlib.settings(vault)
-    assert [f["name"] for f in s.faults] == ["publish.connections"]
+    assert [f["name"] for f in s.faults] == ["player_site.features.connections"]
     assert {"name", "level", "kind", "message"} <= set(s.faults[0])
     assert s.origins["player_site.features.connections"] == "fault"
 
 
 def test_unknown_name_fault_keeps_suggestion(tmp_path):
-    vault = make_vault(tmp_path, "publish:\n  conections: web")
+    vault = make_vault(tmp_path, None)
+    (vault / "_meta" / "vault-config.yaml").write_text(
+        "version: 1\nplayer_site:\n  features:\n    conections: web\n", encoding="utf-8")
     faults = vaultlib.settings(vault).faults
-    assert any(f.get("suggest") == "publish.connections" for f in faults)
-
-
-def test_site_config_old_keys_take_part(tmp_path):
-    vault = make_vault(tmp_path, "publish: {}")
-    config = tmp_path / "vault.config.json"
-    config.write_text('{"vaultPath": "vault", "excludeSections": ["Mine"]}',
-                      encoding="utf-8")
-    s = vaultlib.settings(vault, site_config=config)
-    # The site file's list adds to the built-in one when the vault file sets none.
-    assert s.get("player_site.hide.sections") == built_in() + ["Mine"]
-    assert s.origins["player_site.hide.sections"] == "site-file"
-    assert vaultlib.settings(vault).get("player_site.hide.sections") == built_in()
+    assert any(f.get("suggest") == "player_site.features.connections" for f in faults)
 
 
 def test_set_then_settings_sees_it(tmp_path):
@@ -143,17 +133,17 @@ def test_unset(tmp_path):
 def test_refused_unset(tmp_path):
     vault = make_vault(tmp_path, "publish: {}")
     with pytest.raises(vaultlib.SettingsUnavailable) as e:
-        vaultlib.settings_unset(vault, ["nonsense.thing"])
+        vaultlib.settings_unset(vault, ["player_site.hide"])
     assert e.value.refused
 
 
 def test_raw_returns_the_map(tmp_path):
     vault = make_vault(
-        tmp_path, "publish:\n  wrap_up:\n    recap: false")
-    raw = vaultlib.settings_raw(vault, "publish.wrap_up")
+        tmp_path, "publish:\n  landing:\n    max_npcs: 3")
+    raw = vaultlib.settings_raw(vault, "player_site.landing")
     assert isinstance(raw, dict) and raw
-    assert vaultlib.settings_raw(vault, "publish.nothing_here") is None
-    assert "publish" in vaultlib.settings_raw(vault)
+    assert vaultlib.settings_raw(vault, "player_site.nothing_here") is None
+    assert "player_site" in vaultlib.settings_raw(vault)
 
 
 def test_invalid_yaml_raises_with_the_line(tmp_path):
@@ -248,7 +238,8 @@ def test_settings_default(tmp_path):
 def test_hand_edit_is_not_seen_until_forgotten(tmp_path):
     vault = make_vault(tmp_path, "publish:\n  connections: web")
     assert vaultlib.settings(vault).get("player_site.features.connections") == "web"
-    write_config(vault, "---\npublish:\n  connections: tree\n---\n")
+    (vault / "_meta" / "vault-config.yaml").write_text(
+        "version: 1\nplayer_site:\n  features:\n    connections: tree\n", encoding="utf-8")
     assert vaultlib.settings(vault).get("player_site.features.connections") == "web"
     vaultlib.forget_settings(vault)
     assert vaultlib.settings(vault).get("player_site.features.connections") == "tree"
