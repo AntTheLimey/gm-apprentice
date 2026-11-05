@@ -76,7 +76,7 @@ def make(case, files, excluded=(), tool="real", site_json=None, site=True,
     other.mkdir()
     (site_dir / "vault.config.json").write_text(
         site_json if site_json is not None else json.dumps(
-            {"vaultPath": other.as_posix(), "outputDir": "./docs"}),
+            {"vaultPath": other.as_posix()}),
         encoding="utf-8")
     (site_dir / "node_modules").mkdir()
     installed = site_dir / "node_modules" / "gm-apprentice-publish"
@@ -151,10 +151,12 @@ class SiteFaultRowsTests(unittest.TestCase):
         vault, _site = make(self, {MARA: npc("x")}, site=False)
         # The file is not valid YAML further down: the settings cannot be
         # read, and nothing is guessed from the lines that can.
-        write_config(vault, "---\npublish:\n  site: false\n  theme: [unclosed\n---\n")
+        (vault / "_meta" / "vault-config.yaml").write_text(
+            "version: 1\nplayer_site:\n  publish: false\n  theme: [unclosed\n",
+            encoding="utf-8")
         with self.assertRaises(vc.SettingsUnavailable) as caught:
             vc.check_site_faults(vault)
-        self.assertIn("_meta/vault-config.md frontmatter is not valid YAML",
+        self.assertIn("_meta/vault-config.yaml is not valid YAML",
                       str(caught.exception))
         self.assertNotIn("\n", str(caught.exception))
 
