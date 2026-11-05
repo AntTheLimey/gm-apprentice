@@ -76,15 +76,68 @@ class BackupTests(unittest.TestCase):
             archive = update_backup.backup(self.vault, home=self.home)
         self.assertEqual(self._names(archive), ["keep.md"])
 
-    def test_backup_keeps_five(self):
+    def test_backup_keeps_ten(self):
         self._write("a.md")
         made = []
-        for i in range(7):
+        for i in range(12):
             with mock.patch.object(update_backup, "_stamp",
-                                   return_value=f"20260101-00000{i}"):
+                                   return_value=f"20260101-0000{i:02d}"):
                 made.append(update_backup.backup(self.vault, home=self.home))
         left = sorted(made[0].parent.glob("*.tar.gz"))
         self.assertEqual(left, made[2:])
+
+    def test_backup_holds_the_site_files_and_props_pages_the_update_writes(self):
+        self._write("keep.md")
+        self._write("Chapters/One/Props/letter.html")
+        self._write("Chapters/One/Props/letter.css")
+        site = self.tmp / "Site Folder"
+        for rel in ("package.json", "package-lock.json", "vault.config.json",
+                    "scripts/add-props.mjs", "node_modules/x/package.json",
+                    "docs/index.html"):
+            (site / rel).parent.mkdir(parents=True, exist_ok=True)
+            (site / rel).write_text("{}", encoding="utf-8")
+        with mock.patch.object(update_backup, "_site_folder",
+                               return_value=site.resolve()):
+            archive = update_backup.backup(self.vault, home=self.home)
+        self.assertEqual(self._names(archive), [
+            "Chapters/One/Props/letter.css", "Chapters/One/Props/letter.html",
+            "keep.md", "site/package-lock.json", "site/package.json",
+            "site/scripts/add-props.mjs", "site/vault.config.json"])
+
+    def test_an_icloud_timeout_names_the_brctl_fix(self):
+        path = self._write("Evicted.md")
+
+        def add(*_a, **_k):
+            raise OSError(60, "Operation timed out", str(path))
+        with mock.patch.object(tarfile.TarFile, "add", add), \
+                self.assertRaises(update_backup.BackupFailed) as cm:
+            update_backup.backup(self.vault, home=self.home)
+        self.assertIn(f'brctl download "{path}"', str(cm.exception))
+
+    def test_an_interrupted_backup_leaves_no_archive(self):
+        self._write("a.md")
+
+        def add(*_a, **_k):
+            raise KeyboardInterrupt
+        with mock.patch.object(tarfile.TarFile, "add", add), \
+                self.assertRaises(KeyboardInterrupt):
+            update_backup.backup(self.vault, home=self.home)
+        folder = next((self.home / ".gm-apprentice" / "backups").iterdir())
+        self.assertEqual(list(folder.glob("*.tar.gz*")), [])
+
+    def test_a_partial_archive_is_never_pruned_or_counted(self):
+        self._write("a.md")
+        first = update_backup.backup(self.vault, home=self.home)
+        stray = first.parent / "20200101-000000.tar.gz.partial"
+        stray.write_text("x")
+        for i in range(10):
+            with mock.patch.object(update_backup, "_stamp",
+                                   return_value=f"20270101-0000{i:02d}"):
+                update_backup.backup(self.vault, home=self.home)
+        # Pruning counts finished archives only, and leaves the stray alone.
+        self.assertTrue(stray.exists())
+        self.assertFalse(first.exists())
+        self.assertEqual(len(list(first.parent.glob("*.tar.gz"))), 10)
 
     def test_same_second_does_not_overwrite(self):
         self._write("a.md")
@@ -172,7 +225,7 @@ class SiteFolderTests(unittest.TestCase):
             self.assertEqual(update_backup._site_folder(tmp),
                              (tmp / "site").resolve())
 
-    def test_site_folder_outside_vault_is_not_a_skip(self):
+    def test_site_folder_outside_vault_is_still_found(self):
         tmp = Path(tempfile.mkdtemp())
         self.addCleanup(shutil.rmtree, tmp, True)
         other = Path(tempfile.mkdtemp())
@@ -180,8 +233,7 @@ class SiteFolderTests(unittest.TestCase):
         fake = mock.Mock()
         fake.get.return_value = str(other)
         with mock.patch("vaultlib.settings", return_value=fake):
-            self.assertIsNone(update_backup._site_folder(tmp))
-
+            self.assertEqual(update_backup._site_folder(tmp), other.resolve())
 
 if __name__ == "__main__":
     unittest.main()

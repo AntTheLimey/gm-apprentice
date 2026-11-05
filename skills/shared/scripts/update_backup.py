@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """A copy of the vault's notes, taken before `gma update` writes anything.
 
-The archive holds every .md, .yaml and .json file (the update never edits
-images) and lives under the home folder, outside the vault, so it never
-syncs or publishes.
+The archive holds every file the update can write: each .md, .yaml and
+.json note, and the props move's pages, styles and scripts, in the vault
+(the update never edits pictures); and the site folder's package.json,
+package-lock.json, vault.config.json and scripts/ (the repin, the settings
+move and the retired build steps write those), under `site/`. It lives under
+the home folder, outside the vault, so it never syncs or publishes. It is
+written as `<name>.tar.gz.partial` and renamed when whole, so an
+interrupted backup never passes for one.
 """
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
 import re
@@ -15,7 +21,11 @@ import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-NOTE_SUFFIXES = {".md", ".yaml", ".json"}
+NOTE_SUFFIXES = {".md", ".yaml", ".json",
+                 ".html", ".htm", ".css", ".js", ".mjs", ".svg"}
+SITE_FILES = ("package.json", "package-lock.json", "vault.config.json")
+SITE_DIRS = ("scripts",)
+SITE_ARC = "site"   # where the site's files sit in the archive
 SKIP_DIRS = {".obsidian", ".git", ".trash", ".gm-apprentice"}
 
 
@@ -28,26 +38,51 @@ def _stamp() -> str:
 
 
 def _site_folder(vault: Path) -> Path | None:
-    """The site folder when it sits inside the vault, else None. Settings
-    that cannot be read mean no skip: the backup must not fail on them."""
+    """The site folder, wherever it is, else None. Settings that cannot be
+    read mean no site: the backup must not fail on them."""
     import vaultlib  # a failed import is a broken install: let it raise
     try:
         folder = vaultlib.settings(vault).get("player_site.folder")
         if not folder or not isinstance(folder, str):
             return None
-        root = vault.resolve()
-        path = (root / folder).resolve()  # an absolute folder stays itself
-        path.relative_to(root)
-        return path
+        return (vault.resolve() / folder).resolve()  # an absolute one stays itself
     except Exception:  # noqa: BLE001 - any settings fault: back up anyway
         return None
+
+
+def _site_files(site: Path | None) -> list[Path]:
+    """The site files the update can write; none of node_modules or the
+    built pages."""
+    if site is None or not site.is_dir():
+        return []
+    found = [site / n for n in SITE_FILES
+             if (site / n).is_file() and not (site / n).is_symlink()]
+    for d in SITE_DIRS:
+        if (site / d).is_dir() and not (site / d).is_symlink():
+            found.extend(p for p in sorted((site / d).rglob("*"))
+                         if p.is_file() and not p.is_symlink())
+    return found
+
+
+def _unreadable_note(path: object, e: OSError) -> str:
+    """Why a file could not be read, with the iCloud fix when iCloud holds it."""
+    from migrate_vault import DATALESS
+    said = f"could not read {path}: {e.strerror or e}"
+    try:
+        dataless = bool(getattr(os.stat(str(path)), "st_flags", 0) & DATALESS)
+    except OSError:
+        dataless = False
+    # Errno 60 is macOS's ETIMEDOUT, what reading an evicted iCloud file gives.
+    if dataless or e.errno in (errno.ETIMEDOUT, 60):
+        said += (f'; iCloud has not downloaded it: run brctl download '
+                 f'"{path}", then the update again')
+    return said
 
 
 def _notes(vault: Path, site: Path | None) -> list[Path]:
     found: list[Path] = []
     def unreadable(e: OSError) -> None:
-        raise BackupFailed(
-            f"could not read {e.filename}: {e.strerror or e}") from e
+        raise BackupFailed(_unreadable_note(e.filename, e)) from e
 
     for dirpath, dirnames, filenames in os.walk(vault, onerror=unreadable):
         here = Path(dirpath)
@@ -55,7 +90,7 @@ def _notes(vault: Path, site: Path | None) -> list[Path]:
             d for d in dirnames
             if d not in SKIP_DIRS
             and not (here / d).is_symlink()
-            and not (site is not None and (here / d).resolve() == site))
+            and not (site is not None and (here / d).resolve() == site))   # under site/
         for name in sorted(filenames):
             path = here / name
             if path.suffix.lower() in NOTE_SUFFIXES and not path.is_symlink():
@@ -66,13 +101,13 @@ def _notes(vault: Path, site: Path | None) -> list[Path]:
 def _free_name(folder: Path, stamp: str) -> Path:
     path = folder / f"{stamp}.tar.gz"
     n = 2
-    while path.exists():
+    while path.exists() or path.with_name(path.name + ".partial").exists():
         path = folder / f"{stamp}-{n}.tar.gz"
         n += 1
     return path
 
 
-def backup(vault: Path, *, home: Path | None = None, keep: int = 5) -> Path:
+def backup(vault: Path, *, home: Path | None = None, keep: int = 10) -> Path:
     """Write `<home>/.gm-apprentice/backups/<vault name>/<UTC stamp>.tar.gz`
     and keep the newest `keep`. Raises `BackupFailed` naming the file it
     could not read."""
@@ -83,21 +118,28 @@ def backup(vault: Path, *, home: Path | None = None, keep: int = 5) -> Path:
               / ".gm-apprentice" / "backups" / f"{root.name}-{tag}")
     folder.mkdir(parents=True, exist_ok=True)
     target = _free_name(folder, _stamp())
+    partial = target.with_name(target.name + ".partial")
+    site = _site_folder(vault)
+    files = [(p, p.relative_to(vault).as_posix()) for p in _notes(vault, site)]
+    files += [(p, f"{SITE_ARC}/{p.relative_to(site).as_posix()}")
+              for p in _site_files(site)] if site is not None else []
     try:
-        with tarfile.open(target, "w:gz") as tar:
-            for path in _notes(vault, _site_folder(vault)):
+        with tarfile.open(partial, "w:gz") as tar:
+            for path, arcname in files:
                 try:
-                    tar.add(path, arcname=path.relative_to(vault).as_posix(),
-                            recursive=False)
+                    tar.add(path, arcname=arcname, recursive=False)
                 except OSError as e:
-                    raise BackupFailed(
-                        f"could not read {path}: {e.strerror or e}") from e
+                    raise BackupFailed(_unreadable_note(path, e)) from e
+        os.replace(partial, target)
     except BackupFailed:
-        target.unlink(missing_ok=True)
+        partial.unlink(missing_ok=True)
         raise
     except OSError as e:
-        target.unlink(missing_ok=True)
+        partial.unlink(missing_ok=True)
         raise BackupFailed(f"could not write {target}: {e.strerror or e}") from e
+    except BaseException:
+        partial.unlink(missing_ok=True)   # interrupted: no half archive
+        raise
     _prune(folder, keep)
     return target
 
