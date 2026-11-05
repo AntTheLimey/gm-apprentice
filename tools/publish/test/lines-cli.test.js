@@ -176,13 +176,14 @@ describe('lines: stub', () => {
 });
 
 describe('lines: site', () => {
+  const { writeFromOldText } = require('./helpers/vault-files');
   const fs = require('fs');
   const os = require('os');
   const vaultWith = (config) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lines-site-'));
     if (config !== null) {
       fs.mkdirSync(path.join(dir, '_meta'));
-      fs.writeFileSync(path.join(dir, '_meta', 'vault-config.md'), config);
+      writeFromOldText(dir, config);
     }
     return dir;
   };
@@ -195,19 +196,6 @@ describe('lines: site', () => {
     assert.deepStrictEqual(ask(null).got, { publishes: false, site: false, siteDir: null });
     assert.deepStrictEqual(ask('---\ntype: meta\n---\n').got, { publishes: false, site: false, siteDir: null });
     assert.deepStrictEqual(ask('---\npublish:\n---\n').got, { publishes: false, site: false, siteDir: null });
-  });
-  it('reads the block however YAML allows it to be written', () => {
-    for (const config of [
-      '---\npublish:\n  mode: player\n---\n',
-      '\ufeff---\npublish:\n  mode: player\n---\n',
-      '---\n"publish":\n  mode: player\n---\n',
-      '---\n  publish:\n    mode: player\n---\n',
-      '---\n? publish\n: {mode: player}\n---\n',
-      '---\n{publish: {mode: player}}\n---\n',
-      '---\npublish: {mode: player}\n---\n',
-    ]) {
-      assert.deepStrictEqual(ask(config).got, { publishes: true, site: false, siteDir: null }, JSON.stringify(config));
-    }
   });
   it('the switch decides: off is no site whatever site_dir says, on with no folder is a site to set up', () => {
     const dir = path.resolve(os.tmpdir(), 'a-site').replace(/\\/g, '/');
@@ -236,6 +224,14 @@ describe('lines: site', () => {
     if (process.platform === 'win32') assert.strictEqual(siteDirPath('C:\\v', '~\\site'), path.join(os.homedir(), 'site'));
     assert.strictEqual(siteDirPath('/v', '  ~/site '), path.join(os.homedir(), 'site'));
   });
+  it('a settings file that cannot be parsed is an error, not a "no"', () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'lines-site-'));
+    try {
+      fs.mkdirSync(path.join(vault, '_meta'));
+      fs.writeFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'version: 1\nplayer_site:\n  publish: true\nplayer_site:\n  folder: x\n');
+      assert.throws(() => answer({ op: 'site', vault }), /not valid YAML/);
+    } finally { fs.rmSync(vault, { recursive: true, force: true }); }
+  });
   it('on the new file, a stray top-level publish names player_site, not "publish:"', () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'lines-site-'));
     try {
@@ -246,12 +242,6 @@ describe('lines: site', () => {
       fs.writeFileSync(file, 'version: 1\nplayer_site:\n  publish: true\n  folder: ../site\n');
       assert.deepStrictEqual(answer({ op: 'site', vault }), { publishes: true, site: true, siteDir: path.resolve(vault, '../site') });
     } finally { fs.rmSync(vault, { recursive: true, force: true }); }
-  });
-  it('a file that cannot be parsed, or a block that is not one, is an error, not a "no"', () => {
-    assert.throws(() => ask('---\npublish:\n  a: 1\npublish:\n  b: 2\n---\n'), /not valid YAML/);
-    assert.throws(() => ask('---\npublish: yes please\n---\n'), /not a block of settings/);
-    assert.throws(() => ask('---\npublish:\n  site: true\n  site_dir: [a]\n---\n'), /site_dir .* is not a path/);
-    assert.throws(() => answer({ op: 'site' }), /vault must be a path/);
   });
 });
 

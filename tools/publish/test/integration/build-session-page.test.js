@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { build } = require('../../lib/build');
+const { writeSiteConfig } = require('../helpers/vault-files');
 
 function write(base, rel, body) {
   const full = path.join(base, rel);
@@ -112,14 +113,14 @@ The coach left before dawn with [[Mrs Hale]] waving from the INNYARDWAVE porch.
     write(vault, 'Characters/NPCs/Mrs Hale.md', '---\ntype: npc\n---\n\n# Mrs Hale\n\nThe innkeeper.\n');
 
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Session Page Site',
       siteUrl: 'https://example.github.io/session-page',
       vaultPath: vault,
       outputDir: docs,
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { Chapters: 'chapters', 'Characters/NPCs': 'characters/npcs' },
-    }, null, 2));
+    });
     build({ configPath });
   });
 
@@ -223,8 +224,8 @@ describe('same-titled Wrap-Ups in two chapters (#276 review)', () => {
       write(vault, `Chapters/Ch${c}/Session 01 Wrap-Up.md`, `---\ntype: session_wrap\nchapter: "[[Ch${c}]]"\n---\n\n## Narrative Recap\n\nRECAP-OF-CHAPTER-${c}.\n`);
     }
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
-      outputDir: docs, excludeDirs: ['_meta'], folderMap: { Chapters: 'chapters' } }));
+    writeSiteConfig(configPath, { siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
+      outputDir: docs, excludeDirs: ['_meta'], folderMap: { Chapters: 'chapters' } });
     const log = console.log; const warn = console.warn;
     console.log = () => {}; console.warn = () => {};
     try { build({ configPath }); } finally { console.log = log; console.warn = warn; }
@@ -252,9 +253,9 @@ describe('pairing survives excluded pairing fields (#276 final review)', () => {
     write(vault, 'Chapters/Ch1/Wraps/S1 Recap.md', '---\ntype: session_wrap\nsession: "[[Session 01]]"\nchapter: "[[Ch1]]"\n---\n\n## Narrative Recap\n\nWRAPRECAP with [[Mrs Hale]].\n');
     write(vault, 'Characters/NPCs/Mrs Hale.md', '---\ntype: npc\n---\n\n# Mrs Hale\n\nThe innkeeper.\n');
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
+    writeSiteConfig(configPath, { siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
       outputDir: docs, excludeDirs: ['_meta'], excludeFields: ['documents', 'session', 'aliases'],
-      folderMap: { Chapters: 'chapters', 'Characters/NPCs': 'characters/npcs' } }));
+      folderMap: { Chapters: 'chapters', 'Characters/NPCs': 'characters/npcs' } });
     const log = console.log; const warn = console.warn;
     console.log = () => {}; console.warn = () => {};
     try { build({ configPath }); } finally { console.log = log; console.warn = warn; }
@@ -284,8 +285,8 @@ describe('a claim on an unpublished hub never lands on another chapter (#276 fin
     write(vault, 'Chapters/Ch1/Session 01 Wrap-Up.md', '---\ntype: session_wrap\nsession: "[[Session 01]]"\nchapter: "[[Ch1]]"\nsession_number: 1\n---\n\n## Narrative Recap\n\nCH1RECAP\n');
     write(vault, 'Chapters/Ch2/Session 01.md', '---\ntype: session\nsession_number: 1\nchapter: "[[Ch2]]"\nstatus: played\nplay_date: "2026-03-01"\n---\n\n## Narrative Recap\n\nCH2PROSE\n');
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
-      outputDir: docs, excludeDirs: ['_meta'], folderMap: { Chapters: 'chapters' } }));
+    writeSiteConfig(configPath, { siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
+      outputDir: docs, excludeDirs: ['_meta'], folderMap: { Chapters: 'chapters' } });
     const log = console.log; const warn = console.warn;
     console.log = () => {}; console.warn = () => {};
     try { build({ configPath }); } finally { console.log = log; console.warn = warn; }
@@ -313,8 +314,8 @@ describe('a session names its own chapter when every chapter shares a folder (#2
       write(vault, `Campaign/Sessions/Ch${c} S1 Wrap-Up.md`, `---\ntype: session_wrap\nsession: "[[Ch${c} Session 01]]"\nchapter: "[[Chapter ${c}]]"\n---\n\n## Narrative Recap\n\nRECAP-${c}.\n`);
     }
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
-      outputDir: docs, excludeDirs: ['_meta'], folderMap: { Campaign: 'campaign' } }));
+    writeSiteConfig(configPath, { siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
+      outputDir: docs, excludeDirs: ['_meta'], folderMap: { Campaign: 'campaign' } });
     const log = console.log; const warn = console.warn;
     console.log = () => {}; console.warn = () => {};
     try { build({ configPath }); } finally { console.log = log; console.warn = warn; }

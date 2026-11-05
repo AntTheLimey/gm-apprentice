@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { build } = require('../../lib/build');
+const { writeSiteConfig } = require('../helpers/vault-files');
 
 const fixturesDir = path.join(__dirname, '..', 'fixtures');
 
@@ -40,7 +41,7 @@ describe('host config warning', () => {
   });
 
   function runBuild(overrides) {
-    fs.writeFileSync(configPath, JSON.stringify(baseConfig(outputDir, overrides), null, 2));
+    writeSiteConfig(configPath, baseConfig(outputDir, overrides), 2);
     build({ configPath });
   }
 
