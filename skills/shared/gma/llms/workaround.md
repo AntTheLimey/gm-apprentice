@@ -2,9 +2,9 @@
 
 Use it when you build something in a vault to stand in for a gm-apprentice issue that has not shipped yet: a note, a field, a CSS section, a site script, a `_meta` note or a memory note of your own. Record it with the issue number it waits on, and `gma update` offers to retire it once a release ships that issue. It needs the vault.
 
-- **Record one:** `gma workaround add "<vault>" --issue N --what "<one plain line>" --kind note --where <path>`. The kind is one of note, field, css, script, meta or memory. Give a `--where` for every place it lives: a path relative to the vault, or `memory:<file>` for your own memory. Add `--release X.Y.Z` only when the CHANGELOG maps the issue to the wrong release. An umbrella issue that a release only partly fixed still reads as shipped there: record it with `--release` set to the release that finishes it, if you know it, or leave the issue as it is and tell the GM so. Whether to retire is always the GM's call.
-- **The one-time sweep:** a vault with workarounds made before this existed has no record of them, and the update says so. Run `gma workaround scan "<vault>" --memory <your memory folder>`: it lists every line that cites an issue, and writes nothing. Show the GM each finding that is a workaround, `add` only those they say yes to, then run `gma workaround swept "<vault>"`.
-- **When the update offers one** (a `workaround:<id>@<hash>` question, options `retire` and `keep`; answer with the id exactly as the report printed it): ask the GM. On `keep`, answer `--answer workaround:<id>@<hash>=keep`; it is never offered again. On `retire`, answer `--answer workaround:<id>@<hash>=retire`: the update removes nothing and its report says `Retire <id>: <where>`. Switch those places to the built-in way the question names, remove the workaround, then run `gma workaround retire "<vault>" <id> --reason "<why>"`.
+- **Record one:** `gma workaround add "<vault>" --issue N --what "<one plain line>" --kind note --where <path>`. The kind is one of note, field, css, script, meta or memory. Give a `--where` for every place it lives: a path relative to the vault, or `memory:<file>` for your own memory. Add `--release X.Y.Z` only when the CHANGELOG maps the issue to the wrong release. When a release's notes already mention the issue, `add` says so: if that release only partly fixed it, run the same `add` again with `--release` set to the release that finishes it (it sets the release on the one already recorded), or tell the GM you do not know it. Whether to retire is always the GM's call.
+- **The one-time sweep:** a vault with workarounds made before this existed has no record of them, and the update says so. Run `gma workaround scan "<vault>"`: it lists the lines citing an issue in the root `CLAUDE.md` and `AGENTS.md`, the notes directly in `_meta/`, notes named or tagged workaround, and your memory folder, which it finds from the vault's path (`--memory <folder>` when it is elsewhere). Nowhere else: ask the GM about stand-ins no line there names. It says how many memory files it read, or that it found none, and records only that. Tell the GM that line, show them each finding that is a workaround, `add` only those they say yes to, then run `gma workaround swept "<vault>"`; it refuses until a scan has read a memory folder, unless you add `--no-memory` because you keep none.
+- **When the update offers one** (a `workaround:<id>@<hash>` question, options `retire` and `keep`; answer with the id exactly as the report printed it): it quotes the release notes that mention the issue, which may be a part fix only, so ask the GM. It asks `gh` first and offers nothing for an issue GitHub says is still open; without `gh` it offers anyway. On `keep`, answer `--answer workaround:<id>@<hash>=keep`; it is never offered again. On `retire`, answer `--answer workaround:<id>@<hash>=retire`: the update removes nothing and its report says `Retire <id>: <where>`. Switch those places to the built-in way the question names, remove the workaround, then run `gma workaround retire "<vault>" <id> --reason "<why>"`.
 - `gma workaround list "<vault>"` shows them all with their state.
 - When the plugin's CHANGELOG cannot be read (a skill zip install has none), the update offers nothing, not even for a hand-set `--release`, and says so.
 
@@ -80,7 +80,7 @@ gma workaround retire <vault> <id> --reason TEXT
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma workaround scan -->
-lines citing a gm-apprentice issue, for the one-time sweep (writes nothing)
+lines citing a gm-apprentice issue, for the one-time sweep (records only what memory it read)
 
 ```text
 gma workaround scan <vault> [options]
@@ -89,7 +89,7 @@ gma workaround scan <vault> [options]
 | Argument | Value | Help |
 |---|---|---|
 | `<vault>` |  | the vault folder |
-| `--memory` | `DIR` | the agent's memory folder, read as well |
+| `--memory` | `DIR` | the agent's memory folder, when it is not under ~/.claude/projects where scan looks by default |
 | `--json` |  | print the lines as JSON |
 <!-- END GENERATED -->
 
@@ -97,10 +97,11 @@ gma workaround scan <vault> [options]
 record that the one-time sweep is done
 
 ```text
-gma workaround swept <vault>
+gma workaround swept <vault> [options]
 ```
 
 | Argument | Value | Help |
 |---|---|---|
 | `<vault>` |  | the vault folder |
+| `--no-memory` |  | the vault's agent keeps no memory folder, so no scan read one |
 <!-- END GENERATED -->

@@ -21,9 +21,10 @@ note or a memory note of your own.
    `--where` for every place it lives: a path in the vault, or
    `memory:<file>` for your own memory. When the next update finds a
    release that ships the issue, it offers the GM to retire the stand-in.
-3. **Add `--release X.Y.Z`** if the update would read the issue as
-   shipped too early (an umbrella issue a release only partly fixed): give
-   the release that finishes it, if you know it; if not, say so to the GM.
+3. **Add `--release X.Y.Z`** when `add` says a release's notes already
+   mention the issue and that release only partly fixed it: run the same
+   `add` again with the release that finishes it, if you know it; if not,
+   say so to the GM.
 
 With no issue (the GM said no to filing), record nothing: there is nothing
 for an update to offer it back against. The script's `workaround --help`
