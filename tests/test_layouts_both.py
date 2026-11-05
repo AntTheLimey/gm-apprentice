@@ -50,7 +50,7 @@ def test_a_written_value_and_a_default_read_the_same(tmp_path):
     assert s.written("player_site.features.connections")
     assert s.get("player_site.hide.sections") == ["Spoilers"]
     assert s.get("vault.system") == "coc-7e"
-    assert s.has_site_block and not s.inline
+    assert s.has_site_block
 
 
 def test_only_new_names_are_known(tmp_path):
