@@ -117,13 +117,6 @@ describe('functions: each feature follows its own switch (#285)', () => {
     assert.ok(r.logs.some((l) => l.startsWith('  removed functions/api/loadout-list.js: player_site.sheets.show is off')), r.logs.join('\n'));
   });
 
-  it('live stats off by the old site-file name counts as explicit', () => {
-    const s = makeSite('  inbox: true\n', { backend: { statusBar: false } });
-    putAll(s.root, [...LIVE, ...INBOX, ...SHARED]);
-    run(s);
-    assert.deepStrictEqual(listed(s.root), [...INBOX, ...SHARED].sort());
-  });
-
   it('an unreadable value counts as explicitly set (off)', () => {
     const s = makeSite('  inbox:\n');
     putAll(s.root, INBOX);

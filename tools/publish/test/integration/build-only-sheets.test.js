@@ -218,18 +218,15 @@ describe('build --only sheets', () => {
     } finally { s.cleanup(); }
   });
 
-  it('a prebuild or postbuild script in the site package.json is named, once, as not run', () => {
+  it('a prebuild or postbuild script in the site package.json stops a sheets-only build too, naming where it moved', () => {
     const s = buildBoth(NOTES, { sites: ['player'] });
     try {
       fs.writeFileSync(path.join(path.dirname(s.configPath), 'package.json'), JSON.stringify({ scripts: { postbuild: 'node theme.js' } }));
-      const lines = [];
       const l = console.log; const w = console.warn;
-      console.log = (m) => lines.push(String(m)); console.warn = () => {};
-      try { build({ configPath: s.configPath, site: 'player', only: 'sheets' }); } finally { console.log = l; console.warn = w; }
-      const hit = lines.filter((m) => /postbuild/.test(m));
-      assert.equal(hit.length, 1);
-      assert.match(hit[0], /does not run in a sheets-only build/);
-      assert.match(hit[0], /update moves build steps into the vault's settings/);
+      console.log = () => {}; console.warn = () => {};
+      try {
+        assert.throws(() => build({ configPath: s.configPath, site: 'player', only: 'sheets' }), /postbuild \(now player_site\.after_build\)/);
+      } finally { console.log = l; console.warn = w; }
     } finally { s.cleanup(); }
   });
 

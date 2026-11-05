@@ -289,11 +289,6 @@ test('seeded property test: the new file', () => {
   assert.ok(steps > 50, `ran ${steps} steps`);
 });
 
-test('seeded property test: the old file', () => {
-  const steps = run(true);
-  assert.ok(steps > 50, `ran ${steps} steps`);
-});
-
 test('the generator makes a spread of shapes', () => {
   const r = rng(7);
   const seen = new Set();

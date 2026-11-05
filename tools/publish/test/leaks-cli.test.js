@@ -106,16 +106,15 @@ describe('leaks', () => {
     } finally { site.cleanup(); }
   });
 
-  it('accept on a vault still on the old Markdown list refuses and names the update', async () => {
-    const { '_meta/publish-list.yaml': dropped, ...rest } = NOTES;
-    assert.ok(dropped);
-    const site = leakSite({ ...rest, '_meta/publish-manifest.md': '## Publishing\n\n- [x] NPCs/A.md\n- [x] NPCs/B.md\n' }, SETTINGS);
+  it('accept on a vault still on the old Markdown list stops by name and writes nothing', async () => {
+    const site = leakSite(NOTES, SETTINGS);
     try {
+      // The old list turns up after the site was built (an old vault copied in, say).
+      fs.writeFileSync(path.join(vaultOf(site), '_meta', 'publish-manifest.md'), '## Publishing\n\n- [x] NPCs/A.md\n- [x] NPCs/B.md\n');
       leakInto(site.outputDir, 'npcs/b.html', 'The baker poisoned the mayor last winter.');
-      const r = await run(site, 'accept', { page: 'npcs/b.html', text: 'The baker poisoned the mayor last winter.' });
-      assert.equal(r.rc, 1);
-      assert.match(r.text, /update|manifest convert/);
-      assert.ok(!fs.existsSync(path.join(vaultOf(site), '_meta', 'publish-list.yaml')));
+      await assert.rejects(run(site, 'accept', { page: 'npcs/b.html', text: 'The baker poisoned the mayor last winter.' }),
+        /_meta\/publish-manifest\.md is the old publish list, no longer read since plugin 1\.11\.0\. Run the update with plugin 1\.10\.134 first\./);
+      assert.ok(fs.readFileSync(path.join(vaultOf(site), '_meta', 'publish-list.yaml'), 'utf8') === NOTES['_meta/publish-list.yaml']);
     } finally { site.cleanup(); }
   });
 

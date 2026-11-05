@@ -147,11 +147,11 @@ test('a folder that cannot be made writes nothing: the settings file is byte-ide
   assert.deepEqual(fs.readFileSync(file), before);
 });
 
-test('6: a vault still on the old settings file is refused as every new-only setting is', () => {
+test('6: a vault still on the old settings file stops the set by name', () => {
   const s = scratch(null, { legacy: true });
   const { rc, err } = set(s, ['gm_site.publish=on']);
   assert.equal(rc, 1);
-  assert.match(err[0], /needs the new settings file; run the update first/);
+  assert.match(err[0], /is the old settings file, no longer read since plugin 1\.11\.0\. Run the update with plugin 1\.10\.134 first\./);
   assert.ok(!fs.existsSync(`${s.site}-gm`));
 });
 

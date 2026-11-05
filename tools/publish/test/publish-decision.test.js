@@ -74,10 +74,6 @@ describe('publish-decision: one case per code', () => {
     assert.strictEqual(v.bucket, 'decide');
     assert.strictEqual(v.code, 'DIR_UNMAPPED');
     assert.match(v.reason, /player_site\.folder_map/);
-    // A vault still on the old file is told the old name.
-    const legacy = { mode: 'player' };
-    Object.defineProperty(legacy, 'layout', { value: 'legacy', enumerable: false });
-    assert.match(decide({ type: 'npc' }, { folderMapped: false, publishConfig: legacy }).reason, /publish\.folder_map/);
   });
 
   it('NO_TYPE when the frontmatter carries no type', () => {

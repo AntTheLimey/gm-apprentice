@@ -485,7 +485,7 @@ test('an event, person or place with no page supplies no visit, by the build\'s 
     ...event,
     'People/Ada.md': note('npc', rels(edge('visited', 'Hall'))),
     'Places/Hall.md': note('location'),
-    '_meta/vault-config.md': '---\npublish:\n  exclude_dirs:\n    - Drafts\n  folder_map:\n    Events: events\n    People: people\n    Places: places\n    Drafts: drafts\n---\n',
+    '_meta/vault-config.yaml': 'version: 1\nplayer_site:\n  hide:\n    folders:\n      - Drafts\n  folder_map:\n    Events: events\n    People: people\n    Places: places\n    Drafts: drafts\n',
     ...extra,
   });
   const dinner = (more = []) => note('event', ['location: "[[Hall]]"', 'participants:', '  - "[[Ada]]"', ...more]);
