@@ -5,6 +5,7 @@ const WORDS = require('../helpers/settings-files').defaultWithheldWords();
 const os = require('os');
 const path = require('path');
 const { build } = require('../../lib/build');
+const { writeSiteConfig } = require('../helpers/vault-files');
 const { publishedFrontmatter, gmAliasList, gmAliasRewriter } = require('../../lib/processor');
 
 // #212: a `gm_aliases` entry resolves links to its page but its text never
@@ -121,12 +122,12 @@ describe('gm_aliases (#212)', () => {
     const docs = path.join(work, 'docs');
     writeVault(vault);
     const configPath = path.join(work, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       vaultPath: vault, outputDir: docs, attachmentsDir: '_attachments',
       siteTitle: 'Alias Campaign', siteUrl: 'https://example.github.io/alias',
       excludeDirs: ['_meta', '_Templates'],
       folderMap: { 'Characters/NPCs': 'characters/npcs', Locations: 'locations' },
-    }));
+    });
     const origLog = console.log, origWarn = console.warn;
     console.log = () => {};
     console.warn = () => {};

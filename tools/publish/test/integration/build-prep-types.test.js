@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { build } = require('../../lib/build');
+const { writeSiteConfig } = require('../helpers/vault-files');
 const { writePublishList } = require('../helpers/publish-list');
 
 // Scenes and session Plans are prep by type: the publish list cannot put them on the player site,
@@ -27,10 +28,10 @@ describe('build: a prep-type note on the publish list', () => {
     writePublishList(vault, { publishing: ['Locations/Tavern.md', 'Locations/Docks Scene.md', 'Locations/Plan.md'] });
     const configPath = path.join(work, 'vault.config.json');
     docs = path.join(work, 'docs');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Prep', siteUrl: 'https://example.github.io/prep', vaultPath: vault, outputDir: docs,
       excludeDirs: ['_meta', '_Templates'], folderMap: { Locations: 'locations' },
-    }, null, 2));
+    }, 2);
     warnings = [];
     const saved = { log: console.log, warn: console.warn };
     console.log = () => {};

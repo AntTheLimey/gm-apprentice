@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { build } = require('../../lib/build');
+const { writeSiteConfig } = require('../helpers/vault-files');
 
 const fixturesDir = path.join(__dirname, '..', 'fixtures');
 
@@ -12,7 +13,7 @@ function setupSite({ withOverrides }) {
   const configPath = path.join(siteDir, 'config.json');
   const outputDir = path.join(siteDir, 'docs');
 
-  fs.writeFileSync(configPath, JSON.stringify({
+  writeSiteConfig(configPath, {
     vaultPath: path.join(fixturesDir, 'minimal'),
     outputDir,
     attachmentsDir: '_attachments',
@@ -25,7 +26,7 @@ function setupSite({ withOverrides }) {
       'Characters/NPCs': 'characters/npcs',
       'Locations': 'locations',
     },
-  }, null, 2));
+  }, 2);
 
   if (withOverrides) {
     fs.mkdirSync(path.join(siteDir, 'css'), { recursive: true });

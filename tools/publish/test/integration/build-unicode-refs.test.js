@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { build } = require('../../lib/build');
+const { writeSiteConfig } = require('../helpers/vault-files');
 
 // Differential build for #139. The same vault is built twice: once with every author-typed
 // reference decomposed (NFD), once with every reference precomposed (NFC). Filenames are NFC
@@ -220,7 +221,7 @@ function buildVariant(refForm) {
   const docs = path.join(work, 'docs');
   writeVault(vault, refForm);
   const configPath = path.join(work, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
+  writeSiteConfig(configPath, {
     vaultPath: vault, outputDir: docs, attachmentsDir: '_attachments',
     siteTitle: 'Diff Campaign', siteUrl: 'https://example.github.io/diff',
     excludeDirs: ['_meta', '_Templates'],
@@ -231,7 +232,7 @@ function buildVariant(refForm) {
       Events: 'events', Creatures: 'creatures', Heritages: 'heritages', Documents: 'documents',
       World: 'world', Clues: 'clues',
     },
-  }));
+  });
   const origLog = console.log, origWarn = console.warn;
   console.log = () => {};
   console.warn = () => {};
