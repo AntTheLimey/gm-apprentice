@@ -72,9 +72,9 @@ def move_to_new_layout(vault: Path, *fill: str) -> Path:
     as the new settings file and removed. `fill` are `name=value` settings for
     a vault that lacks them."""
     old = vault / "_meta" / "vault-config.md"
-    text = old.read_text(encoding="utf-8") if old.is_file() else "---\npublish:\n---\n"
-    write_config(vault, text)
-    old.unlink(missing_ok=True)
+    if old.is_file():
+        write_config(vault, old.read_text(encoding="utf-8"))
+        old.unlink()
     if fill:
         node = shutil.which("node")
         done = subprocess.run(

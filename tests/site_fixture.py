@@ -13,9 +13,12 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Callable
+
+from layouts import write_config  # noqa: E402
 
 TOOL_DIR = Path(__file__).resolve().parents[1] / "tools" / "publish"
 BARE = "---\npublish:\n---\n"
@@ -161,19 +164,35 @@ def site_copy(fixture: Path) -> Path:
 def give_site(vault: Path, cleanup: Callable[[Path], object],
               private: bool = False) -> None:
     """Turn the site on in a vault already on disk. `private=True` for a
-    test that changes the site (see `private_site`)."""
-    file = vault / "_meta" / "vault-config.md"
-    config = file.read_text(encoding="utf-8") if file.is_file() else None
+    test that changes the site (see `private_site`). A vault whose settings
+    are still written the short way (`_meta/vault-config.md`, as a test
+    builds them) is written as the new settings file; one already on it gets
+    the two settings through the tool."""
+    new_file = vault / "_meta" / "vault-config.yaml"
+    if new_file.is_file():
+        text = new_file.read_text(encoding="utf-8")
+        if re.search(r"^[ \t]+(publish|folder)[ \t]*:", text, re.M):
+            return
+        site = new_site(vault, cleanup, private)
+        subprocess.run(
+            ["node", str(TOOL_DIR / "bin" / "gm-publish.js"), "settings", "set",
+             "--vault", str(vault), "player_site.publish=true",
+             f"player_site.folder={json.dumps(site.as_posix())}"],
+            check=True, capture_output=True, text=True)
+        return
+    old = vault / "_meta" / "vault-config.md"
+    config = old.read_text(encoding="utf-8") if old.is_file() else None
     text = with_site(config, vault, cleanup, private)
-    if text is not None and text != config:
-        file.parent.mkdir(exist_ok=True)
-        file.write_text(text, encoding="utf-8")
+    if text is not None:
+        (vault / "_meta").mkdir(exist_ok=True)
+        write_config(vault, text)
+        old.unlink(missing_ok=True)
 
 
 def site_of(vault: Path) -> Path:
     """The site folder a test vault's settings name (`player_site.folder`)."""
-    text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
-    found = re.search(r"^\s*site_dir:\s*(.+)$", text, re.M)
+    text = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
+    found = re.search(r"^\s*folder:\s*(.+)$", text, re.M)
     assert found, "the vault names no site folder"
     return Path(found.group(1).strip().strip("\"'"))
 

@@ -78,10 +78,10 @@ class SharedSiteGuardTests(unittest.TestCase):
         self.addCleanup(shutil.rmtree, vault, ignore_errors=True)
         (vault / "_meta").mkdir()
         sf.give_site(vault, lambda p: None, private=True)
-        text = (vault / "_meta" / "vault-config.md").read_text(
+        text = (vault / "_meta" / "vault-config.yaml").read_text(
             encoding="utf-8")
         self.assertNotIn(shared().as_posix(), text)
-        self.assertIn("site_dir:", text)
+        self.assertIn("folder:", text)
 
 
 class PublishToolStartsFromThePluginsTests(unittest.TestCase):
