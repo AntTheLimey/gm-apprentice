@@ -77,7 +77,7 @@ test('no default is written as a fallback', () => {
 //   (none: the old editor and the old migration command are gone)
 // The settings package reads and writes the file for everything else (settings/write.js is the one writer),
 // and layout.js is the one place that writes either file's name: a message to the GM gets the name from
-// fileLabel / nameIn (or their `For` forms), which know which of the two files the vault is on.
+// fileLabel / nameIn.
 test('nothing reads the vault settings file but the settings package', () => {
   const allowed = new Set([]);
   // Either file's name anywhere in code: a path joined, a template, a line of help text.

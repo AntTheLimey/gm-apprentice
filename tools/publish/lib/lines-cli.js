@@ -113,7 +113,7 @@ function site(vault) {
   if (!file.exists || !file.hasSiteBlock) {
     // A stray `publish` at the top is not a setting at all: the site's settings go under player_site.
     if (faults.some((f) => f.name === 'publish')) {
-      throw new Error(`publish in ${fileLabel(vault)} is not a setting; the site's settings go under player_site`);
+      throw new Error(`publish in ${fileLabel()} is not a setting; the site's settings go under player_site`);
     }
     return { publishes: false, site: false, siteDir: null };
   }
@@ -125,7 +125,7 @@ function site(vault) {
   const origin = origins['player_site.folder'];
   const blank = origin === 'default' || (typeof raw === 'string' && raw.trim() === '');
   if (!on || blank) return { publishes: true, site: on, siteDir: null };
-  if (origin === 'fault' || typeof raw !== 'string') throw new Error(`${nameIn(vault, 'player_site.folder')} in ${fileLabel(vault)} is not a path`);
+  if (origin === 'fault' || typeof raw !== 'string') throw new Error(`${nameIn('player_site.folder')} in ${fileLabel()} is not a path`);
   return { publishes: true, site: true, siteDir: siteDirPath(vault, raw) };
 }
 

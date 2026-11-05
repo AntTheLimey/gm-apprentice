@@ -223,8 +223,8 @@ const MISTYPED_SHOWN = 10;
 function warnScanReport(report) {
   const { pages, untyped, neverPublish = [], unmapped, malformed, mistyped = [], vaultPath } = report;
   // The messages name a setting, and the file, as this vault's file writes them.
-  const folderMapName = nameIn(vaultPath, 'player_site.folder_map');
-  const hideFoldersName = nameIn(vaultPath, 'player_site.hide.folders');
+  const folderMapName = nameIn('player_site.folder_map');
+  const hideFoldersName = nameIn('player_site.hide.folders');
   for (const { fullPath, message } of malformed) {
     console.warn(`scanner: skipping ${fullPath} — malformed frontmatter: ${message}`);
   }
@@ -235,7 +235,7 @@ function warnScanReport(report) {
     console.warn(`scanner: and ${mistyped.length - MISTYPED_SHOWN} more frontmatter value(s) of the wrong type.`);
   }
   for (const { dir } of unmapped) {
-    console.warn(`scanner: skipping "${dir}" — not in ${folderMapName}; typed pages inside will not publish. Add it to ${folderMapName} in ${fileLabel(vaultPath)} to publish, or to ${hideFoldersName} to silence this warning.`);
+    console.warn(`scanner: skipping "${dir}" — not in ${folderMapName}; typed pages inside will not publish. Add it to ${folderMapName} in ${fileLabel()} to publish, or to ${hideFoldersName} to silence this warning.`);
   }
   if (untyped.length > 0) {
     const shown = untyped.slice(0, 5).join(', ');
@@ -244,7 +244,7 @@ function warnScanReport(report) {
       `scanner: skipped ${untyped.length} file(s) with no \`type:\` in frontmatter — ` +
       `they will not publish: ${shown}${more}. Add \`type:\` to publish them, mark a note ` +
       `\`publish: false\` (\`manifest never-publish --untyped\` marks them all), or list ` +
-      `their folder in ${hideFoldersName} (${fileLabel(vaultPath)}) to silence this.`
+      `their folder in ${hideFoldersName} (${fileLabel()}) to silence this.`
     );
   }
   if (neverPublish.length > 0) {
@@ -340,7 +340,7 @@ function scanAttachments(config, deps) {
   // (CodeRabbit review, PR #234). Check the root the same way before ever walking it.
   const attachmentsRootRel = toPosix(path.relative(vaultPath, attachmentsPath));
   if (dirIsExcluded(attachmentsRootRel, excludes)) {
-    console.warn(`scanner: attachments root "${attachmentsRootRel}" is listed in ${nameIn(vaultPath, 'player_site.hide.folders')} — no attachments scanned`);
+    console.warn(`scanner: attachments root "${attachmentsRootRel}" is listed in ${nameIn('player_site.hide.folders')} — no attachments scanned`);
     return nfcLookupTable(map);
   }
 

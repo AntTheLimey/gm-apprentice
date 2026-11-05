@@ -123,7 +123,7 @@ async function runExplain(options, deps) {
       ? { bucket: 'exclude', code: 'AGENT_FILE', reason: "the vault agent's instructions at the vault's root, not a note", outputPath: null }
       : null)
     || (configExcluded && !alwaysExcluded
-      ? { bucket: 'exclude', code: 'DIR_CONFIG_EXCLUDED', reason: `in ${configExcluded}/ — listed in ${nameIn(vaultPath, 'player_site.hide.folders')}`, outputPath: null }
+      ? { bucket: 'exclude', code: 'DIR_CONFIG_EXCLUDED', reason: `in ${configExcluded}/ — listed in ${nameIn('player_site.hide.folders')}`, outputPath: null }
       : decidePage(page || { rel: target, frontmatter: null }, {
         rel: target,
         publishConfig,
@@ -255,9 +255,9 @@ async function runExplain(options, deps) {
   out('');
   out('  exists: yes');
   out(`  directory: ${dir || '(vault root)'} — ${
-    configExcluded ? `listed in ${nameIn(vaultPath, 'player_site.hide.folders')} (${configExcluded})`
+    configExcluded ? `listed in ${nameIn('player_site.hide.folders')} (${configExcluded})`
       : mappedTo ? `mapped to ${mappedTo}`
-        : dir ? `not in ${nameIn(vaultPath, 'player_site.folder_map')}` : 'the vault root'}`);
+        : dir ? `not in ${nameIn('player_site.folder_map')}` : 'the vault root'}`);
   if (frontmatterError) out(`  frontmatter: could not be parsed — ${frontmatterError}`);
   out(`  type: ${(frontmatter && frontmatter.type) || '(none)'}`);
   out(`  publish mode: ${frontmatter ? publishMode(frontmatter) : '(no frontmatter)'}`);

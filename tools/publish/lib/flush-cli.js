@@ -112,7 +112,7 @@ async function runFlush(deps) {
   // with no `switches` (a test seam) means on, as in pcKeepList.
   const switches = publishConfig.switches;
   if (switches && switches.liveStats !== true) {
-    const liveName = nameIn(vaultPath, 'player_site.features.live_stats');
+    const liveName = nameIn('player_site.features.live_stats');
     const deployedButUnset = switches.characterSheets !== false && (switches.unset || []).includes('live_stats') && detectStatusBar(configDir);
     out(switches.characterSheets === false
       ? 'Nothing flushed: character sheets are off for this campaign, so live stats are off too.'

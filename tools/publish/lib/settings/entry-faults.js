@@ -20,7 +20,7 @@ const words = (list) => new Set((list || []).map((w) => String(w).trim().toLower
 function entryFaults(vaultPath, values, origins, deps) {
   const faults = [];
   const add = (setting, message) => {
-    const name = nameIn(vaultPath, setting);
+    const name = nameIn(setting);
     faults.push(makeFault({ name, setting, kind: 'dropped', level: 'warn', message: message(name) }));
   };
   const get = (setting) => setting.split('.').reduce((o, k) => (o == null ? undefined : o[k]), values);
@@ -45,15 +45,15 @@ function entryFaults(vaultPath, values, origins, deps) {
     const out = words(get('vault.statuses.out_of_play'));
     for (const word of words(get('vault.statuses.fallen'))) {
       if (!out.has(word)) {
-        add('vault.statuses.fallen', (name) => `${name} holds "${word}", which is not in ${nameIn(vaultPath, 'vault.statuses.out_of_play')}; it does not count as fallen`);
+        add('vault.statuses.fallen', (name) => `${name} holds "${word}", which is not in ${nameIn('vault.statuses.out_of_play')}; it does not count as fallen`);
       }
     }
   }
 
   // A vault kept by a player has no GM site.
   if (get('gm_site.publish') === true && get('vault.kept_by') === 'player') {
-    const on = nameIn(vaultPath, 'gm_site.publish');
-    const kept = nameIn(vaultPath, 'vault.kept_by');
+    const on = nameIn('gm_site.publish');
+    const kept = nameIn('vault.kept_by');
     faults.push(makeFault({ name: on, setting: 'gm_site.publish', kind: 'gm-kept-by-player', level: 'stop',
       message: `${on} is on, but this vault is kept by a player (\`${kept}: player\`), so it has no GM site; turn ${on} off` }));
   }

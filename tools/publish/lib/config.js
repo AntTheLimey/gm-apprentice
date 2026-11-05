@@ -16,7 +16,7 @@ function canonicalizeOverrideFieldKeys(fields, vaultPath) {
   for (const [key, value] of Object.entries(fields || {})) {
     const problem = overrideEntryProblem(value);
     if (problem) {
-      problems.push(`${nameIn(vaultPath, 'player_site.hide.field_exceptions')}["${key}"] ${problem}. That override is ignored. Expected shape: "Characters/NPCs/Vex.md": { include: ["secrets"] }.`);
+      problems.push(`${nameIn('player_site.hide.field_exceptions')}["${key}"] ${problem}. That override is ignored. Expected shape: "Characters/NPCs/Vex.md": { include: ["secrets"] }.`);
       continue;
     }
     out[canonicalPath(key)] = value;
@@ -100,8 +100,8 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
 
   const live = p.features.live_stats && p.sheets.show;
   if (p.features.live_stats && !p.sheets.show) {
-    const liveName = nameIn(vaultPath, 'player_site.features.live_stats');
-    faults.push(makeFault({ name: liveName, setting: 'player_site.features.live_stats', kind: 'dropped', level: 'warn', message: `${liveName} is on but ${nameIn(vaultPath, 'player_site.sheets.show')} is off; live stats are not published` }));
+    const liveName = nameIn('player_site.features.live_stats');
+    faults.push(makeFault({ name: liveName, setting: 'player_site.features.live_stats', kind: 'dropped', level: 'warn', message: `${liveName} is on but ${nameIn('player_site.sheets.show')} is off; live stats are not published` }));
   }
   const switchNames = { site: 'player_site.publish', character_sheets: 'player_site.sheets.show', live_stats: 'player_site.features.live_stats', inbox: 'player_site.features.inbox' };
   const unset = Object.keys(switchNames).filter((n) => origins[switchNames[n]] === 'default');
@@ -120,7 +120,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
 
   const overrides = canonicalizeOverrideFieldKeys(p.hide.field_exceptions, vaultPath);
   for (const message of overrides.problems) {
-    faults.push(makeFault({ name: nameIn(vaultPath, 'player_site.hide.field_exceptions'), setting: 'player_site.hide.field_exceptions', kind: 'dropped', level: 'stop', message }));
+    faults.push(makeFault({ name: nameIn('player_site.hide.field_exceptions'), setting: 'player_site.hide.field_exceptions', kind: 'dropped', level: 'stop', message }));
   }
 
   // A genre counts as written even when it was refused (an unknown one reads as null): the page
@@ -258,7 +258,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
     const setting = `player_site.withheld_words.${key}`;
     const raw = String(p.withheld_words[key]).trim();
     if (/[[\]|]/.test(raw)) {
-      const written = nameIn(vaultPath, setting);
+      const written = nameIn(setting);
       faults.push(makeFault({ name: written, setting, kind: 'dropped', level: 'warn', message: `${written} holds a [, ] or |, which cannot be printed in a link; the built-in word is used` }));
       words[key] = entry(setting).default;
     } else words[key] = raw || entry(setting).default;

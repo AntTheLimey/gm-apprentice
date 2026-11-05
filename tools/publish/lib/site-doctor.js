@@ -261,13 +261,13 @@ async function runSiteDoctor(options, deps) {
   for (const f of publishConfig.faults) {
     // A leftover in the site folder (a key of its vault.config.json, a package.json build script) is fixed there.
     const where = f.source === 'site' ? 'vault.config.json' : f.source === 'package' ? 'package.json'
-      : f.leftover && (f.name === OLD_FILE || f.name === OLD_LIST_FILE) ? f.name : fileLabel(vaultPath);
+      : f.leftover && (f.name === OLD_FILE || f.name === OLD_LIST_FILE) ? f.name : fileLabel();
     findings.push(finding(
       'SETTINGS_FAULT', f.level === 'stop' ? 'error' : 'warning', where,
       formatFault(f),
       f.leftover
         ? 'do as the line says: nothing in it is read, so the build stops until then'
-        : `correct it in ${fileLabel(vaultPath)}, or ask the apprentice to run the Settings check`,
+        : `correct it in ${fileLabel()}, or ask the apprentice to run the Settings check`,
     ));
   }
   const settingsStopped = publishConfig.faults.some((f) => f.level === 'stop');
@@ -323,9 +323,9 @@ async function runSiteDoctor(options, deps) {
       .filter((v, i, a) => a.indexOf(v) === i);
     if (names.length > 0) {
       findings.push(finding(
-        'FONTS_GOOGLE', 'warning', fileLabel(vaultPath),
+        'FONTS_GOOGLE', 'warning', fileLabel(),
         `custom fonts ${names.join(', ')} are loaded from Google Fonts at page load — visitors' IP addresses are sent to Google, and some jurisdictions (e.g. the EU under GDPR) require consent for that`,
-        `set ${nameIn(vaultPath, 'player_site.theme.fonts.source')}: self-host to serve them from your site instead, or use a system font`,
+        `set ${nameIn('player_site.theme.fonts.source')}: self-host to serve them from your site instead, or use a system font`,
       ));
     }
   }
@@ -335,7 +335,7 @@ async function runSiteDoctor(options, deps) {
     findings.push(finding(
       'FOLDER_UNMAPPED', 'warning', entry.dir,
       `${plural(entry.typedFileCount, 'typed page')} inside will not publish`,
-      `add "${entry.dir}": "${suggestedSlug(entry.dir)}" to ${nameIn(vaultPath, 'player_site.folder_map')} or list it in ${nameIn(vaultPath, 'player_site.hide.folders')} (${fileLabel(vaultPath)})`,
+      `add "${entry.dir}": "${suggestedSlug(entry.dir)}" to ${nameIn('player_site.folder_map')} or list it in ${nameIn('player_site.hide.folders')} (${fileLabel()})`,
     ));
   }
   const shownUntyped = report.untyped.slice(0, UNTYPED_ROW_CAP);

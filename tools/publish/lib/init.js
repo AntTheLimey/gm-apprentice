@@ -235,15 +235,15 @@ async function init(targetDir = '.', options = {}) {
   const vaultSettings = seedVaultSettings(vaultDir, defaultCampaignSettings(siteTitle, options.tagline, path.resolve(dest)), { turnSiteOn: true, siteConfig: JSON.parse(await fs.readFile(path.join(dest, 'vault.config.json'), 'utf8')) });
   if (vaultSettings.written.length) {
     const which = options.vaultPath ? '' : ' (the default vaultPath, ./vault)';
-    log(`  wrote ${vaultSettings.written.map((n) => nameIn(vaultDir, n)).join(', ')} to ${fileLabel(vaultDir)} in ${vaultDir}${which}`);
+    log(`  wrote ${vaultSettings.written.map((n) => nameIn(n)).join(', ')} to ${fileLabel()} in ${vaultDir}${which}`);
   }
   if (vaultSettings.skipped) {
-    const keys = Object.keys(vaultSettings.missing).map((n) => nameIn(vaultDir, n)).join(', ');
-    const where = vaultSettings.missing[FOLDER] ? ` (${nameIn(vaultDir, FOLDER)}: ${vaultSettings.missing[FOLDER]})` : '';
-    console.warn(`Campaign settings were not written: ${vaultSettings.skipped}. Add these to ${fileLabel(vaultDir)}: ${keys}${where}.`);
+    const keys = Object.keys(vaultSettings.missing).map((n) => nameIn(n)).join(', ');
+    const where = vaultSettings.missing[FOLDER] ? ` (${nameIn(FOLDER)}: ${vaultSettings.missing[FOLDER]})` : '';
+    console.warn(`Campaign settings were not written: ${vaultSettings.skipped}. Add these to ${fileLabel()}: ${keys}${where}.`);
   }
   if (vaultSettings.otherSite) {
-    console.warn(`The vault already names a different site (${nameIn(vaultDir, FOLDER)}: ${vaultSettings.otherSite}); it was left as it is. Change it by hand if this is now the campaign's site.`);
+    console.warn(`The vault already names a different site (${nameIn(FOLDER)}: ${vaultSettings.otherSite}); it was left as it is. Change it by hand if this is now the campaign's site.`);
   }
 
   return { success: true, files: created, vaultSettings };
