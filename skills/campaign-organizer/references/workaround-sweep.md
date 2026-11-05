@@ -15,7 +15,7 @@ their issue ships. The sweep finds them once. `GMA` below is
    itself (Claude Code's `~/.claude/projects/<slug>/memory`, where
    `<slug>` is the vault's full path with every character that is not a
    letter or digit made `-`). If the memory is elsewhere, add
-   `--memory <folder>`.
+   `--memory <folder>`. It records only that a scan ran and what it read.
 2. **Read its last lines to the GM**: how many memory files it read and
    from where, or that it found no memory folder, and any "Could not
    read" line. A scan that read no memory has not looked there.

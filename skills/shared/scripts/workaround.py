@@ -16,8 +16,8 @@ under the issue it stands in for, so `gma update` can offer to retire it
 once a release ships that issue. `scan` lists candidate lines for the
 one-time sweep from the root agent files, the top-level `_meta` notes,
 notes named or tagged workaround, and the agent's memory folder (found
-from the vault's path unless `--memory` names it); it records only what
-memory it read. The agent shows the GM each line and `add`s only those
+from the vault's path unless `--memory` names it); it records only that
+a scan ran and what it read. The agent shows the GM each line and `add`s only those
 the GM says yes to, then runs `swept`, which wants a scan that read a
 memory folder, or `--no-memory`.
 """
@@ -338,8 +338,8 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--reason", required=True, metavar="TEXT",
                    help="why, in a few words")
     s = sub.add_parser("scan", help="lines citing a gm-apprentice issue, for "
-                                    "the one-time sweep (records only what "
-                                    "memory it read)")
+                                    "the one-time sweep (records only that a "
+                                    "scan ran and what it read)")
     s.add_argument("vault", help="the vault folder")
     s.add_argument("--memory", metavar="DIR",
                    help="the agent's memory folder, when it is not under "
