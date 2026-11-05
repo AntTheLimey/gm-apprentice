@@ -110,6 +110,18 @@ function dropLines(text, a, b, eol) {
 // ---- Making text with the library --------------------------------------------------------------
 
 const toStringOptions = (ctx) => ({ indent: ctx.step, indentSeq: ctx.indentSeq, lineWidth: 0, blockQuote: false, flowCollectionPadding: false, minContentWidth: 0 });
+// True when a YAML 1.1 reader (Obsidian, PyYAML, js-yaml) would read this text, written bare, as something other than
+// the same string: `12:30` is the number 750 there and `yes` is true. The library writes YAML 1.2, where both are text,
+// so these are quoted to be read the same everywhere (tests/shared-cases/yaml-scalars.json).
+function readsAsOtherInYaml11(text) {
+  if (/^[yn]$/i.test(text)) return false; // only the `yaml` package reads a lone y or n as a boolean; Obsidian, PyYAML and js-yaml do not
+  try {
+    return YAML.parse(`v: ${text}`, { version: '1.1' }).v !== text;
+  } catch {
+    return false;
+  }
+}
+
 // A string with a line break is always written double-quoted on one line: the library would otherwise
 // spread it over lines, which a one-line (flow) group cannot hold.
 function documentOf(value, ctx = {}) {
@@ -117,7 +129,7 @@ function documentOf(value, ctx = {}) {
   YAML.visit(doc, {
     Scalar(_, node) {
       if (typeof node.value !== 'string') return;
-      if (/[\r\n]/.test(node.value)) node.type = 'QUOTE_DOUBLE';
+      if (/[\r\n]/.test(node.value) || readsAsOtherInYaml11(node.value)) node.type = 'QUOTE_DOUBLE';
     },
   });
   return doc;

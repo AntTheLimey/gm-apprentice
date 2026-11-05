@@ -125,7 +125,7 @@ describe('settings writer: values', () => {
     nw: 'version: 1\nplayer_site:\n  title: a\n',
     old: 'publish:\n  site_title: a\n',
     changes: { new: [{ op: 'set', name: 'player_site.title', value: 'yes' }] },
-    newOut: 'version: 1\nplayer_site:\n  title: yes\n',
+    newOut: 'version: 1\nplayer_site:\n  title: "yes"\n', // quoted: a YAML 1.1 reader reads a bare yes as true
     oldOut: 'publish:\n  site_title: yes\n',
   });
   both('vault.setting_year is written (under vault, or at the left edge of the old file)', {

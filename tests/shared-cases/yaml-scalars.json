@@ -1,0 +1,14 @@
+{
+  "about": "Text values the publish tool's settings writer writes, as it writes them. A reader that follows YAML 1.1 (Obsidian, PyYAML, js-yaml) reads an unquoted 12:30 as the number 750 and an unquoted yes as true, so the writer quotes those. Both sides read `written` back as `value`: tools/publish/test/yaml-shared-cases.test.js (the writer, and the yaml package in both 1.2 and 1.1 mode) and tests/test_yaml_shared_cases.py (vaultlib's frontmatter reader).",
+  "cases": [
+    {"value": "Plain title", "written": "Plain title"},
+    {"value": "7pm", "written": "7pm"},
+    {"value": "12:30", "written": "\"12:30\""},
+    {"value": "1:30:00", "written": "\"1:30:00\""},
+    {"value": "0:30", "written": "\"0:30\""},
+    {"value": "12:30:45.5", "written": "\"12:30:45.5\""},
+    {"value": "yes", "written": "\"yes\""},
+    {"value": "Off", "written": "\"Off\""},
+    {"value": "1_000", "written": "\"1_000\""}
+  ]
+}
