@@ -150,6 +150,9 @@ def keep(vault: Path, wid: str) -> Workaround:
     """The GM keeps it: it is not offered for retirement again."""
     rec = update_record.load(vault)
     w = _find(rec, wid)
+    if w.get("state") == "retired":
+        raise Refused(f"{wid} is already retired ({w.get('retired')}); it "
+                      f"cannot be kept. Add it again if it is needed.")
     found = plugin_version()
     w["state"], w["kept_at"] = "kept", found[0] if found else None
     update_record.save(vault, rec)

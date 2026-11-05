@@ -1,6 +1,7 @@
 """agent_block.py: the plugin-managed block in a vault's CLAUDE.md and
 AGENTS.md, written by the update (as bookkeeping) and by the scaffold."""
 
+import dataclasses
 import json
 import os
 import shutil
@@ -224,6 +225,32 @@ class UpdateTests(unittest.TestCase):
         self.assertTrue(any("AGENTS.md" in x and END in x for x in lines), lines)
         self.assertIn(BEGIN, read(vault / "CLAUDE.md"))
 
+    def test_a_newly_broken_file_is_could_not_read_not_done(self):
+        vault = make_vault(self, version=PLUGIN)
+        (vault / "CLAUDE.md").write_text("# Mine\n", encoding="utf-8")
+        (vault / "AGENTS.md").write_text("# Also\n", encoding="utf-8")
+        real = the_check().find
+
+        def find_then_break(v):
+            items = real(v)
+            (v / "AGENTS.md").write_text(f"{BEGIN}\nno end\n", encoding="utf-8")
+            return items
+        check = dataclasses.replace(the_check(), find=find_then_break)
+        res = update.run(vault, {}, True, checks=[check], home=self.home)
+        self.assertEqual(res.exit, 0, res.error)
+        self.assertEqual(len(res.read_problems), 1, res.read_problems)
+        self.assertIn("AGENTS.md", res.read_problems[0])
+        self.assertFalse(any("AGENTS.md" in d and END in d for d in res.did))
+
+    def test_a_second_begin_before_the_end_leaves_the_file_alone(self):
+        vault = folder(self)
+        text = f"{BEGIN}\nold\n\n# Mine\n{BEGIN}\nnew\n{END}\n"
+        (vault / "CLAUDE.md").write_text(text, encoding="utf-8")
+        changes, problems = agent_block.plan(vault)
+        self.assertEqual(changes, [])
+        self.assertEqual(len(problems), 1)
+        self.assertEqual(read(vault / "CLAUDE.md"), text)
+
     @unittest.skipIf(os.name != "posix" or os.geteuid() == 0,
                      "needs file permissions that bite")
     def test_an_unreadable_claude_md_is_a_read_problem_in_the_update(self):
@@ -248,6 +275,16 @@ class ScaffoldTests(unittest.TestCase):
         self.assertIsNotNone(rec["swept"])
         self.assertEqual(rec["swept_memory"], "none (a new vault)")
         self.assertEqual(rec["workarounds"], [])
+
+    def test_a_vault_with_notes_keeps_the_sweep_to_do(self):
+        vault = folder(self) / "V"
+        (vault / "PCs").mkdir(parents=True)
+        (vault / "PCs" / "Six.md").write_text("# Six\n", encoding="utf-8")
+        pieces = vs.missing(vault, "coc-7e", campaign="V", version=PLUGIN)
+        (piece,) = [p for p in pieces if p.rel == "_meta/update-record.json"]
+        rec = json.loads(piece.text())
+        self.assertIsNone(rec["swept"])
+        self.assertIsNone(rec["swept_memory"])
 
     def test_a_set_up_vault_gets_no_record_from_the_scaffold(self):
         vault = make_vault(self, version=PLUGIN)

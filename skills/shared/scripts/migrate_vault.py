@@ -1235,6 +1235,7 @@ def find_wrapup_sections_key(vault: Path) -> list[Item]:
 
 
 AGENT_BLOCK_UNREADABLE = "agent-block-unreadable:"
+AGENT_BLOCK_BROKE = "\x00unreadable:"   # an apply line the update files as Could not read
 
 
 def find_skeleton(vault: Path) -> list[Item]:
@@ -1283,7 +1284,12 @@ def find_agent_block(vault: Path) -> list[Item]:
             # Planned again: a file may have changed since the find. One
             # that broke since is said here, as the find would have.
             fresh, broke = agent_block.plan(vault)
-            return agent_block.write(vault, fresh) + broke
+            # Only files that broke since the find are new; the find
+            # already said the rest. The prefix routes them to Could not
+            # read in the update.
+            return agent_block.write(vault, fresh) + [
+                AGENT_BLOCK_BROKE + line for line in broke
+                if line not in problems]
         items.append(Item("agent-block", WILL,
                           [f"write the plugin's block in {c.rel}"
                            for c in changes], apply))

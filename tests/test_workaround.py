@@ -210,6 +210,7 @@ class MemoryFolderTests(Base):
         self.odd = self.vault.parent / f"{self.vault.name}_My Vault.x"
         self.vault.rename(self.odd)
         self.vault = self.odd
+        self.addCleanup(shutil.rmtree, self.odd, ignore_errors=True)
         name = "".join(c if c.isalnum() else "-" for c in str(self.vault))
         self.memory = self.home_dir / ".claude" / "projects" / name / "memory"
 
@@ -333,6 +334,36 @@ class BeforeReleaseTests(Base):
 
 
 class OfferTests(Base):
+    def test_an_unknown_state_is_a_note_not_a_crash(self):
+        self.swept()
+        self.add()
+        rec = self.record()
+        rec["workarounds"][0]["state"] = "actve"
+        update_record.save(self.vault, rec)
+        res = self.update()
+        self.assertEqual((res.exit, res.questions), (0, []))
+        self.assertTrue(any("state 'actve'" in n and "fix it there" in n
+                            for n in res.notes), res.notes)
+
+    def test_a_non_list_where_is_a_note_not_a_crash(self):
+        self.swept()
+        self.add()
+        rec = self.record()
+        rec["workarounds"][0]["where"] = 5
+        update_record.save(self.vault, rec)
+        res = self.update()
+        self.assertEqual((res.exit, res.questions), (0, []))
+        self.assertTrue(any("where" in n and "not a list" in n
+                            for n in res.notes), res.notes)
+
+    def test_keep_on_a_retired_workaround_is_refused(self):
+        w = self.add()
+        workaround.retire(self.vault, w["id"], "built in")
+        code, _, err = wa(self.vault, "keep", w["id"])
+        self.assertNotEqual(code, 0)
+        self.assertIn("already retired", err)
+        self.assertEqual(self.record()["workarounds"][0]["state"], "retired")
+
     def test_a_shipped_workaround_is_asked(self):
         self.swept()
         self.add()

@@ -71,7 +71,10 @@ def refreshed(text: str) -> str | None:
         return text + tail + eol + block(eol) + eol
     end = next((i for i in range(start + 1, len(lines))
                 if _bare(lines[i]) == END), None)
-    if end is None:
+    # A second BEGIN before the END means the first has none: where the
+    # block ends is unclear, so the file is left alone and said.
+    if end is None or any(_bare(lines[i]).startswith(BEGIN_PREFIX)
+                          for i in range(start + 1, end)):
         return None
     ending = lines[end][len(lines[end].rstrip("\r\n")):]
     marker = lines[start]
@@ -85,8 +88,8 @@ def refreshed(text: str) -> str | None:
 
 
 def missing_end(rel: str) -> str:
-    return (f"{rel} has the gm-apprentice block's BEGIN marker but no "
-            f"`{END}` after it, so it was left as it is. Fix it by hand: "
+    return (f"{rel} has a gm-apprentice block BEGIN marker with no "
+            f"`{END}` after it before the next BEGIN, so it was left as it is. Fix it by hand: "
             f"add the END line where the block should stop, then run the "
             f"update again.")
 

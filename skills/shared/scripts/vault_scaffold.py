@@ -252,6 +252,7 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
     the update tool's own check; `pages=False` leaves out the four one-off
     pages (world index, world flags, Timeline, Player Characters)."""
     types, has_world_index, has_chapter = _types_in(vault)
+    fresh = not (vault.is_dir() and any(True for _ in vault_files(vault)))
     day = today or datetime.date.today().isoformat()
     out: list[Piece] = []
 
@@ -307,11 +308,12 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
         for change in changes:
             out.append(Piece(change.rel, partial(str, change.text),
                              merge=(vault / change.rel).exists()))
-    # A new vault has no workarounds from before they were recorded, so its
-    # one-time sweep is done: its first update does not ask for one.
+    # A vault made empty has no workarounds from before they were recorded,
+    # so its one-time sweep is done. One that already holds notes (adopted,
+    # no settings file yet) keeps the sweep to do.
     file(update_record.RECORD_FILE, lambda: update_record.dumps(
-        {**update_record.empty(), "swept": day,
-         "swept_memory": NEW_VAULT_SWEPT}), present=has_settings)
+        {**update_record.empty(), "swept": day, "swept_memory": NEW_VAULT_SWEPT}
+        if fresh else update_record.empty()), present=has_settings)
     # The index is rendered when it is written, after the files above exist.
     file("_meta/index.md",
          lambda: index_build.render(vault, today=day, previous=None))

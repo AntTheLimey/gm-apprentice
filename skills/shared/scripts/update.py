@@ -309,6 +309,12 @@ def _offers(record: update_record.Record, plugin_v: str,
         out.notes.append(NO_SWEEP)
     active: list[update_record.Workaround] = []
     for w in record["workarounds"]:
+        if (isinstance(w, dict) and w.get("id")
+                and w.get("state") not in ("active", "kept", "retired")):
+            out.notes.append(f"{w['id']} has state '{w.get('state')}' in "
+                             f"{update_record.RECORD_FILE}, not active, kept "
+                             f"or retired, so it was not checked; fix it there.")
+            continue
         if not (isinstance(w, dict) and w.get("state") == "active"
                 and w.get("id")):
             continue
@@ -343,7 +349,13 @@ def _offers(record: update_record.Record, plugin_v: str,
                              f"offered.")
             continue
         item_id = f"{WORKAROUND}{w['id']}"
-        where = ", ".join(str(p) for p in w.get("where") or [])
+        where_list = w.get("where") or []
+        if not isinstance(where_list, list):
+            out.notes.append(f"{w['id']} has where in "
+                             f"{update_record.RECORD_FILE} that is not a list, "
+                             f"so it was not offered; fix it there.")
+            continue
+        where = ", ".join(str(p) for p in where_list)
         quoted = note.cited.get(str(release), []) if note else []
         cite = (f"The {release} release notes mention #{issue}: "
                 f"{_first_line(quoted)}." if quoted else
@@ -622,7 +634,8 @@ def _one(run: _Run, check: Check, item: Item, given: dict[str, Given],
         return
     if not _asks(check, item):
         run.before_write()
-        _did(check, item.apply(None) if item.apply else [], run.did)
+        _did(check, _unreadable(res, item.apply(None) if item.apply else []),
+             run.did)
         return
     answer, now = _answer_for(item, given, known, res)
     if answer is not None and not now:
@@ -656,6 +669,16 @@ def _one(run: _Run, check: Check, item: Item, given: dict[str, Given],
     run.asked.append(item.id)
     run.new[item.id] = {"answer": answer, "lines_sha": lines_sha(item.lines),
                         "on": _today(), "plugin": run.plugin_v}
+
+
+def _unreadable(res: UpdateResult, lines: list[str]) -> list[str]:
+    """The apply lines for Done; a file that broke since the find goes to
+    Could not read instead."""
+    import migrate_vault
+    mark = migrate_vault.AGENT_BLOCK_BROKE
+    res.read_problems.extend(_row(x[len(mark):]) for x in lines
+                             if x.startswith(mark))
+    return [x for x in lines if not x.startswith(mark)]
 
 
 def _did(check: Check, lines: list[str], did: dict[str, None]) -> None:
