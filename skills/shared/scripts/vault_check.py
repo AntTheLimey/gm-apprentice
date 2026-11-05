@@ -215,7 +215,6 @@ from vaultlib import (  # noqa: F401
     settings,
     settings_add,
     settings_carry,
-    setting_name,
     settings_describe,
     settings_raw,
     settings_set,
@@ -1335,7 +1334,7 @@ def vault_settings(vault: Path) -> Settings:
 
 
 def no_site_dir(vault: Path) -> str:
-    return f"{setting_name(vault, 'player_site.folder')} is not set"
+    return "player_site.folder is not set"
 
 
 def _site_config(vault: Path) -> tuple[Path | None, str | None]:
@@ -1350,7 +1349,7 @@ def _site_config(vault: Path) -> tuple[Path | None, str | None]:
         return None, no_site_dir(vault)
     if not has_config:
         return None, (f"no vault.config.json in "
-                      f"{setting_name(vault, 'player_site.folder')} ({site})")
+                      f"player_site.folder ({site})")
     return site / "vault.config.json", None
 
 
@@ -1683,7 +1682,7 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
         has_site = site_without_tool(settings(vault))
         if has_site:
             fix += (f"; if this vault has no site, set "
-                    f"{setting_name(vault, 'player_site.publish')}: false "
+                    "player_site.publish: false "
                     f"in {settings_file(vault)}")
         elif fix == node_fix:
             # The site is off and only node is missing: there is nothing a
@@ -1700,14 +1699,14 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
                 "fix what it lists"), True
         return None, site_is_off(vault), None, False
     if site is None:
-        on_name = setting_name(vault, "player_site.publish")
+        on_name = "player_site.publish"
         return None, (f"{on_name} is on but "
-                      f"{setting_name(vault, 'player_site.folder')} names no "
+                      "player_site.folder names no "
                       f"site"), (
             f"set the site up with publish-site, or set {on_name}: false"
             ), True
     if not (site / "vault.config.json").is_file():
-        folder_name = setting_name(vault, "player_site.folder")
+        folder_name = "player_site.folder"
         return None, (f"no vault.config.json in {folder_name} "
                       f"({site.as_posix()})"), f"fix {folder_name}", True
     fix = f"run update-pin --site {site.as_posix()}, then run this again"
@@ -1751,7 +1750,7 @@ def _stop_fault(vault: Path) -> bool:
 
 
 def site_is_off(vault: Path) -> str:
-    return f"{setting_name(vault, 'player_site.publish')} is not on"
+    return "player_site.publish is not on"
 
 
 def _resolved_from(site: Path) -> Path | None:
@@ -2891,8 +2890,8 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
             if state.in_code or not state.published:
                 continue
             if state.heading is not None:
-                found = _heading_leak(rel, state, excludes, setting_name(
-                    vault, "player_site.hide.sections"), settled)
+                found = _heading_leak(rel, state, excludes,
+                                      "player_site.hide.sections", settled)
                 was_settled = found == [SETTLED_SKIP]
                 if was_settled:
                     found = []
@@ -4824,7 +4823,7 @@ def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
     an `exclude_sections` the tool cannot read, writes nothing.
     """
     name = "player_site.hide.sections"
-    shown_name = setting_name(vault, name)
+    shown_name = name
     own = settings(vault)
     if own.origins[name] == "fault":
         why = next((f["message"] for f in own.faults if f.get("setting") == name),

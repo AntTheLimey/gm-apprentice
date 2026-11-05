@@ -36,7 +36,7 @@ import sys
 import threading
 import unicodedata
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Literal
@@ -1543,13 +1543,6 @@ class Settings:
     # Whether the file holds the block the site's settings live in
     # (`player_site:`). A key with nothing under it does not count.
     has_site_block: bool
-    # Each setting's name as THIS vault's file writes it (the tool's answer):
-    # the same name on the new file, the old file's name on the old one.
-    names: dict[str, str] = field(default_factory=dict)
-
-    def named(self, name: str) -> str:
-        """`name` as the vault's own file writes it, for a message."""
-        return self.names.get(name, name)
 
     def get(self, name: str) -> Any:
         """The value of `name`; a KeyError for a name that is no setting."""
@@ -1723,7 +1716,6 @@ def settings(vault: Path, *, site_config: Path | None = None) -> Settings:
                 "origins": dict(answer["origins"]),
                 "faults": list(answer["faults"]),
                 "file": dict(answer["file"]),
-                "names": dict(answer.get("written") or {}),
             }
         except (KeyError, TypeError, AttributeError, ValueError) as e:
             raise SettingsUnavailable(
@@ -1732,18 +1724,8 @@ def settings(vault: Path, *, site_config: Path | None = None) -> Settings:
     read = copy.deepcopy(_SETTINGS_CACHE[key])
     return Settings(
         values=read["values"], origins=read["origins"], faults=read["faults"],
-        has_site_block=bool(read["file"].get("hasSiteBlock")),
-        names=read["names"])
+        has_site_block=bool(read["file"].get("hasSiteBlock")))
 
-
-def setting_name(vault: Path, name: str) -> str:
-    """`name` as the vault's own file writes it, for a message to the GM.
-    The tool says (never a table here); when it cannot be asked the new name
-    stands."""
-    try:
-        return settings(vault).named(name)
-    except SettingsUnavailable:
-        return name
 
 
 # The vault file's own words, as against a value that came from the site
@@ -1866,9 +1848,7 @@ def settings_describe(name: str) -> dict[str, Any]:
 
 def settings_raw(vault: Path, name: str | None = None) -> Any:
     """The settings file as written ({} when there is no file), or the
-    value at `name` (None when `name` is not in the file). On the old file
-    a name is asked by the old name (`publish.wrap_up`: the names that exist
-    only there); the new file is asked by the new names. Not cached."""
+    value at `name` (None when `name` is not in the file). Not cached."""
     _check_vault(vault)
     if name is not None:
         _check_names([name])

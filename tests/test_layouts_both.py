@@ -221,13 +221,6 @@ def test_a_misspelt_key_is_fixed(tmp_path, monkeypatch, capsys):
     assert "sectoins" not in text
 
 
-# ---- messages name a setting as THIS vault's file writes it -----------------
-
-def test_a_message_names_the_setting_as_the_vaults_file_writes_it(tmp_path):
-    vault = make_vault(tmp_path)
-    assert vaultlib.setting_name(vault, "player_site.publish") == "player_site.publish"
-
-
 def site_vault(tmp_path, publish):
     import site_fixture
     vault = make_vault(tmp_path, publish)

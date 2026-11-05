@@ -21,7 +21,7 @@ from vault_check import (ExplainAll, ask_publish_tool, check_frontmatter, check_
                          check_pc_body, check_sessions, configured_site,
                          _kept_by_player, semver_below, site_pin, vault_settings)
 from vaultlib import (PublishToolUnavailable, SettingsUnavailable,
-                      forget_settings, google_fonts, set_key, setting_name, settings,
+                      forget_settings, google_fonts, set_key, settings,
                       settings_default, settings_file, settings_raw, settings_remove, settings_set,
                       settings_unset, settings_written, site_switch_written, written_in_vault_file, yaml_scalar)
 
@@ -52,8 +52,8 @@ def find_site_repin(vault: Path) -> list[Item]:
     brought to the plugin's before anything else asks it. `update-pin
     --check` says whether it is; this never reads the pin itself."""
     site, has_config = configured_site(vault)
-    switch = setting_name(vault, "player_site.publish")
-    folder = setting_name(vault, "player_site.folder")
+    switch = "player_site.publish"
+    folder = "player_site.folder"
     if site is None:
         if site_switch_written(settings(vault)) is True:
             raise StepFailed(
@@ -98,7 +98,7 @@ def _drop_mode(vault: Path) -> list[str]:
         settings_unset(vault, [RETIRED_MODE])
     except SettingsUnavailable as e:
         raise StepFailed(f"nothing was changed: {e}") from e
-    return [f"removed {setting_name(vault, RETIRED_MODE)} (no longer used)"]
+    return [f"removed {RETIRED_MODE} (no longer used)"]
 
 
 def _move_full_vault(vault: Path) -> list[str]:
@@ -168,7 +168,7 @@ def find_full_mode(vault: Path) -> list[Item]:
                       f"retired `mode` line was not looked at: {e}"])]
     if origin != "file" or value is None:
         return []
-    name = setting_name(vault, RETIRED_MODE)
+    name = RETIRED_MODE
     if str(value).strip().lower() != "full":
         return [Item(FULL_MODE, WILL, [f"remove {name} (no longer used)"],
                      lambda _v: _drop_mode(vault))]
@@ -219,8 +219,8 @@ def find_publish_site(vault: Path) -> list[Item]:
     has_dir = bool(own.get("player_site.folder"))
     value = "true" if has_dir else "false"
     where = settings_file(vault)
-    switch = setting_name(vault, "player_site.publish")
-    folder = setting_name(vault, "player_site.folder")
+    switch = "player_site.publish"
+    folder = "player_site.folder"
     row = (f"write {switch}: {value} in {where}" if has_dir
            else f"write {switch}: false in {where} (no site "
                 f"folder is named; if this vault has a site, set "
@@ -484,7 +484,7 @@ def find_postbuild(vault: Path) -> list[Item]:
         return []
     if not isinstance(steps, list) or not steps:
         return []
-    name = setting_name(vault, "player_site.after_build")
+    name = "player_site.after_build"
     return [Item("postbuild", PERSON,
                  [f'{name} (settings)\tbuild steps "{" && ".join(map(str, steps))}": '
                   f"{POSTBUILD}"])]
@@ -521,7 +521,7 @@ def find_default_mode(vault: Path) -> list[Item]:
         if value == "leave":
             return ["left the default palette to the reader's device"]
         _set_settings(vault, [("player_site.theme.default_mode", value)])
-        return [f"wrote {setting_name(vault, 'player_site.theme.default_mode')}: "
+        return ["wrote player_site.theme.default_mode: "
                 f"{value}"]
 
     return [Item("default-mode", CHOICE,
@@ -550,7 +550,7 @@ def find_fonts(vault: Path) -> list[Item]:
 
     def apply(_value: str | None) -> list[str]:
         _set_settings(vault, [("player_site.theme.fonts.source", "self-host")])
-        return [f"wrote {setting_name(vault, 'player_site.theme.fonts.source')}: "
+        return ["wrote player_site.theme.fonts.source: "
                 "self-host; the next build "
                 "downloads the fonts once and serves them from the site"]
 
@@ -623,14 +623,14 @@ def find_exclude_lists(vault: Path) -> list[Item]:
     def line(name: str, default: list) -> str:
         replaced = f" (replacing: {typed[name]})" if name in typed else ""
         return (f"{'replace' if name in typed else 'write'} the built-in "
-                f"{setting_name(vault, name)} ({', '.join(default)}) "
+                f"{name} ({', '.join(default)}) "
                 f"into {where} so you can see and edit it"
                 f"{replaced}; what publishes does not change")
 
     def write(chosen: list[tuple[str, list]]) -> Callable[[str | None], list[str]]:
         def apply(_value: str | None) -> list[str]:
             _set_settings(vault, list(chosen))
-            return [f"wrote {setting_name(vault, name)}: {len(default)} entries"
+            return [f"wrote {name}: {len(default)} entries"
                     for name, default in chosen]
         return apply
 
@@ -738,7 +738,7 @@ def find_retire_steps(vault: Path, release: str = "1.10.63") -> list[Item]:
         if tool is None or semver_below(tool, RETIRED_FROM[name]):
             items.append(Item(
                 f"retire-step:{name}", PERSON,
-                [f"{setting_name(vault, AFTER_BUILD)}\t"
+                [f"{AFTER_BUILD}\t"
                  f'build step "{command}": the site\'s publish tool is '
                  f"{tool or 'not installed'}, and does this step's work from "
                  f"{RETIRED_FROM[name]}; update it (update-pin --site {site}) "
@@ -760,12 +760,12 @@ def find_retire_steps(vault: Path, release: str = "1.10.63") -> list[Item]:
             if name == "optimize-images":
                 # Never without the setting: the pictures would ship unshrunk.
                 _set_settings(vault, [(OPTIMIZE, True)])
-                done.append(f"wrote {setting_name(vault, OPTIMIZE)}: true")
+                done.append(f"wrote {OPTIMIZE}: true")
             try:
                 removed = settings_remove(vault, AFTER_BUILD, same)
                 if not removed:
                     raise StepFailed(f'the build step "{command}" was not in '
-                                     f"{setting_name(vault, AFTER_BUILD)}")
+                                     f"{AFTER_BUILD}")
             except (SettingsUnavailable, StepFailed) as e:
                 if name == "optimize-images":
                     # Put the setting back as it was: the step still runs.
@@ -775,7 +775,7 @@ def find_retire_steps(vault: Path, release: str = "1.10.63") -> list[Item]:
                         settings_unset(vault, [OPTIMIZE])
                 raise StepFailed(str(e)) from e
             done.append(f'removed the build step "{command}" from '
-                        f"{setting_name(vault, AFTER_BUILD)}")
+                        f"{AFTER_BUILD}")
             return done
 
         items.append(Item(f"retire-step:{name}", CHOICE,
