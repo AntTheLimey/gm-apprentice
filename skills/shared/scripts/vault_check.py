@@ -5471,7 +5471,8 @@ def _row_json(r: SettingsRow) -> dict[str, Any]:
 
 def _row_lines(r: SettingsRow, file_name: str) -> list[str]:
     word = {"stop": "STOP", "info": "NOTE"}.get(r.fault["level"], "WARN")
-    lines = [f"{word}\t{file_name}\t{r.fault['message']}"]
+    where = "vault.config.json" if r.fault.get("source") == "site" else file_name
+    lines = [f"{word}\t{where}\t{r.fault['message']}"]
     if r.fix:
         lines.append(f"{'proposed' if r.kind == 'proposed' else 'fix'}: "
                      f"{r.fix}")

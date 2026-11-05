@@ -1698,17 +1698,14 @@ def _target_args(vault: Path, site_config: Path | None = None) -> list[str]:
     args = ["--vault", str(vault)]
     if site_config is not None:
         args += ["--config", str(site_config)]
-    else:
-        # The scripts read the site folder file themselves; the tool must not
-        # also read the one the vault names, or its rows would be said twice.
-        args.append("--no-site-file")
     return args
 
 
 def settings(vault: Path, *, site_config: Path | None = None) -> Settings:
     """Every setting of `vault`, as the publish tool reads it. Asked once
-    per (vault, site_config) for the process. `site_config` is the site
-    folder's vault.config.json, whose old keys take part in the read.
+    per (vault, site_config) for the process. The tool reads the site
+    folder's vault.config.json the vault names (it stops on any key but
+    `vaultPath` there); `site_config` names one explicitly.
 
     The answer is fixed for the process until `settings_set`,
     `settings_unset` or `forget_settings`. Anything else that writes the
