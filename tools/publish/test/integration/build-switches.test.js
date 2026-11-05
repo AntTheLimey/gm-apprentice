@@ -1,21 +1,28 @@
 const { describe, it, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
+const YAML = require('yaml');
 const { build } = require('../../lib/build');
+const { writeSettings, writeSiteConfig } = require('../helpers/vault-files');
 
-const FIXTURE = path.join(__dirname, '..', 'fixtures-legacy', 'with-gurps-pc');
+const FIXTURE = path.join(__dirname, '..', 'fixtures', 'with-gurps-pc');
 const KV_TOML = '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n';
 
-// Builds the with-gurps-pc fixture in a temp site whose vault file carries `publish`
-// (a YAML fragment), and returns the PC page HTML plus every line the build printed.
-function buildSite({ publish = '', siteExtra = {}, wrangler = false, functions = false, pcAppend = '' }) {
+// Builds the with-gurps-pc fixture in a temp site whose settings file carries `publish` (a YAML fragment of the
+// switches, named by their short names), and returns the PC page HTML plus every line the build printed.
+const SHORT = {
+  character_sheets: 'player_site.sheets.show', live_stats: 'player_site.features.live_stats', inbox: 'player_site.features.inbox',
+  pc_prose_sections: 'player_site.sheets.prose_sections', exclude_dirs: 'player_site.hide.folders', exclude_sections: 'player_site.hide.sections',
+};
+function buildSite({ publish = '', wrangler = false, functions = false, pcAppend = '' }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-switches-'));
   roots.push(root);
   const vault = path.join(root, 'vault');
   fs.cpSync(FIXTURE, vault, { recursive: true });
   if (pcAppend) fs.appendFileSync(path.join(vault, 'Characters', 'PCs', 'Karl Brenner.md'), pcAppend);
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-    `---\npublish:\n  system: gurps-4e\n  folder_map:\n    Characters/PCs: characters/pcs\n${publish}---\n`);
+  const set = { 'vault.system': 'gurps-4e', 'player_site.folder_map': { 'Characters/PCs': 'characters/pcs' } };
+  for (const [k, v] of Object.entries(YAML.parse(publish) || {})) set[SHORT[k]] = v;
+  writeSettings(vault, set);
   if (wrangler) fs.writeFileSync(path.join(root, 'wrangler.toml'), KV_TOML);
   if (functions) {
     fs.mkdirSync(path.join(root, 'functions', 'api'), { recursive: true });
@@ -23,7 +30,7 @@ function buildSite({ publish = '', siteExtra = {}, wrangler = false, functions =
     fs.writeFileSync(path.join(root, 'functions', 'api', 'loadout.js'), '// fn');
   }
   const configPath = path.join(root, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs'), ...siteExtra }));
+  writeSiteConfig(configPath, { vaultPath: vault, outputDir: path.join(root, 'docs') });
   const real = { warn: console.warn, log: console.log };
   const lines = [];
   console.warn = (...a) => lines.push(a.join(' '));
@@ -43,15 +50,15 @@ describe('live stats and the inbox follow the switches', () => {
     assert.ok(html.includes('id="cr-root"'), 'chatbox root');
     assert.ok(html.includes('gurps-live.js'), 'live client script');
     assert.ok(html.includes('js/change-request.js'), 'change-request client script');
-    assert.ok(!lines.some((l) => /WARNING: publish\.(live_stats|inbox)/.test(l)), lines.join('\n'));
+    assert.ok(!lines.some((l) => /WARNING: player_site\.features\.(live_stats|inbox)/.test(l)), lines.join('\n'));
   });
 
   it('both on with no KV store: neither appears, and the build says why for each', () => {
     const { html, lines } = buildSite({ publish: '  live_stats: true\n  inbox: true\n' });
     assert.ok(!html.includes('id="cr-root"'));
     assert.ok(!html.includes('gurps-live.js'));
-    assert.ok(lines.some((l) => l.includes('WARNING: publish.live_stats is on but this site has no KV store wired')), lines.join('\n'));
-    assert.ok(lines.some((l) => l.includes('WARNING: publish.inbox is on but this site has no KV store wired')), lines.join('\n'));
+    assert.ok(lines.some((l) => l.includes('WARNING: player_site.features.live_stats is on but this site has no KV store wired')), lines.join('\n'));
+    assert.ok(lines.some((l) => l.includes('WARNING: player_site.features.inbox is on but this site has no KV store wired')), lines.join('\n'));
   });
 
   it('switches unset with the backend not deployed: nothing appears and nothing is warned', () => {
@@ -65,59 +72,48 @@ describe('live stats and the inbox follow the switches', () => {
     const { html, lines } = buildSite({ wrangler: true, functions: true });
     assert.ok(!html.includes('id="cr-root"'));
     assert.ok(!html.includes('gurps-live.js'));
-    assert.strictEqual(lines.filter((l) => l.includes('WARNING: live stats are deployed on this site but publish.live_stats is not set, so they are off. Set publish.live_stats to true to keep them, or to false to remove their functions.')).length, 1, lines.join('\n'));
-    assert.strictEqual(lines.filter((l) => l.includes('WARNING: the inbox is deployed on this site but publish.inbox is not set, so it is off. Set publish.inbox to true to keep it, or to false to remove its functions.')).length, 1, lines.join('\n'));
+    assert.strictEqual(lines.filter((l) => l.includes('WARNING: live stats are deployed on this site but player_site.features.live_stats is not set, so they are off. Set player_site.features.live_stats to true to keep them, or to false to remove their functions.')).length, 1, lines.join('\n'));
+    assert.strictEqual(lines.filter((l) => l.includes('WARNING: the inbox is deployed on this site but player_site.features.inbox is not set, so it is off. Set player_site.features.inbox to true to keep it, or to false to remove its functions.')).length, 1, lines.join('\n'));
   });
 
   it('character_sheets off forces live stats off, with one line saying so', () => {
     const { html, lines } = buildSite({ publish: '  character_sheets: false\n  live_stats: true\n', wrangler: true, functions: true });
     assert.ok(!html.includes('gurps-live.js'));
-    const said = lines.filter((l) => l.includes('publish.live_stats is on but publish.character_sheets is off; live stats are not published'));
+    const said = lines.filter((l) => l.includes('player_site.features.live_stats is on but player_site.sheets.show is off; live stats are not published'));
     assert.strictEqual(said.length, 1, lines.join('\n'));
   });
 });
 
-describe('an unmigrated site that loses live stats or the inbox is told', () => {
+describe('a site that would lose live stats or the inbox is told', () => {
   // The update does not switch these on, so the line says what works now: set the switch (#382). It never sends the GM to migrate.py.
-  const LIVE = 'WARNING: live stats are deployed on this site but publish.live_stats is not set, so they are off. Set publish.live_stats to true to keep them, or to false to remove their functions.';
-  const INBOX = 'WARNING: the inbox is deployed on this site but publish.inbox is not set, so it is off. Set publish.inbox to true to keep it, or to false to remove its functions.';
+  const LIVE = 'WARNING: live stats are deployed on this site but player_site.features.live_stats is not set, so they are off. Set player_site.features.live_stats to true to keep them, or to false to remove their functions.';
+  const INBOX = 'WARNING: the inbox is deployed on this site but player_site.features.inbox is not set, so it is off. Set player_site.features.inbox to true to keep it, or to false to remove its functions.';
   const said = (lines, text) => lines.filter((l) => l.includes(text)).length;
   const deployed = { wrangler: true, functions: true };
-
-  it('old settings left, both switches unset, backend deployed: one warning each, none sending the GM to migrate.py', () => {
-    const { lines, html } = buildSite({ ...deployed, siteExtra: { siteTitle: 'Old' } });
-    assert.strictEqual(said(lines, LIVE), 1, lines.join('\n'));
-    assert.strictEqual(said(lines, INBOX), 1, lines.join('\n'));
-    assert.ok(!lines.some((l) => l.includes('migrate.py') && /live stats|inbox/.test(l)), lines.join('\n'));
-    assert.ok(!html.includes('gurps-live.js'), 'unset still means off');
-  });
 
   it('a site with only deployment keys is not sent to migrate.py: the other wording applies', () => {
     const { lines } = buildSite({ ...deployed });
     assert.strictEqual(said(lines, 'were on for this site'), 0, lines.join('\n'));
     assert.strictEqual(said(lines, 'was on for this site'), 0, lines.join('\n'));
-    assert.strictEqual(said(lines, 'publish.live_stats is not set, so they are off'), 1, lines.join('\n'));
-    assert.strictEqual(said(lines, 'publish.inbox is not set, so it is off'), 1, lines.join('\n'));
+    assert.strictEqual(said(lines, 'player_site.features.live_stats is not set, so they are off'), 1, lines.join('\n'));
+    assert.strictEqual(said(lines, 'player_site.features.inbox is not set, so it is off'), 1, lines.join('\n'));
     assert.ok(!lines.some((l) => l.includes('migrate.py')), lines.join('\n'));
   });
 
-  it('a switch set either way, in either file, is not warned', () => {
-    const a = buildSite({ ...deployed, publish: '  live_stats: false\n  inbox: true\n', siteExtra: { siteTitle: 'Old' } });
+  it('a switch set either way is not warned', () => {
+    const a = buildSite({ ...deployed, publish: '  live_stats: false\n  inbox: true\n' });
     assert.strictEqual(said(a.lines, LIVE), 0, a.lines.join('\n'));
     assert.strictEqual(said(a.lines, INBOX), 0, a.lines.join('\n'));
-    const b = buildSite({ ...deployed, siteExtra: { backend: { statusBar: false, inbox: false } } });
-    assert.strictEqual(said(b.lines, LIVE), 0, b.lines.join('\n'));
-    assert.strictEqual(said(b.lines, INBOX), 0, b.lines.join('\n'));
-    for (const r of [a, b]) assert.ok(!r.lines.some((l) => l.includes('is not set, so')), r.lines.join('\n'));
+    assert.ok(!a.lines.some((l) => l.includes('is not set, so')), a.lines.join('\n'));
   });
 
   it('no deployed backend: nothing was lost, so nothing is said', () => {
-    const { lines } = buildSite({ siteExtra: { siteTitle: 'Old' } });
+    const { lines } = buildSite({});
     assert.strictEqual(said(lines, 'on for this site and'), 0, lines.join('\n'));
   });
 
   it('character_sheets off: no live stats warning, the inbox one stays', () => {
-    const { lines } = buildSite({ ...deployed, publish: '  character_sheets: false\n', siteExtra: { siteTitle: 'Old' } });
+    const { lines } = buildSite({ ...deployed, publish: '  character_sheets: false\n' });
     assert.strictEqual(said(lines, LIVE), 0, lines.join('\n'));
     assert.strictEqual(said(lines, INBOX), 1, lines.join('\n'));
     const clean = buildSite({ ...deployed, publish: '  character_sheets: false\n' });
@@ -125,87 +121,6 @@ describe('an unmigrated site that loses live stats or the inbox is told', () => 
     assert.strictEqual(said(clean.lines, 'the inbox is deployed'), 1, clean.lines.join('\n'));
   });
 
-  it('the warnings come with the closing lines, after the campaign-settings one', () => {
-    const { lines } = buildSite({ ...deployed, siteExtra: { siteTitle: 'Old' } });
-    const settings = lines.findIndex((l) => l.includes('still holds campaign settings'));
-    assert.ok(settings >= 0 && lines.findIndex((l) => l.includes(LIVE)) > settings, lines.join('\n'));
-  });
-});
-
-describe('the closing line about campaign settings left in vault.config.json', () => {
-  it('names each key and each list entry still applied, once, and says how to move them', () => {
-    const { lines } = buildSite({
-      publish: '  exclude_dirs: [_meta]\n',
-      siteExtra: { siteTitle: 'Old Title', excludeDirs: ['Secrets'] },
-    });
-    const said = lines.filter((l) => l.includes('WARNING: vault.config.json still holds campaign settings'));
-    assert.strictEqual(said.length, 1, lines.join('\n'));
-    assert.match(said[0], /siteTitle/);
-    assert.match(said[0], /excludeDirs \(ignored; the vault file sets it\)/);
-    assert.match(said[0], /excludeDirs entry "Secrets" is still applied from vault\.config\.json/);
-    assert.ok(said[0].endsWith('Settings left in vault.config.json are planned to stop being read in plugin 1.11.0. Run `migrate.py <vault>` to move them.'), said[0]);
-  });
-
-  it('a site-file exclusion the vault list lacks keeps hiding its section everywhere', () => {
-    const { lines, root } = buildSite({
-      publish: '  exclude_sections: [GM Notes]\n',
-      siteExtra: { excludeSections: ['Keeper Only'] },
-      pcAppend: '\n## Keeper Only\n\nZorblatt the unspeakable.\n',
-    });
-    const walk = (d) => fs.readdirSync(d, { withFileTypes: true })
-      .flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
-    const files = walk(path.join(root, 'docs'));
-    assert.ok(files.length > 3);
-    for (const f of files) {
-      if (/\.(png|jpe?g|webp|woff2?)$/.test(f)) continue;
-      assert.ok(!/zorblatt/i.test(fs.readFileSync(f, 'utf8')), `${path.relative(root, f)} carries the section`);
-    }
-    const said = lines.filter((l) => l.includes('still holds campaign settings'));
-    assert.strictEqual(said.length, 1, lines.join('\n'));
-    assert.match(said[0], /excludeSections entry "Keeper Only" is still applied from vault\.config\.json/);
-  });
-
-  it('a site file landingTagline is named but never put on the landing page', () => {
-    const { root, lines } = buildSite({ siteExtra: { landingTagline: 'TAGLINE-FROM-SITE-FILE' } });
-    const index = fs.readFileSync(path.join(root, 'docs', 'index.html'), 'utf8');
-    assert.ok(!index.includes('TAGLINE-FROM-SITE-FILE'), 'the landing page carries the site file tagline');
-    assert.ok(lines.some((l) => l.includes('landingTagline')), lines.join('\n'));
-  });
-
-  it('names landingTagline and backend, either of which gives the migration work', () => {
-    for (const [extra, key] of [[{ landingTagline: 'Hi' }, 'landingTagline'], [{ backend: { inbox: false } }, 'backend']]) {
-      const { lines } = buildSite({ siteExtra: extra });
-      const said = lines.filter((l) => l.includes('still holds campaign settings'));
-      assert.strictEqual(said.length, 1, lines.join('\n'));
-      assert.ok(said[0].includes(`settings: ${key}.`), said[0]);
-    }
-  });
-
-  it('a site-file hiding list that is not a list stops the build, naming the site file\'s key once (#373)', () => {
-    assert.throws(() => buildSite({ siteExtra: { excludeSections: 'Keeper Only' } }), (err) => {
-      assert.match(err.message, /^build stopped: the settings have a fault that could show players more than you meant\./);
-      assert.strictEqual(err.message.split('excludeSections').length - 1, 1, err.message);
-      assert.match(err.message, /excludeSections in the site folder's vault\.config\.json is "Keeper Only"/);
-      assert.ok(!err.message.includes('publish.exclude_sections'), err.message);
-      return true;
-    });
-  });
-
-  it('a list holding only entries that cannot be moved is named by hand and never sent to migrate.py', () => {
-    const { lines } = buildSite({ siteExtra: { excludeDirs: [null] } });
-    const clause = lines.filter((l) => l.includes('excludeDirs in vault.config.json holds entries that are not text and cannot be moved; remove them or the key by hand'));
-    assert.strictEqual(clause.length, 1, lines.join('\n'));
-    assert.ok(!lines.some((l) => l.includes('migrate.py') || l.includes('still holds campaign settings')), lines.join('\n'));
-    const both = buildSite({ siteExtra: { excludeDirs: [null], siteTitle: 'Old' } });
-    const settings = both.lines.filter((l) => l.includes('still holds campaign settings'));
-    assert.strictEqual(settings.length, 1, both.lines.join('\n'));
-    assert.ok(settings[0].includes('settings: siteTitle.') && !settings[0].includes('excludeDirs'), settings[0]);
-  });
-
-  it('is absent when the site file holds only deploy keys', () => {
-    const { lines } = buildSite({});
-    assert.ok(!lines.some((l) => l.includes('still holds campaign settings')));
-  });
 });
 
 describe('the PC keep-list reaches the search index', () => {
@@ -229,7 +144,7 @@ describe('the PC keep-list reaches the search index', () => {
 describe('a malformed pc_prose_sections', () => {
   it('prints a warning in the build output and never keeps everything', () => {
     const { lines, root } = buildSite({ publish: '  character_sheets: false\n  pc_prose_sections: everything\n' });
-    assert.ok(lines.some((l) => l.includes('WARNING: publish.pc_prose_sections is "everything"')), lines.join('\n'));
+    assert.ok(lines.some((l) => l.includes('WARNING: player_site.sheets.prose_sections is "everything"')), lines.join('\n'));
     assert.ok(!fs.readFileSync(path.join(root, 'docs', 'search-index.json'), 'utf8').includes('"broadsword"'));
   });
 });
