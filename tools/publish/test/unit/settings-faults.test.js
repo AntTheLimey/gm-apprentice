@@ -59,7 +59,7 @@ test('a switch that cannot be read is off, never on', () => {
 });
 
 test('keys under an open map are never unknown', () => {
-  const r = read('player_site:\n  folder_map:\n    "My Folder": mine\n  banners:\n    locations: a.png\n  hide:\n    field_exceptions:\n      "NPCs/Vex.md":\n        include: [secrets]\n  landing:\n    explore_descriptions:\n      anything: text\n');
+  const r = read('player_site:\n  folder_map:\n    "My Folder": mine\n  lists:\n    banners:\n      locations: a.png\n  hide:\n    field_exceptions:\n      "NPCs/Vex.md":\n        include: [secrets]\n  landing:\n    explore_descriptions:\n      anything: text\n');
   assert.deepEqual(r.faults, []);
 });
 

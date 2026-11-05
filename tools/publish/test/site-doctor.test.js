@@ -16,7 +16,7 @@ function write(root, rel, body) {
 }
 
 // A site directory whose vault.config.json points at `vaultPath`.
-function siteFor(vaultPath, extra = {}) {
+function siteFor(vaultPath, extra = {}, { raw = false } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-'));
   const configPath = path.join(dir, 'vault.config.json');
   const config = Object.assign({
@@ -32,9 +32,9 @@ function siteFor(vaultPath, extra = {}) {
       Chapters: 'chapters',
     },
   }, extra);
-  // A vault on the settings file takes these as settings; one without keeps them in the site file.
-  if (!Object.keys(extra).length && fs.existsSync(path.join(vaultPath, '_meta', 'vault-config.yaml'))) writeSiteConfig(configPath, config, 2);
-  else fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+  // The campaign keys are the vault's settings; a test that wants them left in the site file passes `raw`.
+  if (raw) fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+  else writeSiteConfig(configPath, config, 2);
   return { dir, configPath };
 }
 
@@ -111,52 +111,14 @@ describe('doctor --site', () => {
     } finally { buildModule.build = realBuild; }
   });
 
-  it('a vault still on the old file: one note, whose words depend on whether the site\'s tool is ours', async () => {
-    const vault = settingsVault('  mode: player\n');
-    const { dir, configPath } = siteFor(vault);
-    const pin = (spec) => fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ dependencies: { 'gm-apprentice-publish': spec } }));
-    const notes = async () => {
-      const cap = capture();
-      await runSiteDoctor({ configPath, json: true }, cap.deps);
-      return JSON.parse(cap.text()).findings.filter((f) => f.code === 'SETTINGS_FILE_OLD');
-    };
-    assert.deepEqual(await notes(), [], 'no package.json: nothing to say');
-    pin('file:/cache/gm-apprentice/1.10.54/tools/publish');
-    const ours = await notes();
-    assert.equal(ours.length, 1);
-    assert.equal(ours[0].detail, 'this vault is still on the old settings file; the next update moves it');
-    pin('^1.20.0');
-    const theirs = await notes();
-    assert.equal(theirs.length, 1);
-    assert.match(theirs[0].detail, /stays on the old settings file because its site's tool \(\^1\.20\.0\) cannot read the new one\. When that tool is 1\.23\.0 or later, run the update again\./);
-    pin('^1.24.0');
-    const fine = await notes();
-    assert.equal(fine.length, 1);
-    assert.equal(fine[0].detail, 'this vault is still on the old settings file; the next update moves it');
-  });
-
-  it('an old tool installed in a site folder with no package.json is said to hold the vault, as the move holds it', async () => {
-    const { dir, configPath } = siteFor(settingsVault('  mode: player\n'));
-    const pkg = path.join(dir, 'node_modules', 'gm-apprentice-publish');
-    fs.mkdirSync(pkg, { recursive: true });
-    fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: 'gm-apprentice-publish', version: '1.22.0' }));
-    const cap = capture();
-    await runSiteDoctor({ configPath, json: true }, cap.deps);
-    const notes = JSON.parse(cap.text()).findings.filter((f) => f.code === 'SETTINGS_FILE_OLD');
-    assert.equal(notes.length, 1);
-    assert.match(notes[0].detail, /stays on the old settings file because its site's tool \(1\.22\.0\) cannot read the new one/);
-  });
-
   it('a setting left in the site folder\'s file is fixed in vault.config.json, not in the vault\'s settings file', async () => {
-    const vault = settingsVault('  mode: player\n');
-    fs.unlinkSync(path.join(vault, '_meta', 'vault-config.md'));
-    write(vault, '_meta/vault-config.yaml', 'version: 1\n');
-    const { configPath } = siteFor(vault, { siteTitle: 'Left Behind' });
+    const vault = newSettingsVault({ version: 1 });
+    const { configPath } = siteFor(vault, { siteTitle: 'Left Behind' }, { raw: true });
     const cap = capture();
     await runSiteDoctor({ configPath, json: true }, cap.deps);
     const row = JSON.parse(cap.text()).findings.find((f) => f.code === 'SETTINGS_FAULT' && f.path === 'vault.config.json');
     assert.ok(row, cap.text());
-    assert.match(row.fix, /remove it from vault\.config\.json/);
+    assert.match(row.detail, /leave only vaultPath in vault\.config\.json/);
   });
 
   it('a look-side settings fault is a warning finding, and the audit goes on to build', async () => {
@@ -198,6 +160,7 @@ describe('doctor --site', () => {
     write(other, 'Characters/NPCs/Fine.md', '---\ntype: npc\n---\n\nNothing wrong.\n');
     const audited = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-audited-'));
     write(audited, 'Characters/NPCs/Odd.md', '---\ntype: npc\n---\n\nWe were 100%% done and 50%% off.\n');
+    writeSettings(audited, { 'player_site.folder_map': { 'Characters/NPCs': 'characters/npcs' } });
     const { configPath } = siteFor(other);
     const cap = capture();
     await runSiteDoctor({ configPath, vaultPath: audited, json: true }, cap.deps);
@@ -227,7 +190,7 @@ describe('doctor --site', () => {
       write(vault, `Characters/NPCs/Odd_${n}.md`, `---\ntype: npc\n${fields.map(shape).join('\n')}\n---\n\nFine.\n`);
     }
     const { configPath } = siteFor(vault);
-    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const { config } = require('../lib/config').resolveConfig(JSON.parse(fs.readFileSync(configPath, 'utf8')), vault, () => {});
     const { scanVaultReport } = require('../lib/scanner');
     const { mistyped } = scanVaultReport({ ...config, vaultPath: vault, folderMap: config.folderMap });
     assert.ok(mistyped.length > 3);
@@ -386,7 +349,7 @@ describe('doctor --site', () => {
   });
 
   it('reports a vaultPath that does not exist as an error', async () => {
-    const { configPath } = siteFor(path.join(os.tmpdir(), 'no-such-vault-' + Date.now()));
+    const { configPath } = siteFor(path.join(os.tmpdir(), 'no-such-vault-' + Date.now()), {}, { raw: true });
     const c = capture();
     const rc = await runSiteDoctor({ configPath, json: true }, c.deps);
     assert.strictEqual(rc, 1);
