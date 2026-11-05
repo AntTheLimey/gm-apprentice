@@ -901,7 +901,7 @@ class SiteFileKeyTests(NewFileBase):
 
     def older_site(self, **keys):
         import site_fixture
-        from test_migrate_move import install_as
+        from migrate_helpers import install_as
         vault, site_file = self.moved_vault_with_site_keys(**keys)
         site = site_file.parent
         site_fixture.pin_site(site, "^1.20.0")

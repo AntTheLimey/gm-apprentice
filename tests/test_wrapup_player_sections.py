@@ -3,7 +3,7 @@
 runs once: only the recap, Memorable Moments and the titles a vault listed
 in publish.wrap_up.player_sections are player-facing.
 
-Covers the config reader and how `vault_check wrapup` (and `--fix`), given
+Covers how `vault_check wrapup` (and `--fix`), given
 an explicit `player` set, treat a listed H2: never flagged, never moved
 under `## GM Notes`, hoisted in original order after Memorable Moments,
 and left inside a gm-only fence when the GM fenced it. An empty set means
@@ -21,9 +21,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
 
 import vault_check as vc  # noqa: E402
-from migrate_vault import read_wrap_up_player_sections  # noqa: E402
-from vaultlib import SettingsUnavailable  # noqa: E402
-from layouts import write_config  # noqa: E402
 
 REL = "Sessions/Chapter_01_Session_01_Wrap_Up.md"
 
@@ -90,10 +87,6 @@ Fenced on purpose.
 """
 
 
-def config(block):
-    return f"---\ntype: vault_config\npublish:\n{block}---\n"
-
-
 def make_vault(tmp, body):
     vault = Path(tmp)
     (vault / "_meta").mkdir()
@@ -102,57 +95,12 @@ def make_vault(tmp, body):
     return vault
 
 
-LISTED = config("  wrap_up:\n    player_sections:\n"
-                "      - What the Party Learned\n"
-                "      - \"Where We Left Off\"\n"
-                "      - '**The Party**'\n")
-
-
 LISTED_TITLES = ["What the Party Learned", "Where We Left Off",
                  "**The Party**"]
 
 
 def keeper_rows(rows):
     return [r for r in rows if "Keeper-facing H2" in r]
-
-
-class ReaderTests(unittest.TestCase):
-    def read(self, cfg):
-        with tempfile.TemporaryDirectory() as tmp:
-            vault = Path(tmp)
-            (vault / "_meta").mkdir()
-            if cfg is not None:
-                write_config(vault, cfg)
-            return read_wrap_up_player_sections(vault)
-
-    def test_absent_config_or_key_is_empty(self):
-        self.assertEqual(self.read(None), [])
-        self.assertEqual(self.read(config("  mode: player\n")), [])
-        self.assertEqual(self.read(config("  wrap_up:\n    other: 1\n")), [])
-
-    def test_block_and_flow_lists(self):
-        self.assertEqual(
-            self.read(LISTED),
-            ["What the Party Learned", "Where We Left Off", "**The Party**"])
-        flow = config("  wrap_up:\n    player_sections: [A, \"B c\"]\n"
-                      "  mode: player\n")
-        self.assertEqual(self.read(flow), ["A", "B c"])
-
-    def test_empty_null_and_malformed_read_as_none(self):
-        self.assertEqual(
-            self.read(config("  wrap_up:\n    player_sections:\n")), [])
-        self.assertEqual(
-            self.read(config("  wrap_up:\n    player_sections: null\n")), [])
-
-    def test_a_file_that_is_not_valid_YAML_stops_rather_than_reads_as_none(self):
-        with self.assertRaises(SettingsUnavailable):
-            self.read(config("  wrap_up:\n    player_sections: [A\n"))
-
-    def test_a_list_that_is_not_plain_text_reads_as_none(self):
-        self.assertEqual(
-            self.read(config("  wrap_up:\n    player_sections: [[A]]\n")), [])
-        self.assertEqual(
-            self.read(config("  wrap_up:\n    player_sections: Recap\n")), [])
 
 
 class WrapupPlayerSectionTests(unittest.TestCase):

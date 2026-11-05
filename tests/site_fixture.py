@@ -25,10 +25,12 @@ BARE = "---\npublish:\n---\n"
 
 
 _SITE: Path | None = None
-_CONFIG = {"vaultPath": ".",
-           "folderMap": {"Characters/NPCs": "characters/npcs",
-                         "Characters/PCs": "characters/pcs",
-                         "Chapters": "chronicle"}}
+_CONFIG = {"vaultPath": "."}
+# The folders test notes live in, so the tool publishes them: a setting of the
+# vault, not of the site folder (which holds only `vaultPath`).
+FOLDER_MAP = {"Characters/NPCs": "characters/npcs",
+              "Characters/PCs": "characters/pcs",
+              "Chapters": "chronicle"}
 
 
 def _link_and_config(site: Path) -> None:
@@ -81,7 +83,7 @@ def shared_site_problem() -> str | None:
     except (OSError, ValueError) as e:
         return f"vault.config.json in {_SITE} cannot be read ({e})"
     if config != _CONFIG:
-        return f"vault.config.json in {_SITE} no longer holds its folderMap"
+        return f"vault.config.json in {_SITE} holds more than vaultPath"
     return None
 
 
@@ -108,8 +110,6 @@ def new_site(vault: Path, cleanup: Callable[[Path], object],
     if _SITE is None:
         _SITE = Path(tempfile.mkdtemp(prefix="vc-site-"))
         _remove_at_exit(_SITE)
-    # The folderMap is for the folders test notes live in, so the tool
-    # publishes them.
     restore_shared_site()
     return _SITE
 
@@ -141,8 +141,10 @@ def with_site(config: str | None, vault: Path,
     child = next((line for line in lines[at + 1:] if line.strip()), "")
     pad = child[:len(child) - len(child.lstrip())] or "  "
     site = new_site(vault, cleanup, private)
-    lines[at + 1:at + 1] = [f"{pad}site: true",
-                            f"{pad}site_dir: {site.as_posix()}"]
+    found = [f"{pad}site: true", f"{pad}site_dir: {site.as_posix()}"]
+    if not re.search(r"^\s*folder_map\s*:", config, re.M):
+        found.append(f"{pad}folder_map: {json.dumps(FOLDER_MAP)}")
+    lines[at + 1:at + 1] = found
     return "\n".join(lines)
 
 
@@ -177,7 +179,8 @@ def give_site(vault: Path, cleanup: Callable[[Path], object],
         subprocess.run(
             ["node", str(TOOL_DIR / "bin" / "gm-publish.js"), "settings", "set",
              "--vault", str(vault), "player_site.publish=true",
-             f"player_site.folder={json.dumps(site.as_posix())}"],
+             f"player_site.folder={json.dumps(site.as_posix())}",
+             f"player_site.folder_map={json.dumps(FOLDER_MAP)}"],
             check=True, capture_output=True, text=True)
         return
     old = vault / "_meta" / "vault-config.md"

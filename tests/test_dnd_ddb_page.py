@@ -49,10 +49,13 @@ def build_site(tmp_path, notes):
     for file_name, text in notes.items():
         (vault / "Characters" / "PCs" / file_name).write_text(text, encoding="utf-8", newline="\n")
     config = tmp_path / "config.json"
-    config.write_text(json.dumps({
-        "vaultPath": str(vault), "outputDir": str(tmp_path / "docs"), "attachmentsDir": "_attachments",
-        "siteTitle": "D&D Page Test", "system": "dnd-5e-2024", "excludeDirs": ["_meta", "_Templates"],
-        "excludeSections": ["GM Notes"], "folderMap": {"Characters/PCs": "characters/pcs"}}), encoding="utf-8")
+    config.write_text(json.dumps({"vaultPath": str(vault)}), encoding="utf-8")
+    (vault / "_meta").mkdir()
+    (vault / "_meta" / "vault-config.yaml").write_text(
+        "version: 1\nvault:\n  attachments: _attachments\n  system: dnd-5e-2024\n"
+        f"player_site:\n  output: {json.dumps(str(tmp_path / 'docs'))}\n  title: D&D Page Test\n"
+        "  hide:\n    folders: [_meta, _Templates]\n    sections: [GM Notes]\n"
+        "  folder_map:\n    Characters/PCs: characters/pcs\n", encoding="utf-8")
     done = subprocess.run([NODE, "-e", BUILD_JS, str(BUILD_LIB), str(config)], capture_output=True, text=True,
                           encoding="utf-8", timeout=180, cwd=str(tmp_path))
     assert done.returncode == 0, done.stderr

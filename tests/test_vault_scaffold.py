@@ -20,9 +20,8 @@ import migrate_vault as mv  # noqa: E402
 import vault_check as vc  # noqa: E402
 import vaultlib as vl  # noqa: E402
 import vault_scaffold as vs  # noqa: E402
-from layouts import on_layout  # noqa: E402
+from layouts import on_layout, write_config  # noqa: E402
 from vaultlib import (PUBLISH_TOOL, extract_frontmatter, plugin_version,  # noqa: E402
-from layouts import write_config  # noqa: E402
                       read_stamp, settings, settings_default, vault_layout)
 
 # The folder a vault keeps its attachments in until it names another: the tool's
