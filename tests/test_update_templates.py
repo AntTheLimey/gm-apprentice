@@ -20,6 +20,7 @@ import migrate_vault as mv  # noqa: E402
 import template_compare as tc  # noqa: E402
 import update_record as ur  # noqa: E402
 from migrate_core import CHOICE, PERSON, WILL, StepFailed  # noqa: E402
+from layouts import write_config  # noqa: E402
 from vaultlib import plugin_version, read_stamp, write_stamp  # noqa: E402
 
 VERSION = plugin_version()[0]
@@ -33,9 +34,9 @@ def make_vault(case, system="coc-7e", version="1.10.12"):
     vault = Path(tempfile.mkdtemp(prefix="updt-"))
     case.addCleanup(shutil.rmtree, vault, ignore_errors=True)
     (vault / "_meta").mkdir()
-    (vault / "_meta" / "vault-config.md").write_text(
-        f'---\ngm_apprentice_version: "{version}"\npublish:\n  system: {system}\n---\n',
-        encoding="utf-8")
+    write_config(
+        vault,
+        f'---\ngm_apprentice_version: "{version}"\npublish:\n  system: {system}\n---\n')
     (vault / "_Templates").mkdir()
     for name, text in mv.expected_templates(vault).items():
         (vault / "_Templates" / name).write_text(text, encoding="utf-8")

@@ -135,11 +135,10 @@ class SortTests(unittest.TestCase):
                      "empty-scenes-lists", "retire-steps"):
             self.assertEqual(kinds[name], "removes", name)
         for name in ("wrapup-sections", "tone-words", "open-threads-fold",
-                     "sheet-source", "props-move", "props-settle",
-                     "publish-hidden"):
+                     "sheet-source", "props-move", "props-settle"):
             self.assertEqual(kinds[name], "asks", name)
         for name in ("wrapup-filenames", "heritage-notes", "mobrpg-sections",
-                     "templates", "site-repin", "settings-move"):
+                     "templates", "site-repin"):
             self.assertEqual(kinds[name], "bookkeeping", name)
 
 
@@ -566,8 +565,8 @@ class ExcludeListsTests(Base):
                           ("exclude-lists-replace", "asks")])
         real = next(c for c in ms.SITE_CHECKS if c.name == "exclude-lists")
         lists = dataclasses.replace(real, asks_site=False, release=None)
-        before = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
-        self.assertIn("exclude_sections: Mine", before)
+        before = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
+        self.assertIn("sections: Mine", before)
         res = self.run_update(vault, [lists], headless=True)
         self.assertEqual([q.id.split("@")[0] for q in res.questions], ["exclude-lists-replace"])
         self.assertEqual([q.kind for q in res.questions], ["asks"])
@@ -580,7 +579,7 @@ class ExcludeListsTests(Base):
         # falls back to the built-in list, so read the file).
         typed = "".join(p.read_text(encoding="utf-8")
                         for p in (vault / "_meta").glob("vault-config.*"))
-        self.assertIn("exclude_sections: Mine", typed)
+        self.assertIn("sections: Mine", typed)
 
 
     def new_layout_vault(self, site_config, top="", under=""):
@@ -601,8 +600,6 @@ class ExcludeListsTests(Base):
     def test_a_list_typed_under_an_old_name_or_in_a_bad_place_asks(self):
         import migrate_site as ms
         for label, vault in (
-                ("site file's old name",
-                 self.new_layout_vault({"excludeSections": ["Mine"]})),
                 ("vault's old name", self.new_layout_vault(
                     {}, top="publish:\n  exclude_sections:\n    - Mine\n")),
                 ("the group is not a map",

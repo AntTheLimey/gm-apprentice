@@ -27,7 +27,7 @@ from template_compare import compare, summary
 from vault_check import (RECONSTRUCTION_NOTE_RE, WRAP_TYPES, WrapDetail, check_wrapup,
                          configured_site, semver_below,
                          site_pin, wrapup_filename_findings)
-from vaultlib import (SKIP_DIRS, SettingsUnavailable, StateUnreadable, entity_type, extract_frontmatter,
+from vaultlib import (SKIP_DIRS, StateUnreadable, entity_type, extract_frontmatter,
                       delete_key, fence_step, frontmatter_span, opens_a_block,
                       parse_version, plugin_version,
                       read_held, read_stamp, scan_body, settings, settings_file,
