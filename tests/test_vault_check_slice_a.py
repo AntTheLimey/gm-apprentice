@@ -2587,12 +2587,13 @@ class NoPublishToolTests(unittest.TestCase):
                 if blank:
                     file = vault / "_meta" / "vault-config.yaml"
                     file.write_text(file.read_text(encoding="utf-8").replace(
-                        "publish:\n", "publish:\n" + blank), encoding="utf-8")
+                        "player_site:\n", "player_site:\n  folder:\n"), encoding="utf-8")
+                    vaultlib.forget_settings(vault)
                 self.assert_stopped(
-                    vault, "publish.site is on but publish.site_dir names no "
-                           "site) — nothing checked, nothing written; set the "
-                           "site up with publish-site, or set publish.site: "
-                           "false")
+                    vault, "player_site.publish is on but player_site.folder "
+                           "names no site) — nothing checked, nothing written; "
+                           "set the site up with publish-site, or set "
+                           "player_site.publish: false")
 
     def test_the_site_on_is_checked_through_its_tool(self):
         vault = make_vault(self, "---\npublish:\n  mode: player\n---\n")
@@ -2633,7 +2634,7 @@ class NoPublishToolTests(unittest.TestCase):
                     vault, "the publish tool exited without answering) — "
                            "nothing checked, nothing written; it needs Node "
                            "22+ on PATH; if this vault has no site, set "
-                           "publish.site: false in _meta/vault-config.yaml")
+                           "player_site.publish: false in _meta/vault-config.yaml")
 
     def test_without_the_lines_tool_a_site_dir_is_a_site(self):
         # The settings read the file with the build's YAML parser: any
@@ -2652,7 +2653,8 @@ class NoPublishToolTests(unittest.TestCase):
     def test_a_vault_file_that_is_not_YAML_stops_the_check_with_the_one_line(self):
         vault = self.vault(False)
         (vault / "_meta" / "vault-config.yaml").write_bytes(
-            b"---\npublish:\n  site_dir: [\n---\n")
+            b"version: 1\nplayer_site:\n  folder: [\n")
+        vaultlib.forget_settings(vault)
         with self.assertRaises(vaultlib.SettingsUnavailable):
             vc.check_gm_leak(vault, None, fix=True)
         self.assertEqual(read(vault, "W.md"), self.WRAP)
@@ -2684,7 +2686,7 @@ class NoPublishToolTests(unittest.TestCase):
         # Broken YAML with no switch and no site_dir: nothing is stopped,
         # but the row says the file is to be fixed.
         refused = vaultlib.PublishToolUnavailable(
-            "the publish tool refused: _meta/vault-config.yaml frontmatter is "
+            "the publish tool refused: _meta/vault-config.yaml is "
             "not valid YAML: bad indentation")
         vault = self.vault(site=False)
         with mock.patch.object(vc, "vault_site", side_effect=refused):
@@ -2911,57 +2913,25 @@ class NoPublishToolTests(unittest.TestCase):
         self.assertIn("exited without answering", rows[0])
         self.assertEqual(read(vault, "Bob.md"), self.LEAKY)
 
-    def test_a_publish_block_is_seen_however_the_file_is_saved(self):
-        block = "publish:\n  mode: player\n"
+    def test_the_site_block_is_seen_however_the_file_is_saved(self):
         for form, data in (
-                ("byte-order mark", ("\ufeff---\n" + block + "---\n").encode()),
-                ("space after the fence", ("--- \n" + block + "---\n").encode()),
-                ("inline", b"---\npublish: {mode: player}\n---\n"),
-                ("double-quoted key", b'---\n"publish":\n  mode: player\n---\n'),
-                ("single-quoted key", b"---\n'publish' :\n  mode: player\n---\n"),
-                ("not utf-8", b"---\n# caf\xe9\n" + block.encode() + b"---\n")):
+                ("byte-order mark", "\ufeffversion: 1\nplayer_site:\n  publish: true\n".encode()),
+                ("inline", b"version: 1\nplayer_site: {publish: true}\n"),
+                ("double-quoted key", b'version: 1\n"player_site":\n  publish: true\n'),
+                ("single-quoted key", b"version: 1\n'player_site' :\n  publish: true\n"),
+                ("flow root", b"{version: 1, player_site: {publish: true}}\n"),
+                ("complex key", b"version: 1\n? player_site\n: {publish: true}\n"),
+                ("not utf-8", b"version: 1\n# caf\xe9\nplayer_site:\n  publish: true\n")):
             with self.subTest(form):
                 vault = make_vault(self, "", site=False)
                 (vault / "_meta" / "vault-config.yaml").write_bytes(data)
-                self.assertEqual(vaultlib.vault_site(vault), (True, False, None))
-        for form, text in (
-                ("indented", "---\n  publish:\n    mode: player\n---\n"),
-                ("complex key", "---\n? publish\n: {mode: player}\n---\n"),
-                ("flow root", "---\n{publish: {mode: player}}\n---\n"),
-                ("merge key", "---\nb: &b {publish: {mode: player}}\n"
-                              "<<: *b\n---\n")):
-            with self.subTest(form):
-                vault = make_vault(self, text, site=False)
-                self.assertEqual(vaultlib.vault_site(vault), (True, False, None))
+                vaultlib.forget_settings(vault)
+                # On, with no folder named: a site still to be set up.
+                self.assertEqual(vaultlib.vault_site(vault), (True, True, None))
         none = make_vault(self, "---\ntype: meta\n---\n", site=False)
         self.assertEqual(vaultlib.vault_site(none), (False, False, None))
         self.assertEqual(vaultlib.vault_site(make_vault(self, meta=False)),
                          (False, False, None))
-
-    def test_a_block_written_on_one_line_is_not_checked_on_a_guess(self):
-        # The gate's tool reads it, but the vault's settings call it out: a
-        # block on one line is not edited or checked here.
-        site = Path(tempfile.mkdtemp(prefix="vc-site-"))
-        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
-        (site / "vault.config.json").write_text("{}", encoding="utf-8")
-        where = site.as_posix()
-        for form, block in (
-                ("one line", "publish: {exclude_sections: [Plot Threads], "
-                             f"site_dir: {where}}}\n"),):
-            with self.subTest(form):
-                vault = make_vault(self, f"---\n{block}---\n")
-                note = ("---\ntype: npc\n---\n\n# Bob\n\n"
-                        "## **Plot Threads**\n\nSECRET\n")
-                (vault / "Bob.md").write_text(note, encoding="utf-8")
-                (vault / "W.md").write_text(self.WRAP, encoding="utf-8")
-                for rows in (vc.check_gm_leak(vault, None, fix=True),
-                             vc.check_wrapup(vault, None, True)):
-                    self.assertEqual(len(rows), 1, rows)
-                    self.assertIn("is written in a way that is not understood "
-                                  "here (on one line)", rows[0])
-                    self.assertIn("nothing checked, nothing written", rows[0])
-                self.assertEqual(read(vault, "Bob.md"), note)
-                self.assertEqual(read(vault, "W.md"), self.WRAP)
 
     def test_a_real_old_tool_prints_its_usage_and_is_refused_in_words(self):
         old = Path(tempfile.mkdtemp(prefix="vc-old-tool-")) / "gm-publish.js"
@@ -5271,10 +5241,9 @@ class PublishToolEndToEndTests(unittest.TestCase):
         site = Path(tempfile.mkdtemp(prefix="vc-e2e-site-"))
         self.addCleanup(shutil.rmtree, site, ignore_errors=True)
         (site / "vault.config.json").write_text(json.dumps({
-            "siteTitle": "T", "vaultPath": str(vault), "outputDir": "./docs",
-            "excludeDirs": ["_meta"],
-            "folderMap": {"Sessions": "sessions"}}), encoding="utf-8")
-        write_config(vault, f"---\npublish:\n  mode: player\n  site_dir: {site}\n---\n")
+            "vaultPath": str(vault)}), encoding="utf-8")
+        write_config(vault, f"---\npublish:\n  site_title: T\n  site_dir: {site}\n"
+                     "  exclude_dirs: [_meta]\n  folder_map:\n    Sessions: sessions\n---\n")
         (vault / "Sessions").mkdir()
         (vault / "Sessions" / "Session 01 - Arrival.md").write_text(
             f"---\ntype: session\nsession_number: 1\nstatus: played\n"
@@ -5347,7 +5316,7 @@ class PublishToolEndToEndTests(unittest.TestCase):
         vault = self.site_vault("", "session_number: 1\n")
         config = vault / "_meta" / "vault-config.yaml"
         config.write_text(config.read_text(encoding="utf-8").replace(
-            "  mode: player\n", "  mode: player\n  mode: gm\n"),
+            "player_site:\n", "player_site:\n  title: A\n  title: B\n"),
             encoding="utf-8")
         # The settings are read first, so the run stops with the tool's
         # reason in one line, not a row about a tool that could not answer.
@@ -5355,8 +5324,8 @@ class PublishToolEndToEndTests(unittest.TestCase):
             vc.check_frontmatter(vault, None)
         line = str(caught.exception)
         self.assertNotIn("\n", line)
-        self.assertIn("_meta/vault-config.yaml frontmatter is not valid YAML: "
-                      "duplicated mapping key", line)
+        self.assertIn("_meta/vault-config.yaml is not valid YAML: "
+                      "Map keys must be unique", line)
 
     def test_a_handouts_keeper_sections_come_from_the_tool(self):
         # #280, against the real tool: it withholds the handout's Context
@@ -5380,7 +5349,7 @@ class PublishToolEndToEndTests(unittest.TestCase):
         vault = self.site_vault("", "")
         config = vault / "_meta" / "vault-config.yaml"
         config.write_text(config.read_text(encoding="utf-8").replace(
-            "  mode: player\n", "  mode: player\n  character_sheets: false\n"),
+            "player_site:\n", "player_site:\n  sheets:\n    show: false\n"),
             encoding="utf-8")
         (vault / "Sessions" / "Hero.md").write_text(
             "---\ntype: pc\n---\n\n## Background\n\nA sailor.\n",
@@ -5389,26 +5358,19 @@ class PublishToolEndToEndTests(unittest.TestCase):
         self.assertFalse(rows_for(rows, "could not be consulted"), rows)
         self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
         config.write_text(config.read_text(encoding="utf-8").replace(
-            "character_sheets: false", "character_sheets: true"),
+            "show: false", "show: true"),
             encoding="utf-8")
         self.assertTrue(rows_for(vc.check_pc_body(vault), "Stat Sheet"))
 
     def test_python_scans_by_the_list_the_build_resolves(self):
-        # Vault file lists GM Notes, site file lists Keeper Only. Python
-        # uses whatever the tool resolves: during the 1.10.x fallback the
-        # build still applies the site entry, so the section is hidden and
-        # the marker is not reported. A silent vault file gives the site
-        # list alone; Python never reads the site file itself.
+        # The vault file's list is the one the tool resolves; Python scans by
+        # that and never reads a list of its own.
         vault = self.site_vault("", "")
         config = vault / "_meta" / "vault-config.yaml"
         config.write_text(config.read_text(encoding="utf-8").replace(
-            "  mode: player\n",
-            '  mode: player\n  exclude_sections: ["GM Notes"]\n'),
+            "  hide:\n",
+            '  hide:\n    sections: ["GM Notes", "Keeper Only"]\n'),
             encoding="utf-8")
-        site = Path(vc.settings(vault).get("player_site.folder"))
-        site_cfg = json.loads((site / "vault.config.json").read_text(encoding="utf-8"))
-        site_cfg["excludeSections"] = ["Keeper Only"]
-        (site / "vault.config.json").write_text(json.dumps(site_cfg), encoding="utf-8")
         (vault / "Sessions" / "Bob.md").write_text(
             "---\ntype: npc\n---\n\n# Bob\n\nA sailor.\n\n"
             "## Keeper Only\n\n**Keeper-only:** Bob is the Baron.\n",
@@ -5418,8 +5380,9 @@ class PublishToolEndToEndTests(unittest.TestCase):
         self.assertFalse(rows_for(rows, "could not be consulted"), rows)
         self.assertFalse(rows_for(rows, marker), rows)
         config.write_text(config.read_text(encoding="utf-8").replace(
-            '  exclude_sections: ["GM Notes"]\n', ""), encoding="utf-8")
-        self.assertFalse(rows_for(vc.check_gm_leak(vault, None), marker))
+            '"GM Notes", "Keeper Only"', '"GM Notes"'), encoding="utf-8")
+        vaultlib.forget_settings(vault)
+        self.assertTrue(rows_for(vc.check_gm_leak(vault, None), marker))
 
     def test_manifest_rows_follow_publish_played(self):
         # The real `manifest publish-played --dry-run --json --vault`: a
