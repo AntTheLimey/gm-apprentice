@@ -113,7 +113,7 @@ describe('leaks', () => {
       fs.writeFileSync(path.join(vaultOf(site), '_meta', 'publish-manifest.md'), '## Publishing\n\n- [x] NPCs/A.md\n- [x] NPCs/B.md\n');
       leakInto(site.outputDir, 'npcs/b.html', 'The baker poisoned the mayor last winter.');
       await assert.rejects(run(site, 'accept', { page: 'npcs/b.html', text: 'The baker poisoned the mayor last winter.' }),
-        /_meta\/publish-manifest\.md is the old publish list, no longer read since plugin 1\.11\.0\. Run the update with plugin 1\.10\.134 first\./);
+        /_meta\/publish-manifest\.md is the old publish list, no longer read since plugin 1\.11\.0\. Run the update with a 1\.10 release, 1\.10\.134 or later, first\./);
       assert.ok(fs.readFileSync(path.join(vaultOf(site), '_meta', 'publish-list.yaml'), 'utf8') === NOTES['_meta/publish-list.yaml']);
     } finally { site.cleanup(); }
   });

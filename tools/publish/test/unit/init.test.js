@@ -446,7 +446,7 @@ describe('init', () => {
         await fs.writeFile(path.join(vault, '_meta', 'vault-config.md'), original);
         const site = path.join(tmpDir, 'site');
         await assert.rejects(() => init(site, { vaultPath: vault }),
-          /_meta\/vault-config\.md is the old settings file, no longer read since plugin 1\.11\.0\. Run the update with plugin 1\.10\.134 first\./);
+          /_meta\/vault-config\.md is the old settings file, no longer read since plugin 1\.11\.0\. Run the update with a 1\.10 release, 1\.10\.134 or later, first\./);
         await assert.rejects(fs.access(site));
         assert.strictEqual(readFileSync(path.join(vault, '_meta', 'vault-config.md'), 'utf8'), original);
         assert.ok(!existsSync(path.join(vault, '_meta', 'vault-config.yaml')));

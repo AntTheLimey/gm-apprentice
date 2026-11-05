@@ -151,7 +151,7 @@ test('6: a vault still on the old settings file stops the set by name', () => {
   const s = scratch(null, { legacy: true });
   const { rc, err } = set(s, ['gm_site.publish=on']);
   assert.equal(rc, 1);
-  assert.match(err[0], /is the old settings file, no longer read since plugin 1\.11\.0\. Run the update with plugin 1\.10\.134 first\./);
+  assert.match(err[0], /is the old settings file, no longer read since plugin 1\.11\.0\. Run the update with a 1\.10 release, 1\.10\.134 or later, first\./);
   assert.ok(!fs.existsSync(`${s.site}-gm`));
 });
 
