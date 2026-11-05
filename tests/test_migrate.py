@@ -96,22 +96,22 @@ class GateTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertEqual(out, "")
         self.assertEqual(len(err.strip().splitlines()), 1)
-        self.assertIn("a stamp older than 1.10.12", err)
+        self.assertIn("an update stamp of 1.9.14 (_meta/vault-state.json), older than 1.10.12", err)
 
     def test_no_recorded_version_is_refused(self):
         vault = make_vault(self, None)
         code, _, err = call([str(vault), "apply"], [])
         self.assertEqual(code, 2)
-        self.assertIn("a stamp older than", err)
+        self.assertIn("no update stamp (_meta/vault-state.json)", err)
 
     def test_a_vault_below_the_floor_is_refused_naming_the_bridge(self):
         vault = make_vault(self, "1.10.59")
         code, _, err = call([str(vault), "plan"], [], floor=REAL_FLOOR)
         self.assertEqual(code, 2)
         self.assertEqual(REAL_FLOOR, "1.10.60")
-        self.assertIn("a stamp older than 1.10.60", err)
-        self.assertIn("1.10.134 is the last release that can", err)
-        self.assertIn("releases/tag/v1.10.134", err)
+        self.assertIn("older than 1.10.60", err)
+        self.assertIn("a 1.10 release, 1.10.134 or later", err)
+        self.assertIn("releases/tag/v1.10.137", err)
 
     def test_a_moved_vault_stamped_1_10_121_passes(self):
         vault = make_vault(self, "1.10.121")
@@ -133,8 +133,8 @@ class GateTests(unittest.TestCase):
                                return_value=("1.11.0", "test")):
             said = migrate.gate(vault)
         self.assertIsInstance(said, str)
-        self.assertIn("the old settings file _meta/vault-config.md", said)
-        self.assertNotIn("stamp older", said)
+        self.assertIn("_meta/vault-config.md is the old settings file", said)
+        self.assertNotIn("older than", said)
 
     def test_an_old_list_left_behind_is_refused(self):
         vault = make_vault(self, "1.10.121")
@@ -142,7 +142,7 @@ class GateTests(unittest.TestCase):
         with mock.patch.object(migrate, "plugin_version",
                                return_value=("1.11.0", "test")):
             said = migrate.gate(vault)
-        self.assertIn("the old publish list _meta/publish-manifest.md", said)
+        self.assertIn("_meta/publish-manifest.md is the old publish list", said)
 
     def test_every_leftover_is_named_not_just_the_first(self):
         vault = make_vault(self, "1.9.50")
@@ -156,13 +156,17 @@ class GateTests(unittest.TestCase):
         vault = make_vault(self, "1.10.121")
         site = vault / "site"
         site.mkdir()
-        (site / "vault.config.json").write_text("{}", encoding="utf-8")
+        (site / "vault.config.json").write_text(
+            json.dumps({"vaultPath": vault.as_posix()}), encoding="utf-8")
         (site / "package.json").write_text(
             '{"dependencies": {"gm-apprentice-publish": "1.26.0"}}',
             encoding="utf-8")
-        with mock.patch.object(vc, "configured_site", return_value=(site, True)):
-            said = vc.unmoved(vault, "1.10.121")
-        self.assertEqual(said, ["a site publish tool older than 1.27.0"])
+        (vault / "_meta" / "vault-config.yaml").write_text(
+            "version: 1\nplayer_site:\n  folder: site\n", encoding="utf-8")
+        vc.forget_settings(vault)
+        said = vc.unmoved(vault, "1.10.121")
+        self.assertEqual([x.text for x in said],
+                         ["a site publish tool older than 1.27.0"])
 
     def test_a_new_vault_with_no_stamp_and_no_settings_is_not_refused(self):
         vault = Path(tempfile.mkdtemp(prefix="mig-"))

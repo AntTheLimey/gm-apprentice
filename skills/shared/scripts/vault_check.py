@@ -855,38 +855,102 @@ MIGRATION_HINT = ("run campaign-organizer's migration workflow "
 
 MOVED_FLOOR = "1.10.60"      # the oldest stamp the update accepts
 MOVED_TOOL = "1.27.0"        # the oldest site publish tool it accepts
-BRIDGE = "1.10.134"          # the last release that moves a vault
+BRIDGE = "1.10.134"          # the first release whose update moves a vault
+LAST_BRIDGE = "1.10.137"     # the last 1.10 release (the one to install)
+
+# Where a leftover the publish tool names is, by its `source`; a leftover
+# with no source is the vault file the fault names.
+LEFTOVER_FILES = {"site": "vault.config.json", "package": "package.json"}
 
 
-def unmoved(vault: Path, stamp: str | None) -> list[str]:
-    """What is left on a vault that 1.10.134 has not moved, in the order the
-    refusal names them; empty when the vault is moved. A vault with no
-    stamp and no settings file is new, not unmoved: the caller sends it to
-    setup first."""
-    left: list[str] = []
-    if stamp is None or parse_version(stamp) < parse_version(MOVED_FLOOR):
-        left.append(f"a stamp older than {MOVED_FLOOR}")
-    if vault_layout(vault) == "legacy":
-        left.append(f"the old settings file {vaultlib.LEGACY_SETTINGS_FILE}")
-    if (vault / "_meta" / "publish-manifest.md").is_file():
-        left.append("the old publish list _meta/publish-manifest.md")
+@dataclass(frozen=True)
+class Left:
+    """One thing that keeps a vault from the update: the file it is in, what
+    it is, and whether the 1.10 bridge update fixes it (`bridge`: a short
+    phrase for one sentence) or the GM does by hand (a sentence that says
+    how, as the publish tool words it)."""
+    file: str
+    text: str
+    bridge: bool
+
+
+def _fault_file(f: dict[str, Any]) -> str:
+    source = f.get("source")
+    if source in LEFTOVER_FILES:
+        return LEFTOVER_FILES[source]
+    name = str(f.get("name") or "")
+    return name if name.startswith("_meta/") else vaultlib.SETTINGS_FILE
+
+
+def unmoved(vault: Path, stamp: str | None) -> list[Left]:
+    """What keeps a vault from the update, in the order the refusal names
+    them; empty when the vault is moved. Everything the build stops on as a
+    leftover comes from the publish tool (`settings get`: the old settings
+    file alone or beside the new one, the old publish list, keys in the site
+    folder's vault.config.json, build hooks or an unreadable package.json in
+    the site folder); this adds only the stamp and the site's tool version.
+    Settings or a site tool that cannot be read are named, never passed. A
+    vault with no stamp and no settings file is new, not unmoved: the caller
+    sends it to setup first."""
+    left: list[Left] = []
+    if stamp is None:
+        left.append(Left(vaultlib.STATE_FILE, f"no update stamp ({vaultlib.STATE_FILE})", True))
+    elif parse_version(stamp) < parse_version(MOVED_FLOOR):
+        left.append(Left(vaultlib.STATE_FILE, f"an update stamp of {stamp} "
+                         f"({vaultlib.STATE_FILE}), older than {MOVED_FLOOR}", True))
     try:
-        site, _ = configured_site(vault)
-    except (SettingsUnavailable, OSError, ValueError):
-        site = None
+        own = settings(vault)
+    except SettingsUnavailable as e:
+        left.append(Left(vaultlib.SETTINGS_FILE, f"{e}. Fix that so its settings can "
+                         "be checked.", False))
+        return left
+    for f in own.faults:
+        if f.get("level") == "stop" and f.get("leftover"):
+            left.append(Left(_fault_file(f), str(f["message"]), False))
+    site, _ = _site_of(own, vault)
     if site is not None:
-        version = site_pin(site).version
-        if version is not None and semver_below(version, MOVED_TOOL):
-            left.append(f"a site publish tool older than {MOVED_TOOL}")
+        pin = site_pin(site)
+        if pin.version is None and pin.stale:
+            left.append(Left(f"{site.as_posix()}/package.json",
+                             f"The site's publish tool version could not be "
+                             f"checked: {pin.stale}. Fix that in the site "
+                             f"folder.", False))
+        elif pin.version is not None and semver_below(pin.version, MOVED_TOOL):
+            left.append(Left(f"{site.as_posix()}/package.json",
+                             f"a site publish tool older than {MOVED_TOOL}",
+                             True))
     return left
 
 
-def refusal(left: list[str]) -> str:
-    return (f"This vault still has {', '.join(left)}. Plugin 1.11.0 no longer "
-            f"moves these; {BRIDGE} is the last release that can. Update it "
-            f"with that release first: see https://github.com/AntTheLimey/"
-            f"gm-apprentice/releases/tag/v{BRIDGE} (campaign-organizer zip, "
-            f"run its update), then run this one.")
+def _and(parts: list[str]) -> str:
+    return (parts[0] if len(parts) < 2
+            else f"{', '.join(parts[:-1])} and {parts[-1]}")
+
+
+def _sentence(text: str) -> str:
+    text = text.strip()
+    text = text[:1].upper() + text[1:]
+    return text if text.endswith((".", "!", "?")) else f"{text}."
+
+
+def refusal(left: list[Left], plugin: str) -> str:
+    """The one line that refuses the update: what the 1.10 bridge update
+    fixes in one sentence, then each thing the GM fixes, as the tool says
+    it."""
+    said = [f"Plugin {plugin} cannot update this vault yet."]
+    bridged = [x.text for x in left if x.bridge]
+    where = (f"{LAST_BRIDGE} is the last: https://github.com/AntTheLimey/"
+             f"gm-apprentice/releases/tag/v{LAST_BRIDGE}; install its "
+             f"campaign-organizer and run its update")
+    if bridged:
+        said.append(f"It has {_and(bridged)}: update it first with a 1.10 "
+                    f"release, {BRIDGE} or later ({where}).")
+    by_hand = [_sentence(x.text) for x in left if not x.bridge]
+    said += by_hand
+    if not bridged and any(BRIDGE in x for x in by_hand):
+        said.append(f"(For the 1.10 release: {where}.)")
+    said.append("Then run this update again.")
+    return " ".join(said)
 
 
 def check_version(vault: Path) -> tuple[list[str], int]:
@@ -925,7 +989,8 @@ def check_version(vault: Path) -> tuple[list[str], int]:
                  "references/vault-setup.md)"], 0)
     left = unmoved(vault, str(current) if current else None)
     if left:
-        return ([f"ERROR\t{rel}\t{refusal(left)}"], 1)
+        # Not ERROR (a broken install): the vault must be moved or tidied first.
+        return ([f"REFUSED\t{left[0].file}\t{refusal(left, plugin)}"], 1)
     if not current:
         return ([f"MISMATCH\t{rel}\tgm_apprentice_version absent — "
                  f"{MIGRATION_HINT}"], 1)
@@ -5509,7 +5574,8 @@ def _row_json(r: SettingsRow) -> dict[str, Any]:
 
 def _row_lines(r: SettingsRow, file_name: str) -> list[str]:
     word = {"stop": "STOP", "info": "NOTE"}.get(r.fault["level"], "WARN")
-    where = "vault.config.json" if r.fault.get("source") == "site" else file_name
+    where = (_fault_file(r.fault) if r.fault.get("leftover")
+             or r.fault.get("source") else file_name)
     lines = [f"{word}\t{where}\t{r.fault['message']}"]
     if r.fix:
         lines.append(f"{'proposed' if r.kind == 'proposed' else 'fix'}: "

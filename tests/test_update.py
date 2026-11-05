@@ -645,7 +645,7 @@ class ExcludeListsTests(Base):
         c, _ = check("tidy", "bookkeeping", will_item("tidy"))
         code, out, err = self.main(vault, [c])
         self.assertEqual(code, 2)
-        self.assertIn("a stamp older than 1.10.12", err)
+        self.assertIn("an update stamp of 1.9.14 (_meta/vault-state.json), older than 1.10.12", err)
         self.assertEqual(self.backups(), [])
 
     def test_an_unmoved_vault_exits_2_naming_the_bridge(self):
@@ -655,8 +655,8 @@ class ExcludeListsTests(Base):
         with mock.patch.object(vc, "MOVED_FLOOR", REAL_FLOOR):
             code, _, err = self.main(vault, [c])
         self.assertEqual(code, 2)
-        self.assertIn("the old publish list _meta/publish-manifest.md", err)
-        self.assertIn("releases/tag/v1.10.134", err)
+        self.assertIn("_meta/publish-manifest.md is the old publish list", err)
+        self.assertIn("releases/tag/v1.10.137", err)
         self.assertEqual(self.backups(), [])
 
     def test_an_unreadable_template_is_a_read_problem_not_a_question(self):

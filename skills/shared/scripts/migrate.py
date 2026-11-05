@@ -47,9 +47,9 @@ from migrate_core import CHOICE, PERSON, WILL, Check, Item, StepFailed
 from migrate_site import REPIN, SITE_CHECKS
 from migrate_vault import VAULT_CHECKS
 from update_record import AnswerEntry, lines_sha
-from vault_check import MOVED_FLOOR, refusal, unmoved
+from vault_check import MOVED_FLOOR, Left, refusal, unmoved
 from vaultlib import cli_name  # noqa: E402
-from vaultlib import (SettingsUnavailable, StateUnreadable, parse_version, plugin_version,
+from vaultlib import (STATE_FILE, SettingsUnavailable, StateUnreadable, parse_version, plugin_version,
                       read_held, read_stamp, vault_layout, write_held,
                       write_stamp)
 
@@ -80,8 +80,10 @@ def gate(vault: Path) -> tuple[str, str] | str:
                 f"first-time setup (vault_scaffold.py), not a migration")
     left = unmoved(vault, shown)
     if left:
-        return refusal(left)
-    assert shown is not None   # no stamp is "a stamp older than the floor"
+        return refusal(left, plugin)
+    if shown is None:   # unmoved lists a missing stamp; never pass without one
+        return refusal([Left(STATE_FILE, f"no update stamp ({STATE_FILE})",
+                             True)], plugin)
     if parse_version(shown) > parse_version(plugin):
         return (f"vault {shown} is ahead of plugin {plugin}; update the "
                 f"plugin before touching this vault")

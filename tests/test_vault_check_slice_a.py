@@ -318,11 +318,15 @@ class SettingsUnavailableCommandTests(unittest.TestCase):
                     "node is not on PATH\n"), proc.stderr)
                 self.assertNotIn("Traceback", proc.stderr)
 
-    def test_version_needs_no_settings_and_no_node(self):
+    def test_version_without_node_is_refused_naming_why(self):
+        # The gate asks the publish tool what is left on the vault; with no
+        # node it cannot, and says so rather than passing the vault unchecked.
         vault = make_vault(self, "---\ngm_apprentice_version: \"%s\"\n---\n"
                            % plugin_version_string(), site=False)
         proc = run_cli_without_node(vault, "version")
-        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(proc.returncode, 1, proc.stderr)
+        self.assertIn("REFUSED", proc.stdout)
+        self.assertIn("node is not on PATH", proc.stdout)
 
     def test_a_vault_file_that_is_not_YAML_stops_with_one_line(self):
         vault = make_vault(self, "---\npublish:\n  mode: [\n---\n", site=False)
@@ -365,19 +369,19 @@ class VersionCommandTests(unittest.TestCase):
         self.assertIn("references/migration-procedure.md", message)
         self.assertEqual(code, 1)
 
-    def test_a_vault_below_the_floor_is_an_error_naming_the_bridge_not_a_mismatch(self):
+    def test_a_vault_below_the_floor_is_refused_naming_the_bridge_not_a_mismatch(self):
         (token, path, message), code = self.verdict(FIXTURES / "version-behind")
-        self.assertEqual(token, "ERROR")
+        self.assertEqual(token, "REFUSED")
         self.assertEqual(path, "_meta/vault-state.json")
-        self.assertIn("a stamp older than 1.10.60", message)
-        self.assertIn("1.10.134 is the last release that can", message)
+        self.assertIn("older than 1.10.60", message)
+        self.assertIn("a 1.10 release, 1.10.134 or later", message)
         self.assertEqual(code, 1)
 
     def test_comparison_is_numeric_not_lexical(self):
         # 1.8.9 < 1.9.6 lexically too; 1.10.0 vs 1.9.6 is the real test.
         vault = make_vault(self, '---\ngm_apprentice_version: "1.10.0"\n---\n')
         (token, _path, _message), _code = self.verdict(vault)
-        self.assertEqual(token, "ERROR")   # 1.10.0 is below the floor 1.10.60
+        self.assertEqual(token, "REFUSED")   # 1.10.0 is below the floor 1.10.60
         # "1.9.99" sorts after "1.10.0" as text; numerically it is behind.
         self.assertLess(vc.parse_version("1.9.99"), vc.parse_version("1.10.0"))
 
@@ -393,16 +397,16 @@ class VersionCommandTests(unittest.TestCase):
     def test_absent_field_is_an_error_not_a_pass(self):
         vault = make_vault(self, "---\npublish:\n  mode: player\n---\n")
         (token, path, message), code = self.verdict(vault)
-        self.assertEqual(token, "ERROR")
+        self.assertEqual(token, "REFUSED")
         self.assertEqual(path, "_meta/vault-state.json")
-        self.assertIn("a stamp older than 1.10.60", message)
+        self.assertIn("no update stamp", message)
         self.assertEqual(code, 1)
 
     def test_meta_without_a_config_file_is_the_absent_mismatch(self):
         vault = make_vault(self, config=None, meta=True)
         (token, _path, message), code = self.verdict(vault)
-        self.assertEqual(token, "ERROR")
-        self.assertIn("a stamp older than 1.10.60", message)
+        self.assertEqual(token, "REFUSED")
+        self.assertIn("no update stamp", message)
         self.assertEqual(code, 1)
 
     def test_meta_with_no_settings_file_is_setup_not_migration(self):
