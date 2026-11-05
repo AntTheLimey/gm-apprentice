@@ -19,14 +19,18 @@ CONVERTER = Path(__file__).resolve().parent / "old_config_to_new.js"
 
 LAYOUTS = ("new",)
 
+# A test may patch `subprocess.run` or `shutil.which` for the code it tests;
+# the converter must keep running for real.
+_RUN = subprocess.run
+_NODE = shutil.which("node")
+
 
 @functools.lru_cache(maxsize=None)
 def _converted(text: str) -> tuple[str, str]:
-    node = shutil.which("node")
-    if not node:
+    if not _NODE:
         pytest.skip("node is not on PATH")
-    done = subprocess.run([node, str(CONVERTER)], input=text,
-                          capture_output=True, text=True)
+    done = _RUN([_NODE, str(CONVERTER)], input=text,
+                capture_output=True, text=True)
     assert done.returncode == 0, done.stdout + done.stderr
     answer = json.loads(done.stdout)
     if "error" in answer:
@@ -76,9 +80,8 @@ def move_to_new_layout(vault: Path, *fill: str) -> Path:
         write_config(vault, old.read_text(encoding="utf-8"))
         old.unlink()
     if fill:
-        node = shutil.which("node")
-        done = subprocess.run(
-            [node, str(TOOL), "settings", "set", "--vault", str(vault),
+        done = _RUN(
+            [_NODE, str(TOOL), "settings", "set", "--vault", str(vault),
              *[f.replace("=", "=", 1) for f in fill]],
             capture_output=True, text=True)
         assert done.returncode == 0, done.stdout + done.stderr

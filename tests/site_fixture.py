@@ -20,6 +20,8 @@ from typing import Callable
 
 from layouts import write_config  # noqa: E402
 
+_RUN = subprocess.run   # a test may patch subprocess.run for the code it tests
+
 TOOL_DIR = Path(__file__).resolve().parents[1] / "tools" / "publish"
 BARE = "---\npublish:\n---\n"
 
@@ -176,7 +178,7 @@ def give_site(vault: Path, cleanup: Callable[[Path], object],
         if re.search(r"^[ \t]+(publish|folder)[ \t]*:", text, re.M):
             return
         site = new_site(vault, cleanup, private)
-        subprocess.run(
+        _RUN(
             ["node", str(TOOL_DIR / "bin" / "gm-publish.js"), "settings", "set",
              "--vault", str(vault), "player_site.publish=true",
              f"player_site.folder={json.dumps(site.as_posix())}",
