@@ -14,8 +14,8 @@ describe('the built-in defaults', () => {
     assert.ok(defaultOf('exclude_sections').includes('GM Notes'));
   });
 
-  it('excludes secrets, current_plan, plan_progress, gm_notes, prep_notes by default', () => {
-    assert.deepStrictEqual(defaultOf('exclude_fields'), ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability']);
+  it('excludes secrets, current_plan, plan_progress, gm_notes, prep_notes, reliability, voice by default', () => {
+    assert.deepStrictEqual(defaultOf('exclude_fields'), ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability', 'voice']);
   });
 
   it('excludes _meta and _Templates dirs by default', () => {
@@ -87,7 +87,7 @@ describe('loadPublishConfig', () => {
     writeFromOldText(metaDir, '---\ntitle: Test\n---\nSome config');
     const result = loadPublishConfig(tmpDir);
     assert.strictEqual(result.mode, undefined);
-    assert.deepStrictEqual(result.exclude_fields, ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability']);
+    assert.deepStrictEqual(result.exclude_fields, ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability', 'voice']);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 

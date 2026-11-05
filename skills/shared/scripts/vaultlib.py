@@ -1850,6 +1850,15 @@ def settings_describe(name: str) -> dict[str, Any]:
     return answer
 
 
+def settings_added(name: str) -> list[dict[str, str]]:
+    """The entries the tool says were added to the built-in list `name`
+    after vaults began owning their lists: `[{"entry", "since", "why"}]`,
+    `[]` when it names none."""
+    added = settings_describe(name).get("added") or []
+    return [{k: str(a[k]) for k in ("entry", "since", "why")}
+            for a in added if isinstance(a, dict)]
+
+
 def settings_raw(vault: Path, name: str | None = None) -> Any:
     """The settings file as written ({} when there is no file), or the
     value at `name` (None when `name` is not in the file). Not cached."""

@@ -24,6 +24,7 @@ import migrate_core  # noqa: E402
 import migrate_site as ms  # noqa: E402
 import site_fixture  # noqa: E402
 import vault_check as vc  # noqa: E402
+import vaultlib  # noqa: E402
 from migrate_core import PERSON, WILL, StepFailed  # noqa: E402
 from layouts import write_config  # noqa: E402
 
@@ -753,6 +754,79 @@ class ExcludeListTests(unittest.TestCase):
         (check,) = [c for c in ms.SITE_CHECKS if c.name == "exclude-lists"]
         self.assertEqual((check.release, check.band, check.asks_site),
                          ("1.10.47", 2, True))
+
+
+class HideAdditionTests(unittest.TestCase):
+    """1.11.2 (#460): an entry added to a built-in hide list after vaults
+    began owning their lists is offered to a list the vault owns, so the
+    voice field never reaches a player site. The settings are the real
+    tool's."""
+
+    FIELDS = "player_site.hide.fields"
+
+    def old_fields(self):
+        # The list a vault wrote before voice joined the default; read from
+        # the tool, never written out here.
+        return [f for f in ms.settings_default(self.FIELDS) if f != "voice"]
+
+    def owning(self, fields):
+        vault = make_vault(self)
+        vaultlib.settings_set(vault, [(self.FIELDS, fields)])
+        return vault
+
+    def test_hide_additions_owned_list(self):
+        old = self.old_fields()
+        vault = self.owning(old)
+        (item,) = ms.find_hide_additions(vault, "1.11.2")
+        self.assertEqual(item.id, "hide-add:voice")
+        self.assertEqual(len(item.lines), 1)
+        self.assertIn("voice", item.lines[0])
+        self.assertIn(self.FIELDS, item.lines[0])
+        self.assertIn("for the GM only", item.lines[0])
+        item.apply(None)
+        s = vc.settings(vault)
+        self.assertEqual(s.origins[self.FIELDS], "file")
+        self.assertEqual(s.get(self.FIELDS), [*old, "voice"])
+        self.assertEqual(ms.find_hide_additions(vault, "1.11.2"), [])
+
+    def test_hide_additions_keep_the_gms_own_entries(self):
+        vault = self.owning(["mine"])
+        (item,) = ms.find_hide_additions(vault, "1.11.2")
+        item.apply(None)
+        self.assertEqual(vc.settings(vault).get(self.FIELDS), ["mine", "voice"])
+
+    def test_hide_additions_already_listed(self):
+        vault = self.owning([*self.old_fields(), "voice"])
+        self.assertEqual(ms.find_hide_additions(vault, "1.11.2"), [])
+
+    def test_hide_additions_no_own_list(self):
+        # The built-in list stands, and it already holds voice.
+        vault = make_vault(self)
+        self.assertEqual(ms.find_hide_additions(vault, "1.11.2"), [])
+        self.assertIn("voice", vc.settings(vault).get(self.FIELDS))
+
+    def test_hide_additions_no_site(self):
+        vault = make_vault(self, site=False)
+        self.assertEqual(ms.find_hide_additions(vault, "1.11.2"), [])
+
+    def test_hide_additions_other_release_offers_nothing(self):
+        vault = self.owning(self.old_fields())
+        self.assertEqual(ms.find_hide_additions(vault, "1.10.47"), [])
+
+    def test_the_check_asks_at_1_11_2(self):
+        (check,) = [c for c in ms.SITE_CHECKS if c.name == "hide-fields-voice"]
+        self.assertEqual((check.release, check.band, check.asks_site,
+                          check.choices, check.kind),
+                         ("1.11.2", 2, True, ("hide-add:",), "asks"))
+        self.assertTrue(check.plain and check.ask and check.left)
+
+
+class VoicesSwitchTests(unittest.TestCase):
+    def test_on_by_default_and_off_when_written_off(self):
+        vault = make_vault(self)
+        self.assertIs(vaultlib.setting_or_builtin(vault, "vault.voices"), True)
+        vaultlib.settings_set(vault, [("vault.voices", False)])
+        self.assertIs(vaultlib.setting_or_builtin(vault, "vault.voices"), False)
 
 
 class PropsMoveTests(unittest.TestCase):

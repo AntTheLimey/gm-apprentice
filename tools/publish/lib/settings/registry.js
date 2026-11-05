@@ -96,6 +96,11 @@ const REGISTRY = [
     does: 'How alike two note names must be, from `0` (anything) to `1` (identical), before the name check lists them as too close. The check\'s `--threshold` option overrides it for one run',
     left_out: '`0.85`',
   },
+  {
+    name: 'vault.voices', type: 'switch', default: true, group: 'vault',
+    does: 'Whether the skills keep a short voice for the campaign and each storied character, draft missing ones for the GM to approve, and write story prose in them. Off, story prose takes its tone from the genre, as before',
+    left_out: 'On',
+  },
   { name: 'vault.index', type: 'map', container: true },
   {
     name: 'vault.index.recent_changes', type: 'number', integer: true, min: 0, default: 20, group: 'vault',
@@ -300,10 +305,13 @@ const REGISTRY = [
   },
   {
     name: 'player_site.hide.fields', was: [{ name: 'publish.exclude_fields', in: 'vault' }, { name: 'excludeFields', in: 'site' }], type: 'list', of: 'field names',
-    default: ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability'],
+    default: ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability', 'voice'],
     guards: true, legacyKind: 'list', legacyMerge: 'union', group: 'published',
     does: 'Fields in the block at the top of a note (between its `---` lines) that are never shown',
-    left_out: '`secrets`, `current_plan`, `plan_progress`, `gm_notes`, `prep_notes`, `reliability`',
+    left_out: '`secrets`, `current_plan`, `plan_progress`, `gm_notes`, `prep_notes`, `reliability`, `voice`',
+    // Entries put in the default after vaults began owning their lists: the update offers each to a list the
+    // vault owns (migrate_site.find_hide_additions), since a list the GM owns replaces the default.
+    added: [{ entry: 'voice', since: '1.11.2', why: 'how a character or the campaign is told, for the GM only' }],
   },
   {
     name: 'player_site.hide.callouts', was: [{ name: 'publish.exclude_callouts', in: 'vault' }, { name: 'excludeCallouts', in: 'site' }], type: 'switchOrList', same: 'callout', of: 'callout types', default: false, onFault: true, guards: true,
