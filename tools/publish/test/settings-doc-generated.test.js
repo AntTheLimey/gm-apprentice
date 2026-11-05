@@ -9,7 +9,6 @@ const path = require('node:path');
 const { render } = require('../scripts/gen-settings-doc');
 const { REGISTRY, GROUPS } = require('../lib/settings/registry');
 const { isLeaf } = require('../lib/settings/describe');
-const { DEPLOY_KEYS } = require('../lib/settings/legacy');
 
 const DOC = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'docs', 'site-settings.md'), 'utf8').replace(/\r\n/g, '\n');
 // A twin under gm_site is described once, in the GM site section, not row by row.
@@ -52,11 +51,11 @@ test('no retired or bookkeeping setting has a row', () => {
   }
 });
 
-test('the site-file section names exactly the keys the site file still holds', () => {
+test('the site-file section names only vaultPath, the one key the site file holds', () => {
   const section = DOC.match(/^## The site file[^\n]*\n([\s\S]*?)(?=^## )/m);
   assert.ok(section, 'the site-file section is missing');
   const named = [...section[1].matchAll(/^\| `([A-Za-z]+)` \|/gm)].map((m) => m[1]);
-  assert.deepEqual(named, DEPLOY_KEYS);
+  assert.deepEqual(named, ['vaultPath']);
 });
 
 test('the page lists, in one generated region, every setting that stops the build', () => {
