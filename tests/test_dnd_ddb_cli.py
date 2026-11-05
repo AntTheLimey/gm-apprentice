@@ -19,6 +19,7 @@ import dnd_ddb  # noqa: E402
 from ddb_builder import character  # noqa: E402
 from dnd_ddb import character_id, fetch, main  # noqa: E402
 from dnd_ddb_read import Unreadable  # noqa: E402
+from layouts import write_config  # noqa: E402
 
 TEMPLATE = (ROOT / "skills" / "shared" / "templates" / "pc-dnd-5e-2024.md").read_text(encoding="utf-8")
 LINK = "https://www.dndbeyond.com/characters/424242"
@@ -225,10 +226,9 @@ def test_the_arguments_are_checked():
 # --- --party ------------------------------------------------------------------------------
 
 def vault(tmp_path, system="dnd-5e-2024", setting=None):
-    meta = tmp_path / "_meta"
-    meta.mkdir()
+    (tmp_path / "_meta").mkdir()
     config = f"---\npublish:\n  system: {system}\n" + (f"  dndbeyond_sync: {setting}\n" if setting else "") + "---\n"
-    (meta / "vault-config.md").write_text(config, encoding="utf-8")
+    write_config(tmp_path, config)
     (tmp_path / "Characters").mkdir()
     return tmp_path
 
@@ -294,7 +294,7 @@ def test_party_on_a_gurps_vault_asks_nothing(tmp_path, capsys, fake):
     ('"manual"', 0, []),
     ("build", 1, None),
     ('"build"', 1, None),
-    ("always", 0, ['dnd_ddb.py: publish.dndbeyond_sync is "always"; it takes build or manual; nothing was synced']),
+    ("always", 0, ['dnd_ddb.py: vault.dndbeyond_sync is "always"; it takes build or manual; nothing was synced']),
 ])
 def test_on_build_follows_the_vault_setting(tmp_path, capsys, fake, setting, asked, said):
     root = vault(tmp_path, setting=setting)
@@ -532,9 +532,9 @@ def test_a_control_character_in_a_file_name_cannot_shift_the_columns(tmp_path, c
 def test_on_build_with_an_unreadable_settings_file_says_so_once(tmp_path, capsys, fake):
     root = vault(tmp_path, setting="build")
     pcs(root, ("Alder",))
-    (root / "_meta" / "vault-config.md").write_bytes(b"---\npublish:\n  dndbeyond_sync: build\n\xff\xfe\n---\n")
+    (root / "_meta" / "vault-config.yaml").write_bytes(b"version: 1\nvault:\n  dndbeyond_sync: build\n\xff\xfe\n")
     assert main(["--party", str(root), "--on-build"]) == 0
-    assert lines(capsys) == ["dnd_ddb.py: _meta/vault-config.md could not be read; nothing was synced"]
+    assert lines(capsys) == ["dnd_ddb.py: _meta/vault-config.yaml could not be read; nothing was synced"]
     assert fake.asked == []
 
 
@@ -795,19 +795,19 @@ def test_a_template_note_with_no_rows_needs_no_such_line(tmp_path, capsys, fake)
 
 def test_a_control_character_in_the_vault_setting_is_not_echoed(tmp_path, capsys, fake):
     root = vault(tmp_path)
-    (root / "_meta" / "vault-config.md").write_bytes(
-        b'---\npublish:\n  system: dnd-5e-2024\n  dndbeyond_sync: "always\\a\\e[2J"\n---\n')
+    (root / "_meta" / "vault-config.yaml").write_bytes(
+        b'version: 1\nvault:\n  system: dnd-5e-2024\n  dndbeyond_sync: "always\\a\\e[2J"\n')
     assert main(["--party", str(root), "--on-build"]) == 0
     out = capsys.readouterr().out
     assert "nothing was synced" in out and "\x07" not in out and "\x1b" not in out
 
 
-def test_raw_control_characters_in_the_vault_file_stop_with_one_clean_line(tmp_path, capsys, fake):
+def test_raw_control_characters_in_the_vault_file_are_not_echoed(tmp_path, capsys, fake):
     root = vault(tmp_path)
-    (root / "_meta" / "vault-config.md").write_bytes(
-        b"---\npublish:\n  system: dnd-5e-2024\n  dndbeyond_sync: always\x07\x1b[2J\n---\n")
-    assert main(["--party", str(root), "--on-build"]) == 2
-    err = capsys.readouterr().err
-    assert err.startswith("dnd_ddb.py: could not read the vault's settings: ")
-    assert err.count("\n") == 1 and "\x07" not in err and "\x1b" not in err
+    (root / "_meta" / "vault-config.yaml").write_bytes(
+        b"version: 1\nvault:\n  system: dnd-5e-2024\n  dndbeyond_sync: always\x07\x1b[2J\n")
+    assert main(["--party", str(root), "--on-build"]) == 0
+    captured = capsys.readouterr()
+    assert "nothing was synced" in captured.out
+    assert "\x07" not in captured.out + captured.err and "\x1b" not in captured.out + captured.err
     assert fake.asked == []
