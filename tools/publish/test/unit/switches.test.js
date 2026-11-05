@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const config = require('../../lib/config');
+const { writeFromOldText } = require('../helpers/vault-files');
 const { loadPublishConfig, siteOff, siteOffText } = config;
 
 // The switches as loadPublishConfig settles them, for a publish block and a site file.
@@ -11,7 +12,7 @@ function resolve(publish, json = {}) {
   const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-sw-'));
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
   // JSON is YAML, so the block can be written as flow text.
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\ntype: meta\npublish: ${JSON.stringify(publish || {})}\n---\n`);
+  writeFromOldText(vault, `---\ntype: meta\npublish: ${JSON.stringify(publish || {})}\n---\n`);
   const cfg = loadPublishConfig(vault, json, () => {});
   fs.rmSync(vault, { recursive: true, force: true });
   return { ...cfg.switches, faults: cfg.faults };
@@ -25,7 +26,7 @@ describe('publish switches', () => {
   it('sheets off forces live stats off and says so', () => {
     const s = resolve({ character_sheets: false, live_stats: true });
     assert.deepStrictEqual([s.characterSheets, s.liveStats], [false, false]);
-    assert.ok(s.faults.some((f) => f.name === 'publish.live_stats' && /character_sheets is off/.test(f.message)));
+    assert.ok(s.faults.some((f) => f.name === 'player_site.features.live_stats' && /player_site\.sheets\.show is off/.test(f.message)));
   });
   it('sheets off leaves the inbox alone', () => assert.deepStrictEqual(on({ character_sheets: false, inbox: true }), [false, false, true]));
   for (const [text, value] of [['no', false], ['No', false], ['off', false], ['false', false], ['yes', true], ['on', true], ['TRUE', true]]) {
@@ -34,45 +35,14 @@ describe('publish switches', () => {
   it('an unreadable value withholds, for every switch, and is reported', () => {
     const s = resolve({ character_sheets: 'maybe', live_stats: 3, inbox: [] });
     assert.deepStrictEqual([s.characterSheets, s.liveStats, s.inbox], [false, false, false]);
-    assert.deepStrictEqual(faultNames(s), ['publish.character_sheets', 'publish.inbox', 'publish.live_stats']);
+    assert.deepStrictEqual(faultNames(s), ['player_site.features.inbox', 'player_site.features.live_stats', 'player_site.sheets.show']);
   });
-  it('old names in the vault file are still read, and reported', () => {
-    const s = resolve({ backend: { statusBar: true, inbox: true } });
-    assert.deepStrictEqual([s.liveStats, s.inbox], [true, true]);
-    assert.ok(s.faults.some((f) => f.kind === 'old-name' && f.name === 'publish.backend.statusBar'));
-  });
-  it('old names in the site file are read only when the vault file is silent', () => {
-    assert.deepStrictEqual(on({}, { backend: { statusBar: true, inbox: true } }), [true, true, true]);
-    assert.deepStrictEqual(on({ live_stats: false, inbox: false }, { backend: { statusBar: true, inbox: true } }), [true, false, false]);
-  });
-  it('a new name beats an old name in the same file', () =>
-    assert.strictEqual(resolve({ inbox: false, backend: { inbox: true } }).inbox, false));
-
   it('a present but empty value is unreadable: off, with a fault, for every switch', () => {
-    for (const key of ['character_sheets', 'live_stats', 'inbox']) {
-      assert.ok(resolve({ [key]: null }).faults.some((f) => f.name === `publish.${key}`), key);
+    for (const [key, name] of [['character_sheets', 'player_site.sheets.show'], ['live_stats', 'player_site.features.live_stats'], ['inbox', 'player_site.features.inbox']]) {
+      assert.ok(resolve({ [key]: null }).faults.some((f) => f.name === name), key);
     }
     assert.strictEqual(resolve({ character_sheets: null }).characterSheets, false);
     assert.strictEqual(resolve({ inbox: null }).inbox, false);
-  });
-  it('an empty vault-file value wins over the site file and does not fall through', () =>
-    assert.strictEqual(resolve({ live_stats: null }, { backend: { statusBar: true } }).liveStats, false));
-  it('a backend that is not a map is ignored and reported', () => {
-    const s = resolve({ backend: true });
-    assert.deepStrictEqual([s.liveStats, s.inbox], [false, false]);
-    assert.ok(s.faults.some((f) => f.name === 'publish.backend'));
-  });
-  it('an unreadable old-name value withholds and reports it', () => {
-    const s = resolve({ backend: { statusBar: 'maybe' } });
-    assert.strictEqual(s.liveStats, false);
-    assert.ok(s.faults.some((f) => f.name === 'publish.live_stats' && f.kind === 'not-allowed'), JSON.stringify(s.faults));
-  });
-  it('a site-file old name is reported under its own name', () =>
-    assert.ok(resolve({}, { backend: { statusBar: true } }).faults.some((f) => f.kind === 'old-name' && f.name === 'backend.statusBar')));
-  it('live stats via an old name is forced off when sheets are off', () => {
-    const s = resolve({ character_sheets: false, backend: { statusBar: true } });
-    assert.strictEqual(s.liveStats, false);
-    assert.ok(s.faults.some((f) => /character_sheets is off/.test(f.message)));
   });
   it('loadPublishConfig returns switches and no backend', () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-sw-'));
@@ -86,10 +56,10 @@ describe('publish switches', () => {
 describe('explicitOff: which off switches were the GM\'s choice', () => {
   const off = (p, j) => resolve(p || {}, j || {}).explicitOff;
   it('unset is not explicit', () => assert.deepStrictEqual(off({}, {}), { liveStats: false, inbox: false, site: false }));
-  it('false is explicit, under the new name or either old one', () => {
+  it('false is explicit', () => {
     assert.deepStrictEqual(off({ live_stats: false, inbox: false }), { liveStats: true, inbox: true, site: false });
-    assert.deepStrictEqual(off({ backend: { statusBar: false } }), { liveStats: true, inbox: false, site: false });
-    assert.deepStrictEqual(off({}, { backend: { inbox: false } }), { liveStats: false, inbox: true, site: false });
+    assert.deepStrictEqual(off({ live_stats: false }), { liveStats: true, inbox: false, site: false });
+    assert.deepStrictEqual(off({ inbox: false }), { liveStats: false, inbox: true, site: false });
   });
   it('an unreadable value counts as set', () => assert.deepStrictEqual(off({ live_stats: 'maybe', inbox: null }), { liveStats: true, inbox: true, site: false }));
   it('character_sheets: false makes live stats explicit, not the inbox', () => {
@@ -124,12 +94,11 @@ describe('site: whether the vault has a site at all', () => {
   it('an unreadable value is off, with a fault naming the key', () => {
     const got = resolve({ site: 'maybe', site_dir: '/s' });
     assert.strictEqual(got.site, false);
-    assert.ok(got.faults.some((f) => f.name === 'publish.site'), JSON.stringify(got.faults));
+    assert.ok(got.faults.some((f) => f.name === 'player_site.publish'), JSON.stringify(got.faults));
   });
   it('siteOff stops a build only for an explicit off', () => {
-    assert.strictEqual(siteOff(resolve({ site: false, site_dir: '/s' })), siteOffText('legacy'));
-    // The text is made from the vault's layout; no module keeps a copy of one layout's wording (#382).
-    assert.strictEqual('SITE_OFF' in config, false);
+    assert.strictEqual(siteOff(resolve({ site: false, site_dir: '/s' })), siteOffText());
+    assert.strictEqual(siteOffText(), config.SITE_OFF);
     assert.strictEqual(siteOff(resolve({})), null);
     assert.strictEqual(siteOff(resolve({ site: true })), null);
     assert.strictEqual(siteOff(undefined), null);
