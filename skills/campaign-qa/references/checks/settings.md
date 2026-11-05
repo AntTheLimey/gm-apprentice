@@ -41,10 +41,10 @@ beside the right one) need no `carry`: `--fix` merges them.
 `package.json`). A `STOP` row with no fix, against that file, naming
 each key's home (`siteTitle (now player_site.title)`). With the GM's
 yes, set each with `settings set` under its home, then take it out of
-the file (only `vaultPath` stays in `vault.config.json`). A `prebuild`
-or `postbuild` script goes to `player_site.before_build` or
-`player_site.after_build` with `settings add`. A file that is not
-valid JSON: fix it first.
+the file (only `vaultPath` stays in `vault.config.json`). A build
+script in `package.json` goes to the setting the row names
+(`player_site.before_build` or `player_site.after_build`) with
+`settings add`. A file that is not valid JSON: fix it first.
 
 **A file that is not valid YAML.** No `settings` command and no `--fix`
 can read it, so this is the one time the file is opened. The message

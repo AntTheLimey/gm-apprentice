@@ -61,8 +61,8 @@ matches and what was decided when; `answers` holds each answer;
 its fix: no update stamp or one older than 1.10.60, the old settings file
 (alone or beside the new one), the old publish list, a site publish tool
 older than 1.27.0, a key other than `vaultPath` in the site folder's
-`vault.config.json`, a `prebuild` or `postbuild` script (or a broken file)
-in the site's `package.json`, or settings it could not read. This release
+`vault.config.json`, a build script (or a broken file) in the site's
+`package.json`, or settings it could not read. This release
 moves none of those. Tell the GM what it names: what the 1.10 update moves
 needs a 1.10 release, 1.10.134 or later (the release it links to: its
 campaign-organizer, and its update); the rest the GM fixes as the row
