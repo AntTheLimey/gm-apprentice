@@ -340,27 +340,24 @@ test('setup-backend.js and site-doctor.js read no site-folder key off the site f
 // (d) A build step is run in one place: lib/settings/steps.js. This looks at the settings package too, so a second
 // runner there is caught. Files that require child_process: run-command.js (the shared runner for git, npm install,
 // wrangler and gh), image-optimize.js (image tools), chrome.js and props/pages-cli.js (find and run Chrome to print a
-// page; not build steps), steps.js (the steps) and settings/move.js, whose one use runs
-// this tool's own `update-pin --check`. The only code that runs `npm run <hook>` is the dated block in deploy-cli.js,
-// which keeps a site on the old layout running its package.json prebuild/postbuild until the site is updated
-// (legacy.js's buildHooks; it goes with that file). The two script names appear as code only there, in legacy.js (that
-// block's reader) and in the registry (`stepsFrom`); a shell is opened with `shell: true` only by steps.js.
-test('a build step is run only by the steps module and the dated deploy hook', () => {
+// page; not build steps), steps.js (the steps) and settings/site-tool.js, whose one use runs this tool's own
+// `update-pin --check`. No code runs `npm run <hook>` any more: a package.json prebuild or postbuild stops the build.
+// The two script names appear as code only in the registry (`stepsFrom`); a shell is opened with `shell: true` only by
+// steps.js.
+test('a build step is run only by the steps module', () => {
   const everywhere = [...sources, ...files(SETTINGS)];
   const grepAll = (re) => everywhere.filter((f) => re.test(code(f))).map(rel).sort();
   assert.deepEqual(grepAll(/\brequire\(\s*['"](?:node:)?child_process['"]\s*\)/),
-    ['lib/chrome.js', 'lib/image-optimize.js', 'lib/props/pages-cli.js', 'lib/run-command.js', 'lib/settings/move.js', 'lib/settings/steps.js']);
-  // move.js starts exactly one process: this tool, to ask update-pin about the site.
-  const moveSpawns = code(path.join(SETTINGS, 'move.js')).match(/\bspawnSync\(/g) || [];
-  assert.equal(moveSpawns.length, 1, 'move.js: one call');
-  assert.match(code(path.join(SETTINGS, 'move.js')), /spawnSync\(process\.execPath, \[bin, 'update-pin', '--check'/);
+    ['lib/chrome.js', 'lib/image-optimize.js', 'lib/props/pages-cli.js', 'lib/run-command.js', 'lib/settings/site-tool.js', 'lib/settings/steps.js']);
+  // site-tool.js starts exactly one process: this tool, to ask update-pin about the site.
+  const spawns = code(path.join(SETTINGS, 'site-tool.js')).match(/\bspawnSync\(/g) || [];
+  assert.equal(spawns.length, 1, 'site-tool.js: one call');
+  assert.match(code(path.join(SETTINGS, 'site-tool.js')), /spawnSync\(process\.execPath, \[bin, 'update-pin', '--check'/);
   assert.deepEqual(grepAll(/shell:\s*true/), ['lib/settings/steps.js']);
-  // `npm run <something>` is run by deploy-cli.js alone.
-  assert.deepEqual(grepAll(/runCommand\(\s*['"]npm['"]\s*,\s*\[\s*['"]run['"]/), ['lib/deploy-cli.js']);
-  // The two script names, as code (build.js and the doctor ask steps.js).
-  assert.deepEqual(grepAll(/['"`](?:pre|post)build['"`]/), ['lib/deploy-cli.js', 'lib/settings/legacy.js', 'lib/settings/registry.js']);
-  // The hook list that block runs comes from the dated legacy module.
-  assert.match(code(path.join(ROOT, 'lib', 'deploy-cli.js')), /buildHooks[\s\S]*require\('\.\/settings\/legacy'\)|require\('\.\/settings\/legacy'\)[\s\S]*buildHooks/);
+  // Nothing runs `npm run <something>`.
+  assert.deepEqual(grepAll(/runCommand\(\s*['"]npm['"]\s*,\s*\[\s*['"]run['"]/), []);
+  // The two script names, as code, only where the registry maps them to their settings.
+  assert.deepEqual(grepAll(/['"`](?:pre|post)build['"`]/), ['lib/settings/registry.js']);
   // Every call of the steps runner is the settings module's own.
   for (const f of grep(/\brunSteps\(/, code)) {
     assert.match(code(path.join(ROOT, f)), /require\('\.\/settings\/steps'\)/, f);
@@ -369,11 +366,11 @@ test('a build step is run only by the steps module and the dated deploy hook', (
 
 // #382: the tool installed in a site folder is read by siteToolVersion (settings/layout.js), which update-pin.js
 // calls twice and move.js once; neither of them reads the installed package.json on its own.
-test('the installed tool of a site is read in one place by update-pin and the move', () => {
+test('the installed tool of a site is read in one place by update-pin and the site-tool module', () => {
   const installedRead = /['"`]node_modules['"`]\s*,\s*['"`]gm-apprentice-publish['"`]|node_modules\/gm-apprentice-publish/;
   assert.deepEqual(grep(installedRead, code).filter((f) => f === 'lib/update-pin.js'), []);
   assert.match(code(path.join(SETTINGS, 'layout.js')), installedRead);
   assert.equal((code(path.join(ROOT, 'lib', 'update-pin.js')).match(/siteToolVersion\(/g) || []).length, 2);
-  assert.doesNotMatch(code(path.join(SETTINGS, 'move.js')), installedRead);
-  assert.match(code(path.join(SETTINGS, 'move.js')), /siteToolVersion\(/);
+  assert.doesNotMatch(code(path.join(SETTINGS, 'site-tool.js')), installedRead);
+  assert.match(code(path.join(SETTINGS, 'site-tool.js')), /siteToolVersion\(/);
 });
