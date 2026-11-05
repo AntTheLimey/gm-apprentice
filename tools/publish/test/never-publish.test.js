@@ -39,6 +39,18 @@ const FILES = {
   'AGENTS.md': 'agent notes\n',
 };
 
+describe('scanner: the vault agent files at the root', () => {
+  it('never makes a page of CLAUDE.md or AGENTS.md holding the plugin block', () => {
+    const block = '<!-- BEGIN gm-apprentice (managed by the plugin; edits here are replaced) -->\n- a line\n<!-- END gm-apprentice -->\n';
+    const { vault } = setup({ ...FILES, 'CLAUDE.md': block, 'AGENTS.md': `agent notes\n\n${block}` });
+    const report = scanVaultReport({ vaultPath: vault, excludeDirs: ['_meta'], folderMap: FOLDER_MAP });
+    const sources = report.pages.map((p) => p.relPath || p.sourcePath || p.path || JSON.stringify(p));
+    assert.ok(sources.every((s) => !/CLAUDE\.md|AGENTS\.md/.test(s)), sources.join('\n'));
+    assert.ok(report.untyped.includes('CLAUDE.md'));
+    assert.ok(report.untyped.includes('AGENTS.md'));
+  });
+});
+
 describe('scanner: publish: false on a note with no type', () => {
   it('counts it apart from the untyped files and does not warn about it', () => {
     const { vault } = setup(FILES);

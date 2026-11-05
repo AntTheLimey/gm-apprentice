@@ -33,6 +33,7 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
+import agent_block
 import index_build
 import migrate_vault as mv
 from schema_rules import (SYSTEMS, TYPE_FOLDERS, WORLD_STUBS, system_id,
@@ -298,13 +299,18 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
         file(FIRST_CHAPTER, first_chapter_text, present=has_chapter)
     file("_meta/entity-types.md", entity_types_text)
     file("_meta/relationship-types.md", relationship_types_text)
+    has_settings = vault_layout(vault) != "none"
+    if not has_settings:   # a set-up vault's block is the update's agent-block check
+        changes, _left = agent_block.plan(vault)   # a broken block stays the update's to say
+        for change in changes:
+            out.append(Piece(change.rel, partial(str, change.text),
+                             merge=(vault / change.rel).exists()))
     # The index is rendered when it is written, after the files above exist.
     file("_meta/index.md",
          lambda: index_build.render(vault, today=day, previous=None))
     # Only for a vault with no settings file at all: a vault on either layout
     # (the update's skeleton check) must never get the new files, nor an old
     # one back beside them.
-    has_settings = vault_layout(vault) != "none"
     file(SETTINGS_FILE, lambda: settings_text(system, campaign),
          present=has_settings)
     file(STATE_FILE, lambda: state_text(version), present=has_settings)

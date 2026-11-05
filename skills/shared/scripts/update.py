@@ -46,9 +46,9 @@ from vaultlib import (SettingsUnavailable, StateUnreadable, cli_name,
                       parse_version, read_held, utf8_output, write_held)
 
 HOME: Path | None = None   # where backups go; None is the home folder
-UNREADABLE = "template-unreadable:"
+UNREADABLE = ("template-unreadable:", "agent-block-unreadable:")
 # Checks whose apply lines are already written for the GM.
-PLAIN_LINES = {"templates"}
+PLAIN_LINES = {"templates", "agent-block"}
 YES_NO = ["yes", "leave"]
 SHOWN_LINES = 3   # a question's text shows this many of its lines
 HASH_LEN = 8      # an answer id's hash: `<id>@<8 hex>`

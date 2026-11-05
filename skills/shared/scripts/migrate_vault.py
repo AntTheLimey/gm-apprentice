@@ -1234,6 +1234,9 @@ def find_wrapup_sections_key(vault: Path) -> list[Item]:
                   f"(no longer read)"], apply)]
 
 
+AGENT_BLOCK_UNREADABLE = "agent-block-unreadable:"
+
+
 def find_skeleton(vault: Path) -> list[Item]:
     """Every pass: the folders and `_meta/` schema files a vault's skeleton
     lacks, as vault_scaffold.py defines it. Only adds, and a file that
@@ -1263,6 +1266,26 @@ def find_skeleton(vault: Path) -> list[Item]:
 
     return [Item("skeleton", WILL,
                  [f"create {vs.shown(p)}" for p in pieces], apply)]
+
+
+def find_agent_block(vault: Path) -> list[Item]:
+    """Every pass: the plugin's block in the vault's CLAUDE.md (and
+    AGENTS.md, if it has one), as agent_block.py writes it. Only the text
+    between its markers changes; a file whose BEGIN marker has no END is
+    left as it is and said."""
+    import agent_block
+
+    changes, problems = agent_block.plan(vault)
+    items = [Item(f"{AGENT_BLOCK_UNREADABLE}{n}", PERSON, [line])
+             for n, line in enumerate(problems)]
+    if changes:
+        def apply(_value: str | None) -> list[str]:
+            fresh, _ = agent_block.plan(vault)
+            return agent_block.write(vault, fresh)
+        items.append(Item("agent-block", WILL,
+                          [f"write the plugin's block in {c.rel}"
+                           for c in changes], apply))
+    return items
 
 
 def find_timeline_page(vault: Path) -> list[Item]:
@@ -1982,6 +2005,10 @@ VAULT_CHECKS: list[Check] = [
     Check("skeleton", None, 3, "the vault skeleton", find_skeleton,
           kind="bookkeeping",
           plain=("Added the folders and setup files your vault was missing; nothing already there was touched.")),
+    Check("agent-block", None, 3, "the plugin's block in CLAUDE.md",
+          find_agent_block,
+          kind="bookkeeping",
+          plain=("Wrote the plugin's short instructions for the vault's agent into its CLAUDE.md; nothing outside the block's markers was touched.")),
     Check("templates", None, 3, "templates", find_templates,
           choices=("template:=",),
           kind="bookkeeping",
