@@ -75,7 +75,7 @@ class TemplateRuleTests(unittest.TestCase):
         item = by_id(mv.find_templates(vault))[f"template:{NPC}"]
         self.assertEqual(item.group, WILL)
         self.assertEqual(item.lines, [f"copy the missing template _Templates/{NPC}"])
-        self.assertEqual(item.apply(None), [f"wrote _Templates/{NPC}"])
+        self.assertEqual(item.apply(None), ["Added the missing NPC template."])
         self.assertEqual((vault / "_Templates" / NPC).read_text(encoding="utf-8"),
                          mv.expected_templates(vault)[NPC])
         entry = record(vault)["templates"][NPC]

@@ -375,6 +375,19 @@ def find_templates(vault: Path) -> list[Item]:
     release's text, unedited, updated; the GM's own, asked once (keep or
     take) and the answer remembered in the update record against both
     texts, so it is asked again only when one of them changes."""
+    return _survey_templates(vault)[0]
+
+
+def same_templates(vault: Path) -> dict[str, update_record.TemplateEntry]:
+    """A record entry for each template that is the plugin's text, as it
+    is now: what `gma update` writes at the end of a run that did work."""
+    return _survey_templates(vault)[1]
+
+
+def _survey_templates(vault: Path) -> tuple[
+        list[Item], dict[str, update_record.TemplateEntry]]:
+    """find_templates' items, and the entries of the templates found the
+    same as the plugin's."""
     folder = vault / "_Templates"
     items: list[Item] = []
     system = vault_system(vault)
@@ -449,7 +462,7 @@ def find_templates(vault: Path) -> list[Item]:
                 remember((name, entry(name, written, text,
                                       f"The vault had no copy, so the plugin's "
                                       f"{version} text was copied in.")))
-                return [f"wrote _Templates/{name}"]
+                return [f"Added the missing {template_label(name)} template."]
 
             items.append(Item(f"template:{name}", WILL,
                               [f"copy the missing template _Templates/{name}"],
@@ -547,7 +560,7 @@ def find_templates(vault: Path) -> list[Item]:
             detail={"file": f"_Templates/{name}", "label": label,
                     "comparison": comparison.as_dict(),
                     "summary": summary(comparison)}))
-    return items
+    return items, same
 
 
 def _read(path: Path) -> str:
@@ -1964,57 +1977,99 @@ def find_reconstruction_note_fence(vault: Path) -> list[Item]:
 
 
 VAULT_CHECKS: list[Check] = [
-    Check("skeleton", None, 3, "the vault skeleton", find_skeleton),
+    Check("skeleton", None, 3, "the vault skeleton", find_skeleton,
+          kind="bookkeeping",
+          plain=("Added the folders and setup files your vault was missing; nothing already there was touched.")),
     Check("templates", None, 3, "templates", find_templates,
-          choices=("template:=",)),
+          choices=("template:=",),
+          kind="bookkeeping",
+          plain=("Brought your note templates up to date with the plugin's.")),
     Check("regency-looks", "1.10.49", 3, "a Regency look to the templates",
-          find_regency_looks),
+          find_regency_looks,
+          kind="bookkeeping",
+          plain=("Noticed that your templates look like Regency Cthulhu while the vault is set to plain Call of Cthulhu, and said so; nothing was changed.")),
     Check("pc-template-sheet-source", "1.10.22", 3,
-          "sheet_source in PC templates", find_pc_template_field),
+          "sheet_source in PC templates", find_pc_template_field,
+          kind="bookkeeping",
+          plain=("Added an empty place for a character sheet link to your PC templates.")),
     Check("schema-mirror", None, 3, "the schema mirror", find_schema_mirror,
-          choices=("schema-mirror",)),
+          choices=("schema-mirror",),
+          kind="removes",
+          plain=("Brought the vault's own copy of the built-in note types up to the plugin's.")),
     Check("required-ties-section", "1.10.65",
           3, "the retired required-relationships section",
-          find_required_ties_section, choices=("required-ties-section",)),
+          find_required_ties_section, choices=("required-ties-section",),
+          kind="removes",
+          plain=("Removed the old Required Relationships section from your list of note types; nothing reads it any more.")),
     Check("relationship-types-missing", "1.10.66", 3,
           "the relationship types a list is missing",
           find_relationship_types_missing,
-          choices=("relationship-types-missing",)),
+          choices=("relationship-types-missing",),
+          kind="asks",
+          plain=("Added the relationship types your list was missing, so every kind of tie can be recorded.")),
     # An empty Timeline changes what an older publish tool shows, so it waits
     # for the repin: band 4, asks_site.
     Check("timeline-page", None, 4, "the Timeline page", find_timeline_page,
-          asks_site=True),
+          asks_site=True,
+          kind="bookkeeping",
+          plain=("Created an empty Timeline page for session events to be written to.")),
     # A rename asks the site's publish tool (what it changes on the site), so
     # it waits for the repin: band 4, asks_site.
     Check("wrapup-filenames", None, 4, "Wrap-Up filenames",
           find_wrapup_filenames, asks_site=True,
-          choices=("wrapup-filenames",)),
+          choices=("wrapup-filenames",),
+          kind="bookkeeping",
+          plain=("Renamed wrap-up notes to the current naming pattern and updated every link to them.")),
     # Re-nesting changes what the site shows, so it waits for the repin.
     Check("wrapup-sections", "1.10.28", 4, "Wrap-Up sections",
           find_wrapup_sections, asks_site=True,
-          choices=("wrapup-sections=",)),
+          choices=("wrapup-sections=",),
+          kind="asks",
+          plain=("Moved the wrap-up notes' GM headings under GM Notes, so they stay off the player site.")),
     Check("wrapup-sections-key", None, 2, "the retired player-sections list",
-          find_wrapup_sections_key),
+          find_wrapup_sections_key,
+          kind="removes",
+          plain=("Removed an old setting that listed which wrap-up sections players see; the site no longer reads it.")),
     Check("tone-words", "1.10.44", 3, "tone words",
-          find_tone_words, choices=("tone-words=",)),
+          find_tone_words, choices=("tone-words=",),
+          kind="asks",
+          plain=("Changed the tone words on relationships to the listed ones.")),
     Check("tone-list", "1.10.44", 3, "the tone list in _meta",
-          find_tone_list),
+          find_tone_list,
+          kind="bookkeeping",
+          plain=("Updated the list of relationship tone words in your setup files to the current list.")),
     Check("mobrpg-sections", "1.10.13", 3, "mobRPG vault-only sections",
-          find_mobrpg_sections, choices=("mobrpg-sections",)),
+          find_mobrpg_sections, choices=("mobrpg-sections",),
+          kind="bookkeeping",
+          plain=("Added two section titles to mobRPG's list of sections kept in the vault, so wrap-up lines stay private.")),
     Check("heritage-notes", "1.10.15", 4, "mobRPG heritage notes",
           find_heritage_notes, asks_site=True,
-          choices=("heritage-notes",)),
+          choices=("heritage-notes",),
+          kind="bookkeeping",
+          plain=("Moved culture and race notes into the Heritages folder and updated every link to them.")),
     Check("open-threads-fold", "1.10.83", 3,
           "per-session open threads in PC Current Status",
-          find_open_threads_fold, choices=("open-threads-fold=",)),
+          find_open_threads_fold, choices=("open-threads-fold=",),
+          kind="asks",
+          plain=("Folded each session's new open threads into the one Open threads list in PC Current Status, word for word.")),
     Check("stage-keys", "1.10.93", 3, "the retired stage: key",
-          find_stage_keys),
+          find_stage_keys,
+          kind="removes",
+          plain=("Removed the old stage line from session notes; nothing reads it any more.")),
     Check("empty-scenes-lists", "1.10.93", 3, "empty scenes: lists",
-          find_empty_scenes_lists),
+          find_empty_scenes_lists,
+          kind="removes",
+          plain=("Removed empty scene lists from session index notes.")),
     Check("dnd-background-sections", "1.10.94", 3,
-          "backstory sections in D&D PC notes", find_dnd_background_sections),
+          "backstory sections in D&D PC notes", find_dnd_background_sections,
+          kind="bookkeeping",
+          plain=("Moved D&D characters' backstory, appearance and personality into their own sections under Background, word for word.")),
     Check("wrapup-source-fence", "1.10.114", 3,
-          "the Source callout in Wrap-Ups", find_wrapup_source_fence),
+          "the Source callout in Wrap-Ups", find_wrapup_source_fence,
+          kind="bookkeeping",
+          plain=("Hid the line in each wrap-up that says where it came from, so the player site never shows it.")),
     Check("reconstruction-note-fence", "1.10.119", 3,
-          "the Reconstruction Note callout", find_reconstruction_note_fence),
+          "the Reconstruction Note callout", find_reconstruction_note_fence,
+          kind="bookkeeping",
+          plain=("Hid the Reconstruction Note on imported notes, so the player site never shows it.")),
 ]

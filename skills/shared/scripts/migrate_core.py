@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Literal, Optional
 
 import vaultlib
 from vaultlib import (LEGACY_SETTINGS_FILE, PUBLISH_TOOL, SETTINGS_FILE, STATE_FILE,
@@ -47,6 +47,10 @@ class Item:
     detail: dict[str, object] | None = None
 
 
+Kind = Literal["bookkeeping", "removes", "asks"]
+KINDS: tuple[Kind, ...] = ("bookkeeping", "removes", "asks")
+
+
 @dataclass(frozen=True)
 class Check:
     name: str
@@ -58,6 +62,15 @@ class Check:
     # ids it can offer; "x:" is a prefix; a trailing "=" ("mode=",
     # "sheet-source:=") marks a choice that needs `--choose id=value`
     choices: tuple[str, ...] = ()
+    # How `gma update` treats what it finds. bookkeeping: changes form and
+    # keeps content, so it runs in every run, headless too, and is
+    # reported. removes: can delete text the GM or their agent wrote, so it
+    # asks. asks: needs a value only the GM has. A choice that needs a value
+    # asks whatever its check's kind. None is treated as asks.
+    kind: Optional[Kind] = None
+    # One sentence, past tense, for a GM who knows nothing of the system:
+    # what changed for them when this check ran.
+    plain: str = ""
 
 
 # The files the vault's settings are read from: the vault's (either layout)

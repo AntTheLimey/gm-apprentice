@@ -10,6 +10,7 @@ Library module, no CLI.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Literal, Optional, TypedDict
@@ -41,8 +42,23 @@ UpdateEntry = TypedDict("UpdateEntry", {
 Workaround = dict[str, object]   # PR D gives it its fields
 
 
+class AnswerEntry(TypedDict):
+    """The GM's answer to one question, kept against the lines it was asked
+    with: while a check finds the same lines, the answer stands."""
+    answer: str
+    lines_sha: str   # lines_sha of the item's lines when it was answered
+    on: str          # ISO date
+    plugin: str      # the plugin version that asked
+
+
+def lines_sha(lines: list[str]) -> str:
+    """The sha256 of an item's lines, joined by newlines."""
+    return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
+
+
 class Record(TypedDict):
     templates: dict[str, TemplateEntry]
+    answers: dict[str, AnswerEntry]
     updates: list[UpdateEntry]
     workarounds: list[Workaround]
     swept: Optional[str]
@@ -53,7 +69,8 @@ class RecordUnreadable(StepFailed):
 
 
 def empty() -> Record:
-    return {"templates": {}, "updates": [], "workarounds": [], "swept": None}
+    return {"templates": {}, "answers": {}, "updates": [], "workarounds": [],
+            "swept": None}
 
 
 def load(vault: Path) -> Record:
@@ -76,7 +93,7 @@ def load(vault: Path) -> Record:
     if not isinstance(data, dict):
         raise RecordUnreadable(f"{RECORD_FILE} does not hold a JSON object. {FIX}")
     rec = empty()
-    for key, kind in (("templates", dict), ("updates", list),
+    for key, kind in (("templates", dict), ("answers", dict), ("updates", list),
                       ("workarounds", list)):
         if key in data:
             if not isinstance(data[key], kind):

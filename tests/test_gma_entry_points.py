@@ -17,7 +17,7 @@ CLI_SCRIPTS = [
     "links", "migrate", "moments", "plan_check", "plans_index", "prop_move",
     "reconcile_scan", "relink", "reveal", "reveal_scan", "rules_lookup",
     "scene_queue", "schema_rules", "session_context", "stamp_entities",
-    "tones", "vault_check", "vault_scaffold", "vault_search", "vault_write",
+    "tones", "update", "vault_check", "vault_scaffold", "vault_search", "vault_write",
 ]
 
 

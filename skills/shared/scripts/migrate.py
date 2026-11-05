@@ -30,12 +30,16 @@ from __future__ import annotations
 
 import argparse
 import sys
+from dataclasses import dataclass, field
 from pathlib import Path
+
+import update_record
 
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           check_editable)
 from migrate_site import REPIN, SITE_CHECKS
 from migrate_vault import VAULT_CHECKS
+from update_record import AnswerEntry, lines_sha
 from vaultlib import cli_name  # noqa: E402
 from vaultlib import (LEGACY_SETTINGS_FILE, SettingsUnavailable,
                       StateUnreadable, parse_version, plugin_version,
@@ -93,9 +97,66 @@ def offered(checks: list[Check], vault_v: str,
 Row = tuple[str, str]   # (the check or item that printed it, its row)
 
 
-def _answered(item: Item, held: dict[str, set[str]]) -> bool:
-    """Is this item settled by what a held update remembered: a "leave"
-    already given, or a notice already said?"""
+@dataclass
+class Found:
+    """What one offered check found, in run order."""
+    check: Check
+    items: list[Item] = field(default_factory=list)
+    failed: str | None = None   # its find raised StepFailed: the message
+    waiting: bool = False       # behind a pending repin: not looked at
+
+
+def collect(vault: Path, checks: list[Check]) -> list[Found]:
+    """Run each check's find, in the order given (`offered`), printing
+    nothing. A check that asks the site's tool waits, unlooked-at, while a
+    repin is still to run; a find that fails is kept with its message."""
+    out: list[Found] = []
+    repin_waits = False
+    for check in checks:
+        if check.asks_site and repin_waits:
+            out.append(Found(check, waiting=True))
+            continue
+        try:
+            items = check.find(vault)
+        except StepFailed as e:
+            out.append(Found(check, failed=str(e)))
+            repin_waits = repin_waits or check.name == REPIN
+            continue
+        out.append(Found(check, items))
+        if check.name == REPIN and any(i.group == WILL for i in items):
+            repin_waits = True
+    return out
+
+
+def recorded_answers(vault: Path) -> dict[str, AnswerEntry]:
+    """The answers the update record keeps; none when it cannot be read
+    (`gma update` reports that; a plan only shows the question again)."""
+    try:
+        return update_record.load(vault)["answers"]
+    except update_record.RecordUnreadable:
+        return {}
+
+
+def recorded(item: Item, answers: dict[str, AnswerEntry]) -> str | None:
+    """The answer the record keeps for this item while its lines are the
+    ones it was given against; a template's answer is the record's
+    templates entry, never this."""
+    if item.group == PERSON or item.id.startswith(TEMPLATE):
+        return None
+    entry = answers.get(item.id)
+    if isinstance(entry, dict) and entry.get("lines_sha") == lines_sha(item.lines):
+        answer = entry.get("answer")
+        return answer if isinstance(answer, str) else None
+    return None
+
+
+def _answered(item: Item, held: dict[str, set[str]],
+              answers: dict[str, AnswerEntry] | None = None) -> bool:
+    """Is this item settled by what a held update remembered (a "leave"
+    already given, or a notice already said), or by an answer the update
+    record keeps against these same lines?"""
+    if answers and recorded(item, answers) is not None:
+        return True
     if item.group == CHOICE:
         # A template's answer lives in the update record, not here.
         return item.id in held["left"] and not item.id.startswith(TEMPLATE)
@@ -153,30 +214,27 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
     holding: list[str] = []   # choices apply will not stamp without
     maybe: list[str] = []     # checks behind the repin that may ask one
     held = read_held(vault)
+    answers = recorded_answers(vault)
     stuck: list[str] = []     # things only a person can settle, that hold it
-    repin_waits = False
-    for check in offered(CHECKS if checks is None else checks, vault_v, plugin_v):
-        if check.asks_site and repin_waits:
+    todo = offered(CHECKS if checks is None else checks, vault_v, plugin_v)
+    for found in collect(vault, todo):
+        check = found.check
+        if found.waiting:
             waiting.append((check.name, f"{check.name}\t{check.title}"))
             if any(c.endswith("=") for c in check.choices):
                 # not looked at yet: all that is known is that it can ask
                 maybe.append(check.name)
             continue
-        try:
-            items = check.find(vault)
-        except StepFailed as e:
-            groups[PERSON].append((check.name, f"{check.name}\t{e} (apply "
-                                   f"stops here until this is fixed)"))
-            repin_waits = repin_waits or check.name == REPIN
+        if found.failed is not None:
+            groups[PERSON].append((check.name, f"{check.name}\t{found.failed} "
+                                   f"(apply stops here until this is fixed)"))
             continue
-        for item in items:
-            if _answered(item, held):
+        for item in found.items:
+            if _answered(item, held, answers):
                 continue
             groups[item.group].extend(_rows(item))
             if item.holds_stamp:
                 (stuck if item.group == PERSON else holding).append(item.id)
-        if check.name == REPIN and any(i.group == WILL for i in items):
-            repin_waits = True
     behind = parse_version(vault_v) < parse_version(plugin_v)
     print(f"vault {vault_v}, plugin {plugin_v}")
     if not behind and not waiting and not any(groups.values()):
@@ -271,6 +329,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
     repinned = waited = False
     unanswered: list[str] = []   # value choices the GM was not asked
     held = read_held(vault)
+    answers = recorded_answers(vault)
     left_ids: set[str] = set()   # "leave" answers given this run
     said: set[str] = set()       # notices seen this run
     stuck: list[str] = []        # person rows that hold the stamp
@@ -279,7 +338,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         try:
             for item in check.find(vault):
                 picked = any(i == item.id for i, _v in chosen)
-                if _answered(item, held) and not picked:
+                if _answered(item, held, answers) and not picked:
                     continue
                 if item.notice:
                     said.add(item.id)
