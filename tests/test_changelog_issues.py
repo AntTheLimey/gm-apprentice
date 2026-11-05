@@ -79,6 +79,17 @@ class IssueReleaseTests(unittest.TestCase):
                "### Changed\n\n- changed (#9).\n\n### Note\n\n- n (#10).\n")
         self.assertEqual(sorted(issue_releases(log)), [1, 2, 5, 6, 7, 8, 9])
 
+    def test_another_repos_issue_and_an_html_entity_are_not_ours(self):
+        log = ("## [1.2.3] — x\n\n- Borrowed from tdennis/game#67.\n"
+               "- It&#39;s fixed (#5).\n")
+        self.assertEqual(sorted(issue_releases(log)), [5])
+
+    def test_every_release_citing_an_issue_keeps_its_own_lines(self):
+        got = issue_releases(LOG)
+        self.assertEqual(got[357].cited, {
+            "1.10.12": ["- The second half of the fix (#357)."],
+            "1.10.9": ["- The first half of the fix (#357, #366)."]})
+
     def test_a_missing_changelog_reads_as_none(self):
         self.assertIsNone(changelog_issues.plugin_releases(
             ROOT / "no-such-CHANGELOG.md"))

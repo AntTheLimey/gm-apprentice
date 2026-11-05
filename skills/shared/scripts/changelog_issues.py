@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""changelog_issues.py: which release shipped each GitHub issue.
+"""changelog_issues.py: which releases' notes mention each GitHub issue.
 
 Read offline from the plugin's own CHANGELOG.md. Only released sections
 (`## [x.y.z]`) count; `[Unreleased]` and anything else is skipped. Within
 a release only its intro paragraphs and its change subsections (Added,
 Changed, Fixed, Removed, Security, Deprecated) are read: Follow-ups,
 Testing, Note and the like name issues filed, not fixed. Every `#N` in
-those entries is an issue the release ships. An issue cited in more
-than one release maps to the highest: the last is when the fix was
-complete. Library module, no CLI.
+those entries is an issue the release mentions, which may be a part fix
+only, so the update words its offer that way and asks GitHub first. An
+issue cited in more than one release maps to the highest, and every
+release's own lines are kept. Library module, no CLI.
 """
 
 from __future__ import annotations
@@ -26,7 +27,8 @@ CHANGELOG = Path(__file__).resolve().parents[3] / "CHANGELOG.md"
 _RELEASE = re.compile(r"^## \[(\d+(?:\.\d+)*)\]")
 _HEADING = re.compile(r"^#{1,6} ")
 _BULLET = re.compile(r"^\s*[-*] ")
-_ISSUE = re.compile(r"#(\d+)\b")
+# Not another repo's (`owner/repo#67`) nor an HTML entity (`&#39;`).
+_ISSUE = re.compile(r"(?<![\w&])#(\d+)\b")
 _SUBSECTION = re.compile(r"^### +(\w+)")
 # A `### ` subsection is read when its title's first word is one of these
 # ("Fixed (publish tool)" counts as Fixed).
@@ -37,6 +39,8 @@ SHIPPED = ("Added", "Changed", "Fixed", "Removed", "Security", "Deprecated")
 class ReleaseNote:
     release: str
     lines: list[str] = field(default_factory=list)   # the entries citing it
+    # every release citing it, with that release's entries (highest included)
+    cited: dict[str, list[str]] = field(default_factory=dict)
 
 
 def _entries(body: list[str]) -> list[str]:
@@ -85,8 +89,10 @@ def issue_releases(changelog: str) -> dict[int, ReleaseNote]:
                 here.setdefault(n, []).append(entry)
         for n, lines in here.items():
             old = found.get(n)
+            cited = old.cited if old is not None else {}
+            cited[release] = lines
             if old is None or parse_version(release) > parse_version(old.release):
-                found[n] = ReleaseNote(release, lines)
+                found[n] = ReleaseNote(release, lines, cited)
     return found
 
 
