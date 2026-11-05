@@ -39,8 +39,8 @@ not a fault.
 **Version check** (first invocation): run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
 version`. `OK`/`SETUP` → proceed. `MISMATCH` → announce the row and
-hand off to campaign-organizer's migration workflow
-(`campaign-organizer/references/migration-procedure.md`) before any
+run the update by campaign-organizer's
+`campaign-organizer/references/migration-procedure.md` before any
 audit; resume after. `AHEAD` → announce the row, tell the GM to
 update the plugin, stop. `ERROR` → report the row (broken plugin
 install), stop. No verdict row plus `not a directory` on stderr →

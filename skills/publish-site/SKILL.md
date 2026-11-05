@@ -19,9 +19,9 @@ a terminal command does rather than assuming they know.
 **Version check:** on first invocation run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
 version`. `OK`/`SETUP` → proceed. `MISMATCH` → announce the row,
-run campaign-organizer's `references/migration-procedure.md`, then
-resume. `AHEAD` → announce the row, tell the GM to update the
-plugin, stop. `ERROR` → report the row (broken plugin install),
+run the update by campaign-organizer's
+`references/migration-procedure.md`, then resume. `AHEAD` →
+announce the row, tell the GM to update the plugin, stop. `ERROR` → report the row (broken plugin install),
 stop. No verdict row plus a `not a directory` error → ask the GM
 for the correct vault path.
 
@@ -99,8 +99,8 @@ settings … --config <dir>/vault.config.json` (`--help` lists the
 verbs); never open a settings file in `_meta/` to read one or edit it
 by hand. When `settings` answers "needs the new settings file; run the
 update first", or `init` says the settings are still in the old file,
-run campaign-organizer's `references/migration-procedure.md`, then
-carry on.
+run the update by campaign-organizer's
+`references/migration-procedure.md`, then carry on.
 
 **Is there a site?** `node "$TOOL" settings get player_site.publish
 player_site.folder --vault <vault>`.
