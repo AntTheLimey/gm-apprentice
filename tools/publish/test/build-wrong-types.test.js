@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 const { build } = require('../lib/build');
 const { TEXT_FIELDS, LIST_FIELDS, RECORD_LIST_FIELDS } = require('../lib/frontmatter-shape');
-const { writeSettings } = require('./helpers/vault-files');
+const { writeSettings, writeSiteConfig } = require('./helpers/vault-files');
 
 // One note of every kind of page, each carrying `lines` in its frontmatter; built as a site.
 // Returns what the build said and whether it finished.
@@ -27,7 +27,7 @@ function buildWith(lines, { typed = true } = {}) {
     }
   }
   const configPath = path.join(root, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' }));
+  writeSiteConfig(configPath, { vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' });
   const said = [];
   const { log, warn, error } = console;
   console.log = () => {};
