@@ -39,7 +39,24 @@ UpdateEntry = TypedDict("UpdateEntry", {
     "from": str, "to": str, "on": str, "did": list[str], "asked": list[str],
     "left_open": list[str], "backup": str})
 
-Workaround = dict[str, object]   # PR D gives it its fields
+WorkaroundKind = Literal["note", "field", "css", "script", "meta", "memory"]
+WORKAROUND_KINDS: tuple[str, ...] = ("note", "field", "css", "script", "meta",
+                                     "memory")
+
+
+class Workaround(TypedDict):
+    """Something the GM or their agent built to stand in for a plugin
+    issue, kept so the update can offer to retire it once the issue ships."""
+    id: str                  # a slug of `what`, unique in the record
+    issue: int               # the gm-apprentice GitHub issue it stands in for
+    what: str                # one plain line
+    where: list[str]         # vault-relative paths, or memory:<file>
+    kind: WorkaroundKind
+    added: str               # ISO date
+    release: Optional[str]   # by hand: the release that ships it, over the CHANGELOG's
+    state: Literal["active", "kept", "retired"]
+    kept_at: Optional[str]   # the plugin version when the GM said keep
+    retired: Optional[str]   # date and reason
 
 
 class AnswerEntry(TypedDict):

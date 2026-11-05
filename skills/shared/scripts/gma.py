@@ -60,6 +60,7 @@ COMMANDS: dict[str, Command] = {
     "vault-scaffold": Command("vault_scaffold", "Build a new vault's skeleton, or list what one lacks."),
     "vault-search": Command("vault_search", "Ranked vault search."),
     "vault-write": Command("vault_write", "Place text the apprentice wrote into vault notes."),
+    "workaround": Command("workaround", "Record the vault's workarounds by the issue each stands in for."),
     "publish": Command("", "Build and deploy the campaign site (runs the publish tool under node)."),
     "llms": Command("", "The command reference: when to use each command, its flags, an example."),
 }
