@@ -52,4 +52,11 @@ function packageScripts(siteDir) {
   return out;
 }
 
-module.exports = { runSteps, packageScripts };
+// Why the site folder's package.json cannot be read as JSON, or null (no file, or it parses).
+function packageJsonProblem(siteDir) {
+  let text;
+  try { text = fs.readFileSync(path.join(siteDir, 'package.json'), 'utf8'); } catch { return null; }
+  try { JSON.parse(text.replace(/^﻿/, '')); return null; } catch (e) { return String(e.message).split('\n')[0]; }
+}
+
+module.exports = { runSteps, packageScripts, packageJsonProblem };

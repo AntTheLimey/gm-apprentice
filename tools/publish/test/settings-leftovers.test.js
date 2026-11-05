@@ -146,6 +146,27 @@ describe('leftovers from before plugin 1.11.0 stop the build by name', () => {
     builtNothing(s);
   });
 
+  it('build --site gm on an old-only vault names the old settings file, not "GM site is off"', () => {
+    const { spawnSync } = require('node:child_process');
+    const s = site({ settings: null, oldFile: true });
+    const r = spawnSync(process.execPath, [path.join(__dirname, '..', 'bin', 'gm-publish.js'), 'build', '--site', 'gm', '--config', s.configPath], { encoding: 'utf8' });
+    assert.strictEqual(r.status, 1);
+    assert.ok(r.stderr.includes(OLD_FILE_STOP), r.stderr);
+    assert.ok(!/GM site is off/.test(r.stderr), r.stderr);
+  });
+
+  it('an unparseable package.json in the site folder stops build and deploy, naming the file', async () => {
+    const { runDeploy } = require('../lib/deploy-cli');
+    const s = site();
+    fs.writeFileSync(path.join(s.siteDir, 'package.json'), '{ "scripts": ');
+    const { error } = quietBuild(s.configPath);
+    assert.ok(error, 'the build stopped');
+    assert.match(error.message, /package\.json is not valid JSON/);
+    const ran = [];
+    await assert.rejects(runDeploy({ configPath: s.configPath }, { out: () => {}, runCommand: (...a) => { ran.push(a); return { code: 0 }; }, runWrangler: (...a) => { ran.push(a); return { code: 0 }; }, build: async () => { ran.push('build'); } }), /package\.json is not valid JSON/);
+    assert.deepStrictEqual(ran, []);
+  });
+
   it('a site file with only vaultPath builds', () => {
     const s = site({ pkg: { scripts: { build: 'gm-apprentice-publish build' } } });
     const { error, lines } = quietBuild(s.configPath);

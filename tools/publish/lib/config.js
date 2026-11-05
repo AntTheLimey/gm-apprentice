@@ -3,7 +3,7 @@ const path = require('path');
 const { canonicalPath } = require('./manifest');
 const { isBlankStep, menuKey, words: statusWords } = require('./settings/entry-faults');
 const { readSettings, forSite, formatFault, makeFault, stops, entry, REGISTRY, legacyNameOf, siteKeyOf, siteFolderKeys, nameIn, fileLabelFor } = require('./settings');
-const { packageScripts } = require('./settings/steps');
+const { packageScripts, packageJsonProblem } = require('./settings/steps');
 
 // build.js looks up per-page field overrides via `fieldOverrides[vaultRelPathOf(page)]`,
 // and vaultRelPathOf() canonicalizes the scanned path to NFC (#139). An overrides.fields
@@ -104,6 +104,12 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
     const homeOf = (script) => REGISTRY.find((e) => e.stepsFrom === script && !e.twinOf).name;
     faults.push(makeFault({ name: 'package.json', setting: null, kind: 'dropped', level: 'stop', leftover: true, source: 'package',
       message: `the site folder's package.json holds build scripts that are no longer run: ${scripts.map((s) => `${s} (now ${homeOf(s)})`).join(', ')}. Move each to the vault's settings and take it out of package.json.` }));
+  }
+  // A package.json that cannot be read might hold build scripts that were never seen: stop, naming the file.
+  const pkgProblem = siteDir ? packageJsonProblem(siteDir) : null;
+  if (pkgProblem) {
+    faults.push(makeFault({ name: 'package.json', setting: null, kind: 'dropped', level: 'stop', leftover: true, source: 'package',
+      message: `the site folder's package.json is not valid JSON (${pkgProblem}), so any build scripts in it cannot be checked. Fix the file or remove it.` }));
   }
   const named = (n) => origins[n] !== 'default';
 
