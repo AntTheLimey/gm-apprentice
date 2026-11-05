@@ -97,6 +97,9 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   const off = (deps.siteOffFor || require('./config').siteOffFor)(configPath);
   if (off) { out(off.replace('nothing was built', 'nothing was set up')); return 1; }
 
+  // A leftover in the site folder, or an old settings file, stops the setup before KV or wrangler.toml is touched.
+  (deps.assertNoStopsFor || require('./config').assertNoStopsFor)(configPath, 'setup-backend');
+
   const config = JSON.parse(readFile(configPath));
   const siteRoot = path.dirname(path.resolve(configPath));
   const tomlPath = path.join(siteRoot, 'wrangler.toml');

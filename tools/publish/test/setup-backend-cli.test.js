@@ -116,6 +116,23 @@ test('a vault file the editor refuses stops the command before any KV or wrangle
   assert.deepStrictEqual(calls, [], 'no wrangler call of any kind');
 });
 
+test('a site file that still holds settings stops setup before any KV or toml change', async () => {
+  const vault = tempVault();
+  const lines = [];
+  const { deps, files, calls } = harness({ out: (m) => lines.push(m) }, vault);
+  const siteDir = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'gm-setup-site-'));
+  const siteFile = nodePath.join(siteDir, 'vault.config.json');
+  fs.writeFileSync(siteFile, JSON.stringify({ vaultPath: vault, siteTitle: 'Kept', excludeSections: ['Spoilers'] }));
+  files['vault.config.json'] = fs.readFileSync(siteFile, 'utf8');
+  const tomlBefore = files['wrangler.toml'];
+  try {
+    await assert.rejects(runSetupBackend('inbox', { configPath: siteFile }, deps), /vault\.config\.json holds keys that are no longer read there: siteTitle \(now player_site\.title\), excludeSections/);
+  } finally { fs.rmSync(siteDir, { recursive: true, force: true }); }
+  assert.strictEqual(files['wrangler.toml'], tomlBefore);
+  assert.deepStrictEqual(calls, []);
+  assert.strictEqual(fs.existsSync(nodePath.join(vault, '_meta')), false, 'no settings file was made');
+});
+
 test('a vault with no settings file whose site file holds no settings gets the new file, as before', async () => {
   const vault = tempVault();
   const { deps } = harness({}, vault);
