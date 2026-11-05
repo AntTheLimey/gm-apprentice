@@ -102,9 +102,9 @@ class GmaTests(unittest.TestCase):
         self.assertTrue(out.startswith("usage: gma links"), out)
 
     def test_truly_nested_usage_reads_gma(self):
-        code, out, _ = _run(["moments", "status", "--help"])
+        code, out, _ = _run(["moments", "v", "status", "--help"])
         self.assertEqual(code, 0)
-        self.assertTrue(out.startswith("usage: gma moments status"), out)
+        self.assertTrue(out.startswith("usage: gma moments vault status"), out)
 
     def test_missing_node_exits_1(self):
         import unittest.mock as mock
