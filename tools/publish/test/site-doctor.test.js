@@ -504,7 +504,7 @@ describe('doctor --site', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
-  it('names the failure instead of going silent when the site package.json is malformed JSON (M7)', async () => {
+  it('reports a malformed site package.json once, as the settings stop (M7)', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-pkg-bad-'));
     write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\nHi.\n');
     const { dir, configPath } = siteFor(vault, { folderMap: { 'Characters/NPCs': 'characters/npcs' } });
@@ -516,9 +516,8 @@ describe('doctor --site', () => {
     assert.strictEqual(rc, 1);
     const payload = JSON.parse(c.out.join(''));
     assert.ok(payload.findings.some((f) => f.code === 'SETTINGS_FAULT' && /package\.json is not valid JSON/.test(f.detail)), JSON.stringify(payload.findings));
-    const finding = payload.findings.find((f) => f.code === 'VERSION_DRIFT' && /package\.json/.test(f.path));
-    assert.ok(finding, JSON.stringify(payload.findings));
-    assert.match(finding.detail, /could not be read as JSON/);
+    // One report of it, not two: the stop already names the file.
+    assert.deepStrictEqual(payload.findings.filter((f) => f.code === 'VERSION_DRIFT' && /package\.json/.test(f.path)), [], JSON.stringify(payload.findings));
     fs.rmSync(vault, { recursive: true, force: true });
   });
 

@@ -296,7 +296,8 @@ async function runSiteDoctor(options, deps) {
         tarball = /\.(?:tgz|tar\.gz)$/i.test(String(spec || ''));
         if (spec && !tarball && String(spec).startsWith('file:')) sitePin = pinnedVersionOf(String(spec).slice('file:'.length));
       } catch (err) {
-        findings.push(finding(
+        // The settings stop above already names an unreadable package.json; a second finding would say it twice.
+        if (!publishConfig.faults.some((f) => f.source === 'package' && f.level === 'stop')) findings.push(finding(
           'VERSION_DRIFT', 'warning', pkgPath,
           `could not be read as JSON: ${err.message} — cannot confirm the site's pinned version`,
           'fix the JSON in package.json',
