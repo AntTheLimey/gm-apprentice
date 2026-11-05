@@ -221,7 +221,7 @@ class TemplateRuleTests(unittest.TestCase):
         vault = make_vault(self)
         path = edited_npc(vault)
         item = by_id(mv.find_templates(vault))[f"template:{NPC}"]
-        self.assertEqual(item.apply("take"), ["took the plugin's NPC template"])
+        self.assertEqual(item.apply("take"), ["Took the plugin's NPC template."])
         self.assertEqual(path.read_text(encoding="utf-8"), mv.expected_templates(vault)[NPC])
         self.assertEqual(record(vault)["templates"][NPC]["decision"], "take")
         self.assertEqual(mv.find_templates(vault), [])
@@ -231,7 +231,7 @@ class TemplateRuleTests(unittest.TestCase):
         path = edited_npc(vault)
         text = path.read_text(encoding="utf-8")
         item = by_id(mv.find_templates(vault))[f"template:{NPC}"]
-        self.assertEqual(item.apply("leave"), ["kept your NPC template"])
+        self.assertEqual(item.apply("leave"), ["Kept your NPC template."])
         self.assertEqual(path.read_text(encoding="utf-8"), text)
         entry = record(vault)["templates"][NPC]
         self.assertEqual((entry["state"], entry["decision"]), ("gms", "keep"))
@@ -253,7 +253,7 @@ class RememberedTests(unittest.TestCase):
         code, out, err = run(migrate.run_apply, vault, [(f"template:{NPC}", "keep")],
                              checks=[TEMPLATES_CHECK])
         self.assertEqual(code, 0, out + err)
-        self.assertIn("kept your NPC template", out)
+        self.assertIn("Kept your NPC template.", out)
         return out
 
     def test_keep_is_remembered_after_stamping(self):
@@ -273,7 +273,7 @@ class RememberedTests(unittest.TestCase):
         self.assertIn(f"keep your NPC template (decided {entry['on']})", out)
         code, out, err = run(migrate.run_apply, vault, [], checks=[TEMPLATES_CHECK])
         self.assertEqual(code, 0, out + err)
-        self.assertIn(f"kept your NPC template (decided {entry['on']})", out)
+        self.assertIn(f"Kept your NPC template (decided {entry['on']}).", out)
         self.assertEqual(read_stamp(vault), VERSION)
 
     def test_keep_is_reasked_when_the_vault_file_changes(self):
@@ -324,7 +324,7 @@ class RememberedTests(unittest.TestCase):
         self.held(vault)
         text = (vault / "_Templates" / NPC).read_text(encoding="utf-8")
         item = by_id(mv.find_templates(vault))[f"template-kept:{NPC}"]
-        self.assertEqual(item.apply(None), ["kept your NPC template (you answered before)"])
+        self.assertEqual(item.apply(None), ["Kept your NPC template (you answered before)."])
         entry = record(vault)["templates"][NPC]
         self.assertEqual((entry["state"], entry["decision"]), ("gms", "keep"))
         self.assertEqual(entry["file_sha"], mv.text_hash(text))

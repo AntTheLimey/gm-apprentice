@@ -508,7 +508,7 @@ def _survey_templates(vault: Path) -> tuple[
 
                 def kept(_value: str | None, label: str = label,
                          on: str = str(on)) -> list[str]:
-                    return [f"kept your {label} template (decided {on})"]
+                    return [f"Kept your {label} template (decided {on})."]
 
                 items.append(Item(
                     f"template-kept:{name}", WILL,
@@ -524,7 +524,7 @@ def _survey_templates(vault: Path) -> tuple[
                     f"The GM chose to keep their own {label} template "
                     f"(answered leave in an earlier update).",
                     state="gms", matches=None, decision="keep")))
-                return [f"kept your {label} template (you answered before)"]
+                return [f"Kept your {label} template (you answered before)."]
 
             items.append(Item(
                 f"template-kept:{name}", WILL,
@@ -541,14 +541,14 @@ def _survey_templates(vault: Path) -> tuple[
                     name, current, text,
                     f"The GM chose to keep their own {label} template.",
                     state="gms", matches=None, decision="keep")))
-                return [f"kept your {label} template"]
+                return [f"Kept your {label} template."]
             if value == "take":
                 write_text_atomic(path, written)
                 remember((name, entry(
                     name, written, text,
                     f"The GM chose the plugin's {version} {label} template.",
                     decision="take")))
-                return [f"took the plugin's {label} template"]
+                return [f"Took the plugin's {label} template."]
             raise StepFailed(f"template:{name} takes keep or take")
 
         items.append(Item(
