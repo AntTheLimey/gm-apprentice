@@ -135,7 +135,6 @@ function syncScaffoldFunctions(siteRoot, options = {}) {
 }
 
 // Why a feature is off, for the line printed with a removal.
-// The setting is named as the vault's file writes it (`layout`: 'new', 'legacy' or 'none').
 const OFF_REASON = {
   liveStats: (sw, layout) => (sw.characterSheets === false
     ? `${nameInFor(layout, 'player_site.sheets.show')} is off, so live stats are off`

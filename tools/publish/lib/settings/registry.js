@@ -16,8 +16,8 @@
 // onWhenSet (the switch is on when the setting this names holds text), defaultFromVaultFolder (unset, the
 // value is the vault folder's name), settable, group, does, left_out, same (how the build decides two entries of a list are one:
 // 'heading', 'folder', 'callout' or 'name'; for a `listOfMaps`, the field two entries are told apart by; absent means exact text),
-// fields (a `listOfMaps` entry's keys: { key: { required?: true } }, each text), siteFallback (also a key of the site
-// folder's vault.config.json that is read while the vault sets none), stepsFrom (the site's package.json script a build-steps list was; the move carries it), check ('output' or 'keep': a rule on the value
+// fields (a `listOfMaps` entry's keys: { key: { required?: true } }, each text), siteFallback (one of the five keys the site
+// folder's vault.config.json once held; config.js gives it to the config object under that key), stepsFrom (the site's package.json script a build-steps list was; one left there stops the build), check ('output' or 'keep': a rule on the value
 // beyond its type, folders.js) and stopOnFault (an unreadable value stops the build, as a hiding setting does).
 // The entries that carry `legacyKind` stay in the order of the old moved-key table.
 
@@ -151,9 +151,8 @@ const REGISTRY = [
     does: 'The words a reader sees after following a link to a page that is not there',
     left_out: '"This page is not available."',
   },
-  // The five keys the site folder's vault.config.json used to hold. `siteFallback` reads the site file's key while
-  // the vault sets none (legacy.js, read.js); `check` and `stopOnFault` keep a build from cleaning a folder it is
-  // unsure of.
+  // The five keys the site folder's vault.config.json used to hold (`siteFallback`; a key left there stops the build);
+  // `check` and `stopOnFault` keep a build from cleaning a folder it is unsure of.
   {
     name: 'player_site.url', was: [{ name: 'siteUrl', in: 'site' }], type: 'text', legacyKind: 'scalar', siteFallback: true, group: 'site',
     shape: 'a web address',

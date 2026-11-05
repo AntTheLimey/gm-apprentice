@@ -1,8 +1,8 @@
 'use strict';
-// The one writer of a vault's settings, on the yaml library, for either layout. A change is
+// The one writer of a vault's settings file, on the yaml library. A change is
 // found in the document the library parses (every node knows where its text sits), and only
 // that node's text is replaced, so everything else in the GM's file (comments, quoting, blank
-// lines, flow lists, indentation, line endings, the old file's body) comes back byte for byte.
+// lines, flow lists, indentation, line endings) comes back byte for byte.
 // The new text for a changed node is made by the library too. Every change is checked before
 // anything is written, the result is read back and compared with what was meant, and the file
 // is replaced through a temp file and a rename.
@@ -10,16 +10,12 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
 const YAML = require('yaml');
-const matter = require('gray-matter');
-const { ENGINES } = require('../frontmatter');
-const { REGISTRY, resolve, legacyNameOf } = require('./registry');
+const { REGISTRY, resolve } = require('./registry');
 const { TYPES, isMap, getPath } = require('./types');
 const { makeFault } = require('./faults');
 const { isLeaf } = require('./describe');
-const { NEW_FILE, OLD_FILE, GROUPS: GROUP_NAMES, layoutOf, at } = require('./layout');
+const { NEW_FILE, OLD_FILE_STOP, GROUPS: GROUP_NAMES, layoutOf, at } = require('./layout');
 const { LAYOUT_VERSION, NEWER_VERSION } = require('./read');
-const { OLD_BLOCK, hasLegacy } = require('./legacy');
-const { parseNote } = require('../frontmatter');
 const { outputProblem, keepProblem } = require('./folders');
 
 const { Scalar, isScalar, isMap: isYMap, isSeq: isYSeq, isCollection } = YAML;
@@ -114,12 +110,6 @@ function dropLines(text, a, b, eol) {
 // ---- Making text with the library --------------------------------------------------------------
 
 const toStringOptions = (ctx) => ({ indent: ctx.step, indentSeq: ctx.indentSeq, lineWidth: 0, blockQuote: false, flowCollectionPadding: false, minContentWidth: 0 });
-// On the old file (`ctx.v11`) the build reads with another YAML reader (js-yaml, YAML 1.1), which takes some plain
-// text for a number or a date ("12:30", "2024-10-13"). A string that reader would not give back as written is
-// quoted, so both readers agree on it; asked of the reader itself, not of a list of words.
-const buildReadsAsWritten = (text) => {
-  try { return parseNote(`---\nk: ${new YAML.Document(text).toString().trim()}\n---\n`).data.k === text; } catch { return false; }
-};
 // A string with a line break is always written double-quoted on one line: the library would otherwise
 // spread it over lines, which a one-line (flow) group cannot hold.
 function documentOf(value, ctx = {}) {
@@ -127,7 +117,7 @@ function documentOf(value, ctx = {}) {
   YAML.visit(doc, {
     Scalar(_, node) {
       if (typeof node.value !== 'string') return;
-      if (/[\r\n]/.test(node.value) || (ctx.v11 && !buildReadsAsWritten(node.value))) node.type = 'QUOTE_DOUBLE';
+      if (/[\r\n]/.test(node.value)) node.type = 'QUOTE_DOUBLE';
     },
   });
   return doc;
@@ -435,40 +425,16 @@ function renameItem(text, doc, keys, from, to, ctx) {
 
 // ---- The layouts -------------------------------------------------------------------------------
 
-// The document text of a settings file and how to put an edited text back.
+// The document text of a settings file and how to put an edited text back. A vault with only the old settings file
+// is refused: that file is no longer read (since plugin 1.11.0), so nothing is written to it or beside it.
 function open(vaultPath, layout, create) {
   if (layout === 'new') {
     const text = fs.readFileSync(at(vaultPath, NEW_FILE), 'utf8');
     return { rel: NEW_FILE, label: NEW_FILE, whole: text, text, eol: eolOf(text), join: (t) => t };
   }
-  if (layout === 'legacy') {
-    const whole = fs.readFileSync(at(vaultPath, OLD_FILE), 'utf8');
-    if (!whole.startsWith('---')) throw new Error(`${OLD_FILE} has no frontmatter to edit`);
-    const m = splitFront(whole).matter;
-    if (whole.slice(3, 3 + m.length) !== m || !whole.slice(3 + m.length).startsWith('\n') && !whole.slice(3 + m.length).startsWith('\r\n') && whole.slice(3 + m.length) !== '') {
-      throw new Error(`${OLD_FILE} frontmatter is not in a form this command edits`);
-    }
-    const eol = eolOf(whole);
-    return { rel: OLD_FILE, label: OLD_FILE, whole, eol, ...editableFront(whole, eol) };
-  }
+  if (layout === 'legacy') throw plain(OLD_FILE_STOP);
   if (!create) throw new Error(`this vault has no settings file yet; add --create to make ${NEW_FILE}`);
   return { rel: NEW_FILE, label: NEW_FILE, whole: null, text: 'version: 1\n', eol: '\n', join: (t) => t, created: true };
-}
-
-// The old file split by gray-matter (its own YAML engine turned off): `matter` is the text between the --- lines
-// exactly as written, `content` what follows the closing ---. The one split, used here and by the move.
-const splitFront = (whole) => matter(whole, { engines: { ...ENGINES, yaml: () => ({}) } });
-
-// The part of the old file that is edited: { text (the frontmatter without its edges), join (puts an edited
-// text back between the same --- lines) }.
-function editableFront(whole, eol) {
-  const m = splitFront(whole).matter;
-  const cr = m.endsWith('\r') ? '\r' : '';
-  let body = cr ? m.slice(0, -1) : m;
-  let lead = '';
-  if (body.startsWith('\r\n')) { lead = '\r\n'; body = body.slice(2); } else if (body.startsWith('\n')) { lead = '\n'; body = body.slice(1); } else if (body === '') lead = eol;
-  const rest = whole.slice(3 + m.length);
-  return { text: body, join: (t) => `---${lead}${t}${cr}${rest}` };
 }
 
 function writeAtomic(link, text, { rename } = {}) {
@@ -498,14 +464,13 @@ const checkProblem = (e, value, siteDir) => (e.check === 'output' ? outputProble
 function prepare(changes, layout, { allowState = false, siteDir = null } = {}) {
   const refusals = [];
   const steps = [];
-  const legacy = layout === 'legacy';
   for (const change of changes) {
     if (change.op === 'unset-raw') {
       const dotted = change.path.join('.');
       // On the new file only a key the list does not know can be taken out as written (`version` and the groups stay).
       const known = dotted === 'version' || REGISTRY.some((x) => x.name === dotted || x.name.startsWith(`${dotted}.`)) || GROUP_NAMES.includes(dotted);
       if (layout === 'none') refusals.push('there is no settings file to take it out of');
-      else if (!legacy && known) refusals.push(`${dotted} is a setting; remove it with settings unset ${dotted}.`);
+      else if (known) refusals.push(`${dotted} is a setting; remove it with settings unset ${dotted}.`);
       else steps.push({ kind: 'del', keys: change.path, setting: dotted, shown: dotted });
       continue;
     }
@@ -539,17 +504,9 @@ function prepare(changes, layout, { allowState = false, siteDir = null } = {}) {
       continue;
     }
     // On the new layout a setting is written under its own name, whatever name the command was given.
-    let keys = (legacy ? name : e.name).split('.');
-    let older = [];
-    let spelling = legacy ? name : e.name;
-    if (legacy) {
-      const first = legacyNameOf(e);
-      if (!first) { refusals.push(`${name} needs the new settings file; run the update first.`); continue; }
-      keys = first.split('.');
-      spelling = first;
-      older = (e.was || []).filter((w) => w.in === 'vault' && w.name !== first).map((w) => w.name);
-    }
-    const base = { shown: legacy ? name : e.name, setting: change.name, keys, older: older.map((o) => o.split('.')), spelling, olderNames: older };
+    const keys = e.name.split('.');
+    const older = [];
+    const base = { shown: e.name, setting: change.name, keys, older, spelling: e.name, olderNames: older };
     if (change.op === 'set') {
       if (blank(change.value) && e.type !== 'text') { refusals.push(`${name} has no value; to take it out of the file, use settings unset ${name}.`); continue; }
       if (Array.isArray(change.value) && change.value.some(blank)) { refusals.push(`${name} has a blank entry; remove it.`); continue; }
@@ -591,7 +548,7 @@ function prepare(changes, layout, { allowState = false, siteDir = null } = {}) {
 // One step on one text. Returns { text, expected (the data it should parse to), wrote, removed, notes }.
 function runStep(text, step, label, eol, keepBlock) {
   const doc = parseText(text, label);
-  const ctx = { ...styleOf(doc, text), eol, keepBlock, v11: !!keepBlock };
+  const ctx = { ...styleOf(doc, text), eol, keepBlock };
   const before = doc.toJS() || {};
   const wrote = [];
   const removed = [];
@@ -676,18 +633,14 @@ function expandCarry(text, step, label) {
 }
 
 // Plans the changes without writing: { rel, file, before, after, changed, notes, wrote, removed, created }.
-// `siteConfig` is the site folder's vault.config.json, when the caller has it: a vault with no settings file whose
-// site file still holds settings is not given a new one (the new file would switch those settings off).
-function planChanges(vaultPath, changes, { create = false, allowState = false, siteConfig = null, siteConfigPath = null } = {}) {
+// `siteConfigPath` is the site folder's vault.config.json, when the caller has it: a folder setting is checked against it.
+function planChanges(vaultPath, changes, { create = false, allowState = false, siteConfigPath = null } = {}) {
   const layout = layoutOf(vaultPath);
   const { steps, refusals } = prepare(changes, layout, { allowState, siteDir: siteConfigPath ? path.dirname(path.resolve(siteConfigPath)) : null });
   if (refusals.length) {
     const err = new Error(refusals.join('\n'));
     err.refusals = refusals;
     throw err;
-  }
-  if (layout === 'none' && create && hasLegacy(siteConfig)) {
-    throw plain(`the site folder's vault.config.json still holds this vault's settings, so none can be set yet. Bring them into the vault first by running: gm-apprentice-publish settings move --vault "${vaultPath}" --config "${siteConfigPath || '<site folder>/vault.config.json'}". Nothing was written.`);
   }
   const doc = open(vaultPath, layout, create);
   if (layout === 'new' || doc.created) {
@@ -698,8 +651,6 @@ function planChanges(vaultPath, changes, { create = false, allowState = false, s
   // The file as given must read; "not valid YAML" is only ever said about that.
   parseText(text, doc.label);
   const result = { changed: [], notes: [], wrote: [], removed: [] };
-  // Lines in the old file count the opening --- line too.
-  const lineBase = layout === 'legacy' ? 1 : 0;
   const queue = [...steps];
   while (queue.length) {
     const step = queue.shift();
@@ -707,20 +658,12 @@ function planChanges(vaultPath, changes, { create = false, allowState = false, s
     const before = text;
     let out;
     try {
-      out = runStep(text, step, doc.label, doc.eol, layout === 'legacy' ? OLD_BLOCK : null);
+      out = runStep(text, step, doc.label, doc.eol, null);
       const after = parseText(out.text, doc.label).toJS() || {};
       if (!isDeepStrictEqual(after, out.expected)) throw new Error('did not read back as intended');
-      // The old file is read by the build with another YAML reader (js-yaml, YAML 1.1): the changed setting must
-      // come out of that reader as it was meant too.
-      if (layout === 'legacy' && step.kind !== 'del' && out.text !== before) {
-        const built = parseNote(doc.join(out.text)).data || {};
-        if (!isDeepStrictEqual(getPath(built, step.keys), getPath(out.expected, step.keys))) throw new Error('the build would read it differently');
-      }
     } catch (e) {
       if (e.plain) throw e;
-      const err = notMade(step.shown || step.setting, doc.rel, before, step.keys);
-      if (lineBase) err.message = err.message.replace(/near line (\d+)/, (m, n) => `near line ${Number(n) + lineBase}`);
-      throw err;
+      throw notMade(step.shown || step.setting, doc.rel, before, step.keys);
     }
     text = out.text;
     if (text !== before && step.setting) result.changed.push(step.setting);
@@ -745,18 +688,14 @@ function applyChanges(vaultPath, changes, options = {}) {
 // ---- For the callers that read or rename --------------------------------------------------------
 
 // The settings file's name (relative) and text, or null with no file; { rel, text, data } where
-// `data` is what the file's settings parse to, whichever layout it is on.
+// `data` is what the file's settings parse to. A vault with only the old settings file throws (open).
 function settingsText(vaultPath) {
   const layout = layoutOf(vaultPath);
   if (layout === 'none') return null;
   const opened = open(vaultPath, layout, false);
   const data = parseText(opened.text, opened.label).toJS() || {};
   // The value the file holds for a setting (by its new name), wherever the layout keeps it; undefined when absent.
-  const get = (name) => {
-    const e = BY_NAME.get(name);
-    const where = layout === 'legacy' ? (e && legacyNameOf(e)) : name;
-    return where ? getPath(data, where.split('.')) : undefined;
-  };
+  const get = (name) => getPath(data, name.split('.'));
   return { rel: opened.rel, whole: opened.whole, data, layout, get };
 }
 
@@ -769,14 +708,14 @@ function renameInSettings(vaultPath, renames, { text } = {}) {
   if (layout === 'none') return null;
   const opened = open(vaultPath, layout, false);
   let current = text === undefined ? opened.whole : text;
-  const stage = layout === 'legacy' ? editableFront(current, opened.eol) : { text: current, join: (t) => t };
+  const stage = { text: current, join: (t) => t };
   let edit = stage.text;
   for (const r of renames) {
     const e = BY_NAME.get(r.name);
     if (!e) throw new Error(`${r.name} is not a setting.`);
-    const keys = (layout === 'legacy' ? legacyNameOf(e) : e.name).split('.');
+    const keys = e.name.split('.');
     const doc = parseText(edit, opened.label);
-    const ctx = { ...styleOf(doc, edit), eol: opened.eol, v11: layout === 'legacy' };
+    const ctx = { ...styleOf(doc, edit), eol: opened.eol };
     const before = doc.toJS() || {};
     const held = getPath(before, keys);
     let edits;
@@ -806,4 +745,4 @@ function refusalsFor(vaultPath, changes) {
   return prepare(changes, layoutOf(vaultPath)).refusals;
 }
 
-module.exports = { applyChanges, refusalsFor, planChanges, renameInSettings, settingsText, writeAtomic, splitFront, applyEdits, addLines, dropLines, endOf, dashOffset, parseText };
+module.exports = { applyChanges, refusalsFor, planChanges, renameInSettings, settingsText, writeAtomic, applyEdits, addLines, dropLines, endOf, dashOffset, parseText };

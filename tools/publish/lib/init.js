@@ -4,6 +4,7 @@ const path = require('path');
 const { applyChanges, settingsText } = require('./settings/write');
 const { siteDirPath } = require('./lines-cli');
 const { entry, nameIn, fileLabel, layoutOf } = require('./settings');
+const { OLD_FILE_STOP } = require('./settings/layout');
 const { VAULT_FOLDERS } = require('./shared-lists');
 
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates-scaffold');
@@ -159,7 +160,7 @@ async function init(targetDir = '.', options = {}) {
   // them: a vault still on the old file is updated first.
   const vaultDir = path.resolve(dest, values.VAULT_PATH);
   if (layoutOf(vaultDir) === 'legacy') {
-    throw new Error("This vault's settings are still in the old file. Update the vault first (ask the apprentice to update it), then set up the site.");
+    throw new Error(OLD_FILE_STOP);
   }
 
   function log(msg) {
