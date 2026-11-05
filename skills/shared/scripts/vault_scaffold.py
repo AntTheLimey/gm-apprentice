@@ -464,7 +464,7 @@ def _refuse_unusable_version(vault: Path, plugin: str) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
-        prog="vault_scaffold.py", description=__doc__,
+        description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("vault", type=Path)
     which = ap.add_mutually_exclusive_group()

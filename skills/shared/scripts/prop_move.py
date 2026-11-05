@@ -2018,7 +2018,7 @@ def _write_json(path: Path, data: Any) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    ap = argparse.ArgumentParser(prog="prop_move.py", description=__doc__.split("\n\n")[0],
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("vault", type=Path)
     ap.add_argument("mode", choices=("plan", "apply"))

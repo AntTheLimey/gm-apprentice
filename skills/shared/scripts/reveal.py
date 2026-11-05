@@ -426,7 +426,6 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
-        prog="reveal.py",
         description="Publish what a session let the players learn, lift "
                     "withheld, and log it. Dry run unless --write.")
     ap.add_argument("vault", type=Path)

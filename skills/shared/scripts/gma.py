@@ -78,18 +78,8 @@ def _root(with_commands: bool) -> argparse.ArgumentParser:
     return root
 
 
-def _reprog(parser: argparse.ArgumentParser, old: str, new: str) -> None:
-    """Swap the leading program name at every depth of a parser."""
-    parser.prog = new + parser.prog[len(old):]
-    for action in parser._actions:
-        if isinstance(action, argparse._SubParsersAction):
-            for child in set(action.choices.values()):
-                _reprog(child, old, new)
-
-
 def _load(name: str) -> argparse.ArgumentParser:
-    # Same mechanism as dispatch: build under argv[0] = "gma <name>". The
-    # _reprog pass covers scripts that fix their own prog= (see the tests).
+    # Same mechanism as dispatch: build under argv[0] = "gma <name>".
     saved = sys.argv[0]
     sys.argv[0] = f"gma {name}"
     try:
@@ -97,7 +87,6 @@ def _load(name: str) -> argparse.ArgumentParser:
         parser: argparse.ArgumentParser = module.build_parser()
     finally:
         sys.argv[0] = saved
-    _reprog(parser, parser.prog, f"gma {name}")
     return parser
 
 

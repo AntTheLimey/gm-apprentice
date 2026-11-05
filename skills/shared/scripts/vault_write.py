@@ -3284,7 +3284,7 @@ def link_scene(batch: Batch, rel: str, title: str) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
-        prog="vault_write.py", description=__doc__,
+        description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("vault", type=Path)
     sub = ap.add_subparsers(dest="command", required=True)

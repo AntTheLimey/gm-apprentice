@@ -365,7 +365,6 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
-        prog="migrate.py",
         description="Bring a vault and its site up to the plugin's version.")
     ap.add_argument("vault")
     ap.add_argument("command", nargs="?", choices=["plan", "apply"],

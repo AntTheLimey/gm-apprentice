@@ -387,7 +387,7 @@ def cmd_offered(vault: Path) -> list[str]:
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
-        prog="moments.py", description=__doc__,
+        description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("vault", type=Path)
     sub = ap.add_subparsers(dest="command", required=True)

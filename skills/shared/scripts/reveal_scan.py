@@ -241,7 +241,6 @@ def render(result: ScanResult) -> list[str]:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="reveal_scan.py",
         description="List what is still hidden in the notes a session touched. "
                     "Writes nothing.")
     parser.add_argument("vault", type=Path)

@@ -93,29 +93,39 @@ class GmaTests(unittest.TestCase):
         _run(["vault-check", str(vault), "version"])
         self.assertNotIn("dnd_ddb", sys.modules)
 
-    def test_nested_usage_reads_gma(self):
-        tree = gma.full_tree()
-        links = gma._subparsers(tree).choices["links"]
-        self.assertTrue(links.format_usage().startswith("usage: gma links"))
-        nested = [a for a in links._actions
-                  if isinstance(a, argparse._SubParsersAction)]
-        for action in nested:
-            for child in action.choices.values():
-                self.assertTrue(
-                    child.format_usage().startswith("usage: gma links"),
-                    child.format_usage())
-        done = _subprocess(["links", "fix", "--help"])
-        self.assertEqual(done.returncode, 0)
-        self.assertTrue(done.stdout.startswith("usage: gma links"), done.stdout)
+    def test_help_reads_gma_at_every_depth(self):
+        # Subprocess: Python 3.14 derives prog from -m in-process under pytest.
+        for argv, prefix in (
+                (["links", "fix", "--help"], "usage: gma links"),
+                (["moments", "v", "status", "--help"],
+                 "usage: gma moments vault status")):
+            with self.subTest(argv=argv):
+                done = _subprocess(argv)
+                self.assertEqual(done.returncode, 0, done.stderr)
+                self.assertTrue(done.stdout.startswith(prefix), done.stdout)
 
-    def test_help_three_deep_in_the_full_tree(self):
-        moments = gma._subparsers(gma.full_tree()).choices["moments"]
-        depth = [a for a in moments._actions
-                 if isinstance(a, argparse._SubParsersAction)][0]
-        status = depth.choices["status"]
-        self.assertTrue(
-            status.format_usage().startswith("usage: gma moments vault status"),
-            status.format_usage())
+    def test_every_command_help_reads_gma_in_a_subprocess(self):
+        for name in gma.COMMANDS:
+            if name == "publish":
+                continue
+            with self.subTest(command=name):
+                done = _subprocess([name, "--help"])
+                self.assertEqual(done.returncode, 0, done.stderr)
+                self.assertTrue(done.stdout.startswith(f"usage: gma {name}"),
+                                done.stdout[:80])
+
+    def test_full_tree_usage_reads_gma(self):
+        code = ("import gma\n"
+                "for n, p in gma._subparsers(gma.full_tree()).choices.items():\n"
+                "    print(p.format_usage().splitlines()[0][:40], '|', n)\n")
+        done = subprocess.run(
+            [sys.executable, "-c", code], cwd=SCRIPTS, capture_output=True,
+            text=True, encoding="utf-8")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        rows = [l.split(" | ") for l in done.stdout.splitlines()]
+        self.assertEqual(len(rows), len(gma.COMMANDS))
+        for usage, name in rows:
+            self.assertTrue(usage.startswith(f"usage: gma {name}"), usage)
 
     def test_error_usage_reads_gma(self):
         done = _subprocess(["links", "fix", "--bogus"])

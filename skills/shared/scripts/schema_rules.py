@@ -620,7 +620,6 @@ def show(etype: str) -> str | None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="schema_rules.py",
         description="Print the frontmatter rules for a note type.")
     sub = parser.add_subparsers(dest="command", required=True)
     one = sub.add_parser("show", help="one type's fields; no type lists the types")
