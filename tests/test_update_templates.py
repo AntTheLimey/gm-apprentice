@@ -398,5 +398,55 @@ class LabelTests(unittest.TestCase):
         self.assertEqual(mv.template_label("Mine.md"), "Mine.md")
 
 
+class AskedTextTests(unittest.TestCase):
+    """An answer names the text the GM was shown (`<id>@<hash>`): a
+    template edited between the asking run and the answering run is asked
+    again, never overwritten."""
+
+    def setUp(self):
+        import update
+        self.update = update
+        self.home = Path(tempfile.mkdtemp(prefix="updt-home-"))
+        self.addCleanup(shutil.rmtree, self.home, ignore_errors=True)
+
+    def ask(self, vault, answers=None):
+        return self.update.run(vault, answers or {}, False,
+                               checks=[TEMPLATES_CHECK], home=self.home)
+
+    def test_a_template_edited_after_it_was_asked_is_asked_again(self):
+        vault = make_vault(self)
+        path = edited_npc(vault)
+        [q] = self.ask(vault).questions
+        self.assertRegex(q.id, rf"^template:{NPC}@[0-9a-f]{{8}}$")
+        path.write_text(path.read_text(encoding="utf-8") + "\nLater edit\n",
+                        encoding="utf-8")
+        res = self.ask(vault, {q.id: "take"})
+        self.assertIn("Later edit", path.read_text(encoding="utf-8"))
+        self.assertEqual(res.exit, 3)
+        [again] = res.questions
+        self.assertTrue(again.id.startswith(f"template:{NPC}@"))
+        self.assertNotEqual(again.id, q.id)
+        self.assertTrue(any("changed since you were asked" in n
+                            for n in res.notes), res.notes)
+
+    def test_the_answer_for_the_text_shown_is_applied(self):
+        vault = make_vault(self)
+        path = edited_npc(vault)
+        [q] = self.ask(vault).questions
+        res = self.ask(vault, {q.id: "take"})
+        self.assertEqual(res.exit, 0, res)
+        self.assertEqual(path.read_text(encoding="utf-8"),
+                         mv.expected_templates(vault)[NPC])
+
+    def test_a_bare_id_is_not_applied(self):
+        vault = make_vault(self)
+        path = edited_npc(vault)
+        before = path.read_text(encoding="utf-8")
+        res = self.ask(vault, {f"template:{NPC}": "take"})
+        self.assertEqual(path.read_text(encoding="utf-8"), before)
+        self.assertEqual(res.exit, 3)
+        self.assertTrue(any(f"template:{NPC}" in n for n in res.notes), res.notes)
+
+
 if __name__ == "__main__":
     unittest.main()

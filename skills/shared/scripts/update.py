@@ -7,8 +7,10 @@ Every change a check finds is one of three kinds (`Check.kind`):
 bookkeeping changes form and keeps content, so it runs in every run,
 headless too, and is reported; removes could delete what the GM or their
 agent wrote, and asks needs a value only the GM has, so both are put to
-the GM as questions. A question is answered with `--answer ID=VALUE` on the
-next run. Every answer is kept in the update record (`_meta/update-record.json`)
+the GM as questions. A question is answered with `--answer ID@HASH=VALUE`
+on the next run, by the id the report printed: the hash names the text the
+GM was shown, so an answer is applied only while that text is unchanged
+(else the question is asked again). Every answer is kept in the update record (`_meta/update-record.json`)
 against the lines it was asked with, so it is never asked again while
 those lines stay the same.
 
@@ -28,6 +30,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import re
 import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -46,6 +49,60 @@ UNREADABLE = "template-unreadable:"
 PLAIN_LINES = {"templates"}
 YES_NO = ["yes", "leave"]
 SHOWN_LINES = 3   # a question's text shows this many of its lines
+HASH_LEN = 8      # an answer id's hash: `<id>@<8 hex>`
+ASKED_RE = re.compile(rf"(.+)@([0-9a-f]{{{HASH_LEN}}})")
+
+
+@dataclass(frozen=True)
+class Given:
+    """An --answer as the GM gave it: the hash names the text they saw."""
+    value: str
+    hash: str | None   # None: a bare id, which is never applied
+    raw: str           # the id as written
+
+
+def split_answers(answers: dict[str, str]) -> dict[str, Given]:
+    """`{"<id>@<hash>": value}` by the item id each answers."""
+    out: dict[str, Given] = {}
+    for key, value in answers.items():
+        m = ASKED_RE.fullmatch(key)
+        out[m.group(1) if m else key] = Given(value, m.group(2) if m else None,
+                                              key)
+    return out
+
+
+def asked_hash(item: Item) -> str:
+    """The hash of what the GM is shown for this item: a template's two
+    texts (`detail.texts_sha`), else its lines."""
+    texts = (item.detail or {}).get("texts_sha")
+    return (texts if isinstance(texts, str) else lines_sha(item.lines))[:HASH_LEN]
+
+
+def asked_id(item: Item) -> str:
+    return f"{item.id}@{asked_hash(item)}"
+
+
+def _matches(item: Item, given: dict[str, Given]) -> str | None:
+    """The GM's answer for this item, only if it names the text it has now."""
+    g = given.get(item.id)
+    return g.value if g is not None and g.hash == asked_hash(item) else None
+
+
+def _offered(item: Item, given: dict[str, Given], res: UpdateResult) -> str | None:
+    """_matches, saying in Worth knowing why an answer given was not used."""
+    g = given.get(item.id)
+    if g is None:
+        return None
+    if g.hash == asked_hash(item):
+        return g.value
+    why = (f"{item.id} changed since you were asked" if g.hash is not None
+           else f"it does not name the question as it was shown "
+                f"({asked_id(item)}), so it may be for other text")
+    note = (f"Your answer {g.raw}={g.value} was not used: {why}; it is asked "
+            f"again below.")
+    if note not in res.notes:
+        res.notes.append(note)
+    return None
 
 
 @dataclass
@@ -115,7 +172,7 @@ def _question(check: Check, item: Item) -> Question:
     detail.setdefault("if_yes", check.ask or check.plain)
     kind = kind_of(check, item)
     kind = kind if kind in ("removes", "asks") else "asks"
-    return Question(item.id, kind, text, options(item), detail)
+    return Question(asked_id(item), kind, text, options(item), detail)
 
 
 def kind_of(check: Check, item: Item) -> str:
@@ -137,17 +194,20 @@ def _holds(check: Check, item: Item) -> bool:
     return item.holds_stamp or check.release is not None
 
 
-def _answer_for(item: Item, given: dict[str, str],
-                answers: dict[str, AnswerEntry]) -> tuple[str | None, bool]:
-    """(the answer, whether the GM gave it this run). The record answers
-    only with a standing answer (leave, keep), and only while the item's
-    lines are the ones it was given against."""
+def _answer_for(item: Item, given: dict[str, Given],
+                answers: dict[str, AnswerEntry],
+                res: UpdateResult) -> tuple[str | None, bool]:
+    """(the answer, whether the GM gave it this run). A given answer counts
+    only for the text it names; one that does not is asked again. The
+    record answers only with a standing answer (leave, keep), and only
+    while the item's lines are the ones it was given against."""
     if item.id in given:
-        return given[item.id], True
+        value = _offered(item, given, res)
+        return value, value is not None
     return migrate.recorded(item, answers), False
 
 
-def _would_write(found: list[migrate.Found], given: dict[str, str],
+def _would_write(found: list[migrate.Found], given: dict[str, Given],
                  answers: dict[str, AnswerEntry],
                  held: dict[str, set[str]]) -> bool:
     for f in found:
@@ -160,7 +220,7 @@ def _would_write(found: list[migrate.Found], given: dict[str, str],
                 continue
             if not _asks(f.check, item):
                 return True
-            if item.id in given:
+            if _matches(item, given) is not None:
                 return True
     return False
 
@@ -194,17 +254,21 @@ def run(vault: Path, answers: dict[str, str], headless: bool, *,
                            vault_v, plugin_v)
     behind = parse_version(vault_v) < parse_version(plugin_v)
     found = migrate.collect(vault, todo)
+    given = split_answers(answers)
     for f in found:   # an answer the GM gave must fit, before any write
         for item in f.items:
-            if item.id in answers and item.group != PERSON \
-                    and not _fits(answers[item.id], options(item)):
-                return _refuse(res, f"--answer {item.id}={answers[item.id]}: "
+            value = _matches(item, given)
+            if value is not None and item.group != PERSON \
+                    and not _fits(value, options(item)):
+                return _refuse(res, f"--answer {asked_id(item)}={value}: "
                                     f"the answers are {', '.join(options(item))}")
-    if not behind and not _would_write(found, answers, known, held):
+    if not behind and not _would_write(found, given, known, held):
         for f in found:
             for item in f.items:
+                if item.group != PERSON and _asks(f.check, item):
+                    _offered(item, given, res)
                 _sort_unapplied(f.check, item, held, known, res)
-        _unused(answers, set(), found, res)
+        _unused(given, set(), found, res)
         res.exit = 3 if res.questions else 0
         return res
     if behind:
@@ -213,7 +277,7 @@ def run(vault: Path, answers: dict[str, str], headless: bool, *,
         except StepFailed as e:
             res.exit, res.error = 1, f"{e}; nothing was changed"
             return res
-    _apply(vault, todo, answers, known, held, vault_v, plugin_v, res,
+    _apply(vault, todo, given, known, held, vault_v, plugin_v, res,
            home if home is not None else HOME)
     return res
 
@@ -232,13 +296,20 @@ def _sort_unapplied(check: Check, item: Item, held: dict[str, set[str]],
         res.left_open.append(item.id)
 
 
-def _unused(given: dict[str, str], used: set[str],
-            found: list[migrate.Found], res: UpdateResult) -> None:
+def _unused(given: dict[str, Given], used: set[str],
+            found: list[migrate.Found], res: UpdateResult,
+            stopped: bool = False) -> None:
     seen = {i.id for f in found for i in f.items}
-    for choice, value in given.items():
-        if choice not in used and choice not in seen:
-            res.notes.append(f"Your answer {choice}={value} was not used: "
-                             f"nothing asks it now.")
+    by_hand = {i.id for f in found for i in f.items if i.group == PERSON}
+    for choice, g in given.items():
+        if choice in by_hand:
+            res.notes.append(f"Nothing to answer: {choice} is fixed by hand, "
+                             f"then the update is run again.")
+        elif choice not in used and choice not in seen:
+            why = ("the run stopped before it was reached" if stopped
+                   else "nothing asks it now")
+            res.notes.append(f"Your answer {g.raw}={g.value} was not used: "
+                             f"{why}.")
 
 
 class _Run:
@@ -277,7 +348,7 @@ class _Run:
         _save_record(self.vault, self.new, entry)
 
 
-def _apply(vault: Path, todo: list[Check], given: dict[str, str],
+def _apply(vault: Path, todo: list[Check], given: dict[str, Given],
            known: dict[str, AnswerEntry], held: dict[str, set[str]],
            vault_v: str, plugin_v: str, res: UpdateResult,
            home: Path | None) -> None:
@@ -313,7 +384,7 @@ def _apply(vault: Path, todo: list[Check], given: dict[str, str],
                 if note is not None:
                     note(f"the update record could not be written: {e}")
         raise
-    _unused(given, used, seen, res)
+    _unused(given, used, seen, res, stopped=failed is not None)
     target = migrate.stamp_target(todo, failed, vault_v, plugin_v)
     stamping = parse_version(target) > parse_version(vault_v) and not holding
     if run.wrote() or stamping:
@@ -348,7 +419,7 @@ def _apply(vault: Path, todo: list[Check], given: dict[str, str],
     res.exit = 1 if failed is not None else 3 if res.questions else 0
 
 
-def _one(run: _Run, check: Check, item: Item, given: dict[str, str],
+def _one(run: _Run, check: Check, item: Item, given: dict[str, Given],
          known: dict[str, AnswerEntry], held: dict[str, set[str]],
          used: set[str], left_ids: set[str], said: set[str],
          holding: list[str]) -> None:
@@ -366,7 +437,7 @@ def _one(run: _Run, check: Check, item: Item, given: dict[str, str],
         run.before_write()
         _did(check, item.apply(None) if item.apply else [], run.did)
         return
-    answer, now = _answer_for(item, given, known)
+    answer, now = _answer_for(item, given, known, res)
     if answer is not None and not now:
         return   # a standing answer the record keeps: nothing to run or ask
     if answer is None:
@@ -430,6 +501,12 @@ def _fix_last_to(vault: Path, to: str) -> None:
         update_record.save(vault, rec)
 
 
+def _waiting(q: Question) -> str:
+    if not q.options:
+        return q.text
+    return f"{q.text} [answer {q.id}={'|'.join(q.options)}]"
+
+
 def report(res: UpdateResult) -> str:
     """The plain report: what was done, what waits, what could not be read."""
     out: list[str] = []
@@ -453,7 +530,7 @@ def report(res: UpdateResult) -> str:
                    f"update again once this is fixed.")
     sections = [("Done:", res.did),
                 (f"Waiting for you ({len(res.questions)}):",
-                 [q.text for q in res.questions]),
+                 [_waiting(q) for q in res.questions]),
                 ("Could not read:", res.read_problems),
                 ("Worth knowing:", res.notes)]
     for title, lines in sections:
@@ -480,15 +557,17 @@ def build_parser() -> argparse.ArgumentParser:
                     "and reports in plain words.")
     ap.add_argument("vault", help="the vault folder")
     ap.add_argument("--answer", action="append", default=[],
-                    metavar="ID=VALUE",
-                    help="the GM's answer to a waiting question, by its id")
+                    metavar="ID@HASH=VALUE",
+                    help="the GM's answer to a waiting question, by the id "
+                         "the report printed (the hash names the text the GM "
+                         "was shown; a changed question is asked again)")
     ap.add_argument("--headless", action="store_true",
                     help="no GM to ask: do the bookkeeping only and leave "
                          "every question for next time")
     ap.add_argument("--json", action="store_true",
                     help="print the result as JSON instead of the report")
     ap.epilog = ("Example: gma update ~/Vaults/Canticle "
-                 "--answer template:pc-coc-7e-regency.md=keep")
+                 "--answer template:pc-coc-7e-regency.md@1a2b3c4d=keep")
     return ap
 
 
@@ -506,7 +585,7 @@ def main(argv: list[str] | None = None) -> int:
     for raw in args.answer:
         choice, sep, value = raw.partition("=")
         if not sep or not choice or not value:
-            print(f"{cli_name()}: --answer {raw}: write it as ID=VALUE",
+            print(f"{cli_name()}: --answer {raw}: write it as ID@HASH=VALUE",
                   file=sys.stderr)
             return 2
         given[choice] = value

@@ -66,6 +66,12 @@ def file_check(vault, name, kind, release=None):
                  plain=f"Plainly did {name}.")
 
 
+def tag(name, lines=None):
+    """The id a question is answered by: its id and the hash of the lines
+    the GM was shown."""
+    return f"{name}@{update_record.lines_sha(lines or [f'do {name}'])[:8]}"
+
+
 def will_item(name):
     return lambda: [Item(name, WILL, [f"do {name}"], None)]
 
@@ -194,7 +200,7 @@ class RunTests(Base):
     def test_headless_takes_no_answers(self):
         vault = make_vault(self)
         r, _ = check("drop", "removes", will_item("drop"))
-        res = self.run_update(vault, [r], {"drop": "yes"}, headless=True)
+        res = self.run_update(vault, [r], {tag("drop"): "yes"}, headless=True)
         self.assertEqual(res.exit, 2)
 
     def test_headless_never_stamps_past_a_question_that_holds_it(self):
@@ -224,7 +230,7 @@ class RunTests(Base):
         self.assertIn("Waiting for you (1):\n- move the old lists", out)
         res = self.run_update(vault, [c])
         [q] = res.questions
-        self.assertEqual((q.id, q.kind, q.options), ("pick", "asks",
+        self.assertEqual((q.id.split("@")[0], q.kind, q.options), ("pick", "asks",
                                                      ["move", "leave"]))
         self.assertEqual(stamp_of(vault), "1.10.12")
 
@@ -243,7 +249,7 @@ class RunTests(Base):
         log = []
         r, _ = check("drop", "removes", will_item("drop"), release="1.10.20",
                      plain="Removed the old lines.", log=log)
-        res = self.run_update(vault, [r], {"drop": "yes"})
+        res = self.run_update(vault, [r], {tag("drop"): "yes"})
         self.assertEqual((res.exit, log), (0, ["drop"]))
         self.assertIn("Removed the old lines.", res.did)
         self.assertEqual(res.stamped, PLUGIN)
@@ -260,7 +266,7 @@ class RunTests(Base):
     def test_an_answer_outside_the_options_is_refused_before_any_write(self):
         vault = make_vault(self)
         r, _ = check("drop", "removes", will_item("drop"))
-        res = self.run_update(vault, [r], {"drop": "maybe"})
+        res = self.run_update(vault, [r], {tag("drop"): "maybe"})
         self.assertEqual(res.exit, 2)
         self.assertEqual(self.backups(), [])
 
@@ -268,7 +274,7 @@ class RunTests(Base):
         vault = make_vault(self)
         log = []
         r, state = check("drop", "removes", will_item("drop"), log=log)
-        res = self.run_update(vault, [r], {"drop": "leave"})
+        res = self.run_update(vault, [r], {tag("drop"): "leave"})
         self.assertEqual((res.exit, res.stamped, log), (0, PLUGIN, []))
         self.assertEqual(update_record.load(vault)["answers"]["drop"]["answer"],
                          "leave")
@@ -277,7 +283,7 @@ class RunTests(Base):
         state["lines"] = ["do drop, and more"]   # what it would do changed
         changed = self.run_update(vault, [r])
         self.assertEqual(changed.exit, 3)
-        self.assertEqual([q.id for q in changed.questions], ["drop"])
+        self.assertEqual([q.id.split("@")[0] for q in changed.questions], ["drop"])
 
     def test_backup_exists_before_the_first_write(self):
         vault = make_vault(self)
@@ -301,7 +307,7 @@ class RunTests(Base):
         second, _ = check("second", "removes", failing("second"),
                           release="1.10.30")
         res = self.run_update(vault, [early, first, second],
-                              {"first": "yes", "second": "yes"})
+                              {tag("first"): "yes", tag("second"): "yes"})
         self.assertEqual(res.exit, 1)
         self.assertIn("broke", res.error)
         self.assertTrue((vault / "first.done").is_file())
@@ -312,7 +318,7 @@ class RunTests(Base):
         # `first` runs every pass: it is not asked again only because the
         # file now says it is done.
         again = self.run_update(vault, [early, first, second])
-        self.assertEqual([q.id for q in again.questions], ["second"])
+        self.assertEqual([q.id.split("@")[0] for q in again.questions], ["second"])
 
     def test_an_unexpected_error_still_records_what_finished(self):
         vault = make_vault(self)
@@ -324,7 +330,7 @@ class RunTests(Base):
             return [Item("boom", WILL, ["do boom"], apply)]
         bad, _ = check("boom", "bookkeeping", boom)
         with self.assertRaises(RuntimeError):
-            self.run_update(vault, [first, bad], {"first": "yes"})
+            self.run_update(vault, [first, bad], {tag("first"): "yes"})
         rec = update_record.load(vault)
         self.assertEqual(rec["answers"]["first"]["answer"], "yes")
         self.assertEqual(rec["updates"][-1]["did"], ["Plainly did first."])
@@ -335,15 +341,15 @@ class RunTests(Base):
         vault = make_vault(self)
         log = []
         r, state = check("drop", "removes", will_item("drop"), log=log)
-        self.run_update(vault, [r], {"drop": "yes"})
+        self.run_update(vault, [r], {tag("drop"): "yes"})
         self.assertEqual(log, ["drop"])
         state["pending"] = True   # the same change is due again (GM re-edited)
         headless = self.run_update(vault, [r], headless=True)
         self.assertEqual(log, ["drop"])
-        self.assertEqual([q.id for q in headless.questions], ["drop"])
+        self.assertEqual([q.id.split("@")[0] for q in headless.questions], ["drop"])
         asked = self.run_update(vault, [r])
         self.assertEqual(log, ["drop"])
-        self.assertEqual((asked.exit, [q.id for q in asked.questions]),
+        self.assertEqual((asked.exit, [q.id.split("@")[0] for q in asked.questions]),
                          (3, ["drop"]))
 
     def test_a_stamp_only_run_records_its_backup(self):
@@ -369,7 +375,7 @@ class RunTests(Base):
                                side_effect=OSError("disk full")), \
                 contextlib.redirect_stderr(err), \
                 self.assertRaises(RuntimeError) as caught:
-            self.run_update(vault, [first, bad], {"first": "yes"})
+            self.run_update(vault, [first, bad], {tag("first"): "yes"})
         self.assertEqual(str(caught.exception), "the original")
         self.assertIn("disk full", err.getvalue())
 
@@ -385,7 +391,7 @@ class RunTests(Base):
         vault = make_vault(self)
         r, _ = check("drop", "removes", will_item("drop"))
         r = dataclasses.replace(r, left="Kept your old lines.")
-        res = self.run_update(vault, [r], {"drop": "leave"})
+        res = self.run_update(vault, [r], {tag("drop"): "leave"})
         self.assertEqual(res.did, ["Kept your old lines."])
         self.assertEqual(update_record.load(vault)["updates"][-1]["did"],
                          ["Kept your old lines."])
@@ -399,8 +405,57 @@ class RunTests(Base):
                  kind="asks")], log=log)
         res = self.run_update(vault, [c], headless=True)
         self.assertEqual(log, ["lists"])
-        self.assertEqual([(q.id, q.kind) for q in res.questions],
+        self.assertEqual([(q.id.split("@")[0], q.kind) for q in res.questions],
                          [("lists-replace", "asks")])
+
+
+class AskedTextTests(Base):
+    """An answer applies only to the lines the GM was shown."""
+
+    def test_a_removes_item_whose_lines_changed_is_asked_again(self):
+        vault = make_vault(self)
+        log = []
+        r, state = check("drop", "removes", will_item("drop"), log=log)
+        [q] = self.run_update(vault, [r]).questions
+        self.assertEqual(q.id, tag("drop"))
+        state["lines"] = ["do drop", "and a line the GM added since"]
+        res = self.run_update(vault, [r], {q.id: "yes"})
+        self.assertEqual(log, [])
+        self.assertEqual(res.exit, 3)
+        self.assertEqual([x.id for x in res.questions],
+                         [tag("drop", state["lines"])])
+        self.assertTrue(any("changed since you were asked" in n
+                            for n in res.notes), res.notes)
+
+    def test_a_matching_hash_is_applied(self):
+        vault = make_vault(self)
+        log = []
+        r, _ = check("drop", "removes", will_item("drop"), log=log)
+        [q] = self.run_update(vault, [r]).questions
+        res = self.run_update(vault, [r], {q.id: "yes"})
+        self.assertEqual((res.exit, log), (0, ["drop"]))
+
+    def test_a_bare_id_is_not_applied(self):
+        vault = make_vault(self)
+        log = []
+        r, _ = check("drop", "removes", will_item("drop"), log=log)
+        res = self.run_update(vault, [r], {"drop": "yes"})
+        self.assertEqual((res.exit, log), (3, []))
+        self.assertTrue(any("drop=yes" in n for n in res.notes), res.notes)
+
+    def test_an_answer_for_a_fix_by_hand_row_says_so(self):
+        vault = make_vault(self)
+        c, _ = check("broken", "asks", lambda: [Item(
+            "broken", PERSON, ["Notes/A.md\tfix this by hand"])])
+        res = self.run_update(vault, [c], {"broken": "yes"})
+        self.assertTrue(any("Nothing to answer: broken is fixed by hand" in n
+                            for n in res.notes), res.notes)
+
+    def test_the_report_names_each_question_by_its_answer_id(self):
+        vault = make_vault(self)
+        r, _ = check("drop", "removes", will_item("drop"))
+        _code, out, _ = self.main(vault, [r])
+        self.assertIn(tag("drop"), out)
 
 
 class ExcludeListsTests(Base):
@@ -421,7 +476,7 @@ class ExcludeListsTests(Base):
         before = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
         self.assertIn("exclude_sections: Mine", before)
         res = self.run_update(vault, [lists], headless=True)
-        self.assertEqual([q.id for q in res.questions], ["exclude-lists-replace"])
+        self.assertEqual([q.id.split("@")[0] for q in res.questions], ["exclude-lists-replace"])
         self.assertEqual([q.kind for q in res.questions], ["asks"])
         import vault_check as vc
         s = vc.settings(vault)
@@ -504,7 +559,7 @@ class ExcludeListsTests(Base):
         vault = make_vault(self, PLUGIN)
         r, _ = check("drop", "removes", lambda: [Item(
             "drop", CHOICE, ["drop the old section"], None)])
-        self.run_update(vault, [r], {"drop": "leave"})
+        self.run_update(vault, [r], {tag("drop", ["drop the old section"]): "leave"})
         out = io.StringIO()
         with mock.patch.object(migrate, "CHECKS", [r]), \
                 contextlib.redirect_stdout(out):

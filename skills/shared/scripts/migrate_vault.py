@@ -557,6 +557,9 @@ def _survey_templates(vault: Path) -> tuple[
              f"plugin's. Keep yours, or take the plugin's?"],
             choose, wants="keep or take",
             detail={"file": f"_Templates/{name}", "label": label,
+                    # What the GM is shown: an answer names it (gma update).
+                    "texts_sha": hashlib.sha256(
+                        (current + "\0" + text).encode("utf-8")).hexdigest(),
                     "comparison": comparison.as_dict(),
                     "summary": summary(comparison)}))
     return items, same
