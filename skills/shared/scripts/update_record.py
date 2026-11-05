@@ -73,12 +73,21 @@ def lines_sha(lines: list[str]) -> str:
     return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
 
 
+class ScanEntry(TypedDict):
+    """What the last `gma workaround scan` read of the agent's memory."""
+    on: str                  # ISO date
+    memory: Optional[str]    # the memory folder read; None: none found
+    memory_files: int
+
+
 class Record(TypedDict):
     templates: dict[str, TemplateEntry]
     answers: dict[str, AnswerEntry]
     updates: list[UpdateEntry]
     workarounds: list[Workaround]
     swept: Optional[str]
+    scanned: Optional[ScanEntry]
+    swept_memory: Optional[str]   # the memory the sweep read, or why none
 
 
 class RecordUnreadable(StepFailed):
@@ -87,7 +96,7 @@ class RecordUnreadable(StepFailed):
 
 def empty() -> Record:
     return {"templates": {}, "answers": {}, "updates": [], "workarounds": [],
-            "swept": None}
+            "swept": None, "scanned": None, "swept_memory": None}
 
 
 def load(vault: Path) -> Record:
@@ -119,6 +128,10 @@ def load(vault: Path) -> Record:
             rec[key] = data[key]  # type: ignore[literal-required]
     swept = data.get("swept")
     rec["swept"] = swept if isinstance(swept, str) else None
+    scanned = data.get("scanned")
+    rec["scanned"] = scanned if isinstance(scanned, dict) else None  # type: ignore[typeddict-item]
+    how = data.get("swept_memory")
+    rec["swept_memory"] = how if isinstance(how, str) else None
     return rec
 
 

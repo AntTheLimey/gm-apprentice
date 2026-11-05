@@ -31,6 +31,8 @@ import argparse
 import datetime
 import json
 import re
+import shutil
+import subprocess
 import sys
 import traceback
 from dataclasses import asdict, dataclass, field
@@ -60,6 +62,9 @@ NO_SWEEP = ("No workaround record yet: run the one-time sweep "
             "(campaign-organizer/references/workaround-sweep.md).")
 NO_CHANGELOG = ("Could not read the plugin's CHANGELOG, so no workaround "
                 "was checked.")
+GH_REPO = "AntTheLimey/gm-apprentice"
+GH_TIMEOUT = 5.0   # seconds gh gets to say an issue's state, once per run
+_RELEASE = re.compile(r"\d+\.\d+\.\d+")
 
 
 @dataclass(frozen=True)
@@ -258,21 +263,67 @@ def _first_line(lines: list[str]) -> str:
     return line if len(line) <= SAID else line[:SAID - 1].rstrip() + "…"
 
 
+class _IssueStates:
+    """Each issue's state on GitHub, asked of `gh` once per run. None when
+    gh is not on PATH, fails or is slow: then the question is put with its
+    honest wording, never left out. A slow gh is not asked again this run."""
+
+    def __init__(self) -> None:
+        self.seen: dict[int, str | None] = {}
+        self.gh: str | None = shutil.which("gh")
+
+    def state(self, issue: int) -> str | None:
+        if issue in self.seen:
+            return self.seen[issue]
+        found: str | None = None
+        if self.gh is not None:
+            try:
+                done = subprocess.run(
+                    [self.gh, "issue", "view", str(issue), "--repo", GH_REPO,
+                     "--json", "state"], capture_output=True, text=True,
+                    timeout=GH_TIMEOUT, check=False)
+                data = json.loads(done.stdout) if done.returncode == 0 else {}
+                got = data.get("state") if isinstance(data, dict) else None
+                found = got if isinstance(got, str) else None
+            except subprocess.TimeoutExpired:
+                self.gh = None
+            except (OSError, ValueError):
+                pass
+        self.seen[issue] = found
+        return found
+
+
 def _offers(record: update_record.Record, plugin_v: str,
             given: dict[str, Given]) -> _Offers:
-    """Every active workaround whose issue has shipped by the plugin's
-    version (a release named by hand first, else the CHANGELOG's): a
-    question, or the GM's answer to it. An answer counts only for the
-    question text it names (`workaround:<id>@<hash>`), as every other
-    does. `keep` is recorded in the workaround and stands; `retire`
-    changes nothing here: the agent swaps it for the built-in way and runs
-    `gma workaround retire`."""
+    """Every active workaround whose issue a release up to the plugin's
+    mentions (a release named by hand first, else the CHANGELOG's highest),
+    and that GitHub does not say is still open: a question, or the GM's
+    answer to it. The release notes may only part-fix an issue, so the
+    question quotes them and asks rather than says it shipped. An answer
+    counts only for the question text it names (`workaround:<id>@<hash>`),
+    as every other does. `keep` is recorded in the workaround and stands;
+    `retire` changes nothing here: the agent swaps it for the built-in way
+    and runs `gma workaround retire`."""
     out = _Offers()
     if record["swept"] is None:
         out.notes.append(NO_SWEEP)
-    active = [w for w in record["workarounds"]
-              if isinstance(w, dict) and w.get("state") == "active"
-              and isinstance(w.get("issue"), int) and w.get("id")]
+    active: list[update_record.Workaround] = []
+    for w in record["workarounds"]:
+        if not (isinstance(w, dict) and w.get("state") == "active"
+                and w.get("id")):
+            continue
+        issue, hand = w.get("issue"), w.get("release")
+        if not isinstance(issue, int) or isinstance(issue, bool) or issue <= 0:
+            out.notes.append(f"{w['id']} has issue '{issue}' in "
+                             f"{update_record.RECORD_FILE}, not a number, so "
+                             f"it was not checked; fix it there.")
+        elif hand is not None and not (isinstance(hand, str)
+                                       and _RELEASE.fullmatch(hand)):
+            out.notes.append(f"{w['id']} has release '{hand}' in "
+                             f"{update_record.RECORD_FILE}, not X.Y.Z, so it "
+                             f"was not checked; fix it there.")
+        else:
+            active.append(w)
     if not active:
         return out
     releases = changelog_issues.plugin_releases()
@@ -280,17 +331,26 @@ def _offers(record: update_record.Record, plugin_v: str,
         out.notes.append(NO_CHANGELOG)
         return out
     plugin = parse_version(plugin_v)
+    states = _IssueStates()
     for w in active:
-        note = releases.get(int(w["issue"]))
+        issue = int(w["issue"])
+        note = releases.get(issue)
         release = w.get("release") or (note.release if note else None)
         if not release or parse_version(str(release)) > plugin:
             continue
+        if states.state(issue) == "OPEN":
+            out.notes.append(f"#{issue} is still open, so {w['id']} was not "
+                             f"offered.")
+            continue
         item_id = f"{WORKAROUND}{w['id']}"
         where = ", ".join(str(p) for p in w.get("where") or [])
-        said = _first_line(note.lines if note else [])
-        built = f"built in since {release}" + (f": {said}" if said else "")
-        text = (f"{w.get('what')} ({where}) stands in for #{w['issue']}, "
-                f"{built}. Retire it and switch to the built-in way?")
+        quoted = note.cited.get(str(release), []) if note else []
+        cite = (f"The {release} release notes mention #{issue}: "
+                f"{_first_line(quoted)}." if quoted else
+                f"You set {release} by hand as the release that builds it in.")
+        text = (f"{w.get('what')} ({where}) stands in for #{issue}. {cite} "
+                f"If that release built in what this stands in for, retire "
+                f"it and switch to the built-in way; otherwise keep it.")
         qid = f"{item_id}@{lines_sha([text])[:HASH_LEN]}"
         out.ids.add(item_id)
         g = given.get(item_id)
@@ -311,9 +371,9 @@ def _offers(record: update_record.Record, plugin_v: str,
         else:
             out.questions.append(Question(
                 qid, "asks", text, list(WORKAROUND_OPTIONS),
-                {"issue": w["issue"], "release": release,
+                {"issue": issue, "release": release,
                  "where": list(w.get("where") or []),
-                 "changelog": list(note.lines if note else []),
+                 "changelog": list(quoted),
                  "if_yes": "You swap it for the built-in way and remove it, "
                            "then run gma workaround retire.",
                  "if_keep": "It stays, and is not offered again."}))

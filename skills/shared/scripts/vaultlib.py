@@ -52,6 +52,19 @@ SKIP_DIRS = {"_Templates", "_templates", "_inbox"}
 AGENT_FILES = ("CLAUDE.md", "AGENTS.md")
 _AGENT_FILES_LOWER = {name.lower() for name in AGENT_FILES}
 
+
+def agent_files(vault: Path) -> list[str]:
+    """The agent files at the vault's root, by their names on disk
+    (`claude.md` as it is spelt), sorted; matched case-blind, as
+    is_skipped_path skips them. Empty when the root cannot be listed."""
+    try:
+        with os.scandir(vault) as entries:
+            return sorted(e.name for e in entries
+                          if e.name.lower() in _AGENT_FILES_LOWER
+                          and e.is_file())
+    except OSError:
+        return []
+
 # Top-level folders whose notes are records of the past (QA reports,
 # archives). Links written in them are not reported as broken; notes in
 # them still count as link targets.
