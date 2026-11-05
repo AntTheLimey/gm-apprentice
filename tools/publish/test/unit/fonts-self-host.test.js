@@ -5,6 +5,7 @@ const os = require('os');
 const path = require('path');
 const fonts = require('../../lib/fonts');
 const { build } = require('../../lib/build');
+const { writeSettings, writeSiteConfig } = require('../helpers/vault-files');
 
 const WOFF2 = Buffer.concat([Buffer.from('wOF2'), Buffer.from('fake-font-bytes')]);
 
@@ -179,15 +180,14 @@ describe('build with source: self-host', () => {
     const vault = path.join(work, 'vault');
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
     fs.mkdirSync(path.join(vault, 'Characters/NPCs'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta/vault-config.md'),
-      `---\npublish:\n  theme:\n${genre ? `    genre: ${genre}\n` : ''}    fonts:\n${fontsYaml}\n---\n`);
+    writeSettings(vault, `player_site:\n  theme:\n${genre ? `    genre: ${genre}\n` : ''}    fonts:\n${fontsYaml}\n`);
     fs.writeFileSync(path.join(vault, 'Characters/NPCs/Someone.md'), '---\ntype: npc\n---\n\n# Someone\n');
     const outputDir = path.join(work, 'docs');
     const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
+    writeSiteConfig(configPath, {
       siteTitle: 'Self Host', siteUrl: 'https://example.github.io/x', vaultPath: vault, outputDir,
       excludeDirs: ['_meta', '_Templates'], folderMap: { 'Characters/NPCs': 'characters/npcs' },
-    }));
+    });
     return { work, vault, outputDir, configPath };
   }
 

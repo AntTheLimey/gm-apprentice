@@ -5,6 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { syncSiteFunctions, featuresByFile, featuresOfFile, SCAFFOLD_FUNCTIONS_DIR } = require('../../lib/sync-functions');
 const { runSetupBackend } = require('../../lib/setup-backend');
+const { writeSettings } = require('../helpers/vault-files');
 
 const roots = [];
 after(() => roots.forEach((r) => fs.rmSync(r, { recursive: true, force: true })));
@@ -13,15 +14,28 @@ const LIVE = ['api/loadout-core.mjs', 'api/loadout-list.js', 'api/loadout.js'];
 const INBOX = ['api/inbox-core.mjs', 'api/request.js'];
 const SHARED = ['api/package.json'];
 
-// A site beside a vault whose publish block is `publishYaml`; the site file can carry old keys.
+// The settings file's text for old-style switch lines ('  live_stats: true\n').
+const NEW_HOME = { live_stats: ['features', 'live_stats'], inbox: ['features', 'inbox'], character_sheets: ['sheets', 'show'] };
+const settingsFrom = (publishYaml) => {
+  const out = { 'player_site.title': 'T' };
+  for (const line of publishYaml.split('\n').filter(Boolean)) {
+    const [key, ...rest] = line.trim().split(':');
+    const value = rest.join(':').trim();
+    out[`player_site.${NEW_HOME[key].join('.')}`] = value === '' ? null : value === 'true' ? true : value === 'false' ? false : value;
+  }
+  return out;
+};
+
+// A site beside a vault whose switches are the old-style lines `publishYaml`. A site file carrying old keys keeps the vault on the old file (legacy).
 function makeSite(publishYaml, site = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-fn-sw-'));
   roots.push(root);
   const vault = path.join(root, 'vault');
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n  mode: player\n${publishYaml}---\n`);
+  if (Object.keys(site).length) fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n  mode: player\n${publishYaml}---\n`);
+  else writeSettings(vault, settingsFrom(publishYaml));
   const configPath = path.join(root, 'vault.config.json');
-  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: './vault', outputDir: './docs', ...site }));
+  fs.writeFileSync(configPath, JSON.stringify(Object.keys(site).length ? { vaultPath: './vault', outputDir: './docs', ...site } : { vaultPath: './vault' }));
   return { root, vault, configPath };
 }
 const listed = (root) => {
@@ -88,8 +102,8 @@ describe('functions: each feature follows its own switch (#285)', () => {
     const r = run(s);
     assert.deepStrictEqual(listed(s.root), ['api/mine.js', 'api/request.js', 'other/thing.txt']);
     assert.deepStrictEqual(r.removed.sort(), [...LIVE, 'api/inbox-core.mjs', ...SHARED].sort());
-    assert.ok(r.logs.some((l) => l.includes('removed functions/api/loadout.js: publish.live_stats is off')), r.logs.join('\n'));
-    assert.ok(r.logs.some((l) => l.includes('removed functions/api/inbox-core.mjs: publish.inbox is off')), r.logs.join('\n'));
+    assert.ok(r.logs.some((l) => l.includes('removed functions/api/loadout.js: player_site.features.live_stats is off')), r.logs.join('\n'));
+    assert.ok(r.logs.some((l) => l.includes('removed functions/api/inbox-core.mjs: player_site.features.inbox is off')), r.logs.join('\n'));
     assert.strictEqual(r.warns.length, 1);
     assert.ok(r.warns[0].includes('WARNING') && r.warns[0].includes('functions/api/request.js'), r.warns[0]);
     assert.strictEqual(fs.readFileSync(path.join(s.root, 'functions', 'api', 'request.js'), 'utf8'), `${scaffold('api/request.js')}// local change\n`);
@@ -100,7 +114,7 @@ describe('functions: each feature follows its own switch (#285)', () => {
     putAll(s.root, [...LIVE, ...INBOX, ...SHARED]);
     const r = run(s);
     assert.deepStrictEqual(listed(s.root), [...INBOX, ...SHARED].sort());
-    assert.ok(r.logs.some((l) => l.startsWith('  removed functions/api/loadout-list.js: publish.character_sheets is off')), r.logs.join('\n'));
+    assert.ok(r.logs.some((l) => l.startsWith('  removed functions/api/loadout-list.js: player_site.sheets.show is off')), r.logs.join('\n'));
   });
 
   it('live stats off by the old site-file name counts as explicit', () => {
