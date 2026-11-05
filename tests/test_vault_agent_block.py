@@ -1,6 +1,8 @@
 """agent_block.py: the plugin-managed block in a vault's CLAUDE.md and
 AGENTS.md, written by the update (as bookkeeping) and by the scaffold."""
 
+import json
+import os
 import shutil
 import sys
 import tempfile
@@ -109,6 +111,47 @@ class EnsureBlockTests(unittest.TestCase):
         self.assertIn("by hand", lines[0])
 
 
+    def test_a_bom_before_a_leading_block_is_kept_and_the_block_not_doubled(self):
+        vault = folder(self)
+        text = "\ufeff" + agent_block.block().replace("MISMATCH", "OLD") + "\n"
+        (vault / "CLAUDE.md").write_bytes(text.encode("utf-8"))
+        agent_block.ensure_block(vault)
+        got = read(vault / "CLAUDE.md")
+        self.assertEqual(got, "\ufeff" + agent_block.block() + "\n")
+        self.assertEqual(agent_block.ensure_block(vault), [])
+
+    def test_a_lower_case_claude_md_is_updated_and_no_second_one_made(self):
+        vault = folder(self)
+        (vault / "claude.md").write_text("mine\n", encoding="utf-8")
+        lines = agent_block.ensure_block(vault)
+        self.assertEqual(len(lines), 1)
+        self.assertIn("claude.md", lines[0])
+        self.assertEqual(sorted(os.listdir(vault)), ["claude.md"])
+        self.assertIn(BEGIN, read(vault / "claude.md"))
+
+    def test_text_after_the_begin_marker_is_kept_below_the_block(self):
+        vault = folder(self)
+        (vault / "CLAUDE.md").write_text(
+            f"# Top\n{BEGIN} my own note\nold\n{END}\nafter\n", encoding="utf-8")
+        agent_block.ensure_block(vault)
+        self.assertEqual(read(vault / "CLAUDE.md"),
+                         f"# Top\n{agent_block.block()}\nmy own note\nafter\n")
+        self.assertEqual(agent_block.ensure_block(vault), [])
+
+    @unittest.skipIf(os.name != "posix" or os.geteuid() == 0,
+                     "needs file permissions that bite")
+    def test_an_unreadable_claude_md_is_said_not_raised(self):
+        vault = folder(self)
+        path = vault / "CLAUDE.md"
+        path.write_text("mine\n", encoding="utf-8")
+        path.chmod(0)
+        self.addCleanup(path.chmod, 0o644)
+        changes, problems = agent_block.plan(vault)
+        self.assertEqual(changes, [])
+        self.assertEqual(len(problems), 1)
+        self.assertIn("CLAUDE.md could not be read", problems[0])
+
+
 class NotANoteTests(unittest.TestCase):
     def test_the_root_agent_files_are_not_walked_as_notes(self):
         from vaultlib import vault_files
@@ -171,8 +214,46 @@ class UpdateTests(unittest.TestCase):
         self.assertIn(END, res.read_problems[0])
         self.assertEqual(read(vault / "CLAUDE.md"), text)
 
+    def test_a_block_broken_between_find_and_apply_is_said(self):
+        vault = make_vault(self, version=PLUGIN)
+        (vault / "CLAUDE.md").write_text("# Mine\n", encoding="utf-8")
+        (vault / "AGENTS.md").write_text("# Also\n", encoding="utf-8")
+        [item] = the_check().find(vault)
+        (vault / "AGENTS.md").write_text(f"{BEGIN}\nno end\n", encoding="utf-8")
+        lines = item.apply(None)
+        self.assertTrue(any("AGENTS.md" in x and END in x for x in lines), lines)
+        self.assertIn(BEGIN, read(vault / "CLAUDE.md"))
+
+    @unittest.skipIf(os.name != "posix" or os.geteuid() == 0,
+                     "needs file permissions that bite")
+    def test_an_unreadable_claude_md_is_a_read_problem_in_the_update(self):
+        vault = make_vault(self, version=PLUGIN)
+        path = vault / "CLAUDE.md"
+        path.write_text("# Mine\n", encoding="utf-8")
+        path.chmod(0)
+        self.addCleanup(path.chmod, 0o644)
+        res = update.run(vault, {}, True, checks=[the_check()], home=self.home)
+        self.assertEqual(res.exit, 0, res.error)
+        self.assertEqual(len(res.read_problems), 1)
+        self.assertIn("CLAUDE.md could not be read", res.read_problems[0])
+        self.assertIn("Could not read:", update.report(res))
+
 
 class ScaffoldTests(unittest.TestCase):
+    def test_a_new_vault_records_the_sweep_as_done(self):
+        vault = folder(self) / "V"
+        pieces = vs.missing(vault, "coc-7e", campaign="V", version=PLUGIN)
+        (piece,) = [p for p in pieces if p.rel == "_meta/update-record.json"]
+        rec = json.loads(piece.text())
+        self.assertIsNotNone(rec["swept"])
+        self.assertEqual(rec["swept_memory"], "none (a new vault)")
+        self.assertEqual(rec["workarounds"], [])
+
+    def test_a_set_up_vault_gets_no_record_from_the_scaffold(self):
+        vault = make_vault(self, version=PLUGIN)
+        pieces = vs.missing(vault, "coc-7e", campaign="V", version=PLUGIN)
+        self.assertFalse(any(p.rel == "_meta/update-record.json" for p in pieces))
+
     def test_a_new_vault_gets_claude_md_with_the_block(self):
         vault = folder(self) / "V"
         pieces = vs.missing(vault, "coc-7e", campaign="V", version=PLUGIN)

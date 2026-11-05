@@ -36,6 +36,7 @@ from pathlib import Path
 import agent_block
 import index_build
 import migrate_vault as mv
+import update_record
 from schema_rules import (SYSTEMS, TYPE_FOLDERS, WORLD_STUBS, system_id,
                           without_generated_markers)
 from migrate_core import StepFailed, write_text_atomic
@@ -53,6 +54,7 @@ SCHEMA = SHARED / "entity-schema.md"
 ONTOLOGY = SHARED / "gm-apprentice-ontology.json"
 # What a new vault gets, besides folders and schema files. An existing vault, on either layout, never gets them.
 NEW_FILES = (SETTINGS_FILE, STATE_FILE)
+NEW_VAULT_SWEPT = "none (a new vault)"   # the record's swept_memory
 TIMELINE = "_Campaign/Timeline.md"
 FIRST_CHAPTER = "Chapters/Chapter 1/Chapter 1.md"
 
@@ -305,6 +307,11 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
         for change in changes:
             out.append(Piece(change.rel, partial(str, change.text),
                              merge=(vault / change.rel).exists()))
+    # A new vault has no workarounds from before they were recorded, so its
+    # one-time sweep is done: its first update does not ask for one.
+    file(update_record.RECORD_FILE, lambda: update_record.dumps(
+        {**update_record.empty(), "swept": day,
+         "swept_memory": NEW_VAULT_SWEPT}), present=has_settings)
     # The index is rendered when it is written, after the files above exist.
     file("_meta/index.md",
          lambda: index_build.render(vault, today=day, previous=None))

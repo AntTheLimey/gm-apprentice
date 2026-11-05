@@ -1280,8 +1280,10 @@ def find_agent_block(vault: Path) -> list[Item]:
              for n, line in enumerate(problems)]
     if changes:
         def apply(_value: str | None) -> list[str]:
-            fresh, _ = agent_block.plan(vault)
-            return agent_block.write(vault, fresh)
+            # Planned again: a file may have changed since the find. One
+            # that broke since is said here, as the find would have.
+            fresh, broke = agent_block.plan(vault)
+            return agent_block.write(vault, fresh) + broke
         items.append(Item("agent-block", WILL,
                           [f"write the plugin's block in {c.rel}"
                            for c in changes], apply))

@@ -19,9 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from migrate_core import write_text_atomic
-from vaultlib import AGENT_FILES
-
-FILES = AGENT_FILES
+from vaultlib import agent_files
 BEGIN = ("<!-- BEGIN gm-apprentice (managed by the plugin; edits here are "
          "replaced) -->")
 BEGIN_PREFIX = "<!-- BEGIN gm-apprentice"   # an older BEGIN's words may differ
@@ -53,24 +51,37 @@ def _eol(text: str) -> str:
     return "\r\n" if "\r\n" in text else "\n"
 
 
+def _bare(line: str) -> str:
+    """A line as the markers are matched: no BOM, no spaces round it."""
+    return line.lstrip("\ufeff").strip()
+
+
 def refreshed(text: str) -> str | None:
     """`text` with the block written or refreshed; None when its BEGIN
-    marker has no END after it."""
+    marker has no END after it. A BOM before the BEGIN marker is kept, and
+    words after the BEGIN marker's `-->` are moved below the END."""
     eol = _eol(text)
     lines = text.splitlines(keepends=True)
     start = next((i for i, line in enumerate(lines)
-                  if line.strip().startswith(BEGIN_PREFIX)), None)
+                  if _bare(line).startswith(BEGIN_PREFIX)), None)
     if start is None:
         if not text.strip():
             return block(eol) + eol
         tail = "" if text.endswith(("\n", "\r")) else eol
         return text + tail + eol + block(eol) + eol
     end = next((i for i in range(start + 1, len(lines))
-                if lines[i].strip() == END), None)
+                if _bare(lines[i]) == END), None)
     if end is None:
         return None
     ending = lines[end][len(lines[end].rstrip("\r\n")):]
-    return "".join([*lines[:start], block(eol), ending, *lines[end + 1:]])
+    marker = lines[start]
+    bom = "\ufeff" if marker.startswith("\ufeff") else ""
+    after = marker.partition("-->")[2].strip()
+    moved = [after + ending] if after else []
+    if after and not ending:   # the END was the file's last line
+        ending = eol
+    return "".join([*lines[:start], bom, block(eol), ending, *moved,
+                    *lines[end + 1:]])
 
 
 def missing_end(rel: str) -> str:
@@ -84,7 +95,7 @@ def plan(vault: Path) -> tuple[list[Change], list[str]]:
     """What to write, and the files left alone with why."""
     changes: list[Change] = []
     problems: list[str] = []
-    present = [rel for rel in FILES if (vault / rel).is_file()]
+    present = agent_files(vault)   # case-blind: `claude.md` is the one
     if not present:
         return [Change("CLAUDE.md", block() + "\n",
                        "Created CLAUDE.md holding the plugin's short "
