@@ -100,9 +100,13 @@ def _match(text):
         text = text[2:]
     m = SCRIPT_RE.match(text)
     if m:
-        if m.group("mod") not in MODULES:
+        if m.group("mod") == "gma":
+            # The plan's calling form: hand the rest to the gma branch.
+            text = "gma" + text[m.end():]
+        elif m.group("mod") not in MODULES:
             return ("unknown-script", m.group("mod"), "", "script")
-        return ("cmd", MODULES[m.group("mod")], text[m.end():], "script")
+        else:
+            return ("cmd", MODULES[m.group("mod")], text[m.end():], "script")
     m = BARE_RE.match(text)
     if m and m.group("mod") in MODULES:
         return ("cmd", MODULES[m.group("mod")], text[m.end():], "bare")
@@ -372,6 +376,12 @@ class PageTests(unittest.TestCase):
         self.assertTrue(any("relink" in p
                             for p in gma_docs.problems(tree(), docs)))
 
+    def test_gate_catches_a_missing_index(self):
+        docs = _copy_docs()
+        self.addCleanupDir(docs)
+        (docs / "llms.md").unlink()
+        self.assertIn("llms.md: missing", gma_docs.problems(tree(), docs))
+
     def test_gate_catches_a_missing_block(self):
         docs = _copy_docs()
         self.addCleanupDir(docs)
@@ -528,6 +538,25 @@ class ParserTests(unittest.TestCase):
                         bad.append(f"{name}: {line}: {err}")
         self.assertEqual(bad, [])
 
+    def test_every_parser_formats_its_help(self):
+        # argparse's own --help runs the %-formatting the pages also use;
+        # a badly formed help string must fail here, at every depth.
+        count = 0
+        for path, parser, _ in gma_docs.walk(tree(), ("gma",)):
+            with self.subTest(parser=" ".join(path)):
+                parser.format_help()
+                count += 1
+        self.assertGreater(count, 40)
+
+    def test_a_bad_help_string_fails_the_generator(self):
+        ap = argparse.ArgumentParser(prog="x")
+        action = ap.add_argument("--n", help="fine")
+        action.help = "see %(nope)s"   # 3.14 refuses this at add_argument
+        with self.assertRaises(KeyError):
+            gma_docs.render_block("gma x", ap, "")
+        with self.assertRaises((KeyError, TypeError, ValueError)):
+            ap.format_help()
+
     def test_flags_are_kebab_case(self):
         self.assertEqual(snake_flags(tree()), [], "flags are --kebab-case")
 
@@ -631,6 +660,23 @@ class SkillTextTests(unittest.TestCase):
             "x.md:5: publish has no subcommand frobnicate",
             "x.md:7: gma relink: unclosed quote"])
 
+    def test_gma_py_calling_form_is_read(self):
+        d = Path(tempfile.mkdtemp(prefix="gma-skill-"))
+        self.addCleanup(shutil.rmtree, d, True)
+        call = 'python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py"'
+        md = d / "x.md"
+        md.write_text(f"Run `{call} relink <vault> <old> <new>`.\n\n"
+                      f"Run `{call} frobnicate <vault>`.\n\n"
+                      f"Run `{call} relink <vault> <old> <new> --aply`.\n",
+                      encoding="utf-8")
+        found = scan_file(md)
+        self.assertEqual([(f.kind, f.name, f.form) for f in found],
+                         [("cmd", "relink", "gma"), ("cmd", "frobnicate", "gma"),
+                          ("cmd", "relink", "gma")])
+        self.assertEqual(name_problems(found), [
+            "x.md:3: no command gma frobnicate",
+            "x.md:5: gma relink: no flag --aply"])
+
     def test_publish_subcommands_match_the_tool(self):
         text = PUBLISH_JS.read_text(encoding="utf-8")
         names = {n for n in re.findall(r"command === '([^']+)'", text)
@@ -671,6 +717,16 @@ class SkillTextTests(unittest.TestCase):
         self.assertEqual(route_problems([md]),
                          (["x.md:2: no page frobnicate"], 2))
 
+    def test_route_gate_reads_the_gma_py_form(self):
+        d = Path(tempfile.mkdtemp(prefix="gma-skill-"))
+        self.addCleanup(shutil.rmtree, d, True)
+        md = d / "x.md"
+        call = 'python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py"'
+        md.write_text(f'Read `{call} llms relink`, then\n`{call} llms frobnicate`.\n',
+                      encoding="utf-8")
+        self.assertEqual(route_problems([md]),
+                         (["x.md:2: no page frobnicate"], 2))
+
     def test_recipes_keep_exit_status(self):
         bad = []
         for path in skill_files():
@@ -685,6 +741,18 @@ class SkillTextTests(unittest.TestCase):
                       "```bash\nset -o pipefail\ngma links <vault> | head\n```\n",
                       encoding="utf-8")
         self.assertEqual(len(_pipefail_problems(md)), 1)
+
+    def test_pipefail_gate_sees_other_filters_continuations_and_inline(self):
+        d = Path(tempfile.mkdtemp(prefix="gma-skill-"))
+        self.addCleanup(shutil.rmtree, d, True)
+        md = d / "x.md"
+        md.write_text("```bash\ngma links <vault> | sort\n```\n\n"
+                      "```bash\ngma links <vault> \\\n  | head -3\n```\n\n"
+                      "Run `gma links <vault> | wc -l` for the count.\n\n"
+                      "```bash\nset -o pipefail\ngma links <vault> | sort\n```\n",
+                      encoding="utf-8")
+        self.assertEqual([p.split(": ")[0] for p in _pipefail_problems(md)],
+                         ["x.md:1", "x.md:5", "x.md:10"])
 
 
 def name_problems(found):
@@ -710,7 +778,7 @@ def route_problems(paths):
     bad, seen = [], 0
     for path in paths:
         text = path.read_text(encoding="utf-8")
-        for m in re.finditer(r'gma llms\s+([a-z][a-z-]*)', text):
+        for m in re.finditer(r'gma(?:\.py"?)?\s+llms\s+([a-z][a-z-]*)', text):
             seen += 1
             if m.group(1) not in pages:
                 line = text[:m.start()].count("\n") + 1
@@ -718,29 +786,61 @@ def route_problems(paths):
     return bad, seen
 
 
+FILTERS = r"(?:head|tail|grep|sort|wc|jq|tee|awk|sed|cut)"
+PIPE_INTO_FILTER = re.compile(r"(?<!\|)\|(?!\|)\s*" + FILTERS + r"\b")
+
+
+def _piped(logical):
+    """True when a gma command's output goes into a filter, which hides the
+    command's exit status without `set -o pipefail`."""
+    m = PIPE_INTO_FILTER.search(logical)
+    return bool(m) and any(_match(seg) for seg in _segments(logical[:m.start()]))
+
+
+def _logical_lines(block):
+    """Fenced lines with `\\` continuations and a trailing `|` joined, so a
+    pipe that starts a continuation line is seen with its command."""
+    out, cur = [], ""
+    for line in block:
+        cur = f"{cur} {line.strip()}" if cur else line
+        if cur.rstrip().endswith("\\"):
+            cur = cur.rstrip()[:-1]
+        elif cur.rstrip().endswith("|") and not cur.rstrip().endswith("||"):
+            continue
+        else:
+            out.append(cur)
+            cur = ""
+    if cur:
+        out.append(cur)
+    return out
+
+
 def _pipefail_problems(path):
     lines = path.read_text(encoding="utf-8").splitlines()
+    try:
+        where = path.relative_to(ROOT).as_posix()
+    except ValueError:
+        where = path.name
     bad, block, start, fence = [], [], 0, None
     for n, line in enumerate(lines, 1):
         m = FENCE_RE.match(line)
         if fence is None and m:
             fence, block, start = m.group(1), [], n
         elif fence is not None and line.strip().startswith(fence):
-            body = "\n".join(block)
-            piped = any(
-                re.search(r'\|\s*(head|tail|grep)\b', l)
-                and any(_match(seg) for seg in _segments(l.split("|")[0]))
-                for l in block)
-            if piped and "set -o pipefail" not in body:
-                try:
-                    where = path.relative_to(ROOT).as_posix()
-                except ValueError:
-                    where = path.name
+            if (any(_piped(l) for l in _logical_lines(block))
+                    and "set -o pipefail" not in "\n".join(block)):
                 bad.append(f"{where}:{start}: piped command without "
                            "set -o pipefail")
             fence = None
         elif fence is not None:
             block.append(line)
+        else:
+            # Inline code can't carry `set -o pipefail`.
+            for span in re.finditer(r"`([^`]+)`", line):
+                body = span.group(1).replace("\\|", "|")
+                if _piped(body) and "set -o pipefail" not in body:
+                    bad.append(f"{where}:{n}: piped command without "
+                               "set -o pipefail")
     return bad
 
 

@@ -2717,9 +2717,9 @@ class NoPublishToolTests(unittest.TestCase):
     def test_a_tool_that_goes_away_mid_run_is_an_error_exit(self):
         gone = vaultlib.PublishToolUnavailable("node could not run")
         err = io.StringIO()
-        with mock.patch.object(vc, "main", side_effect=gone), \
+        with mock.patch.object(vc, "_main", side_effect=gone), \
                 contextlib.redirect_stderr(err):
-            self.assertEqual(vc.run(), 2)
+            self.assertEqual(vc.main(), 2)
         self.assertIn("stopped answering part-way (node could not run)",
                       err.getvalue())
 

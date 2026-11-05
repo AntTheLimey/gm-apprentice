@@ -6119,6 +6119,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """`_main`, with the failures no check can answer for itself: the
+    publish tool going away after a check began asking it, and settings the
+    tool cannot read. Direct runs and `gma vault-check` take this one path."""
+    try:
+        return report_unreadable_settings(lambda: _main(argv))
+    except PublishToolUnavailable as e:
+        print(f"error: the publish tool stopped answering part-way ({e}) — "
+              f"the rows above are incomplete and nothing further was "
+              f"written; run it again", file=sys.stderr)
+        return 2
+
+
+def _main(argv: list[str] | None) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
 
@@ -6279,18 +6292,5 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def run() -> int:
-    """`main`, with the failures no check can answer for itself: the
-    publish tool going away after a check began asking it, and settings the
-    tool cannot read."""
-    try:
-        return report_unreadable_settings(main)
-    except PublishToolUnavailable as e:
-        print(f"error: the publish tool stopped answering part-way ({e}) — "
-              f"the rows above are incomplete and nothing further was "
-              f"written; run it again", file=sys.stderr)
-        return 2
-
-
 if __name__ == "__main__":
-    sys.exit(run())
+    sys.exit(main())

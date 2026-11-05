@@ -45,6 +45,7 @@ from pathlib import Path
 from typing import Any
 
 import vault_check as vc
+from vaultlib import cli_name  # noqa: E402
 import vaultlib as vl
 import vault_write as vw
 
@@ -414,7 +415,7 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
     args = build_parser().parse_args(argv)
     vault: Path = args.vault
     if not vault.is_dir():
-        print(f"moments.py: {vault} is not a folder", file=sys.stderr)
+        print(f"{cli_name()}: {vault} is not a folder", file=sys.stderr)
         return 2
     try:
         if args.command != "offered":

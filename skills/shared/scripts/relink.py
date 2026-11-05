@@ -50,6 +50,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote, unquote
 
+from vaultlib import cli_name  # noqa: E402
 import vaultlib
 from migrate_core import StepFailed, write_text_atomic
 from vaultlib import (
@@ -1042,21 +1043,21 @@ def main(argv: list[str] | None = None) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
-        print(f"relink.py: not a directory: {args.vault}", file=sys.stderr)
+        print(f"{cli_name()}: not a directory: {args.vault}", file=sys.stderr)
         return 2
     try:
         old = resolve_old(args.vault, args.old)
         p = plan(args.vault, old, args.new)
         out = apply(p) if args.apply else rows(p)
     except RelinkError as e:
-        print(f"relink.py: {e}", file=sys.stderr)
+        print(f"{cli_name()}: {e}", file=sys.stderr)
         return 2 if e.usage else 1
     except SettingsUnavailable as e:
-        print(f"relink.py: {e}", file=sys.stderr)
+        print(f"{cli_name()}: {e}", file=sys.stderr)
         return 1
     except KeyboardInterrupt as e:
-        print(f"relink.py: interrupted; {e}" if str(e)
-              else "relink.py: interrupted", file=sys.stderr)
+        print(f"{cli_name()}: interrupted; {e}" if str(e)
+              else f"{cli_name()}: interrupted", file=sys.stderr)
         return 130
     print("\n".join(out))
     return 0

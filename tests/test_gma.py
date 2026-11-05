@@ -3,12 +3,14 @@
 import argparse
 import contextlib
 import io
+import os
 import shutil
 import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "shared" / "scripts"
 if str(SCRIPTS) not in sys.path:
@@ -32,10 +34,14 @@ def _run(argv):
     return code, out.getvalue(), err.getvalue()
 
 
+# Windows children write cp1252 to a pipe; the tests decode UTF-8.
+CHILD_ENV = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+
+
 def _subprocess(argv):
     return subprocess.run(
         [sys.executable, str(SCRIPTS / "gma.py"), *argv],
-        capture_output=True, text=True, encoding="utf-8")
+        capture_output=True, text=True, encoding="utf-8", env=CHILD_ENV)
 
 
 class GmaTests(unittest.TestCase):
@@ -46,6 +52,73 @@ class GmaTests(unittest.TestCase):
             expected = vault_check.main([str(vault), "version"])
         code, _, _ = _run(["vault-check", str(vault), "version"])
         self.assertEqual(code, expected)
+
+    def test_a_nonzero_status_comes_back_through_gma(self):
+        # A real script: relink on a vault with no such note returns 1.
+        vault = Path(tempfile.mkdtemp(prefix="gma-vault-"))
+        self.addCleanup(shutil.rmtree, vault, True)
+        import relink
+        argv = [str(vault), "Nope", "Other"]
+        with contextlib.redirect_stderr(io.StringIO()), \
+                contextlib.redirect_stdout(io.StringIO()):
+            direct = relink.main(argv)
+        self.assertEqual(direct, 1)
+        code, _, _ = _run(["relink", *argv])
+        self.assertEqual(code, 1)
+        # And a main that returns 3 (not 0, not an argparse exit).
+        with mock.patch.object(relink, "main", return_value=3):
+            self.assertEqual(_run(["relink", *argv])[0], 3)
+
+    def test_publish_signal_death_maps_to_1(self):
+        with mock.patch.object(gma.subprocess, "call", return_value=-15):
+            self.assertEqual(gma.main(["publish", "doctor"]), 1)
+        with mock.patch.object(gma.subprocess, "call", return_value=7):
+            self.assertEqual(gma.main(["publish", "doctor"]), 7)
+
+    def test_error_wrappers_run_the_same_directly_and_through_gma(self):
+        # The wrappers live in main(argv), so both paths take them.
+        import index_build
+        import session_context
+        cases = [
+            ("vault-check", vault_check, vaultlib.SettingsUnavailable("bad"), "bad"),
+            ("vault-check", vault_check,
+             vaultlib.PublishToolUnavailable("node died"), "node died"),
+            ("index-build", index_build, vaultlib.SettingsUnavailable("bad"), "bad"),
+            ("session-context", session_context,
+             vaultlib.SettingsUnavailable("bad"), "bad"),
+        ]
+        for name, module, exc, text in cases:
+            vault = Path(tempfile.mkdtemp(prefix="gma-vault-"))
+            self.addCleanup(shutil.rmtree, vault, True)
+            argv = [str(vault)]
+            if name == "vault-check":
+                argv.append("version")
+            for how, call in (("direct", module.main),
+                              ("gma", lambda a, n=name: gma.main([n, *a]))):
+                with self.subTest(command=name, exc=type(exc).__name__, how=how):
+                    err = io.StringIO()
+                    with mock.patch.object(module, "_main", side_effect=exc), \
+                            contextlib.redirect_stderr(err), \
+                            contextlib.redirect_stdout(io.StringIO()):
+                        code = call(argv)
+                    self.assertEqual(code, 2)
+                    lines = [l for l in err.getvalue().splitlines() if l]
+                    self.assertEqual(len(lines), 1, lines)
+                    self.assertTrue(lines[0].startswith("error: "), lines)
+                    self.assertIn(text, lines[0])
+
+    def test_hand_written_error_lines_name_gma_command(self):
+        vault = Path(tempfile.mkdtemp(prefix="gma-vault-"))
+        missing = vault / "nope"
+        self.addCleanup(shutil.rmtree, vault, True)
+        done = _subprocess(["migrate", str(missing)])
+        self.assertEqual(done.returncode, 2, done.stderr)
+        self.assertIn("gma migrate: not a directory", done.stderr)
+        self.assertNotIn("migrate.py:", done.stderr)
+        direct = subprocess.run(
+            [sys.executable, str(SCRIPTS / "migrate.py"), str(missing)],
+            capture_output=True, text=True, encoding="utf-8", env=CHILD_ENV)
+        self.assertIn("migrate.py: not a directory", direct.stderr)
 
     def test_unknown_command_exits_2_and_names_llms(self):
         code, _, err = _run(["frobnicate"])
@@ -120,7 +193,7 @@ class GmaTests(unittest.TestCase):
                 "    print(p.format_usage().splitlines()[0][:40], '|', n)\n")
         done = subprocess.run(
             [sys.executable, "-c", code], cwd=SCRIPTS, capture_output=True,
-            text=True, encoding="utf-8")
+            text=True, encoding="utf-8", env=CHILD_ENV)
         self.assertEqual(done.returncode, 0, done.stderr)
         rows = [l.split(" | ") for l in done.stdout.splitlines()]
         self.assertEqual(len(rows), len(gma.COMMANDS))

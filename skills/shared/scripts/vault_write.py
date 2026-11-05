@@ -72,6 +72,7 @@ from typing import Any
 import plan_check
 import schema_rules
 import vault_check as vc
+from vaultlib import cli_name  # noqa: E402
 import vaultlib as vl
 from migrate_core import StepFailed, write_text_atomic
 from vaultlib import GM_MARKER_RE, LineState, scan_body
@@ -3583,7 +3584,7 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
         if not args.dropped and not args.session:
             ap.error("--session is required unless --dropped")
     if not args.vault.is_dir():
-        print(f"vault_write.py: {args.vault} is not a folder",
+        print(f"{cli_name()}: {args.vault} is not a folder",
               file=sys.stderr)
         return 2
     needs_stdin = args.command not in NO_STDIN

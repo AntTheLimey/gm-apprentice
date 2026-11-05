@@ -99,6 +99,10 @@ def note(*tone_lines):
 
 class VaultCase(unittest.TestCase):
     def setUp(self):
+        # Error lines name the script as run; in-process that is sys.argv[0].
+        patcher = mock.patch.object(sys, "argv", ["tones.py"])
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.tmp = tempfile.TemporaryDirectory()
         self.vault = Path(self.tmp.name)
 

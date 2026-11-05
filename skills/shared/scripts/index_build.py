@@ -644,6 +644,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Settings that cannot be read end in one `error:` line and exit 2,
+    # the same whether run directly or through `gma`.
+    return report_unreadable_settings(lambda: _main(argv))
+
+
+def _main(argv: list[str] | None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
@@ -688,4 +694,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(report_unreadable_settings(main))
+    sys.exit(main())

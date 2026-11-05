@@ -83,6 +83,7 @@ from schema_rules import (
     tone_key,
     tone_proposal,
 )
+from vaultlib import cli_name  # noqa: E402
 from vaultlib import (UNCHECKED_DIRS, PublishToolUnavailable,
                       SettingsUnavailable,
                       run_relationships, settings)
@@ -471,7 +472,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
-        print(f"tones.py: not a directory: {args.vault.as_posix()}",
+        print(f"{cli_name()}: not a directory: {args.vault.as_posix()}",
               file=sys.stderr)
         return 2
     usage = None
@@ -498,7 +499,7 @@ def main(argv: list[str] | None = None) -> int:
             usage = "--set takes OLD=NEW"
         sets.append((old, new))
     if usage:
-        print(f"tones.py: {usage}", file=sys.stderr)
+        print(f"{cli_name()}: {usage}", file=sys.stderr)
         return 2
     try:
         if args.command is None:
@@ -513,7 +514,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "shown":
             published = published_notes(args.vault)
             if published is None:
-                print("tones.py: the site's publish tool could not be asked "
+                print(f"{cli_name()}: the site's publish tool could not be asked "
                       "which notes publish", file=sys.stderr)
                 return 1
             if args.accept:
@@ -527,11 +528,11 @@ def main(argv: list[str] | None = None) -> int:
             apply(p)
         print("\n".join(rows(p, done=args.write)))
     except (TonesError, SettingsUnavailable) as e:
-        print(f"tones.py: {e}", file=sys.stderr)
+        print(f"{cli_name()}: {e}", file=sys.stderr)
         return 1
     except KeyboardInterrupt as e:
-        print(f"tones.py: interrupted; {e}" if str(e)
-              else "tones.py: interrupted", file=sys.stderr)
+        print(f"{cli_name()}: interrupted; {e}" if str(e)
+              else f"{cli_name()}: interrupted", file=sys.stderr)
         return 130
     return 0
 

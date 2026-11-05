@@ -70,6 +70,7 @@ from reveal import LOG, _load_log, _write_log, apply_publish, prop_paths, publis
 from reveal_scan import NEVER_CANDIDATES  # noqa: E402
 from vault_check import configured_site  # noqa: E402
 from vault_write import BAD_NAME_RE, HAND_ID_RE, HANDS_REL, Batch, WriteError, use_hand  # noqa: E402
+from vaultlib import cli_name  # noqa: E402
 from vaultlib import (PUBLISH_TOOL, PublishToolUnavailable, SettingsUnavailable, entity_type,  # noqa: E402
                       extract_frontmatter, forget_settings, frontmatter_span, is_skipped_path,
                       scalar_value, settings, settings_remove, yaml_scalar, yaml_value_for_cli)
@@ -2036,15 +2037,15 @@ def main(argv: list[str] | None = None) -> int:
     except SystemExit as e:
         return int(e.code) if isinstance(e.code, int) else 2
     if not args.vault.is_dir():
-        print(f"prop_move.py: error: {args.vault} is not a folder", file=sys.stderr)
+        print(f"{cli_name()}: error: {args.vault} is not a folder", file=sys.stderr)
         return 2
     if args.mode == "apply" and (args.draft or args.json_out):
-        print("prop_move.py: error: --draft and --json are for plan", file=sys.stderr)
+        print(f"{cli_name()}: error: --draft and --json are for plan", file=sys.stderr)
         return 2
     try:
         given = _load_decisions(args.decisions) if args.decisions else None
     except ValueError as e:
-        print(f"prop_move.py: error: {e}", file=sys.stderr)
+        print(f"{cli_name()}: error: {e}", file=sys.stderr)
         return 2
     vault = args.vault.resolve()
     try:

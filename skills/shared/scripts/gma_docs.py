@@ -127,11 +127,9 @@ def _help(action: argparse.Action, display: str) -> str:
     if text == argparse.SUPPRESS:
         return ""
     if "%" in text:
-        params = dict(vars(action), prog=display)
-        try:
-            text = text % params
-        except (KeyError, TypeError, ValueError):
-            pass
+        # No try: a badly formed help string crashes argparse's own --help,
+        # so it must fail the generator too.
+        text = text % dict(vars(action), prog=display)
     return _cell(text)
 
 
@@ -304,9 +302,12 @@ def problems(tree: argparse.ArgumentParser, docs: Path = DOCS) -> list[str]:
         if path not in expected:
             found.append(f"llms/{path.name}: a page for no command")
     for path, blocks in expected.items():
-        if not path.is_file():
-            continue
         rel = path.relative_to(docs).as_posix()
+        if not path.is_file():
+            # Command pages are reported above, with the stub hint.
+            if path.parent == docs:
+                found.append(f"{rel}: missing")
+            continue
         doc = path.read_text(encoding="utf-8")
         have = block_names(doc)
         for name in blocks:

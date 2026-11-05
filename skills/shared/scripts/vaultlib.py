@@ -2014,6 +2014,13 @@ def setting_or_builtin(vault: Path, name: str) -> Any:
     return _schema_default(name)
 
 
+def cli_name() -> str:
+    """The name this command was run as: the script's file name directly,
+    `gma <command>` through gma. Same source as argparse's default prog, so
+    hand-written error lines match its usage lines."""
+    return os.path.basename(sys.argv[0])
+
+
 def report_unreadable_settings(main: Callable[[], int]) -> int:
     """`main()`'s exit code; settings that cannot be read (a typo in the
     settings file, no publish tool) end the command with one `error:` line

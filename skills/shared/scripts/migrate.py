@@ -36,6 +36,7 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           check_editable)
 from migrate_site import REPIN, SITE_CHECKS
 from migrate_vault import VAULT_CHECKS
+from vaultlib import cli_name  # noqa: E402
 from vaultlib import (LEGACY_SETTINGS_FILE, SettingsUnavailable,
                       StateUnreadable, parse_version, plugin_version,
                       read_held, read_stamp, vault_layout, write_held,
@@ -138,7 +139,7 @@ def emit(label: str, rows: list[Row], unchanged: int = 0) -> None:
 def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
     refused = gate(vault)
     if isinstance(refused, str):
-        print(f"migrate.py: {refused}", file=sys.stderr)
+        print(f"{cli_name()}: {refused}", file=sys.stderr)
         return 2
     vault_v, plugin_v = refused
     groups: dict[str, list[Row]] = {WILL: [], CHOICE: [], PERSON: []}
@@ -239,7 +240,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
               checks: list[Check] | None = None) -> int:
     refused = gate(vault)
     if isinstance(refused, str):
-        print(f"migrate.py: {refused}", file=sys.stderr)
+        print(f"{cli_name()}: {refused}", file=sys.stderr)
         return 2
     vault_v, plugin_v = refused
     todo = offered(CHECKS if checks is None else checks, vault_v, plugin_v)
@@ -247,13 +248,13 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
     for choice, value in chosen:
         problem = _choice_problem(choice, value, known)
         if problem:
-            print(f"migrate.py: {problem}", file=sys.stderr)
+            print(f"{cli_name()}: {problem}", file=sys.stderr)
             return 2
     if parse_version(vault_v) < parse_version(plugin_v):
         try:   # a stamp is due, written last; find out now that it can be
             _check_stampable(vault)
         except StepFailed as e:
-            print(f"migrate.py: {e}; nothing was changed", file=sys.stderr)
+            print(f"{cli_name()}: {e}; nothing was changed", file=sys.stderr)
             return 1
     did: list[Row] = []
     person: list[Row] = []
@@ -337,7 +338,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         try:   # the next plan does not ask these again
             write_held(vault, left_ids, said)
         except (StateUnreadable, OSError) as e:
-            print(f"migrate.py: answers could not be remembered "
+            print(f"{cli_name()}: answers could not be remembered "
                   f"({e.__class__.__name__}); they will be asked again",
                   file=sys.stderr)
     emit("Did", did)
@@ -352,7 +353,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
     if waited:
         print(WAITED_LINE)
     if failed is not None:
-        print(f"migrate.py: {error}", file=sys.stderr)
+        print(f"{cli_name()}: {error}", file=sys.stderr)
         print(f"stamped {target}; the rest is offered again next time"
               if stamped else "not stamped")
         return 1
@@ -384,16 +385,16 @@ def main(argv: list[str] | None = None) -> int:
         return 2 if e.code else 0
     vault = Path(args.vault).expanduser()
     if not vault.is_dir():
-        print(f"migrate.py: not a directory: {vault}", file=sys.stderr)
+        print(f"{cli_name()}: not a directory: {vault}", file=sys.stderr)
         return 2
     if args.command == "plan":
         if args.choose:
-            print("migrate.py: --choose goes with apply", file=sys.stderr)
+            print(f"{cli_name()}: --choose goes with apply", file=sys.stderr)
             return 2
         try:
             return run_plan(vault)
         except SettingsUnavailable as e:
-            print(f"migrate.py: {e}", file=sys.stderr)
+            print(f"{cli_name()}: {e}", file=sys.stderr)
             return 1
     chosen: list[tuple[str, str | None]] = []
     for raw in args.choose:

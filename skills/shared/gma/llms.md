@@ -5,6 +5,9 @@ publish tool. Work from these pages, not from `--help` or memory: each
 command's page says when to use it, what it needs, every flag, and an
 example that is checked against the real command.
 
+There is no `gma` on the PATH: where these pages write `gma`, run
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py"`.
+
 - `gma llms` prints this index; `gma llms <command>` prints that
   command's page. Read the page before the first use of a command in a
   task.
@@ -25,7 +28,7 @@ gma <command> ... [options]
 | Argument | Value | Help |
 |---|---|---|
 | `--version` |  | print the plugin version |
-| `<command>` | `dnd-ddb`, `dnd-sheet`, `graph-check`, `gurps-check`, `gurps-skill-default`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `session-context`, `stamp-entities`, `tones`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `publish`, `llms` |  |
+| `<command>` | `dnd-ddb`, `dnd-sheet`, `graph-check`, `gurps-check`, `gurps-skill-default`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `session-context`, `stamp-entities`, `tones`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `publish`, `llms` | the command to run; each has its own --help |
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma llms -->

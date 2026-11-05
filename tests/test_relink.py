@@ -582,6 +582,10 @@ class CliTests(unittest.TestCase):
 
 class ApplyExtraTests(unittest.TestCase):
     def setUp(self):
+        # Error lines name the script as run; in-process that is sys.argv[0].
+        patcher = mock.patch.object(sys, "argv", ["relink.py"])
+        patcher.start()
+        self.addCleanup(patcher.stop)
         self.vault = make_vault(self, {
             OLD: "x\n", "A.md": "[[Session_4_Wrapup]]\n"})
 

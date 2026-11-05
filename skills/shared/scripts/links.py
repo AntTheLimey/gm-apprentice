@@ -85,6 +85,7 @@ from relink import (
     _walk,
     resolve_old,
 )
+from vaultlib import cli_name  # noqa: E402
 from vaultlib import (
     LINK_RE,
     UNCHECKED_DIRS,
@@ -603,7 +604,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
-        print(f"links.py: not a directory: {args.vault.as_posix()}",
+        print(f"{cli_name()}: not a directory: {args.vault.as_posix()}",
               file=sys.stderr)
         return 2
     usage = None
@@ -626,7 +627,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.picks and min(args.picks) < 1:
         usage = "--pick takes a row number from 1"
     if usage:
-        print(f"links.py: {usage}", file=sys.stderr)
+        print(f"{cli_name()}: {usage}", file=sys.stderr)
         return 2
     try:
         if args.command is None:
@@ -642,14 +643,14 @@ def main(argv: list[str] | None = None) -> int:
             apply(p)
         print("\n".join(rows(p, done=args.write)))
     except RelinkError as e:
-        print(f"links.py: {e}", file=sys.stderr)
+        print(f"{cli_name()}: {e}", file=sys.stderr)
         return 2 if e.usage else 1
     except (LinksError, StepFailed) as e:
-        print(f"links.py: {e}", file=sys.stderr)
+        print(f"{cli_name()}: {e}", file=sys.stderr)
         return 1
     except KeyboardInterrupt as e:
-        print(f"links.py: interrupted; {e}" if str(e)
-              else "links.py: interrupted", file=sys.stderr)
+        print(f"{cli_name()}: interrupted; {e}" if str(e)
+              else f"{cli_name()}: interrupted", file=sys.stderr)
         return 130
     return 0
 

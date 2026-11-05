@@ -51,6 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gurps_calc as gc  # noqa: E402
 import gurps_check as gk  # noqa: E402
 import rules_lookup  # noqa: E402
+from vaultlib import cli_name  # noqa: E402
 from migrate_core import StepFailed, write_text_atomic  # noqa: E402
 
 ATTRS = ("st", "dx", "iq", "ht", "will", "per")
@@ -425,17 +426,17 @@ def main(argv: list[str] | None = None) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
     if (args.difficulty is None) != (args.defaults is None):
-        print("gurps_skill_default.py: --difficulty and --default go "
+        print(f"{cli_name()}: --difficulty and --default go "
               "together", file=sys.stderr)
         return 2
     if not args.skill.strip():
-        print("gurps_skill_default.py: give the skill's name",
+        print(f"{cli_name()}: give the skill's name",
               file=sys.stderr)
         return 2
     try:
         text = args.sheet.read_bytes().decode("utf-8")
     except (OSError, UnicodeError) as e:
-        print(f"gurps_skill_default.py: cannot read {args.sheet}: {e}",
+        print(f"{cli_name()}: cannot read {args.sheet}: {e}",
               file=sys.stderr)
         return 2
     where = args.sheet.as_posix()

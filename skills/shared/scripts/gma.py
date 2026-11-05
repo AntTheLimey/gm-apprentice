@@ -77,7 +77,8 @@ def _root(with_commands: bool) -> argparse.ArgumentParser:
     root.add_argument("--version", action="store_true",
                       help="print the plugin version")
     if with_commands:
-        root.add_subparsers(dest="command", metavar="<command>")
+        root.add_subparsers(dest="command", metavar="<command>",
+                            help="the command to run; each has its own --help")
     return root
 
 
@@ -159,7 +160,9 @@ def full_tree() -> argparse.ArgumentParser:
 def _publish(args: list[str]) -> int:
     cmd = ["node", str(vaultlib.PUBLISH_TOOL), *args]
     try:
-        return subprocess.call(cmd)
+        code = subprocess.call(cmd)
+        # A signal death comes back negative; exit codes are 0..255.
+        return code if 0 <= code <= 255 else 1
     except FileNotFoundError:
         print("gma: publish needs node on the PATH", file=sys.stderr)
         return 1
