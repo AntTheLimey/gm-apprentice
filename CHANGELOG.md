@@ -13,14 +13,15 @@ The vault update is now one command, `gma update`, and it says what it did. No v
 
 ### Added
 
-- **`gma update`.** It backs the vault up first, outside the vault, prints a plain report, exits 3 when a question waits, and takes `--headless` and `--json`.
+- **`gma update`.** It backs the vault up first, outside the vault (the notes, props pages and the site's package and config files; the last ten are kept), prints a plain report, exits 3 when a question waits, and takes `--headless` and `--json`. An answer names the question as shown (`--answer <id>@<hash>=<value>`), so a file edited since the GM was asked is asked about again, never overwritten.
 - **`_meta/update-record.json`**, which keeps template decisions, answers and each update's summary.
 
 ### Changed
 
 - **Templates are decided by rule.** An unedited old release is updated and named; a real difference is one question with what each side has. The answer is remembered against both texts, survives stamping, and "leave" counts as keep.
 - **"May I apply?" is gone.** Bookkeeping just happens; anything that would remove the GM's text asks.
-- **Skills route the version gate's MISMATCH to `gma update`.**
+- **Skills route the version gate's MISMATCH to `gma update`**, and a later "which template, and why" to the update record.
+- **`migrate.py` called directly:** `--choose template:<file>` needs `keep` or `take`; `apply` writes `_meta/update-record.json`; an unreadable template no longer stops the run; the hide lists can show as two ids (`exclude-lists`, and `exclude-lists-replace` for a list the GM typed), both run on the one yes.
 
 ### Fixed
 

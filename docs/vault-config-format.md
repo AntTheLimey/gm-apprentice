@@ -289,11 +289,13 @@ with nothing to do leaves the vault untouched. A "leave" answer counts as keep,
 and so does a template "leave" an older update kept in `update_held`. A
 record that cannot be read stops the template check rather than being
 written over: restore it from the latest update backup, or delete it and
-answer the template questions again. Under `answers`, every other
-question `gma update` asked has the GM's answer (`answer`), a hash of
-the lines it was asked with (`lines_sha`), the date and the plugin
-version: the question is not asked again while a check finds those same
-lines. Under `updates`, each run that did something lists the version
+answer the template questions again. Under `answers`, every question
+`gma update` asked has the GM's answer (`answer`), a hash of the lines
+it was asked with (`lines_sha`), the date and the plugin version: a
+`leave` stands while a check finds those same lines (a yes is asked
+again whenever the change is due again). A
+template's answer is listed there too, but what counts for a template
+is its `templates` entry. Under `updates`, each run that did something lists the version
 it came from and went to, the date, what it did in plain words, the
 questions answered and left open, and its backup. Do not
 edit the file by hand. It sits in `_meta/`, which a site never

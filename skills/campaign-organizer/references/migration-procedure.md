@@ -8,17 +8,19 @@ of the notes before its first write, and asks before anything that
 would remove what the GM wrote. There is no separate "may I apply?"
 step: run it.
 
-1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py" update <vault>`
-   and show the GM its report as printed: Done, Waiting for you, Could
-   not read, Worth knowing, and the Backup line.
-2. **Exit 0** means done (or nothing to do). Go to the end.
-3. **Exit 3** means questions wait under "Waiting for you". Run
-   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py" update <vault> --json`
-   to see each question's `id`, `options` and `detail`. Put each
-   question to the GM once, one at a time, in plain words:
+1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py" update <vault> --json`
+   and show the GM its `report` as printed: Done, Waiting for you,
+   Could not read, Worth knowing, and the Backup line.
+2. **Could not read** lines name a file the update could not read and
+   its fix (for an iCloud file, `brctl download "<path>"`). Tell the GM
+   the file and the fix; the update left that file as it was.
+3. **Exit 0** means done (or nothing to do). Go to the end.
+4. **Exit 3** means `questions` wait. Each has an `id`, `options` and
+   `detail`. Put each question to the GM once, one at a time, in plain
+   words:
    - Say what saying yes would do (`detail.if_yes`).
-   - A template question (`template:<file>`): use `detail.summary` and
-     `detail.comparison` to say what the GM's version has that the
+   - A template question (`template:<file>@...`): use `detail.summary`
+     and `detail.comparison` to say what the GM's version has that the
      plugin's does not, and what the plugin's adds. `keep` keeps theirs
      as it is; `take` puts the plugin's in its place. Never show a raw
      diff.
@@ -26,15 +28,14 @@ step: run it.
      the GM what and where (`detail.lines`), then run the update again
      once it is fixed.
    - `leave` is always an answer and leaves that thing as it is.
-4. Run it again with every answer, one `--answer` per question:
-   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py" update <vault> --answer template:pc-coc-7e-regency.md=keep`.
+5. Run it again with every answer, one `--answer` per question, by its
+   `id` exactly as given (the `@` part names the text the GM saw):
+   `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py" update <vault> --json --answer template:pc-coc-7e-regency.md@1a2b3c4d=keep`.
    Each answer is kept in `_meta/update-record.json`, so the same
    question is not asked again while what it would change stays the
-   same. If it exits 3 again, the new rows are new questions: ask only
-   about those.
-5. **Could not read** lines name a file the update could not read and
-   its fix (for an iCloud file, `brctl download "<path>"`). Tell the GM
-   the file and the fix; the update left that file as it was.
+   same. If a file changed since the GM was asked, Worth knowing says
+   so and the question comes back; if it exits 3 again, ask only about
+   the new questions.
 6. **Exit 1** means a step failed: give the GM the line under "Stopped"
    as printed. What finished is kept, and the next run carries on from
    the failed step.

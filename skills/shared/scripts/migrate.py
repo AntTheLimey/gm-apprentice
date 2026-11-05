@@ -22,6 +22,14 @@ lists it again; everything else in the plan still runs.
 A step that fails stops the run; the vault is stamped at the last release
 whose steps all completed, so the next run starts at the failed step.
 
+`gma update` (update.py) is the command skills run; this is its engine.
+For a direct caller: a template's choice needs a value
+(`--choose template:<file>=keep|take`); `apply` writes the update record
+(`_meta/update-record.json`) with the template decisions; an unreadable
+template is a Needs a person row and never stops the run; and the hide
+lists can be two ids (`exclude-lists`, `exclude-lists-replace` for a list
+the GM typed), both run on the one yes.
+
 Exit: 0 done or nothing to do; 1 a step failed; 2 bad arguments, or a
 vault this script does not migrate (below 1.10.12, or ahead of the plugin).
 """

@@ -70,6 +70,7 @@ run the update by `references/migration-procedure.md`, then resume the request.
 `AHEAD` → announce the row, tell the GM to update the plugin, stop.
 `ERROR` → report the row (broken plugin install), stop. No verdict
 row plus `not a directory` on stderr → wrong vault path; ask for it.
+Asked what an update did, or which template and why, at any verdict → "Asked later" in `references/migration-procedure.md`.
 
 ### Schema Evolution
 
