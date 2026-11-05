@@ -100,9 +100,27 @@ class BackupTests(unittest.TestCase):
                                return_value=site.resolve()):
             archive = update_backup.backup(self.vault, home=self.home)
         self.assertEqual(self._names(archive), [
+            ".gm-apprentice-site/package-lock.json",
+            ".gm-apprentice-site/package.json",
+            ".gm-apprentice-site/scripts/add-props.mjs",
+            ".gm-apprentice-site/vault.config.json",
             "Chapters/One/Props/letter.css", "Chapters/One/Props/letter.html",
-            "keep.md", "site/package-lock.json", "site/package.json",
-            "site/scripts/add-props.mjs", "site/vault.config.json"])
+            "keep.md"])
+
+    def test_a_vault_site_folder_of_notes_and_the_site_files_stay_apart(self):
+        self._write("site/note.md")
+        self._write("site/package.json", "mine")
+        site = self.tmp / "Real Site"
+        site.mkdir()
+        (site / "package.json").write_text("{}", encoding="utf-8")
+        with mock.patch.object(update_backup, "_site_folder",
+                               return_value=site.resolve()):
+            archive = update_backup.backup(self.vault, home=self.home)
+        names = self._names(archive)
+        self.assertEqual(names, [".gm-apprentice-site/package.json",
+                                 "site/note.md", "site/package.json"])
+        with tarfile.open(archive) as tar:
+            self.assertEqual(tar.extractfile("site/package.json").read(), b"mine")
 
     def test_an_icloud_timeout_names_the_brctl_fix(self):
         path = self._write("Evicted.md")

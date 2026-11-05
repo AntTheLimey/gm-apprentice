@@ -5,7 +5,8 @@ The archive holds every file the update can write: each .md, .yaml and
 .json note, and the props move's pages, styles and scripts, in the vault
 (the update never edits pictures); and the site folder's package.json,
 package-lock.json, vault.config.json and scripts/ (the repin, the settings
-move and the retired build steps write those), under `site/`. It lives under
+move and the retired build steps write those), under
+`.gm-apprentice-site/`. It lives under
 the home folder, outside the vault, so it never syncs or publishes. It is
 written as `<name>.tar.gz.partial` and renamed when whole, so an
 interrupted backup never passes for one.
@@ -25,8 +26,11 @@ NOTE_SUFFIXES = {".md", ".yaml", ".json",
                  ".html", ".htm", ".css", ".js", ".mjs", ".svg"}
 SITE_FILES = ("package.json", "package-lock.json", "vault.config.json")
 SITE_DIRS = ("scripts",)
-SITE_ARC = "site"   # where the site's files sit in the archive
-SKIP_DIRS = {".obsidian", ".git", ".trash", ".gm-apprentice"}
+# Where the site's files sit in the archive: a folder the walk skips, so
+# no vault path can share it.
+SITE_ARC = ".gm-apprentice-site"
+SKIP_DIRS = {".obsidian", ".git", ".trash", ".gm-apprentice",
+             ".gm-apprentice-site"}
 
 
 class BackupFailed(Exception):
