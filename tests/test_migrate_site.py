@@ -465,20 +465,6 @@ class PersonRowTests(unittest.TestCase):
                 # No site: nothing publishes, so nothing waits on the tool.
                 self.assertEqual(find(make_vault(self, site=False)), [], name)
 
-    def test_a_postbuild_script_is_named(self):
-        vault = make_vault(self)
-        site = site_of(vault)
-        (site / "package.json").write_text(json.dumps(
-            {"scripts": {"postbuild": "node add-toggle.js"}}), encoding="utf-8")
-        (item,) = ms.find_postbuild(vault)
-        self.assertEqual(item.group, PERSON)
-        self.assertIn("node add-toggle.js", item.lines[0])
-        self.assertTrue(item.lines[0].startswith("package.json (site)\t"))
-        self.assertIn("build step", item.lines[0])
-        (site / "package.json").write_text("{}", encoding="utf-8")
-        self.assertEqual(ms.find_postbuild(vault), [])
-        self.assertEqual(ms.find_postbuild(make_vault(self, site=False)), [])
-
 
 class ToneShownNoticeTests(unittest.TestCase):
     NOTE = ("---\ntype: npc\nrelationships:\n"

@@ -183,15 +183,12 @@ async function runDeploy(options, deps) {
     ? ['pages', 'deploy', '--branch=main', '--commit-dirty=true']
     : ['pages', 'deploy', outDir, `--project-name=${projectName}`, '--branch=main', '--commit-dirty=true'];
 
-  // The vault's own steps run inside the build. A package.json prebuild or postbuild is never run: the settings check
-  // below stops the deploy, naming each and its home in the vault (player_site.before_build, .after_build).
-  let vaultSteps = { before: [], after: [] };
-  try {
-    if (vaultPath) vaultSteps = loadPublishConfig(vaultPath, rawConfig, () => {}, { siteDir: siteRoot }).steps;
-  } catch { /* a vault that cannot be read is reported by the build */ }
-
-  // A hiding-side settings fault stops the deploy, a dry run included, --no-build included (it throws; the CLI prints it once).
+  // A hiding-side settings fault stops the deploy, a dry run included, --no-build included (it throws; the CLI prints it
+  // once). A package.json prebuild or postbuild is one: it is never run, and the stop names its home in the vault.
   (d.assertNoStopsFor || require('./config').assertNoStopsFor)(configPath, 'deploy');
+
+  // The vault's own steps run inside the build.
+  const vaultSteps = vaultPath ? loadPublishConfig(vaultPath, rawConfig, () => {}, { siteDir: siteRoot }).steps : { before: [], after: [] };
 
   // The leak gate (#293): the folder that would be uploaded, after the build, its steps and any postbuild script.
   // It reads and never writes; a gate that cannot run stops the deploy (it fails closed). --ignore-leaks deploys past a

@@ -1387,10 +1387,10 @@ def story_moments_on(site_settings: Settings | None) -> bool:
 
 
 def vault_settings(vault: Path) -> Settings:
-    """Every setting of the vault, with the site folder's own
-    vault.config.json taking part when the vault has one (its old keys are
-    still read until they are moved). The vault file alone says where the
-    site is, so that is read first."""
+    """Every setting of the vault, read with the site folder's own
+    vault.config.json when the vault has one (any key there but vaultPath
+    is a stop the faults name; nothing in it is read as a setting). The
+    vault file alone says where the site is, so that is read first."""
     own = settings(vault)
     site, has_config = _site_of(own, vault)
     if site is not None and has_config:

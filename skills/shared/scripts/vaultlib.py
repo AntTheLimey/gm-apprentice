@@ -1312,10 +1312,8 @@ def run_tool(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
         except PublishToolTimedOut as e:
             raise subprocess.TimeoutExpired(cmd, timeout) from e
         except PublishToolUnavailable as e:
-            writes = args[0] == "settings" and not (
-                args[1:2] in (["get"], ["raw"], ["describe"], ["list"],
-                              ["check"])
-                or (args[1:2] == ["move"] and "--check" in args))
+            writes = args[0] == "settings" and args[1:2] not in (
+                ["get"], ["raw"], ["describe"], ["list"], ["check"])
             if writes:
                 # The command's own kind of reason, so callers pass it on
                 # instead of reading it as a tool that would not start.

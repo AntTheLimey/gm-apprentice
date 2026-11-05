@@ -456,40 +456,6 @@ def find_sheet_source(vault: Path) -> list[Item]:
     return items
 
 
-POSTBUILD = ("the publish tool now adds the light/dark toggle and leaves "
-             "retired PCs off the party board; if this step does either, "
-             "remove that part")
-
-
-def find_postbuild(vault: Path) -> list[Item]:
-    """1.10.16 and 1.10.17: a site's own postbuild step may now double
-    what the tool does. Whether it does is for a person to read."""
-    site, _has_config = configured_site(vault)
-    if site is None:
-        return []
-    try:
-        data = json.loads((site / "package.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        data = None
-    scripts = data.get("scripts") if isinstance(data, dict) else None
-    script = scripts.get("postbuild") if isinstance(scripts, dict) else None
-    if isinstance(script, str) and script.strip():
-        return [Item("postbuild", PERSON,
-                     [f'package.json (site)\tbuild step "{script}": '
-                      f"{POSTBUILD}"])]
-    # The steps are in the vault's settings now (the move carried them).
-    try:
-        steps = settings(vault).get("player_site.after_build")
-    except (SettingsUnavailable, KeyError):
-        return []
-    if not isinstance(steps, list) or not steps:
-        return []
-    name = "player_site.after_build"
-    return [Item("postbuild", PERSON,
-                 [f'{name} (settings)\tbuild steps "{" && ".join(map(str, steps))}": '
-                  f"{POSTBUILD}"])]
-
-
 def _with_site(vault: Path) -> bool:
     """Whether the vault has a site; the steps below ask nothing of it
     otherwise."""
@@ -982,12 +948,6 @@ SITE_CHECKS: list[Check] = [
           plain=("Set your site to serve its own fonts, so readers' addresses are not sent to Google."),
           ask=("Makes your site serve its own fonts, so readers' addresses are not sent to Google."),
           left=("Kept your site loading its fonts from Google.")),
-    Check("postbuild", "1.10.17", 3, "the site's postbuild script",
-          find_postbuild,
-          kind="asks",
-          plain=("Pointed out a build step of your site's own that may now repeat what the publish tool does."),
-          ask=("Needs you to look at the build step by hand; nothing changes until then."),
-          left=("Kept your site's own build step.")),
     Check("tone-shown", "1.10.46", 3, "relationship tones shown on the site",
           find_tone_shown,
           kind="bookkeeping",

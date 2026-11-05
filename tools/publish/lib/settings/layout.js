@@ -51,7 +51,8 @@ const STEPS_FROM = '1.24.0';
 // installed or its package.json cannot be read. The one reader of it. `readFile` is for a caller that has its own.
 function siteToolVersion(siteDir, readFile = (f) => fs.readFileSync(f, 'utf8')) {
   try {
-    return JSON.parse(readFile(path.join(siteDir, 'node_modules', 'gm-apprentice-publish', 'package.json'))).version || null;
+    const { version } = JSON.parse(readFile(path.join(siteDir, 'node_modules', 'gm-apprentice-publish', 'package.json'))) || {};
+    return typeof version === 'string' && version ? version : null;
   } catch {
     return null;
   }
