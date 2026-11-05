@@ -17,6 +17,9 @@ from typing import Literal, Optional, TypedDict
 from migrate_core import StepFailed, write_text_atomic
 
 RECORD_FILE = "_meta/update-record.json"
+FIX = (f"Fix: restore {RECORD_FILE} from the latest update backup "
+       f"(~/.gm-apprentice/backups/), or delete it and answer the template "
+       f"questions again.")
 
 
 class TemplateEntry(TypedDict):
@@ -64,21 +67,21 @@ def load(vault: Path) -> Record:
         return empty()
     except (OSError, UnicodeDecodeError) as e:
         raise RecordUnreadable(f"{RECORD_FILE} cannot be read "
-                               f"({e.__class__.__name__})") from e
+                               f"({e.__class__.__name__}). {FIX}") from e
     try:
         data = json.loads(raw)
     except ValueError as e:
         raise RecordUnreadable(f"{RECORD_FILE} is not valid JSON "
-                               f"(line {getattr(e, 'lineno', '?')})") from e
+                               f"(line {getattr(e, 'lineno', '?')}). {FIX}") from e
     if not isinstance(data, dict):
-        raise RecordUnreadable(f"{RECORD_FILE} does not hold a JSON object")
+        raise RecordUnreadable(f"{RECORD_FILE} does not hold a JSON object. {FIX}")
     rec = empty()
     for key, kind in (("templates", dict), ("updates", list),
                       ("workarounds", list)):
         if key in data:
             if not isinstance(data[key], kind):
                 raise RecordUnreadable(f"{RECORD_FILE}: {key} is not a "
-                                       f"{'list' if kind is list else 'mapping'}")
+                                       f"{'list' if kind is list else 'mapping'}. {FIX}")
             rec[key] = data[key]  # type: ignore[literal-required]
     swept = data.get("swept")
     rec["swept"] = swept if isinstance(swept, str) else None

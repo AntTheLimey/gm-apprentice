@@ -132,13 +132,38 @@ class TemplateRuleTests(unittest.TestCase):
         row = items[f"template-unreadable:{NPC}"]
         self.assertEqual(row.group, PERSON)
         self.assertFalse(row.holds_stamp)
+        # Truly 0 bytes: no download brings it back.
         self.assertEqual(row.lines, [
-            f"_Templates/{NPC} could not be read (it is empty); left as it is. "
-            f'Fix: brctl download "{path}" (iCloud), or check its permissions, '
-            f"then run the update again."])
-        self.assertIn("brctl download", row.lines[0])
+            f"_Templates/{NPC} is empty (0 bytes on disk); left as it is. Fix: "
+            f"restore it from a backup, or delete it so the update copies the "
+            f"plugin's, then run the update again."])
         self.assertEqual(path.read_text(encoding="utf-8"), "")
         self.assertFalse((vault / ur.RECORD_FILE).exists())
+
+    def test_a_file_that_reads_empty_but_holds_bytes_is_an_icloud_problem(self):
+        vault = make_vault(self)
+        path = vault / "_Templates" / NPC
+        size = path.stat().st_size
+        real = Path.read_text
+
+        def read_text(self, *a, **kw):
+            return "" if self.name == NPC else real(self, *a, **kw)
+
+        with mock.patch.object(Path, "read_text", read_text):
+            items = by_id(mv.find_templates(vault))
+        self.assertNotIn(f"template:{NPC}", items)
+        self.assertEqual(items[f"template-unreadable:{NPC}"].lines, [
+            f"_Templates/{NPC} could not be read (it read as empty, though it "
+            f"holds {size} bytes); left as it is. "
+            f'Fix: brctl download "{path}" (iCloud), or check its permissions, '
+            f"then run the update again."])
+
+    def test_a_template_of_blank_lines_is_empty_not_a_difference(self):
+        vault = make_vault(self)
+        (vault / "_Templates" / NPC).write_text("\n\n", encoding="utf-8")
+        items = by_id(mv.find_templates(vault))
+        self.assertNotIn(f"template:{NPC}", items)
+        self.assertIn("is empty (only blank lines)", items[f"template-unreadable:{NPC}"].lines[0])
 
     def test_unreadable_template_oserror_is_a_read_problem(self):
         vault = make_vault(self)
@@ -201,12 +226,16 @@ class TemplateRuleTests(unittest.TestCase):
         self.assertEqual(record(vault)["templates"][NPC]["decision"], "take")
         self.assertEqual(mv.find_templates(vault), [])
 
-    def test_leave_changes_nothing_and_another_answer_is_refused(self):
+    def test_leave_is_recorded_as_keep_and_another_answer_is_refused(self):
         vault = make_vault(self)
-        edited_npc(vault)
+        path = edited_npc(vault)
+        text = path.read_text(encoding="utf-8")
         item = by_id(mv.find_templates(vault))[f"template:{NPC}"]
-        self.assertIn("asked again", item.apply("leave")[0])
-        self.assertFalse((vault / ur.RECORD_FILE).exists())
+        self.assertEqual(item.apply("leave"), [f"left _Templates/{NPC} as it is"])
+        self.assertEqual(path.read_text(encoding="utf-8"), text)
+        entry = record(vault)["templates"][NPC]
+        self.assertEqual((entry["state"], entry["decision"]), ("gms", "keep"))
+        self.assertNotIn(f"template:{NPC}", by_id(mv.find_templates(vault)))
         with self.assertRaises(StepFailed):
             item.apply("y")
 
@@ -272,12 +301,40 @@ class RememberedTests(unittest.TestCase):
         self.assertEqual(item.detail["comparison"]["headings_only_shipped"],
                          ["New In This Release"])
 
-    def test_a_template_leave_in_update_held_does_not_hide_the_question(self):
-        vault = make_vault(self)
+    def held(self, vault):
         edited_npc(vault)
-        item = by_id(mv.find_templates(vault))[f"template:{NPC}"]
-        held = {"left": {item.id, "other"}, "said": set()}
-        self.assertFalse(migrate._answered(item, held))
+        patch = mock.patch.object(mv, "read_held", return_value={
+            "left": {f"template:{NPC}", "other"}, "said": set()})
+        patch.start()
+        self.addCleanup(patch.stop)
+
+    def test_an_older_updates_leave_in_update_held_is_a_keep(self):
+        vault = make_vault(self)
+        self.held(vault)
+        items = by_id(mv.find_templates(vault))
+        self.assertNotIn(f"template:{NPC}", items)
+        item = items[f"template-kept:{NPC}"]
+        self.assertEqual(item.group, WILL)
+        self.assertEqual(item.lines, ["keep your NPC template (you answered before)"])
+        # plan is read-only: finding it wrote nothing
+        self.assertFalse((vault / ur.RECORD_FILE).exists())
+
+    def test_the_held_leave_is_written_to_the_record_on_apply(self):
+        vault = make_vault(self)
+        self.held(vault)
+        text = (vault / "_Templates" / NPC).read_text(encoding="utf-8")
+        item = by_id(mv.find_templates(vault))[f"template-kept:{NPC}"]
+        self.assertEqual(item.apply(None), ["kept your NPC template (you answered before)"])
+        entry = record(vault)["templates"][NPC]
+        self.assertEqual((entry["state"], entry["decision"]), ("gms", "keep"))
+        self.assertEqual(entry["file_sha"], mv.text_hash(text))
+        self.assertEqual(entry["shipped_sha"], mv.text_hash(mv.expected_templates(vault)[NPC]))
+        self.assertEqual((vault / "_Templates" / NPC).read_text(encoding="utf-8"), text)
+        # From now on the record answers it, with update_held gone too.
+        with mock.patch.object(mv, "read_held", return_value={"left": set(), "said": set()}):
+            items = by_id(mv.find_templates(vault))
+        self.assertNotIn(f"template:{NPC}", items)
+        self.assertIn("decided", items[f"template-kept:{NPC}"].lines[0])
 
     def test_a_no_op_update_writes_no_record_and_a_stamp_keeps_it(self):
         vault = make_vault(self)
@@ -295,8 +352,12 @@ class RememberedTests(unittest.TestCase):
         vault = make_vault(self)
         edited_npc(vault)
         (vault / ur.RECORD_FILE).write_text("{not json", encoding="utf-8")
-        with self.assertRaises(StepFailed):
+        with self.assertRaises(StepFailed) as caught:
             mv.find_templates(vault)
+        self.assertIn("restore _meta/update-record.json from the latest update backup",
+                      str(caught.exception))
+        self.assertIn("~/.gm-apprentice/backups/", str(caught.exception))
+        self.assertIn("or delete it and answer the template questions again", str(caught.exception))
         self.assertEqual((vault / ur.RECORD_FILE).read_text(encoding="utf-8"), "{not json")
 
 

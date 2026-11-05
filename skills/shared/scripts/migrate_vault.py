@@ -21,16 +21,16 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           cells, edit_frontmatter, plugin_tool, stopped,
                           write_text_atomic)
 from schema_rules import system_id as _system_id
-from template_compare import compare, summary
 from schema_rules import STAGE_HIDES, TEMPLATE_NAMES
 from schema_rules import tone_families, without_generated_markers
+from template_compare import compare, summary
 from vault_check import (RECONSTRUCTION_NOTE_RE, WRAP_TYPES, WrapDetail, check_wrapup,
                          configured_site, player_section_key, semver_below,
                          site_pin, wrapup_filename_findings)
 from vaultlib import (LEGACY_SETTINGS_FILE, SKIP_DIRS, SettingsUnavailable, StateUnreadable, entity_type, extract_frontmatter,
                       delete_key, fence_step, frontmatter_span, opens_a_block,
                       parse_version, plugin_version,
-                      read_stamp, scan_body, settings, settings_file,
+                      read_held, read_stamp, scan_body, settings, settings_file,
                       settings_raw,
                       settings_unset, vault_files, vault_layout,
                       wrapup_filename)
@@ -323,7 +323,8 @@ def _unreadable_reason(path: Path) -> str:
     if getattr(st, "st_flags", 0) & DATALESS:
         return "iCloud has not downloaded it to this computer"
     if st.st_size > 0:
-        return f"it read as empty, though it holds {st.st_size} bytes"
+        return (f"it read as empty, though it holds {st.st_size} "
+                f"byte{'s' * (st.st_size != 1)}")
     return "it is empty"
 
 
@@ -332,6 +333,22 @@ def _unreadable(name: str, path: Path, reason: str) -> Item:
         f"_Templates/{name} could not be read ({reason}); left as it is. "
         f'Fix: brctl download "{path}" (iCloud), or check its permissions, '
         f"then run the update again."])
+
+
+def _empty_on_disk(name: str, what: str = "0 bytes on disk") -> Item:
+    """A template that truly holds nothing: no download brings it back."""
+    return Item(f"template-unreadable:{name}", PERSON, [
+        f"_Templates/{name} is empty ({what}); left as it is. Fix: "
+        f"restore it from a backup, or delete it so the update copies the "
+        f"plugin's, then run the update again."])
+
+
+def _is_empty_on_disk(path: Path) -> bool:
+    try:
+        st = path.stat()
+    except OSError:
+        return False
+    return st.st_size == 0 and not getattr(st, "st_flags", 0) & DATALESS
 
 
 def _release_of(released: dict[str, str | None] | list[str],
@@ -374,6 +391,10 @@ def find_templates(vault: Path) -> list[Item]:
     behind = stamp is not None and version != "unknown" \
         and parse_version(stamp) < parse_version(version)
     same: dict[str, update_record.TemplateEntry] = {}
+    try:   # "leave" answers an older update kept before the record existed
+        held_left = read_held(vault)["left"]
+    except (StateUnreadable, OSError):
+        held_left = set()
 
     def entry(name: str, file_text: str, shipped: str, why: str,
               state: Literal["plugin", "gms"] = "plugin",
@@ -404,8 +425,12 @@ def find_templates(vault: Path) -> list[Item]:
                 items.append(_unreadable(
                     name, path, e.strerror or e.__class__.__name__))
                 continue
+            if not current:
+                items.append(_empty_on_disk(name) if _is_empty_on_disk(path)
+                             else _unreadable(name, path, _unreadable_reason(path)))
+                continue
             if not current.strip():
-                items.append(_unreadable(name, path, _unreadable_reason(path)))
+                items.append(_empty_on_disk(name, "only blank lines"))
                 continue
             regency = _regency_build(system, name, current)
             if regency is not None:
@@ -476,20 +501,35 @@ def find_templates(vault: Path) -> list[Item]:
                     f"template-kept:{name}", WILL,
                     [f"keep your {label} template (decided {on})"], kept))
             continue
+        if known is None and f"template:{name}" in held_left:
+            # An older update's "leave" is a keep; the record takes it over
+            # on apply (plan writes nothing).
+            def adopt(_value: str | None, name: str = name, text: str = text,
+                      label: str = label, current: str = current) -> list[str]:
+                remember((name, entry(
+                    name, current, text,
+                    f"The GM chose to keep their own {label} template "
+                    f"(answered leave in an earlier update).",
+                    state="gms", matches=None, decision="keep")))
+                return [f"kept your {label} template (you answered before)"]
+
+            items.append(Item(
+                f"template-kept:{name}", WILL,
+                [f"keep your {label} template (you answered before)"], adopt))
+            continue
         comparison = compare(shown, text)
 
         def choose(value: str | None, path: Path = path, text: str = text,
                    written: str = written, name: str = name,
                    label: str = label, current: str = current) -> list[str]:
-            if value == "leave":
-                return [f"left _Templates/{name} as it is; it is asked "
-                        f"again next time"]
-            if value == "keep":
+            if value in ("keep", "leave"):
+                # "leave" is a keep too: never the same question twice.
                 remember((name, entry(
                     name, current, text,
                     f"The GM chose to keep their own {label} template.",
                     state="gms", matches=None, decision="keep")))
-                return [f"kept your {label} template"]
+                return [f"left _Templates/{name} as it is" if value == "leave"
+                        else f"kept your {label} template"]
             if value == "take":
                 write_text_atomic(path, written)
                 remember((name, entry(

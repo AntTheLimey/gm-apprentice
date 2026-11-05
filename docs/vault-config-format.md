@@ -285,7 +285,10 @@ plugin's text it was compared with (`file_sha`, `shipped_sha`), the
 plugin version and the date, and one sentence saying why. A kept
 template is asked about again only when one of those two texts changes.
 The file is written only when something in it changes, so an update
-with nothing to do leaves the vault untouched. A record that cannot be
-read stops the template check rather than being written over. Do not
+with nothing to do leaves the vault untouched. A "leave" answer counts as keep,
+and so does a template "leave" an older update kept in `update_held`. A
+record that cannot be read stops the template check rather than being
+written over: restore it from the latest update backup, or delete it and
+answer the template questions again. Do not
 edit the file by hand. It sits in `_meta/`, which a site never
 publishes.
