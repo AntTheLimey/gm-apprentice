@@ -13,6 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, dirIsExcluded, scanAllNotes } = require('./scanner');
+const { isAgentFile } = require('./agent-files');
 const { resolveConfig, assertNoStops, vaultRelPath, loadVaultConfig, scanConfigFor } = require('./config');
 const { loadManifest, loadPublishList, canonicalPath, counts, listText } = require('./manifest');
 const { parseAnnotatedManifest, renderManifest } = require('./manifest-legacy');
@@ -47,7 +48,7 @@ function listVaultMarkdown(vaultPath, excludeDirs) {
         if (entry.name.startsWith('.')) continue;
         if (dirIsExcluded(rel, excluded)) continue;
         walk(full);
-      } else if (entry.name.endsWith('.md')) {
+      } else if (entry.name.endsWith('.md') && !isAgentFile(rel)) {   // the vault agent's instructions: not a note
         found.push(canonicalPath(rel));
       }
     }

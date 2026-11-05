@@ -31,11 +31,14 @@ import argparse
 import datetime
 import json
 import re
+import shutil
+import subprocess
 import sys
 import traceback
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+import changelog_issues
 import migrate
 import update_backup
 import update_record
@@ -45,13 +48,23 @@ from vaultlib import (SettingsUnavailable, StateUnreadable, cli_name,
                       parse_version, read_held, utf8_output, write_held)
 
 HOME: Path | None = None   # where backups go; None is the home folder
-UNREADABLE = "template-unreadable:"
+UNREADABLE = ("template-unreadable:", "agent-block-unreadable:")
 # Checks whose apply lines are already written for the GM.
-PLAIN_LINES = {"templates"}
+PLAIN_LINES = {"templates", "agent-block"}
 YES_NO = ["yes", "leave"]
 SHOWN_LINES = 3   # a question's text shows this many of its lines
 HASH_LEN = 8      # an answer id's hash: `<id>@<8 hex>`
 ASKED_RE = re.compile(rf"(.+)@([0-9a-f]{{{HASH_LEN}}})")
+WORKAROUND = "workaround:"   # a workaround question's id is this + its id
+WORKAROUND_OPTIONS = ["retire", "keep"]
+SAID = 160   # the CHANGELOG entry a workaround question quotes, at most
+NO_SWEEP = ("No workaround record yet: run the one-time sweep "
+            "(campaign-organizer/references/workaround-sweep.md).")
+NO_CHANGELOG = ("Could not read the plugin's CHANGELOG, so no workaround "
+                "was checked.")
+GH_REPO = "AntTheLimey/gm-apprentice"
+GH_TIMEOUT = 5.0   # seconds gh gets to say an issue's state, once per run
+_RELEASE = re.compile(r"\d+\.\d+\.\d+")
 
 
 @dataclass(frozen=True)
@@ -233,6 +246,159 @@ def _would_write(found: list[migrate.Found], given: dict[str, Given],
     return False
 
 
+@dataclass
+class _Offers:
+    """The workarounds this run offers for retirement, and what the GM
+    said to them."""
+    questions: list[Question] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
+    keep: list[str] = field(default_factory=list)    # workaround ids
+    ids: set[str] = field(default_factory=set)       # every item id offered
+    refused: str | None = None   # an answer outside the options
+
+
+def _first_line(lines: list[str]) -> str:
+    line = lines[0] if lines else ""
+    line = (line[2:] if line.startswith(("- ", "* ")) else line).rstrip(". ")
+    return line if len(line) <= SAID else line[:SAID - 1].rstrip() + "…"
+
+
+class _IssueStates:
+    """Each issue's state on GitHub, asked of `gh` once per run. None when
+    gh is not on PATH, fails or is slow: then the question is put with its
+    honest wording, never left out. A slow gh is not asked again this run."""
+
+    def __init__(self) -> None:
+        self.seen: dict[int, str | None] = {}
+        self.gh: str | None = shutil.which("gh")
+
+    def state(self, issue: int) -> str | None:
+        if issue in self.seen:
+            return self.seen[issue]
+        found: str | None = None
+        if self.gh is not None:
+            try:
+                done = subprocess.run(
+                    [self.gh, "issue", "view", str(issue), "--repo", GH_REPO,
+                     "--json", "state"], capture_output=True, text=True,
+                    timeout=GH_TIMEOUT, check=False)
+                data = json.loads(done.stdout) if done.returncode == 0 else {}
+                got = data.get("state") if isinstance(data, dict) else None
+                found = got if isinstance(got, str) else None
+            except subprocess.TimeoutExpired:
+                self.gh = None
+            except (OSError, ValueError):
+                pass
+        self.seen[issue] = found
+        return found
+
+
+def _offers(record: update_record.Record, plugin_v: str,
+            given: dict[str, Given]) -> _Offers:
+    """Every active workaround whose issue a release up to the plugin's
+    mentions (a release named by hand first, else the CHANGELOG's highest),
+    and that GitHub does not say is still open: a question, or the GM's
+    answer to it. The release notes may only part-fix an issue, so the
+    question quotes them and asks rather than says it shipped. An answer
+    counts only for the question text it names (`workaround:<id>@<hash>`),
+    as every other does. `keep` is recorded in the workaround and stands;
+    `retire` changes nothing here: the agent swaps it for the built-in way
+    and runs `gma workaround retire`."""
+    out = _Offers()
+    if record["swept"] is None:
+        out.notes.append(NO_SWEEP)
+    active: list[update_record.Workaround] = []
+    for w in record["workarounds"]:
+        if (isinstance(w, dict) and w.get("id")
+                and w.get("state") not in ("active", "kept", "retired")):
+            out.notes.append(f"{w['id']} has state '{w.get('state')}' in "
+                             f"{update_record.RECORD_FILE}, not active, kept "
+                             f"or retired, so it was not checked; fix it there.")
+            continue
+        if not (isinstance(w, dict) and w.get("state") == "active"
+                and w.get("id")):
+            continue
+        issue, hand = w.get("issue"), w.get("release")
+        if not isinstance(issue, int) or isinstance(issue, bool) or issue <= 0:
+            out.notes.append(f"{w['id']} has issue '{issue}' in "
+                             f"{update_record.RECORD_FILE}, not a number, so "
+                             f"it was not checked; fix it there.")
+        elif hand is not None and not (isinstance(hand, str)
+                                       and _RELEASE.fullmatch(hand)):
+            out.notes.append(f"{w['id']} has release '{hand}' in "
+                             f"{update_record.RECORD_FILE}, not X.Y.Z, so it "
+                             f"was not checked; fix it there.")
+        else:
+            active.append(w)
+    if not active:
+        return out
+    releases = changelog_issues.plugin_releases()
+    if releases is None:
+        out.notes.append(NO_CHANGELOG)
+        return out
+    plugin = parse_version(plugin_v)
+    states = _IssueStates()
+    for w in active:
+        issue = int(w["issue"])
+        note = releases.get(issue)
+        release = w.get("release") or (note.release if note else None)
+        if not release or parse_version(str(release)) > plugin:
+            continue
+        if states.state(issue) == "OPEN":
+            out.notes.append(f"#{issue} is still open, so {w['id']} was not "
+                             f"offered.")
+            continue
+        item_id = f"{WORKAROUND}{w['id']}"
+        where_list = w.get("where") or []
+        if not isinstance(where_list, list):
+            out.notes.append(f"{w['id']} has where in "
+                             f"{update_record.RECORD_FILE} that is not a list, "
+                             f"so it was not offered; fix it there.")
+            continue
+        where = ", ".join(str(p) for p in where_list)
+        quoted = note.cited.get(str(release), []) if note else []
+        cite = (f"The {release} release notes mention #{issue}: "
+                f"{_first_line(quoted)}." if quoted else
+                f"You set {release} by hand as the release that builds it in.")
+        text = (f"{w.get('what')} ({where}) stands in for #{issue}. {cite} "
+                f"If that release built in what this stands in for, retire "
+                f"it and switch to the built-in way; otherwise keep it.")
+        qid = f"{item_id}@{lines_sha([text])[:HASH_LEN]}"
+        out.ids.add(item_id)
+        g = given.get(item_id)
+        answer = g.value if g is not None and g.raw == qid else None
+        if g is not None and answer is None:
+            why = (f"{item_id} changed since you were asked"
+                   if g.hash is not None else
+                   f"it does not name the question as it was shown ({qid})")
+            out.notes.append(f"Your answer {g.raw}={g.value} was not used: "
+                             f"{why}; it is asked again below.")
+        if answer is not None and answer not in (*WORKAROUND_OPTIONS, "leave"):
+            out.refused = (f"--answer {qid}={answer}: the answers are "
+                           f"{', '.join(WORKAROUND_OPTIONS)}")
+        elif answer in ("keep", "leave"):
+            out.keep.append(str(w["id"]))
+        elif answer == "retire":
+            out.notes.append(f"Retire {w['id']}: {where}")
+        else:
+            out.questions.append(Question(
+                qid, "asks", text, list(WORKAROUND_OPTIONS),
+                {"issue": issue, "release": release,
+                 "where": list(w.get("where") or []),
+                 "changelog": list(quoted),
+                 "if_yes": "You swap it for the built-in way and remove it, "
+                           "then run gma workaround retire.",
+                 "if_keep": "It stays, and is not offered again."}))
+    return out
+
+
+def _add_offers(offers: _Offers, res: UpdateResult) -> None:
+    """The workaround questions and notes, after the checks'."""
+    res.questions.extend(offers.questions)
+    res.left_open.extend(q.id.rsplit("@", 1)[0] for q in offers.questions)
+    res.notes.extend(offers.notes)
+
+
 def _refuse(res: UpdateResult, why: str) -> UpdateResult:
     res.exit, res.error = 2, why
     return res
@@ -263,6 +429,9 @@ def run(vault: Path, answers: dict[str, str], headless: bool, *,
     behind = parse_version(vault_v) < parse_version(plugin_v)
     found = migrate.collect(vault, todo)
     given = split_answers(answers)
+    offers = _offers(record, plugin_v, given)
+    if offers.refused:
+        return _refuse(res, offers.refused)
     for f in found:   # an answer the GM gave must fit, before any write
         for item in f.items:
             value = _matches(item, given)
@@ -270,13 +439,15 @@ def run(vault: Path, answers: dict[str, str], headless: bool, *,
                     and not _fits(value, options(item)):
                 return _refuse(res, f"--answer {asked_id(item)}={value}: "
                                     f"the answers are {', '.join(options(item))}")
-    if not behind and not _would_write(found, given, known, held):
+    if not behind and not offers.keep \
+            and not _would_write(found, given, known, held):
         for f in found:
             for item in f.items:
                 if item.group != PERSON and _asks(f.check, item):
                     _offered(item, given, res, known)
                 _sort_unapplied(f.check, item, held, known, res)
-        _unused(given, set(), found, res)
+        _add_offers(offers, res)
+        _unused(given, offers.ids, found, res)
         res.exit = 3 if res.questions else 0
         return res
     if behind:
@@ -286,7 +457,7 @@ def run(vault: Path, answers: dict[str, str], headless: bool, *,
             res.exit, res.error = 1, f"{e}; nothing was changed"
             return res
     _apply(vault, todo, given, known, held, vault_v, plugin_v, res,
-           home if home is not None else HOME)
+           home if home is not None else HOME, offers)
     return res
 
 
@@ -331,6 +502,7 @@ class _Run:
         self.did: dict[str, None] = {}          # plain sentences, once each
         self.new: dict[str, AnswerEntry] = {}   # answers that finished
         self.asked: list[str] = []
+        self.kept: list[str] = []               # workarounds the GM keeps
 
     def before_write(self) -> None:
         if self.res.backup is None:
@@ -342,7 +514,7 @@ class _Run:
                                  f"nothing more was changed") from e
 
     def wrote(self) -> bool:
-        return bool(self.did or self.new)
+        return bool(self.did or self.new or self.kept)
 
     def record(self, to: str) -> None:
         """Append this run to the record, with the answers that finished."""
@@ -353,14 +525,15 @@ class _Run:
             "did": self.res.did, "asked": self.asked,
             "left_open": list(self.res.left_open),
             "backup": self.res.backup or ""}
-        _save_record(self.vault, self.new, entry)
+        _save_record(self.vault, self.new, entry, self.kept, self.plugin_v)
 
 
 def _apply(vault: Path, todo: list[Check], given: dict[str, Given],
            known: dict[str, AnswerEntry], held: dict[str, set[str]],
            vault_v: str, plugin_v: str, res: UpdateResult,
-           home: Path | None) -> None:
+           home: Path | None, offers: _Offers | None = None) -> None:
     run = _Run(vault, res, home, vault_v, plugin_v)
+    offers = offers or _Offers()
     used: set[str] = set()
     left_ids: set[str] = set()
     said: set[str] = set()
@@ -400,7 +573,13 @@ def _apply(vault: Path, todo: list[Check], given: dict[str, Given],
                 if note is not None:
                     note(f"the update record could not be written: {e}")
         raise
-    _unused(given, used, seen, res, stopped=failed is not None)
+    _add_offers(offers, res)
+    for wid in offers.keep:
+        run.kept.append(wid)
+        run.asked.append(f"{WORKAROUND}{wid}")
+        run.did[f"Kept the workaround {wid}; it will not be offered "
+                f"again."] = None
+    _unused(given, used | offers.ids, seen, res, stopped=failed is not None)
     target = migrate.stamp_target(todo, failed, vault_v, plugin_v)
     stamping = parse_version(target) > parse_version(vault_v) and not holding
     if run.wrote() or stamping:
@@ -455,7 +634,8 @@ def _one(run: _Run, check: Check, item: Item, given: dict[str, Given],
         return
     if not _asks(check, item):
         run.before_write()
-        _did(check, item.apply(None) if item.apply else [], run.did)
+        _did(check, _unreadable(res, item.apply(None) if item.apply else []),
+             run.did)
         return
     answer, now = _answer_for(item, given, known, res)
     if answer is not None and not now:
@@ -491,6 +671,16 @@ def _one(run: _Run, check: Check, item: Item, given: dict[str, Given],
                         "on": _today(), "plugin": run.plugin_v}
 
 
+def _unreadable(res: UpdateResult, lines: list[str]) -> list[str]:
+    """The apply lines for Done; a file that broke since the find goes to
+    Could not read instead."""
+    import migrate_vault
+    mark = migrate_vault.AGENT_BLOCK_BROKE
+    res.read_problems.extend(_row(x[len(mark):]) for x in lines
+                             if x.startswith(mark))
+    return [x for x in lines if not x.startswith(mark)]
+
+
 def _did(check: Check, lines: list[str], did: dict[str, None]) -> None:
     if check.name in PLAIN_LINES:
         did.update(dict.fromkeys(lines))
@@ -499,15 +689,19 @@ def _did(check: Check, lines: list[str], did: dict[str, None]) -> None:
 
 
 def _save_record(vault: Path, new: dict[str, AnswerEntry],
-                 entry: update_record.UpdateEntry) -> None:
-    """The answers that finished, the templates found the same as the
-    plugin's, and this update. A template's entry is refreshed only when
+                 entry: update_record.UpdateEntry,
+                 kept: list[str] | None = None, plugin_v: str = "") -> None:
+    """The answers that finished, the workarounds the GM keeps, the
+    templates found the same as the plugin's, and this update. A template's entry is refreshed only when
     one of its two texts changed: an entry this run's apply wrote (take,
     a copy, an update from a release) is made against the texts as they
     are now, so it stays, with its decision and why."""
     import migrate_vault
     rec = update_record.load(vault)
     rec["answers"].update(new)
+    for w in rec["workarounds"]:
+        if isinstance(w, dict) and w.get("id") in (kept or []):
+            w["state"], w["kept_at"] = "kept", plugin_v
     for name, same in migrate_vault.same_templates(vault).items():
         old = rec["templates"].get(name)
         if not (isinstance(old, dict) and update_record.same_texts(old, same)):

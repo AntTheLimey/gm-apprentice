@@ -18,6 +18,7 @@ CLI_SCRIPTS = [
     "reconcile_scan", "relink", "reveal", "reveal_scan", "rules_lookup",
     "scene_queue", "schema_rules", "session_context", "stamp_entities",
     "tones", "update", "vault_check", "vault_scaffold", "vault_search", "vault_write",
+    "workaround",
 ]
 
 

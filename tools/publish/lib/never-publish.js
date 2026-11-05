@@ -18,9 +18,8 @@ const { vaultSpelling } = require('./vault-reader');
 // `---` line. A note whose `---` never closes has none (it is a rule line, not frontmatter).
 const BLOCK = /^---[ \t]*\r?\n(?:[\s\S]*?\r?\n)?---[ \t]*(?:\r?\n|$)/;
 
-// The root files that tell an agent how to work in the vault. Adding frontmatter to them
-// would change a file another tool reads, so `--untyped` leaves them be.
-const AGENT_FILES = new Set(['agents.md', 'claude.md']);
+// The root files that tell an agent how to work in the vault are not notes: never marked, named or not.
+const { isAgentFile } = require('./agent-files');
 
 // The note's text with `publish: false` added, or { skip } with the plain reason it was not.
 function markNeverPublish(text) {
@@ -75,13 +74,12 @@ async function runNeverPublish(options, deps, survey) {
     out('Nothing was written. Run `gm-publish manifest diff` for the paths the vault actually has.');
     return 1;
   }
-  const untyped = options.untyped
-    ? report.untyped.map(canonicalPath).filter((rel) => rel.includes('/') || !AGENT_FILES.has(rel.toLowerCase()))
-    : [];
+  const untyped = options.untyped ? report.untyped.map(canonicalPath) : [];
 
   const marked = [];
   const skipped = [];
   for (const rel of [...new Set([...named, ...untyped])]) {
+    if (isAgentFile(rel)) { skipped.push({ path: rel, reason: "the vault agent's instructions, not a note: it never publishes" }); continue; }
     const verdict = verdicts.get(rel);
     // A note the site's survey does not hold (an excluded folder, say) has no verdict to go by: left alone.
     if (!verdict) { skipped.push({ path: rel, reason: 'the site does not read it, so there is no publish verdict to go by; nothing to mark' }); continue; }

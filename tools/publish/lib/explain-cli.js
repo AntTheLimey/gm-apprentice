@@ -24,6 +24,7 @@ const { pcKeepList, storyMomentsOn, retiredSheetFieldsFor } = require('./pc-pros
 const { getCanonStatus } = require('./templates/base');
 const { sheetSourceOf } = require('./sheet-source');
 const { parseNote } = require('./frontmatter');
+const { isAgentFile } = require('./agent-files');
 const { isPropNote } = require('./props/note');
 const { markersIn } = require('./markers');
 const YAML = require('yaml');
@@ -120,6 +121,9 @@ async function runExplain(options, deps) {
   // choice told the GM the wrong story: "never published, by rule" instead of "this
   // vault's config chose to exclude it".
   const verdict = verdicts.get(target)
+    || (isAgentFile(target)
+      ? { bucket: 'exclude', code: 'AGENT_FILE', reason: "the vault agent's instructions at the vault's root, not a note", outputPath: null }
+      : null)
     || (configExcluded && !alwaysExcluded
       ? { bucket: 'exclude', code: 'DIR_CONFIG_EXCLUDED', reason: `in ${configExcluded}/ — listed in ${nameIn(vaultPath, 'player_site.hide.folders')}`, outputPath: null }
       : decidePage(page || { rel: target, frontmatter: null }, {

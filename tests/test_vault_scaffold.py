@@ -735,8 +735,8 @@ class NewFilesTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         meta = sorted(p.name for p in (vault / "_meta").iterdir())
         self.assertEqual(meta, ["entity-types.md", "index.md",
-                                "relationship-types.md", "vault-config.yaml",
-                                "vault-state.json"])
+                                "relationship-types.md", "update-record.json",
+                                "vault-config.yaml", "vault-state.json"])
         self.assertEqual(vault_layout(vault), "new")
         self.assertEqual(read_stamp(vault), plugin_version()[0])
         got = settings(vault)

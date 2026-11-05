@@ -64,6 +64,7 @@ const path = require('path');
 const { parseNote, valueStrays } = require('./frontmatter');
 const { wikilinkRe, parseWikilink, labelsForLinks } = require('./wikilink');
 const { canonicalNfc } = require('./unicode');
+const { isAgentFile } = require('./agent-files');
 const { SWITCH_WORDS } = require('./settings/types');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { gmAliasList, nameList, gmAliasKey, wikiTargetLabel, humanizeName, isWithheld } = require('./processor');
@@ -491,6 +492,7 @@ function startNoteAudit(input) {
   const secretNames = secrets.names;
   for (const note of input.notes) {
     const rel = noteRel(note);
+    if (isAgentFile(rel)) continue;   // the vault agent's instructions: not a note, so never a note with no page
     const why = noPageReason(rel, scanned.get(rel), input, skipped);
     if (why) noPage.push({ rel, page: scanned.get(rel), why, frontmatter: note.frontmatter || {}, displayTitle: note.displayTitle || baseName(rel).replace(/_/g, ' ') });
   }

@@ -39,7 +39,24 @@ UpdateEntry = TypedDict("UpdateEntry", {
     "from": str, "to": str, "on": str, "did": list[str], "asked": list[str],
     "left_open": list[str], "backup": str})
 
-Workaround = dict[str, object]   # PR D gives it its fields
+WorkaroundKind = Literal["note", "field", "css", "script", "meta", "memory"]
+WORKAROUND_KINDS: tuple[str, ...] = ("note", "field", "css", "script", "meta",
+                                     "memory")
+
+
+class Workaround(TypedDict):
+    """Something the GM or their agent built to stand in for a plugin
+    issue, kept so the update can offer to retire it once the issue ships."""
+    id: str                  # a slug of `what`, unique in the record
+    issue: int               # the gm-apprentice GitHub issue it stands in for
+    what: str                # one plain line
+    where: list[str]         # vault-relative paths, or memory:<file>
+    kind: WorkaroundKind
+    added: str               # ISO date
+    release: Optional[str]   # by hand: the release that ships it, over the CHANGELOG's
+    state: Literal["active", "kept", "retired"]
+    kept_at: Optional[str]   # the plugin version when the GM said keep
+    retired: Optional[str]   # date and reason
 
 
 class AnswerEntry(TypedDict):
@@ -56,12 +73,21 @@ def lines_sha(lines: list[str]) -> str:
     return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
 
 
+class ScanEntry(TypedDict):
+    """What the last `gma workaround scan` read of the agent's memory."""
+    on: str                  # ISO date
+    memory: Optional[str]    # the memory folder read; None: none found
+    memory_files: int
+
+
 class Record(TypedDict):
     templates: dict[str, TemplateEntry]
     answers: dict[str, AnswerEntry]
     updates: list[UpdateEntry]
     workarounds: list[Workaround]
     swept: Optional[str]
+    scanned: Optional[ScanEntry]
+    swept_memory: Optional[str]   # the memory the sweep read, or why none
 
 
 class RecordUnreadable(StepFailed):
@@ -70,7 +96,7 @@ class RecordUnreadable(StepFailed):
 
 def empty() -> Record:
     return {"templates": {}, "answers": {}, "updates": [], "workarounds": [],
-            "swept": None}
+            "swept": None, "scanned": None, "swept_memory": None}
 
 
 def load(vault: Path) -> Record:
@@ -102,6 +128,10 @@ def load(vault: Path) -> Record:
             rec[key] = data[key]  # type: ignore[literal-required]
     swept = data.get("swept")
     rec["swept"] = swept if isinstance(swept, str) else None
+    scanned = data.get("scanned")
+    rec["scanned"] = scanned if isinstance(scanned, dict) else None  # type: ignore[typeddict-item]
+    how = data.get("swept_memory")
+    rec["swept_memory"] = how if isinstance(how, str) else None
     return rec
 
 

@@ -31,7 +31,7 @@ gma <command> ... [options]
 | Argument | Value | Help |
 |---|---|---|
 | `--version` |  | print the plugin version |
-| `<command>` | `dnd-ddb`, `dnd-sheet`, `graph-check`, `gurps-check`, `gurps-skill-default`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `session-context`, `stamp-entities`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `publish`, `llms` | the command to run; each has its own --help |
+| `<command>` | `dnd-ddb`, `dnd-sheet`, `graph-check`, `gurps-check`, `gurps-skill-default`, `index-build`, `ingest-images`, `ingest-survey`, `links`, `migrate`, `moments`, `plan-check`, `plans-index`, `prop-move`, `reconcile-scan`, `relink`, `reveal`, `reveal-scan`, `rules-lookup`, `scene-queue`, `schema-rules`, `session-context`, `stamp-entities`, `tones`, `update`, `vault-check`, `vault-scaffold`, `vault-search`, `vault-write`, `workaround`, `publish`, `llms` | the command to run; each has its own --help |
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma llms -->
@@ -82,6 +82,7 @@ Example: `gma llms relink`
 | `vault-scaffold` | `gma llms vault-scaffold` | Build a new vault's skeleton, or list what one lacks. |
 | `vault-search` | `gma llms vault-search` | Ranked vault search. |
 | `vault-write` | `gma llms vault-write` | Place text the apprentice wrote into vault notes. |
+| `workaround` | `gma llms workaround` | Record the vault's workarounds by the issue each stands in for. |
 | `publish` | `gma llms publish` | Build and deploy the campaign site (runs the publish tool under node). |
 | `llms` | this page | The command reference: when to use each command, its flags, an example. |
 <!-- END GENERATED -->

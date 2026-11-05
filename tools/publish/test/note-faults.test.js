@@ -185,6 +185,18 @@ describe('NAMED_NO_PAGE', () => {
     assert.deepStrictEqual(await faults(files, { excluded: ['Characters/The_Ferryman.md'] }, 'NAMED_NO_PAGE'), []);
   });
 
+  it('never reads a root CLAUDE.md or AGENTS.md as a note with no page', async () => {
+    const files = {
+      'Characters/Mara_Quill.md': npc('Mara', 'Met [[CLAUDE]] and [[AGENTS]].'),
+      'CLAUDE.md': 'agent instructions\n',
+      'AGENTS.md': 'agent instructions\n',
+    };
+    const { configPath } = site(files, { publish: ['Characters/Mara_Quill.md'] });
+    const { json } = await doctor(configPath, { json: true });
+    const about = json.findings.filter((f) => /^(CLAUDE|AGENTS)\.md$/.test(f.path || ''));
+    assert.deepStrictEqual(about, []);
+  });
+
   it('reads a note in an excluded folder (DIR_EXCLUDED) and one with no type (NO_TYPE, kind null)', async () => {
     const files = {
       'Characters/Mara_Quill.md': npc('Mara', 'Met [[Hidden_Hall]] and [[Loose_Note]].'),

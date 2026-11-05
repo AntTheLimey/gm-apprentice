@@ -8,6 +8,7 @@ const { entry, nameIn, fileLabel } = require('./settings');
 const { WRAP_UP_TYPES } = require('./shared-lists');
 const { readerFrom, readError } = require('./vault-reader');
 const { publishMode } = require('./processor');
+const { isAgentFile } = require('./agent-files');
 
 // A listing or a read through `rd`, with a failure named by its vault-relative path.
 function listing(rd, vaultPath, dir) {
@@ -127,6 +128,7 @@ function scanVaultReport(config, { quiet = false, deps } = {}) {
         if (dirIsExcluded(relPath, excludeDirs) || entry.name.startsWith('.')) continue;
         walk(fullPath);
       } else if (entry.name.endsWith('.md')) {
+        if (isAgentFile(relPath)) continue;   // the vault agent's instructions: not a note
         const raw = reading(rd, vaultPath, fullPath);
         let frontmatter, content;
         try {

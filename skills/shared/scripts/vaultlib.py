@@ -46,6 +46,24 @@ from typing import Any, Iterable, Iterator, Literal
 # --------------------------------------------------------------------------
 
 SKIP_DIRS = {"_Templates", "_templates", "_inbox"}
+# The vault agent's instructions at the root: not notes (agent_block.py
+# writes the plugin's block in them). Root only and case-blind, the same
+# rule as the publish tool's lib/agent-files.js.
+AGENT_FILES = ("CLAUDE.md", "AGENTS.md")
+_AGENT_FILES_LOWER = {name.lower() for name in AGENT_FILES}
+
+
+def agent_files(vault: Path) -> list[str]:
+    """The agent files at the vault's root, by their names on disk
+    (`claude.md` as it is spelt), sorted; matched case-blind, as
+    is_skipped_path skips them. Empty when the root cannot be listed."""
+    try:
+        with os.scandir(vault) as entries:
+            return sorted(e.name for e in entries
+                          if e.name.lower() in _AGENT_FILES_LOWER
+                          and e.is_file())
+    except OSError:
+        return []
 
 # Top-level folders whose notes are records of the past (QA reports,
 # archives). Links written in them are not reported as broken; notes in
@@ -77,12 +95,15 @@ def is_skipped_path(rel: str, skip_dirs: set[str] = SKIP_DIRS) -> bool:
 
     True for a hidden directory/file (a leading `.` on any path
     segment) or a top-level directory in `skip_dirs` (templates, the
-    `_inbox` staging area). Shared with the `--file` existence check in
+    `_inbox` staging area), and the agent instructions at the vault's
+    root (`AGENT_FILES`), which are not notes. Shared with the `--file` existence check in
     `vault_check.py main()`, so a path that is real on disk but would
     never be walked — `_Templates/Foo.md` — is reported as the same
     clear error as a path that doesn't exist at all, rather than a
     silently empty report.
     """
+    if "/" not in rel and rel.lower() in _AGENT_FILES_LOWER:
+        return True
     parts = rel.split("/")
     if any(p.startswith(".") for p in parts):
         return True

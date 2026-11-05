@@ -33,8 +33,10 @@ from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
 
+import agent_block
 import index_build
 import migrate_vault as mv
+import update_record
 from schema_rules import (SYSTEMS, TYPE_FOLDERS, WORLD_STUBS, system_id,
                           without_generated_markers)
 from migrate_core import StepFailed, write_text_atomic
@@ -52,6 +54,7 @@ SCHEMA = SHARED / "entity-schema.md"
 ONTOLOGY = SHARED / "gm-apprentice-ontology.json"
 # What a new vault gets, besides folders and schema files. An existing vault, on either layout, never gets them.
 NEW_FILES = (SETTINGS_FILE, STATE_FILE)
+NEW_VAULT_SWEPT = "none (a new vault)"   # the record's swept_memory
 TIMELINE = "_Campaign/Timeline.md"
 FIRST_CHAPTER = "Chapters/Chapter 1/Chapter 1.md"
 
@@ -249,6 +252,7 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
     the update tool's own check; `pages=False` leaves out the four one-off
     pages (world index, world flags, Timeline, Player Characters)."""
     types, has_world_index, has_chapter = _types_in(vault)
+    fresh = not (vault.is_dir() and any(True for _ in vault_files(vault)))
     day = today or datetime.date.today().isoformat()
     out: list[Piece] = []
 
@@ -298,13 +302,24 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
         file(FIRST_CHAPTER, first_chapter_text, present=has_chapter)
     file("_meta/entity-types.md", entity_types_text)
     file("_meta/relationship-types.md", relationship_types_text)
+    has_settings = vault_layout(vault) != "none"
+    if not has_settings:   # a set-up vault's block is the update's agent-block check
+        changes, _left = agent_block.plan(vault)   # a broken block stays the update's to say
+        for change in changes:
+            out.append(Piece(change.rel, partial(str, change.text),
+                             merge=(vault / change.rel).exists()))
+    # A vault made empty has no workarounds from before they were recorded,
+    # so its one-time sweep is done. One that already holds notes (adopted,
+    # no settings file yet) keeps the sweep to do.
+    file(update_record.RECORD_FILE, lambda: update_record.dumps(
+        {**update_record.empty(), "swept": day, "swept_memory": NEW_VAULT_SWEPT}
+        if fresh else update_record.empty()), present=has_settings)
     # The index is rendered when it is written, after the files above exist.
     file("_meta/index.md",
          lambda: index_build.render(vault, today=day, previous=None))
     # Only for a vault with no settings file at all: a vault on either layout
     # (the update's skeleton check) must never get the new files, nor an old
     # one back beside them.
-    has_settings = vault_layout(vault) != "none"
     file(SETTINGS_FILE, lambda: settings_text(system, campaign),
          present=has_settings)
     file(STATE_FILE, lambda: state_text(version), present=has_settings)
