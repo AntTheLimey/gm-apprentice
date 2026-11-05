@@ -155,7 +155,7 @@ async function runDiff(options, deps, survey) {
   const exists = deps.exists || ((p) => fs.existsSync(p));
   const { vaultPath, manifest, files, verdicts } = survey;
 
-  const listed = listedEntries(survey, deps.readFile);
+  const listed = entriesOf(survey.manifest);
 
   const added = [];
   const unchanged = { publishing: 0, excluded: 0, needsDecision: 0 };
@@ -347,7 +347,7 @@ function pairsWith(survey, published) {
 // is left to the checks above, and Excluded or non-session paths are still refused.
 function planPublishPlayed(survey, { only = null, includeUnreviewed = false, publishBody = false } = {}) {
   const { vaultPath, publishConfig, manifest, files, pagesByRel } = survey;
-  const listed = listedEntries(survey, survey.readFile);
+  const listed = entriesOf(survey.manifest);
   const sectionOf = (rel) => (listed.get(rel) || {}).section || null;
   const onDisk = new Set(files);
   const relOf = new Map([...pagesByRel].map(([rel, page]) => [page, rel]));
