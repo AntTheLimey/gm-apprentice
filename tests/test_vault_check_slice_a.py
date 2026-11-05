@@ -1959,6 +1959,7 @@ class GmLeakRenestExcludesTests(unittest.TestCase):
 
     def test_dry_run_plans_every_heading_and_the_collapse(self):
         vault = self.vault()
+        before = config_of(vault)
         rows = vc.check_gm_leak(vault, None, renest_excludes=True)
         for title in ("World State", "Keeper Checklist", "Player Notes",
                       "Source References"):
@@ -1967,7 +1968,7 @@ class GmLeakRenestExcludesTests(unittest.TestCase):
         self.assertTrue(rows_for(rows, "WOULD-FIX\t_meta/vault-config.yaml"),
                         rows)
         self.assertEqual(read(vault, "Bob.md"), self.BOB)
-        self.assertEqual(config_of(vault), self.OLD_CONFIG)
+        self.assertEqual(config_of(vault), before)
 
     def test_fix_hides_everything_after_the_collapse(self):
         vault = self.vault()
@@ -1975,8 +1976,8 @@ class GmLeakRenestExcludesTests(unittest.TestCase):
         self.assertTrue(rows_for(rows, "FIXED\t_meta/vault-config.yaml"), rows)
         self.assertEqual(vc.vault_settings(vault).get("player_site.hide.sections"), ["GM Notes"])
         config = read(vault, "_meta/vault-config.yaml")
-        self.assertIn("  exclude_fields: [secrets]", config)
-        self.assertIn('gm_apprentice_version: "1.8.0"', config)
+        self.assertIn("- secrets", config)
+        self.assertEqual(vaultlib.read_stamp(vault), "1.8.0")
         hidden = vc.hidden_lines(read(vault, "Bob.md"), ["GM Notes"],
                                  {"type": "npc"})
         for line in self.SECRETS:
@@ -1988,14 +1989,15 @@ class GmLeakRenestExcludesTests(unittest.TestCase):
         # The notes go first, so a refused write leaves them under the
         # hidden `## GM Notes` and the list as it was; the row says so.
         vault = self.vault()
+        before = config_of(vault)
         refusal = vaultlib.SettingsUnavailable("not today", refused=True)
         with mock.patch.object(vc, "settings_set", side_effect=refusal):
             rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertTrue(rows_for(rows, "ERROR\t_meta/vault-config.yaml\t"
-                                       "publish.exclude_sections cannot be collapsed: "
+                                       "player_site.hide.sections cannot be collapsed: "
                                        "not today"), rows)
         self.assertFalse(rows_for(rows, "FIXED\t_meta/vault-config.yaml"), rows)
-        self.assertEqual(config_of(vault), self.OLD_CONFIG)
+        self.assertEqual(config_of(vault), before)
         self.assertIn("### World State", read(vault, "Bob.md"))
 
     def test_a_collapse_that_cannot_reach_the_tool_is_not_caught(self):
@@ -2024,9 +2026,10 @@ class GmLeakRenestExcludesTests(unittest.TestCase):
                   "    - World State\n  mode: player\n---\n")
         vault = self.vault(config)
         vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
-        self.assertEqual(config_of(vault),
-                         "---\npublish:\n  exclude_sections:\n    - GM Notes\n"
-                         "  mode: player\n---\n")
+        self.assertEqual(vc.vault_settings(vault).get("player_site.hide.sections"),
+                         ["GM Notes"])
+        self.assertIn("mode: player", config_of(vault))
+        self.assertNotIn("World State", config_of(vault))
 
     def test_a_vault_on_the_defaults_is_re_nested_but_keeps_its_defaults(
             self):
@@ -2052,12 +2055,13 @@ class GmLeakRenestExcludesTests(unittest.TestCase):
     def test_an_h1_that_would_leak_blocks_everything(self):
         h1 = "---\ntype: npc\n---\n\n# World State\n\nThe war is lost.\n"
         vault = self.vault(**{"Bob.md": self.BOB, "H1.md": h1})
+        before = config_of(vault)
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertTrue(rows_for(rows, "ERROR\tH1.md\tre-nest refused"), rows)
         self.assertTrue(rows_for(rows, "migration blocked"), rows)
         self.assertFalse(rows_for(rows, "FIXED"), rows)
         self.assertEqual(read(vault, "Bob.md"), self.BOB)
-        self.assertEqual(config_of(vault), self.OLD_CONFIG)
+        self.assertEqual(config_of(vault), before)
 
     def test_an_already_nested_heading_stays_put(self):
         text = ("---\ntype: npc\n---\n\n# Cy\n\n## GM Notes\n\n"
@@ -2114,9 +2118,9 @@ class RenestReviewRegressionTests(unittest.TestCase):
                          ["GM Notes", "World State", "Keeper Checklist"])
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertTrue(rows_for(rows, "FIXED\t_meta/vault-config.yaml"), rows)
-        self.assertEqual(config_of(vault),
-                         "---\npublish:\n  exclude_sections:   # hidden bits\n"
-                         "    - GM Notes\n---\n")
+        self.assertEqual(vc.vault_settings(vault).get("player_site.hide.sections"),
+                         ["GM Notes"])
+        self.assertNotIn("World State", config_of(vault))
         out = self.published(vault, "Bob.md")
         self.assertNotIn("SECRET", out)
 
@@ -2126,7 +2130,7 @@ class RenestReviewRegressionTests(unittest.TestCase):
         vault = self.vault(config, {"Bob.md": self.WS})
         vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         after = read(vault, "_meta/vault-config.yaml")
-        self.assertEqual(after.count("exclude_sections"), 1, after)
+        self.assertEqual(after.count("sections:"), 1, after)
         self.assertNotIn("SECRET", self.published(vault, "Bob.md"))
 
     def test_a_quoted_item_keeps_its_comma(self):
@@ -2150,8 +2154,6 @@ class RenestReviewRegressionTests(unittest.TestCase):
 
     def test_forms_the_tool_cannot_read_write_nothing(self):
         forms = {
-            "flow publish": "publish: {exclude_sections: [GM Notes, "
-                            "World State]}\n",
             "nested item": "publish:\n  exclude_sections:\n"
                            "    - [GM Notes]\n",
             "scalar": "publish:\n  exclude_sections: GM Notes\n",
@@ -2160,14 +2162,7 @@ class RenestReviewRegressionTests(unittest.TestCase):
             with self.subTest(form=name):
                 config = f"---\n{body}---\n"
                 vault = self.vault(config, {"Bob.md": self.WS})
-                if name == "flow publish":
-                    # One line holds the whole block, the site with it.
-                    site = stub_site(self)
-                    config = config.replace(
-                        "{", f"{{site: true, site_dir: {site.as_posix()}, ")
-                    write_config(vault, config)
-                else:
-                    config = read(vault, "_meta/vault-config.yaml")
+                config = read(vault, "_meta/vault-config.yaml")
                 rows = vc.check_gm_leak(vault, None, fix=True,
                                         renest_excludes=True)
                 self.assertTrue(rows_for(rows, "ERROR"), rows)
@@ -2212,6 +2207,7 @@ class RenestReviewRegressionTests(unittest.TestCase):
         config = self.old_pin(self.COLLAPSE_CONFIG)
         vault = self.vault(config, {"C.md": self.FENCED_COLLAPSE,
                                     "W.md": NoPublishToolTests.WRAP})
+        config = read(vault, "_meta/vault-config.yaml")
         for name, rows in (
                 ("gm-leak", vc.check_gm_leak(vault, None, fix=True)),
                 ("gm-leak", vc.check_gm_leak(vault, None, fix=True,
@@ -4469,9 +4465,8 @@ class WrapupCommandTests(unittest.TestCase):
 
 
 class GmLeakSiteExcludeSectionsTests(unittest.TestCase):
-    """The exclude list is the settings' list: the vault file's, with the
-    site file's old list unioned in by the publish tool (the Node tests pin
-    that union), else the built-in one. Python reads it from `settings`,
+    """The exclude list is the settings' list: the vault file's, else the
+    built-in one. Python reads it from `settings`,
     never from the file, and never falls back to a default when the tool
     cannot be asked."""
 
@@ -4506,22 +4501,8 @@ class GmLeakSiteExcludeSectionsTests(unittest.TestCase):
         self.assertEqual(self.listed(vault), ["GM Notes"])
         self.assertTrue(self.marker_rows(vault))
 
-    def test_a_section_only_the_site_file_lists_is_not_scanned(self):
-        # The vault file lists GM Notes; the site file still lists Keeper
-        # Only, and the build hides both until the migration moves it.
-        vault = self.vault(vault_list=["GM Notes"], site_list=["Keeper Only"])
-        self.assertEqual(self.listed(vault), ["GM Notes", "Keeper Only"])
-        self.assertFalse(self.marker_rows(vault))
-
     def test_a_section_the_vault_list_names_is_not_scanned(self):
         vault = self.vault(vault_list=["GM Notes", "Keeper Only"])
-        self.assertFalse(self.marker_rows(vault))
-
-    def test_a_silent_vault_file_adds_the_site_files_list_to_the_built_in_one(self):
-        vault = self.vault(site_list=["Keeper Only"])
-        self.assertEqual(
-            self.listed(vault),
-            vaultlib.settings_default("player_site.hide.sections") + ["Keeper Only"])
         self.assertFalse(self.marker_rows(vault))
 
     def test_a_silent_vault_and_site_take_the_built_in_list(self):
@@ -5482,24 +5463,6 @@ class RenestExcludesSilentVaultTests(unittest.TestCase):
         (vault / "Bob.md").write_text(self.NOTE, encoding="utf-8")
         return vault
 
-    def test_the_site_files_list_is_nested_under_the_built_in_gm_notes(self):
-        # The site file's list adds to the built-in one, so GM Notes is hidden
-        # and the site file's heading can be nested under it without a leak.
-        site = Path(tempfile.mkdtemp(prefix="vc-site-"))
-        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
-        (site / "vault.config.json").write_text(
-            json.dumps({"excludeSections": ["Keeper Only"]}), encoding="utf-8")
-        vault = make_vault(self, f'---\ntype: meta\npublish:\n  mode: player\n'
-                                 f'  site_dir: "{site}"\n---\n')
-        (vault / "Bob.md").write_text(self.NOTE, encoding="utf-8")
-        before = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
-        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
-        text = (vault / "Bob.md").read_text(encoding="utf-8")
-        self.assertLess(text.index("## GM Notes"), text.index("### Keeper Only"))
-        self.assertTrue(rows_for(rows, "FIXED"), rows)
-        self.assertEqual((vault / "_meta" / "vault-config.yaml").read_text(
-            encoding="utf-8"), before)
-
     def test_without_node_it_stops_and_writes_nothing(self):
         vault = self.setup_vault()
         before = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
@@ -5533,19 +5496,11 @@ class RenestExcludesSilentVaultTests(unittest.TestCase):
             "---\ntype: meta\npublish:\n  exclude_sections: GM Notes\n---\n")
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         error = rows_for(rows, "ERROR\t_meta/vault-config.yaml\t"
-                               "publish.exclude_sections is ")
+                               "player_site.hide.sections is ")
         self.assertEqual(len(error), 1, rows)
         self.assertIn("nothing written", error[0])
         self.assertFalse(rows_for(rows, "FIXED"), rows)
         self.assertEqual((vault / "Bob.md").read_text(encoding="utf-8"), self.NOTE)
-
-    def test_publish_block_written_on_one_line_is_detected(self):
-        for text, want in (("---\npublish: {mode: player}\n---\n", True),
-                           ("---\npublish:\n  mode: player\n---\n", False),
-                           ("---\ntype: meta\n---\n", False)):
-            with self.subTest(text=text):
-                vault = make_vault(self, text)
-                self.assertEqual(vaultlib.settings(vault).inline, want)
 
 
 NEW_READING_HEAD = (
