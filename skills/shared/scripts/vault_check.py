@@ -917,12 +917,15 @@ def unmoved(vault: Path, stamp: str | None,
                              "settings can be checked.", False))
             return left
         left += _seen_without_tool(vault)
-        if notes is not None:
+        if notes is not None and _names_a_site_folder(vault):
             notes.append(SITE_CHECKS_SKIPPED)
         return left
     for f in own.faults:
         if f.get("level") == "stop" and f.get("leftover"):
-            left.append(Left(_fault_file(f), str(f["message"]), False))
+            text = str(f["message"])
+            if f.get("source") in LEFTOVER_FILES:
+                text = f"{_sentence(text)[:-1]}; {CLEAR_FOLDER}"
+            left.append(Left(_fault_file(f), text, False))
     site, _ = _site_of(own, vault)
     if site is not None:
         pin = site_pin(site)
@@ -930,7 +933,7 @@ def unmoved(vault: Path, stamp: str | None,
             left.append(Left(f"{site.as_posix()}/package.json",
                              f"The site's publish tool version could not be "
                              f"checked: {pin.stale}. Fix that in the site "
-                             f"folder.", False))
+                             f"folder; {CLEAR_FOLDER}", False))
         elif pin.version is not None and semver_below(pin.version, MOVED_TOOL):
             left.append(Left(f"{site.as_posix()}/package.json",
                              f"a site publish tool older than {MOVED_TOOL}",
@@ -938,12 +941,35 @@ def unmoved(vault: Path, stamp: str | None,
     return left
 
 
+# A site-folder leftover on a vault whose site is no longer published: the
+# folder can go instead.
+CLEAR_FOLDER = ("or, if the site is no longer published, clear "
+                "player_site.folder.")
+
+
+def _names_a_site_folder(vault: Path) -> bool:
+    """Whether the settings file may name a site folder, read with no tool:
+    any `folder:` key with a value. Errs towards yes (it only decides
+    whether the update says the site checks were skipped)."""
+    try:
+        text = (vault / vaultlib.SETTINGS_FILE).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return True
+    return re.search(r"^\s*folder\s*:\s*[^\s#]", text, re.M) is not None
+
+
 def _seen_without_tool(vault: Path) -> list[Left]:
     """The leftovers Python sees with no tool to ask: the old settings file
-    and the old publish list, by their being there."""
+    and the old publish list, by their being there. The old file beside the
+    new one is a hand fix (the 1.10 update leaves it there), worded as the
+    tool words it."""
     left: list[Left] = []
-    old = vaultlib.LEGACY_SETTINGS_FILE
-    if (vault / old).is_file():
+    old, new = vaultlib.LEGACY_SETTINGS_FILE, vaultlib.SETTINGS_FILE
+    if (vault / old).is_file() and (vault / new).is_file():
+        left.append(Left(old, f"{old} is still beside {new}: remove or rename "
+                         f"`{old}` once you have checked its settings are in "
+                         f"`{new}`; plugin 1.11.0 no longer reads it", False))
+    elif (vault / old).is_file():
         left.append(Left(old, f"the old settings file {old}", True))
     listed = "_meta/publish-manifest.md"
     if (vault / listed).is_file():

@@ -206,7 +206,7 @@ def test_version_row_with_both_files_reads_the_state_file_and_names_the_old_file
     code, out = version_row(vault)
     assert code == 1
     assert "REFUSED\t_meta/vault-config.md\t" in out
-    assert "the old settings file _meta/vault-config.md" in out
+    assert "_meta/vault-config.md is still beside _meta/vault-config.yaml: remove or rename" in out
 
 
 def test_version_row_for_a_broken_state_file_is_an_error_row(tmp_path):

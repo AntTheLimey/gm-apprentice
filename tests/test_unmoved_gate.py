@@ -261,7 +261,9 @@ class WithoutNodeTests(unittest.TestCase):
             said = [x.text for x in vc.unmoved(vault, "1.10.10")]
         self.assertEqual(said, [
             f"an update stamp of 1.10.10 (_meta/vault-state.json), older than {vc.MOVED_FLOOR}",
-            "the old settings file _meta/vault-config.md",
+            "_meta/vault-config.md is still beside _meta/vault-config.yaml: remove "
+            "or rename `_meta/vault-config.md` once you have checked its settings "
+            "are in `_meta/vault-config.yaml`; plugin 1.11.0 no longer reads it",
             "the old publish list _meta/publish-manifest.md"])
         self.assertNotIn("node", vc.refusal(vc.unmoved(vault, "1.10.10"), PLUGIN))
 
@@ -286,3 +288,43 @@ class WithoutNodeTests(unittest.TestCase):
         self.assertEqual(vc.unmoved(vault, "1.10.134"), [])
         with self.no_tool():
             self.assertEqual(vc.unmoved(vault, "1.10.134"), [])
+
+
+class ReReviewTests(unittest.TestCase):
+    def no_tool(self):
+        return mock.patch.object(vc, "settings", side_effect=vaultlib.SettingsUnavailable(
+            "could not read the vault's settings: node is not on PATH"))
+
+    def test_without_node_both_files_is_a_hand_fix_not_the_bridge(self):
+        # The 1.10 update leaves an old file beside the new one: sending the GM
+        # back to it would loop.
+        vault, _ = moved_vault(self)
+        both_files(vault, None)
+        with self.no_tool():
+            left = vc.unmoved(vault, "1.10.134")
+            said = vc.refusal(left, PLUGIN)
+        self.assertEqual([x.bridge for x in left], [False])
+        self.assertEqual(left[0].file, "_meta/vault-config.md")
+        self.assertIn("remove or rename `_meta/vault-config.md` once you have "
+                      "checked its settings are in `_meta/vault-config.yaml`", said)
+        self.assertNotIn("update it first with a 1.10 release", said)
+
+    def test_without_node_a_vault_with_no_site_gets_no_skipped_note(self):
+        vault, _ = moved_vault(self)
+        (vault / "_meta" / "vault-config.yaml").write_text("version: 1\n", encoding="utf-8")
+        notes = []
+        with self.no_tool():
+            self.assertEqual(vc.unmoved(vault, "1.10.134", notes), [])
+        self.assertEqual(notes, [])
+
+    def test_a_site_folder_leftover_says_it_can_clear_the_folder(self):
+        vault, site = moved_vault(self)
+        site_key(vault, site)
+        text = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
+        (vault / "_meta" / "vault-config.yaml").write_text(
+            text + "  publish: false\n", encoding="utf-8")
+        vaultlib.forget_settings(vault)
+        said = vc.refusal(vc.unmoved(vault, "1.10.134"), PLUGIN)
+        self.assertIn("siteTitle (now player_site.title)", said)
+        self.assertIn("or, if the site is no longer published, clear "
+                      "player_site.folder", said)
