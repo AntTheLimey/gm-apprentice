@@ -134,6 +134,18 @@ def _ask_move(vault: Path, args: list[str]) -> dict[str, Any]:
 CANNOT_FINISH = " The update cannot finish until this is done."
 
 
+def _clear_tool_hold(line: str) -> str:
+    """The way out of a hold on the site's publish tool being too old: the
+    tool names the version in its own line; the update repins a tool only
+    when the plugin pinned it."""
+    found = re.search(r"\b(\d+\.\d+\.\d+) or later", line)
+    version = found.group(1) if found else "the version above"
+    return (f" To clear it: update that site's publish tool to {version} or "
+            "later (the update repins it only when the plugin pinned it), "
+            "or, if the site is no longer published, clear "
+            "player_site.folder." + CANNOT_FINISH)
+
+
 def find_settings_move(vault: Path) -> list[Item]:
     """Every pass: a vault on the old settings file moves to the new one,
     all of it by the publish tool (`settings move`): the new file, the
@@ -166,7 +178,8 @@ def find_settings_move(vault: Path) -> list[Item]:
     if plan.get("held"):
         # Left behind: the tool says why in plain words and the vault is
         # told it every pass. The move is not done, so the stamp holds.
-        return [Item(MOVE, PERSON, [f"settings\t{plan.get('line')}{CANNOT_FINISH}"],
+        return [Item(MOVE, PERSON, [f"settings\t{plan.get('line')}"
+                      f"{_clear_tool_hold(str(plan.get('line')))}"],
                      holds_stamp=True)]
     if not plan["ok"]:
         blockers = [str(b) for b in plan.get("blockers") or []]
@@ -202,9 +215,16 @@ def find_settings_move(vault: Path) -> list[Item]:
                        ("keysHeld", "vault.config.json (site)")):
         held = plan.get(key)
         if isinstance(held, dict) and held.get("line"):
+            version = re.search(r"\b(\d+\.\d+\.\d+) or later", str(held["line"]))
+            clear = (" To clear it: update that site's publish tool to "
+                     f"{version.group(1) if version else 'the version above'}"
+                     " or later (the update repins it only when the plugin "
+                     "pinned it); the "
+                     + ("build steps" if key == "stepsHeld" else "site keys")
+                     + " then move into the vault." + CANNOT_FINISH)
             told.add(str(held["line"]))
             items.append(Item(f"{MOVE}-{key}", PERSON,
-                              [f"{where}\t{held['line']}{CANNOT_FINISH}"],
+                              [f"{where}\t{held['line']}{clear}"],
                               holds_stamp=True))
     # A package.json step that differs from the vault's is left, and runs
     # beside the vault's under `npm run build`: told each pass, never written.
@@ -215,6 +235,12 @@ def find_settings_move(vault: Path) -> list[Item]:
                               [f"package.json (site)\t{d['line']}"]))
     files = plan.get("files") or {}
     if not (files.get("write") or files.get("remove")):
+        if layout == "legacy":
+            # ok, yet nothing to write: the vault is still on the old file.
+            items.append(Item(MOVE, PERSON, [
+                "settings\tthe settings could not be moved (the publish tool "
+                "reported nothing to write); the update cannot finish until "
+                "they are"], holds_stamp=True))
         return items
     shows = _shows_lines(plan)
 
@@ -281,8 +307,11 @@ def find_publish_list(vault: Path) -> list[Item]:
     flag = ["--site-tool-updated"] if site is not None and has_config else []
     plan = _ask_convert(vault, "--check", *flag)
     if plan.get("held"):
-        return [Item(PUBLISH_LIST, PERSON,
-                     [f"publish list\t{plan['lines'][0]}{CANNOT_FINISH}"],
+        said = str(plan["lines"][0])
+        clear = (_clear_tool_hold(said) if plan.get("held") == "site-tool"
+                 else " To clear it: change that build step so it no longer "
+                      "reads the old file." + CANNOT_FINISH)
+        return [Item(PUBLISH_LIST, PERSON, [f"publish list\t{said}{clear}"],
                      holds_stamp=True)]
     if not plan["ok"]:
         return [Item(PUBLISH_LIST, PERSON,

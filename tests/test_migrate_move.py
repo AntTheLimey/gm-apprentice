@@ -154,6 +154,10 @@ class MoveEndToEndTests(unittest.TestCase):
                       "tool (1.20.0) cannot read the new one", plan)
         self.assertIn("When that tool is 1.23.0 or later, run the update "
                       "again.", plan)
+        self.assertIn("To clear it: update that site's publish tool to 1.23.0 "
+                      "or later (the update repins it only when the plugin "
+                      "pinned it), or, if the site is no longer published, "
+                      "clear player_site.folder.", plan)
         stamp = read_stamp(vault)
         code, did, err = update(vault, "apply", "--choose", "default-mode=leave")
         self.assertEqual(code, 0, err + did)
@@ -405,6 +409,10 @@ class SiteLeftoversTests(unittest.TestCase):
         self.assertIn("The site's build steps stay in its package.json", plan)
         self.assertIn("stay in its vault.config.json until its publish tool "
                       "is 1.24.0 or later", plan)
+        self.assertIn("To clear it: update that site's publish tool to 1.24.0 "
+                      "or later (the update repins it only when the plugin "
+                      "pinned it); the build steps then move", plan)
+        self.assertIn("the site keys then move", plan)
         stamp = read_stamp(vault)
         code, did, err = update(vault, "apply", "--choose", "default-mode=leave")
         self.assertEqual(code, 0, err + did)
@@ -471,6 +479,19 @@ class SiteLeftoversTests(unittest.TestCase):
         self.assertEqual([i.group for i in items], [ms.PERSON])
         self.assertTrue(items[0].holds_stamp)
         self.assertIn("stay in its vault.config.json", "".join(items[0].lines))
+        self.assertIn("To clear it: update that site's publish tool to 1.24.0 "
+                      "or later", "".join(items[0].lines))
+
+    def test_an_ok_answer_with_nothing_to_write_on_the_old_file_holds_the_stamp(self):
+        vault = make_vault(self)
+        answer = {"ok": True, "lines": [], "files": {"write": [], "remove": []}}
+        with mock.patch.object(ms, "_ask_move", return_value=answer):
+            items = ms.find_settings_move(vault)
+        self.assertEqual([(i.group, i.holds_stamp) for i in items],
+                         [(ms.PERSON, True)])
+        self.assertIn("the settings could not be moved (the publish tool "
+                      "reported nothing to write); the update cannot finish "
+                      "until they are", "".join(items[0].lines))
 
     def test_a_vault_with_no_site_and_the_new_file_finds_nothing(self):
         vault = tmp(self) / "Vault"

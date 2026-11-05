@@ -109,8 +109,13 @@ class PublishListMoveTests(unittest.TestCase):
         with_site(self, vault, spec="^1.26.0", installed="1.26.0")
         line = ("publish list\tstays in _meta/publish-manifest.md until the "
                 "site's publish tool is 1.27.0 or later")
+        clear = (" To clear it: update that site's publish tool to 1.27.0 or "
+                 "later (the update repins it only when the plugin pinned "
+                 "it), or, if the site is no longer published, clear "
+                 "player_site.folder. The update cannot finish until this "
+                 "is done.")
         code, plan, err = update(vault, "plan")
-        self.assertIn(line, plan)
+        self.assertIn(line + clear, plan)
         stamp = read_stamp(vault)
         code, did, err = update(vault, *CHOOSE)
         self.assertEqual(code, 0, err + did)
@@ -138,6 +143,9 @@ class PublishListMoveTests(unittest.TestCase):
                       "build step scripts/add-props.mjs reads it. Change the "
                       "script to ask `gm-apprentice-publish manifest list "
                       "--json`, then run the update again.", plan)
+        self.assertIn("To clear it: change that build step so it no longer "
+                      "reads the old file. The update cannot finish until "
+                      "this is done.", plan)
         stamp = read_stamp(vault)
         code, did, err = update(vault, *CHOOSE)
         self.assertEqual(code, 0, err + did)
