@@ -11,11 +11,11 @@ gma prop-move <vault> <mode> [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
-| `<mode>` | `plan`, `apply` |  |
-| `--decisions` | `FILE` |  |
-| `--draft` | `OUT` |  |
-| `--json` | `OUT` |  |
+| `<vault>` |  | the vault folder |
+| `<mode>` | `plan`, `apply` | plan (writes nothing) or apply |
+| `--decisions` | `FILE` | a JSON file of decisions that override what is inferred |
+| `--draft` | `OUT` | plan: write the decisions used to this file |
+| `--json` | `OUT` | plan: write the rows and counts as JSON to this file |
 
 Example: `gma prop-move "<vault>" plan`
 <!-- END GENERATED -->

@@ -11,8 +11,8 @@ gma ingest-images <vault> <dir> [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
-| `<dir>` |  |  |
+| `<vault>` |  | the vault folder |
+| `<dir>` |  | the folder of source material |
 | `--execute` |  | write files and metadata (default: dry-run) |
 
 Example: `gma ingest-images "<vault>" "<source dir>" --execute`

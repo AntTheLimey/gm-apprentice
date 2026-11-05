@@ -11,7 +11,7 @@ gma moments <vault> <command> ...
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
+| `<vault>` |  | the vault folder |
 | `<command>` | `status`, `list`, `show`, `check`, `tag`, `offered` |  |
 
 Example: `gma moments "<vault>" status`
@@ -46,7 +46,7 @@ gma moments <vault> show <wrapup>
 
 | Argument | Value | Help |
 |---|---|---|
-| `<wrapup>` |  |  |
+| `<wrapup>` |  | the wrap-up |
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma moments check -->
@@ -58,7 +58,7 @@ gma moments <vault> check <wrapup>
 
 | Argument | Value | Help |
 |---|---|---|
-| `<wrapup>` |  |  |
+| `<wrapup>` |  | the wrap-up |
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma moments tag -->
@@ -70,8 +70,8 @@ gma moments <vault> tag <wrapup> [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<wrapup>` |  |  |
-| `--write` |  |  |
+| `<wrapup>` |  | the wrap-up |
+| `--write` |  | write the tags (default: preview) |
 <!-- END GENERATED -->
 
 <!-- BEGIN GENERATED: gma moments offered -->

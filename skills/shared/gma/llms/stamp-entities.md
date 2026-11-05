@@ -11,7 +11,7 @@ gma stamp-entities <vault> [<files> ...] [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
+| `<vault>` |  | the vault folder |
 | `<files>` |  | vault-relative paths |
 | `--session` | `SESSION` | asOfSession value, written verbatim: a bare number (9) or a label ("Chapter 4, Session 9") |
 | `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |

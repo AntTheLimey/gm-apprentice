@@ -11,8 +11,8 @@ gma gurps-check <sheet> [<command>]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<sheet>` |  |  |
-| `<command>` | `attributes`, `encumbrance`, `load`, `defenses`, `points`, `skills`, `damage`, `all` |  |
+| `<sheet>` |  | the PC sheet's path |
+| `<command>` | `attributes`, `encumbrance`, `load`, `defenses`, `points`, `skills`, `damage`, `all` | the check to run (default: all) |
 
 Example: `gma gurps-check "<PC note>" all`
 <!-- END GENERATED -->

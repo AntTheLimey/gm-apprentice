@@ -243,7 +243,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="List what is still hidden in the notes a session touched. "
                     "Writes nothing.")
-    parser.add_argument("vault", type=Path)
+    parser.add_argument("vault", type=Path, help="the vault folder")
     parser.add_argument("session", help="the session index's path or file name")
     parser.add_argument("--also", action="append", default=[], metavar="PATH",
                         help="a vault-relative note this run wrote; repeat for each")

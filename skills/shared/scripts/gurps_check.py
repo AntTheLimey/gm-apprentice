@@ -618,9 +618,9 @@ def emit(section, findings):
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("sheet", type=Path)
+    ap.add_argument("sheet", type=Path, help="the PC sheet's path")
     ap.add_argument("command", nargs="?", default="all",
-                    choices=[name for name, _fn in CHECKS] + ["all"])
+                    choices=[name for name, _fn in CHECKS] + ["all"], help="the check to run (default: all)")
     ap.epilog = 'Example: gma gurps-check "<PC note>" all'
     return ap
 

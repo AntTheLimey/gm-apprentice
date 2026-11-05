@@ -147,10 +147,10 @@ def emit(rows, label=None):
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("vault", type=Path)
+    ap.add_argument("vault", type=Path, help="the vault folder")
     ap.add_argument("command",
                     choices=["orphans", "unresolved", "deadends",
-                             "backlinks", "ambiguous", "all"])
+                             "backlinks", "ambiguous", "all"], help="the query to run")
     ap.add_argument("name", nargs="?",
                     help="target note name (backlinks only)")
     ap.add_argument("--folder", help="restrict results to this subfolder")

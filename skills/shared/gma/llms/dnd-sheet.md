@@ -11,8 +11,8 @@ gma dnd-sheet [<sheet>] [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<sheet>` |  |  |
-| `--write` |  |  |
+| `<sheet>` |  | the PC note's path |
+| `--write` |  | write every FILL row (default: report only) |
 | `--party` | `VAULT` | run the rules checks on every PC note in a vault; never writes |
 
 Example: `gma dnd-sheet --party "<vault>"`

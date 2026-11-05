@@ -11,8 +11,8 @@ gma scene-queue <vault> [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
-| `--chapter` | `CHAPTER` |  |
+| `<vault>` |  | the vault folder |
+| `--chapter` | `CHAPTER` | only this chapter's scenes |
 
 Example: `gma scene-queue "<vault>"`
 <!-- END GENERATED -->

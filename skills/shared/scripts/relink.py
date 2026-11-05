@@ -1030,10 +1030,10 @@ def apply(p: Plan) -> list[str]:
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description="Rename or move a note and rewrite every link to it.")
-    ap.add_argument("vault", type=Path)
-    ap.add_argument("old")
-    ap.add_argument("new")
-    ap.add_argument("--apply", action="store_true")
+    ap.add_argument("vault", type=Path, help="the vault folder")
+    ap.add_argument("old", help="the note's path, or its filename when only one note has it")
+    ap.add_argument("new", help="the new path, or a bare filename for a rename in place")
+    ap.add_argument("--apply", action="store_true", help="make the change (default: preview)")
     ap.epilog = 'Example: gma relink "<vault>" "<old path>" "<new name>" --apply'
     return ap
 

@@ -11,10 +11,10 @@ gma vault-search <vault> <query> [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
-| `<query>` |  |  |
-| `--limit` | `LIMIT` |  |
-| `--context` |  |  |
+| `<vault>` |  | the vault folder |
+| `<query>` |  | the search words |
+| `--limit` | `LIMIT` | the most results to print |
+| `--context` |  | show each result's best-matching line |
 
 Example: `gma vault-search "<vault>" "<query>"`
 <!-- END GENERATED -->

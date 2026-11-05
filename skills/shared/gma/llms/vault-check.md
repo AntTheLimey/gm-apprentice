@@ -11,8 +11,8 @@ gma vault-check <vault> <command> [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
-| `<command>` | `frontmatter`, `names`, `index`, `stale-drafts`, `changed`, `tables`, `timeline`, `read-aloud`, `relationships`, `chapters`, `sessions`, `gm-leak`, `pc-body`, `wrapup`, `site-faults`, `settings`, `version`, `active-pcs`, `stories`, `report-new`, `report-stats`, `all` |  |
+| `<vault>` |  | the vault folder |
+| `<command>` | `frontmatter`, `names`, `index`, `stale-drafts`, `changed`, `tables`, `timeline`, `read-aloud`, `relationships`, `chapters`, `sessions`, `gm-leak`, `pc-body`, `wrapup`, `site-faults`, `settings`, `version`, `active-pcs`, `stories`, `report-new`, `report-stats`, `all` | the check to run |
 | `--order` |  | timeline only: check the sessions' in_game_date never goes backwards (qa_checks.py) |
 | `--mode` | `MODE` | report-new only: canon_audit, full_audit... |
 | `--scope` | `SCOPE` | report-new only: full_vault, chapter_N or custom |

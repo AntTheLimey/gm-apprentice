@@ -408,12 +408,12 @@ def unarmed(attack: str, skill: str, attrs: dict, bought: dict
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description="Add a GURPS skill to a sheet at its default, 0 points.")
-    ap.add_argument("sheet", type=Path)
-    ap.add_argument("skill")
-    ap.add_argument("--difficulty", metavar="DX/A")
-    ap.add_argument("--default", dest="defaults", metavar="DEFAULTS")
-    ap.add_argument("--for", dest="attack", metavar="ATTACK")
-    ap.add_argument("--write", action="store_true")
+    ap.add_argument("sheet", type=Path, help="the PC sheet's path")
+    ap.add_argument("skill", help="the skill's name")
+    ap.add_argument("--difficulty", metavar="DX/A", help="the skill's difficulty, e.g. DX/A, for a skill the tables lack")
+    ap.add_argument("--default", dest="defaults", metavar="DEFAULTS", help="the skill's defaults, for a skill the tables lack")
+    ap.add_argument("--for", dest="attack", metavar="ATTACK", help="the attack row the skill is for")
+    ap.add_argument("--write", action="store_true", help="write the skill to the sheet (default: preview)")
     ap.epilog = 'Example: gma gurps-skill-default "<PC note>" "<skill>" --write'
     return ap
 

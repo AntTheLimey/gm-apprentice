@@ -244,12 +244,12 @@ def _overlap(entries: list[dict], against: list[str]) -> list[dict]:
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("vault", type=Path)
+    ap.add_argument("vault", type=Path, help="the vault folder")
     ap.add_argument("--chapter", help="narrow to one chapter (casefold substring)")
     ap.add_argument("--against", action="extend", nargs="+", default=[],
                     help="report Planning/ entries naming these participants "
                          "or locations (space- or comma-separated, repeatable)")
-    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--json", action="store_true", help="print as JSON")
     ap.epilog = 'Example: gma plans-index "<vault>" --json'
     return ap
 

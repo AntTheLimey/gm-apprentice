@@ -11,10 +11,10 @@ gma plans-index <vault> [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
+| `<vault>` |  | the vault folder |
 | `--chapter` | `CHAPTER` | narrow to one chapter (casefold substring) |
 | `--against` | `AGAINST ...` | report Planning/ entries naming these participants or locations (space- or comma-separated, repeatable) (repeatable) |
-| `--json` |  |  |
+| `--json` |  | print as JSON |
 
 Example: `gma plans-index "<vault>" --json`
 <!-- END GENERATED -->

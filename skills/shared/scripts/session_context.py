@@ -1311,7 +1311,7 @@ def print_prep_rest(vault: Path, files, chosen, wrap, current: int,
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("vault", type=Path)
+    ap.add_argument("vault", type=Path, help="the vault folder")
     ap.add_argument("--session", type=int,
                     help="just-played session number (default: highest); "
                          "with --play, the session whose Plan to print")

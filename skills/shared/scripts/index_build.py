@@ -633,7 +633,7 @@ def _is_generated(text: str) -> bool:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("vault", type=Path)
+    parser.add_argument("vault", type=Path, help="the vault folder")
     parser.add_argument("--write", action="store_true",
                         help="apply the rendered index (default: dry run)")
     parser.add_argument("--force", action="store_true",

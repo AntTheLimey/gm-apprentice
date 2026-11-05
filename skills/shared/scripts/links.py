@@ -582,16 +582,16 @@ def rows(p: Plan, done: bool = False) -> list[str]:
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description="List a vault's broken links by kind, and fix them.")
-    ap.add_argument("vault", type=Path)
-    ap.add_argument("command", nargs="?", choices=["retarget", "unlink"])
-    ap.add_argument("names", nargs="*")
-    ap.add_argument("--keep-text", action="store_true")
-    ap.add_argument("--write", action="store_true")
-    ap.add_argument("--in", dest="within", action="append", metavar="NOTE")
-    ap.add_argument("--as", dest="bare", metavar="WORDS")
-    ap.add_argument("--bare", dest="take_bare", action="store_true")
+    ap.add_argument("vault", type=Path, help="the vault folder")
+    ap.add_argument("command", nargs="?", choices=["retarget", "unlink"], help="the fix to make (default: report only)")
+    ap.add_argument("names", nargs="*", help="the broken link names, as the report gives them (retarget: NAME NOTE)")
+    ap.add_argument("--keep-text", action="store_true", help="retarget: keep the old words as the link's display text")
+    ap.add_argument("--write", action="store_true", help="make the change (default: preview)")
+    ap.add_argument("--in", dest="within", action="append", metavar="NOTE", help="unlink: only in this note")
+    ap.add_argument("--as", dest="bare", metavar="WORDS", help="unlink: the words for a link with no display text")
+    ap.add_argument("--bare", dest="take_bare", action="store_true", help="unlink: also turn links that give no path")
     ap.add_argument("--pick", dest="picks", action="append", type=int,
-                    metavar="N")
+                    metavar="N", help="unlink: only the preview row with this number")
     ap.epilog = 'Example: gma links "<vault>" unlink "<note>" --in "<page>"'
     return ap
 

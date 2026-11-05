@@ -11,7 +11,7 @@ gma index-build <vault> [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
+| `<vault>` |  | the vault folder |
 | `--write` |  | apply the rendered index (default: dry run) |
 | `--force` |  | replace an _meta/index.md this tool did not make |
 | `--date` | `DATE` | override today's date (YYYY-MM-DD) |

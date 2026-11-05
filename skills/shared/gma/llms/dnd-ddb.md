@@ -11,8 +11,8 @@ gma dnd-ddb [<sheet>] [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<sheet>` |  |  |
-| `--write` |  |  |
+| `<sheet>` |  | the PC note's path |
+| `--write` |  | write the changes (default: preview) |
 | `--party` | `VAULT` | every PC note in a vault that has a D&D Beyond link |
 | `--on-build` |  | with --party: run only when vault.dndbeyond_sync is build |
 | `--player-text` |  | the player's D&D Beyond text for each background part the note does not match (not report rows) |

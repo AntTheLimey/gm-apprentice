@@ -3286,13 +3286,13 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("vault", type=Path)
+    ap.add_argument("vault", type=Path, help="the vault folder")
     sub = ap.add_subparsers(dest="command", required=True)
     new = sub.add_parser("wrapup-new", help="create a session's Wrap-Up")
     new.add_argument("--session", required=True,
                      help="the session index: vault-relative, or its name")
     new.add_argument("--source", help="text of the Source callout")
-    new.add_argument("--write", action="store_true")
+    new.add_argument("--write", action="store_true", help="write it (default: preview)")
     raw = argparse.RawDescriptionHelpFormatter
     add = sub.add_parser(
         "wrapup-add", help="place Wrap-Up sections (stdin)",
@@ -3309,18 +3309,18 @@ def build_parser() -> argparse.ArgumentParser:
                      help="add the text to the end of a section that "
                           "already exists")
     add.add_argument("--after", help="the heading a new section goes after")
-    add.add_argument("--write", action="store_true")
+    add.add_argument("--write", action="store_true", help="write it (default: preview)")
     story = sub.add_parser(
         "story", help="append story entries (stdin)",
         formatter_class=raw, description=(
             "stdin: entries, each opened by a '# [[PC Name]]' line.\n"
             "An entry may open with its own '## ' heading; otherwise it\n"
             "gets '## Session N - Title'. An entry holds no # or ## after that."))
-    story.add_argument("--wrapup", required=True)
+    story.add_argument("--wrapup", required=True, help="the wrap-up the entries come from")
     story.add_argument("--label", help="the entry heading's label")
     story.add_argument("--as-of", dest="as_of", help="asOfSession value")
     story.add_argument("--date", help="lastUpdated value, YYYY-MM-DD")
-    story.add_argument("--write", action="store_true")
+    story.add_argument("--write", action="store_true", help="write it (default: preview)")
     status = sub.add_parser(
         "status", help="rewrite a PC's Current Status fields (stdin)",
         formatter_class=raw, description=(
@@ -3333,8 +3333,8 @@ def build_parser() -> argparse.ArgumentParser:
             "the fields as they stand, and reads no stdin."))
     status.add_argument("pc", help="the PC note, vault-relative, or its name")
     how_status = status.add_mutually_exclusive_group()
-    how_status.add_argument("--show", action="store_true")
-    how_status.add_argument("--write", action="store_true")
+    how_status.add_argument("--show", action="store_true", help="print the PC's Current Status fields")
+    how_status.add_argument("--write", action="store_true", help="write it (default: preview)")
     log = sub.add_parser(
         "log", help="add log lines to notes (stdin rows)",
         formatter_class=raw, description=(
@@ -3345,7 +3345,7 @@ def build_parser() -> argparse.ArgumentParser:
             "any section name is accepted. A section the note's template\n"
             "keeps under GM Notes must be written as 'GM Notes/<Name>'\n"
             "unless the note already has it as a public section."))
-    log.add_argument("--write", action="store_true")
+    log.add_argument("--write", action="store_true", help="write it (default: preview)")
     tl = sub.add_parser(
         "timeline", help="add timeline entries (stdin)",
         formatter_class=raw, description=(
@@ -3355,7 +3355,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="the heading to add under, with its hashes")
     tl.add_argument("--after", help="where a new heading goes")
     tl.add_argument("--file", help=f"the timeline note (default {TIMELINE})")
-    tl.add_argument("--write", action="store_true")
+    tl.add_argument("--write", action="store_true", help="write it (default: preview)")
     sn = sub.add_parser(
         "session-new", help="a cold session's index and Play Notes, or "
         "with --upcoming an unplayed session's index alone",
@@ -3365,8 +3365,8 @@ def build_parser() -> argparse.ArgumentParser:
             "--export places a table-assistant export whole under\n"
             "## Narrative Record and resolves its NPCs, Locations and\n"
             "Items: EXACT, ALIAS, NEAR (candidates) or NONE, one row each."))
-    sn.add_argument("--number", type=int, required=True)
-    sn.add_argument("--title", required=True)
+    sn.add_argument("--number", type=int, required=True, help="the session's number")
+    sn.add_argument("--title", required=True, help="the session's title")
     sn.add_argument("--play-date", dest="play_date", help="YYYY-MM-DD")
     sn.add_argument("--chapter", help="the chapter, when the number "
                     "alone does not say which")
@@ -3374,7 +3374,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="a session not yet played (prep): the index "
                     "alone, status planned, no Play Notes")
     sn.add_argument("--export", help="the export file (any path)")
-    sn.add_argument("--write", action="store_true")
+    sn.add_argument("--write", action="store_true", help="write it (default: preview)")
     pn = sub.add_parser(
         "play-notes-new", help="Play Notes beside a session index prep "
         "already filed", formatter_class=raw, description=(
@@ -3387,7 +3387,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="the session index: path or name")
     pn.add_argument("--play-date", dest="play_date", help="YYYY-MM-DD")
     pn.add_argument("--export", help="the export file (any path)")
-    pn.add_argument("--write", action="store_true")
+    pn.add_argument("--write", action="store_true", help="write it (default: preview)")
     rs = sub.add_parser(
         "resolve", help="an export's names against the vault (read-only)",
         description="The name rows session-new prints, for an export "
@@ -3402,21 +3402,21 @@ def build_parser() -> argparse.ArgumentParser:
             "are left for the caller to fill."))
     pp.add_argument("draft", help="the draft, vault-relative")
     pp.add_argument("--to", required=True, help="the plan, vault-relative")
-    pp.add_argument("--plan-type", dest="plan_type", required=True)
+    pp.add_argument("--plan-type", dest="plan_type", required=True, help="the plan's type, one word")
     pp.add_argument("--chapter", help="default: the chapter folder of --to")
     pp.add_argument("--leads-to", dest="leads_to", action="append",
                     help="a plan this one leads to (repeatable)")
-    pp.add_argument("--write", action="store_true")
+    pp.add_argument("--write", action="store_true", help="write it (default: preview)")
     ch = sub.add_parser(
         "chapter-new", help="file a new chapter note",
         description="Creates Chapters/<title>/<title>.md from the chapter "
                     "template. Refused when a chapter of that title exists.")
-    ch.add_argument("--title", required=True)
+    ch.add_argument("--title", required=True, help="the chapter's title")
     ch.add_argument("--sort-order", dest="sort_order", type=float,
                     help="default: one after the highest chapter")
     ch.add_argument("--status", default="planned",
                     help="planned | active | complete (default planned)")
-    ch.add_argument("--write", action="store_true")
+    ch.add_argument("--write", action="store_true", help="write it (default: preview)")
     sc = sub.add_parser(
         "scene-new", help="file a new scene under its chapter",
         formatter_class=raw, description=(
@@ -3424,13 +3424,13 @@ def build_parser() -> argparse.ArgumentParser:
             "scene template, or with --set-piece\n"
             "Scenes/<title>/<title>.md. --chapter is the chapter note's\n"
             "name, its title or its folder; none or several: refused."))
-    sc.add_argument("--chapter", required=True)
-    sc.add_argument("--title", required=True)
+    sc.add_argument("--chapter", required=True, help="the chapter the scene belongs to")
+    sc.add_argument("--title", required=True, help="the scene's title")
     sc.add_argument("--set-piece", dest="set_piece", action="store_true",
                     help="give the scene a folder of its own")
     sc.add_argument("--folder", help="a sub-folder of the chapter, e.g. "
                     "Side_Adventures/The Audition")
-    sc.add_argument("--write", action="store_true")
+    sc.add_argument("--write", action="store_true", help="write it (default: preview)")
     pa = sub.add_parser(
         "scene-paused", help="write a paused scene's snapshot",
         formatter_class=raw, description=(
@@ -3450,7 +3450,7 @@ def build_parser() -> argparse.ArgumentParser:
                     "the session's)")
     pa.add_argument("--folder", help="with --new: a sub-folder of the "
                     "chapter")
-    pa.add_argument("--write", action="store_true")
+    pa.add_argument("--write", action="store_true", help="write it (default: preview)")
     sp = sub.add_parser(
         "scene-played", help="mark a scene played or dropped",
         description="Sets status to played or dropped; played adds the "
@@ -3462,7 +3462,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="the session note's name (not with --dropped)")
     sp.add_argument("--dropped", action="store_true",
                     help="the scene will not be played; no session")
-    sp.add_argument("--write", action="store_true")
+    sp.add_argument("--write", action="store_true", help="write it (default: preview)")
     pr = sub.add_parser(
         "prop-new", help="file a new prop in its chapter's Props folder",
         formatter_class=raw, description=(
@@ -3472,8 +3472,8 @@ def build_parser() -> argparse.ArgumentParser:
             "writer's hand in _meta/prop-hands.json (a new one needs\n"
             "--hand-font). --scene links the prop from that scene's\n"
             "entities. The publish list is never touched."))
-    pr.add_argument("--chapter", required=True)
-    pr.add_argument("--title", required=True)
+    pr.add_argument("--chapter", required=True, help="the chapter the prop belongs to")
+    pr.add_argument("--title", required=True, help="the prop's title")
     pr.add_argument("--kind", default="document",
                     help="document | object | diagram | supplied | "
                          "container (default document)")
@@ -3487,7 +3487,7 @@ def build_parser() -> argparse.ArgumentParser:
     pr.add_argument("--scene", help="the scene that hands it over")
     pr.add_argument("--container", help="the container prop it sits in")
     pr.add_argument("--folder", help="a sub-folder of the chapter")
-    pr.add_argument("--write", action="store_true")
+    pr.add_argument("--write", action="store_true", help="write it (default: preview)")
     ph = sub.add_parser(
         "prop-hand", help="add a writer's hand to _meta/prop-hands.json",
         formatter_class=raw, description=(
@@ -3501,7 +3501,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="the hand's font family")
     ph.add_argument("--hand-who", dest="hand_who",
                     help="the hand's writer, in words")
-    ph.add_argument("--write", action="store_true")
+    ph.add_argument("--write", action="store_true", help="write it (default: preview)")
     pl = sub.add_parser(
         "plan", help="write a session's Plan and check it",
         formatter_class=raw, description=(
@@ -3512,7 +3512,7 @@ def build_parser() -> argparse.ArgumentParser:
             "Plan is never overwritten: --section replaces each section\n"
             "on stdin by level and title, and adds a missing ## where the\n"
             "template has it."))
-    pl.add_argument("--number", type=int, required=True)
+    pl.add_argument("--number", type=int, required=True, help="the session's number")
     pl.add_argument("--chapter", help="the chapter, when the number "
                     "alone does not say which")
     pl.add_argument("--title", help="the session's title, to file its "
@@ -3525,7 +3525,7 @@ def build_parser() -> argparse.ArgumentParser:
                     choices=sorted(plan_check.GM_INPUT_PARTS),
                     metavar="PART", help="with --headless: the parts the "
                     "GM supplied (intent, scenes, spotlight; bare: all)")
-    pl.add_argument("--write", action="store_true")
+    pl.add_argument("--write", action="store_true", help="write it (default: preview)")
     ap.epilog = 'Example: gma vault-write "<vault>" wrapup-add "<wrap-up>" --write'
     return ap
 

@@ -2020,11 +2020,11 @@ def _write_json(path: Path, data: Any) -> None:
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("vault", type=Path)
-    ap.add_argument("mode", choices=("plan", "apply"))
-    ap.add_argument("--decisions", type=Path, metavar="FILE")
-    ap.add_argument("--draft", type=Path, metavar="OUT")
-    ap.add_argument("--json", type=Path, metavar="OUT", dest="json_out")
+    ap.add_argument("vault", type=Path, help="the vault folder")
+    ap.add_argument("mode", choices=("plan", "apply"), help="plan (writes nothing) or apply")
+    ap.add_argument("--decisions", type=Path, metavar="FILE", help="a JSON file of decisions that override what is inferred")
+    ap.add_argument("--draft", type=Path, metavar="OUT", help="plan: write the decisions used to this file")
+    ap.add_argument("--json", type=Path, metavar="OUT", dest="json_out", help="plan: write the rows and counts as JSON to this file")
     ap.epilog = 'Example: gma prop-move "<vault>" plan'
     return ap
 

@@ -11,7 +11,7 @@ gma reveal-scan <vault> <session> [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
+| `<vault>` |  | the vault folder |
 | `<session>` |  | the session index's path or file name |
 | `--also` | `PATH` | a vault-relative note this run wrote; repeat for each (repeatable) |
 

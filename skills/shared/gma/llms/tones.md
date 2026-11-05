@@ -11,14 +11,14 @@ gma tones <vault> [<command>] [<WORD> ...] [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
-| `<command>` | `fix`, `uses`, `shown` |  |
-| `<WORD>` |  |  |
-| `--near` |  |  |
-| `--except` | `WORD` | (repeatable) |
-| `--set` | `OLD=NEW` | (repeatable) |
-| `--accept` |  |  |
-| `--write` |  |  |
+| `<vault>` |  | the vault folder |
+| `<command>` | `fix`, `uses`, `shown` | what to do (default: report only) |
+| `<WORD>` |  | uses: the stray words to list; shown --accept: the NOTE:LINE places |
+| `--near` |  | fix: change every NEAR word to its listed word |
+| `--except` | `WORD` | fix --near: leave this word alone (repeatable) |
+| `--set` | `OLD=NEW` | fix: change OLD to NEW (repeatable) |
+| `--accept` |  | shown: record ties as accepted |
+| `--write` |  | make the change (default: preview) |
 
 Example: `gma tones "<vault>"`
 <!-- END GENERATED -->

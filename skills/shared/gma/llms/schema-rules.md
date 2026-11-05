@@ -25,5 +25,5 @@ gma schema-rules show [<type>]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<type>` |  |  |
+| `<type>` |  | the note type |
 <!-- END GENERATED -->

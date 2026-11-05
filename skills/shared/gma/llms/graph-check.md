@@ -11,8 +11,8 @@ gma graph-check <vault> <command> [<name>] [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
-| `<command>` | `orphans`, `unresolved`, `deadends`, `backlinks`, `ambiguous`, `all` |  |
+| `<vault>` |  | the vault folder |
+| `<command>` | `orphans`, `unresolved`, `deadends`, `backlinks`, `ambiguous`, `all` | the query to run |
 | `<name>` |  | target note name (backlinks only) |
 | `--folder` | `FOLDER` | restrict results to this subfolder |
 | `--exclude` | `EXCLUDE` | glob of relpaths or top-level dirs to skip (repeatable) |

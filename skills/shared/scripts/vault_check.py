@@ -6047,7 +6047,7 @@ def _kept_by_player_row(name: str) -> list[str]:
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("vault", type=Path)
+    ap.add_argument("vault", type=Path, help="the vault folder")
     ap.add_argument("command", choices=["frontmatter", "names", "index",
                                         "stale-drafts", "changed", "tables",
                                         "timeline", "read-aloud",
@@ -6055,7 +6055,7 @@ def build_parser() -> argparse.ArgumentParser:
                                         "gm-leak", "pc-body", "wrapup",
                                         "site-faults", "settings",
                                         "version", "active-pcs", "stories",
-                                        "report-new", "report-stats", "all"])
+                                        "report-new", "report-stats", "all"], help="the check to run")
     ap.add_argument("--order", action="store_true",
                     help="timeline only: check the sessions' in_game_date "
                          "never goes backwards (qa_checks.py)")

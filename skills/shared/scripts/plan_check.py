@@ -1055,17 +1055,17 @@ def build_state(text: str) -> dict[str, str]:
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("plan", type=Path)
-    ap.add_argument("--headless", action="store_true")
+    ap.add_argument("plan", type=Path, help="the Session Plan's path")
+    ap.add_argument("--headless", action="store_true", help="the plan was written with no GM present: apply the hard guard")
     ap.add_argument("--gm-input", nargs="*", choices=sorted(GM_INPUT_PARTS),
                     metavar="PART",
                     help="with --headless: the GM supplied the spine, so "
                          "skip the guard; or name the parts the GM's "
                          "request settled (intent, scenes, spotlight)")
     mode = ap.add_mutually_exclusive_group()
-    mode.add_argument("--inventory", action="store_true")
-    mode.add_argument("--state", action="store_true")
-    ap.add_argument("--json", action="store_true")
+    mode.add_argument("--inventory", action="store_true", help="list the plan's sections instead of findings")
+    mode.add_argument("--state", action="store_true", help="print the prep-state comment instead of findings")
+    ap.add_argument("--json", action="store_true", help="print as JSON")
     ap.epilog = 'Example: gma plan-check "<plan>" --inventory'
     return ap
 

@@ -11,15 +11,15 @@ gma links <vault> [<command>] [<names> ...] [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
-| `<command>` | `retarget`, `unlink` |  |
-| `<names>` |  |  |
-| `--keep-text` |  |  |
-| `--write` |  |  |
-| `--in` | `NOTE` | (repeatable) |
-| `--as` | `WORDS` |  |
-| `--bare` |  |  |
-| `--pick` | `N` | (repeatable) |
+| `<vault>` |  | the vault folder |
+| `<command>` | `retarget`, `unlink` | the fix to make (default: report only) |
+| `<names>` |  | the broken link names, as the report gives them (retarget: NAME NOTE) |
+| `--keep-text` |  | retarget: keep the old words as the link's display text |
+| `--write` |  | make the change (default: preview) |
+| `--in` | `NOTE` | unlink: only in this note (repeatable) |
+| `--as` | `WORDS` | unlink: the words for a link with no display text |
+| `--bare` |  | unlink: also turn links that give no path |
+| `--pick` | `N` | unlink: only the preview row with this number (repeatable) |
 
 Example: `gma links "<vault>" unlink "<note>" --in "<page>"`
 <!-- END GENERATED -->

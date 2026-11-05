@@ -366,9 +366,9 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description="Bring a vault and its site up to the plugin's version.")
-    ap.add_argument("vault")
+    ap.add_argument("vault", help="the vault folder")
     ap.add_argument("command", nargs="?", choices=["plan", "apply"],
-                    default="plan")
+                    default="plan", help="plan (writes nothing) or apply (default: plan)")
     ap.add_argument("--choose", action="append", default=[],
                     metavar="ID[=VALUE]",
                     help="apply only: a Your-choice id from plan; repeatable")

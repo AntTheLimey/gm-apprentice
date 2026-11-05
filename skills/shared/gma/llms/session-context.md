@@ -11,7 +11,7 @@ gma session-context <vault> [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
+| `<vault>` |  | the vault folder |
 | `--session` | `SESSION` | just-played session number (default: highest); with --play, the session whose Plan to print |
 | `--play` |  | print only the upcoming (or --session) Play Brief |
 | `--threads` |  | print the Session Context header and Threads report only: each active PC's Open threads aged against the Wrap-Ups' Unresolved Threads and PC Carry-Forward bullets, age=N sessions since last touched, STALE at the vault's stale-after number (vault.stale_after_sessions; a candidate, not a verdict — resolve, advance, or retire is the GM's call). A thread read as first~N age~N (~ instead of =) is a likely match by shared names and words, not the same text: check it |

@@ -11,12 +11,12 @@ gma plan-check <plan> [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<plan>` |  |  |
-| `--headless` |  |  |
+| `<plan>` |  | the Session Plan's path |
+| `--headless` |  | the plan was written with no GM present: apply the hard guard |
 | `--gm-input` | `intent`, `scenes`, `spotlight` | with --headless: the GM supplied the spine, so skip the guard; or name the parts the GM's request settled (intent, scenes, spotlight) |
-| `--inventory` |  |  |
-| `--state` |  |  |
-| `--json` |  |  |
+| `--inventory` |  | list the plan's sections instead of findings |
+| `--state` |  | print the prep-state comment instead of findings |
+| `--json` |  | print as JSON |
 
 Example: `gma plan-check "<plan>" --inventory`
 <!-- END GENERATED -->

@@ -15,10 +15,10 @@ gma rules-lookup <system> <term> [options]
 | `<term>` |  | name to look up |
 | `--kind` | `KIND` | restrict to one record kind |
 | `--variant` | `VARIANT` | include this variant's records |
-| `--limit` | `LIMIT` |  |
+| `--limit` | `LIMIT` | the most records to print |
 | `--json` |  | emit the records as JSON instead of rows |
 | `--personal` |  | also read the gitignored personal/ files |
-| `--systems-dir` | `SYSTEMS_DIR` |  |
+| `--systems-dir` | `SYSTEMS_DIR` | the systems folder to read |
 
 Example: `gma rules-lookup gurps-4e "Broadsword" --kind skill`
 <!-- END GENERATED -->

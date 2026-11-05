@@ -11,7 +11,7 @@ gma vault-scaffold <vault> [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
+| `<vault>` |  | the vault folder |
 | `--system` | `ID` | one of coc-7e, coc-7e-regency, gurps-4e, dnd-5e-2024, pf2e, fitd, or an alias |
 | `--no-system` |  | no particular system: generic templates |
 | `--name` | `TEXT` | campaign name for page titles (default: the vault folder's name) |

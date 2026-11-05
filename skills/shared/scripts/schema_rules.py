@@ -623,7 +623,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Print the frontmatter rules for a note type.")
     sub = parser.add_subparsers(dest="command", required=True)
     one = sub.add_parser("show", help="one type's fields; no type lists the types")
-    one.add_argument("type", nargs="?")
+    one.add_argument("type", nargs="?", help="the note type")
     parser.epilog = 'Example: gma schema-rules show npc'
     return parser
 

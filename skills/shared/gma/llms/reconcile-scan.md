@@ -11,7 +11,7 @@ gma reconcile-scan <vault> <wrap_up>
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
+| `<vault>` |  | the vault folder |
 | `<wrap_up>` |  | the Wrap-Up's path, vault-relative or absolute |
 
 Example: `gma reconcile-scan "<vault>" "<wrap-up>"`

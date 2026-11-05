@@ -466,7 +466,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("vault", type=Path)
+    ap.add_argument("vault", type=Path, help="the vault folder")
     which = ap.add_mutually_exclusive_group()
     which.add_argument("--system", metavar="ID",
                        help=f"one of {', '.join(SYSTEMS)}, or an alias")

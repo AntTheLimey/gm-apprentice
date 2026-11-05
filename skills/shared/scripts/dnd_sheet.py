@@ -466,8 +466,8 @@ def party(vault: Path) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("sheet", nargs="?")
-    ap.add_argument("--write", action="store_true")
+    ap.add_argument("sheet", nargs="?", help="the PC note's path")
+    ap.add_argument("--write", action="store_true", help="write every FILL row (default: report only)")
     ap.add_argument("--party", metavar="VAULT",
                     help="run the rules checks on every PC note in a vault; never writes")
     ap.epilog = 'Example: gma dnd-sheet --party "<vault>"'

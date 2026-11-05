@@ -291,7 +291,7 @@ def scan(vault: Path, wrap_arg: str) -> list[str]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Count what reconcile reviews in one Wrap-Up. Writes nothing.")
-    parser.add_argument("vault", type=Path)
+    parser.add_argument("vault", type=Path, help="the vault folder")
     parser.add_argument("wrap_up", help="the Wrap-Up's path, vault-relative or absolute")
     parser.epilog = 'Example: gma reconcile-scan "<vault>" "<wrap-up>"'
     return parser

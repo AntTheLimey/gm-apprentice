@@ -1800,8 +1800,8 @@ def failed_here(rows: list[tuple[str, str, str]]) -> bool:
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0] if __doc__ else None)
-    ap.add_argument("sheet", nargs="?")
-    ap.add_argument("--write", action="store_true")
+    ap.add_argument("sheet", nargs="?", help="the PC note's path")
+    ap.add_argument("--write", action="store_true", help="write the changes (default: preview)")
     ap.add_argument("--party", metavar="VAULT", help="every PC note in a vault that has a D&D Beyond link")
     ap.add_argument("--on-build", action="store_true",
                     help="with --party: run only when vault.dndbeyond_sync is build")

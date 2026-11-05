@@ -11,10 +11,10 @@ gma relink <vault> <old> <new> [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
-| `<old>` |  |  |
-| `<new>` |  |  |
-| `--apply` |  |  |
+| `<vault>` |  | the vault folder |
+| `<old>` |  | the note's path, or its filename when only one note has it |
+| `<new>` |  | the new path, or a bare filename for a rename in place |
+| `--apply` |  | make the change (default: preview) |
 
 Example: `gma relink "<vault>" "<old path>" "<new name>" --apply`
 <!-- END GENERATED -->

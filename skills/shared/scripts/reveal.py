@@ -428,11 +428,11 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description="Publish what a session let the players learn, lift "
                     "withheld, and log it. Dry run unless --write.")
-    ap.add_argument("vault", type=Path)
+    ap.add_argument("vault", type=Path, help="the vault folder")
     ap.add_argument("--session", required=True, help="the session's name, e.g. 'Session 12'")
-    ap.add_argument("--publish", action="append", default=[], metavar="PATH")
-    ap.add_argument("--released", action="append", default=[], metavar="PATH=WHAT")
-    ap.add_argument("--write", action="store_true")
+    ap.add_argument("--publish", action="append", default=[], metavar="PATH", help="a note to publish")
+    ap.add_argument("--released", action="append", default=[], metavar="PATH=WHAT", help="a note and what came out of it, to log")
+    ap.add_argument("--write", action="store_true", help="make the changes (default: preview)")
     ap.epilog = 'Example: gma reveal "<vault>" --session "<title>" --publish "<path>" --write'
     return ap
 

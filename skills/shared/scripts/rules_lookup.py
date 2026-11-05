@@ -575,12 +575,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("term", help="name to look up")
     parser.add_argument("--kind", help="restrict to one record kind")
     parser.add_argument("--variant", help="include this variant's records")
-    parser.add_argument("--limit", type=int, default=10)
+    parser.add_argument("--limit", type=int, default=10, help="the most records to print")
     parser.add_argument("--json", action="store_true",
                         help="emit the records as JSON instead of rows")
     parser.add_argument("--personal", action="store_true",
                         help="also read the gitignored personal/ files")
-    parser.add_argument("--systems-dir", type=Path, default=SYSTEMS_DIR)
+    parser.add_argument("--systems-dir", type=Path, default=SYSTEMS_DIR, help="the systems folder to read")
     parser.epilog = 'Example: gma rules-lookup gurps-4e "Broadsword" --kind skill'
     return parser
 

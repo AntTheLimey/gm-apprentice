@@ -11,8 +11,8 @@ gma migrate <vault> [<command>] [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
-| `<command>` | `plan`, `apply` |  |
+| `<vault>` |  | the vault folder |
+| `<command>` | `plan`, `apply` | plan (writes nothing) or apply (default: plan) |
 | `--choose` | `ID[=VALUE]` | apply only: a Your-choice id from plan; repeatable (repeatable) |
 
 Example: `gma migrate "<vault>" plan`

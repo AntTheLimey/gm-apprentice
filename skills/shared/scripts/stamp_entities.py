@@ -406,7 +406,7 @@ def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("vault", type=Path)
+    ap.add_argument("vault", type=Path, help="the vault folder")
     ap.add_argument("files", nargs="*", help="vault-relative paths")
     ap.add_argument("--session",
                     help="asOfSession value, written verbatim: a bare "

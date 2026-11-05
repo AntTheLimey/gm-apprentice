@@ -11,11 +11,11 @@ gma reveal <vault> --session SESSION [options]
 
 | Argument | Value | Help |
 |---|---|---|
-| `<vault>` |  |  |
+| `<vault>` |  | the vault folder |
 | `--session` | `SESSION` | the session's name, e.g. 'Session 12' |
-| `--publish` | `PATH` | (repeatable) |
-| `--released` | `PATH=WHAT` | (repeatable) |
-| `--write` |  |  |
+| `--publish` | `PATH` | a note to publish (repeatable) |
+| `--released` | `PATH=WHAT` | a note and what came out of it, to log (repeatable) |
+| `--write` |  | make the changes (default: preview) |
 
 Example: `gma reveal "<vault>" --session "<title>" --publish "<path>" --write`
 <!-- END GENERATED -->

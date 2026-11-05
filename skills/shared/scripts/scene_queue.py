@@ -108,8 +108,8 @@ def queue(vault: Path, chapter: str | None = None) -> list[QueueRow]:
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("vault", type=Path)
-    ap.add_argument("--chapter")
+    ap.add_argument("vault", type=Path, help="the vault folder")
+    ap.add_argument("--chapter", help="only this chapter's scenes")
     ap.epilog = 'Example: gma scene-queue "<vault>"'
     return ap
 
