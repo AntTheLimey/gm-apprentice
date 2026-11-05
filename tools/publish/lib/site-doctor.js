@@ -285,6 +285,7 @@ async function runSiteDoctor(options, deps) {
   }
   if (drift) {
     let sitePin = null;
+    let parseFailed = false; // package.json exists but is not JSON: the pin is unknown, so no claim about it
     let tarball = false; // a vendored release tarball is the GM's own pin (as update-pin treats it): no advice to repin
     const pkgPath = path.join(siteRoot, 'package.json');
     // Absent is fine — plenty of sites have no package.json yet, and the running
@@ -296,6 +297,7 @@ async function runSiteDoctor(options, deps) {
         tarball = /\.(?:tgz|tar\.gz)$/i.test(String(spec || ''));
         if (spec && !tarball && String(spec).startsWith('file:')) sitePin = pinnedVersionOf(String(spec).slice('file:'.length));
       } catch (err) {
+        parseFailed = true;
         // The settings stop above already names an unreadable package.json; a second finding would say it twice.
         if (!publishConfig.faults.some((f) => f.source === 'package' && f.level === 'stop')) findings.push(finding(
           'VERSION_DRIFT', 'warning', pkgPath,
@@ -305,7 +307,7 @@ async function runSiteDoctor(options, deps) {
       }
     }
     const stale = sitePin && sitePin !== drift.latest;
-    if (!tarball && (drift.drift || stale)) {
+    if (!parseFailed && !tarball && (drift.drift || stale)) {
       findings.push(finding(
         'VERSION_DRIFT', 'warning', pkgPath,
         `site pinned to ${sitePin || drift.pinned}, newest installed is ${drift.latest} — the site builds with the old renderer`,

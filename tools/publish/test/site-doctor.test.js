@@ -521,6 +521,21 @@ describe('doctor --site', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  it('makes no pinned-version claim when drift is detected and package.json cannot be parsed', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-pkg-bad-drift-'));
+    write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\nHi.\n');
+    const { dir, configPath } = siteFor(vault, { folderMap: { 'Characters/NPCs': 'characters/npcs' } });
+    fs.writeFileSync(path.join(dir, 'package.json'), '{ not json');
+    const c = capture();
+    c.deps.detect = () => ({ pinned: '1.11.20', latest: '1.11.30', drift: true, versionsRoot: '/cache/gm-apprentice' });
+    await runSiteDoctor({ configPath, json: true }, c.deps);
+    const payload = JSON.parse(c.out.join(''));
+    const about = payload.findings.filter((f) => /package\.json$/.test(f.path));
+    assert.strictEqual(about.length, 1, JSON.stringify(payload.findings));
+    assert.strictEqual(about[0].code, 'SETTINGS_FAULT');
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('stays silent about package.json when the site simply has none yet', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-no-pkg-'));
     write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\nHi.\n');
