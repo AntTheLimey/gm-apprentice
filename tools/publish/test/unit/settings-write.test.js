@@ -1,12 +1,12 @@
 'use strict';
-// The one writer: every case runs on the new file and on the old file's frontmatter, and asserts the whole text.
+// The one writer: every case runs on the new file and asserts the whole text.
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { applyChanges } = require('../../lib/settings/write');
-const { NEW_FILE, OLD_FILE, at } = require('../../lib/settings/layout');
+const { NEW_FILE, at } = require('../../lib/settings/layout');
 
 const BODY = '\n# Notes\n\nSome prose of the GM.\n';
 
@@ -18,17 +18,12 @@ function vaultWith(rel, text) {
   return { dir, file, read: () => fs.readFileSync(file, 'utf8') };
 }
 
-// Runs `change` on the new-layout text and on the legacy frontmatter text, checks both whole texts.
+// Runs `change` on the new-layout text and checks the whole text. (`old`/`oldOut` are the old file's form of the same case, no longer run.)
 function both(name, { nw, old, changes, newOut, oldOut, eol = '\n' }) {
-  it(`${name} (new file)`, () => {
+  it(`${name}`, () => {
     const v = vaultWith(NEW_FILE, nw);
     applyChanges(v.dir, changes.new);
     assert.strictEqual(v.read(), newOut);
-  });
-  it(`${name} (old file)`, () => {
-    const v = vaultWith(OLD_FILE, `---${eol}${old}---${BODY.replace(/\n/g, eol)}`);
-    applyChanges(v.dir, changes.old || changes.new);
-    assert.strictEqual(v.read(), `---${eol}${oldOut}---${BODY.replace(/\n/g, eol)}`);
   });
 }
 
@@ -158,13 +153,13 @@ describe('settings writer: unset', () => {
 });
 
 describe('settings writer: all or nothing, line endings, the rest of the file', () => {
-  it('a failed multi-change leaves the file byte-identical (both layouts)', () => {
+  it('a failed multi-change leaves the file byte-identical ', () => {
     const changes = [
       { op: 'set', name: 'player_site.title', value: 'T' },
       { op: 'set', name: 'player_site.features.search', value: 'maybe' },
       { op: 'set', name: 'player_site.footer', value: 'F' },
     ];
-    for (const [rel, text] of [[NEW_FILE, 'version: 1\n'], [OLD_FILE, `---\ntype: meta\n---\n${BODY}`]]) {
+    for (const [rel, text] of [[NEW_FILE, 'version: 1\n']]) {
       const v = vaultWith(rel, text);
       assert.throws(() => applyChanges(v.dir, changes), /player_site\.features\.search/);
       assert.strictEqual(v.read(), text);
@@ -194,43 +189,6 @@ describe('settings writer: all or nothing, line endings, the rest of the file', 
     assert.strictEqual(v.read(), 'version: 1\nplayer_site:\n  title: T\n  footer: F');
     applyChanges(v.dir, [{ op: 'unset', name: 'player_site.footer' }]);
     assert.strictEqual(v.read(), 'version: 1\nplayer_site:\n  title: T');
-  });
-  it('the old file keeps its body and its other keys byte for byte', () => {
-    const head = '# a note\ntype: meta\ncampaign: "X"   # the name\n\npublish:\n  site_title: T\n\n# about the next\nchapter_naming: "Ch"\n';
-    const v = vaultWith(OLD_FILE, `---\n${head}---\n${BODY}`);
-    applyChanges(v.dir, [{ op: 'set', name: 'player_site.title', value: 'U' }]);
-    assert.strictEqual(v.read(), `---\n${head.replace('site_title: T', 'site_title: U')}---\n${BODY}`);
-  });
-  it('a hiding key written beside publish: can be moved under it (unset-raw, then set)', () => {
-    const v = vaultWith(OLD_FILE, `---\ntype: meta\nexclude_sections: [a]\npublish:\n  site_title: T\n---\n${BODY}`);
-    applyChanges(v.dir, [{ op: 'unset-raw', path: ['exclude_sections'] }, { op: 'set', name: SEC, value: ['a'] }]);
-    assert.strictEqual(v.read(), `---\ntype: meta\npublish:\n  site_title: T\n  exclude_sections:\n    - a\n---\n${BODY}`);
-  });
-});
-
-describe('settings writer: the old file, older spellings', () => {
-  it('set of an older spelling writes the primary name once, in place', () => {
-    const v = vaultWith(OLD_FILE, '---\npublish:\n  images:\n    maxWidth: 800  # wide\n    quality: 80\n---\n');
-    const out = applyChanges(v.dir, [{ op: 'set', name: 'player_site.images.max_width', value: 900 }]);
-    const text = v.read();
-    assert.ok(!/maxWidth/.test(text), text);
-    assert.ok(/max_width: 900  # wide/.test(text), text);
-    assert.deepStrictEqual(out.wrote, ['publish.images.max_width']);
-  });
-  it('set across different parents removes the older spelling', () => {
-    const v = vaultWith(OLD_FILE, '---\npublish:\n  backend:\n    statusBar: true\n  site_title: T\n---\n');
-    applyChanges(v.dir, [{ op: 'set', name: 'player_site.features.live_stats', value: false }]);
-    assert.strictEqual(v.read(), '---\npublish:\n  site_title: T\n  live_stats: false\n---\n');
-  });
-  it('unset removes every spelling present and says which', () => {
-    const v = vaultWith(OLD_FILE, '---\npublish:\n  live_stats: true\n  backend:\n    statusBar: true\n  site_title: T\n---\n');
-    const out = applyChanges(v.dir, [{ op: 'unset', name: 'player_site.features.live_stats' }]);
-    assert.strictEqual(v.read(), '---\npublish:\n  site_title: T\n---\n');
-    assert.deepStrictEqual(out.removed.sort(), ['publish.backend.statusBar', 'publish.live_stats']);
-  });
-  it('a setting new in this layout is refused on the old file', () => {
-    const v = vaultWith(OLD_FILE, '---\ntype: meta\n---\n');
-    assert.throws(() => applyChanges(v.dir, [{ op: 'set', name: 'vault.kept_by', value: 'gm' }]), /needs the new settings file; run the update first/);
   });
 });
 
@@ -289,9 +247,9 @@ describe('settings writer: the write itself', () => {
     assert.strictEqual(v.read(), 'version: 1\nplayer_site: nope\n');
   });
   it('a one-line group is written again with the change', () => {
-    const v = vaultWith(OLD_FILE, '---\npublish: {site_title: X}\n---\n');
+    const v = vaultWith(NEW_FILE, 'version: 1\nplayer_site: {title: X}\n');
     applyChanges(v.dir, [{ op: 'set', name: 'player_site.footer', value: 'F' }]);
-    assert.strictEqual(v.read(), '---\npublish: {site_title: X, footer: F}\n---\n');
+    assert.strictEqual(v.read(), 'version: 1\nplayer_site: {title: X, footer: F}\n');
   });
 });
 
@@ -317,9 +275,6 @@ describe('settings writer: review fixes', () => {
     const b = vaultWith(NEW_FILE, 'version: 1\nvault: {setting_year: x}\n');
     applyChanges(b.dir, [{ op: 'unset', name: 'vault.setting_year' }]);
     assert.strictEqual(b.read(), 'version: 1\n');
-    const c = vaultWith(OLD_FILE, '---\npublish: {site_title: x}\n---\nbody\n');
-    applyChanges(c.dir, [{ op: 'unset', name: 'player_site.title' }]);
-    assert.strictEqual(c.read(), '---\npublish:\n---\nbody\n');
   });
   it('a change the writer cannot make safely says so in one plain line and writes nothing', () => {
     const text = 'version: 1\nplayer_site:\n  title: &a T\n  footer: *a\n';
@@ -336,10 +291,5 @@ describe('settings writer: review fixes', () => {
     assert.strictEqual(v.read(), text);
     const bad = vaultWith(NEW_FILE, 'version: 1\nplayer_site: [\n');
     assert.throws(() => applyChanges(bad.dir, [{ op: 'set', name: 'player_site.title', value: 'T' }]), /not valid YAML/);
-  });
-  it('an old file with empty frontmatter gets no stray blank line', () => {
-    const v = vaultWith(OLD_FILE, '---\n---\nbody\n');
-    applyChanges(v.dir, [{ op: 'set', name: 'player_site.title', value: 'T' }]);
-    assert.strictEqual(v.read(), '---\npublish:\n  site_title: T\n---\nbody\n');
   });
 });
