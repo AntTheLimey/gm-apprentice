@@ -239,9 +239,10 @@ class MoveEndToEndTests(unittest.TestCase):
         self.assertIn("not stamped", did)
         self.assertIn("not settled: settings-move", did)
         self.assertFalse((vault / "_meta" / "vault-config.yaml").exists())
+        # The plugin's block in CLAUDE.md is bookkeeping, like the templates.
         self.assertEqual({k: v for k, v in hashes(vault).items()
                           if not k.startswith(("_Templates", "_meta/"))
-                          and not k.startswith("_")},
+                          and not k.startswith("_") and k != "CLAUDE.md"},
                          {k: v for k, v in before.items()
                           if not k.startswith("_")})
         self.assertIn("(not until settings-move is settled)", plan)

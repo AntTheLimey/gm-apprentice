@@ -47,6 +47,7 @@ names, then accept again.
   (`node "$TOOL" --version`) and the build steps the site runs. Show the draft.
   Post it with `gh issue create` only on the GM's yes. The finding stays until it
   is fixed or accepted.
+  A stand-in built meanwhile is recorded per `${CLAUDE_PLUGIN_ROOT}/skills/shared/filing-plugin-issues.md`.
 
 ## Name findings
 

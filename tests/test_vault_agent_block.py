@@ -109,6 +109,17 @@ class EnsureBlockTests(unittest.TestCase):
         self.assertIn("by hand", lines[0])
 
 
+class NotANoteTests(unittest.TestCase):
+    def test_the_root_agent_files_are_not_walked_as_notes(self):
+        from vaultlib import vault_files
+        vault = folder(self)
+        for rel in ("CLAUDE.md", "AGENTS.md", "Sessions/CLAUDE.md"):
+            (vault / rel).parent.mkdir(parents=True, exist_ok=True)
+            (vault / rel).write_text("x\n", encoding="utf-8")
+        self.assertEqual([rel for rel, _ in vault_files(vault)],
+                         ["Sessions/CLAUDE.md"])
+
+
 def the_check():
     (check,) = [c for c in mv.VAULT_CHECKS if c.name == "agent-block"]
     return check

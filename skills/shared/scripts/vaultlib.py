@@ -46,6 +46,9 @@ from typing import Any, Iterable, Iterator, Literal
 # --------------------------------------------------------------------------
 
 SKIP_DIRS = {"_Templates", "_templates", "_inbox"}
+# The vault agent's instructions at the root: not notes (agent_block.py
+# writes the plugin's block in them).
+AGENT_FILES = ("CLAUDE.md", "AGENTS.md")
 
 # Top-level folders whose notes are records of the past (QA reports,
 # archives). Links written in them are not reported as broken; notes in
@@ -77,12 +80,15 @@ def is_skipped_path(rel: str, skip_dirs: set[str] = SKIP_DIRS) -> bool:
 
     True for a hidden directory/file (a leading `.` on any path
     segment) or a top-level directory in `skip_dirs` (templates, the
-    `_inbox` staging area). Shared with the `--file` existence check in
+    `_inbox` staging area), and the agent instructions at the vault's
+    root (`AGENT_FILES`), which are not notes. Shared with the `--file` existence check in
     `vault_check.py main()`, so a path that is real on disk but would
     never be walked — `_Templates/Foo.md` — is reported as the same
     clear error as a path that doesn't exist at all, rather than a
     silently empty report.
     """
+    if rel in AGENT_FILES:
+        return True
     parts = rel.split("/")
     if any(p.startswith(".") for p in parts):
         return True

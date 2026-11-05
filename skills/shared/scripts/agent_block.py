@@ -19,8 +19,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from migrate_core import write_text_atomic
+from vaultlib import AGENT_FILES
 
-FILES = ("CLAUDE.md", "AGENTS.md")
+FILES = AGENT_FILES
 BEGIN = ("<!-- BEGIN gm-apprentice (managed by the plugin; edits here are "
          "replaced) -->")
 BEGIN_PREFIX = "<!-- BEGIN gm-apprentice"   # an older BEGIN's words may differ
