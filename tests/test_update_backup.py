@@ -1,6 +1,7 @@
 """update_backup: a copy of the vault's notes, taken before the update writes."""
 
 import os
+import shutil
 import sys
 import tarfile
 import tempfile
@@ -20,6 +21,7 @@ NOTE_SUFFIXES = {".md", ".yaml", ".json"}
 class BackupTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, True)
         self.vault = self.tmp / "My Vault"
         self.home = self.tmp / "home"
         self.home.mkdir()
@@ -51,8 +53,9 @@ class BackupTests(unittest.TestCase):
             if p.is_file() and p.suffix in NOTE_SUFFIXES)
         self.assertEqual(self._names(archive), expected)
         self.assertIn("Session 01/Scene 1 – Café.md", expected)
-        self.assertTrue(archive.is_relative_to(
-            self.home / ".gm-apprentice" / "backups" / "My Vault"))
+        self.assertTrue(archive.parent.name.startswith("My Vault-"))
+        self.assertEqual(archive.parent.parent,
+                         self.home / ".gm-apprentice" / "backups")
         self.assertTrue(archive.name.endswith(".tar.gz"))
 
     def test_backup_skips_images_and_obsidian(self):
@@ -119,14 +122,50 @@ class BackupTests(unittest.TestCase):
             [])
 
 
+    def test_prune_leaves_foreign_files(self):
+        self._write("a.md")
+        first = update_backup.backup(self.vault, home=self.home)
+        (first.parent / "mine.tar.gz").write_text("x")
+        (first.parent / "notes.txt").write_text("x")
+        for i in range(7):
+            with mock.patch.object(update_backup, "_stamp",
+                                   return_value=f"20270101-00000{i}"):
+                update_backup.backup(self.vault, home=self.home)
+        self.assertTrue((first.parent / "mine.tar.gz").exists())
+        self.assertTrue((first.parent / "notes.txt").exists())
+
+    def test_same_folder_name_gets_its_own_backup_folder(self):
+        other = self.tmp / "elsewhere" / "My Vault"
+        other.mkdir(parents=True)
+        (other / "b.md").write_text("x")
+        self._write("a.md")
+        a = update_backup.backup(self.vault, home=self.home)
+        b = update_backup.backup(other, home=self.home)
+        self.assertNotEqual(a.parent, b.parent)
+
+    @unittest.skipUnless(os.name == "posix" and os.geteuid() != 0,
+                         "chmod 000 only blocks reads for non-root POSIX")
+    def test_unreadable_directory_fails_naming_it(self):
+        self._write("fine.md")
+        self._write("Locked Dir/inside.md")
+        d = self.vault / "Locked Dir"
+        d.chmod(0)
+        self.addCleanup(d.chmod, 0o755)
+        with self.assertRaises(update_backup.BackupFailed) as cm:
+            update_backup.backup(self.vault, home=self.home)
+        self.assertIn("Locked Dir", str(cm.exception))
+
+
 class SiteFolderTests(unittest.TestCase):
     def test_settings_failure_means_no_skip(self):
         tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
         with mock.patch("vaultlib.settings", side_effect=RuntimeError("bad")):
             self.assertIsNone(update_backup._site_folder(tmp))
 
     def test_relative_site_folder_resolves_inside_vault(self):
         tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
         fake = mock.Mock()
         fake.get.return_value = "site"
         with mock.patch("vaultlib.settings", return_value=fake):
@@ -135,7 +174,9 @@ class SiteFolderTests(unittest.TestCase):
 
     def test_site_folder_outside_vault_is_not_a_skip(self):
         tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, True)
         other = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, other, True)
         fake = mock.Mock()
         fake.get.return_value = str(other)
         with mock.patch("vaultlib.settings", return_value=fake):

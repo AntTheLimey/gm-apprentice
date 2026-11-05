@@ -8,7 +8,9 @@ syncs or publishes.
 
 from __future__ import annotations
 
+import hashlib
 import os
+import re
 import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,8 +30,8 @@ def _stamp() -> str:
 def _site_folder(vault: Path) -> Path | None:
     """The site folder when it sits inside the vault, else None. Settings
     that cannot be read mean no skip: the backup must not fail on them."""
+    import vaultlib  # a failed import is a broken install: let it raise
     try:
-        import vaultlib
         folder = vaultlib.settings(vault).get("player_site.folder")
         if not folder or not isinstance(folder, str):
             return None
@@ -43,7 +45,11 @@ def _site_folder(vault: Path) -> Path | None:
 
 def _notes(vault: Path, site: Path | None) -> list[Path]:
     found: list[Path] = []
-    for dirpath, dirnames, filenames in os.walk(vault):
+    def unreadable(e: OSError) -> None:
+        raise BackupFailed(
+            f"could not read {e.filename}: {e.strerror or e}") from e
+
+    for dirpath, dirnames, filenames in os.walk(vault, onerror=unreadable):
         here = Path(dirpath)
         dirnames[:] = sorted(
             d for d in dirnames
@@ -71,8 +77,10 @@ def backup(vault: Path, *, home: Path | None = None, keep: int = 5) -> Path:
     and keep the newest `keep`. Raises `BackupFailed` naming the file it
     could not read."""
     vault = Path(vault)
+    root = vault.resolve()
+    tag = hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:8]
     folder = ((home if home is not None else Path.home())
-              / ".gm-apprentice" / "backups" / vault.resolve().name)
+              / ".gm-apprentice" / "backups" / f"{root.name}-{tag}")
     folder.mkdir(parents=True, exist_ok=True)
     target = _free_name(folder, _stamp())
     try:
@@ -99,6 +107,8 @@ def _prune(folder: Path, keep: int) -> None:
         n = p.name.removesuffix(".tar.gz")[16:]
         return (p.name[:15], int(n) if n.isdigit() else 1)
 
-    old = sorted(folder.glob("*.tar.gz"), key=age)
+    ours = re.compile(r"\d{8}-\d{6}(-\d+)?\.tar\.gz")
+    old = sorted((p for p in folder.glob("*.tar.gz")
+                  if ours.fullmatch(p.name)), key=age)
     for path in old[:max(0, len(old) - keep)]:
         path.unlink(missing_ok=True)
