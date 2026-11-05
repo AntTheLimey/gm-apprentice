@@ -209,7 +209,7 @@ test('vault.campaign unset is the vault folder name, from the default', () => {
 });
 
 // 9
-test('both files present: the old one is not read, and one warning says it is left over', () => {
+test('both files present: the old one is not read, and one stop says to remove it', () => {
   const v = vault();
   writeOldConfig(v, { mode: 'full', site_title: 'Old' });
   writeNewConfig(v, 'player_site:\n  title: New\n');
@@ -217,9 +217,9 @@ test('both files present: the old one is not read, and one warning says it is le
   assert.equal(r.file.leftover, true);
   assert.equal(r.values.player_site.title, 'New');
   assert.equal(r.values.player_site.hide.mode, undefined);
-  const left = r.faults.filter((f) => f.level === 'warn' && /is the old settings file and is no longer read/.test(f.message));
+  const left = r.faults.filter((f) => f.level === 'stop' && /plugin 1\.11\.0 no longer reads it/.test(f.message));
   assert.equal(left.length, 1);
-  assert.equal(left[0].message, '_meta/vault-config.md is the old settings file and is no longer read (_meta/vault-config.yaml holds this vault\'s settings); it can be deleted.');
+  assert.equal(left[0].message, '_meta/vault-config.md is still beside _meta/vault-config.yaml: remove or rename `_meta/vault-config.md` once you have checked its settings are in `_meta/vault-config.yaml`; plugin 1.11.0 no longer reads it.');
   assert.equal(r.faults.length, 1);
 });
 

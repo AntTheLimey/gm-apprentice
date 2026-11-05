@@ -210,7 +210,7 @@ when it does not. The tool never reads `_meta/vault-config.md`:
 
 - With only the old file, the tool stops and says to run the update with
   plugin 1.10.134 first.
-- With both, it reads the new file and warns that the old file can be deleted.
+- With both, it stops and says to remove or rename the old file once its settings are checked against the new one.
 
 ## The old file
 

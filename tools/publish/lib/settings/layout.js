@@ -10,7 +10,7 @@ const NEW_FILE = '_meta/vault-config.yaml';
 const OLD_FILE = '_meta/vault-config.md';
 // What the tools say of the old file since plugin 1.11.0, when it is the only settings file, and when it is left beside the new one.
 const OLD_FILE_STOP = `${OLD_FILE} is the old settings file, no longer read since plugin 1.11.0. Run the update with plugin 1.10.134 first.`;
-const OLD_FILE_LEFT = `${OLD_FILE} is the old settings file and is no longer read (${NEW_FILE} holds this vault's settings); it can be deleted.`;
+const OLD_FILE_LEFT = `${OLD_FILE} is still beside ${NEW_FILE}: remove or rename \`${OLD_FILE}\` once you have checked its settings are in \`${NEW_FILE}\`; plugin 1.11.0 no longer reads it.`;
 const STATE_FILE = '_meta/vault-state.json';
 const NOTES_FILE = '_meta/vault-notes.md';
 

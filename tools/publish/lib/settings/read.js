@@ -196,7 +196,7 @@ function readNew({ vaultPath, siteConfig, siteDir, deps }) {
   if (hasOld && !exists) {
     faults.push(makeFault({ name: OLD_FILE, setting: null, kind: 'dropped', level: 'stop', leftover: true, message: OLD_FILE_STOP }));
   } else if (hasOld) {
-    faults.push(makeFault({ name: OLD_FILE, setting: null, kind: 'dropped', level: 'warn', message: OLD_FILE_LEFT }));
+    faults.push(makeFault({ name: OLD_FILE, setting: null, kind: 'dropped', level: 'stop', leftover: true, message: OLD_FILE_LEFT }));
   }
   // Any key but vaultPath left in the site folder's vault.config.json is not read: one stop naming every one.
   const site = isMap(siteConfig) ? siteConfig : {};

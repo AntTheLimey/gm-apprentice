@@ -93,14 +93,6 @@ describe('leftovers from before plugin 1.11.0 stop the build by name', () => {
     builtNothing(s);
   });
 
-  it('an old settings file beside the new one is a warning that it can be deleted, and the build goes on', () => {
-    const s = site({ oldFile: true });
-    const { error, lines } = quietBuild(s.configPath);
-    assert.ifError(error);
-    assert.ok(lines.some((l) => l.includes('_meta/vault-config.md is the old settings file and is no longer read') && l.includes('can be deleted')), lines.join('\n'));
-    assert.ok(fs.existsSync(path.join(s.siteDir, 'docs', 'index.html')));
-  });
-
   it('an old publish list stops naming it', () => {
     const s = site();
     fs.writeFileSync(path.join(s.vault, '_meta', 'publish-manifest.md'), '# Publish Manifest\n\n## Publishing\n\n- NPCs/Clerk.md\n');

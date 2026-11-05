@@ -445,7 +445,7 @@ editor at the schema to get names and values as you type.
 
 The tool no longer reads `_meta/vault-config.md`. A vault that still has only
 that file stops with a line saying to run the update with plugin 1.10.134
-first; one that has both files reads the new one and warns that the old file
+first; one that has both files stops too, and the message says to remove or rename the old file
 can be deleted. The old publish list (`_meta/publish-manifest.md`) is
 handled the same way.
 
