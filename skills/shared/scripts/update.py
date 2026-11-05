@@ -481,14 +481,16 @@ def _did(check: Check, lines: list[str], did: dict[str, None]) -> None:
 def _save_record(vault: Path, new: dict[str, AnswerEntry],
                  entry: update_record.UpdateEntry) -> None:
     """The answers that finished, the templates found the same as the
-    plugin's (their release and plugin refreshed), and this update."""
+    plugin's, and this update. A template's entry is refreshed only when
+    one of its two texts changed: an entry this run's apply wrote (take,
+    a copy, an update from a release) is made against the texts as they
+    are now, so it stays, with its decision and why."""
     import migrate_vault
     rec = update_record.load(vault)
     rec["answers"].update(new)
     for name, same in migrate_vault.same_templates(vault).items():
         old = rec["templates"].get(name)
-        if not (isinstance(old, dict)
-                and update_record._same_entry(old, same)):
+        if not (isinstance(old, dict) and update_record.same_texts(old, same)):
             rec["templates"][name] = same
     rec["updates"].append(entry)
     update_record.save(vault, rec)

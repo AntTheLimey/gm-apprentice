@@ -120,12 +120,28 @@ def _same_entry(a: TemplateEntry, b: TemplateEntry) -> bool:
         {k: v for k, v in b.items() if k != "on"}
 
 
-def record_templates(vault: Path, entries: dict[str, TemplateEntry]) -> bool:
-    """Merge `entries` into the record's templates and save it, only when
-    that changes something; an entry that differs only in its date keeps
+def same_texts(a: TemplateEntry, b: TemplateEntry) -> bool:
+    """Two entries made against the same two texts (the vault's copy and
+    the plugin's)."""
+    return (a.get("file_sha"), a.get("shipped_sha")) == \
+        (b.get("file_sha"), b.get("shipped_sha"))
+
+
+def record_templates(vault: Path, entries: dict[str, TemplateEntry],
+                     refresh: dict[str, TemplateEntry] | None = None) -> bool:
+    """Merge `entries` (what an apply decided) into the record's templates,
+    and `refresh` (templates found the same as the plugin's) where the
+    record has no entry made against the same two texts; save it only when
+    that changes something. An entry that differs only in its date keeps
     the old one. True when the file was written."""
     rec = load(vault)
     changed = False
+    for name, entry in (refresh or {}).items():
+        old = rec["templates"].get(name)
+        if name not in entries and not (isinstance(old, dict)
+                                        and same_texts(old, entry)):
+            rec["templates"][name] = entry
+            changed = True
     for name, entry in entries.items():
         old = rec["templates"].get(name)
         if isinstance(old, dict) and _same_entry(old, entry):

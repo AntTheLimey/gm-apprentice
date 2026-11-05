@@ -422,7 +422,7 @@ def _survey_templates(vault: Path) -> tuple[
     def remember(*entries: tuple[str, update_record.TemplateEntry]) -> None:
         # The templates found the same as the plugin's ride along with any
         # write; a run that changes nothing writes nothing.
-        update_record.record_templates(vault, {**same, **dict(entries)})
+        update_record.record_templates(vault, dict(entries), refresh=same)
 
     for name, text in expected_templates(vault).items():
         path = folder / name

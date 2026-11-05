@@ -448,5 +448,56 @@ class AskedTextTests(unittest.TestCase):
         self.assertTrue(any(f"template:{NPC}" in n for n in res.notes), res.notes)
 
 
+class RecordKeepsWhatTheRunDecidedTests(unittest.TestCase):
+    """The end-of-run refresh never overwrites the entry an apply wrote."""
+
+    def setUp(self):
+        import update
+        self.update = update
+        self.home = Path(tempfile.mkdtemp(prefix="updt-home-"))
+        self.addCleanup(shutil.rmtree, self.home, ignore_errors=True)
+
+    def ask(self, vault, answers=None):
+        return self.update.run(vault, answers or {}, False,
+                               checks=[TEMPLATES_CHECK], home=self.home)
+
+    def test_take_stays_take(self):
+        vault = make_vault(self)
+        edited_npc(vault)
+        [q] = self.ask(vault).questions
+        self.assertEqual(self.ask(vault, {q.id: "take"}).exit, 0)
+        entry = record(vault)["templates"][NPC]
+        self.assertEqual(entry["decision"], "take")
+        self.assertIn("chose the plugin's", entry["why"])
+
+    def test_a_later_write_keeps_an_earlier_take(self):
+        vault = make_vault(self)
+        edited_npc(vault)
+        [q] = self.ask(vault).questions
+        self.ask(vault, {q.id: "take"})
+        write_stamp(vault, "1.10.12")
+        (vault / "_Templates" / DOC).unlink()   # a later run copies this one
+        self.assertEqual(self.ask(vault).exit, 0)
+        self.assertEqual(record(vault)["templates"][NPC]["decision"], "take")
+
+    def test_a_copy_stays_a_copy(self):
+        vault = make_vault(self)
+        (vault / "_Templates" / NPC).unlink()
+        self.assertEqual(self.ask(vault).exit, 0)
+        self.assertIn("had no copy", record(vault)["templates"][NPC]["why"])
+
+    def test_an_update_from_a_release_stays_said(self):
+        vault = make_vault(self)
+        old = mv.expected_templates(vault)[DOC] + "\n## Handout Notes\n"
+        (vault / "_Templates" / DOC).write_text(old, encoding="utf-8")
+        file = Path(tempfile.mkdtemp(prefix="updh-")) / "template-history.json"
+        self.addCleanup(shutil.rmtree, file.parent, ignore_errors=True)
+        file.write_text(json.dumps({"coc-7e": {DOC: {mv.text_hash(old): "1.10.20"}}}),
+                        encoding="utf-8")
+        with mock.patch.object(mv, "HISTORY", file):
+            self.assertEqual(self.ask(vault).exit, 0)
+        self.assertIn("It was 1.10.20's text", record(vault)["templates"][DOC]["why"])
+
+
 if __name__ == "__main__":
     unittest.main()
