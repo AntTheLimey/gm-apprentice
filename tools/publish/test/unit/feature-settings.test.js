@@ -8,19 +8,22 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs'); const os = require('node:os'); const path = require('node:path');
 const { resolveConfig } = require('../../lib/config');
+const { writeSettings } = require('../helpers/vault-files');
+
+// The settings file's text for one old-style feature line ('  key: value\n', the value as raw YAML).
+const featureText = (line) => `player_site:\n  title: T\n${line ? `  features:\n    ${line.trim()}\n` : ''}`;
 
 function valueOf(line) {
   const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-th-'));
-  fs.mkdirSync(path.join(vault, '_meta'));
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n${line}  site_title: T\n---\n`);
+  writeSettings(vault, featureText(line));
   const said = [];
   try {
     return { value: resolveConfig({ vaultPath: vault }, vault, (m) => said.push(String(m))).publishConfig.tohit_calculator,
-      said: said.filter((m) => m.includes('publish.tohit_calculator')) };
+      said: said.filter((m) => m.includes('player_site.features.tohit_calculator')) };
   } finally { fs.rmSync(vault, { recursive: true, force: true }); }
 }
 
-describe('publish.tohit_calculator', () => {
+describe('player_site.features.tohit_calculator', () => {
   it('is on when left out, and says nothing', () => {
     assert.deepStrictEqual(valueOf(''), { value: 'on', said: [] });
   });
@@ -46,7 +49,7 @@ describe('publish.tohit_calculator', () => {
     const { value, said } = valueOf('  tohit_calculator: maybe\n');
     assert.strictEqual(value, 'on');
     assert.strictEqual(said.length, 1);
-    assert.match(said[0], /publish.tohit_calculator .*; it takes on or off/);
+    assert.match(said[0], /player_site.features.tohit_calculator .*; it takes on or off/);
   });
 });
 }
@@ -57,19 +60,20 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs'); const os = require('node:os'); const path = require('node:path');
 const { resolveConfig } = require('../../lib/config');
+const { writeSettings } = require('../helpers/vault-files');
+const featureText = (line) => `player_site:\n  title: T\n${line ? `  features:\n    ${line.trim()}\n` : ''}`;
 
 function valueOf(line) {
   const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-cn-'));
-  fs.mkdirSync(path.join(vault, '_meta'));
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n${line}  site_title: T\n---\n`);
+  writeSettings(vault, featureText(line));
   const said = [];
   try {
     return { value: resolveConfig({ vaultPath: vault }, vault, (m) => said.push(String(m))).publishConfig.connections,
-      said: said.filter((m) => m.includes('publish.connections')) };
+      said: said.filter((m) => m.includes('player_site.features.connections')) };
   } finally { fs.rmSync(vault, { recursive: true, force: true }); }
 }
 
-describe('publish.connections', () => {
+describe('player_site.features.connections', () => {
   it('is tree when left out, and says nothing', () => {
     assert.deepStrictEqual(valueOf(''), { value: 'tree', said: [] });
   });
@@ -90,7 +94,7 @@ describe('publish.connections', () => {
       const { value, said } = valueOf(`  connections: ${line}\n`);
       assert.strictEqual(value, 'tree', line);
       assert.strictEqual(said.length, 1, line);
-      assert.match(said[0], /publish\.connections .*; it takes tree, web, cards or off\./);
+      assert.match(said[0], /player_site.features.connections .*; it takes tree, web, cards or off\./);
     }
   });
 });
@@ -102,19 +106,20 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs'); const os = require('node:os'); const path = require('node:path');
 const { resolveConfig } = require('../../lib/config');
+const { writeSettings } = require('../helpers/vault-files');
+const featureText = (line) => `player_site:\n  title: T\n${line ? `  features:\n    ${line.trim()}\n` : ''}`;
 
 function valueOf(line) {
   const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-lp-'));
-  fs.mkdirSync(path.join(vault, '_meta'));
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n${line}  site_title: T\n---\n`);
+  writeSettings(vault, featureText(line));
   const said = [];
   try {
     return { value: resolveConfig({ vaultPath: vault }, vault, (m) => said.push(String(m))).publishConfig.link_previews,
-      said: said.filter((m) => m.includes('publish.link_previews')) };
+      said: said.filter((m) => m.includes('player_site.features.link_previews')) };
   } finally { fs.rmSync(vault, { recursive: true, force: true }); }
 }
 
-describe('publish.link_previews', () => {
+describe('player_site.features.link_previews', () => {
   it('is on when left out, and says nothing', () => {
     assert.deepStrictEqual(valueOf(''), { value: 'on', said: [] });
   });
@@ -134,7 +139,7 @@ describe('publish.link_previews', () => {
       const { value, said } = valueOf(`  link_previews: ${line}\n`);
       assert.strictEqual(value, 'on', line);
       assert.strictEqual(said.length, 1, line);
-      assert.match(said[0], /publish.link_previews .*; it takes on, desktop or off/);
+      assert.match(said[0], /player_site.features.link_previews .*; it takes on, desktop or off/);
     }
   });
 });
