@@ -237,6 +237,12 @@ class VaultRenameWaitsForTheRepinTests(unittest.TestCase):
 
 
 class ApplyTests(unittest.TestCase):
+    def setUp(self):
+        # Error lines name the script as run; in-process that is sys.argv[0].
+        patcher = mock.patch.object(sys, "argv", ["migrate.py"])
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_runs_in_band_then_release_order_and_stamps(self):
         vault = make_vault(self)
         log = []

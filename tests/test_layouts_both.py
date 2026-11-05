@@ -221,7 +221,7 @@ def test_the_scaffold_does_not_bring_the_old_file_back(tmp_path):
 def test_the_settings_check_lists_a_fault_on_both(tmp_path, layout, monkeypatch, capsys):
     vault = with_bad_value(tmp_path, layout)
     monkeypatch.setattr(sys, "argv", ["vault_check.py", str(vault), "settings"])
-    assert vc.run() == 0
+    assert vc.main() == 0
     out = capsys.readouterr().out
     file_name = "_meta/vault-config.md" if layout == "legacy" else "_meta/vault-config.yaml"
     assert f"STOP\t{file_name}\t" in out
@@ -237,7 +237,7 @@ def test_a_misspelt_key_is_fixed_on_both_files(
         (vault / "_meta" / "vault-config.yaml").write_text(
             "version: 1\nplayer_site:\n  hide:\n    sectoins: [Secrets]\n", encoding="utf-8")
     monkeypatch.setattr(sys, "argv", ["vault_check.py", str(vault), "settings", "--fix"])
-    assert vc.run() == 0
+    assert vc.main() == 0
     out = capsys.readouterr().out
     vaultlib.forget_settings(None)
     s = vaultlib.settings(vault)

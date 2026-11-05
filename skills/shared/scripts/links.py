@@ -85,6 +85,7 @@ from relink import (
     _walk,
     resolve_old,
 )
+from vaultlib import cli_name  # noqa: E402
 from vaultlib import (
     LINK_RE,
     UNCHECKED_DIRS,
@@ -579,25 +580,31 @@ def rows(p: Plan, done: bool = False) -> list[str]:
                   + (f", {len(p.kept)} left as written" if p.kept else "")]
 
 
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        description="List a vault's broken links by kind, and fix them.")
+    ap.add_argument("vault", type=Path, help="the vault folder")
+    ap.add_argument("command", nargs="?", choices=["retarget", "unlink"], help="the fix to make (default: report only)")
+    ap.add_argument("names", nargs="*", help="the broken link names, as the report gives them (retarget: NAME NOTE)")
+    ap.add_argument("--keep-text", action="store_true", help="retarget: keep the old words as the link's display text")
+    ap.add_argument("--write", action="store_true", help="make the change (default: preview)")
+    ap.add_argument("--in", dest="within", action="append", metavar="NOTE", help="unlink: only in this note")
+    ap.add_argument("--as", dest="bare", metavar="WORDS", help="unlink: the words for a link with no display text")
+    ap.add_argument("--bare", dest="take_bare", action="store_true", help="unlink: also turn links that give no path")
+    ap.add_argument("--pick", dest="picks", action="append", type=int,
+                    metavar="N", help="unlink: only the preview row with this number")
+    ap.epilog = 'Example: gma links "<vault>" unlink "<note>" --in "<page>"'
+    return ap
+
+
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8")
-    ap = argparse.ArgumentParser(
-        description="List a vault's broken links by kind, and fix them.")
-    ap.add_argument("vault", type=Path)
-    ap.add_argument("command", nargs="?", choices=["retarget", "unlink"])
-    ap.add_argument("names", nargs="*")
-    ap.add_argument("--keep-text", action="store_true")
-    ap.add_argument("--write", action="store_true")
-    ap.add_argument("--in", dest="within", action="append", metavar="NOTE")
-    ap.add_argument("--as", dest="bare", metavar="WORDS")
-    ap.add_argument("--bare", dest="take_bare", action="store_true")
-    ap.add_argument("--pick", dest="picks", action="append", type=int,
-                    metavar="N")
+    ap = build_parser()
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
-        print(f"links.py: not a directory: {args.vault.as_posix()}",
+        print(f"{cli_name()}: not a directory: {args.vault.as_posix()}",
               file=sys.stderr)
         return 2
     usage = None
@@ -620,7 +627,7 @@ def main(argv: list[str] | None = None) -> int:
     elif args.picks and min(args.picks) < 1:
         usage = "--pick takes a row number from 1"
     if usage:
-        print(f"links.py: {usage}", file=sys.stderr)
+        print(f"{cli_name()}: {usage}", file=sys.stderr)
         return 2
     try:
         if args.command is None:
@@ -636,14 +643,14 @@ def main(argv: list[str] | None = None) -> int:
             apply(p)
         print("\n".join(rows(p, done=args.write)))
     except RelinkError as e:
-        print(f"links.py: {e}", file=sys.stderr)
+        print(f"{cli_name()}: {e}", file=sys.stderr)
         return 2 if e.usage else 1
     except (LinksError, StepFailed) as e:
-        print(f"links.py: {e}", file=sys.stderr)
+        print(f"{cli_name()}: {e}", file=sys.stderr)
         return 1
     except KeyboardInterrupt as e:
-        print(f"links.py: interrupted; {e}" if str(e)
-              else "links.py: interrupted", file=sys.stderr)
+        print(f"{cli_name()}: interrupted; {e}" if str(e)
+              else f"{cli_name()}: interrupted", file=sys.stderr)
         return 130
     return 0
 

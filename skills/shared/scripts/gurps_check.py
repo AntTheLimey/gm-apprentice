@@ -616,12 +616,18 @@ def emit(section, findings):
         print(f"{level}\t{locus}\t{message}")
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("sheet", type=Path)
+    ap.add_argument("sheet", type=Path, help="the PC sheet's path")
     ap.add_argument("command", nargs="?", default="all",
-                    choices=[name for name, _fn in CHECKS] + ["all"])
-    args = ap.parse_args()
+                    choices=[name for name, _fn in CHECKS] + ["all"], help="the check to run (default: all)")
+    ap.epilog = 'Example: gma gurps-check "<PC note>" all'
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
     try:
         text = args.sheet.read_text(encoding="utf-8", errors="replace")
     except OSError as e:

@@ -14,6 +14,7 @@ from here are re-exported below so nothing had to be rewritten.
 
 from __future__ import annotations
 
+import argparse
 import re
 import sys
 from functools import lru_cache
@@ -617,14 +618,18 @@ def show(etype: str) -> str | None:
     return "\n".join(lines)
 
 
-def main(argv: list[str] | None = None) -> int:
-    import argparse
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="schema_rules.py",
         description="Print the frontmatter rules for a note type.")
     sub = parser.add_subparsers(dest="command", required=True)
     one = sub.add_parser("show", help="one type's fields; no type lists the types")
-    one.add_argument("type", nargs="?")
+    one.add_argument("type", nargs="?", help="the note type")
+    parser.epilog = 'Example: gma schema-rules show npc'
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
     if args.type is None:
         print(show_types())

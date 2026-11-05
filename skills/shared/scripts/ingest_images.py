@@ -560,14 +560,20 @@ def write_dest_bytes(vault: Path, plan: Plan, tmp_dir: Path) -> str | None:
 # --------------------------------------------------------------------------
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("vault", type=Path)
-    ap.add_argument("dir", type=Path)
+    ap.add_argument("vault", type=Path, help="the vault folder")
+    ap.add_argument("dir", type=Path, help="the folder of source material")
     ap.add_argument("--execute", action="store_true",
                     help="write files and metadata (default: dry-run)")
-    args = ap.parse_args()
+    ap.epilog = 'Example: gma ingest-images "<vault>" "<source dir>" --execute'
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
 
     vault = args.vault.expanduser().resolve()
     dir_ = args.dir.expanduser().resolve()

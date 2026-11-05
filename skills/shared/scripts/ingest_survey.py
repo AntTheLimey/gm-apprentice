@@ -609,7 +609,7 @@ def run_archive(vault: Path, files: list[str], write: bool) -> int:
     return 1 if errors else 0
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("dir", type=Path, help="DIR to survey, or VAULT with --archive")
@@ -620,7 +620,13 @@ def main() -> int:
     ap.add_argument("--write", action="store_true",
                     help="apply the archive move (default: dry-run plan). "
                          "Only meaningful with --archive.")
-    args = ap.parse_args()
+    ap.epilog = 'Example: gma ingest-survey "<source dir>"'
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
     if args.write and not args.archive:
         ap.error("--write only applies to --archive")
 

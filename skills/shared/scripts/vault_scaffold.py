@@ -464,9 +464,9 @@ def _refuse_unusable_version(vault: Path, plugin: str) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
-        prog="vault_scaffold.py", description=__doc__,
+        description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("vault", type=Path)
+    ap.add_argument("vault", type=Path, help="the vault folder")
     which = ap.add_mutually_exclusive_group()
     which.add_argument("--system", metavar="ID",
                        help=f"one of {', '.join(SYSTEMS)}, or an alias")
@@ -479,6 +479,7 @@ def build_parser() -> argparse.ArgumentParser:
                     help="also create _inbox/ for vault-ingest")
     ap.add_argument("--write", action="store_true",
                     help="create it (default: print the plan)")
+    ap.epilog = 'Example: gma vault-scaffold "<vault>" --system <id> --name "<campaign name>"'
     return ap
 
 

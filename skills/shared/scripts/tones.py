@@ -83,6 +83,7 @@ from schema_rules import (
     tone_key,
     tone_proposal,
 )
+from vaultlib import cli_name  # noqa: E402
 from vaultlib import (UNCHECKED_DIRS, PublishToolUnavailable,
                       SettingsUnavailable,
                       run_relationships, settings)
@@ -448,24 +449,30 @@ def rows(p: Plan, done: bool = False) -> list[str]:
                   + (f", {len(p.kept)} left as written" if p.kept else "")]
 
 
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        description="List a vault's stray tone words, and tidy them.")
+    ap.add_argument("vault", type=Path, help="the vault folder")
+    ap.add_argument("command", nargs="?", choices=["fix", "uses", "shown"], help="what to do (default: report only)")
+    ap.add_argument("words", nargs="*", metavar="WORD", help="uses: the stray words to list; shown --accept: the NOTE:LINE places")
+    ap.add_argument("--near", action="store_true", help="fix: change every NEAR word to its listed word")
+    ap.add_argument("--except", dest="excepts", action="append",
+                    metavar="WORD", help="fix --near: leave this word alone")
+    ap.add_argument("--set", dest="sets", action="append", metavar="OLD=NEW", help="fix: change OLD to NEW")
+    ap.add_argument("--accept", action="store_true", help="shown: record ties as accepted")
+    ap.add_argument("--write", action="store_true", help="make the change (default: preview)")
+    ap.epilog = 'Example: gma tones "<vault>"'
+    return ap
+
+
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8")
-    ap = argparse.ArgumentParser(
-        description="List a vault's stray tone words, and tidy them.")
-    ap.add_argument("vault", type=Path)
-    ap.add_argument("command", nargs="?", choices=["fix", "uses", "shown"])
-    ap.add_argument("words", nargs="*", metavar="WORD")
-    ap.add_argument("--near", action="store_true")
-    ap.add_argument("--except", dest="excepts", action="append",
-                    metavar="WORD")
-    ap.add_argument("--set", dest="sets", action="append", metavar="OLD=NEW")
-    ap.add_argument("--accept", action="store_true")
-    ap.add_argument("--write", action="store_true")
+    ap = build_parser()
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
-        print(f"tones.py: not a directory: {args.vault.as_posix()}",
+        print(f"{cli_name()}: not a directory: {args.vault.as_posix()}",
               file=sys.stderr)
         return 2
     usage = None
@@ -492,7 +499,7 @@ def main(argv: list[str] | None = None) -> int:
             usage = "--set takes OLD=NEW"
         sets.append((old, new))
     if usage:
-        print(f"tones.py: {usage}", file=sys.stderr)
+        print(f"{cli_name()}: {usage}", file=sys.stderr)
         return 2
     try:
         if args.command is None:
@@ -507,7 +514,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "shown":
             published = published_notes(args.vault)
             if published is None:
-                print("tones.py: the site's publish tool could not be asked "
+                print(f"{cli_name()}: the site's publish tool could not be asked "
                       "which notes publish", file=sys.stderr)
                 return 1
             if args.accept:
@@ -521,11 +528,11 @@ def main(argv: list[str] | None = None) -> int:
             apply(p)
         print("\n".join(rows(p, done=args.write)))
     except (TonesError, SettingsUnavailable) as e:
-        print(f"tones.py: {e}", file=sys.stderr)
+        print(f"{cli_name()}: {e}", file=sys.stderr)
         return 1
     except KeyboardInterrupt as e:
-        print(f"tones.py: interrupted; {e}" if str(e)
-              else "tones.py: interrupted", file=sys.stderr)
+        print(f"{cli_name()}: interrupted; {e}" if str(e)
+              else f"{cli_name()}: interrupted", file=sys.stderr)
         return 130
     return 0
 

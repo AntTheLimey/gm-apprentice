@@ -145,18 +145,24 @@ def emit(rows, label=None):
         print(r)
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("vault", type=Path)
+    ap.add_argument("vault", type=Path, help="the vault folder")
     ap.add_argument("command",
                     choices=["orphans", "unresolved", "deadends",
-                             "backlinks", "ambiguous", "all"])
+                             "backlinks", "ambiguous", "all"], help="the query to run")
     ap.add_argument("name", nargs="?",
                     help="target note name (backlinks only)")
-    ap.add_argument("--folder", help="restrict results to this subfolder")
+    ap.add_argument("--folder", help="restrict orphans and deadends to this subfolder (the other lookups ignore it)")
     ap.add_argument("--exclude", action="append", default=[],
                     help="glob of relpaths or top-level dirs to skip")
-    args = ap.parse_args()
+    ap.epilog = 'Example: gma graph-check "<vault>" orphans --folder Characters'
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
 
     if not args.vault.is_dir():
         print(f"error: not a directory: {args.vault}", file=sys.stderr)

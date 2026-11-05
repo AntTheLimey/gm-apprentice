@@ -567,7 +567,7 @@ def render(mode: str, records: list[Record], *, total: int = 0,
     return "\n".join(out)
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Look up one rules record in the systems corpus.")
     parser.add_argument("system",
@@ -575,12 +575,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("term", help="name to look up")
     parser.add_argument("--kind", help="restrict to one record kind")
     parser.add_argument("--variant", help="include this variant's records")
-    parser.add_argument("--limit", type=int, default=10)
+    parser.add_argument("--limit", type=int, default=10, help="the most records to print")
     parser.add_argument("--json", action="store_true",
                         help="emit the records as JSON instead of rows")
     parser.add_argument("--personal", action="store_true",
                         help="also read the gitignored personal/ files")
-    parser.add_argument("--systems-dir", type=Path, default=SYSTEMS_DIR)
+    parser.add_argument("--systems-dir", type=Path, default=SYSTEMS_DIR, help="the systems folder to read")
+    parser.epilog = 'Example: gma rules-lookup gurps-4e "Broadsword" --kind skill'
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     if not args.systems_dir.is_dir():

@@ -51,6 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gurps_calc as gc  # noqa: E402
 import gurps_check as gk  # noqa: E402
 import rules_lookup  # noqa: E402
+from vaultlib import cli_name  # noqa: E402
 from migrate_core import StepFailed, write_text_atomic  # noqa: E402
 
 ATTRS = ("st", "dx", "iq", "ht", "will", "per")
@@ -405,31 +406,37 @@ def unarmed(attack: str, skill: str, attrs: dict, bought: dict
             f"the Skill cell as \"{name} {level}\"; nothing is added", None)
 
 
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        description="Add a GURPS skill to a sheet at its default, 0 points.")
+    ap.add_argument("sheet", type=Path, help="the PC sheet's path")
+    ap.add_argument("skill", help="the skill's name")
+    ap.add_argument("--difficulty", metavar="DX/A", help="the skill's difficulty, e.g. DX/A, for a skill the tables lack")
+    ap.add_argument("--default", dest="defaults", metavar="DEFAULTS", help="the skill's defaults, for a skill the tables lack")
+    ap.add_argument("--for", dest="attack", metavar="ATTACK", help="the attack row the skill is for")
+    ap.add_argument("--write", action="store_true", help="write the skill to the sheet (default: preview)")
+    ap.epilog = 'Example: gma gurps-skill-default "<PC note>" "<skill>" --write'
+    return ap
+
+
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(encoding="utf-8")
-    ap = argparse.ArgumentParser(
-        description="Add a GURPS skill to a sheet at its default, 0 points.")
-    ap.add_argument("sheet", type=Path)
-    ap.add_argument("skill")
-    ap.add_argument("--difficulty", metavar="DX/A")
-    ap.add_argument("--default", dest="defaults", metavar="DEFAULTS")
-    ap.add_argument("--for", dest="attack", metavar="ATTACK")
-    ap.add_argument("--write", action="store_true")
+    ap = build_parser()
     args = ap.parse_args(argv)
     if (args.difficulty is None) != (args.defaults is None):
-        print("gurps_skill_default.py: --difficulty and --default go "
+        print(f"{cli_name()}: --difficulty and --default go "
               "together", file=sys.stderr)
         return 2
     if not args.skill.strip():
-        print("gurps_skill_default.py: give the skill's name",
+        print(f"{cli_name()}: give the skill's name",
               file=sys.stderr)
         return 2
     try:
         text = args.sheet.read_bytes().decode("utf-8")
     except (OSError, UnicodeError) as e:
-        print(f"gurps_skill_default.py: cannot read {args.sheet}: {e}",
+        print(f"{cli_name()}: cannot read {args.sheet}: {e}",
               file=sys.stderr)
         return 2
     where = args.sheet.as_posix()

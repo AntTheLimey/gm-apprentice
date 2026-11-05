@@ -84,7 +84,7 @@ from dnd_note import (BARE, HALF, HEADING, PLACEHOLDER, REASONED, SEPARATOR, YES
 from dnd_sheet import to_weight  # noqa: E402
 from dnd_background import MEMORY, clean_text, memory_entries, memory_from, plan_background  # noqa: E402
 from migrate_core import StepFailed, write_text_atomic  # noqa: E402
-from vaultlib import (SettingsUnavailable, find_vault, entity_type, extract_frontmatter, fence_step,  # noqa: E402
+from vaultlib import (SettingsUnavailable, cli_name, find_vault, entity_type, extract_frontmatter, fence_step,  # noqa: E402
                       frontmatter_span, is_unchecked_source, set_key, settings, settings_file,
                       vault_files, yaml_scalar)
 
@@ -1577,7 +1577,7 @@ def sync_parts(text: str, data: object, seen: Seen | None) -> Report:
 
 STATE_VERSION = 1
 STATE_MAX = 1024 * 1024
-NOT_IN_A_VAULT = "dnd_ddb: this note is not inside a vault, so nothing is remembered and no row is ever removed"
+NOT_IN_A_VAULT = "this note is not inside a vault, so nothing is remembered and no row is ever removed"
 
 
 def state_path(vault: Path, char_id: str) -> Path:
@@ -1623,7 +1623,7 @@ def remember(vault: Path | None, stem: str, text: str, report: Report) -> None:
         save_seen(state_path(vault, char_id), char_id, report.seen)
     except Exception as e:     # the note is already written; the memory is a convenience
         reason = (e.strerror if isinstance(e, OSError) and e.strerror else None) or str(e) or e.__class__.__name__
-        print(f"dnd_ddb: could not save what was synced for {PLAIN.sub(' ', stem)}: {PLAIN.sub(' ', reason)}",
+        print(f"{cli_name()}: could not save what was synced for {PLAIN.sub(' ', stem)}: {PLAIN.sub(' ', reason)}",
               file=sys.stderr)
 
 
@@ -1656,7 +1656,7 @@ def sync_note(text: str, vault: Path | None = None) -> Report:
         return Report([("ERROR", "dndbeyond", "this is not a D&D Beyond character link")], text)
     seen = load_seen(state_path(vault, char_id)) if vault is not None else None
     if vault is not None and seen is None and has_list_rows(text):
-        print("dnd_ddb: nothing is remembered of an earlier sync of this note, so no row is removed this time",
+        print(f"{cli_name()}: nothing is remembered of an earlier sync of this note, so no row is removed this time",
               file=sys.stderr)
     try:
         data = FETCH(char_id)
@@ -1702,11 +1702,11 @@ def one_sheet(path: Path, write_it: bool, player_text: bool = False) -> int:
         with path.open("r", encoding="utf-8", newline="") as f:
             text = f.read()
     except (OSError, UnicodeDecodeError) as e:
-        print(f"dnd_ddb: cannot read {path.as_posix()}: {e}", file=sys.stderr)
+        print(f"{cli_name()}: cannot read {path.as_posix()}: {e}", file=sys.stderr)
         return 2
     vault = find_vault(path)
     if vault is None:
-        print(NOT_IN_A_VAULT, file=sys.stderr)
+        print(f"{cli_name()}: {NOT_IN_A_VAULT}", file=sys.stderr)
     report = with_portrait(guarded_sync(text, vault), path.stem, vault, write_it)
     for row in report.rows:
         emit(*row)
@@ -1720,7 +1720,7 @@ def one_sheet(path: Path, write_it: bool, player_text: bool = False) -> int:
             write_text_atomic(path, report.text)
         except StepFailed as e:
             unplace([report.placed] if report.placed else [])
-            print(f"dnd_ddb: {e}", file=sys.stderr)
+            print(f"{cli_name()}: {e}", file=sys.stderr)
             return 2
     if write_it:
         remember(vault, path.stem, text, report)
@@ -1731,7 +1731,7 @@ def party(vault: Path, write_it: bool, on_build: bool, player_text: bool = False
     from migrate_vault import vault_system
 
     if not vault.is_dir():
-        print(f"dnd_ddb: {vault.as_posix()} is not a folder", file=sys.stderr)
+        print(f"{cli_name()}: {vault.as_posix()} is not a folder", file=sys.stderr)
         return 2
     if on_build:
         config = vault / settings_file(vault)
@@ -1739,13 +1739,13 @@ def party(vault: Path, write_it: bool, on_build: bool, player_text: bool = False
             try:
                 config.read_text(encoding="utf-8-sig")
             except (OSError, UnicodeDecodeError):
-                print(f"dnd_ddb: {settings_file(vault)} could not be read; nothing was synced")
+                print(f"{cli_name()}: {settings_file(vault)} could not be read; nothing was synced")
                 return 0
         now = settings(vault)
         if now.origins["vault.dndbeyond_sync"] == "fault":
             said = next((f["message"] for f in now.faults
                          if f.get("setting") == "vault.dndbeyond_sync"), "")
-            print(PLAIN.sub(" ", f"dnd_ddb: {said.rstrip('.')}; nothing was synced"))
+            print(PLAIN.sub(" ", f"{cli_name()}: {said.rstrip('.')}; nothing was synced"))
             return 0
         if now.get("vault.dndbeyond_sync") != "build":
             return 0
@@ -1754,7 +1754,7 @@ def party(vault: Path, write_it: bool, on_build: bool, player_text: bool = False
         return 0                      # a site build in another system has nothing to say about this
     if system != SYSTEM:
         said = f"is {system}, not {SYSTEM}" if system else f"is not recorded, not {SYSTEM}"
-        print(PLAIN.sub(" ", f"dnd_ddb: this vault's system {said}; nothing was read"))
+        print(PLAIN.sub(" ", f"{cli_name()}: this vault's system {said}; nothing was read"))
         return 0
     rows: list[tuple[str, str, str]] = []
     sheets, failed = 0, False
@@ -1798,15 +1798,21 @@ def failed_here(rows: list[tuple[str, str, str]]) -> bool:
     return any(r[0] == "ERROR" for r in rows)
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0] if __doc__ else None)
-    ap.add_argument("sheet", nargs="?")
-    ap.add_argument("--write", action="store_true")
+    ap.add_argument("sheet", nargs="?", help="the PC note's path")
+    ap.add_argument("--write", action="store_true", help="write the changes (default: preview)")
     ap.add_argument("--party", metavar="VAULT", help="every PC note in a vault that has a D&D Beyond link")
     ap.add_argument("--on-build", action="store_true",
                     help="with --party: run only when vault.dndbeyond_sync is build")
     ap.add_argument("--player-text", action="store_true",
                     help="the player's D&D Beyond text for each background part the note does not match (not report rows)")
+    ap.epilog = 'Example: gma dnd-ddb "<PC note>" --write'
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
     args = ap.parse_args(argv)
     if bool(args.sheet) == bool(args.party):
         ap.error("give one sheet, or --party VAULT")
@@ -1816,7 +1822,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             return party(Path(args.party), args.write, args.on_build, args.player_text)
         except SettingsUnavailable as e:
-            print(f"dnd_ddb: {e}", file=sys.stderr)
+            print(f"{cli_name()}: {e}", file=sys.stderr)
             return 2
     return one_sheet(Path(args.sheet), args.write, args.player_text)
 

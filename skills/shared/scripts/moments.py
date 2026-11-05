@@ -45,6 +45,7 @@ from pathlib import Path
 from typing import Any
 
 import vault_check as vc
+from vaultlib import cli_name  # noqa: E402
 import vaultlib as vl
 import vault_write as vw
 
@@ -387,24 +388,25 @@ def cmd_offered(vault: Path) -> list[str]:
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
-        prog="moments.py", description=__doc__,
+        description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("vault", type=Path)
+    ap.add_argument("vault", type=Path, help="the vault folder")
     sub = ap.add_subparsers(dest="command", required=True)
     sub.add_parser("status", help="on or off, the kinds, the back-fill offer")
     lst = sub.add_parser("list", help="wrap-ups with no moments or untagged ones")
     lst.add_argument("--except", dest="skip", metavar="WRAPUP",
                      help="leave this wrap-up out (this session's)")
     show = sub.add_parser("show", help="one wrap-up's moments, numbered")
-    show.add_argument("wrapup")
+    show.add_argument("wrapup", help="the wrap-up")
     check = sub.add_parser(
         "check", help="name untagged moments and tags that are no kind "
         "(exit 1 on the latter)")
-    check.add_argument("wrapup")
+    check.add_argument("wrapup", help="the wrap-up")
     tag = sub.add_parser("tag", help="tag moments (stdin: N<TAB>kind rows)")
-    tag.add_argument("wrapup")
-    tag.add_argument("--write", action="store_true")
+    tag.add_argument("wrapup", help="the wrap-up")
+    tag.add_argument("--write", action="store_true", help="write the tags (default: preview)")
     sub.add_parser("offered", help="record that the back-fill was offered")
+    ap.epilog = 'Example: gma moments "<vault>" status'
     return ap
 
 
@@ -413,7 +415,7 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
     args = build_parser().parse_args(argv)
     vault: Path = args.vault
     if not vault.is_dir():
-        print(f"moments.py: {vault} is not a folder", file=sys.stderr)
+        print(f"{cli_name()}: {vault} is not a folder", file=sys.stderr)
         return 2
     try:
         if args.command != "offered":

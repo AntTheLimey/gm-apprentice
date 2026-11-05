@@ -6045,9 +6045,9 @@ def _kept_by_player_row(name: str) -> list[str]:
             f"notes and was skipped"]
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("vault", type=Path)
+    ap.add_argument("vault", type=Path, help="the vault folder")
     ap.add_argument("command", choices=["frontmatter", "names", "index",
                                         "stale-drafts", "changed", "tables",
                                         "timeline", "read-aloud",
@@ -6055,7 +6055,7 @@ def main() -> int:
                                         "gm-leak", "pc-body", "wrapup",
                                         "site-faults", "settings",
                                         "version", "active-pcs", "stories",
-                                        "report-new", "report-stats", "all"])
+                                        "report-new", "report-stats", "all"], help="the check to run")
     ap.add_argument("--order", action="store_true",
                     help="timeline only: check the sessions' in_game_date "
                          "never goes backwards (qa_checks.py)")
@@ -6114,7 +6114,26 @@ def main() -> int:
                          "vault.name_match setting)")
     ap.add_argument("--since", type=int,
                     help="session number for the changed command")
-    args = ap.parse_args()
+    ap.epilog = 'Example: gma vault-check "<vault>" version'
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    """`_main`, with the failures no check can answer for itself: the
+    publish tool going away after a check began asking it, and settings the
+    tool cannot read. Direct runs and `gma vault-check` take this one path."""
+    try:
+        return report_unreadable_settings(lambda: _main(argv))
+    except PublishToolUnavailable as e:
+        print(f"error: the publish tool stopped answering part-way ({e}) — "
+              f"the rows above are incomplete and nothing further was "
+              f"written; run it again", file=sys.stderr)
+        return 2
+
+
+def _main(argv: list[str] | None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
 
     if not args.vault.is_dir():
         print(f"error: not a directory: {args.vault}", file=sys.stderr)
@@ -6273,18 +6292,5 @@ def main() -> int:
     return 0
 
 
-def run() -> int:
-    """`main`, with the failures no check can answer for itself: the
-    publish tool going away after a check began asking it, and settings the
-    tool cannot read."""
-    try:
-        return report_unreadable_settings(main)
-    except PublishToolUnavailable as e:
-        print(f"error: the publish tool stopped answering part-way ({e}) — "
-              f"the rows above are incomplete and nothing further was "
-              f"written; run it again", file=sys.stderr)
-        return 2
-
-
 if __name__ == "__main__":
-    sys.exit(run())
+    sys.exit(main())

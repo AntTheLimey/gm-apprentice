@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.135] — 2026-11-05
+
+No vault or site change.
+
+### Added
+
+- **`gma`, one entry point over the plugin's scripts.** `gma <command>` runs any of them, and `gma llms <command>` prints a reference page for it, generated from the commands themselves. Checks now fail when skill text names a command or flag that does not exist, or when a page drifts from its command. Every script argument has help.
+
+### Changed
+
+- **Script errors and usage name `gma <command>` when run through gma**, and keep the script's own name when run directly.
+
+---
+
 ## [1.10.134] — 2026-11-05
 
 No vault change; a vault whose settings or publish list could not move now stays at its old version until the move is done.

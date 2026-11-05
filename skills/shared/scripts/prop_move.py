@@ -70,6 +70,7 @@ from reveal import LOG, _load_log, _write_log, apply_publish, prop_paths, publis
 from reveal_scan import NEVER_CANDIDATES  # noqa: E402
 from vault_check import configured_site  # noqa: E402
 from vault_write import BAD_NAME_RE, HAND_ID_RE, HANDS_REL, Batch, WriteError, use_hand  # noqa: E402
+from vaultlib import cli_name  # noqa: E402
 from vaultlib import (PUBLISH_TOOL, PublishToolUnavailable, SettingsUnavailable, entity_type,  # noqa: E402
                       extract_frontmatter, forget_settings, frontmatter_span, is_skipped_path,
                       scalar_value, settings, settings_remove, yaml_scalar, yaml_value_for_cli)
@@ -2017,28 +2018,34 @@ def _write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="prop_move.py", description=__doc__.split("\n\n")[0],
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("vault", type=Path)
-    ap.add_argument("mode", choices=("plan", "apply"))
-    ap.add_argument("--decisions", type=Path, metavar="FILE")
-    ap.add_argument("--draft", type=Path, metavar="OUT")
-    ap.add_argument("--json", type=Path, metavar="OUT", dest="json_out")
+    ap.add_argument("vault", type=Path, help="the vault folder")
+    ap.add_argument("mode", choices=("plan", "apply"), help="plan (writes nothing) or apply")
+    ap.add_argument("--decisions", type=Path, metavar="FILE", help="a JSON file of decisions that override what is inferred")
+    ap.add_argument("--draft", type=Path, metavar="OUT", help="plan: write the decisions used to this file")
+    ap.add_argument("--json", type=Path, metavar="OUT", dest="json_out", help="plan: write the rows and counts as JSON to this file")
+    ap.epilog = 'Example: gma prop-move "<vault>" plan'
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
     try:
         args = ap.parse_args(argv)
     except SystemExit as e:
         return int(e.code) if isinstance(e.code, int) else 2
     if not args.vault.is_dir():
-        print(f"prop_move.py: error: {args.vault} is not a folder", file=sys.stderr)
+        print(f"{cli_name()}: error: {args.vault} is not a folder", file=sys.stderr)
         return 2
     if args.mode == "apply" and (args.draft or args.json_out):
-        print("prop_move.py: error: --draft and --json are for plan", file=sys.stderr)
+        print(f"{cli_name()}: error: --draft and --json are for plan", file=sys.stderr)
         return 2
     try:
         given = _load_decisions(args.decisions) if args.decisions else None
     except ValueError as e:
-        print(f"prop_move.py: error: {e}", file=sys.stderr)
+        print(f"{cli_name()}: error: {e}", file=sys.stderr)
         return 2
     vault = args.vault.resolve()
     try:

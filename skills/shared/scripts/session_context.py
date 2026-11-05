@@ -1309,9 +1309,9 @@ def print_prep_rest(vault: Path, files, chosen, wrap, current: int,
                      title="Narrative Plans"))
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("vault", type=Path)
+    ap.add_argument("vault", type=Path, help="the vault folder")
     ap.add_argument("--session", type=int,
                     help="just-played session number (default: highest); "
                          "with --play, the session whose Plan to print")
@@ -1374,7 +1374,19 @@ def main() -> int:
              "unchanged. Drill into a file only where a stub or outline "
              "shows the need — for the Plan that means "
              "`plan_check.py --inventory/--state`, not a full read.")
-    args = ap.parse_args()
+    ap.epilog = 'Example: gma session-context "<vault>" --prep'
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    # Settings that cannot be read end in one `error:` line and exit 2,
+    # the same whether run directly or through `gma`.
+    return report_unreadable_settings(lambda: _main(argv))
+
+
+def _main(argv: list[str] | None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
     if args.brief and (args.play or args.threads or args.arcs
                        or args.prep):
         print("error: --brief applies to the default bundle only",
@@ -1573,4 +1585,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(report_unreadable_settings(main))
+    sys.exit(main())

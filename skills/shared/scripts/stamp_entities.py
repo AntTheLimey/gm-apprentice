@@ -402,11 +402,11 @@ def plan_file(rel: str, lines: list[str],
     return actions, None, False
 
 
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("vault", type=Path)
+    ap.add_argument("vault", type=Path, help="the vault folder")
     ap.add_argument("files", nargs="*", help="vault-relative paths")
     ap.add_argument("--session",
                     help="asOfSession value, written verbatim: a bare "
@@ -435,6 +435,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                          "bare number) in files that already use one")
     ap.add_argument("--write", action="store_true",
                     help="apply changes (default: dry run)")
+    ap.epilog = 'Example: gma stamp-entities "<vault>" "<note>" --set status=active --write'
+    return ap
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    ap = build_parser()
     args = ap.parse_args(argv)
 
     stamping = bool(args.session or args.date or args.retag or args.sets
@@ -538,8 +544,8 @@ def targets(args: argparse.Namespace) -> list[str]:
             if legacy.search(_legacy_scan_region(text))]
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
     repairing = args.repair_canon
     sweeping = repairing and not args.files
 

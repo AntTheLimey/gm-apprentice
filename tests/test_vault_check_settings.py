@@ -48,7 +48,7 @@ def make_vault(tmp_path: Path, publish: str | None, name: str = "vault",
 def run(monkeypatch, capsys, vault: Path, *args: str):
     monkeypatch.setattr(sys, "argv", ["vault_check.py", str(vault), *args])
     vaultlib.forget_settings(None)
-    code = vc.run()
+    code = vc.main()
     out = capsys.readouterr()
     return code, out.out, out.err
 
@@ -308,7 +308,7 @@ def test_a_removal_that_fails_after_the_write_says_so_and_stops(
     monkeypatch.setattr(vc, "settings_unset", refuse)
     monkeypatch.setattr(sys, "argv",
                         ["vault_check.py", str(vault), "settings", "--fix"])
-    code = vc.run()
+    code = vc.main()
     err = capsys.readouterr().err
     assert code == 2
     assert "the new value was written but the old key could not be removed" in err

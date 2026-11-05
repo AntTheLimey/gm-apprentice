@@ -631,14 +631,26 @@ def _is_generated(text: str) -> bool:
     return False
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("vault", type=Path)
+    parser.add_argument("vault", type=Path, help="the vault folder")
     parser.add_argument("--write", action="store_true",
                         help="apply the rendered index (default: dry run)")
     parser.add_argument("--force", action="store_true",
                         help="replace an _meta/index.md this tool did not make")
     parser.add_argument("--date", help="override today's date (YYYY-MM-DD)")
+    parser.epilog = 'Example: gma index-build "<vault>" --write'
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    # Settings that cannot be read end in one `error:` line and exit 2,
+    # the same whether run directly or through `gma`.
+    return report_unreadable_settings(lambda: _main(argv))
+
+
+def _main(argv: list[str] | None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     vault: Path = args.vault
@@ -682,4 +694,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(report_unreadable_settings(main))
+    sys.exit(main())

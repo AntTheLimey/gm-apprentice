@@ -16,6 +16,12 @@ sys.path.insert(0, str(ROOT / "tests"))
 from dnd_builder import sheet  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def invoked_as_the_script(monkeypatch):
+    """Error lines name the invoked command; these tests run it directly."""
+    monkeypatch.setattr(sys, "argv", ["dnd_sheet.py"])
+
+
 def summary(out, prefix="# same:"):
     return next(ln for ln in out.splitlines() if ln.startswith(prefix))
 
@@ -610,7 +616,7 @@ def test_party_on_another_system_says_so(tmp_path):
     (vault / "Characters" / "PCs" / "Ada.md").write_text(sheet(), encoding="utf-8")
     code, out, _ = party("--party", str(vault))
     assert code == 0
-    assert out.strip() == ("dnd_sheet: this vault's system is gurps-4e, not dnd-5e-2024; "
+    assert out.strip() == ("dnd_sheet.py: this vault's system is gurps-4e, not dnd-5e-2024; "
                            "nothing was checked")
 
 
@@ -632,4 +638,4 @@ def test_party_on_a_vault_with_no_recorded_system_says_so(tmp_path):
     (vault / "Characters" / "PCs" / "Ada.md").write_text(sheet(), encoding="utf-8")
     code, out, _ = party("--party", str(vault))
     assert code == 0
-    assert out.strip() == "dnd_sheet: this vault's system is not recorded; nothing was checked"
+    assert out.strip() == "dnd_sheet.py: this vault's system is not recorded; nothing was checked"

@@ -424,16 +424,21 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
     return rows, (1 if counts["errors"] else 0)
 
 
-def _parse(argv: list[str] | None) -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
-        prog="reveal.py",
         description="Publish what a session let the players learn, lift "
                     "withheld, and log it. Dry run unless --write.")
-    ap.add_argument("vault", type=Path)
+    ap.add_argument("vault", type=Path, help="the vault folder")
     ap.add_argument("--session", required=True, help="the session's name, e.g. 'Session 12'")
-    ap.add_argument("--publish", action="append", default=[], metavar="PATH")
-    ap.add_argument("--released", action="append", default=[], metavar="PATH=WHAT")
-    ap.add_argument("--write", action="store_true")
+    ap.add_argument("--publish", action="append", default=[], metavar="PATH", help="a note to publish")
+    ap.add_argument("--released", action="append", default=[], metavar="PATH=WHAT", help="a note and what came out of it, to log")
+    ap.add_argument("--write", action="store_true", help="make the changes (default: preview)")
+    ap.epilog = 'Example: gma reveal "<vault>" --session "<title>" --publish "<path>" --write'
+    return ap
+
+
+def _parse(argv: list[str] | None) -> argparse.Namespace:
+    ap = build_parser()
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
         ap.error(f"{args.vault} is not a folder")

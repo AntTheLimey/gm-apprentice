@@ -52,6 +52,9 @@ def test_no_script_reads_the_publish_list_file():
 
 # The generated parts of a page sit between these markers; the rest is hand-written.
 GENERATED = re.compile(r"<!-- settings:(\S+) -->.*?<!-- /settings:\1 -->", re.S)
+# The gma llms pages copy each command's own help (gma_docs.py); the scripts
+# are not pages, so their copies are not held to the page rules either.
+GMA_GENERATED = re.compile(r"<!-- BEGIN GENERATED: gma[^>]*-->.*?<!-- END GENERATED -->", re.S)
 ROOT = Path(__file__).resolve().parents[1]
 HIDING_LISTS = ("player_site.hide.folders", "player_site.hide.sections", "player_site.hide.fields")
 
@@ -141,7 +144,7 @@ def _bare_old_keys():
 
 
 def _bare_old_key_mentions(name, text, keys):
-    text = GENERATED.sub("", text.replace("\r\n", "\n"))
+    text = GMA_GENERATED.sub("", GENERATED.sub("", text.replace("\r\n", "\n")))
     if name == OLD_LAYOUT_SECTION[0]:
         text = OLD_LAYOUT_SECTION[1].sub("", text)
     allowed = SETUP_NOTE_KEYS.get(name, set())

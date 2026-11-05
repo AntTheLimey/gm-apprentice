@@ -50,6 +50,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote, unquote
 
+from vaultlib import cli_name  # noqa: E402
 import vaultlib
 from migrate_core import StepFailed, write_text_atomic
 from vaultlib import (
@@ -1027,30 +1028,36 @@ def apply(p: Plan) -> list[str]:
     return rows(p, done=True)
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description="Rename or move a note and rewrite every link to it.")
-    ap.add_argument("vault", type=Path)
-    ap.add_argument("old")
-    ap.add_argument("new")
-    ap.add_argument("--apply", action="store_true")
+    ap.add_argument("vault", type=Path, help="the vault folder")
+    ap.add_argument("old", help="the note's path, or its filename when only one note has it")
+    ap.add_argument("new", help="the new path, or a bare filename for a rename in place")
+    ap.add_argument("--apply", action="store_true", help="make the change (default: preview)")
+    ap.epilog = 'Example: gma relink "<vault>" "<old path>" "<new name>" --apply'
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
-        print(f"relink.py: not a directory: {args.vault}", file=sys.stderr)
+        print(f"{cli_name()}: not a directory: {args.vault}", file=sys.stderr)
         return 2
     try:
         old = resolve_old(args.vault, args.old)
         p = plan(args.vault, old, args.new)
         out = apply(p) if args.apply else rows(p)
     except RelinkError as e:
-        print(f"relink.py: {e}", file=sys.stderr)
+        print(f"{cli_name()}: {e}", file=sys.stderr)
         return 2 if e.usage else 1
     except SettingsUnavailable as e:
-        print(f"relink.py: {e}", file=sys.stderr)
+        print(f"{cli_name()}: {e}", file=sys.stderr)
         return 1
     except KeyboardInterrupt as e:
-        print(f"relink.py: interrupted; {e}" if str(e)
-              else "relink.py: interrupted", file=sys.stderr)
+        print(f"{cli_name()}: interrupted; {e}" if str(e)
+              else f"{cli_name()}: interrupted", file=sys.stderr)
         return 130
     print("\n".join(out))
     return 0
