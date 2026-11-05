@@ -18,6 +18,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault> ver
   then resume your task.
 - `AHEAD` → announce the row and tell the GM to update the plugin. Stop.
 - `ERROR` → report the row: the plugin install is broken. Stop.
+- `REFUSED` → tell the GM in plain words what the row says is left and how to fix it (most need the update from a 1.10 release, 1.10.134 or later, first). Stop.
 - No verdict row and `not a directory` on stderr → the vault path is
   wrong; ask the GM for it.
 - `warning: unusable …plugin.json` on stderr → broken install even

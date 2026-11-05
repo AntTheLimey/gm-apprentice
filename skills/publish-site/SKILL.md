@@ -22,7 +22,7 @@ version`. `OK`/`SETUP` → proceed. `MISMATCH` → announce the row,
 run the update by campaign-organizer's
 `references/migration-procedure.md`, then resume. `AHEAD` →
 announce the row, tell the GM to update the plugin, stop. `ERROR` → report the row (broken plugin install),
-stop. No verdict row plus a `not a directory` error → ask the GM
+stop. `REFUSED` → tell the GM in plain words what the row says is left and how to fix it (most need the update from a 1.10 release, 1.10.134 or later, first), stop. No verdict row plus a `not a directory` error → ask the GM
 for the correct vault path.
 
 ## The build tool
