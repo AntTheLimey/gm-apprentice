@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.134] — 2026-11-05
+
+No vault change; a vault whose settings or publish list could not move now stays at its old version until the move is done.
+
+### Changed
+
+- **A held settings move or publish-list move now holds the update's stamp.** Before, a vault whose site's publish tool was too old (or whose build step still read the old publish list) was stamped as up to date while its settings or list stayed behind. The update now prints `not stamped` and tells you again on the next pass, until the site's tool is updated or the step is changed. Each row ends: "The update cannot finish until this is done."
+
+---
+
 ## [1.10.133] — 2026-11-04
 
 New chapter notes have a place for the Teaser, and the Story's chapter bookkeeping joins campaign-qa's Site Faults check. Publish tool 1.67.0. No vault change is needed: no existing chapter note is given a Teaser; that is yours to write.

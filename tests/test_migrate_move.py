@@ -146,7 +146,7 @@ class MoveEndToEndTests(unittest.TestCase):
         self.assertNotIn("excludeSections", left)
         self.assertEqual(update(vault, "plan")[1].splitlines()[1], "up to date")
 
-    def test_a_site_pinned_by_something_else_stays_behind_and_the_stamp_advances(self):
+    def test_a_site_pinned_by_something_else_stays_behind_and_the_stamp_holds(self):
         vault = make_vault(self)
         site = with_site(self, vault, spec="^1.20.0", siteTitle="Theirs")
         code, plan, err = update(vault, "plan")
@@ -154,10 +154,17 @@ class MoveEndToEndTests(unittest.TestCase):
                       "tool (1.20.0) cannot read the new one", plan)
         self.assertIn("When that tool is 1.23.0 or later, run the update "
                       "again.", plan)
+        self.assertIn("To clear it: update that site's publish tool to 1.23.0 "
+                      "or later (the update repins it only when the plugin "
+                      "pinned it), or, if the site is no longer published, "
+                      "set publish.site to false and clear "
+                      "publish.site_dir.", plan)   # the old file's names
+        self.assertNotIn("player_site.folder", plan)
+        stamp = read_stamp(vault)
         code, did, err = update(vault, "apply", "--choose", "default-mode=leave")
         self.assertEqual(code, 0, err + did)
         self.assertEqual(vault_layout(vault), "legacy")
-        self.assertEqual(read_stamp(vault), PLUGIN)   # not held
+        self.assertEqual(read_stamp(vault), stamp)   # held
         self.assertEqual(json.loads((site / "vault.config.json").read_text())
                          ["siteTitle"], "Theirs")
         # The second pass says the same, and changes nothing.
@@ -166,7 +173,8 @@ class MoveEndToEndTests(unittest.TestCase):
         self.assertIn("its site's tool (1.20.0) cannot read the new one", plan)
         code, again, _ = update(vault, "apply")
         self.assertIn("# 1 row already shown in the plan", again)
-        self.assertIn(f"already at {PLUGIN}", again)
+        self.assertIn("not stamped", again)
+        self.assertEqual(read_stamp(vault), stamp)
         self.assertEqual(hashes(vault.parent), before)
 
     def test_a_foreign_tool_that_can_read_the_new_file_moves_like_any_other(self):
@@ -189,9 +197,10 @@ class MoveEndToEndTests(unittest.TestCase):
         before = hashes(vault.parent)
         code, plan, err = update(vault, "plan")
         self.assertIn("cannot read the new one", plan)
+        stamp = read_stamp(vault)
         code, did, err = update(vault, "apply", "--choose", "default-mode=leave")
         self.assertEqual(vault_layout(vault), "legacy")
-        self.assertEqual(read_stamp(vault), PLUGIN)       # a notice, not a hold
+        self.assertEqual(read_stamp(vault), stamp)   # held
         self.assertTrue(site.is_dir())
         self.assertNotIn("Wrote _meta/vault-config.yaml", did)
 
@@ -207,10 +216,11 @@ class MoveEndToEndTests(unittest.TestCase):
         code, plan, err = update(vault, "plan")
         self.assertIn("stays on the old settings file for now", plan)
         self.assertNotIn("site-repin", plan)
+        stamp = read_stamp(vault)
         code, did, err = update(vault, "apply", "--choose", "default-mode=leave")
         self.assertEqual(vault_layout(vault), "legacy")
         self.assertFalse((vault / "_meta" / "vault-config.yaml").exists())
-        self.assertEqual(read_stamp(vault), PLUGIN)       # a notice, not a hold
+        self.assertEqual(read_stamp(vault), stamp)   # held
         self.assertNotIn("Wrote _meta/vault-config.yaml", did)
         self.assertEqual(
             json.loads((site / "node_modules" / "gm-apprentice-publish"
@@ -374,7 +384,7 @@ class SiteLeftoversTests(unittest.TestCase):
         self.assertEqual(read_stamp(vault), PLUGIN)
         self.assertEqual(update(vault, "plan")[1].splitlines()[1], "up to date")
 
-    def test_a_site_whose_tool_is_older_keeps_its_steps_and_keys_and_the_stamp_advances(self):
+    def test_a_site_whose_tool_is_older_keeps_its_steps_and_keys_and_the_stamp_holds(self):
         vault, site = moved_vault_with_site(
             self, spec="^1.20.0", installed="1.23.1", preserveDirs=["gazetteer"])
         add_steps(site, postbuild="node scripts/glue.mjs")
@@ -385,10 +395,11 @@ class SiteLeftoversTests(unittest.TestCase):
         self.assertIn("The site's address, host, output folder, project name "
                       "and kept folders stay in its vault.config.json until "
                       "its publish tool is 1.24.0 or later.", plan)
+        stamp = read_stamp(vault)
         code, did, err = update(vault, "apply")
         self.assertEqual(code, 0, err + did)
-        self.assertEqual(read_stamp(vault), PLUGIN)
-        self.assertNotIn("not stamped", did)
+        self.assertEqual(read_stamp(vault), stamp)
+        self.assertIn("not stamped", did)
         self.assertEqual(hashes(site), before)
 
     def test_an_old_layout_vault_with_a_1_23_1_site_moves_and_holds_both_parts(self):
@@ -400,10 +411,15 @@ class SiteLeftoversTests(unittest.TestCase):
         self.assertIn("The site's build steps stay in its package.json", plan)
         self.assertIn("stay in its vault.config.json until its publish tool "
                       "is 1.24.0 or later", plan)
+        self.assertIn("To clear it: update that site's publish tool to 1.24.0 "
+                      "or later (the update repins it only when the plugin "
+                      "pinned it); the build steps then move", plan)
+        self.assertIn("the site keys then move", plan)
+        stamp = read_stamp(vault)
         code, did, err = update(vault, "apply", "--choose", "default-mode=leave")
         self.assertEqual(code, 0, err + did)
         self.assertEqual(vault_layout(vault), "new")
-        self.assertEqual(read_stamp(vault), PLUGIN)
+        self.assertEqual(read_stamp(vault), stamp)   # held
         left = json.loads((site / "vault.config.json").read_text())
         self.assertEqual(left["preserveDirs"], ["gazetteer"])
         self.assertNotIn("siteTitle", left)
@@ -463,8 +479,35 @@ class SiteLeftoversTests(unittest.TestCase):
             self, spec="^1.20.0", installed="1.23.1", preserveDirs=["gazetteer"])
         items = ms.find_settings_move(vault)
         self.assertEqual([i.group for i in items], [ms.PERSON])
-        self.assertFalse(items[0].holds_stamp)
+        self.assertTrue(items[0].holds_stamp)
         self.assertIn("stay in its vault.config.json", "".join(items[0].lines))
+        self.assertIn("To clear it: update that site's publish tool to 1.24.0 "
+                      "or later", "".join(items[0].lines))
+
+    def test_an_ok_answer_with_nothing_to_write_on_the_old_file_holds_the_stamp(self):
+        vault = make_vault(self)
+        answer = {"ok": True, "lines": [], "files": {"write": [], "remove": []}}
+        with mock.patch.object(ms, "_ask_move", return_value=answer):
+            items = ms.find_settings_move(vault)
+        self.assertEqual([(i.group, i.holds_stamp) for i in items],
+                         [(ms.PERSON, True)])
+        self.assertIn("the settings could not be moved (the publish tool "
+                      "reported nothing to write); the update cannot finish "
+                      "until they are", "".join(items[0].lines))
+
+    def test_held_steps_alone_hold_the_stamp(self):
+        vault, site = moved_vault_with_site(
+            self, spec="^1.20.0", installed="1.23.1")
+        add_steps(site, postbuild="node scripts/glue.mjs")
+        items = ms.find_settings_move(vault)
+        self.assertEqual([i.group for i in items], [ms.PERSON])
+        self.assertIn("build steps stay in its package.json",
+                      "".join(items[0].lines))
+        stamp = read_stamp(vault)
+        code, did, err = update(vault, "apply")
+        self.assertEqual(code, 0, err + did)
+        self.assertEqual(read_stamp(vault), stamp)
+        self.assertIn("not stamped", did)
 
     def test_a_vault_with_no_site_and_the_new_file_finds_nothing(self):
         vault = tmp(self) / "Vault"

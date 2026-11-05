@@ -131,6 +131,34 @@ def _ask_move(vault: Path, args: list[str]) -> dict[str, Any]:
     return data
 
 
+CANNOT_FINISH = " The update cannot finish until this is done."
+
+
+def _setting_words(vault: Path, name: str, moves: bool) -> str:
+    """`name` as the vault's file writes it; where the settings move happens
+    before the GM reads this (`moves`), the new name with the old one beside."""
+    written = setting_name(vault, name)
+    if moves and written != name:
+        return f"{name} ({written} before the settings move)"
+    return written
+
+
+def _clear_tool_hold(vault: Path, line: str, moves: bool = False) -> str:
+    """The way out of a hold on the site's publish tool being too old: the
+    tool names the version in its own line; the update repins a tool only
+    when the plugin pinned it. A site left switched on stops the next update
+    (the repin), so the switch goes off as well as the folder going blank.
+    `moves` is for a hold the settings move happens ahead of."""
+    found = re.search(r"\b(\d+\.\d+\.\d+) or later", line)
+    version = found.group(1) if found else "the version above"
+    return (f" To clear it: update that site's publish tool to {version} or "
+            "later (the update repins it only when the plugin pinned it), "
+            "or, if the site is no longer published, set "
+            f"{_setting_words(vault, 'player_site.publish', moves)} to false "
+            f"and clear {_setting_words(vault, 'player_site.folder', moves)}."
+            + CANNOT_FINISH)
+
+
 def find_settings_move(vault: Path) -> list[Item]:
     """Every pass: a vault on the old settings file moves to the new one,
     all of it by the publish tool (`settings move`): the new file, the
@@ -141,8 +169,7 @@ def find_settings_move(vault: Path) -> list[Item]:
     to move: the move itself holds a vault whose site's publish tool is
     pinned by something else (its answer has `held`, with the words), because
     such a tool reads a moved vault as having no settings and would publish
-    with defaults. `held` is a notice that does not hold the stamp; a
-    blocker does."""
+    with defaults. A `held` move and a blocker both hold the stamp."""
     layout = vault_layout(vault)
     if layout == "none":
         return []    # no settings file: nothing names a site folder to ask
@@ -162,9 +189,11 @@ def find_settings_move(vault: Path) -> list[Item]:
     base = _move_args(vault, site, has_config, *extra)
     plan = _ask_move(vault, [*base, "--check"])
     if plan.get("held"):
-        # Left behind, not wrong: the tool says why in plain words and the
-        # vault is told it every pass. This does not hold the stamp.
-        return [Item(MOVE, PERSON, [f"settings\t{plan.get('line')}"])]
+        # Left behind: the tool says why in plain words and the vault is
+        # told it every pass. The move is not done, so the stamp holds.
+        return [Item(MOVE, PERSON, [f"settings\t{plan.get('line')}"
+                      f"{_clear_tool_hold(vault, str(plan.get('line')))}"],
+                     holds_stamp=True)]
     if not plan["ok"]:
         blockers = [str(b) for b in plan.get("blockers") or []]
         if layout == "legacy":
@@ -191,17 +220,25 @@ def find_settings_move(vault: Path) -> list[Item]:
             "vault.config.json\tstill holds settings this vault's file "
             f"decides ({', '.join(str(x) for x in differs)}); run "
             "campaign-qa's Settings check, which takes them out safely"]))
-    # Left behind, not wrong: the site's installed tool is older than the one
-    # that runs steps and reads the folder keys from the vault. The tool says
-    # which part and in what words; neither holds the stamp.
+    # Left behind: the site's installed tool is older than the one that runs
+    # steps and reads the folder keys from the vault. The tool says which part
+    # and in what words; the move is unfinished, so each holds the stamp.
     told: set[str] = set()
     for key, where in (("stepsHeld", "package.json (site)"),
                        ("keysHeld", "vault.config.json (site)")):
         held = plan.get(key)
         if isinstance(held, dict) and held.get("line"):
+            version = re.search(r"\b(\d+\.\d+\.\d+) or later", str(held["line"]))
+            clear = (" To clear it: update that site's publish tool to "
+                     f"{version.group(1) if version else 'the version above'}"
+                     " or later (the update repins it only when the plugin "
+                     "pinned it); the "
+                     + ("build steps" if key == "stepsHeld" else "site keys")
+                     + " then move into the vault." + CANNOT_FINISH)
             told.add(str(held["line"]))
             items.append(Item(f"{MOVE}-{key}", PERSON,
-                              [f"{where}\t{held['line']}"]))
+                              [f"{where}\t{held['line']}{clear}"],
+                              holds_stamp=True))
     # A package.json step that differs from the vault's is left, and runs
     # beside the vault's under `npm run build`: told each pass, never written.
     for d in plan.get("stepsDiffer") or []:
@@ -211,6 +248,12 @@ def find_settings_move(vault: Path) -> list[Item]:
                               [f"package.json (site)\t{d['line']}"]))
     files = plan.get("files") or {}
     if not (files.get("write") or files.get("remove")):
+        if layout == "legacy":
+            # ok, yet nothing to write: the vault is still on the old file.
+            items.append(Item(MOVE, PERSON, [
+                "settings\tthe settings could not be moved (the publish tool "
+                "reported nothing to write); the update cannot finish until "
+                "they are"], holds_stamp=True))
         return items
     shows = _shows_lines(plan)
 
@@ -268,8 +311,7 @@ def find_publish_list(vault: Path) -> list[Item]:
     decides what moves and whether it should: it holds the list where it is
     (`held`, with the words) when the site's tool is older than 1.27.0 or a
     build step of the site reads the old file. A held list is left behind,
-    not wrong: told every pass, and it does not hold the stamp. A list the
-    tool cannot move holds it."""
+    told every pass, and holds the stamp, as a list the tool cannot move does."""
     if not (vault / OLD_PUBLISH_LIST).is_file():
         return []
     site, has_config = configured_site(vault)
@@ -278,8 +320,12 @@ def find_publish_list(vault: Path) -> list[Item]:
     flag = ["--site-tool-updated"] if site is not None and has_config else []
     plan = _ask_convert(vault, "--check", *flag)
     if plan.get("held"):
-        return [Item(PUBLISH_LIST, PERSON,
-                     [f"publish list\t{plan['lines'][0]}"])]
+        said = str(plan["lines"][0])
+        clear = (_clear_tool_hold(vault, said, moves=True) if plan.get("held") == "site-tool"
+                 else " To clear it: change that build step so it no longer "
+                      "reads the old file." + CANNOT_FINISH)
+        return [Item(PUBLISH_LIST, PERSON, [f"publish list\t{said}{clear}"],
+                     holds_stamp=True)]
     if not plan["ok"]:
         return [Item(PUBLISH_LIST, PERSON,
                      [f"publish list\tthe publish list cannot move to its new "
