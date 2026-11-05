@@ -72,7 +72,7 @@ from typing import Any
 import plan_check
 import schema_rules
 import vault_check as vc
-from vaultlib import cli_name  # noqa: E402
+from vaultlib import cli_name, utf8_output  # noqa: E402
 import vaultlib as vl
 from migrate_core import StepFailed, write_text_atomic
 from vaultlib import GM_MARKER_RE, LineState, scan_body
@@ -3564,14 +3564,6 @@ def read_stdin() -> str:
         return buffer.read().decode("utf-8-sig")
     except UnicodeDecodeError:
         raise WriteError("stdin is not UTF-8") from None
-
-
-def utf8_output() -> None:
-    """Make stdout and stderr write UTF-8 and never raise on a character."""
-    for stream in (sys.stdout, sys.stderr):
-        reconfigure = getattr(stream, "reconfigure", None)
-        if reconfigure is not None:
-            reconfigure(encoding="utf-8", errors="replace")
 
 
 def main(argv: list[str] | None = None, stdin: str | None = None) -> int:

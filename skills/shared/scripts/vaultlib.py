@@ -2914,3 +2914,11 @@ def plugin_version() -> tuple[str, str] | None:
               f"is unknown", file=sys.stderr)
         return None
     return (current, "shared/VERSION") if current else None
+
+
+def utf8_output() -> None:
+    """Make stdout and stderr write UTF-8 and never raise on a character."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")

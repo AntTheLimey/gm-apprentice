@@ -329,8 +329,10 @@ class RunTests(Base):
                 raise RuntimeError("not a step failure")
             return [Item("boom", WILL, ["do boom"], apply)]
         bad, _ = check("boom", "bookkeeping", boom)
-        with self.assertRaises(RuntimeError):
-            self.run_update(vault, [first, bad], {tag("first"): "yes"})
+        with contextlib.redirect_stderr(io.StringIO()):
+            res = self.run_update(vault, [first, bad], {tag("first"): "yes"})
+        self.assertEqual(res.exit, 1)
+        self.assertIn("not a step failure", res.error)
         rec = update_record.load(vault)
         self.assertEqual(rec["answers"]["first"]["answer"], "yes")
         self.assertEqual(rec["updates"][-1]["did"], ["Plainly did first."])
@@ -370,14 +372,28 @@ class RunTests(Base):
                 raise RuntimeError("the original")
             return [Item("boom", WILL, ["do boom"], apply)]
         bad, _ = check("boom", "bookkeeping", boom)
-        err = io.StringIO()
         with mock.patch.object(update, "_save_record",
                                side_effect=OSError("disk full")), \
-                contextlib.redirect_stderr(err), \
-                self.assertRaises(RuntimeError) as caught:
+                contextlib.redirect_stderr(io.StringIO()):
+            res = self.run_update(vault, [first, bad], {tag("first"): "yes"})
+        self.assertIn("the original", res.error)
+        self.assertTrue(any("disk full" in n for n in res.notes), res.notes)
+        self.assertEqual(stamp_of(vault), "1.10.12")
+
+    def test_an_interrupt_still_records_what_finished_and_is_raised(self):
+        vault = make_vault(self)
+        first = file_check(vault, "first", "removes")
+
+        def stop():
+            def apply(_v):
+                raise KeyboardInterrupt
+            return [Item("stop", WILL, ["do stop"], apply)]
+        bad, _ = check("stop", "bookkeeping", stop)
+        with self.assertRaises(KeyboardInterrupt):
             self.run_update(vault, [first, bad], {tag("first"): "yes"})
-        self.assertEqual(str(caught.exception), "the original")
-        self.assertIn("disk full", err.getvalue())
+        rec = update_record.load(vault)
+        self.assertEqual(rec["answers"]["first"]["answer"], "yes")
+        self.assertEqual(stamp_of(vault), "1.10.12")
 
     def test_a_held_question_alone_writes_nothing(self):
         vault = make_vault(self)
@@ -456,6 +472,70 @@ class AskedTextTests(Base):
         r, _ = check("drop", "removes", will_item("drop"))
         _code, out, _ = self.main(vault, [r])
         self.assertIn(tag("drop"), out)
+
+
+class OutputTests(Base):
+    """The report always reaches the GM: any encoding, any failure."""
+
+    def named_vault(self, name):
+        base = Path(tempfile.mkdtemp(prefix="upd-named-"))
+        self.addCleanup(shutil.rmtree, base, ignore_errors=True)
+        vault = make_vault(self)
+        return Path(shutil.move(str(vault), str(base / name)))
+
+    def cp1252_main(self, vault, checks, *args):
+        raw = io.BytesIO()
+        out = io.TextIOWrapper(raw, encoding="cp1252", errors="strict")
+        err = io.TextIOWrapper(io.BytesIO(), encoding="cp1252", errors="strict")
+        with mock.patch.object(migrate, "CHECKS", checks), \
+                mock.patch.object(update, "HOME", self.home), \
+                mock.patch.object(sys, "stdout", out), \
+                mock.patch.object(sys, "stderr", err):
+            code = update.main([str(vault), *args])
+            sys.stdout.flush()
+        return code, raw.getvalue().decode("utf-8")
+
+    def test_a_cp1252_stdout_still_gets_the_report_of_a_non_ascii_vault(self):
+        vault = self.named_vault("カンティクル Café")
+        for args in ((), ("--json",)):
+            with self.subTest(args=args):
+                b, _ = check("tidy", "bookkeeping", will_item("tidy"))
+                code, text = self.cp1252_main(vault, [b], *args)
+                self.assertIn(code, (0,), text)
+                self.assertIn("カンティクル Café", text)
+
+    def test_an_unexpected_error_in_a_step_still_reports_what_finished(self):
+        vault = make_vault(self)
+        first = file_check(vault, "first", "removes")
+
+        def boom():
+            def apply(_v):
+                raise RuntimeError("not a step failure")
+            return [Item("boom", WILL, ["do boom"], apply)]
+        bad, _ = check("boom", "bookkeeping", boom)
+        for args in ((), ("--json",)):
+            with self.subTest(args=args):
+                (vault / "first.done").unlink(missing_ok=True)
+                code, out, err = self.main(vault, [first, bad],
+                                           "--answer", tag("first") + "=yes",
+                                           *args)
+                self.assertEqual(code, 1)
+                self.assertIn("not a step failure", out)
+                self.assertIn("Plainly did first.", out)
+                if args:
+                    self.assertEqual(json.loads(out)["exit"], 1)
+
+    def test_a_record_that_cannot_be_written_for_the_settings_still_reports(self):
+        from vaultlib import SettingsUnavailable
+        vault = make_vault(self)
+        b, _ = check("tidy", "bookkeeping", will_item("tidy"))
+        with mock.patch.object(update, "_save_record",
+                               side_effect=SettingsUnavailable("tool broke")):
+            code, out, _ = self.main(vault, [b])
+        self.assertEqual(code, 1)
+        self.assertIn("Plainly did tidy.", out)
+        self.assertIn("tool broke", out)
+        self.assertEqual(stamp_of(vault), "1.10.12")
 
 
 class ExcludeListsTests(Base):

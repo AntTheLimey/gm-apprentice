@@ -32,6 +32,7 @@ import datetime
 import json
 import re
 import sys
+import traceback
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -41,7 +42,7 @@ import update_record
 from migrate_core import CHOICE, PERSON, Check, Item, StepFailed
 from update_record import AnswerEntry, lines_sha
 from vaultlib import (SettingsUnavailable, StateUnreadable, cli_name,
-                      parse_version, read_held, write_held)
+                      parse_version, read_held, utf8_output, write_held)
 
 HOME: Path | None = None   # where backups go; None is the home folder
 UNREADABLE = "template-unreadable:"
@@ -370,9 +371,17 @@ def _apply(vault: Path, todo: list[Check], given: dict[str, Given],
             except (StepFailed, SettingsUnavailable) as e:
                 failed, res.error = n, f"{check.name}: {e}"
                 break
+            except Exception as e:  # noqa: BLE001 - reported, never swallowed
+                # Not a failure the checks know: it stops the run like one,
+                # so what finished is recorded and reported; the trace goes
+                # to stderr for whoever fixes it.
+                traceback.print_exc(file=sys.stderr)
+                failed, res.error = n, (f"{check.name}: unexpected "
+                                        f"{e.__class__.__name__}: {e}")
+                break
     except BaseException as original:
-        # Not a failure the checks know: keep what finished, then let it go.
-        # The original error stays the one raised; a record that cannot be
+        # Interrupted (Ctrl-C, exit): keep what finished, then let it go.
+        # The original stays the one raised; a record that cannot be
         # written is said beside it.
         if run.wrote():
             try:
@@ -390,11 +399,14 @@ def _apply(vault: Path, todo: list[Check], given: dict[str, Given],
     if run.wrote() or stamping:
         try:
             run.record(target if stamping else vault_v)
-        except (StepFailed, OSError) as e:
+        except Exception as e:  # noqa: BLE001 - any failure: reported below
             stamping = False   # an answer not kept must not be passed by the stamp
-            res.error = res.error or (f"the update record could not be "
-                                      f"written ({e}); the answers will be "
-                                      f"asked again")
+            why = (f"the update record could not be written ({e}); the "
+                   f"answers will be asked again")
+            if res.error:
+                res.notes.append(why[0].upper() + why[1:] + ".")
+            else:
+                res.error = why
             failed = len(todo) if failed is None else failed
     if stamping:
         try:
@@ -405,8 +417,9 @@ def _apply(vault: Path, todo: list[Check], given: dict[str, Given],
             failed = len(todo) if failed is None else failed
             try:   # the record must not claim a stamp that was not written
                 _fix_last_to(vault, vault_v)
-            except (StepFailed, OSError):
-                pass   # the error above is already the run's report
+            except (StepFailed, OSError) as e2:
+                print(f"{cli_name()}: the update record still names {target} "
+                      f"as this run's version ({e2})", file=sys.stderr)
     left = {i for i in left_ids if not i.startswith(migrate.TEMPLATE)}
     if res.stamped is None and (left or said - held["said"]):
         try:   # migrate.py's plan does not ask these again either
@@ -573,7 +586,31 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+def _emit(res: UpdateResult, as_json: bool) -> None:
+    """Print the result. The report is what the GM must see, so a stream
+    that cannot take a character gets it with that character escaped."""
+    if as_json:
+        data = asdict(res)
+        data["report"] = report(res)
+        text = json.dumps(data, indent=2, ensure_ascii=False) + "\n"
+    elif res.exit == 2:
+        print(f"{cli_name()}: {res.error}", file=sys.stderr)
+        return
+    else:
+        text = report(res)
+    try:
+        sys.stdout.write(text)
+        sys.stdout.flush()
+    except (UnicodeError, ValueError):
+        buffer = getattr(sys.stdout, "buffer", None)
+        if buffer is None:
+            raise
+        buffer.write(text.encode("ascii", "backslashreplace"))
+        buffer.flush()
+
+
 def main(argv: list[str] | None = None) -> int:
+    utf8_output()
     ap = build_parser()
     try:
         args = ap.parse_args(argv)
@@ -593,15 +630,13 @@ def main(argv: list[str] | None = None) -> int:
         given[choice] = value
     try:
         res = run(vault, given, args.headless)
-    except SettingsUnavailable as e:
-        print(f"{cli_name()}: {e}", file=sys.stderr)
-        return 1
-    if args.json:
-        print(json.dumps(asdict(res), indent=2, ensure_ascii=False))
-    elif res.exit == 2:
-        print(f"{cli_name()}: {res.error}", file=sys.stderr)
-    else:
-        sys.stdout.write(report(res))
+    except Exception as e:  # noqa: BLE001 - the report says it, exit 1
+        if not isinstance(e, SettingsUnavailable):
+            traceback.print_exc(file=sys.stderr)
+        res = UpdateResult(exit=1, vault=vault.name, headless=args.headless,
+                           error=(str(e) if isinstance(e, SettingsUnavailable)
+                                  else f"unexpected {e.__class__.__name__}: {e}"))
+    _emit(res, args.json)
     return res.exit
 
 
