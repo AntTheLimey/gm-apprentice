@@ -95,7 +95,6 @@ test('nothing reads the vault settings file but the settings package', () => {
 //   live      the live-play flags worked out from those switches (build.js, templates/pc.js)
 //   legacy    the settings an older site file still holds (build.js lists them in its closing warning)
 //   faults    the settings problems found while reading (config.js, site-doctor.js, build.js report them)
-//   layout    which settings file the vault is on, for naming a setting in a message (not enumerable)
 //   site      the site folder's own settings (url, host, output, cloudflare_project, keep), for code that has only the publishConfig (not enumerable)
 // `setting_year` is a setting, written beside `publish:`; it is checked below as a top-level name.
 //   steps     the vault's build steps, { before, after } (not enumerable; only `build` and `deploy` run them)
@@ -109,7 +108,7 @@ test('nothing reads the vault settings file but the settings package', () => {
 //   rules_lists  whether a sheet carries the tool's own rules lists, { gurpsReference, cocSkillList } (not enumerable; build.js passes them to the sheet renderers)
 //   story     { moments }: player_site.story.moments (not enumerable; the GM site reads the player site's value)
 //   gm        the GM site's switch, folder and show switches, { publish, folder, show } (not enumerable; the GM build reads it)
-const DERIVED = ['switches', 'live', 'legacy', 'faults', 'layout', 'site', 'steps', 'menu_extra', 'limits', 'header_facts', 'withheld_words', 'never_show', 'statuses', 'gm', 'rules_lists', 'stylesheets', 'theme_hooks', 'page_banner', 'story'];
+const DERIVED = ['switches', 'live', 'legacy', 'faults', 'site', 'steps', 'menu_extra', 'limits', 'header_facts', 'withheld_words', 'never_show', 'statuses', 'gm', 'rules_lists', 'stylesheets', 'theme_hooks', 'page_banner', 'story'];
 
 // Only reads through the name `publishConfig` are checked (`publishConfig.x`, `publishConfig['x']`,
 // and one level further for the groups). A read through another name (`p.x`, `cfg.publish.x`)
@@ -133,7 +132,7 @@ test('the scan reads a name however the code spells the read', () => {
   assert.deepEqual(groupReads("publishConfig.theme.a; publishConfig.theme?.['b']; publishConfig?.['theme'].c; publishConfig?.theme?.d;", ['theme']), ['theme.a', 'theme.b', 'theme.c', 'theme.d']);
 });
 
-// The resolved config carries `layout`, `withheld_words`, `statuses` and others as non-enumerable properties: a copy
+// The resolved config carries `withheld_words`, `statuses` and others as non-enumerable properties: a copy
 // of it (`{ ...publishConfig }`, `Object.assign({}, publishConfig)`) loses them, and a message would then name settings
 // by the new names on a vault still on the old file. Code passes the object itself, or reads what it needs off it.
 const copiesOf = (src) => [...src.matchAll(/\.\.\.\s*publishConfig\b(?!\s*\.)|Object\.assign\(\s*\{[^}]*\}\s*,\s*publishConfig\b|structuredClone\(\s*publishConfig\b|JSON\.parse\(JSON\.stringify\(\s*publishConfig\b/g)].map((m) => m[0]);
@@ -142,7 +141,7 @@ test('nothing copies the resolved config and loses its hidden properties', () =>
   assert.deepEqual(copiesOf('const c = { ...publishConfig, x: 1 }; Object.assign({}, publishConfig); structuredClone(publishConfig)').length, 3);
   assert.deepEqual(copiesOf('f(publishConfig.theme, ...publishConfig.list)'), []);
   assert.deepEqual(sources.flatMap((f) => copiesOf(code(f)).map((c) => `${rel(f)}: ${c}`)), []);
-  for (const key of ['layout', 'withheld_words', 'statuses']) {
+  for (const key of ['withheld_words', 'statuses']) {
     assert.equal(Object.getOwnPropertyDescriptor(built(), key).enumerable, false, `${key} is meant to be hidden`);
   }
 });

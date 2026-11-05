@@ -33,7 +33,6 @@ const { decidePage, publishesPage } = require('./publish-decision');
 const { loadManifest } = require('./manifest');
 const { publishedPages } = require('./published-pages');
 const { renameInSettings, settingsText } = require('./settings/write');
-const { nameInFor } = require('./settings');
 const { PUBLISH_LIST_FILE, OLD_LIST_FILE, OLD_LIST_STOP } = require('./settings/layout');
 
 const EXCEPTIONS = 'player_site.hide.field_exceptions';
@@ -193,8 +192,8 @@ function unpublishReason(ctx, from, to) {
   const dir = path.posix.dirname(to) === '.' ? '' : path.posix.dirname(to);
   let why = null;
   if (dir.split('/').some((seg) => seg.startsWith('.'))) why = 'it is in a hidden folder';
-  else if (dir && dirIsExcluded(dir, ctx.publishConfig.exclude_dirs)) why = `its folder is in ${nameInFor(ctx.publishConfig.layout, 'player_site.hide.folders')}`;
-  else if (dir && !mapFolder(dir, ctx.scanConfig.folderMap || {})) why = `its folder is not in ${nameInFor(ctx.publishConfig.layout, 'player_site.folder_map')}`;
+  else if (dir && dirIsExcluded(dir, ctx.publishConfig.exclude_dirs)) why = `its folder is in player_site.hide.folders`;
+  else if (dir && !mapFolder(dir, ctx.scanConfig.folderMap || {})) why = `its folder is not in player_site.folder_map`;
   if (!why) {
     const hyp = ctx.manifest ? Object.assign({}, ctx.manifest, {
       publishing: ctx.manifest.publishing.map((r) => (r === canonicalPath(from) ? canonicalPath(to) : r)),

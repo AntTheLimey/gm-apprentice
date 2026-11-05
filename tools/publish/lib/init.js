@@ -159,7 +159,7 @@ async function init(targetDir = '.', options = {}) {
   // The site's address, host and output folder are settings of the vault's new file, and the old file has no place for
   // them: a vault still on the old file is updated first.
   const vaultDir = path.resolve(dest, values.VAULT_PATH);
-  if (layoutOf(vaultDir) === 'legacy') {
+  if (layoutOf(vaultDir) === 'old-only') {
     throw new Error(OLD_FILE_STOP);
   }
 
