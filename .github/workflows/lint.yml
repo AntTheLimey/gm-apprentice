@@ -129,7 +129,7 @@ jobs:
         run: python scripts/gen_field_lists.py --check
 
       - name: Generated gma llms pages are current
-        run: python3 scripts/gen_gma_docs.py --check
+        run: python scripts/gen_gma_docs.py --check
 
       # Every tests/test_*.py in one run, so a new test file can't be left
       # out of CI again (tests/test_ci_runs_every_test.py pins this).

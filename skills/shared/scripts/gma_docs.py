@@ -27,7 +27,7 @@ from typing import Iterator
 
 import gma
 
-DOCS = Path(__file__).resolve().parent.parent / "gma"
+DOCS = gma.PAGES  # one home for where the pages live
 INDEX = DOCS / "llms.md"
 PAGES = DOCS / "llms"
 # The index is read on every routed call: every byte costs every lookup.
@@ -278,6 +278,17 @@ def documents(tree: argparse.ArgumentParser, docs: Path) -> dict[Path, list[str]
     return out
 
 
+def over_budget(index: Path) -> list[str]:
+    """The index over INDEX_BUDGET, with why that matters."""
+    size = len(index.read_bytes())
+    if size < INDEX_BUDGET:
+        return []
+    return [f"{index.name} is {size} bytes, over INDEX_BUDGET ({INDEX_BUDGET}): "
+            "the index is read on every routed call, so every byte costs every "
+            "lookup. Move detail onto the command's own page; raise the budget "
+            "only on purpose."]
+
+
 def problems(tree: argparse.ArgumentParser, docs: Path = DOCS) -> list[str]:
     """Everything that keeps the pages from conforming to `tree`."""
     found = []
@@ -306,8 +317,10 @@ def problems(tree: argparse.ArgumentParser, docs: Path = DOCS) -> list[str]:
                 found.append(f"{rel}: block for {name}, which is no command")
             elif name not in blocks:
                 found.append(f"{rel}: block for {name} belongs on another page")
-        if path == docs / "llms.md" and ROUTING not in doc:
-            found.append(f"{rel}: no routing table")
+        if path == docs / "llms.md":
+            if ROUTING not in doc:
+                found.append(f"{rel}: no routing table")
+            found += over_budget(path)
         if render(doc, tree) != doc:
             found.append(f"{rel}: generated blocks out of date")
     return found

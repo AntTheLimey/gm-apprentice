@@ -34,7 +34,6 @@ PUBLISH_JS = ROOT / "tools" / "publish" / "bin" / "gm-publish.js"
 # Snake_case flags that predate the kebab-case rule, with the reason each
 # stays. This set may only shrink (test_grandfathered_flags_only_shrink).
 GRANDFATHERED_FLAGS: dict[str, str] = {}
-GRANDFATHERED_AT_START: frozenset = frozenset()
 
 # Full command lines that stop short on purpose, by where they sit, with why.
 # An entry the scan no longer finds fails (test_prefix_allowances_are_used).
@@ -74,17 +73,24 @@ class Found:
     def __init__(self, path, line, kind, name, rest, form, fenced):
         self.path, self.line, self.kind = path, line, kind
         self.name, self.rest, self.fenced = name, rest, fenced
-        # "full" (python3 "${CLAUDE_PLUGIN_ROOT}/..." or gma) or "bare"
-        # (`vault_check.py frontmatter`, the skills' shorthand).
+        # "script" (python3 "${CLAUDE_PLUGIN_ROOT}/..."), "gma", or "bare"
+        # (`vault_check.py frontmatter` or `vw ...`, the skills' shorthand).
         self.form = form
 
     def example(self):
         """A full command line with arguments: it must parse."""
-        return (self.kind == "cmd" and self.form == "full"
+        return (self.kind == "cmd" and self.form in ("script", "gma")
                 and bool(self.rest.strip()) and not _synopsis(self.rest))
 
     def where(self):
-        return f"{self.path.relative_to(ROOT).as_posix()}:{self.line}"
+        return f"{_rel(self.path)}:{self.line}"
+
+
+def _rel(path):
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return path.name
 
 
 def _match(text):
@@ -95,8 +101,8 @@ def _match(text):
     m = SCRIPT_RE.match(text)
     if m:
         if m.group("mod") not in MODULES:
-            return ("unknown-script", m.group("mod"), "", "full")
-        return ("cmd", MODULES[m.group("mod")], text[m.end():], "full")
+            return ("unknown-script", m.group("mod"), "", "script")
+        return ("cmd", MODULES[m.group("mod")], text[m.end():], "script")
     m = BARE_RE.match(text)
     if m and m.group("mod") in MODULES:
         return ("cmd", MODULES[m.group("mod")], text[m.end():], "bare")
@@ -108,7 +114,7 @@ def _match(text):
         if m.group("cmd") == "publish":
             sub = re.match(r'\s+([a-z][a-z-]*)', text[m.end():])
             return ("publish", sub.group(1), "", "full") if sub else None
-        return ("cmd", m.group("cmd"), text[m.end():], "full")
+        return ("cmd", m.group("cmd"), text[m.end():], "gma")
     m = PUBLISH_RE.match(text)
     if m:
         return ("publish", m.group("sub"), "", "full")
@@ -222,9 +228,13 @@ def _tokens(rest):
             if tok and set(tok) <= set("();<>|&"):
                 break
             out.append(tok)
-    except ValueError:
-        pass  # an unclosed quote: the span ended mid-line
+    except ValueError as exc:
+        raise UnclosedQuote(rest.strip()) from exc
     return out
+
+
+class UnclosedQuote(ValueError):
+    """A command line whose quotes don't close."""
 
 
 def _synopsis(rest):
@@ -250,7 +260,10 @@ def flag_errors(command, rest, root=None):
                 for f in re.findall(r'(?<![\w-])(--?[a-zA-Z][\w-]*)', rest)
                 if f not in known]
     errors = []
-    toks = _tokens(rest)
+    try:
+        toks = _tokens(rest)
+    except UnclosedQuote:
+        return [f"gma {command}: unclosed quote"]
     i = 0
     while i < len(toks):
         tok = toks[i]
@@ -302,9 +315,13 @@ def parse_error(command, rest, root=None):
     parser = gma._subparsers(root).choices[command]
     err = io.StringIO()
     try:
+        toks = _tokens(rest)
+    except UnclosedQuote:
+        return "unclosed quote"
+    try:
         with contextlib.redirect_stderr(err), \
                 contextlib.redirect_stdout(io.StringIO()):
-            parser.parse_args(_tokens(rest))
+            parser.parse_args(toks)
     except SystemExit as exc:
         if exc.code:
             return err.getvalue().strip().splitlines()[-1]
@@ -377,17 +394,19 @@ class PageTests(unittest.TestCase):
         self.assertTrue(any("gma relink nowhere" in p for p in found), found)
 
     def test_index_under_budget(self):
-        size = len(gma_docs.INDEX.read_bytes())
-        self.assertLess(
-            size, gma_docs.INDEX_BUDGET,
-            f"llms.md is {size} bytes, over INDEX_BUDGET: the index is read "
-            "on every routed call, so every byte costs every lookup. Move "
-            "detail onto the command's own page; raise the budget only on "
-            "purpose.")
+        self.assertEqual(gma_docs.over_budget(gma_docs.INDEX), [])
 
     def test_index_budget_gate_bites(self):
-        self.assertGreaterEqual(gma_docs.INDEX_BUDGET, 1)
-        self.assertGreater(len("x" * 12_001), gma_docs.INDEX_BUDGET)
+        docs = _copy_docs()
+        self.addCleanupDir(docs)
+        index = docs / "llms.md"
+        text = index.read_text(encoding="utf-8")
+        index.write_text(text + "x" * (12_001 - len(text.encode("utf-8"))),
+                         encoding="utf-8", newline="\n")
+        self.assertEqual(len(index.read_bytes()), 12_001)
+        found = gma_docs.problems(tree(), docs)
+        self.assertTrue(any("over INDEX_BUDGET" in p and "every routed call" in p
+                            for p in found), found)
 
     def test_rendering_does_not_depend_on_prog(self):
         # Python 3.14 takes prog from `-m` under pytest; the pages must not.
@@ -419,22 +438,75 @@ class PageTests(unittest.TestCase):
             self.assertEqual(gen.main(["--check", "--docs", str(docs)]), 0)
 
 
+def help_problems(root, commands=None):
+    """Commands with no summary, no `Example: gma <name>` epilog, or a
+    subcommand with no help line."""
+    commands = gma.COMMANDS if commands is None else commands
+    bad = []
+    for name, parser in gma._subparsers(root).choices.items():
+        if not commands[name].summary:
+            bad.append(f"{name}: no summary")
+        epilog = (parser.epilog or "").strip()
+        if not epilog.startswith("Example:"):
+            bad.append(f"{name}: epilog does not begin 'Example:'")
+        elif not re.search(rf'gma {re.escape(name)}\b', epilog):
+            bad.append(f"{name}: example names no full `gma {name}` line")
+        for path, _, summary in gma_docs.walk(parser, (name,)):
+            if len(path) > 1 and not summary:
+                bad.append(f"{' '.join(path)}: no help line")
+    return bad
+
+
+def snake_flags(root):
+    """Option strings with an underscore, less the grandfathered ones."""
+    return sorted({o for p in _all_parsers(root) for o in
+                   p._option_string_actions if "_" in o}
+                  - set(GRANDFATHERED_FLAGS))
+
+
+def missing_arg_help(root):
+    """Every argument (bar -h) with no help string, as `gma <path>: <arg>`."""
+    bad = []
+    for name, parser in gma._subparsers(root).choices.items():
+        for path, p, _ in gma_docs.walk(parser, (name,)):
+            for a in p._actions:
+                if isinstance(a, (argparse._HelpAction,
+                                  argparse._SubParsersAction)):
+                    continue
+                if not a.help:
+                    arg = "/".join(a.option_strings) or a.dest
+                    bad.append(f"gma {' '.join(path)}: {arg}")
+    return bad
+
+
 class ParserTests(unittest.TestCase):
     def test_every_command_has_help_and_an_example(self):
-        bad = []
-        for name, parser in gma._subparsers(tree()).choices.items():
-            if not gma.COMMANDS[name].summary:
-                bad.append(f"{name}: no summary")
-            epilog = (parser.epilog or "").strip()
-            if not epilog.startswith("Example:"):
-                bad.append(f"{name}: epilog does not begin 'Example:'")
-            elif not re.search(rf'gma {re.escape(name)}\b', epilog):
-                bad.append(f"{name}: example names no full `gma {name}` line")
-            sub = _sub_action(parser)
-            for path, p, summary in gma_docs.walk(parser, (name,)):
-                if len(path) > 1 and not summary:
-                    bad.append(f"{' '.join(path)}: no help line")
-        self.assertEqual(bad, [])
+        self.assertEqual(help_problems(tree()), [])
+
+    def test_help_gate_catches_each_fault(self):
+        t = gma.full_tree()
+        cmds = dict(gma.COMMANDS)
+        cmds["relink"] = gma.Command("relink", "")
+        gma._subparsers(t).choices["tones"].epilog = "Example: tones x"
+        sub = _sub_action(gma._subparsers(t).choices["moments"])
+        for a in sub._choices_actions:
+            if a.dest == "status":
+                a.help = None
+        self.assertEqual(sorted(help_problems(t, cmds)), [
+            "moments status: no help line",
+            "relink: no summary",
+            "tones: example names no full `gma tones` line"])
+        gma._subparsers(t).choices["tones"].epilog = None
+        self.assertIn("tones: epilog does not begin 'Example:'",
+                      help_problems(t, cmds))
+
+    def test_every_argument_has_help(self):
+        self.assertEqual(missing_arg_help(tree()), [])
+
+    def test_argument_help_gate_bites(self):
+        t = gma.full_tree()
+        gma._subparsers(t).choices["relink"].add_argument("--planted")
+        self.assertEqual(missing_arg_help(t), ["gma relink: --planted"])
 
     def test_gate_catches_a_missing_example(self):
         t = gma.full_tree()
@@ -457,13 +529,18 @@ class ParserTests(unittest.TestCase):
         self.assertEqual(bad, [])
 
     def test_flags_are_kebab_case(self):
-        snake = sorted({o for p in _all_parsers(tree()) for o in
-                        p._option_string_actions if "_" in o}
-                       - set(GRANDFATHERED_FLAGS))
-        self.assertEqual(snake, [], "flags are --kebab-case")
+        self.assertEqual(snake_flags(tree()), [], "flags are --kebab-case")
+
+    def test_kebab_gate_bites(self):
+        t = gma.full_tree()
+        gma._subparsers(t).choices["relink"].add_argument(
+            "--snake_flag", help="planted")
+        self.assertEqual(snake_flags(t), ["--snake_flag"])
 
     def test_grandfathered_flags_only_shrink(self):
-        self.assertLessEqual(set(GRANDFATHERED_FLAGS), GRANDFATHERED_AT_START)
+        # 0 when this gate was added (2026-11-05). This number may only go
+        # down: a new flag is kebab-case, never a new entry.
+        self.assertLessEqual(len(GRANDFATHERED_FLAGS), 0)
 
 
 class LlmsCommandTests(unittest.TestCase):
@@ -510,20 +587,13 @@ class SkillTextTests(unittest.TestCase):
         self.assertGreater(len(found), 40)
         self.assertTrue(any(f.fenced for f in found))
         self.assertTrue(any(not f.fenced for f in found))
+        # Each form the gates claim to read was read.
+        self.assertGreater(len([f for f in found if f.form == "script"]), 0)
+        self.assertGreater(len([f for f in all_found()
+                                if f.kind == "publish"]), 0)
 
     def test_skill_text_names_only_real_flags(self):
-        bad = []
-        for f in all_found():
-            if f.kind == "unknown-script":
-                bad.append(f"{f.where()}: no command for {f.name}.py")
-            elif f.kind == "publish":
-                if f.name not in gma_docs.PUBLISH_SUBCOMMANDS:
-                    bad.append(f"{f.where()}: publish has no subcommand {f.name}")
-            elif f.name not in gma.COMMANDS:
-                bad.append(f"{f.where()}: no command gma {f.name}")
-            else:
-                bad += [f"{f.where()}: {e}" for e in flag_errors(f.name, f.rest)]
-        self.assertEqual(bad, [])
+        self.assertEqual(name_problems(all_found()), [])
 
     def test_flag_gate_bites(self):
         d = Path(tempfile.mkdtemp(prefix="gma-skill-"))
@@ -543,6 +613,23 @@ class SkillTextTests(unittest.TestCase):
         self.assertEqual(errs, [["gma relink: no flag --aply"],
                                 ["gma moments tag: no flag --writ"],
                                 ["gma moments list: no flag --write"]])
+
+    def test_name_gate_catches_each_fault(self):
+        d = Path(tempfile.mkdtemp(prefix="gma-skill-"))
+        self.addCleanup(shutil.rmtree, d, True)
+        md = d / "x.md"
+        md.write_text(
+            "Run `python3 \"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/"
+            "frob_nicate.py\" <vault>`.\n\n"
+            "Run `gma frobnicate <vault>`.\n\n"
+            "Run `gma publish frobnicate`.\n\n"
+            "Run `gma relink <vault> \"<old> <new>`.\n",
+            encoding="utf-8")
+        self.assertEqual(name_problems(scan_file(md)), [
+            "x.md:1: no command for frob_nicate.py",
+            "x.md:3: no command gma frobnicate",
+            "x.md:5: publish has no subcommand frobnicate",
+            "x.md:7: gma relink: unclosed quote"])
 
     def test_publish_subcommands_match_the_tool(self):
         text = PUBLISH_JS.read_text(encoding="utf-8")
@@ -571,16 +658,18 @@ class SkillTextTests(unittest.TestCase):
         self.assertIsNone(parse_error("relink", " <vault> <old> <new>"))
 
     def test_routed_pages_exist(self):
-        pages = {p.stem for p in gma_docs.PAGES.glob("*.md")}
-        bad = []
-        for path in skill_files():
-            text = path.read_text(encoding="utf-8")
-            for m in re.finditer(r'gma llms\s+([a-z][a-z-]*)', text):
-                if m.group(1) not in pages:
-                    line = text[:m.start()].count("\n") + 1
-                    bad.append(f"{path.relative_to(ROOT).as_posix()}:{line}: "
-                               f"no page {m.group(1)}")
+        bad, seen = route_problems(skill_files())
+        self.assertGreater(seen, 0)
         self.assertEqual(bad, [])
+
+    def test_route_gate_bites(self):
+        d = Path(tempfile.mkdtemp(prefix="gma-skill-"))
+        self.addCleanup(shutil.rmtree, d, True)
+        md = d / "x.md"
+        md.write_text("Read `gma llms relink`, then\n`gma llms frobnicate`.\n",
+                      encoding="utf-8")
+        self.assertEqual(route_problems([md]),
+                         (["x.md:2: no page frobnicate"], 2))
 
     def test_recipes_keep_exit_status(self):
         bad = []
@@ -596,6 +685,37 @@ class SkillTextTests(unittest.TestCase):
                       "```bash\nset -o pipefail\ngma links <vault> | head\n```\n",
                       encoding="utf-8")
         self.assertEqual(len(_pipefail_problems(md)), 1)
+
+
+def name_problems(found):
+    """Commands, scripts and publish subcommands that don't exist, and
+    flags their command doesn't have."""
+    bad = []
+    for f in found:
+        if f.kind == "unknown-script":
+            bad.append(f"{f.where()}: no command for {f.name}.py")
+        elif f.kind == "publish":
+            if f.name not in gma_docs.PUBLISH_SUBCOMMANDS:
+                bad.append(f"{f.where()}: publish has no subcommand {f.name}")
+        elif f.name not in gma.COMMANDS:
+            bad.append(f"{f.where()}: no command gma {f.name}")
+        else:
+            bad += [f"{f.where()}: {e}" for e in flag_errors(f.name, f.rest)]
+    return bad
+
+
+def route_problems(paths):
+    """(each `gma llms <name>` naming no page, how many routes were read)."""
+    pages = {p.stem for p in gma_docs.PAGES.glob("*.md")}
+    bad, seen = [], 0
+    for path in paths:
+        text = path.read_text(encoding="utf-8")
+        for m in re.finditer(r'gma llms\s+([a-z][a-z-]*)', text):
+            seen += 1
+            if m.group(1) not in pages:
+                line = text[:m.start()].count("\n") + 1
+                bad.append(f"{_rel(path)}:{line}: no page {m.group(1)}")
+    return bad, seen
 
 
 def _pipefail_problems(path):

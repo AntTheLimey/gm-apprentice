@@ -5,8 +5,9 @@
 
 Each command is one of the scripts beside this file; `gma <name> args` runs
 that script's `main(args)`. `gma publish args` runs the publish tool under
-node; `gma llms [<command>]` prints the command reference. COMMANDS is plain data (module name and one-line summary) so another
-implementation can read the same table.
+node; `gma llms [<command>]` prints the command reference. COMMANDS is
+plain data (module name and one-line summary) so another implementation
+can read the same table.
 
 A module is imported only when its command runs; `full_tree()` imports them
 all, for the docs generator and the tests.
