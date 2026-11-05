@@ -6045,7 +6045,7 @@ def _kept_by_player_row(name: str) -> list[str]:
             f"notes and was skipped"]
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("vault", type=Path)
     ap.add_argument("command", choices=["frontmatter", "names", "index",
@@ -6114,7 +6114,12 @@ def main() -> int:
                          "vault.name_match setting)")
     ap.add_argument("--since", type=int,
                     help="session number for the changed command")
-    args = ap.parse_args()
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
 
     if not args.vault.is_dir():
         print(f"error: not a directory: {args.vault}", file=sys.stderr)

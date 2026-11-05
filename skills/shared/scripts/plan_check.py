@@ -1053,7 +1053,7 @@ def build_state(text: str) -> dict[str, str]:
     return parse_prep_state_tokens(found[1])
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("plan", type=Path)
     ap.add_argument("--headless", action="store_true")
@@ -1066,7 +1066,12 @@ def main() -> int:
     mode.add_argument("--inventory", action="store_true")
     mode.add_argument("--state", action="store_true")
     ap.add_argument("--json", action="store_true")
-    args = ap.parse_args()
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
     if args.gm_input is not None and not args.headless:
         ap.error("--gm-input only changes what --headless reports; "
                  "pass --headless too")

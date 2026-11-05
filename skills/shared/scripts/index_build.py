@@ -631,7 +631,7 @@ def _is_generated(text: str) -> bool:
     return False
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("vault", type=Path)
     parser.add_argument("--write", action="store_true",
@@ -639,6 +639,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--force", action="store_true",
                         help="replace an _meta/index.md this tool did not make")
     parser.add_argument("--date", help="override today's date (YYYY-MM-DD)")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     vault: Path = args.vault

@@ -42,13 +42,18 @@ def best_line(text: str, terms: set[str]) -> str:
     return best[:200]
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("vault", type=Path)
     ap.add_argument("query")
     ap.add_argument("--limit", type=int, default=10)
     ap.add_argument("--context", action="store_true")
-    args = ap.parse_args()
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
 
     if not args.vault.is_dir():
         print(f"error: not a directory: {args.vault}", file=sys.stderr)

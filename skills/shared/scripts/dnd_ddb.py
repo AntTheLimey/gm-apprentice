@@ -1798,7 +1798,7 @@ def failed_here(rows: list[tuple[str, str, str]]) -> bool:
     return any(r[0] == "ERROR" for r in rows)
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0] if __doc__ else None)
     ap.add_argument("sheet", nargs="?")
     ap.add_argument("--write", action="store_true")
@@ -1807,6 +1807,11 @@ def main(argv: list[str] | None = None) -> int:
                     help="with --party: run only when vault.dndbeyond_sync is build")
     ap.add_argument("--player-text", action="store_true",
                     help="the player's D&D Beyond text for each background part the note does not match (not report rows)")
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
     args = ap.parse_args(argv)
     if bool(args.sheet) == bool(args.party):
         ap.error("give one sheet, or --party VAULT")

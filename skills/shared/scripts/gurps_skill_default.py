@@ -405,10 +405,7 @@ def unarmed(attack: str, skill: str, attrs: dict, bought: dict
             f"the Skill cell as \"{name} {level}\"; nothing is added", None)
 
 
-def main(argv: list[str] | None = None) -> int:
-    for stream in (sys.stdout, sys.stderr):
-        if hasattr(stream, "reconfigure"):
-            stream.reconfigure(encoding="utf-8")
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description="Add a GURPS skill to a sheet at its default, 0 points.")
     ap.add_argument("sheet", type=Path)
@@ -417,6 +414,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--default", dest="defaults", metavar="DEFAULTS")
     ap.add_argument("--for", dest="attack", metavar="ATTACK")
     ap.add_argument("--write", action="store_true")
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
+    ap = build_parser()
     args = ap.parse_args(argv)
     if (args.difficulty is None) != (args.defaults is None):
         print("gurps_skill_default.py: --difficulty and --default go "

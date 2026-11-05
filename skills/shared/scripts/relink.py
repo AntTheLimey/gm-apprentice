@@ -1027,13 +1027,18 @@ def apply(p: Plan) -> list[str]:
     return rows(p, done=True)
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description="Rename or move a note and rewrite every link to it.")
     ap.add_argument("vault", type=Path)
     ap.add_argument("old")
     ap.add_argument("new")
     ap.add_argument("--apply", action="store_true")
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
         print(f"relink.py: not a directory: {args.vault}", file=sys.stderr)

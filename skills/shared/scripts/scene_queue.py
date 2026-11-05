@@ -106,10 +106,15 @@ def queue(vault: Path, chapter: str | None = None) -> list[QueueRow]:
     return rows
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("vault", type=Path)
     ap.add_argument("--chapter")
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
     args = ap.parse_args(argv)
     try:
         rows = queue(args.vault, args.chapter)

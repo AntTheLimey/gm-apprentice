@@ -288,12 +288,17 @@ def scan(vault: Path, wrap_arg: str) -> list[str]:
     return out
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="reconcile_scan.py",
         description="Count what reconcile reviews in one Wrap-Up. Writes nothing.")
     parser.add_argument("vault", type=Path)
     parser.add_argument("wrap_up", help="the Wrap-Up's path, vault-relative or absolute")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
     try:
         lines = scan(args.vault, args.wrap_up)

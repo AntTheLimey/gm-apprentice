@@ -239,7 +239,7 @@ def render(result: ScanResult) -> list[str]:
     return out
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="reveal_scan.py",
         description="List what is still hidden in the notes a session touched. "
@@ -248,6 +248,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("session", help="the session index's path or file name")
     parser.add_argument("--also", action="append", default=[], metavar="PATH",
                         help="a vault-relative note this run wrote; repeat for each")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
     try:
         result = scan(args.vault, args.session, also=args.also)

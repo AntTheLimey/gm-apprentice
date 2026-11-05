@@ -1309,7 +1309,7 @@ def print_prep_rest(vault: Path, files, chosen, wrap, current: int,
                      title="Narrative Plans"))
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("vault", type=Path)
     ap.add_argument("--session", type=int,
@@ -1374,7 +1374,12 @@ def main() -> int:
              "unchanged. Drill into a file only where a stub or outline "
              "shows the need — for the Plan that means "
              "`plan_check.py --inventory/--state`, not a full read.")
-    args = ap.parse_args()
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
     if args.brief and (args.play or args.threads or args.arcs
                        or args.prep):
         print("error: --brief applies to the default bundle only",

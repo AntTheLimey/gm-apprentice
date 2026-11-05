@@ -242,7 +242,7 @@ def _overlap(entries: list[dict], against: list[str]) -> list[dict]:
     return out
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("vault", type=Path)
     ap.add_argument("--chapter", help="narrow to one chapter (casefold substring)")
@@ -250,7 +250,12 @@ def main() -> int:
                     help="report Planning/ entries naming these participants "
                          "or locations (space- or comma-separated, repeatable)")
     ap.add_argument("--json", action="store_true")
-    args = ap.parse_args()
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
     args.against = [n.strip() for raw in args.against
                     for n in raw.split(",") if n.strip()]
     if not args.vault.is_dir():

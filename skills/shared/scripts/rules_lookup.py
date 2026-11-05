@@ -567,7 +567,7 @@ def render(mode: str, records: list[Record], *, total: int = 0,
     return "\n".join(out)
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Look up one rules record in the systems corpus.")
     parser.add_argument("system",
@@ -581,6 +581,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--personal", action="store_true",
                         help="also read the gitignored personal/ files")
     parser.add_argument("--systems-dir", type=Path, default=SYSTEMS_DIR)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     if not args.systems_dir.is_dir():

@@ -363,7 +363,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="migrate.py",
         description="Bring a vault and its site up to the plugin's version.")
@@ -373,6 +373,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--choose", action="append", default=[],
                     metavar="ID[=VALUE]",
                     help="apply only: a Your-choice id from plan; repeatable")
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
     try:
         args = ap.parse_args(argv)
     except SystemExit as e:

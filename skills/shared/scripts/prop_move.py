@@ -2017,7 +2017,7 @@ def _write_json(path: Path, data: Any) -> None:
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(prog="prop_move.py", description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("vault", type=Path)
@@ -2025,6 +2025,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--decisions", type=Path, metavar="FILE")
     ap.add_argument("--draft", type=Path, metavar="OUT")
     ap.add_argument("--json", type=Path, metavar="OUT", dest="json_out")
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
     try:
         args = ap.parse_args(argv)
     except SystemExit as e:

@@ -448,10 +448,7 @@ def rows(p: Plan, done: bool = False) -> list[str]:
                   + (f", {len(p.kept)} left as written" if p.kept else "")]
 
 
-def main(argv: list[str] | None = None) -> int:
-    for stream in (sys.stdout, sys.stderr):
-        if hasattr(stream, "reconfigure"):
-            stream.reconfigure(encoding="utf-8")
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         description="List a vault's stray tone words, and tidy them.")
     ap.add_argument("vault", type=Path)
@@ -463,6 +460,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--set", dest="sets", action="append", metavar="OLD=NEW")
     ap.add_argument("--accept", action="store_true")
     ap.add_argument("--write", action="store_true")
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
+    ap = build_parser()
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
         print(f"tones.py: not a directory: {args.vault.as_posix()}",

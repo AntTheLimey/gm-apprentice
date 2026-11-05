@@ -424,7 +424,7 @@ def run(vault: Path, session: str, publish: list[str], released: list[tuple[str,
     return rows, (1 if counts["errors"] else 0)
 
 
-def _parse(argv: list[str] | None) -> argparse.Namespace:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="reveal.py",
         description="Publish what a session let the players learn, lift "
@@ -434,6 +434,11 @@ def _parse(argv: list[str] | None) -> argparse.Namespace:
     ap.add_argument("--publish", action="append", default=[], metavar="PATH")
     ap.add_argument("--released", action="append", default=[], metavar="PATH=WHAT")
     ap.add_argument("--write", action="store_true")
+    return ap
+
+
+def _parse(argv: list[str] | None) -> argparse.Namespace:
+    ap = build_parser()
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
         ap.error(f"{args.vault} is not a folder")

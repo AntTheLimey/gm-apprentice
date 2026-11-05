@@ -145,7 +145,7 @@ def emit(rows, label=None):
         print(r)
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("vault", type=Path)
     ap.add_argument("command",
@@ -156,7 +156,12 @@ def main() -> int:
     ap.add_argument("--folder", help="restrict results to this subfolder")
     ap.add_argument("--exclude", action="append", default=[],
                     help="glob of relpaths or top-level dirs to skip")
-    args = ap.parse_args()
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
 
     if not args.vault.is_dir():
         print(f"error: not a directory: {args.vault}", file=sys.stderr)

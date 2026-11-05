@@ -464,13 +464,18 @@ def party(vault: Path) -> int:
     return 0
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("sheet", nargs="?")
     ap.add_argument("--write", action="store_true")
     ap.add_argument("--party", metavar="VAULT",
                     help="run the rules checks on every PC note in a vault; never writes")
-    args = ap.parse_args()
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = build_parser()
+    args = ap.parse_args(argv)
     if bool(args.sheet) == bool(args.party):
         ap.error("give one sheet, or --party VAULT")
     if args.party:
