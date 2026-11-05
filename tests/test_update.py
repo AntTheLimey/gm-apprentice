@@ -338,6 +338,33 @@ class RunTests(Base):
         self.assertEqual((asked.exit, [q.id for q in asked.questions]),
                          (3, ["drop"]))
 
+    def test_a_stamp_only_run_records_its_backup(self):
+        vault = make_vault(self)
+        c, _ = check("tidy", "bookkeeping", lambda: [])
+        res = self.run_update(vault, [c])
+        self.assertEqual((res.exit, res.stamped), (0, PLUGIN))
+        self.assertTrue(res.backup and Path(res.backup).is_file())
+        self.assertEqual(update_record.load(vault)["updates"][-1]["backup"],
+                         res.backup)
+
+    def test_an_unexpected_error_stays_the_error_when_the_record_fails(self):
+        vault = make_vault(self)
+        first = file_check(vault, "first", "removes")
+
+        def boom():
+            def apply(_v):
+                raise RuntimeError("the original")
+            return [Item("boom", WILL, ["do boom"], apply)]
+        bad, _ = check("boom", "bookkeeping", boom)
+        err = io.StringIO()
+        with mock.patch.object(update, "_save_record",
+                               side_effect=OSError("disk full")), \
+                contextlib.redirect_stderr(err), \
+                self.assertRaises(RuntimeError) as caught:
+            self.run_update(vault, [first, bad], {"first": "yes"})
+        self.assertEqual(str(caught.exception), "the original")
+        self.assertIn("disk full", err.getvalue())
+
     def test_a_held_question_alone_writes_nothing(self):
         vault = make_vault(self)
         r, _ = check("drop", "removes", will_item("drop"), release="1.10.20")

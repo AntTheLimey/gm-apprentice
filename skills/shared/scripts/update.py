@@ -267,13 +267,13 @@ class _Run:
 
     def record(self, to: str) -> None:
         """Append this run to the record, with the answers that finished."""
+        self.before_write()   # first, so the entry names the backup
         self.res.did = list(self.did)
         entry: update_record.UpdateEntry = {
             "from": self.vault_v, "to": to, "on": _today(),
             "did": self.res.did, "asked": self.asked,
             "left_open": list(self.res.left_open),
             "backup": self.res.backup or ""}
-        self.before_write()
         _save_record(self.vault, self.new, entry)
 
 
@@ -299,10 +299,19 @@ def _apply(vault: Path, todo: list[Check], given: dict[str, str],
             except (StepFailed, SettingsUnavailable) as e:
                 failed, res.error = n, f"{check.name}: {e}"
                 break
-    except BaseException:
+    except BaseException as original:
         # Not a failure the checks know: keep what finished, then let it go.
+        # The original error stays the one raised; a record that cannot be
+        # written is said beside it.
         if run.wrote():
-            run.record(vault_v)
+            try:
+                run.record(vault_v)
+            except Exception as e:
+                print(f"{cli_name()}: the update record could not be written "
+                      f"({e})", file=sys.stderr)
+                note = getattr(original, "add_note", None)   # Python 3.11+
+                if note is not None:
+                    note(f"the update record could not be written: {e}")
         raise
     _unused(given, used, seen, res)
     target = migrate.stamp_target(todo, failed, vault_v, plugin_v)
