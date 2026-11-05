@@ -88,8 +88,15 @@ def _reprog(parser: argparse.ArgumentParser, old: str, new: str) -> None:
 
 
 def _load(name: str) -> argparse.ArgumentParser:
-    module = importlib.import_module(COMMANDS[name].module)
-    parser: argparse.ArgumentParser = module.build_parser()
+    # Same mechanism as dispatch: build under argv[0] = "gma <name>". The
+    # _reprog pass covers scripts that fix their own prog= (see the tests).
+    saved = sys.argv[0]
+    sys.argv[0] = f"gma {name}"
+    try:
+        module = importlib.import_module(COMMANDS[name].module)
+        parser: argparse.ArgumentParser = module.build_parser()
+    finally:
+        sys.argv[0] = saved
     _reprog(parser, parser.prog, f"gma {name}")
     return parser
 
@@ -153,11 +160,15 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if name == "publish":
         return _publish(rest)
-    if any(a in ("-h", "--help") for a in rest):
-        # Help comes from the re-programmed parser so usage reads `gma ...`.
-        _load(name).parse_args(rest)
     module = importlib.import_module(COMMANDS[name].module)
-    result: int | None = module.main(rest)
+    # argparse derives its default prog from sys.argv[0], so usage and error
+    # lines read `gma <name> ...` at every depth.
+    saved = sys.argv[0]
+    sys.argv[0] = f"gma {name}"
+    try:
+        result: int | None = module.main(rest)
+    finally:
+        sys.argv[0] = saved
     return result or 0
 
 

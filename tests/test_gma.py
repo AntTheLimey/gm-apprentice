@@ -4,6 +4,7 @@ import argparse
 import contextlib
 import io
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -29,6 +30,12 @@ def _run(argv):
         except SystemExit as exc:
             code = exc.code
     return code, out.getvalue(), err.getvalue()
+
+
+def _subprocess(argv):
+    return subprocess.run(
+        [sys.executable, str(SCRIPTS / "gma.py"), *argv],
+        capture_output=True, text=True, encoding="utf-8")
 
 
 class GmaTests(unittest.TestCase):
@@ -97,14 +104,33 @@ class GmaTests(unittest.TestCase):
                 self.assertTrue(
                     child.format_usage().startswith("usage: gma links"),
                     child.format_usage())
-        code, out, _ = _run(["links", "fix", "--help"])
-        self.assertEqual(code, 0)
-        self.assertTrue(out.startswith("usage: gma links"), out)
+        done = _subprocess(["links", "fix", "--help"])
+        self.assertEqual(done.returncode, 0)
+        self.assertTrue(done.stdout.startswith("usage: gma links"), done.stdout)
 
-    def test_truly_nested_usage_reads_gma(self):
-        code, out, _ = _run(["moments", "v", "status", "--help"])
-        self.assertEqual(code, 0)
-        self.assertTrue(out.startswith("usage: gma moments vault status"), out)
+    def test_help_three_deep_in_the_full_tree(self):
+        moments = gma._subparsers(gma.full_tree()).choices["moments"]
+        depth = [a for a in moments._actions
+                 if isinstance(a, argparse._SubParsersAction)][0]
+        status = depth.choices["status"]
+        self.assertTrue(
+            status.format_usage().startswith("usage: gma moments vault status"),
+            status.format_usage())
+
+    def test_error_usage_reads_gma(self):
+        done = _subprocess(["links", "fix", "--bogus"])
+        self.assertEqual(done.returncode, 2)
+        self.assertTrue(done.stderr.startswith("usage: gma links"), done.stderr)
+
+    def test_option_value_help_is_not_intercepted(self):
+        done = _subprocess(["links", "v", "--as", "-h"])
+        self.assertNotIn("show this help message", done.stdout)
+
+    def test_argv0_restored_even_on_system_exit(self):
+        before = sys.argv[0]
+        _run(["links", "fix", "--bogus"])
+        _run(["links", "--help"])
+        self.assertEqual(sys.argv[0], before)
 
     def test_missing_node_exits_1(self):
         import unittest.mock as mock
