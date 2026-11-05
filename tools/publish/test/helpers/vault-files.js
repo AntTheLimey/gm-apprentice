@@ -94,4 +94,38 @@ function writeSiteConfig(configPath, obj, space) {
   fs.writeFileSync(configPath, JSON.stringify({ vaultPath }, null, space));
 }
 
-module.exports = { writeSettings, writeState, mergeSettings, writeSiteConfig, settingsText, nest, NEW_FILE };
+// A test written against the old settings file keeps its fixture text: the old file's front matter (a `publish:` block and
+// a few top-level keys) is read as the settings those names stand for, and written as the new file under their current names.
+// An old name that stands for nothing is kept under player_site, where it is an unknown name.
+function currentNameOf(dotted, top) {
+  const { REGISTRY } = require('../../lib/settings/registry');
+  const want = top ? dotted : `publish.${dotted}`;
+  const e = REGISTRY.find((x) => (x.was || []).some((w) => w.in === 'vault' && w.name === want));
+  return e ? e.name : null;
+}
+function flattenOld(obj, prefix, out, top) {
+  for (const [k, v] of Object.entries(obj || {})) {
+    const dotted = prefix ? `${prefix}.${k}` : k;
+    const name = currentNameOf(dotted, top);
+    if (name) out[name] = v;
+    else if (v && typeof v === 'object' && !Array.isArray(v)) flattenOld(v, dotted, out, top);
+    else out[top ? `vault.${dotted}` : `player_site.${dotted}`] = v;
+  }
+  return out;
+}
+function oldFileSettings(fileText) {
+  const m = String(fileText).match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  const data = (m && YAML.parse(m[1])) || {};
+  const { publish, type, ...top } = data;
+  const flat = flattenOld(publish, '', {}, false);
+  flattenOld(top, '', flat, true);
+  return flat;
+}
+// Writes the settings file a test's old-file text stands for (no file at all when it holds nothing).
+function writeFromOldText(dirOrMeta, fileText) {
+  const vault = path.basename(dirOrMeta) === '_meta' ? path.dirname(dirOrMeta) : dirOrMeta;
+  const flat = oldFileSettings(fileText);
+  if (Object.keys(flat).length) writeSettings(vault, flat);
+}
+
+module.exports = { oldFileSettings, writeFromOldText, writeSettings, writeState, mergeSettings, writeSiteConfig, settingsText, nest, NEW_FILE };

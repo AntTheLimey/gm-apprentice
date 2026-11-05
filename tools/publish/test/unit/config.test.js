@@ -5,6 +5,7 @@ const path = require('path');
 const os = require('os');
 const { loadPublishConfig } = require('../../lib/config');
 const { resolve } = require('../../lib/settings');
+const { writeFromOldText } = require('../helpers/vault-files');
 // The built-in default of a setting, asked by the name the old vault file gave it.
 const defaultOf = (name) => resolve(`publish.${name}`).entry.default;
 
@@ -52,8 +53,7 @@ describe('exclude_sections default (issue #144)', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
-    fs.writeFileSync(
-      path.join(metaDir, 'vault-config.md'),
+    writeFromOldText(metaDir,
       '---\npublish:\n  exclude_sections:\n    - "Custom Section"\n---\n',
     );
     const result = loadPublishConfig(tmpDir);
@@ -61,25 +61,7 @@ describe('exclude_sections default (issue #144)', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('a vault-config.md list is first, a stale vault.config.json excludeSections only adds its missing entries', () => {
-    // A site scaffolded before #144 has a stale 4-item excludeSections in
-    // vault.config.json. The vault file's list leads; the stale entries it lacks are
-    // still applied (a site-file exclusion keeps hiding what it hid) until migrated.
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
-    const metaDir = path.join(tmpDir, '_meta');
-    fs.mkdirSync(metaDir);
-    fs.writeFileSync(
-      path.join(metaDir, 'vault-config.md'),
-      '---\npublish:\n  exclude_sections:\n    - "Custom Section"\n---\n',
-    );
-    const staleFallback = {
-      excludeSections: ['GM Notes', 'DM Notes', 'Player Notes', 'Source References'],
-    };
-    const result = loadPublishConfig(tmpDir, staleFallback);
-    assert.deepStrictEqual(result.exclude_sections, ['Custom Section', 'GM Notes', 'DM Notes', 'Player Notes', 'Source References']);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
   });
-});
 
 describe('exclude_drafts', () => {
   it('defaults to false', () => {
@@ -95,18 +77,14 @@ describe('exclude_callouts (issue #137)', () => {
     assert.strictEqual(config.exclude_callouts, false);
   });
 
-  it('reads excludeCallouts from vault.config.json fallback', () => {
-    const config = loadPublishConfig('/nonexistent/path', { excludeCallouts: true });
-    assert.strictEqual(config.exclude_callouts, true);
   });
-});
 
 describe('loadPublishConfig', () => {
   it('returns defaults when vault-config.md has no publish section', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), '---\ntitle: Test\n---\nSome config');
+    writeFromOldText(metaDir, '---\ntitle: Test\n---\nSome config');
     const result = loadPublishConfig(tmpDir);
     assert.strictEqual(result.mode, undefined);
     assert.deepStrictEqual(result.exclude_fields, ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability']);
@@ -128,7 +106,7 @@ describe('loadPublishConfig', () => {
       '      primary: "#111"',
       '---',
     ].join('\n');
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), yaml);
+    writeFromOldText(metaDir, yaml);
     const result = loadPublishConfig(tmpDir);
     assert.deepStrictEqual(result.exclude_fields, ['secrets']);
     assert.strictEqual(result.theme.genre, 'noir');
@@ -143,56 +121,14 @@ describe('loadPublishConfig', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('falls back to vault.config.json excludeSections when vault-config.md has none', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
-    const fallback = { excludeSections: ['DM Notes', 'Hidden'], excludeDirs: ['_meta', '_Prep'] };
-    const result = loadPublishConfig(tmpDir, fallback);
-    assert.ok(result.exclude_sections.includes('DM Notes'));
-    assert.ok(result.exclude_sections.includes('Hidden'));
-    assert.ok(result.exclude_dirs.includes('_Prep'));
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('merges vault-config.md and vault.config.json exclude lists only as the fallback (vault list first)', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
-    const metaDir = path.join(tmpDir, '_meta');
-    fs.mkdirSync(metaDir);
-    const yaml = '---\npublish:\n  exclude_sections:\n    - "GM Notes"\n  exclude_dirs:\n    - "_meta"\n---\n';
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), yaml);
-    const fallback = {
-      excludeSections: ['GM Notes', 'DM Notes', 'Player Notes', 'Source References'],
-      excludeDirs: ['_meta', '_QA'],
-    };
-    const result = loadPublishConfig(tmpDir, fallback);
-    assert.deepStrictEqual(result.exclude_sections, ['GM Notes', 'DM Notes', 'Player Notes', 'Source References']);
-    assert.deepStrictEqual(result.exclude_dirs, ['_meta', '_QA']);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('applies, and names, the site-file entries the vault list lacks', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
-    const metaDir = path.join(tmpDir, '_meta');
-    fs.mkdirSync(metaDir);
-    fs.writeFileSync(
-      path.join(metaDir, 'vault-config.md'),
-      '---\npublish:\n  exclude_sections:\n    - "GM Notes"\n---\n',
-    );
-    const result = loadPublishConfig(tmpDir, { excludeSections: ['gm notes', 'Secrets'] });
-    assert.deepStrictEqual(result.exclude_sections, ['GM Notes', 'Secrets']);
-    assert.deepStrictEqual(result.legacy, [
-      { key: 'excludeSections', publishKey: 'exclude_sections', status: 'ignored', stillApplied: ['Secrets'] },
-    ]);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-});
+      });
 
 describe('exclude_dirs spelling normalization', () => {
   it('strips a trailing slash', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-excl-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+    writeFromOldText(metaDir,
       '---\npublish:\n  exclude_dirs:\n    - "NPCs/Hidden/"\n---\n');
     const result = loadPublishConfig(tmpDir);
     assert.ok(result.exclude_dirs.includes('NPCs/Hidden'), result.exclude_dirs.join(', '));
@@ -204,7 +140,7 @@ describe('exclude_dirs spelling normalization', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-excl-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+    writeFromOldText(metaDir,
       '---\npublish:\n  exclude_dirs:\n    - "./NPCs/Hidden"\n---\n');
     const result = loadPublishConfig(tmpDir);
     assert.ok(result.exclude_dirs.includes('NPCs/Hidden'), result.exclude_dirs.join(', '));
@@ -215,7 +151,7 @@ describe('exclude_dirs spelling normalization', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-excl-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+    writeFromOldText(metaDir,
       '---\npublish:\n  exclude_dirs:\n    - "NPCs\\\\Hidden"\n---\n');
     const result = loadPublishConfig(tmpDir);
     assert.ok(result.exclude_dirs.includes('NPCs/Hidden'), result.exclude_dirs.join(', '));
@@ -227,7 +163,7 @@ describe('exclude_dirs spelling normalization', () => {
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
     const absolute = path.join(tmpDir, 'NPCs', 'Hidden');
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+    writeFromOldText(metaDir,
       `---\npublish:\n  exclude_dirs:\n    - "${absolute.replace(/\\/g, '\\\\')}"\n---\n`);
     const result = loadPublishConfig(tmpDir);
     assert.ok(result.exclude_dirs.includes('NPCs/Hidden'), result.exclude_dirs.join(', '));
@@ -239,7 +175,7 @@ describe('exclude_dirs spelling normalization', () => {
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
     const outside = path.join(os.tmpdir(), 'somewhere-else-entirely');
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+    writeFromOldText(metaDir,
       `---\npublish:\n  exclude_dirs:\n    - "${outside.replace(/\\/g, '\\\\')}"\n---\n`);
     const warns = [];
     const orig = console.warn;
@@ -263,7 +199,7 @@ describe('exclude_dirs spelling normalization', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-excl-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+    writeFromOldText(metaDir,
       '---\npublish:\n  exclude_dirs:\n    - "gm"\n---\n');
     const result = loadPublishConfig(tmpDir, { excludeDirs: ['GM'] });
     const gmCount = result.exclude_dirs.filter((d) => d.toLowerCase() === 'gm').length;
@@ -275,7 +211,7 @@ describe('exclude_dirs spelling normalization', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-excl-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+    writeFromOldText(metaDir,
       '---\npublish:\n  exclude_dirs:\n    - "NPCs/Hidden/"\n---\n');
     const result = loadPublishConfig(tmpDir, { excludeDirs: ['NPCs/Hidden'] });
     const count = result.exclude_dirs.filter((d) => d.toLowerCase() === 'npcs/hidden').length;
@@ -295,7 +231,7 @@ describe('loadPublishConfig — setting_year', () => {
       'publish:',
       '---',
     ].join('\n');
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), yaml);
+    writeFromOldText(metaDir, yaml);
     const result = loadPublishConfig(tmpDir);
     assert.strictEqual(result.setting_year, 2019);
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -319,7 +255,7 @@ describe('system field', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-system-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir, { recursive: true });
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+    writeFromOldText(metaDir,
       '---\npublish:\n  system: coc-7e-regency\n---\n');
 
     const result = loadPublishConfig(tmpDir, {});
@@ -337,7 +273,7 @@ describe('system field', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-nosystem-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir, { recursive: true });
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
+    writeFromOldText(metaDir,
       '---\npublish:\n  exclude_drafts: false\n---\n');
 
     const result = loadPublishConfig(tmpDir, {});
@@ -366,7 +302,7 @@ describe('section_titles passthrough', () => {
       '    locations: "Star Charts"',
       '---',
     ].join('\n');
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), yaml);
+    writeFromOldText(metaDir, yaml);
     const result = loadPublishConfig(tmpDir);
     assert.deepStrictEqual(result.section_titles, { locations: 'Star Charts' });
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -374,27 +310,7 @@ describe('section_titles passthrough', () => {
 });
 
 describe('exclude_fields resolution', () => {
-  it('the vault-config.md list leads; vault.config.json excludeFields adds its missing entries', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
-    const metaDir = path.join(tmpDir, '_meta');
-    fs.mkdirSync(metaDir);
-    fs.writeFileSync(
-      path.join(metaDir, 'vault-config.md'),
-      '---\npublish:\n  exclude_fields:\n    - "secrets"\n---\n',
-    );
-    const result = loadPublishConfig(tmpDir, { excludeFields: ['secrets', 'custom_field'] });
-    assert.deepStrictEqual(result.exclude_fields, ['secrets', 'custom_field']);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('vault.config.json excludeFields applies when the vault file is silent', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
-    const result = loadPublishConfig(tmpDir, { excludeFields: ['secrets', 'custom_field'] });
-    // The site file's entries add to the built-in list (#371).
-    assert.deepStrictEqual(result.exclude_fields, [...resolve('publish.exclude_fields').entry.default, 'custom_field']);
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-});
+    });
 
 describe('sheet_crest', () => {
   // Regression for #112: the field-by-field allow-list in loadPublishConfig
@@ -403,8 +319,7 @@ describe('sheet_crest', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
-    fs.writeFileSync(
-      path.join(metaDir, 'vault-config.md'),
+    writeFromOldText(metaDir,
       '---\npublish:\n  sheet_crest: "_attachments/factions/order.webp"\n---\n',
     );
     const result = loadPublishConfig(tmpDir);
@@ -412,19 +327,11 @@ describe('sheet_crest', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('falls back to vault.config.json sheet_crest when the publish block has none', () => {
-    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
-    const result = loadPublishConfig(tmpDir, { sheet_crest: 'images/crest.png' });
-    assert.strictEqual(result.sheet_crest, 'images/crest.png');
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('lets the publish block win over the vault.config.json fallback', () => {
+    it('lets the publish block win over the vault.config.json fallback', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
-    fs.writeFileSync(
-      path.join(metaDir, 'vault-config.md'),
+    writeFromOldText(metaDir,
       '---\npublish:\n  sheet_crest: "block.webp"\n---\n',
     );
     const result = loadPublishConfig(tmpDir, { sheet_crest: 'fallback.webp' });
@@ -464,7 +371,7 @@ describe('overrides.fields unicode normalization (#139)', () => {
       '        some_field: "override value"',
       '---',
     ].join('\n');
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), yaml);
+    writeFromOldText(metaDir, yaml);
   }
 
   it('canonicalizes an NFD-keyed overrides.fields entry to NFC, matching an NFC page path', () => {
@@ -496,7 +403,7 @@ describe('overrides surface (dead top-level keys)', () => {
   function writeConfig(tmpDir, yamlBody) {
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir, { recursive: true });
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), `---\n${yamlBody}---\n`);
+    writeFromOldText(metaDir, `---\n${yamlBody}---\n`);
   }
 
   function captureWarns(fn) {
@@ -511,7 +418,7 @@ describe('overrides surface (dead top-level keys)', () => {
     try {
       writeConfig(tmpDir, 'publish:\n  overrides:\n    exclude:\n      - "Notes/Secret.md"\n');
       const { warns } = captureWarns(() => loadPublishConfig(tmpDir));
-      const hits = warns.filter(w => w.includes('overrides.exclude'));
+      const hits = warns.filter(w => w.includes('player_site.overrides'));
       assert.strictEqual(hits.length, 1, `expected one warning, got: ${warns.join(' | ')}`);
       assert.match(hits[0], /not a setting/);
     } finally {
@@ -540,7 +447,7 @@ describe('malformed publish.overrides blocks', () => {
   function writeConfig(tmpDir, yamlBody) {
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir, { recursive: true });
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), `---\n${yamlBody}---\n`);
+    writeFromOldText(metaDir, `---\n${yamlBody}---\n`);
   }
 
   function loadWithWarns(yamlBody) {
@@ -557,26 +464,10 @@ describe('malformed publish.overrides blocks', () => {
     }
   }
 
-  it('warns once, not per character index, when overrides is a bare string', () => {
-    // Object.keys('fields') is ['0'..'5'], which would invent six override keys.
-    const { result, warns } = loadWithWarns('publish:\n  overrides: fields\n');
-    const hits = warns.filter(w => w.includes('publish.overrides'));
-    assert.strictEqual(hits.length, 1, `expected one warning, got: ${warns.join(' | ')}`);
-    assert.match(hits[0], /takes/);
-    assert.deepStrictEqual(result.overrides, { fields: {} });
-  });
-
-  it('warns once when overrides is a list', () => {
-    const { warns } = loadWithWarns('publish:\n  overrides:\n    - fields\n');
-    const hits = warns.filter(w => w.includes('publish.overrides'));
-    assert.strictEqual(hits.length, 1, `expected one warning, got: ${warns.join(' | ')}`);
-    assert.match(hits[0], /\["fields"\]/);
-  });
-
   it('ignores a non-map overrides.fields instead of inventing per-character keys', () => {
     const { result, warns } = loadWithWarns('publish:\n  overrides:\n    fields: secrets\n');
     assert.deepStrictEqual(result.overrides.fields, {});
-    assert.ok(warns.some(w => w.includes('overrides.fields')), `no warning in: ${warns.join(' | ')}`);
+    assert.ok(warns.some(w => w.includes('field_exceptions')), `no warning in: ${warns.join(' | ')}`);
   });
 
   it('reaches the validator for an explicitly falsy fields value', () => {
@@ -584,7 +475,7 @@ describe('malformed publish.overrides blocks', () => {
     // GM who wrote `fields: false` got silence and no overrides.
     const { result, warns } = loadWithWarns('publish:\n  overrides:\n    fields: false\n');
     assert.deepStrictEqual(result.overrides.fields, {});
-    assert.ok(warns.some(w => w.includes('overrides.fields') && w.includes('is false')),
+    assert.ok(warns.some(w => w.includes('field_exceptions') && w.includes('is false')),
       `no 'is false' warning in: ${warns.join(' | ')}`);
   });
 
@@ -636,7 +527,7 @@ describe('landing config (#169)', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-landing-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
-    fs.writeFileSync(path.join(metaDir, 'vault-config.md'), yaml);
+    writeFromOldText(metaDir, yaml);
     return tmpDir;
   };
 
@@ -663,13 +554,7 @@ describe('landing config (#169)', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  it('falls back to vault.config.json when the publish block has no landing', () => {
-    const config = loadPublishConfig('/nonexistent/path', { landing: { max_npcs: 9 } });
-    assert.strictEqual(config.landing.max_npcs, 9);
-    assert.strictEqual(config.landing.max_locations, 4);   // untouched keys keep defaults
-  });
-
-  it('lets the publish block win over vault.config.json', () => {
+    it('lets the publish block win over vault.config.json', () => {
     const dir = withVaultConfig('---\npublish:\n  landing:\n    max_npcs: 8\n---\n');
     const config = loadPublishConfig(dir, { landing: { max_npcs: 2 } });
     assert.strictEqual(config.landing.max_npcs, 8);
