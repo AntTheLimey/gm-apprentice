@@ -97,10 +97,10 @@ https://nodejs.org (LTS).
 **Settings.** Read and change every setting through `node "$TOOL"
 settings … --config <dir>/vault.config.json` (`--help` lists the
 verbs); never open a settings file in `_meta/` to read one or edit it
-by hand. When a command says `_meta/vault-config.md` is the old
-settings file (or `_meta/publish-manifest.md` the old publish list), the
-vault needs the update from plugin 1.10.134 first; tell the GM, then carry
-on once it is done.
+by hand. When a command stops on the old settings file or the old
+publish list ("no longer read since plugin 1.11.0"), the vault needs the
+update from plugin 1.10.134 first; tell the GM, then carry on once it is
+done.
 
 **Is there a site?** `node "$TOOL" settings get player_site.publish
 player_site.folder --vault <vault>`.

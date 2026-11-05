@@ -206,11 +206,8 @@ build.
 ## Which file holds the settings
 
 A vault has settings when `_meta/vault-config.yaml` exists, and none yet
-when it does not. The tool never reads `_meta/vault-config.md`:
-
-- With only the old file, the tool stops and says to run the update with
-  plugin 1.10.134 first.
-- With both, it stops and says to remove or rename the old file once its settings are checked against the new one.
+when it does not. The tool reads no other settings file (see "The old
+file" below).
 
 ## The old file
 
@@ -218,6 +215,11 @@ Before this layout, settings lived in the frontmatter of
 `_meta/vault-config.md`, under a `publish:` block with other names, such as
 `publish.exclude_sections`. The tool no longer reads it (plugin 1.11.0).
 Plugin 1.10.134 holds the update that moves a vault off it.
+
+- With only the old file, the tool stops and says to run the update with
+  plugin 1.10.134 first.
+- With both, it stops and says to remove or rename the old file once its
+  settings are checked against the new one.
 
 A site folder's `vault.config.json` holds only `vaultPath`. Any other key
 there, or a `prebuild` or `postbuild` script in the site's `package.json`,

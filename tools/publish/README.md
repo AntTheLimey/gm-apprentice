@@ -329,10 +329,10 @@ path, as `npm run` gives a script), and stops the build when one fails or
 takes longer than ten minutes. Nothing is published after a failure. Only
 `build`, `deploy` and the two set-up commands that build before they
 deploy (`setup-status-bar` and `setup-inbox`) run steps; a dry build, `explain`, `manifest`,
-`doctor --site`, the live preview and `deploy --no-build` do not. A
-`prebuild` or `postbuild` script left in the site's `package.json` is not run:
-it stops the build and names the setting it moved to. Move it into the vault
-and take it out of `package.json`.
+`doctor --site`, the live preview and `deploy --no-build` do not. A script
+the site's `package.json` once ran before or after the build is not run if
+it is still there: it stops the build and names the setting it moved to.
+Move it into the vault and take it out of `package.json`.
 
 The steps under `player_site` never run for the GM site. Its own go under
 `gm_site.before_build` and `gm_site.after_build`, and run in the same site

@@ -40,9 +40,9 @@ step: run it.
    as printed. What finished is kept, and the next run carries on from
    the failed step.
 7. **Exit 2** means it refused and changed nothing: the vault is not one
-   it updates (first-time setup, too old, or ahead of the plugin), or an
-   answer was not one of the question's options. Tell the GM what the
-   message names and stop. For a rejected answer, check the id and
+   it updates (first-time setup, not yet moved: see "A vault not yet
+   moved" below, or ahead of the plugin), or an answer was not one of
+   the question's options. Tell the GM what the message names and stop. For a rejected answer, check the id and
    value against the `--json` output and run again.
 8. **No GM to ask** (a scheduled or unattended run): run
    `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py" update <vault> --headless`.
@@ -56,23 +56,12 @@ on, why, or what an update did, read `_meta/update-record.json`:
 matches and what was decided when; `answers` holds each answer;
 `updates` lists each run and its backup.
 
-**The settings move.** The update moves the vault's settings to the new
-settings file. Its rows come as questions with no options:
-
-- The vault stays on the old file because its site's publish tool is
-  too old to read the new one (the row names the version it needs). The
-  same holds for the publish list, and for build steps or site keys the
-  old tool cannot take. These holds keep the vault at its old version
-  until cleared. Tell the GM what clears each: update or repin the
-  site's tool; change a build step that reads the old file; or, for a
-  site no longer published, clear `player_site.folder`.
-- The settings cannot move yet. Each row says what blocks the move. A
-  row naming a setting: campaign-qa's Settings check. A site folder that
-  belongs to another vault or cannot be read: correct `vaultPath` in
-  that site's `vault.config.json`. A `vault-notes.md` that already
-  exists and differs: ask the GM, then move it aside. Then run the
-  update again.
-- Settings still in the site folder's file of a vault already moved:
-  campaign-qa's Settings check.
+**A vault not yet moved.** The update refuses it (exit 2; `vault_check.py
+<vault> version` says `ERROR`) and names what is left on it: a stamp older
+than 1.10.60, the old settings file, the old publish list, or a site
+publish tool older than 1.27.0. This release no longer moves those. Tell
+the GM what it names and the release it links to: update the vault with
+plugin 1.10.134 first (that release's campaign-organizer, and its update),
+then run this update again.
 
 Then return to the calling skill, or carry on with the GM's request.
