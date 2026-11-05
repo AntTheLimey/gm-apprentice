@@ -49,6 +49,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import dnd_calc as dc  # noqa: E402
 import dnd_rules as dr  # noqa: E402
 from migrate_core import StepFailed, write_text_atomic  # noqa: E402
+from vaultlib import cli_name  # noqa: E402
 from dnd_note import (BARE, HALF, PLACEHOLDER, REASONED, YES, Cell, Note,  # noqa: E402
                       clean, column, number, plain_name, to_int)
 
@@ -439,12 +440,12 @@ def party(vault: Path) -> int:
     from vaultlib import entity_type, extract_frontmatter, vault_files
 
     if not vault.is_dir():
-        print(f"dnd_sheet: {vault.as_posix()} is not a folder", file=sys.stderr)
+        print(f"{cli_name()}: {vault.as_posix()} is not a folder", file=sys.stderr)
         return 2
     system = vault_system(vault)
     if system != SYSTEM:
         said = f"is {system}, not {SYSTEM}" if system else "is not recorded"
-        print(f"dnd_sheet: this vault's system {said}; nothing was checked")
+        print(f"{cli_name()}: this vault's system {said}; nothing was checked")
         return 0
     tally = dict.fromkeys(("WRONG", "LOOK", "CANTCHECK"), 0)
     sheets = 0
@@ -486,14 +487,14 @@ def main(argv: list[str] | None = None) -> int:
         try:
             return party(Path(args.party))
         except SettingsUnavailable as e:
-            print(f"dnd_sheet: {e}", file=sys.stderr)
+            print(f"{cli_name()}: {e}", file=sys.stderr)
             return 2
     path = Path(args.sheet)
     try:
         with path.open("r", encoding="utf-8", newline="") as f:
             text = f.read()
     except (OSError, UnicodeDecodeError) as e:
-        print(f"dnd_sheet: cannot read {path.as_posix()}: {e}", file=sys.stderr)
+        print(f"{cli_name()}: cannot read {path.as_posix()}: {e}", file=sys.stderr)
         return 2
     rows = plan(text)
     for r in rows:
@@ -506,7 +507,7 @@ def main(argv: list[str] | None = None) -> int:
         try:
             write_text_atomic(path, new)
         except StepFailed as e:
-            print(f"dnd_sheet: {e}", file=sys.stderr)
+            print(f"{cli_name()}: {e}", file=sys.stderr)
             return 2
         count["SAME"] += count["FILL"]
         count["FILL"] = 0

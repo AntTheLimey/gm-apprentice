@@ -108,7 +108,9 @@ def _match(text):
         else:
             return ("cmd", MODULES[m.group("mod")], text[m.end():], "script")
     m = BARE_RE.match(text)
-    if m and m.group("mod") in MODULES:
+    if m:
+        if m.group("mod") not in MODULES:
+            return ("unknown-script", m.group("mod"), "", "bare")
         return ("cmd", MODULES[m.group("mod")], text[m.end():], "bare")
     if text.startswith("vw "):
         # session-wrapup's shorthand for `vault_write.py <vault>`.
@@ -125,8 +127,30 @@ def _match(text):
     return None
 
 
+def _split_outside_quotes(text):
+    """`text` cut at each separator that is not inside quoted text."""
+    parts, start, quote = [], 0, None
+    i = 0
+    while i < len(text):
+        ch = text[i]
+        if quote:
+            if ch == quote:
+                quote = None
+        elif ch in "\"'":
+            quote = ch
+        else:
+            m = SEPARATORS.match(text, i)
+            if m:
+                parts.append(text[start:i])
+                start = i = m.end()
+                continue
+        i += 1
+    parts.append(text[start:])
+    return parts
+
+
 def _segments(text):
-    for seg in SEPARATORS.split(text):
+    for seg in _split_outside_quotes(text):
         seg = seg.strip()
         while seg.startswith(("$(", "(")):
             seg = seg[2:] if seg.startswith("$(") else seg[1:]
@@ -403,6 +427,27 @@ class PageTests(unittest.TestCase):
         found = gma_docs.problems(tree(), docs)
         self.assertTrue(any("gma relink nowhere" in p for p in found), found)
 
+    def test_gate_catches_a_stale_routing_table(self):
+        docs = _copy_docs()
+        self.addCleanupDir(docs)
+        index = docs / "llms.md"
+        text = index.read_text(encoding="utf-8")
+        row = next(l for l in text.splitlines() if l.startswith("| `links` |"))
+        index.write_text(text.replace(row, row.replace("links", "linkz", 1)),
+                         encoding="utf-8")
+        self.assertIn("llms.md: routing table out of date",
+                      gma_docs.problems(tree(), docs))
+        # With its closing marker gone the block is skipped by the renderer.
+        index.write_text(text.replace(row, row.replace("links", "linkz", 1))
+                         .replace(gma_docs.END, "", 1), encoding="utf-8")
+        self.assertTrue(any("llms.md" in p
+                            for p in gma_docs.problems(tree(), docs)))
+
+    def test_stdin_formats_are_rendered(self):
+        text = (gma_docs.PAGES / "vault-write.md").read_text(encoding="utf-8")
+        self.assertIn("PATH<TAB>SECTION<TAB>LINE", text)
+        self.assertIn("stdin: markdown sections", text)
+
     def test_index_under_budget(self):
         self.assertEqual(gma_docs.over_budget(gma_docs.INDEX), [])
 
@@ -660,6 +705,32 @@ class SkillTextTests(unittest.TestCase):
             "x.md:5: publish has no subcommand frobnicate",
             "x.md:7: gma relink: unclosed quote"])
 
+    def test_name_gate_catches_a_bare_unknown_script(self):
+        d = Path(tempfile.mkdtemp(prefix="gma-skill-"))
+        self.addCleanup(shutil.rmtree, d, True)
+        md = d / "x.md"
+        md.write_text("Run `vault_chek.py frontmatter <vault>`.\n\n"
+                      "Run `vault_check.py frontmatter <vault>`.\n",
+                      encoding="utf-8")
+        self.assertEqual(name_problems(scan_file(md)), [
+            "x.md:1: no command for vault_chek.py"])
+
+    def test_segments_keep_separators_inside_quotes(self):
+        for text in ('gma links <v> --as "north | south"',
+                     "gma links <v> --as 'a && b'",
+                     'gma links <v> --as "x ; y"'):
+            with self.subTest(text=text):
+                self.assertEqual(list(_segments(text)), [text])
+        self.assertEqual(
+            list(_segments('gma links <v> --as "a | b" | sort')),
+            ['gma links <v> --as "a | b"', "sort"])
+        d = Path(tempfile.mkdtemp(prefix="gma-skill-"))
+        self.addCleanup(shutil.rmtree, d, True)
+        md = d / "x.md"
+        md.write_text('Run `gma links <vault> fix --as "north | south"`.\n',
+                      encoding="utf-8")
+        self.assertNotIn("unclosed quote", " ".join(name_problems(scan_file(md))))
+
     def test_gma_py_calling_form_is_read(self):
         d = Path(tempfile.mkdtemp(prefix="gma-skill-"))
         self.addCleanup(shutil.rmtree, d, True)
@@ -757,7 +828,8 @@ class SkillTextTests(unittest.TestCase):
 
 def name_problems(found):
     """Commands, scripts and publish subcommands that don't exist, and
-    flags their command doesn't have."""
+    flags their command doesn't have. A publish line's flags are not
+    checked: the tool's help is hand-written and has no parser to ask."""
     bad = []
     for f in found:
         if f.kind == "unknown-script":

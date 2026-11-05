@@ -14,7 +14,7 @@ gma graph-check <vault> <command> [<name>] [options]
 | `<vault>` |  | the vault folder |
 | `<command>` | `orphans`, `unresolved`, `deadends`, `backlinks`, `ambiguous`, `all` | the query to run |
 | `<name>` |  | target note name (backlinks only) |
-| `--folder` | `FOLDER` | restrict results to this subfolder |
+| `--folder` | `FOLDER` | restrict orphans and deadends to this subfolder (the other lookups ignore it) |
 | `--exclude` | `EXCLUDE` | glob of relpaths or top-level dirs to skip (repeatable) |
 
 Example: `gma graph-check "<vault>" orphans --folder Characters`

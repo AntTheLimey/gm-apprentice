@@ -180,6 +180,10 @@ def main(argv: list[str] | None = None) -> int:
         root.print_help()
         return 0
     if args[0] == "--version":
+        if len(args) > 1:
+            print(f"gma: --version takes no arguments, got '{args[1]}'",
+                  file=sys.stderr)
+            return 2
         found = vaultlib.plugin_version()
         if found is None:
             print("gma: cannot determine the plugin version", file=sys.stderr)

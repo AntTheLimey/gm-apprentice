@@ -166,6 +166,32 @@ class GmaTests(unittest.TestCase):
         _run(["vault-check", str(vault), "version"])
         self.assertNotIn("dnd_ddb", sys.modules)
 
+    def test_version_takes_no_arguments(self):
+        self.assertEqual(_run(["--version"])[0], 0)
+        for extra in (["--bogus"], ["dnd-ddb"]):
+            with self.subTest(extra=extra):
+                code, out, err = _run(["--version", *extra])
+                self.assertEqual((code, out), (2, ""))
+                self.assertIn("--version takes no arguments", err)
+
+    def test_script_error_lines_name_gma_through_gma(self):
+        # The hard-coded prefixes of dnd_ddb, dnd_sheet and scene_queue.
+        vault = Path(tempfile.mkdtemp(prefix="gma-vault-"))
+        self.addCleanup(shutil.rmtree, vault, True)
+        missing = vault / "nope"
+        for folder in ("Chapters/A", "Chapters/B"):
+            (vault / folder).mkdir(parents=True)
+            (vault / folder / "Same.md").write_text(
+                "---\ntype: chapter\n---\n", encoding="utf-8")
+        for argv, prefix in (
+                (["dnd-ddb", str(missing / "a.md")], "gma dnd-ddb: "),
+                (["dnd-sheet", "--party", str(missing)], "gma dnd-sheet: "),
+                (["scene-queue", str(vault), "--chapter", "Same"],
+                 "gma scene-queue: ")):
+            with self.subTest(argv=argv[0]):
+                done = _subprocess(argv)
+                self.assertTrue(done.stderr.startswith(prefix), done.stderr)
+
     def test_help_reads_gma_at_every_depth(self):
         # Subprocess: Python 3.14 derives prog from -m in-process under pytest.
         for argv, prefix in (

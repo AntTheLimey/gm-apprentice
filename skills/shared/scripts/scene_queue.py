@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from vaultlib import cli_name                          # noqa: E402
 import vaultlib as vl                                  # noqa: E402
 from schema_rules import VALUE_ALIASES                  # noqa: E402
 
@@ -109,7 +110,7 @@ def queue(vault: Path, chapter: str | None = None) -> list[QueueRow]:
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("vault", type=Path, help="the vault folder")
-    ap.add_argument("--chapter", help="only this chapter's scenes")
+    ap.add_argument("--chapter", help="only this chapter's scenes, plus every paused scene")
     ap.epilog = 'Example: gma scene-queue "<vault>"'
     return ap
 
@@ -120,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         rows = queue(args.vault, args.chapter)
     except ValueError as e:
-        print(f"scene_queue: {e}", file=sys.stderr)
+        print(f"{cli_name()}: {e}", file=sys.stderr)
         return 1
     for row in rows:
         print(f"{row.status}\t{row.folder}\t[[{row.title}]]")

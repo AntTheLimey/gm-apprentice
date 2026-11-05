@@ -38,6 +38,13 @@ place Wrap-Up sections (stdin)
 gma vault-write <vault> wrapup-add <wrapup> [options]
 ```
 
+```text
+stdin: markdown sections, each starting with a heading.
+A ## section is player-facing and goes before GM Notes; a ###
+or #### section goes under GM Notes, unless it is written
+inside a ## section, where it stays and players see it.
+```
+
 | Argument | Value | Help |
 |---|---|---|
 | `<wrapup>` |  | the Wrap-Up: vault-relative, or its name |
@@ -52,6 +59,12 @@ append story entries (stdin)
 
 ```text
 gma vault-write <vault> story --wrapup WRAPUP [options]
+```
+
+```text
+stdin: entries, each opened by a '# [[PC Name]]' line.
+An entry may open with its own '## ' heading; otherwise it
+gets '## Session N - Title'. An entry holds no # or ## after that.
 ```
 
 | Argument | Value | Help |
@@ -70,6 +83,16 @@ rewrite a PC's Current Status fields (stdin)
 gma vault-write <vault> status <pc> [options]
 ```
 
+```text
+stdin: labelled fields, each opened by '**Label:** value' at
+the margin; lines under it (an Open threads list) belong to it.
+Each field sent replaces the one with that label in
+## Current Status, in the note's own shape; a label the note
+lacks is added after its last field. Fields not sent, the
+lede, subsections and asides are left alone. --show prints
+the fields as they stand, and reads no stdin.
+```
+
 | Argument | Value | Help |
 |---|---|---|
 | `<pc>` |  | the PC note, vault-relative, or its name |
@@ -84,6 +107,16 @@ add log lines to notes (stdin rows)
 gma vault-write <vault> log [options]
 ```
 
+```text
+stdin: one row per line, PATH<TAB>SECTION<TAB>LINE.
+SECTION is 'Campaign Log' or 'GM Notes/Behind the Scenes';
+a note with no Campaign Log but an Appearances or Encounters
+section gets the row there (the row says 'resolved');
+any section name is accepted. A section the note's template
+keeps under GM Notes must be written as 'GM Notes/<Name>'
+unless the note already has it as a public section.
+```
+
 | Argument | Value | Help |
 |---|---|---|
 | `--write` |  | write it (default: preview) |
@@ -94,6 +127,11 @@ add timeline entries (stdin)
 
 ```text
 gma vault-write <vault> timeline --under UNDER [options]
+```
+
+```text
+stdin: entries exactly as they should read. A line at the
+margin opens an entry; indented lines belong to it.
 ```
 
 | Argument | Value | Help |
@@ -109,6 +147,14 @@ a cold session's index and Play Notes, or with --upcoming an unplayed session's 
 
 ```text
 gma vault-write <vault> session-new --number NUMBER --title TITLE [options]
+```
+
+```text
+Files both beside the previous session, from the session
+template; the previous index's own keys come forward empty.
+--export places a table-assistant export whole under
+## Narrative Record and resolves its NPCs, Locations and
+Items: EXACT, ALIAS, NEAR (candidates) or NONE, one row each.
 ```
 
 | Argument | Value | Help |
@@ -129,6 +175,14 @@ Play Notes beside a session index prep already filed
 gma vault-write <vault> play-notes-new --session SESSION [options]
 ```
 
+```text
+Files <index> - Play Notes beside the index and sets its
+documents.play_notes, play_date (with --play-date) and a
+planned or prepped status to played; the Plan link stays.
+Refused when Play Notes anywhere name the session. --export
+works as in session-new.
+```
+
 | Argument | Value | Help |
 |---|---|---|
 | `--session` | `SESSION` | the session index: path or name |
@@ -144,6 +198,10 @@ an export's names against the vault (read-only)
 gma vault-write <vault> resolve --export EXPORT
 ```
 
+```text
+The name rows session-new prints, for an export whose session is already filed.
+```
+
 | Argument | Value | Help |
 |---|---|---|
 | `--export` | `EXPORT` | the export file |
@@ -154,6 +212,12 @@ file a Midwife draft as a vault plan
 
 ```text
 gma vault-write <vault> promote-plan <draft> --to TO --plan-type PLAN_TYPE [options]
+```
+
+```text
+Scaffolds from the plan template, copies the draft's body
+exactly and runs the schema check. participants and locations
+are left for the caller to fill.
 ```
 
 | Argument | Value | Help |
@@ -173,6 +237,10 @@ file a new chapter note
 gma vault-write <vault> chapter-new --title TITLE [options]
 ```
 
+```text
+Creates Chapters/<title>/<title>.md from the chapter template. Refused when a chapter of that title exists.
+```
+
 | Argument | Value | Help |
 |---|---|---|
 | `--title` | `TITLE` | the chapter's title |
@@ -186,6 +254,13 @@ file a new scene under its chapter
 
 ```text
 gma vault-write <vault> scene-new --chapter CHAPTER --title TITLE [options]
+```
+
+```text
+Creates <chapter folder>[/<folder>]/Scenes/<title>.md from the
+scene template, or with --set-piece
+Scenes/<title>/<title>.md. --chapter is the chapter note's
+name, its title or its folder; none or several: refused.
 ```
 
 | Argument | Value | Help |
@@ -202,6 +277,14 @@ write a paused scene's snapshot
 
 ```text
 gma vault-write <vault> scene-paused --scene SCENE --session SESSION [options]
+```
+
+```text
+Sets status to paused, adds the session to played_in once and
+writes the snapshot on stdin as the scene's `## Paused`
+section (replaced in place when there is one, else at the top
+of the body). --new files a scene born at the table in the
+session's chapter (or --chapter) as Scenes/<scene>.md.
 ```
 
 | Argument | Value | Help |
@@ -221,6 +304,10 @@ mark a scene played or dropped
 gma vault-write <vault> scene-played --scene SCENE [options]
 ```
 
+```text
+Sets status to played or dropped; played adds the session to played_in once. No other field changes.
+```
+
 | Argument | Value | Help |
 |---|---|---|
 | `--scene` | `SCENE` | the scene note's name, or its vault-relative path when several share the name |
@@ -234,6 +321,15 @@ file a new prop in its chapter's Props folder
 
 ```text
 gma vault-write <vault> prop-new --chapter CHAPTER --title TITLE [options]
+```
+
+```text
+Creates <chapter folder>[/<folder>]/Props/<title>.md from the
+prop template. --style builds the page on the site; --file
+names a hand-made page beside the note. --hand names the
+writer's hand in _meta/prop-hands.json (a new one needs
+--hand-font). --scene links the prop from that scene's
+entities. The publish list is never touched.
 ```
 
 | Argument | Value | Help |
@@ -259,6 +355,13 @@ add a writer's hand to _meta/prop-hands.json
 gma vault-write <vault> prop-hand --hand HAND --hand-font HAND_FONT [options]
 ```
 
+```text
+Adds a hand for props already filed (prop-new adds one for a
+new prop). The same id with the same font is a skip; with a
+different font, refused. It never touches a note or the
+publish list.
+```
+
 | Argument | Value | Help |
 |---|---|---|
 | `--hand` | `HAND` | the writer's hand id, e.g. sophia |
@@ -272,6 +375,16 @@ write a session's Plan and check it
 
 ```text
 gma vault-write <vault> plan --number NUMBER [options]
+```
+
+```text
+Writes the Plan on stdin beside session N's index, with the
+template's frontmatter, sets the index to prepped with
+documents.plan, and prints plan_check's rows. No index yet:
+--title (and --chapter) files one as upcoming. An existing
+Plan is never overwritten: --section replaces each section
+on stdin by level and title, and adds a missing ## where the
+template has it.
 ```
 
 | Argument | Value | Help |

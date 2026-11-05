@@ -13,7 +13,10 @@ There is no `gma` on the PATH: where these pages write `gma`, run
   task.
 - Most commands that write preview first and write only with `--write`
   (or `--apply`, `--execute`); show the GM the preview before the write.
-- Exit status 2 means the command was called wrongly: read its page.
+- Exit status 2 means the call was wrong (read the command's page) or the
+  command could not run on a right one: unreadable settings, or a publish
+  tool that stops answering part-way through `vault-check`. The `error:`
+  line on stderr says which.
   When you pipe a command into `head`, `tail` or `grep`, put
   `set -o pipefail` first so its exit status survives.
 - Quote a vault path or note name with spaces in it.

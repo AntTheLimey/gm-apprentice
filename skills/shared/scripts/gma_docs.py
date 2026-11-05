@@ -197,6 +197,11 @@ def render_block(display: str, parser: argparse.ArgumentParser, summary: str,
     if summary:
         lines += [_cell(summary), ""]
     lines += ["```text", _usage(prefix or display, parser), "```", ""]
+    if display.count(" ") >= 2 and parser.description:
+        # A subcommand's description holds its stdin format; the index sends
+        # agents to this page, not to --help. (A command's own description
+        # is the page's prose.)
+        lines += ["```text", parser.description.strip(), "```", ""]
     rows = []
     for action in parser._actions:
         if isinstance(action, argparse._HelpAction) or action.help == argparse.SUPPRESS:
@@ -321,6 +326,8 @@ def problems(tree: argparse.ArgumentParser, docs: Path = DOCS) -> list[str]:
         if path == docs / "llms.md":
             if ROUTING not in doc:
                 found.append(f"{rel}: no routing table")
+            elif f"{ROUTING}\n{render_routing(tree)}{END}" not in doc:
+                found.append(f"{rel}: routing table out of date")
             found += over_budget(path)
         if render(doc, tree) != doc:
             found.append(f"{rel}: generated blocks out of date")

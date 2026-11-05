@@ -27,6 +27,12 @@ COUNT = "# write: {w}  add: {a}  remove: {r}  kept: {k}  check: {c}  fill: {f}"
 
 
 @pytest.fixture(autouse=True)
+def invoked_as_the_script(monkeypatch):
+    """Error lines name the invoked command; these tests run it directly."""
+    monkeypatch.setattr(sys, "argv", ["dnd_ddb.py"])
+
+
+@pytest.fixture(autouse=True)
 def no_network(monkeypatch):
     """A test that opens a socket fails."""
     def refuse(self, *args, **kwargs):
@@ -278,7 +284,7 @@ def test_party_on_a_gurps_vault_asks_nothing(tmp_path, capsys, fake):
     root = vault(tmp_path, system="gurps-4e")
     pcs(root)
     assert main(["--party", str(root)]) == 0
-    assert lines(capsys) == ["dnd_ddb: this vault's system is gurps-4e, not dnd-5e-2024; nothing was read"]
+    assert lines(capsys) == ["dnd_ddb.py: this vault's system is gurps-4e, not dnd-5e-2024; nothing was read"]
     assert fake.asked == []
 
 
@@ -288,7 +294,7 @@ def test_party_on_a_gurps_vault_asks_nothing(tmp_path, capsys, fake):
     ('"manual"', 0, []),
     ("build", 1, None),
     ('"build"', 1, None),
-    ("always", 0, ['dnd_ddb: publish.dndbeyond_sync is "always"; it takes build or manual; nothing was synced']),
+    ("always", 0, ['dnd_ddb.py: publish.dndbeyond_sync is "always"; it takes build or manual; nothing was synced']),
 ])
 def test_on_build_follows_the_vault_setting(tmp_path, capsys, fake, setting, asked, said):
     root = vault(tmp_path, setting=setting)
@@ -528,7 +534,7 @@ def test_on_build_with_an_unreadable_settings_file_says_so_once(tmp_path, capsys
     pcs(root, ("Alder",))
     (root / "_meta" / "vault-config.md").write_bytes(b"---\npublish:\n  dndbeyond_sync: build\n\xff\xfe\n---\n")
     assert main(["--party", str(root), "--on-build"]) == 0
-    assert lines(capsys) == ["dnd_ddb: _meta/vault-config.md could not be read; nothing was synced"]
+    assert lines(capsys) == ["dnd_ddb.py: _meta/vault-config.md could not be read; nothing was synced"]
     assert fake.asked == []
 
 
@@ -541,7 +547,7 @@ def test_on_build_with_no_settings_file_stays_silent(tmp_path, capsys, fake):
 # --- the memory of what sync added ----------------------------------------------------------
 
 GOOD = {"version": 1, "character": "424242", "lists": {"gear": ["rope, hempen", "shield"], "spells": ["fire bolt"]}}
-NOT_IN_A_VAULT = "dnd_ddb: this note is not inside a vault, so nothing is remembered and no row is ever removed"
+NOT_IN_A_VAULT = "dnd_ddb.py: this note is not inside a vault, so nothing is remembered and no row is ever removed"
 
 
 def memory_file(root, char_id="424242"):
@@ -703,14 +709,14 @@ def test_a_memory_that_cannot_be_saved_is_one_stderr_line_and_the_note_is_still_
     path = sheet(root / "Characters")
     assert main([str(path), "--write"]) == 0
     captured = capsys.readouterr()
-    assert captured.err.splitlines() == ["dnd_ddb: could not save what was synced for Tavin: disk full"]
+    assert captured.err.splitlines() == ["dnd_ddb.py: could not save what was synced for Tavin: disk full"]
     assert "| Level | 5 |" in path.read_text(encoding="utf-8")
     (tmp_path / "party").mkdir()
     other = vault(tmp_path / "party")
     pcs(other, ("Alder",))
     capsys.readouterr()
     assert main(["--party", str(other), "--write"]) == 0
-    assert capsys.readouterr().err.splitlines() == ["dnd_ddb: could not save what was synced for Alder: disk full"]
+    assert capsys.readouterr().err.splitlines() == ["dnd_ddb.py: could not save what was synced for Alder: disk full"]
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="folder modes are not enforced the same way on Windows")
@@ -802,6 +808,6 @@ def test_raw_control_characters_in_the_vault_file_stop_with_one_clean_line(tmp_p
         b"---\npublish:\n  system: dnd-5e-2024\n  dndbeyond_sync: always\x07\x1b[2J\n---\n")
     assert main(["--party", str(root), "--on-build"]) == 2
     err = capsys.readouterr().err
-    assert err.startswith("dnd_ddb: could not read the vault's settings: ")
+    assert err.startswith("dnd_ddb.py: could not read the vault's settings: ")
     assert err.count("\n") == 1 and "\x07" not in err and "\x1b" not in err
     assert fake.asked == []

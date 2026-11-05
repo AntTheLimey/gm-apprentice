@@ -153,7 +153,7 @@ def build_parser() -> argparse.ArgumentParser:
                              "backlinks", "ambiguous", "all"], help="the query to run")
     ap.add_argument("name", nargs="?",
                     help="target note name (backlinks only)")
-    ap.add_argument("--folder", help="restrict results to this subfolder")
+    ap.add_argument("--folder", help="restrict orphans and deadends to this subfolder (the other lookups ignore it)")
     ap.add_argument("--exclude", action="append", default=[],
                     help="glob of relpaths or top-level dirs to skip")
     ap.epilog = 'Example: gma graph-check "<vault>" orphans --folder Characters'
