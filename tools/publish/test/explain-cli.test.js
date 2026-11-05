@@ -419,6 +419,16 @@ describe('explain', () => {
     return { vault, dir, configPath };
   }
 
+  it('says a root CLAUDE.md is the vault agent\'s instructions, not a note with no type', async () => {
+    const vault = makeVault();
+    write(vault, 'CLAUDE.md', 'agent instructions\n');
+    const c = capture();
+    assert.strictEqual(await runExplain({ configPath: siteFor(vault), target: 'CLAUDE.md' }, c.deps), 0);
+    assert.doesNotMatch(c.text(), /NO_TYPE/);
+    assert.match(c.text(), /AGENT_FILE/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('says the frontmatter could not be parsed, not NO_TYPE, for an unparseable file', async () => {
     const { vault, dir, configPath } = siteForMalformed();
     const c = capture();

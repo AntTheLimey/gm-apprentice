@@ -47,8 +47,10 @@ from typing import Any, Iterable, Iterator, Literal
 
 SKIP_DIRS = {"_Templates", "_templates", "_inbox"}
 # The vault agent's instructions at the root: not notes (agent_block.py
-# writes the plugin's block in them).
+# writes the plugin's block in them). Root only and case-blind, the same
+# rule as the publish tool's lib/agent-files.js.
 AGENT_FILES = ("CLAUDE.md", "AGENTS.md")
+_AGENT_FILES_LOWER = {name.lower() for name in AGENT_FILES}
 
 # Top-level folders whose notes are records of the past (QA reports,
 # archives). Links written in them are not reported as broken; notes in
@@ -87,7 +89,7 @@ def is_skipped_path(rel: str, skip_dirs: set[str] = SKIP_DIRS) -> bool:
     clear error as a path that doesn't exist at all, rather than a
     silently empty report.
     """
-    if rel in AGENT_FILES:
+    if "/" not in rel and rel.lower() in _AGENT_FILES_LOWER:
         return True
     parts = rel.split("/")
     if any(p.startswith(".") for p in parts):

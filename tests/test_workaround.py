@@ -281,7 +281,7 @@ class OfferTests(Base):
         self.assertEqual(res.exit, 0)
         self.assertEqual(res.notes, [update.NO_SWEEP])
         self.assertIn("- No workaround record yet: run the one-time sweep "
-                      "(campaign-organizer, workaround-sweep.md).",
+                      "(campaign-organizer/references/workaround-sweep.md).",
                       update.report(res))
         self.swept()
         self.assertEqual(self.update().notes, [])

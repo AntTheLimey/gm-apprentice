@@ -16,14 +16,14 @@ note or a memory note of your own.
    python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py" workaround add "<vault>" --issue N --what "<one plain line>" --kind note --where <path>
    ```
 
-   Outside a skill, `${CLAUDE_PLUGIN_ROOT}` is the gm-apprentice
-   plugin's folder. `--kind` is note, field, css, script, meta or memory. Give a `--where`
-   for every place it lives: a path in the vault, or `memory:<file>` for
-   your own memory. When the next update finds a release that ships the
-   issue, it offers the GM to retire the stand-in.
-3. **An issue a release only partly fixes** (an umbrella issue) reads as
-   shipped once any part ships. Add `--release X.Y.Z` with the release
-   that finishes it, if you know it; if not, say so to the GM.
+   Outside a skill, `${CLAUDE_PLUGIN_ROOT}` is the gm-apprentice plugin's
+   folder. `--kind` is note, field, css, script, meta or memory. Give a
+   `--where` for every place it lives: a path in the vault, or
+   `memory:<file>` for your own memory. When the next update finds a
+   release that ships the issue, it offers the GM to retire the stand-in.
+3. **Add `--release X.Y.Z`** if the update would read the issue as
+   shipped too early (an umbrella issue a release only partly fixed): give
+   the release that finishes it, if you know it; if not, say so to the GM.
 
 With no issue (the GM said no to filing), record nothing: there is nothing
 for an update to offer it back against. The script's `workaround --help`

@@ -119,6 +119,13 @@ class NotANoteTests(unittest.TestCase):
         self.assertEqual([rel for rel, _ in vault_files(vault)],
                          ["Sessions/CLAUDE.md"])
 
+    def test_the_rule_is_root_only_and_case_blind_like_the_publish_tool(self):
+        from vaultlib import is_skipped_path
+        for rel in ("CLAUDE.md", "claude.md", "Agents.MD"):
+            self.assertTrue(is_skipped_path(rel), rel)
+        for rel in ("Notes/CLAUDE.md", "README.md", "Notes/agents.md"):
+            self.assertFalse(is_skipped_path(rel), rel)
+
 
 def the_check():
     (check,) = [c for c in mv.VAULT_CHECKS if c.name == "agent-block"]

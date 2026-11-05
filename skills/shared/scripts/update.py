@@ -57,7 +57,7 @@ WORKAROUND = "workaround:"   # a workaround question's id is this + its id
 WORKAROUND_OPTIONS = ["retire", "keep"]
 SAID = 160   # the CHANGELOG entry a workaround question quotes, at most
 NO_SWEEP = ("No workaround record yet: run the one-time sweep "
-            "(campaign-organizer, workaround-sweep.md).")
+            "(campaign-organizer/references/workaround-sweep.md).")
 NO_CHANGELOG = ("Could not read the plugin's CHANGELOG, so no workaround "
                 "was checked.")
 

@@ -40,14 +40,41 @@ const FILES = {
 };
 
 describe('scanner: the vault agent files at the root', () => {
-  it('never makes a page of CLAUDE.md or AGENTS.md holding the plugin block', () => {
-    const block = '<!-- BEGIN gm-apprentice (managed by the plugin; edits here are replaced) -->\n- a line\n<!-- END gm-apprentice -->\n';
-    const { vault } = setup({ ...FILES, 'CLAUDE.md': block, 'AGENTS.md': `agent notes\n\n${block}` });
+  const block = '<!-- BEGIN gm-apprentice (managed by the plugin; edits here are replaced) -->\n- a line\n<!-- END gm-apprentice -->\n';
+  const files = () => ({ ...FILES, 'CLAUDE.md': block, 'AGENTS.md': `agent notes\n\n${block}`, 'Notes/CLAUDE.md': 'a note of that name\n' });
+
+  it('skips a root CLAUDE.md or AGENTS.md silently: no page, not untyped, no warning; a nested one is still a note', () => {
+    const { vault } = setup(files());
     const report = scanVaultReport({ vaultPath: vault, excludeDirs: ['_meta'], folderMap: FOLDER_MAP });
-    const sources = report.pages.map((p) => p.relPath || p.sourcePath || p.path || JSON.stringify(p));
+    const sources = report.pages.map((p) => JSON.stringify(p));
     assert.ok(sources.every((s) => !/CLAUDE\.md|AGENTS\.md/.test(s)), sources.join('\n'));
-    assert.ok(report.untyped.includes('CLAUDE.md'));
-    assert.ok(report.untyped.includes('AGENTS.md'));
+    assert.ok(report.untyped.includes('Notes/CLAUDE.md'), report.untyped.join(', '));
+    assert.ok(!report.untyped.some((rel) => !rel.includes('/') && /^(claude|agents)\.md$/i.test(rel)), report.untyped.join(', '));
+    const warned = [];
+    const real = console.warn;
+    const realLog = console.log;
+    console.warn = (m) => warned.push(String(m));
+    console.log = () => {};
+    try { warnScanReport(report); } finally { console.warn = real; console.log = realLog; }
+    assert.ok(warned.every((w) => !/(^|[^/])(CLAUDE|AGENTS)\.md/.test(w)), warned.join('\n'));
+    assert.match(warned.join('\n'), /skipped 3 file\(s\)/);   // the two working notes and Notes\/CLAUDE.md
+  });
+
+  it('is root-only and case-blind', () => {
+    const { isAgentFile } = require('../lib/agent-files');
+    assert.ok(isAgentFile('CLAUDE.md'));
+    assert.ok(isAgentFile('claude.md'));
+    assert.ok(isAgentFile('Agents.MD'));
+    assert.ok(!isAgentFile('Notes/CLAUDE.md'));
+    assert.ok(!isAgentFile('README.md'));
+  });
+
+  it('never marks one, even when named', async () => {
+    const { vault, configPath } = setup(files());
+    const r = await run(configPath, { paths: ['AGENTS.md', 'CLAUDE.md'], write: true });
+    assert.match(r.text, /marked 0 note/);
+    assert.strictEqual(fs.readFileSync(path.join(vault, 'AGENTS.md'), 'utf8'), `agent notes\n\n${block}`);
+    assert.strictEqual(fs.readFileSync(path.join(vault, 'CLAUDE.md'), 'utf8'), block);
   });
 });
 
@@ -65,7 +92,7 @@ describe('scanner: publish: false on a note with no type', () => {
     console.log = (m) => logged.push(m);
     try { warnScanReport(report); } finally { console.warn = real; console.log = realLog; }
     assert.ok(warned.every((w) => !w.includes('Marked.md')), warned.join('\n'));
-    assert.match(warned.join('\n'), /skipped 3 file\(s\)/);
+    assert.match(warned.join('\n'), /skipped 2 file\(s\)/);   // the root AGENTS.md is not a note
     assert.match(warned.join('\n'), /publish: false/);
     assert.match(logged.join('\n'), /1 note\(s\) with no `type:` marked publish: false/);
   });
@@ -115,7 +142,7 @@ describe('manifest never-publish', () => {
     assert.strictEqual(fs.readFileSync(path.join(vault, 'Sessions/Plan.md'), 'utf8'), '---\npublish: false\nstatus: draft\n---\nplan body\n');
     assert.strictEqual(fs.readFileSync(path.join(vault, 'AGENTS.md'), 'utf8'), 'agent notes\n');
     const report = scanVaultReport({ vaultPath: vault, excludeDirs: ['_meta'], folderMap: FOLDER_MAP });
-    assert.deepStrictEqual(report.untyped, ['AGENTS.md']);
+    assert.deepStrictEqual(report.untyped, []);
     assert.strictEqual(report.neverPublish.length, 3);
     const again = await run(configPath, { untyped: true, write: true });
     assert.match(again.text, /marked 0 note/);
@@ -131,12 +158,6 @@ describe('manifest never-publish', () => {
     assert.strictEqual(bad.rc, 1);
     assert.match(bad.text, /no such file in the vault: Sessions\/Nope\.md/);
     assert.strictEqual(fs.readFileSync(path.join(vault, 'Sessions/Plan.md'), 'utf8'), FILES['Sessions/Plan.md']);
-  });
-
-  it('marks a root AGENTS.md only when it is named', async () => {
-    const { vault, configPath } = setup(FILES);
-    await run(configPath, { paths: ['AGENTS.md'], write: true });
-    assert.strictEqual(fs.readFileSync(path.join(vault, 'AGENTS.md'), 'utf8'), '---\npublish: false\n---\nagent notes\n');
   });
 
   it('reads a --path as the vault spells it, so a note that publishes is never marked whatever the case typed', async () => {
