@@ -195,6 +195,13 @@ def test_voice_value_bare_word_null_inside_text_is_kept():
     assert vl.voice_value(fm("voice: nullish and wary")) == "nullish and wary"
 
 
+def test_voice_read_an_indented_comment_is_no_continuation():
+    text = "---\ntype: npc\nvoice: Dry.\n  # how they speak\nstatus: x\n---\n"
+    assert vl.voice_read(text) == "Dry."
+    text = "---\ntype: npc\nvoice: Dry.\n  # note\n  continued\n---\n"
+    assert vl.voice_read(text) is None
+
+
 @pytest.mark.parametrize("value", [
     "Dry.\nSecond line", "Tab\there", "CR\rhere", "bell\x07", "sep\u2028x",
     "nel\x85x", "both \\ and \"quote\"\nnext"])

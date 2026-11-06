@@ -409,7 +409,11 @@ def voice_read(text: str) -> str | None:
     if at is None:
         return ""
     raw = fm[at][len("voice:"):].strip()
-    following = fm[at + 1] if at + 1 < len(fm) else ""
+    # The next line that is not an indented comment (YAML reads one as a
+    # comment, never as more of the value).
+    following = next((ln for ln in fm[at + 1:]
+                      if not (ln[:1] in (" ", "\t")
+                              and ln.lstrip().startswith("#"))), "")
     continued = bool(following.strip()) and following[:1] in (" ", "\t")
     if raw.startswith('"'):
         try:
