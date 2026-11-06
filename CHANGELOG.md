@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.11.2] — 2026-11-06
+
+A new vault no longer starts with a table error. No vault change for an existing vault.
+
+### Fixed
+
+- **The `publish` row of the schema table** wrote its two values as `` `false` \| `stub` ``. A new vault copies that table into `_meta/entity-types.md`, and the table check rejects an escaped pipe in a cell, so every new vault began with one ERROR. The row now reads `` `false` or `stub` ``, and a test runs the table check over the text a new vault gets.
+
+---
+
 ## [1.11.1] — 2026-11-05
 
 Settings writer fixes (#380). Publish tool 1.69.1. No vault change.

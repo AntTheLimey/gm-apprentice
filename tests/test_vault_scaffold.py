@@ -59,6 +59,10 @@ class TextTests(unittest.TestCase):
         self.assertNotIn("## Relationship Types", text)
         self.assertNotIn("Required Relationships", text)
 
+    def test_entity_types_has_no_table_cell_the_checker_rejects(self):
+        self.assertEqual(vc.table_findings("_meta/entity-types.md",
+                                           vs.entity_types_text()), [])
+
     def test_relationship_types_holds_the_full_vocabulary(self):
         text = vs.relationship_types_text()
         data = json.loads((SHARED / "gm-apprentice-ontology.json")
