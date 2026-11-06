@@ -63,11 +63,11 @@ too) adding a new section or sub-section for players, one the
 template lacks, and tell the GM of any they did not ask for before
 `--write`.
 
-**Authoring vs. preserving:** four outputs are authoring
+**Authoring vs. preserving:** five outputs are authoring
 exceptions to `shared/content-fidelity.md`, because the source is
 shorthand and no prose exists yet — the Step 2 recap, Step 3b
-story entries, Step 3c `## Current Status`, and timeline summary
-lines. Write them faithful to the notes (or recap and
+story entries and NPC passages, Step 3c `## Current Status`, and
+timeline summary lines. Write them faithful to the notes (or recap and
 carry-forward): no embellishment, invent nothing the session
 didn't produce. The synthesized GM Notes sections (What Carries
 Forward, World State, Keeper Checklist, Quality Notes) are
@@ -75,7 +75,11 @@ grounded too: each claim traces to the Play Notes, the plan or a
 named vault file; mark anything uncertain `<!-- UNVERIFIED (S{n}): … -->`
 for reconcile, tagged with this session (`Ch{c} S{n}` if it has a
 chapter). Everything
-else that moves existing text keeps it verbatim.
+else that moves existing text keeps it verbatim. Voices shape the
+recap, Story entries and NPC passages; records stay plain
+(Campaign Log, timeline, Carry-Forward, Keeper Checklist,
+`## Current Status`, entity Overviews). Offer to fold a GM correction
+of voiced prose into the voice (`shared/voice.md`).
 
 ## Workflow
 
@@ -108,9 +112,17 @@ Steps 2 and 4.
 
 ### 2. Narrative Recap
 
+**Voices first:** `vault_check.py <vault> voices`, plus one naming
+any PC who died or left this session (else left out). `# off:
+vault.voices` → no voices, as before. A `(none)` voice → draft it
+per `shared/voice.md` for the GM's yes: the campaign's before the
+recap, a PC's before their Story entry, an NPC's when the GM gives
+them a story.
+
 Write `## Narrative Recap` from the Play Notes, with every entity
-`[[wiki-linked]]`; tone per `references/recap-formats.md`, set
-from the chapter overview and recent notes. Add Quick Bullets and
+`[[wiki-linked]]`, in the campaign voice (off: tone per
+`references/recap-formats.md`, set from the chapter overview and
+recent notes). Add Quick Bullets and
 Memorable Moments when the template's conditions call for them. Run
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/moments.py"
 <vault> status`; on `moments on`, read
@@ -137,6 +149,11 @@ Write each roster PC's entry per `shared/character-story-format.md`
 — read it; its Appending command takes 3c's values. Source: Steps
 2–3 only. Current session only — missing earlier entries are
 vault-ingest's job.
+
+**Storied NPCs** (voiced, appeared): a passage each, in voice:
+`vw npc-story --wrapup "<wrap-up>" --as-of "<asOfSession value>"`,
+entries under `# [[NPC Name]]` lines; dry-run, then `--write` plus
+the `--section` a HINT names.
 
 ### 3c. PC Sheet Refresh
 
