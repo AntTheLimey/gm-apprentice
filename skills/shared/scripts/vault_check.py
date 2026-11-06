@@ -1080,8 +1080,10 @@ def list_active_pcs(vault: Path) -> list[str]:
 def voice_rows(vault: Path, names: Sequence[str]) -> list[str]:
     """`voices`: the campaign's voice, then each character's. No NAMEs: the
     active PCs and every NPC with a voice. NAMEs: those characters, by
-    name, alias or `[[link]]`. Only real notes count: not a `*_Story.md`
-    companion, an archived or QA copy, or a `_Template_` file."""
+    name, alias or `[[link]]`; a name two characters answer to reads
+    `(ambiguous: ...)` rather than either voice. Only real notes count:
+    not a `*_Story.md` companion, an archived or QA copy, or a
+    `_Template_` file."""
     def row(label: str, text: str) -> str:
         voice = vaultlib.voice_read(text)
         # one row a line: any whitespace but a plain space (a line break of
@@ -1112,12 +1114,16 @@ def voice_rows(vault: Path, names: Sequence[str]) -> list[str]:
               if fm.get("type") in ("pc", "npc")]
     for name in names:
         want = vaultlib.normalize(vaultlib.wikilink_target(name.strip()))
-        hit = next((p for p in people
-                    if vaultlib.normalize(Path(p[0]).stem) == want
-                    or want in {vaultlib.normalize(a)
-                                for a in link_aliases(p[2])}), None)
-        rows.append(row(Path(hit[0]).stem, hit[1]) if hit
-                    else f"{name}\t(no such character)")
+        hits = [p for p in people
+                if vaultlib.normalize(Path(p[0]).stem) == want
+                or want in {vaultlib.normalize(a)
+                            for a in link_aliases(p[2])}]
+        if len(hits) > 1:
+            rows.append(f"{name}\t(ambiguous: " + ", ".join(
+                sorted(Path(p[0]).stem for p in hits)) + ")")
+        else:
+            rows.append(row(Path(hits[0][0]).stem, hits[0][1]) if hits
+                        else f"{name}\t(no such character)")
     return rows
 
 

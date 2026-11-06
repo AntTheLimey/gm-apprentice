@@ -263,6 +263,18 @@ def test_voices_row_stays_one_line_for_every_line_break(tmp_path, monkeypatch,
     assert out[3:] == ["Ada Vane\tDry. Second"]
 
 
+def test_voices_name_two_characters_answer_to_is_ambiguous(tmp_path,
+                                                           monkeypatch, capsys):
+    vault = make_vault(tmp_path)
+    note(vault / "NPCs" / "A Twin.md",
+         'type: npc\naliases: [Marlo Petrak]\nvoice: "Wrong one."\n')
+    populate(vault)
+    code, out = voices(monkeypatch, capsys, vault, "Marlo Petrak", "Ada")
+    assert code == 0
+    assert out[3:] == ["Marlo Petrak\t(ambiguous: A Twin, Marlo Petrak)",
+                       "Ada Vane\tClipped."]
+
+
 def test_voices_name_takes_a_wikilink_and_inner_spaces(tmp_path, monkeypatch,
                                                        capsys):
     vault = make_vault(tmp_path)
