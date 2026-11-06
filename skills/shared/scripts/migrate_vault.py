@@ -28,7 +28,7 @@ from vault_check import (RECONSTRUCTION_NOTE_RE, WRAP_TYPES, WrapDetail, check_w
                          configured_site, semver_below,
                          site_pin, wrapup_filename_findings)
 from vaultlib import (SKIP_DIRS, StateUnreadable, entity_type, extract_frontmatter,
-                      delete_key, fence_step, frontmatter_span, opens_a_block,
+                      delete_key, set_key, fence_step, frontmatter_span, opens_a_block,
                       parse_version, plugin_version,
                       read_held, read_stamp, scan_body, settings, settings_file,
                       vault_files, vault_layout,
@@ -1635,6 +1635,48 @@ def find_empty_scenes_lists(vault: Path) -> list[Item]:
                  [f"remove scenes: [] from {rel}" for rel in found], apply)]
 
 
+# --- lastUpdated: "null" -------------------------------------------------------
+
+# The quoted string null the old `vw story` wrote from a Wrap-Up still at
+# `play_date: null`. A bare `null` is YAML's own no-value and stays. The key
+# is matched as written (YAML keys are case-sensitive); the value in any case.
+NULL_DATE_RE = re.compile(r"""^lastUpdated:[ \t]*(["'])(?i:null)\1[ \t]*(#.*)?$""")
+
+
+def _null_date(fm: list[str], rel: str) -> bool:
+    """A `lastUpdated: "null"` on a `*_Story.md` companion or an NPC note."""
+    if not (rel.endswith("_Story.md") or _fm_type(fm) == "npc"):
+        return False
+    return any(NULL_DATE_RE.match(line.rstrip("\r\n")) for line in fm)
+
+
+def find_null_last_updated(vault: Path) -> list[Item]:
+    """1.11.2: `vw story` (and the first `npc-story`) wrote the text
+    `"null"` as a date when the Wrap-Up had no play date. The value is
+    cleared to `""`, which every reader takes as no date."""
+    found = _notes_with(vault, _null_date)
+    if not found:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        done = []
+        for rel in found:
+            def change(fm: list[str], eol: str, rel: str = rel) -> None:
+                if _null_date(fm, rel):
+                    note = next(m.group(2) for line in fm
+                                if (m := NULL_DATE_RE.match(line.rstrip("\r\n"))))
+                    # Keep a trailing comment: `lastUpdated: ""  # old`.
+                    set_key(fm, "lastUpdated",
+                            '""' + (f"  {note}" if note else ""), eol)
+            edit_frontmatter(vault / rel, change)
+            done.append(f'cleared lastUpdated: "null" in {rel}')
+        return done
+
+    return [Item("null-last-updated", WILL,
+                 [f'clear lastUpdated: "null" in {rel}' for rel in found],
+                 apply)]
+
+
 # --- D&D PC Background sections -----------------------------------------------
 
 OLD_BACKSTORY = re.compile(r"^\*\*Backstory & Personality:\*\*[ \t]*(.*?)[ \t]*$")
@@ -2047,4 +2089,8 @@ VAULT_CHECKS: list[Check] = [
           "the Reconstruction Note callout", find_reconstruction_note_fence,
           kind="bookkeeping",
           plain=("Hid the Reconstruction Note on imported notes, so the player site never shows it.")),
+    Check("null-last-updated", "1.11.2", 3,
+          'lastUpdated: "null" in story and NPC notes', find_null_last_updated,
+          kind="bookkeeping",
+          plain=("Cleared a last-updated date that read \"null\" on character story and NPC notes, left there when a wrap-up had no play date yet.")),
 ]

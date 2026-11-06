@@ -276,22 +276,25 @@ the mirror against these entries.
 **NPC:** `companion` (true: travels with the party (an Ally, follower,
 familiar, cohort); never pictured on Story pages), `occupation`,
 `age`, `gender`, `nationality`, `status` (alive/dead/missing/unknown),
-`location` (wiki-link: where they can usually be found), `portrait`
+`location` (wiki-link: where they can usually be found), `portrait`,
+`voice` (set only when the GM gives this NPC their own story; how they
+are told and speak; never published)
 
 **PC:** `player_name`, `occupation`, `age`, `gender`, `nationality`,
 `status` (alive/dead/missing/retired/unknown), `key_traits`,
 `portrait`, `display_meta` (optional array: ordered field names for
 the site meta row; when omitted, the setting
-`player_site.sheets.header_facts` decides), `sheet_source` (optional
-string: where the sheet is kept when not in this file, e.g. `"D&D
-Beyond"` or `"paper, with the player"`; not shown by default; see
-`shared/pc-body-structure.md`), `hook` (optional string, any system:
-one line under the name and on cards; blank means the backstory's
-first sentence), `dndbeyond` (optional string, D&D only: a D&D Beyond
-character link or id; `dnd_ddb.py` syncs the note from it), `gravity`
-(optional number, GURPS only: local gravity in G, e.g. `1.2`; the
-sheet and party board work encumbrance out by B350 and show the value;
-absent means 1G)
+`player_site.sheets.header_facts` decides), `voice` (how this PC is
+told and how they speak, a few sentences; the GM approves it; never
+published), `sheet_source` (optional string: where the sheet is kept
+when not in this file, e.g. `"D&D Beyond"` or `"paper, with the
+player"`; not shown by default; see `shared/pc-body-structure.md`),
+`hook` (optional string, any system: one line under the name and on
+cards; blank means the backstory's first sentence), `dndbeyond`
+(optional string, D&D only: a D&D Beyond character link or id;
+`dnd_ddb.py` syncs the note from it), `gravity` (optional number,
+GURPS only: local gravity in G, e.g. `1.2`; the sheet and party board
+work encumbrance out by B350 and show the value; absent means 1G)
 
 **Character Story:** `character` (wiki-link to the PC), plus universal
 fields only. Body is append-only session sections; see the Story
@@ -367,7 +370,9 @@ note does.
 (campaign/few-shot/one-shot), `status`
 (abandoned/completed/in_progress/not_started/paused),
 `sessions_played`, `last_session`, `last_play_date`, `current_arc`,
-`arcs_planned`, `current_chapter`, `chapters_planned`, `portrait`
+`arcs_planned`, `current_chapter`, `chapters_planned`, `portrait`,
+`voice` (the campaign's storytelling voice, a few sentences; the GM
+approves it; never published)
 
 **Creature:** `creature_type` (beast, undead, construct, spirit,
 deity, aberration), `threat_level` (how dangerous the PCs believe it

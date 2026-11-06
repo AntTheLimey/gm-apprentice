@@ -14,6 +14,7 @@ nationality: ""
 status: alive
 key_traits: []
 portrait: ""
+voice: ""            # how this PC is told and how they speak, a few sentences; the GM approves it; never published
 sheet_source: ""
 display_meta: [occupation, age, nationality]
 relationships:

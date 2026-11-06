@@ -384,7 +384,9 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                 if item.holds_stamp and not picks:
                     # Silence is not an answer (`leave` is), and past the
                     # stamp the release gate would never offer it again.
-                    unanswered.append(f"{item.id}=<{item.wants}>")
+                    unanswered.append(
+                        f"{item.id}=<{item.wants}>" if item.wants else
+                        f"{item.id} (name it to run it, or {item.id}=leave)")
                 for value in picks:
                     if value == "leave" and not item.wants:
                         # A yes/no choice declined by name: nothing is run,

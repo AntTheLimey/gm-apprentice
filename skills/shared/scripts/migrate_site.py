@@ -22,8 +22,10 @@ from vault_check import (ExplainAll, ask_publish_tool, check_frontmatter, check_
                          _kept_by_player, semver_below, site_pin, vault_settings)
 from vaultlib import (PublishToolUnavailable, SettingsUnavailable,
                       forget_settings, google_fonts, set_key, settings,
-                      settings_default, settings_file, settings_raw, settings_remove, settings_set,
-                      settings_unset, settings_written, site_switch_written, written_in_vault_file, yaml_scalar)
+                      settings_added, settings_add, settings_default,
+                      settings_file, settings_raw, settings_remove,
+                      settings_set, settings_unset, settings_written,
+                      site_switch_written, written_in_vault_file, yaml_scalar)
 
 # --- the checks ---------------------------------------------------------------
 
@@ -616,6 +618,46 @@ def find_exclude_lists(vault: Path) -> list[Item]:
     return items
 
 
+def find_hide_additions(vault: Path, since: str) -> list[Item]:
+    """An entry put in a built-in hide list in release `since` reaches a
+    vault that owns its list only when the GM says yes: the list the vault
+    owns replaces the built-in one, so without this step the entry would
+    publish. One item per entry missing from a list the vault owns; none for
+    a vault with no list of its own (the built-in list, which holds the
+    entry, is what it uses). A site is not needed: a list the vault owns
+    that lacks the entry would publish it the day a site is set up."""
+    now = vault_settings(vault)
+    items: list[Item] = []
+    for name in EXCLUDE_LISTS:
+        if now.origins[name] != "file":
+            continue
+        has = now.get(name)
+        has = has if isinstance(has, list) else []
+        for added in settings_added(name):
+            entry = added["entry"]
+            if added["since"] != since or entry in has:
+                continue
+
+            def apply(_value: str | None, name: str = name,
+                      entry: str = entry) -> list[str]:
+                try:
+                    settings_add(vault, name, [entry])
+                except SettingsUnavailable as e:
+                    if not e.refused:
+                        raise
+                    raise StepFailed(str(e)) from e
+                return [f"added {entry} to {name}"]
+
+            # Held: silence is not an answer, and once the vault is
+            # stamped the release gate would never offer this again.
+            items.append(Item(
+                f"hide-add:{entry}", CHOICE,
+                [f"add {entry} to the details your site hides ({name}), "
+                 f"so the site never shows it: {entry} is {added['why']}"],
+                apply, holds_stamp=True))
+    return items
+
+
 AFTER_BUILD = "player_site.after_build"
 PROP_KEEP = "player_site.keep"
 PAGE_EXTS = (".html", ".htm")
@@ -995,6 +1037,13 @@ SITE_CHECKS: list[Check] = [
           plain=("Wrote the lists of headings and details your site hides into your settings, where you can see them; what publishes is unchanged."),
           ask=("Replaces a value you typed for the headings or details your site hides with the built-in list; what publishes does not change, since the site already ignored that value."),
           left=("Kept the value you typed for what your site hides.")),
+    Check("hide-fields-voice", "1.11.2", 2, "the voice field kept off the site",
+          lambda v: find_hide_additions(v, "1.11.2"), asks_site=True,
+          choices=("hide-add:",),
+          kind="asks",
+          plain=("Added voice to the details your site hides, so the voice you keep for the campaign and its characters never shows on the site."),
+          ask=("Adds voice to the details your site hides, so the voice you keep for the campaign and its characters never shows on the site."),
+          left=("Kept your list of hidden details without voice, so a voice can show on your site wherever a page names that detail.")),
     Check("gm-leak", None, 4, "sections the site withholds are nested under "
           "GM Notes", find_gm_leak, asks_site=True,
           kind="bookkeeping",

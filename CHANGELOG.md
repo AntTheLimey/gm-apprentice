@@ -7,13 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.11.2] — 2026-11-06
+## [1.11.3] — 2026-11-06
 
 A new vault no longer starts with a table error. No vault change for an existing vault.
 
 ### Fixed
 
 - **The `publish` row of the schema table** wrote its two values as `` `false` \| `stub` ``. A new vault copies that table into `_meta/entity-types.md`, and the table check rejects an escaped pipe in a cell, so every new vault began with one ERROR. The row now reads `` `false` or `stub` ``, and a test runs the table check over the text a new vault gets.
+
+---
+
+## [1.11.2] — 2026-11-05
+
+Voices, part one (#460): the field, the switch, and the tools the skills will use. Publish tool 1.70.0. The skills start drafting and using voices in the next release. The update adds the `voice:` line to unedited PC, NPC and Campaign Overview templates and asks about edited ones, as usual; it leaves existing notes alone. A vault that keeps its own list of hidden details is asked whether to add `voice` to it, and the update waits for that answer.
+
+### Added
+
+- **`vault.voices`**, a vault setting, on by default. It says whether the skills keep a short voice for the campaign and for each storied character, and write story prose in it. Off, story prose takes its tone from the genre, as before.
+- **A `voice:` line** on the Campaign Overview, PC and NPC templates: a few sentences on how the campaign or character is told and how they speak, on one line. An NPC with a voice is one the GM has given their own story. A voice cleared to `null`, `~` or only a comment counts as none.
+- **`vault_check.py VAULT voices [NAME ...]`** prints the campaign's voice and each character's in one short list (every active PC and every NPC with a voice, or the characters named). Names match by name, alias or `[[link]]`, with or without underscores; a name two characters answer to shows as ambiguous. A voice not on one line shows as unreadable.
+- **`vault_write.py npc-story`** writes a storied NPC's passage for the session at the end of its `## Story` section, made when the note has none, or under the section `--section` names. It refuses a hidden or gm-only section (and will not open a `## Story` that `player_site.hide.sections` hides), a place inside a block the site strips, a session already written there, an NPC with no voice, and every NPC while `vault.voices` is off. With no `--section`, it points out a section that already holds earlier session passages.
+
+### Changed
+
+- **The NPC template's `**Voice:**` line under Playing Them is now `**Speech:**`**, so "voice" means only the story voice. Existing NPC notes keep their line as written.
+- **`voice` is kept off the player site.** It joins the built-in `player_site.hide.fields`. A vault that keeps its own list is asked by the update (check `hide-fields-voice`) to add `voice` to it, and stays at its old version until it answers. Answering leave keeps the list as it is, so a voice can show wherever a page names that detail.
+
+### Fixed
+
+- **`vault_write.py story` and `npc-story`** no longer write `lastUpdated: "null"` from a Wrap-Up whose `play_date` is still `null`; they leave `lastUpdated` as it was and warn.
+- **`vault_write.py story`** in a vault that numbers sessions per chapter no longer refuses chapter 2's Session 2 as chapter 1's again; the entry is headed `Chapter 2 Session 2`, as `npc-story` heads its passage there.
+- **Notes already holding `lastUpdated: "null"`**: the update (check `null-last-updated`) clears it to `lastUpdated: ""` on character story and NPC notes.
+- **A value written with a line break or tab** (`stamp_entities.py --set`) is escaped onto one line, so it reads back whole.
 
 ---
 
