@@ -1663,7 +1663,11 @@ def find_null_last_updated(vault: Path) -> list[Item]:
         for rel in found:
             def change(fm: list[str], eol: str, rel: str = rel) -> None:
                 if _null_date(fm, rel):
-                    set_key(fm, "lastUpdated", '""', eol)
+                    note = next(m.group(2) for line in fm
+                                if (m := NULL_DATE_RE.match(line.rstrip("\r\n"))))
+                    # Keep a trailing comment: `lastUpdated: ""  # old`.
+                    set_key(fm, "lastUpdated",
+                            '""' + (f"  {note}" if note else ""), eol)
             edit_frontmatter(vault / rel, change)
             done.append(f'cleared lastUpdated: "null" in {rel}')
         return done

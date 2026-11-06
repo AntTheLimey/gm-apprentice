@@ -623,10 +623,9 @@ def find_hide_additions(vault: Path, since: str) -> list[Item]:
     vault that owns its list only when the GM says yes: the list the vault
     owns replaces the built-in one, so without this step the entry would
     publish. One item per entry missing from a list the vault owns; none for
-    a vault with no site or with no list of its own (the built-in list,
-    which holds the entry, is what it uses)."""
-    if not _with_site(vault):
-        return []
+    a vault with no list of its own (the built-in list, which holds the
+    entry, is what it uses). A site is not needed: a list the vault owns
+    that lacks the entry would publish it the day a site is set up."""
     now = vault_settings(vault)
     items: list[Item] = []
     for name in EXCLUDE_LISTS:

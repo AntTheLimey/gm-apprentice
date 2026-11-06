@@ -805,9 +805,18 @@ class HideAdditionTests(unittest.TestCase):
         self.assertEqual(ms.find_hide_additions(vault, "1.11.2"), [])
         self.assertIn("voice", vc.settings(vault).get(self.FIELDS))
 
-    def test_hide_additions_no_site(self):
+    def test_hide_additions_no_site_no_own_list(self):
         vault = make_vault(self, site=False)
         self.assertEqual(ms.find_hide_additions(vault, "1.11.2"), [])
+
+    def test_hide_additions_owned_list_without_a_site(self):
+        # A site turned on later would publish voice if this were skipped.
+        vault = make_vault(self, site=False)
+        vaultlib.settings_set(vault, [(self.FIELDS, self.old_fields())])
+        (item,) = ms.find_hide_additions(vault, "1.11.2")
+        self.assertEqual(item.id, "hide-add:voice")
+        item.apply(None)
+        self.assertIn("voice", vc.settings(vault).get(self.FIELDS))
 
     def test_hide_additions_other_release_offers_nothing(self):
         vault = self.owning(self.old_fields())

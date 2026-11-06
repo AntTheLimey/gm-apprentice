@@ -70,6 +70,13 @@ class NullLastUpdatedTests(unittest.TestCase):
                                   '"null"', '"2026-09-30"')})
         self.assertEqual(mv.find_null_last_updated(v), [])
 
+    def test_trailing_comment_kept(self):
+        v = make_vault(self, {"NPCs/Marlo.md": NPC.replace(
+            "'null'", "'NULL'  # old")})
+        (item,) = mv.find_null_last_updated(v)
+        item.apply(None)
+        self.assertIn('lastUpdated: ""  # old\n', raw(v, "NPCs/Marlo.md"))
+
     def test_crlf_kept(self):
         v = make_vault(self, {"NPCs/Marlo.md": NPC.replace("\n", "\r\n")})
         (item,) = mv.find_null_last_updated(v)
