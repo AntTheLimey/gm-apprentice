@@ -2316,6 +2316,46 @@ class NpcStoryTests(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("'## Story' is inside a gm-only fence", out)
 
+    def test_npc_story_refuses_to_open_a_hidden_story_section(self):
+        cfg = ("version: 1\nplayer_site:\n  hide:\n"
+               "    sections: [Story, GM Notes]\n")
+        vault = story_vault(self, {MARLO_REL: NPC_VOICED,
+                                   "_meta/vault-config.yaml": cfg})
+        code, out = npc_story(vault, "# [[Marlo]]\n\nx\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("'## Story' is hidden from the player site", out)
+        self.assertEqual(read(vault, MARLO_REL), NPC_VOICED)
+
+    def test_npc_story_refuses_a_place_players_never_see(self):
+        # The end of ## Story falls inside a block the site strips: an
+        # inline gm-only opener, or a comment never closed.
+        story = ('---\ntype: npc\nvoice: "Dry."\n---\n\n# M\n\n## Story\n\n'
+                 "### Session 1: A\n\n")
+        for tail in ("Old. <!-- gm-only -->\n\n## GM Notes\n\nOut.\n\n"
+                     "<!-- /gm-only -->\n",
+                     "Old.\n\n<!-- todo\n\n## Related\n\n- x\n"):
+            with self.subTest(tail=tail):
+                note = story + tail
+                vault = story_vault(self, {MARLO_REL: note})
+                code, out = npc_story(vault, "# [[Marlo Petrak]]\n\nx\n")
+                self.assertEqual(code, 1, out)
+                self.assertIn("players would never see it", out)
+                self.assertEqual(read(vault, MARLO_REL), note)
+
+    def test_npc_story_skips_archived_and_qa_copies(self):
+        old = NPC_VOICED.replace("Dry, short, never asks.", "Archived.")
+        vault = story_vault(self, {MARLO_REL: NPC_VOICED,
+                                   "_archive/Marlo Petrak.md": old})
+        code, out = npc_story(vault, "# [[Marlo Petrak]]\n\nx\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("### Session 2: The Docks", read(vault, MARLO_REL))
+        self.assertEqual(read(vault, "_archive/Marlo Petrak.md"), old)
+        # a name only an archived copy carries is no NPC
+        vault = story_vault(self, {"_archive/Marlo Petrak.md": old})
+        code, out = npc_story(vault, "# [[Marlo Petrak]]\n\nx\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("not found", out)
+
     def test_npc_story_ignores_appearance_records_elsewhere(self):
         # Canticle's shape: an appearance log, not a passage, holds a
         # Session 2 heading; the passage still goes to ## Story.

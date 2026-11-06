@@ -1250,12 +1250,17 @@ def find_npc(batch: Batch, name: str) -> str:
     return hits[0]
 
 
+def hidden_sections(vault: Path) -> list[str]:
+    """`player_site.hide.sections`: the section titles players never see."""
+    hides = vl.setting_or_builtin(vault, "player_site.hide.sections")
+    return [str(h) for h in hides] if isinstance(hides, list) else []
+
+
 def npc_sections(text: str, doc: Doc, vault: Path) -> list[tuple[Head, str]]:
     """Each `##` section of the note, with why players never see it (""
     when they do): inside a gm-only or spoiler fence, or hidden by
     `player_site.hide.sections` as the publish tool reads it."""
-    hides = vl.setting_or_builtin(vault, "player_site.hide.sections")
-    hides = [str(h) for h in hides] if isinstance(hides, list) else []
+    hides = hidden_sections(vault)
     try:
         states, _problems = scan_body(text, hides)
         hidden_by = {s.lineno - 1: s.excluded_by for s in states}
@@ -1316,6 +1321,17 @@ def npc_story_insert(doc: Doc, heading: str, body: list[str],
     return new
 
 
+def npc_heading_shows(text: str, heading: str, hides: list[str]) -> bool:
+    """Does the player site render `heading` in `text`? The publish tool's
+    own answer (an inline marker or an open comment hides what follows);
+    with no tool to ask, the section checks already made stand."""
+    try:
+        shown = vl.publisher_lines(text, hides)
+    except vl.PublishToolUnavailable:
+        return True
+    return heading in (line.strip() for line in shown)
+
+
 def cmd_npc_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
     if not vl.setting_or_builtin(batch.vault, "vault.voices"):
         raise WriteError("voices are off (vault.voices)")
@@ -1347,6 +1363,11 @@ def cmd_npc_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
         if found and found[1]:
             raise WriteError(f"{rel}: '## {found[0].title}' {found[1]}; "
                              f"passages are for players")
+        hides = hidden_sections(batch.vault)
+        if found is None and "story" in {key(h) for h in hides}:
+            raise WriteError(f"{rel}: '## Story' is hidden from the player "
+                             f"site (player_site.hide.sections: Story); "
+                             f"passages are for players")
         if target is not None:
             for h, n in npc_passages(doc, target):
                 if n == info.number:
@@ -1363,6 +1384,11 @@ def cmd_npc_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
                           f"\"{elsewhere.title}\" to keep them together")
         heading = f"### Session {info.number}: {info.title}"
         lines = npc_story_insert(doc, heading, body, target)
+        if not npc_heading_shows("".join(lines), heading, hides):
+            raise WriteError(f"{rel}: the passage would land inside a block "
+                             f"the player site strips (a gm-only or spoiler "
+                             f"block, or a comment left open), so players "
+                             f"would never see it")
         where = target.title if target is not None else "Story"
         end, error = vl.frontmatter_span(
             [lines[0].lstrip("\ufeff"), *lines[1:]] if lines else lines)
