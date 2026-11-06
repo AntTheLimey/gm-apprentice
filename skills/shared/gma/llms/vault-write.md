@@ -89,10 +89,11 @@ Each is added to that NPC's note as '### Session N: Title'
 at the end of '## Story' (made before '## Related' when the
 note has none), or of the '## ' section --section names.
 Refused: a hidden or gm-only section (passages are for
-players), a session the section already has, an NPC with no
-voice, and any NPC while vault.voices is off. With no
---section, a HINT row names a section holding earlier
-session passages.
+players), a place inside a block the site strips, a session
+the section already has, an NPC with no voice, and any NPC
+while vault.voices is off. Archived and QA copies are never
+the NPC. With no --section, a HINT row names a section
+holding earlier session passages.
 ```
 
 | Argument | Value | Help |

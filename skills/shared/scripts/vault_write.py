@@ -3546,10 +3546,11 @@ def build_parser() -> argparse.ArgumentParser:
             "at the end of '## Story' (made before '## Related' when the\n"
             "note has none), or of the '## ' section --section names.\n"
             "Refused: a hidden or gm-only section (passages are for\n"
-            "players), a session the section already has, an NPC with no\n"
-            "voice, and any NPC while vault.voices is off. With no\n"
-            "--section, a HINT row names a section holding earlier\n"
-            "session passages."))
+            "players), a place inside a block the site strips, a session\n"
+            "the section already has, an NPC with no voice, and any NPC\n"
+            "while vault.voices is off. Archived and QA copies are never\n"
+            "the NPC. With no --section, a HINT row names a section\n"
+            "holding earlier session passages."))
     npcs.add_argument("--wrapup", required=True, help="the wrap-up the entries come from")
     npcs.add_argument("--section", metavar="HEADING",
                       help="the '## ' section to write under (default: Story)")
