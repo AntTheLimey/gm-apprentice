@@ -71,7 +71,13 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" \
 ```
 
 It creates a missing story file, appends at the bottom, stamps the
-frontmatter and refuses a second entry for the same session
-(`--replace` rewrites that session's entry, as for a GM's correction;
-on its HINT that a gm-only or spoiler block goes, tell the GM first).
-Earlier entries are never edited.
+frontmatter and refuses a second entry for the same session.
+Earlier entries are never edited, but for a correction.
+
+## Corrections
+
+A GM's correction of a Story entry, NPC passage or recap: `story`,
+`npc-story` or `wrapup-add` with `--replace`. Keep gm-only, spoiler
+and comment blocks as they are. Dry-run first; on a HINT that one
+goes, tell the GM before `--write`. For an earlier session, leave
+out `--as-of` and `--date`.

@@ -290,7 +290,7 @@ dictating approach.
 1. **Type:** select template from above
 2. **Author's style:** social class, education, emotional state,
    relationship to reader, era, what they know/conceal (an author
-   with a `voice` in the vault: start from it)
+   with a `voice` in the vault: start from it, unless voices are off)
 3. **Embed Info:** primary clue (skimmable position), secondary
    details (reward close reading), red herrings, connections
    to other handouts/campaign

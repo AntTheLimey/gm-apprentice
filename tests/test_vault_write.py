@@ -2627,11 +2627,12 @@ class NpcStoryTests(unittest.TestCase):
             "Wordy.\n")
         vault = story_vault(self, {MARLO_REL: note})
         code, out = npc_story(vault, "# Marlo Petrak\n\nTerse.\n", "--replace",
-                              write=False)
+                              "--section", "Overview", write=False)
         self.assertEqual(code, 0, out)
         self.assertIn("replaced (", out)
         self.assertEqual(read(vault, MARLO_REL), note)
-        code, out = npc_story(vault, "# Marlo Petrak\n\nTerse.\n", "--replace")
+        code, out = npc_story(vault, "# Marlo Petrak\n\nTerse.\n", "--replace",
+                              "--section", "Overview")
         self.assertEqual(code, 0, out)
         self.assertEqual(read(vault, MARLO_REL),
                          note.replace("Wordy.", "Terse."))
@@ -2650,7 +2651,8 @@ class NpcStoryTests(unittest.TestCase):
         vault = story_vault(self, {MARLO_REL: MARLO_SHAPE})
         code, out = npc_story(vault, "# Marlo Petrak\n\nTerse.\n", "--replace")
         self.assertEqual(code, 1, out)
-        self.assertIn("no passage for session 2 to replace", out)
+        self.assertIn("no passage for session 2 under '## Story' to replace",
+                      out)
         self.assertEqual(read(vault, MARLO_REL), MARLO_SHAPE)
 
     def test_npc_story_replace_a_chapter_labelled_passage(self):
@@ -2681,12 +2683,14 @@ class NpcStoryTests(unittest.TestCase):
             "Wordy.\n\n<!-- spoiler -->\nHidden.\n<!-- /spoiler -->\n")
         vault = story_vault(self, {MARLO_REL: note})
         code, out = npc_story(vault, "# Marlo Petrak\n\nA.\n\n"
-                              "# Marlo Petrak\n\nB.\n", "--replace")
+                              "# Marlo Petrak\n\nB.\n", "--replace",
+                              "--section", "Overview")
         self.assertEqual(code, 1, out)
         self.assertIn("given twice", out)
         self.assertEqual(read(vault, MARLO_REL), note)
         code, out = npc_story(vault, "# Marlo Petrak\n\nTerse.\n",
-                              "--replace", "--date", "2026-11-06")
+                              "--replace", "--section", "Overview",
+                              "--date", "2026-11-06")
         self.assertEqual(code, 0, out)
         self.assertIn("HINT\t", out)
         text = read(vault, MARLO_REL)
@@ -2789,6 +2793,121 @@ class NpcStoryTests(unittest.TestCase):
         self.assertIn("voices are off (vault.voices)", out)
         self.assertEqual(read(vault, MARLO_REL), NPC_VOICED)
 
+
+
+NPC_BASE = ("---\ntype: npc\nvoice: \"Dry.\"\n---\n\n# Marlo Petrak\n\n"
+            "## Overview\n\nA fixer.\n\n")
+NPC_STORY_S2 = "## Story\n\n### Session 2: The Docks\n\nWordy.\n\n"
+NPC_APPEAR = ("## Session Appearances\n\n### Session 2 \u2014 The Docks\n\n"
+              "Seen at the quay.\n\n")
+NPC_GMN = ("## GM Notes\n\n<!-- gm-only -->\n\n### Session 2 \u2014 what she "
+           "hid\n\nSECRET: she is the killer.\n\n<!-- /gm-only -->\n")
+
+
+class NpcStoryReplaceScopeTests(unittest.TestCase):
+    """Final review: `npc-story --replace` looks only where the add path
+    writes, so it never overwrites an appearance log or GM-only notes."""
+
+    def go(self, note, *flags):
+        vault = story_vault(self, {MARLO_REL: note})
+        code, out = npc_story(vault, "# Marlo Petrak\n\nTerse.\n",
+                              "--replace", *flags)
+        return code, out, read(vault, MARLO_REL)
+
+    def test_p1_story_and_an_appearance_log(self):
+        note = NPC_BASE + NPC_STORY_S2 + NPC_APPEAR
+        code, out, text = self.go(note)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(text, note.replace("Wordy.", "Terse."))
+
+    def test_p2_only_a_gm_notes_heading_is_refused_untouched(self):
+        note = NPC_BASE + NPC_GMN
+        code, out, text = self.go(note)
+        self.assertEqual(code, 1, out)
+        self.assertIn("no passage for session 2 under '## Story'", out)
+        self.assertNotIn("GM Notes", out)
+        self.assertEqual(text, note)
+
+    def test_p2b_only_an_appearance_log_is_refused_untouched(self):
+        note = NPC_BASE + NPC_APPEAR
+        code, out, text = self.go(note)
+        self.assertEqual(code, 1, out)
+        self.assertIn("'## Session Appearances' has one: pass --section", out)
+        self.assertIn("not an appearance log", out)
+        self.assertEqual(text, note)
+
+    def test_p3_story_and_gm_notes(self):
+        note = NPC_BASE + NPC_STORY_S2 + NPC_GMN
+        code, out, text = self.go(note)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(text, note.replace("Wordy.", "Terse."))
+        self.assertIn("SECRET: she is the killer.", text)
+
+    def test_p4_a_gm_only_section_is_refused(self):
+        note = NPC_BASE + NPC_STORY_S2 + NPC_GMN
+        code, out, text = self.go(note, "--section", "GM Notes")
+        self.assertEqual(code, 1, out)
+        self.assertIn("passages are for players", out)
+        self.assertEqual(text, note)
+
+    def test_a_gm_fenced_passage_inside_story_is_not_it(self):
+        note = (NPC_BASE + "## Story\n\n<!-- gm-only -->\n\n### Session 2: "
+                "The Docks\n\nHidden.\n\n<!-- /gm-only -->\n")
+        code, out, text = self.go(note)
+        self.assertEqual(code, 1, out)
+        self.assertEqual(text, note)
+
+    def test_canticle_shape_add_then_replace(self):
+        note = NPC_VOICED.replace(
+            "## Related\n",
+            "## Session Appearances\n\n### Session 2 \u2014 Arrival in "
+            "Vienna\n\n- seen\n\n## Related\n")
+        vault = story_vault(self, {MARLO_REL: note})
+        self.assertEqual(npc_story(vault, "# [[Marlo]]\n\nShe waited.\n")[0],
+                         0)
+        before = read(vault, MARLO_REL)
+        code, out = npc_story(vault, "# [[Marlo]]\n\nShe left.\n",
+                              "--replace")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, MARLO_REL),
+                         before.replace("She waited.", "She left."))
+
+    def test_replace_works_while_voices_are_off(self):
+        note = NPC_BASE + NPC_STORY_S2
+        vault = story_vault(self, {MARLO_REL: note})
+        with mock.patch.object(vw.vl, "setting_or_builtin",
+                               return_value=False):
+            code, out = npc_story(vault, "# Marlo Petrak\n\nTerse.\n",
+                                  "--replace")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, MARLO_REL),
+                         note.replace("Wordy.", "Terse."))
+
+    def test_a_comment_that_goes_is_named(self):
+        note = NPC_BASE + NPC_STORY_S2.replace(
+            "Wordy.\n", "Wordy.\n\n%% check the dates %%\n")
+        code, out, text = self.go(note)
+        self.assertEqual(code, 0, out)
+        self.assertIn("HINT\t", out)
+
+
+class StoryReplaceFinalTests(unittest.TestCase):
+    def test_a_gm_fenced_entry_heading_is_not_it(self):
+        story = (STORY + "\n<!-- gm-only -->\n\n## Session 2 \u2014 The "
+                 "Docks\n\nHidden.\n\n<!-- /gm-only -->\n")
+        vault = story_vault(self, {STORY_REL: story})
+        code, out = tell(vault, "# Rock\n\nNew.\n", "--replace")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(read(vault, STORY_REL), story)
+
+    def test_as_of_keeps_a_quoted_number_quoted(self):
+        story = (STORY.replace('asOfSession: "Session 1"', 'asOfSession: "2"')
+                 + "\n## Session 2 \u2014 The Docks\n\nOld.\n")
+        vault = story_vault(self, {STORY_REL: story})
+        code, out = tell(vault, "# Rock\n\nNew.\n", "--replace",
+                         "--as-of", "2")
+        self.assertEqual(code, 0, out)
+        self.assertIn('asOfSession: "2"\n', read(vault, STORY_REL))
 
 if __name__ == "__main__":
     unittest.main()

@@ -13,7 +13,8 @@ Draft from this campaign's own material, not a genre label:
   the session just played.
 - **PC:** the sheet's background, signature traits and disadvantages,
   the backstory, and how the character has played.
-- **NPC:** their note (its `**Speech:**` line too) and their history
+- **NPC:** their note (its `**Speech:**` or older `**Voice:**` line)
+  and their history
   in play.
 
 A few sentences, on one line. What tends to belong, as guidance and
@@ -42,8 +43,7 @@ An apostrophe in the voice goes in as `'\''`.
 
 ## Folding in a correction
 
-When the GM corrects prose told in a voice, rewrite it with
-`vault_write.py`'s `--replace` (`story`, `npc-story`, `wrapup-add`),
-then offer to fold the lesson into that voice, so it sticks. The
+When the GM corrects prose told in a voice, rewrite it per
+`shared/character-story-format.md` § Corrections, then offer to fold the lesson into that voice, so it sticks. The
 voice comes out no longer than it was: cut or reword to make room.
 Same stamp.

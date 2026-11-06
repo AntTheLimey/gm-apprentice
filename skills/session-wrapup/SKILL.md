@@ -118,10 +118,11 @@ any PC who died or left this session (else left out). `# off:
 vault.voices` → no voices, as before. A `(none)` voice → draft it
 per `shared/voice.md` for the GM's yes: the campaign's before the
 recap, a PC's before their Story entry, an NPC's when the GM gives
-them a story. An `(ambiguous: A, B)` row: ask the GM which note.
+them a story; on a no, say `vault.voices: false` stops the asking.
+An `(ambiguous: A, B)` row: ask the GM which note.
 
 Write `## Narrative Recap` from the Play Notes, with every entity
-`[[wiki-linked]]`, in the campaign voice (off: tone per
+`[[wiki-linked]]`, in the campaign voice (off or none: tone per
 `references/recap-formats.md`, set from the chapter overview and
 recent notes; export: the Summary verbatim, in the voice only when
 the GM asks). Add Quick Bullets and

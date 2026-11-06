@@ -95,7 +95,7 @@ section --section names.
 Refused: a hidden or gm-only section (passages are for
 players), a place inside a block the site strips, a session
 the section already has (--replace rewrites it), an NPC
-with no voice, and any NPC while vault.voices is off.
+with no voice, and a new passage while vault.voices is off.
 Archived and QA copies are never the NPC. With no
 --section, a HINT row names a section holding earlier
 session passages.
@@ -107,7 +107,7 @@ session passages.
 | `--section` | `HEADING` | the '## ' section to write under (default: Story) |
 | `--as-of` | `AS_OF` | asOfSession value |
 | `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |
-| `--replace` |  | replace the NPC's existing passage for this session (refused when there is none); other passages stay as they are, and the frontmatter but for --as-of and --date |
+| `--replace` |  | replace the NPC's existing passage for this session in the section a new one would go to (refused when there is none); other passages stay as they are, and the frontmatter but for --as-of and --date |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 
