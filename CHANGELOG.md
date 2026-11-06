@@ -26,6 +26,7 @@ Voices, part one (#460): the field, the switch, and the tools the skills will us
 ### Fixed
 
 - **`vault_write.py story` and `npc-story`** no longer write `lastUpdated: "null"` from a Wrap-Up whose `play_date` is still `null`; they leave `lastUpdated` as it was and warn.
+- **`vault_write.py story`** in a vault that numbers sessions per chapter no longer refuses chapter 2's Session 2 as chapter 1's again; the entry is headed `Chapter 2 Session 2`, as `npc-story` heads its passage there.
 - **Notes already holding `lastUpdated: "null"`**: the update (check `null-last-updated`) clears it to `lastUpdated: ""` on character story and NPC notes.
 - **A value written with a line break or tab** (`stamp_entities.py --set`) is escaped onto one line, so it reads back whole.
 

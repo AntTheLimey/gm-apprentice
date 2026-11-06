@@ -2195,6 +2195,30 @@ def npc_story(vault, stdin, *flags, write=True):
                *(["--write"] if write else []), stdin=stdin)
 
 
+class StoryChapterRestartTests(unittest.TestCase):
+    def test_story_session_numbers_restarting_per_chapter(self):
+        ch2 = "Chapters/Chapter 2 - Vienna/Sessions/Session 02/"
+        vault = story_vault(self)
+        self.assertEqual(tell(vault, "# [[Rock Lavey]]\n\nOne.\n")[0], 0)
+        (vault / ch2).mkdir(parents=True)
+        (vault / ch2 / "Session 02 - The Opera.md").write_text(
+            INDEX.replace("Chapter 1 - Arrival", "Chapter 2 - Vienna")
+            .replace("The Docks", "The Opera"))
+        (vault / ch2 / "Chapter_02_Session_02_Wrap_Up.md").write_text(
+            STORY_WRAP.replace("The Docks", "The Opera"))
+        two = ["story", "--wrapup", ch2 + "Chapter_02_Session_02_Wrap_Up.md",
+               "--write"]
+        code, out = run(vault, *two, stdin="# [[Rock Lavey]]\n\nTwo.\n")
+        self.assertEqual(code, 0, out)
+        text = read(vault, STORY_REL)
+        self.assertIn("## Session 2 \u2014 The Docks\n\nOne.", text)
+        self.assertIn("## Chapter 2 Session 2 \u2014 The Opera\n\nTwo.", text)
+        code, out = run(vault, *two, stdin="# [[Rock Lavey]]\n\nAgain.\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("already has", out)
+        self.assertEqual(read(vault, STORY_REL), text)
+
+
 class StoryNullDateTests(unittest.TestCase):
     def test_story_null_play_date_leaves_last_updated(self):
         for spelling in ("null", "~", "Null", ""):
@@ -2379,6 +2403,35 @@ class NpcStoryTests(unittest.TestCase):
                 self.assertEqual(code, 1, out)
                 self.assertIn("already has", out)
                 self.assertEqual(read(vault, MARLO_REL), note)
+
+    def test_npc_story_session_numbers_restarting_per_chapter(self):
+        # Canticle's shape: each chapter numbers its sessions from 1, so a
+        # chapter 2 Session 2 is a new passage, not chapter 1's again.
+        ch2 = "Chapters/Chapter 2 - Vienna/Sessions/Session 02/"
+        index2 = (INDEX.replace("Chapter 1 - Arrival", "Chapter 2 - Vienna")
+                  .replace("The Docks", "The Opera")
+                  .replace("Chapter_01", "Chapter_02"))
+        wrap2 = STORY_WRAP.replace("The Docks", "The Opera")
+        vault = story_vault(self, {MARLO_REL: NPC_VOICED})
+        self.assertEqual(npc_story(vault, "# [[Marlo]]\n\nOne.\n")[0], 0)
+        (vault / ch2).mkdir(parents=True)
+        (vault / ch2 / "Session 02 - The Opera.md").write_text(index2)
+        (vault / ch2 / "Chapter_02_Session_02_Wrap_Up.md").write_text(wrap2)
+        two = ["npc-story", "--wrapup", ch2 + "Chapter_02_Session_02_Wrap_Up.md",
+               "--write"]
+        code, out = run(vault, *two, stdin="# [[Marlo]]\n\nTwo.\n")
+        self.assertEqual(code, 0, out)
+        text = read(vault, MARLO_REL)
+        self.assertIn("### Session 2: The Docks\n\nOne.", text)
+        self.assertIn("### Chapter 2 Session 2: The Opera\n\nTwo.", text)
+        # each is still refused a second time
+        code, out = run(vault, *two, stdin="# [[Marlo]]\n\nAgain.\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("already has 'Chapter 2 Session 2: The Opera'", out)
+        code, out = npc_story(vault, "# [[Marlo]]\n\nAgain.\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("already has 'Session 2: The Docks'", out)
+        self.assertEqual(read(vault, MARLO_REL), text)
 
     def test_npc_story_passage_before_any_section_is_no_crash(self):
         note = ("---\ntype: npc\nvoice: \"Dry.\"\n---\n\n"

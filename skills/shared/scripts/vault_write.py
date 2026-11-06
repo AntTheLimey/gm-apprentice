@@ -1125,6 +1125,7 @@ class WrapInfo:
     title: str
     canon: str
     date: str   # "" when neither --date nor a play_date gives one
+    chapter: str | None = None   # vl.chapter_of the Wrap-Up
 
 
 def read_wrapup(batch: Batch, args: argparse.Namespace) -> WrapInfo:
@@ -1148,7 +1149,8 @@ def read_wrapup(batch: Batch, args: argparse.Namespace) -> WrapInfo:
     played = vl.unquote(raw_value(wrap, "play_date") or "")
     if played.casefold() in vc.YAML_NULLS:
         played = ""   # the template's `play_date: null`: no date yet
-    return WrapInfo(wrap_rel, wrap, number, title, canon, args.date or played)
+    return WrapInfo(wrap_rel, wrap, number, title, canon, args.date or played,
+                    vl.chapter_of(wrap_rel, fm))
 
 
 def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
@@ -1161,6 +1163,13 @@ def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
         rel = pc_rel[:-3] + "_Story.md"
         existing = batch.read(rel) if batch.exists(rel) else None
         label = args.label or story_label(existing, number)
+        repeats = False
+        if not args.label:
+            # Per-chapter numbering: `Chapter C Session N`, as npc-story.
+            chap_label, _c, repeats = npc_label(batch.vault, info)
+            if chap_label.startswith("Chapter "):
+                label = chap_label.split(" Session ")[0] + " " + re.sub(
+                    r"(?i)^chapter\s+\d+\s+", "", label)
         heading = custom or f"## {label}{DASH}{title}"
         opener = closer = ""
         if existing is None:
@@ -1189,7 +1198,9 @@ def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
         as_of = args.as_of or (
             str(number) if existing is not None
             and re.fullmatch(r"\d+", old_plain) else label)
-        if existing is not None and old_plain == as_of:
+        # Where numbers repeat by chapter, the heading check above is the
+        # one that tells sessions apart: a bare `2` names either chapter's.
+        if existing is not None and old_plain == as_of and not repeats:
             raise WriteError(f"{rel}: already has an entry for {as_of} "
                              f"(asOfSession)")
         quoted_int = (old_as_of or "")[:1] in ('"', "'")
@@ -1225,8 +1236,10 @@ def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
 # A session passage's heading, as `npc-story` writes it and as notes like
 # Marlo's carry it: `### Session N: Title`; `Session 0N` and a
 # `Chapter C Session N` label are the same session N.
-NPC_SESSION_RE = re.compile(r"^(?:chapter\s+\d+\s+)?session\s+0*(\d+)\b",
-                            re.IGNORECASE)
+NPC_SESSION_RE = re.compile(
+    r"^(?:chapter\s+0*(\d+)\s+)?session\s+0*(\d+)\b\s*:?\s*(.*)$",
+    re.IGNORECASE)
+CHAPTER_NO_RE = re.compile(r"(?i)\bchapter[\s_]+0*(\d+)")
 
 
 def find_npc(batch: Batch, name: str) -> str:
@@ -1290,8 +1303,39 @@ def npc_passages(doc: Doc, head: Head) -> list[tuple[Head, int]]:
     for h in doc.heads:
         m = NPC_SESSION_RE.match(h.title) if h.level == 3 else None
         if m and head.idx < h.idx < end:
-            out.append((h, int(m.group(1))))
+            out.append((h, int(m.group(2))))
     return out
+
+
+def npc_label(vault: Path, info: WrapInfo) -> tuple[str, int | None, bool]:
+    """(label, chapter number, numbers repeat) for the Wrap-Up's passage.
+    Where another chapter has a session of the same number (the vault
+    numbers sessions per chapter), the label is `Chapter C Session N`;
+    otherwise `Session N`, as notes like Marlo's carry it."""
+    def chapter_no(chapter: str | None) -> int | None:
+        m = CHAPTER_NO_RE.search(chapter or "")
+        return int(m.group(1)) if m else None
+    repeats = any(n == info.number and ch != info.chapter
+                  for _rel, n, ch, _d in session_indexes(vault))
+    c = chapter_no(info.chapter)
+    if repeats and c is not None:
+        return f"Chapter {c} Session {info.number}", c, True
+    return f"Session {info.number}", c, repeats
+
+
+def npc_same_passage(title: str, number: int, chapter: int | None,
+                     repeats: bool, wrap_title: str) -> bool:
+    """Is the passage headed `title` this session's? Same number, and in a
+    vault whose numbers repeat, the same chapter when the heading names
+    one, else the same session title."""
+    m = NPC_SESSION_RE.match(title)
+    if not m or int(m.group(2)) != number:
+        return False
+    if not repeats:
+        return True
+    if m.group(1) is not None and chapter is not None:
+        return int(m.group(1)) == chapter
+    return key(m.group(3)) == key(wrap_title)
 
 
 def npc_story_insert(doc: Doc, heading: str, body: list[str],
@@ -1368,9 +1412,11 @@ def cmd_npc_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
             raise WriteError(f"{rel}: '## Story' is hidden from the player "
                              f"site (player_site.hide.sections: Story); "
                              f"passages are for players")
+        label, chapter, repeats = npc_label(batch.vault, info)
         if target is not None:
-            for h, n in npc_passages(doc, target):
-                if n == info.number:
+            for h, _n in npc_passages(doc, target):
+                if npc_same_passage(h.title, info.number, chapter, repeats,
+                                    info.title):
                     raise WriteError(f"{rel}: already has '{h.title}' "
                                      f"(session {info.number})")
         if not section:
@@ -1382,7 +1428,7 @@ def cmd_npc_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
                           f"earlier session passages under ## "
                           f"{elsewhere.title}; pass --section "
                           f"\"{elsewhere.title}\" to keep them together")
-        heading = f"### Session {info.number}: {info.title}"
+        heading = f"### {label}: {info.title}"
         lines = npc_story_insert(doc, heading, body, target)
         if not npc_heading_shows("".join(lines), heading, hides):
             raise WriteError(f"{rel}: the passage would land inside a block "
@@ -3543,8 +3589,10 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=raw, description=(
             "stdin: entries, each opened by a '# [[NPC Name]]' line.\n"
             "Each is added to that NPC's note as '### Session N: Title'\n"
-            "at the end of '## Story' (made before '## Related' when the\n"
-            "note has none), or of the '## ' section --section names.\n"
+            "('### Chapter C Session N: Title' where another chapter has\n"
+            "a session N) at the end of '## Story' (made before\n"
+            "'## Related' when the note has none), or of the '## '\n"
+            "section --section names.\n"
             "Refused: a hidden or gm-only section (passages are for\n"
             "players), a place inside a block the site strips, a session\n"
             "the section already has, an NPC with no voice, and any NPC\n"

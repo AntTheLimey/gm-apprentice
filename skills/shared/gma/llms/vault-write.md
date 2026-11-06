@@ -86,8 +86,10 @@ gma vault-write <vault> npc-story --wrapup WRAPUP [options]
 ```text
 stdin: entries, each opened by a '# [[NPC Name]]' line.
 Each is added to that NPC's note as '### Session N: Title'
-at the end of '## Story' (made before '## Related' when the
-note has none), or of the '## ' section --section names.
+('### Chapter C Session N: Title' where another chapter has
+a session N) at the end of '## Story' (made before
+'## Related' when the note has none), or of the '## '
+section --section names.
 Refused: a hidden or gm-only section (passages are for
 players), a place inside a block the site strips, a session
 the section already has, an NPC with no voice, and any NPC
