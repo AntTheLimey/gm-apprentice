@@ -20,11 +20,13 @@ Voices, part one (#460): the field, the switch, and the tools the skills will us
 
 ### Changed
 
+- **The NPC template's `**Voice:**` line under Playing Them is now `**Speech:**`**, so "voice" means only the story voice. Existing NPC notes keep their line as written.
 - **`voice` is kept off the player site.** It joins the built-in `player_site.hide.fields`. A vault that keeps its own list is asked by the update (check `hide-fields-voice`) to add `voice` to it, and stays at its old version until it answers. Answering leave keeps the list as it is, so a voice can show wherever a page names that detail.
 
 ### Fixed
 
 - **`vault_write.py story` and `npc-story`** no longer write `lastUpdated: "null"` from a Wrap-Up whose `play_date` is still `null`; they leave `lastUpdated` as it was and warn.
+- **Notes already holding `lastUpdated: "null"`**: the update (check `null-last-updated`) clears it to `lastUpdated: ""` on character story and NPC notes.
 - **A value written with a line break or tab** (`stamp_entities.py --set`) is escaped onto one line, so it reads back whole.
 
 ---
