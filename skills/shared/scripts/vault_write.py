@@ -1061,9 +1061,11 @@ def find_pc(batch: Batch, name: str) -> str:
     return hits[0]
 
 
-def split_entries(text: str) -> list[tuple[str, str | None, list[str]]]:
-    """(PC name, the entry's own `## ` heading or None, its lines). An
-    entry that opens with a `## ` line is headed exactly so."""
+def split_entries(text: str, noun: str = "PC"
+                  ) -> list[tuple[str, str | None, list[str]]]:
+    """(the PC's or NPC's name, the entry's own `## ` heading or None, its
+    lines). An entry that opens with a `## ` line is headed exactly so.
+    `noun` names what the entries are about in the refusals."""
     lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     raw: list[tuple[str, list[str]]] = []
     fence = False
@@ -1076,7 +1078,8 @@ def split_entries(text: str) -> list[tuple[str, str | None, list[str]]]:
         elif raw:
             raw[-1][1].append(line)
         elif line.strip():
-            raise WriteError("stdin must start with a '# [[PC Name]]' line")
+            raise WriteError(f"stdin must start with a '# [[{noun} Name]]' "
+                             f"line")
     if not raw:
         raise WriteError("nothing on stdin")
     out: list[tuple[str, str | None, list[str]]] = []
@@ -1091,9 +1094,9 @@ def split_entries(text: str) -> list[tuple[str, str | None, list[str]]]:
             while body and not body[0].strip():
                 body.pop(0)
         if not body:
-            raise WriteError(f"PC '{name}': the entry is empty")
+            raise WriteError(f"{noun} '{name}': the entry is empty")
         if any(h[1] <= 2 for h in vl.fenced_headings("\n".join(body))):
-            raise WriteError(f"PC '{name}': an entry cannot hold a # or ## "
+            raise WriteError(f"{noun} '{name}': an entry cannot hold a # or ## "
                              f"heading after its own (it would read as "
                              f"another session)")
         out.append((name, custom, body))
@@ -1116,10 +1119,12 @@ def story_label(story: str | None, number: int) -> str:
 
 @dataclass
 class WrapInfo:
+    rel: str
+    text: str
     number: int
     title: str
     canon: str
-    date: str
+    date: str   # "" when neither --date nor a play_date gives one
 
 
 def read_wrapup(batch: Batch, args: argparse.Namespace) -> WrapInfo:
@@ -1140,14 +1145,15 @@ def read_wrapup(batch: Batch, args: argparse.Namespace) -> WrapInfo:
     if not title:
         raise WriteError(f"{wrap_rel}: `session:` names no session")
     canon = raw_value(wrap, "canon_status") or "DRAFT"
-    date = args.date or vl.unquote(raw_value(wrap, "play_date") or "")
-    return WrapInfo(number, title, canon, date)
+    played = vl.unquote(raw_value(wrap, "play_date") or "")
+    if played.casefold() in vc.YAML_NULLS:
+        played = ""   # the template's `play_date: null`: no date yet
+    return WrapInfo(wrap_rel, wrap, number, title, canon, args.date or played)
 
 
 def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
-    wrap = batch.read(batch.note_named(args.wrapup, vc.WRAP_TYPES,
-                                       "--wrapup"))
     info = read_wrapup(batch, args)
+    wrap = info.text
     number, title, canon, date = (info.number, info.title, info.canon,
                                   info.date)
     for name, custom, body in split_entries(text):
@@ -1216,7 +1222,11 @@ def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
 
 # --- NPC story ---------------------------------------------------------------
 
-NPC_SESSION_RE = re.compile(r"^session\s+0*(\d+)\b", re.IGNORECASE)
+# A session passage's heading, as `npc-story` writes it and as notes like
+# Marlo's carry it: `### Session N: Title`; `Session 0N` and a
+# `Chapter C Session N` label are the same session N.
+NPC_SESSION_RE = re.compile(r"^(?:chapter\s+\d+\s+)?session\s+0*(\d+)\b",
+                            re.IGNORECASE)
 
 
 def find_npc(batch: Batch, name: str) -> str:
@@ -1238,34 +1248,60 @@ def find_npc(batch: Batch, name: str) -> str:
     return hits[0]
 
 
-def npc_story_insert(doc: Doc, heading: str, body: list[str]) -> tuple[
-        list[str], str]:
-    """The note's lines with the passage added, and the section it went to."""
+def npc_sections(text: str, doc: Doc, vault: Path) -> list[tuple[Head, str]]:
+    """Each `##` section of the note, with why players never see it (""
+    when they do): inside a gm-only or spoiler fence, or hidden by
+    `player_site.hide.sections` as the publish tool reads it."""
+    hides = vl.setting_or_builtin(vault, "player_site.hide.sections")
+    hides = [str(h) for h in hides] if isinstance(hides, list) else []
+    try:
+        states, _problems = scan_body(text, hides)
+        hidden_by = {s.lineno - 1: s.excluded_by for s in states}
+    except vl.PublishToolUnavailable:
+        # No tool to ask: a heading named in the list is hidden.
+        named = {key(h) for h in hides}
+        hidden_by = {h.idx: h.title for h in doc.heads
+                     if key(h.title) in named}
+    at = {s.lineno - 1: s for s in doc.states}
+    out = []
+    for h in doc.heads:
+        if h.level != 2:
+            continue
+        state = at[h.idx]
+        why = ("is inside a gm-only fence" if state.gm_depth else
+               "is inside a spoiler fence" if state.spoiler_depth else
+               "is hidden from the player site (player_site.hide.sections: "
+               f"{hidden_by[h.idx]})" if hidden_by.get(h.idx) else "")
+        out.append((h, why))
+    return out
+
+
+def npc_passages(doc: Doc, head: Head) -> list[tuple[Head, int]]:
+    """The `### Session N` headings in the section `head` opens, with N."""
+    end = section_end(doc, head)
+    out = []
+    for h in doc.heads:
+        m = NPC_SESSION_RE.match(h.title) if h.level == 3 else None
+        if m and head.idx < h.idx < end:
+            out.append((h, int(m.group(1))))
+    return out
+
+
+def npc_story_insert(doc: Doc, heading: str, body: list[str],
+                     target: Head | None) -> list[str]:
+    """The note's lines with the passage added at the end of `target`, or
+    in a new `## Story` (before `## Related`, else before the first
+    gm-only fence, else at the end) when `target` is None."""
     eol = doc.eol
-    heads = [h for h in doc.heads if not h.gm]
-    passages = [h for h in heads
-                if h.level == 3 and NPC_SESSION_RE.match(h.title)]
     block = [heading, "", *body]
-    if passages:
-        last = passages[-1]
-        parent = next(h for h in reversed(heads)
-                      if h.idx < last.idx and h.level == 2)
-        at = section_end(doc, parent)
-        where = parent.title
+    if target is not None:
+        at = section_end(doc, target)
     else:
-        story = next((h for h in heads
-                      if h.level == 2 and key(h.title) == "story"), None)
-        if story is not None:
-            at = section_end(doc, story)
-            where = story.title
-        else:
-            cands = [h.idx for h in heads
-                     if h.level == 2 and key(h.title) == "related"]
-            cands += [s.lineno - 1 for s in doc.states
-                      if s.marker in OPENERS]
-            at = min(cands) if cands else len(doc.lines)
-            block = ["## Story", "", *block]
-            where = "Story"
+        cands = [h.idx for h in doc.heads if not h.gm
+                 and h.level == 2 and key(h.title) == "related"]
+        cands += [s.lineno - 1 for s in doc.states if s.marker in OPENERS]
+        at = min(cands) if cands else len(doc.lines)
+        block = ["## Story", "", *block]
     q = at
     while q > 0 and not doc.lines[q - 1].strip():
         q -= 1
@@ -1275,30 +1311,55 @@ def npc_story_insert(doc: Doc, heading: str, body: list[str]) -> tuple[
     if at < len(doc.lines):
         new.append(eol)
     new += doc.lines[at:]
-    return new, where
+    return new
 
 
 def cmd_npc_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
     if not vl.setting_or_builtin(batch.vault, "vault.voices"):
         raise WriteError("voices are off (vault.voices)")
     info = read_wrapup(batch, args)
-    for name, custom, body in split_entries(text):
+    for name, custom, body in split_entries(text, "NPC"):
         if custom:
             raise WriteError(f"NPC '{name}': an entry takes no '## ' "
                              f"heading of its own")
+        if any(h[1] <= 3 for h in vl.fenced_headings("\n".join(body))):
+            raise WriteError(f"NPC '{name}': a passage cannot hold a heading "
+                             f"of its own (it would read as another passage)")
         rel = find_npc(batch, name)
         note = batch.read(rel)
-        if not vl.voice_value(note):
+        voice = vl.voice_read(note)
+        if voice is None:
+            raise WriteError(f"{rel}: its voice is {vl.VOICE_UNREADABLE}")
+        if not voice:
             raise WriteError(f"{rel}: not a storied NPC: set its voice first")
         doc = parse(note)
-        for h in doc.heads:
-            m = NPC_SESSION_RE.match(h.title) if h.level == 3 else None
-            if m and int(m.group(1)) == info.number and not h.gm:
-                raise WriteError(f"{rel}: already has '{h.title}' "
-                                 f"(session {info.number})")
+        sections = npc_sections(note, doc, batch.vault)
+        want = key(args.section) if args.section else "story"
+        found = next(((h, why) for h, why in sections
+                      if key(h.title) == want), None)
+        if args.section and found is None:
+            raise WriteError(f"{rel}: no '## {args.section}' section")
+        target = found[0] if found else None
+        if found and found[1]:
+            raise WriteError(f"{rel}: '## {found[0].title}' {found[1]}; "
+                             f"passages are for players")
+        if target is not None:
+            for h, n in npc_passages(doc, target):
+                if n == info.number:
+                    raise WriteError(f"{rel}: already has '{h.title}' "
+                                     f"(session {info.number})")
+        if not args.section:
+            elsewhere = next((h for h, why in sections
+                              if not why and h is not target
+                              and npc_passages(doc, h)), None)
+            if elsewhere is not None:
+                batch.row("HINT", rel, "",
+                          f"earlier session passages under ## "
+                          f"{elsewhere.title}; pass --section "
+                          f"\"{elsewhere.title}\" to keep them together")
         heading = f"### Session {info.number}: {info.title}"
-        new_lines, where = npc_story_insert(doc, heading, body)
-        lines = new_lines
+        lines = npc_story_insert(doc, heading, body, target)
+        where = target.title if target is not None else "Story"
         end, error = vl.frontmatter_span(
             [lines[0].lstrip("\ufeff"), *lines[1:]] if lines else lines)
         if error:
@@ -3451,10 +3512,17 @@ def build_parser() -> argparse.ArgumentParser:
         "npc-story", help="add a storied NPC's passage for a session (stdin)",
         formatter_class=raw, description=(
             "stdin: entries, each opened by a '# [[NPC Name]]' line.\n"
-            "Each is added to that NPC's note as '### Session N: Title',\n"
-            "after the note's earlier session passages, else in '## Story'.\n"
-            "Only an NPC with a voice; refused when vault.voices is off."))
+            "Each is added to that NPC's note as '### Session N: Title'\n"
+            "at the end of '## Story' (made before '## Related' when the\n"
+            "note has none), or of the '## ' section --section names.\n"
+            "Refused: a hidden or gm-only section (passages are for\n"
+            "players), a session the section already has, an NPC with no\n"
+            "voice, and any NPC while vault.voices is off. With no\n"
+            "--section, a HINT row names a section holding earlier\n"
+            "session passages."))
     npcs.add_argument("--wrapup", required=True, help="the wrap-up the entries come from")
+    npcs.add_argument("--section", metavar="HEADING",
+                      help="the '## ' section to write under (default: Story)")
     npcs.add_argument("--as-of", dest="as_of", help="asOfSession value")
     npcs.add_argument("--date", help="lastUpdated value, YYYY-MM-DD")
     npcs.add_argument("--write", action="store_true", help="write it (default: preview)")
