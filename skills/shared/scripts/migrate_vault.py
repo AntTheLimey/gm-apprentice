@@ -1677,6 +1677,40 @@ def find_null_last_updated(vault: Path) -> list[Item]:
                  apply)]
 
 
+# --- the `publish` row of the schema table -----------------------------------
+
+# 1.11.3: the stock schema table in `_meta/entity-types.md` once wrote the
+# `publish` row's values as `false` \| `stub`. The table check rejects an
+# escaped pipe in a cell. Only the second cell is matched, so any wording of
+# the rest of the row (and a row the GM changed) is untouched.
+PUBLISH_ROW_RE = re.compile(
+    r"^(\|[ \t]*`publish`[ \t]*\|[ \t]*)`false` \\\| `stub`([ \t]*\|)",
+    re.MULTILINE)
+PUBLISH_ROW_FIXED = r"\1`false` or `stub`\2"
+ENTITY_TYPES_REL = "_meta/entity-types.md"
+
+
+def find_publish_row_pipe(vault: Path) -> list[Item]:
+    """1.11.3: the `publish` row of `_meta/entity-types.md` holding
+    `false` \\| `stub` as its values gets `false` or `stub`. Nothing else in
+    the file changes; line endings are kept."""
+    path = vault / ENTITY_TYPES_REL
+    if not path.is_file() or not PUBLISH_ROW_RE.search(_read(path)):
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        text = _read(path)
+        new = PUBLISH_ROW_RE.sub(PUBLISH_ROW_FIXED, text)
+        if new == text:
+            return []
+        write_text_atomic(path, new)
+        return [f"{ENTITY_TYPES_REL}: publish row now reads `false` or `stub`"]
+
+    return [Item("publish-row-pipe", WILL,
+                 [f"{ENTITY_TYPES_REL}: write the publish row's values as "
+                  f"`false` or `stub`, so the table check passes"], apply)]
+
+
 # --- D&D PC Background sections -----------------------------------------------
 
 OLD_BACKSTORY = re.compile(r"^\*\*Backstory & Personality:\*\*[ \t]*(.*?)[ \t]*$")
@@ -2093,4 +2127,8 @@ VAULT_CHECKS: list[Check] = [
           'lastUpdated: "null" in story and NPC notes', find_null_last_updated,
           kind="bookkeeping",
           plain=("Cleared a last-updated date that read \"null\" on character story and NPC notes, left there when a wrap-up had no play date yet.")),
+    Check("publish-row-pipe", "1.11.3", 3,
+          "the publish row of the schema table", find_publish_row_pipe,
+          kind="bookkeeping",
+          plain=("Fixed the publish row of the schema table in _meta/entity-types.md so the table check no longer reports an error there; nothing else in the file was touched.")),
 ]
