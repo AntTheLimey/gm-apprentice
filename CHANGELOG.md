@@ -9,11 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.11.3] — 2026-11-06
 
-A new vault no longer starts with a table error, and the update repairs the same row in an existing vault (check `publish-row-pipe`).
+A new vault no longer starts with a table error, and the update repairs the same row in an existing vault (check `publish-row-pipe`) (#599, thanks to dcordle).
 
 ### Fixed
 
-- **The `publish` row of the schema table** wrote its two values as `` `false` \| `stub` ``. A new vault copies that table into `_meta/entity-types.md`, and the table check rejects an escaped pipe in a cell, so every new vault began with one ERROR. The row now reads `` `false` or `stub` ``, and a test runs the table check over the text a new vault gets. In an existing vault, the update (check `publish-row-pipe`) rewrites the value cell of the `publish` row in `_meta/entity-types.md` the same way, whatever wording the rest of the row has; a row you changed is left alone.
+- **The `publish` row of the schema table** wrote its two values as `` `false` \| `stub` ``. A new vault copies that table into `_meta/entity-types.md`, and the table check rejects an escaped pipe in a cell, so every new vault began with one ERROR. The row now reads `` `false` or `stub` ``, and a test runs the table check over the text a new vault gets. In an existing vault, the update (check `publish-row-pipe`) rewrites the value cell of the `publish` row in `_meta/entity-types.md` the same way, whatever wording the rest of the row has; a row whose values you changed is left alone.
 
 ---
 

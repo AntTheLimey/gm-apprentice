@@ -148,7 +148,7 @@ meaning in frontmatter).
 
 | Field | Type | Meaning |
 |-------|------|---------|
-| `publish` | `false` \| `stub` | `false` — no page in any mode; links to it render as plain text. `stub` — page emitted for navigation, keeping only `publish_include_sections`. |
+| `publish` | `false` or `stub` | `false` — no page in any mode; links to it render as plain text. `stub` — page emitted for navigation, keeping only `publish_include_sections`. |
 | `publish_exclude_fields` | array | Fields hidden on **this file only**, merged over the vault's `player_site.hide.fields`. Not re-admitted by `player_site.hide.field_exceptions`. |
 | `publish_include_sections` | array | With `publish: stub` only. Headings to keep; default none. |
 
