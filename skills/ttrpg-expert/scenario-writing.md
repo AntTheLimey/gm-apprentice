@@ -21,7 +21,7 @@ NPC motivations, clue connections, timeline, possible endings
 create surprise; the GM needs complete knowledge to run
 effectively.
 
-## Narrative Voice
+## Narrative Style
 
 ### Read-Aloud Text (Boxed Text)
 

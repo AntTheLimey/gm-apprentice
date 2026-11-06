@@ -9,7 +9,7 @@ through the standard Fix Workflow, one finding at a time.
 
 **All fixes are content-preserving.** This check relocates,
 demotes, renames, and fences — it never rewrites, summarizes, or
-re-voices prose. If a fix would require changing what a section
+restyles prose. If a fix would require changing what a section
 *says*, that is not conformance drift; dismiss it or route it to
 Canon Audit.
 

@@ -124,7 +124,7 @@ wiki-links; entity notes link back to sessions in their
 - **Writing an entity:** read `_Templates/_Template_{Type}.md`
   first and use it as the structure — never pattern-match off
   existing entity files. Carry the source's prose about the
-  entity into the body verbatim; don't summarize or re-voice it
+  entity into the body verbatim; don't summarize or restyle it
   (an over-long entity is recoverable, a summarized one is lossy).
   (rationale: `shared/content-fidelity.md`)
 - **World rules:** if `_World/` exists, check each created or

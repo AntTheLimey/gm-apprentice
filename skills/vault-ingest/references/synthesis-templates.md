@@ -173,10 +173,9 @@ limited source data, not a gap in the skill's work.}
    per-session entries — historical notes rarely have that
    granularity.
 
-3. **Genre voice from campaign overview.** Same voice matching
-   as session-wrapup uses. See
-   `shared/character-story-format.md` for the genre-voice
-   table.
+3. **The voices session-wrapup uses.** The character's and the
+   campaign's voice, or the genre table where there is none
+   (`shared/character-story-format.md`). Never draft one here.
 
 4. **Scale prose to available data.** Rich sources get longer
    entries. Sparse sources get shorter entries with a

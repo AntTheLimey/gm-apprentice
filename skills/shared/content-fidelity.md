@@ -4,13 +4,13 @@
 
 We help the GM write their story; we don't write it for them. When content
 moves between places in the vault, the GM's words are the asset: organizing
-them preserves their voice, rewriting substitutes ours.
+them preserves their wording, rewriting substitutes ours.
 
 ## The rule
 
 Moving existing prose PRESERVES it verbatim. Only structure changes —
 frontmatter, section headers, [[wiki-links]]. Do not condense, paraphrase,
-re-voice, or "improve" body text when relocating, promoting, extracting, or
+restyle, or "improve" body text when relocating, promoting, extracting, or
 reorganizing it. Fill empty template sections and flesh out gaps; never
 rewrite what is already written.
 
@@ -27,7 +27,7 @@ operation and says why generation is correct there.
 - Loss is silent and breaks play. Summarizing drops a planted clue, a
   foreshadowed detail, an NPC's exact phrasing — and the GM can't tell what
   was lost. A dropped clue can break an investigation chain (Three Clue Rule).
-- Rewriting flattens voice into generic model prose.
+- Rewriting flattens the GM's style into generic model prose.
 
 ## The block/seam test (mixed operations)
 
