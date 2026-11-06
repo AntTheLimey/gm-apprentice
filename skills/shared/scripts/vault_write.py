@@ -1231,10 +1231,12 @@ NPC_SESSION_RE = re.compile(r"^(?:chapter\s+\d+\s+)?session\s+0*(\d+)\b",
 
 def find_npc(batch: Batch, name: str) -> str:
     """The vault-relative path of the one NPC note called (or aliased)
-    `name`."""
+    `name`. An archived, QA or Midwife copy is never it (`is_record`)."""
     want = vl.normalize(name)
     hits = []
     for rel, text in vl.vault_files(batch.vault):
+        if is_record(rel):
+            continue
         fm = vl.extract_frontmatter(text) or {}
         if vl.entity_type(fm) != "npc":
             continue
