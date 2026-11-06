@@ -34,6 +34,22 @@ class TemplatesCarryVoice(unittest.TestCase):
             self.assertEqual(len(lines), 1, name)
             self.assertRegex(lines[0], r'^voice: ""\s+#', name)
 
+    def test_npc_table_delivery_line_is_speech(self):
+        # One word, one meaning: `voice:` is the story voice; how the GM
+        # plays them at the table is the Speech line under Playing Them.
+        text = (TEMPLATES / "npc.md").read_text(encoding="utf-8")
+        self.assertIn("- **Speech:** {accent, pace, a verbal tic}\n", text)
+        self.assertNotIn("**Voice:**", text)
+
+    def test_template_voice_comments(self):
+        for name in NAMES:
+            text = (TEMPLATES / f"{name}.md").read_text(encoding="utf-8")
+            (line,) = [ln for ln in text.splitlines()
+                       if ln.startswith("voice:")]
+            comment = line.split("#", 1)[1].strip()
+            self.assertTrue(comment, name)
+            self.assertTrue(comment.endswith("never published"), name)
+
     def test_show_lists_voice(self):
         for etype in ("pc", "npc", "campaign_overview"):
             self.assertIn("voice", rules.show(etype), etype)

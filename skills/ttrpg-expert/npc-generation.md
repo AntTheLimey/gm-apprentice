@@ -66,7 +66,7 @@ For NPCs in scenarios other GMs will run:
 4. **Reaction** — response if PCs intervene
 5. **Escalation** — what happens if PCs don't intervene
 
-## Voice and Mannerism
+## Speech and Mannerism
 
 **Speech** — one distinctive element per NPC:
 
@@ -82,7 +82,7 @@ For NPCs in scenarios other GMs will run:
 
 **Mannerism** — limit to 1-2 per NPC: fidgets with object,
 avoids/forces eye contact, stands too close/far, drums fingers,
-adjusts clothing. Voice and mannerism should reinforce
+adjusts clothing. Speech and mannerism should reinforce
 personality (contradictions only if intentional).
 
 ## Relationship Web
