@@ -78,8 +78,9 @@ chapter). Everything
 else that moves existing text keeps it verbatim. Voices shape the
 recap, Story entries and NPC passages; records stay plain
 (Campaign Log, timeline, Carry-Forward, Keeper Checklist,
-`## Current Status`, entity Overviews). Offer to fold a GM correction
-of voiced prose into the voice (`shared/voice.md`).
+`## Current Status`, entity Overviews). A GM correction of voiced
+prose: replace it, then offer to fold the lesson into the voice
+(`shared/voice.md`).
 
 ## Workflow
 
@@ -117,12 +118,13 @@ any PC who died or left this session (else left out). `# off:
 vault.voices` → no voices, as before. A `(none)` voice → draft it
 per `shared/voice.md` for the GM's yes: the campaign's before the
 recap, a PC's before their Story entry, an NPC's when the GM gives
-them a story. Any other row: ask the GM.
+them a story. An `(ambiguous: A, B)` row: ask the GM which note.
 
 Write `## Narrative Recap` from the Play Notes, with every entity
 `[[wiki-linked]]`, in the campaign voice (off: tone per
 `references/recap-formats.md`, set from the chapter overview and
-recent notes). Add Quick Bullets and
+recent notes; export: the Summary verbatim, in the voice only when
+the GM asks). Add Quick Bullets and
 Memorable Moments when the template's conditions call for them. Run
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/moments.py"
 <vault> status`; on `moments on`, read
@@ -252,8 +254,8 @@ creating entities.
 - **Timeline:** `- **{in_game_date}** — {description}`
   (`[[Event_Name]] — {summary}` when linked), or the shape this
   timeline already uses. `vw timeline --under "<the heading this
-  timeline files the session under>" --write` places them (`--after`
-  sites a new heading).
+  timeline files the session under>" --write` places them (a new
+  heading takes its hashes, `--after` sites it).
 - **Events:** create an Event file from `_Templates/_Template_Event.md`
   (dated with `in_game_date:`) when a moment meets its threshold — see
   `shared/templates/event.md`'s comment if the vault copy lacks one.
@@ -303,8 +305,10 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
   --increment sessions_played \
   --set last_session="[[<this session's index title>]]" \
   --set last_play_date=YYYY-MM-DD \
-  --session N --date YYYY-MM-DD
+  --session "<asOfSession value>" --date YYYY-MM-DD
 ```
+
+`--session` takes the Overview's own shape, as in 3c.
 
 Show the dry-run rows to the GM as-is — they are the confirmation
 prompt. Yes → re-run with `--write`; no → skip. Leave

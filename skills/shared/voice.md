@@ -42,6 +42,8 @@ An apostrophe in the voice goes in as `'\''`.
 
 ## Folding in a correction
 
-When the GM corrects prose told in a voice, offer to fold the lesson
-into that voice right then, so it sticks. It stays a few sentences on
-one line: reword to make room rather than grow it. Same stamp.
+When the GM corrects prose told in a voice, rewrite it with
+`vault_write.py`'s `--replace` (`story`, `npc-story`, `wrapup-add`),
+then offer to fold the lesson into that voice, so it sticks. The
+voice comes out no longer than it was: cut or reword to make room.
+Same stamp.
