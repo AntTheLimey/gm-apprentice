@@ -1084,9 +1084,10 @@ def voice_rows(vault: Path, names: Sequence[str]) -> list[str]:
     companion, an archived or QA copy, or a `_Template_` file."""
     def row(label: str, text: str) -> str:
         voice = vaultlib.voice_read(text)
-        # one row a line: a stamped line break or tab shows as a space
+        # one row a line: any whitespace but a plain space (a line break of
+        # any kind splitlines sees, a tab) shows as one space
         shown = (vaultlib.VOICE_UNREADABLE if voice is None
-                 else re.sub(r"\s*[\r\n\t]\s*", " ", voice))
+                 else re.sub(r"\s*[^\S ]\s*", " ", voice))
         return f"{label}\t{shown or '(none)'}"
 
     def real(rel: str) -> bool:

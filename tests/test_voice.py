@@ -251,6 +251,18 @@ def test_stamp_writes_a_multi_line_voice(tmp_path, monkeypatch, capsys):
     assert out[3:] == ["Ada Vane\tDry. Second line"]   # one row, one line
 
 
+@pytest.mark.parametrize("sep", ["\x0b", "\x0c", "\x1c", "\x1e", "\x85",
+                                 "\u2028", "\u2029"])
+def test_voices_row_stays_one_line_for_every_line_break(tmp_path, monkeypatch,
+                                                        capsys, sep):
+    vault = make_vault(tmp_path)
+    populate(vault)
+    note(vault / "PCs" / "Ada Vane.md", "type: pc\nstatus: active\nvoice: "
+         + vl.yaml_scalar("Dry." + sep + "Second") + "\n")
+    code, out = voices(monkeypatch, capsys, vault, "Ada Vane")
+    assert out[3:] == ["Ada Vane\tDry. Second"]
+
+
 def test_voices_name_takes_a_wikilink_and_inner_spaces(tmp_path, monkeypatch,
                                                        capsys):
     vault = make_vault(tmp_path)
