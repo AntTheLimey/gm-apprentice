@@ -1418,6 +1418,43 @@ class TimelineTests(unittest.TestCase):
                 self.assertEqual(code, 1)
                 self.assertEqual(read(vault, TL_REL), TL)
 
+    def test_under_takes_a_heading_by_its_text(self):
+        # Wrap-ups passed `--under "October 1923"` and were refused.
+        vault = make_vault(self, {TL_REL: TL})
+        code, out = tl(vault, "- **4 August 1814** — They slept.\n",
+                       "--under", "Session 1 — Arrival (3 August)")
+        self.assertEqual(code, 0, out)
+        self.assertIn("They came.\n- **4 August 1814** — They slept.\n",
+                      read(vault, TL_REL))
+        code, out = tl(vault, "- **1815** — Later.\n", "--under", "chapter 1")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, TL_REL).count("## Chapter 1"), 1)
+
+    def test_after_takes_a_heading_by_its_text(self):
+        two = TL.replace("<!-- gm-only -->", "## Chapter 2\n\n- **1815** — "
+                         "Later.\n\n<!-- gm-only -->")
+        vault = make_vault(self, {TL_REL: two})
+        code, out = tl(vault, "- **5 August 1814** — Dawn.\n",
+                       "--under", "### Session 2 — The Duel",
+                       "--after", "Session 1 — Arrival (3 August)")
+        self.assertEqual(code, 0, out)
+        text = read(vault, TL_REL)
+        self.assertLess(text.index("### Session 2"), text.index("## Chapter 2"))
+
+    def test_bare_under_refuses_a_new_or_two_level_heading(self):
+        vault = make_vault(self, {TL_REL: TL})
+        code, out = tl(vault, "- **1814** — x\n", "--under", "October 1923")
+        self.assertEqual(code, 1)
+        self.assertIn("a new one takes its hashes, e.g. '### October 1923'",
+                      out)
+        both = TL.replace("## Future Events", "## Future Events\n\n"
+                          "### Chapter 1")
+        vault = make_vault(self, {TL_REL: both})
+        code, out = tl(vault, "- **1814** — x\n", "--under", "Chapter 1")
+        self.assertEqual(code, 1)
+        self.assertIn("more than one level", out)
+        self.assertEqual(read(vault, TL_REL), both)
+
     def test_a_missing_timeline_says_who_creates_it(self):
         vault = make_vault(self, {"x.md": "x\n"})
         code, out = tl(vault, "- **1814** — x\n", "--under", "### New")
@@ -2219,6 +2256,74 @@ class StoryChapterRestartTests(unittest.TestCase):
         self.assertEqual(read(vault, STORY_REL), text)
 
 
+class StoryReplaceTests(unittest.TestCase):
+    """`story --replace`: a GM's correction swaps the session's entry and
+    leaves everything else byte for byte."""
+    TWO = STORY + "\n## Session 2 \u2014 The Docks\n\nFlorid.\n\n" \
+        "## Session 3 \u2014 Later\n\nAfter.\n"
+
+    def test_replace_swaps_only_that_entry(self):
+        six = "Characters/PCs/Six.md"
+        six_story = "Characters/PCs/Six_Story.md"
+        other = STORY.replace("Rock Lavey", "Six") + \
+            "\n## Session 2 \u2014 The Docks\n\nSix's.\n"
+        vault = story_vault(self, {STORY_REL: self.TWO,
+                                   six: "---\ntype: pc\n---\n",
+                                   six_story: other})
+        code, out = run(vault, "story", "--wrapup", WRAP_REL, "--replace",
+                        stdin="# Rock\n\nClipped.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("replaced (", out)
+        self.assertEqual(read(vault, STORY_REL), self.TWO)   # preview
+        code, out = tell(vault, "# Rock\n\nClipped.\n", "--replace")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, STORY_REL),
+                         self.TWO.replace("Florid.", "Clipped."))
+        self.assertEqual(read(vault, six_story), other)
+
+    def test_replace_keeps_crlf(self):
+        crlf = self.TWO.replace("\n", "\r\n")
+        vault = story_vault(self, {STORY_REL: crlf})
+        code, out = tell(vault, "# Rock\n\nClipped.\n\nShort.\n",
+                         "--replace")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, STORY_REL), crlf.replace(
+            "Florid.", "Clipped.\r\n\r\nShort."))
+
+    def test_replace_refuses_when_there_is_no_entry(self):
+        for story in (STORY, None):
+            with self.subTest(story is None):
+                vault = story_vault(self, {STORY_REL: story})
+                code, out = tell(vault, "# Rock\n\nClipped.\n", "--replace")
+                self.assertEqual(code, 1, out)
+                self.assertIn("to replace", out)
+                if story is None:
+                    self.assertFalse((vault / STORY_REL).exists())
+                else:
+                    self.assertEqual(read(vault, STORY_REL), STORY)
+
+    def test_replace_a_chapter_labelled_entry(self):
+        ch2 = "Chapters/Chapter 2 - Vienna/Sessions/Session 02/"
+        vault = story_vault(self, {STORY_REL: self.TWO})
+        (vault / ch2).mkdir(parents=True)
+        (vault / ch2 / "Session 02 - The Opera.md").write_text(
+            INDEX.replace("Chapter 1 - Arrival", "Chapter 2 - Vienna")
+            .replace("The Docks", "The Opera"))
+        (vault / ch2 / "Chapter_02_Session_02_Wrap_Up.md").write_text(
+            STORY_WRAP.replace("The Docks", "The Opera"))
+        two = ["story", "--wrapup", ch2 + "Chapter_02_Session_02_Wrap_Up.md",
+               "--write"]
+        self.assertEqual(run(vault, *two, stdin="# Rock\n\nSung.\n")[0], 0)
+        before = read(vault, STORY_REL)
+        self.assertIn("## Chapter 2 Session 2 \u2014 The Opera\n\nSung.",
+                      before)
+        code, out = run(vault, *two, "--replace", stdin="# Rock\n\nSaid.\n")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, STORY_REL),
+                         before.replace("Sung.", "Said."))
+        self.assertIn("Florid.", before)   # chapter 1's Session 2 untouched
+
+
 class StoryNullDateTests(unittest.TestCase):
     def test_story_null_play_date_leaves_last_updated(self):
         for spelling in ("null", "~", "Null", ""):
@@ -2432,6 +2537,60 @@ class NpcStoryTests(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("already has 'Session 2: The Docks'", out)
         self.assertEqual(read(vault, MARLO_REL), text)
+
+    def test_npc_story_replace_swaps_only_that_passage(self):
+        note = MARLO_SHAPE.replace(
+            "Older one.\n", "Older one.\n\n### Session 2: The Docks\n\n"
+            "Wordy.\n")
+        vault = story_vault(self, {MARLO_REL: note})
+        code, out = npc_story(vault, "# Marlo Petrak\n\nTerse.\n", "--replace",
+                              write=False)
+        self.assertEqual(code, 0, out)
+        self.assertIn("replaced (", out)
+        self.assertEqual(read(vault, MARLO_REL), note)
+        code, out = npc_story(vault, "# Marlo Petrak\n\nTerse.\n", "--replace")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, MARLO_REL),
+                         note.replace("Wordy.", "Terse."))
+
+    def test_npc_story_replace_keeps_crlf(self):
+        vault = story_vault(self, {MARLO_REL: NPC_VOICED})
+        self.assertEqual(npc_story(vault, "# Marlo\n\nWordy.\n")[0], 0)
+        crlf = read(vault, MARLO_REL).replace("\n", "\r\n")
+        (vault / MARLO_REL).write_bytes(crlf.encode())
+        code, out = npc_story(vault, "# Marlo\n\nTerse.\n", "--replace")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, MARLO_REL),
+                         crlf.replace("Wordy.", "Terse."))
+
+    def test_npc_story_replace_refuses_when_there_is_no_passage(self):
+        vault = story_vault(self, {MARLO_REL: MARLO_SHAPE})
+        code, out = npc_story(vault, "# Marlo Petrak\n\nTerse.\n", "--replace")
+        self.assertEqual(code, 1, out)
+        self.assertIn("no passage for session 2 to replace", out)
+        self.assertEqual(read(vault, MARLO_REL), MARLO_SHAPE)
+
+    def test_npc_story_replace_a_chapter_labelled_passage(self):
+        ch2 = "Chapters/Chapter 2 - Vienna/Sessions/Session 02/"
+        vault = story_vault(self, {MARLO_REL: NPC_VOICED})
+        self.assertEqual(npc_story(vault, "# [[Marlo]]\n\nOne.\n")[0], 0)
+        (vault / ch2).mkdir(parents=True)
+        (vault / ch2 / "Session 02 - The Opera.md").write_text(
+            INDEX.replace("Chapter 1 - Arrival", "Chapter 2 - Vienna")
+            .replace("The Docks", "The Opera"))
+        (vault / ch2 / "Chapter_02_Session_02_Wrap_Up.md").write_text(
+            STORY_WRAP.replace("The Docks", "The Opera"))
+        two = ["npc-story", "--wrapup", ch2 + "Chapter_02_Session_02_Wrap_Up.md",
+               "--write"]
+        self.assertEqual(run(vault, *two, stdin="# Marlo\n\nTwo.\n")[0], 0)
+        before = read(vault, MARLO_REL)
+        code, out = run(vault, *two, "--replace", stdin="# Marlo\n\nNew.\n")
+        self.assertEqual(code, 0, out)
+        after = read(vault, MARLO_REL)
+        self.assertEqual(after, before.replace(
+            "### Chapter 2 Session 2: The Opera\n\nTwo.",
+            "### Chapter 2 Session 2: The Opera\n\nNew."))
+        self.assertIn("### Session 2: The Docks\n\nOne.", after)
 
     def test_npc_story_passage_before_any_section_is_no_crash(self):
         note = ("---\ntype: npc\nvoice: \"Dry.\"\n---\n\n"

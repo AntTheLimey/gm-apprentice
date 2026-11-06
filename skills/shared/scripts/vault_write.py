@@ -1171,6 +1171,10 @@ def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
                 label = chap_label.split(" Session ")[0] + " " + re.sub(
                     r"(?i)^chapter\s+\d+\s+", "", label)
         heading = custom or f"## {label}{DASH}{title}"
+        if args.replace:
+            story_replace(batch, rel, existing, heading,
+                          f"## {label}{DASH}{title}", custom, body)
+            continue
         opener = closer = ""
         if existing is None:
             fm_lines = [line + "\n" for line in template_frontmatter(
@@ -1229,6 +1233,35 @@ def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
         if not date:
             batch.row("WARNING", rel, "", "no play_date on the Wrap-Up and "
                       "no --date: lastUpdated left as it was")
+
+
+def story_replace(batch: Batch, rel: str, existing: str | None,
+                  heading: str, default: str, custom: str | None,
+                  body: list[str]) -> None:
+    """Replace the session's entry in a Story companion: the `## ` entry
+    headed `default` (or `custom`) gets `body`, under `custom` when given
+    and its own heading otherwise. Frontmatter and every other entry are
+    left as they are."""
+    if existing is None:
+        raise WriteError(f"{rel}: no Story file, so no '{heading}' entry "
+                         f"to replace")
+    doc = parse(existing)
+    wants = {dash_key(default[3:])}
+    if custom:
+        wants.add(dash_key(custom[3:]))
+    hits = [h for h in doc.heads
+            if h.level == 2 and dash_key(h.title) in wants]
+    if not hits:
+        raise WriteError(f"{rel}: no '{heading}' entry to replace")
+    if len(hits) > 1:
+        raise WriteError(f"{rel}: {len(hits)} entries headed "
+                         f"'## {hits[0].title}': replace by hand")
+    head = hits[0]
+    new_heading = custom or doc.lines[head.idx].rstrip("\r\n")
+    text, count = _replace(doc, head, [new_heading, "", *body])
+    batch.put(rel, text)
+    batch.row("WOULD-ADD", rel, f"\u00a7{new_heading[3:]}",
+              f"replaced ({count} lines)")
 
 
 # --- NPC story ---------------------------------------------------------------
@@ -1376,6 +1409,29 @@ def npc_heading_shows(text: str, heading: str, hides: list[str]) -> bool:
     return heading in (line.strip() for line in shown)
 
 
+def npc_replace(batch: Batch, rel: str, doc: Doc, info: WrapInfo,
+                scope: list[Head], body: list[str]) -> None:
+    """Replace the session's passage, wherever in the `scope` sections it
+    sits, with `body` under its own heading. Frontmatter and every other
+    passage are left as they are."""
+    _label, chapter, repeats = npc_label(batch.vault, info)
+    hits = [h for sec in scope for h, _n in npc_passages(doc, sec)
+            if npc_same_passage(h.title, info.number, chapter, repeats,
+                                info.title)]
+    if not hits:
+        raise WriteError(f"{rel}: no passage for session {info.number} "
+                         f"to replace")
+    if len(hits) > 1:
+        raise WriteError(f"{rel}: {len(hits)} passages for session "
+                         f"{info.number}: replace by hand")
+    head = hits[0]
+    heading = doc.lines[head.idx].rstrip("\r\n")
+    text, count = _replace(doc, head, [heading, "", *body])
+    batch.put(rel, text)
+    batch.row("WOULD-ADD", rel, f"\u00a7{head.title}",
+              f"replaced ({count} lines)")
+
+
 def cmd_npc_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
     if not vl.setting_or_builtin(batch.vault, "vault.voices"):
         raise WriteError("voices are off (vault.voices)")
@@ -1403,6 +1459,11 @@ def cmd_npc_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
                       if key(h.title) == want), None)
         if section and found is None:
             raise WriteError(f"{rel}: no '## {section}' section")
+        if args.replace:
+            scope = ([found[0]] if section and found
+                     else [h for h, _why in sections])
+            npc_replace(batch, rel, doc, info, scope, body)
+            continue
         target = found[0] if found else None
         if found and found[1]:
             raise WriteError(f"{rel}: '## {found[0].title}' {found[1]}; "
@@ -2004,6 +2065,25 @@ def _heading_arg(raw: str, flag: str) -> tuple[int, str]:
     return len(m.group(1)), m.group(2)
 
 
+def _heading_in(doc: Doc, raw: str, flag: str) -> tuple[int, str]:
+    """`raw` as (level, title). With its hashes it is taken as written; bare
+    text names the note's heading of that title, whatever its level, and
+    a heading that does not exist yet needs its hashes."""
+    if HEADING_ARG_RE.match(raw):
+        return _heading_arg(raw, flag)
+    title = raw.strip()
+    hits = [h for h in doc.heads if title and key(h.title) == key(title)]
+    if len({h.level for h in hits}) > 1:
+        raise WriteError(f"{flag} '{title}': headings at more than one level "
+                         f"(" + ", ".join(f"'{'#' * h.level} {h.title}'"
+                                          for h in hits)
+                         + "): give the one meant with its hashes")
+    if not hits:
+        raise WriteError(f"{flag} '{title}': no such heading; a new one "
+                         f"takes its hashes, e.g. '### {title or 'Session 13'}'")
+    return hits[0].level, hits[0].title
+
+
 def _find(doc: Doc, level: int, title: str) -> Head | None:
     return next((h for h in doc.heads
                  if h.level == level and key(h.title) == key(title)), None)
@@ -2084,13 +2164,13 @@ def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
     entries = split_timeline(text)
     if not entries:
         raise WriteError("nothing on stdin")
-    level, title = _heading_arg(args.under, "--under")
-    where = f"\u00a7{title}"
     note = batch.read(rel)
     doc = parse(note)
     if doc.problems:
         raise WriteError(f"{rel}: gm-only fence is unbalanced "
                          f"({doc.problems[0]})")
+    level, title = _heading_in(doc, args.under, "--under")
+    where = f"\u00a7{title}"
     if _find(doc, level, title) is None:
         other = next((h for h in doc.heads if key(h.title) == key(title)),
                      None)
@@ -2100,7 +2180,7 @@ def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
                 f"second heading with that title would be a duplicate: use "
                 f"--under '{'#' * other.level} {other.title}'")
         if args.after:
-            after = _find(doc, *_heading_arg(args.after, "--after"))
+            after = _find(doc, *_heading_in(doc, args.after, "--after"))
             if after is None:
                 raise WriteError(f"{rel}: no heading '{args.after}'")
             at = section_end(doc, after)
@@ -3578,11 +3658,16 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=raw, description=(
             "stdin: entries, each opened by a '# [[PC Name]]' line.\n"
             "An entry may open with its own '## ' heading; otherwise it\n"
-            "gets '## Session N - Title'. An entry holds no # or ## after that."))
+            "gets '## Session N - Title'. An entry holds no # or ## after that.\n"
+            "--replace rewrites the session's entry instead of adding one."))
     story.add_argument("--wrapup", required=True, help="the wrap-up the entries come from")
     story.add_argument("--label", help="the entry heading's label")
     story.add_argument("--as-of", dest="as_of", help="asOfSession value")
     story.add_argument("--date", help="lastUpdated value, YYYY-MM-DD")
+    story.add_argument("--replace", action="store_true",
+                       help="replace each PC's existing entry for this "
+                            "session (refused when there is none); the "
+                            "frontmatter and other entries stay as they are")
     story.add_argument("--write", action="store_true", help="write it (default: preview)")
     npcs = sub.add_parser(
         "npc-story", help="add a storied NPC's passage for a session (stdin)",
@@ -3595,15 +3680,20 @@ def build_parser() -> argparse.ArgumentParser:
             "section --section names.\n"
             "Refused: a hidden or gm-only section (passages are for\n"
             "players), a place inside a block the site strips, a session\n"
-            "the section already has, an NPC with no voice, and any NPC\n"
-            "while vault.voices is off. Archived and QA copies are never\n"
-            "the NPC. With no --section, a HINT row names a section\n"
-            "holding earlier session passages."))
+            "the section already has (--replace rewrites it), an NPC\n"
+            "with no voice, and any NPC while vault.voices is off.\n"
+            "Archived and QA copies are never the NPC. With no\n"
+            "--section, a HINT row names a section holding earlier\n"
+            "session passages."))
     npcs.add_argument("--wrapup", required=True, help="the wrap-up the entries come from")
     npcs.add_argument("--section", metavar="HEADING",
                       help="the '## ' section to write under (default: Story)")
     npcs.add_argument("--as-of", dest="as_of", help="asOfSession value")
     npcs.add_argument("--date", help="lastUpdated value, YYYY-MM-DD")
+    npcs.add_argument("--replace", action="store_true",
+                      help="replace the NPC's existing passage for this "
+                           "session (refused when there is none); the "
+                           "frontmatter and other passages stay as they are")
     npcs.add_argument("--write", action="store_true", help="write it (default: preview)")
     status = sub.add_parser(
         "status", help="rewrite a PC's Current Status fields (stdin)",
@@ -3636,8 +3726,11 @@ def build_parser() -> argparse.ArgumentParser:
             "stdin: entries exactly as they should read. A line at the\n"
             "margin opens an entry; indented lines belong to it."))
     tl.add_argument("--under", required=True,
-                    help="the heading to add under, with its hashes")
-    tl.add_argument("--after", help="where a new heading goes")
+                    help="the heading to add under: its text names an "
+                         "existing heading at any level; a new heading "
+                         "takes its hashes ('### October 1923')")
+    tl.add_argument("--after", help="where a new heading goes (its text, "
+                    "or with its hashes)")
     tl.add_argument("--file", help=f"the timeline note (default {TIMELINE})")
     tl.add_argument("--write", action="store_true", help="write it (default: preview)")
     sn = sub.add_parser(

@@ -65,6 +65,7 @@ gma vault-write <vault> story --wrapup WRAPUP [options]
 stdin: entries, each opened by a '# [[PC Name]]' line.
 An entry may open with its own '## ' heading; otherwise it
 gets '## Session N - Title'. An entry holds no # or ## after that.
+--replace rewrites the session's entry instead of adding one.
 ```
 
 | Argument | Value | Help |
@@ -73,6 +74,7 @@ gets '## Session N - Title'. An entry holds no # or ## after that.
 | `--label` | `LABEL` | the entry heading's label |
 | `--as-of` | `AS_OF` | asOfSession value |
 | `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |
+| `--replace` |  | replace each PC's existing entry for this session (refused when there is none); the frontmatter and other entries stay as they are |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 
@@ -92,10 +94,11 @@ a session N) at the end of '## Story' (made before
 section --section names.
 Refused: a hidden or gm-only section (passages are for
 players), a place inside a block the site strips, a session
-the section already has, an NPC with no voice, and any NPC
-while vault.voices is off. Archived and QA copies are never
-the NPC. With no --section, a HINT row names a section
-holding earlier session passages.
+the section already has (--replace rewrites it), an NPC
+with no voice, and any NPC while vault.voices is off.
+Archived and QA copies are never the NPC. With no
+--section, a HINT row names a section holding earlier
+session passages.
 ```
 
 | Argument | Value | Help |
@@ -104,6 +107,7 @@ holding earlier session passages.
 | `--section` | `HEADING` | the '## ' section to write under (default: Story) |
 | `--as-of` | `AS_OF` | asOfSession value |
 | `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |
+| `--replace` |  | replace the NPC's existing passage for this session (refused when there is none); the frontmatter and other passages stay as they are |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 
@@ -167,8 +171,8 @@ margin opens an entry; indented lines belong to it.
 
 | Argument | Value | Help |
 |---|---|---|
-| `--under` | `UNDER` | the heading to add under, with its hashes |
-| `--after` | `AFTER` | where a new heading goes |
+| `--under` | `UNDER` | the heading to add under: its text names an existing heading at any level; a new heading takes its hashes ('### October 1923') |
+| `--after` | `AFTER` | where a new heading goes (its text, or with its hashes) |
 | `--file` | `FILE` | the timeline note (default _Campaign/Timeline.md) |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
