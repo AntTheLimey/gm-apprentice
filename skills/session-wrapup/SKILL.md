@@ -117,7 +117,7 @@ any PC who died or left this session (else left out). `# off:
 vault.voices` → no voices, as before. A `(none)` voice → draft it
 per `shared/voice.md` for the GM's yes: the campaign's before the
 recap, a PC's before their Story entry, an NPC's when the GM gives
-them a story.
+them a story. Any other row: ask the GM.
 
 Write `## Narrative Recap` from the Play Notes, with every entity
 `[[wiki-linked]]`, in the campaign voice (off: tone per
@@ -152,8 +152,9 @@ vault-ingest's job.
 
 **Storied NPCs** (voiced, appeared): a passage each, in voice:
 `vw npc-story --wrapup "<wrap-up>" --as-of "<asOfSession value>"`,
-entries under `# [[NPC Name]]` lines; dry-run, then `--write` plus
-the `--section` a HINT names.
+entries under `# [[NPC Name]]` lines; dry-run, then `--write`. On a
+HINT, add its `--section` only if those passages are this NPC's
+story, not an appearance log or notes; unsure, ask the GM.
 
 ### 3c. PC Sheet Refresh
 

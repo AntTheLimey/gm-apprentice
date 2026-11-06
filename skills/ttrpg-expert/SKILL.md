@@ -6,11 +6,11 @@ description: "TTRPG rules advisor and content engine for CoC 7e, GURPS 4e, Forge
 TTRPG advisor and content engine. Files prefixed `shared/` live
 at `skills/shared/`; `systems/` paths are relative to this skill.
 
-**Voices:** in a vault, before writing dialogue, read-aloud or a
-handout, run `shared/scripts/vault_check.py <vault> voices`: the
-campaign voice, or a voiced character's own when they speak or
-write. Off, a `(none)` campaign or no vault: as before. Never draft
-one.
+**Voices:** in a vault, for dialogue, read-aloud, scene-setting
+or a handout, run `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
+voices`: the campaign voice, or a voiced speaker's or writer's own.
+Off, a `(none)` campaign or no vault: as before. Never draft one.
 
 ## Quick Commands
 
@@ -55,7 +55,7 @@ outline with NPC roster, timeline, clue paths. Player-agency
 review: `scenario-writing.md` + `continuity-engine.md`.
 
 **"Write a handout"** / **"letter/newspaper/diary"**
-→ `handouts-and-props.md`. Type → voice → embed info → write
+→ `handouts-and-props.md`. Type → author → embed info → write
 in-character → prop notes.
 
 **"Make a prop for X"** / **"file this handout for the site"**

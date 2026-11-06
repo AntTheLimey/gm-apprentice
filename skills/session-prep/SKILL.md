@@ -96,7 +96,8 @@ upcoming session's complexity, not the campaign's size.
 **Voices:** with the bundle, run `vault_check.py <vault> voices`
 (`# off: vault.voices` → none, as before). Read-aloud, scene-setting,
 dialogue and handouts take the campaign voice, or a voiced
-character's own when that character speaks or writes. A `(none)`
+character's own when that character speaks or writes; Plan bullets
+stay plain (Two registers). A `(none)`
 campaign voice: draft one per `shared/voice.md` and offer it.
 
 When prep needs setting detail the SRD/ORC files lack (faction rosters,

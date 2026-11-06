@@ -30,12 +30,12 @@ player_site.publish player_site.hide.fields --vault <vault>`) and
 whose `player_site.hide.fields` lacks `voice`, tell the GM the voice
 would show on their site and ask the update's question: add `voice`
 to the details the site hides (`settings add player_site.hide.fields
-voice --vault <vault>`)? Then, on their answer, write it: dry-run,
-then `--write` on their yes.
+voice --vault <vault>`)? Whatever they answer about the site, write
+the approved voice: dry-run, then `--write`.
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
-  <vault> "<note>" --set 'voice=…'
+  <vault> "<note path>" --set 'voice=…'
 ```
 
 An apostrophe in the voice goes in as `'\''`.
