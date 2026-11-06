@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.11.4] — 2026-11-07
+## [1.11.4] — 2026-11-06
 
 Voices, part two (#460): the skills draft and use the voices. With `vault.voices` on (the default), session-wrapup and session-prep read the campaign's voice and each character's before writing story prose, and draft a missing one for the GM's yes; session-play and ttrpg-expert use the voices they find and never draft. Records stay plain. The update refreshes an unedited character-story template and asks about an edited one, as usual.
 
