@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.11.2] — 2026-11-05
+
+Voices, part one (#460): the field, the switch, and the tools the skills will use. Publish tool 1.70.0. The skills start drafting and using voices in the next release.
+
+### Added
+
+- **`vault.voices`**, a vault setting, on by default. It says whether the skills keep a short voice for the campaign and for each storied character, and write story prose in it. Off, story prose takes its tone from the genre, as before.
+- **A `voice:` line** on the Campaign Overview, PC and NPC templates: a few sentences on how the campaign or character is told and how they speak. An NPC with a voice is one the GM has given their own story.
+- **`vault_check.py VAULT voices [NAME ...]`** prints the campaign's voice and each character's in one short list (every active PC and every NPC with a voice, or the characters named). Names match with or without underscores.
+- **`vault_write.py npc-story`** writes a storied NPC's passage for the session: next to the NPC's earlier passages when they have some, or in a new `## Story` section.
+
+### Changed
+
+- **`voice` is never shown on a player site.** It joins the built-in `player_site.hide.fields`. A vault that keeps its own list is asked once by the update (check `hide-fields-voice`) to add `voice` to it.
+
+---
+
 ## [1.11.1] — 2026-11-05
 
 Settings writer fixes (#380). Publish tool 1.69.1. No vault change.
