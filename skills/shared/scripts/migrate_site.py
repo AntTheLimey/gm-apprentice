@@ -22,8 +22,10 @@ from vault_check import (ExplainAll, ask_publish_tool, check_frontmatter, check_
                          _kept_by_player, semver_below, site_pin, vault_settings)
 from vaultlib import (PublishToolUnavailable, SettingsUnavailable,
                       forget_settings, google_fonts, set_key, settings,
-                      settings_added, settings_add, settings_default, settings_file, settings_raw, settings_remove, settings_set,
-                      settings_unset, settings_written, site_switch_written, written_in_vault_file, yaml_scalar)
+                      settings_added, settings_add, settings_default,
+                      settings_file, settings_raw, settings_remove,
+                      settings_set, settings_unset, settings_written,
+                      site_switch_written, written_in_vault_file, yaml_scalar)
 
 # --- the checks ---------------------------------------------------------------
 
@@ -628,7 +630,7 @@ def find_hide_additions(vault: Path, since: str) -> list[Item]:
     now = vault_settings(vault)
     items: list[Item] = []
     for name in EXCLUDE_LISTS:
-        if now.origins[name] not in ("file", "site-file"):
+        if now.origins[name] != "file":
             continue
         has = now.get(name)
         has = has if isinstance(has, list) else []

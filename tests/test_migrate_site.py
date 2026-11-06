@@ -826,6 +826,16 @@ class HideAdditionTests(unittest.TestCase):
                                                  "your site hides"),
                         item.lines[0])
 
+    def test_settings_added_skips_a_malformed_entry(self):
+        answer = {"added": [{"entry": "voice", "since": "1.11.2", "why": "w"},
+                            {"entry": "x"}, "junk", {"entry": 3, "since": "1",
+                                                     "why": None}]}
+        with mock.patch.object(vaultlib, "settings_describe",
+                               return_value=answer):
+            self.assertEqual(vaultlib.settings_added(self.FIELDS),
+                             [{"entry": "voice", "since": "1.11.2",
+                               "why": "w"}])
+
     def test_the_item_holds_the_stamp(self):
         (item,) = ms.find_hide_additions(self.owning(self.old_fields()), "1.11.2")
         self.assertTrue(item.holds_stamp)

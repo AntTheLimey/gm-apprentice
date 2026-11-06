@@ -1929,10 +1929,13 @@ def settings_describe(name: str) -> dict[str, Any]:
 def settings_added(name: str) -> list[dict[str, str]]:
     """The entries the tool says were added to the built-in list `name`
     after vaults began owning their lists: `[{"entry", "since", "why"}]`,
-    `[]` when it names none."""
+    `[]` when it names none. An entry missing any of the three as text is
+    skipped."""
+    keys = ("entry", "since", "why")
     added = settings_describe(name).get("added") or []
-    return [{k: str(a[k]) for k in ("entry", "since", "why")}
-            for a in added if isinstance(a, dict)]
+    return [{k: a[k] for k in keys} for a in added
+            if isinstance(a, dict) and all(isinstance(a.get(k), str)
+                                           for k in keys)]
 
 
 def settings_raw(vault: Path, name: str | None = None) -> Any:
