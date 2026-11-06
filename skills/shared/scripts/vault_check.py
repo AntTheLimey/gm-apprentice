@@ -28,6 +28,7 @@ Usage:
   vault_check.py VAULT site-faults [--file REL ...]
   vault_check.py VAULT version
   vault_check.py VAULT active-pcs
+  vault_check.py VAULT voices [NAME ...]   (campaign voice, then each character's)
   vault_check.py VAULT all
 
 `--file` is repeatable (`--file A.md --file B.md`) and combines with
@@ -1073,6 +1074,40 @@ def list_active_pcs(vault: Path) -> list[str]:
         stamp = str(as_of) if as_of not in (None, "", []) else "?"
         rows.append(f"PC\t{rel}\t{Path(rel).stem}; "
                     f"aliases: {names or 'none'}; asOfSession: {stamp}")
+    return rows
+
+
+def voice_rows(vault: Path, names: Sequence[str]) -> list[str]:
+    """`voices`: the campaign's voice, then each character's. No NAMEs: the
+    active PCs and every NPC with a voice. NAMEs: those characters, by
+    name or alias."""
+    def key(text: str) -> str:
+        return unicodedata.normalize("NFC", text).strip().casefold()
+
+    def row(label: str, text: str) -> str:
+        return f"{label}\t{vaultlib.voice_value(text) or '(none)'}"
+
+    notes = [(rel, text, extract_frontmatter(text) or {})
+             for rel, text in vault_files(vault)]
+    overview = next((t for _r, t, fm in notes
+                     if fm.get("type") == "campaign_overview"), "")
+    rows = [row("campaign", overview)]
+    if not names:
+        gone = vaultlib.out_of_play(vault)
+        rows += [row(Path(rel).stem, text) for rel, text, fm in notes
+                 if vaultlib.is_active_pc(rel, fm, gone)]
+        rows += [row(Path(rel).stem, text) for rel, text, fm in notes
+                 if fm.get("type") == "npc" and vaultlib.voice_value(text)]
+        return rows
+    people = [(rel, text, fm) for rel, text, fm in notes
+              if fm.get("type") in ("pc", "npc")]
+    for name in names:
+        want = key(name)
+        hit = next((p for p in people
+                    if key(Path(p[0]).stem) == want
+                    or want in {key(a) for a in link_aliases(p[2])}), None)
+        rows.append(row(Path(hit[0]).stem, hit[1]) if hit
+                    else f"{name}\t(no such character)")
     return rows
 
 
@@ -5754,8 +5789,10 @@ def build_parser() -> argparse.ArgumentParser:
                                         "relationships", "chapters", "sessions",
                                         "gm-leak", "pc-body", "wrapup",
                                         "site-faults", "settings",
-                                        "version", "active-pcs", "stories",
+                                        "version", "active-pcs", "voices", "stories",
                                         "report-new", "report-stats", "all"], help="the check to run")
+    ap.add_argument("names", nargs="*", metavar="NAME",
+                    help="voices only: the characters to read")
     ap.add_argument("--order", action="store_true",
                     help="timeline only: check the sessions' in_game_date "
                          "never goes backwards (qa_checks.py)")
@@ -5883,6 +5920,13 @@ def _main(argv: list[str] | None) -> int:
         return code
     if args.command == "active-pcs":
         emit("active-pcs", list_active_pcs(args.vault))
+        return 0
+    if args.command == "voices":
+        if not vaultlib.setting_or_builtin(args.vault, "vault.voices"):
+            emit("voices", [])
+            print("# off: vault.voices")
+            return 0
+        emit("voices", voice_rows(args.vault, args.names))
         return 0
     if args.command == "stories":
         emit("stories", qa_checks.check_stories(args.vault))

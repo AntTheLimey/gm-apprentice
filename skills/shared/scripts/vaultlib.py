@@ -377,6 +377,27 @@ def get_key(fm: list[str], key: str) -> str | None:
     return None
 
 
+def voice_value(text: str) -> str:
+    """The note's `voice:` as plain text; `""` when absent or empty. Read
+    from the raw line, as `extract_frontmatter` keeps a double-quoted
+    value's backslashes. Double-quoted: decoded as JSON (what `yaml_scalar`
+    writes); single-quoted: `''` is `'`; bare: stripped."""
+    lines = text.splitlines(keepends=True)
+    end, err = frontmatter_span(lines)
+    if err:
+        return ""
+    raw = get_key(lines[1:end], "voice") or ""
+    if len(raw) >= 2 and raw[0] == raw[-1] == '"':
+        try:
+            value = json.loads(raw)
+            return value.strip() if isinstance(value, str) else ""
+        except ValueError:
+            return raw[1:-1].strip()
+    if len(raw) >= 2 and raw[0] == raw[-1] == "'":
+        return raw[1:-1].replace("''", "'").strip()
+    return raw.strip()
+
+
 def set_key(fm: list[str], key: str, value: str, eol: str) -> str:
     """Replace (or append) a top-level `key:` line, keeping its own EOL.
 
