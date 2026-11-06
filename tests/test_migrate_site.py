@@ -820,6 +820,119 @@ class HideAdditionTests(unittest.TestCase):
                          ("1.11.2", 2, True, ("hide-add:",), "asks"))
         self.assertTrue(check.plain and check.ask and check.left)
 
+    def test_the_question_leads_with_plain_words(self):
+        (item,) = ms.find_hide_additions(self.owning(self.old_fields()), "1.11.2")
+        self.assertTrue(item.lines[0].startswith("add voice to the details "
+                                                 "your site hides"),
+                        item.lines[0])
+
+    def test_the_item_holds_the_stamp(self):
+        (item,) = ms.find_hide_additions(self.owning(self.old_fields()), "1.11.2")
+        self.assertTrue(item.holds_stamp)
+
+
+class HideAdditionStampTests(unittest.TestCase):
+    """The 1.11.2 hide-add question holds the stamp until it is answered,
+    through the low-level apply and `gma update` alike: past the stamp the
+    release gate would never offer it again, and voice would publish."""
+
+    FIELDS = "player_site.hide.fields"
+
+    def setUp(self):
+        (self.check,) = [c for c in ms.SITE_CHECKS
+                         if c.name == "hide-fields-voice"]
+        for target, value in ((migrate, ("1.11.2", "test")),):
+            p = mock.patch.object(target, "plugin_version", return_value=value)
+            p.start()
+            self.addCleanup(p.stop)
+        p = mock.patch.object(migrate, "CHECKS", [self.check])
+        p.start()
+        self.addCleanup(p.stop)
+        self.home = tmp(self, "mig-home-")
+
+    def owned(self):
+        vault = make_vault(self, version="1.11.1")
+        old = [f for f in ms.settings_default(self.FIELDS) if f != "voice"]
+        vaultlib.settings_set(vault, [(self.FIELDS, old)])
+        return vault, old
+
+    def apply(self, vault, *choose):
+        out = io.StringIO()
+        args = [str(vault), "apply"]
+        for c in choose:
+            args += ["--choose", c]
+        with contextlib.redirect_stdout(out), \
+                contextlib.redirect_stderr(io.StringIO()):
+            code = migrate.main(args)
+        return code, out.getvalue()
+
+    def stamp(self, vault):
+        return vaultlib.read_stamp(vault)
+
+    def test_offered_from_1_11_1_and_not_once_stamped(self):
+        self.assertEqual(migrate.offered([self.check], "1.11.1", "1.11.2"),
+                         [self.check])
+        self.assertEqual(migrate.offered([self.check], "1.11.2", "1.11.2"), [])
+
+    def test_bare_apply_holds_the_stamp_and_asks_again(self):
+        vault, old = self.owned()
+        code, out = self.apply(vault)
+        self.assertEqual(code, 0, out)
+        self.assertIn("not answered: hide-add:voice", out)
+        self.assertNotIn("<None>", out)
+        self.assertIn("not stamped", out)
+        self.assertEqual(self.stamp(vault), "1.11.1")
+        self.assertEqual(vc.settings(vault).get(self.FIELDS), old)
+        code, out = self.apply(vault)
+        self.assertIn("not answered: hide-add:voice", out)
+
+    def test_apply_yes_adds_voice_and_stamps(self):
+        vault, old = self.owned()
+        code, out = self.apply(vault, "hide-add:voice")
+        self.assertEqual(code, 0, out)
+        self.assertIn("stamped 1.11.2", out)
+        vaultlib.forget_settings(vault)
+        self.assertEqual(vc.settings(vault).get(self.FIELDS), [*old, "voice"])
+
+    def test_apply_leave_stamps_without_adding(self):
+        vault, old = self.owned()
+        code, out = self.apply(vault, "hide-add:voice=leave")
+        self.assertEqual(code, 0, out)
+        self.assertIn("left as it is", out)
+        self.assertIn("stamped 1.11.2", out)
+        self.assertEqual(self.stamp(vault), "1.11.2")
+        vaultlib.forget_settings(vault)
+        self.assertEqual(vc.settings(vault).get(self.FIELDS), old)
+
+    def update(self, vault, answers=None, headless=False):
+        import update
+        return update.run(vault, answers or {}, headless, home=self.home)
+
+    def test_update_headless_holds_then_yes_adds_voice(self):
+        import update_record
+        vault, old = self.owned()
+        res = self.update(vault, headless=True)
+        self.assertEqual(res.left_open, ["hide-add:voice"])
+        self.assertEqual(self.stamp(vault), "1.11.1")
+        (item,) = ms.find_hide_additions(vault, "1.11.2")
+        asked = f"hide-add:voice@{update_record.lines_sha(item.lines)[:8]}"
+        res = self.update(vault, {asked: "yes"})
+        self.assertEqual(res.left_open, [])
+        self.assertEqual(self.stamp(vault), "1.11.2")
+        vaultlib.forget_settings(vault)
+        self.assertEqual(vc.settings(vault).get(self.FIELDS), [*old, "voice"])
+
+    def test_update_leave_lets_the_stamp_move(self):
+        import update_record
+        vault, old = self.owned()
+        (item,) = ms.find_hide_additions(vault, "1.11.2")
+        asked = f"hide-add:voice@{update_record.lines_sha(item.lines)[:8]}"
+        res = self.update(vault, {asked: "leave"})
+        self.assertEqual(res.left_open, [])
+        self.assertEqual(self.stamp(vault), "1.11.2")
+        vaultlib.forget_settings(vault)
+        self.assertEqual(vc.settings(vault).get(self.FIELDS), old)
+
 
 class VoicesSwitchTests(unittest.TestCase):
     def test_on_by_default_and_off_when_written_off(self):

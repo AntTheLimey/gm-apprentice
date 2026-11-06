@@ -154,9 +154,12 @@ release:
 2. Add a check to `SITE_CHECKS` beside `hide-fields-voice`: a new name,
    that release, band 2, `find=lambda v: find_hide_additions(v, "<release>")`,
    `asks_site=True`, `choices=("hide-add:",)` and `kind="asks"`, with
-   its own `plain`, `ask` and `left`.
-3. Test it as `HideAdditionTests` in `tests/test_migrate_site.py` does:
-   a vault owning the old list is offered the entry once, and one with
+   its own `plain`, `ask` and `left`. The items it finds hold the stamp
+   (`holds_stamp=True`, set by `find_hide_additions`), so an apply that
+   leaves the question unanswered does not stamp past it.
+3. Test it as `HideAdditionTests` and `HideAdditionStampTests` in
+   `tests/test_migrate_site.py` do: a vault owning the old list is
+   offered the entry, the stamp holds until it is answered, and one with
    no list of its own is offered nothing.
 
 There is no other copy to change. The three default lists (folders,

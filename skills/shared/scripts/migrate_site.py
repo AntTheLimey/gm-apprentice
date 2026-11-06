@@ -647,10 +647,13 @@ def find_hide_additions(vault: Path, since: str) -> list[Item]:
                     raise StepFailed(str(e)) from e
                 return [f"added {entry} to {name}"]
 
+            # Held: silence is not an answer, and once the vault is
+            # stamped the release gate would never offer this again.
             items.append(Item(
                 f"hide-add:{entry}", CHOICE,
-                [f"add {entry} to {name} so the site never shows it: "
-                 f"{entry} is {added['why']}"], apply))
+                [f"add {entry} to the details your site hides ({name}), "
+                 f"so the site never shows it: {entry} is {added['why']}"],
+                apply, holds_stamp=True))
     return items
 
 
