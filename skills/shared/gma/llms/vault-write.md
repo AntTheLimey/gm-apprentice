@@ -12,7 +12,7 @@ gma vault-write <vault> <command> ...
 | Argument | Value | Help |
 |---|---|---|
 | `<vault>` |  | the vault folder |
-| `<command>` | `wrapup-new`, `wrapup-add`, `story`, `status`, `log`, `timeline`, `session-new`, `play-notes-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan` |  |
+| `<command>` | `wrapup-new`, `wrapup-add`, `story`, `npc-story`, `status`, `log`, `timeline`, `session-new`, `play-notes-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan` |  |
 
 Example: `gma vault-write "<vault>" wrapup-add "<wrap-up>" --write`
 <!-- END GENERATED -->
@@ -71,6 +71,28 @@ gets '## Session N - Title'. An entry holds no # or ## after that.
 |---|---|---|
 | `--wrapup` | `WRAPUP` | the wrap-up the entries come from |
 | `--label` | `LABEL` | the entry heading's label |
+| `--as-of` | `AS_OF` | asOfSession value |
+| `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |
+| `--write` |  | write it (default: preview) |
+<!-- END GENERATED -->
+
+<!-- BEGIN GENERATED: gma vault-write npc-story -->
+add a storied NPC's passage for a session (stdin)
+
+```text
+gma vault-write <vault> npc-story --wrapup WRAPUP [options]
+```
+
+```text
+stdin: entries, each opened by a '# [[NPC Name]]' line.
+Each is added to that NPC's note as '### Session N: Title',
+after the note's earlier session passages, else in '## Story'.
+Only an NPC with a voice; refused when vault.voices is off.
+```
+
+| Argument | Value | Help |
+|---|---|---|
+| `--wrapup` | `WRAPUP` | the wrap-up the entries come from |
 | `--as-of` | `AS_OF` | asOfSession value |
 | `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |
 | `--write` |  | write it (default: preview) |

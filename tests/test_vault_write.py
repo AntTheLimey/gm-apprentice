@@ -2176,5 +2176,100 @@ class FollowUp2Tests(unittest.TestCase):
         self.assertNotIn("SKIP", out)
 
 
+MARLO_REL = "Characters/NPCs/Marlo Petrak.md"
+NPC_VOICED = (
+    "---\ntype: npc\naliases: [Marlo]\nasOfSession: \"Session 1\"\n"
+    "lastUpdated: \"2026-09-01\"\nvoice: \"Dry, short, never asks.\"\n---\n\n"
+    "# Marlo Petrak\n\n## Overview\n\nA fixer.\n\n## Related\n\n"
+    "- **People:** [[Rock Lavey]]\n\n## Campaign Log\n\n- x\n\n"
+    "<!-- gm-only -->\n\n## GM Notes\n\nOut.\n\n<!-- /gm-only -->\n")
+MARLO_SHAPE = (
+    "---\ntype: npc\nvoice: \"Dry.\"\n---\n\n# Marlo Petrak\n\n"
+    "## Overview\n\nA fixer.\n\n"
+    "### Session 13: Albatross Security LLC: The Zenith Job\n\nOld one.\n\n"
+    "### Session 14: Iced Tea\n\nOlder one.\n\n## Appearances\n\n- a\n")
+
+
+def npc_story(vault, stdin, *flags, write=True):
+    return run(vault, "npc-story", "--wrapup", WRAP_REL, *flags,
+               *(["--write"] if write else []), stdin=stdin)
+
+
+class NpcStoryTests(unittest.TestCase):
+    def test_npc_story_new_section(self):
+        vault = story_vault(self, {MARLO_REL: NPC_VOICED})
+        code, out = npc_story(vault, "# [[Marlo Petrak]]\n\nShe waited.\n")
+        self.assertEqual(code, 0, out)
+        text = read(vault, MARLO_REL)
+        self.assertIn("A fixer.\n\n## Story\n\n### Session 2: The Docks"
+                      "\n\nShe waited.\n\n## Related\n", text)
+        self.assertIn('asOfSession: "Session 2"\n', text)
+        self.assertIn('lastUpdated: "2026-09-30"\n', text)
+        self.assertIn("voice: \"Dry, short, never asks.\"\n", text)
+        self.assertIn("<!-- gm-only -->\n\n## GM Notes\n", text)
+
+    def test_npc_story_by_alias_and_no_related_goes_before_the_fence(self):
+        note = NPC_VOICED.replace(
+            "## Related\n\n- **People:** [[Rock Lavey]]\n\n", "")
+        note = note.replace("## Campaign Log\n\n- x\n\n", "")
+        vault = story_vault(self, {MARLO_REL: note})
+        code, out = npc_story(vault, "# [[Marlo]]\n\nShe waited.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("A fixer.\n\n## Story\n\n### Session 2: The Docks"
+                      "\n\nShe waited.\n\n<!-- gm-only -->",
+                      read(vault, MARLO_REL))
+
+    def test_npc_story_follows_existing_passages(self):
+        vault = story_vault(self, {MARLO_REL: MARLO_SHAPE})
+        code, out = npc_story(vault, "# [[Marlo Petrak]]\n\nShe waited.\n")
+        self.assertEqual(code, 0, out)
+        text = read(vault, MARLO_REL)
+        self.assertNotIn("## Story", text)
+        self.assertIn("Older one.\n\n### Session 2: The Docks\n\n"
+                      "She waited.\n\n## Appearances\n", text)
+
+    def test_npc_story_refuses_unvoiced(self):
+        note = NPC_VOICED.replace(
+            'voice: "Dry, short, never asks."',
+            'voice: ""            # set only when the GM gives a voice')
+        vault = story_vault(self, {MARLO_REL: note})
+        code, out = npc_story(vault, "# [[Marlo Petrak]]\n\nShe waited.\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("not a storied NPC: set its voice first", out)
+        self.assertEqual(read(vault, MARLO_REL), note)
+
+    def test_npc_story_refuses_duplicate_session(self):
+        vault = story_vault(self, {MARLO_REL: NPC_VOICED})
+        self.assertEqual(npc_story(vault, "# [[Marlo]]\n\nOnce.\n")[0], 0)
+        after = read(vault, MARLO_REL)
+        code, out = npc_story(vault, "# [[Marlo]]\n\nTwice.\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("already has", out)
+        self.assertEqual(read(vault, MARLO_REL), after)
+
+    def test_npc_story_preview_writes_nothing(self):
+        vault = story_vault(self, {MARLO_REL: NPC_VOICED})
+        code, out = npc_story(vault, "# [[Marlo]]\n\nShe waited.\n",
+                              write=False)
+        self.assertEqual(code, 0, out)
+        self.assertIn("WOULD-ADD", out)
+        self.assertEqual(read(vault, MARLO_REL), NPC_VOICED)
+
+    def test_npc_story_refuses_unknown_npc(self):
+        vault = story_vault(self, {MARLO_REL: NPC_VOICED})
+        code, out = npc_story(vault, "# [[Nobody]]\n\nx\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("not found", out)
+
+    def test_npc_story_refuses_when_voices_are_off(self):
+        vault = story_vault(self, {MARLO_REL: NPC_VOICED})
+        with mock.patch.object(vw.vl, "setting_or_builtin",
+                               return_value=False):
+            code, out = npc_story(vault, "# [[Marlo]]\n\nx\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("voices are off (vault.voices)", out)
+        self.assertEqual(read(vault, MARLO_REL), NPC_VOICED)
+
+
 if __name__ == "__main__":
     unittest.main()

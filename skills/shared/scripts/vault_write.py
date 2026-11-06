@@ -1114,7 +1114,17 @@ def story_label(story: str | None, number: int) -> str:
     return f"{last.group(1)}{number:0{len(last.group(2))}d}"
 
 
-def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
+@dataclass
+class WrapInfo:
+    number: int
+    title: str
+    canon: str
+    date: str
+
+
+def read_wrapup(batch: Batch, args: argparse.Namespace) -> WrapInfo:
+    """The session number, title, canon status and play date a Wrap-Up
+    names; `--date` overrides the date."""
     wrap_rel = batch.note_named(args.wrapup, vc.WRAP_TYPES, "--wrapup")
     wrap = batch.read(wrap_rel)
     fm = vl.extract_frontmatter(wrap) or {}
@@ -1131,6 +1141,15 @@ def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
         raise WriteError(f"{wrap_rel}: `session:` names no session")
     canon = raw_value(wrap, "canon_status") or "DRAFT"
     date = args.date or vl.unquote(raw_value(wrap, "play_date") or "")
+    return WrapInfo(number, title, canon, date)
+
+
+def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
+    wrap = batch.read(batch.note_named(args.wrapup, vc.WRAP_TYPES,
+                                       "--wrapup"))
+    info = read_wrapup(batch, args)
+    number, title, canon, date = (info.number, info.title, info.canon,
+                                  info.date)
     for name, custom, body in split_entries(text):
         pc_rel = find_pc(batch, name)
         rel = pc_rel[:-3] + "_Story.md"
@@ -1191,6 +1210,112 @@ def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
             batch.put(rel, new)
             batch.row("WOULD-ADD", rel, f"\u00a7{heading[3:]}", "")
         if not date:
+            batch.row("WARNING", rel, "", "no play_date on the Wrap-Up and "
+                      "no --date: lastUpdated left as it was")
+
+
+# --- NPC story ---------------------------------------------------------------
+
+NPC_SESSION_RE = re.compile(r"^session\s+0*(\d+)\b", re.IGNORECASE)
+
+
+def find_npc(batch: Batch, name: str) -> str:
+    """The vault-relative path of the one NPC note called (or aliased)
+    `name`."""
+    want = vl.normalize(name)
+    hits = []
+    for rel, text in vl.vault_files(batch.vault):
+        fm = vl.extract_frontmatter(text) or {}
+        if vl.entity_type(fm) != "npc":
+            continue
+        names = [Path(rel).stem, *vl.frontmatter_aliases(text)]
+        if want in {vl.normalize(n) for n in names}:
+            hits.append(rel)
+    if not hits:
+        raise WriteError(f"NPC '{name}': not found")
+    if len(hits) != 1:
+        raise WriteError(f"NPC '{name}': matches " + ", ".join(sorted(hits)))
+    return hits[0]
+
+
+def npc_story_insert(doc: Doc, heading: str, body: list[str]) -> tuple[
+        list[str], str]:
+    """The note's lines with the passage added, and the section it went to."""
+    eol = doc.eol
+    heads = [h for h in doc.heads if not h.gm]
+    passages = [h for h in heads
+                if h.level == 3 and NPC_SESSION_RE.match(h.title)]
+    block = [heading, "", *body]
+    if passages:
+        last = passages[-1]
+        parent = next(h for h in reversed(heads)
+                      if h.idx < last.idx and h.level == 2)
+        at = section_end(doc, parent)
+        where = parent.title
+    else:
+        story = next((h for h in heads
+                      if h.level == 2 and key(h.title) == "story"), None)
+        if story is not None:
+            at = section_end(doc, story)
+            where = story.title
+        else:
+            cands = [h.idx for h in heads
+                     if h.level == 2 and key(h.title) == "related"]
+            cands += [s.lineno - 1 for s in doc.states
+                      if s.marker in OPENERS]
+            at = min(cands) if cands else len(doc.lines)
+            block = ["## Story", "", *block]
+            where = "Story"
+    q = at
+    while q > 0 and not doc.lines[q - 1].strip():
+        q -= 1
+    new = [ln.rstrip("\r\n") + eol for ln in doc.lines[:q]]
+    new.append(eol)
+    new += [ln + eol for ln in block]
+    if at < len(doc.lines):
+        new.append(eol)
+    new += doc.lines[at:]
+    return new, where
+
+
+def cmd_npc_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
+    if not vl.setting_or_builtin(batch.vault, "vault.voices"):
+        raise WriteError("voices are off (vault.voices)")
+    info = read_wrapup(batch, args)
+    for name, custom, body in split_entries(text):
+        if custom:
+            raise WriteError(f"NPC '{name}': an entry takes no '## ' "
+                             f"heading of its own")
+        rel = find_npc(batch, name)
+        note = batch.read(rel)
+        if not vl.voice_value(note):
+            raise WriteError(f"{rel}: not a storied NPC: set its voice first")
+        doc = parse(note)
+        for h in doc.heads:
+            m = NPC_SESSION_RE.match(h.title) if h.level == 3 else None
+            if m and int(m.group(1)) == info.number and not h.gm:
+                raise WriteError(f"{rel}: already has '{h.title}' "
+                                 f"(session {info.number})")
+        heading = f"### Session {info.number}: {info.title}"
+        new_lines, where = npc_story_insert(doc, heading, body)
+        lines = new_lines
+        end, error = vl.frontmatter_span(
+            [lines[0].lstrip("\ufeff"), *lines[1:]] if lines else lines)
+        if error:
+            raise WriteError(f"{rel}: {error}")
+        fm_lines = lines[1:end]
+        old_plain = vl.unquote(vl.get_key(fm_lines, "asOfSession") or "")
+        as_of = args.as_of or (str(info.number)
+                               if re.fullmatch(r"\d+", old_plain)
+                               else f"Session {info.number}")
+        stamps = {"asOfSession": vl.yaml_scalar(as_of)}
+        if info.date:
+            stamps["lastUpdated"] = vl.yaml_scalar(info.date)
+        for field, value in stamps.items():
+            vl.set_key(fm_lines, field, value, doc.eol)
+        batch.put(rel, "".join([*lines[:1], *fm_lines, *lines[end:]]))
+        batch.row("WOULD-ADD", rel, f"\u00a7{where}/{heading[4:]}", "")
+        if not info.date:
             batch.row("WARNING", rel, "", "no play_date on the Wrap-Up and "
                       "no --date: lastUpdated left as it was")
 
@@ -3322,6 +3447,17 @@ def build_parser() -> argparse.ArgumentParser:
     story.add_argument("--as-of", dest="as_of", help="asOfSession value")
     story.add_argument("--date", help="lastUpdated value, YYYY-MM-DD")
     story.add_argument("--write", action="store_true", help="write it (default: preview)")
+    npcs = sub.add_parser(
+        "npc-story", help="add a storied NPC's passage for a session (stdin)",
+        formatter_class=raw, description=(
+            "stdin: entries, each opened by a '# [[NPC Name]]' line.\n"
+            "Each is added to that NPC's note as '### Session N: Title',\n"
+            "after the note's earlier session passages, else in '## Story'.\n"
+            "Only an NPC with a voice; refused when vault.voices is off."))
+    npcs.add_argument("--wrapup", required=True, help="the wrap-up the entries come from")
+    npcs.add_argument("--as-of", dest="as_of", help="asOfSession value")
+    npcs.add_argument("--date", help="lastUpdated value, YYYY-MM-DD")
+    npcs.add_argument("--write", action="store_true", help="write it (default: preview)")
     status = sub.add_parser(
         "status", help="rewrite a PC's Current Status fields (stdin)",
         formatter_class=raw, description=(
@@ -3535,6 +3671,7 @@ Command = Callable[[Batch, argparse.Namespace, str], None]
 COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
                                 "wrapup-add": cmd_wrapup_add,
                                 "story": cmd_story,
+                                "npc-story": cmd_npc_story,
                                 "status": cmd_status,
                                 "log": cmd_log,
                                 "timeline": cmd_timeline,
