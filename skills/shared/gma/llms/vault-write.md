@@ -74,7 +74,7 @@ gets '## Session N - Title'. An entry holds no # or ## after that.
 | `--label` | `LABEL` | the entry heading's label |
 | `--as-of` | `AS_OF` | asOfSession value |
 | `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |
-| `--replace` |  | replace each PC's existing entry for this session (refused when there is none); the frontmatter and other entries stay as they are |
+| `--replace` |  | replace each PC's existing entry for this session (refused when there is none); other entries stay as they are, and the frontmatter but for --as-of and --date |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 
@@ -107,7 +107,7 @@ session passages.
 | `--section` | `HEADING` | the '## ' section to write under (default: Story) |
 | `--as-of` | `AS_OF` | asOfSession value |
 | `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |
-| `--replace` |  | replace the NPC's existing passage for this session (refused when there is none); the frontmatter and other passages stay as they are |
+| `--replace` |  | replace the NPC's existing passage for this session (refused when there is none); other passages stay as they are, and the frontmatter but for --as-of and --date |
 | `--write` |  | write it (default: preview) |
 <!-- END GENERATED -->
 

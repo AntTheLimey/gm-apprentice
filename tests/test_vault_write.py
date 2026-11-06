@@ -1455,6 +1455,15 @@ class TimelineTests(unittest.TestCase):
         self.assertIn("more than one level", out)
         self.assertEqual(read(vault, TL_REL), both)
 
+    def test_bare_after_naming_no_heading_says_so(self):
+        vault = make_vault(self, {TL_REL: TL})
+        code, out = tl(vault, "- **1814** — x\n", "--under", "### New",
+                       "--after", "Nowhere")
+        self.assertEqual(code, 1)
+        self.assertIn("--after 'Nowhere': no such heading", out)
+        self.assertNotIn("takes its hashes", out)
+        self.assertEqual(read(vault, TL_REL), TL)
+
     def test_a_missing_timeline_says_who_creates_it(self):
         vault = make_vault(self, {"x.md": "x\n"})
         code, out = tl(vault, "- **1814** — x\n", "--under", "### New")
@@ -2324,6 +2333,80 @@ class StoryReplaceTests(unittest.TestCase):
         self.assertIn("Florid.", before)   # chapter 1's Session 2 untouched
 
 
+class StoryReplaceByIdentityTests(unittest.TestCase):
+    """Review round 2: --replace finds the entry by session, not by the
+    heading the add path would write today."""
+
+    def test_replace_an_unpadded_entry_when_a_later_one_is_two_digit(self):
+        story = (STORY + "\n## Session 2 \u2014 The Docks\n\nOld.\n\n"
+                 "## Session 10 \u2014 Late\n\nTen.\n")
+        vault = story_vault(self, {STORY_REL: story})
+        code, out = tell(vault, "# Rock\n\nNew.\n", "--replace")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, STORY_REL), story.replace("Old.", "New."))
+
+    def test_replace_a_padded_entry(self):
+        story = STORY + "\n## Session 02 \u2014 The Docks\n\nOld.\n"
+        vault = story_vault(self, {STORY_REL: story})
+        code, out = tell(vault, "# Rock\n\nNew.\n", "--replace")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, STORY_REL), story.replace("Old.", "New."))
+
+    def test_replace_an_entry_written_before_its_chapter_prefix(self):
+        # Chapter 1's Session 2 was written before chapter 2 had one, so
+        # it has no `Chapter 1` prefix; its title tells it apart.
+        ch2 = "Chapters/Chapter 2 - Vienna/Sessions/Session 02/"
+        story = (STORY + "\n## Session 2 \u2014 The Docks\n\nOld.\n\n"
+                 "## Chapter 2 Session 2 \u2014 The Opera\n\nSung.\n")
+        vault = story_vault(self, {STORY_REL: story})
+        (vault / ch2).mkdir(parents=True)
+        (vault / ch2 / "Session 02 - The Opera.md").write_text(
+            INDEX.replace("Chapter 1 - Arrival", "Chapter 2 - Vienna")
+            .replace("The Docks", "The Opera"))
+        (vault / ch2 / "Chapter_02_Session_02_Wrap_Up.md").write_text(
+            STORY_WRAP.replace("The Docks", "The Opera"))
+        code, out = tell(vault, "# Rock\n\nNew.\n", "--replace")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, STORY_REL), story.replace("Old.", "New."))
+
+    def test_replace_refuses_a_pc_given_twice(self):
+        story = STORY + "\n## Session 2 \u2014 The Docks\n\nOld.\n"
+        vault = story_vault(self, {STORY_REL: story})
+        code, out = tell(vault, "# Rock\n\nA.\n\n# Rock Lavey\n\nB.\n",
+                         "--replace")
+        self.assertEqual(code, 1, out)
+        self.assertIn("given twice", out)
+        self.assertEqual(read(vault, STORY_REL), story)
+
+    def test_replace_names_a_hidden_block_that_goes(self):
+        story = (STORY + "\n## Session 2 \u2014 The Docks\n\nOld.\n\n"
+                 "<!-- gm-only -->\nSecret.\n<!-- /gm-only -->\n")
+        vault = story_vault(self, {STORY_REL: story})
+        code, out = tell(vault, "# Rock\n\nNew.\n", "--replace")
+        self.assertEqual(code, 0, out)
+        self.assertIn("HINT\t", out)
+        self.assertIn("gm-only or spoiler block", out)
+        vault = story_vault(self, {STORY_REL: story})
+        code, out = tell(vault, "# Rock\n\nNew.\n\n<!-- gm-only -->\n"
+                         "Secret.\n<!-- /gm-only -->\n", "--replace")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("HINT", out)
+
+    def test_replace_stamps_only_what_it_is_given(self):
+        story = STORY + "\n## Session 2 \u2014 The Docks\n\nOld.\n"
+        vault = story_vault(self, {STORY_REL: story})
+        code, out = tell(vault, "# Rock\n\nNew.\n", "--replace")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, STORY_REL), story.replace("Old.", "New."))
+        code, out = tell(vault, "# Rock\n\nNewer.\n", "--replace",
+                         "--date", "2026-11-06", "--as-of", "Session 2")
+        self.assertEqual(code, 0, out)
+        text = read(vault, STORY_REL)
+        self.assertIn('lastUpdated: "2026-11-06"\n', text)
+        self.assertIn('asOfSession: "Session 2"\n', text)
+        self.assertIn("Newer.", text)
+
+
 class StoryNullDateTests(unittest.TestCase):
     def test_story_null_play_date_leaves_last_updated(self):
         for spelling in ("null", "~", "Null", ""):
@@ -2591,6 +2674,25 @@ class NpcStoryTests(unittest.TestCase):
             "### Chapter 2 Session 2: The Opera\n\nTwo.",
             "### Chapter 2 Session 2: The Opera\n\nNew."))
         self.assertIn("### Session 2: The Docks\n\nOne.", after)
+
+    def test_npc_story_replace_round_two(self):
+        note = MARLO_SHAPE.replace(
+            "Older one.\n", "Older one.\n\n### Session 2: The Docks\n\n"
+            "Wordy.\n\n<!-- spoiler -->\nHidden.\n<!-- /spoiler -->\n")
+        vault = story_vault(self, {MARLO_REL: note})
+        code, out = npc_story(vault, "# Marlo Petrak\n\nA.\n\n"
+                              "# Marlo Petrak\n\nB.\n", "--replace")
+        self.assertEqual(code, 1, out)
+        self.assertIn("given twice", out)
+        self.assertEqual(read(vault, MARLO_REL), note)
+        code, out = npc_story(vault, "# Marlo Petrak\n\nTerse.\n",
+                              "--replace", "--date", "2026-11-06")
+        self.assertEqual(code, 0, out)
+        self.assertIn("HINT\t", out)
+        text = read(vault, MARLO_REL)
+        self.assertIn('lastUpdated: "2026-11-06"\n', text)
+        self.assertNotIn("asOfSession", text)
+        self.assertNotIn("Hidden.", text)
 
     def test_npc_story_passage_before_any_section_is_no_crash(self):
         note = ("---\ntype: npc\nvoice: \"Dry.\"\n---\n\n"

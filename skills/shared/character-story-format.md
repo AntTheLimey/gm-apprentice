@@ -72,5 +72,6 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" \
 
 It creates a missing story file, appends at the bottom, stamps the
 frontmatter and refuses a second entry for the same session
-(`--replace` rewrites that session's entry, as for a GM's correction).
+(`--replace` rewrites that session's entry, as for a GM's correction;
+on its HINT that a gm-only or spoiler block goes, tell the GM first).
 Earlier entries are never edited.
