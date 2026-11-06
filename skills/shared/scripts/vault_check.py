@@ -1082,7 +1082,8 @@ def voice_rows(vault: Path, names: Sequence[str]) -> list[str]:
     active PCs and every NPC with a voice. NAMEs: those characters, by
     name or alias."""
     def key(text: str) -> str:
-        return unicodedata.normalize("NFC", text).strip().casefold()
+        return unicodedata.normalize("NFC", text).replace(
+            "_", " ").strip().casefold()
 
     def row(label: str, text: str) -> str:
         return f"{label}\t{vaultlib.voice_value(text) or '(none)'}"

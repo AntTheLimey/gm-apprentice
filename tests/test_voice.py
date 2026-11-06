@@ -127,5 +127,36 @@ def test_stamp_writes_voice(tmp_path, monkeypatch, capsys):
     assert out[3] == "Ada Vane\t" + TRICKY
 
 
+def test_voice_value_ignores_trailing_comment():
+    assert vl.voice_value('---\nvoice: "terse" # note\n---\n') == "terse"
+    assert vl.voice_value("---\nvoice: 'it''s' # n\n---\n") == "it's"
+    assert vl.voice_value("---\nvoice: bare # n\n---\n") == "bare"
+    assert vl.voice_value('---\nvoice: "a # b"  # n\n---\n') == "a # b"
+
+
+def test_voice_value_of_every_template_is_empty():
+    for name in NAMES:
+        text = (TEMPLATES / f"{name}.md").read_text(encoding="utf-8")
+        assert vl.voice_value(text) == "", name
+
+
+def test_voices_lists_no_template_npc(tmp_path, monkeypatch, capsys):
+    vault = make_vault(tmp_path)
+    tpl = (TEMPLATES / "npc.md").read_text(encoding="utf-8")
+    (vault / "NPCs").mkdir()
+    (vault / "NPCs" / "Blank One.md").write_text(tpl, encoding="utf-8")
+    code, out = voices(monkeypatch, capsys, vault)
+    assert out == ["## voices", "# count: 1", "campaign\t(none)"]
+
+
+def test_voices_name_ignores_underscore_and_case(tmp_path, monkeypatch,
+                                                 capsys):
+    vault = make_vault(tmp_path)
+    note(vault / "NPCs" / "Freddy_Cavendish.md",
+         'type: npc\nvoice: "Booming."\n')
+    code, out = voices(monkeypatch, capsys, vault, "freddy Cavendish")
+    assert out[3] == "Freddy_Cavendish\tBooming."
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -387,15 +387,23 @@ def voice_value(text: str) -> str:
     if err:
         return ""
     raw = get_key(lines[1:end], "voice") or ""
-    if len(raw) >= 2 and raw[0] == raw[-1] == '"':
+    if raw.startswith('"'):
         try:
-            value = json.loads(raw)
-            return value.strip() if isinstance(value, str) else ""
+            value, _ = json.JSONDecoder().raw_decode(raw)
         except ValueError:
-            return raw[1:-1].strip()
-    if len(raw) >= 2 and raw[0] == raw[-1] == "'":
-        return raw[1:-1].replace("''", "'").strip()
-    return raw.strip()
+            return ""
+        return value.strip() if isinstance(value, str) else ""
+    if raw.startswith("'"):
+        i = 1
+        while i < len(raw):
+            if raw[i] == "'":
+                if raw[i + 1:i + 2] == "'":
+                    i += 2
+                    continue
+                break
+            i += 1
+        return raw[1:i].replace("''", "'").strip()
+    return re.split(r"\s#", raw, maxsplit=1)[0].strip()
 
 
 def set_key(fm: list[str], key: str, value: str, eol: str) -> str:
