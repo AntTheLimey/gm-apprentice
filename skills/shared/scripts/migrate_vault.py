@@ -1638,9 +1638,9 @@ def find_empty_scenes_lists(vault: Path) -> list[Item]:
 # --- lastUpdated: "null" -------------------------------------------------------
 
 # The quoted string null the old `vw story` wrote from a Wrap-Up still at
-# `play_date: null`. A bare `null` is YAML's own no-value and stays.
-NULL_DATE_RE = re.compile(r"""^lastUpdated:[ \t]*(["'])null\1[ \t]*(#.*)?$""",
-                          re.IGNORECASE)
+# `play_date: null`. A bare `null` is YAML's own no-value and stays. The key
+# is matched as written (YAML keys are case-sensitive); the value in any case.
+NULL_DATE_RE = re.compile(r"""^lastUpdated:[ \t]*(["'])(?i:null)\1[ \t]*(#.*)?$""")
 
 
 def _null_date(fm: list[str], rel: str) -> bool:

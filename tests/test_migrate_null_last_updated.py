@@ -77,6 +77,13 @@ class NullLastUpdatedTests(unittest.TestCase):
         item.apply(None)
         self.assertIn('lastUpdated: ""  # old\n', raw(v, "NPCs/Marlo.md"))
 
+    def test_another_key_spelling_is_left_alone(self):
+        # YAML keys are case-sensitive: `LASTUPDATED` is not the date field.
+        other = NPC.replace("lastUpdated:", "LASTUPDATED:")
+        v = make_vault(self, {"NPCs/Marlo.md": other})
+        self.assertEqual(mv.find_null_last_updated(v), [])
+        self.assertEqual(raw(v, "NPCs/Marlo.md"), other)
+
     def test_crlf_kept(self):
         v = make_vault(self, {"NPCs/Marlo.md": NPC.replace("\n", "\r\n")})
         (item,) = mv.find_null_last_updated(v)
