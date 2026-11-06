@@ -82,6 +82,7 @@ OPEN_GM, CLOSE_GM = "open-gm", "close-gm"
 # by the same rule.
 OPENERS = frozenset({OPEN_GM, "open-spoiler"})
 CLOSERS = frozenset({CLOSE_GM, "close-spoiler"})
+ANY_MARKER_RE = vl.marker_re()   # a gm-only or spoiler marker
 LIST_RE = re.compile(r"^\s*[-*+] ")
 # The one non-note file a command may change, in the same all-or-none batch.
 DATA_FILES = frozenset({"_meta/prop-hands.json"})
@@ -1246,35 +1247,37 @@ STORY_SESSION_RE = re.compile(
 def story_same_entry(title: str, info: WrapInfo, chapter: int | None,
                      repeats: bool) -> bool:
     """Is the Story entry headed `## title` this session's? Its label names
-    the same number (any padding); where numbers repeat by chapter, the
-    same chapter when the label names one, else the same session title."""
+    the same number (any padding), and the same chapter when the label
+    names one (even where no other chapter's index is left to say the
+    numbers repeat); where they repeat, an unlabelled entry needs the same
+    session title."""
     parts = re.split(r"\s+[\u2014\u2013-]\s+", title, maxsplit=1)
     m = STORY_SESSION_RE.match(parts[0].strip())
     if not m or int(m.group(2)) != info.number:
         return False
-    if not repeats:
-        return True
     if m.group(1) is not None and chapter is not None:
         return int(m.group(1)) == chapter
+    if not repeats:
+        return True
     return len(parts) == 2 and dash_key(parts[1]) == dash_key(info.title)
 
 
 def _hidden_kinds(text: str) -> set[str]:
-    """The kinds of hidden text `text` holds: a gm-only block, a spoiler
-    block, an HTML comment (not a block marker) or a `%%` comment."""
+    """The kinds of hidden text `text` holds outside code fences: a gm-only
+    block, a spoiler block (its opener on a line of its own or inline),
+    an HTML comment (not a block marker) or a `%%` comment."""
     states, _p = scan_body(text, ())
     kinds = set()
     for st in states:
-        if st.marker == OPEN_GM:
-            kinds.add("gm-only block")
-        elif st.marker == "open-spoiler":
-            kinds.add("spoiler block")
-    lines = text.splitlines()
-    markers = {st.lineno - 1 for st in states if st.marker}
-    if any("<!--" in ln for n, ln in enumerate(lines) if n not in markers):
-        kinds.add("HTML comment")
-    if "%%" in text:
-        kinds.add("%% comment")
+        if st.in_code:
+            continue
+        for _pos, word, is_close in vl.markers_in(st.line):
+            if not is_close:
+                kinds.add(f"{word} block")
+        if "<!--" in ANY_MARKER_RE.sub("", st.line):
+            kinds.add("HTML comment")
+        if "%%" in st.line:
+            kinds.add("%% comment")
     return kinds
 
 
@@ -1459,16 +1462,16 @@ def npc_label(vault: Path, info: WrapInfo) -> tuple[str, int | None, bool]:
 
 def npc_same_passage(title: str, number: int, chapter: int | None,
                      repeats: bool, wrap_title: str) -> bool:
-    """Is the passage headed `title` this session's? Same number, and in a
-    vault whose numbers repeat, the same chapter when the heading names
-    one, else the same session title."""
+    """Is the passage headed `title` this session's? Same number, the same
+    chapter when the heading names one, and in a vault whose numbers
+    repeat, an unlabelled passage needs the same session title."""
     m = NPC_SESSION_RE.match(title)
     if not m or int(m.group(2)) != number:
         return False
-    if not repeats:
-        return True
     if m.group(1) is not None and chapter is not None:
         return int(m.group(1)) == chapter
+    if not repeats:
+        return True
     return key(m.group(3)) == key(wrap_title)
 
 
@@ -2201,6 +2204,10 @@ def _heading_in(doc: Doc, raw: str, flag: str) -> tuple[int, str]:
                          f"(" + ", ".join(f"'{'#' * h.level} {h.title}'"
                                           for h in hits)
                          + "): give the one meant with its hashes")
+    if len(hits) > 1:
+        raise WriteError(f"{flag} '{title}': {len(hits)} headings "
+                         f"'{'#' * hits[0].level} {hits[0].title}': a bare "
+                         f"title cannot say which; make them differ")
     if not hits and flag == "--after":
         raise WriteError(f"--after '{title}': no such heading")
     if not hits:

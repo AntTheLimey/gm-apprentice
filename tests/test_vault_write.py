@@ -2936,5 +2936,72 @@ class StoryReplaceFinalTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn('asOfSession: "2"\n', read(vault, STORY_REL))
 
+
+class ReplaceReviewTests(unittest.TestCase):
+    """PR #602 review: --replace keeps to its own chapter even when no
+    other chapter's index is left, and its HINT sees an inline block."""
+
+    def test_story_replace_refuses_another_chapters_labelled_entry(self):
+        # Chapter 3's index is archived, so numbers no longer look like
+        # they repeat; its labelled entry is still not chapter 1's.
+        story = (STORY + "\n## Chapter 3 Session 2 \u2014 Elsewhere\n\n"
+                 "Theirs.\n")
+        vault = story_vault(self, {STORY_REL: story})
+        code, out = tell(vault, "# Rock\n\nNew.\n", "--replace")
+        self.assertEqual(code, 1, out)
+        self.assertIn("no entry for session 2", out)
+        self.assertEqual(read(vault, STORY_REL), story)
+        story = story.replace("Chapter 3", "Chapter 1")
+        vault = story_vault(self, {STORY_REL: story})
+        code, out = tell(vault, "# Rock\n\nNew.\n", "--replace")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(read(vault, STORY_REL),
+                         story.replace("Theirs.", "New."))
+
+    def test_npc_replace_refuses_another_chapters_labelled_passage(self):
+        note = NPC_BASE + ("## Story\n\n### Chapter 3 Session 2: Elsewhere"
+                           "\n\nTheirs.\n")
+        vault = story_vault(self, {MARLO_REL: note})
+        code, out = npc_story(vault, "# Marlo Petrak\n\nTerse.\n",
+                              "--replace")
+        self.assertEqual(code, 1, out)
+        self.assertIn("no passage for session 2", out)
+        self.assertEqual(read(vault, MARLO_REL), note)
+
+    def test_hint_sees_an_inline_block_beside_a_kept_comment(self):
+        story = (STORY + "\n## Session 2 \u2014 The Docks\n\nOld. "
+                 "<!-- gm-only -->Secret.<!-- /gm-only -->\n")
+        vault = story_vault(self, {STORY_REL: story})
+        code, out = run(vault, "story", "--wrapup", WRAP_REL, "--replace",
+                        stdin="# Rock\n\nNew. <!-- a note -->\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("holds a gm-only block the new text lacks", out)
+        self.assertNotIn("HTML comment", out)
+
+    def test_hint_ignores_markers_in_a_code_fence(self):
+        story = (STORY + "\n## Session 2 \u2014 The Docks\n\nOld.\n\n"
+                 "```\n<!-- gm-only -->\n%% x %%\n```\n")
+        vault = story_vault(self, {STORY_REL: story})
+        code, out = run(vault, "story", "--wrapup", WRAP_REL, "--replace",
+                        stdin="# Rock\n\nNew.\n")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("HINT", out)
+
+    def test_bare_timeline_heading_shared_by_two_chapters_is_refused(self):
+        two = TL.replace("<!-- gm-only -->", "## Chapter 2\n\n### Session 1 "
+                         "\u2014 Arrival (3 August)\n\n- **1815** \u2014 "
+                         "Later.\n\n<!-- gm-only -->")
+        vault = make_vault(self, {TL_REL: two})
+        for flags in (("--under", "Session 1 \u2014 Arrival (3 August)"),
+                      ("--under", "### New",
+                       "--after", "Session 1 \u2014 Arrival (3 August)")):
+            with self.subTest(flags[-2]):
+                code, out = tl(vault, "- **1814** \u2014 x\n", *flags)
+                self.assertEqual(code, 1, out)
+                self.assertIn("2 headings", out)
+                self.assertIn("make them differ", out)
+                self.assertEqual(read(vault, TL_REL), two)
+
+
 if __name__ == "__main__":
     unittest.main()
