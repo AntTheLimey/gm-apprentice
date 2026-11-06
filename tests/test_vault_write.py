@@ -2385,7 +2385,7 @@ class StoryReplaceByIdentityTests(unittest.TestCase):
         code, out = tell(vault, "# Rock\n\nNew.\n", "--replace")
         self.assertEqual(code, 0, out)
         self.assertIn("HINT\t", out)
-        self.assertIn("gm-only or spoiler block", out)
+        self.assertIn("holds a gm-only block the new text lacks", out)
         vault = story_vault(self, {STORY_REL: story})
         code, out = tell(vault, "# Rock\n\nNew.\n\n<!-- gm-only -->\n"
                          "Secret.\n<!-- /gm-only -->\n", "--replace")
@@ -2889,6 +2889,33 @@ class NpcStoryReplaceScopeTests(unittest.TestCase):
         code, out, text = self.go(note)
         self.assertEqual(code, 0, out)
         self.assertIn("HINT\t", out)
+
+
+    def test_p6_a_comment_in_the_new_text_does_not_hide_a_dropped_gm_block(self):
+        note = NPC_BASE + ("## Story\n\n### Session 2: The Docks\n\nWordy."
+                           "\n\n<!-- gm-only -->\nSECRET aside.\n"
+                           "<!-- /gm-only -->\n\n## Related\n\n- x\n")
+        vault = story_vault(self, {MARLO_REL: note})
+        code, out = npc_story(vault, "# Marlo Petrak\n\nTerse. <!-- "
+                              "UNVERIFIED (S2): x -->\n", "--replace",
+                              write=False)
+        self.assertEqual(code, 0, out)
+        self.assertIn("HINT\t", out)
+        self.assertIn("holds a gm-only block the new text lacks", out)
+        self.assertNotIn("HTML comment", out)
+
+    def test_a_kept_spoiler_does_not_hide_a_dropped_gm_block(self):
+        note = NPC_BASE + ("## Story\n\n### Session 2: The Docks\n\nWordy."
+                           "\n\n<!-- spoiler -->\nLater.\n<!-- /spoiler -->"
+                           "\n\n<!-- gm-only -->\nSECRET.\n<!-- /gm-only -->"
+                           "\n")
+        vault = story_vault(self, {MARLO_REL: note})
+        code, out = npc_story(vault, "# Marlo Petrak\n\nTerse.\n\n<!-- "
+                              "spoiler -->\nLater.\n<!-- /spoiler -->\n",
+                              "--replace", write=False)
+        self.assertEqual(code, 0, out)
+        self.assertIn("holds a gm-only block the new text lacks", out)
+        self.assertNotIn("spoiler block", out)
 
 
 class StoryReplaceFinalTests(unittest.TestCase):

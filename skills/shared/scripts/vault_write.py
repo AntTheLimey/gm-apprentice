@@ -1259,24 +1259,38 @@ def story_same_entry(title: str, info: WrapInfo, chapter: int | None,
     return len(parts) == 2 and dash_key(parts[1]) == dash_key(info.title)
 
 
-def _holds_hidden(text: str) -> bool:
-    """Does `text` hold a gm-only or spoiler block, or an HTML or `%%`
-    comment?"""
+def _hidden_kinds(text: str) -> set[str]:
+    """The kinds of hidden text `text` holds: a gm-only block, a spoiler
+    block, an HTML comment (not a block marker) or a `%%` comment."""
     states, _p = scan_body(text, ())
-    return (any(s.marker in OPENERS for s in states)
-            or "<!--" in text or "%%" in text)
+    kinds = set()
+    for st in states:
+        if st.marker == OPEN_GM:
+            kinds.add("gm-only block")
+        elif st.marker == "open-spoiler":
+            kinds.add("spoiler block")
+    lines = text.splitlines()
+    markers = {st.lineno - 1 for st in states if st.marker}
+    if any("<!--" in ln for n, ln in enumerate(lines) if n not in markers):
+        kinds.add("HTML comment")
+    if "%%" in text:
+        kinds.add("%% comment")
+    return kinds
 
 
-def replaced_asides(doc: Doc, head: Head, body: list[str]) -> bool:
-    """Does the section `head` opens hold hidden text (`_holds_hidden`)
-    that `body` does not carry over?"""
+def replaced_asides(doc: Doc, head: Head, body: list[str]) -> list[str]:
+    """Each kind of hidden text (`_hidden_kinds`) the section `head` opens
+    holds and `body` does not, compared kind by kind."""
     end = section_end(doc, head)
-    old = "".join(doc.lines[head.idx + 1:end])
-    return _holds_hidden(old) and not _holds_hidden("\n".join(body) + "\n")
+    old = _hidden_kinds("".join(doc.lines[head.idx + 1:end]))
+    new = _hidden_kinds("\n".join(body) + "\n")
+    order = ("gm-only block", "spoiler block", "HTML comment", "%% comment")
+    return [k for k in order if k in old - new]
 
 
-HIDDEN_HINT = ("the old {} holds a gm-only or spoiler block or a comment the "
-               "new text lacks: it goes too")
+def hidden_hint(what: str, kinds: list[str]) -> str:
+    return (f"the old {what} holds a " + ", ".join(kinds)
+            + " the new text lacks: it goes too")
 
 
 def restamp(text: str, rel: str, stamps: dict[str, str]) -> str:
@@ -1341,9 +1355,10 @@ def story_replace(batch: Batch, args: argparse.Namespace, rel: str,
                          + "): replace by hand")
     head = hits[0]
     new_heading = custom or doc.lines[head.idx].rstrip("\r\n")
-    if replaced_asides(doc, head, body):
+    gone = replaced_asides(doc, head, body)
+    if gone:
         batch.row("HINT", rel, f"\u00a7{head.title}",
-                  HIDDEN_HINT.format("entry"))
+                  hidden_hint("entry", gone))
     text, count = _replace(doc, head, [new_heading, "", *body])
     batch.put(rel, restamp(text, rel, replace_stamps(args)))
     batch.row("WOULD-ADD", rel, f"\u00a7{new_heading[3:]}",
@@ -1526,9 +1541,10 @@ def npc_replace(batch: Batch, args: argparse.Namespace, rel: str, doc: Doc,
                          f"hand")
     head = hits[0]
     heading = doc.lines[head.idx].rstrip("\r\n")
-    if replaced_asides(doc, head, body):
+    gone = replaced_asides(doc, head, body)
+    if gone:
         batch.row("HINT", rel, f"\u00a7{head.title}",
-                  HIDDEN_HINT.format("passage"))
+                  hidden_hint("passage", gone))
     text, count = _replace(doc, head, [heading, "", *body])
     batch.put(rel, restamp(text, rel, replace_stamps(args)))
     batch.row("WOULD-ADD", rel, f"\u00a7{where}/{head.title}",
