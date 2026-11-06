@@ -28,8 +28,12 @@ it.
 
 ## Narrative Voice by Campaign Genre
 
-Voice follows the campaign's genre/tone (campaign overview or world
-file), not the game system.
+Tell the entry in this character's voice and the campaign's, from
+`vault_check.py <vault> voices`. The table below, set by the
+campaign's genre/tone (campaign overview or world file) and not the
+game system, is the fallback where a voice is `(none)`, the whole
+voice on `# off: vault.voices`, and a starting point for drafting
+one (`shared/voice.md`).
 
 | Genre | Voice |
 |-------|-------|
