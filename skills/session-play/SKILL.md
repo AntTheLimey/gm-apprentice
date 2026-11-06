@@ -16,7 +16,10 @@ and end objectives; a paused scene's `## Paused` snapshot comes first
 in its text, and paused scenes are listed (in full with no Plan).
 Open the Plan file only for a section the brief drops. With a paused
 scene in the Plan (or no Plan), your first reply this session opens
-with where it stopped, in the usual 1-5 sentences.
+with where it stopped, in the usual 1-5 sentences. Also run
+`vault_check.py <vault> voices` once; dialogue and read-aloud use
+the campaign voice, or a voiced character's own (`# off:
+vault.voices` or a `(none)` campaign: as before). Never draft one.
 
 ## Behavior
 

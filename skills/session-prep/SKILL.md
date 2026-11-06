@@ -32,7 +32,7 @@ When the GM asks what an item on your list is or why you need it,
 answer from context — no tool calls, no re-reading — and act only
 after they reply.
 
-**Two voices.** Seeds you speak may be evocative ("the anklet debt is
+**Two registers.** Seeds you speak may be evocative ("the anklet debt is
 owed"). The Plan file is read cold, days later, mid-session, by a
 Keeper who has forgotten this conversation: name the document, the
 person and the reason in the line that uses them, in bullets, tables
@@ -92,6 +92,12 @@ them. Read
 a stubbed or outlined section from its file only when a step needs it.
 After the bundle, vault dives are targeted reads, proportional to the
 upcoming session's complexity, not the campaign's size.
+
+**Voices:** with the bundle, run `vault_check.py <vault> voices`
+(`# off: vault.voices` → none, as before). Read-aloud, scene-setting,
+dialogue and handouts take the campaign voice, or a voiced
+character's own when that character speaks or writes. A `(none)`
+campaign voice: draft one per `shared/voice.md` and offer it.
 
 When prep needs setting detail the SRD/ORC files lack (faction rosters,
 NPC references, location atmosphere), check the user's gitignored
