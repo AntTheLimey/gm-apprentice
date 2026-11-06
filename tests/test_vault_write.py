@@ -2246,6 +2246,15 @@ class NpcStoryTests(unittest.TestCase):
         self.assertIn("\u00a7Overview/Session 2: The Docks", out)
         self.assertNotIn("HINT", out)
 
+    def test_npc_story_section_takes_the_heading_with_markers(self):
+        for given in ("## Overview", "  ## Overview  ", " Overview "):
+            vault = story_vault(self, {MARLO_REL: MARLO_SHAPE})
+            code, out = npc_story(vault, "# [[Marlo Petrak]]\n\nShe waited.\n",
+                                  "--section", given)
+            self.assertEqual(code, 0, (given, out))
+            self.assertNotIn("## Story", read(vault, MARLO_REL), given)
+            self.assertIn("\u00a7Overview/Session 2", out)
+
     def test_npc_story_hints_at_earlier_passages_and_writes_story(self):
         vault = story_vault(self, {MARLO_REL: MARLO_SHAPE})
         code, out = npc_story(vault, "# [[Marlo Petrak]]\n\nShe waited.\n",

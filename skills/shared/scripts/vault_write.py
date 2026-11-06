@@ -1334,11 +1334,13 @@ def cmd_npc_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
             raise WriteError(f"{rel}: not a storied NPC: set its voice first")
         doc = parse(note)
         sections = npc_sections(note, doc, batch.vault)
-        want = key(args.section) if args.section else "story"
+        # `--section "## Overview"` and " Overview " name the same section.
+        section = (args.section or "").strip().lstrip("#").strip()
+        want = key(section) if section else "story"
         found = next(((h, why) for h, why in sections
                       if key(h.title) == want), None)
-        if args.section and found is None:
-            raise WriteError(f"{rel}: no '## {args.section}' section")
+        if section and found is None:
+            raise WriteError(f"{rel}: no '## {section}' section")
         target = found[0] if found else None
         if found and found[1]:
             raise WriteError(f"{rel}: '## {found[0].title}' {found[1]}; "
@@ -1348,7 +1350,7 @@ def cmd_npc_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
                 if n == info.number:
                     raise WriteError(f"{rel}: already has '{h.title}' "
                                      f"(session {info.number})")
-        if not args.section:
+        if not section:
             elsewhere = next((h for h, why in sections
                               if not why and h is not target
                               and npc_passages(doc, h)), None)
