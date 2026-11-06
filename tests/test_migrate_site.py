@@ -24,6 +24,7 @@ import migrate_core  # noqa: E402
 import migrate_site as ms  # noqa: E402
 import site_fixture  # noqa: E402
 import vault_check as vc  # noqa: E402
+import vaultlib  # noqa: E402
 from migrate_core import PERSON, WILL, StepFailed  # noqa: E402
 from layouts import write_config  # noqa: E402
 
@@ -753,6 +754,211 @@ class ExcludeListTests(unittest.TestCase):
         (check,) = [c for c in ms.SITE_CHECKS if c.name == "exclude-lists"]
         self.assertEqual((check.release, check.band, check.asks_site),
                          ("1.10.47", 2, True))
+
+
+class HideAdditionTests(unittest.TestCase):
+    """1.11.2 (#460): an entry added to a built-in hide list after vaults
+    began owning their lists is offered to a list the vault owns, so the
+    voice field never reaches a player site. The settings are the real
+    tool's."""
+
+    FIELDS = "player_site.hide.fields"
+
+    def old_fields(self):
+        # The list a vault wrote before voice joined the default; read from
+        # the tool, never written out here.
+        return [f for f in ms.settings_default(self.FIELDS) if f != "voice"]
+
+    def owning(self, fields):
+        vault = make_vault(self)
+        vaultlib.settings_set(vault, [(self.FIELDS, fields)])
+        return vault
+
+    def test_hide_additions_owned_list(self):
+        old = self.old_fields()
+        vault = self.owning(old)
+        (item,) = ms.find_hide_additions(vault, "1.11.2")
+        self.assertEqual(item.id, "hide-add:voice")
+        self.assertEqual(len(item.lines), 1)
+        self.assertIn("voice", item.lines[0])
+        self.assertIn(self.FIELDS, item.lines[0])
+        self.assertIn("for the GM only", item.lines[0])
+        item.apply(None)
+        s = vc.settings(vault)
+        self.assertEqual(s.origins[self.FIELDS], "file")
+        self.assertEqual(s.get(self.FIELDS), [*old, "voice"])
+        self.assertEqual(ms.find_hide_additions(vault, "1.11.2"), [])
+
+    def test_hide_additions_keep_the_gms_own_entries(self):
+        vault = self.owning(["mine"])
+        (item,) = ms.find_hide_additions(vault, "1.11.2")
+        item.apply(None)
+        self.assertEqual(vc.settings(vault).get(self.FIELDS), ["mine", "voice"])
+
+    def test_hide_additions_already_listed(self):
+        vault = self.owning([*self.old_fields(), "voice"])
+        self.assertEqual(ms.find_hide_additions(vault, "1.11.2"), [])
+
+    def test_hide_additions_no_own_list(self):
+        # The built-in list stands, and it already holds voice.
+        vault = make_vault(self)
+        self.assertEqual(ms.find_hide_additions(vault, "1.11.2"), [])
+        self.assertIn("voice", vc.settings(vault).get(self.FIELDS))
+
+    def test_hide_additions_no_site_no_own_list(self):
+        vault = make_vault(self, site=False)
+        self.assertEqual(ms.find_hide_additions(vault, "1.11.2"), [])
+
+    def test_hide_additions_owned_list_without_a_site(self):
+        # A site turned on later would publish voice if this were skipped.
+        vault = make_vault(self, site=False)
+        vaultlib.settings_set(vault, [(self.FIELDS, self.old_fields())])
+        (item,) = ms.find_hide_additions(vault, "1.11.2")
+        self.assertEqual(item.id, "hide-add:voice")
+        item.apply(None)
+        self.assertIn("voice", vc.settings(vault).get(self.FIELDS))
+
+    def test_hide_additions_other_release_offers_nothing(self):
+        vault = self.owning(self.old_fields())
+        self.assertEqual(ms.find_hide_additions(vault, "1.10.47"), [])
+
+    def test_the_check_asks_at_1_11_2(self):
+        (check,) = [c for c in ms.SITE_CHECKS if c.name == "hide-fields-voice"]
+        self.assertEqual((check.release, check.band, check.asks_site,
+                          check.choices, check.kind),
+                         ("1.11.2", 2, True, ("hide-add:",), "asks"))
+        self.assertTrue(check.plain and check.ask and check.left)
+
+    def test_the_question_leads_with_plain_words(self):
+        (item,) = ms.find_hide_additions(self.owning(self.old_fields()), "1.11.2")
+        self.assertTrue(item.lines[0].startswith("add voice to the details "
+                                                 "your site hides"),
+                        item.lines[0])
+
+    def test_settings_added_skips_a_malformed_entry(self):
+        answer = {"added": [{"entry": "voice", "since": "1.11.2", "why": "w"},
+                            {"entry": "x"}, "junk", {"entry": 3, "since": "1",
+                                                     "why": None}]}
+        with mock.patch.object(vaultlib, "settings_describe",
+                               return_value=answer):
+            self.assertEqual(vaultlib.settings_added(self.FIELDS),
+                             [{"entry": "voice", "since": "1.11.2",
+                               "why": "w"}])
+
+    def test_the_item_holds_the_stamp(self):
+        (item,) = ms.find_hide_additions(self.owning(self.old_fields()), "1.11.2")
+        self.assertTrue(item.holds_stamp)
+
+
+class HideAdditionStampTests(unittest.TestCase):
+    """The 1.11.2 hide-add question holds the stamp until it is answered,
+    through the low-level apply and `gma update` alike: past the stamp the
+    release gate would never offer it again, and voice would publish."""
+
+    FIELDS = "player_site.hide.fields"
+
+    def setUp(self):
+        (self.check,) = [c for c in ms.SITE_CHECKS
+                         if c.name == "hide-fields-voice"]
+        for target, value in ((migrate, ("1.11.2", "test")),):
+            p = mock.patch.object(target, "plugin_version", return_value=value)
+            p.start()
+            self.addCleanup(p.stop)
+        p = mock.patch.object(migrate, "CHECKS", [self.check])
+        p.start()
+        self.addCleanup(p.stop)
+        self.home = tmp(self, "mig-home-")
+
+    def owned(self):
+        vault = make_vault(self, version="1.11.1")
+        old = [f for f in ms.settings_default(self.FIELDS) if f != "voice"]
+        vaultlib.settings_set(vault, [(self.FIELDS, old)])
+        return vault, old
+
+    def apply(self, vault, *choose):
+        out = io.StringIO()
+        args = [str(vault), "apply"]
+        for c in choose:
+            args += ["--choose", c]
+        with contextlib.redirect_stdout(out), \
+                contextlib.redirect_stderr(io.StringIO()):
+            code = migrate.main(args)
+        return code, out.getvalue()
+
+    def stamp(self, vault):
+        return vaultlib.read_stamp(vault)
+
+    def test_offered_from_1_11_1_and_not_once_stamped(self):
+        self.assertEqual(migrate.offered([self.check], "1.11.1", "1.11.2"),
+                         [self.check])
+        self.assertEqual(migrate.offered([self.check], "1.11.2", "1.11.2"), [])
+
+    def test_bare_apply_holds_the_stamp_and_asks_again(self):
+        vault, old = self.owned()
+        code, out = self.apply(vault)
+        self.assertEqual(code, 0, out)
+        self.assertIn("not answered: hide-add:voice", out)
+        self.assertNotIn("<None>", out)
+        self.assertIn("not stamped", out)
+        self.assertEqual(self.stamp(vault), "1.11.1")
+        self.assertEqual(vc.settings(vault).get(self.FIELDS), old)
+        code, out = self.apply(vault)
+        self.assertIn("not answered: hide-add:voice", out)
+
+    def test_apply_yes_adds_voice_and_stamps(self):
+        vault, old = self.owned()
+        code, out = self.apply(vault, "hide-add:voice")
+        self.assertEqual(code, 0, out)
+        self.assertIn("stamped 1.11.2", out)
+        vaultlib.forget_settings(vault)
+        self.assertEqual(vc.settings(vault).get(self.FIELDS), [*old, "voice"])
+
+    def test_apply_leave_stamps_without_adding(self):
+        vault, old = self.owned()
+        code, out = self.apply(vault, "hide-add:voice=leave")
+        self.assertEqual(code, 0, out)
+        self.assertIn("left as it is", out)
+        self.assertIn("stamped 1.11.2", out)
+        self.assertEqual(self.stamp(vault), "1.11.2")
+        vaultlib.forget_settings(vault)
+        self.assertEqual(vc.settings(vault).get(self.FIELDS), old)
+
+    def update(self, vault, answers=None, headless=False):
+        import update
+        return update.run(vault, answers or {}, headless, home=self.home)
+
+    def test_update_headless_holds_then_yes_adds_voice(self):
+        import update_record
+        vault, old = self.owned()
+        res = self.update(vault, headless=True)
+        self.assertEqual(res.left_open, ["hide-add:voice"])
+        self.assertEqual(self.stamp(vault), "1.11.1")
+        (item,) = ms.find_hide_additions(vault, "1.11.2")
+        asked = f"hide-add:voice@{update_record.lines_sha(item.lines)[:8]}"
+        res = self.update(vault, {asked: "yes"})
+        self.assertEqual(res.left_open, [])
+        self.assertEqual(self.stamp(vault), "1.11.2")
+        vaultlib.forget_settings(vault)
+        self.assertEqual(vc.settings(vault).get(self.FIELDS), [*old, "voice"])
+
+    def test_update_leave_lets_the_stamp_move(self):
+        import update_record
+        vault, old = self.owned()
+        (item,) = ms.find_hide_additions(vault, "1.11.2")
+        asked = f"hide-add:voice@{update_record.lines_sha(item.lines)[:8]}"
+        res = self.update(vault, {asked: "leave"})
+        self.assertEqual(res.left_open, [])
+        self.assertEqual(self.stamp(vault), "1.11.2")
+        vaultlib.forget_settings(vault)
+        self.assertEqual(vc.settings(vault).get(self.FIELDS), old)
+
+
+class VoicesSwitchTests(unittest.TestCase):
+    def test_on_by_default_and_off_when_written_off(self):
+        vault = make_vault(self)
+        self.assertIs(vaultlib.setting_or_builtin(vault, "vault.voices"), True)
+        vaultlib.settings_set(vault, [("vault.voices", False)])
+        self.assertIs(vaultlib.setting_or_builtin(vault, "vault.voices"), False)
 
 
 class PropsMoveTests(unittest.TestCase):

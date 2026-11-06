@@ -28,6 +28,7 @@ Usage:
   vault_check.py VAULT site-faults [--file REL ...]
   vault_check.py VAULT version
   vault_check.py VAULT active-pcs
+  vault_check.py VAULT voices [NAME ...]   (campaign voice, then each character's)
   vault_check.py VAULT all
 
 `--file` is repeatable (`--file A.md --file B.md`) and combines with
@@ -1073,6 +1074,56 @@ def list_active_pcs(vault: Path) -> list[str]:
         stamp = str(as_of) if as_of not in (None, "", []) else "?"
         rows.append(f"PC\t{rel}\t{Path(rel).stem}; "
                     f"aliases: {names or 'none'}; asOfSession: {stamp}")
+    return rows
+
+
+def voice_rows(vault: Path, names: Sequence[str]) -> list[str]:
+    """`voices`: the campaign's voice, then each character's. No NAMEs: the
+    active PCs and every NPC with a voice. NAMEs: those characters, by
+    name, alias or `[[link]]`; a name two characters answer to reads
+    `(ambiguous: ...)` rather than either voice. Only real notes count:
+    not a `*_Story.md` companion, an archived or QA copy, or a
+    `_Template_` file."""
+    def row(label: str, text: str) -> str:
+        voice = vaultlib.voice_read(text)
+        # one row a line: any whitespace but a plain space (a line break of
+        # any kind splitlines sees, a tab) shows as one space
+        shown = (vaultlib.VOICE_UNREADABLE if voice is None
+                 else re.sub(r"\s*[^\S ]\s*", " ", voice))
+        return f"{label}\t{shown or '(none)'}"
+
+    def real(rel: str) -> bool:
+        return not (rel.endswith("_Story.md")
+                    or vaultlib.is_unchecked_source(rel)
+                    or Path(rel).name.startswith("_Template_"))
+
+    notes = [(rel, text, extract_frontmatter(text) or {})
+             for rel, text in vault_files(vault) if real(rel)]
+    overview = next((t for _r, t, fm in notes
+                     if fm.get("type") == "campaign_overview"), "")
+    rows = [row("campaign", overview)]
+    if not names:
+        gone = vaultlib.out_of_play(vault)
+        rows += [row(Path(rel).stem, text) for rel, text, fm in notes
+                 if vaultlib.is_active_pc(rel, fm, gone)]
+        rows += [row(Path(rel).stem, text) for rel, text, fm in notes
+                 if fm.get("type") == "npc"
+                 and vaultlib.voice_read(text) != ""]
+        return rows
+    people = [(rel, text, fm) for rel, text, fm in notes
+              if fm.get("type") in ("pc", "npc")]
+    for name in names:
+        want = vaultlib.normalize(vaultlib.wikilink_target(name.strip()))
+        hits = [p for p in people
+                if vaultlib.normalize(Path(p[0]).stem) == want
+                or want in {vaultlib.normalize(a)
+                            for a in link_aliases(p[2])}]
+        if len(hits) > 1:
+            rows.append(f"{name}\t(ambiguous: " + ", ".join(
+                sorted(Path(p[0]).stem for p in hits)) + ")")
+        else:
+            rows.append(row(Path(hits[0][0]).stem, hits[0][1]) if hits
+                        else f"{name}\t(no such character)")
     return rows
 
 
@@ -5754,8 +5805,10 @@ def build_parser() -> argparse.ArgumentParser:
                                         "relationships", "chapters", "sessions",
                                         "gm-leak", "pc-body", "wrapup",
                                         "site-faults", "settings",
-                                        "version", "active-pcs", "stories",
+                                        "version", "active-pcs", "voices", "stories",
                                         "report-new", "report-stats", "all"], help="the check to run")
+    ap.add_argument("names", nargs="*", metavar="NAME",
+                    help="voices only: the characters to read, by name, alias or [[link]]")
     ap.add_argument("--order", action="store_true",
                     help="timeline only: check the sessions' in_game_date "
                          "never goes backwards (qa_checks.py)")
@@ -5834,6 +5887,9 @@ def main(argv: list[str] | None = None) -> int:
 def _main(argv: list[str] | None) -> int:
     ap = build_parser()
     args = ap.parse_args(argv)
+    if args.names and args.command != "voices":
+        ap.error(f"unrecognized arguments: {' '.join(args.names)} "
+                 f"(only voices takes names)")
 
     if not args.vault.is_dir():
         print(f"error: not a directory: {args.vault}", file=sys.stderr)
@@ -5883,6 +5939,13 @@ def _main(argv: list[str] | None) -> int:
         return code
     if args.command == "active-pcs":
         emit("active-pcs", list_active_pcs(args.vault))
+        return 0
+    if args.command == "voices":
+        if not vaultlib.setting_or_builtin(args.vault, "vault.voices"):
+            emit("voices", [])
+            print("# off: vault.voices")
+            return 0
+        emit("voices", voice_rows(args.vault, args.names))
         return 0
     if args.command == "stories":
         emit("stories", qa_checks.check_stories(args.vault))

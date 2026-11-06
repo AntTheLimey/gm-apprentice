@@ -377,6 +377,73 @@ def get_key(fm: list[str], key: str) -> str | None:
     return None
 
 
+# What `voices` prints, and `npc-story` says, for a voice that is not on
+# one line (a `|` block, a folded or continued value): read as no voice.
+VOICE_UNREADABLE = "(unreadable: write it on one line)"
+YAML_NULL_WORDS = {"null", "~"}
+
+
+def voice_read(text: str) -> str | None:
+    """The note's `voice:` as plain text; `""` when absent, empty, a YAML
+    null (`null`, `~`, any case) or only a comment; None when it is there
+    but not on one line (a block, a folded or continued value, an
+    unclosed quote). Read from the raw line, as `extract_frontmatter`
+    keeps a double-quoted value's backslashes. Double-quoted: decoded as
+    JSON (what `yaml_scalar` writes); single-quoted: `''` is `'`; bare:
+    stripped, up to a ` #` comment."""
+    lines = text.splitlines(keepends=True)
+    end, err = frontmatter_span(lines)
+    if err:
+        # An indented line (a block or continued value) makes the strict
+        # reader refuse the region; read up to the closing line anyway, so
+        # a voice written that way is told apart from no voice.
+        if not lines or lines[0].strip() != "---":
+            return ""
+        end = next((i for i, line in enumerate(lines[1:], 1)
+                    if line.strip() == "---"), -1)
+        if end < 0:
+            return ""
+    fm = lines[1:end]
+    at = next((i for i, line in enumerate(fm)
+               if re.match(r"voice:", line)), None)
+    if at is None:
+        return ""
+    raw = fm[at][len("voice:"):].strip()
+    # The next line that is not an indented comment (YAML reads one as a
+    # comment, never as more of the value).
+    following = next((ln for ln in fm[at + 1:]
+                      if not (ln[:1] in (" ", "\t")
+                              and ln.lstrip().startswith("#"))), "")
+    continued = bool(following.strip()) and following[:1] in (" ", "\t")
+    if raw.startswith('"'):
+        try:
+            value, _ = json.JSONDecoder().raw_decode(raw)
+        except ValueError:
+            return None
+        return value.strip() if isinstance(value, str) else ""
+    if raw.startswith("'"):
+        i = 1
+        while i < len(raw):
+            if raw[i] == "'":
+                if raw[i + 1:i + 2] == "'":
+                    i += 2
+                    continue
+                return raw[1:i].replace("''", "'").strip()
+            i += 1
+        return None
+    if raw[:1] in ("|", ">") or continued:
+        return None
+    value = "" if raw.startswith("#") else re.split(r"\s#", raw, maxsplit=1)[0]
+    value = value.strip()
+    return "" if value.casefold() in YAML_NULL_WORDS else value
+
+
+def voice_value(text: str) -> str:
+    """The note's voice as plain text, `""` for none and for one that is
+    not on one line (`voice_read` tells those apart)."""
+    return voice_read(text) or ""
+
+
 def set_key(fm: list[str], key: str, value: str, eol: str) -> str:
     """Replace (or append) a top-level `key:` line, keeping its own EOL.
 
@@ -516,7 +583,20 @@ def yaml_scalar(value: str, *, quoted_int: bool = False) -> str:
     (`asOfSession: "9"` stays `"10"`); anything else is double-quoted."""
     if re.fullmatch(r"\d+", value) and not quoted_int:
         return value
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+    return '"' + _CONTROL_RE.sub(_escape_control, value.replace(
+        "\\", "\\\\").replace('"', '\\"')) + '"'
+
+
+# Characters a one-line double-quoted value cannot hold raw: C0 controls,
+# DEL, and the line breaks YAML 1.1 and Python's splitlines see (NEL,
+# U+2028, U+2029). Escaped the way YAML and JSON both read.
+_CONTROL_RE = re.compile("[\x00-\x1f\x7f\x85\u2028\u2029]")
+_NAMED_ESCAPES = {"\n": "\\n", "\r": "\\r", "\t": "\\t"}
+
+
+def _escape_control(m: re.Match[str]) -> str:
+    ch = m.group(0)
+    return _NAMED_ESCAPES.get(ch) or f"\\u{ord(ch):04x}"
 
 
 def yaml_value_for_cli(raw: str) -> str:
@@ -1848,6 +1928,18 @@ def settings_describe(name: str) -> dict[str, Any]:
             "could not read the vault's settings: the publish tool's "
             "description was not in the shape expected")
     return answer
+
+
+def settings_added(name: str) -> list[dict[str, str]]:
+    """The entries the tool says were added to the built-in list `name`
+    after vaults began owning their lists: `[{"entry", "since", "why"}]`,
+    `[]` when it names none. An entry missing any of the three as text is
+    skipped."""
+    keys = ("entry", "since", "why")
+    added = settings_describe(name).get("added") or []
+    return [{k: a[k] for k in keys} for a in added
+            if isinstance(a, dict) and all(isinstance(a.get(k), str)
+                                           for k in keys)]
 
 
 def settings_raw(vault: Path, name: str | None = None) -> Any:

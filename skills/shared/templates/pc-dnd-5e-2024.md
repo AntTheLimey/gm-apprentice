@@ -15,6 +15,7 @@ status: alive
 key_traits: []
 hook: ""
 portrait: ""
+voice: ""            # how this PC is told and how they speak, a few sentences; the GM approves it; never published
 sheet_source: ""
 dndbeyond: ""
 display_meta: [occupation, age, nationality]

@@ -12,7 +12,7 @@ gma vault-write <vault> <command> ...
 | Argument | Value | Help |
 |---|---|---|
 | `<vault>` |  | the vault folder |
-| `<command>` | `wrapup-new`, `wrapup-add`, `story`, `status`, `log`, `timeline`, `session-new`, `play-notes-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan` |  |
+| `<command>` | `wrapup-new`, `wrapup-add`, `story`, `npc-story`, `status`, `log`, `timeline`, `session-new`, `play-notes-new`, `resolve`, `promote-plan`, `chapter-new`, `scene-new`, `scene-paused`, `scene-played`, `prop-new`, `prop-hand`, `plan` |  |
 
 Example: `gma vault-write "<vault>" wrapup-add "<wrap-up>" --write`
 <!-- END GENERATED -->
@@ -71,6 +71,37 @@ gets '## Session N - Title'. An entry holds no # or ## after that.
 |---|---|---|
 | `--wrapup` | `WRAPUP` | the wrap-up the entries come from |
 | `--label` | `LABEL` | the entry heading's label |
+| `--as-of` | `AS_OF` | asOfSession value |
+| `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |
+| `--write` |  | write it (default: preview) |
+<!-- END GENERATED -->
+
+<!-- BEGIN GENERATED: gma vault-write npc-story -->
+add a storied NPC's passage for a session (stdin)
+
+```text
+gma vault-write <vault> npc-story --wrapup WRAPUP [options]
+```
+
+```text
+stdin: entries, each opened by a '# [[NPC Name]]' line.
+Each is added to that NPC's note as '### Session N: Title'
+('### Chapter C Session N: Title' where another chapter has
+a session N) at the end of '## Story' (made before
+'## Related' when the note has none), or of the '## '
+section --section names.
+Refused: a hidden or gm-only section (passages are for
+players), a place inside a block the site strips, a session
+the section already has, an NPC with no voice, and any NPC
+while vault.voices is off. Archived and QA copies are never
+the NPC. With no --section, a HINT row names a section
+holding earlier session passages.
+```
+
+| Argument | Value | Help |
+|---|---|---|
+| `--wrapup` | `WRAPUP` | the wrap-up the entries come from |
+| `--section` | `HEADING` | the '## ' section to write under (default: Story) |
 | `--as-of` | `AS_OF` | asOfSession value |
 | `--date` | `DATE` | lastUpdated value, YYYY-MM-DD |
 | `--write` |  | write it (default: preview) |

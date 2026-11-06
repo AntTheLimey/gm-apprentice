@@ -140,8 +140,27 @@ one. So a heading or field added to a default reaches a new vault and
 one with no list, and never a vault that owns a list, unless a
 migration step proposes it. Such a release ships that step: it tells
 the GM what the new entry is for and adds it to their list on a yes,
-and it never adds it unasked. The step that proposes an entry is not
-built yet; it waits for the first release that adds a default.
+and it never adds it unasked.
+
+The step is `find_hide_additions(vault, since)` in
+`skills/shared/scripts/migrate_site.py`, first used by the
+`hide-fields-voice` check (1.11.2, `voice`). To add an entry in a later
+release:
+
+1. Add it to the list's `default` and `left_out`, and record it in the
+   entry's `added` with the release, as
+   `{ entry, since, why }`. `why` finishes the sentence "`<entry>` is …"
+   that the update shows the GM.
+2. Add a check to `SITE_CHECKS` beside `hide-fields-voice`: a new name,
+   that release, band 2, `find=lambda v: find_hide_additions(v, "<release>")`,
+   `asks_site=True`, `choices=("hide-add:",)` and `kind="asks"`, with
+   its own `plain`, `ask` and `left`. The items it finds hold the stamp
+   (`holds_stamp=True`, set by `find_hide_additions`), so an apply that
+   leaves the question unanswered does not stamp past it.
+3. Test it as `HideAdditionTests` and `HideAdditionStampTests` in
+   `tests/test_migrate_site.py` do: a vault owning the old list is
+   offered the entry, the stamp holds until it is answered, and one with
+   no list of its own is offered nothing.
 
 There is no other copy to change. The three default lists (folders,
 headings and fields) live only in the registry. The Python scripts and

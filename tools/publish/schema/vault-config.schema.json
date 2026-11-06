@@ -145,6 +145,22 @@
             }
           ]
         },
+        "voices": {
+          "description": "Whether the skills keep a short voice for the campaign and each storied character, draft missing ones for the GM to approve, and write story prose in them. Off, story prose takes its tone from the genre, as before",
+          "default": true,
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "index": {
           "type": [
             "object",
@@ -552,7 +568,8 @@
                 "plan_progress",
                 "gm_notes",
                 "prep_notes",
-                "reliability"
+                "reliability",
+                "voice"
               ],
               "type": [
                 "array",

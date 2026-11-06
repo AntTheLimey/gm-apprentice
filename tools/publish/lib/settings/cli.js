@@ -216,6 +216,11 @@ function describe(name) {
   }
   lines.push(`  ${r.does || '(no description)'}`, `  takes: ${r.takes}`, `  default: ${plainValue(r.default)}`);
   if (r.guards) lines.push(e.name === 'player_site.never_show' ? '  guards what players see: a mistake here stops the build' : '  hides things from players: a mistake here stops the build');
+  // Entries added to the default after vaults began owning their lists; the update offers each to the vault's own list.
+  if (e.added) {
+    for (const a of e.added) lines.push(`  added in ${a.since}: ${a.entry} (${a.why})`);
+    return { result: { ...r, added: e.added.map((a) => ({ ...a })) }, lines, notices: noticesFor([name]) };
+  }
   return { result: r, lines, notices: noticesFor([name]) };
 }
 
