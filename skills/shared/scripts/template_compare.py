@@ -63,7 +63,7 @@ def _parts(text: str) -> _Parts:
     fields: list[str] = []
     values: dict[str, str] = {}
     start = 0
-    if lines and lines[0].rstrip() == "---":
+    if lines and lines[0].lstrip("\ufeff").rstrip() == "---":
         end = next((i for i in range(1, len(lines))
                     if lines[i].rstrip() == "---"), None)
         if end is not None:

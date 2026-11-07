@@ -50,7 +50,7 @@ def read_tables(lines: list[str], second: dict | None = None) -> dict[tuple[str,
     raw2 = raw3 = ""
     header: list[str] | None = None
     closed: set = set()
-    in_fm = bool(lines) and lines[0].strip() == "---"
+    in_fm = bool(lines) and lines[0].lstrip("\ufeff").strip() == "---"
     fence: str | None = None
     for i, raw in enumerate(lines):
         s = raw.strip()
@@ -146,7 +146,7 @@ class Note:
     def bold_at(self, label: str, under: str | None = None) -> tuple[int, str] | None:
         """(line index, text) of the first `**Label:**` line outside frontmatter and code; with
         `under`, the first one beneath that `## ` heading (any case) and no other."""
-        in_fm = bool(self.lines) and self.lines[0].strip() == "---"
+        in_fm = bool(self.lines) and self.lines[0].lstrip("\ufeff").strip() == "---"
         fence: str | None = None
         h2 = ""
         for i, raw in enumerate(self.lines):

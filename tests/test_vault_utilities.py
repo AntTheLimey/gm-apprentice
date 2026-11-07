@@ -493,9 +493,15 @@ for raw, expected, label in [
     ('"npc",', '"npc",', "a stray flow comma is not unwrapped"),
     ('"unterminated', '"unterminated', "an unclosed quote stays raw"),
     # Escapes belong to the scalar: the closing quote is the unescaped one,
-    # so a value like a height range survives whole instead of truncating.
-    ('"5\'4\\" - 6\'0\\""', "5'4\\\" - 6'0\\\"", "escaped inner quote is kept"),
-    ("'O''Brien'", "O''Brien", "single-quote escape is kept"),
+    # so a value like a height range survives whole instead of truncating,
+    # and the escapes are decoded as YAML reads them (#597).
+    ('"5\'4\\" - 6\'0\\""', "5'4\" - 6'0\"", "escaped inner quote is decoded"),
+    ("'O''Brien'", "O'Brien", "single-quote escape is decoded"),
+    ('"C:\\\\x"', "C:\\x", "an escaped backslash is one backslash"),
+    ('"a\\tb"', "a\tb", "an escaped tab is a tab"),
+    ('"caf\\u00e9"', "caf\u00e9", "a unicode escape is decoded"),
+    ('"\\x41\\tz"', "A\tz", "an unusual escape does not stop the rest"),
+    ('"\\q"', "\\q", "an escape YAML lacks is kept as authored"),
 ]:
     check(f"scalar_value: {label}",
           lambda raw=raw: [scalar_value(raw)], [expected])

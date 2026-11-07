@@ -1095,13 +1095,13 @@ class ScenePointerFixRoundTests(unittest.TestCase):
         self.assertIn("isn't a scene note", rows[0])
         self.assertNotIn("write the note", rows[0])
 
-    def test_a_bom_note_is_named_not_rewritten(self):
+    def test_a_bom_note_is_read_as_the_scene_it_is(self):
+        # A byte-order mark before the frontmatter used to hide its type
+        # (#593); the note is a scene, so the pointer is fine.
         plan = self.vault(
             {"Scenes/Gala.md": "\ufeff---\ntype: scene\n---\n"},
             "Plans/P.md", self.plan("[[Gala]]"))
-        rows = self.rows(plan)
-        self.assertEqual(len(rows), 1, rows)
-        self.assertIn("isn't a scene note", rows[0])
+        self.assertEqual(self.rows(plan), [])
 
     def test_a_truly_missing_note_still_says_write_it(self):
         plan = self.vault({}, "Plans/P.md", self.plan("[[Nope]]"))

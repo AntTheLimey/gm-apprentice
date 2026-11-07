@@ -328,6 +328,19 @@ def _choice_problem(choice: str, value: str | None,
             f"run plan to see the ids")
 
 
+def _last_check(choice: str, todo: list[Check]) -> int:
+    """The index in `todo` of the last check that may offer `choice`
+    (matched as `_choice_problem` matches it: several checks can share a
+    prefix such as `retire-step:`); len(todo) when none does."""
+    last = len(todo)
+    for n, check in enumerate(todo):
+        for entry in check.choices:
+            base = entry.removesuffix("=")
+            if choice == base or (base.endswith(":") and choice.startswith(base)):
+                last = n
+    return last
+
+
 def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
               checks: list[Check] | None = None) -> int:
     refused = gate(vault)
@@ -401,9 +414,10 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                             f"{item.id}=<{item.wants}>")
                     if item.apply is None:
                         raise StepFailed(f"{item.id} has nothing to run")
+                    # its failure is reported; it was offered (#595)
+                    used.add(item.id)
                     did.extend((item.id, f"{item.id}\t{line}")
                                for line in item.apply(value))
-                    used.add(item.id)
                     if value == "leave" and item.holds_stamp:
                         left_ids.add(item.id)   # only once it has worked
                     repinned = repinned or (check.name == REPIN
@@ -431,7 +445,12 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                   file=sys.stderr)
     emit("Did", did)
     for choice in dict.fromkeys(i for i, _v in chosen if i not in used):
-        print(f"not offered: {choice}")
+        # A choice not every one of whose checks finished was not fully
+        # looked for, so "not offered" would be a guess (#595). A failed
+        # stamp comes after every check (failed == len(todo)).
+        reached = failed is None or _last_check(choice, todo) < failed
+        print(f"not offered: {choice}" if reached else
+              f"not run: {choice} (the update stopped first)")
     if person or shown:
         emit(TITLES[PERSON], person, shown)
     for label in unanswered:

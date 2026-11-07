@@ -312,6 +312,11 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
 
 `--session` takes the Overview's own shape, as in 3c.
 
+`current_game_date` never gets vaguer. With no date in the notes,
+keep the one there (leave its `--set` out), or move it on only as
+far as the notes say time passed; ask the GM if unsure. "October
+1923" never replaces "October 17, 1923".
+
 Show the dry-run rows to the GM as-is — they are the confirmation
 prompt. Yes → re-run with `--write`; no → skip. Leave
 `current_arc`, `arcs_planned`, `current_chapter`,

@@ -526,7 +526,8 @@ def strip_comment(value: str) -> str:
     through its closing quote, so a # inside the quotes survives."""
     if value.lstrip().startswith("#"):
         return ""
-    quoted = re.match(r"""^\s*("[^"]*"|'[^']*')""", value)
+    # through the unescaped closing quote: `"A \\"B\\""` is one value
+    quoted = re.match(r"""^\s*("(?:\\.|[^"\\])*"|'(?:''|[^'])*')""", value)
     if quoted:
         return quoted.group(1).strip()
     return COMMENT_TAIL_RE.sub("", value)
@@ -536,7 +537,7 @@ def template_frontmatter(text: str) -> list[str]:
     """A template's frontmatter lines without endings and without its
     comments (whole-line or trailing)."""
     lines = text.splitlines()
-    if not lines or lines[0].strip() != "---":
+    if not lines or lines[0].lstrip("\ufeff").strip() != "---":
         raise WriteError("template has no frontmatter")
     out: list[str] = []
     for line in lines[1:]:
@@ -2419,7 +2420,7 @@ def link_list(links: list[str]) -> tuple[str, list[str]]:
     `[]`."""
     if not links:
         return "[]", []
-    return "", [f'  - "[[{link}]]"' for link in links]
+    return "", [f"  - {vl.yaml_scalar(f'[[{link}]]')}" for link in links]
 
 
 def bare_link(raw: str) -> str:

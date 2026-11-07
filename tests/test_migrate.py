@@ -624,6 +624,82 @@ class ApplyTests(unittest.TestCase):
         _, plan, _ = call([str(vault), "plan"], checks)
         self.assertIn("one=<a or b>", plan)
 
+    def test_a_failed_choice_is_not_said_to_be_not_offered(self):
+        # #595: the failed step was listed under "not offered" as well, and a
+        # choice past the failure was never looked at.
+        vault = self.new_layout(make_vault(self))
+
+        def boom(x):
+            raise StepFailed("could not")
+
+        def find_one(v):
+            return [Item("one", CHOICE, ["a or b"], boom, wants="a or b")]
+
+        def find_later(v):
+            return [Item("later", CHOICE, ["yes"], lambda x: ["later done"])]
+        checks = [Check("one", "1.10.30", 3, "one", find_one,
+                        choices=("one=",)),
+                  Check("later", "1.10.30", 4, "later", find_later,
+                        choices=("later",))]
+        code, out, err = call([str(vault), "apply", "--choose", "one=a",
+                               "--choose", "later"], checks)
+        self.assertEqual(code, 1)
+        self.assertIn("could not", err)
+        self.assertNotIn("not offered", out)
+        self.assertIn("not run: later (the update stopped first)", out)
+        self.assertNotIn("not run: one", out)
+
+    def test_a_choice_whose_check_ran_is_not_offered_despite_a_later_failure(self):
+        # Review of #595: only a check that never finished says "not run".
+        vault = self.new_layout(make_vault(self))
+
+        def boom(x):
+            raise StepFailed("could not")
+
+        def find_one(v):
+            return [Item("one", CHOICE, ["a or b"], boom, wants="a or b")]
+        checks = [Check("tpl", "1.10.30", 2, "tpl", lambda v: [],
+                        choices=("template:",)),
+                  Check("one", "1.10.30", 3, "one", find_one,
+                        choices=("one=",))]
+        code, out, _ = call([str(vault), "apply", "--choose",
+                             "template:npc.md", "--choose", "one=a"], checks)
+        self.assertEqual(code, 1)
+        self.assertIn("not offered: template:npc.md", out)
+        self.assertNotIn("not run", out)
+
+    def test_a_prefix_a_later_check_shares_is_not_run(self):
+        # CodeRabbit #603: `retire-step:` is offered by more than one check;
+        # until the last of them has run, the choice was not fully looked for.
+        vault = self.new_layout(make_vault(self))
+
+        def boom(x):
+            raise StepFailed("could not")
+        checks = [Check("early", "1.10.30", 2, "early", lambda v: [],
+                        choices=("retire-step:=",)),
+                  Check("one", "1.10.30", 3, "one",
+                        lambda v: [Item("one", CHOICE, ["a or b"], boom,
+                                        wants="a or b")],
+                        choices=("one=",)),
+                  Check("late", "1.10.30", 4, "late", lambda v: [],
+                        choices=("retire-step:=",))]
+        code, out, _ = call([str(vault), "apply", "--choose",
+                             "retire-step:x=retire", "--choose", "one=a"],
+                            checks)
+        self.assertEqual(code, 1)
+        self.assertIn("not run: retire-step:x (the update stopped first)", out)
+
+    def test_a_failed_stamp_leaves_unoffered_choices_not_offered(self):
+        vault = make_vault(self)
+        with mock.patch.object(migrate, "stamp",
+                               side_effect=StepFailed("read-only")):
+            code, out, _ = call(
+                [str(vault), "apply", "--choose", "template:npc.md"],
+                self.choice_checks([]))
+        self.assertEqual(code, 1)
+        self.assertIn("not offered: template:npc.md", out)
+        self.assertNotIn("not run", out)
+
     def test_answers_that_could_not_be_remembered_are_said(self):
         # CodeRabbit #452: a failed held write was silent, and the next plan asked again.
         vault = self.new_layout(make_vault(self))

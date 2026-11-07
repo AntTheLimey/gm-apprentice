@@ -215,7 +215,7 @@ def _frontmatter_blocks(text: str) -> tuple[list[str], dict[str, tuple[int, int]
     lines = text.splitlines(keepends=True)
     def bare(i: int) -> str:
         return lines[i].rstrip("\r\n")
-    if not lines or bare(0) != "---":
+    if not lines or bare(0).lstrip("\ufeff") != "---":
         return lines, {}
     end = next((i for i in range(1, len(lines)) if bare(i) == "---"), None)
     if end is None:

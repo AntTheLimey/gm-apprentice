@@ -517,7 +517,7 @@ def _legacy_scan_region(text: str) -> str:
     reports the malformed delimiter.
     """
     raw = raw_frontmatter(text)
-    if raw or not text.startswith("---"):
+    if raw or not text.lstrip("\ufeff").startswith("---"):
         return raw
     return text
 

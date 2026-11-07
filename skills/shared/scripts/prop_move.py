@@ -112,10 +112,11 @@ def is_build_props_note(text: str) -> bool:
 
 
 def _requote(raw: str, value: str) -> str:
-    """`value` written as `raw` was: in the same quotes, or bare."""
+    """`value` written as `raw` was: quoted (re-escaped, as the reader now
+    decodes it: #597) or bare."""
     text = raw.strip()
     if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
-        return f"{text[0]}{value}{text[0]}"
+        return yaml_scalar(value, quoted_int=True)   # "123" stays a string
     return value
 
 

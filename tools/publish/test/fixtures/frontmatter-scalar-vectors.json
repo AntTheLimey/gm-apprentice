@@ -1,0 +1,122 @@
+{
+  "_comment": "Frontmatter values both readers must agree on: the scripts' vaultlib.extract_frontmatter and the publish tool's parseNote (#593, #597). Vectors marked yaml_scalar hold exactly what vaultlib.yaml_scalar writes for the value (tests/test_vaultlib.py checks).",
+  "vectors": [
+    {
+      "name": "escaped double quotes",
+      "text": "---\nv: \"a \\\"b\\\"\"\n---\nBody.\n",
+      "key": "v",
+      "value": "a \"b\""
+    },
+    {
+      "name": "escaped backslash",
+      "text": "---\nv: \"C:\\\\x\"\n---\nBody.\n",
+      "key": "v",
+      "value": "C:\\x"
+    },
+    {
+      "name": "escaped tab",
+      "text": "---\nv: \"tab\\there\"\n---\nBody.\n",
+      "key": "v",
+      "value": "tab\there"
+    },
+    {
+      "name": "escaped newline",
+      "text": "---\nv: \"line\\nbreak\"\n---\nBody.\n",
+      "key": "v",
+      "value": "line\nbreak"
+    },
+    {
+      "name": "unicode escape",
+      "text": "---\nv: \"caf\\u00e9\"\n---\nBody.\n",
+      "key": "v",
+      "value": "café"
+    },
+    {
+      "name": "single-quoted doubled quote",
+      "text": "---\nv: 'O''Brien'\n---\nBody.\n",
+      "key": "v",
+      "value": "O'Brien"
+    },
+    {
+      "name": "quoted value with a comment after it",
+      "text": "---\nv: \"x # y\"  # note\n---\nBody.\n",
+      "key": "v",
+      "value": "x # y"
+    },
+    {
+      "name": "yaml_scalar: a quote",
+      "text": "---\nv: \"say \\\"hi\\\"\"\n---\nBody.\n",
+      "key": "v",
+      "value": "say \"hi\"",
+      "yaml_scalar": true
+    },
+    {
+      "name": "yaml_scalar: a backslash",
+      "text": "---\nv: \"back\\\\slash\"\n---\nBody.\n",
+      "key": "v",
+      "value": "back\\slash",
+      "yaml_scalar": true
+    },
+    {
+      "name": "yaml_scalar: a control character",
+      "text": "---\nv: \"ctrl\\u0001char\"\n---\nBody.\n",
+      "key": "v",
+      "value": "ctrl\u0001char",
+      "yaml_scalar": true
+    },
+    {
+      "name": "yaml_scalar: a NEL",
+      "text": "---\nv: \"nel\\u0085line\"\n---\nBody.\n",
+      "key": "v",
+      "value": "nelline",
+      "yaml_scalar": true
+    },
+    {
+      "name": "a byte-order mark before the frontmatter",
+      "text": "﻿---\nv: plain\n---\nBody.\n",
+      "key": "v",
+      "value": "plain"
+    },
+    {
+      "name": "quoted block-list items",
+      "text": "---\nv:\n  - \"a \\\"b\\\"\"\n  - 'O''Brien'\n---\nBody.\n",
+      "key": "v",
+      "value": [
+        "a \"b\"",
+        "O'Brien"
+      ]
+    },
+    {
+      "name": "quoted flow-list items",
+      "text": "---\nv: [\"a \\\"b\\\"\", 'O''Brien', plain]\n---\nBody.\n",
+      "key": "v",
+      "value": [
+        "a \"b\"",
+        "O'Brien",
+        "plain"
+      ]
+    },
+    {
+      "name": "an unusual escape beside a common one",
+      "text": "---\nv: \"a\\tb\\x41 \\e[0m\"\n---\nBody.\n",
+      "key": "v",
+      "value": "a\tbA \u001b[0m"
+    },
+    {
+      "name": "YAML-only escapes",
+      "text": "---\nv: \"\\N\\_\\L\\P\\/\\ x\"\n---\nBody.\n",
+      "key": "v",
+      "value": "   / x"
+    },
+    {
+      "name": "a comma inside a quoted flow-list item",
+      "text": "---\nv: [\"Smith, Jr\", 'Doe, Jane', plain]\n---\nBody.\n",
+      "key": "v",
+      "value": [
+        "Smith, Jr",
+        "Doe, Jane",
+        "plain"
+      ]
+    }
+  ]
+}

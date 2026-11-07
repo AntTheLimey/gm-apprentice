@@ -187,7 +187,7 @@ def _subsections(lines: list[str]) -> dict[str, tuple[int, int]]:
     """`backstory`/`appearance`/`personality` -> (index of its heading line, end exclusive),
     for the first of each under `## Background`. Frontmatter and fenced code are skipped."""
     heads: list[tuple[int, int, str]] = []
-    in_fm = bool(lines) and lines[0].strip() == "---"
+    in_fm = bool(lines) and lines[0].lstrip("\ufeff").strip() == "---"
     fence: str | None = None
     for i, raw in enumerate(lines):
         s = raw.strip()

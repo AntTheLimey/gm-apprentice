@@ -2241,6 +2241,42 @@ def npc_story(vault, stdin, *flags, write=True):
                *(["--write"] if write else []), stdin=stdin)
 
 
+class LinkListTests(unittest.TestCase):
+    def test_a_name_with_a_quote_round_trips(self):
+        # #597 review: items now read back decoded, so they must be written
+        # escaped, or `"[[A "B"]]"` breaks the frontmatter.
+        _, children = vw.link_list(['A "B"', "C\\D", "Plain"])
+        # The written text, not only a read-back: the scripts' reader is
+        # lenient enough to read the broken line too; YAML is not.
+        self.assertEqual(children, ['  - "[[A \\"B\\"]]"',
+                                    '  - "[[C\\\\D]]"', '  - "[[Plain]]"'])
+        text = "---\nentities:\n" + "\n".join(children) + "\n---\n"
+        self.assertEqual(vw.vl.extract_frontmatter(text)["entities"],
+                         ['[[A "B"]]', "[[C\\D]]", "[[Plain]]"])
+
+
+class StripCommentTests(unittest.TestCase):
+    def test_an_escaped_quote_does_not_end_the_value(self):
+        self.assertEqual(vw.strip_comment(' "A \\"B\\"" # note'), '"A \\"B\\""')
+        self.assertEqual(vw.strip_comment(" 'O''Brien' # note"), "'O''Brien'")
+
+
+class ByteOrderMarkTests(unittest.TestCase):
+    """A note saved with a UTF-8 byte-order mark is still found (#593)."""
+
+    def test_story_finds_a_pc_note_with_a_bom(self):
+        vault = story_vault(self, {PC_REL: "\ufeff" + PC})
+        code, out = tell(vault, "# [[Rock Lavey]]\n\nHe fought.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("He fought.", read(vault, STORY_REL))
+
+    def test_npc_story_finds_an_npc_note_with_a_bom(self):
+        vault = story_vault(self, {MARLO_REL: "\ufeff" + NPC_VOICED})
+        code, out = npc_story(vault, "# [[Marlo]]\n\nShe waited.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("She waited.", read(vault, MARLO_REL))
+
+
 class StoryChapterRestartTests(unittest.TestCase):
     def test_story_session_numbers_restarting_per_chapter(self):
         ch2 = "Chapters/Chapter 2 - Vienna/Sessions/Session 02/"
