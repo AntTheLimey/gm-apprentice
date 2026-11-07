@@ -33,11 +33,11 @@ Template fields: `player_name`, `occupation`, `age`, `gender`,
 |-------|--------|-------------|
 | `status` | Optional | Also a word in `vault.statuses.out_of_play` (which takes the PC out of play) |
 | `key_traits` | Optional | List of defining traits (shown on PC card and landing page) |
-| `live_key` | Optional | Written by `relink.py` when it renames a PC, so the PC keeps their live stats on the site. Leave it alone |
+| `live_key` | Optional | Written by `gma relink` when it renames a PC, so the PC keeps their live stats on the site. Leave it alone |
 | `display_meta` | Optional | Ordered list of frontmatter field names to show in the meta row (with none, the setting `player_site.sheets.header_facts` decides) |
 | `sheet_source` | Optional | Where the sheet is kept when it is not in the file. Not shown on the site (unless listed in `display_meta`). Without it, a PC whose note gives the system's sheet nothing to render is named in the build's "published with no character sheet" warning |
 | `sheet_skin`, `sheet_frame` | Optional | This character's own look, over the campaign's. See `sheet-skins.md` |
-| `dndbeyond` | Optional | D&D only. A D&D Beyond character link or id; `dnd_ddb.py` syncs the note from it. Not shown on the site |
+| `dndbeyond` | Optional | D&D only. A D&D Beyond character link or id; `gma dnd-ddb` syncs the note from it. Not shown on the site |
 | `gravity` | Optional | GURPS only. Local gravity in G (`gravity: 1.2`); absent is 1G. When not 1, the sheet and party board work encumbrance out by B350 and show the value. Above 1G it needs the sheet's `Weight` row |
 
 **Layout — single panel vs. tabbed:** When no story companion file
@@ -395,7 +395,7 @@ SUPERSEDED entities also redirect wiki-links to their
 **Page title:** The page title is always derived from the vault
 filename (without the `.md` extension), not from frontmatter. To
 change a page's title, rename the file with
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/relink.py" <vault> <old path> <new name>`
+`gma relink <vault> <old path> <new name>`
 (a dry run: it shows every change and writes nothing), and after the
 GM's yes run it again with `--apply`. It rewrites every link to the
 note, and keeps a renamed PC's live stats and story file with it. To
@@ -426,5 +426,5 @@ area is hidden rather than showing a broken image.
 ## Site settings
 
 Settings that affect the whole site are not listed here: run
-`node "$TOOL" settings list`, and `settings describe <name>` for one
+`gma publish settings list`, and `settings describe <name>` for one
 (`configuration.md` § Settings).

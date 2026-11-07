@@ -117,7 +117,7 @@ campaign-qa's Tone Words check lists the hostile ties the site shows.
 
 ## Configuration
 
-`node "$TOOL" settings get player_site.hide --config
+`gma publish settings get player_site.hide --config
 <dir>/vault.config.json` says what the site hides. To hide one more heading, field or folder
 use `settings add`; `settings set` replaces the whole list, built-in
 entries included.
@@ -228,7 +228,7 @@ not a publish list: the vault publishes as it would with none.
 
 Never open the file to read or change it. Ask the tool:
 
-- `node "$TOOL" manifest list --vault <vault>` shows the three lists and
+- `gma publish manifest list --vault <vault>` shows the three lists and
   their counts (`--json` for the whole thing).
 - `manifest diff --config <dir>/vault.config.json` sorts every vault file
   by the rules in this document and shows what is not on the list yet.

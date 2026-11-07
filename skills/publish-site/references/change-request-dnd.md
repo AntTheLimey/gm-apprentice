@@ -121,7 +121,7 @@ Vault". Follow it; it is not repeated here.
      preview:
 
      ```bash
-     python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_sheet.py" "<path to the PC note>"
+     gma dnd-sheet "<path to the PC note>"
      ```
 
      If the tool fails here (see "When the tool fails" below), the fault
@@ -138,7 +138,7 @@ Vault". Follow it; it is not repeated here.
      the sums:
 
      ```bash
-     python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_sheet.py" "<path to the PC note>" --write
+     gma dnd-sheet "<path to the PC note>" --write
      ```
 
   4. Collect the request into the applied batch; step 4 of "When a batch

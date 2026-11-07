@@ -11,9 +11,8 @@ marked, is the GM site; see `content-filtering.md` § The GM site.
 
 The publish tool holds the one list of settings. Never open the
 settings file to read one, and never edit it by hand:
-`node "$TOOL" settings --help` shows every verb (`list`, `describe`,
-`get`, `set`, `add`, `remove`, `unset`, `check`). `$TOOL` is the
-plugin's `gm-publish.js` (`SKILL.md` § The build tool).
+`gma publish settings --help` shows every verb (`list`, `describe`,
+`get`, `set`, `add`, `remove`, `unset`, `check`).
 
 Give `--config <dir>/vault.config.json`; with no site yet, `--vault
 <vault>`. A
@@ -27,9 +26,7 @@ players only with the next build and deploy.
 **When a setting stops the build.** A fault in a setting that hides
 things from players stops the build, so nothing extra is shown by a
 guess. Never mend a misspelt or old name by hand. Run campaign-qa's
-Settings check, `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
-settings`: tell the GM its `fix:` lines, on a yes run it again with
+Settings check, `gma vault-check <vault> settings`: tell the GM its `fix:` lines, on a yes run it again with
 `--fix`, and put what is left to the GM, above all whether something
 was meant to be hidden. A settings file that is not valid YAML is the
 one thing mended by hand: campaign-qa's
@@ -65,7 +62,7 @@ Either drop a `_banner.*` file into the section's vault folder
 wins. The setting is one map, so write it whole:
 
 ```bash
-node "$TOOL" settings set 'player_site.lists.banners={"locations":{"image":"_attachments/sector-map.webp","link":"_attachments/sector-map.svg","alt":"Sector 7-G star chart"},"factions":"_attachments/factions-hero.svg"}' --config <dir>/vault.config.json
+gma publish settings set 'player_site.lists.banners={"locations":{"image":"_attachments/sector-map.webp","link":"_attachments/sector-map.svg","alt":"Sector 7-G star chart"},"factions":"_attachments/factions-hero.svg"}' --config <dir>/vault.config.json
 ```
 
 An **SVG with no `link` is inlined**, so its internal `<a>` elements stay
@@ -105,7 +102,7 @@ the site.
 ### Extra menu entries
 
 ```bash
-node "$TOOL" settings add player_site.menu_extra label=Gazetteer link=gazetteer/index.html group=World --config <dir>/vault.config.json
+gma publish settings add player_site.menu_extra label=Gazetteer link=gazetteer/index.html group=World --config <dir>/vault.config.json
 ```
 
 One entry a call. `link` is a note's name, a page on the site or a web
@@ -116,7 +113,7 @@ takes one out by its label.
 ### Landing banner
 
 ```bash
-node "$TOOL" settings set player_site.landing.banner.title="Season two starts 4 May" player_site.landing.banner.text="Bring your sheets." --config <dir>/vault.config.json
+gma publish settings set player_site.landing.banner.title="Season two starts 4 May" player_site.landing.banner.text="Bring your sheets." --config <dir>/vault.config.json
 ```
 
 `.link` and `.image` (a picture in the vault) are the other two parts.
@@ -129,7 +126,7 @@ names the page and the fields. It is one map, so `get` it and write it
 whole, keeping the notes already there:
 
 ```bash
-node "$TOOL" settings set 'player_site.hide.field_exceptions={"Characters/NPCs/Vex Ambrose.md":{"include":["secrets"]}}' --config <dir>/vault.config.json
+gma publish settings set 'player_site.hide.field_exceptions={"Characters/NPCs/Vex Ambrose.md":{"include":["secrets"]}}' --config <dir>/vault.config.json
 ```
 
 There is no per-file `exclude`; to strip a field from one page only,

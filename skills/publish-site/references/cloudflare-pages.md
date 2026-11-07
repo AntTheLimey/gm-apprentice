@@ -64,11 +64,10 @@ setup, which saves it and figures out your Account ID for you → done.**
 You never look up the Account ID by hand, and you never edit a shell
 startup file yourself.
 
-Run this from the site directory (the `$TOOL` path is the one you set at
-the top of the publish walkthrough — the plugin's `gm-publish.js`):
+Run this from the site directory:
 
 ```bash
-node "$TOOL" doctor --set-cloudflare-creds
+gma publish doctor --set-cloudflare-creds
 ```
 
 Paste your token when it asks. It then:
@@ -94,7 +93,7 @@ hidden `read` prompt (you can paste it — it stays invisible) so it never
 passes through the assistant — for example:
 
 ```bash
-read -rs CF_TOKEN; printf '%s' "$CF_TOKEN" | node "$TOOL" doctor --set-cloudflare-creds; unset CF_TOKEN
+read -rs CF_TOKEN; printf '%s' "$CF_TOKEN" | gma publish doctor --set-cloudflare-creds; unset CF_TOKEN
 ```
 
 Chain the three with `;` (not `&&`) so `unset CF_TOKEN` always runs and
@@ -154,7 +153,7 @@ variables aren't in `~/.zshenv`, or you need a new terminal / `source`.
 ## Step 3: Point the site at Cloudflare
 
 ```bash
-node "$TOOL" settings set player_site.host=cloudflare-pages player_site.url=https://<project-name>.pages.dev --config <dir>/vault.config.json
+gma publish settings set player_site.host=cloudflare-pages player_site.url=https://<project-name>.pages.dev --config <dir>/vault.config.json
 ```
 
 The address must be the Cloudflare one: with a `github.io` address
@@ -240,8 +239,8 @@ the `[[kv_namespaces]]` block, turn the switch on in the vault's
 settings, rebuild, and deploy — in one command. Run from the site directory:
 
 ```bash
-node "$TOOL" setup-status-bar   # live status bar (Tier 2a)
-node "$TOOL" setup-inbox        # change-request inbox (Tier 2b)
+gma publish setup-status-bar   # live status bar (Tier 2a)
+gma publish setup-inbox        # change-request inbox (Tier 2b)
 ```
 
 Each defaults to `./vault.config.json`; pass `--config <path>` if you're
@@ -456,7 +455,7 @@ of `<project>.pages.dev`:
 The token isn't reaching the command. Almost always the variables are in
 `~/.zshrc` instead of `~/.zshenv` (see Step 2), or you're in a terminal
 opened before you added them — open a new one or run `source ~/.zshenv`.
-Re-running `node "$TOOL" doctor --set-cloudflare-creds` fixes this by
+Re-running `gma publish doctor --set-cloudflare-creds` fixes this by
 writing the file every shell reads.
 Confirm with `npx wrangler@4 whoami`.
 
