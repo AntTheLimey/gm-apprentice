@@ -28,8 +28,12 @@ it.
 
 ## Narrative Voice by Campaign Genre
 
-Voice follows the campaign's genre/tone (campaign overview or world
-file), not the game system.
+Tell the entry in this character's voice and the campaign's, from
+`vault_check.py <vault> voices`. The table below, set by the
+campaign's genre/tone (campaign overview or world file) and not the
+game system, is the fallback where a voice is `(none)`, the whole
+voice on `# off: vault.voices`, and a starting point for drafting
+one (`shared/voice.md`).
 
 | Genre | Voice |
 |-------|-------|
@@ -68,4 +72,12 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" \
 
 It creates a missing story file, appends at the bottom, stamps the
 frontmatter and refuses a second entry for the same session.
-Earlier entries are never edited.
+Earlier entries are never edited, but for a correction.
+
+## Corrections
+
+A GM's correction of a Story entry, NPC passage or recap: `story`,
+`npc-story` or `wrapup-add` with `--replace`. Keep gm-only, spoiler
+and comment blocks as they are. Dry-run first; on a HINT that one
+goes, tell the GM before `--write`. For an earlier session, leave
+out `--as-of` and `--date`.

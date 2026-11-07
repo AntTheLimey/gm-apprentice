@@ -1,6 +1,6 @@
 # Handouts, Props, and In-Game Documents
 
-Templates, voice guides, and design principles for generating
+Templates, style guides, and design principles for generating
 in-game documents and player handouts. Read when creating
 letters, newspapers, journals, official documents, Mythos
 tomes, item cards, coded messages, or any in-world artefact.
@@ -17,7 +17,7 @@ and mechanical stats in handouts, also read:
 
 **Use when:** players need persistent reference (names, dates,
 clues across sessions); document is a puzzle element; artefact
-creates dramatic weight; voice/period flavour matters; multiple
+creates dramatic weight; an author's style or period flavour matters; multiple
 embedded clues reward close reading.
 
 **Skip when:** info takes 30 seconds verbally; purely
@@ -58,7 +58,7 @@ P3 (optional): Personal detail revealing character or subtext.
  important clue or most emotional line.]
 ```
 
-**Voice by character type:**
+**Style by character type:**
 
 | Type | Style |
 |------|-------|
@@ -147,7 +147,7 @@ info connecting later. Ads = hidden messages or locations.
 [PHYSICAL DESCRIPTION — binding, condition, medium, marginalia]
 [FRAGMENT]
 - Opening: author's perspective and era
-- Core: describe entity/ritual/location in author's voice.
+- Core: describe entity/ritual/location in author's own style.
   Never use game terminology. Not "Cthulhu" — "the dreaming
   god beneath the waves."
 - Implication: what this suggests about current investigation
@@ -215,7 +215,7 @@ knowledge. Errors are powerful tools (outdated bridge, liar's
 omissions). Annotate with in-character handwriting. Multi-part
 maps reward assembly.
 
-## Period Voice Guide
+## Period Style Guide
 
 | Era | Key Traits |
 |-----|-----------|
@@ -288,12 +288,13 @@ dictating approach.
 ## Handout Generation Workflow
 
 1. **Type:** select template from above
-2. **Author Voice:** social class, education, emotional state,
-   relationship to reader, era, what they know/conceal
+2. **Author's style:** social class, education, emotional state,
+   relationship to reader, era, what they know/conceal (an author
+   with a `voice` in the vault: start from it, unless voices are off)
 3. **Embed Info:** primary clue (skimmable position), secondary
    details (reward close reading), red herrings, connections
    to other handouts/campaign
-4. **Write:** use template, author's voice, 1-2 pages max
+4. **Write:** use template, author's style, 1-2 pages max
 5. **Prop Notes:** paper type/condition, aging effects,
    packaging, when to introduce, how players find it
 6. **GM Notes:** significance, skill checks needed, scenario

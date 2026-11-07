@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.11.4] — 2026-11-06
+
+Voices, part two (#460): the skills draft and use the voices. With `vault.voices` on (the default), session-wrapup and session-prep read the campaign's voice and each character's before writing story prose, and draft a missing one for the GM's yes; session-play and ttrpg-expert use the voices they find and never draft. Records stay plain. The update refreshes an unedited character-story template and asks about an edited one, as usual.
+
+### Added
+
+- **`shared/voice.md`**: how a voice is drafted (from the vault: background, backstory, sheet, how the character played; a few sentences on one line), checked against the player site's hidden list before it is written, shown to the GM, and stored with `stamp_entities.py --set`; and how a GM's correction to voiced prose is folded into that voice without making it longer.
+- **session-wrapup** runs `vault_check.py VAULT voices` before the recap, names a PC who died or left this session and an NPC the GM gives a story, drafts any missing voice for the GM's yes, and writes the recap in the campaign voice and each Story entry in its PC's voice. A voiced NPC who appeared gets a passage through `vault_write.py npc-story`. A gmassistant.app export's `## Summary` is still adopted word for word; it is rewritten in the campaign voice only when the GM asks.
+- **session-prep** uses the campaign voice for read-aloud, scene-setting and handouts, and a voiced character's own when they speak or write; it drafts a missing campaign voice for the GM's yes. **session-play**, **ttrpg-expert** and **vault-ingest**'s backstory entries use the voices when a vault has them.
+- **`vault_write.py story --replace` and `npc-story --replace`** replace a session's existing Story entry or NPC passage, found by session number (and by chapter where sessions restart or the heading names one), all or nothing. An NPC passage is looked for only where a new one would go (`## Story`, or the `--section` given, never a gm-only or hidden section), so an appearance log or GM Notes heading for the same session is never overwritten; `npc-story --replace` works while `vault.voices` is off. The preview names any gm-only or spoiler block (inline too), or comment, the new text drops. `--date` and `--as-of` stamp `lastUpdated` and `asOfSession` when given. The story format's new Corrections section says how a GM's correction is made: dry-run first, hidden blocks kept.
+
+### Changed
+
+- **The story format** reads the voices first; the genre table is the fallback when a voice is `(none)` or voices are off, and a starting point for drafting.
+- **"Voice" means only the story voice** in the skills: the NPC generator's `Voice:` line is now `Speech:`, and craft uses elsewhere read "register", "style" or "restyle".
+- **`vault_write.py timeline --under` and `--after`** take a heading by its text, without the `#` marks, when exactly one heading has that text.
+
+### Fixed
+
+- **session-wrapup step 4b and the world-evolution stamps** passed `--session N`, which `stamp_entities.py` refuses when the Campaign Overview labels sessions ("Session 3"); they now pass the session's value in the Overview's own shape.
+
+---
+
 ## [1.11.3] — 2026-11-06
 
 A new vault no longer starts with a table error, and the update repairs the same row in an existing vault (check `publish-row-pipe`) (#599, thanks to dcordle).

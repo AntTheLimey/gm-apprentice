@@ -15,7 +15,7 @@ Assemble the adventure index and topic files into the brief
 using the template below. Apply the block/seam test: where a
 topic file already holds finished prose, lift it verbatim;
 author only the connective seams and fragment-derived text. Do
-not re-voice writing that is already written.
+not restyle writing that is already written.
 (rationale: `shared/content-fidelity.md`)
 
 - **Existing vault:** Write to

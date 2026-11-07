@@ -63,11 +63,11 @@ too) adding a new section or sub-section for players, one the
 template lacks, and tell the GM of any they did not ask for before
 `--write`.
 
-**Authoring vs. preserving:** four outputs are authoring
+**Authoring vs. preserving:** five outputs are authoring
 exceptions to `shared/content-fidelity.md`, because the source is
 shorthand and no prose exists yet — the Step 2 recap, Step 3b
-story entries, Step 3c `## Current Status`, and timeline summary
-lines. Write them faithful to the notes (or recap and
+story entries and NPC passages, Step 3c `## Current Status`, and
+timeline summary lines. Write them faithful to the notes (or recap and
 carry-forward): no embellishment, invent nothing the session
 didn't produce. The synthesized GM Notes sections (What Carries
 Forward, World State, Keeper Checklist, Quality Notes) are
@@ -75,7 +75,12 @@ grounded too: each claim traces to the Play Notes, the plan or a
 named vault file; mark anything uncertain `<!-- UNVERIFIED (S{n}): … -->`
 for reconcile, tagged with this session (`Ch{c} S{n}` if it has a
 chapter). Everything
-else that moves existing text keeps it verbatim.
+else that moves existing text keeps it verbatim. Voices shape the
+recap, Story entries and NPC passages; records stay plain
+(Campaign Log, timeline, Carry-Forward, Keeper Checklist,
+`## Current Status`, entity Overviews). A GM correction of voiced
+prose: replace it, then offer to fold the lesson into the voice
+(`shared/voice.md`).
 
 ## Workflow
 
@@ -108,9 +113,20 @@ Steps 2 and 4.
 
 ### 2. Narrative Recap
 
+**Voices first:** `vault_check.py <vault> voices`, plus one naming
+any PC who died or left this session and any NPC the GM gives a
+story (else left out). `# off:
+vault.voices` → no voices, as before. A `(none)` voice → draft it
+per `shared/voice.md` for the GM's yes: the campaign's before the
+recap, a PC's before their Story entry, an NPC's when the GM gives
+them a story; on a no, say `vault.voices: false` stops the asking.
+An `(ambiguous: A, B)` row: ask the GM which note.
+
 Write `## Narrative Recap` from the Play Notes, with every entity
-`[[wiki-linked]]`; tone per `references/recap-formats.md`, set
-from the chapter overview and recent notes. Add Quick Bullets and
+`[[wiki-linked]]`, in the campaign voice (off or none: tone per
+`references/recap-formats.md`, set from the chapter overview and
+recent notes; export: the Summary verbatim, in the voice only when
+the GM asks). Add Quick Bullets and
 Memorable Moments when the template's conditions call for them. Run
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/moments.py"
 <vault> status`; on `moments on`, read
@@ -137,6 +153,12 @@ Write each roster PC's entry per `shared/character-story-format.md`
 — read it; its Appending command takes 3c's values. Source: Steps
 2–3 only. Current session only — missing earlier entries are
 vault-ingest's job.
+
+**Storied NPCs** (voiced, appeared): a passage each, in voice:
+`vw npc-story --wrapup "<wrap-up>" --as-of "<asOfSession value>"`,
+entries under `# [[NPC Name]]` lines; dry-run, then `--write`. On a
+HINT, add its `--section` only if those passages are this NPC's
+story, not an appearance log or notes; unsure, ask the GM.
 
 ### 3c. PC Sheet Refresh
 
@@ -234,8 +256,8 @@ creating entities.
 - **Timeline:** `- **{in_game_date}** — {description}`
   (`[[Event_Name]] — {summary}` when linked), or the shape this
   timeline already uses. `vw timeline --under "<the heading this
-  timeline files the session under>" --write` places them (`--after`
-  sites a new heading).
+  timeline files the session under>" --write` places them (a new
+  heading takes its hashes, `--after` sites it).
 - **Events:** create an Event file from `_Templates/_Template_Event.md`
   (dated with `in_game_date:`) when a moment meets its threshold — see
   `shared/templates/event.md`'s comment if the vault copy lacks one.
@@ -285,8 +307,10 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
   --increment sessions_played \
   --set last_session="[[<this session's index title>]]" \
   --set last_play_date=YYYY-MM-DD \
-  --session N --date YYYY-MM-DD
+  --session "<asOfSession value>" --date YYYY-MM-DD
 ```
+
+`--session` takes the Overview's own shape, as in 3c.
 
 Show the dry-run rows to the GM as-is — they are the confirmation
 prompt. Yes → re-run with `--write`; no → skip. Leave

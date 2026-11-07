@@ -164,7 +164,7 @@ Bargains they might propose.
 Concept: [One sentence]
 Appearance: [Distinctive detail]
 Portrayal: [How to play at table]
-Voice: [Speech pattern]
+Speech: [Speech pattern]
 
 AIMS:
 - Agenda: [Immediate / Short-term / Long-term]
