@@ -18,11 +18,13 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from install_layout import LAYOUT
 from vaultlib import parse_version
 
 # skills/shared/scripts/ -> the plugin root, where CHANGELOG.md sits. A skill
 # zip install has none.
-CHANGELOG = Path(__file__).resolve().parents[3] / "CHANGELOG.md"
+CHANGELOG: Path | None = (LAYOUT.root / "CHANGELOG.md"
+                          if LAYOUT.root is not None else None)
 
 _RELEASE = re.compile(r"^## \[(\d+(?:\.\d+)*)\]")
 _HEADING = re.compile(r"^#{1,6} ")
@@ -99,8 +101,11 @@ def issue_releases(changelog: str) -> dict[int, ReleaseNote]:
 def plugin_releases(path: Path | None = None) -> dict[int, ReleaseNote] | None:
     """issue_releases over the plugin's CHANGELOG; None when it cannot be
     read (a skill zip install ships without it)."""
+    source = path or CHANGELOG
+    if source is None:
+        return None
     try:
-        text = (path or CHANGELOG).read_text(encoding="utf-8")
+        text = source.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         return None
     return issue_releases(text)

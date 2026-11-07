@@ -77,8 +77,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import schema_rules  # noqa: E402
+from install_layout import LAYOUT  # noqa: E402
 
-SYSTEMS_DIR = Path(__file__).resolve().parents[2] / "ttrpg-expert" / "systems"
+SYSTEMS_DIR = LAYOUT.shared.parent / "ttrpg-expert" / "systems"
 # Each system directory ships a licence notice; it is not rules content.
 NOTICE_FILE = "NOTICE.md"
 

@@ -1529,7 +1529,8 @@ def convert(vault: Path, *, site: Path | None = None, given: dict[str, Any] | No
 
 VAULT_STYLES = "_meta/prop-styles"
 # The plugin's own styles, beside the publish tool the move builds with.
-PLUGIN_STYLES = PUBLISH_TOOL.parent.parent / "prop-styles"
+PLUGIN_STYLES = (PUBLISH_TOOL.parent.parent / "prop-styles"
+                 if PUBLISH_TOOL is not None else None)
 MISSING_STYLE = "a listing style that is not there"
 
 
@@ -1541,7 +1542,7 @@ def missing_styles(c: Conversion) -> None:
     gone. The move is not built or checked while one is missing."""
     for address, choice in sorted((c.decisions.get("listings") or {}).items()):
         style = str((choice or {}).get("style") or "").strip()
-        if not style or any((root / style / "layout.html").is_file() for root in (c.vault / VAULT_STYLES, PLUGIN_STYLES)):
+        if not style or any((root / style / "layout.html").is_file() for root in (c.vault / VAULT_STYLES, PLUGIN_STYLES) if root is not None):
             continue
         c.row(PERSON, f"listings.{address}.style", f'no style "{style}" in {VAULT_STYLES}/ or the plugin '
               f"({PLUGIN_STYLES}); copy the style's folder into {VAULT_STYLES}/, or name another style")

@@ -70,6 +70,9 @@ class GmaTests(unittest.TestCase):
             self.assertEqual(_run(["relink", *argv])[0], 3)
 
     def test_publish_signal_death_maps_to_1(self):
+        # POSIX execs node; the Windows path (subprocess.call) is the one
+        # that maps exit codes.
+        self.enterContext(mock.patch.object(gma.os, "name", "nt"))
         with mock.patch.object(gma.subprocess, "call", return_value=-15):
             self.assertEqual(gma.main(["publish", "doctor"]), 1)
         with mock.patch.object(gma.subprocess, "call", return_value=7):
@@ -148,6 +151,7 @@ class GmaTests(unittest.TestCase):
         old = vaultlib.PUBLISH_TOOL
         vaultlib.PUBLISH_TOOL = stub
         self.addCleanup(setattr, vaultlib, "PUBLISH_TOOL", old)
+        self.enterContext(mock.patch.object(gma.os, "name", "nt"))
         self.assertEqual(gma.main(["publish", "doctor"]), 7)
 
     def test_full_tree_has_every_command(self):
@@ -243,7 +247,7 @@ class GmaTests(unittest.TestCase):
 
     def test_missing_node_exits_1(self):
         import unittest.mock as mock
-        with mock.patch("subprocess.call", side_effect=FileNotFoundError):
+        with mock.patch("os.execvp", side_effect=FileNotFoundError):
             code, _, err = _run(["publish", "doctor"])
         self.assertEqual(code, 1)
         self.assertIn("needs node", err)

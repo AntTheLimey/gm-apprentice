@@ -45,7 +45,7 @@ from vault_write import (set_block, template_body, template_frontmatter,
 from vaultlib import (PUBLISH_TOOL, SETTINGS_FILE, STAMP_KEY, STATE_FILE,
                       SettingsUnavailable, StateUnreadable, _read_state, entity_type,
                       extract_frontmatter, forget_settings, parse_version,
-                      plugin_version, read_stamp, settings, settings_default,
+                      plugin_tool_problem, plugin_version, read_stamp, settings, settings_default,
                       settings_set, stamp_file, vault_files, vault_layout)
 
 SHARED = Path(__file__).resolve().parent.parent
@@ -510,7 +510,7 @@ def main(argv: list[str] | None = None) -> int:
             if found is None:
                 raise ScaffoldError("cannot determine the plugin version")
             if vault_layout(vault) == "none" and (
-                    not shutil.which("node") or not PUBLISH_TOOL.is_file()):
+                    not shutil.which("node") or plugin_tool_problem(PUBLISH_TOOL)):
                 # The settings defaults are the publish tool's, and so is the
                 # new vault's settings file: asking it first would say "could
                 # not read the vault's settings" of a vault that is not there.

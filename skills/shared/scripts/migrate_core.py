@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Callable, Literal, Optional
 
 import vaultlib
+from install_layout import MISSING_TOOL
 from vaultlib import (PUBLISH_TOOL, SETTINGS_FILE, STATE_FILE,
                       forget_settings, frontmatter_span)
 
@@ -216,8 +217,8 @@ def plugin_tool(args: list[str]) -> tuple[int, str, str]:
     if not node:
         raise StepFailed("node is not on PATH; install Node.js, then run "
                          "migrate.py again")
-    if not PUBLISH_TOOL.is_file():
-        raise StepFailed(f"the publish tool is not at {PUBLISH_TOOL}")
+    if PUBLISH_TOOL is None or not PUBLISH_TOOL.is_file():
+        raise StepFailed(vaultlib.plugin_tool_problem(PUBLISH_TOOL) or MISSING_TOOL)
     try:
         proc = vaultlib.run_tool(
             [node, str(PUBLISH_TOOL), *args], capture_output=True, text=True,

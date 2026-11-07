@@ -179,6 +179,7 @@ from schema_rules import (
 )
 # LINK_RE and SKIP_DIRS are re-exported: they were part
 # of this module's surface before vaultlib existed.
+from install_layout import MISSING_TOOL
 from vaultlib import (  # noqa: F401
     FENCE_RE,
     HEADING_RE,
@@ -200,6 +201,7 @@ from vaultlib import (  # noqa: F401
     PublishToolTooOld,
     PublishToolUnavailable,
     publish_tool_problem,
+    plugin_tool_problem,
     publisher_lines,
     stub_kept,
     use_publish_tool,
@@ -806,9 +808,9 @@ def check_relationships(vault: Path, folder: str | None = None,
     node = shutil.which("node")
     if not node:
         return _relationships_tool_row("node is not on PATH")
-    if not PUBLISH_TOOL.is_file():
-        return _relationships_tool_row(
-            f"the publish tool is not at {PUBLISH_TOOL.as_posix()}")
+    problem = plugin_tool_problem(PUBLISH_TOOL)
+    if PUBLISH_TOOL is None or problem:
+        return _relationships_tool_row(problem or MISSING_TOOL)
     args = [node, str(PUBLISH_TOOL), "relationships", "check", "--json",
             "--vault", str(vault)]
     if folder:
@@ -1675,8 +1677,8 @@ def _publish_tool_for(site: Path) -> tuple[Path | None, str, str | None]:
              if pin.source == "none" else
              f"the plugin's publish tool (the site pins {pin.version}, not "
              f"installed yet)")
-    if not PUBLISH_TOOL.is_file():
-        return None, label, f"the publish tool is not at {PUBLISH_TOOL}"
+    if PUBLISH_TOOL is None or not PUBLISH_TOOL.is_file():
+        return None, label, plugin_tool_problem(PUBLISH_TOOL)
     return PUBLISH_TOOL, label, None
 
 
@@ -1720,8 +1722,8 @@ def ask_publish_tool(vault: Path, args: list[str],
         tool: Path | None = PUBLISH_TOOL
         label = "the plugin's publish tool (the vault has no site to ask)"
         why = None
-        if not PUBLISH_TOOL.is_file():
-            tool, why = None, f"the publish tool is not at {PUBLISH_TOOL}"
+        if PUBLISH_TOOL is None or not PUBLISH_TOOL.is_file():
+            tool, why = None, plugin_tool_problem(PUBLISH_TOOL)
         used: str | None = label
     elif config is None:
         # A site that is off is not a tool that could not be asked: there is
