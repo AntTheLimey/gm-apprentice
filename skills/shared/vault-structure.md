@@ -1,6 +1,6 @@
 # Default Vault Structure
 
-`vault_scaffold.py` creates this layout on first setup; a test holds
+`gma vault-scaffold` creates this layout on first setup; a test holds
 the tree and the script in step. `_midwife/` and `_inbox/` are made on demand.
 `_meta/dndbeyond/` is made by the D&D Beyond sync: one file per synced
 character, holding the names D&D Beyond gave at the last sync. It is never published.
@@ -117,7 +117,7 @@ chapter; adventures stay there until promoted, or for good.
 - campaign-qa ignores it — never lint it for schema.
 - session-prep and session-play read it: it often holds a
   chapter's only forward design. Resolve the directory through
-  `_midwife/index.md` (or `plans_index.py`), never from a
+  `_midwife/index.md` (or `gma plans-index`), never from a
   chapter-title slug; if the match is ambiguous, ask. `Ingested`
   means it was already promoted to `Planning/`.
 - Its files have no frontmatter — find them by path, not by

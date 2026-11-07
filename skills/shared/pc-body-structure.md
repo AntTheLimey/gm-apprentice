@@ -71,7 +71,7 @@ which the publish tool matches against the sheet's Encumbrance table.
 The block **must** sit outside any `<!-- gm-only -->` or
 `<!-- spoiler -->` fence (it publishes) and before the protected
 `## Notes`/`## GM Notes` sections. The GM may also edit it directly;
-the next wrap-up reconciles it either way. `vault_check.py pc-body`
+the next wrap-up reconciles it either way. `gma vault-check <vault> pc-body`
 (see `shared/vault-access.md`) checks placement and field shape.
 
 ## A sheet kept somewhere else
@@ -81,7 +81,7 @@ PDF, paper. Such a PC has no `## Stat Sheet`, an empty one, or one
 still holding the template's values, and its page publishes with a
 Character Sheet tab that is empty or shows only defaults.
 
-- `vault_check.py pc-body` reports these as a WARNING, in any system,
+- `gma vault-check <vault> pc-body` reports these as a WARNING, in any system,
   along with a Stat Sheet that holds only a pointer or a "TBD", and
   one that is the template's but for a single line.
 - The publish build names, in one line, every PC whose note gave the

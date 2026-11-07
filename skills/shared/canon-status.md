@@ -32,7 +32,7 @@ canon_status: DRAFT    # AUTHORITATIVE | SUPERSEDED | STUB
 
 ## Repairing Legacy Keys
 
-Run `stamp_entities.py <vault> --repair-canon [--write]`; the
+Run `gma stamp-entities <vault> --repair-canon [--write]`; the
 cases below are its specification, and apply by hand to any file
 you touch that carries a legacy key.
 

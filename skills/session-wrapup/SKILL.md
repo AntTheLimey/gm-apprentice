@@ -13,15 +13,13 @@ with the whole path quoted; `gma llms` lists its commands.
 **On first invocation:** read `shared/session-principles.md` and
 run its Version Gate, then read `shared/session-document-chain.md`.
 
-**Placing:** `vw` is `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py"
-<vault>`: you write, it places, text on stdin (`<<'EOF'`).
+**Placing:** `vw` is `gma vault-write <vault>`: you write, it places, text on stdin (`<<'EOF'`).
 
 **Session index:** stamp it (dry-run, then `--write` on
 confirmation):
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
+gma stamp-entities \
   <vault> "<session index>" --set status=wrap-up \
   --set play_date=YYYY-MM-DD --set in_game_date="<fictional date>" \
   --set documents.wrap_up="[[Chapter_CC_Session_NN_Wrap_Up]]"
@@ -103,12 +101,10 @@ with an index but no Play Notes: `vw play-notes-new
 --session "<index>" --play-date D [--export PATH]`. Without an
 export, ask the GM for notes (paste, path, or dictation) for them.
 Read the PC roster and the session's Plan for planned-vs-actual.
-`plan_check.py <plan> --inventory` gives per-section status and
+`gma plan-check <plan> --inventory` gives per-section status and
 word counts but not scene titles — open the plan body for those.
 What the last session left open (for What Carries Forward and the
-Keeper Checklist) comes from `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py"
-<vault> --carry --before "<session index>"`; don't read that Wrap-Up.
+Keeper Checklist) comes from `gma session-context <vault> --carry --before "<session index>"`; don't read that Wrap-Up.
 
 **gmassistant.app export:** if the Play Notes contain a
 `## Memorable Moments` heading, they are a gmassistant.app
@@ -117,7 +113,7 @@ Steps 2 and 4.
 
 ### 2. Narrative Recap
 
-**Voices first:** `vault_check.py <vault> voices`, plus one naming
+**Voices first:** `gma vault-check <vault> voices`, plus one naming
 any PC who died or left this session and any NPC the GM gives a
 story (else left out). `# off:
 vault.voices` → no voices, as before. A `(none)` voice → draft it
@@ -132,17 +128,14 @@ Write `## Narrative Recap` from the Play Notes, with every entity
 recent notes; export: the Summary verbatim, in the voice only when
 the GM asks). Add Quick Bullets and
 Memorable Moments when the template's conditions call for them. Run
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/moments.py"
-<vault> status`; on `moments on`, read
+`gma moments <vault> status`; on `moments on`, read
 `references/memorable-moments.md`.
 The recap is the single source of truth — session-prep reuses it,
 never regenerates it.
 
 ### 3. PC Carry-Forward
 
-**Active PC roster** (also used by 3b and 3c): `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py"
-<vault> active-pcs`, minus any PC off-screen this session.
+**Active PC roster** (also used by 3b and 3c): `gma vault-check <vault> active-pcs`, minus any PC off-screen this session.
 
 Per active PC, one `#### [[PC Name]] (Player)` block with the
 template's labels (omit empty ones), under `### PC Carry-Forward`:
@@ -176,7 +169,7 @@ the narrative.
    Dry-run, review, then re-run with `--write`:
 
    ```bash
-   python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
+   gma stamp-entities \
      <vault> Characters/PCs/A.md Characters/PCs/B.md \
      --session "<asOfSession value>" --date YYYY-MM-DD --retag old-tag=new-tag
    ```
@@ -243,7 +236,7 @@ creating entities.
   `<path><TAB>Campaign Log<TAB>{bullet}`, or
   `GM Notes/Behind the Scenes`. If it warns that a GM Notes has no
   hidden-markers, tell the GM once per wrap-up
-  (`vault_check.py gm-leak --fix` repairs it). Each
+  (`gma vault-check <vault> gm-leak --fix` repairs it). Each
   `(projected)` entry (Behind the Scenes or Under Pressure) on an
   entity that appeared: drop the marker if it played, strike it
   through with `not played` if play went elsewhere, or leave it if
@@ -267,22 +260,20 @@ creating entities.
   `shared/templates/event.md`'s comment if the vault copy lacks one.
 
 **Validate** with one call each, then fix every ERROR before
-presenting receipts: `vault_check.py frontmatter --folder <dir>`
-per folder touched, `vault_check.py relationships` with `--file
+presenting receipts: `gma vault-check <vault> frontmatter --folder <dir>`
+per folder touched, `gma vault-check <vault> relationships` with `--file
 <path>` repeated for every vault-relative path Step 4 created,
 edited or re-pointed — new/updated entities, re-pointed container
-children, cross-entity claim targets, Event files — `vault_check.py
-pc-body` with `--file Characters/PCs/{Name}.md` repeated for every
+children, cross-entity claim targets, Event files — `gma vault-check <vault> pc-body` with `--file Characters/PCs/{Name}.md` repeated for every
 PC refreshed in 3c (a WARNING about a missing or untouched
 `## Stat Sheet`: `shared/pc-body-structure.md` § A sheet kept
 somewhere else; when `pc-body` emits no Stat Sheet rows there is
 nothing to ask, and never ask where a sheet is kept on a campaign
-that does not publish sheets), `vault_check.py wrapup --file
-<wrap-up>`. A tone WARNING on a relationship you wrote or changed
+that does not publish sheets), `gma vault-check <vault> wrapup --file <wrap-up>`. A tone WARNING on a relationship you wrote or changed
 this session: use the word the row names, or where it names none the
 listed word that fits (`relationships words` in the publish tool prints
 them). Leave any
-other tone WARNING to campaign-qa; never run `tones.py` here. If
+other tone WARNING to campaign-qa; never run `gma tones` here. If
 Step 4 ran as sub-agents, also run `relationships` once more with
 `--newer-than <session index>` (stamped once, before Step 1, and
 never touched again) as a completeness cross-check on the `--file`
@@ -305,7 +296,7 @@ calls stay with you.
 If `_Campaign/Campaign Overview.md` exists:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
+gma stamp-entities \
   <vault> "_Campaign/Campaign Overview.md" \
   --set current_game_date="<in-game date at session end>" \
   --increment sessions_played \
@@ -337,7 +328,7 @@ presents the three-state prompts.
 ### 4d. What came out tonight
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/reveal_scan.py" \
+gma reveal-scan \
   <vault> "<index>" --also <path> --also <path>
 ```
 
@@ -357,7 +348,7 @@ Then rewrite any Narrative Recap, Campaign Log or Timeline line this
 run wrote that states what they kept hidden, so it says only what came
 out (the truth can go in GM Notes `### Behind the Scenes`). Link each
 picked prop's note (`[[Note]]`) from the recap line where it came up;
-reveal.py writes its `revealed_in` itself. On none, skip the rest.
+gma reveal writes its `revealed_in` itself. On none, skip the rest.
 
 For each picked secret, edit that page so the fact is hidden nowhere
 on it, in whatever way suits how it came out, and remove the spoiler
@@ -366,7 +357,7 @@ scan's first line, one `--publish` per note to publish and one
 `--released` per secret, each `<path>` as the scan prints it:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/reveal.py" \
+gma reveal \
   <vault> --session "<title>" \
   --publish <path> --released "<path>=<what came out>"
 ```
@@ -396,9 +387,7 @@ Run `shared/reconcile.md`; on approval it promotes the session to
 status `wrap-up` (session-prep runs reconcile as a fallback), and
 don't publish an unreviewed Wrap-Up silently. In a vault where step
 6.1 applies, ask once: "Publish the Wrap-Up now, or after
-reconcile?" Only on "now", run `node "$TOOL" manifest publish-played
---config <site_dir>/vault.config.json --session "<index>"
---include-unreviewed` (`$TOOL` as in publish-site; `<index>` relative
+reconcile?" Only on "now", run `gma publish manifest publish-played --config <site_dir>/vault.config.json --session "<index>" --include-unreviewed` (`<index>` relative
 to the vault). It waives only the review check for this one session:
 it still ticks the index only with a Wrap-Up that pairs with it and
 will publish, on a current site pin. Report what it ticked; if it

@@ -44,8 +44,8 @@ class WrapupRecapLinkTests(unittest.TestCase):
 
     def test_reveal_writes_revealed_in_itself(self):
         self.assertIn("revealed_in", self.step)
-        self.assertRegex(self.step, r"(?s)reveal\.py.{0,40}writes.{0,80}"
-                                    r"revealed_in|revealed_in.{0,80}reveal\.py")
+        self.assertRegex(self.step, r"(?s)gma reveal.{0,40}writes.{0,80}"
+                                    r"revealed_in|revealed_in.{0,80}gma reveal")
 
 
 class MakingAPropTests(unittest.TestCase):
@@ -103,7 +103,7 @@ class RoutingTests(unittest.TestCase):
     def test_vault_access_row(self):
         self.assertRegex(read("shared/vault-access.md"),
                          r"\| File a new prop in its chapter's `?Props/`?[^|]*"
-                         r"\| `gma vault-write prop-new`")
+                         r"\| `gma vault-write VAULT prop-new \[options\]`")
 
 
 class HandsTests(unittest.TestCase):

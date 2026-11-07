@@ -38,7 +38,7 @@ GRANDFATHERED_FLAGS: dict[str, str] = {}
 # Full command lines that stop short on purpose, by where they sit, with why.
 # An entry the scan no longer finds fails (test_prefix_allowances_are_used).
 PREFIX_ONLY = {
-    "skills/session-wrapup/SKILL.md:12":
+    "skills/session-wrapup/SKILL.md:16":
         "defines the shorthand `vw` that the later steps extend",
 }
 

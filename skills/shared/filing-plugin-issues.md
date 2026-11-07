@@ -13,7 +13,7 @@ note or a memory note of your own.
 2. **Record the stand-in** once it is built, with the issue it waits on:
 
    ```text
-   python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py" workaround add "<vault>" --issue N --what "<one plain line>" --kind note --where <path>
+   gma workaround add "<vault>" --issue N --what "<one plain line>" --kind note --where <path>
    ```
 
    `--kind` is note, field, css, script, meta or memory. Give a

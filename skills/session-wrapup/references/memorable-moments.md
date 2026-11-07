@@ -1,9 +1,7 @@
 # Memorable Moments
 
-Read when `moments.py <vault> status` says `moments on`: the site
+Read when `gma moments <vault> status` says `moments on`: the site
 shows a wrap-up's Memorable Moments as cards on its Story page.
-`moments.py` is `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/moments.py"`.
 
 Players read every card. A moment comes only from what happened at
 the table as the players saw it (the Play Notes, the player-facing
@@ -30,22 +28,21 @@ recap): never from GM Notes, gm-only text or a secret.
   ```
 
 - Send the section with the other `##` sections.
-- Then run `moments.py <vault> check "<wrap-up>"` and fix each
+- Then run `gma moments <vault> check "<wrap-up>"` and fix each
   moment it names (`UNTAGGED`, `UNKNOWN`) before going on.
 
 ## Back-fill, offered once per campaign
 
 When status's `backfill` line says `not offered`, offer once, after
 Step 5, to tag the moments in past wrap-ups and write moments for
-those with none. `moments.py <vault> list --except "<this
-wrap-up>"` names them; the GM picks all, some or none. Then run `moments.py <vault> offered`, whatever
+those with none. `gma moments <vault> list --except "<this wrap-up>"` names them; the GM picks all, some or none. Then run `gma moments <vault> offered`, whatever
 the answer, so it is never offered again.
 
 For each wrap-up picked:
 
-- With moments: `moments.py <vault> show "<wrap-up>"` numbers them.
+- With moments: `gma moments <vault> show "<wrap-up>"` numbers them.
   Pick each untagged one's kind and send `N<TAB>kind` rows to
-  `moments.py <vault> tag "<wrap-up>"` (dry run, then `--write`).
+  `gma moments <vault> tag "<wrap-up>"` (dry run, then `--write`).
   It changes nothing but the tags.
 - With none: write them from that session's Play Notes (its
   player-facing recap if it has none) as above, show the GM, and on

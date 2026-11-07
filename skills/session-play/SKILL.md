@@ -12,17 +12,14 @@ with the whole path quoted; `gma llms` lists its commands.
 
 **On first invocation:** read `shared/session-principles.md` and
 run its Version Gate first. Then read
-`shared/session-document-chain.md` and run `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py"
-<vault> --play` — the plan brief with every scene's full text (scene
+`shared/session-document-chain.md` and run `gma session-context <vault> --play` — the plan brief with every scene's full text (scene
 files the Plan links included), NPC table, world state, contingencies
 and end objectives; a paused scene's `## Paused` snapshot comes first
 in its text, and paused scenes are listed (in full with no Plan).
 Open the Plan file only for a section the brief drops. With a paused
 scene in the Plan (or no Plan), your first reply this session opens
 with where it stopped, in the usual 1-5 sentences. Also run
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py"
-<vault> voices` once; dialogue, read-aloud,
+`gma vault-check <vault> voices` once; dialogue, read-aloud,
 scene-setting and handouts use the campaign voice, or a voiced
 character's own (`# off: vault.voices`, or `(none)` for the voice
 that prose takes: as before). Never draft one.
@@ -85,8 +82,8 @@ Load the file directly — don't search.
 
 | Need | Go to |
 |------|-------|
-| Rules dispute | `rules_lookup.py {system} "<term>"` first — one row, cited `file:line`, is the answer at the table. No python: `ttrpg-expert/systems/{system}/rules-reference.md` (CoC, D&D, PF2e, FitD, Generic) or `mechanics.md` (GURPS) |
-| Combat mechanics | `ttrpg-expert/systems/{system}/combat-reference.md` (CoC) or `combat.md` (GURPS — for sheet arithmetic disputes, run `gurps_check.py <sheet> defenses` or `damage` instead of hand-checking) or `conditions-rules.md` (D&D) or `rules-reference.md` (PF2e) or `mechanics.md` (FitD) |
+| Rules dispute | `gma rules-lookup {system} "<term>"` first — one row, cited `file:line`, is the answer at the table. No python: `ttrpg-expert/systems/{system}/rules-reference.md` (CoC, D&D, PF2e, FitD, Generic) or `mechanics.md` (GURPS) |
+| Combat mechanics | `ttrpg-expert/systems/{system}/combat-reference.md` (CoC) or `combat.md` (GURPS — for sheet arithmetic disputes, run `gma gurps-check <sheet> defenses` or `damage` instead of hand-checking) or `conditions-rules.md` (D&D) or `rules-reference.md` (PF2e) or `mechanics.md` (FitD) |
 | Improvise NPC | `ttrpg-expert/npc-generation.md` §The 3-Line NPC (Quick Generation) |
 | Random encounter | `ttrpg-expert/random-generation.md` §Random Encounter Generation |
 | Random NPC | `ttrpg-expert/random-generation.md` §Random NPC Generator |
@@ -95,7 +92,7 @@ Load the file directly — don't search.
 | Scene fell flat | `ttrpg-expert/active-play-management.md` §Mid-Session Adjustments |
 | Pacing / tension | `ttrpg-expert/active-play-management.md` §Pacing and Flow |
 | Improvisation help | `ttrpg-expert/active-play-management.md` §Improvisation |
-| Narrative plan | `plans_index.py <vault> --chapter "<chapter>"` — Planning/ entities and the resolved midwife adventure with per-file summaries; `AMBIGUOUS` means ask, never guess |
+| Narrative plan | `gma plans-index <vault> --chapter "<chapter>"` — Planning/ entities and the resolved midwife adventure with per-file summaries; `AMBIGUOUS` means ask, never guess |
 
 For GM-craft questions, read only the routed section and deliver
 the answer, not a summary.
