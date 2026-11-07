@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.11.6] — 2026-11-07
+
+Every skill now runs its vault scripts and the publish tool through `gma`, and `gma` finds its own install. Nothing for a GM to do; the publish tool is 1.70.1.
+
+### Changed
+
+- **The skills call only `gma`.** Every vault script and the publish tool run as a `gma <command>` line, so the skills no longer depend on a Claude Code variable to find where the plugin lives. `gma` finds its own install, and the scripts' hints and the generated text name `gma` too. A test keeps the skill text `gma`-only.
+- **Publish tool 1.70.1:** the fix line for a link that is not shown on the site names `gma links`.
+
+### Fixed
+
+- **Stopping a background `gma publish serve` stops the server.** `gma publish` now hands over to the publish tool instead of running it as a child, so ending the background job ends the server rather than leaving it running. When the publish tool is not installed, `gma publish` says so plainly and stops.
+
 ## [1.11.5] — 2026-11-06
 
 Four bug fixes.
