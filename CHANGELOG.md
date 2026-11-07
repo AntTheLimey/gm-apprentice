@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.11.5] — 2026-11-06
+
+Four bug fixes.
+
+### Fixed
+
+- **A note that starts with a byte-order mark** (some Windows editors save one) is now read: `vault_write.py story` and `npc-story` found no such PC or NPC, and the scripts' checks read it as having no frontmatter (#593).
+- **Quoted frontmatter values are decoded** by the scripts' reader as YAML reads them: `"a \"b\""` reads `a "b"`, `"C:\\x"` reads `C:\x`, an escaped tab is a tab, and `'O''Brien'` reads `O'Brien`. Values the scripts wrote with escapes used to read back with their backslashes (#597). A shared set of test notes checks the publish tool's reader against the same values.
+- **`migrate.py apply`** no longer lists a choice whose step failed under "not offered" as well; a choice the run never reached because it stopped reads "not run" (#595).
+- **session-wrapup** never replaces the Campaign Overview's `current_game_date` with a vaguer one: with no date in the notes it keeps the date there, or moves it on only as far as the notes say time passed, and asks when unsure (#600).
+
 ## [1.11.4] — 2026-11-06
 
 Voices, part two (#460): the skills draft and use the voices. With `vault.voices` on (the default), session-wrapup and session-prep read the campaign's voice and each character's before writing story prose, and draft a missing one for the GM's yes; session-play and ttrpg-expert use the voices they find and never draft. Records stay plain. The update refreshes an unedited character-story template and asks about an edited one, as usual.
