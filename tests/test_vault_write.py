@@ -2255,6 +2255,12 @@ class LinkListTests(unittest.TestCase):
                          ['[[A "B"]]', "[[C\\D]]", "[[Plain]]"])
 
 
+class StripCommentTests(unittest.TestCase):
+    def test_an_escaped_quote_does_not_end_the_value(self):
+        self.assertEqual(vw.strip_comment(' "A \\"B\\"" # note'), '"A \\"B\\""')
+        self.assertEqual(vw.strip_comment(" 'O''Brien' # note"), "'O''Brien'")
+
+
 class ByteOrderMarkTests(unittest.TestCase):
     """A note saved with a UTF-8 byte-order mark is still found (#593)."""
 

@@ -500,7 +500,8 @@ for raw, expected, label in [
     ('"C:\\\\x"', "C:\\x", "an escaped backslash is one backslash"),
     ('"a\\tb"', "a\tb", "an escaped tab is a tab"),
     ('"caf\\u00e9"', "caf\u00e9", "a unicode escape is decoded"),
-    ('"\\x41"', "\\x41", "a YAML-only escape is kept as authored"),
+    ('"\\x41\\tz"', "A\tz", "an unusual escape does not stop the rest"),
+    ('"\\q"', "\\q", "an escape YAML lacks is kept as authored"),
 ]:
     check(f"scalar_value: {label}",
           lambda raw=raw: [scalar_value(raw)], [expected])

@@ -526,7 +526,8 @@ def strip_comment(value: str) -> str:
     through its closing quote, so a # inside the quotes survives."""
     if value.lstrip().startswith("#"):
         return ""
-    quoted = re.match(r"""^\s*("[^"]*"|'[^']*')""", value)
+    # through the unescaped closing quote: `"A \\"B\\""` is one value
+    quoted = re.match(r"""^\s*("(?:\\.|[^"\\])*"|'(?:''|[^'])*')""", value)
     if quoted:
         return quoted.group(1).strip()
     return COMMENT_TAIL_RE.sub("", value)

@@ -1,5 +1,5 @@
 {
-  "_comment": "Frontmatter values both readers must agree on: the scripts' vaultlib.extract_frontmatter and the publish tool's parseNote (#593, #597). Vectors marked yaml_scalar hold exactly what vaultlib.yaml_scalar writes for the value (tests/test_vaultlib.py checks). YAML-only escapes (\\x41, \\e, \\N) are left out: yaml_scalar never writes them and the scripts' reader keeps them as written.",
+  "_comment": "Frontmatter values both readers must agree on: the scripts' vaultlib.extract_frontmatter and the publish tool's parseNote (#593, #597). Vectors marked yaml_scalar hold exactly what vaultlib.yaml_scalar writes for the value (tests/test_vaultlib.py checks).",
   "vectors": [
     {
       "name": "escaped double quotes",
@@ -93,6 +93,28 @@
       "value": [
         "a \"b\"",
         "O'Brien",
+        "plain"
+      ]
+    },
+    {
+      "name": "an unusual escape beside a common one",
+      "text": "---\nv: \"a\\tb\\x41 \\e[0m\"\n---\nBody.\n",
+      "key": "v",
+      "value": "a\tbA \u001b[0m"
+    },
+    {
+      "name": "YAML-only escapes",
+      "text": "---\nv: \"\\N\\_\\L\\P\\/\\ x\"\n---\nBody.\n",
+      "key": "v",
+      "value": "   / x"
+    },
+    {
+      "name": "a comma inside a quoted flow-list item",
+      "text": "---\nv: [\"Smith, Jr\", 'Doe, Jane', plain]\n---\nBody.\n",
+      "key": "v",
+      "value": [
+        "Smith, Jr",
+        "Doe, Jane",
         "plain"
       ]
     }

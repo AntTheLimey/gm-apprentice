@@ -668,6 +668,27 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("not offered: template:npc.md", out)
         self.assertNotIn("not run", out)
 
+    def test_a_prefix_a_later_check_shares_is_not_run(self):
+        # CodeRabbit #603: `retire-step:` is offered by more than one check;
+        # until the last of them has run, the choice was not fully looked for.
+        vault = self.new_layout(make_vault(self))
+
+        def boom(x):
+            raise StepFailed("could not")
+        checks = [Check("early", "1.10.30", 2, "early", lambda v: [],
+                        choices=("retire-step:=",)),
+                  Check("one", "1.10.30", 3, "one",
+                        lambda v: [Item("one", CHOICE, ["a or b"], boom,
+                                        wants="a or b")],
+                        choices=("one=",)),
+                  Check("late", "1.10.30", 4, "late", lambda v: [],
+                        choices=("retire-step:=",))]
+        code, out, _ = call([str(vault), "apply", "--choose",
+                             "retire-step:x=retire", "--choose", "one=a"],
+                            checks)
+        self.assertEqual(code, 1)
+        self.assertIn("not run: retire-step:x (the update stopped first)", out)
+
     def test_a_failed_stamp_leaves_unoffered_choices_not_offered(self):
         vault = make_vault(self)
         with mock.patch.object(migrate, "stamp",

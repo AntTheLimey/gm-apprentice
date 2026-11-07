@@ -116,7 +116,7 @@ def _requote(raw: str, value: str) -> str:
     decodes it: #597) or bare."""
     text = raw.strip()
     if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
-        return yaml_scalar(value)
+        return yaml_scalar(value, quoted_int=True)   # "123" stays a string
     return value
 
 

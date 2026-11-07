@@ -183,18 +183,28 @@ QUOTED_SCALAR_RE = re.compile(
 )
 
 
-def _decode_double_quoted(inner: str) -> str:
-    """A double-quoted scalar's content with its escapes decoded (#597).
+# YAML 1.2's double-quoted escapes (spec 5.7), each read on its own so one
+# that is unusual (`\\x41`) does not stop the rest (`\\t`) being decoded.
+_YAML_ESCAPES = {"0": "\0", "a": "\a", "b": "\b", "t": "\t", "\t": "\t",
+                 "n": "\n", "v": "\v", "f": "\f", "r": "\r", "e": "\x1b",
+                 " ": " ", '"': '"', "/": "/", "\\": "\\", "N": "\x85",
+                 "_": "\xa0", "L": "\u2028", "P": "\u2029"}
+_YAML_ESCAPE_RE = re.compile(
+    r"\\(x[0-9A-Fa-f]{2}|u[0-9A-Fa-f]{4}|U[0-9A-Fa-f]{8}|.)", re.DOTALL)
 
-    JSON's escapes are the ones `yaml_scalar` writes (`\\"`, `\\\\`, `\\t`,
-    `\\n`, `\\uXXXX`), so `json.loads` reads them as YAML does. A YAML-only
-    escape JSON lacks (`\\x41`, `\\e`) leaves the content as authored rather
-    than guessing."""
-    try:
-        value = json.loads(f'"{inner}"', strict=False)
-    except ValueError:
-        return inner
-    return value if isinstance(value, str) else inner
+
+def _yaml_escape(m: re.Match[str]) -> str:
+    code = m.group(1)
+    if code[0] in "xuU" and len(code) > 1:
+        return chr(int(code[1:], 16))
+    # an escape YAML does not have is kept as written
+    return _YAML_ESCAPES.get(code, m.group(0))
+
+
+def _decode_double_quoted(inner: str) -> str:
+    """A double-quoted scalar's content with its escapes decoded as YAML
+    reads them (#597); `yaml_scalar` writes a subset of these."""
+    return _YAML_ESCAPE_RE.sub(_yaml_escape, inner)
 
 
 def scalar_value(value: str) -> str:
@@ -215,6 +225,12 @@ def scalar_value(value: str) -> str:
     if text.startswith("#"):
         return ""
     return re.split(r"\s+#", text, maxsplit=1)[0].strip()
+
+
+# One flow-list item: a whole quoted scalar (a comma inside it is content,
+# as in "Smith, Jr") or bare text up to the next comma.
+FLOW_ITEM_RE = re.compile(
+    r"""\s*("(?:\\.|[^"\\])*"|'(?:''|[^'])*'|[^,]*?)\s*(?:,|$)""")
 
 
 def _list_item(raw: str) -> str:
@@ -264,7 +280,7 @@ def extract_frontmatter(content: str) -> dict[str, Any] | None:
             elif value.startswith("[") and value.endswith("]"):
                 # Inline array: aliases: [Doc, "The Colonel"]
                 frontmatter[key] = [
-                    _list_item(v) for v in value[1:-1].split(",")
+                    _list_item(v) for v in FLOW_ITEM_RE.findall(value[1:-1])
                     if v.strip()]
             else:
                 frontmatter[key] = value

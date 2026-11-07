@@ -328,15 +328,17 @@ def _choice_problem(choice: str, value: str | None,
             f"run plan to see the ids")
 
 
-def _check_index(choice: str, todo: list[Check]) -> int:
-    """The index in `todo` of the check that offers `choice`, matched as
-    `_choice_problem` matches it; len(todo) when none does."""
+def _last_check(choice: str, todo: list[Check]) -> int:
+    """The index in `todo` of the last check that may offer `choice`
+    (matched as `_choice_problem` matches it: several checks can share a
+    prefix such as `retire-step:`); len(todo) when none does."""
+    last = len(todo)
     for n, check in enumerate(todo):
         for entry in check.choices:
             base = entry.removesuffix("=")
             if choice == base or (base.endswith(":") and choice.startswith(base)):
-                return n
-    return len(todo)
+                last = n
+    return last
 
 
 def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
@@ -443,10 +445,10 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                   file=sys.stderr)
     emit("Did", did)
     for choice in dict.fromkeys(i for i, _v in chosen if i not in used):
-        # A choice whose check failed or was never reached was not looked
-        # for, so "not offered" would be a guess (#595). A failed stamp
-        # comes after every check (failed == len(todo)).
-        reached = failed is None or _check_index(choice, todo) < failed
+        # A choice not every one of whose checks finished was not fully
+        # looked for, so "not offered" would be a guess (#595). A failed
+        # stamp comes after every check (failed == len(todo)).
+        reached = failed is None or _last_check(choice, todo) < failed
         print(f"not offered: {choice}" if reached else
               f"not run: {choice} (the update stopped first)")
     if person or shown:

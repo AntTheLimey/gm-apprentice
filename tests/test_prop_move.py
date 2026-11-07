@@ -114,7 +114,8 @@ def test_build_props_note_converted() -> None:
     # A quoted hand is read decoded and written escaped again (#597 review):
     # `'o''x-hand'` must not become the broken `'o'x'`.
     for raw, want in (("'o''x-hand'", 'prop_hand: "o\'x"\n'),
-                      ('"a\\\\b-hand"', 'prop_hand: "a\\\\b"\n')):
+                      ('"a\\\\b-hand"', 'prop_hand: "a\\\\b"\n'),
+                      ('"123-hand"', 'prop_hand: "123"\n')):
         out, _, _ = prop_move.convert_build_props_note(
             LETTER.replace("prop_hand: gull-hand", f"prop_hand: {raw}"))
         assert out is not None and want in out, (raw, out)
