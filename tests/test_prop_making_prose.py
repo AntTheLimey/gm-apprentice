@@ -16,7 +16,7 @@ import unittest
 from pathlib import Path
 
 SKILLS = Path(__file__).resolve().parent.parent / "skills"
-SCRIPTS = 'python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/'
+SCRIPTS = "gma "
 
 
 def read(rel):
@@ -53,7 +53,7 @@ class MakingAPropTests(unittest.TestCase):
         self.text = read("ttrpg-expert/making-a-prop.md")
 
     def test_prop_new_by_full_command_line(self):
-        self.assertRegex(self.text, re.escape(SCRIPTS + 'vault_write.py"')
+        self.assertRegex(self.text, re.escape(SCRIPTS + "vault-write")
                          + r"\s*\\?\s*<vault> prop-new")
         for flag in ("--chapter", "--title", "--style", "--hand",
                      "--hand-font", "--hand-who", "--scene", "--write"):
@@ -75,8 +75,8 @@ class MakingAPropTests(unittest.TestCase):
         self.assertNotIn("not built", self.text)
 
     def test_new_writer_on_a_filed_prop(self):
-        self.assertRegex(self.text, r"vault_write\.py <vault> prop-hand(?!s)")
-        self.assertIn('stamp_entities.py <vault> "<note path>" --set prop_hand=<id>',
+        self.assertRegex(self.text, r"gma vault-write <vault> prop-hand(?!s)")
+        self.assertIn('gma stamp-entities <vault> "<note path>" --set prop_hand=<id>',
                       self.text)
 
     def test_hand_only_for_a_writer(self):
@@ -103,7 +103,7 @@ class RoutingTests(unittest.TestCase):
     def test_vault_access_row(self):
         self.assertRegex(read("shared/vault-access.md"),
                          r"\| File a new prop in its chapter's `?Props/`?[^|]*"
-                         r"\| `vault_write\.py prop-new`")
+                         r"\| `gma vault-write prop-new`")
 
 
 class HandsTests(unittest.TestCase):
@@ -118,7 +118,7 @@ class HandsTests(unittest.TestCase):
         # A filed prop's hand is added with prop-hand, with the font the
         # GM names.
         self.assertIn("prop_hand", step)
-        self.assertRegex(step, r"vault_write\.py\s+\"<vault>\" prop-hand --hand <id>\s+"
+        self.assertRegex(step, r"gma vault-write\s+\"<vault>\" prop-hand --hand <id>\s+"
                                r"--hand-font \"<family>\"")
         self.assertRegex(step, r"Ask the GM for the font;\s+never pick one")
 
