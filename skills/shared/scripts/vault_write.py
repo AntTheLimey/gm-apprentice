@@ -62,6 +62,7 @@ import json
 import re
 import sys
 import unicodedata
+from collections import Counter
 from collections.abc import Callable, Collection, Iterable
 from dataclasses import dataclass
 from datetime import date
@@ -1262,33 +1263,32 @@ def story_same_entry(title: str, info: WrapInfo, chapter: int | None,
     return len(parts) == 2 and dash_key(parts[1]) == dash_key(info.title)
 
 
-def _hidden_kinds(text: str) -> set[str]:
-    """The kinds of hidden text `text` holds outside code fences: a gm-only
-    block, a spoiler block (its opener on a line of its own or inline),
-    an HTML comment (not a block marker) or a `%%` comment."""
+def _hidden_kinds(text: str) -> Counter[str]:
+    """How many of each kind of hidden text `text` holds outside code
+    fences: gm-only blocks, spoiler blocks (an opener on a line of its own
+    or inline), HTML comments (not block markers) and `%%` marks."""
     states, _p = scan_body(text, ())
-    kinds = set()
+    kinds: Counter[str] = Counter()
     for st in states:
         if st.in_code:
             continue
         for _pos, word, is_close in vl.markers_in(st.line):
             if not is_close:
-                kinds.add(f"{word} block")
-        if "<!--" in ANY_MARKER_RE.sub("", st.line):
-            kinds.add("HTML comment")
-        if "%%" in st.line:
-            kinds.add("%% comment")
+                kinds[f"{word} block"] += 1
+        kinds["HTML comment"] += ANY_MARKER_RE.sub("", st.line).count("<!--")
+        kinds["%% comment"] += st.line.count("%%")
     return kinds
 
 
 def replaced_asides(doc: Doc, head: Head, body: list[str]) -> list[str]:
     """Each kind of hidden text (`_hidden_kinds`) the section `head` opens
-    holds and `body` does not, compared kind by kind."""
+    holds more of than `body` does: dropping one of two gm-only blocks
+    counts, though the other is kept."""
     end = section_end(doc, head)
     old = _hidden_kinds("".join(doc.lines[head.idx + 1:end]))
     new = _hidden_kinds("\n".join(body) + "\n")
     order = ("gm-only block", "spoiler block", "HTML comment", "%% comment")
-    return [k for k in order if k in old - new]
+    return [k for k in order if old[k] > new[k]]
 
 
 def hidden_hint(what: str, kinds: list[str]) -> str:

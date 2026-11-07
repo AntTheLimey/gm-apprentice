@@ -2978,6 +2978,21 @@ class ReplaceReviewTests(unittest.TestCase):
         self.assertIn("holds a gm-only block the new text lacks", out)
         self.assertNotIn("HTML comment", out)
 
+    def test_hint_counts_blocks_so_one_of_two_dropped_warns(self):
+        block = "<!-- gm-only -->\n{}\n<!-- /gm-only -->\n"
+        story = (STORY + "\n## Session 2 \u2014 The Docks\n\nOld.\n\n"
+                 + block.format("A.") + "\n" + block.format("B."))
+        vault = story_vault(self, {STORY_REL: story})
+        code, out = run(vault, "story", "--wrapup", WRAP_REL, "--replace",
+                        stdin="# Rock\n\nNew.\n\n" + block.format("A."))
+        self.assertEqual(code, 0, out)
+        self.assertIn("holds a gm-only block the new text lacks", out)
+        code, out = run(vault, "story", "--wrapup", WRAP_REL, "--replace",
+                        stdin="# Rock\n\nNew.\n\n" + block.format("A.")
+                        + "\n" + block.format("B."))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("HINT", out)
+
     def test_hint_ignores_markers_in_a_code_fence(self):
         story = (STORY + "\n## Session 2 \u2014 The Docks\n\nOld.\n\n"
                  "```\n<!-- gm-only -->\n%% x %%\n```\n")
