@@ -194,7 +194,7 @@ wiki-links; entity notes link back to sessions in their
 
 **Use when:** checking graph quality without adding content.
 
-1. **Structural:** run `gma graph-check <vault> all`, `gma links` and
+1. **Structural:** run `gma graph-check <vault> all`, `gma links <vault>` and
    `gma vault-check <vault> all` (see `shared/vault-access.md`; `gma links`
    sorts the broken links and fixes the misspelt ones on a yes), then
    interpret on top of their orphan/ambiguity/schema output: type

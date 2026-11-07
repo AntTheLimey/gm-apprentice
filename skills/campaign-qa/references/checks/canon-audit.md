@@ -15,7 +15,7 @@ gma vault-check \
 ```
 
 Audit the listed files, plus each one's backlinks
-(`gma graph-check <vault> backlinks`) — contradictions live where
+(`gma graph-check <vault> backlinks <note-name>`) — contradictions live where
 changes happened. Record the audited session number in the QA
 report so the next run knows its starting point. Run the full
 vault sweep periodically (e.g. every few chapters) or when no

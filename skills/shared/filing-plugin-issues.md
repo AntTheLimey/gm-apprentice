@@ -5,6 +5,9 @@ gm-apprentice plugin cannot do, or does wrong, and builds a stand-in so the
 GM can carry on: a note, a field, a CSS section, a site script, a `_meta`
 note or a memory note of your own.
 
+Outside a skill, `gma` is `python3 "<shared>/scripts/gma.py"`, where
+`<shared>` is the `shared` folder of the installed gm-apprentice skills.
+
 1. **Find or file the issue.** Search `AntTheLimey/gm-apprentice` first
    (`gh issue list --search "<words>"`). If none fits, draft one: what the
    GM wanted, what the plugin did, the plugin version, and the stand-in you

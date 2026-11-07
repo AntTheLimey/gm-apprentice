@@ -90,10 +90,13 @@ Paste your token when it asks. It then:
 **Prefer your token never passes through the assistant?** Run the same
 command in **your own terminal window**, entering the token at the
 hidden `read` prompt (you can paste it — it stays invisible) so it never
-passes through the assistant — for example:
+passes through the assistant. `gma` is not defined in the GM's own
+shell, so hand them the line with `gma` written out in full
+(`python3 "<shared>/scripts/gma.py"`, the real absolute path filled in
+before you hand it over). For example:
 
 ```bash
-read -rs CF_TOKEN; printf '%s' "$CF_TOKEN" | gma publish doctor --set-cloudflare-creds; unset CF_TOKEN
+read -rs CF_TOKEN; printf '%s' "$CF_TOKEN" | python3 "<shared>/scripts/gma.py" publish doctor --set-cloudflare-creds; unset CF_TOKEN
 ```
 
 Chain the three with `;` (not `&&`) so `unset CF_TOKEN` always runs and
