@@ -29,17 +29,16 @@ with the whole path quoted; `gma llms` lists its commands.
 
 All state lives in the vault (Obsidian or plain folder), never in
 memory. Use plain filesystem tools plus the bundled utilities
-(`graph_check.py`, `vault_search.py`, `vault_check.py`) per
+(`gma graph-check`, `gma vault-search`, `gma vault-check`) per
 `shared/vault-access.md`; map the generic operations in
 `references/checks/` (enumerate files, search, read) to them.
 
 **Kept by a player.** On a vault with `vault.kept_by: player`, the
-GM-note checks of `vault_check.py` (gm-leak, stale-drafts, read-aloud,
+GM-note checks of `gma vault-check` (gm-leak, stale-drafts, read-aloud,
 sessions, wrapup) print one row saying so and skip; that is expected,
 not a fault.
 
-**Version check** (first invocation): run `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
+**Version check** (first invocation): run `gma vault-check <vault>
 version`. `OK`/`SETUP` → proceed. `MISMATCH` → announce the row and
 run the update by campaign-organizer's
 `campaign-organizer/references/migration-procedure.md` before any
@@ -60,12 +59,12 @@ wrong vault path; ask for it.
   drafts) — ignore in every mode; never flag them.
 
 **Schema:** field, enum and legacy-key checks come from
-`vault_check.py frontmatter`; a type's fields and place in the
-hierarchy from `schema_rules.py show <type>`; canon states are in
+`gma vault-check <vault> frontmatter`; a type's fields and place in the
+hierarchy from `gma schema-rules show <type>`; canon states are in
 `shared/canon-status.md`.
 
 **Reports** go in `_QA/` at the vault root (create on first use),
-made by `vault_check.py report-new` and counted by `report-stats`
+made by `gma vault-check <vault> report-new` and counted by `report-stats`
 (`references/report-template.md`): findings with resolutions,
 follow-up recommendations.
 
@@ -108,7 +107,7 @@ Read the named check file when the mode runs.
   `status: dead`) missing the block or with it empty despite a
   live arc; `Open threads` still open for an entity the timeline
   shows resolved or dead, or whose payoff a recap already shows
-- PCs with no character sheet — `vault_check.py pc-body`: a
+- PCs with no character sheet — `gma vault-check <vault> pc-body`: a
   WARNING for a PC with no `## Stat Sheet`, or one still holding
   the template's values. Ask where the sheet is kept and write
   `sheet_source` (`shared/pc-body-structure.md`). When `pc-body`
@@ -149,14 +148,14 @@ index-drift checks, also:
 
 - Legacy canon keys (`source_confidence:`, `confidence:`) —
   `references/checks/legacy-canon-field-repair.md`
-- Session document chain — `vault_check.py sessions`: Play Notes
+- Session document chain — `gma vault-check <vault> sessions`: Play Notes
   with no Wrap-Up, sessions stuck at `wrap-up` across prep cycles,
   `documents:` links to missing files
 - Plan entities in `Chapters/{chapter}/Planning/`: missing
   `plan_type`, `chapter` links to non-existent overviews, scene
   plans with empty `participants` or `locations` (arc and
   timeline plans may be sparse)
-- Index drift fix is `index_build.py <vault> --write`, never a
+- Index drift fix is `gma index-build <vault> --write`, never a
   hand edit
 - Wrap-Up conformance is its own pass
   (`references/checks/wrapup-conformance.md`), not part of Graph
@@ -168,7 +167,7 @@ Relationship tones off the 27 listed words. The ones a rule can place
 take one yes; for the rest, read their uses and bring the GM one table
 of proposals to mark up. Also run on "tidy the tones" and after a
 migration that left words to pick. It also counts the hostile ties the
-site shows (`tones.py shown`) as one Info line, and walks them with the GM
+site shows (`gma tones shown`) as one Info line, and walks them with the GM
 (leave, re-tone or hide each) only on a yes.
 
 ### D&D Sheets — `references/checks/dnd-sheets.md`
@@ -179,8 +178,7 @@ dice, slots, attunement, more spent than owned), from one call.
 ### Site Faults — `references/checks/site-faults.md`
 
 Vaults with a site only; skipped without a word otherwise. Faults in
-the notes that change what the site shows, from `vault_check.py
-site-faults`: a note with no page that published pages name, a stray
+the notes that change what the site shows, from `gma vault-check <vault> site-faults`: a note with no page that published pages name, a stray
 `%%`, a code fence never closed, a secret name in a page's text, a
 GURPS sheet row the to-hit calculator cannot fully read. An
 NPC or place the players have met gets a page with its secrets moved
@@ -190,8 +188,7 @@ asked again.
 ### Settings — `references/checks/settings.md`
 
 Faults in the vault's settings file (a misspelt name, a value a setting
-cannot take, an old name, a retired setting), from `vault_check.py
-settings`. Fixes the certain ones on a yes; puts the rest to the GM.
+cannot take, an old name, a retired setting), from `gma vault-check <vault> settings`. Fixes the certain ones on a yes; puts the rest to the GM.
 Also run when a build stopped with a settings fault.
 
 ### Stale DRAFT Detection — `references/checks/stale-draft-detection.md`
@@ -200,7 +197,7 @@ DRAFT entities left unreviewed too long.
 
 ### Chapter Notes — `references/checks/chapter-notes.md`
 
-A chapter with two chapter notes, from `vault_check.py chapters`.
+A chapter with two chapter notes, from `gma vault-check <vault> chapters`.
 The GM picks which to keep.
 
 ### Open Spoilers — `references/checks/open-spoilers.md`

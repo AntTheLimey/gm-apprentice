@@ -13,7 +13,7 @@ restyles prose. If a fix would require changing what a section
 *says*, that is not conformance drift; dismiss it or route it to
 Canon Audit.
 
-**Preferred procedure:** run `vault_check.py <vault> wrapup`
+**Preferred procedure:** run `gma vault-check <vault> wrapup`
 (see `shared/vault-access.md`) and present its findings per
 file. For the mechanical set — the
 frontmatter backfills, the re-nest of a GM Notes heading found
@@ -24,12 +24,12 @@ them).
 The steps below cover what the script leaves as judgment calls:
 dateless Reconciliation Context, unreconciled promotion, Section
 order drift, Keeper Checklist semantics, PC Carry-Forward format,
-and the filename rename, which `relink.py` does on the GM's yes
+and the filename rename, which `gma relink` does on the GM's yes
 (the migration offers it too).
 
 ### Step 1: Frontmatter Conformance
 
-`vault_check.py wrapup` backfills the mechanical fields against
+`gma vault-check <vault> wrapup` backfills the mechanical fields against
 the spec's frontmatter block — `session:` link derivation
 (chapter-level wrap-ups with no per-session index keep their
 existing value; the script never fabricates a link),
@@ -72,7 +72,7 @@ GM Notes (`## World State`, `## Keeper Checklist`,
 As an H2 outside the fence that is a slip, and it publishes Keeper
 content.
 
-`vault_check.py wrapup` finds those headings and (with `--fix`)
+`gma vault-check <vault> wrapup` finds those headings and (with `--fix`)
 re-nests them under `## GM Notes`, each demoted a level with its
 children. Player-facing sections are hoisted above the GM block
 **first**, in their written order, since real files interleave
@@ -118,7 +118,7 @@ calls:
 
 Filename should be `Chapter_CC_Session_NN_Wrap_Up.md`
 (zero-padded, no title). Drifted names — Warning. Rename with
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/relink.py" <vault> <old path>
+`gma relink <vault> <old path>
 Chapter_CC_Session_NN_Wrap_Up` (dry run; add `--apply` on the GM's
 yes): it renames the file and rewrites every link to it, the session
 index's `documents.wrap_up` included, in one pass.

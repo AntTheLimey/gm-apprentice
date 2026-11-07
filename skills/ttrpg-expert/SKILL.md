@@ -3,15 +3,14 @@ name: ttrpg-expert
 description: "TTRPG rules advisor and content engine for CoC 7e, GURPS 4e, Forged in the Dark, D&D 5e (2024) and Pathfinder 2e (Remaster): rules lookups, character building and point-budget validation, NPCs and stat blocks, scenes, encounters, scenarios, locations, factions, items, handouts, random inspiration, continuity and plot-hole checks, canon verification, PC arc and spotlight analysis, fail forward and improvisation. For session workflows use session-prep/play/wrapup; vault filing, campaign-organizer; audits, campaign-qa. Trigger on rules questions, point-buy, 'build me a character', 'make me an NPC', 'check for plot holes', 'write a scene', 'create a handout'."
 ---
 
-TTRPG advisor and content engine. `shared/` is the `shared` folder beside this skill's folder (inside
-it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
-with the whole path quoted; `gma llms` lists its commands.
-`systems/` paths are relative to this skill.
+TTRPG advisor and content engine. `shared/` is the `shared` folder
+beside this skill's folder (inside it, in a zip install). `gma` is
+`python3 "<shared>/scripts/gma.py"`, with the whole path quoted;
+`gma llms` lists its commands. `systems/` paths are relative to this
+skill.
 
 **Voices:** in a vault, for dialogue, read-aloud, scene-setting
-or a handout, run `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
-voices` (plus one naming a speaker or writer it leaves out): the
+or a handout, run `gma vault-check <vault> voices` (plus one naming a speaker or writer it leaves out): the
 campaign voice, or a voiced speaker's or writer's own. Off, no vault,
 or `(none)` for the voice that prose takes: as before. Never draft one.
 
@@ -21,8 +20,7 @@ Match intent → go straight to the file. Skip clarification.
 
 **Rules or cost question** ("how much does [trait] cost?", "rules
 for [mechanic]?", any skill/creature/spell/item/feat/class lookup)
-→ `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/rules_lookup.py"
-<system> "<term>"` first, with `--kind` from the System Routing
+→ `gma rules-lookup <system> "<term>"` first, with `--kind` from the System Routing
 row when it has one, `--variant regency` for Regency CoC, and
 `all` as `<system>` when the system is unknown. Answer from the
 row and cite its `file:line`. Open the routed file only when the
@@ -110,7 +108,7 @@ all changes; file only after GM approval.
 interactive worldbuilding sessions go to the-midwife.
 
 **Relationships** → `relationship-patterns.md`. The words (types, tones,
-strength): `node "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js" relationships words --vault <vault>`.
+strength): `gma publish relationships words --vault <vault>`.
 **Prep frameworks** (Lazy DM, Three Clue Rule, Fronts, Five Room
 Dungeon) and discovery state → `gm-session-patterns.md`.
 **Campaign/session structure** → campaign-organizer skill +
@@ -128,7 +126,7 @@ Read the relevant file before generating; load only what the
 request needs. Every system folder has `mechanics.md` (core rules;
 then `rules-reference.md`, which GURPS lacks),
 `character-generation.md`, `session-procedures.md` and
-`character-sheet.md`. `kind` = the `rules_lookup.py --kind` for
+`character-sheet.md`. `kind` = the `gma rules-lookup <system> "<term>" --kind <kind>` for
 that row. Unsupported system → `systems/generic/`. Cite source
 books where possible.
 

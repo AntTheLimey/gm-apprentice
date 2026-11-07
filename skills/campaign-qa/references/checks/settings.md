@@ -7,7 +7,7 @@ build stopped on one, and in a full QA pass. Never open the settings
 file to read it (one exception, at the end).
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" "<vault>" settings
+gma vault-check "<vault>" settings
 ```
 
 "Settings: no faults": say so and stop. Otherwise rows come in three
@@ -25,12 +25,11 @@ groups.
    and find the setting with `settings list`. Apply the answer:
 
 ```bash
-TOOL="${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js"
-node "$TOOL" settings set player_site.features.link_previews=off --vault "<vault>"
-node "$TOOL" settings add player_site.hide.sections Rumours --vault "<vault>"
-node "$TOOL" settings unset player_site.features.link_preview --vault "<vault>"
-node "$TOOL" settings carry player_site.exclude_sections player_site.hide.sections --vault "<vault>"
-node "$TOOL" settings list
+gma publish settings set player_site.features.link_previews=off --vault "<vault>"
+gma publish settings add player_site.hide.sections Rumours --vault "<vault>"
+gma publish settings unset player_site.features.link_preview --vault "<vault>"
+gma publish settings carry player_site.exclude_sections player_site.hide.sections --vault "<vault>"
+gma publish settings list
 ```
 
 `carry` puts a mis-named key's value under the right name and removes
@@ -52,5 +51,5 @@ script in `package.json` goes to the setting the row names
 **A file that is not valid YAML.** No `settings` command and no `--fix`
 can read it, so this is the one time the file is opened. The message
 names the line. Show the GM that line and the ones around it, agree
-the correction, change only that line, then run `node "$TOOL" settings
+the correction, change only that line, then run `gma publish settings
 check --vault "<vault>"`.

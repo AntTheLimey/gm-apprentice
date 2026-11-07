@@ -6,10 +6,10 @@ answers; you run the tool. The GM never edits a note and is never told
 to.
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/tones.py" "<vault>"
+gma tones "<vault>"
 ```
 
-Below, `tones.py` stands for that command, vault included. It reads the
+Below, `gma tones` stands for that command, vault included. It reads the
 whole vault whatever scope the GM chose, and a fix changes a word
 everywhere it is used: say so when the scope was narrower.
 
@@ -32,8 +32,8 @@ written with capitals or extra spaces.
 2. Ask once: "Tidy these?" The GM may take all, take all but some,
    place a word differently, or decline.
 3. Run the fix (see Running a fix):
-   - all: `tones.py fix --near`
-   - all but some: `tones.py fix --near --except WORD`, one `--except`
+   - all: `gma tones fix --near`
+   - all but some: `gma tones fix --near --except WORD`, one `--except`
      for each row declined, WORD as the row prints it. Once a row is
      declined, never run `--near` without its `--except`.
    - only a few: no `--near`; `--set OLD=NEW` for each row taken, NEW
@@ -50,7 +50,7 @@ An `ASK` row is a word no rule can place (word, count, up to three
 notes); `--near` never changes it. Propose only listed words: the
 three `#` lines.
 
-1. `tones.py uses` lists every use, tab-separated: `note:line`, the
+1. `gma tones uses` lists every use, tab-separated: `note:line`, the
    word, the target, the description. Read that listing. Open a note
    only where a row's description is empty or does not settle it.
 2. Show one table, however few the words: word, count, proposed listed
@@ -61,7 +61,7 @@ three `#` lines.
    "not a feeling".
 3. Take the answer in one go (all; all but these; these become X).
    What the GM leaves stays as written and is reported next time.
-4. Apply it in one fix: `tones.py fix --set old1=new1 --set old2=new2`
+4. Apply it in one fix: `gma tones fix --set old1=new1 --set old2=new2`
 
 One `--set` changes every use. To split a word, name the uses each way
 in the question; on a yes, write the listed word on the fewer uses'
@@ -93,13 +93,13 @@ of your own, and say so.
 The site shows each relationship's tone as warm, hostile or neutral. A
 hostile tie can give something away (who fears whom, who resents whom).
 
-`tones.py shown` lists every relationship with a negative tone that is
+`gma tones shown` lists every relationship with a negative tone that is
 not `gm_only`, on a note the site publishes: note and line, the tone as
 written, the target, the description. It reads a tone the way the site
 does, so `Cold` and `HOSTILE` count. Exit 1 means the site's tool could
 not be asked.
 
-Every time this check runs, run `tones.py shown` and add its count to
+Every time this check runs, run `gma tones shown` and add its count to
 the report as one Info line: "N hostile ties show on the site" (N counts those still to review; add its "(M accepted)"). Say
 nothing when the vault has no site or the tool could not be asked. With
 N above 0, offer the walk in one short sentence beside that line. Walk
@@ -117,7 +117,7 @@ whom, tone, the line). For each the GM says one of:
   relationship then leaves the site whole, from both pages.
 
 A batch answer ("leave all of these", "hide the two about Hallam") is
-fine. Record each `leave` with `tones.py shown --accept NOTE:LINE ...`
+fine. Record each `leave` with `gma tones shown --accept NOTE:LINE ...`
 (no place: every tie listed), then again with `--write`; `shown` then
 stops listing it, until its tone, target or description changes. Do not rebuild or deploy the site; say the changes show at the
 next build.

@@ -19,8 +19,7 @@ in the Skill cell, `DX-12`, the weapon's skill: Knife for a knife), and
 a Skill cell with no level. Where the row gives a nearest name, first
 check the skill is not that one misspelt. GURPS uses such a skill at
 its default, 0 points spent. Run
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gurps_skill_default.py"
-"<PC note>" "<skill>" --for "<the row's weapon>" --write`. It works the level out from the sheet
+`gma gurps-skill-default "<PC note>" "<skill>" --for "<the row's weapon>" --write`. It works the level out from the sheet
 and the GURPS tables and prints one row:
 
 - `ADDED`: the Skills table row it wrote. Write the weapon row's Skill

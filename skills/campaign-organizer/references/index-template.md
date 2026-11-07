@@ -1,6 +1,6 @@
 # Index Template for `_meta/index.md`
 
-`index_build.py` generates this file; the structure below is its output
+`gma index-build` generates this file; the structure below is its output
 contract.
 
 ```markdown
@@ -81,5 +81,5 @@ sections above) gets its own `### Other` section, subgrouped by type.
 
 ## Maintenance Rules
 
-- After Organize / Dissect / Weave / any note change: `index_build.py <vault> --write`
+- After Organize / Dissect / Weave / any note change: `gma index-build <vault> --write`
 - The index is derived — if stale, delete and rebuild

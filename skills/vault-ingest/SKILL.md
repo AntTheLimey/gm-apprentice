@@ -52,7 +52,7 @@ and `_meta/` schema to file correctly.
 2. **One file per entity** — multiple entities per file break wiki-links and publish rendering.
 3. **Never modify external source files** — they are the GM's backup and proof of ownership.
 4. **Process buckets chronologically, earliest first**, each through Phases 3-6 before the next — later buckets reference entities created by earlier ones.
-5. **Archive, never delete, processed `_inbox/` files** — `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/ingest_survey.py" <vault> --archive FILE... --write` moves them to `_inbox/_processed/` with a date stamp, keeping the subpath and refusing to overwrite. Dry-run (no `--write`) first to confirm destinations.
+5. **Archive, never delete, processed `_inbox/` files** — `gma ingest-survey <vault> --archive FILE... --write` moves them to `_inbox/_processed/` with a date stamp, keeping the subpath and refusing to overwrite. Dry-run (no `--write`) first to confirm destinations.
 6. **Prep is not play** — scenario prep describes potential, not reality. Dice rolls, skill-check results or specific PC actions are play records wherever they appear.
 7. **Flag, don't guess** — anything ambiguous goes to the GM, never resolved by invention.
 
@@ -62,16 +62,13 @@ Six phases. vault-ingest owns 1-4; 5-6 hand off to existing skills.
 
 ### Phase 1: Survey & Classify
 
-Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/ingest_survey.py"
-<source-dir>` before reading anything. `DECIDED` rows (settled by
+Run `gma ingest-survey <source-dir>` before reading anything. `DECIDED` rows (settled by
 extension, frontmatter or heading signature) need nothing. Read a
 `SCORED` row's file only to confirm or override its proposal,
 using `references/classification-taxonomy.md`. `UNSCORED` rows
 (Word/PDF/VTT) need a manual read. Report `ERROR` rows to the GM.
 
-**Images:** run `python3
-"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/ingest_images.py"
-<vault> <source-dir>` (dry-run) before touching any image by
+**Images:** run `gma ingest-images <vault> <source-dir>` (dry-run) before touching any image by
 hand, then `--execute`. Work its report per
 `references/image-handling.md`.
 
@@ -100,8 +97,7 @@ Per bucket, read all AUTHORITATIVE material. Source priority:
 **Output:** confirmed events (with source citations) and gaps
 (things prep says could have happened, unconfirmed).
 
-After creating this bucket's entities, re-run `ingest_images.py
---execute` so images match against them too.
+After creating this bucket's entities, re-run `gma ingest-images <vault> <source-dir> --execute` so images match against them too.
 
 ### Phase 4: Keeper Interview
 
@@ -134,14 +130,14 @@ Read `references/synthesis-templates.md`.
    Backstory Entries). A PC whose sources hold no stats:
    `shared/pc-body-structure.md` § A sheet kept somewhere else; on a
    campaign that does not publish sheets (`player_site.sheets.show`
-   off) do not ask where one is kept; when `vault_check.py pc-body`
+   off) do not ask where one is kept; when `gma vault-check <vault> pc-body`
    emits no Stat Sheet rows there is nothing to ask.
 
 Check each entity as you write it: entity mentions are
 `[[Entity Name]]` wiki-links; `play_date` is `YYYY-MM-DD`;
 `in_game_date` follows `shared/session-document-chain.md` (never a
 fabricated Gregorian date or a time of day). Per bucket, run
-`vault_check.py frontmatter --folder <dir>` (see
+`gma vault-check <vault> frontmatter --folder <dir>` (see
 `shared/vault-access.md`) and fix every ERROR before the next
 bucket.
 
@@ -154,7 +150,7 @@ session ingested (`Ch{c} S{n}` if it has a chapter).
 become `type: plan` entities in `Chapters/{chapter}/Planning/` per
 `_Templates/_Template_Plan.md`, with `plan_type` `arc`, `scene`,
 `investigation` or `timeline`. A design for one scene becomes a scene
-file instead: `vault_write.py <vault> scene-new --chapter
+file instead: `gma vault-write <vault> scene-new --chapter
 "<chapter>" --title "<title>" --write`, then its text goes in the
 body and its `entities`/`locations` get the wiki-links it names.
 
@@ -169,17 +165,16 @@ approval it becomes `reviewed` and AUTHORITATIVE.
 ## Post-Ingestion
 
 After all buckets:
-- Deduplicate entities — `vault_check.py names`
-- Cross-bucket relationship chains — `graph_check.py all`,
-  `vault_check.py relationships` (a tone WARNING on a relationship
+- Deduplicate entities — `gma vault-check <vault> names`
+- Cross-bucket relationship chains — `gma graph-check <vault> all`,
+  `gma vault-check <vault> relationships` (a tone WARNING on a relationship
   this ingest wrote: use the word the row names, or where it names
   none the listed word that fits, as `relationships words` in the publish
   tool prints them;
-  leave any other to campaign-qa and never run `tones.py` here)
-- Timeline consistency across buckets — by eye (`vault_check.py
-  timeline` does not check cross-bucket ordering)
-- Entity status progression — `vault_check.py stale-drafts`
-- `vault_check.py wrapup` over the generated wrap-ups
+  leave any other to campaign-qa and never run `gma tones` here)
+- Timeline consistency across buckets — by eye (`gma vault-check <vault> timeline` does not check cross-bucket ordering)
+- Entity status progression — `gma vault-check <vault> stale-drafts`
+- `gma vault-check <vault> wrapup` over the generated wrap-ups
 - Route inconsistencies back through reconcile
 
 Then offer, without pushing: "I've ingested N sessions of

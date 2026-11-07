@@ -188,7 +188,7 @@ setting `createdSession` in the initial write. Then stamp the rest
 with the bundled stamper (dry-run first, `--write` on confirmation):
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
+gma stamp-entities \
   <vault> <entity files> --set source=world-evolution --session N --date D
 ```
 

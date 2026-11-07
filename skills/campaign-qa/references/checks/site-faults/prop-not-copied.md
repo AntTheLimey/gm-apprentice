@@ -60,8 +60,7 @@ Offer each row's fix as it reads. Where the fix is not all of it:
   nothing can point at the real file, and an `assets` file can become a
   folder.
 - **An unknown `prop_hand`, or a broken `_meta/prop-hands.json`:**
-  offer to correct `prop_hand`, to add the hand with `vault_write.py
-  "<vault>" prop-hand --hand <id> --hand-font "<family>"`, or to mend the
+  offer to correct `prop_hand`, to add the hand with `gma vault-write "<vault>" prop-hand --hand <id> --hand-font "<family>"`, or to mend the
   entry or JSON the row names. Ask the GM for the font; never pick one
   for them.
 - **Both a prop_file and a prop_style:** ask which the GM wants.

@@ -7,7 +7,7 @@ vocabulary.
 
 **The vocabulary is fixed.** Every `relationships[].type` must be
 one of the sanctioned predicates, which `shared/gm-apprentice-ontology.json`
-holds and `vault_check.py relationships` enforces. A new vault's
+holds and `gma vault-check <vault> relationships` enforces. A new vault's
 `_meta/relationship-types.md` starts with the full list; older
 vaults may hold a genre subset.
 Never invent a type; when a play note gives you a narrative verb
@@ -15,7 +15,7 @@ Never invent a type; when a play note gives you a narrative verb
 `shared/relationship-normalization.md`.
 
 For the words (types, their reverse names, tones, strength), run
-`node "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js" relationships words --vault <vault>`;
+`gma publish relationships words --vault <vault>`;
 it prints only what this vault uses.
 
 ## The Edge

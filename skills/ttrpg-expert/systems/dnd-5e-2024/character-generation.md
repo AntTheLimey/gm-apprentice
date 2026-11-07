@@ -119,7 +119,7 @@ Your background lists 3 abilities. Increase one by 2 and a different one by 1, o
 
 ### Ability Modifiers
 
-Record the six scores. The modifiers are filled in at Step 5 by `dnd_sheet.py`; mechanics.md has the table if the GM asks how one is reached.
+Record the six scores. The modifiers are filled in at Step 5 by `gma dnd-sheet`; mechanics.md has the table if the GM asks how one is reached.
 
 ## Step 4: Choose Alignment
 
@@ -143,7 +143,7 @@ Write the PC note in the template's layout, following "Writing the Sheet in the 
 2. Run the tool. Do not work out or type the modifiers, saves, skill bonuses, passive scores, Initiative, spell attack or spell save DC: one tool owns those sums, so they are right now and stay right at every level-up.
 
    ```bash
-   python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_sheet.py" "path/to/PC.md"
+   gma dnd-sheet "path/to/PC.md"
    ```
 
    Show the GM the `FILL` rows it prints, then run it again with `--write` on their yes.
