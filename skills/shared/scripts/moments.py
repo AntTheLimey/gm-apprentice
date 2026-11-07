@@ -185,7 +185,7 @@ def cmd_status(vault: Path) -> list[str]:
         rows.append("backfill\tnothing to offer")
     else:
         rows.append(f"backfill\tnot offered: {_counts(todo)} "
-                    f"(moments.py list)")
+                    f"(gma moments list)")
     return rows
 
 

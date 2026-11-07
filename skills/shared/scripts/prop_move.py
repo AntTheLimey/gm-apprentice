@@ -358,7 +358,7 @@ def convert_build_props(c: Conversion) -> None:
         if not hand.endswith(HAND_SUFFIX) or not HAND_ID_RE.match(short):
             c.row(PERSON, where, f"prop_hand {hand!r}: not a hand class this "
                   f"can name (lower-case letters, digits and hyphens, then "
-                  f"-hand); add the hand with vault_write.py prop-hand and "
+                  f"-hand); add the hand with gma vault-write <vault> prop-hand and "
                   f"set prop_hand on {', '.join(rels)}")
             continue
         families = fonts.get(hand, [])
@@ -366,7 +366,7 @@ def convert_build_props(c: Conversion) -> None:
             why = ("no props.css rule gives it a font-family" if not families
                    else f"the stylesheets disagree ({', '.join(families)})")
             c.row(PERSON, where, f"hand {short}: {why}; add it with "
-                  f"vault_write.py prop-hand --hand {short} --hand-font FAMILY")
+                  f"gma vault-write <vault> prop-hand --hand {short} --hand-font FAMILY")
             continue
         try:
             use_hand(c.batch, short, families[0], None)

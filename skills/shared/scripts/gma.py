@@ -118,7 +118,8 @@ def _llms(args: list[str]) -> int:
                   file=sys.stderr)
             return 2
         path = PAGES / "llms" / f"{page}.md"
-    text = path.read_text(encoding="utf-8")
+    text = path.read_text(encoding="utf-8").replace(
+        "{gma}", f'python3 "{Path(__file__).resolve().as_posix()}"')
     enc = getattr(sys.stdout, "encoding", None) or "utf-8"
     sys.stdout.write(text.encode(enc, "replace").decode(enc))
     return 0

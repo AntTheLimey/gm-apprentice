@@ -1106,7 +1106,7 @@ def find_wrapup_sections(vault: Path) -> list[Item]:
             person.append(f"{rel}\t{why}")
             person.append(
                 f"{rel}\t{_name_headings(titles)} would have moved; after "
-                f"it is repaired `vault_check.py <vault> wrapup --file "
+                f"it is repaired `gma vault-check <vault> wrapup --file "
                 f"{rel} --fix` will not move them (the new rule leaves "
                 f"them), so move them under ## GM Notes by hand if they "
                 f"are Keeper content")
@@ -1115,7 +1115,7 @@ def find_wrapup_sections(vault: Path) -> list[Item]:
                 f"{rel}\thas no recap heading the tool recognises, so "
                 f"nothing in it was moved ({_name_headings(titles)}): "
                 f"retitle the player-facing section '## Narrative Recap', "
-                f"then run `vault_check.py <vault> wrapup --file {rel}`; it "
+                f"then run `gma vault-check <vault> wrapup --file {rel}`; it "
                 f"leaves those headings where they are, so move any that are "
                 f"Keeper content under ## GM Notes by hand")
         else:

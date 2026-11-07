@@ -62,7 +62,10 @@ class EnsureBlockTests(unittest.TestCase):
         self.assertLess(len(block.encode("utf-8")), 500)
         self.assertTrue(block.startswith(BEGIN))
         self.assertTrue(block.endswith(END))
-        self.assertIn("update", block)
+        self.assertIn('run `gma update "<this vault>"`, where `gma` is '
+                      '`python3 "<shared>/scripts/gma.py"` in the '
+                      "gm-apprentice skills' `shared` folder", block)
+        self.assertIn("`gma workaround add`", block)
         self.assertIn("workaround add", block)
         self.assertIn("filing-plugin-issues.md", block)
         self.assertNotIn("${CLAUDE_PLUGIN_ROOT}", block)

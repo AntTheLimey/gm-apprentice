@@ -608,7 +608,7 @@ def _site_tool(vault: Path) -> Path | None:
         if "is missing" in reason or "not installed" in reason:
             # The migration repins the site's tool; the GM is not sent to
             # update-pin by hand, which is what `fix` says here.
-            hint = "run the migration (`migrate.py <vault> apply`) to repin it"
+            hint = "run the migration (`gma migrate <vault> apply`) to repin it"
         else:
             hint = fix if fix and "update-pin" not in fix else ""
         raise _SiteToolMissing(f"{reason}; {hint}" if hint else reason)
@@ -637,7 +637,7 @@ def _ask_publish(vault: Path, old: str, new: str, listed: bool,
                      or "Unknown argument" in str(e)):
             raise ToolTooOld(
                 "the site's publish tool is older than this rename needs; "
-                "run the migration (`migrate.py <vault> apply`) first"
+                "run the migration (`gma migrate <vault> apply`) first"
             ) from None
         raise RelinkError(
             f"{old} is on the site's publish list and the publish tool "

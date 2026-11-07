@@ -993,7 +993,7 @@ class PropsMoveTests(unittest.TestCase):
         text = "\n".join(item.lines)
         for part in ("1 build_props note", "1 hand-made page in Props folders, 1 of them live",
                      "kept folder props with 1 page", "build step add-props",
-                     "run prop_move.py VAULT plan to see every page compared before choosing"):
+                     "run gma prop-move VAULT plan to see every page compared before choosing"):
             self.assertIn(part, text)
         self.assertEqual(item.lines[-1].split()[-1], "choosing")
         check = next(c for c in ms.SITE_CHECKS if c.name == "props-move")

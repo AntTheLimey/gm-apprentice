@@ -630,7 +630,9 @@ class LlmsCommandTests(unittest.TestCase):
     def test_llms_prints_the_index(self):
         code, out, _ = self._run(["llms"])
         self.assertEqual(code, 0)
-        self.assertEqual(out, gma_docs.INDEX.read_text(encoding="utf-8"))
+        want = gma_docs.INDEX.read_text(encoding="utf-8").replace(
+            "{gma}", f'python3 "{Path(gma.__file__).resolve().as_posix()}"')
+        self.assertEqual(out, want)
 
     def test_llms_prints_a_page(self):
         code, out, _ = self._run(["llms", "relink"])

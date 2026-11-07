@@ -216,7 +216,7 @@ def plugin_tool(args: list[str]) -> tuple[int, str, str]:
     node = shutil.which("node")
     if not node:
         raise StepFailed("node is not on PATH; install Node.js, then run "
-                         "migrate.py again")
+                         "gma migrate again")
     if PUBLISH_TOOL is None or not PUBLISH_TOOL.is_file():
         raise StepFailed(vaultlib.plugin_tool_problem(PUBLISH_TOOL) or MISSING_TOOL)
     try:

@@ -24,11 +24,12 @@ BEGIN = ("<!-- BEGIN gm-apprentice (managed by the plugin; edits here are "
          "replaced) -->")
 BEGIN_PREFIX = "<!-- BEGIN gm-apprentice"   # an older BEGIN's words may differ
 END = "<!-- END gm-apprentice -->"
-GMA = 'python3 "<plugin>/skills/shared/scripts/gma.py"'
+GMA = "gma"
 LINES = (
     f"- When a gm-apprentice skill's version gate says MISMATCH, run "
-    f'`{GMA} update "<this vault>"`; `<plugin>` is the gm-apprentice '
-    f"plugin's folder.",
+    f'`{GMA} update "<this vault>"`, where `gma` is '
+    f'`python3 "<shared>/scripts/gma.py"` in the gm-apprentice skills\' '
+    f"`shared` folder.",
     f"- When you build a stand-in for a plugin gap, record it with "
     f"`{GMA} workaround add` (see the plugin's "
     f"`skills/shared/filing-plugin-issues.md`).",

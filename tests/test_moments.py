@@ -70,7 +70,7 @@ class StatusTests(unittest.TestCase):
             "moments\ton",
             "kinds\tdramatic, intriguing, funny, epic, tragic",
             "backfill\tnot offered: 1 wrap-up without moments, 1 with "
-            "untagged ones (moments.py list)"])
+            "untagged ones (gma moments list)"])
 
     def test_off_by_the_setting_or_with_no_site_says_off_and_nothing_more(self):
         for config in (OFF, NO_SITE):

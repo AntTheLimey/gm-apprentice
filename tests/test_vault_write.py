@@ -1468,7 +1468,7 @@ class TimelineTests(unittest.TestCase):
         vault = make_vault(self, {"x.md": "x\n"})
         code, out = tl(vault, "- **1814** — x\n", "--under", "### New")
         self.assertEqual(code, 1)
-        self.assertIn("no timeline — vault_scaffold.py creates it", out)
+        self.assertIn("no timeline — gma vault-scaffold creates it", out)
 
     def test_file_flag_names_another_timeline(self):
         vault = make_vault(self, {"Lore/When.md": TL})

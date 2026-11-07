@@ -113,3 +113,64 @@ def test_publish_execs_node(tmp_path):
     lines = out.splitlines()
     assert lines[0] == str(proc.pid)
     assert "token" in out
+
+
+# ---- printed hints name `gma`, never a script file or the plugin root ----
+
+import ast  # noqa: E402
+import re  # noqa: E402
+
+import gma as _gma  # noqa: E402
+
+_MODULES = sorted({c.module for c in _gma.COMMANDS.values() if c.module})
+_FILE_RE = re.compile(r"\b(" + "|".join(_MODULES) + r")\.py\s")
+
+
+def _printed_strings(tree: ast.AST):
+    """String constants and f-string literal parts, docstrings skipped."""
+    skip = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef,
+                             ast.AsyncFunctionDef, ast.ClassDef)):
+            body = node.body
+            if (body and isinstance(body[0], ast.Expr)
+                    and isinstance(body[0].value, ast.Constant)
+                    and isinstance(body[0].value.value, str)):
+                skip.add(id(body[0].value))
+    for node in ast.walk(tree):
+        if (isinstance(node, ast.Constant) and isinstance(node.value, str)
+                and id(node) not in skip):
+            yield node.lineno, node.value
+
+
+def _flagged(path: Path):
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    out = []
+    for line, s in _printed_strings(tree):
+        if "CLAUDE_PLUGIN_ROOT" in s or _FILE_RE.search(s):
+            out.append(f"{path.name}:{line}: {s[:70]!r}")
+    return out
+
+
+def test_printed_hints_use_gma():
+    bad = []
+    for p in sorted(SCRIPTS.glob("*.py")):
+        bad += _flagged(p)
+    for p in sorted((ROOT / "tools" / "publish" / "lib").rglob("*.js")):
+        if "CLAUDE_PLUGIN_ROOT" in p.read_text(encoding="utf-8"):
+            bad.append(f"{p.name}: CLAUDE_PLUGIN_ROOT")
+    assert bad == []
+
+
+def test_printed_hints_gate_flags_a_planted_script_name(tmp_path):
+    p = tmp_path / "planted.py"
+    p.write_text('def f(v):\n    return f"run `vault_check.py {v} x`"\n')
+    assert _flagged(p)
+
+
+def test_llms_names_its_own_path(capsys):
+    assert _gma.main(["llms"]) == 0
+    out = capsys.readouterr().out
+    want = 'python3 "' + Path(_gma.__file__).resolve().as_posix() + '"'
+    assert want in out
+    assert "{gma}" not in out
