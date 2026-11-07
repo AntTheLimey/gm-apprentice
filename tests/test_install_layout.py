@@ -159,10 +159,32 @@ def test_printed_hints_use_gma():
     bad = []
     for p in sorted(SCRIPTS.glob("*.py")):
         bad += _flagged(p)
-    for p in sorted((ROOT / "tools" / "publish" / "lib").rglob("*.js")):
-        if "CLAUDE_PLUGIN_ROOT" in p.read_text(encoding="utf-8"):
-            bad.append(f"{p.name}: CLAUDE_PLUGIN_ROOT")
+    for p in _js_files():
+        bad += _js_flagged(p)
     assert bad == []
+
+
+def _js_files():
+    pub = ROOT / "tools" / "publish"
+    return sorted([*(pub / "lib").rglob("*.js"), *(pub / "bin").glob("*.js")])
+
+
+def _js_flagged(path: Path):
+    out = []
+    text = path.read_text(encoding="utf-8")
+    for n, line in enumerate(text.splitlines(), 1):
+        if line.lstrip().startswith(("//", "*", "/*")):
+            continue    # a comment, not printed
+        if "CLAUDE_PLUGIN_ROOT" in line or _FILE_RE.search(line):
+            out.append(f"{path.name}:{n}: {line.strip()[:70]!r}")
+    return out
+
+
+def test_printed_hints_gate_flags_a_planted_js_script_name(tmp_path):
+    p = tmp_path / "planted.js"
+    p.write_text("// vault_check.py in a comment is fine\n"
+                 "console.warn(`run vault_check.py <vault> x`);\n")
+    assert len(_js_flagged(p)) == 1
 
 
 def test_printed_hints_gate_flags_a_planted_script_name(tmp_path):

@@ -213,10 +213,9 @@ def _line_of(para, offset):
 # with the reason. Empty to start; it may only shrink.
 ONLY_GMA_ALLOWED: dict[str, str] = {}
 
-ONLY_GMA_EXCLUDED = ("skills/shared/gma/llms/",)
 MODULE_PY_RE = re.compile(
     r'(?<![\w.-])(?P<mod>' + "|".join(sorted(MODULES)) + r')\.py\b')
-PUBLISH_DIRECT_RE = re.compile(r'gm-publish\.js|\$\{?TOOL\}?\b|"\$TOOL"')
+PUBLISH_DIRECT_RE = re.compile(r'gm-publish\.js|(?<![\w.-])gm-publish\s+[a-z]|\$\{?TOOL\}?\b|"\$TOOL"')
 
 
 def only_gma_problems(paths):
@@ -224,8 +223,6 @@ def only_gma_problems(paths):
     bad = []
     for path in paths:
         rel = _rel(path)
-        if rel.startswith(ONLY_GMA_EXCLUDED):
-            continue
         for n, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             where = f"{rel}:{n}"
             if where in ONLY_GMA_ALLOWED:
@@ -700,13 +697,15 @@ class SkillTextTests(unittest.TestCase):
             "Install the gm-apprentice-publish package.\n"
             "The entry point is gma.py.\n"
             "Run `gma publish build`.\n"
-            'Run `"$TOOL" build`.\n',
+            'Run `"$TOOL" build`.\n'
+            "Run `gm-publish build`.\n",
             encoding="utf-8")
         self.assertEqual(only_gma_problems([md]), [
             "x.md:1: names CLAUDE_PLUGIN_ROOT",
             "x.md:2: names relink.py; use gma relink",
             "x.md:3: runs the publish tool directly; use gma publish",
-            "x.md:9: runs the publish tool directly; use gma publish"])
+            "x.md:9: runs the publish tool directly; use gma publish",
+            "x.md:10: runs the publish tool directly; use gma publish"])
 
     def test_scan_matches_enough_lines(self):
         found = [f for f in all_found() if f.kind == "cmd"]

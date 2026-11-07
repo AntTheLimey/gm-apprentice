@@ -1,6 +1,7 @@
 """Where this install keeps shared/ and the publish tool.
 
-The one place that climbs parent folders. Everything else asks `LAYOUT`.
+The one place that finds the install root and the publish tool. Everything
+else asks `LAYOUT`.
 """
 from __future__ import annotations
 

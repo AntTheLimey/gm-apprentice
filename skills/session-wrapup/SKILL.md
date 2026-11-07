@@ -271,7 +271,7 @@ somewhere else; when `pc-body` emits no Stat Sheet rows there is
 nothing to ask, and never ask where a sheet is kept on a campaign
 that does not publish sheets), `gma vault-check <vault> wrapup --file <wrap-up>`. A tone WARNING on a relationship you wrote or changed
 this session: use the word the row names, or where it names none the
-listed word that fits (`relationships words` in the publish tool prints
+listed word that fits (`gma publish relationships words` prints
 them). Leave any
 other tone WARNING to campaign-qa; never run `gma tones` here. If
 Step 4 ran as sub-agents, also run `relationships` once more with

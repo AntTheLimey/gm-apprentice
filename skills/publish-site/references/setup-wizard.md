@@ -354,16 +354,14 @@ to skip theming, set nothing.
 ### Step 13: Scaffold the site
 
 The build tool ships **inside the plugin** — never install it from the
-npm registry. Run its `init` from the plugin cache so the scaffold pins
-itself to the exact version the GM has installed:
+npm registry. Run its `init` through `gma` so the scaffold pins itself to
+the exact version the GM has installed:
 
 ```bash
 gma publish init "<site_dir>" --vault "<vault>"
 ```
 
-Use the plugin cache path for the GM's OS (e.g.
-`~/.claude/plugins/cache/gm-apprentice` on macOS/Linux). `<site_dir>`
-is the set-up note's `site_dir`. Pass the absolute vault path from
+`<site_dir>` is the set-up note's `site_dir`. Pass the absolute vault path from
 Step 1: `--vault` records it as `vaultPath` in the site file and tells
 `init` which vault's settings to write (without it `init` assumes
 `./vault` inside the site directory). This creates the following

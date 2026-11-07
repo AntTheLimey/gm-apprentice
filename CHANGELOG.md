@@ -14,11 +14,11 @@ Every skill now runs its vault scripts and the publish tool through `gma`, and `
 ### Changed
 
 - **The skills call only `gma`.** Every vault script and the publish tool run as a `gma <command>` line, so the skills no longer depend on a Claude Code variable to find where the plugin lives. `gma` finds its own install, and the scripts' hints and the generated text name `gma` too. A test keeps the skill text `gma`-only.
-- **Publish tool 1.70.1:** the fix line for a link that is not shown on the site names `gma links`.
+- **Publish tool 1.70.1:** the fix line for a link that is not shown on the site names `gma links`, and its build warnings and help name `gma` commands rather than script files.
 
 ### Fixed
 
-- **Stopping a background `gma publish serve` stops the server.** `gma publish` now hands over to the publish tool instead of running it as a child, so ending the background job ends the server rather than leaving it running. When the publish tool is not installed, `gma publish` says so plainly and stops.
+- **On macOS and Linux, stopping a background `gma publish serve` stops the server.** `gma publish` now hands over to the publish tool instead of running it as a child, so ending the background job ends the server rather than leaving it running. When the publish tool is not installed, `gma publish` says so plainly and stops.
 
 ## [1.11.5] — 2026-11-06
 

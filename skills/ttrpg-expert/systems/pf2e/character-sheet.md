@@ -2,7 +2,7 @@
 
 Section-by-section reference for a PF2e PC entity file in the vault. Use it
 to build, audit, or fill any sheet field. The shared template lives at
-`skills/shared/templates/pc-pf2e.md`.
+`shared/templates/pc-pf2e.md`.
 
 ## Stat Sheet
 

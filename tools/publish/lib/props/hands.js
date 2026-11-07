@@ -62,7 +62,7 @@ function withHand(fields, hands) {
     fields,
     problem: {
       detail: `prop_hand "${id}" is not in ${HANDS_FILE}, so the style's own hand is used`,
-      fix: `add the hand to ${HANDS_FILE} (vault_write.py prop-hand --hand ${id} --hand-font "<family>"), or correct prop_hand`,
+      fix: `add the hand to ${HANDS_FILE} (gma vault-write <vault> prop-hand --hand ${id} --hand-font "<family>"), or correct prop_hand`,
     },
   };
 }

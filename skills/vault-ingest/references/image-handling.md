@@ -2,7 +2,7 @@
 
 Read when source material includes images.
 
-`gma ingest-images VAULT DIR [--execute]`
+`gma ingest-images <vault> <dir> [--execute]`
 converts, matches, files, de-duplicates and links images — run it
 first (dry-run, then `--execute`) and work its report; don't
 redo its steps by hand. It never modifies or deletes the source

@@ -509,11 +509,16 @@ def main(argv: list[str] | None = None) -> int:
             found = plugin_version()
             if found is None:
                 raise ScaffoldError("cannot determine the plugin version")
+            tool_problem = plugin_tool_problem(PUBLISH_TOOL)
             if vault_layout(vault) == "none" and (
-                    not shutil.which("node") or plugin_tool_problem(PUBLISH_TOOL)):
+                    not shutil.which("node") or tool_problem):
                 # The settings defaults are the publish tool's, and so is the
                 # new vault's settings file: asking it first would say "could
                 # not read the vault's settings" of a vault that is not there.
+                if shutil.which("node"):
+                    raise ScaffoldError(
+                        f"a new vault needs the publish tool, which writes "
+                        f"its settings file: {tool_problem}")
                 raise ScaffoldError(
                     "a new vault needs Node.js, which writes its settings "
                     "file; install Node.js, then run this again")

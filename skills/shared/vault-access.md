@@ -52,8 +52,7 @@ Grep — `gma graph-check` does it in one pass.
 
 ## Running the scripts
 
-They live in `skills/shared/scripts/` (stdlib Python 3). Invoke
-via the plugin root:
+They live in `shared/scripts/` (stdlib Python 3); run them through `gma`:
 
 ```bash
 gma graph-check \

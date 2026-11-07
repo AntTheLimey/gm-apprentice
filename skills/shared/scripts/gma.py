@@ -176,7 +176,7 @@ def _publish(args: list[str]) -> int:
         code = subprocess.call(cmd)
         # A signal death comes back negative; exit codes are 0..255.
         return code if 0 <= code <= 255 else 1
-    except FileNotFoundError:
+    except OSError:
         print("gma: publish needs node on the PATH", file=sys.stderr)
         return 1
 
