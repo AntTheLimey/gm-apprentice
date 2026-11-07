@@ -70,7 +70,9 @@ def agent_files(vault: Path) -> list[str]:
 # them still count as link targets.
 UNCHECKED_DIRS: tuple[str, ...] = ("_QA", "_archive")
 LINK_RE = re.compile(r"!?\[\[([^\[\]]+?)\]\]")
-FRONTMATTER_RE = re.compile(r"^---\r?\n(.*?)\r?\n---(?:\r?\n|$)", re.DOTALL)
+# A note may open with a UTF-8 byte-order mark (some Windows editors add one,
+# #593); the block is read past it.
+FRONTMATTER_RE = re.compile(r"^\ufeff?---\r?\n(.*?)\r?\n---(?:\r?\n|$)", re.DOTALL)
 
 
 def normalize_file_arg(raw: str) -> str:
@@ -181,6 +183,19 @@ QUOTED_SCALAR_RE = re.compile(
 )
 
 
+def _decode_double_quoted(inner: str) -> str:
+    """A double-quoted scalar's content with its escapes decoded (#597).
+
+    JSON's escapes are the ones `yaml_scalar` writes (`\\"`, `\\\\`, `\\t`,
+    `\\n`, `\\uXXXX`), so `json.loads` reads them as YAML does. A YAML-only
+    escape JSON lacks (`\\x41`, `\\e`) leaves the content as authored rather
+    than guessing."""
+    try:
+        return json.loads(f'"{inner}"', strict=False)
+    except ValueError:
+        return inner
+
+
 def scalar_value(value: str) -> str:
     """Unwrap a YAML scalar: quoted content, or unquoted up to a comment.
 
@@ -192,10 +207,9 @@ def scalar_value(value: str) -> str:
     text = value.strip()
     m = QUOTED_SCALAR_RE.match(text)
     if m:
-        # Escapes are left as authored — nothing downstream compares against
-        # an unescaped form, and decoding them here would be a second guess
-        # at YAML this parser is deliberately not implementing.
-        return m.group(1) if m.group(1) is not None else m.group(2)
+        if m.group(1) is None:
+            return m.group(2).replace("''", "'")
+        return _decode_double_quoted(m.group(1))
     # Unquoted: a ' #' starts a YAML comment, and so does a leading '#'.
     if text.startswith("#"):
         return ""
@@ -225,8 +239,12 @@ def extract_frontmatter(content: str) -> dict[str, Any] | None:
             if current_key and current_key in frontmatter:
                 if not isinstance(frontmatter[current_key], list):
                     frontmatter[current_key] = []
+                item = line.strip()[2:].strip()
+                # A quoted item is decoded as a quoted value is; anything
+                # else is kept as before (`- #tag` is not dropped).
                 frontmatter[current_key].append(
-                    line.strip()[2:].strip('"').strip("'"))
+                    scalar_value(item) if QUOTED_SCALAR_RE.match(item)
+                    else item.strip('"').strip("'"))
             continue
 
         # Key: value pair
@@ -272,7 +290,7 @@ def raw_frontmatter(text: str) -> str:
 def body_of(text: str) -> str:
     """Everything after the closing `---`, stripped; the whole text if
     there is no frontmatter block."""
-    m = re.match(r"^---\r?\n.*?\r?\n---\r?\n?(.*)$", text, re.DOTALL)
+    m = re.match(r"^\ufeff?---\r?\n.*?\r?\n---\r?\n?(.*)$", text, re.DOTALL)
     return (m.group(1) if m else text).strip()
 
 
@@ -347,12 +365,13 @@ YAML_LINE_RE = re.compile(r"^\s*$|^\s*#|^[\w.-]+:|^\s+-\s|^\s+[^\s#:][^:]*:(\s|$
 def frontmatter_span(lines: list[str]) -> tuple[int, str | None]:
     """Return (index of closing delimiter line, error).
 
-    Fail-safe rules: the file must open with exactly `---`; the FIRST
+    Fail-safe rules: the file must open with exactly `---` (after a
+    byte-order mark, if it has one: #593); the FIRST
     subsequent line starting with `---` must be exactly `---` (a
     malformed delimiter like `--- ` is an error, not a reason to keep
     scanning into the body); every line between must look like YAML.
     """
-    if not lines or lines[0].rstrip("\r\n") != "---":
+    if not lines or lines[0].lstrip("\ufeff").rstrip("\r\n") != "---":
         return -1, "no frontmatter"
     for i, line in enumerate(lines[1:], start=1):
         stripped = line.rstrip("\r\n")
@@ -397,7 +416,7 @@ def voice_read(text: str) -> str | None:
         # An indented line (a block or continued value) makes the strict
         # reader refuse the region; read up to the closing line anyway, so
         # a voice written that way is told apart from no voice.
-        if not lines or lines[0].strip() != "---":
+        if not lines or lines[0].lstrip("\ufeff").strip() != "---":
             return ""
         end = next((i for i, line in enumerate(lines[1:], 1)
                     if line.strip() == "---"), -1)

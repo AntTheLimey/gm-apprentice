@@ -2241,6 +2241,22 @@ def npc_story(vault, stdin, *flags, write=True):
                *(["--write"] if write else []), stdin=stdin)
 
 
+class ByteOrderMarkTests(unittest.TestCase):
+    """A note saved with a UTF-8 byte-order mark is still found (#593)."""
+
+    def test_story_finds_a_pc_note_with_a_bom(self):
+        vault = story_vault(self, {PC_REL: "\ufeff" + PC})
+        code, out = tell(vault, "# [[Rock Lavey]]\n\nHe fought.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("He fought.", read(vault, STORY_REL))
+
+    def test_npc_story_finds_an_npc_note_with_a_bom(self):
+        vault = story_vault(self, {MARLO_REL: "\ufeff" + NPC_VOICED})
+        code, out = npc_story(vault, "# [[Marlo]]\n\nShe waited.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("She waited.", read(vault, MARLO_REL))
+
+
 class StoryChapterRestartTests(unittest.TestCase):
     def test_story_session_numbers_restarting_per_chapter(self):
         ch2 = "Chapters/Chapter 2 - Vienna/Sessions/Session 02/"

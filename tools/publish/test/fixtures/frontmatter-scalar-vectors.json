@@ -1,0 +1,92 @@
+{
+  "_comment": "Frontmatter values both readers must agree on: the scripts' vaultlib.extract_frontmatter and the publish tool's parseNote (#593, #597). Built from what vaultlib.yaml_scalar writes.",
+  "vectors": [
+    {
+      "name": "escaped double quotes",
+      "text": "---\nv: \"a \\\"b\\\"\"\n---\nBody.\n",
+      "key": "v",
+      "value": "a \"b\""
+    },
+    {
+      "name": "escaped backslash",
+      "text": "---\nv: \"C:\\\\x\"\n---\nBody.\n",
+      "key": "v",
+      "value": "C:\\x"
+    },
+    {
+      "name": "escaped tab",
+      "text": "---\nv: \"tab\\there\"\n---\nBody.\n",
+      "key": "v",
+      "value": "tab\there"
+    },
+    {
+      "name": "escaped newline",
+      "text": "---\nv: \"line\\nbreak\"\n---\nBody.\n",
+      "key": "v",
+      "value": "line\nbreak"
+    },
+    {
+      "name": "unicode escape",
+      "text": "---\nv: \"caf\\u00e9\"\n---\nBody.\n",
+      "key": "v",
+      "value": "café"
+    },
+    {
+      "name": "single-quoted doubled quote",
+      "text": "---\nv: 'O''Brien'\n---\nBody.\n",
+      "key": "v",
+      "value": "O'Brien"
+    },
+    {
+      "name": "quoted value with a comment after it",
+      "text": "---\nv: \"x # y\"  # note\n---\nBody.\n",
+      "key": "v",
+      "value": "x # y"
+    },
+    {
+      "name": "what yaml_scalar writes for 'say \"hi\"'",
+      "text": "---\nv: \"say \\\"hi\\\"\"\n---\nBody.\n",
+      "key": "v",
+      "value": "say \"hi\""
+    },
+    {
+      "name": "what yaml_scalar writes for 'back\\\\slash'",
+      "text": "---\nv: \"back\\\\slash\"\n---\nBody.\n",
+      "key": "v",
+      "value": "back\\slash"
+    },
+    {
+      "name": "what yaml_scalar writes for 'tab\\there'",
+      "text": "---\nv: \"tab\\there\"\n---\nBody.\n",
+      "key": "v",
+      "value": "tab\there"
+    },
+    {
+      "name": "what yaml_scalar writes for 'ctrl\\x01char'",
+      "text": "---\nv: \"ctrl\\u0001char\"\n---\nBody.\n",
+      "key": "v",
+      "value": "ctrl\u0001char"
+    },
+    {
+      "name": "what yaml_scalar writes for 'nel\\x85line'",
+      "text": "---\nv: \"nel\\u0085line\"\n---\nBody.\n",
+      "key": "v",
+      "value": "nelline"
+    },
+    {
+      "name": "a byte-order mark before the frontmatter",
+      "text": "﻿---\nv: plain\n---\nBody.\n",
+      "key": "v",
+      "value": "plain"
+    },
+    {
+      "name": "quoted list item",
+      "text": "---\nv:\n  - \"a \\\"b\\\"\"\n  - 'O''Brien'\n---\nBody.\n",
+      "key": "v",
+      "value": [
+        "a \"b\"",
+        "O'Brien"
+      ]
+    }
+  ]
+}

@@ -1207,3 +1207,22 @@ class FindVaultTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+VECTORS = Path(__file__).resolve().parent.parent / "tools" / "publish" / \
+    "test" / "fixtures" / "frontmatter-scalar-vectors.json"
+
+
+class SharedFrontmatterVectorTests(unittest.TestCase):
+    """The notes the publish tool's reader is tested on (its
+    frontmatter-scalar-vectors.test.js): both readers must agree on quoted
+    escapes and a leading byte-order mark (#593, #597)."""
+
+    def test_vectors(self):
+        vectors = json.loads(VECTORS.read_text(encoding="utf-8"))["vectors"]
+        self.assertTrue(vectors)
+        for v in vectors:
+            with self.subTest(v["name"]):
+                fm = vl.extract_frontmatter(v["text"]) or {}
+                self.assertEqual(fm.get(v["key"]), v["value"])
+
