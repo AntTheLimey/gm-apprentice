@@ -79,7 +79,7 @@ def gate(vault: Path,
         return str(e)
     if shown is None and vault_layout(vault) == "none":
         return (f"{vault} has a _meta/ folder but no settings file: that is "
-                f"first-time setup (vault_scaffold.py), not a migration")
+                f"first-time setup (gma vault-scaffold), not a migration")
     left = unmoved(vault, shown, notes)
     if left:
         return refusal(left, plugin)

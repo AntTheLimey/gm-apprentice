@@ -123,7 +123,8 @@ import re  # noqa: E402
 import gma as _gma  # noqa: E402
 
 _MODULES = sorted({c.module for c in _gma.COMMANDS.values() if c.module})
-_FILE_RE = re.compile(r"\b(" + "|".join(_MODULES) + r")\.py\s")
+_FILE_RE = re.compile(r"\b(" + "|".join(_MODULES) + r")\.py\b")
+_BARE_FILE_RE = re.compile(r"[a-z_]+\.py")
 
 
 def _printed_strings(tree: ast.AST):
@@ -147,6 +148,8 @@ def _flagged(path: Path):
     tree = ast.parse(path.read_text(encoding="utf-8"))
     out = []
     for line, s in _printed_strings(tree):
+        if _BARE_FILE_RE.fullmatch(s):
+            continue    # a filename the code runs, not a hint
         if "CLAUDE_PLUGIN_ROOT" in s or _FILE_RE.search(s):
             out.append(f"{path.name}:{line}: {s[:70]!r}")
     return out
@@ -174,3 +177,17 @@ def test_llms_names_its_own_path(capsys):
     want = 'python3 "' + Path(_gma.__file__).resolve().as_posix() + '"'
     assert want in out
     assert "{gma}" not in out
+
+
+def test_printed_hints_gate_catches_parenthesised_and_backticked(tmp_path):
+    for body in ('"run the upgrade (migrate.py), done"',
+                 '"first-time setup `vault_scaffold.py`"'):
+        p = tmp_path / "planted.py"
+        p.write_text(f"X = {body}\n")
+        assert _flagged(p), body
+
+
+def test_printed_hints_gate_skips_an_exact_filename(tmp_path):
+    p = tmp_path / "planted.py"
+    p.write_text('run_script("reconcile_scan.py", [])\n')
+    assert _flagged(p) == []

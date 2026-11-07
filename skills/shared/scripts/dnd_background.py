@@ -379,7 +379,7 @@ def plan_background(text: str, player_text: PlayerText, last: dict[str, tuple[st
                     gap = f"the note has no {label} under {SECTION[part]}"
                 else:
                     gap = f"the note has no ### {SECTION[part]} under Background"
-                rows.append(("CHECK", locus, f"{gap}; run the vault upgrade (migrate.py), nothing was written"))
+                rows.append(("CHECK", locus, f"{gap}; run the vault upgrade (gma migrate), nothing was written"))
             continue
         now, source_fp, note_fp = held(part, span), fingerprint(want), fingerprint(held(part, span))
         legacy_fp = fingerprint(legacy[part])
