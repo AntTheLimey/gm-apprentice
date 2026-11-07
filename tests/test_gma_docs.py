@@ -2,9 +2,8 @@
 
 The pages under skills/shared/gma/ are hand-written prose around blocks
 rendered from the command tree (gma_docs.render, the one definition of
-conforming). The skill-text gates read every `gma <cmd> ...`,
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/<x>.py" ...` and
-publish-tool line in skills/**/*.md and hold it to the real parsers.
+conforming). The skill-text gates read every `gma <cmd> ...`
+and publish-tool line in skills/**/*.md and hold it to the real parsers.
 
 Each gate has a positive control: an error planted in a copy, which the
 gate must catch.
@@ -55,9 +54,6 @@ def tree():
 # --- reading commands out of skill text ------------------------------------
 
 MODULES = {c.module: n for n, c in gma.COMMANDS.items() if c.module}
-SCRIPT_RE = re.compile(
-    r'(?:python3?\s+)?"?\$\{CLAUDE_PLUGIN_ROOT\}/skills/shared/scripts/'
-    r'(?P<mod>\w+)\.py"?')
 BARE_RE = re.compile(r'(?P<mod>[a-z_]+)\.py\b')
 GMA_RE = re.compile(r'gma\s+(?P<cmd>[a-z][a-z-]*)')
 PUBLISH_RE = re.compile(
@@ -73,13 +69,13 @@ class Found:
     def __init__(self, path, line, kind, name, rest, form, fenced):
         self.path, self.line, self.kind = path, line, kind
         self.name, self.rest, self.fenced = name, rest, fenced
-        # "script" (python3 "${CLAUDE_PLUGIN_ROOT}/..."), "gma", or "bare"
-        # (`vault_check.py frontmatter` or `vw ...`, the skills' shorthand).
+        # "gma", "bare" (`vault_check.py frontmatter` or `vw ...`, the
+        # skills' shorthand), or "full" (a publish-tool line).
         self.form = form
 
     def example(self):
         """A full command line with arguments: it must parse."""
-        return (self.kind == "cmd" and self.form in ("script", "gma")
+        return (self.kind == "cmd" and self.form == "gma"
                 and bool(self.rest.strip()) and not _synopsis(self.rest))
 
     def where(self):
@@ -98,15 +94,6 @@ def _match(text):
     text = text.lstrip()
     if text.startswith("$ "):
         text = text[2:]
-    m = SCRIPT_RE.match(text)
-    if m:
-        if m.group("mod") == "gma":
-            # The plan's calling form: hand the rest to the gma branch.
-            text = "gma" + text[m.end():]
-        elif m.group("mod") not in MODULES:
-            return ("unknown-script", m.group("mod"), "", "script")
-        else:
-            return ("cmd", MODULES[m.group("mod")], text[m.end():], "script")
     m = BARE_RE.match(text)
     if m:
         if m.group("mod") not in MODULES:
@@ -728,7 +715,7 @@ class SkillTextTests(unittest.TestCase):
         self.assertTrue(any(f.fenced for f in found))
         self.assertTrue(any(not f.fenced for f in found))
         # Each form the gates claim to read was read.
-        self.assertGreater(len([f for f in found if f.form == "gma"]), 0)
+        self.assertGreater(len([f for f in found if f.form == "gma"]), 40)
         self.assertGreater(len([f for f in all_found()
                                 if f.kind == "publish"]), 0)
 

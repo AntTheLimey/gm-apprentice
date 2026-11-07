@@ -126,8 +126,7 @@ Read the relevant file before generating; load only what the
 request needs. Every system folder has `mechanics.md` (core rules;
 then `rules-reference.md`, which GURPS lacks),
 `character-generation.md`, `session-procedures.md` and
-`character-sheet.md`. `kind` = the `gma rules-lookup <system> "<term>" --kind <kind>` for
-that row. Unsupported system → `systems/generic/`. Cite source
+`character-sheet.md`. `kind` = the `--kind` value for that row. Unsupported system → `systems/generic/`. Cite source
 books where possible.
 
 ### GURPS 4e (`systems/gurps-4e/`)
