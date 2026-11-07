@@ -179,7 +179,7 @@ so the deploy is `npx wrangler@4 pages deploy --branch=main` — no `docs/`
 argument; passing it positionally conflicts with the config and errors.
 Only a site with no `wrangler.toml` (an older scaffold) uses the explicit
 `pages deploy docs/ --project-name=<project-name> --branch=main --commit-dirty=true`
-form instead. `gm-publish deploy` chooses the form for you — the explanation
+form instead. `gma publish deploy` chooses the form for you — the explanation
 above is the fallback for running wrangler by hand.
 
 The `project create` step is a one-time setup per site. When it finishes,
@@ -203,7 +203,7 @@ npx wrangler@4 pages deploy --branch=main
 ```
 
 wrangler only uploads files that changed, so repeat deploys are fast.
-`gm-publish deploy --verify` runs this same build-then-deploy pair and
+`gma publish deploy --verify` runs this same build-then-deploy pair and
 also checks that the site's address serves the deployment wrangler
 printed (exit 1 if it does not) — the commands above are the fallback for
 running it by hand. The vault's build steps run with every build,
@@ -222,7 +222,7 @@ A fresh Tier-1 site scaffolds a **minimal** `wrangler.toml` — it has
 working) but **no** `[[kv_namespaces]]` block — and **no** `functions/`
 directory. The KV binding and the `functions/` are added only when you opt
 into the inbox or the live status bar: either the streamlined
-`gm-publish setup-inbox` / `setup-status-bar` commands below, or the manual
+`gma publish setup-inbox` / `setup-status-bar` commands below, or the manual
 steps further down in this section. Already-deployed inbox sites are
 unaffected — this only changes what a brand-new site ships.
 
@@ -416,7 +416,7 @@ skip it only if the loadout endpoint already put it there), then re-deploy.
    > same bare `npx wrangler@4 pages deploy` used throughout this guide — no
    > `docs/` argument. The `wrangler.toml` (`pages_build_output_dir = "docs"`)
    > is what makes the bare form required; there is nothing inbox-specific
-   > about it. `gm-publish deploy` chooses the form for you; the commands
+   > about it. `gma publish deploy` chooses the form for you; the commands
    > above are the fallback for running wrangler by hand.
 
 5. **Verify the endpoint** — with no session code set yet, a submit must be

@@ -57,8 +57,7 @@ MODULES = {c.module: n for n, c in gma.COMMANDS.items() if c.module}
 BARE_RE = re.compile(r'(?P<mod>[a-z_]+)\.py\b')
 GMA_RE = re.compile(r'gma\s+(?P<cmd>[a-z][a-z-]*)')
 PUBLISH_RE = re.compile(
-    r'(?:(?:node|npx)\s+)?(?:"[^"\s]*/gm-publish\.js"|gm-publish\.js'
-    r'|gm-publish|gm-apprentice-publish|"\$TOOL")\s+(?P<sub>[a-z][a-z-]*)')
+    r'(?:(?:node|npx)\s+)?gm-apprentice-publish\s+(?P<sub>[a-z][a-z-]*)')
 FENCE_RE = re.compile(r'^\s*(```|~~~)')
 SEPARATORS = re.compile(r'\s(?:&&|\|\||;|\|)\s')
 

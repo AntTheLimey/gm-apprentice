@@ -8,7 +8,7 @@ does the waiting, and you only wake when a request actually arrives.
 
 ## Prerequisites
 
-- First, bring the site's pinned tool up to date, from the site directory
+- First, bring the site's pinned tool up to date, from the site directory:
   `gma publish update-pin --site .`. A site
   still pinned to an older tool has no `inbox watch` and no `sheetFamily`.
 - The inbox is set up (KV namespace + `wrangler.toml` id + deployed Function).

@@ -327,7 +327,7 @@ that warning, this is the failure — follow the fix below.
 
 Run `gma publish doctor --site --config <dir>/vault.config.json`. A
 `VERSION_DRIFT` row names the version the site is pinned to, the newest
-version installed in the plugin cache, and the fix (`gm-publish
+version installed in the plugin cache, and the fix (`gma publish
 update-pin`).
 
 ### Fix
