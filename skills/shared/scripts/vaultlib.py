@@ -191,9 +191,10 @@ def _decode_double_quoted(inner: str) -> str:
     escape JSON lacks (`\\x41`, `\\e`) leaves the content as authored rather
     than guessing."""
     try:
-        return json.loads(f'"{inner}"', strict=False)
+        value = json.loads(f'"{inner}"', strict=False)
     except ValueError:
         return inner
+    return value if isinstance(value, str) else inner
 
 
 def scalar_value(value: str) -> str:
