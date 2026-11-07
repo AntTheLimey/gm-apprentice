@@ -3,8 +3,10 @@ name: ttrpg-expert
 description: "TTRPG rules advisor and content engine for CoC 7e, GURPS 4e, Forged in the Dark, D&D 5e (2024) and Pathfinder 2e (Remaster): rules lookups, character building and point-budget validation, NPCs and stat blocks, scenes, encounters, scenarios, locations, factions, items, handouts, random inspiration, continuity and plot-hole checks, canon verification, PC arc and spotlight analysis, fail forward and improvisation. For session workflows use session-prep/play/wrapup; vault filing, campaign-organizer; audits, campaign-qa. Trigger on rules questions, point-buy, 'build me a character', 'make me an NPC', 'check for plot holes', 'write a scene', 'create a handout'."
 ---
 
-TTRPG advisor and content engine. Files prefixed `shared/` live
-at `skills/shared/`; `systems/` paths are relative to this skill.
+TTRPG advisor and content engine. `shared/` is the `shared` folder beside this skill's folder (inside
+it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
+with the whole path quoted; `gma llms` lists its commands.
+`systems/` paths are relative to this skill.
 
 **Voices:** in a vault, for dialogue, read-aloud, scene-setting
 or a handout, run `python3

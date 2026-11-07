@@ -9,6 +9,10 @@ conversationally (not programmatically) to campaign-organizer,
 session-wrapup, `shared/reconcile.md` and, optionally,
 campaign-qa.
 
+`shared/` is the `shared` folder beside this skill's folder (inside
+it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
+with the whole path quoted; `gma llms` lists its commands.
+
 **Shared references:** Read on first invocation:
 `shared/session-principles.md`, `shared/session-document-chain.md`,
 `shared/reconcile.md`.

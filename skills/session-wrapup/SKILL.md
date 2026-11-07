@@ -6,6 +6,10 @@ description: "Use when a TTRPG session has just ended and the GM needs to wrap u
 Post-session processor: turns the Play Notes into canon and
 writes the Wrap-Up file that session-prep reads next.
 
+`shared/` is the `shared` folder beside this skill's folder (inside
+it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
+with the whole path quoted; `gma llms` lists its commands.
+
 **On first invocation:** read `shared/session-principles.md` and
 run its Version Gate, then read `shared/session-document-chain.md`.
 

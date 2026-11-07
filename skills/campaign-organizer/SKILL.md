@@ -11,7 +11,9 @@ campaign content as interlinked markdown with Juggl-compatible
 graph metadata. You don't create content — `ttrpg-expert` does.
 For a gap, scaffold a placeholder note and flag it.
 
-Files prefixed `shared/` live at `skills/shared/`.
+`shared/` is the `shared` folder beside this skill's folder (inside
+it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
+with the whole path quoted; `gma llms` lists its commands.
 
 ## Companion Skills
 

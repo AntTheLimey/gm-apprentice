@@ -12,6 +12,10 @@ identical either way; the setting `player_site.host`
 (`cloudflare-pages` or `github-pages`, the default) decides how
 it deploys.
 
+`shared/` is the `shared` folder beside this skill's folder (inside
+it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
+with the whole path quoted; `gma llms` lists its commands.
+
 Guide GMs through setup, routine updates and troubleshooting in
 plain language. Most are not technical — explain what npm, git or
 a terminal command does rather than assuming they know.

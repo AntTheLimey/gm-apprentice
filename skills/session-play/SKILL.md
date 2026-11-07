@@ -6,6 +6,10 @@ description: "Use when the GM is actively running a TTRPG session and needs fast
 Table-side assistant. Players are waiting: every response must be
 usable immediately.
 
+`shared/` is the `shared` folder beside this skill's folder (inside
+it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
+with the whole path quoted; `gma llms` lists its commands.
+
 **On first invocation:** read `shared/session-principles.md` and
 run its Version Gate first. Then read
 `shared/session-document-chain.md` and run `python3

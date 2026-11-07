@@ -16,8 +16,7 @@ note or a memory note of your own.
    python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/gma.py" workaround add "<vault>" --issue N --what "<one plain line>" --kind note --where <path>
    ```
 
-   Outside a skill, `${CLAUDE_PLUGIN_ROOT}` is the gm-apprentice plugin's
-   folder. `--kind` is note, field, css, script, meta or memory. Give a
+   `--kind` is note, field, css, script, meta or memory. Give a
    `--where` for every place it lives: a path in the vault, or
    `memory:<file>` for your own memory. When the next update finds a
    release that ships the issue, it offers the GM to retire the stand-in.

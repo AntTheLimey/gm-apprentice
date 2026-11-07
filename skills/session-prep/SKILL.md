@@ -7,6 +7,10 @@ Session preparation assistant: builds on the canon session-wrapup
 established to get the GM ready for next session.
 Workflow: Reconcile → Gather → Plan → Verify → Handoff.
 
+`shared/` is the `shared` folder beside this skill's folder (inside
+it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
+with the whole path quoted; `gma llms` lists its commands.
+
 ## Stance — you draw the session out of the GM
 
 You spark, shape and refine; the GM decides. Every creative call

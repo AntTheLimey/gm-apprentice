@@ -9,7 +9,9 @@ they reach the table, and walk the GM through fixing each one. You
 validate and repair; you don't create content. Every finding gets
 a severity, an explanation and a proposed fix — the GM decides.
 
-Files prefixed `shared/` live at `skills/shared/`.
+`shared/` is the `shared` folder beside this skill's folder (inside
+it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
+with the whole path quoted; `gma llms` lists its commands.
 
 ## Companion Skills
 
