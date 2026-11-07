@@ -114,7 +114,8 @@ Steps 2 and 4.
 ### 2. Narrative Recap
 
 **Voices first:** `vault_check.py <vault> voices`, plus one naming
-any PC who died or left this session (else left out). `# off:
+any PC who died or left this session and any NPC the GM gives a
+story (else left out). `# off:
 vault.voices` → no voices, as before. A `(none)` voice → draft it
 per `shared/voice.md` for the GM's yes: the campaign's before the
 recap, a PC's before their Story entry, an NPC's when the GM gives

@@ -171,8 +171,8 @@ state — presented together, GM approves each item. Then:
 - `stamp_entities.py <vault> <new entity files> --set source=world-evolution --session S --date D`
   on entities this pass created
 - `stamp_entities.py <vault> <changed entity files> --session S --date D`
-  on entities it updated (their `source` stays); S is the asOfSession
-  value in the vault's shape (`9` or `"Session 9"`)
+  on entities it updated (their `source` stays); S is the session being
+  reconciled, in the vault's asOfSession shape (`9` or `"Session 9"`)
 
 ### 7. Record decisions
 

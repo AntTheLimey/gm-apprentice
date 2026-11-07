@@ -20,8 +20,8 @@ with where it stopped, in the usual 1-5 sentences. Also run
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py"
 <vault> voices` once; dialogue, read-aloud,
 scene-setting and handouts use the campaign voice, or a voiced
-character's own (`# off: vault.voices` or a `(none)` campaign: as
-before). Never draft one.
+character's own (`# off: vault.voices`, or `(none)` for the voice
+that prose takes: as before). Never draft one.
 
 ## Behavior
 

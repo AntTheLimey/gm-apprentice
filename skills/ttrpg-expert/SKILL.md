@@ -9,8 +9,9 @@ at `skills/shared/`; `systems/` paths are relative to this skill.
 **Voices:** in a vault, for dialogue, read-aloud, scene-setting
 or a handout, run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
-voices`: the campaign voice, or a voiced speaker's or writer's own.
-Off, a `(none)` campaign or no vault: as before. Never draft one.
+voices` (plus one naming a speaker or writer it leaves out): the
+campaign voice, or a voiced speaker's or writer's own. Off, no vault,
+or `(none)` for the voice that prose takes: as before. Never draft one.
 
 ## Quick Commands
 

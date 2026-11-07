@@ -36,14 +36,16 @@ the approved voice: dry-run, then `--write`.
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
-  <vault> "<note path>" --set 'voice=…'
+  <vault> "<note path>" --set 'voice="…"'
 ```
 
-An apostrophe in the voice goes in as `'\''`.
+The stamp strips the double quotes around `…`, so quotes the voice
+itself opens or closes with stay. An apostrophe goes in as `'\''`.
 
 ## Folding in a correction
 
 When the GM corrects prose told in a voice, rewrite it per
-`shared/character-story-format.md` § Corrections, then offer to fold the lesson into that voice, so it sticks. The
-voice comes out no longer than it was: cut or reword to make room.
-Same stamp.
+`shared/character-story-format.md` § Corrections, then, unless
+`vault.voices` is off, offer to fold the lesson into that voice, so
+it sticks. The voice comes out no longer than it was: cut or reword
+to make room. Same stamp.
