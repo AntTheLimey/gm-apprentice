@@ -2241,6 +2241,20 @@ def npc_story(vault, stdin, *flags, write=True):
                *(["--write"] if write else []), stdin=stdin)
 
 
+class LinkListTests(unittest.TestCase):
+    def test_a_name_with_a_quote_round_trips(self):
+        # #597 review: items now read back decoded, so they must be written
+        # escaped, or `"[[A "B"]]"` breaks the frontmatter.
+        _, children = vw.link_list(['A "B"', "C\\D", "Plain"])
+        # The written text, not only a read-back: the scripts' reader is
+        # lenient enough to read the broken line too; YAML is not.
+        self.assertEqual(children, ['  - "[[A \\"B\\"]]"',
+                                    '  - "[[C\\\\D]]"', '  - "[[Plain]]"'])
+        text = "---\nentities:\n" + "\n".join(children) + "\n---\n"
+        self.assertEqual(vw.vl.extract_frontmatter(text)["entities"],
+                         ['[[A "B"]]', "[[C\\D]]", "[[Plain]]"])
+
+
 class ByteOrderMarkTests(unittest.TestCase):
     """A note saved with a UTF-8 byte-order mark is still found (#593)."""
 

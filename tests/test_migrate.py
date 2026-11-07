@@ -649,6 +649,36 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("not run: later (the update stopped first)", out)
         self.assertNotIn("not run: one", out)
 
+    def test_a_choice_whose_check_ran_is_not_offered_despite_a_later_failure(self):
+        # Review of #595: only a check that never finished says "not run".
+        vault = self.new_layout(make_vault(self))
+
+        def boom(x):
+            raise StepFailed("could not")
+
+        def find_one(v):
+            return [Item("one", CHOICE, ["a or b"], boom, wants="a or b")]
+        checks = [Check("tpl", "1.10.30", 2, "tpl", lambda v: [],
+                        choices=("template:",)),
+                  Check("one", "1.10.30", 3, "one", find_one,
+                        choices=("one=",))]
+        code, out, _ = call([str(vault), "apply", "--choose",
+                             "template:npc.md", "--choose", "one=a"], checks)
+        self.assertEqual(code, 1)
+        self.assertIn("not offered: template:npc.md", out)
+        self.assertNotIn("not run", out)
+
+    def test_a_failed_stamp_leaves_unoffered_choices_not_offered(self):
+        vault = make_vault(self)
+        with mock.patch.object(migrate, "stamp",
+                               side_effect=StepFailed("read-only")):
+            code, out, _ = call(
+                [str(vault), "apply", "--choose", "template:npc.md"],
+                self.choice_checks([]))
+        self.assertEqual(code, 1)
+        self.assertIn("not offered: template:npc.md", out)
+        self.assertNotIn("not run", out)
+
     def test_answers_that_could_not_be_remembered_are_said(self):
         # CodeRabbit #452: a failed held write was silent, and the next plan asked again.
         vault = self.new_layout(make_vault(self))

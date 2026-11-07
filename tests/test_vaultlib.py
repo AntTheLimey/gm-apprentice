@@ -748,10 +748,12 @@ class TextHelperTests(unittest.TestCase):
             ["Crowe"])
         self.assertEqual(vl.link_aliases({"gm_aliases": ""}), [])
         self.assertEqual(vl.link_aliases({"gm_aliases": "   "}), [])
-        # The parser keeps YAML escapes as written; the decoded spelling is
-        # the one a link uses.
-        self.assertIn("O'Neil", vl.link_aliases({"gm_aliases": "O''Neil"}))
-        self.assertIn('Say "Hi"', vl.link_aliases({"aliases": ['Say \\"Hi\\"']}))
+        # Quoted names arrive decoded (#597), block or flow: the spelling a
+        # link uses.
+        for text in ("---\ngm_aliases: 'O''Neil'\naliases:\n  - \"Say \\\"Hi\\\"\"\n---\n",
+                     "---\ngm_aliases: 'O''Neil'\naliases: [\"Say \\\"Hi\\\"\"]\n---\n"):
+            with self.subTest(text=text):
+                self.assertEqual(vl.frontmatter_aliases(text), ['Say "Hi"', "O'Neil"])
 
     def test_raw_frontmatter_and_body_of(self):
         text = "---\ntype: npc\n---\n\n# Body\n\ntext\n"
@@ -1205,9 +1207,17 @@ class FindVaultTests(unittest.TestCase):
         self.assertIsNone(vl.find_vault(root / "Sub" / "n.md"))
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
 
+class ByteOrderMarkBodyTests(unittest.TestCase):
+    """The body readers skip a BOM note's frontmatter, as the frontmatter
+    reader now reads it (#593 review)."""
+    TEXT = '\ufeff---\ntype: npc\nsecret: "[[Hidden]]"\n---\n# Body\n'
+
+    def test_iter_body_lines(self):
+        self.assertEqual(list(vl.iter_body_lines(self.TEXT)), [(5, "# Body")])
+
+    def test_body_and_offset(self):
+        self.assertEqual(vl.body_and_offset(self.TEXT), (4, "# Body\n"))
 
 VECTORS = Path(__file__).resolve().parent.parent / "tools" / "publish" / \
     "test" / "fixtures" / "frontmatter-scalar-vectors.json"
@@ -1225,4 +1235,10 @@ class SharedFrontmatterVectorTests(unittest.TestCase):
             with self.subTest(v["name"]):
                 fm = vl.extract_frontmatter(v["text"]) or {}
                 self.assertEqual(fm.get(v["key"]), v["value"])
+                if v.get("yaml_scalar"):
+                    self.assertIn(f'{v["key"]}: {vl.yaml_scalar(v["value"])}\n',
+                                  v["text"])
 
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

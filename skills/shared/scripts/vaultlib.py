@@ -216,6 +216,15 @@ def scalar_value(value: str) -> str:
     return re.split(r"\s+#", text, maxsplit=1)[0].strip()
 
 
+def _list_item(raw: str) -> str:
+    """One list item: a quoted one decoded as a quoted value is (#597);
+    anything else kept as before (`- #tag` is not dropped as a comment)."""
+    item = raw.strip()
+    if QUOTED_SCALAR_RE.match(item):
+        return scalar_value(item)
+    return item.strip('"').strip("'")
+
+
 def extract_frontmatter(content: str) -> dict[str, Any] | None:
     """Extract YAML frontmatter from markdown content."""
     # Handle both LF and CRLF line endings
@@ -239,12 +248,7 @@ def extract_frontmatter(content: str) -> dict[str, Any] | None:
             if current_key and current_key in frontmatter:
                 if not isinstance(frontmatter[current_key], list):
                     frontmatter[current_key] = []
-                item = line.strip()[2:].strip()
-                # A quoted item is decoded as a quoted value is; anything
-                # else is kept as before (`- #tag` is not dropped).
-                frontmatter[current_key].append(
-                    scalar_value(item) if QUOTED_SCALAR_RE.match(item)
-                    else item.strip('"').strip("'"))
+                frontmatter[current_key].append(_list_item(line.strip()[2:]))
             continue
 
         # Key: value pair
@@ -259,8 +263,8 @@ def extract_frontmatter(content: str) -> dict[str, Any] | None:
             elif value.startswith("[") and value.endswith("]"):
                 # Inline array: aliases: [Doc, "The Colonel"]
                 frontmatter[key] = [
-                    v.strip().strip('"').strip("'")
-                    for v in value[1:-1].split(",") if v.strip()]
+                    _list_item(v) for v in value[1:-1].split(",")
+                    if v.strip()]
             else:
                 frontmatter[key] = value
             current_key = key
@@ -406,8 +410,8 @@ def voice_read(text: str) -> str | None:
     """The note's `voice:` as plain text; `""` when absent, empty, a YAML
     null (`null`, `~`, any case) or only a comment; None when it is there
     but not on one line (a block, a folded or continued value, an
-    unclosed quote). Read from the raw line, as `extract_frontmatter`
-    keeps a double-quoted value's backslashes. Double-quoted: decoded as
+    unclosed quote). Read from the raw line, so a value that does not
+    sit on one line is told apart from none. Double-quoted: decoded as
     JSON (what `yaml_scalar` writes); single-quoted: `''` is `'`; bare:
     stripped, up to a ` #` comment."""
     lines = text.splitlines(keepends=True)
@@ -719,9 +723,7 @@ def link_aliases(fm: dict[str, Any]) -> list[str]:
     GM-only `gm_aliases:` (#212), deduplicated. An `aliases: Doc` scalar
     is malformed and skipped, matching the publish tool. A `gm_aliases:`
     scalar is read as one name: dropping it would leave the secret
-    unprotected without a word. The frontmatter parser keeps YAML escapes
-    as written, so a quoted `'O''Neil'` or `"a \\"b\\""` also adds its
-    decoded spelling, the one a link actually uses."""
+    unprotected without a word. Quoted names arrive decoded (#597)."""
     names: list[str] = []
     for field in ("aliases", "gm_aliases"):
         values = fm.get(field)
@@ -731,11 +733,8 @@ def link_aliases(fm: dict[str, Any]) -> list[str]:
             continue
         for a in values:
             name = str(a).strip()
-            if len(name) > 1 and name[0] == name[-1] and name[0] in "\"'":
-                name = name[1:-1].strip()
-            for n in (name, name.replace("''", "'"), name.replace('\\"', '"')):
-                if n and n not in names:
-                    names.append(n)
+            if name and name not in names:
+                names.append(name)
     return names
 
 
@@ -894,7 +893,7 @@ def iter_body_lines(text: str) -> Iterator[tuple[int, str]]:
     frontmatter so scans never trip on `aliases:` or `type:` values."""
     lines = text.splitlines()
     start = 0
-    if lines and lines[0].strip() == "---":
+    if lines and lines[0].lstrip("\ufeff").strip() == "---":
         for i in range(1, len(lines)):
             if lines[i].strip() == "---":
                 start = i + 1
@@ -2299,7 +2298,7 @@ def build_lines(text: str, exclude_sections: Iterable[str] = (), *,
         lines.pop()
     lines = [line.replace("\r", "") for line in lines]
     start = 0
-    if lines and lines[0].strip() == "---":
+    if lines and lines[0].lstrip("\ufeff").strip() == "---":
         start = next((i + 1 for i in range(1, len(lines))
                       if lines[i].strip() == "---"), 0)
     body = lines[start:]
@@ -2700,7 +2699,7 @@ def body_and_offset(text: str) -> tuple[int, str]:
     `body_text` gives it), for a caller that maps body lines back."""
     norm = text.replace("\r\n", "\n").replace("\r", "")
     lines = norm.split("\n")
-    if lines and lines[0].strip() == "---":
+    if lines and lines[0].lstrip("\ufeff").strip() == "---":
         for i in range(1, len(lines)):
             if lines[i].strip() == "---":
                 return i + 1, "\n".join(lines[i + 1:])

@@ -328,6 +328,17 @@ def _choice_problem(choice: str, value: str | None,
             f"run plan to see the ids")
 
 
+def _check_index(choice: str, todo: list[Check]) -> int:
+    """The index in `todo` of the check that offers `choice`, matched as
+    `_choice_problem` matches it; len(todo) when none does."""
+    for n, check in enumerate(todo):
+        for entry in check.choices:
+            base = entry.removesuffix("=")
+            if choice == base or (base.endswith(":") and choice.startswith(base)):
+                return n
+    return len(todo)
+
+
 def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
               checks: list[Check] | None = None) -> int:
     refused = gate(vault)
@@ -405,7 +416,6 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                     used.add(item.id)
                     did.extend((item.id, f"{item.id}\t{line}")
                                for line in item.apply(value))
-                    used.add(item.id)
                     if value == "leave" and item.holds_stamp:
                         left_ids.add(item.id)   # only once it has worked
                     repinned = repinned or (check.name == REPIN
@@ -433,10 +443,12 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                   file=sys.stderr)
     emit("Did", did)
     for choice in dict.fromkeys(i for i, _v in chosen if i not in used):
-        # Past a failure the rest was never looked at, so "not offered"
-        # would be a guess (#595).
-        print(f"not run: {choice} (the update stopped first)"
-              if failed is not None else f"not offered: {choice}")
+        # A choice whose check failed or was never reached was not looked
+        # for, so "not offered" would be a guess (#595). A failed stamp
+        # comes after every check (failed == len(todo)).
+        reached = failed is None or _check_index(choice, todo) < failed
+        print(f"not offered: {choice}" if reached else
+              f"not run: {choice} (the update stopped first)")
     if person or shown:
         emit(TITLES[PERSON], person, shown)
     for label in unanswered:

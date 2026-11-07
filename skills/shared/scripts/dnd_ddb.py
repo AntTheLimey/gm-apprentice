@@ -571,7 +571,7 @@ def find_table(lines: list[str], h2: str, h3: str) -> Table | None:
     cur2 = cur3 = ""
     table: Table | None = None
     header_at = -1
-    in_fm = bool(lines) and lines[0].strip() == "---"
+    in_fm = bool(lines) and lines[0].lstrip("\ufeff").strip() == "---"
     fence: str | None = None
     for i, raw in enumerate(lines):
         s = raw.strip()

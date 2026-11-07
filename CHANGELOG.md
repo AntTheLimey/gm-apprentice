@@ -13,9 +13,9 @@ Four bug fixes.
 
 ### Fixed
 
-- **A note that starts with a byte-order mark** (some Windows editors save one) is now read: `vault_write.py story` and `npc-story` found no such PC or NPC, and the scripts' checks read it as having no frontmatter (#593).
-- **Quoted frontmatter values are decoded** by the scripts' reader as YAML reads them: `"a \"b\""` reads `a "b"`, `"C:\\x"` reads `C:\x`, an escaped tab is a tab, and `'O''Brien'` reads `O'Brien`. Values the scripts wrote with escapes used to read back with their backslashes (#597). A shared set of test notes checks the publish tool's reader against the same values.
-- **`migrate.py apply`** no longer lists a choice whose step failed under "not offered" as well; a choice the run never reached because it stopped reads "not run" (#595).
+- **A note that starts with a byte-order mark** (some Windows editors save one) is now read: `vault_write.py story` and `npc-story` found no such PC or NPC, and the scripts read it as having no frontmatter, so the checks skipped it. Every frontmatter and body reader in the scripts now skips the mark (#593).
+- **Quoted frontmatter values are decoded** by the scripts' reader as YAML reads them: `"a \"b\""` reads `a "b"`, `"C:\\x"` reads `C:\x`, an escaped tab is a tab, and `'O''Brien'` reads `O'Brien`. Values the scripts wrote with escapes used to read back with their backslashes (#597). Block and flow lists are decoded too. The writers that put a read value back (a scene's linked notes and `played_in`, the props move's `prop_hand`) now escape it, so a name with a quote or backslash keeps its frontmatter valid. A shared set of test notes checks the publish tool's reader against the same values.
+- **`migrate.py apply`** no longer lists a choice whose step failed under "not offered" as well; a choice whose step the run never reached, because an earlier step failed, reads "not run" (#595).
 - **session-wrapup** never replaces the Campaign Overview's `current_game_date` with a vaguer one: with no date in the notes it keeps the date there, or moves it on only as far as the notes say time passed, and asks when unsure (#600).
 
 ## [1.11.4] — 2026-11-06

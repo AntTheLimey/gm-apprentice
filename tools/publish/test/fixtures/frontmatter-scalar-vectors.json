@@ -1,5 +1,5 @@
 {
-  "_comment": "Frontmatter values both readers must agree on: the scripts' vaultlib.extract_frontmatter and the publish tool's parseNote (#593, #597). Built from what vaultlib.yaml_scalar writes.",
+  "_comment": "Frontmatter values both readers must agree on: the scripts' vaultlib.extract_frontmatter and the publish tool's parseNote (#593, #597). Vectors marked yaml_scalar hold exactly what vaultlib.yaml_scalar writes for the value (tests/test_vaultlib.py checks). YAML-only escapes (\\x41, \\e, \\N) are left out: yaml_scalar never writes them and the scripts' reader keeps them as written.",
   "vectors": [
     {
       "name": "escaped double quotes",
@@ -44,34 +44,32 @@
       "value": "x # y"
     },
     {
-      "name": "what yaml_scalar writes for 'say \"hi\"'",
+      "name": "yaml_scalar: a quote",
       "text": "---\nv: \"say \\\"hi\\\"\"\n---\nBody.\n",
       "key": "v",
-      "value": "say \"hi\""
+      "value": "say \"hi\"",
+      "yaml_scalar": true
     },
     {
-      "name": "what yaml_scalar writes for 'back\\\\slash'",
+      "name": "yaml_scalar: a backslash",
       "text": "---\nv: \"back\\\\slash\"\n---\nBody.\n",
       "key": "v",
-      "value": "back\\slash"
+      "value": "back\\slash",
+      "yaml_scalar": true
     },
     {
-      "name": "what yaml_scalar writes for 'tab\\there'",
-      "text": "---\nv: \"tab\\there\"\n---\nBody.\n",
-      "key": "v",
-      "value": "tab\there"
-    },
-    {
-      "name": "what yaml_scalar writes for 'ctrl\\x01char'",
+      "name": "yaml_scalar: a control character",
       "text": "---\nv: \"ctrl\\u0001char\"\n---\nBody.\n",
       "key": "v",
-      "value": "ctrl\u0001char"
+      "value": "ctrl\u0001char",
+      "yaml_scalar": true
     },
     {
-      "name": "what yaml_scalar writes for 'nel\\x85line'",
+      "name": "yaml_scalar: a NEL",
       "text": "---\nv: \"nel\\u0085line\"\n---\nBody.\n",
       "key": "v",
-      "value": "nelline"
+      "value": "nelline",
+      "yaml_scalar": true
     },
     {
       "name": "a byte-order mark before the frontmatter",
@@ -80,12 +78,22 @@
       "value": "plain"
     },
     {
-      "name": "quoted list item",
+      "name": "quoted block-list items",
       "text": "---\nv:\n  - \"a \\\"b\\\"\"\n  - 'O''Brien'\n---\nBody.\n",
       "key": "v",
       "value": [
         "a \"b\"",
         "O'Brien"
+      ]
+    },
+    {
+      "name": "quoted flow-list items",
+      "text": "---\nv: [\"a \\\"b\\\"\", 'O''Brien', plain]\n---\nBody.\n",
+      "key": "v",
+      "value": [
+        "a \"b\"",
+        "O'Brien",
+        "plain"
       ]
     }
   ]
