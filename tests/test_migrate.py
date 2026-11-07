@@ -624,6 +624,31 @@ class ApplyTests(unittest.TestCase):
         _, plan, _ = call([str(vault), "plan"], checks)
         self.assertIn("one=<a or b>", plan)
 
+    def test_a_failed_choice_is_not_said_to_be_not_offered(self):
+        # #595: the failed step was listed under "not offered" as well, and a
+        # choice past the failure was never looked at.
+        vault = self.new_layout(make_vault(self))
+
+        def boom(x):
+            raise StepFailed("could not")
+
+        def find_one(v):
+            return [Item("one", CHOICE, ["a or b"], boom, wants="a or b")]
+
+        def find_later(v):
+            return [Item("later", CHOICE, ["yes"], lambda x: ["later done"])]
+        checks = [Check("one", "1.10.30", 3, "one", find_one,
+                        choices=("one=",)),
+                  Check("later", "1.10.30", 4, "later", find_later,
+                        choices=("later",))]
+        code, out, err = call([str(vault), "apply", "--choose", "one=a",
+                               "--choose", "later"], checks)
+        self.assertEqual(code, 1)
+        self.assertIn("could not", err)
+        self.assertNotIn("not offered", out)
+        self.assertIn("not run: later (the update stopped first)", out)
+        self.assertNotIn("not run: one", out)
+
     def test_answers_that_could_not_be_remembered_are_said(self):
         # CodeRabbit #452: a failed held write was silent, and the next plan asked again.
         vault = self.new_layout(make_vault(self))
