@@ -1,0 +1,201 @@
+"""tool_cache: fetch the publish tool release into a per-user cache."""
+import hashlib
+import http.server
+import io
+import os
+import shutil
+import sys
+import tarfile
+import threading
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
+
+import tool_cache  # noqa: E402
+from tool_cache import FetchFailed, cached_tool, fetch  # noqa: E402
+
+needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
+TOOL_JS = b"console.log('tool');\n"
+
+
+def make_tgz(members: list[tuple[str, bytes | None, str | None]]) -> bytes:
+    """(name, data, symlink target) entries; data None with a target is a link."""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for name, data, target in members:
+            info = tarfile.TarInfo(name)
+            if target is not None:
+                info.type = tarfile.SYMTYPE
+                info.linkname = target
+                tar.addfile(info)
+            else:
+                assert data is not None
+                info.size = len(data)
+                tar.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
+GOOD = [("package/bin/gm-publish.js", TOOL_JS, None),
+        ("package/package.json", b'{"version": "1.2.3"}', None)]
+
+
+class Release:
+    """Files served under /publish-v<ver>/, and a request count."""
+
+    def __init__(self) -> None:
+        self.files: dict[str, bytes] = {}
+        self.hits = 0
+
+    def add(self, version: str, tgz: bytes, sums: bytes | None = None) -> None:
+        name = f"gm-apprentice-publish-{version}.tgz"
+        self.files[f"/publish-v{version}/{name}"] = tgz
+        if sums is None:
+            sums = f"{hashlib.sha256(tgz).hexdigest()}  {name}\n".encode()
+        self.files[f"/publish-v{version}/SHA256SUMS"] = sums
+
+
+@pytest.fixture
+def release():
+    rel = Release()
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            rel.hits += 1
+            body = rel.files.get(self.path)
+            if body is None:
+                self.send_response(404)
+                self.end_headers()
+                return
+            self.send_response(200)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    rel.base = f"http://127.0.0.1:{server.server_address[1]}"  # type: ignore[attr-defined]
+    yield rel
+    server.shutdown()
+
+
+@pytest.fixture
+def cache(tmp_path):
+    d = tmp_path / "cache root"
+    d.mkdir()
+    return d
+
+
+def _left(cache: Path) -> list[str]:
+    pub = cache / "publish"
+    return sorted(p.name for p in pub.iterdir()) if pub.is_dir() else []
+
+
+@needs_node
+def test_fetch_unpacks_and_returns_the_tool(release, cache):
+    release.add("1.2.3", make_tgz(GOOD))
+    tool = fetch("1.2.3", root=cache, base=release.base)
+    assert tool == cache / "publish" / "1.2.3" / "package" / "bin" / "gm-publish.js"
+    assert tool.read_bytes() == TOOL_JS
+    assert cached_tool("1.2.3", root=cache) == tool
+
+
+@needs_node
+def test_fetch_is_a_no_op_when_cached(release, cache):
+    release.add("1.2.3", make_tgz(GOOD))
+    fetch("1.2.3", root=cache, base=release.base)
+    hits = release.hits
+    fetch("1.2.3", root=cache, base=release.base)
+    assert release.hits == hits
+
+
+@needs_node
+def test_checksum_mismatch_leaves_nothing(release, cache):
+    tgz = make_tgz(GOOD)
+    release.add("1.2.3", tgz,
+                sums=f"{'0' * 64}  gm-apprentice-publish-1.2.3.tgz\n".encode())
+    with pytest.raises(FetchFailed, match="checksum"):
+        fetch("1.2.3", root=cache, base=release.base)
+    assert _left(cache) == []
+
+
+@needs_node
+def test_404_names_the_version(release, cache):
+    with pytest.raises(FetchFailed) as e:
+        fetch("9.9.9", root=cache, base=release.base)
+    assert "publish-v9.9.9" in e.value.reason
+    assert "404" in e.value.reason
+    assert _left(cache) == []
+
+
+@needs_node
+@pytest.mark.parametrize("bad", [
+    ("package/../../evil.js", b"x", None),
+    ("/abs/evil.js", b"x", None),
+    ("package/bin/link", None, "/etc/passwd"),
+])
+def test_member_escaping_the_tree_is_refused(release, cache, bad):
+    release.add("1.2.3", make_tgz([*GOOD, bad]))
+    with pytest.raises(FetchFailed):
+        fetch("1.2.3", root=cache, base=release.base)
+    assert _left(cache) == []
+    assert not (cache.parent / "evil.js").exists()
+
+
+@needs_node
+def test_tarball_without_the_tool_is_refused(release, cache):
+    release.add("1.2.3", make_tgz([("package/package.json", b"{}", None)]))
+    with pytest.raises(FetchFailed, match="gm-publish.js"):
+        fetch("1.2.3", root=cache, base=release.base)
+    assert _left(cache) == []
+
+
+@needs_node
+def test_older_versions_cleared_newer_kept(release, cache):
+    for v in ("1.0.0", "1.2.3", "1.10.0"):
+        release.add(v, make_tgz(GOOD))
+    fetch("1.0.0", root=cache, base=release.base)
+    fetch("1.10.0", root=cache, base=release.base)
+    fetch("1.2.3", root=cache, base=release.base)
+    assert _left(cache) == ["1.10.0", "1.2.3"]
+
+
+@needs_node
+def test_no_node_fails_plainly(release, cache):
+    release.add("1.2.3", make_tgz(GOOD))
+    with pytest.raises(FetchFailed, match="node"):
+        fetch("1.2.3", root=cache, base=release.base, node="")
+
+
+def test_cache_root_honours_GMA_CACHE(monkeypatch, tmp_path):
+    monkeypatch.setenv("GMA_CACHE", str(tmp_path / "x y"))
+    assert tool_cache.cache_root() == tmp_path / "x y"
+
+
+def test_cache_root_default_is_per_user(monkeypatch):
+    monkeypatch.delenv("GMA_CACHE", raising=False)
+    root = tool_cache.cache_root()
+    assert root.name == "gm-apprentice" or root.parent.name == "gm-apprentice"
+
+
+def test_release_base_override(monkeypatch):
+    monkeypatch.setenv("GMA_RELEASE_BASE", "http://example.invalid/r")
+    assert tool_cache.release_base() == "http://example.invalid/r"
+    monkeypatch.delenv("GMA_RELEASE_BASE")
+    assert tool_cache.release_base() == tool_cache.RELEASE_BASE
+
+
+def test_release_base_matches_update_pin():
+    js = (ROOT / "tools" / "publish" / "lib" / "update-pin.js").read_text(encoding="utf-8")
+    assert f"'{tool_cache.RELEASE_BASE}'" in js
+
+
+def test_cached_tool_none_when_absent(cache):
+    assert cached_tool("1.2.3", root=cache) is None
+    os.makedirs(cache / "publish" / "1.2.3")
+    assert cached_tool("1.2.3", root=cache) is None
