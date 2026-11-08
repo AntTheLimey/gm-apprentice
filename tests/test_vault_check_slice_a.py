@@ -24,6 +24,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 from unittest import mock
 
@@ -390,6 +391,15 @@ class VersionCommandTests(unittest.TestCase):
         self.assertIn(f"vault 99.0.0 > plugin {plugin_version_string()}", message)
         self.assertIn("update the plugin before touching this vault", message)
         self.assertEqual(code, 1)
+
+    def test_ahead_off_the_plugin_names_the_skills_update(self):
+        vault = make_vault(self, '---\ngm_apprentice_version: "99.0.0"\n---\n')
+        bare = vc.install_layout.LAYOUT._replace(root=None)
+        with unittest.mock.patch.object(vc.install_layout, "LAYOUT", bare):
+            (token, _path, message), _code = self.verdict(vault)
+        self.assertEqual(token, "AHEAD")
+        self.assertIn("npx skills update", message)
+        self.assertNotIn("the plugin", message)
 
     def test_absent_field_is_an_error_not_a_pass(self):
         vault = make_vault(self, "---\npublish:\n  mode: player\n---\n")

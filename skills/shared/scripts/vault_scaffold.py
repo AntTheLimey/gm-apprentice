@@ -42,7 +42,7 @@ from schema_rules import (SYSTEMS, TYPE_FOLDERS, WORLD_STUBS, system_id,
 from migrate_core import StepFailed, write_text_atomic
 from vault_write import (set_block, template_body, template_frontmatter,
                          template_text, utf8_output)
-from install_layout import VERSION_UNKNOWN  # noqa: E402
+from install_layout import VERSION_UNKNOWN, update_step  # noqa: E402
 from vaultlib import (PUBLISH_TOOL, SETTINGS_FILE, STAMP_KEY, STATE_FILE,
                       SettingsUnavailable, StateUnreadable, _read_state, entity_type,
                       extract_frontmatter, forget_settings, parse_version,
@@ -475,7 +475,8 @@ def _refuse_unusable_version(vault: Path, plugin: str) -> None:
             f"that file")
     if parse_version(str(current)) > parse_version(plugin):
         raise ScaffoldError(f"vault {current} is ahead of plugin {plugin}: "
-                            f"update the plugin before touching this vault")
+                            f"{update_step('update the plugin')} before "
+                            f"touching this vault")
 
 
 def build_parser() -> argparse.ArgumentParser:

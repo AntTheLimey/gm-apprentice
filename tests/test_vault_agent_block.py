@@ -68,6 +68,9 @@ class EnsureBlockTests(unittest.TestCase):
         self.assertIn("`gma workaround add`", block)
         self.assertIn("workaround add", block)
         self.assertIn("filing-plugin-issues.md", block)
+        # An npx skills install has no skills/shared/ path; name the folder.
+        self.assertNotIn("skills/shared/", block)
+        self.assertNotIn("plugin gap", block)
         self.assertNotIn("${CLAUDE_PLUGIN_ROOT}", block)
 
     def test_text_outside_the_markers_is_untouched(self):
