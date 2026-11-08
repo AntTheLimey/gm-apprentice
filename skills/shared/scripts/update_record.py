@@ -53,7 +53,7 @@ class Workaround(TypedDict):
     where: list[str]         # vault-relative paths, or memory:<file>
     kind: WorkaroundKind
     added: str               # ISO date
-    release: Optional[str]   # by hand: the release that ships it, over the CHANGELOG's
+    release: Optional[str]   # by hand: the release that ships it, over GitHub's answer
     state: Literal["active", "kept", "retired"]
     kept_at: Optional[str]   # the plugin version when the GM said keep
     retired: Optional[str]   # date and reason

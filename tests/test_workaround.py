@@ -1,5 +1,5 @@
 """workaround.py and the update's offers: workarounds recorded by the issue
-they stand in for, offered for retirement once a release ships it."""
+they stand in for, offered for retirement once GitHub says a release ships it."""
 
 import contextlib
 import io
@@ -16,27 +16,33 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "shared" / "script
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import changelog_issues  # noqa: E402
+import github_issues  # noqa: E402
 import migrate  # noqa: E402
 import update  # noqa: E402
 import update_record  # noqa: E402
 import workaround  # noqa: E402
 from test_migrate import make_vault  # noqa: E402
 
-LOG = """# Changelog
+class FakeHub:
+    """GitHub as the tests set it: #510 closed as fixed on 2026-11-04 at
+    10:00, between 1.10.128 (the day before) and 1.10.129 (at 12:00)."""
 
-## [1.10.129] — 2026-11-04
+    def __init__(self):
+        self.issues = {510: github_issues.Issue(
+            "closed", "completed", "2026-11-04T10:00:00Z")}
+        self.releases = {"1.10.128": "2026-11-03T12:00:00Z",
+                         "1.10.129": "2026-11-04T12:00:00Z"}
+        self.asked = []
 
-GURPS sheets can count local gravity (#510).
+    def __call__(self, timeout=None):
+        return self
 
-## [1.10.125] — 2026-11-03
+    def issue(self, number):
+        self.asked.append(number)
+        return self.issues.get(number)
 
-- Gravity, part one: the field is read (#510).
-
-## [1.10.120] — 2026-11-01
-
-- Hero layouts, full-bleed included (#530).
-"""
+    def published(self, version):
+        return self.releases.get(version)
 
 
 def wa(vault, *args):
@@ -56,8 +62,7 @@ class Base(unittest.TestCase):
         tmp = Path(tempfile.mkdtemp(prefix="wa-"))
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
         self.home = tmp / "home"
-        self.changelog = tmp / "CHANGELOG.md"
-        self.changelog.write_text(LOG, encoding="utf-8")
+        self.hub = FakeHub()
         self.bin = tmp / "bin"   # PATH holds only this: no gh unless a test puts one
         self.bin.mkdir()
         node = shutil.which("node")   # the settings are read through node
@@ -68,7 +73,7 @@ class Base(unittest.TestCase):
         p.start()
         self.addCleanup(p.stop)
         for target, attr, value in (
-                (changelog_issues, "CHANGELOG", self.changelog),
+                (github_issues, "GitHub", self.hub),
                 (migrate, "plugin_version", lambda: (self.plugin, "test")),
                 (workaround, "plugin_version", lambda: (self.plugin, "test"))):
             p = mock.patch.object(target, attr, value)
@@ -90,17 +95,6 @@ class Base(unittest.TestCase):
 
     def swept(self):
         workaround.swept(self.vault, no_memory=True)
-
-    def gh(self, body):
-        """A stub `gh` on PATH that logs its arguments, then runs `body`."""
-        stub = self.bin / "gh"
-        stub.write_text(f'#!/bin/sh\necho "$@" >> "{self.gh_log}"\n{body}\n',
-                        encoding="utf-8")
-        stub.chmod(0o755)
-
-    def gh_calls(self):
-        return (self.gh_log.read_text(encoding="utf-8").splitlines()
-                if self.gh_log.exists() else [])
 
     def record(self):
         return update_record.load(self.vault)
@@ -170,16 +164,16 @@ class AddTests(Base):
         self.assertEqual(code, 2)
 
 
-class AlreadyCitedTests(Base):
-    def test_add_says_when_the_release_notes_already_mention_the_issue(self):
+class AlreadyFixedTests(Base):
+    def test_add_says_when_github_already_has_it_fixed(self):
         code, out, _ = wa(self.vault, "add", "--issue", "510", "--what",
                           "Gravity by hand", "--kind", "note",
                           "--where", "PCs/Six.md")
         self.assertEqual(code, 0)
-        self.assertIn("#510 is already mentioned in 1.10.129's release notes. "
-                      "If that release only partly fixed it, run this add "
-                      "again with --release set to the release that finishes "
-                      "it; otherwise the next update may offer it for "
+        self.assertIn("#510 is already closed as fixed on GitHub. If that "
+                      "fix only partly covers it, run this add again with "
+                      "--release set to the release that finishes it; "
+                      "otherwise the next update may offer it for "
                       "retirement.", out)
         self.assertEqual(len(self.record()["workarounds"]), 1)   # still added
         code, out, _ = wa(self.vault, "add", "--issue", "510", "--what",
@@ -187,14 +181,23 @@ class AlreadyCitedTests(Base):
                           "--where", "PCs/Six.md", "--release", "1.10.140")
         self.assertEqual(code, 0, out)
         self.assertIn("Set gravity-by-hand's release to 1.10.140", out)
-        self.assertNotIn("already mentioned", out)
+        self.assertNotIn("already closed", out)
         [w] = self.record()["workarounds"]
         self.assertEqual(w["release"], "1.10.140")
 
-    def test_no_notice_for_an_issue_not_yet_mentioned(self):
-        _, out, _ = wa(self.vault, "add", "--issue", "999", "--what", "x",
+    def test_no_notice_for_an_open_or_unknown_issue(self):
+        self.hub.issues[998] = github_issues.Issue("open", None, None)
+        for issue in ("998", "999"):
+            _, out, _ = wa(self.vault, "add", "--issue", issue, "--what", "x",
+                           "--kind", "note", "--where", "PCs/Six.md")
+            self.assertNotIn("already closed", out)
+
+    def test_no_notice_for_an_issue_closed_as_not_planned(self):
+        self.hub.issues[997] = github_issues.Issue(
+            "closed", "not_planned", "2026-11-01T00:00:00Z")
+        _, out, _ = wa(self.vault, "add", "--issue", "997", "--what", "x",
                        "--kind", "note", "--where", "PCs/Six.md")
-        self.assertNotIn("already mentioned", out)
+        self.assertNotIn("already closed", out)
 
 
 class MemoryFolderTests(Base):
@@ -327,7 +330,7 @@ class BeforeReleaseTests(Base):
 
     def test_a_workaround_is_offered_only_after_its_release(self):
         self.swept()
-        self.add()   # #510 ships in 1.10.129
+        self.add()   # #510 was closed after 1.10.128 came out
         res = self.update()
         self.assertEqual(res.questions, [])
         self.assertEqual(res.exit, 0)
@@ -374,26 +377,13 @@ class OfferTests(Base):
         self.assertEqual((q.kind, q.options), ("asks", ["retire", "keep"]))
         self.assertEqual(
             q.text, "Gravity by hand on the sheet (PCs/Six.md) stands in for "
-            "#510. The 1.10.129 release notes mention #510: GURPS sheets can "
-            "count local gravity (#510). If that release built in what this "
-            "stands in for, retire it and switch to the built-in way; "
-            "otherwise keep it.")
-
-    def test_a_long_changelog_entry_is_cut_to_160(self):
-        self.swept()
-        self.changelog.write_text(
-            "## [1.10.129] — x\n\n" + "word " * 500 + "(#510).\n",
-            encoding="utf-8")
-        self.add()
-        [q] = self.update().questions
-        said = q.text.split("release notes mention #510: ", 1)[1]
-        said = said.rsplit(". If that release", 1)[0]
-        self.assertLessEqual(len(said), 160)
-        self.assertTrue(said.endswith("…"))
+            "#510. GitHub closed #510 as fixed on 2026-11-04, before 1.10.129 "
+            "came out. If that release built in what this stands in for, "
+            "retire it and switch to the built-in way; otherwise keep it.")
 
     def test_release_override_wins(self):
         self.swept()
-        self.add(release="1.10.200")   # the CHANGELOG says 1.10.129
+        self.add(release="1.10.200")   # GitHub alone would offer it now
         self.assertEqual(self.update().questions, [])
         self.add(issue=9999, what="Unmapped", release="1.10.1")
         [q] = self.update().questions
@@ -401,15 +391,13 @@ class OfferTests(Base):
         self.assertIn("stands in for #9999. You set 1.10.1 by hand as the "
                       "release that builds it in. If that release", q.text)
 
-    def test_a_hand_set_release_quotes_its_own_lines(self):
+    def test_a_hand_set_release_is_offered_once_reached(self):
         self.swept()
-        self.add(release="1.10.125")   # the CHANGELOG's highest is 1.10.129
+        self.add(release="1.10.125")
         [q] = self.update().questions
-        self.assertIn("The 1.10.125 release notes mention #510: Gravity, part "
-                      "one: the field is read (#510).", q.text)
-        self.assertNotIn("count local gravity", q.text)
-        self.assertEqual(q.detail["changelog"],
-                         ["- Gravity, part one: the field is read (#510)."])
+        self.assertIn("You set 1.10.125 by hand as the release that builds it "
+                      "in.", q.text)
+        self.assertEqual(q.detail["release"], "1.10.125")
 
     def test_kept_workaround_is_not_offered_again(self):
         self.swept()
@@ -478,32 +466,46 @@ class OfferTests(Base):
 
     def test_an_issue_still_open_on_github_is_not_offered(self):
         self.swept()
+        self.hub.issues[510] = github_issues.Issue("open", None, None)
         self.add()
-        self.add(what="Gravity in the GM notes")   # the same issue: one ask
-        self.gh("echo '{\"state\":\"OPEN\"}'")
+        self.add(what="Gravity in the GM notes")
         res = self.update()
         self.assertEqual((res.exit, res.questions), (0, []))
         self.assertIn("#510 is still open, so gravity-by-hand-on-the-sheet was "
                       "not offered.", res.notes)
-        self.assertEqual(self.gh_calls(),
-                         ["issue view 510 --repo AntTheLimey/gm-apprentice "
-                          "--json state"])
 
-    def test_a_closed_issue_is_offered(self):
+    def test_closed_as_not_planned_is_said_not_offered(self):
         self.swept()
+        self.hub.issues[510] = github_issues.Issue(
+            "closed", "not_planned", "2026-11-04T10:00:00Z")
         self.add()
-        self.gh("echo '{\"state\":\"CLOSED\"}'")
+        res = self.update()
+        self.assertEqual(res.questions, [])
+        self.assertIn("#510 was closed as not planned, so "
+                      "gravity-by-hand-on-the-sheet was not offered.", res.notes)
+
+    def test_github_unreachable_checks_nothing_and_says_so_once(self):
+        self.swept()
+        self.hub.issues.clear()
+        self.add()
+        self.add(issue=511, what="Another")
+        res = self.update()
+        self.assertEqual((res.exit, res.questions), (0, []))
+        self.assertEqual(res.notes, [update.NO_GITHUB])
+
+    def test_an_unreleased_install_is_not_offered(self):
+        self.swept()
+        del self.hub.releases["1.10.129"]   # a build with no GitHub release
+        self.add()
+        res = self.update()
+        self.assertEqual(res.questions, [])
+        self.assertEqual(res.notes, [update.NO_GITHUB])
+
+    def test_a_hand_set_release_is_offered_without_github(self):
+        self.swept()
+        self.hub.issues.clear()
+        self.add(release="1.10.100")
         self.assertEqual(len(self.update().questions), 1)
-
-    def test_gh_failing_or_slow_offers_with_the_honest_wording(self):
-        self.swept()
-        self.add()
-        for body in ("exit 1", "echo not json", "exec /bin/sleep 5"):
-            with self.subTest(body=body), \
-                    mock.patch.object(update, "GH_TIMEOUT", 0.5):
-                self.gh(body)
-                [q] = self.update().questions
-                self.assertIn("If that release built in", q.text)
 
     def test_a_hand_edited_issue_or_release_is_said_not_skipped(self):
         self.swept()
@@ -521,14 +523,6 @@ class OfferTests(Base):
         self.assertIn("second has release 'soon' in _meta/update-record.json, "
                       "not X.Y.Z, so it was not checked; fix it there.",
                       res.notes)
-
-    def test_a_missing_changelog_offers_nothing_and_says_so(self):
-        self.swept()
-        self.add()
-        self.changelog.unlink()
-        res = self.update()
-        self.assertEqual((res.exit, res.questions), (0, []))
-        self.assertEqual(res.notes, [update.NO_CHANGELOG])
 
 
 if __name__ == "__main__":
