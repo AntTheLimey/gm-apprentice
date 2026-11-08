@@ -29,3 +29,11 @@ def test_shared_is_hidden_in_claude_code():
 
 def test_shared_skill_is_small():
     assert SKILL.stat().st_size < 400
+
+
+def test_shared_is_hidden_in_codex():
+    # Codex leaves a skill out of the model's list when its agents/openai.yaml
+    # says so (tested with codex 0.167.0); `npx skills` copies the folder.
+    policy = yaml.safe_load((SKILL.parent / "agents" / "openai.yaml")
+                            .read_text(encoding="utf-8"))["policy"]
+    assert policy["allow_implicit_invocation"] is False
