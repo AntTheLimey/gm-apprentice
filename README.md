@@ -32,6 +32,12 @@ If your plan doesn't include plugin support, upload skills individually:
 2. In Claude Desktop, go to **Chat > Skills**
 3. Click **+** and upload each zip file
 
+The zips don't carry the publish tool that builds the campaign site. The
+first command that needs it downloads it once (about 2 MB, checked against
+the release's checksum; it needs Node 22). If a sandbox blocks that
+download, allow `gma tool install` when asked, or run it once in a
+terminal.
+
 ### VS Code / Cursor
 
 1. Install the [Claude Code extension](vscode:extension/anthropic.claude-code)

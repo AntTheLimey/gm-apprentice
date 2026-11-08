@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.11.8] — 2026-11-08
+
+Installs other than the Claude Code plugin now get the publish tool too: it downloads once, on first use. Nothing changes for a Claude Code GM.
+
+### Added
+
+- **The publish tool reaches every install.** An install without the tool beside its skills (the zips now; `npx skills` and other assistants next) downloads the matching tool release once, on the first command that needs it, checks it against the release's SHA256SUMS and keeps it in a per-user cache folder. Node 22 does the download. A failed download warns once and the command carries on as it would without the tool.
+- **`gma tool install` and `gma tool path`.** Install fetches the tool now, for a sandbox that blocks network access until the GM allows it; path prints the tool in use.
+- **`skills/shared/PUBLISH_VERSION`** names the tool release the skills go with. A test, CI and the zip build fail when it differs from `tools/publish/package.json`.
+
+### Changed
+
+- **Each install pins the site its own way.** The Claude Code plugin keeps today's pin. Other installs, and a site already pinned to a release tarball, pin the checksummed release named by `PUBLISH_VERSION`, kept inside the site folder, so the site builds wherever it is. `gma publish update-pin` adds that release on those installs.
+- **The checks say "run `gma update`"** where they said "run update-pin" for a site tool that is too old: the update repins the site on every install.
+- **The settings schema is read from beside the publish tool**, so a downloaded tool brings it too.
+
 ## [1.11.7] — 2026-11-08
 
 Every install now knows its own version, and an install that is missing a piece says so and stops. Nothing for a GM to do.
