@@ -8,11 +8,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import NamedTuple
 
+from tool_cache import cached_tool
+
 INSTALL_STOP = ("Assistants: stop here, tell the GM what is missing, and do "
                 "not work around it.")
-MISSING_TOOL = ("the publish tool is not installed with these skills; it "
-                "ships with the Claude Code plugin, and other installs get "
-                "it in a later release. " + INSTALL_STOP)
+MISSING_TOOL = ("the publish tool is not installed. The Claude Code plugin "
+                "carries it; other installs download it once: run `gma tool "
+                "install` with network access. " + INSTALL_STOP)
 VERSION_UNKNOWN = ("cannot determine the version of these skills: "
                    "shared/VERSION is missing, empty or unreadable. This "
                    "install is incomplete. " + INSTALL_STOP)
@@ -40,7 +42,8 @@ def publish_version(shared: Path) -> str | None:
 class Layout(NamedTuple):
     shared: Path               # the shared/ folder these scripts sit in
     root: Path | None          # plugin or repo root, when shared/ is <root>/skills/shared
-    publish_tool: Path | None  # <root>/tools/publish/bin/gm-publish.js when that file exists
+    publish_tool: Path | None  # beside the skills, else the fetched one in the cache
+    door_owns_tool: bool = False  # the tool sits beside the skills (plugin, repo)
 
 
 def find_layout(scripts_dir: Path | None = None) -> Layout:
@@ -53,9 +56,12 @@ def find_layout(scripts_dir: Path | None = None) -> Layout:
                 or (candidate / _TOOL).is_file()):
             root = candidate
     tool = root / _TOOL if root is not None else None
-    if tool is not None and not tool.is_file():
-        tool = None
-    return Layout(shared, root, tool)
+    if tool is not None and tool.is_file():
+        return Layout(shared, root, tool, True)
+    version = publish_version(shared)
+    if version is None:
+        return Layout(shared, root, None)
+    return Layout(shared, root, cached_tool(version))
 
 
 LAYOUT = find_layout()

@@ -269,3 +269,179 @@ def test_printed_hints_gate_skips_an_exact_filename(tmp_path):
     p = tmp_path / "planted.py"
     p.write_text('run_script("reconcile_scan.py", [])\n')
     assert _flagged(p) == []
+
+
+# ---- the publish tool from the cache (installs without tools/publish) ----
+
+import hashlib  # noqa: E402
+import http.server  # noqa: E402
+import io  # noqa: E402
+import socket  # noqa: E402
+import tarfile  # noqa: E402
+import threading  # noqa: E402
+
+needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
+STAMP = (ROOT / "skills" / "shared" / "PUBLISH_VERSION").read_text().strip()
+FAKE_TOOL = b"console.log('fake tool ' + process.argv.slice(2).join(' '));\n"
+
+
+def _fake_release(version: str) -> dict[str, bytes]:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for name, data in (("package/bin/gm-publish.js", FAKE_TOOL),
+                           ("package/package.json", b'{"version": "%s"}' % version.encode())):
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    tgz = buf.getvalue()
+    name = f"gm-apprentice-publish-{version}.tgz"
+    return {f"/publish-v{version}/{name}": tgz,
+            f"/publish-v{version}/SHA256SUMS":
+                f"{hashlib.sha256(tgz).hexdigest()}  {name}\n".encode()}
+
+
+@pytest.fixture
+def server():
+    files = _fake_release(STAMP)
+    hits: list[str] = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            hits.append(self.path)
+            body = files.get(self.path)
+            self.send_response(200 if body else 404)
+            self.end_headers()
+            if body:
+                self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    s = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=s.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{s.server_address[1]}", hits
+    s.shutdown()
+
+
+def _dead_base() -> str:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return f"http://127.0.0.1:{s.getsockname()[1]}"
+
+
+def _env(t: Path, base: str, **extra: str) -> dict[str, str]:
+    return {**os.environ, "GMA_CACHE": str(t / "the cache"),
+            "GMA_RELEASE_BASE": base, "PYTHONIOENCODING": "utf-8", **extra}
+
+
+def _run_gma(gma: Path, args: list[str], env: dict[str, str]):
+    return subprocess.run([sys.executable, str(gma), *args],
+                          capture_output=True, text=True, env=env)
+
+
+def test_cached_tool_is_found_when_none_sits_beside(t):
+    scripts = t / "x" / "shared" / "scripts"
+    scripts.mkdir(parents=True)
+    (scripts.parent / "PUBLISH_VERSION").write_text("1.2.3\n")
+    tool = t / "c" / "publish" / "1.2.3" / "package" / "bin" / "gm-publish.js"
+    _touch(tool)
+    os.environ["GMA_CACHE"] = str(t / "c")
+    try:
+        got = find_layout(scripts)
+    finally:
+        del os.environ["GMA_CACHE"]
+    assert got.publish_tool == tool
+    assert got.door_owns_tool is False
+
+
+def test_plugin_layout_owns_its_tool():
+    assert install_layout.LAYOUT.door_owns_tool is True
+
+
+def test_missing_tool_names_the_install_command():
+    assert "gma tool install" in MISSING_TOOL
+
+
+def test_plugin_layout_never_fetches(t, server):
+    base, hits = server
+    vault = t / "vault"
+    vault.mkdir()
+    done = _run_gma(SCRIPTS / "gma.py", ["vault-check", str(vault), "version"],
+                _env(t, base))
+    assert hits == []
+    assert "tool" not in done.stderr
+    assert not (t / "the cache").exists()
+
+
+@needs_node
+def test_spaced_copy_fetches_on_first_command(t, server):
+    base, hits = server
+    gma = _spaced_copy(t)
+    env = _env(t, base)
+    assert _run_gma(gma, ["llms"], env).returncode == 0
+    assert hits == []
+    done = _run_gma(gma, ["publish", "hello"], env)
+    assert done.returncode == 0, done.stderr
+    assert "fake tool hello" in done.stdout
+    assert len(hits) == 2
+    again = _run_gma(gma, ["publish", "again"], env)
+    assert "fake tool again" in again.stdout
+    assert len(hits) == 2
+
+
+@needs_node
+def test_fetch_failure_warns_once_and_runs(t):
+    gma = _spaced_copy(t)
+    vault = t / "vault"
+    vault.mkdir()
+    done = _run_gma(gma, ["vault-check", str(vault), "version"], _env(t, _dead_base()))
+    warned = [x for x in done.stderr.splitlines() if "gma tool install" in x]
+    assert len(warned) == 1, done.stderr
+    assert "Traceback" not in done.stderr
+
+
+@needs_node
+def test_tool_install_reports_failure(t):
+    gma = _spaced_copy(t)
+    done = _run_gma(gma, ["tool", "install"], _env(t, _dead_base()))
+    assert done.returncode == 1
+    assert f"publish-v{STAMP}" in done.stderr
+    assert install_layout.INSTALL_STOP in done.stderr
+
+
+@needs_node
+def test_tool_install_then_path_names_the_cache(t, server):
+    base, _ = server
+    gma = _spaced_copy(t)
+    env = _env(t, base)
+    done = _run_gma(gma, ["tool", "install"], env)
+    assert done.returncode == 0, done.stderr
+    path = _run_gma(gma, ["tool", "path"], env)
+    assert path.returncode == 0
+    assert path.stdout.strip() == str(
+        t / "the cache" / "publish" / STAMP / "package" / "bin" / "gm-publish.js")
+
+
+def test_tool_path_in_the_plugin_is_beside_the_skills():
+    done = subprocess.run([sys.executable, str(SCRIPTS / "gma.py"), "tool", "path"],
+                          capture_output=True, text=True)
+    assert done.stdout.strip() == str(ROOT / TOOL)
+
+
+def test_tool_path_without_a_tool_says_so(t):
+    gma = _spaced_copy(t)
+    done = _run_gma(gma, ["tool", "path"], _env(t, _dead_base()))
+    assert done.returncode == 1
+    assert "gma tool install" in done.stderr
+
+
+def test_no_node_skips_fetch(t, server):
+    base, hits = server
+    gma = _spaced_copy(t)
+    vault = t / "vault"
+    vault.mkdir()
+    bare = t / "bin"
+    bare.mkdir()
+    env = _env(t, base, PATH=str(bare))
+    _run_gma(gma, ["vault-check", str(vault), "version"], env)
+    assert hits == []

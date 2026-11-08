@@ -54,6 +54,14 @@ def _remove_made_temp_dirs():
         shutil.rmtree(made, ignore_errors=True)
 
 
+# No test reaches the network or the real per-user cache for the publish
+# tool: a copy of the skills without the tool would otherwise download the
+# real release (tool_cache). A test that wants a fetch passes its own.
+os.environ["GMA_CACHE"] = os.path.join(_TEMP_ROOT, f"gma-test-cache-{os.getpid()}")
+_MADE_TEMP_DIRS.append(os.environ["GMA_CACHE"])
+os.environ["GMA_RELEASE_BASE"] = "http://127.0.0.1:9/no-network-in-tests"
+
+
 @pytest.fixture(autouse=True)
 def _test_vaults_may_be_stamped_old(request):
     """Most tests stamp vaults at made-up old versions; the update's real
