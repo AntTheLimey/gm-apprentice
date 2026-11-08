@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.11.7] — 2026-11-08
+
+Every install now knows its own version, and an install that is missing a piece says so and stops. Nothing for a GM to do.
+
+### Added
+
+- **A version stamp that ships with the skills.** `skills/shared/VERSION` is committed and is the version every install reads, the Claude Code plugin included. A plugin manifest beside it is checked against it and only warns when they differ, so an install converted for another assistant no longer refuses first use. A test, CI and the zip build all fail when the stamp and `plugin.json` differ.
+
+### Changed
+
+- **The zips carry the committed stamp** instead of writing their own.
+- **A broken install tells the assistant to stop.** When the plugin version cannot be found, or the publish tool is not installed, the message now ends: "This install is incomplete: stop here, tell the GM what is missing, and do not work around it."
+
 ## [1.11.6] — 2026-11-07
 
 Every skill now runs its vault scripts and the publish tool through `gma`, and `gma` finds its own install. Nothing for a GM to do; the publish tool is 1.70.1.

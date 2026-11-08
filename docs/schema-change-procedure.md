@@ -122,7 +122,7 @@ CHANGELOG entry says what it changes in a vault.
 
 ### 9. Version bump
 
-- [ ] Bump the version in `.claude-plugin/plugin.json`
+- [ ] Bump the version in `.claude-plugin/plugin.json` and `skills/shared/VERSION` (the same version)
   (patch for field additions, minor for breaking changes)
 - [ ] Add a CHANGELOG entry under that version describing the
   schema change (CI fails when the version has no entry)

@@ -414,6 +414,7 @@ class RealBuildScriptTests(unittest.TestCase):
         shared = tmp / "skills" / "shared"
         shared.mkdir()
         (shared / "README.md").write_text("# shared\n")
+        (shared / "VERSION").write_text("9.9.9\n")
         out = tmp / "dist"
         subprocess.run(
             ["bash", str(tmp / "scripts" / "build-skill-zips.sh"), str(out)],
@@ -431,13 +432,23 @@ class RealBuildScriptTests(unittest.TestCase):
             self.assertFalse([n for n in names if "personal" in n], names)
             self.assertEqual(ac.check_zips(out), [])
 
-    def test_the_zip_carries_the_plugin_version_and_the_tree_is_untouched(self) -> None:
+    def test_the_zip_carries_the_committed_version(self) -> None:
+        with tempfile.TemporaryDirectory() as t:
+            out = self.build(Path(t), personal=False)
+            with zipfile.ZipFile(out / "ttrpg-expert.zip") as z:
+                self.assertEqual(z.read("shared/VERSION").decode(), "9.9.9\n")
+
+    def test_the_build_refuses_a_stale_version(self) -> None:
         with tempfile.TemporaryDirectory() as t:
             tmp = Path(t)
             out = self.build(tmp, personal=False)
-            with zipfile.ZipFile(out / "ttrpg-expert.zip") as z:
-                self.assertEqual(z.read("shared/VERSION").decode(), "9.9.9\n")
-            self.assertFalse((tmp / "skills" / "shared" / "VERSION").exists())
+            (tmp / "skills" / "shared" / "VERSION").write_text("0.0.1\n")
+            run = subprocess.run(
+                ["bash", str(tmp / "scripts" / "build-skill-zips.sh"), str(out)],
+                capture_output=True, text=True)
+            self.assertEqual(run.returncode, 1)
+            self.assertIn("skills/shared/VERSION (0.0.1) differs from "
+                          "plugin.json (9.9.9)", run.stdout + run.stderr)
 
     def test_check_fails_when_the_real_build_lacks_a_notice(self) -> None:
         with tempfile.TemporaryDirectory() as t:
