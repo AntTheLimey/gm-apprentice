@@ -17,3 +17,12 @@ def test_shared_version_matches_plugin_json():
 def test_zip_build_does_not_write_version():
     script = (ROOT / "scripts" / "build-skill-zips.sh").read_text(encoding="utf-8")
     assert '> "$STAGE/shared/VERSION"' not in script
+
+
+def test_publish_stamp_matches_package_json():
+    tool = json.loads((ROOT / "tools" / "publish" / "package.json")
+                      .read_text(encoding="utf-8"))["version"]
+    stamp = (ROOT / "skills" / "shared" / "PUBLISH_VERSION").read_bytes().decode("utf-8")
+    assert stamp.replace("\r\n", "\n") == tool + "\n", (
+        "skills/shared/PUBLISH_VERSION must equal tools/publish/package.json's "
+        "version, one line: bump both")

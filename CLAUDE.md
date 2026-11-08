@@ -137,7 +137,9 @@ Every non-trivial change follows this sequence:
 3. **Version bump** — bump `version` in `.claude-plugin/plugin.json`
    and `skills/shared/VERSION` to the same version (patch by default
    unless the user specifies otherwise). The stamp is what every install
-   reads; CI fails when the two differ
+   reads; CI fails when the two differ. A publish tool change also bumps
+   `tools/publish/package.json` and `skills/shared/PUBLISH_VERSION`
+   together (the release a non-plugin install fetches; CI checks it too)
 4. **CHANGELOG** — add a categorized entry (Added/Changed/Fixed/Removed)
    under the new version in `CHANGELOG.md`, following the existing format.
    CI fails when `CHANGELOG.md` has no `## [version]` entry for it

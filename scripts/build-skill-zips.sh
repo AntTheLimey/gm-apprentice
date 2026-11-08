@@ -16,6 +16,15 @@ if [ "$STAMP" != "$VERSION" ]; then
   echo "::error::skills/shared/VERSION ($STAMP) differs from plugin.json ($VERSION): bump both"
   exit 1
 fi
+# shared/PUBLISH_VERSION names the tool release a zip install fetches.
+TOOL_VERSION=$(jq -r '.version' "$REPO_ROOT/tools/publish/package.json")
+TOOL_STAMP=$(cat "$SKILLS_DIR/shared/PUBLISH_VERSION")
+TOOL_STAMP="${TOOL_STAMP#"${TOOL_STAMP%%[![:space:]]*}"}"
+TOOL_STAMP="${TOOL_STAMP%"${TOOL_STAMP##*[![:space:]]}"}"
+if [ "$TOOL_STAMP" != "$TOOL_VERSION" ]; then
+  echo "::error::skills/shared/PUBLISH_VERSION ($TOOL_STAMP) differs from tools/publish/package.json ($TOOL_VERSION): bump both"
+  exit 1
+fi
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
 cp -R "$SKILLS_DIR/shared" "$STAGE/shared"

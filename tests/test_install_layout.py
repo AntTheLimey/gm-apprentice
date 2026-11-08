@@ -105,6 +105,17 @@ def test_publish_without_tool_stops_plainly(t):
     assert "Traceback" not in done.stderr
 
 
+def test_publish_version_reads_the_stamp(t):
+    (t / "PUBLISH_VERSION").write_text(" 1.2.3\r\n")
+    assert install_layout.publish_version(t) == "1.2.3"
+
+
+def test_publish_version_none_when_missing_or_empty(t):
+    assert install_layout.publish_version(t) is None
+    (t / "PUBLISH_VERSION").write_text("\n")
+    assert install_layout.publish_version(t) is None
+
+
 def test_broken_install_messages_say_stop():
     assert install_layout.MISSING_TOOL.endswith(install_layout.INSTALL_STOP)
     assert install_layout.VERSION_UNKNOWN.endswith(install_layout.INSTALL_STOP)

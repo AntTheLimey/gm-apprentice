@@ -17,11 +17,24 @@ VERSION_UNKNOWN = ("cannot determine the version of these skills: "
                    "shared/VERSION is missing, empty or unreadable. This "
                    "install is incomplete. " + INSTALL_STOP)
 
+# The publish tool release these skills go with; a copy without the tool
+# beside it fetches that release (tool_cache).
+PUBLISH_STAMP = "PUBLISH_VERSION"
 _TOOL = Path("tools") / "publish" / "bin" / "gm-publish.js"
 # Manifests an install can carry beside skills/: the Claude Code plugin's,
 # and the one OpenAI's plugin import converts it to.
 MANIFESTS = (Path(".claude-plugin") / "plugin.json",
              Path(".codex-plugin") / "plugin.json")
+
+
+def publish_version(shared: Path) -> str | None:
+    """The tool version stamped in `shared`, or None when the stamp is
+    missing, empty or unreadable."""
+    try:
+        text = (shared / PUBLISH_STAMP).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return text or None
 
 
 class Layout(NamedTuple):
