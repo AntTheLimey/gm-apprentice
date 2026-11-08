@@ -55,7 +55,9 @@ class GitHub:
 
     def _ask_gh(self, path: str) -> Any:
         try:
-            done = subprocess.run([str(self.gh), "api", path],
+            # github.com always: GH_HOST may name a company's own GitHub.
+            done = subprocess.run([str(self.gh), "api", "--hostname",
+                                   "github.com", path],
                                   capture_output=True, text=True,
                                   timeout=self.timeout, check=False)
             return json.loads(done.stdout) if done.returncode == 0 else None

@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import tempfile
+import urllib.error
 import urllib.request
 from pathlib import Path
 from unittest import mock
@@ -33,11 +34,15 @@ def gh_stub(tmp_path, monkeypatch):
         "#!/bin/sh\n"
         f'echo "$@" >> "{log}"\n'
         f'exec "{sys.executable}" -c "import json,sys; '
-        f"t=json.load(open('{table}')); a=sys.argv[2]; "
+        f"t=json.load(open('{table}')); a=sys.argv[-1]; "
         f"print(json.dumps(t[a])) if a in t else sys.exit(1)\" \"$@\"\n",
         encoding="utf-8")
     stub.chmod(0o755)
     monkeypatch.setenv("PATH", str(stub.parent))
+
+    def not_found(req, timeout):   # no test reaches the real GitHub
+        raise urllib.error.HTTPError(req.full_url, 404, "Not Found", {}, None)
+    monkeypatch.setattr(urllib.request, "urlopen", not_found)
 
     def answers(mapping):
         table.write_text(json.dumps(mapping), encoding="utf-8")
@@ -54,8 +59,8 @@ def test_issue_and_release_through_gh(gh_stub):
     assert hub.published("1.10.129") == "2026-11-04T12:00:00Z"
     hub.issue(510)   # asked once per run
     assert log.read_text().splitlines() == [
-        "api repos/AntTheLimey/gm-apprentice/issues/510",
-        "api repos/AntTheLimey/gm-apprentice/releases/tags/v1.10.129"]
+        "api --hostname github.com repos/AntTheLimey/gm-apprentice/issues/510",
+        "api --hostname github.com repos/AntTheLimey/gm-apprentice/releases/tags/v1.10.129"]
 
 
 def test_unknown_issue_or_release_is_none(gh_stub):

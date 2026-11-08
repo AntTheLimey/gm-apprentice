@@ -11,7 +11,7 @@ campaign content as interlinked markdown with Juggl-compatible
 graph metadata. You don't create content — `ttrpg-expert` does.
 For a gap, scaffold a placeholder note and flag it.
 
-`shared/` is the `shared` folder beside this skill's folder (if it is missing, tell the GM to add it the way they added this skill, e.g. `npx skills add AntTheLimey/gm-apprentice --skill shared -g`, with the same `#tag` if they pinned one; then stop). `gma` is `python3 "<shared>/scripts/gma.py"`,
+`shared/` is the `shared` folder beside this skill's folder (if it is missing, tell the GM to run `npx skills add AntTheLimey/gm-apprentice --skill shared` with the same `-g` and `#tag` they used for this skill, then stop). `gma` is `python3 "<shared>/scripts/gma.py"`,
 with the whole path quoted; `gma llms` lists its commands.
 
 ## Companion Skills

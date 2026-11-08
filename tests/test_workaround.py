@@ -33,6 +33,7 @@ class FakeHub:
         self.releases = {"1.10.128": "2026-11-03T12:00:00Z",
                          "1.10.129": "2026-11-04T12:00:00Z"}
         self.asked = []
+        self.slow = False
 
     def __call__(self, timeout=None):
         return self
@@ -511,6 +512,13 @@ class OfferTests(Base):
         res = self.update()
         self.assertEqual(res.questions, [])
         self.assertEqual(res.notes, [update.no_release("1.10.129")])
+
+    def test_a_release_lookup_that_timed_out_says_could_not_ask(self):
+        self.swept()
+        del self.hub.releases["1.10.129"]
+        self.hub.slow = True   # the release question timed out
+        self.add()
+        self.assertEqual(self.update().notes, [update.NO_GITHUB])
 
     def test_a_hand_set_release_is_offered_without_github(self):
         self.swept()

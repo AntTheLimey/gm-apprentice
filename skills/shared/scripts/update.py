@@ -328,7 +328,11 @@ def _offers(record: update_record.Record, plugin_v: str,
                 continue
             out_at = hub.published(plugin_v)
             if out_at is None:
-                unreleased = True
+                # A timeout is not an answer; only a reply with no release is.
+                if hub.slow:
+                    unasked = True
+                else:
+                    unreleased = True
                 continue
             if not github_issues.closed_before(info, out_at):
                 continue   # fixed in a later release than this one

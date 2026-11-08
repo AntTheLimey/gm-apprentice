@@ -385,8 +385,6 @@ class RealRepoTests(unittest.TestCase):
         self.assertEqual(bad.returncode, 1)
         self.assertIn("fitd/NOTICE.md", bad.stdout)
 
-if __name__ == "__main__":
-    unittest.main()
 
 
 class SharedNoticeTests(unittest.TestCase):
@@ -407,3 +405,7 @@ class SharedNoticeTests(unittest.TestCase):
         found = [str(f) for f in ac.check_shared(tmp)]
         self.assertTrue(any("Steve Jackson Games" in f or "SJG" in f
                             for f in found), found)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -12,7 +12,7 @@ identical either way; the setting `player_site.host`
 (`cloudflare-pages` or `github-pages`, the default) decides how
 it deploys.
 
-`shared/` is the `shared` folder beside this skill's folder (if it is missing, tell the GM to add it the way they added this skill, e.g. `npx skills add AntTheLimey/gm-apprentice --skill shared -g`, with the same `#tag` if they pinned one; then stop). `gma` is `python3 "<shared>/scripts/gma.py"`,
+`shared/` is the `shared` folder beside this skill's folder (if it is missing, tell the GM to run `npx skills add AntTheLimey/gm-apprentice --skill shared` with the same `-g` and `#tag` they used for this skill, then stop). `gma` is `python3 "<shared>/scripts/gma.py"`,
 with the whole path quoted; `gma llms` lists its commands.
 
 Guide GMs through setup, routine updates and troubleshooting in
