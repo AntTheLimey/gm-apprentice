@@ -9,9 +9,7 @@ with the files under a count indented below it:
 
     wrap-up, session (the index, its status and number)
     skip       why reconcile does not run, or `no`: the index is already
-               `reviewed`, or it is session 1 with no UNVERIFIED marker
-               and no reconstruction note (a rebuilt session 1 carries
-               those, and is reviewed)
+               `reviewed` (a first session is reconciled like any other)
     unverified           `<!-- UNVERIFIED -->` markers in the Wrap-Up (any
                          case, one may span lines), line and text
     unverified in linked notes
@@ -221,10 +219,10 @@ def scan(vault: Path, wrap_arg: str) -> list[str]:
     recon = [ll.lineno for ll in link_lines(wrap.text)
              if not ll.in_code and not ll.in_frontmatter
              and RECONSTRUCTION_NOTE_RE.match(ll.line)]
+    # A first session is reconciled too: skipping it left its Wrap-Up and
+    # new notes DRAFT for good (#618).
     if index is not None and index.fm.get("status") == "reviewed":
         out.append("skip: status is already reviewed")
-    elif number == 1 and not unverified and not recon:
-        out.append("skip: first session (session_number 1)")
     else:
         out.append("skip: no")
     out.append(f"unverified: {len(unverified)}")

@@ -171,11 +171,14 @@ class Scan(unittest.TestCase):
         self.assertIn("older draft entities linked (the quick path leaves them): 2", out)
         self.assertEqual(out[-1], "quick path: yes")
 
-    # Ruling 1: first session means session_number 1, and never with markers.
-    def test_first_session_is_session_number_one(self):
+    # #618: a clean first session is reconciled like any other, so its
+    # Wrap-Up and new notes get promoted instead of staying DRAFT for good.
+    def test_a_clean_first_session_is_not_skipped(self):
         files = plain_wrap(FILES)
         files[INDEX] = files[INDEX].replace("session_number: 5", "session_number: 1")
-        self.assertIn("skip: first session (session_number 1)", scan(files))
+        out = scan(files)
+        self.assertIn("skip: no", out)
+        self.assertFalse(any(line.startswith("skip: first") for line in out))
 
     def test_session_one_with_markers_is_not_skipped(self):
         files = dict(FILES)
