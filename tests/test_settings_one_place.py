@@ -189,7 +189,8 @@ OLD_KEY_SECTIONS = {
 # `docs/mechanization-analysis/` is a dated analysis of the code as it stood when it was
 # written; it is a record, not a page that tells anyone what to do now. The other folders under
 # docs/ hold local plans and specs (gitignored).
-RECORD_FOLDERS = ("docs/mechanization-analysis/", "docs/superpowers/", "docs/plans/")
+RECORD_FOLDERS = ("docs/mechanization-analysis/", "docs/superpowers/", "docs/plans/",
+                  "docs/history/")
 
 
 def _site_folder_word_mentions(rel, text):

@@ -141,8 +141,11 @@ Every non-trivial change follows this sequence:
    `tools/publish/package.json` and `skills/shared/PUBLISH_VERSION`
    together (the release a non-plugin install fetches; CI checks it too)
 4. **CHANGELOG** — add a categorized entry (Added/Changed/Fixed/Removed)
-   under the new version in `CHANGELOG.md`, following the existing format.
-   CI fails when `CHANGELOG.md` has no `## [version]` entry for it
+   under the new version in `CHANGELOG.md`. Keep it short: one or two
+   lines per change, saying what it does for the GM; the PR holds the
+   detail. CI fails when `CHANGELOG.md` has no `## [version]` entry for it.
+   Releases before 1.11.0 live in `docs/history/changelog-archive.md`; nothing
+   reads either file, so never add a parser for one
 5. **Local review** — dispatch the code-reviewer agent against the branch
    before pushing; fix all findings
 6. **Push + PR** — once local checks pass and the review findings are
