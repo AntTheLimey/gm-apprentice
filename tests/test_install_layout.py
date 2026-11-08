@@ -47,6 +47,13 @@ def test_repo_without_manifest_still_finds_tool(t):
     assert find_layout(scripts).root == t
 
 
+def test_codex_manifest_marks_the_root(t):
+    _touch(t / ".codex-plugin" / "plugin.json")
+    scripts = t / "skills" / "shared" / "scripts"
+    scripts.mkdir(parents=True)
+    assert find_layout(scripts).root == t
+
+
 def test_zip_layout(t):
     scripts = t / "session-wrapup" / "shared" / "scripts"
     scripts.mkdir(parents=True)

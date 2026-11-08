@@ -566,34 +566,76 @@ class VersionTests(unittest.TestCase):
     def test_empty(self):
         self.assertEqual(vl.parse_version(""), ())
 
-    def test_plugin_version_reads_plugin_json(self):
+    def test_live_version_is_shared_version(self):
         expected = json.loads(
             (ROOT / ".claude-plugin" / "plugin.json").read_text(
                 encoding="utf-8"))["version"]
-        got = vl.plugin_version()
-        self.assertIsNotNone(got)
-        self.assertEqual(got[0], expected)
+        self.assertEqual(vl.plugin_version(), (expected, "shared/VERSION"))
 
-    def _zip_layout_version(self, stamp):
-        """plugin_version() from a copy laid out as a skill zip unpacks:
-        shared/scripts/vaultlib.py beside shared/'s ontology file (a zip
-        carries all of shared/), no .claude-plugin/plugin.json."""
+    def _layout_version(self, stamp, manifests=None):
+        """(stdout, stderr) of plugin_version() from a copy of the scripts.
+        No manifests: laid out as a skill zip unpacks (<skill>/shared/...).
+        With manifests ({relative path: version}): laid out as a plugin,
+        <root>/skills/shared/..., each manifest written under <root>."""
         with tempfile.TemporaryDirectory() as t:
-            scripts = Path(t) / "skill" / "shared" / "scripts"
+            if manifests is None:
+                scripts = Path(t) / "skill" / "shared" / "scripts"
+            else:
+                root = Path(t) / "plug"
+                scripts = root / "skills" / "shared" / "scripts"
+                for rel, version in manifests.items():
+                    (root / rel).parent.mkdir(parents=True, exist_ok=True)
+                    (root / rel).write_text(json.dumps({"version": version}),
+                                            encoding="utf-8")
             scripts.mkdir(parents=True)
             shutil.copy(Path(vl.__file__), scripts / "vaultlib.py")
             shutil.copy(vl.ONTOLOGY_PATH, scripts.parent / vl.ONTOLOGY_PATH.name)
             shutil.copy(Path(vl.__file__).with_name("install_layout.py"),
                         scripts / "install_layout.py")
             if stamp is not None:
-                (scripts.parent / "VERSION").write_text(stamp, encoding="utf-8")
+                (scripts.parent / "VERSION").write_bytes(stamp.encode("utf-8"))
             run = subprocess.run(
                 [sys.executable, "-I", "-c",
                  "import sys; sys.path.insert(0, sys.argv[1]); "
                  "import vaultlib; print(vaultlib.plugin_version())",
                  str(scripts)],
                 capture_output=True, text=True, check=True)
-            return run.stdout.strip()
+            return run.stdout.strip(), run.stderr
+
+    def _zip_layout_version(self, stamp):
+        return self._layout_version(stamp)[0]
+
+    def test_version_file_wins_over_an_agreeing_manifest(self):
+        out, err = self._layout_version(
+            "1.2.3\n", {".claude-plugin/plugin.json": "1.2.3"})
+        self.assertEqual(out, "('1.2.3', 'shared/VERSION')")
+        self.assertEqual(err, "")
+
+    def test_version_file_wins_over_a_disagreeing_manifest(self):
+        out, err = self._layout_version(
+            "1.2.3\n", {".claude-plugin/plugin.json": "1.2.4"})
+        self.assertEqual(out, "('1.2.3', 'shared/VERSION')")
+        self.assertIn(".claude-plugin/plugin.json says 1.2.4", err)
+        self.assertIn("using shared/VERSION", err)
+
+    def test_codex_manifest_is_checked_too(self):
+        out, err = self._layout_version(
+            "1.2.3", {".codex-plugin/plugin.json": "1.0.0"})
+        self.assertEqual(out, "('1.2.3', 'shared/VERSION')")
+        self.assertIn(".codex-plugin/plugin.json says 1.0.0", err)
+
+    def test_version_file_with_crlf_and_spaces(self):
+        self.assertEqual(self._zip_layout_version(" 1.2.3\r\n"),
+                         "('1.2.3', 'shared/VERSION')")
+
+    def test_empty_version_file_falls_back_with_a_warning(self):
+        out, err = self._layout_version(
+            "", {".claude-plugin/plugin.json": "1.2.3"})
+        self.assertEqual(out, "('1.2.3', '.claude-plugin/plugin.json')")
+        self.assertIn("shared/VERSION is missing or empty", err)
+
+    def test_nothing_at_all_is_none(self):
+        self.assertEqual(self._layout_version(None, {}), ("None", ""))
 
     def test_a_skill_zip_reads_shared_version(self):
         self.assertEqual(self._zip_layout_version("1.2.3\n"),

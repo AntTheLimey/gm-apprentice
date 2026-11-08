@@ -41,7 +41,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Literal
 
-from install_layout import LAYOUT, MISSING_TOOL
+from install_layout import LAYOUT, MANIFESTS, MISSING_TOOL
 
 # --------------------------------------------------------------------------
 # Vault walking
@@ -2949,40 +2949,45 @@ def parse_version(text: str) -> tuple[int, ...]:
 
 
 def plugin_version() -> tuple[str, str] | None:
-    """(version, source) for the installed plugin, or None.
+    """(version, source) for the installed skills, or None.
 
-    `.claude-plugin/plugin.json` is authoritative. A skill zip ships
-    without it, so the zip build writes the same version into
-    `shared/VERSION`, and that is the fallback.
-
-    A *missing* manifest is the ordinary skill-zip case and falls through
-    quietly. A manifest that exists but cannot be parsed warns on stderr
-    first: that is a broken install, not a zip.
+    `shared/VERSION` is committed and authoritative on every install. Any
+    manifest beside the install (`MANIFESTS`) is checked against it and a
+    disagreement only warns; a manifest is used only when the stamp is
+    missing or empty, which is a broken install, so that warns too.
     """
-    manifest = (LAYOUT.root / ".claude-plugin" / "plugin.json"
-                if LAYOUT.root is not None else None)
-    try:
-        if manifest is not None:
-            version = json.loads(manifest.read_text(encoding="utf-8"))["version"]
-            if version:
-                return str(version), ".claude-plugin/plugin.json"
-            print(f"warning: {manifest} has an empty version — falling back "
-                  f"to shared/VERSION", file=sys.stderr)
-    except FileNotFoundError:
-        pass
-    except (OSError, ValueError, KeyError, TypeError) as e:
-        print(f"warning: unusable {manifest} ({e.__class__.__name__}: {e}) "
-              f"— falling back to shared/VERSION", file=sys.stderr)
     stamp = LAYOUT.shared / "VERSION"
+    current = ""
     try:
         current = stamp.read_text(encoding="utf-8").strip()
     except FileNotFoundError:
-        return None
+        pass
     except OSError as e:
-        print(f"warning: unreadable {stamp}: {e} — the plugin version "
-              f"is unknown", file=sys.stderr)
-        return None
-    return (current, "shared/VERSION") if current else None
+        print(f"warning: unreadable {stamp.as_posix()}: {e}", file=sys.stderr)
+    found = []
+    for rel in MANIFESTS if LAYOUT.root is not None else ():
+        manifest = LAYOUT.root / rel
+        try:
+            version = json.loads(manifest.read_text(encoding="utf-8"))["version"]
+        except FileNotFoundError:
+            continue
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            print(f"warning: unusable {manifest.as_posix()} "
+                  f"({e.__class__.__name__}: {e})", file=sys.stderr)
+            continue
+        if version:
+            found.append((str(version), rel.as_posix()))
+    if current:
+        for version, rel in found:
+            if version != current:
+                print(f"warning: {rel} says {version}, shared/VERSION says "
+                      f"{current}; using shared/VERSION", file=sys.stderr)
+        return current, "shared/VERSION"
+    if found:
+        print(f"warning: shared/VERSION is missing or empty; using "
+              f"{found[0][1]}", file=sys.stderr)
+        return found[0]
+    return None
 
 
 def utf8_output() -> None:
