@@ -15,11 +15,18 @@ import sys
 import tarfile
 import tempfile
 import time
+import urllib.error
+import urllib.request
 from pathlib import Path, PurePosixPath
 
 # The same address update-pin.js pins a site to (`--tag`).
 RELEASE_BASE = "https://github.com/AntTheLimey/gm-apprentice/releases/download"
 _TOOL_IN_PACKAGE = Path("package") / "bin" / "gm-publish.js"
+# A release must carry these beside the tool: the schema is what the vault
+# scripts read the settings' defaults from.
+_NEEDED = (_TOOL_IN_PACKAGE, Path("package") / "package.json",
+           Path("package") / "schema" / "vault-config.schema.json")
+_PROXY_VARS = ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy")
 _DOWNLOAD = Path(__file__).resolve().parent / "download.mjs"
 DOWNLOAD_TIMEOUT = 300
 KEEP_VERSIONS = 3          # another install on the machine may use an older one
@@ -85,17 +92,30 @@ def failed_recently(version: str, root: Path | None = None) -> bool:
 
 def _download(node: str, url: str, dest: Path, timeout: int) -> None:
     # Node's fetch goes through HTTPS_PROXY (a sandbox's way out) only when
-    # asked to; a Node too old to know the switch ignores it.
+    # asked to, and Node 22 before 22.21 ignores the switch: behind a proxy,
+    # a failed Node download tries again in Python, whose urllib reads the
+    # proxy settings itself. Node goes first because a python.org Python on
+    # a Mac may have no certificates to check github.com with.
     env = {**os.environ, "NODE_USE_ENV_PROXY": "1"}
     try:
         done = subprocess.run([node, str(_DOWNLOAD), url, str(dest)],
                               capture_output=True, text=True, env=env,
                               timeout=timeout)
     except (OSError, subprocess.TimeoutExpired) as e:
-        raise FetchFailed(f"could not download {url}: {e}") from e
-    if done.returncode != 0:
+        failed = FetchFailed(f"could not download {url}: {e}")
+    else:
+        if done.returncode == 0:
+            return
         said = done.stderr.strip().splitlines()
-        raise FetchFailed(f"could not download: {said[-1] if said else url}")
+        failed = FetchFailed(f"could not download: {said[-1] if said else url}")
+    if not any(os.environ.get(v) for v in _PROXY_VARS):
+        raise failed
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as got, \
+                open(dest, "wb") as out:
+            shutil.copyfileobj(got, out)
+    except (OSError, urllib.error.URLError) as e:
+        raise FetchFailed(f"{failed.reason}; through the proxy: {e}") from e
 
 
 def _expected_sum(sums: str, name: str) -> str:
@@ -188,9 +208,17 @@ def fetch(version: str, *, root: Path | None = None, base: str | None = None,
             raise FetchFailed(f"{tag}: the checksum does not match SHA256SUMS")
         unpacked = work / "unpacked"
         _safe_extract(tgz, unpacked)
-        if not (unpacked / _TOOL_IN_PACKAGE).is_file():
-            raise FetchFailed(f"{tag}: the tarball has no package/bin/gm-publish.js")
+        for needed in _NEEDED:
+            if not (unpacked / needed).is_file():
+                raise FetchFailed(f"{tag}: the tarball has no {needed.as_posix()}")
         final = publish / version
+        if final.exists() and cached_tool(version, root) is None:
+            # Half deleted (a tidy or a user stopped part way): move it
+            # aside, so the fresh copy can take its place.
+            try:
+                os.replace(final, work / "broken")
+            except OSError:
+                pass
         try:
             os.replace(unpacked, final)
         except OSError:
@@ -206,8 +234,12 @@ def fetch(version: str, *, root: Path | None = None, base: str | None = None,
         raise FetchFailed(f"{tag}: could not install into {publish}: {e}") from e
     finally:
         shutil.rmtree(work, ignore_errors=True)
-    _tidy(publish, version)
-    failure_marker(version, root).unlink(missing_ok=True)
+    try:
+        # Housekeeping: the tool is installed whether or not this works.
+        _tidy(publish, version)
+        failure_marker(version, root).unlink(missing_ok=True)
+    except OSError:
+        pass
     tool = cached_tool(version, root)
     assert tool is not None
     return tool

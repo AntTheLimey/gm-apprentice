@@ -39,7 +39,7 @@ def publish_version(shared: Path) -> str | None:
     missing, empty or unreadable."""
     try:
         text = (shared / PUBLISH_STAMP).read_text(encoding="utf-8").strip()
-    except OSError:
+    except (OSError, UnicodeDecodeError):
         return None
     return text or None
 

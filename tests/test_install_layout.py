@@ -289,7 +289,8 @@ def _fake_release(version: str) -> dict[str, bytes]:
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for name, data in (("package/bin/gm-publish.js", FAKE_TOOL),
-                           ("package/package.json", b'{"version": "%s"}' % version.encode())):
+                           ("package/package.json", b'{"version": "%s"}' % version.encode()),
+                           ("package/schema/vault-config.schema.json", b"{}")):
             info = tarfile.TarInfo(name)
             info.size = len(data)
             tar.addfile(info, io.BytesIO(data))
@@ -339,20 +340,22 @@ def _run_gma(gma: Path, args: list[str], env: dict[str, str]):
                           capture_output=True, text=True, env=env)
 
 
-def test_cached_tool_is_found_when_none_sits_beside(t):
+def test_cached_tool_is_found_when_none_sits_beside(t, monkeypatch):
     scripts = t / "x" / "shared" / "scripts"
     scripts.mkdir(parents=True)
     (scripts.parent / "PUBLISH_VERSION").write_text("1.2.3\n")
     tool = t / "c" / "publish" / "1.2.3" / "package" / "bin" / "gm-publish.js"
     _touch(tool)
     _touch(t / "c" / "publish" / "1.2.3" / "package" / "package.json")
-    os.environ["GMA_CACHE"] = str(t / "c")
-    try:
-        got = find_layout(scripts)
-    finally:
-        del os.environ["GMA_CACHE"]
+    monkeypatch.setenv("GMA_CACHE", str(t / "c"))
+    got = find_layout(scripts)
     assert got.publish_tool == tool
     assert got.door_owns_tool is False
+
+
+def test_an_unreadable_stamp_counts_as_missing(t):
+    (t / "PUBLISH_VERSION").write_bytes(b"\xff\xfe1.2.3")
+    assert install_layout.publish_version(t) is None
 
 
 def test_plugin_layout_owns_its_tool():
@@ -487,6 +490,49 @@ def test_update_pin_on_the_plugin_follows_a_tarball_site(monkeypatch):
     assert seen == [["update-pin", "--site", "s", "--tag", f"publish-v{STAMP}"],
                     ["update-pin", "--site", "s"],
                     ["update-pin", "--site", "s", "--check"]]
+
+
+def test_a_check_asks_about_the_release_a_run_would_pin(monkeypatch):
+    import gma as g
+    seen = []
+    monkeypatch.setattr(g, "_run_tool", lambda tool, args: seen.append(args) or 0)
+    ran = []
+
+    class Done:
+        stdout = '{"spec": "file:vendor/gm-apprentice-publish-1.60.0.tgz"}'
+    monkeypatch.setattr(g.subprocess, "run", lambda cmd, **kw: ran.append(cmd) or Done)
+    g._publish(["update-pin", "--site", "s", "--check", "--json"])
+    assert seen == [["update-pin", "--site", "s", "--check", "--json",
+                     "--tag", f"publish-v{STAMP}"]]
+    assert ran[0][2:] == ["update-pin", "--site", "s", "--check", "--json"]
+    monkeypatch.setattr(g.install_layout, "LAYOUT",
+                        g.install_layout.LAYOUT._replace(door_owns_tool=False))
+    g._publish(["update-pin", "--check"])
+    assert seen[-1] == ["update-pin", "--check", "--tag", f"publish-v{STAMP}"]
+
+
+@pytest.mark.parametrize("owns", [True, False])
+def test_a_repin_without_the_stamp_stops_plainly(monkeypatch, tmp_path, capsys, owns):
+    import gma as g
+    seen = []
+    monkeypatch.setattr(g, "_run_tool", lambda tool, args: seen.append(args) or 0)
+    monkeypatch.setattr(g, "_site_pin_spec", lambda tool, args:
+                        "file:vendor/gm-apprentice-publish-1.60.0.tgz")
+    monkeypatch.setattr(g.install_layout, "LAYOUT", g.install_layout.LAYOUT._replace(
+        shared=tmp_path, door_owns_tool=owns))
+    assert g._publish(["update-pin", "--site", "s"]) == 1
+    assert seen == []
+    err = capsys.readouterr().err
+    assert "PUBLISH_VERSION" in err and g.install_layout.INSTALL_STOP in err
+
+
+def test_python_command_help_does_not_wait_on_a_download(monkeypatch, capsys):
+    import gma as g
+    monkeypatch.setattr(g, "_ensure_tool", lambda: (_ for _ in ()).throw(
+        AssertionError("fetched for --help")))
+    with pytest.raises(SystemExit):
+        g.main(["vault-check", "--help"])
+    assert "usage" in capsys.readouterr().out
 
 
 def test_node_children_use_a_sandbox_proxy(monkeypatch):

@@ -39,7 +39,8 @@ def make_tgz(members: list[tuple[str, bytes | None, str | None]]) -> bytes:
 
 
 GOOD = [("package/bin/gm-publish.js", TOOL_JS, None),
-        ("package/package.json", b'{"version": "1.2.3"}', None)]
+        ("package/package.json", b'{"version": "1.2.3"}', None),
+        ("package/schema/vault-config.schema.json", b"{}", None)]
 
 
 class Release:
@@ -149,7 +150,7 @@ def test_member_escaping_the_tree_is_refused(release, cache, bad):
 
 @needs_node
 def test_tarball_without_the_tool_is_refused(release, cache):
-    release.add("1.2.3", make_tgz([("package/package.json", b"{}", None)]))
+    release.add("1.2.3", make_tgz([m for m in GOOD if "gm-publish" not in m[0]]))
     with pytest.raises(FetchFailed, match="gm-publish.js"):
         fetch("1.2.3", root=cache, base=release.base)
     assert _left(cache) == []
@@ -291,3 +292,60 @@ def test_an_older_fetch_keeps_its_own_version(release, cache):
         release.add(v, make_tgz(GOOD))
         fetch(v, root=cache, base=release.base)
     assert cached_tool("1.0.0", root=cache) is not None
+
+
+@needs_node
+@pytest.mark.parametrize("left_out", ["package.json", "vault-config.schema.json"])
+def test_tarball_missing_a_needed_file_is_refused(release, cache, left_out):
+    release.add("1.2.3", make_tgz([m for m in GOOD if not m[0].endswith(left_out)]))
+    with pytest.raises(FetchFailed, match=left_out):
+        fetch("1.2.3", root=cache, base=release.base)
+    assert _left(cache) == []
+
+
+@needs_node
+def test_a_half_deleted_version_is_repaired(release, cache):
+    broken = cache / "publish" / "1.2.3" / "package" / "bin" / "gm-publish.js"
+    broken.parent.mkdir(parents=True)
+    broken.write_bytes(b"old")
+    release.add("1.2.3", make_tgz(GOOD))
+    tool = fetch("1.2.3", root=cache, base=release.base)
+    assert tool.read_bytes() == TOOL_JS
+    assert _left(cache) == ["1.2.3"]
+
+
+@needs_node
+def test_a_tidy_failure_does_not_fail_the_fetch(release, cache, monkeypatch):
+    def boom(*a):
+        raise OSError("locked")
+    monkeypatch.setattr(tool_cache, "_tidy", boom)
+    release.add("1.2.3", make_tgz(GOOD))
+    assert fetch("1.2.3", root=cache, base=release.base).is_file()
+
+
+def _node_fails(monkeypatch):
+    class Done:
+        returncode = 1
+        stderr = "TypeError: fetch failed"
+    monkeypatch.setattr(tool_cache.subprocess, "run", lambda *a, **kw: Done)
+
+
+def test_behind_a_proxy_a_failed_node_download_retries_in_python(
+        release, cache, monkeypatch):
+    # Node 22 before 22.21 ignores NODE_USE_ENV_PROXY; Python's urllib
+    # reads the proxy settings itself.
+    _node_fails(monkeypatch)
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9")  # not used for http
+    release.add("1.2.3", make_tgz(GOOD))
+    tool = fetch("1.2.3", root=cache, base=release.base, node="node")
+    assert tool.read_bytes() == TOOL_JS
+
+
+def test_without_a_proxy_a_failed_node_download_stays_failed(
+        release, cache, monkeypatch):
+    _node_fails(monkeypatch)
+    for name in tool_cache._PROXY_VARS:
+        monkeypatch.delenv(name, raising=False)
+    release.add("1.2.3", make_tgz(GOOD))
+    with pytest.raises(FetchFailed, match="fetch failed"):
+        fetch("1.2.3", root=cache, base=release.base, node="node")

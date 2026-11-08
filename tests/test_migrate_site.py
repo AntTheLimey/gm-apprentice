@@ -254,7 +254,7 @@ class DoorPinTests(unittest.TestCase):
     def test_cache_path_pin_from_init_moves_to_tarball(self):
         # A site made on this door pins file:<cache>/…; the plain check
         # cannot see it from the cache, so the tag check decides.
-        pin = DoorPin(ok=True, spec="file:/Users/x/Library/Caches/gm-apprentice/"
+        pin = DoorPin(ok=True, spec="file:/home/x/.cache/gm-apprentice/"
                                     "publish/1.70.1/package")
         (item,) = self.run_repin(make_vault(self), pin, owns=False)
         self.assertIn("--tag", pin.calls[-1])

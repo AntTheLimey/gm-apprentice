@@ -240,8 +240,9 @@ def full_tree() -> argparse.ArgumentParser:
 def _site_pin_spec(tool: Path, args: list[str]) -> str:
     """What the site's package.json pins, as `update-pin --check --json`
     reports it ("" when it does not say)."""
+    asked = [a for a in args if a not in ("--check", "--json")]
     try:
-        done = subprocess.run(["node", str(tool), *args, "--check", "--json"],
+        done = subprocess.run(["node", str(tool), *asked, "--check", "--json"],
                               capture_output=True, text=True, timeout=120)
         spec = json.loads(done.stdout).get("spec")
     except (OSError, subprocess.TimeoutExpired, ValueError, AttributeError):
@@ -249,13 +250,18 @@ def _site_pin_spec(tool: Path, args: list[str]) -> str:
     return spec if isinstance(spec, str) else ""
 
 
+class StampMissing(Exception):
+    pass
+
+
 def _door_args(tool: Path, args: list[str]) -> list[str]:
     """`update-pin` with no --tag repoints at the plugin's cache. An install
     without the plugin has none, and a site already on a release tarball
     is left alone by it: both pin the release these skills go with
-    instead, as `gma update` does (migrate_site._door_check)."""
+    instead, as `gma update` does (migrate_site._door_check). A `--check`
+    asks about that same release. Raises StampMissing."""
     if (not args or args[0] != "update-pin"
-            or any(a in ("--tag", "--check", "-h", "--help")
+            or any(a in ("--tag", "-h", "--help")
                    or a.startswith("--tag=") for a in args[1:])):
         return args
     layout = install_layout.LAYOUT
@@ -263,7 +269,9 @@ def _door_args(tool: Path, args: list[str]) -> list[str]:
             _site_pin_spec(tool, args).replace("\\", "/")):
         return args
     version = install_layout.publish_version(layout.shared)
-    return args if version is None else [*args, "--tag", f"publish-v{version}"]
+    if version is None:
+        raise StampMissing
+    return [*args, "--tag", f"publish-v{version}"]
 
 
 def _run_tool(tool: Path, args: list[str]) -> int:
@@ -286,7 +294,15 @@ def _publish(args: list[str]) -> int:
     if tool is None:
         print("gma: " + MISSING_TOOL, file=sys.stderr)
         return 1
-    return _run_tool(tool, _door_args(tool, args))
+    try:
+        args = _door_args(tool, args)
+    except StampMissing:
+        print(f"gma: shared/{install_layout.PUBLISH_STAMP} is missing or "
+              "unreadable, so the tool release these skills go with is "
+              "unknown and the site cannot be repinned. "
+              + install_layout.INSTALL_STOP, file=sys.stderr)
+        return 1
+    return _run_tool(tool, args)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -322,7 +338,9 @@ def main(argv: list[str] | None = None) -> int:
         return _llms(rest)
     if name == "tool":
         return _tool(rest)
-    _ensure_tool()
+    if name == "publish" or not any(a in ("-h", "--help") for a in rest):
+        # A Python command's help needs no tool, so no wait on a download.
+        _ensure_tool()
     if name == "publish":
         return _publish(rest)
     module = importlib.import_module(COMMANDS[name].module)
