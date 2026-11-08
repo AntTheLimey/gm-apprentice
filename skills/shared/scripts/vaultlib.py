@@ -2948,6 +2948,16 @@ def parse_version(text: str) -> tuple[int, ...]:
     return tuple(parts)
 
 
+_WARNED: set[str] = set()
+
+
+def _warn_once(message: str) -> None:
+    """Print a version warning once per command, however often it is asked."""
+    if message not in _WARNED:
+        _WARNED.add(message)
+        print(message, file=sys.stderr)
+
+
 def plugin_version() -> tuple[str, str] | None:
     """(version, source) for the installed skills, or None.
 
@@ -2983,12 +2993,12 @@ def plugin_version() -> tuple[str, str] | None:
     if current:
         for version, source in found:
             if version != current:
-                print(f"warning: {source} says {version}, shared/VERSION says "
-                      f"{current}; using shared/VERSION", file=sys.stderr)
+                _warn_once(f"warning: {source} says {version}, shared/VERSION "
+                           f"says {current}; using shared/VERSION")
         return current, "shared/VERSION"
     if found:
-        print(f"warning: shared/VERSION is missing or empty; using "
-              f"{found[0][1]}", file=sys.stderr)
+        _warn_once(f"warning: shared/VERSION is missing or empty; using "
+                   f"{found[0][1]}")
         return found[0]
     return None
 

@@ -110,6 +110,20 @@ def test_broken_install_messages_say_stop():
     assert install_layout.VERSION_UNKNOWN.endswith(install_layout.INSTALL_STOP)
 
 
+def test_stop_sentence_speaks_to_the_assistant():
+    assert install_layout.INSTALL_STOP.startswith("Assistants: stop here")
+
+
+def test_missing_tool_does_not_call_the_install_broken():
+    # A zip or Codex install without the tool is correct until it ships there.
+    assert "incomplete" not in install_layout.MISSING_TOOL
+
+
+def test_version_unknown_names_every_cause():
+    assert "missing, empty or unreadable" in install_layout.VERSION_UNKNOWN
+    assert "This install is incomplete." in install_layout.VERSION_UNKNOWN
+
+
 def test_gma_version_unknown_says_stop(t):
     gma = _spaced_copy(t)
     (gma.parents[1] / "VERSION").unlink()
@@ -117,6 +131,7 @@ def test_gma_version_unknown_says_stop(t):
                           capture_output=True, text=True)
     assert done.returncode == 1
     assert "stop here, tell the GM" in done.stderr
+    assert "incomplete" in done.stderr
 
 
 def test_ordinary_refusals_do_not_say_stop(t):

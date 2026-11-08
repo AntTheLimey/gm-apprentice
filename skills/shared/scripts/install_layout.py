@@ -8,13 +8,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import NamedTuple
 
-INSTALL_STOP = ("This install is incomplete: stop here, tell the GM what is "
-                "missing, and do not work around it.")
+INSTALL_STOP = ("Assistants: stop here, tell the GM what is missing, and do "
+                "not work around it.")
 MISSING_TOOL = ("the publish tool is not installed with these skills; it "
                 "ships with the Claude Code plugin, and other installs get "
                 "it in a later release. " + INSTALL_STOP)
-VERSION_UNKNOWN = ("cannot determine the plugin version: this install has "
-                   "no shared/VERSION. " + INSTALL_STOP)
+VERSION_UNKNOWN = ("cannot determine the version of these skills: "
+                   "shared/VERSION is missing, empty or unreadable. This "
+                   "install is incomplete. " + INSTALL_STOP)
 
 _TOOL = Path("tools") / "publish" / "bin" / "gm-publish.js"
 # Manifests an install can carry beside skills/: the Claude Code plugin's,

@@ -18,7 +18,7 @@ Every install now knows its own version, and an install that is missing a piece 
 ### Changed
 
 - **The zips carry the committed stamp** instead of writing their own.
-- **A broken install tells the assistant to stop.** When the plugin version cannot be found, or the publish tool is not installed, the message now ends: "This install is incomplete: stop here, tell the GM what is missing, and do not work around it."
+- **A missing piece tells the assistant to stop.** When the version cannot be found, or the publish tool is not installed, the message now ends: "Assistants: stop here, tell the GM what is missing, and do not work around it." A version mismatch warns once per command, not once per check.
 
 ## [1.11.6] — 2026-11-07
 

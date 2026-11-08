@@ -572,7 +572,7 @@ class VersionTests(unittest.TestCase):
                 encoding="utf-8"))["version"]
         self.assertEqual(vl.plugin_version(), (expected, "shared/VERSION"))
 
-    def _layout_version(self, stamp, manifests=None):
+    def _layout_version(self, stamp, manifests=None, calls=1):
         """(stdout, stderr) of plugin_version() from a copy of the scripts.
         No manifests: laid out as a skill zip unpacks (<skill>/shared/...).
         With manifests ({relative path: version}): laid out as a plugin,
@@ -597,7 +597,9 @@ class VersionTests(unittest.TestCase):
             run = subprocess.run(
                 [sys.executable, "-I", "-c",
                  "import sys; sys.path.insert(0, sys.argv[1]); "
-                 "import vaultlib; print(vaultlib.plugin_version())",
+                 "import vaultlib\n"
+                 f"for _ in range({calls}): found = vaultlib.plugin_version()\n"
+                 "print(found)",
                  str(scripts)],
                 capture_output=True, text=True, check=True)
             return run.stdout.strip(), run.stderr
@@ -617,6 +619,11 @@ class VersionTests(unittest.TestCase):
         self.assertEqual(out, "('1.2.3', 'shared/VERSION')")
         self.assertIn(".claude-plugin/plugin.json says 1.2.4", err)
         self.assertIn("using shared/VERSION", err)
+
+    def test_a_disagreement_warns_once_per_command(self):
+        _out, err = self._layout_version(
+            "1.2.3\n", {".claude-plugin/plugin.json": "1.2.4"}, calls=4)
+        self.assertEqual(err.count("says 1.2.4"), 1, err)
 
     def test_codex_manifest_is_checked_too(self):
         out, err = self._layout_version(
