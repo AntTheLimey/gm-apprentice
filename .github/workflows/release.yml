@@ -33,14 +33,6 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Build skill zips
-        if: steps.check_tag.outputs.exists == 'false'
-        run: ./scripts/build-skill-zips.sh
-
-      - name: Check the zips ship every system notice
-        if: steps.check_tag.outputs.exists == 'false'
-        run: python3 scripts/attribution_check.py --zips dist
-
       # Generated notes start from the previous plugin release (v*), never from a
       # publish-v* tag the publish tool's own workflow created in between.
       - name: Find the previous plugin release
@@ -63,6 +55,5 @@ jobs:
           START=()
           if [[ -n "$PREV" ]]; then START=(--notes-start-tag "$PREV"); fi
           gh release create "${{ steps.version.outputs.tag }}" \
-            dist/*.zip \
             --title "v${{ steps.version.outputs.version }}" \
             --generate-notes "${START[@]}"

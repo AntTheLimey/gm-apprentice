@@ -2,7 +2,7 @@
 once into a per-user cache, checked against the release's SHA256SUMS.
 
 The plugin and the repo have `tools/publish` beside the skills and never
-come here. Everything else (zips, `npx skills`, a portal import) fetches
+come here. Everything else (`npx skills`, a portal import) fetches
 the release named by `shared/PUBLISH_VERSION` on first use.
 """
 from __future__ import annotations

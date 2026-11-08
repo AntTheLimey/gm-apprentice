@@ -33,7 +33,7 @@ import sys
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-import changelog_issues
+import github_issues
 import update_record
 from migrate_core import StepFailed
 from update_record import WORKAROUND_KINDS, Workaround
@@ -122,19 +122,17 @@ def add(vault: Path, issue: int, what: str, kind: str, where: list[str],
     return entry
 
 
-def already_cited(issue: int) -> str | None:
-    """A word for the agent when the plugin's release notes already mention
-    the issue at or below the plugin's version: the update would offer the
-    workaround at once, which is wrong if that release only part-fixed it."""
-    releases, found = changelog_issues.plugin_releases(), plugin_version()
-    note = releases.get(issue) if releases else None
-    if note is None or not found \
-            or parse_version(note.release) > parse_version(found[0]):
+def already_fixed(issue: int) -> str | None:
+    """A word for the agent when GitHub says the issue is already closed as
+    fixed: the next update may offer the workaround at once, which is wrong
+    if that fix was only part of it. None when open, unknown or unreachable."""
+    info = github_issues.GitHub().issue(issue)
+    if info is None or info.state != "closed" or info.reason not in github_issues.FIXED:
         return None
-    return (f"#{issue} is already mentioned in {note.release}'s release "
-            f"notes. If that release only partly fixed it, run this add "
-            f"again with --release set to the release that finishes it; "
-            f"otherwise the next update may offer it for retirement.")
+    return (f"#{issue} is already closed as fixed on GitHub. If that fix "
+            f"only partly covers it, run this add again with --release set "
+            f"to the release that finishes it; otherwise the next update may "
+            f"offer it for retirement.")
 
 
 def _find(rec: update_record.Record, wid: str) -> Workaround:
@@ -327,7 +325,7 @@ def build_parser() -> argparse.ArgumentParser:
                         "for agent memory")
     a.add_argument("--release", metavar="X.Y.Z",
                    help="the release that ships the issue, when the "
-                        "CHANGELOG's is wrong")
+                        "answer GitHub gives is wrong")
     ls = sub.add_parser("list", help="the recorded workarounds")
     ls.add_argument("vault", help="the vault folder")
     ls.add_argument("--json", action="store_true", help="print them as JSON")
@@ -398,7 +396,7 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Set {w['id']}'s release to {w['release']}.")
             else:
                 print(f"Recorded {w['id']}: {w['what']} (#{w['issue']}).")
-            notice = None if args.release else already_cited(args.issue)
+            notice = None if args.release else already_fixed(args.issue)
             if notice:
                 print(notice)
         elif args.command == "list":

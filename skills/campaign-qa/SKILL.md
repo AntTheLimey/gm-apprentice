@@ -9,8 +9,7 @@ they reach the table, and walk the GM through fixing each one. You
 validate and repair; you don't create content. Every finding gets
 a severity, an explanation and a proposed fix — the GM decides.
 
-`shared/` is the `shared` folder beside this skill's folder (inside
-it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
+`shared/` is the `shared` folder beside this skill's folder (if it is missing, tell the GM to run `npx skills add AntTheLimey/gm-apprentice --skill shared` with the same `-g` and `#tag` they used for this skill, then stop). `gma` is `python3 "<shared>/scripts/gma.py"`,
 with the whole path quoted; `gma llms` lists its commands.
 
 ## Companion Skills
@@ -42,8 +41,8 @@ not a fault.
 version`. `OK`/`SETUP` → proceed. `MISMATCH` → announce the row and
 run the update by campaign-organizer's
 `campaign-organizer/references/migration-procedure.md` before any
-audit; resume after. `AHEAD` → announce the row, tell the GM to
-update the plugin, stop. `ERROR` → report the row (broken plugin
+audit; resume after. `AHEAD` → announce the row, tell the GM
+the update step the row names, stop. `ERROR` → report the row (broken
 install), stop. `REFUSED` → tell the GM in plain words what the row says is left and how to fix it (most need the update from a 1.10 release, 1.10.134 or later, first), stop. No verdict row plus `not a directory` on stderr →
 wrong vault path; ask for it.
 

@@ -31,9 +31,6 @@ _backup/
 # Claude Code local settings
 .claude/
 
-# Skill zip distribution files (built by scripts/build-skill-zips.sh)
-dist/
-
 # Python bytecode (from scripts/ and tests/)
 __pycache__/
 *.pyc

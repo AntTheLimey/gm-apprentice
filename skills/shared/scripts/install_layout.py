@@ -13,8 +13,8 @@ from tool_cache import cached_tool
 
 INSTALL_STOP = ("Assistants: stop here, tell the GM what is missing, and do "
                 "not work around it.")
-MISSING_TOOL = ("the publish tool is not installed. The Claude Code plugin "
-                "carries it; other installs download it once (it needs Node "
+MISSING_TOOL = ("the publish tool is not installed. The Claude Code and "
+                "Codex plugins carry it; other installs download it once (it needs Node "
                 "22.21 or newer): run `gma tool install` with network access. "
                 + INSTALL_STOP)
 VERSION_UNKNOWN = ("cannot determine the version of these skills: "
@@ -67,6 +67,22 @@ def find_layout(scripts_dir: Path | None = None) -> Layout:
     if version is None:
         return Layout(shared, root, None)
     return Layout(shared, root, cached_tool(version))
+
+
+# Off the plugin (Claude Code's or Codex's), the skills came from `npx skills`.
+NPX_UPDATE = ("update the gm-apprentice skills the way they were installed: "
+              "`npx skills update -g` (without `-g` for an install in one "
+              "project; one pinned to a release: run `npx skills add` again "
+              "with the new tag)")
+
+
+def update_step(plugin_words: str, layout: Layout | None = None) -> str:
+    """How the GM updates these skills: `plugin_words` on a plugin install,
+    unchanged, so a plugin GM reads what they always have."""
+    here = LAYOUT if layout is None else layout
+    on_plugin = here.root is not None and any(
+        (here.root / m).is_file() for m in MANIFESTS)
+    return plugin_words if on_plugin else NPX_UPDATE
 
 
 LAYOUT = find_layout()

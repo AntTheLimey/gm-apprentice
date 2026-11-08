@@ -96,6 +96,8 @@ def _base_repo() -> Path:
             _write(root, f"{SYSTEMS}/{system}/NOTICE.md", notice)
             _write(root, f"{SYSTEMS}/{system}/mechanics.md", "# Mechanics\n")
         _write(root, f"{SYSTEMS}/generic/mechanics.md", "# Generic\n")
+        _write(root, "skills/shared/NOTICE.md",
+               (REPO / "skills" / "shared" / "NOTICE.md").read_text(encoding="utf-8"))
         git(root, "add", "-A")
         git(root, "commit", "-q", "-m", "base")
     return Path(_BASE.name)
@@ -353,146 +355,6 @@ class AddedFilesTests(unittest.TestCase):
         self.assertIn("failed", str(found[0]))
 
 
-class ZipTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.tmp = tempfile.TemporaryDirectory()
-        self.addCleanup(self.tmp.cleanup)
-        self.dir = Path(self.tmp.name)
-
-    def make_zip(self, entries: list[str]) -> None:
-        with zipfile.ZipFile(self.dir / "ttrpg-expert.zip", "w") as z:
-            for e in entries:
-                z.writestr(e, "x")
-
-    def all_notices(self) -> list[str]:
-        return [f"systems/{s}/NOTICE.md" for s in NOTICES]
-
-    def test_zip_with_every_notice_is_clean(self) -> None:
-        self.make_zip(self.all_notices() + ["systems/gurps-4e/mechanics.md", "SKILL.md"])
-        self.assertEqual(ac.check_zips(self.dir), [])
-
-    def test_zip_missing_a_notice_is_reported(self) -> None:
-        self.make_zip([e for e in self.all_notices() if "pf2e" not in e])
-        found = [str(f) for f in ac.check_zips(self.dir)]
-        self.assertEqual(len(found), 1)
-        self.assertIn("systems/pf2e/NOTICE.md", found[0])
-
-    def test_zip_shipping_a_personal_file_is_reported(self) -> None:
-        self.make_zip(self.all_notices() + ["systems/gurps-4e/personal/book.md"])
-        found = [str(f) for f in ac.check_zips(self.dir)]
-        self.assertEqual(len(found), 1)
-        self.assertIn("personal/book.md", found[0])
-
-    def test_missing_zip_is_an_error_not_a_silent_pass(self) -> None:
-        found = [str(f) for f in ac.check_zips(self.dir)]
-        self.assertEqual(len(found), 1)
-        self.assertIn("zip not found", found[0])
-
-
-@unittest.skipUnless(shutil.which("zip") and shutil.which("jq"), "needs zip and jq")
-class RealBuildScriptTests(unittest.TestCase):
-    """Run the real scripts/build-skill-zips.sh, so the zip entry names are
-    the ones it really emits and not ones this file assumes."""
-
-    def build(self, tmp: Path, personal: bool) -> Path:
-        (tmp / "scripts").mkdir()
-        shutil.copy(REPO / "scripts" / "build-skill-zips.sh", tmp / "scripts")
-        (tmp / ".claude-plugin").mkdir()
-        (tmp / ".claude-plugin" / "plugin.json").write_text('{"version": "9.9.9"}')
-        (tmp / "tools" / "publish").mkdir(parents=True)
-        (tmp / "tools" / "publish" / "package.json").write_text('{"version": "8.8.8"}')
-        skill = tmp / "skills" / "ttrpg-expert"
-        (skill / "SKILL.md").parent.mkdir(parents=True)
-        (skill / "SKILL.md").write_text("# skill\n")
-        for system, notice in NOTICES.items():
-            d = skill / "systems" / system
-            d.mkdir(parents=True)
-            (d / "NOTICE.md").write_text(notice)
-            (d / "mechanics.md").write_text("# m\n")
-        if personal:
-            p = skill / "systems" / "gurps-4e" / "personal"
-            p.mkdir()
-            (p / "book.md").write_text("private\n")
-        shared = tmp / "skills" / "shared"
-        shared.mkdir()
-        (shared / "README.md").write_text("# shared\n")
-        (shared / "VERSION").write_text("9.9.9\n")
-        (shared / "PUBLISH_VERSION").write_text("8.8.8\n")
-        out = tmp / "dist"
-        subprocess.run(
-            ["bash", str(tmp / "scripts" / "build-skill-zips.sh"), str(out)],
-            check=True,
-            capture_output=True,
-        )
-        return out
-
-    def test_real_build_ships_every_notice_and_no_personal_file(self) -> None:
-        with tempfile.TemporaryDirectory() as t:
-            out = self.build(Path(t), personal=True)
-            with zipfile.ZipFile(out / "ttrpg-expert.zip") as z:
-                names = z.namelist()
-            self.assertIn("systems/gurps-4e/NOTICE.md", names)
-            self.assertFalse([n for n in names if "personal" in n], names)
-            self.assertEqual(ac.check_zips(out), [])
-
-    def test_the_zip_carries_the_committed_version(self) -> None:
-        with tempfile.TemporaryDirectory() as t:
-            out = self.build(Path(t), personal=False)
-            with zipfile.ZipFile(out / "ttrpg-expert.zip") as z:
-                self.assertEqual(z.read("shared/VERSION").decode(), "9.9.9\n")
-
-    def test_the_build_refuses_a_stamp_with_inner_space(self) -> None:
-        # The scripts trim only the ends, so "9.9 .9" is not 9.9.9.
-        with tempfile.TemporaryDirectory() as t:
-            tmp = Path(t)
-            out = self.build(tmp, personal=False)
-            (tmp / "skills" / "shared" / "VERSION").write_text("9.9 .9\n")
-            run = subprocess.run(
-                ["bash", str(tmp / "scripts" / "build-skill-zips.sh"), str(out)],
-                capture_output=True, text=True)
-            self.assertEqual(run.returncode, 1)
-
-    def test_the_build_refuses_a_stale_version(self) -> None:
-        with tempfile.TemporaryDirectory() as t:
-            tmp = Path(t)
-            out = self.build(tmp, personal=False)
-            (tmp / "skills" / "shared" / "VERSION").write_text("0.0.1\n")
-            run = subprocess.run(
-                ["bash", str(tmp / "scripts" / "build-skill-zips.sh"), str(out)],
-                capture_output=True, text=True)
-            self.assertEqual(run.returncode, 1)
-            self.assertIn("skills/shared/VERSION (0.0.1) differs from "
-                          "plugin.json (9.9.9)", run.stdout + run.stderr)
-
-    def test_the_build_refuses_a_stale_publish_stamp(self) -> None:
-        with tempfile.TemporaryDirectory() as t:
-            tmp = Path(t)
-            out = self.build(tmp, personal=False)
-            (tmp / "skills" / "shared" / "PUBLISH_VERSION").write_text("0.0.1\n")
-            run = subprocess.run(
-                ["bash", str(tmp / "scripts" / "build-skill-zips.sh"), str(out)],
-                capture_output=True, text=True)
-            self.assertEqual(run.returncode, 1)
-            self.assertIn("skills/shared/PUBLISH_VERSION (0.0.1) differs from "
-                          "tools/publish/package.json (8.8.8)",
-                          run.stdout + run.stderr)
-
-    def test_check_fails_when_the_real_build_lacks_a_notice(self) -> None:
-        with tempfile.TemporaryDirectory() as t:
-            tmp = Path(t)
-            (tmp / "skills").mkdir()
-            out = self.build(tmp, personal=False)
-            (tmp / "skills/ttrpg-expert/systems/fitd/NOTICE.md").unlink()
-            subprocess.run(
-                ["bash", str(tmp / "scripts" / "build-skill-zips.sh"), str(out)],
-                check=True,
-                capture_output=True,
-            )
-            found = [str(f) for f in ac.check_zips(out)]
-            self.assertEqual(len(found), 1)
-            self.assertIn("systems/fitd/NOTICE.md", found[0])
-
-
 class RealRepoTests(unittest.TestCase):
     def test_repository_is_clean(self) -> None:
         found = ac.check_systems(REPO) + ac.check_personal(REPO)
@@ -523,25 +385,26 @@ class RealRepoTests(unittest.TestCase):
         self.assertEqual(bad.returncode, 1)
         self.assertIn("fitd/NOTICE.md", bad.stdout)
 
-    def test_cli_zips_flag(self) -> None:
-        fx = Fixture()
-        self.addCleanup(fx.close)
-        zdir = fx.root / "dist"
-        zdir.mkdir()
-        script = str(REPO / "scripts" / "attribution_check.py")
 
-        def run() -> subprocess.CompletedProcess[str]:
-            return subprocess.run(
-                [sys.executable, script, "--repo", str(fx.root), "--zips", str(zdir)],
-                capture_output=True,
-                text=True,
-            )
 
-        self.assertEqual(run().returncode, 1)  # no zip yet
-        with zipfile.ZipFile(zdir / "ttrpg-expert.zip", "w") as z:
-            for s in NOTICES:
-                z.writestr(f"systems/{s}/NOTICE.md", "x")
-        self.assertEqual(run().returncode, 0)
+class SharedNoticeTests(unittest.TestCase):
+    """`shared` installs as its own skill (`npx skills`), without
+    ATTRIBUTION.md, and holds SRD 5.2 and GURPS numbers in its scripts."""
+
+    def test_the_real_shared_notice_is_clean(self) -> None:
+        self.assertEqual(ac.check_shared(REPO), [])
+
+    def test_a_missing_shared_notice_is_reported(self) -> None:
+        tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        (tmp / "skills" / "shared").mkdir(parents=True)
+        found = [str(f) for f in ac.check_shared(tmp)]
+        self.assertTrue(any("skills/shared/NOTICE.md" in f and "missing" in f
+                            for f in found), found)
+        (tmp / "skills" / "shared" / "NOTICE.md").write_text("SRD 5.2 only\n")
+        found = [str(f) for f in ac.check_shared(tmp)]
+        self.assertTrue(any("Steve Jackson Games" in f or "SJG" in f
+                            for f in found), found)
 
 
 if __name__ == "__main__":

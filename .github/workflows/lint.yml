@@ -259,22 +259,3 @@ jobs:
             echo "::warning::No version bump detected — no release will be created on merge"
             exit 1
           fi
-
-      - name: Test build script
-        run: |
-          ./scripts/build-skill-zips.sh
-          ZIP_COUNT=$(ls dist/*.zip 2>/dev/null | wc -l | xargs)
-          if [ "$ZIP_COUNT" -ne 9 ]; then
-            echo "::error::Expected 9 skill zips, got $ZIP_COUNT"
-            exit 1
-          fi
-          for z in dist/*.zip; do
-            if ! unzip -l "$z" | grep -q 'SKILL.md'; then
-              echo "::error::$(basename "$z") missing SKILL.md"
-              exit 1
-            fi
-          done
-          echo "All $ZIP_COUNT skill zips valid"
-
-      - name: Every system notice ships in the zip, and no personal file
-        run: python3 scripts/attribution_check.py --zips dist

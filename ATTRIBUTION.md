@@ -3,8 +3,9 @@
 ## Where the notices live
 
 Each system directory under `skills/ttrpg-expert/systems/` ships one
-`NOTICE.md` with the licence notice for the files in it. The skill zips
-include it; they do not include this document. The individual reference
+`NOTICE.md` with the licence notice for the files in it. An install
+through `npx skills` copies the skill's folder with it, and not this
+document. The individual reference
 files carry no notice of their own.
 
 CC-BY 3.0 (section 4(b)) asks for attribution "reasonable to the medium
@@ -15,8 +16,7 @@ on every file, so one per system is used, which also avoids repeating
 the same text in every file that is read.
 
 `scripts/attribution_check.py` runs in CI and fails if a system has no
-`NOTICE.md`, if the notice lacks its required text, or if the built zip
-does not ship it. The Call of Cthulhu notice also records, file by file,
+`NOTICE.md`, or if the notice lacks its required text. The Call of Cthulhu notice also records, file by file,
 which files derive from BRP, which from Lovecraft's public-domain
 fiction, and which are our own descriptions of mechanics.
 
@@ -72,7 +72,9 @@ throws, cantrips and prepared spells by level, the spell slot table, the
 Warlock's pact slots, the Warlock levels at which a spell of level 6 to 9
 is gained, the most cantrips a class option adds, and the level-20 ability
 score caps of the Barbarian and Monk. Numbers only; no rules text is
-copied.
+copied. `shared` can install as a skill of its own without this document,
+so `skills/shared/NOTICE.md` carries the SRD 5.2 notice for this file and
+the SJG notice for `skills/shared/scripts/gurps_calc.py`.
 
 The Python tools' D&D test characters (`tests/fixtures/dnd-pcs/*.md`)
 are built from SRD 5.2 names and numbers only (CC-BY 4.0), with no
@@ -98,11 +100,11 @@ score procedures. All content is paraphrased; setting IP
 distributed files.
 
 The `skills/ttrpg-expert/systems/fitd/` directory ships a
-`NOTICE.md` carrying the attribution line above, with both URIs. The
-skill zips ship those files without this document, and CC-BY 3.0 asks
+`NOTICE.md` carrying the attribution line above, with both URIs. An
+install can ship those files without this document, and CC-BY 3.0 asks
 for attribution "reasonable to the medium or means", so the notice
 travels with the directory. (The gitignored `personal/` working
-copies are excluded from the repo and from the zips.)
+copies are excluded from the repo, so no install carries them.)
 
 The publish tool's FitD sheet tests
 (`tools/publish/test/helpers/pc-template.js`) fill the PC template
@@ -169,8 +171,8 @@ chargen kits.
 See `skills/ttrpg-expert/systems/gurps-4e/sources.md` for
 book coverage status. The `skills/ttrpg-expert/systems/gurps-4e/`
 directory ships a `NOTICE.md` carrying the notice above. (The
-gitignored `personal/` working copies are excluded from the repo and
-from the zips.)
+gitignored `personal/` working copies are excluded from the repo, so no
+install carries them.)
 
 **GURPS rules charts in `skills/ttrpg-expert/systems/gurps-4e/`**
 Source: *GURPS Basic Set 4th Edition* (Steve Jackson Games), except

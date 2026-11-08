@@ -231,7 +231,7 @@ TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 # Templates a new vault gets as a page, not under _Templates/ (vault_scaffold).
 WORLD_STUBS = {"world-index.md": "_World/world-index.md", "world-flags.md": "_World/_flags.md"}
 # Types with no template: the example frontmatter their fields are read from,
-# under skills/ (a skill zip holds only its own skill beside shared/).
+# under skills/ (an `npx skills` install holds the skills beside shared/).
 EXAMPLE_FILES = {
     "adventure-brief": "the-midwife/references/scaffold-handoff.md",
     "session-play-notes": "shared/session-document-chain.md",

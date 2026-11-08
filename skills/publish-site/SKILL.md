@@ -12,8 +12,7 @@ identical either way; the setting `player_site.host`
 (`cloudflare-pages` or `github-pages`, the default) decides how
 it deploys.
 
-`shared/` is the `shared` folder beside this skill's folder (inside
-it, in a zip install). `gma` is `python3 "<shared>/scripts/gma.py"`,
+`shared/` is the `shared` folder beside this skill's folder (if it is missing, tell the GM to run `npx skills add AntTheLimey/gm-apprentice --skill shared` with the same `-g` and `#tag` they used for this skill, then stop). `gma` is `python3 "<shared>/scripts/gma.py"`,
 with the whole path quoted; `gma llms` lists its commands.
 
 Guide GMs through setup, routine updates and troubleshooting in
@@ -23,7 +22,7 @@ a terminal command does rather than assuming they know.
 **Version check:** on first invocation run `gma vault-check <vault> version`. `OK`/`SETUP` → proceed. `MISMATCH` → announce the row,
 run the update by campaign-organizer's
 `references/migration-procedure.md`, then resume. `AHEAD` →
-announce the row, tell the GM to update the plugin, stop. `ERROR` → report the row (broken plugin install),
+announce the row, tell the GM the update step the row names, stop. `ERROR` → report the row (broken install),
 stop. `REFUSED` → tell the GM in plain words what the row says is left and how to fix it (most need the update from a 1.10 release, 1.10.134 or later, first), stop. No verdict row plus a `not a directory` error → ask the GM
 for the correct vault path.
 

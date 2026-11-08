@@ -602,3 +602,19 @@ def test_tool_install_ignores_a_recent_failure(monkeypatch, tmp_path):
 
 def test_missing_tool_names_node():
     assert "Node 22" in MISSING_TOOL
+
+
+def test_update_step_on_a_plugin_keeps_its_words(t):
+    _touch(t / ".claude-plugin" / "plugin.json")
+    scripts = t / "skills" / "shared" / "scripts"
+    scripts.mkdir(parents=True)
+    layout = find_layout(scripts)
+    assert install_layout.update_step("update the plugin", layout) == "update the plugin"
+
+
+def test_update_step_elsewhere_names_npx_skills(t):
+    scripts = t / ".agents" / "skills" / "shared" / "scripts"
+    scripts.mkdir(parents=True)
+    step = install_layout.update_step("update the plugin", find_layout(scripts))
+    assert "npx skills update -g" in step
+    assert "npx skills add" in step   # a pinned install re-runs add

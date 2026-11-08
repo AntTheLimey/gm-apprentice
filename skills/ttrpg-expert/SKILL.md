@@ -4,7 +4,7 @@ description: "TTRPG rules advisor and content engine for CoC 7e, GURPS 4e, Forge
 ---
 
 TTRPG advisor and content engine. `shared/` is the `shared` folder
-beside this skill's folder (inside it, in a zip install). `gma` is
+beside this skill's folder (if it is missing, tell the GM to run `npx skills add AntTheLimey/gm-apprentice --skill shared` with the same `-g` and `#tag` they used for this skill, then stop). `gma` is
 `python3 "<shared>/scripts/gma.py"`, with the whole path quoted;
 `gma llms` lists its commands. `systems/` paths are relative to this
 skill.

@@ -48,7 +48,7 @@ from migrate_site import REPIN, SITE_CHECKS
 from migrate_vault import VAULT_CHECKS
 from update_record import AnswerEntry, lines_sha
 from vault_check import MOVED_FLOOR, Left, refusal, unmoved
-from install_layout import VERSION_UNKNOWN  # noqa: E402
+from install_layout import VERSION_UNKNOWN, update_step  # noqa: E402
 from vaultlib import cli_name  # noqa: E402
 from vaultlib import (STATE_FILE, SettingsUnavailable, StateUnreadable, parse_version, plugin_version,
                       read_held, read_stamp, vault_layout, write_held,
@@ -88,8 +88,8 @@ def gate(vault: Path,
         return refusal([Left(STATE_FILE, f"no update stamp ({STATE_FILE})",
                              True)], plugin)
     if parse_version(shown) > parse_version(plugin):
-        return (f"vault {shown} is ahead of plugin {plugin}; update the "
-                f"plugin before touching this vault")
+        return (f"vault {shown} is ahead of plugin {plugin}; "
+                f"{update_step('update the plugin')} before touching this vault")
     return shown, plugin
 
 

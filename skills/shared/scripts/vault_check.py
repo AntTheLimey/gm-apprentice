@@ -179,6 +179,7 @@ from schema_rules import (
 )
 # LINK_RE and SKIP_DIRS are re-exported: they were part
 # of this module's surface before vaultlib existed.
+import install_layout
 from install_layout import MISSING_TOOL, VERSION_UNKNOWN
 from vaultlib import (  # noqa: F401
     FENCE_RE,
@@ -1057,8 +1058,9 @@ def check_version(vault: Path) -> tuple[list[str], int]:
     if vault_v < plugin_v:
         return ([f"MISMATCH\t{rel}\tvault {current} < plugin {plugin} — "
                  f"{MIGRATION_HINT}"], 1)
-    return ([f"AHEAD\t{rel}\tvault {current} > plugin {plugin} — update "
-             f"the plugin before touching this vault"], 1)
+    step = install_layout.update_step("update the plugin")
+    return ([f"AHEAD\t{rel}\tvault {current} > plugin {plugin} — {step} "
+             f"before touching this vault"], 1)
 
 
 def list_active_pcs(vault: Path) -> list[str]:
@@ -1848,7 +1850,7 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
         elif why.endswith("is not understood"):
             # The plugin's own tool answered in a shape this script does not
             # know: the two are from different releases.
-            fix = "update the gm-apprentice plugin"
+            fix = install_layout.update_step("update the gm-apprentice plugin")
         else:
             fix = node_fix
         has_site = site_without_tool(settings(vault))
@@ -3601,8 +3603,8 @@ CANONICAL_WRAP_TYPE = WRAP_UP_TYPE
 
 WRAP_TEMPLATE_PATH = (Path(__file__).resolve().parent.parent
                       / "templates" / "session-wrap.md")
-# Used only when the template is missing — a skill zip that shipped
-# without it must still normalise decorated headings rather than silently
+# Used only when the template is missing — an install that lacks
+# it must still normalise decorated headings rather than silently
 # stop recognising them.
 WRAP_SUBSECTIONS_FALLBACK: tuple[str, ...] = (
     "Quick Bullets", "PC Carry-Forward", "What Carries Forward",

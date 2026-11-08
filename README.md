@@ -1,8 +1,9 @@
 # gm-apprentice
 
-TTRPG Game Master skills for Claude. An apprentice that helps GMs
-run tabletop role-playing games -- from a first spark of an idea
-through content generation, live play, and campaign management.
+TTRPG Game Master skills for Claude Code, Codex and other AI agents.
+An apprentice that helps GMs run tabletop role-playing games -- from a
+first spark of an idea through content generation, live play, and
+campaign management.
 
 ## Installation
 
@@ -23,20 +24,55 @@ through content generation, live play, and campaign management.
 5. Enter: `https://github.com/AntTheLimey/gm-apprentice`
 6. Once synced, click **Install** on the gm-apprentice plugin
 
-#### Individual skill upload (free / starter accounts)
+### Codex
 
-If your plan doesn't include plugin support, upload skills individually:
+gm-apprentice is a Codex plugin marketplace as well. In a terminal:
 
-1. Download the `.zip` files you want from the
-   [latest release](https://github.com/AntTheLimey/gm-apprentice/releases/latest)
-2. In Claude Desktop, go to **Chat > Skills**
-3. Click **+** and upload each zip file
+```bash
+codex plugin marketplace add AntTheLimey/gm-apprentice
+codex plugin add gm-apprentice@gm-apprentice
+```
 
-The zips don't carry the publish tool that builds the campaign site. The
-first command that needs it downloads it once (about 2 MB, checked against
-the release's checksum; it needs Node 22.21 or newer). If a sandbox blocks that
+This installs the whole plugin, publish tool included, as Claude Code
+does. To update, run `codex plugin marketplace upgrade gm-apprentice`,
+then the `codex plugin add` line again.
+
+### Other agents (`npx skills`)
+
+For Cursor's own agent, Gemini CLI, OpenCode and the other agents the
+[`skills`](https://github.com/vercel-labs/skills) installer supports:
+
+```bash
+npx skills add AntTheLimey/gm-apprentice --all -g
+```
+
+`--all` matters: it brings the `shared` skill, the scripts and
+templates the other nine use. `-g` installs for your user, so every
+vault has them. To match a release, name it:
+`npx skills add "AntTheLimey/gm-apprentice#v1.12.0" --all -g`. A
+pinned install stays on that release; re-run it with a newer tag to
+move on. An unpinned one updates with `npx skills update -g`.
+
+These installs don't carry the publish tool that builds the campaign
+site. The first command that needs it downloads it once (about 2 MB,
+checked against the release's checksum). If a sandbox blocks that
 download, allow `gma tool install` when asked, or run it once in a
 terminal.
+
+Codex and Cursor are being tested end to end. The other agents install
+through `npx skills` but have not been tested yet.
+
+### Requirements
+
+- Python 3.10 or newer, for the vault scripts.
+- Node 22.21 or newer, for the campaign site, the site's settings and
+  the checks that ask what a note would publish. A vault with no site
+  needs no Node.
+
+### After an update
+
+When the skills are newer than a vault, the version check asks for
+`gma update` on that vault, and the skills run it for you.
 
 ### VS Code / Cursor
 
@@ -53,8 +89,8 @@ management UI yet — install via the CLI method above.
 
 ## Skills
 
-You talk to Claude normally; skills activate automatically from what
-you ask. Say "build me an NPC" and Claude reaches for **ttrpg-expert**;
+You talk to your assistant normally; skills activate automatically from
+what you ask. Say "build me an NPC" and it reaches for **ttrpg-expert**;
 say "help me start a new campaign" and it reaches for **the-midwife**.
 
 | Skill | Description | Obsidian |

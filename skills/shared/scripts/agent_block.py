@@ -30,9 +30,9 @@ LINES = (
     f'`{GMA} update "<this vault>"`, where `gma` is '
     f'`python3 "<shared>/scripts/gma.py"` in the gm-apprentice skills\' '
     f"`shared` folder.",
-    f"- When you build a stand-in for a plugin gap, record it with "
-    f"`{GMA} workaround add` (see the plugin's "
-    f"`skills/shared/filing-plugin-issues.md`).",
+    f"- When you build a stand-in for a gm-apprentice gap, record it with "
+    f"`{GMA} workaround add` (see `filing-plugin-issues.md` in that "
+    f"`shared` folder).",
 )
 
 
