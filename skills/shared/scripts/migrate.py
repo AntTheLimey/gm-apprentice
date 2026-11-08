@@ -48,6 +48,7 @@ from migrate_site import REPIN, SITE_CHECKS
 from migrate_vault import VAULT_CHECKS
 from update_record import AnswerEntry, lines_sha
 from vault_check import MOVED_FLOOR, Left, refusal, unmoved
+from install_layout import VERSION_UNKNOWN  # noqa: E402
 from vaultlib import cli_name  # noqa: E402
 from vaultlib import (STATE_FILE, SettingsUnavailable, StateUnreadable, parse_version, plugin_version,
                       read_held, read_stamp, vault_layout, write_held,
@@ -69,7 +70,7 @@ def gate(vault: Path,
     check the gate had to skip is said on `notes`."""
     found = plugin_version()
     if found is None:
-        return "cannot determine the plugin version"
+        return VERSION_UNKNOWN
     plugin = found[0]
     if not (vault / "_meta").is_dir():
         return f"{vault} has no _meta/ folder: first-time setup, not a migration"

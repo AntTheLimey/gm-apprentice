@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 import vaultlib
-from install_layout import MISSING_TOOL
+from install_layout import MISSING_TOOL, VERSION_UNKNOWN
 
 
 class Command(NamedTuple):
@@ -199,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         found = vaultlib.plugin_version()
         if found is None:
-            print("gma: cannot determine the plugin version", file=sys.stderr)
+            print("gma: " + VERSION_UNKNOWN, file=sys.stderr)
             return 1
         print(found[0])
         return 0

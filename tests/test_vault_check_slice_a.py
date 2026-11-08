@@ -32,6 +32,7 @@ SCRIPTS = ROOT / "skills" / "shared" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import vault_check as vc  # noqa: E402
+from install_layout import VERSION_UNKNOWN  # noqa: E402
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from site_fixture import give_site, site_copy, with_site  # noqa: E402
@@ -432,10 +433,7 @@ class VersionCommandTests(unittest.TestCase):
             FIXTURES / "version-behind")
         self.assertEqual(token, "ERROR")
         self.assertEqual(path, "(plugin)")
-        self.assertEqual(message,
-                         "cannot determine the plugin version "
-                         "(no .claude-plugin/plugin.json or "
-                         "shared/VERSION)")
+        self.assertEqual(message, VERSION_UNKNOWN)
         self.assertEqual(code, 1)
 
     def test_cli_emits_the_version_section_and_exits_zero_on_ok(self):

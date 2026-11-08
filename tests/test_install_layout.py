@@ -105,6 +105,29 @@ def test_publish_without_tool_stops_plainly(t):
     assert "Traceback" not in done.stderr
 
 
+def test_broken_install_messages_say_stop():
+    assert install_layout.MISSING_TOOL.endswith(install_layout.INSTALL_STOP)
+    assert install_layout.VERSION_UNKNOWN.endswith(install_layout.INSTALL_STOP)
+
+
+def test_gma_version_unknown_says_stop(t):
+    gma = _spaced_copy(t)
+    (gma.parents[1] / "VERSION").unlink()
+    done = subprocess.run([sys.executable, str(gma), "--version"],
+                          capture_output=True, text=True)
+    assert done.returncode == 1
+    assert "stop here, tell the GM" in done.stderr
+
+
+def test_ordinary_refusals_do_not_say_stop(t):
+    gma = _spaced_copy(t)
+    done = subprocess.run([sys.executable, str(gma), "vault-check",
+                           str(t / "nope"), "version"],
+                          capture_output=True, text=True)
+    assert "not a directory" in done.stderr
+    assert "stop here" not in done.stderr
+
+
 @pytest.mark.skipif(os.name == "nt", reason="exec is POSIX")
 def test_publish_execs_node(tmp_path):
     bin_dir = tmp_path / "bin"

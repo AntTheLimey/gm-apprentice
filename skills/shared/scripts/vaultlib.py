@@ -2964,9 +2964,12 @@ def plugin_version() -> tuple[str, str] | None:
         pass
     except OSError as e:
         print(f"warning: unreadable {stamp.as_posix()}: {e}", file=sys.stderr)
-    found = []
-    for rel in MANIFESTS if LAYOUT.root is not None else ():
-        manifest = LAYOUT.root / rel
+    root = LAYOUT.root
+    found: list[tuple[str, str]] = []
+    for rel in MANIFESTS:
+        if root is None:
+            break
+        manifest = root / rel
         try:
             version = json.loads(manifest.read_text(encoding="utf-8"))["version"]
         except FileNotFoundError:
@@ -2978,9 +2981,9 @@ def plugin_version() -> tuple[str, str] | None:
         if version:
             found.append((str(version), rel.as_posix()))
     if current:
-        for version, rel in found:
+        for version, source in found:
             if version != current:
-                print(f"warning: {rel} says {version}, shared/VERSION says "
+                print(f"warning: {source} says {version}, shared/VERSION says "
                       f"{current}; using shared/VERSION", file=sys.stderr)
         return current, "shared/VERSION"
     if found:
