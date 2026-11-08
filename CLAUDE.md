@@ -154,15 +154,14 @@ Every non-trivial change follows this sequence:
    holds and what CodeRabbit raised, and wait for explicit user
    confirmation. Never merge autonomously
 10. **Merge** — the release workflow creates the tag and GitHub Release
-    with skill zips automatically
+    automatically
 
 **What counts as trivial:** single file, 1-2 lines, user explicitly says
 "push to main." Everything else gets a branch and PR.
 
 **Test requirements:** at minimum, run `python3 scripts/validate_schema.py`
 and verify markdown lint passes. For script or tooling changes, verify the
-scripts work locally (e.g., `./scripts/build-skill-zips.sh` produces 9
-valid zips). For publish tool changes, run the publish tool test suite.
+scripts work locally. For publish tool changes, run the publish tool test suite.
 
 ## Skill edits
 

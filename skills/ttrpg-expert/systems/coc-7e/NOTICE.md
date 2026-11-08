@@ -1,6 +1,7 @@
 # Call of Cthulhu 7th Edition (with Regency Cthulhu) — Licence Notice
 
-This directory ships in the skill zip without `ATTRIBUTION.md`. This file carries the
+This directory can ship without `ATTRIBUTION.md` (an `npx skills` install
+copies only the skill's folder). This file carries the
 licence notice for the files in it, so the notice travels with them. The files
 themselves no longer repeat it.
 References to `ATTRIBUTION.md` are to the file in the source repository,

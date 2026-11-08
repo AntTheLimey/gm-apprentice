@@ -3601,8 +3601,8 @@ CANONICAL_WRAP_TYPE = WRAP_UP_TYPE
 
 WRAP_TEMPLATE_PATH = (Path(__file__).resolve().parent.parent
                       / "templates" / "session-wrap.md")
-# Used only when the template is missing — a skill zip that shipped
-# without it must still normalise decorated headings rather than silently
+# Used only when the template is missing — an install that lacks
+# it must still normalise decorated headings rather than silently
 # stop recognising them.
 WRAP_SUBSECTIONS_FALLBACK: tuple[str, ...] = (
     "Quick Bullets", "PC Carry-Forward", "What Carries Forward",

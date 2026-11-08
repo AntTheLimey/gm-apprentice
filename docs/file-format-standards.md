@@ -7,8 +7,8 @@ Standards for all files under `skills/ttrpg-expert/systems/`.
 ## 1. Licence Notice
 
 **One notice per system, not one per file.** Each system directory ships a
-`NOTICE.md` with the licence notice for the files in it, and the skill zips
-include it. Reference files carry no attribution header or footer; the H1 is
+`NOTICE.md` with the licence notice for the files in it, which every install
+carries with the skill. Reference files carry no attribution header or footer; the H1 is
 the first line.
 
 When you add a file that references copyrighted game content:
