@@ -302,6 +302,14 @@ def _publish(args: list[str]) -> int:
               "unknown and the site cannot be repinned. "
               + install_layout.INSTALL_STOP, file=sys.stderr)
         return 1
+    if (args and args[0] == "update-pin" and "--check" not in args
+            and any(a == "--tag" or a.startswith("--tag=") for a in args)):
+        # A tagged repin downloads the release with Node's own fetch.
+        old = tool_cache.node_too_old("node")
+        if old is not None:
+            print(f"gma: {tool_cache.node_upgrade(old)}, then run this again.",
+                  file=sys.stderr)
+            return 1
     return _run_tool(tool, args)
 
 

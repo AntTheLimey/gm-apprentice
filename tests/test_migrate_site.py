@@ -247,6 +247,13 @@ class DoorPinTests(unittest.TestCase):
         self.assertIn("--tag", pin.calls[2])
         self.assertNotIn("--check", pin.calls[2])
 
+    def test_a_repin_on_too_old_a_node_says_upgrade(self):
+        pin = DoorPin()
+        with mock.patch.object(ms.tool_cache, "node_too_old", lambda node: "v22.5.0"):
+            with self.assertRaisesRegex(ms.StepFailed, r"Node 22\.21 or newer"):
+                self.run_repin(make_vault(self), pin, owns=False)
+        self.assertFalse([c for c in pin.calls if "--check" not in c])
+
     def test_tarball_pin_at_the_stamp_on_plugin_door_plans_nothing(self):
         pin = DoorPin(ok=True, spec=TARBALL, tag_ok=True)
         self.assertEqual(self.run_repin(make_vault(self), pin, owns=True), [])

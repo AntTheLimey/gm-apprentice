@@ -2440,7 +2440,7 @@ class NoPublishToolTests(unittest.TestCase):
                     f"ERROR\t(vault)\t{name} could not ask the publish tool "
                     f"what publishes (the publish tool exited without "
                     f"answering) — nothing checked, nothing written; it "
-                    f"needs Node 22+"), rows)
+                    f"needs Node 22.21+"), rows)
         self.assertEqual(read(vault, "W.md"), self.WRAP)
 
     def test_without_node_every_check_stops_with_the_one_line(self):
@@ -2583,7 +2583,7 @@ class NoPublishToolTests(unittest.TestCase):
                 self.assert_stopped(
                     vault, "the publish tool exited without answering) — "
                            "nothing checked, nothing written; it needs Node "
-                           "22+ on PATH; if this vault has no site, set "
+                           "22.21+ on PATH; if this vault has no site, set "
                            "player_site.publish: false in _meta/vault-config.yaml")
 
     def test_without_the_lines_tool_a_site_dir_is_a_site(self):
@@ -2654,7 +2654,7 @@ class NoPublishToolTests(unittest.TestCase):
             rows = vc.check_gm_leak(vault, None)
         self.assertEqual(len(rows), 1, rows)
         self.assertTrue(rows[0].startswith("ERROR\t(vault)\t"), rows)
-        self.assertNotIn("Node 22+", rows[0])
+        self.assertNotIn("Node 22.21+", rows[0])
         self.assertIn("update the gm-apprentice plugin", rows[0])
 
     def test_no_tool_does_not_move_text_out_of_an_html_comment(self):

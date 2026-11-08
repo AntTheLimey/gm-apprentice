@@ -15,8 +15,6 @@ import sys
 import tarfile
 import tempfile
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path, PurePosixPath
 
 # The same address update-pin.js pins a site to (`--tag`).
@@ -26,7 +24,9 @@ _TOOL_IN_PACKAGE = Path("package") / "bin" / "gm-publish.js"
 # scripts read the settings' defaults from.
 _NEEDED = (_TOOL_IN_PACKAGE, Path("package") / "package.json",
            Path("package") / "schema" / "vault-config.schema.json")
-_PROXY_VARS = ("HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy")
+# Node's fetch takes a sandbox's HTTPS_PROXY (with NODE_USE_ENV_PROXY) from
+# 22.21 and 24.0 on; older Nodes are told to upgrade, not worked around.
+NODE_FLOOR = "22.21"
 _DOWNLOAD = Path(__file__).resolve().parent / "download.mjs"
 DOWNLOAD_TIMEOUT = 300
 KEEP_VERSIONS = 3          # another install on the machine may use an older one
@@ -90,32 +90,38 @@ def failed_recently(version: str, root: Path | None = None) -> bool:
     return age < FAILURE_HOLD
 
 
+def node_too_old(node: str) -> str | None:
+    """`node --version` when it is below the floor, else None. A version
+    that cannot be read is not called old: the step that needs Node says
+    what is wrong instead."""
+    try:
+        said = subprocess.run([node, "--version"], capture_output=True,
+                              text=True, timeout=30).stdout.strip()
+        major, minor = (int(x) for x in said.lstrip("v").split(".")[:2])
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return None
+    ok = major >= 24 or (major == 22 and minor >= 21)
+    return None if ok else said
+
+
+def node_upgrade(version: str) -> str:
+    return (f"the publish tool needs Node {NODE_FLOOR} or newer (this is "
+            f"{version}): upgrade Node from https://nodejs.org")
+
+
 def _download(node: str, url: str, dest: Path, timeout: int) -> None:
     # Node's fetch goes through HTTPS_PROXY (a sandbox's way out) only when
-    # asked to, and Node 22 before 22.21 ignores the switch: behind a proxy,
-    # a failed Node download tries again in Python, whose urllib reads the
-    # proxy settings itself. Node goes first because a python.org Python on
-    # a Mac may have no certificates to check github.com with.
+    # asked to.
     env = {**os.environ, "NODE_USE_ENV_PROXY": "1"}
     try:
         done = subprocess.run([node, str(_DOWNLOAD), url, str(dest)],
                               capture_output=True, text=True, env=env,
                               timeout=timeout)
     except (OSError, subprocess.TimeoutExpired) as e:
-        failed = FetchFailed(f"could not download {url}: {e}")
-    else:
-        if done.returncode == 0:
-            return
+        raise FetchFailed(f"could not download {url}: {e}") from e
+    if done.returncode != 0:
         said = done.stderr.strip().splitlines()
-        failed = FetchFailed(f"could not download: {said[-1] if said else url}")
-    if not any(os.environ.get(v) for v in _PROXY_VARS):
-        raise failed
-    try:
-        with urllib.request.urlopen(url, timeout=timeout) as got, \
-                open(dest, "wb") as out:
-            shutil.copyfileobj(got, out)
-    except (OSError, urllib.error.URLError) as e:
-        raise FetchFailed(f"{failed.reason}; through the proxy: {e}") from e
+        raise FetchFailed(f"could not download: {said[-1] if said else url}")
 
 
 def _expected_sum(sums: str, name: str) -> str:
@@ -188,7 +194,11 @@ def fetch(version: str, *, root: Path | None = None, base: str | None = None,
         return found
     node = shutil.which("node") if node is None else node
     if not node:
-        raise FetchFailed("node is not on the PATH, and the publish tool needs Node 22")
+        raise FetchFailed(f"node is not on the PATH, and the publish tool needs "
+                          f"Node {NODE_FLOOR} or newer")
+    old = node_too_old(node)
+    if old is not None:
+        raise FetchFailed(node_upgrade(old))
     publish = (root or cache_root()) / "publish"
     tag = f"publish-v{version}"
     name = f"gm-apprentice-publish-{version}.tgz"

@@ -323,29 +323,32 @@ def test_a_tidy_failure_does_not_fail_the_fetch(release, cache, monkeypatch):
     assert fetch("1.2.3", root=cache, base=release.base).is_file()
 
 
-def _node_fails(monkeypatch):
+def _node_says(monkeypatch, version):
     class Done:
-        returncode = 1
-        stderr = "TypeError: fetch failed"
+        returncode = 0
+        stdout = version + "\n"
     monkeypatch.setattr(tool_cache.subprocess, "run", lambda *a, **kw: Done)
 
 
-def test_behind_a_proxy_a_failed_node_download_retries_in_python(
-        release, cache, monkeypatch):
-    # Node 22 before 22.21 ignores NODE_USE_ENV_PROXY; Python's urllib
-    # reads the proxy settings itself.
-    _node_fails(monkeypatch)
-    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9")  # not used for http
-    release.add("1.2.3", make_tgz(GOOD))
-    tool = fetch("1.2.3", root=cache, base=release.base, node="node")
-    assert tool.read_bytes() == TOOL_JS
+@pytest.mark.parametrize("version,old", [
+    ("v20.18.0", True), ("v22.20.0", True), ("v23.11.1", True),
+    ("v22.21.0", False), ("v22.23.4", False), ("v24.0.0", False),
+    ("v26.12.1", False), ("v100.0.0", False)])
+def test_the_node_floor_is_22_21(monkeypatch, version, old):
+    # Node's fetch takes a sandbox's proxy from 22.21 and 24.0 on.
+    _node_says(monkeypatch, version)
+    assert tool_cache.node_too_old("node") == (version if old else None)
 
 
-def test_without_a_proxy_a_failed_node_download_stays_failed(
-        release, cache, monkeypatch):
-    _node_fails(monkeypatch)
-    for name in tool_cache._PROXY_VARS:
-        monkeypatch.delenv(name, raising=False)
+def test_an_unreadable_node_version_is_not_called_old(monkeypatch):
+    _node_says(monkeypatch, "garbage")
+    assert tool_cache.node_too_old("node") is None
+
+
+def test_too_old_a_node_stops_before_any_download(release, cache, monkeypatch):
+    monkeypatch.setattr(tool_cache, "node_too_old", lambda node: "v22.5.0")
     release.add("1.2.3", make_tgz(GOOD))
-    with pytest.raises(FetchFailed, match="fetch failed"):
+    with pytest.raises(FetchFailed, match=r"Node 22\.21 or newer.*v22\.5\.0"):
         fetch("1.2.3", root=cache, base=release.base, node="node")
+    assert release.hits == 0
+

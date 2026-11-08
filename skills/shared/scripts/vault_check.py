@@ -1836,7 +1836,7 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
     through whatever copy node would load from there (a workspace installs
     it higher up), and failing that by the plugin's own tool.
     """
-    node_fix = "it needs Node 22+ on PATH"
+    node_fix = "it needs Node 22.21+ on PATH"
     try:
         publishes, on, site = vault_site(vault)
     except PublishToolUnavailable as e:

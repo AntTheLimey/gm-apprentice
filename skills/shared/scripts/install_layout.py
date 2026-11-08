@@ -15,7 +15,7 @@ INSTALL_STOP = ("Assistants: stop here, tell the GM what is missing, and do "
                 "not work around it.")
 MISSING_TOOL = ("the publish tool is not installed. The Claude Code plugin "
                 "carries it; other installs download it once (it needs Node "
-                "22): run `gma tool install` with network access. "
+                "22.21 or newer): run `gma tool install` with network access. "
                 + INSTALL_STOP)
 VERSION_UNKNOWN = ("cannot determine the version of these skills: "
                    "shared/VERSION is missing, empty or unreadable. This "

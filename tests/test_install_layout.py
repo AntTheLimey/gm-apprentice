@@ -526,6 +526,21 @@ def test_a_repin_without_the_stamp_stops_plainly(monkeypatch, tmp_path, capsys, 
     assert "PUBLISH_VERSION" in err and g.install_layout.INSTALL_STOP in err
 
 
+def test_a_repin_on_too_old_a_node_says_upgrade(monkeypatch, capsys):
+    import gma as g
+    seen = []
+    monkeypatch.setattr(g, "_run_tool", lambda tool, args: seen.append(args) or 0)
+    monkeypatch.setattr(g.tool_cache, "node_too_old", lambda node: "v22.5.0")
+    monkeypatch.setattr(g.install_layout, "LAYOUT",
+                        g.install_layout.LAYOUT._replace(door_owns_tool=False))
+    assert g._publish(["update-pin", "--site", "s"]) == 1
+    assert "Node 22.21 or newer" in capsys.readouterr().err
+    g._publish(["update-pin", "--site", "s", "--check"])
+    g._publish(["build"])
+    assert seen == [["update-pin", "--site", "s", "--check",
+                     "--tag", f"publish-v{STAMP}"], ["build"]]
+
+
 def test_python_command_help_does_not_wait_on_a_download(monkeypatch, capsys):
     import gma as g
     monkeypatch.setattr(g, "_ensure_tool", lambda: (_ for _ in ()).throw(

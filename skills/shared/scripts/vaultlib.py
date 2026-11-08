@@ -1369,7 +1369,7 @@ class PublishLines:
             self.close()
             raise PublishToolUnavailable(
                 "the publish tool exited without answering (it needs Node "
-                "22+, and a tool older than 1.12.1 has no `lines` command)")
+                "22.21+, and a tool older than 1.12.1 has no `lines` command)")
         try:
             answer = json.loads(line)
         except ValueError as e:

@@ -85,7 +85,7 @@ npm run build    # generate docs/ from the vault
 npx gm-apprentice-publish sheet show --pc <name> [--player-safe] [--json]
 ```
 
-Node 22+ is required; on a version error, send the GM to
+Node 22.21+ is required; on a version error, send the GM to
 https://nodejs.org (LTS).
 
 **Settings.** Read and change every setting through `gma publish

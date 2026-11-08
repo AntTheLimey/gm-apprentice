@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import install_layout
+import tool_cache
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item,
                           StepFailed, cells, edit_frontmatter, plugin_tool, stopped)
 from vault_check import (ExplainAll, ask_publish_tool, check_frontmatter, check_gm_leak,
@@ -94,6 +95,12 @@ def find_site_repin(vault: Path) -> list[Item]:
     installed = data.get("installedBefore") or "none"
 
     def apply(_value: str | None) -> list[str]:
+        if pin_args:
+            # A tagged repin downloads the release with Node's own fetch.
+            old = tool_cache.node_too_old("node")
+            if old is not None:
+                raise StepFailed(tool_cache.node_upgrade(old)
+                                 + ", then run `gma update` again")
         code, text, err = plugin_tool(
             ["update-pin", "--site", str(site), *pin_args])
         # It may have written the site switch into the vault file.
