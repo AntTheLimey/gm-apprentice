@@ -122,7 +122,7 @@ between the `---` markers at the top. Common YAML mistakes:
 `configuration.md` § Settings, "When a setting stops the build".
 
 **Node version too low:**
-Install Node 22 LTS from https://nodejs.org and restart your
+Install the current Node LTS from https://nodejs.org and restart your
 terminal.
 
 ---
@@ -255,7 +255,7 @@ the system PATH.
 
 ### Fix
 
-1. Install Node.js 22 LTS from https://nodejs.org
+1. Install the current Node.js LTS from https://nodejs.org
 2. Close and reopen your terminal
 3. Run `node --version` to confirm it is installed
 4. Run `npm --version` to confirm npm is available

@@ -18,7 +18,7 @@ difference is the final step: instead of `git push`, you run one
 ## What you need first
 
 1. A **free Cloudflare account** — sign up at https://dash.cloudflare.com/sign-up
-2. **Node 22 or later** (same as for building the site).
+2. **Node 22.21 or later** (same as for building the site).
 3. `wrangler`, Cloudflare's command-line tool — you do **not** need to
    install it; every command below runs it with `npx wrangler@4`, which
    fetches it on demand. The `@4` pins the major version so a future

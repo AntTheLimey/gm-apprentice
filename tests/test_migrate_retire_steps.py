@@ -103,7 +103,7 @@ class RetireStepsTests(unittest.TestCase):
         self.assertTrue(crew.holds_stamp)
         self.assertIn("1.21.0", crew.lines[0])
         self.assertIn("from 1.46.0", crew.lines[0])
-        self.assertIn("update-pin --site", crew.lines[0])
+        self.assertIn("`gma update` repins it", crew.lines[0])
         none = vault_with_steps(self, steps, installed=None)
         self.assertTrue(all(i.group == PERSON for i in ms.find_retire_steps(none)))
 

@@ -105,6 +105,17 @@ jobs:
             exit 1
           fi
 
+      - name: shared/PUBLISH_VERSION matches the publish tool
+        run: |
+          TOOL_VERSION=$(jq -r '.version' tools/publish/package.json)
+          STAMP=$(cat skills/shared/PUBLISH_VERSION)
+          STAMP="${STAMP#"${STAMP%%[![:space:]]*}"}"
+          STAMP="${STAMP%"${STAMP##*[![:space:]]}"}"
+          if [ "$STAMP" != "$TOOL_VERSION" ]; then
+            echo "::error::skills/shared/PUBLISH_VERSION ($STAMP) differs from tools/publish/package.json ($TOOL_VERSION): bump both"
+            exit 1
+          fi
+
   python-tests-and-schema:
     runs-on: ubuntu-latest
     steps:

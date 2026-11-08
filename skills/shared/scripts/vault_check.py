@@ -1611,7 +1611,7 @@ class SitePin:
 def _stale_reason(version: str) -> str | None:
     since = ".".join(str(n) for n in WITHHOLDS_HUB_BODIES_SINCE)
     return (f"site pinned to {version} predates body withholding — run "
-            f"update-pin" if semver_below(version, since) else None)
+            f"`gma update`" if semver_below(version, since) else None)
 
 
 def site_pin(site: Path) -> SitePin:
@@ -1836,7 +1836,7 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
     through whatever copy node would load from there (a workspace installs
     it higher up), and failing that by the plugin's own tool.
     """
-    node_fix = "it needs Node 22+ on PATH"
+    node_fix = "it needs Node 22.21+ on PATH"
     try:
         publishes, on, site = vault_site(vault)
     except PublishToolUnavailable as e:
@@ -1881,7 +1881,7 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
         folder_name = "player_site.folder"
         return None, (f"no vault.config.json in {folder_name} "
                       f"({site.as_posix()})"), f"fix {folder_name}", True
-    fix = f"run update-pin --site {site.as_posix()}, then run this again"
+    fix = "run `gma update`, then run this again"
     installed = site / "node_modules" / PUBLISH_PACKAGE
     script = installed / "bin" / "gm-publish.js"
     if script.is_file():
@@ -2188,9 +2188,9 @@ def check_site_faults(vault: Path, files: list[str] | None = None
 
 def _tool_too_old_row(check: str, e: PublishToolTooOld) -> str:
     """The row for a site whose publish tool answers but predates a
-    question the check needs: an old pin, which update-pin fixes."""
+    question the check needs: an old pin, which `gma update` fixes."""
     return (f"ERROR\t(vault)\t{check} did not run: the site's publish tool "
-            f"predates {e} and is too old for this check — run update-pin, "
+            f"predates {e} and is too old for this check — run `gma update`, "
             f"then run this again")
 
 
@@ -2221,7 +2221,7 @@ def sections_withheld(answer: ToolAnswer
             return None, (f"the site's publish tool predates "
                           f"{STRIPPED_SECTIONS_SINCE}, so a handout's "
                           f"Context, Clues and Prop Notes sections publish "
-                          f"— run update-pin")
+                          f"— run `gma update`")
         return {unicodedata.normalize("NFC", str(p["path"])):
                 {str(t).strip().casefold() for t in p["strippedSections"]}
                 for p in pages if p["strippedSections"]}, None
@@ -2348,7 +2348,7 @@ def settle_heading(vault: Path, where: str) -> tuple[list[str], int]:
             # the tool refuses by version (SETTLE_FROM): an old pin, which
             # update-pin fixes (as `_tool_too_old_row`).
             why = ("the site's publish tool is too old to settle a heading "
-                   "— run update-pin, then run this again")
+                   "— run `gma update`, then run this again")
         return [f"ERROR\t{rel}:{n}\t'{title}' was not settled: {why}"], 1
     return [f"SETTLED\t{rel}:{n}\t'{title}' is for players: gm-leak does "
             f"not flag it while the note's path and the heading stay the "

@@ -145,7 +145,7 @@ def check_session_order(vault: Path) -> list[str]:
             # The wording of vault_check._tool_too_old_row.
             return [f"ERROR\t(vault)\ttimeline --order did not run: the "
                     f"site's publish tool predates {vaultlib.DATES_SINCE} "
-                    f"and is too old for this check — run update-pin, then "
+                    f"and is too old for this check — run `gma update`, then "
                     f"run this again"]
         return [f"ERROR\t(vault)\tthe session order was not checked: the "
                 f"publish tool could not read the dates ({e})"]

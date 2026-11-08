@@ -105,6 +105,17 @@ def test_publish_without_tool_stops_plainly(t):
     assert "Traceback" not in done.stderr
 
 
+def test_publish_version_reads_the_stamp(t):
+    (t / "PUBLISH_VERSION").write_text(" 1.2.3\r\n")
+    assert install_layout.publish_version(t) == "1.2.3"
+
+
+def test_publish_version_none_when_missing_or_empty(t):
+    assert install_layout.publish_version(t) is None
+    (t / "PUBLISH_VERSION").write_text("\n")
+    assert install_layout.publish_version(t) is None
+
+
 def test_broken_install_messages_say_stop():
     assert install_layout.MISSING_TOOL.endswith(install_layout.INSTALL_STOP)
     assert install_layout.VERSION_UNKNOWN.endswith(install_layout.INSTALL_STOP)
@@ -258,3 +269,336 @@ def test_printed_hints_gate_skips_an_exact_filename(tmp_path):
     p = tmp_path / "planted.py"
     p.write_text('run_script("reconcile_scan.py", [])\n')
     assert _flagged(p) == []
+
+
+# ---- the publish tool from the cache (installs without tools/publish) ----
+
+import hashlib  # noqa: E402
+import http.server  # noqa: E402
+import io  # noqa: E402
+import socket  # noqa: E402
+import tarfile  # noqa: E402
+import threading  # noqa: E402
+
+needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="needs node")
+STAMP = (ROOT / "skills" / "shared" / "PUBLISH_VERSION").read_text().strip()
+FAKE_TOOL = b"console.log('fake tool ' + process.argv.slice(2).join(' '));\n"
+
+
+def _fake_release(version: str) -> dict[str, bytes]:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+        for name, data in (("package/bin/gm-publish.js", FAKE_TOOL),
+                           ("package/package.json", b'{"version": "%s"}' % version.encode()),
+                           ("package/schema/vault-config.schema.json", b"{}")):
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+    tgz = buf.getvalue()
+    name = f"gm-apprentice-publish-{version}.tgz"
+    return {f"/publish-v{version}/{name}": tgz,
+            f"/publish-v{version}/SHA256SUMS":
+                f"{hashlib.sha256(tgz).hexdigest()}  {name}\n".encode()}
+
+
+@pytest.fixture
+def server():
+    files = _fake_release(STAMP)
+    hits: list[str] = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):  # noqa: N802
+            hits.append(self.path)
+            body = files.get(self.path)
+            self.send_response(200 if body else 404)
+            self.end_headers()
+            if body:
+                self.wfile.write(body)
+
+        def log_message(self, *a):
+            pass
+
+    s = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=s.serve_forever, daemon=True).start()
+    yield f"http://127.0.0.1:{s.server_address[1]}", hits
+    s.shutdown()
+
+
+def _dead_base() -> str:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return f"http://127.0.0.1:{s.getsockname()[1]}"
+
+
+def _env(t: Path, base: str, **extra: str) -> dict[str, str]:
+    return {**os.environ, "GMA_CACHE": str(t / "the cache"),
+            "GMA_RELEASE_BASE": base, "PYTHONIOENCODING": "utf-8", **extra}
+
+
+def _run_gma(gma: Path, args: list[str], env: dict[str, str]):
+    return subprocess.run([sys.executable, str(gma), *args],
+                          capture_output=True, text=True, env=env)
+
+
+def test_cached_tool_is_found_when_none_sits_beside(t, monkeypatch):
+    scripts = t / "x" / "shared" / "scripts"
+    scripts.mkdir(parents=True)
+    (scripts.parent / "PUBLISH_VERSION").write_text("1.2.3\n")
+    tool = t / "c" / "publish" / "1.2.3" / "package" / "bin" / "gm-publish.js"
+    _touch(tool)
+    _touch(t / "c" / "publish" / "1.2.3" / "package" / "package.json")
+    monkeypatch.setenv("GMA_CACHE", str(t / "c"))
+    got = find_layout(scripts)
+    assert got.publish_tool == tool
+    assert got.door_owns_tool is False
+
+
+def test_an_unreadable_stamp_counts_as_missing(t):
+    (t / "PUBLISH_VERSION").write_bytes(b"\xff\xfe1.2.3")
+    assert install_layout.publish_version(t) is None
+
+
+def test_plugin_layout_owns_its_tool():
+    assert install_layout.LAYOUT.door_owns_tool is True
+
+
+def test_missing_tool_names_the_install_command():
+    assert "gma tool install" in MISSING_TOOL
+
+
+def test_plugin_layout_never_fetches(t, server):
+    base, hits = server
+    vault = t / "vault"
+    vault.mkdir()
+    done = _run_gma(SCRIPTS / "gma.py", ["vault-check", str(vault), "version"],
+                _env(t, base))
+    assert hits == []
+    assert "tool" not in done.stderr
+    assert not (t / "the cache").exists()
+
+
+@needs_node
+def test_spaced_copy_fetches_on_first_command(t, server):
+    base, hits = server
+    gma = _spaced_copy(t)
+    env = _env(t, base)
+    assert _run_gma(gma, ["llms"], env).returncode == 0
+    assert hits == []
+    done = _run_gma(gma, ["publish", "hello"], env)
+    assert done.returncode == 0, done.stderr
+    assert "fake tool hello" in done.stdout
+    assert len(hits) == 2
+    again = _run_gma(gma, ["publish", "again"], env)
+    assert "fake tool again" in again.stdout
+    assert len(hits) == 2
+
+
+@needs_node
+def test_fetch_failure_warns_once_and_runs(t):
+    gma = _spaced_copy(t)
+    vault = t / "vault"
+    vault.mkdir()
+    done = _run_gma(gma, ["vault-check", str(vault), "version"], _env(t, _dead_base()))
+    warned = [x for x in done.stderr.splitlines() if "gma tool install" in x]
+    assert len(warned) == 1, done.stderr
+    assert "Traceback" not in done.stderr
+
+
+@needs_node
+def test_tool_install_reports_failure(t):
+    gma = _spaced_copy(t)
+    done = _run_gma(gma, ["tool", "install"], _env(t, _dead_base()))
+    assert done.returncode == 1
+    assert f"publish-v{STAMP}" in done.stderr
+    assert install_layout.INSTALL_STOP in done.stderr
+
+
+@needs_node
+def test_tool_install_then_path_names_the_cache(t, server):
+    base, _ = server
+    gma = _spaced_copy(t)
+    env = _env(t, base)
+    done = _run_gma(gma, ["tool", "install"], env)
+    assert done.returncode == 0, done.stderr
+    path = _run_gma(gma, ["tool", "path"], env)
+    assert path.returncode == 0
+    assert path.stdout.strip() == str(
+        t / "the cache" / "publish" / STAMP / "package" / "bin" / "gm-publish.js")
+
+
+def test_tool_path_in_the_plugin_is_beside_the_skills():
+    done = subprocess.run([sys.executable, str(SCRIPTS / "gma.py"), "tool", "path"],
+                          capture_output=True, text=True)
+    assert done.stdout.strip() == str(ROOT / TOOL)
+
+
+def test_tool_path_without_a_tool_says_so(t):
+    gma = _spaced_copy(t)
+    done = _run_gma(gma, ["tool", "path"], _env(t, _dead_base()))
+    assert done.returncode == 1
+    assert "gma tool install" in done.stderr
+
+
+def test_no_node_skips_fetch(t, server):
+    base, hits = server
+    gma = _spaced_copy(t)
+    vault = t / "vault"
+    vault.mkdir()
+    bare = t / "bin"
+    bare.mkdir()
+    env = _env(t, base, PATH=str(bare))
+    _run_gma(gma, ["vault-check", str(vault), "version"], env)
+    assert hits == []
+
+
+def test_update_pin_on_a_cache_install_pins_the_stamped_release(monkeypatch):
+    import gma as g
+    seen = []
+    monkeypatch.setattr(g, "_run_tool", lambda tool, args: seen.append(args) or 0)
+    monkeypatch.setattr(g.vaultlib, "PUBLISH_TOOL", Path("/c/gm-publish.js"))
+    monkeypatch.setattr(g.install_layout, "LAYOUT",
+                        g.install_layout.LAYOUT._replace(door_owns_tool=False))
+    g._publish(["update-pin", "--site", "s"])
+    g._publish(["update-pin", "--site", "s", "--tag", "publish-v1.0.0"])
+    g._publish(["update-pin", "--help"])
+    g._publish(["build"])
+    assert seen == [["update-pin", "--site", "s", "--tag", f"publish-v{STAMP}"],
+                    ["update-pin", "--site", "s", "--tag", "publish-v1.0.0"],
+                    ["update-pin", "--help"],
+                    ["build"]]
+
+
+def test_update_pin_in_the_plugin_is_unchanged(monkeypatch):
+    import gma as g
+    seen = []
+    monkeypatch.setattr(g, "_run_tool", lambda tool, args: seen.append(args) or 0)
+    g._publish(["update-pin", "--site", "s"])
+    assert seen == [["update-pin", "--site", "s"]]
+
+
+def test_update_pin_on_the_plugin_follows_a_tarball_site(monkeypatch):
+    import gma as g
+    seen = []
+    monkeypatch.setattr(g, "_run_tool", lambda tool, args: seen.append(args) or 0)
+    monkeypatch.setattr(g, "_site_pin_spec", lambda tool, args:
+                        "file:vendor/gm-apprentice-publish-1.60.0.tgz")
+    g._publish(["update-pin", "--site", "s"])
+    monkeypatch.setattr(g, "_site_pin_spec", lambda tool, args:
+                        "file:/plugin/cache/1.11.7/tools/publish")
+    g._publish(["update-pin", "--site", "s"])
+    g._publish(["update-pin", "--site", "s", "--check"])
+    assert seen == [["update-pin", "--site", "s", "--tag", f"publish-v{STAMP}"],
+                    ["update-pin", "--site", "s"],
+                    ["update-pin", "--site", "s", "--check"]]
+
+
+def test_a_check_asks_about_the_release_a_run_would_pin(monkeypatch):
+    import gma as g
+    seen = []
+    monkeypatch.setattr(g, "_run_tool", lambda tool, args: seen.append(args) or 0)
+    ran = []
+
+    class Done:
+        stdout = '{"spec": "file:vendor/gm-apprentice-publish-1.60.0.tgz"}'
+    monkeypatch.setattr(g.subprocess, "run", lambda cmd, **kw: ran.append(cmd) or Done)
+    g._publish(["update-pin", "--site", "s", "--check", "--json"])
+    assert seen == [["update-pin", "--site", "s", "--check", "--json",
+                     "--tag", f"publish-v{STAMP}"]]
+    assert ran[0][2:] == ["update-pin", "--site", "s", "--check", "--json"]
+    monkeypatch.setattr(g.install_layout, "LAYOUT",
+                        g.install_layout.LAYOUT._replace(door_owns_tool=False))
+    g._publish(["update-pin", "--check"])
+    assert seen[-1] == ["update-pin", "--check", "--tag", f"publish-v{STAMP}"]
+
+
+@pytest.mark.parametrize("owns", [True, False])
+def test_a_repin_without_the_stamp_stops_plainly(monkeypatch, tmp_path, capsys, owns):
+    import gma as g
+    seen = []
+    monkeypatch.setattr(g, "_run_tool", lambda tool, args: seen.append(args) or 0)
+    monkeypatch.setattr(g, "_site_pin_spec", lambda tool, args:
+                        "file:vendor/gm-apprentice-publish-1.60.0.tgz")
+    monkeypatch.setattr(g.install_layout, "LAYOUT", g.install_layout.LAYOUT._replace(
+        shared=tmp_path, door_owns_tool=owns))
+    assert g._publish(["update-pin", "--site", "s"]) == 1
+    assert seen == []
+    err = capsys.readouterr().err
+    assert "PUBLISH_VERSION" in err and g.install_layout.INSTALL_STOP in err
+
+
+def test_a_repin_on_too_old_a_node_says_upgrade(monkeypatch, capsys):
+    import gma as g
+    seen = []
+    monkeypatch.setattr(g, "_run_tool", lambda tool, args: seen.append(args) or 0)
+    monkeypatch.setattr(g.tool_cache, "node_too_old", lambda node: "v22.5.0")
+    monkeypatch.setattr(g.install_layout, "LAYOUT",
+                        g.install_layout.LAYOUT._replace(door_owns_tool=False))
+    assert g._publish(["update-pin", "--site", "s"]) == 1
+    assert "Node 22.21 or newer" in capsys.readouterr().err
+    g._publish(["update-pin", "--site", "s", "--check"])
+    g._publish(["build"])
+    assert seen == [["update-pin", "--site", "s", "--check",
+                     "--tag", f"publish-v{STAMP}"], ["build"]]
+
+
+def test_python_command_help_does_not_wait_on_a_download(monkeypatch, capsys):
+    import gma as g
+    monkeypatch.setattr(g, "_ensure_tool", lambda: (_ for _ in ()).throw(
+        AssertionError("fetched for --help")))
+    with pytest.raises(SystemExit):
+        g.main(["vault-check", "--help"])
+    assert "usage" in capsys.readouterr().out
+
+
+def test_node_children_use_a_sandbox_proxy(monkeypatch):
+    import gma as g
+    monkeypatch.delenv("NODE_USE_ENV_PROXY", raising=False)
+    g.main(["llms", "tool"])
+    assert os.environ.get("NODE_USE_ENV_PROXY") == "1"
+
+
+def _broken_door(monkeypatch, tmp_path, reason):
+    import gma as g
+    calls = []
+
+    def fail(version, **kw):
+        calls.append(kw)
+        raise g.tool_cache.FetchFailed(reason)
+    monkeypatch.setenv("GMA_CACHE", str(tmp_path))
+    monkeypatch.setattr(g.vaultlib, "PUBLISH_TOOL", None)
+    monkeypatch.setattr(g.tool_cache, "fetch", fail)
+    monkeypatch.setattr(g.shutil, "which", lambda name: "/usr/bin/node")
+    return g, calls
+
+
+def test_a_failed_automatic_fetch_is_not_retried_at_once(monkeypatch, tmp_path, capsys):
+    g, calls = _broken_door(monkeypatch, tmp_path,
+                            "publish-v1.0.0: could not download: fetch failed")
+    g._ensure_tool()
+    g._ensure_tool()
+    assert len(calls) == 1
+    err = capsys.readouterr().err
+    assert err.count("gma tool install") == 1
+    assert "network access" in err
+    assert calls[0].get("timeout") == g.AUTO_FETCH_TIMEOUT
+
+
+def test_a_checksum_failure_does_not_blame_the_network(monkeypatch, tmp_path, capsys):
+    g, _ = _broken_door(monkeypatch, tmp_path,
+                        "publish-v1.0.0: the checksum does not match SHA256SUMS")
+    g._ensure_tool()
+    err = capsys.readouterr().err
+    assert "checksum" in err
+    assert "network" not in err
+
+
+def test_tool_install_ignores_a_recent_failure(monkeypatch, tmp_path):
+    g, calls = _broken_door(monkeypatch, tmp_path, "x: could not download: y")
+    g._ensure_tool()
+    assert g._tool(["install"]) == 1
+    assert len(calls) == 2
+    assert calls[1].get("timeout") is None
+
+
+def test_missing_tool_names_node():
+    assert "Node 22" in MISSING_TOOL

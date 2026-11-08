@@ -156,7 +156,7 @@ with a theme of your own, see [Theme hooks](theme-hooks.md): the classes
 and attributes that stay put between releases, and how to link your own
 stylesheets.
 
-The tool requires Node 22 or later. It **ships inside the gm-apprentice
+The tool requires Node 22.21 or later. It **ships inside the gm-apprentice
 plugin** — it is not installed from the npm registry. The publish-site
 skill drives it from the plugin cache and scaffolds sites that pin it
 with a `file:` path into that cache, so every build uses the exact

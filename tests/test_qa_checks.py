@@ -190,7 +190,7 @@ class SessionOrderOldToolTests(unittest.TestCase):
         self.assertEqual(rows, [
             "ERROR\t(vault)\ttimeline --order did not run: the site's publish "
             "tool predates 1.41.0 and is too old for this check — run "
-            "update-pin, then run this again"])
+            "`gma update`, then run this again"])
 
 
     OLD_TOOL = (Path.home() / ".claude/plugins/cache/gm-apprentice/"
@@ -209,7 +209,7 @@ class SessionOrderOldToolTests(unittest.TestCase):
             rows = qa.check_session_order(v)
         self.assertEqual(len(rows), 1, rows)
         self.assertIn("predates 1.41.0 and is too old for this check — run "
-                      "update-pin", rows[0])
+                      "`gma update`", rows[0])
 
     def test_text_must_be_a_string_also_means_too_old(self):
         from unittest import mock

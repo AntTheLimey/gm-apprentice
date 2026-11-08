@@ -124,6 +124,8 @@ CHANGELOG entry says what it changes in a vault.
 
 - [ ] Bump the version in `.claude-plugin/plugin.json` and `skills/shared/VERSION` (the same version)
   (patch for field additions, minor for breaking changes)
+- [ ] If the publish tool changed, bump `tools/publish/package.json` and
+  `skills/shared/PUBLISH_VERSION` to the same version
 - [ ] Add a CHANGELOG entry under that version describing the
   schema change (CI fails when the version has no entry)
 

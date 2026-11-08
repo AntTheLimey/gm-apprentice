@@ -606,11 +606,10 @@ def _site_tool(vault: Path) -> Path | None:
     if tool is None:
         reason = why or "the site tool cannot be found"
         if "is missing" in reason or "not installed" in reason:
-            # The migration repins the site's tool; the GM is not sent to
-            # update-pin by hand, which is what `fix` says here.
+            # The migration repins the site's tool.
             hint = "run the migration (`gma migrate <vault> apply`) to repin it"
         else:
-            hint = fix if fix and "update-pin" not in fix else ""
+            hint = fix or ""
         raise _SiteToolMissing(f"{reason}; {hint}" if hint else reason)
     return None if tool == vaultlib.PUBLISH_TOOL else tool
 

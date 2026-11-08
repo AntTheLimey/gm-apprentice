@@ -17,14 +17,18 @@ from __future__ import annotations
 
 import argparse
 import importlib
+import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 from typing import NamedTuple
 
+import install_layout
+import tool_cache
 import vaultlib
-from install_layout import MISSING_TOOL, VERSION_UNKNOWN
+from install_layout import INSTALL_STOP, MISSING_TOOL, VERSION_UNKNOWN
 
 
 class Command(NamedTuple):
@@ -64,6 +68,7 @@ COMMANDS: dict[str, Command] = {
     "vault-write": Command("vault_write", "Place text the apprentice wrote into vault notes."),
     "workaround": Command("workaround", "Record the vault's workarounds by the issue each stands in for."),
     "publish": Command("", "Build and deploy the campaign site (runs the publish tool under node)."),
+    "tool": Command("", "Download the publish tool (installs without it), or print where it is."),
     "llms": Command("", "The command reference: when to use each command, its flags, an example."),
 }
 
@@ -125,7 +130,77 @@ def _llms(args: list[str]) -> int:
     return 0
 
 
-BUILTINS = {"publish": _publish_parser, "llms": _llms_parser}
+def _tool_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        prog="gma tool", description=COMMANDS["tool"].summary,
+        epilog="Example: gma tool install")
+    sub = ap.add_subparsers(dest="action", required=True, metavar="<action>",
+                            help="install: download and check it now; "
+                                 "path: print the tool in use")
+    sub.add_parser("install", help="download and check the tool now")
+    sub.add_parser("path", help="print the tool in use")
+    return ap
+
+
+def _fetch_tool(timeout: int | None = None) -> Path:
+    """Fetch this install's tool release into the cache and point this
+    process at it. Raises tool_cache.FetchFailed."""
+    version = install_layout.publish_version(install_layout.LAYOUT.shared)
+    if version is None:
+        raise tool_cache.FetchFailed(
+            f"shared/{install_layout.PUBLISH_STAMP} is missing or empty, so "
+            "the tool version is unknown")
+    tool = tool_cache.fetch(version, timeout=timeout)
+    install_layout.LAYOUT = install_layout.LAYOUT._replace(publish_tool=tool)
+    vaultlib.adopt_publish_tool(tool)
+    return tool
+
+
+# The automatic fetch runs before a command, maybe at the table: it gives
+# up sooner than `gma tool install`, and a failure holds it off a while.
+AUTO_FETCH_TIMEOUT = 60
+
+
+def _ensure_tool() -> None:
+    """Before a command: an install without the tool fetches it once. A
+    failure warns once and the command runs without it, as it would have."""
+    if vaultlib.PUBLISH_TOOL is not None or shutil.which("node") is None:
+        return
+    version = install_layout.publish_version(install_layout.LAYOUT.shared)
+    if version is None or tool_cache.failed_recently(version):
+        return
+    try:
+        _fetch_tool(timeout=AUTO_FETCH_TIMEOUT)
+    except tool_cache.FetchFailed as e:
+        tool_cache.note_failure(version)
+        fix = ("run `gma tool install` with network access"
+               if "could not download" in e.reason
+               else "run `gma tool install` to try again")
+        print(f"gma: warning: could not install the publish tool ({e.reason}); "
+              f"{fix}", file=sys.stderr)
+
+
+def _tool(args: list[str]) -> int:
+    action = _tool_parser().parse_args(args).action
+    if action == "install":
+        try:
+            tool = (vaultlib.PUBLISH_TOOL if vaultlib.PUBLISH_TOOL is not None
+                    else _fetch_tool())
+        except tool_cache.FetchFailed as e:
+            print(f"gma tool: could not download the publish tool: {e.reason}. "
+                  + INSTALL_STOP, file=sys.stderr)
+            return 1
+        print(tool)
+        return 0
+    if vaultlib.PUBLISH_TOOL is None:
+        print("gma tool: " + MISSING_TOOL, file=sys.stderr)
+        return 1
+    print(vaultlib.PUBLISH_TOOL)
+    return 0
+
+
+BUILTINS = {"publish": _publish_parser, "llms": _llms_parser,
+            "tool": _tool_parser}
 
 
 def _load(name: str) -> argparse.ArgumentParser:
@@ -162,11 +237,44 @@ def full_tree() -> argparse.ArgumentParser:
     return root
 
 
-def _publish(args: list[str]) -> int:
-    tool = vaultlib.PUBLISH_TOOL
-    if tool is None:
-        print("gma: " + MISSING_TOOL, file=sys.stderr)
-        return 1
+def _site_pin_spec(tool: Path, args: list[str]) -> str:
+    """What the site's package.json pins, as `update-pin --check --json`
+    reports it ("" when it does not say)."""
+    asked = [a for a in args if a not in ("--check", "--json")]
+    try:
+        done = subprocess.run(["node", str(tool), *asked, "--check", "--json"],
+                              capture_output=True, text=True, timeout=120)
+        spec = json.loads(done.stdout).get("spec")
+    except (OSError, subprocess.TimeoutExpired, ValueError, AttributeError):
+        return ""
+    return spec if isinstance(spec, str) else ""
+
+
+class StampMissing(Exception):
+    pass
+
+
+def _door_args(tool: Path, args: list[str]) -> list[str]:
+    """`update-pin` with no --tag repoints at the plugin's cache. An install
+    without the plugin has none, and a site already on a release tarball
+    is left alone by it: both pin the release these skills go with
+    instead, as `gma update` does (migrate_site._door_check). A `--check`
+    asks about that same release. Raises StampMissing."""
+    if (not args or args[0] != "update-pin"
+            or any(a in ("--tag", "-h", "--help")
+                   or a.startswith("--tag=") for a in args[1:])):
+        return args
+    layout = install_layout.LAYOUT
+    if layout.door_owns_tool and not install_layout.TARBALL_PIN.match(
+            _site_pin_spec(tool, args).replace("\\", "/")):
+        return args
+    version = install_layout.publish_version(layout.shared)
+    if version is None:
+        raise StampMissing
+    return [*args, "--tag", f"publish-v{version}"]
+
+
+def _run_tool(tool: Path, args: list[str]) -> int:
     cmd = ["node", str(tool), *args]
     try:
         if os.name != "nt":
@@ -181,8 +289,35 @@ def _publish(args: list[str]) -> int:
         return 1
 
 
+def _publish(args: list[str]) -> int:
+    tool = vaultlib.PUBLISH_TOOL
+    if tool is None:
+        print("gma: " + MISSING_TOOL, file=sys.stderr)
+        return 1
+    try:
+        args = _door_args(tool, args)
+    except StampMissing:
+        print(f"gma: shared/{install_layout.PUBLISH_STAMP} is missing or "
+              "unreadable, so the tool release these skills go with is "
+              "unknown and the site cannot be repinned. "
+              + install_layout.INSTALL_STOP, file=sys.stderr)
+        return 1
+    if (args and args[0] == "update-pin" and "--check" not in args
+            and any(a == "--tag" or a.startswith("--tag=") for a in args)):
+        # A tagged repin downloads the release with Node's own fetch.
+        old = tool_cache.node_too_old("node")
+        if old is not None:
+            print(f"gma: {tool_cache.node_upgrade(old)}, then run this again.",
+                  file=sys.stderr)
+            return 1
+    return _run_tool(tool, args)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
+    # Node's fetch uses a sandbox's HTTPS_PROXY only when asked: the tool
+    # download, `update-pin --tag` and every other Node child.
+    os.environ.setdefault("NODE_USE_ENV_PROXY", "1")
     if not args or args[0] in ("-h", "--help"):
         # Help lists every command with its summary; the table is enough,
         # so no script's own parser is built.
@@ -207,10 +342,15 @@ def main(argv: list[str] | None = None) -> int:
     if name not in COMMANDS:
         print(f"gma: unknown command '{name}'; run 'gma llms'", file=sys.stderr)
         return 2
-    if name == "publish":
-        return _publish(rest)
     if name == "llms":
         return _llms(rest)
+    if name == "tool":
+        return _tool(rest)
+    if name == "publish" or not any(a in ("-h", "--help") for a in rest):
+        # A Python command's help needs no tool, so no wait on a download.
+        _ensure_tool()
+    if name == "publish":
+        return _publish(rest)
     module = importlib.import_module(COMMANDS[name].module)
     # argparse derives its default prog from sys.argv[0], so usage and error
     # lines read `gma <name> ...` at every depth.

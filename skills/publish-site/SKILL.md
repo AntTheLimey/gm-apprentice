@@ -35,7 +35,7 @@ and never replicate its logic). One-off commands:
 
 ```bash
 gma publish init <target-dir> --vault <vault>   # scaffold a new site (auto-pins itself to this version)
-gma publish update-pin --site <dir>                       # repoint + npm install a stale site (outside the plugin: add --tag publish-vX.Y.Z to pin a release tarball)
+gma publish update-pin --site <dir>                       # repoint + npm install a stale site
 gma publish manifest diff --config <dir>/vault.config.json    # classify vault files vs the publish list
 gma publish manifest apply --config <dir>/vault.config.json ...  # change the publish list
 gma publish manifest list --vault <vault>   # show the publish list
@@ -85,7 +85,7 @@ npm run build    # generate docs/ from the vault
 npx gm-apprentice-publish sheet show --pc <name> [--player-safe] [--json]
 ```
 
-Node 22+ is required; on a version error, send the GM to
+Node 22.21+ is required; on a version error, send the GM to
 https://nodejs.org (LTS).
 
 **Settings.** Read and change every setting through `gma publish

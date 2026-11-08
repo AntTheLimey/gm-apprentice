@@ -1170,8 +1170,8 @@ def markers_in(line: str) -> list[tuple[int, str, bool]]:
 # run so a whole vault can be asked note by note.
 # --------------------------------------------------------------------------
 
-# The publish tool, beside skills/ in both the repo and the installed plugin
-# (<plugin>/skills/shared/scripts/vaultlib.py, <plugin>/tools/publish/...).
+# The publish tool: beside skills/ in the repo and the plugin
+# (<plugin>/tools/publish/...), else the release fetched into the user cache.
 PUBLISH_TOOL: Path | None = LAYOUT.publish_tool
 # How long one question may take before the tool is given up on.
 PUBLISH_LINES_TIMEOUT = 120
@@ -1369,7 +1369,7 @@ class PublishLines:
             self.close()
             raise PublishToolUnavailable(
                 "the publish tool exited without answering (it needs Node "
-                "22+, and a tool older than 1.12.1 has no `lines` command)")
+                "22.21+, and a tool older than 1.12.1 has no `lines` command)")
         try:
             answer = json.loads(line)
         except ValueError as e:
@@ -2025,9 +2025,24 @@ def settings_default(name: str) -> Any:
     return copy.deepcopy(_DEFAULTS_CACHE[name])
 
 
-SETTINGS_SCHEMA: Path | None = (
-    LAYOUT.root / "tools" / "publish" / "schema" / "vault-config.schema.json"
-    if LAYOUT.root is not None else None)
+def _settings_schema(tool: Path | None) -> Path | None:
+    """The settings schema shipped with the publish tool at `tool`."""
+    return (tool.parent.parent / "schema" / "vault-config.schema.json"
+            if tool is not None else None)
+
+
+SETTINGS_SCHEMA: Path | None = _settings_schema(PUBLISH_TOOL)
+
+
+def adopt_publish_tool(tool: Path) -> None:
+    """Make `tool` this install's publish tool: gma calls it after fetching
+    the tool on first use. Modules imported afterwards read the new value."""
+    global PUBLISH_TOOL, SETTINGS_SCHEMA
+    PUBLISH_TOOL = tool
+    SETTINGS_SCHEMA = _settings_schema(tool)
+    use_publish_tool(tool)
+
+
 _NO_NODE_NOTICE = ("Node was not found, so this vault's own settings were not "
                    "read; the built-in values were used.")
 _NO_NODE_NOTICE_GIVEN = False

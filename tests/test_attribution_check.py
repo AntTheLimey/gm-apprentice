@@ -399,6 +399,8 @@ class RealBuildScriptTests(unittest.TestCase):
         shutil.copy(REPO / "scripts" / "build-skill-zips.sh", tmp / "scripts")
         (tmp / ".claude-plugin").mkdir()
         (tmp / ".claude-plugin" / "plugin.json").write_text('{"version": "9.9.9"}')
+        (tmp / "tools" / "publish").mkdir(parents=True)
+        (tmp / "tools" / "publish" / "package.json").write_text('{"version": "8.8.8"}')
         skill = tmp / "skills" / "ttrpg-expert"
         (skill / "SKILL.md").parent.mkdir(parents=True)
         (skill / "SKILL.md").write_text("# skill\n")
@@ -415,6 +417,7 @@ class RealBuildScriptTests(unittest.TestCase):
         shared.mkdir()
         (shared / "README.md").write_text("# shared\n")
         (shared / "VERSION").write_text("9.9.9\n")
+        (shared / "PUBLISH_VERSION").write_text("8.8.8\n")
         out = tmp / "dist"
         subprocess.run(
             ["bash", str(tmp / "scripts" / "build-skill-zips.sh"), str(out)],
@@ -460,6 +463,19 @@ class RealBuildScriptTests(unittest.TestCase):
             self.assertEqual(run.returncode, 1)
             self.assertIn("skills/shared/VERSION (0.0.1) differs from "
                           "plugin.json (9.9.9)", run.stdout + run.stderr)
+
+    def test_the_build_refuses_a_stale_publish_stamp(self) -> None:
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            out = self.build(tmp, personal=False)
+            (tmp / "skills" / "shared" / "PUBLISH_VERSION").write_text("0.0.1\n")
+            run = subprocess.run(
+                ["bash", str(tmp / "scripts" / "build-skill-zips.sh"), str(out)],
+                capture_output=True, text=True)
+            self.assertEqual(run.returncode, 1)
+            self.assertIn("skills/shared/PUBLISH_VERSION (0.0.1) differs from "
+                          "tools/publish/package.json (8.8.8)",
+                          run.stdout + run.stderr)
 
     def test_check_fails_when_the_real_build_lacks_a_notice(self) -> None:
         with tempfile.TemporaryDirectory() as t:
