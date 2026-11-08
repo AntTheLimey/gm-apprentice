@@ -438,6 +438,17 @@ class RealBuildScriptTests(unittest.TestCase):
             with zipfile.ZipFile(out / "ttrpg-expert.zip") as z:
                 self.assertEqual(z.read("shared/VERSION").decode(), "9.9.9\n")
 
+    def test_the_build_refuses_a_stamp_with_inner_space(self) -> None:
+        # The scripts trim only the ends, so "9.9 .9" is not 9.9.9.
+        with tempfile.TemporaryDirectory() as t:
+            tmp = Path(t)
+            out = self.build(tmp, personal=False)
+            (tmp / "skills" / "shared" / "VERSION").write_text("9.9 .9\n")
+            run = subprocess.run(
+                ["bash", str(tmp / "scripts" / "build-skill-zips.sh"), str(out)],
+                capture_output=True, text=True)
+            self.assertEqual(run.returncode, 1)
+
     def test_the_build_refuses_a_stale_version(self) -> None:
         with tempfile.TemporaryDirectory() as t:
             tmp = Path(t)
