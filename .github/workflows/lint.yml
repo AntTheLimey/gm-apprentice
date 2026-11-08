@@ -93,6 +93,18 @@ jobs:
             exit 1
           fi
 
+      - name: shared/VERSION matches plugin.json
+        run: |
+          PLUGIN_VERSION=$(jq -r '.version' .claude-plugin/plugin.json)
+          STAMP=$(cat skills/shared/VERSION)
+          # Trim the ends only, as the scripts read it: "1.11 .7" is not 1.11.7.
+          STAMP="${STAMP#"${STAMP%%[![:space:]]*}"}"
+          STAMP="${STAMP%"${STAMP##*[![:space:]]}"}"
+          if [ "$STAMP" != "$PLUGIN_VERSION" ]; then
+            echo "::error::skills/shared/VERSION ($STAMP) differs from plugin.json ($PLUGIN_VERSION): bump both"
+            exit 1
+          fi
+
   python-tests-and-schema:
     runs-on: ubuntu-latest
     steps:

@@ -179,7 +179,7 @@ from schema_rules import (
 )
 # LINK_RE and SKIP_DIRS are re-exported: they were part
 # of this module's surface before vaultlib existed.
-from install_layout import MISSING_TOOL
+from install_layout import MISSING_TOOL, VERSION_UNKNOWN
 from vaultlib import (  # noqa: F401
     FENCE_RE,
     HEADING_RE,
@@ -1027,8 +1027,7 @@ def check_version(vault: Path) -> tuple[list[str], int]:
     """
     found = plugin_version()
     if found is None:
-        return ([("ERROR\t(plugin)\tcannot determine the plugin version "
-                  "(no .claude-plugin/plugin.json or shared/VERSION)")],
+        return ([("ERROR\t(plugin)\t" + VERSION_UNKNOWN)],
                 1)
     plugin, _source = found
     if not (vault / "_meta").is_dir():

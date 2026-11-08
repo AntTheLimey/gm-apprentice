@@ -135,8 +135,9 @@ Every non-trivial change follows this sequence:
 1. **Branch** — create a feature branch from main
 2. **Implement** — write code and tests for any scripts or tooling
 3. **Version bump** — bump `version` in `.claude-plugin/plugin.json`
-   (patch by default unless the user specifies otherwise); it is the one
-   place the plugin version lives
+   and `skills/shared/VERSION` to the same version (patch by default
+   unless the user specifies otherwise). The stamp is what every install
+   reads; CI fails when the two differ
 4. **CHANGELOG** — add a categorized entry (Added/Changed/Fixed/Removed)
    under the new version in `CHANGELOG.md`, following the existing format.
    CI fails when `CHANGELOG.md` has no `## [version]` entry for it

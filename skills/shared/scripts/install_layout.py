@@ -8,11 +8,20 @@ from __future__ import annotations
 from pathlib import Path
 from typing import NamedTuple
 
+INSTALL_STOP = ("Assistants: stop here, tell the GM what is missing, and do "
+                "not work around it.")
 MISSING_TOOL = ("the publish tool is not installed with these skills; it "
                 "ships with the Claude Code plugin, and other installs get "
-                "it in a later release")
+                "it in a later release. " + INSTALL_STOP)
+VERSION_UNKNOWN = ("cannot determine the version of these skills: "
+                   "shared/VERSION is missing, empty or unreadable. This "
+                   "install is incomplete. " + INSTALL_STOP)
 
 _TOOL = Path("tools") / "publish" / "bin" / "gm-publish.js"
+# Manifests an install can carry beside skills/: the Claude Code plugin's,
+# and the one OpenAI's plugin import converts it to.
+MANIFESTS = (Path(".claude-plugin") / "plugin.json",
+             Path(".codex-plugin") / "plugin.json")
 
 
 class Layout(NamedTuple):
@@ -27,7 +36,7 @@ def find_layout(scripts_dir: Path | None = None) -> Layout:
     root: Path | None = None
     if shared.parent.name == "skills":
         candidate = shared.parent.parent
-        if ((candidate / ".claude-plugin" / "plugin.json").is_file()
+        if (any((candidate / m).is_file() for m in MANIFESTS)
                 or (candidate / _TOOL).is_file()):
             root = candidate
     tool = root / _TOOL if root is not None else None

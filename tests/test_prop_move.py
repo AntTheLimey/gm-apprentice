@@ -1132,6 +1132,20 @@ def test_a_missing_listing_style_is_a_person_row_before_any_build(tmp_path: Path
     assert converted(vault, site, given).missing_styles == []
 
 
+def test_a_missing_style_without_plugin_styles_asks_plainly(tmp_path: Path) -> None:
+    # An install with no publish tool has no plugin styles: the row says so
+    # in a few words and carries no stop sentence (it is a question).
+    vault, site = gazetteer(tmp_path)
+    given = converted(vault, site).decisions
+    given["listings"]["gazetteer/papers/index.html"]["style"] = "port-papers"
+    with mock.patch.object(prop_move, "PLUGIN_STYLES", None):
+        c = converted(vault, site, given)
+    row = [r for r in c.rows if "port-papers" in r]
+    assert row and ('no style "port-papers" in _meta/prop-styles/ (the '
+                    "plugin's styles are not installed); copy") in row[0], c.rows
+    assert "stop here" not in row[0]
+
+
 def test_apply_with_a_missing_listing_style_changes_nothing(tmp_path: Path) -> None:
     vault, site = gazetteer(tmp_path)
     given = converted(vault, site).decisions

@@ -42,6 +42,7 @@ from schema_rules import (SYSTEMS, TYPE_FOLDERS, WORLD_STUBS, system_id,
 from migrate_core import StepFailed, write_text_atomic
 from vault_write import (set_block, template_body, template_frontmatter,
                          template_text, utf8_output)
+from install_layout import VERSION_UNKNOWN  # noqa: E402
 from vaultlib import (PUBLISH_TOOL, SETTINGS_FILE, STAMP_KEY, STATE_FILE,
                       SettingsUnavailable, StateUnreadable, _read_state, entity_type,
                       extract_frontmatter, forget_settings, parse_version,
@@ -508,7 +509,7 @@ def main(argv: list[str] | None = None) -> int:
                 raise ScaffoldError(f"{vault.name}: not a folder")
             found = plugin_version()
             if found is None:
-                raise ScaffoldError("cannot determine the plugin version")
+                raise ScaffoldError(VERSION_UNKNOWN)
             tool_problem = plugin_tool_problem(PUBLISH_TOOL)
             if vault_layout(vault) == "none" and (
                     not shutil.which("node") or tool_problem):

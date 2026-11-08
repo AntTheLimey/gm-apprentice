@@ -521,7 +521,7 @@ class BuildTests(unittest.TestCase):
             with mock.patch.object(vs, "plugin_version", return_value=None):
                 code, out = run(scratch(self) / "V", "--no-system")
             self.assertEqual(code, 1)
-            self.assertIn("plugin version", out)
+            self.assertIn("cannot determine the version of these skills", out)
 
         with self.subTest("an unrecognised recorded system"):
             vault = self.unrecognised()

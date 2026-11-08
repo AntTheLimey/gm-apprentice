@@ -70,7 +70,6 @@ from reveal import LOG, _load_log, _write_log, apply_publish, prop_paths, publis
 from reveal_scan import NEVER_CANDIDATES  # noqa: E402
 from vault_check import configured_site  # noqa: E402
 from vault_write import BAD_NAME_RE, HAND_ID_RE, HANDS_REL, Batch, WriteError, use_hand  # noqa: E402
-from install_layout import MISSING_TOOL  # noqa: E402
 from vaultlib import cli_name  # noqa: E402
 from vaultlib import (PUBLISH_TOOL, PublishToolUnavailable, SettingsUnavailable, entity_type,  # noqa: E402
                       extract_frontmatter, forget_settings, frontmatter_span, is_skipped_path,
@@ -1546,7 +1545,7 @@ def missing_styles(c: Conversion) -> None:
         if not style or any((root / style / "layout.html").is_file() for root in (c.vault / VAULT_STYLES, PLUGIN_STYLES) if root is not None):
             continue
         where = (f"{VAULT_STYLES}/ or the plugin ({PLUGIN_STYLES})" if PLUGIN_STYLES is not None
-                 else f"{VAULT_STYLES}/ (and {MISSING_TOOL})")
+                 else f"{VAULT_STYLES}/ (the plugin's styles are not installed)")
         c.row(PERSON, f"listings.{address}.style", f'no style "{style}" in {where}; '
               f"copy the style's folder into {VAULT_STYLES}/, or name another style")
         c.missing_styles.append(style)

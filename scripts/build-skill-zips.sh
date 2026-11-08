@@ -5,13 +5,20 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SKILLS_DIR="$REPO_ROOT/skills"
 OUT_DIR="${1:-$REPO_ROOT/dist}"
 
-# A zip has no plugin.json, so shared/VERSION carries the plugin version into it.
-# It is written into a staging copy of shared/, never into the source tree.
+# shared/VERSION is committed and carries the version into every zip; it
+# must equal plugin.json's, or the zips would ship the wrong one.
 VERSION=$(jq -r '.version' "$REPO_ROOT/.claude-plugin/plugin.json")
+STAMP=$(cat "$SKILLS_DIR/shared/VERSION")
+# Trim the ends only, as the scripts read it: "1.11 .7" is not 1.11.7.
+STAMP="${STAMP#"${STAMP%%[![:space:]]*}"}"
+STAMP="${STAMP%"${STAMP##*[![:space:]]}"}"
+if [ "$STAMP" != "$VERSION" ]; then
+  echo "::error::skills/shared/VERSION ($STAMP) differs from plugin.json ($VERSION): bump both"
+  exit 1
+fi
 STAGE=$(mktemp -d)
 trap 'rm -rf "$STAGE"' EXIT
 cp -R "$SKILLS_DIR/shared" "$STAGE/shared"
-printf '%s\n' "$VERSION" > "$STAGE/shared/VERSION"
 
 mkdir -p "$OUT_DIR"
 
