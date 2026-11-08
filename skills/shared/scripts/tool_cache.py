@@ -7,6 +7,7 @@ the release named by `shared/PUBLISH_VERSION` on first use.
 """
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
 import shutil
@@ -42,6 +43,12 @@ OUTSIDE_STOP = ("It is outside the project folder, which an assistant's "
                 "sandbox may block. Assistants: stop here, tell the GM, ask "
                 "them to allow this one command outside the sandbox, and do "
                 "not work around it (no other HOME or folder).")
+
+
+def refused(e: OSError) -> bool:
+    """A write refused for permission (what a sandbox does), not a full
+    disk or another fault that sandbox access would not fix."""
+    return isinstance(e, PermissionError) or e.errno in (errno.EACCES, errno.EPERM)
 
 
 class FetchFailed(Exception):
@@ -219,7 +226,7 @@ def fetch(version: str, *, root: Path | None = None, base: str | None = None,
         work = Path(tempfile.mkdtemp(prefix=".tmp-", dir=publish))
     except OSError as e:
         raise FetchFailed(f"cannot write the cache at {publish}: {e}",
-                          outside=True) from e
+                          outside=refused(e)) from e
     try:
         tgz, sums = work / name, work / "SHA256SUMS"
         _download(node, f"{url}/SHA256SUMS", sums, wait)

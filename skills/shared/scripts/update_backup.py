@@ -23,7 +23,7 @@ import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
 
-from tool_cache import OUTSIDE_STOP
+from tool_cache import OUTSIDE_STOP, refused
 
 NOTE_SUFFIXES = {".md", ".yaml", ".json",
                  ".html", ".htm", ".css", ".js", ".mjs", ".svg"}
@@ -138,7 +138,7 @@ def backup(vault: Path, *, home: Path | None = None, keep: int = 10) -> Path:
         folder.mkdir(parents=True, exist_ok=True)
     except OSError as e:
         raise BackupFailed(f"could not make {folder}: {e.strerror or e}",
-                           outside=True) from e
+                           outside=refused(e)) from e
     target = _free_name(folder, _stamp())
     partial = target.with_name(target.name + ".partial")
     site = _site_folder(vault)
@@ -165,7 +165,7 @@ def backup(vault: Path, *, home: Path | None = None, keep: int = 10) -> Path:
     except OSError as e:
         partial.unlink(missing_ok=True)
         raise BackupFailed(f"could not write {target}: {e.strerror or e}",
-                           outside=True) from e
+                           outside=refused(e)) from e
     except BaseException:
         partial.unlink(missing_ok=True)   # interrupted: no half archive
         raise

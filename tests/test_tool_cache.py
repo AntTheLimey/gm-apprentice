@@ -370,3 +370,11 @@ def test_a_cache_it_cannot_write_is_marked_outside(release, cache):
     assert e.value.outside
     assert "cannot write the cache" in e.value.reason
     assert "Assistants" not in e.value.reason
+
+
+def test_only_a_refused_write_is_marked_outside(tmp_path, monkeypatch):
+    # A full disk is not a sandbox: asking for sandbox access would not fix it.
+    import errno
+    assert tool_cache.refused(PermissionError(errno.EACCES, "denied"))
+    assert tool_cache.refused(OSError(errno.EPERM, "Operation not permitted"))
+    assert not tool_cache.refused(OSError(errno.ENOSPC, "No space left on device"))

@@ -272,6 +272,15 @@ class BackupTests(unittest.TestCase):
         self.assertIn(".gm-apprentice", str(cm.exception))
         self.assertTrue(cm.exception.outside)
 
+    def test_a_full_disk_is_not_marked_outside(self):
+        import errno
+        self._write("fine.md")
+        full = OSError(errno.ENOSPC, "No space left on device")
+        with mock.patch.object(update_backup.tarfile, "open", side_effect=full), \
+                self.assertRaises(update_backup.BackupFailed) as cm:
+            update_backup.backup(self.vault, home=self.home)
+        self.assertFalse(cm.exception.outside)
+
     def test_update_puts_the_stop_after_its_sentence(self):
         import update
         e = update_backup.BackupFailed("could not make /h/.gm-apprentice: denied",
