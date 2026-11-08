@@ -23,6 +23,8 @@ import tarfile
 from datetime import datetime, timezone
 from pathlib import Path
 
+from tool_cache import OUTSIDE_STOP, refused
+
 NOTE_SUFFIXES = {".md", ".yaml", ".json",
                  ".html", ".htm", ".css", ".js", ".mjs", ".svg"}
 SITE_FILES = ("package.json", "package-lock.json", "vault.config.json")
@@ -35,7 +37,12 @@ SKIP_DIRS = {".obsidian", ".git", ".trash", ".gm-apprentice",
 
 
 class BackupFailed(Exception):
-    """The backup could not be made; the message names the file at fault."""
+    """The backup could not be made; the message names the file at fault.
+    `outside`: the backup folder (outside the vault) could not be written."""
+
+    def __init__(self, reason: str, *, outside: bool = False) -> None:
+        super().__init__(reason)
+        self.outside = outside
 
 
 def _stamp() -> str:
@@ -127,7 +134,11 @@ def backup(vault: Path, *, home: Path | None = None, keep: int = 10) -> Path:
     tag = hashlib.sha256(str(root).encode("utf-8")).hexdigest()[:8]
     folder = ((home if home is not None else Path.home())
               / ".gm-apprentice" / "backups" / f"{root.name}-{tag}")
-    folder.mkdir(parents=True, exist_ok=True)
+    try:
+        folder.mkdir(parents=True, exist_ok=True)
+    except OSError as e:
+        raise BackupFailed(f"could not make {folder}: {e.strerror or e}",
+                           outside=refused(e)) from e
     target = _free_name(folder, _stamp())
     partial = target.with_name(target.name + ".partial")
     site = _site_folder(vault)
@@ -153,7 +164,8 @@ def backup(vault: Path, *, home: Path | None = None, keep: int = 10) -> Path:
         raise
     except OSError as e:
         partial.unlink(missing_ok=True)
-        raise BackupFailed(f"could not write {target}: {e.strerror or e}") from e
+        raise BackupFailed(f"could not write {target}: {e.strerror or e}",
+                           outside=refused(e)) from e
     except BaseException:
         partial.unlink(missing_ok=True)   # interrupted: no half archive
         raise

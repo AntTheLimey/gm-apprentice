@@ -173,7 +173,9 @@ def _ensure_tool() -> None:
         _fetch_tool(timeout=AUTO_FETCH_TIMEOUT)
     except tool_cache.FetchFailed as e:
         tool_cache.note_failure(version)
-        fix = ("run `gma tool install` with network access"
+        fix = ("ask the GM to allow `gma tool install` outside the sandbox"
+               if e.outside
+               else "run `gma tool install` with network access"
                if "could not download" in e.reason
                else "run `gma tool install` to try again")
         print(f"gma: warning: could not install the publish tool ({e.reason}); "
@@ -187,8 +189,12 @@ def _tool(args: list[str]) -> int:
             tool = (vaultlib.PUBLISH_TOOL if vaultlib.PUBLISH_TOOL is not None
                     else _fetch_tool())
         except tool_cache.FetchFailed as e:
-            print(f"gma tool: could not download the publish tool: {e.reason}. "
-                  + INSTALL_STOP, file=sys.stderr)
+            if e.outside:
+                print(f"gma tool: could not save the publish tool: {e.reason}. "
+                      + tool_cache.OUTSIDE_STOP, file=sys.stderr)
+            else:
+                print(f"gma tool: could not download the publish tool: {e.reason}. "
+                      + INSTALL_STOP, file=sys.stderr)
             return 1
         print(tool)
         return 0

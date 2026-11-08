@@ -9,6 +9,19 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.1] — 2026-11-08
+
+Codex and Cursor tested end to end on 1.12.0 (create a vault, prep, wrap-up, build the site locally, update).
+
+### Fixed
+
+- A first session is reconciled like any other: before, a tidy session 1 (the campaign's, or a chapter's in a vault that restarts numbering each chapter) was skipped, so its Wrap-Up and new notes stayed DRAFT for good (#618).
+- When an agent's sandbox blocks the update's backup or `gma tool install`, the message says the folder is outside the project folder and asks the assistant to stop and ask the GM to allow it, not to work around it. The automatic download before other commands only warns.
+
+### Changed
+
+- README: what was tested on Codex and Cursor, and the one command a sandbox may ask you to allow.
+
 ## [1.12.0] — 2026-11-08
 
 gm-apprentice installs in Codex and in the other agents `npx skills` supports, and the skill zips are gone.

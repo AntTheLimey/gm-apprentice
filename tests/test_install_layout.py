@@ -600,6 +600,41 @@ def test_tool_install_ignores_a_recent_failure(monkeypatch, tmp_path):
     assert calls[1].get("timeout") is None
 
 
+def _blocked_cache(monkeypatch, tmp_path):
+    import gma as g
+    calls = []
+
+    def fail(version, **kw):
+        calls.append(kw)
+        raise g.tool_cache.FetchFailed(
+            "cannot write the cache at /x/publish: denied", outside=True)
+    monkeypatch.setenv("GMA_CACHE", str(tmp_path))
+    monkeypatch.setattr(g.vaultlib, "PUBLISH_TOOL", None)
+    monkeypatch.setattr(g.tool_cache, "fetch", fail)
+    monkeypatch.setattr(g.shutil, "which", lambda name: "/usr/bin/node")
+    return g
+
+
+def test_a_blocked_cache_before_a_command_warns_without_stopping(monkeypatch, tmp_path, capsys):
+    # The automatic fetch runs before every command, maybe at the table:
+    # the command carries on, so its warning must not tell the agent to stop.
+    g = _blocked_cache(monkeypatch, tmp_path)
+    g._ensure_tool()
+    err = capsys.readouterr().err
+    assert "Assistants: stop" not in err
+    assert "allow `gma tool install` outside the sandbox" in err
+
+
+def test_tool_install_with_a_blocked_cache_stops_once(monkeypatch, tmp_path, capsys):
+    g = _blocked_cache(monkeypatch, tmp_path)
+    assert g._tool(["install"]) == 1
+    err = capsys.readouterr().err
+    assert err.count("Assistants: stop here") == 1
+    assert "outside the project folder" in err
+    assert "could not download" not in err
+    assert ".." not in err
+
+
 def test_missing_tool_names_node():
     assert "Node 22" in MISSING_TOOL
 

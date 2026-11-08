@@ -352,3 +352,29 @@ def test_too_old_a_node_stops_before_any_download(release, cache, monkeypatch):
         fetch("1.2.3", root=cache, base=release.base, node="node")
     assert release.hits == 0
 
+
+
+@needs_node
+@pytest.mark.skipif(os.name != "posix" or os.geteuid() == 0,
+                    reason="chmod only blocks writes for non-root POSIX")
+def test_a_cache_it_cannot_write_is_marked_outside(release, cache):
+    # An agent's sandbox often allows writes only in the project folder.
+    cache.mkdir(parents=True, exist_ok=True)
+    cache.chmod(0o500)
+    try:
+        with pytest.raises(FetchFailed) as e:
+            fetch("1.2.3", root=cache, base=release.base)
+    finally:
+        cache.chmod(0o755)
+    # The caller adds the stop line: only `gma tool install` should stop.
+    assert e.value.outside
+    assert "cannot write the cache" in e.value.reason
+    assert "Assistants" not in e.value.reason
+
+
+def test_only_a_refused_write_is_marked_outside(tmp_path, monkeypatch):
+    # A full disk is not a sandbox: asking for sandbox access would not fix it.
+    import errno
+    assert tool_cache.refused(PermissionError(errno.EACCES, "denied"))
+    assert tool_cache.refused(OSError(errno.EPERM, "Operation not permitted"))
+    assert not tool_cache.refused(OSError(errno.ENOSPC, "No space left on device"))
