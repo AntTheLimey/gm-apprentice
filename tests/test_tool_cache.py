@@ -199,3 +199,20 @@ def test_cached_tool_none_when_absent(cache):
     assert cached_tool("1.2.3", root=cache) is None
     os.makedirs(cache / "publish" / "1.2.3")
     assert cached_tool("1.2.3", root=cache) is None
+
+
+def test_download_honours_a_proxy(monkeypatch, tmp_path):
+    # Sandboxes (Codex) reach the network through HTTPS_PROXY; Node's fetch
+    # uses it only when NODE_USE_ENV_PROXY is set.
+    seen = {}
+
+    def run(cmd, **kw):
+        seen.update(kw.get("env") or {})
+        raise OSError("stop here")
+
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:3128")
+    monkeypatch.setattr(tool_cache.subprocess, "run", run)
+    with pytest.raises(FetchFailed):
+        tool_cache._download("node", "https://x/y", tmp_path / "f")
+    assert seen.get("NODE_USE_ENV_PROXY") == "1"
+    assert seen.get("HTTPS_PROXY") == "http://127.0.0.1:3128"

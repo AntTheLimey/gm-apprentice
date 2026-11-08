@@ -53,9 +53,12 @@ def cached_tool(version: str, root: Path | None = None) -> Path | None:
 
 
 def _download(node: str, url: str, dest: Path) -> None:
+    # Node's fetch goes through HTTPS_PROXY (a sandbox's way out) only when
+    # asked to; a Node too old to know the switch ignores it.
+    env = {**os.environ, "NODE_USE_ENV_PROXY": "1"}
     try:
         done = subprocess.run([node, str(_DOWNLOAD), url, str(dest)],
-                              capture_output=True, text=True,
+                              capture_output=True, text=True, env=env,
                               timeout=DOWNLOAD_TIMEOUT)
     except (OSError, subprocess.TimeoutExpired) as e:
         raise FetchFailed(f"could not download {url}: {e}") from e
