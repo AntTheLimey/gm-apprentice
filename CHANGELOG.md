@@ -9,6 +9,28 @@ Releases before 1.11.0 are in [docs/history/changelog-archive.md](docs/history/c
 
 ---
 
+## [1.12.0] — 2026-11-08
+
+gm-apprentice installs in Codex and in the other agents `npx skills` supports, and the skill zips are gone.
+
+### Added
+
+- **Codex plugin:** `codex plugin marketplace add AntTheLimey/gm-apprentice`, then `codex plugin add gm-apprentice@gm-apprentice`, installs the whole plugin, publish tool included.
+- **`npx skills add AntTheLimey/gm-apprentice --all -g`** installs the nine skills and `shared`, the helper skill they use. Claude Code and Codex keep `shared` out of the skill list.
+
+### Changed
+
+- When a vault is newer than the skills, an install that isn't a plugin is told to run `npx skills update`; the plugin's words are unchanged.
+- `gma update` offers to retire a workaround when GitHub says its issue was closed as fixed before the installed release came out; it no longer reads the changelog.
+- The vault's managed note block names the `shared` folder rather than a plugin path, so it refreshes once.
+- Releases before 1.11.0 moved to `docs/history/changelog-archive.md`.
+
+### Removed
+
+- **The skill zips.** Install through the Claude Code or Codex plugin, or `npx skills`, instead.
+
+---
+
 ## [1.11.8] — 2026-11-08
 
 Installs other than the Claude Code plugin now get the publish tool too: it downloads once, on first use. Nothing changes for a Claude Code GM.
